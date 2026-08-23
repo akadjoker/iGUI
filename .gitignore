@@ -10,3 +10,10 @@ example/bin/*
 *.exe
 *.dSYM
 /private/
+/tmp/
+/build*/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
+7tmp

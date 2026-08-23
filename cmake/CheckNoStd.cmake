@@ -3,6 +3,12 @@ file(GLOB_RECURSE IG_CORE_FILES
      "${IGUI_SOURCE_DIR}/src/*.cpp"
      "${IGUI_SOURCE_DIR}/tests/*.cpp")
 
+# The original retained widget library intentionally uses STL containers.
+# Keep the no-std contract scoped to the immediate-mode core only.
+list(FILTER IG_CORE_FILES EXCLUDE REGEX "/include/igui/widgets/")
+list(FILTER IG_CORE_FILES EXCLUDE REGEX "/src/widgets/")
+list(FILTER IG_CORE_FILES EXCLUDE REGEX "/tests/test_original_widgets\\.cpp$")
+
 foreach(IG_FILE IN LISTS IG_CORE_FILES)
     file(READ "${IG_FILE}" IG_CONTENT)
     string(REGEX MATCH "std[ \t\r\n]*::" IG_STD_MATCH "${IG_CONTENT}")

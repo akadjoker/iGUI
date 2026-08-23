@@ -21,10 +21,24 @@ struct FontGlyph
     float advance;
 };
 
+struct FontRange
+{
+    uint32_t first;
+    uint32_t last;
+
+    FontRange(uint32_t firstCodepoint, uint32_t lastCodepoint)
+        : first(firstCodepoint), last(lastCodepoint) {}
+};
+
+// Defaults úteis, não um limite: a aplicação pode fornecer quaisquer ranges.
+Span<const FontRange> defaultFontRanges();
+
 class FontAtlas : public TextProvider
 {
 public:
     FontAtlas();
+    FontAtlas(Span<const FontRange> ranges, uint32_t width, uint32_t height,
+              float bakedSize = 14.0f);
 
     bool valid() const;
     FontId defaultFont() const;
@@ -50,6 +64,7 @@ private:
     float ascent_;
     float descent_;
     float lineHeight_;
+    float bakedSize_;
     uint32_t width_;
     uint32_t height_;
     TextureId texture_;

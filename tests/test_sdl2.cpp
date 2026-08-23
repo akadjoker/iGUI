@@ -47,6 +47,37 @@ static void test_window_and_wheel_translation()
     assert(event.type == ig::EventType::PointerWheel);
     assert(event.wheelX == -2.0f);
     assert(event.wheelY == -3.0f);
+
+    SDL_zero(nativeEvent);
+    nativeEvent.type = SDL_KEYDOWN;
+    nativeEvent.key.keysym.sym = SDLK_BACKSPACE;
+    assert(ig::sdl2::translateEvent(nativeEvent, event));
+    assert(event.type == ig::EventType::KeyDown);
+    assert(event.key == ig::KeyCode::Backspace);
+
+    SDL_zero(nativeEvent);
+    nativeEvent.type = SDL_KEYDOWN;
+    nativeEvent.key.keysym.sym = SDLK_f;
+    nativeEvent.key.keysym.mod = KMOD_CTRL;
+    assert(ig::sdl2::translateEvent(nativeEvent, event));
+    assert(event.key == ig::KeyCode::F);
+    assert(event.control);
+
+    SDL_zero(nativeEvent);
+    nativeEvent.type = SDL_KEYDOWN;
+    nativeEvent.key.keysym.sym = SDLK_PAGEUP;
+    nativeEvent.key.keysym.mod = KMOD_SHIFT;
+    assert(ig::sdl2::translateEvent(nativeEvent, event));
+    assert(event.key == ig::KeyCode::PageUp);
+    assert(event.shift);
+
+    SDL_zero(nativeEvent);
+    nativeEvent.type = SDL_TEXTINPUT;
+    nativeEvent.text.text[0] = 'a';
+    nativeEvent.text.text[1] = '\0';
+    assert(ig::sdl2::translateEvent(nativeEvent, event));
+    assert(event.type == ig::EventType::TextInput);
+    assert(event.textLength == 1u);
 }
 
 static void test_software_rendering()

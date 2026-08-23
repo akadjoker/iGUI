@@ -46,6 +46,7 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
         PointerButton button;
         if (!pointerButton(nativeEvent.button.button, button))
             return false;
+        SDL_CaptureMouse(nativeEvent.type == SDL_MOUSEBUTTONDOWN ? SDL_TRUE : SDL_FALSE);
         event = nativeEvent.type == SDL_MOUSEBUTTONDOWN
                     ? Event::pointerDown(button, static_cast<float>(nativeEvent.button.x),
                                          static_cast<float>(nativeEvent.button.y))
@@ -64,6 +65,44 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
             event.wheelY = -event.wheelY;
         }
         return true;
+    case SDL_KEYDOWN:
+    {
+        KeyCode key = KeyCode::None;
+        switch (nativeEvent.key.keysym.sym)
+        {
+        case SDLK_BACKSPACE: key = KeyCode::Backspace; break;
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER: key = KeyCode::Enter; break;
+        case SDLK_DELETE: key = KeyCode::Delete; break;
+        case SDLK_TAB: key = KeyCode::Tab; break;
+        case SDLK_LEFT: key = KeyCode::Left; break;
+        case SDLK_RIGHT: key = KeyCode::Right; break;
+        case SDLK_UP: key = KeyCode::Up; break;
+        case SDLK_DOWN: key = KeyCode::Down; break;
+        case SDLK_HOME: key = KeyCode::Home; break;
+        case SDLK_END: key = KeyCode::End; break;
+        case SDLK_PAGEUP: key = KeyCode::PageUp; break;
+        case SDLK_PAGEDOWN: key = KeyCode::PageDown; break;
+        case SDLK_ESCAPE: key = KeyCode::Escape; break;
+        case SDLK_a: key = KeyCode::A; break;
+        case SDLK_c: key = KeyCode::C; break;
+        case SDLK_d: key = KeyCode::D; break;
+        case SDLK_f: key = KeyCode::F; break;
+        case SDLK_h: key = KeyCode::H; break;
+        case SDLK_v: key = KeyCode::V; break;
+        case SDLK_x: key = KeyCode::X; break;
+        case SDLK_y: key = KeyCode::Y; break;
+        case SDLK_z: key = KeyCode::Z; break;
+        default: return false;
+        }
+        const SDL_Keymod modifiers = static_cast<SDL_Keymod>(nativeEvent.key.keysym.mod);
+        event = Event::keyDown(key, (modifiers & KMOD_CTRL) != 0,
+                              (modifiers & KMOD_SHIFT) != 0);
+        return true;
+    }
+    case SDL_TEXTINPUT:
+        event = Event::textInput(StringView(nativeEvent.text.text));
+        return event.textLength != 0u;
     case SDL_WINDOWEVENT:
         if (nativeEvent.window.event == SDL_WINDOWEVENT_FOCUS_LOST)
         {
@@ -99,6 +138,13 @@ TextureId textureId(SDL_Texture *texture)
 
 Backend::Backend(SDL_Renderer *renderer)
     : renderer_(renderer), fontAtlas_(), fontTexture_(nullptr), vertices_(), indices_(), fontPixels_()
+{
+}
+
+Backend::Backend(SDL_Renderer *renderer, Span<const FontRange> ranges,
+                 uint32_t atlasWidth, uint32_t atlasHeight, float bakedSize)
+    : renderer_(renderer), fontAtlas_(ranges, atlasWidth, atlasHeight, bakedSize),
+      fontTexture_(nullptr), vertices_(), indices_(), fontPixels_()
 {
 }
 

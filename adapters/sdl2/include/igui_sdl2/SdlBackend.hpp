@@ -30,6 +30,8 @@ class Backend : public ig::Backend
 {
 public:
     explicit Backend(SDL_Renderer *renderer);
+    Backend(SDL_Renderer *renderer, Span<const FontRange> ranges,
+            uint32_t atlasWidth, uint32_t atlasHeight, float bakedSize = 14.0f);
     ~Backend() override;
 
     void setRenderer(SDL_Renderer *renderer);

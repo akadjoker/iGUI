@@ -122,6 +122,224 @@ static void test_draw_primitives()
     assert(data.commands[6].payload.geometry.indexCount == 9u);
 }
 
+static void test_automatic_layout()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 20.0f, 50.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 20.0f, 50.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.button("one"));
+    context.sameLine();
+    assert(!context.button("two"));
+    context.separator();
+    context.label("three");
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(data.vertices[8].position.x == 18.0f);
+    assert(data.vertices[8].position.y == 42.0f);
+    assert(data.vertices[12].position.x == 88.0f);
+    assert(data.vertices[12].position.y == 42.0f);
+    assert(data.vertices[16].position.y == 76.0f);
+}
+
+static void test_slider_and_radio()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    float value = 0.0f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 160.0f, 64.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value > 0.7f && value < 0.8f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.radioButton("choice", false, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_selectable()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.selectable("first", false, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.selectable("first", true, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f)));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(data.vertices[8].color.r == 70u);
+    assert(data.vertices[8].color.g == 125u);
+    assert(data.vertices[8].color.b == 185u);
+}
+
+static void test_progress_bar()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.progressBar(50.0f, 100.0f, ig::Rect(8.0f, 8.0f, 120.0f, 20.0f));
+    context.progressBar(200.0f, 100.0f, ig::Rect(8.0f, 36.0f, 120.0f, 20.0f));
+    context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(data.vertices[12].position.x == 26.0f);
+    assert(data.vertices[13].position.x == 86.0f);
+    assert(data.vertices[12].color.r == 90u);
+    assert(data.vertices[12].color.g == 160u);
+    assert(data.vertices[12].color.b == 230u);
+    assert(data.vertices[20].position.x == 26.0f);
+    assert(data.vertices[21].position.x == 146.0f);
+    assert(data.vertices.size() == 28u);
+}
+
+static void test_automatic_selectable_and_progress_bar()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.selectable("entry", false, 120.0f));
+    context.progressBar(1.0f, 2.0f, 100.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(data.vertices[8].position.x == 18.0f);
+    assert(data.vertices[8].position.y == 42.0f);
+    assert(data.vertices[12].position.x == 18.0f);
+    assert(data.vertices[12].position.y == 76.0f);
+    assert(data.vertices[17].position.x == 68.0f);
+}
+
+static void test_slider_captures_pointer()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool checked = false;
+    float value = 0.0f;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 106.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
+    context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(!checked);
+    assert(data.vertices[8].color.r == 55u);
+    assert(data.vertices[8].color.g == 55u);
+    assert(data.vertices[8].color.b == 65u);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_input_text_focus_and_utf8_backspace()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String value;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::textInput(u8"Olá"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.inputText("name", value, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    assert(context.wantsKeyboard());
+    assert(context.wantsTextInput());
+    context.endWindow();
+    const ig::DrawData &firstData = context.endFrame();
+    assert(value.size() == 4u);
+    bool foundInputText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < firstData.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = firstData.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size() &&
+            command.payload.text.position.x == 30.0f)
+        {
+            assert(command.payload.text.clip.x == 26.0f);
+            assert(command.payload.text.clip.y == 50.0f);
+            assert(command.payload.text.clip.width == 160.0f);
+            assert(command.payload.text.clip.height == 28.0f);
+            foundInputText = true;
+        }
+    }
+    assert(foundInputText);
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.inputText("name", value, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value.size() == 2u);
+    assert(value[0] == 'O');
+    assert(value[1] == 'l');
+}
+
+static void test_input_text_scrolls_to_caret()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String value("this text is longer than the editor width");
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.inputText("name", value, ig::Rect(8.0f, 8.0f, 80.0f, 28.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    bool foundInputText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size())
+        {
+            assert(command.payload.text.position.x < 30.0f);
+            assert(command.payload.text.clip.x == 26.0f);
+            assert(command.payload.text.clip.width == 80.0f);
+            foundInputText = true;
+        }
+    }
+    assert(foundInputText);
+}
+
 static void test_window_can_reopen()
 {
     TestBackend backend;
@@ -203,6 +421,14 @@ int main()
     test_checkbox();
     test_focus_lost_cancels_capture();
     test_draw_primitives();
+    test_automatic_layout();
+    test_slider_and_radio();
+    test_selectable();
+    test_progress_bar();
+    test_automatic_selectable_and_progress_bar();
+    test_slider_captures_pointer();
+    test_input_text_focus_and_utf8_backspace();
+    test_input_text_scrolls_to_caret();
     test_window_can_reopen();
     test_content_clip_applies_to_checkbox_label();
     test_clipped_button_cannot_be_clicked();
