@@ -1,14 +1,14 @@
-#include "pch.h"
-#include "Batch.hpp"
-#include "Color.hpp"
-#include "Shader.hpp"
-#include "Texture.hpp"
 #include "GUI.hpp"
-#include "Input.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <cstdarg>
+#include <cstdio>
+#include <cstring>
 
 Color LerpColor(const Color &a, const Color &b, float t)
 {
-    t = Clamp(t, 0.0f, 1.0f);
+    t = ig::clamp(t, 0.0f, 1.0f);
     return Color(
         static_cast<u8>(a.r + (b.r - a.r) * t),
         static_cast<u8>(a.g + (b.g - a.g) * t),
@@ -32,10 +32,11 @@ GUI::~GUI()
     Release();
 }
 
-void GUI::Init(RenderBatch *batch, Font *font)
+void GUI::Init(ig::Backend *backend, ig::FontId font, float fontSize)
 {
-    m_batch = batch;
+    m_backend = backend;
     m_font = font;
+    m_fontSize = fontSize > 0.0f ? fontSize : 14.0f;
 }
 
 void GUI::Release()
@@ -100,19 +101,69 @@ float GUI::AlignLeft(float margin) const
 // Frame Management
 // ========================================
 
-bool GUI::BeginFrame()
+void GUI::PushEvent(const ig::Event &event)
 {
+    m_events.push_back(event);
+}
+
+bool GUI::BeginFrame(const ig::FrameInfo &frame)
+{
+    m_frame = frame;
+    m_drawList.clear();
+    m_input.mousePressed = false;
+    m_input.mouseReleased = false;
+    std::fill(std::begin(m_input.keys), std::end(m_input.keys), false);
+    m_input.chars.clear();
+    m_input.nextChar = 0;
+
+    for (const ig::Event &event : m_events)
+    {
+        switch (event.type)
+        {
+        case ig::EventType::PointerMove:
+            m_input.mousePos = event.position;
+            break;
+        case ig::EventType::PointerDown:
+            m_input.mousePos = event.position;
+            if (event.button == ig::PointerButton::Left) {
+                m_input.mouseDown = true;
+                m_input.mousePressed = true;
+            }
+            break;
+        case ig::EventType::PointerUp:
+            m_input.mousePos = event.position;
+            if (event.button == ig::PointerButton::Left) {
+                m_input.mouseDown = false;
+                m_input.mouseReleased = true;
+            }
+            break;
+        case ig::EventType::KeyDown:
+            m_input.keys[static_cast<unsigned>(event.key)] = true;
+            break;
+        case ig::EventType::TextInput:
+            for (uint32_t i = 0; i < event.textLength; ++i)
+                m_input.chars.push_back(static_cast<unsigned char>(event.text[i]));
+            break;
+        case ig::EventType::FocusLost:
+            m_input.mouseDown = false;
+            break;
+        default:
+            break;
+        }
+    }
+    m_events.clear();
+
     m_nextControlID = 0;
     m_activeControl = 0;
     focusCounter = 0;
 
-    m_mousePos = Input::GetMousePosition();
+    m_mousePos = m_input.mousePos;
 
     ++m_frameCounter;
     m_widgetCounter = 0;
 
     // Soltou botão → limpa captura e termina drag
-    if (Input::IsMouseReleased(MouseButton::LEFT))
+    if (IsMouseReleased())
     {
         m_activeID.clear();
         if (m_draggingWindow)
@@ -125,7 +176,7 @@ bool GUI::BeginFrame()
     SortWindowsByZOrder();
 
     // Atualiza arrasto em progresso
-    if (m_draggingWindow && m_draggingWindow->isDragging && Input::IsMouseDown(MouseButton::LEFT))
+    if (m_draggingWindow && m_draggingWindow->isDragging && IsMouseDown())
     {
         m_draggingWindow->bounds.x = m_mousePos.x - m_draggingWindow->dragOffset.x;
         m_draggingWindow->bounds.y = m_mousePos.y - m_draggingWindow->dragOffset.y;
@@ -153,7 +204,7 @@ bool GUI::BeginFrame()
     {
         UpdateWindowInteraction(topWindow);
     }
-    else if (Input::IsMousePressed(MouseButton::LEFT))
+    else if (IsMousePressed())
     {
         // Clique no vazio → limpa foco
         for (auto &p : m_windows)
@@ -167,6 +218,18 @@ bool GUI::BeginFrame()
 void GUI::EndFrame()
 {
     m_hotID.clear();
+    if (m_backend)
+    {
+        const ig::DrawData data = m_drawList.data(m_frame.displaySize, m_frame.dpiScale);
+        m_backend->render(data);
+    }
+}
+
+int GUI::GetCharPressed()
+{
+    if (m_input.nextChar >= m_input.chars.size())
+        return 0;
+    return m_input.chars[m_input.nextChar++];
 }
 
 bool GUI::IsFocused()
@@ -438,40 +501,110 @@ WidgetState GUI::GetWidgetState(const FloatRect &rect, const std::string &widget
 
 void GUI::DrawRectFilled(const FloatRect &rect, const Color &color)
 {
-    if (!m_batch)
-        return;
-    m_batch->SetColor(color);
-    m_batch->Rectangle((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, true);
+    m_drawList.addRectFilled(rect, color, DisplayClip());
 }
 
-void GUI::DrawRectOutline(const FloatRect &rect, const Color &color, float /*thickness*/)
+void GUI::DrawRectOutline(const FloatRect &rect, const Color &color, float thickness)
 {
-    if (!m_batch)
-        return;
-    m_batch->SetColor(color);
-    m_batch->Rectangle((int)rect.x, (int)rect.y, (int)rect.width, (int)rect.height, false);
+    m_drawList.addRect(rect, color, DisplayClip(), thickness);
 }
 
 void GUI::DrawText(const char *text, float x, float y, const Color &color)
 {
-    if (!m_font)
+    if (!text)
         return;
-    m_font->SetColor(color);
-    m_font->Print(text, x, y);
+    m_drawList.addText(ig::StringView(text), Vec2(x, y), m_font, m_fontSize,
+                       color, DisplayClip());
+}
+
+void GUI::DrawLine(const Vec2 &from, const Vec2 &to, const Color &color,
+                   float thickness)
+{
+    m_drawList.addLine(from, to, color, DisplayClip(), thickness);
+}
+
+void GUI::DrawCircle(const Vec2 &center, float radius, const Color &color,
+                     bool filled, float thickness)
+{
+    if (radius <= 0.0f)
+        return;
+    if (filled)
+    {
+        m_drawList.addCircleFilled(center, radius, color, DisplayClip(), 32u);
+        return;
+    }
+
+    constexpr int segments = 32;
+    Vec2 previous(center.x + radius, center.y);
+    for (int i = 1; i <= segments; ++i)
+    {
+        const float angle = static_cast<float>(i) * 6.28318530718f /
+                            static_cast<float>(segments);
+        const Vec2 current(center.x + std::cos(angle) * radius,
+                           center.y + std::sin(angle) * radius);
+        DrawLine(previous, current, color, thickness);
+        previous = current;
+    }
+}
+
+void GUI::DrawRoundedRect(const FloatRect &rect, float radius, const Color &color,
+                          bool filled, float thickness)
+{
+    radius = ig::clamp(radius, 0.0f,
+                       std::min(rect.width, rect.height) * 0.5f);
+    if (radius <= 0.0f)
+    {
+        if (filled) DrawRectFilled(rect, color);
+        else DrawRectOutline(rect, color, thickness);
+        return;
+    }
+
+    constexpr int cornerSegments = 8;
+    Vec2 points[cornerSegments * 4];
+    int count = 0;
+    const Vec2 centers[4] = {
+        Vec2(rect.x + rect.width - radius, rect.y + radius),
+        Vec2(rect.x + rect.width - radius, rect.y + rect.height - radius),
+        Vec2(rect.x + radius, rect.y + rect.height - radius),
+        Vec2(rect.x + radius, rect.y + radius)};
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const float start = -1.57079632679f + corner * 1.57079632679f;
+        for (int i = 0; i < cornerSegments; ++i)
+        {
+            const float angle = start + 1.57079632679f *
+                static_cast<float>(i) / static_cast<float>(cornerSegments - 1);
+            points[count++] = Vec2(centers[corner].x + std::cos(angle) * radius,
+                                   centers[corner].y + std::sin(angle) * radius);
+        }
+    }
+
+    if (filled)
+    {
+        m_drawList.addPolygonFilled(ig::Span<const Vec2>(points, count), color,
+                                    DisplayClip());
+    }
+    else
+    {
+        for (int i = 0; i < count; ++i)
+            DrawLine(points[i], points[(i + 1) % count], color, thickness);
+    }
 }
 
 float GUI::GetTextWidth(const char *text)
 {
-    if (!m_font)
+    if (!m_backend || !text)
         return 0.0f;
-    return m_font->GetTextWidth(text);
+    return m_backend->measureText(m_font, ig::StringView(text), m_fontSize,
+                                  m_frame.dpiScale).width;
 }
 
 float GUI::GetTextHeight(const char *text)
 {
-    if (!m_font)
+    if (!m_backend || !text)
         return 0.0f;
-    return m_font->GetTextHeight(text);
+    return m_backend->measureText(m_font, ig::StringView(text), m_fontSize,
+                                  m_frame.dpiScale).height;
 }
 
 bool GUI::IsMouseInWindow() const
@@ -658,19 +791,19 @@ void GUI::UpdateWindowInteraction(WindowData *window)
     const bool mouseInWindow = IsPointInRect(m_mousePos, interactionRect);
 
     // Botões
-    if (window->canClose && Input::IsMousePressed(MouseButton::LEFT) && IsPointInRect(m_mousePos, closeButtonRect))
+    if (window->canClose && IsMousePressed() && IsPointInRect(m_mousePos, closeButtonRect))
     {
         window->isOpen = false;
         return;
     }
-    if (window->canMinimize && Input::IsMousePressed(MouseButton::LEFT) && IsPointInRect(m_mousePos, minimizeButtonRect))
+    if (window->canMinimize && IsMousePressed() && IsPointInRect(m_mousePos, minimizeButtonRect))
     {
         window->isMinimized = !window->isMinimized;
         return;
     }
 
     // Foco apenas se o clique foi nesta janela
-    if (Input::IsMousePressed(MouseButton::LEFT) && mouseInWindow)
+    if (IsMousePressed() && mouseInWindow)
     {
         for (auto &p : m_windows)
             p.second.isFocused = false;
@@ -680,7 +813,7 @@ void GUI::UpdateWindowInteraction(WindowData *window)
     }
 
     // Drag — só se nenhum controlo estiver ativo
-    if (window->canMove && mouseInTitleBar && !AnyControlActive() && Input::IsMousePressed(MouseButton::LEFT))
+    if (window->canMove && mouseInTitleBar && !AnyControlActive() && IsMousePressed())
     {
         window->isDragging = true;
         m_draggingWindow = window;
@@ -690,7 +823,7 @@ void GUI::UpdateWindowInteraction(WindowData *window)
 
 void GUI::RenderWindow(WindowData *window, const char *title)
 {
-    if (!window || !m_batch)
+    if (!window)
         return;
 
     // Minimizada → só titlebar
@@ -715,11 +848,12 @@ void GUI::RenderWindow(WindowData *window, const char *title)
             DrawRectFilled(closeButtonRect, c);
 
             float p = 8.0f;
-            m_batch->SetColor(m_theme.titleText);
-            m_batch->Line2D(Vec2(closeButtonRect.x + p, closeButtonRect.y + p),
-                            Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + closeButtonRect.height - p));
-            m_batch->Line2D(Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + p),
-                            Vec2(closeButtonRect.x + p, closeButtonRect.y + closeButtonRect.height - p));
+            DrawLine(Vec2(closeButtonRect.x + p, closeButtonRect.y + p),
+                     Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + closeButtonRect.height - p),
+                     m_theme.titleText);
+            DrawLine(Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + p),
+                     Vec2(closeButtonRect.x + p, closeButtonRect.y + closeButtonRect.height - p),
+                     m_theme.titleText);
             buttonX -= m_theme.titleBarHeight;
         }
 
@@ -731,10 +865,9 @@ void GUI::RenderWindow(WindowData *window, const char *title)
             DrawRectFilled(minimizeButtonRect, c);
 
             float p = 8.0f;
-            m_batch->SetColor(m_theme.titleText);
             FloatRect icon(minimizeButtonRect.x + p, minimizeButtonRect.y + p,
                            minimizeButtonRect.width - 2 * p, minimizeButtonRect.height - 2 * p);
-            m_batch->Rectangle((int)icon.x, (int)icon.y, (int)icon.width, (int)icon.height, false);
+            DrawRectOutline(icon, m_theme.titleText);
         }
         return;
     }
@@ -762,11 +895,12 @@ void GUI::RenderWindow(WindowData *window, const char *title)
         DrawRectFilled(closeButtonRect, c);
 
         float p = 8.0f;
-        m_batch->SetColor(m_theme.titleText);
-        m_batch->Line2D(Vec2(closeButtonRect.x + p, closeButtonRect.y + p),
-                        Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + closeButtonRect.height - p));
-        m_batch->Line2D(Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + p),
-                        Vec2(closeButtonRect.x + p, closeButtonRect.y + closeButtonRect.height - p));
+        DrawLine(Vec2(closeButtonRect.x + p, closeButtonRect.y + p),
+                 Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + closeButtonRect.height - p),
+                 m_theme.titleText);
+        DrawLine(Vec2(closeButtonRect.x + closeButtonRect.width - p, closeButtonRect.y + p),
+                 Vec2(closeButtonRect.x + p, closeButtonRect.y + closeButtonRect.height - p),
+                 m_theme.titleText);
         buttonX -= m_theme.titleBarHeight;
     }
 
@@ -778,10 +912,10 @@ void GUI::RenderWindow(WindowData *window, const char *title)
         DrawRectFilled(minimizeButtonRect, c);
 
         float p = 8.0f;
-        m_batch->SetColor(m_theme.titleText);
         float lineY = minimizeButtonRect.y + minimizeButtonRect.height - p - 2.0f;
-        m_batch->Line2D(Vec2(minimizeButtonRect.x + p, lineY),
-                        Vec2(minimizeButtonRect.x + minimizeButtonRect.width - p, lineY));
+        DrawLine(Vec2(minimizeButtonRect.x + p, lineY),
+                 Vec2(minimizeButtonRect.x + minimizeButtonRect.width - p, lineY),
+                 m_theme.titleText);
     }
 }
 
@@ -819,8 +953,8 @@ bool GUI::Button(const char *label, float x, float y, float w, float h)
 
     FloatRect rect = MakeContentRect(x, y, w, h);
     bool hovered = IsPointInRect(m_mousePos, rect);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
-    bool released = Input::IsMouseReleased(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
+    bool released = IsMouseReleased();
 
     if (pressed)
         c->active = true;
@@ -870,7 +1004,7 @@ bool GUI::Checkbox(const char *label, bool *value, float x, float y, float size)
 
     FloatRect box = MakeContentRect(x, y, size, size);
     bool hovered = IsPointInRect(m_mousePos, box);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
 
     if (pressed)
     {
@@ -920,15 +1054,15 @@ bool GUI::SliderFloat(const char *label, float *value, float min, float max,
     FloatRect slider(rect.x + lw, rect.y, sw, rect.height);
 
     bool hovered = IsPointInRect(m_mousePos, slider);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
-    bool released = Input::IsMouseReleased(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
+    bool released = IsMouseReleased();
 
     if (pressed)
         c->active = true;
 
-    if (c->active && Input::IsMouseDown(MouseButton::LEFT))
+    if (c->active && IsMouseDown())
     {
-        float t = Clamp((m_mousePos.x - slider.x) / slider.width, 0.0f, 1.0f);
+        float t = ig::clamp((m_mousePos.x - slider.x) / slider.width, 0.0f, 1.0f);
         float nv = min + t * (max - min);
         if (nv != *value)
         {
@@ -943,13 +1077,13 @@ bool GUI::SliderFloat(const char *label, float *value, float min, float max,
     DrawRectFilled(slider, m_theme.sliderBg);
     DrawRectOutline(slider, m_theme.windowBorder, 1.0f);
 
-    float t = Clamp((*value - min) / (max - min), 0.0f, 1.0f);
+    float t = ig::clamp((*value - min) / (max - min), 0.0f, 1.0f);
     float fw = t * slider.width;
     if (fw > 0.0f)
         DrawRectFilled(FloatRect(slider.x, slider.y, fw, slider.height), m_theme.sliderFill);
 
     float handleW = 12.0f;
-    float hx = Clamp(slider.x + fw - handleW * 0.5f, slider.x, slider.x + slider.width - handleW);
+    float hx = ig::clamp(slider.x + fw - handleW * 0.5f, slider.x, slider.x + slider.width - handleW);
     FloatRect handle(hx, slider.y - 2.0f, handleW, slider.height + 4.0f);
     Color hc = (hovered || c->active) ? m_theme.sliderHandleHover : m_theme.sliderHandle;
     DrawRectFilled(handle, hc);
@@ -990,15 +1124,15 @@ bool GUI::SliderInt(const char *label, int *value, int min, int max,
     FloatRect slider(rect.x + lw, rect.y, sw, rect.height);
 
     bool hovered = IsPointInRect(m_mousePos, slider);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
-    bool released = Input::IsMouseReleased(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
+    bool released = IsMouseReleased();
 
     if (pressed)
         c->active = true;
 
-    if (c->active && Input::IsMouseDown(MouseButton::LEFT))
+    if (c->active && IsMouseDown())
     {
-        float t = Clamp((m_mousePos.x - slider.x) / slider.width, 0.0f, 1.0f);
+        float t = ig::clamp((m_mousePos.x - slider.x) / slider.width, 0.0f, 1.0f);
         int nv = min + int(t * (max - min) + 0.5f);
         if (nv != *value)
         {
@@ -1013,13 +1147,13 @@ bool GUI::SliderInt(const char *label, int *value, int min, int max,
     DrawRectFilled(slider, m_theme.sliderBg);
     DrawRectOutline(slider, m_theme.windowBorder, 1.0f);
 
-    float t = Clamp(float(*value - min) / float(max - min), 0.0f, 1.0f);
+    float t = ig::clamp(float(*value - min) / float(max - min), 0.0f, 1.0f);
     float fw = t * slider.width;
     if (fw > 0.0f)
         DrawRectFilled(FloatRect(slider.x, slider.y, fw, slider.height), m_theme.sliderFill);
 
     float handleW = 12.0f;
-    float hx = Clamp(slider.x + fw - handleW * 0.5f, slider.x, slider.x + slider.width - handleW);
+    float hx = ig::clamp(slider.x + fw - handleW * 0.5f, slider.x, slider.x + slider.width - handleW);
     FloatRect handle(hx, slider.y - 2.0f, handleW, slider.height + 4.0f);
     Color hc = (hovered || c->active) ? m_theme.sliderHandleHover : m_theme.sliderHandle;
     DrawRectFilled(handle, hc);
@@ -1062,15 +1196,15 @@ bool GUI::SliderFloatVertical(const char *label, float *value, float min, float 
              m_theme.labelText);
 
     bool hovered = IsPointInRect(m_mousePos, rect);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
-    bool released = Input::IsMouseReleased(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
+    bool released = IsMouseReleased();
 
     if (pressed)
         c->active = true;
 
-    if (c->active && Input::IsMouseDown(MouseButton::LEFT))
+    if (c->active && IsMouseDown())
     {
-        float t = Clamp((rect.y + rect.height - m_mousePos.y) / rect.height, 0.0f, 1.0f);
+        float t = ig::clamp((rect.y + rect.height - m_mousePos.y) / rect.height, 0.0f, 1.0f);
         float nv = min + t * (max - min);
         if (nv != *value)
         {
@@ -1085,13 +1219,13 @@ bool GUI::SliderFloatVertical(const char *label, float *value, float min, float 
     DrawRectFilled(rect, m_theme.sliderBg);
     DrawRectOutline(rect, m_theme.windowBorder, 1.0f);
 
-    float t = Clamp((*value - min) / (max - min), 0.0f, 1.0f);
+    float t = ig::clamp((*value - min) / (max - min), 0.0f, 1.0f);
     float fh = t * rect.height;
     if (fh > 0.0f)
         DrawRectFilled(FloatRect(rect.x, rect.y + rect.height - fh, rect.width, fh), m_theme.sliderFill);
 
     float handleH = 12.0f;
-    float hy = Clamp(rect.y + rect.height - fh - handleH * 0.5f, rect.y, rect.y + rect.height - handleH);
+    float hy = ig::clamp(rect.y + rect.height - fh - handleH * 0.5f, rect.y, rect.y + rect.height - handleH);
     FloatRect handle(rect.x - 2.0f, hy, rect.width + 4.0f, handleH);
     Color hc = (hovered || c->active) ? m_theme.sliderHandleHover : m_theme.sliderHandle;
     DrawRectFilled(handle, hc);
@@ -1128,15 +1262,15 @@ bool GUI::SliderIntVertical(const char *label, int *value, int min, int max,
              m_theme.labelText);
 
     bool hovered = IsPointInRect(m_mousePos, rect);
-    bool pressed = hovered && Input::IsMousePressed(MouseButton::LEFT);
-    bool released = Input::IsMouseReleased(MouseButton::LEFT);
+    bool pressed = hovered && IsMousePressed();
+    bool released = IsMouseReleased();
 
     if (pressed)
         c->active = true;
 
-    if (c->active && Input::IsMouseDown(MouseButton::LEFT))
+    if (c->active && IsMouseDown())
     {
-        float t = Clamp((rect.y + rect.height - m_mousePos.y) / rect.height, 0.0f, 1.0f);
+        float t = ig::clamp((rect.y + rect.height - m_mousePos.y) / rect.height, 0.0f, 1.0f);
         int nv = min + int(t * (max - min) + 0.5f);
         if (nv != *value)
         {
@@ -1151,13 +1285,13 @@ bool GUI::SliderIntVertical(const char *label, int *value, int min, int max,
     DrawRectFilled(rect, m_theme.sliderBg);
     DrawRectOutline(rect, m_theme.windowBorder, 1.0f);
 
-    float t = Clamp(float(*value - min) / float(max - min), 0.0f, 1.0f);
+    float t = ig::clamp(float(*value - min) / float(max - min), 0.0f, 1.0f);
     float fh = t * rect.height;
     if (fh > 0.0f)
         DrawRectFilled(FloatRect(rect.x, rect.y + rect.height - fh, rect.width, fh), m_theme.sliderFill);
 
     float handleH = 12.0f;
-    float hy = Clamp(rect.y + rect.height - fh - handleH * 0.5f, rect.y, rect.y + rect.height - handleH);
+    float hy = ig::clamp(rect.y + rect.height - fh - handleH * 0.5f, rect.y, rect.y + rect.height - handleH);
     FloatRect handle(rect.x - 2.0f, hy, rect.width + 4.0f, handleH);
     Color hc = (hovered || c->active) ? m_theme.sliderHandleHover : m_theme.sliderHandle;
     DrawRectFilled(handle, hc);
@@ -1252,7 +1386,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
     bool hovered = IsPointInRect(m_mousePos, rect);
 
     // Foco pelo rato
-    if (Input::IsMousePressed(MouseButton::LEFT))
+    if (IsMousePressed())
     {
         if (hovered)
             m_focusedControl = (int)control->id;
@@ -1284,7 +1418,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
     if (control->active)
     {
         // Caracteres "imprimíveis"
-        int ch = Input::GetCharPressed();
+        int ch = GetCharPressed();
         
         if (ch >= 32 && ch < 127)
         {
@@ -1307,7 +1441,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
     
 
         // Backspace (apaga antes do cursor)
-        if (Input::IsKeyPressed(KeyCode::KEY_BACKSPACE))
+        if (IsKeyPressed(ig::KeyCode::Backspace))
         {
             if (control->itag > 0 && len > 0)
             {
@@ -1324,7 +1458,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
         }
 
         // Delete (apaga em cima do cursor)
-        if (Input::IsKeyPressed(KeyCode::KEY_DELETE))
+        if (IsKeyPressed(ig::KeyCode::Delete))
         {
             if (control->itag < (int)len)
             {
@@ -1340,20 +1474,20 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
         }
 
         // Movimentação do cursor
-        if (Input::IsKeyPressed(KeyCode::KEY_LEFT) && control->itag > 0)
+        if (IsKeyPressed(ig::KeyCode::Left) && control->itag > 0)
             control->itag--;
 
-        if (Input::IsKeyPressed(KeyCode::KEY_RIGHT) && control->itag < (int)len)
+        if (IsKeyPressed(ig::KeyCode::Right) && control->itag < (int)len)
             control->itag++;
 
-        if (Input::IsKeyPressed(KeyCode::KEY_HOME))
+        if (IsKeyPressed(ig::KeyCode::Home))
             control->itag = 0;
 
-        if (Input::IsKeyPressed(KeyCode::KEY_END))
+        if (IsKeyPressed(ig::KeyCode::End))
             control->itag = (int)len;
 
         // Enter → sai do foco (opcional)
-        if (Input::IsKeyPressed(KeyCode::KEY_ENTER) || Input::IsKeyPressed(KeyCode::KEY_KP_ENTER))
+        if (IsKeyPressed(ig::KeyCode::Enter) || IsKeyPressed(ig::KeyCode::Enter))
         {
             m_focusedControl = -1;
             control->active = false;
@@ -1382,7 +1516,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
     // Cursor
     if (control->active)
     {
-        control->ftag += Device::Instance().GetFrameTime();
+        control->ftag += m_frame.deltaSeconds;
         if (control->ftag > 1.0f)
             control->ftag = 0.0f;
 
@@ -1434,8 +1568,8 @@ static void RGBtoHSV(float r, float g, float b, float &h, float &s, float &v)
 
 static void HSVtoRGB(float h, float s, float v, float &r, float &g, float &b)
 {
-    s = Clamp(s, 0.0f, 1.0f);
-    v = Clamp(v, 0.0f, 1.0f);
+    s = ig::clamp(s, 0.0f, 1.0f);
+    v = ig::clamp(v, 0.0f, 1.0f);
 
     if (s <= 0.0f)
     {
@@ -1555,16 +1689,16 @@ bool GUI::ColorPicker(const char *label, Color *color, float x, float y, float w
     // Qual SV box está a ser arrastado
     static u32 activeSVId = 0;
 
-    if (svHovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (svHovered && IsMousePressed())
         activeSVId = control->id;
 
-    if (activeSVId == control->id && Input::IsMouseDown(MouseButton::LEFT))
+    if (activeSVId == control->id && IsMouseDown())
     {
         float sx = (m_mousePos.x - svBox.x) / svBox.width;
         float sy = (m_mousePos.y - svBox.y) / svBox.height;
 
-        sx = Clamp(sx, 0.0f, 1.0f);
-        sy = Clamp(sy, 0.0f, 1.0f);
+        sx = ig::clamp(sx, 0.0f, 1.0f);
+        sy = ig::clamp(sy, 0.0f, 1.0f);
 
         hsv.y = sx;          // S
         hsv.z = 1.0f - sy;   // V
@@ -1577,7 +1711,7 @@ bool GUI::ColorPicker(const char *label, Color *color, float x, float y, float w
         control->changed = true;
     }
 
-    if (!Input::IsMouseDown(MouseButton::LEFT))
+    if (!IsMouseDown())
         activeSVId = 0;
 
     y += boxSize + spacing * 2.0f;
@@ -1609,13 +1743,13 @@ bool GUI::ColorPicker(const char *label, Color *color, float x, float y, float w
     bool hueHovered = IsPointInRect(m_mousePos, hueBar);
     static u32 activeHueId = 0;
 
-    if (hueHovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (hueHovered && IsMousePressed())
         activeHueId = control->id;
 
-    if (activeHueId == control->id && Input::IsMouseDown(MouseButton::LEFT))
+    if (activeHueId == control->id && IsMouseDown())
     {
         float hx = (m_mousePos.x - hueBar.x) / hueBar.width;
-        hx = Clamp(hx, 0.0f, 1.0f);
+        hx = ig::clamp(hx, 0.0f, 1.0f);
 
         hsv.x = hx * 360.0f;
 
@@ -1627,7 +1761,7 @@ bool GUI::ColorPicker(const char *label, Color *color, float x, float y, float w
         control->changed = true;
     }
 
-    if (!Input::IsMouseDown(MouseButton::LEFT))
+    if (!IsMouseDown())
         activeHueId = 0;
 
     y += hueBarH + spacing * 2.0f;
@@ -1647,7 +1781,7 @@ void GUI::ProgressBar(float progress, float x, float y, float w, float h,
     if (!win || win->isMinimized || !win->isOpen)
         return;
 
-    progress = Clamp(progress, 0.0f, 1.0f);
+    progress = ig::clamp(progress, 0.0f, 1.0f);
 
     FloatRect bgRect = MakeContentRect(x, y, w, h);
 
@@ -1716,7 +1850,7 @@ bool GUI::ListBox(const char *label, int *selectedIndex, const char **items, int
 
     float maxScroll = (itemCount - visibleItems) * itemH;
     if (maxScroll < 0.0f) maxScroll = 0.0f;
-    scrollOffset = Clamp(scrollOffset, 0.0f, maxScroll);
+    scrollOffset = ig::clamp(scrollOffset, 0.0f, maxScroll);
 
     bool boxHovered = IsPointInRect(m_mousePos, boxRect);
     bool isScrolling = false;
@@ -1748,22 +1882,22 @@ bool GUI::ListBox(const char *label, int *selectedIndex, const char **items, int
         Color handleColor = handleHovered ? m_theme.sliderHandleHover : m_theme.sliderHandle;
         DrawRectFilled(handleRect, handleColor);
 
-        if (handleHovered && Input::IsMousePressed(MouseButton::LEFT))
+        if (handleHovered && IsMousePressed())
         {
             draggingScrollbarId = control->id;
             dragStartY = m_mousePos.y;
             dragStartOffset = scrollOffset;
         }
 
-        if (draggingScrollbarId == control->id && Input::IsMouseDown(MouseButton::LEFT))
+        if (draggingScrollbarId == control->id && IsMouseDown())
         {
             float deltaY = m_mousePos.y - dragStartY;
             float deltaScroll = (deltaY / (scrollbarH - handleHeight)) * maxScroll;
-            scrollOffset = Clamp(dragStartOffset + deltaScroll, 0.0f, maxScroll);
+            scrollOffset = ig::clamp(dragStartOffset + deltaScroll, 0.0f, maxScroll);
             isScrolling = true;
         }
 
-        if (!Input::IsMouseDown(MouseButton::LEFT))
+        if (!IsMouseDown())
             draggingScrollbarId = 0;
     }
 
@@ -1790,7 +1924,7 @@ bool GUI::ListBox(const char *label, int *selectedIndex, const char **items, int
         float textY = itemRect.y + (itemRect.height - GetTextHeight(txt)) * 0.5f;
         DrawText(txt, itemRect.x + 8.0f, textY, m_theme.buttonText);
 
-        if (itemHovered && Input::IsMousePressed(MouseButton::LEFT))
+        if (itemHovered && IsMousePressed())
         {
             *selectedIndex = i;
             control->changed = true;
@@ -1829,7 +1963,7 @@ bool GUI::Dropdown(const char *label, int *selectedIndex, const char **items, in
 
     bool buttonHovered = IsPointInRect(m_mousePos, rect);
 
-    if (buttonHovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (buttonHovered && IsMousePressed())
     {
         isOpen = !isOpen;
     }
@@ -1878,7 +2012,7 @@ bool GUI::Dropdown(const char *label, int *selectedIndex, const char **items, in
         float itY = itemRect.y + (itemRect.height - GetTextHeight(txt)) * 0.5f;
         DrawText(txt, itemRect.x + 8.0f, itY, m_theme.buttonText);
 
-        if (itemHovered && Input::IsMousePressed(MouseButton::LEFT))
+        if (itemHovered && IsMousePressed())
         {
             if (i != *selectedIndex)
             {
@@ -1890,7 +2024,7 @@ bool GUI::Dropdown(const char *label, int *selectedIndex, const char **items, in
     }
 
     // Clique fora fecha
-    if (Input::IsMousePressed(MouseButton::LEFT) &&
+    if (IsMousePressed() &&
         !IsPointInRect(m_mousePos, rect) &&
         !IsPointInRect(m_mousePos, listRect))
     {
@@ -1938,7 +2072,7 @@ bool GUI::RadioButton(const char *label, int *selected, int value, float x, floa
     float labelY = circleRect.y + (circleRect.height - GetTextHeight(label)) * 0.5f;
     DrawText(label, labelX, labelY, m_theme.labelText);
 
-    if (hovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (hovered && IsMousePressed())
     {
         *selected = value;
         return true;
@@ -1969,7 +2103,7 @@ bool GUI::ToggleSwitch(const char *label, bool *value, float x, float y, float w
     FloatRect rect = MakeContentRect(x, y, w, h);
     bool hovered = IsPointInRect(m_mousePos, rect);
 
-    if (hovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (hovered && IsMousePressed())
     {
         *value = !*value;
         control->changed = true;
@@ -1982,35 +2116,22 @@ bool GUI::ToggleSwitch(const char *label, bool *value, float x, float y, float w
     if (hovered)
         bg = LerpColor(bg, m_theme.buttonHover, 0.35f);
 
-    if (!m_batch)
-        return control->changed;
-
     float radius = rect.height * 0.5f;
     float handleR = radius - 2.0f;
     float cxOff   = rect.x + handleR;
     float cxOn    = rect.x + rect.width - handleR;
     float cy      = rect.y + radius;
  
-    m_batch->SetColor(bg);
-    m_batch->RoundedRectangle((int)rect.x, (int)rect.y,
-                              (int)rect.width, (int)rect.height,
-                              radius, 8, true);
-
-    m_batch->SetColor(m_theme.checkboxBorder);
-    m_batch->RoundedRectangle((int)rect.x, (int)rect.y,
-                              (int)rect.width, (int)rect.height,
-                              radius, 8, false);
+    DrawRoundedRect(rect, radius, bg, true);
+    DrawRoundedRect(rect, radius, m_theme.checkboxBorder, false);
 
 
 
     float cx = *value ? cxOn : cxOff;
 
     Color handleColor = hovered ? m_theme.sliderHandleHover : m_theme.sliderHandle;
-    m_batch->SetColor(handleColor);
-    m_batch->Circle((int)cx, (int)cy, handleR, true);
-
-    m_batch->SetColor(m_theme.windowBorder);
-    m_batch->Circle((int)cx, (int)cy, handleR, false);
+    DrawCircle(Vec2(cx, cy), handleR, handleColor, true);
+    DrawCircle(Vec2(cx, cy), handleR, m_theme.windowBorder, false);
 
     if (label && label[0] != '\0')
     {
@@ -2052,16 +2173,10 @@ void GUI::SeparatorText(const char *text, float x, float y, float w)
     float rightStart = textX + textW + padding;
     float rightEnd   = base.x + w;
 
-    if (m_batch)
-    {
-        m_batch->SetColor(m_theme.separatorColor);
-        if (leftEnd > leftStart)
-            m_batch->Line2D((int)leftStart, (int)lineY,
-                            (int)leftEnd,   (int)lineY);
-        if (rightEnd > rightStart)
-            m_batch->Line2D((int)rightStart, (int)lineY,
-                            (int)rightEnd,  (int)lineY);
-    }
+    if (leftEnd > leftStart)
+        DrawLine(Vec2(leftStart, lineY), Vec2(leftEnd, lineY), m_theme.separatorColor);
+    if (rightEnd > rightStart)
+        DrawLine(Vec2(rightStart, lineY), Vec2(rightEnd, lineY), m_theme.separatorColor);
 
     DrawText(text, textX, textY, m_theme.labelText);
 }
@@ -2076,7 +2191,7 @@ void GUI::Spinner(float x, float y, float radius)
     if (!control)
         return;
 
-    float dt = Device::Instance().GetFrameTime();
+    float dt = m_frame.deltaSeconds;
     control->ftag += dt;
     if (control->ftag > 1.0f)
         control->ftag -= 1.0f;
@@ -2106,11 +2221,8 @@ void GUI::Spinner(float x, float y, float radius)
         points[i].y = cy + std::sin(a) * radius;
     }
 
-    if (m_batch)
-    {
-        m_batch->SetColor(m_theme.buttonActive);
-        m_batch->Polyline(points, segments + 1);
-    }
+    for (int i = 0; i < segments; ++i)
+        DrawLine(points[i], points[i + 1], m_theme.buttonActive, 2.0f);
 }
 bool GUI::DragFloat(const char *label, float *value,
                     float speed,
@@ -2157,20 +2269,20 @@ bool GUI::DragFloat(const char *label, float *value,
 
     bool hovered = IsPointInRect(m_mousePos, box);
 
-    if (hovered && Input::IsMousePressed(MouseButton::LEFT))
+    if (hovered && IsMousePressed())
     {
         control->active = true;
         control->ftag   = *value;
         control->itag   = (int)m_mousePos.x;
     }
 
-    if (control->active && Input::IsMouseDown(MouseButton::LEFT))
+    if (control->active && IsMouseDown())
     {
         float dx       = m_mousePos.x - (float)control->itag;
         float newValue = control->ftag + dx * speed;
 
         if (min < max)
-            newValue = Clamp(newValue, min, max);
+            newValue = ig::clamp(newValue, min, max);
 
         if (newValue != *value)
         {
@@ -2179,7 +2291,7 @@ bool GUI::DragFloat(const char *label, float *value,
         }
     }
 
-    if (control->active && Input::IsMouseReleased(MouseButton::LEFT))
+    if (control->active && IsMouseReleased())
     {
         control->active = false;
     }

@@ -241,23 +241,8 @@ bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &comman
         command.indexCount > data.indices.size() - command.firstIndex)
         return false;
 
-    vertices_.clear();
     indices_.clear();
-    vertices_.reserve(data.vertices.size());
     indices_.reserve(command.indexCount);
-    for (Span<const DrawVertex>::size_type i = 0; i < data.vertices.size(); ++i)
-    {
-        SDL_Vertex vertex;
-        vertex.position.x = data.vertices[i].position.x;
-        vertex.position.y = data.vertices[i].position.y;
-        vertex.color.r = data.vertices[i].color.r;
-        vertex.color.g = data.vertices[i].color.g;
-        vertex.color.b = data.vertices[i].color.b;
-        vertex.color.a = data.vertices[i].color.a;
-        vertex.tex_coord.x = data.vertices[i].uv.x;
-        vertex.tex_coord.y = data.vertices[i].uv.y;
-        vertices_.push_back(vertex);
-    }
     for (uint32_t i = 0; i < command.indexCount; ++i)
     {
         const DrawIndex index = data.indices[command.firstIndex + i];
@@ -323,6 +308,25 @@ bool Backend::render(const DrawData &data)
 {
     if (!renderer_)
         return false;
+
+    // Convert the shared vertex buffer once. Geometry commands only select
+    // their index ranges below; reconverting it per command is quadratic for
+    // dense widgets such as the color picker.
+    vertices_.clear();
+    vertices_.reserve(data.vertices.size());
+    for (Span<const DrawVertex>::size_type i = 0; i < data.vertices.size(); ++i)
+    {
+        SDL_Vertex vertex;
+        vertex.position.x = data.vertices[i].position.x;
+        vertex.position.y = data.vertices[i].position.y;
+        vertex.color.r = data.vertices[i].color.r;
+        vertex.color.g = data.vertices[i].color.g;
+        vertex.color.b = data.vertices[i].color.b;
+        vertex.color.a = data.vertices[i].color.a;
+        vertex.tex_coord.x = data.vertices[i].uv.x;
+        vertex.tex_coord.y = data.vertices[i].uv.y;
+        vertices_.push_back(vertex);
+    }
 
     for (Span<const DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
     {

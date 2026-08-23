@@ -134,7 +134,10 @@ static void test_widget_gallery()
     assert(context.wantsKeyboard());
     assert(context.wantsTextInput());
     assert(state.name.size() == 4u);
-    assert(inputData.commands.size() >= 20u);
+    // Consecutive compatible geometry is batched, so command count is lower
+    // than the number of individual widget primitives.
+    assert(inputData.commands.size() >= 17u);
+    assert(inputData.vertices.size() >= 44u);
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 312.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 312.0f));

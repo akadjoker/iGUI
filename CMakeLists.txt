@@ -21,11 +21,12 @@ add_library(ct INTERFACE)
 target_include_directories(ct INTERFACE "${igui_containers_SOURCE_DIR}/include")
 
 add_library(igui
+    GUI.cpp
     src/DrawList.cpp
     src/Gui.cpp
 )
 add_library(igui::igui ALIAS igui)
-target_include_directories(igui PUBLIC include)
+target_include_directories(igui PUBLIC include "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(igui PUBLIC ct)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -120,6 +121,9 @@ if(IGUI_BUILD_SDL2_DEMO)
 
     add_executable(igui_sdl2_demo examples/sdl2_demo/main.cpp)
     target_link_libraries(igui_sdl2_demo PRIVATE igui_sdl2)
+
+    add_executable(igui_sdl2_legacy_gui_demo examples/sdl2_legacy_gui_demo/main.cpp)
+    target_link_libraries(igui_sdl2_legacy_gui_demo PRIVATE igui_sdl2)
 
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/stb_impl.cpp")
         add_library(igui_widgets_stb STATIC third_party/stb/stb_impl.cpp)

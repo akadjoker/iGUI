@@ -1,5 +1,6 @@
 #include <assert.h>
 
+#include <GUI.hpp>
 #include <igui/Gui.hpp>
 
 class TestBackend : public ig::Backend
@@ -43,6 +44,115 @@ static void test_draw_data_and_label()
     assert(data.textBytes.size() >= 9u);
     assert(backend.render(data));
     assert(backend.rendered);
+}
+
+static void test_legacy_gui_uses_backend()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    assert(gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f, 1.0f, 1.0f / 60.0f)));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 180.0f));
+    gui.Label("backend", 8.0f, 8.0f);
+    gui.Button("button", 8.0f, 32.0f, 100.0f, 24.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+    assert(backend.rendered);
+    assert(backend.lastData.commands.size() > 0u);
+    bool foundDefaultFontText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0;
+         i < backend.lastData.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = backend.lastData.commands[i];
+        if (command.type == ig::DrawCommandType::Text)
+        {
+            assert(command.payload.text.font == ig::FontId(1u));
+            foundDefaultFontText = true;
+        }
+    }
+    assert(foundDefaultFontText);
+}
+
+static void test_legacy_gui_widget_interaction()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    bool checked = false;
+    float value = 0.0f;
+
+    gui.PushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 65.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    assert(!gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f));
+    gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f);
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    gui.PushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 65.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    assert(gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f));
+    gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f);
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    gui.PushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 105.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f);
+    assert(gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f));
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+    assert(checked);
+}
+
+static void test_legacy_gui_complete_widget_render()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    bool checked = true;
+    bool toggle = false;
+    float value = 0.5f;
+    float drag = 1.0f;
+    int integer = 50;
+    int selected = 0;
+    Color color(80, 140, 220, 255);
+    char text[32] = "text";
+    const char *items[] = {"one", "two", "three"};
+
+    gui.BeginFrame(ig::FrameInfo(1000.0f, 700.0f, 1.0f, 1.0f / 60.0f));
+    assert(gui.BeginWindow("all", 10.0f, 10.0f, 960.0f, 650.0f));
+    gui.Button("Button", 10.0f, 10.0f, 100.0f, 24.0f);
+    gui.Checkbox("Checkbox", &checked, 10.0f, 45.0f, 18.0f);
+    gui.ToggleSwitch("Toggle", &toggle, 10.0f, 80.0f, 44.0f, 20.0f);
+    gui.RadioButton("Radio", &selected, 1, 10.0f, 115.0f, 18.0f);
+    gui.SliderFloat("Float", &value, 0.0f, 1.0f, 10.0f, 150.0f, 240.0f, 20.0f);
+    gui.SliderInt("Int", &integer, 0, 100, 10.0f, 185.0f, 240.0f, 20.0f);
+    gui.SliderFloatVertical("VF", &value, 0.0f, 1.0f, 290.0f, 45.0f, 24.0f, 160.0f);
+    gui.SliderIntVertical("VI", &integer, 0, 100, 350.0f, 45.0f, 24.0f, 160.0f);
+    gui.DragFloat("Drag", &drag, 0.1f, -10.0f, 10.0f, 10.0f, 220.0f, 240.0f, 24.0f);
+    gui.TextInput("Text", text, sizeof(text), 55.0f, 260.0f, 195.0f, 24.0f);
+    gui.Dropdown("Drop", &selected, items, 3, 410.0f, 45.0f, 180.0f, 26.0f);
+    gui.ListBox("List", &selected, items, 3, 410.0f, 100.0f, 180.0f, 120.0f, 3);
+    gui.ProgressBar(value, 10.0f, 305.0f, 240.0f, 18.0f,
+                    Orientation::Horizontal, "50%");
+    gui.ColorPicker("Color", &color, 650.0f, 45.0f, 180.0f);
+    gui.SeparatorText("Section", 10.0f, 350.0f, 240.0f);
+    gui.Spinner(130.0f, 395.0f, 18.0f);
+    gui.LabelColored("colored", Color(255, 180, 80, 255), 10.0f, 440.0f);
+    gui.Text(10.0f, 470.0f, "value %.2f", value);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    assert(backend.rendered);
+    assert(backend.lastData.commands.size() > 20u);
+    assert(backend.lastData.vertices.size() > 4000u);
+    assert(backend.lastData.indices.size() > 6000u);
 }
 
 static void test_button_click()
@@ -115,11 +225,10 @@ static void test_draw_primitives()
     drawList.addPolygonFilled(ig::Span<const ig::Vec2>(polygon), color, clip);
     const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
 
-    assert(data.commands.size() == 7u);
+    assert(data.commands.size() == 1u);
     assert(data.vertices.size() == 34u);
     assert(data.indices.size() == 63u);
-    assert(data.commands[5].payload.geometry.indexCount == 24u);
-    assert(data.commands[6].payload.geometry.indexCount == 9u);
+    assert(data.commands[0].payload.geometry.indexCount == 63u);
 }
 
 static void test_automatic_layout()
@@ -416,6 +525,9 @@ static void test_clicked_window_is_composed_on_top()
 int main()
 {
     test_draw_data_and_label();
+    test_legacy_gui_uses_backend();
+    test_legacy_gui_widget_interaction();
+    test_legacy_gui_complete_widget_render();
     test_button_click();
     test_button_release_outside_does_not_click();
     test_checkbox();

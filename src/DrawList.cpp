@@ -23,16 +23,35 @@ bool pointInTriangle(const Vec2 &point, const Vec2 &a, const Vec2 &b, const Vec2
     return !hasNegative || !hasPositive;
 }
 
+bool sameRect(const Rect &a, const Rect &b)
+{
+    return a.x == b.x && a.y == b.y &&
+           a.width == b.width && a.height == b.height;
+}
+
 void addGeometryCommand(ct::Vector<DrawCommand> &commands,
                         uint32_t firstIndex, uint32_t indexCount,
-                        const Rect &clip)
+                        const Rect &clip, TextureId texture = TextureId())
 {
     GeometryCommand geometry;
     geometry.clip = clip;
-    geometry.texture = TextureId();
+    geometry.texture = texture;
     geometry.firstIndex = firstIndex;
     geometry.indexCount = indexCount;
     geometry.vertexOffset = 0;
+
+    if (!commands.empty() && commands.back().type == DrawCommandType::Geometry)
+    {
+        GeometryCommand &previous = commands.back().payload.geometry;
+        if (previous.texture == geometry.texture &&
+            previous.vertexOffset == geometry.vertexOffset &&
+            previous.firstIndex + previous.indexCount == geometry.firstIndex &&
+            sameRect(previous.clip, geometry.clip))
+        {
+            previous.indexCount += geometry.indexCount;
+            return;
+        }
+    }
     commands.push_back(DrawCommand(geometry));
 }
 
@@ -168,13 +187,7 @@ void DrawList::addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
     indices_.push_back(firstVertex + 2u);
     indices_.push_back(firstVertex + 3u);
 
-    GeometryCommand geometry;
-    geometry.clip = clip;
-    geometry.texture = texture;
-    geometry.firstIndex = firstIndex;
-    geometry.indexCount = 6u;
-    geometry.vertexOffset = 0;
-    commands_.push_back(DrawCommand(geometry));
+    addGeometryCommand(commands_, firstIndex, 6u, clip, texture);
 }
 
 void DrawList::addCircleFilled(const Vec2 &center, float radius,

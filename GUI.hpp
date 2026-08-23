@@ -1,15 +1,27 @@
 #pragma once
 
-#include "Config.hpp"
-#include "Math.hpp"
-#include "Color.hpp"
+#include <igui/Backend.hpp>
+#include <igui/Events.hpp>
 #include <string>
 #include <vector>
 #include <functional>
 #include <unordered_map>
 
-class RenderBatch;
-class Font;
+using u8 = uint8_t;
+using u32 = uint32_t;
+using Vec2 = ig::Vec2;
+using FloatRect = ig::Rect;
+using Color = ig::Color;
+
+struct Vec3
+{
+    float x;
+    float y;
+    float z;
+    Vec3() : x(0.0f), y(0.0f), z(0.0f) {}
+    Vec3(float xValue, float yValue, float zValue)
+        : x(xValue), y(yValue), z(zValue) {}
+};
 
  
  
@@ -142,11 +154,13 @@ public:
     ~GUI();
 
     // Init / Release
-    void Init(RenderBatch *batch, Font *font);
+    void Init(ig::Backend *backend, ig::FontId font = ig::FontId(1u),
+              float fontSize = 14.0f);
     void Release();
 
     // Frame
-    bool BeginFrame();
+    void PushEvent(const ig::Event &event);
+    bool BeginFrame(const ig::FrameInfo &frame);
     void EndFrame();
 
     bool IsFocused();
@@ -251,6 +265,12 @@ private:
 
     float GetTextWidth(const char *text);
     float GetTextHeight(const char *text);
+    void DrawLine(const Vec2 &from, const Vec2 &to, const Color &color,
+                  float thickness = 1.0f);
+    void DrawCircle(const Vec2 &center, float radius, const Color &color,
+                    bool filled, float thickness = 1.0f);
+    void DrawRoundedRect(const FloatRect &rect, float radius, const Color &color,
+                         bool filled, float thickness = 1.0f);
 
     // Ids
     // std::string GenerateID(const char *label);
@@ -260,8 +280,36 @@ private:
     // ========================================
     // Member Variables
     // ========================================
-    RenderBatch *m_batch = nullptr;
-    Font *m_font = nullptr;
+    ig::Backend *m_backend = nullptr;
+    ig::FontId m_font = ig::FontId(1u);
+    float m_fontSize = 14.0f;
+    ig::DrawList m_drawList;
+    ig::FrameInfo m_frame;
+
+    struct InputState
+    {
+        Vec2 mousePos{};
+        bool mouseDown = false;
+        bool mousePressed = false;
+        bool mouseReleased = false;
+        bool keys[static_cast<unsigned>(ig::KeyCode::Z) + 1] = {};
+        std::vector<int> chars;
+        size_t nextChar = 0;
+    } m_input;
+    std::vector<ig::Event> m_events;
+
+    bool IsMouseDown() const { return m_input.mouseDown; }
+    bool IsMousePressed() const { return m_input.mousePressed; }
+    bool IsMouseReleased() const { return m_input.mouseReleased; }
+    bool IsKeyPressed(ig::KeyCode key) const
+    {
+        return m_input.keys[static_cast<unsigned>(key)];
+    }
+    int GetCharPressed();
+    FloatRect DisplayClip() const
+    {
+        return FloatRect(0.0f, 0.0f, m_frame.displaySize.x, m_frame.displaySize.y);
+    }
     GUITheme m_theme{};
 
     // Input state
