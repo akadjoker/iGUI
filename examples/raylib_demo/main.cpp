@@ -10,6 +10,7 @@ struct DemoState
 {
     bool enabled;
     bool notifications;
+    bool liveUpdates;
     bool advanced;
     bool showInspector;
     bool selectedPreset;
@@ -19,7 +20,7 @@ struct DemoState
     ig::String name;
 
     DemoState()
-        : enabled(true), notifications(false), advanced(false), showInspector(true),
+        : enabled(true), notifications(false), liveUpdates(true), advanced(false), showInspector(true),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), name("Raylib user")
     {
     }
@@ -40,6 +41,7 @@ void drawControls(ig::Context &ui, DemoState &state)
     ui.inputText("Display name", state.name, 330.0f);
     ui.checkbox("Enable renderer", state.enabled);
     ui.checkbox("Desktop notifications", state.notifications);
+    ui.toggleSwitch("Live updates", state.liveUpdates);
     ui.spacing(4.0f);
 
     ui.label("Rendering quality");

@@ -25,6 +25,7 @@ public:
 struct GalleryState
 {
     bool checked;
+    bool switched;
     bool firstChoice;
     bool selected;
     float volume;
@@ -32,6 +33,7 @@ struct GalleryState
     int quality;
     bool buttonClicked;
     bool checkboxClicked;
+    bool switchClicked;
     bool radioClicked;
     bool selectableClicked;
     bool sliderChanged;
@@ -39,8 +41,8 @@ struct GalleryState
     bool comboChanged;
 
     GalleryState()
-        : checked(false), firstChoice(false), selected(false), volume(0.0f), name(), quality(0),
-          buttonClicked(false), checkboxClicked(false), radioClicked(false),
+        : checked(false), switched(false), firstChoice(false), selected(false), volume(0.0f), name(), quality(0),
+          buttonClicked(false), checkboxClicked(false), switchClicked(false), radioClicked(false),
           selectableClicked(false), sliderChanged(false), inputChanged(false), comboChanged(false)
     {
     }
@@ -54,6 +56,7 @@ static void drawGallery(ig::Context &context, GalleryState &state)
     assert(context.beginWindow("widget gallery", ig::Rect(10.0f, 10.0f, 300.0f, 480.0f)));
     state.buttonClicked = context.button("action");
     state.checkboxClicked = context.checkbox("enabled", state.checked);
+    state.switchClicked = context.toggleSwitch("live update", state.switched);
     state.radioClicked = context.radioButton("choice", state.firstChoice);
     if (state.radioClicked)
         state.firstChoice = true;
@@ -87,6 +90,7 @@ static void test_widget_gallery()
     assert(initialData.vertices.size() >= 44u);
     assert(!state.buttonClicked);
     assert(!state.checked);
+    assert(!state.switched);
     assert(!state.firstChoice);
     assert(!state.selected);
     assert(state.quality == 0);
@@ -108,25 +112,32 @@ static void test_widget_gallery()
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 115.0f));
     beginAndDraw(context, state);
     context.endFrame();
+    assert(state.switchClicked);
+    assert(state.switched);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 147.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 147.0f));
+    beginAndDraw(context, state);
+    context.endFrame();
     assert(state.radioClicked);
     assert(state.firstChoice);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 150.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 150.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 182.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 182.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.selectableClicked);
     assert(state.selected);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 143.0f, 192.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 143.0f, 192.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 143.0f, 224.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 143.0f, 224.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.sliderChanged);
     assert(state.volume > 0.45f && state.volume < 0.55f);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 223.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 223.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 255.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 255.0f));
     context.pushEvent(ig::Event::textInput(u8"Olá"));
     beginAndDraw(context, state);
     const ig::DrawData &inputData = context.endFrame();
@@ -139,14 +150,14 @@ static void test_widget_gallery()
     assert(inputData.commands.size() >= 17u);
     assert(inputData.vertices.size() >= 44u);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 312.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 312.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 344.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 344.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(!state.comboChanged);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 400.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 400.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 432.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 432.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.comboChanged);

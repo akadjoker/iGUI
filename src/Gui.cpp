@@ -222,6 +222,49 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
     return clicked;
 }
 
+bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+    if (clicked)
+        value = !value;
+
+    const float trackHeight = rect.height * 0.62f;
+    const float radius = trackHeight * 0.5f;
+    const Rect track(rect.x, rect.y + (rect.height - trackHeight) * 0.5f,
+                     rect.width, trackHeight);
+    const Color trackColor = value ? theme_.checkboxChecked
+                                   : (hovered ? theme_.buttonHovered : theme_.checkboxBackground);
+    if (track.width > radius * 2.0f)
+        drawList->addRectFilled(Rect(track.x + radius, track.y,
+                                     track.width - radius * 2.0f, track.height), trackColor, clip);
+    drawList->addCircleFilled(Vec2(track.x + radius, track.y + radius), radius, trackColor, clip);
+    drawList->addCircleFilled(Vec2(track.x + track.width - radius, track.y + radius), radius,
+                              trackColor, clip);
+
+    const float handleX = value ? track.x + track.width - radius : track.x + radius;
+    drawList->addCircleFilled(Vec2(handleX, track.y + radius), radius * 0.72f,
+                              theme_.switchThumb, clip);
+
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(rect.x + rect.width + theme_.windowPadding * 0.5f,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    return clicked;
+}
+
 bool Context::radioButton(StringView labelText, bool selected, const Rect &bounds)
 {
     WindowState *window = currentWindow();
@@ -491,6 +534,21 @@ bool Context::checkbox(StringView labelText, bool &value)
     const bool clicked = checkbox(labelText, value, Rect(bounds.x - layout_.origin.x,
                                                          bounds.y - layout_.origin.y,
                                                          bounds.width, bounds.height));
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    advanceLayout(Rect(bounds.x, bounds.y,
+                       bounds.width + theme_.windowPadding * 0.5f + metrics.width,
+                       bounds.height));
+    return clicked;
+}
+
+bool Context::toggleSwitch(StringView labelText, bool &value)
+{
+    const float switchWidth = theme_.widgetHeight * 1.8f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, switchWidth, theme_.widgetHeight);
+    const bool clicked = toggleSwitch(labelText, value,
+                                      Rect(bounds.x - layout_.origin.x,
+                                           bounds.y - layout_.origin.y,
+                                           bounds.width, bounds.height));
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,

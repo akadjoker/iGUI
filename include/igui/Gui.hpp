@@ -58,6 +58,7 @@ public:
 
     bool button(StringView label, const Rect &bounds);
     bool checkbox(StringView label, bool &value, const Rect &bounds);
+    bool toggleSwitch(StringView label, bool &value, const Rect &bounds);
     bool radioButton(StringView label, bool selected, const Rect &bounds);
     bool selectable(StringView label, bool selected, const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
@@ -70,6 +71,7 @@ public:
 
     bool button(StringView label);
     bool checkbox(StringView label, bool &value);
+    bool toggleSwitch(StringView label, bool &value);
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
