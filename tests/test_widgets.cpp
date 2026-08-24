@@ -173,6 +173,20 @@ static void test_widget_gallery()
     assert(inputData.commands.size() >= 17u);
     assert(inputData.vertices.size() >= 44u);
 
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("X"));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.inputChanged);
+    assert(state.name == ig::String("XOl\303\241"));
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::End));
+    context.pushEvent(ig::Event::textInput("!"));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.inputChanged);
+    assert(state.name == ig::String("XOl\303\241!"));
+
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 412.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 412.0f));
     beginAndDraw(context, state);

@@ -142,11 +142,14 @@ private:
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;
+    String::size_type textCursor_;
     uint64_t frameNumber_;
     uint64_t nextZOrder_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
+    bool homePressed_;
+    bool endPressed_;
 
     static WidgetId hashText(StringView text);
     static WidgetId combineIds(WidgetId a, WidgetId b);
@@ -169,7 +172,6 @@ private:
     bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id);
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                      float &value, float minimum, float maximum);
-    static void eraseLastUtf8Codepoint(String &text);
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;

@@ -23,8 +23,9 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windows_(), windowsById_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
-      frameNumber_(0), nextZOrder_(1),
-      wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false)
+      textCursor_(0), frameNumber_(0), nextZOrder_(1),
+      wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false),
+      homePressed_(false), endPressed_(false)
 {
     events_.reserve(32);
     windows_.reserve(8);
@@ -61,6 +62,8 @@ void Context::beginFrame(const FrameInfo &frame)
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
+    homePressed_ = false;
+    endPressed_ = false;
     textEvents_.clear();
     consumeEvents();
 
@@ -549,18 +552,32 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     bool changed = false;
     if (focused)
     {
+        if (textInputWidget_ != id)
+            textCursor_ = value.size();
         textInputWidget_ = id;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
+        if (textCursor_ > value.size())
+            textCursor_ = value.size();
+        if (homePressed_)
+            textCursor_ = 0u;
+        if (endPressed_)
+            textCursor_ = value.size();
         for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
         {
             const Event &event = textEvents_[i];
-            value.append(event.text, event.textLength);
+            value.insert(textCursor_, event.text, event.textLength);
+            textCursor_ += event.textLength;
             changed = event.textLength != 0u || changed;
         }
-        if (backspacePressed_ && !value.empty())
+        if (backspacePressed_ && textCursor_ != 0u)
         {
-            eraseLastUtf8Codepoint(value);
+            String::size_type eraseBegin = textCursor_ - 1u;
+            while (eraseBegin != 0u &&
+                   (static_cast<uint8_t>(value[eraseBegin]) & 0xC0u) == 0x80u)
+                --eraseBegin;
+            value.erase(eraseBegin, textCursor_ - eraseBegin);
+            textCursor_ = eraseBegin;
             changed = true;
         }
     }
@@ -571,14 +588,19 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     const TextMetrics metrics = measureText(theme_.font, value, theme_.fontSize);
     const float leftPadding = theme_.windowPadding * 0.5f;
     const float availableWidth = rect.width - theme_.windowPadding;
-    const float horizontalOffset = metrics.width > availableWidth
-                                       ? availableWidth - metrics.width : 0.0f;
+    float horizontalOffset = metrics.width > availableWidth ? availableWidth - metrics.width : 0.0f;
+    const StringView prefix(value.data(), textCursor_);
+    const TextMetrics prefixMetrics = measureText(theme_.font, prefix, theme_.fontSize);
+    if (focused && prefixMetrics.width + horizontalOffset < 0.0f)
+        horizontalOffset = -prefixMetrics.width;
+    else if (focused && prefixMetrics.width + horizontalOffset > availableWidth)
+        horizontalOffset = availableWidth - prefixMetrics.width;
     const Vec2 textPosition(rect.x + leftPadding + horizontalOffset,
                             rect.y + (rect.height - metrics.height) * 0.5f);
     drawText(*drawList, theme_.font, value, textPosition, theme_.fontSize, theme_.buttonText, textClip);
     if (focused)
     {
-        const float caretX = textPosition.x + metrics.width + 1.0f;
+        const float caretX = textPosition.x + prefixMetrics.width + 1.0f;
         drawList->addRectFilled(Rect(caretX, rect.y + 5.0f, 1.0f,
                                      rect.height > 10.0f ? rect.height - 10.0f : 0.0f),
                                 theme_.buttonText, textClip);
@@ -854,6 +876,10 @@ void Context::consumeEvents()
         case EventType::KeyDown:
             if (event.key == KeyCode::Backspace)
                 backspacePressed_ = true;
+            else if (event.key == KeyCode::Home)
+                homePressed_ = true;
+            else if (event.key == KeyCode::End)
+                endPressed_ = true;
             break;
         case EventType::TextInput:
             if (event.textLength != 0u)
@@ -1045,20 +1071,6 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     if (pointer_.released[left] && activeWidget_ == id)
         activeWidget_ = InvalidWidgetId;
     return changed;
-}
-
-void Context::eraseLastUtf8Codepoint(String &text)
-{
-    if (text.empty())
-        return;
-    const uint8_t lastByte = static_cast<uint8_t>(text.back());
-    text.pop_back();
-    if ((lastByte & 0xC0u) != 0x80u)
-        return;
-    while (!text.empty() && (static_cast<uint8_t>(text.back()) & 0xC0u) == 0x80u)
-        text.pop_back();
-    if (!text.empty())
-        text.pop_back();
 }
 
 void Context::drawWindow(WindowState &window)
