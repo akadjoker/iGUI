@@ -5,6 +5,8 @@
 class WidgetBackend : public ig::Backend
 {
 public:
+    ig::String clipboard;
+
     ig::TextMetrics measureText(ig::FontId, ig::StringView text,
                                 float logicalSize, float) override
     {
@@ -18,6 +20,13 @@ public:
 
     bool render(const ig::DrawData &) override
     {
+        return true;
+    }
+
+    ig::String clipboardText() override { return clipboard; }
+    bool setClipboardText(ig::StringView text) override
+    {
+        clipboard = ig::String(text.data(), text.size());
         return true;
     }
 };
@@ -189,6 +198,18 @@ static void test_widget_gallery()
     context.endFrame();
     assert(state.inputChanged);
     assert(state.name == ig::String("XOl\303\241!"));
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::C, true));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(backend.clipboard == state.name);
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::V, true));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.inputChanged);
+    assert(state.name == ig::String("XOl\303\241!XOl\303\241!"));
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 412.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 412.0f));

@@ -153,6 +153,8 @@ private:
     bool backspacePressed_;
     bool homePressed_;
     bool endPressed_;
+    bool copyRequested_;
+    bool pasteRequested_;
 
     static WidgetId hashText(StringView text);
     static WidgetId combineIds(WidgetId a, WidgetId b);

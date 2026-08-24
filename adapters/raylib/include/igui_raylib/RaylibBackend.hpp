@@ -39,6 +39,8 @@ public:
     TextMetrics measureText(FontId font, StringView text,
                             float logicalSize, float dpiScale) override;
     bool render(const DrawData &data) override;
+    String clipboardText() override;
+    bool setClipboardText(StringView text) override;
 
 private:
     FontAtlas fontAtlas_;

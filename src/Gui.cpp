@@ -25,7 +25,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false),
-      homePressed_(false), endPressed_(false)
+      homePressed_(false), endPressed_(false), copyRequested_(false), pasteRequested_(false)
 {
     events_.reserve(32);
     windows_.reserve(8);
@@ -64,6 +64,8 @@ void Context::beginFrame(const FrameInfo &frame)
     backspacePressed_ = false;
     homePressed_ = false;
     endPressed_ = false;
+    copyRequested_ = false;
+    pasteRequested_ = false;
     textEvents_.clear();
     consumeEvents();
 
@@ -602,6 +604,18 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
             textCursor_ = 0u;
         if (endPressed_)
             textCursor_ = value.size();
+        if (copyRequested_)
+            backend_.setClipboardText(value);
+        if (pasteRequested_)
+        {
+            const String clipboard = backend_.clipboardText();
+            if (!clipboard.empty())
+            {
+                value.insert(textCursor_, clipboard.data(), clipboard.size());
+                textCursor_ += clipboard.size();
+                changed = true;
+            }
+        }
         for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
         {
             const Event &event = textEvents_[i];
@@ -931,6 +945,10 @@ void Context::consumeEvents()
                 homePressed_ = true;
             else if (event.key == KeyCode::End)
                 endPressed_ = true;
+            else if (event.control && event.key == KeyCode::C)
+                copyRequested_ = true;
+            else if (event.control && event.key == KeyCode::V)
+                pasteRequested_ = true;
             break;
         case EventType::TextInput:
             if (event.textLength != 0u)

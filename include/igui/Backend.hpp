@@ -27,6 +27,11 @@ public:
                                     float logicalSize, float dpiScale) = 0;
     // Each command clip is in logical display coordinates and must be honoured.
     virtual bool render(const DrawData &data) = 0;
+
+    // Platform clipboard hooks. Backends that cannot access a native clipboard
+    // can keep the defaults; text input will simply ignore those requests.
+    virtual String clipboardText() { return String(); }
+    virtual bool setClipboardText(StringView) { return false; }
 };
 
 // Fonte independente do backend: mede e escreve glyphs no DrawList.

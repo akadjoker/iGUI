@@ -186,6 +186,24 @@ TextMetrics Backend::measureText(FontId font, StringView text, float logicalSize
     return fontAtlas_.measureText(font, text, logicalSize);
 }
 
+String Backend::clipboardText()
+{
+    if (!::SDL_HasClipboardText())
+        return String();
+    char *text = ::SDL_GetClipboardText();
+    if (!text)
+        return String();
+    const String result(text);
+    ::SDL_free(text);
+    return result;
+}
+
+bool Backend::setClipboardText(StringView text)
+{
+    const String copy(text.data(), text.size());
+    return ::SDL_SetClipboardText(copy.c_str()) == 0;
+}
+
 bool Backend::ensureFontTexture()
 {
     if (fontTexture_)
