@@ -62,6 +62,8 @@ public:
     bool toggleSwitch(StringView label, bool &value, const Rect &bounds);
     bool radioButton(StringView label, bool selected, const Rect &bounds);
     bool selectable(StringView label, bool selected, const Rect &bounds);
+    // Returns whether the section is expanded. The bool stores its persistent state.
+    bool collapsingHeader(StringView label, bool &expanded, const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   const Rect &bounds);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
@@ -79,6 +81,7 @@ public:
     bool toggleSwitch(StringView label, bool &value);
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
+    bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   float width = 180.0f);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,

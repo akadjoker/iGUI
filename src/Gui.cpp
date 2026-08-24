@@ -331,6 +331,45 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
     return clicked;
 }
 
+bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+
+    const bool hovered = itemHovered(rect, clip, id);
+    if (itemClicked(rect, clip, id))
+        expanded = !expanded;
+
+    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.collapsibleHeaderBg, clip);
+    const float arrowSize = rect.height * 0.22f;
+    const float arrowX = rect.x + theme_.windowPadding;
+    const float arrowY = rect.y + rect.height * 0.5f;
+    const Vec2 arrow[] = {
+        expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
+                 : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
+        expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
+                 : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
+        expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
+                 : Vec2(arrowX + arrowSize * 0.75f, arrowY)
+    };
+    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(arrowX + arrowSize + theme_.windowPadding,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    return expanded;
+}
+
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,
                        const Rect &bounds)
 {
@@ -698,6 +737,18 @@ bool Context::selectable(StringView labelText, bool selected, float width)
                                          bounds.width, bounds.height));
     advanceLayout(bounds);
     return clicked;
+}
+
+bool Context::collapsingHeader(StringView labelText, bool &expanded, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool open = collapsingHeader(labelText, expanded,
+                                       Rect(bounds.x - layout_.origin.x,
+                                            bounds.y - layout_.origin.y,
+                                            bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return open;
 }
 
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,

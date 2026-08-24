@@ -28,6 +28,7 @@ struct GalleryState
     bool switched;
     bool firstChoice;
     bool selected;
+    bool headerExpanded;
     float volume;
     int steps;
     int retries;
@@ -45,7 +46,7 @@ struct GalleryState
     bool comboChanged;
 
     GalleryState()
-        : checked(false), switched(false), firstChoice(false), selected(false), volume(0.0f), steps(1), retries(2), name(), quality(0),
+        : checked(false), switched(false), firstChoice(false), selected(false), headerExpanded(false), volume(0.0f), steps(1), retries(2), name(), quality(0),
           buttonClicked(false), checkboxClicked(false), switchClicked(false), radioClicked(false),
           selectableClicked(false), sliderChanged(false), integerSliderChanged(false), stepperChanged(false),
           inputChanged(false), comboChanged(false)
@@ -76,6 +77,7 @@ static void drawGallery(ig::Context &context, GalleryState &state)
     context.label("all widgets rendered");
     state.comboChanged = context.comboBox("quality", state.quality,
                                           ig::Span<const ig::StringView>(qualityItems), 200.0f);
+    state.headerExpanded = context.collapsingHeader("advanced", state.headerExpanded, 200.0f);
     context.endWindow();
 }
 
@@ -100,6 +102,7 @@ static void test_widget_gallery()
     assert(!state.switched);
     assert(!state.firstChoice);
     assert(!state.selected);
+    assert(!state.headerExpanded);
     assert(state.quality == 0);
     assert(state.steps == 1);
     assert(state.retries == 2);
@@ -199,6 +202,12 @@ static void test_widget_gallery()
     context.endFrame();
     assert(state.comboChanged);
     assert(state.quality == 2);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 450.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 450.0f));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.headerExpanded);
 }
 
 static void test_combo_popup_overlay()

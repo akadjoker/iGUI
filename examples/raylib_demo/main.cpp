@@ -12,6 +12,7 @@ struct DemoState
     bool notifications;
     bool liveUpdates;
     bool advanced;
+    bool experimental;
     bool showInspector;
     bool selectedPreset;
     float volume;
@@ -22,7 +23,7 @@ struct DemoState
     ig::String name;
 
     DemoState()
-        : enabled(true), notifications(false), liveUpdates(true), advanced(false), showInspector(true),
+        : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           name("Raylib user")
     {
@@ -79,8 +80,11 @@ void drawSelectionWindow(ig::Context &ui, DemoState &state)
         state.selectedPreset = false;
     if (ui.radioButton("Performance", state.selectedPreset))
         state.selectedPreset = true;
-    if (ui.selectable("Advanced options", state.advanced, 320.0f))
-        state.advanced = !state.advanced;
+    if (ui.collapsingHeader("Advanced options", state.advanced, 320.0f))
+    {
+        ui.checkbox("Use experimental pipeline", state.experimental);
+        ui.sliderFloat("Exposure", state.volume, 0.0f, 1.0f, 320.0f);
+    }
     ui.endWindow();
 }
 
