@@ -50,6 +50,19 @@ void drawProfileWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
+void drawImageWindow(ig::Context &ui, ig::TextureId previewTexture)
+{
+    if (!ui.beginWindow("Images", ig::Rect(926.0f, 530.0f, 410.0f, 240.0f)))
+        return;
+
+    ui.label("Texture previews and image buttons");
+    ui.separator();
+    ui.image(previewTexture, 128.0f, 128.0f);
+    ui.sameLine(14.0f);
+    ui.imageButton("texture preview action", previewTexture, 92.0f, 92.0f);
+    ui.endWindow();
+}
+
 void drawNumericWindow(ig::Context &ui, DemoState &state)
 {
     if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 350.0f)))
@@ -134,6 +147,16 @@ int main()
 
     ig::Context ui(backend, &backend.fontAtlas());
     DemoState state;
+    const ::Image previewImage = ::GenImageChecked(96, 96, 12, 12,
+                                                    ::Color{59u, 94u, 138u, 255u},
+                                                    ::Color{87u, 162u, 226u, 255u});
+    const ::Texture2D previewTexture = ::LoadTextureFromImage(previewImage);
+    ::UnloadImage(previewImage);
+    if (previewTexture.id == 0u)
+    {
+        CloseWindow();
+        return 1;
+    }
 
     while (!WindowShouldClose())
     {
@@ -143,6 +166,7 @@ int main()
         drawNumericWindow(ui, state);
         drawSelectionWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
+        drawImageWindow(ui, ig::raylib::textureId(previewTexture));
         const ig::DrawData &drawData = ui.endFrame();
 
         BeginDrawing();
@@ -153,6 +177,7 @@ int main()
         EndDrawing();
     }
 
+    UnloadTexture(previewTexture);
     CloseWindow();
     return 0;
 }

@@ -75,6 +75,14 @@ public:
     bool inputText(StringView label, String &value, const Rect &bounds);
     bool inputInt(StringView label, int &value, const Rect &bounds);
     bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
+    // Draw an already-owned backend texture. TextureId remains backend-neutral.
+    void image(TextureId texture, const Rect &bounds,
+               const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+               const Color &tint = Color());
+    // The label is an identifier only; the texture is the button's visual.
+    bool imageButton(StringView label, TextureId texture, const Rect &bounds,
+                     const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+                     const Color &tint = Color());
     void progressBar(float value, float maximum, const Rect &bounds);
     void label(StringView text, const Vec2 &position);
 
@@ -95,6 +103,12 @@ public:
     bool inputText(StringView label, String &value, float width = 180.0f);
     bool inputInt(StringView label, int &value, float width = 180.0f);
     bool inputFloat(StringView label, float &value, float width = 180.0f, int precision = 6);
+    void image(TextureId texture, float width, float height,
+               const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+               const Color &tint = Color());
+    bool imageButton(StringView label, TextureId texture, float width, float height,
+                     const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+                     const Color &tint = Color());
     void progressBar(float value, float maximum, float width = 180.0f);
     void label(StringView text);
     void sameLine(float spacing = -1.0f);

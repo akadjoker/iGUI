@@ -679,6 +679,46 @@ bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds,
     return true;
 }
 
+void Context::image(TextureId texture, const Rect &bounds, const Vec2 &uvMin,
+                    const Vec2 &uvMax, const Color &tint)
+{
+    if (!currentWindow() || texture.value == 0u)
+        return;
+
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+
+    const Rect rect = contentRect(bounds);
+    drawList->addImage(texture, rect, uvMin, uvMax, tint, contentClip());
+}
+
+bool Context::imageButton(StringView labelText, TextureId texture, const Rect &bounds,
+                          const Vec2 &uvMin, const Vec2 &uvMax, const Color &tint)
+{
+    WindowState *window = currentWindow();
+    if (!window || texture.value == 0u)
+        return false;
+
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+    const float inset = rect.width < rect.height ? rect.width * 0.08f : rect.height * 0.08f;
+    const Rect imageRect(rect.x + inset, rect.y + inset,
+                         rect.width - inset * 2.0f, rect.height - inset * 2.0f);
+    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawList->addImage(texture, imageRect, uvMin, uvMax, tint, clip);
+    if (hovered)
+        drawList->addRectFilled(imageRect, Color(255u, 255u, 255u, 24u), clip);
+    return clicked;
+}
+
 void Context::progressBar(float value, float maximum, const Rect &bounds)
 {
     if (!currentWindow())
@@ -864,6 +904,32 @@ bool Context::inputFloat(StringView labelText, float &value, float width, int pr
                                          bounds.width, bounds.height), precision);
     advanceLayout(bounds);
     return changed;
+}
+
+void Context::image(TextureId texture, float width, float height,
+                    const Vec2 &uvMin, const Vec2 &uvMax, const Color &tint)
+{
+    if (width <= 0.0f || height <= 0.0f)
+        return;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, height);
+    image(texture, Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                        bounds.width, bounds.height), uvMin, uvMax, tint);
+    advanceLayout(bounds);
+}
+
+bool Context::imageButton(StringView labelText, TextureId texture, float width, float height,
+                          const Vec2 &uvMin, const Vec2 &uvMax, const Color &tint)
+{
+    if (width <= 0.0f || height <= 0.0f)
+        return false;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, height);
+    const bool clicked = imageButton(labelText, texture,
+                                     Rect(bounds.x - layout_.origin.x,
+                                          bounds.y - layout_.origin.y,
+                                          bounds.width, bounds.height),
+                                     uvMin, uvMax, tint);
+    advanceLayout(bounds);
+    return clicked;
 }
 
 void Context::progressBar(float value, float maximum, float width)

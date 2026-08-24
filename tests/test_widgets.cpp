@@ -290,9 +290,43 @@ static void test_combo_popup_overlay()
     assert(lastCommand.payload.text.position.y > 120.0f);
 }
 
+static void test_image_widgets()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::TextureId texture(77u);
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("image widgets", ig::Rect(10.0f, 10.0f, 220.0f, 190.0f)));
+    context.image(texture, ig::Rect(8.0f, 8.0f, 48.0f, 48.0f));
+    assert(!context.imageButton("image action", texture, ig::Rect(8.0f, 64.0f, 48.0f, 48.0f)));
+    context.endWindow();
+    const ig::DrawData &initialData = context.endFrame();
+
+    uint32_t texturedCommands = 0u;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < initialData.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = initialData.commands[i];
+        if (command.type == ig::DrawCommandType::Geometry &&
+            command.payload.geometry.texture == texture)
+            ++texturedCommands;
+    }
+    assert(texturedCommands == 2u);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 120.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("image widgets", ig::Rect(10.0f, 10.0f, 220.0f, 190.0f)));
+    context.image(texture, ig::Rect(8.0f, 8.0f, 48.0f, 48.0f));
+    assert(context.imageButton("image action", texture, ig::Rect(8.0f, 64.0f, 48.0f, 48.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
 int main()
 {
     test_widget_gallery();
     test_combo_popup_overlay();
+    test_image_widgets();
     return 0;
 }
