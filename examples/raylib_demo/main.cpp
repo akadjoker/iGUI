@@ -115,7 +115,7 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     else if (state.workspaceTab == 1)
     {
         ui.label("Project assets");
-        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 350.0f, 6);
+        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 350.0f, 4);
     }
     else
     {
