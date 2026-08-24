@@ -1256,10 +1256,20 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
         return false;
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     const float labelWidth = metrics.width + theme_.windowPadding;
+    const float usableWidth = rect.width > labelWidth ? rect.width - labelWidth : 0.0f;
+    float valueWidth = usableWidth * 0.28f;
+    if (valueWidth < 56.0f)
+        valueWidth = 56.0f;
+    if (valueWidth > 84.0f)
+        valueWidth = 84.0f;
+    const float requestedTrackWidth = usableWidth - valueWidth - theme_.itemSpacing;
+    const float trackWidth = requestedTrackWidth > 28.0f ? requestedTrackWidth : usableWidth;
+    const bool hasValueEditor = requestedTrackWidth > 28.0f;
     const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f,
-                     rect.width > labelWidth ? rect.width - labelWidth : 0.0f,
+                     trackWidth,
                      rect.height * 0.2f);
-    const bool changed = sliderValue(track, clip, id, value, minimum, maximum);
+    const bool sliderChanged = sliderValue(track, clip, combineIds(id, 0x534c49444552ull),
+                                           value, minimum, maximum);
     const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
     const float handleX = track.x + track.width * normalized;
     drawText(*drawList, theme_.font, labelText,
@@ -1270,7 +1280,22 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
                             theme_.sliderFilled, clip);
     drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f),
                               rect.height * 0.28f, theme_.sliderHandle, clip);
-    return changed;
+
+    bool textChanged = false;
+    if (hasValueEditor)
+    {
+        const Rect valueRect(track.x + track.width + theme_.itemSpacing, rect.y,
+                             valueWidth, rect.height);
+        pushId(id);
+        textChanged = inputFloat("value", value,
+                                 Rect(valueRect.x - layout_.origin.x,
+                                      valueRect.y - layout_.origin.y,
+                                      valueRect.width, valueRect.height), 3);
+        popId();
+        if (textChanged)
+            value = clamp(value, minimum, maximum);
+    }
+    return sliderChanged || textChanged;
 }
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum,

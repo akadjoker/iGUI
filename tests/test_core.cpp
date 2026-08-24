@@ -264,8 +264,8 @@ static void test_slider_and_radio()
     TestBackend backend;
     ig::Context context(backend);
     float value = 0.0f;
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 64.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 160.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 114.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 114.0f, 64.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
@@ -280,6 +280,24 @@ static void test_slider_and_radio()
     assert(context.radioButton("choice", false, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
     context.endWindow();
     context.endFrame();
+}
+
+static void test_slider_float_value_editing()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    float value = 0.0f;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 205.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 205.0f, 64.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("0.75"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value > 0.74f && value < 0.76f);
 }
 
 static void test_selectable()
@@ -355,7 +373,7 @@ static void test_slider_captures_pointer()
     bool checked = false;
     float value = 0.0f;
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 106.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 116.0f, 106.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
@@ -616,6 +634,7 @@ int main()
     test_draw_primitives();
     test_automatic_layout();
     test_slider_and_radio();
+    test_slider_float_value_editing();
     test_selectable();
     test_progress_bar();
     test_automatic_selectable_and_progress_bar();

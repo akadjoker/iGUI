@@ -158,15 +158,15 @@ static void test_widget_gallery()
     assert(state.selectableClicked);
     assert(state.selected);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 143.0f, 224.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 143.0f, 224.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 115.0f, 224.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 115.0f, 224.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.sliderChanged);
     assert(state.volume > 0.45f && state.volume < 0.55f);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 143.0f, 258.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 143.0f, 258.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 115.0f, 258.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 115.0f, 258.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.integerSliderChanged);
