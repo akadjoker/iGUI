@@ -35,6 +35,8 @@ struct DemoState
     int selectedAsset;
     float gamma;
     ig::String name;
+    ig::String notes;
+    ig::Color accent;
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
@@ -43,7 +45,8 @@ struct DemoState
           renderExpanded(false), floorExpanded(false),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           sampleOffset(4), workspaceTab(0), selectedAsset(1), gamma(2.2f),
-          name("Raylib user")
+          name("Raylib user"), notes("Use this workspace to configure the demo."),
+          accent(90u, 160u, 230u, 255u)
     {
     }
 };
@@ -119,10 +122,8 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     }
     else
     {
-        ui.label("Workspace defaults");
-        ui.checkbox("Grid visible", state.enabled);
-        ui.toggleSwitch("Realtime previews", state.liveUpdates);
-        ui.sliderFloat("UI scale", state.gamma, 1.0f, 3.0f, 350.0f);
+        ui.inputTextMultiline("Notes", state.notes, 350.0f, 78.0f);
+        ui.colorEdit("Accent color", state.accent, 350.0f, 142.0f);
     }
     ui.endWindow();
 }

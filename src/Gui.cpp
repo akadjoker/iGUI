@@ -21,11 +21,12 @@ Context::PointerState::PointerState()
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), listScrolls_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
-      currentWindow_(), focusedWindow_(), draggingWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
+      currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
-      wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false),
-      homePressed_(false), endPressed_(false), copyRequested_(false), pasteRequested_(false)
+      wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
+      homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
+      copyRequested_(false), pasteRequested_(false)
 {
     events_.reserve(32);
     windows_.reserve(8);
@@ -63,8 +64,11 @@ void Context::beginFrame(const FrameInfo &frame)
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
+    enterPressed_ = false;
     homePressed_ = false;
     endPressed_ = false;
+    upPressed_ = false;
+    downPressed_ = false;
     copyRequested_ = false;
     pasteRequested_ = false;
     textEvents_.clear();
@@ -143,6 +147,20 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
 
 void Context::endWindow()
 {
+    WindowState *window = currentWindow();
+    if (window && !window->minimized)
+    {
+        const float gripSize = 12.0f;
+        const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+        const float right = window->bounds.x + window->bounds.width;
+        const float bottom = window->bounds.y + window->bounds.height;
+        window->drawList.addLine(Vec2(right - gripSize, bottom - 2.0f),
+                                 Vec2(right - 2.0f, bottom - gripSize),
+                                 theme_.borderColor, viewport, 1.0f);
+        window->drawList.addLine(Vec2(right - gripSize * 0.55f, bottom - 2.0f),
+                                 Vec2(right - 2.0f, bottom - gripSize * 0.55f),
+                                 theme_.borderColor, viewport, 1.0f);
+    }
     currentWindow_ = WindowHandle();
     idStack_.clear();
     layout_ = LayoutState();
@@ -510,8 +528,64 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
             *scroll = maximumScroll;
     }
 
-    drawList->addRectFilled(rect, theme_.selectableBackground, visible);
     bool changed = false;
+    if (focusedWidget_ == id && (upPressed_ || downPressed_))
+    {
+        const int previous = currentItem;
+        if (upPressed_ && currentItem > 0)
+            --currentItem;
+        if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
+            ++currentItem;
+        changed = currentItem != previous;
+        if (currentItem < *scroll)
+            *scroll = currentItem;
+        if (currentItem >= *scroll + visibleRows)
+            *scroll = currentItem - visibleRows + 1;
+    }
+
+    float scrollbarWidth = 0.0f;
+    Rect scrollbar;
+    Rect thumb;
+    WidgetId scrollbarId = InvalidWidgetId;
+    if (maximumScroll > 0)
+    {
+        scrollbarWidth = theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f : 4.0f;
+        const float fraction = static_cast<float>(visibleRows) / static_cast<float>(items.size());
+        const float minimumThumb = theme_.scrollbarMinThumb < rect.height
+                                       ? theme_.scrollbarMinThumb : rect.height;
+        const float thumbHeight = rect.height * fraction > minimumThumb
+                                      ? rect.height * fraction : minimumThumb;
+        const float travel = rect.height - thumbHeight;
+        const float offset = travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll);
+        scrollbar = Rect(rect.x + rect.width - scrollbarWidth, rect.y, scrollbarWidth, rect.height);
+        thumb = Rect(scrollbar.x, rect.y + offset, scrollbarWidth, thumbHeight);
+        scrollbarId = combineIds(id, 0x5343524f4c4cull);
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                                  activeWidget_ == InvalidWidgetId &&
+                                  contains(intersect(thumb, visible), pointer_.pressedPosition[left]);
+        if (pressedThumb)
+        {
+            activeWidget_ = scrollbarId;
+            focusedWidget_ = id;
+        }
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+            {
+                const float normalized = travel > 0.0f
+                    ? clamp((pointer_.position.y - rect.y - thumb.height * 0.5f) / travel, 0.0f, 1.0f)
+                    : 0.0f;
+                const int nextScroll = static_cast<int>(normalized * static_cast<float>(maximumScroll) + 0.5f);
+                *scroll = nextScroll < 0 ? 0 : (nextScroll > maximumScroll ? maximumScroll : nextScroll);
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        thumb.y = rect.y + travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll);
+    }
+
+    drawList->addRectFilled(rect, theme_.selectableBackground, visible);
     const int itemCount = static_cast<int>(items.size());
     for (int row = 0; row < visibleRows; ++row)
     {
@@ -519,13 +593,17 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         if (itemIndex >= itemCount)
             break;
         const Rect item(rect.x, rect.y + theme_.widgetHeight * static_cast<float>(row),
-                        rect.width, theme_.widgetHeight);
+                        rect.width - scrollbarWidth, theme_.widgetHeight);
         const WidgetId itemId = combineIds(id, static_cast<WidgetId>(itemIndex + 1));
         const bool itemHoveredValue = itemHovered(item, visible, itemId);
-        if (itemClicked(item, visible, itemId) && currentItem != itemIndex)
+        if (itemClicked(item, visible, itemId))
         {
-            currentItem = itemIndex;
-            changed = true;
+            if (currentItem != itemIndex)
+            {
+                currentItem = itemIndex;
+                changed = true;
+            }
+            focusedWidget_ = id;
         }
         if (itemIndex == currentItem || itemHoveredValue)
             drawList->addRectFilled(item, itemIndex == currentItem
@@ -543,20 +621,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
 
     if (maximumScroll > 0)
     {
-        const float scrollbarWidth = theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f : 4.0f;
-        const float fraction = static_cast<float>(visibleRows) / static_cast<float>(items.size());
-        const float minimumThumb = theme_.scrollbarMinThumb < rect.height
-                                       ? theme_.scrollbarMinThumb : rect.height;
-        const float thumbHeight = rect.height * fraction > minimumThumb
-                                      ? rect.height * fraction : minimumThumb;
-        const float travel = rect.height - thumbHeight;
-        const float offset = maximumScroll > 0
-                                 ? travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll)
-                                 : 0.0f;
-        drawList->addRectFilled(Rect(rect.x + rect.width - scrollbarWidth, rect.y,
-                                     scrollbarWidth, rect.height), theme_.inputBg, visible);
-        drawList->addRectFilled(Rect(rect.x + rect.width - scrollbarWidth, rect.y + offset,
-                                     scrollbarWidth, thumbHeight), theme_.scrollbarThumb, visible);
+        drawList->addRectFilled(scrollbar, theme_.inputBg, visible);
+        drawList->addRectFilled(thumb, theme_.scrollbarThumb, visible);
     }
     return changed;
 }
@@ -850,6 +916,103 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     return changed;
 }
 
+bool Context::inputTextMultiline(StringView labelText, String &value, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    const Rect textClip = intersect(rect, clip);
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const bool hovered = itemHovered(rect, clip, id);
+    itemClicked(rect, clip, id);
+    const bool focused = focusedWidget_ == id;
+    bool changed = false;
+    if (focused)
+    {
+        if (textInputWidget_ != id)
+            textCursor_ = value.size();
+        textInputWidget_ = id;
+        wantsKeyboard_ = true;
+        wantsTextInput_ = true;
+        if (textCursor_ > value.size())
+            textCursor_ = value.size();
+        if (homePressed_)
+            textCursor_ = 0u;
+        if (endPressed_)
+            textCursor_ = value.size();
+        if (copyRequested_)
+            backend_.setClipboardText(value);
+        if (pasteRequested_)
+        {
+            const String clipboard = backend_.clipboardText();
+            if (!clipboard.empty())
+            {
+                value.insert(textCursor_, clipboard.data(), clipboard.size());
+                textCursor_ += clipboard.size();
+                changed = true;
+            }
+        }
+        if (enterPressed_)
+        {
+            value.insert(textCursor_, "\n", 1u);
+            ++textCursor_;
+            changed = true;
+        }
+        for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
+        {
+            const Event &event = textEvents_[i];
+            value.insert(textCursor_, event.text, event.textLength);
+            textCursor_ += event.textLength;
+            changed = event.textLength != 0u || changed;
+        }
+        if (backspacePressed_ && textCursor_ != 0u)
+        {
+            String::size_type eraseBegin = textCursor_ - 1u;
+            while (eraseBegin != 0u &&
+                   (static_cast<uint8_t>(value[eraseBegin]) & 0xC0u) == 0x80u)
+                --eraseBegin;
+            value.erase(eraseBegin, textCursor_ - eraseBegin);
+            textCursor_ = eraseBegin;
+            changed = true;
+        }
+    }
+
+    const Color background = focused ? theme_.buttonHovered
+                                     : (hovered ? theme_.buttonHovered : theme_.inputBg);
+    drawList->addRectFilled(rect, background, clip);
+    const float padding = theme_.textEditPadding;
+    drawText(*drawList, theme_.font, value, Vec2(rect.x + padding, rect.y + padding),
+             theme_.fontSize, theme_.buttonText, textClip);
+    if (focused)
+    {
+        String::size_type lineStart = 0u;
+        uint32_t line = 0u;
+        for (String::size_type i = 0u; i < textCursor_; ++i)
+        {
+            if (value[i] == '\n')
+            {
+                lineStart = i + 1u;
+                ++line;
+            }
+        }
+        const StringView linePrefix(value.data() + lineStart, textCursor_ - lineStart);
+        const TextMetrics prefixMetrics = measureText(theme_.font, linePrefix, theme_.fontSize);
+        const float caretX = rect.x + padding + prefixMetrics.width;
+        const float caretY = rect.y + padding + static_cast<float>(line) * theme_.fontSize;
+        if (caretY < rect.y + rect.height - padding)
+            drawList->addRectFilled(Rect(caretX, caretY, 1.0f, theme_.fontSize),
+                                    theme_.buttonText, textClip);
+    }
+    return changed;
+}
+
 bool Context::inputInt(StringView labelText, int &value, const Rect &bounds)
 {
     String text = String::number(value);
@@ -866,6 +1029,73 @@ bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds,
         return false;
     value = text.to_float();
     return true;
+}
+
+bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const TextMetrics titleMetrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const float swatchSize = rect.height * 0.32f > 36.0f ? rect.height * 0.32f : 36.0f;
+    const float channelStart = rect.y + titleMetrics.height + theme_.itemSpacing;
+    const float availableHeight = rect.y + rect.height - channelStart - theme_.windowPadding * 0.5f;
+    const float rowHeight = availableHeight > 0.0f ? availableHeight * 0.25f : 0.0f;
+    const float trackWidth = rect.width - swatchSize - theme_.windowPadding;
+    bool changed = false;
+
+    drawText(*drawList, theme_.font, labelText, Vec2(rect.x, rect.y), theme_.fontSize,
+             theme_.labelText, clip);
+
+    const StringView channelNames[] = {
+        StringView("R"), StringView("G"), StringView("B"), StringView("A")
+    };
+    const Color channelColors[] = {
+        Color(224u, 92u, 92u, 255u), Color(96u, 196u, 120u, 255u),
+        Color(96u, 148u, 232u, 255u), Color(210u, 210u, 215u, 255u)
+    };
+    float channels[] = {
+        static_cast<float>(value.r) / 255.0f, static_cast<float>(value.g) / 255.0f,
+        static_cast<float>(value.b) / 255.0f, static_cast<float>(value.a) / 255.0f
+    };
+    for (uint32_t i = 0u; i < 4u; ++i)
+    {
+        const float y = channelStart + rowHeight * static_cast<float>(i);
+        const Rect track(rect.x + 22.0f, y + rowHeight * 0.35f,
+                         trackWidth > 22.0f ? trackWidth - 22.0f : 0.0f,
+                         rowHeight * 0.22f);
+        const WidgetId channelId = combineIds(id, static_cast<WidgetId>(i + 1u));
+        const bool channelChanged = sliderValue(track, clip, channelId, channels[i], 0.0f, 1.0f);
+        if (channelChanged)
+        {
+            const uint8_t channel = static_cast<uint8_t>(channels[i] * 255.0f + 0.5f);
+            if (i == 0u) value.r = channel;
+            else if (i == 1u) value.g = channel;
+            else if (i == 2u) value.b = channel;
+            else value.a = channel;
+            changed = true;
+        }
+        drawText(*drawList, theme_.font, channelNames[i], Vec2(rect.x, y), theme_.fontSize,
+                 theme_.labelText, clip);
+        drawList->addRectFilled(track, theme_.sliderBackground, clip);
+        drawList->addRectFilled(Rect(track.x, track.y, track.width * channels[i], track.height),
+                                channelColors[i], clip);
+        drawList->addCircleFilled(Vec2(track.x + track.width * channels[i],
+                                       track.y + track.height * 0.5f),
+                                  rowHeight * 0.20f, theme_.sliderHandle, clip);
+    }
+    drawList->addRectFilled(Rect(rect.x + rect.width - swatchSize,
+                                 rect.y + titleMetrics.height + theme_.itemSpacing,
+                                 swatchSize, swatchSize), value, clip);
+    return changed;
 }
 
 void Context::image(TextureId texture, const Rect &bounds, const Vec2 &uvMin,
@@ -1140,6 +1370,19 @@ bool Context::inputText(StringView labelText, String &value, float width)
     return changed;
 }
 
+bool Context::inputTextMultiline(StringView labelText, String &value, float width, float height)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedHeight = height > theme_.widgetHeight ? height : theme_.widgetHeight;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
+    const bool changed = inputTextMultiline(labelText, value,
+                                            Rect(bounds.x - layout_.origin.x,
+                                                 bounds.y - layout_.origin.y,
+                                                 bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
 bool Context::inputInt(StringView labelText, int &value, float width)
 {
     const float resolvedWidth = width > 0.0f ? width : 180.0f;
@@ -1160,6 +1403,20 @@ bool Context::inputFloat(StringView labelText, float &value, float width, int pr
                                     Rect(bounds.x - layout_.origin.x,
                                          bounds.y - layout_.origin.y,
                                          bounds.width, bounds.height), precision);
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::colorEdit(StringView labelText, Color &value, float width, float height)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float minimumHeight = theme_.widgetHeight * 3.0f;
+    const float resolvedHeight = height > minimumHeight ? height : minimumHeight;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
+    const bool changed = colorEdit(labelText, value,
+                                   Rect(bounds.x - layout_.origin.x,
+                                        bounds.y - layout_.origin.y,
+                                        bounds.width, bounds.height));
     advanceLayout(bounds);
     return changed;
 }
@@ -1326,10 +1583,16 @@ void Context::consumeEvents()
         case EventType::KeyDown:
             if (event.key == KeyCode::Backspace)
                 backspacePressed_ = true;
+            else if (event.key == KeyCode::Enter)
+                enterPressed_ = true;
             else if (event.key == KeyCode::Home)
                 homePressed_ = true;
             else if (event.key == KeyCode::End)
                 endPressed_ = true;
+            else if (event.key == KeyCode::Up)
+                upPressed_ = true;
+            else if (event.key == KeyCode::Down)
+                downPressed_ = true;
             else if (event.control && event.key == KeyCode::C)
                 copyRequested_ = true;
             else if (event.control && event.key == KeyCode::V)
@@ -1351,6 +1614,7 @@ void Context::consumeEvents()
             pointer_.released[2] = false;
             activeWidget_ = InvalidWidgetId;
             draggingWindow_ = WindowHandle();
+            resizingWindow_ = WindowHandle();
             focusedWidget_ = InvalidWidgetId;
             textInputWidget_ = InvalidWidgetId;
             openCombo_ = InvalidWidgetId;
@@ -1542,9 +1806,14 @@ void Context::drawWindow(WindowState &window)
                         window.bounds.width > controlWidth * 2.0f
                             ? window.bounds.width - controlWidth * 2.0f : 0.0f,
                         titleHeight);
+    const float resizeGripSize = 12.0f;
+    const Rect resizeGrip(window.bounds.x + window.bounds.width - resizeGripSize,
+                          window.bounds.y + window.bounds.height - resizeGripSize,
+                          resizeGripSize, resizeGripSize);
     const WidgetId closeId = combineIds(window.id, 0x434c4f5345ull);
     const WidgetId minimizeId = combineIds(window.id, 0x4d494e494d495a45ull);
     const WidgetId dragId = combineIds(window.id, 0x44524147ull);
+    const WidgetId resizeId = combineIds(window.id, 0x524553495a45ull);
     const bool closeHovered = itemHovered(closeButton, viewport, closeId);
     const bool minimizeHovered = itemHovered(minimizeButton, viewport, minimizeId);
 
@@ -1553,6 +1822,7 @@ void Context::drawWindow(WindowState &window)
         window.open = false;
         window.minimized = false;
         draggingWindow_ = WindowHandle();
+        resizingWindow_ = WindowHandle();
         focusedWidget_ = InvalidWidgetId;
         textInputWidget_ = InvalidWidgetId;
         openCombo_ = InvalidWidgetId;
@@ -1562,6 +1832,31 @@ void Context::drawWindow(WindowState &window)
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool pressedResize = !window.minimized && pointer_.pressed[left] &&
+                               currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
+                               contains(intersect(resizeGrip, viewport), pointer_.pressedPosition[left]);
+    if (pressedResize)
+    {
+        activeWidget_ = resizeId;
+        resizingWindow_ = currentWindow_;
+    }
+    if (resizingWindow_ == currentWindow_ && activeWidget_ == resizeId)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+        {
+            const float minimumWidth = titleHeight * 4.0f;
+            const float minimumHeight = titleHeight + theme_.windowPadding * 2.0f + theme_.widgetHeight;
+            const float width = pointer_.position.x - window.bounds.x;
+            const float height = pointer_.position.y - window.bounds.y;
+            window.bounds.width = width > minimumWidth ? width : minimumWidth;
+            window.bounds.height = height > minimumHeight ? height : minimumHeight;
+        }
+        if (pointer_.released[left])
+        {
+            activeWidget_ = InvalidWidgetId;
+            resizingWindow_ = WindowHandle();
+        }
+    }
     const bool pressedTitle = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
                               activeWidget_ == InvalidWidgetId &&
                               contains(intersect(dragArea, viewport), pointer_.pressedPosition[left]);

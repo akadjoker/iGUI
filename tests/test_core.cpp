@@ -320,7 +320,7 @@ static void test_progress_bar()
     assert(data.vertices[12].color.b == 230u);
     assert(data.vertices[20].position.x == 26.0f);
     assert(data.vertices[21].position.x == 146.0f);
-    assert(data.vertices.size() == 28u);
+    assert(data.vertices.size() == 36u);
 }
 
 static void test_automatic_selectable_and_progress_bar()
@@ -477,12 +477,19 @@ static void test_content_clip_applies_to_checkbox_label()
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
-    const ig::DrawCommand &command = data.commands[data.commands.size() - 1u];
-    assert(command.type == ig::DrawCommandType::Text);
-    assert(command.payload.text.clip.x == 18.0f);
-    assert(command.payload.text.clip.y == 42.0f);
-    assert(command.payload.text.clip.width == 284.0f);
-    assert(command.payload.text.clip.height == 140.0f);
+    bool foundContentText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text &&
+            command.payload.text.clip.x == 18.0f && command.payload.text.clip.y == 42.0f &&
+            command.payload.text.clip.width == 284.0f && command.payload.text.clip.height == 140.0f)
+        {
+            foundContentText = true;
+            break;
+        }
+    }
+    assert(foundContentText);
 }
 
 static void test_clipped_button_cannot_be_clicked()
@@ -549,22 +556,42 @@ static void test_window_chrome_drag_minimize_and_close()
     context.endWindow();
     context.endFrame();
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 264.0f, 92.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 264.0f, 92.0f));
-    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
-    assert(!context.beginWindow("managed", initialBounds, &open));
-    context.endFrame();
-    assert(open);
-
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 264.0f, 92.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 264.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 295.0f, 195.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("managed", initialBounds, &open));
     context.endWindow();
     context.endFrame();
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 288.0f, 92.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 288.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerMove(350.0f, 240.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    const ig::DrawData &resizedData = context.endFrame();
+    assert(resizedData.vertices[2].position.x == 350.0f);
+    assert(resizedData.vertices[2].position.y == 240.0f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 350.0f, 240.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("managed", initialBounds, &open));
+    context.endFrame();
+    assert(open);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 338.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 338.0f, 92.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(!context.beginWindow("managed", initialBounds, &open));
     context.endFrame();

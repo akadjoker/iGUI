@@ -392,6 +392,36 @@ static void test_navigation_widgets()
     context.endFrame();
     assert(state.selectedItem == 3);
 
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+    assert(state.selectedItem == 4);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 195.0f, 165.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(195.0f, 185.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 195.0f, 185.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 130.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 130.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+    // The thumb drag moves the visible range; clicking its first row must no
+    // longer select the item that was focused before the drag.
+    assert(state.selectedItem < 4);
+
     context.pushEvent(ig::Event::pointerMove(40.0f, 100.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
     drawNavigationWidgets(context, state);
@@ -402,11 +432,45 @@ static void test_navigation_widgets()
     assert(tooltip.payload.text.textSize == 15u);
 }
 
+static void drawEditorWidgets(ig::Context &context, ig::String &notes, ig::Color &color)
+{
+    assert(context.beginWindow("editors", ig::Rect(10.0f, 10.0f, 300.0f, 320.0f)));
+    context.inputTextMultiline("notes", notes, ig::Rect(8.0f, 8.0f, 230.0f, 90.0f));
+    context.colorEdit("accent", color, ig::Rect(8.0f, 110.0f, 230.0f, 140.0f));
+    context.endWindow();
+}
+
+static void test_editor_widgets()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::String notes("hello");
+    ig::Color color(64u, 96u, 128u, 255u);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 65.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 65.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    context.pushEvent(ig::Event::textInput("world"));
+    context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
+    drawEditorWidgets(context, notes, color);
+    context.endFrame();
+    assert(notes == ig::String("hello\nworld"));
+    assert(context.wantsTextInput());
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 120.0f, 184.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 120.0f, 184.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
+    drawEditorWidgets(context, notes, color);
+    context.endFrame();
+    assert(color.r > 110u && color.r < 150u);
+}
+
 int main()
 {
     test_widget_gallery();
     test_combo_popup_overlay();
     test_image_widgets();
     test_navigation_widgets();
+    test_editor_widgets();
     return 0;
 }

@@ -82,8 +82,11 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
+    bool inputTextMultiline(StringView label, String &value, const Rect &bounds);
     bool inputInt(StringView label, int &value, const Rect &bounds);
     bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
+    // Inline RGBA editor with a preview swatch and four draggable channels.
+    bool colorEdit(StringView label, Color &value, const Rect &bounds);
     // Draw an already-owned backend texture. TextureId remains backend-neutral.
     void image(TextureId texture, const Rect &bounds,
                const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
@@ -117,8 +120,11 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 180.0f);
     bool inputText(StringView label, String &value, float width = 180.0f);
+    bool inputTextMultiline(StringView label, String &value, float width = 180.0f,
+                            float height = 120.0f);
     bool inputInt(StringView label, int &value, float width = 180.0f);
     bool inputFloat(StringView label, float &value, float width = 180.0f, int precision = 6);
+    bool colorEdit(StringView label, Color &value, float width = 180.0f, float height = 128.0f);
     void image(TextureId texture, float width, float height,
                const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                const Color &tint = Color());
@@ -179,6 +185,7 @@ private:
     WindowHandle currentWindow_;
     WindowHandle focusedWindow_;
     WindowHandle draggingWindow_;
+    WindowHandle resizingWindow_;
     WidgetId activeWidget_;
     WidgetId hotWidget_;
     WidgetId focusedWidget_;
@@ -191,8 +198,11 @@ private:
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
+    bool enterPressed_;
     bool homePressed_;
     bool endPressed_;
+    bool upPressed_;
+    bool downPressed_;
     bool copyRequested_;
     bool pasteRequested_;
 
