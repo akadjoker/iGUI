@@ -112,6 +112,12 @@ struct DragDropPayload
     DragDropPayload() : type(InvalidWidgetId), source(InvalidWidgetId), data(0u) {}
 };
 
+enum class SplitterAxis : uint8_t
+{
+    Vertical,
+    Horizontal
+};
+
 class Context
 {
 public:
@@ -188,6 +194,9 @@ public:
                    float speed, const Rect &bounds);
     bool dragInt(StringView label, int &value, int minimum, int maximum,
                  int speed, const Rect &bounds);
+    // Draggable divider. value is the local x/y coordinate inside bounds.
+    bool splitter(StringView id, float &value, float minimum, float maximum,
+                  SplitterAxis axis, const Rect &bounds, float thickness = 5.0f);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
@@ -208,6 +217,15 @@ public:
     bool smallImageButton(StringView label, TextureId texture, const Rect &bounds,
                           const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                           const Color &tint = Color());
+    // Minimal building blocks for application-defined immediate widgets.
+    bool invisibleButton(StringView id, const Rect &bounds);
+    bool isHovered(StringView id, const Rect &bounds);
+    void drawRectFilled(const Rect &bounds, const Color &color);
+    void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
+    void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
+    void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
+    bool isKeyPressed(KeyCode key) const;
+    bool shortcut(KeyCode key, bool control = true, bool shift = false) const;
     void progressBar(float value, float maximum, const Rect &bounds);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
@@ -252,6 +270,12 @@ public:
                    float speed = 0.01f, float width = 0.0f);
     bool dragInt(StringView label, int &value, int minimum, int maximum,
                  int speed = 1, float width = 0.0f);
+    bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3);
+    bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f, int precision = 3);
+    bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
+                    float speed = 0.01f, float width = 0.0f);
+    bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
+                    float speed = 0.01f, float width = 0.0f);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 0.0f);
     bool inputText(StringView label, String &value, float width = 0.0f);
@@ -464,6 +488,10 @@ private:
     bool downPressed_;
     bool copyRequested_;
     bool pasteRequested_;
+    bool escapePressed_;
+    bool keyPressed_[32];
+    bool keyControl_[32];
+    bool keyShift_[32];
 
     static WidgetId hashText(StringView text);
     static WidgetId combineIds(WidgetId a, WidgetId b);

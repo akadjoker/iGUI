@@ -49,6 +49,7 @@ enum class KeyCode : uint8_t
     D,
     F,
     H,
+    S,
     V,
     X,
     Y,

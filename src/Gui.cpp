@@ -94,7 +94,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
-      copyRequested_(false), pasteRequested_(false)
+      copyRequested_(false), pasteRequested_(false), escapePressed_(false), keyPressed_(), keyControl_(), keyShift_()
 {
     events_.reserve(32);
     windows_.reserve(8);
@@ -107,6 +107,12 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     idStack_.reserve(8);
     childStack_.reserve(4);
     toasts_.reserve(4);
+    for (uint32_t i = 0u; i < 32u; ++i)
+    {
+        keyPressed_[i] = false;
+        keyControl_[i] = false;
+        keyShift_[i] = false;
+    }
     textEvents_.reserve(4);
 }
 
@@ -162,6 +168,13 @@ void Context::beginFrame(const FrameInfo &frame)
     downPressed_ = false;
     copyRequested_ = false;
     pasteRequested_ = false;
+    escapePressed_ = false;
+    for (uint32_t i = 0u; i < 32u; ++i)
+    {
+        keyPressed_[i] = false;
+        keyControl_[i] = false;
+        keyShift_[i] = false;
+    }
     textEvents_.clear();
     consumeEvents();
 
@@ -310,6 +323,19 @@ bool Context::wantsKeyboard() const
 bool Context::wantsTextInput() const
 {
     return wantsTextInput_;
+}
+
+bool Context::isKeyPressed(KeyCode key) const
+{
+    const uint32_t index = static_cast<uint32_t>(key);
+    return index < 32u && keyPressed_[index];
+}
+
+bool Context::shortcut(KeyCode key, bool control, bool shift) const
+{
+    const uint32_t index = static_cast<uint32_t>(key);
+    return index < 32u && keyPressed_[index] && keyControl_[index] == control &&
+           keyShift_[index] == shift;
 }
 
 bool Context::button(StringView labelText, const Rect &bounds)
@@ -1346,6 +1372,43 @@ bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum
     return changed;
 }
 
+bool Context::splitter(StringView idText, float &value, float minimum, float maximum,
+                       SplitterAxis axis, const Rect &bounds, float thickness)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || maximum <= minimum || thickness <= 0.0f)
+        return false;
+    const Rect area = contentRect(bounds);
+    const Rect clip = contentClip();
+    const float clampedValue = clamp(value, minimum, maximum);
+    const Rect handle = axis == SplitterAxis::Vertical
+        ? Rect(area.x + clampedValue - thickness * 0.5f, area.y, thickness, area.height)
+        : Rect(area.x, area.y + clampedValue - thickness * 0.5f, area.width, thickness);
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x53504c4954544552ull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool hovered = itemHovered(handle, clip, id);
+    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+        activeWidget_ == InvalidWidgetId && contains(intersect(handle, clip), pointer_.pressedPosition[left]))
+        activeWidget_ = id;
+    bool changed = false;
+    if (activeWidget_ == id)
+    {
+        if (pointer_.down[left])
+        {
+            const float next = (axis == SplitterAxis::Vertical ? pointer_.position.x - area.x
+                                                                 : pointer_.position.y - area.y);
+            const float limited = clamp(next, minimum, maximum);
+            changed = limited != value;
+            value = limited;
+        }
+        if (pointer_.released[left])
+            activeWidget_ = InvalidWidgetId;
+    }
+    drawList->addRectFilled(handle, hovered || activeWidget_ == id ? theme_.dialogBtnPrimary : theme_.borderColor, clip);
+    return changed;
+}
+
 bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum,
                          const Rect &bounds)
 {
@@ -1992,6 +2055,58 @@ bool Context::smallImageButton(StringView labelText, TextureId texture, const Re
     return clicked;
 }
 
+bool Context::invisibleButton(StringView idText, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x494e56495349424cull);
+    return itemClicked(rect, contentClip(), id);
+}
+
+bool Context::isHovered(StringView idText, const Rect &bounds)
+{
+    if (!currentWindow())
+        return false;
+    const Rect rect = contentRect(bounds);
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x435553544f4d484full);
+    return itemHovered(rect, contentClip(), id);
+}
+
+void Context::drawRectFilled(const Rect &bounds, const Color &color)
+{
+    DrawList *drawList = currentDrawList();
+    if (drawList)
+        drawList->addRectFilled(contentRect(bounds), color, contentClip());
+}
+
+void Context::drawRect(const Rect &bounds, const Color &color, float thickness)
+{
+    DrawList *drawList = currentDrawList();
+    if (drawList && thickness > 0.0f)
+        drawList->addRect(contentRect(bounds), color, contentClip(), thickness);
+}
+
+void Context::drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList || thickness <= 0.0f)
+        return;
+    const Rect origin = contentRect(Rect());
+    drawList->addLine(Vec2(origin.x + from.x, origin.y + from.y),
+                      Vec2(origin.x + to.x, origin.y + to.y), color, contentClip(), thickness);
+}
+
+void Context::drawCircleFilled(const Vec2 &center, float radius, const Color &color)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList || radius <= 0.0f)
+        return;
+    const Rect origin = contentRect(Rect());
+    drawList->addCircleFilled(Vec2(origin.x + center.x, origin.y + center.y), radius, color, contentClip());
+}
+
 void Context::progressBar(float value, float maximum, const Rect &bounds)
 {
     if (!currentWindow())
@@ -2558,6 +2673,68 @@ bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum
     return changed;
 }
 
+bool Context::inputFloat2(StringView labelText, float &x, float &y, float width, int precision)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing) * 0.5f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputFloat("x", x, cell, precision);
+    sameLine();
+    changed = inputFloat("y", y, cell, precision) || changed;
+    popId();
+    return changed;
+}
+
+bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, float width, int precision)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing * 2.0f) / 3.0f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputFloat("x", x, cell, precision);
+    sameLine();
+    changed = inputFloat("y", y, cell, precision) || changed;
+    sameLine();
+    changed = inputFloat("z", z, cell, precision) || changed;
+    popId();
+    return changed;
+}
+
+bool Context::dragFloat2(StringView labelText, float &x, float &y, float minimum, float maximum,
+                         float speed, float width)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing) * 0.5f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragFloat("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragFloat("y", y, minimum, maximum, speed, cell) || changed;
+    popId();
+    return changed;
+}
+
+bool Context::dragFloat3(StringView labelText, float &x, float &y, float &z, float minimum, float maximum,
+                         float speed, float width)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing * 2.0f) / 3.0f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragFloat("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragFloat("y", y, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragFloat("z", z, minimum, maximum, speed, cell) || changed;
+    popId();
+    return changed;
+}
+
 bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum, float width)
 {
     const float resolvedWidth = width > 0.0f ? width : availableWidth();
@@ -2711,6 +2888,33 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
         scroll->offset = maximumScroll;
     if (scroll->offset < 0.0f)
         scroll->offset = 0.0f;
+    if (hadScrollbar)
+    {
+        const float barWidth = theme_.scrollbarWidth * 0.65f;
+        const Rect bar(outer.x + outer.width - padding - barWidth, content.y, barWidth, content.height);
+        const float requestedThumb = bar.height * content.height / scroll->contentHeight;
+        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+            ? requestedThumb : theme_.scrollbarMinThumb;
+        const float travel = bar.height - thumbHeight;
+        const float thumbY = travel > 0.0f ? bar.y + travel * scroll->offset / maximumScroll : bar.y;
+        const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
+        const WidgetId scrollbarId = combineIds(id, 0x5343524f4c4cull);
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
+            activeWidget_ == InvalidWidgetId && contains(bar, pointer_.pressedPosition[left]))
+            activeWidget_ = scrollbarId;
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] && travel > 0.0f)
+            {
+                const float normalized = clamp((pointer_.position.y - bar.y - thumb.height * 0.5f) / travel,
+                                               0.0f, 1.0f);
+                scroll->offset = normalized * maximumScroll;
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+    }
     if (pointer_.wheelY != 0.0f && currentWindowReceivesPointer() && contains(outer, pointer_.position))
     {
         scroll->offset -= pointer_.wheelY * theme_.widgetHeight;
@@ -3087,6 +3291,14 @@ void Context::consumeEvents()
             pointer_.wheelY += event.wheelY;
             break;
         case EventType::KeyDown:
+        {
+            const uint32_t keyIndex = static_cast<uint32_t>(event.key);
+            if (keyIndex < 32u)
+            {
+                keyPressed_[keyIndex] = true;
+                keyControl_[keyIndex] = event.control;
+                keyShift_[keyIndex] = event.shift;
+            }
             if (event.key == KeyCode::Backspace)
                 backspacePressed_ = true;
             else if (event.key == KeyCode::Enter)
@@ -3099,11 +3311,20 @@ void Context::consumeEvents()
                 upPressed_ = true;
             else if (event.key == KeyCode::Down)
                 downPressed_ = true;
+            else if (event.key == KeyCode::Escape)
+            {
+                escapePressed_ = true;
+                openCombo_ = InvalidWidgetId;
+                openMenu_ = InvalidWidgetId;
+                openContextMenu_ = InvalidWidgetId;
+                openSubMenu_ = InvalidWidgetId;
+            }
             else if (event.control && event.key == KeyCode::C)
                 copyRequested_ = true;
             else if (event.control && event.key == KeyCode::V)
                 pasteRequested_ = true;
             break;
+        }
         case EventType::TextInput:
             if (event.textLength != 0u)
                 textEvents_.push_back(event);

@@ -44,6 +44,7 @@ bool keyCode(int nativeKey, KeyCode &key)
     case KEY_D: key = KeyCode::D; return true;
     case KEY_F: key = KeyCode::F; return true;
     case KEY_H: key = KeyCode::H; return true;
+    case KEY_S: key = KeyCode::S; return true;
     case KEY_V: key = KeyCode::V; return true;
     case KEY_X: key = KeyCode::X; return true;
     case KEY_Y: key = KeyCode::Y; return true;
@@ -123,7 +124,7 @@ void processInput(Context &context)
     const int keys[] = {KEY_BACKSPACE, KEY_ENTER, KEY_DELETE, KEY_TAB,
                         KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_HOME, KEY_END,
                         KEY_PAGE_UP, KEY_PAGE_DOWN, KEY_ESCAPE, KEY_A, KEY_C, KEY_D,
-                        KEY_F, KEY_H, KEY_V, KEY_X, KEY_Y, KEY_Z};
+                        KEY_F, KEY_H, KEY_S, KEY_V, KEY_X, KEY_Y, KEY_Z};
     const bool control = ::IsKeyDown(KEY_LEFT_CONTROL) || ::IsKeyDown(KEY_RIGHT_CONTROL);
     const bool shift = ::IsKeyDown(KEY_LEFT_SHIFT) || ::IsKeyDown(KEY_RIGHT_SHIFT);
     for (uint32_t i = 0u; i < sizeof(keys) / sizeof(keys[0]); ++i)

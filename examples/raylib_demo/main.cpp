@@ -47,6 +47,12 @@ struct DemoState
     uint64_t droppedImageAsset;
     float gamma;
     float dragExposure;
+    float positionX;
+    float positionY;
+    float positionZ;
+    float scaleX;
+    float scaleY;
+    float scaleZ;
     ig::String name;
     ig::String notes;
     ig::String nodeName;
@@ -59,6 +65,8 @@ struct DemoState
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), droppedImageAsset(0u),
           gamma(2.2f), dragExposure(0.25f),
+          positionX(0.0f), positionY(1.25f), positionZ(-3.5f),
+          scaleX(1.0f), scaleY(1.0f), scaleZ(1.0f),
           name("Raylib user"),
           nodeName("DirectionalLight3D"),
           notes("A multiline text editor now has a real scrollbar.\n"
@@ -496,6 +504,17 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
             ui.label("iGUI immediate");
             ui.endPropertyRow();
         }
+        if (ui.beginPropertyRow("Position"))
+        {
+            ui.inputFloat3("position", state.positionX, state.positionY, state.positionZ);
+            ui.endPropertyRow();
+        }
+        if (ui.beginPropertyRow("Scale"))
+        {
+            ui.dragFloat3("scale", state.scaleX, state.scaleY, state.scaleZ,
+                          0.01f, 100.0f, 0.02f);
+            ui.endPropertyRow();
+        }
         ui.separator();
         if (ui.beginTable("runtime summary", 2))
         {
@@ -554,6 +573,8 @@ int main()
     {
         ig::raylib::processInput(ui);
         ui.beginFrame(ig::raylib::frameInfo(GetFrameTime()));
+        if (ui.shortcut(ig::KeyCode::S))
+            ui.showToast("save shortcut", "Ctrl+S: scene saved", ig::ToastPosition::BottomRight);
         drawProfileWindow(ui, state);
         drawNumericWindow(ui, state);
         drawSelectionWindow(ui, state);

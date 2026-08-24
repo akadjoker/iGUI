@@ -980,6 +980,59 @@ static void test_tree_drag_drop_positions()
     assert(drop.position == ig::TreeDropPosition::Inside);
 }
 
+static bool drawEditorInfrastructure(ig::Context &context, float &split, float &x, float &y, float &z)
+{
+    assert(context.beginWindow("editor infrastructure", ig::Rect(10.0f, 10.0f, 280.0f, 190.0f)));
+    context.drawRectFilled(ig::Rect(8.0f, 8.0f, 210.0f, 72.0f), ig::Color(35u, 35u, 38u, 255u));
+    context.drawLine(ig::Vec2(12.0f, 18.0f), ig::Vec2(120.0f, 60.0f), ig::Color(105u, 170u, 245u, 255u), 2.0f);
+    context.drawCircleFilled(ig::Vec2(150.0f, 42.0f), 8.0f, ig::Color(255u, 220u, 105u, 255u));
+    context.splitter("canvas split", split, 32.0f, 190.0f, ig::SplitterAxis::Vertical,
+                     ig::Rect(8.0f, 8.0f, 210.0f, 72.0f));
+    const bool clicked = context.invisibleButton("canvas click", ig::Rect(8.0f, 88.0f, 210.0f, 24.0f));
+    context.inputFloat3("transform", x, y, z);
+    context.endWindow();
+    return clicked;
+}
+
+static void test_editor_infrastructure()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float split = 80.0f;
+    float x = 1.0f;
+    float y = 2.0f;
+    float z = 3.0f;
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::S, true));
+    context.beginFrame(ig::FrameInfo(340.0f, 240.0f));
+    assert(context.shortcut(ig::KeyCode::S));
+    assert(context.isKeyPressed(ig::KeyCode::S));
+    assert(!drawEditorInfrastructure(context, split, x, y, z));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 106.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(340.0f, 240.0f));
+    assert(!drawEditorInfrastructure(context, split, x, y, z));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(150.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(340.0f, 240.0f));
+    assert(!drawEditorInfrastructure(context, split, x, y, z));
+    context.endFrame();
+    assert(split > 115.0f && split < 130.0f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 150.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(340.0f, 240.0f));
+    assert(!drawEditorInfrastructure(context, split, x, y, z));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 45.0f, 140.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 45.0f, 140.0f));
+    context.beginFrame(ig::FrameInfo(340.0f, 240.0f));
+    assert(drawEditorInfrastructure(context, split, x, y, z));
+    context.endFrame();
+}
+
 int main()
 {
     test_widget_gallery();
@@ -995,5 +1048,6 @@ int main()
     test_scene_tree_and_message_box();
     test_cross_window_drag_drop();
     test_tree_drag_drop_positions();
+    test_editor_infrastructure();
     return 0;
 }
