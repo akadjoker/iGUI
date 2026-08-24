@@ -17,11 +17,14 @@ struct DemoState
     float volume;
     float progress;
     int quality;
+    int samples;
+    int retries;
     ig::String name;
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), showInspector(true),
-          selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), name("Raylib user")
+          selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
+          name("Raylib user")
     {
     }
 };
@@ -32,7 +35,7 @@ void drawControls(ig::Context &ui, DemoState &state)
         ig::StringView("Low"), ig::StringView("Balanced"), ig::StringView("Ultra")
     };
 
-    if (!ui.beginWindow("iGUI / Raylib", ig::Rect(56.0f, 64.0f, 420.0f, 550.0f)))
+    if (!ui.beginWindow("iGUI / Raylib", ig::Rect(56.0f, 16.0f, 420.0f, 608.0f)))
         return;
 
     ui.label("Immediate mode visual demo");
@@ -48,6 +51,8 @@ void drawControls(ig::Context &ui, DemoState &state)
     ui.comboBox("Quality", state.quality,
                 ig::Span<const ig::StringView>(qualityItems), 330.0f);
     ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f, 330.0f);
+    ui.sliderInt("Samples", state.samples, 1, 16, 330.0f);
+    ui.stepperInt("Retries", state.retries, 0, 5, 330.0f);
     ui.progressBar(state.volume, 1.0f, 330.0f);
     ui.spacing(4.0f);
 

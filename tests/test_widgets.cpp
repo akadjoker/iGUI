@@ -29,6 +29,8 @@ struct GalleryState
     bool firstChoice;
     bool selected;
     float volume;
+    int steps;
+    int retries;
     ig::String name;
     int quality;
     bool buttonClicked;
@@ -37,13 +39,16 @@ struct GalleryState
     bool radioClicked;
     bool selectableClicked;
     bool sliderChanged;
+    bool integerSliderChanged;
+    bool stepperChanged;
     bool inputChanged;
     bool comboChanged;
 
     GalleryState()
-        : checked(false), switched(false), firstChoice(false), selected(false), volume(0.0f), name(), quality(0),
+        : checked(false), switched(false), firstChoice(false), selected(false), volume(0.0f), steps(1), retries(2), name(), quality(0),
           buttonClicked(false), checkboxClicked(false), switchClicked(false), radioClicked(false),
-          selectableClicked(false), sliderChanged(false), inputChanged(false), comboChanged(false)
+          selectableClicked(false), sliderChanged(false), integerSliderChanged(false), stepperChanged(false),
+          inputChanged(false), comboChanged(false)
     {
     }
 };
@@ -53,7 +58,7 @@ static void drawGallery(ig::Context &context, GalleryState &state)
     const ig::StringView qualityItems[] = {
         ig::StringView("low"), ig::StringView("medium"), ig::StringView("high")
     };
-    assert(context.beginWindow("widget gallery", ig::Rect(10.0f, 10.0f, 300.0f, 480.0f)));
+    assert(context.beginWindow("widget gallery", ig::Rect(10.0f, 10.0f, 300.0f, 560.0f)));
     state.buttonClicked = context.button("action");
     state.checkboxClicked = context.checkbox("enabled", state.checked);
     state.switchClicked = context.toggleSwitch("live update", state.switched);
@@ -64,6 +69,8 @@ static void drawGallery(ig::Context &context, GalleryState &state)
     if (state.selectableClicked)
         state.selected = !state.selected;
     state.sliderChanged = context.sliderFloat("volume", state.volume, 0.0f, 1.0f, 200.0f);
+    state.integerSliderChanged = context.sliderInt("steps", state.steps, 0, 10, 200.0f);
+    state.stepperChanged = context.stepperInt("retries", state.retries, 0, 5, 200.0f);
     state.inputChanged = context.inputText("name", state.name, 200.0f);
     context.progressBar(state.volume, 1.0f, 200.0f);
     context.label("all widgets rendered");
@@ -74,7 +81,7 @@ static void drawGallery(ig::Context &context, GalleryState &state)
 
 static void beginAndDraw(ig::Context &context, GalleryState &state)
 {
-    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
     drawGallery(context, state);
 }
 
@@ -94,6 +101,8 @@ static void test_widget_gallery()
     assert(!state.firstChoice);
     assert(!state.selected);
     assert(state.quality == 0);
+    assert(state.steps == 1);
+    assert(state.retries == 2);
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 55.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 55.0f));
@@ -136,8 +145,22 @@ static void test_widget_gallery()
     assert(state.sliderChanged);
     assert(state.volume > 0.45f && state.volume < 0.55f);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 255.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 255.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 143.0f, 258.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 143.0f, 258.0f));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.integerSliderChanged);
+    assert(state.steps > 3 && state.steps < 7);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 205.0f, 294.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 205.0f, 294.0f));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.stepperChanged);
+    assert(state.retries == 3);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 323.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 323.0f));
     context.pushEvent(ig::Event::textInput(u8"Olá"));
     beginAndDraw(context, state);
     const ig::DrawData &inputData = context.endFrame();
@@ -150,14 +173,14 @@ static void test_widget_gallery()
     assert(inputData.commands.size() >= 17u);
     assert(inputData.vertices.size() >= 44u);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 344.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 344.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 412.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 412.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(!state.comboChanged);
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 432.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 432.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 500.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 500.0f));
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.comboChanged);

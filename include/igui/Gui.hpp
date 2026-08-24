@@ -65,6 +65,10 @@ public:
                   const Rect &bounds);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds);
+    bool sliderInt(StringView label, int &value, int minimum, int maximum,
+                   const Rect &bounds);
+    bool stepperInt(StringView label, int &value, int minimum, int maximum,
+                    const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
     void progressBar(float value, float maximum, const Rect &bounds);
     void label(StringView text, const Vec2 &position);
@@ -78,6 +82,10 @@ public:
                   float width = 180.0f);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
                      float width = 180.0f);
+    bool sliderInt(StringView label, int &value, int minimum, int maximum,
+                   float width = 180.0f);
+    bool stepperInt(StringView label, int &value, int minimum, int maximum,
+                    float width = 180.0f);
     bool inputText(StringView label, String &value, float width = 180.0f);
     void progressBar(float value, float maximum, float width = 180.0f);
     void label(StringView text);

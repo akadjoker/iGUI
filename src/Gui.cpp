@@ -432,6 +432,95 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     return changed;
 }
 
+bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum,
+                        const Rect &bounds)
+{
+    if (maximum <= minimum)
+        return false;
+
+    float temporary = static_cast<float>(value);
+    const bool changed = sliderFloat(labelText, temporary, static_cast<float>(minimum),
+                                     static_cast<float>(maximum), bounds);
+    if (!changed)
+        return false;
+
+    const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
+                                          : static_cast<int>(temporary - 0.5f);
+    const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
+    const bool valueChanged = value != clamped;
+    value = clamped;
+    return valueChanged;
+}
+
+bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum,
+                         const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window || maximum < minimum)
+        return false;
+
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const float buttonWidth = rect.height;
+    const float valueWidth = rect.height * 1.7f;
+    const float controlsWidth = buttonWidth * 2.0f + valueWidth;
+    const float controlsX = rect.x + (rect.width > controlsWidth ? rect.width - controlsWidth : 0.0f);
+    const Rect decrement(controlsX, rect.y, buttonWidth, rect.height);
+    const Rect valueRect(controlsX + buttonWidth, rect.y, valueWidth, rect.height);
+    const Rect increment(controlsX + buttonWidth + valueWidth, rect.y, buttonWidth, rect.height);
+    const WidgetId id = makeWidgetId(labelText);
+    const WidgetId decrementId = combineIds(id, 1u);
+    const WidgetId incrementId = combineIds(id, 2u);
+    const bool decrementHovered = itemHovered(decrement, clip, decrementId);
+    const bool incrementHovered = itemHovered(increment, clip, incrementId);
+    const bool decrementClicked = itemClicked(decrement, clip, decrementId);
+    const bool incrementClicked = itemClicked(increment, clip, incrementId);
+
+    bool changed = false;
+    if (decrementClicked && value > minimum)
+    {
+        --value;
+        changed = true;
+    }
+    if (incrementClicked && value < maximum)
+    {
+        ++value;
+        changed = true;
+    }
+
+    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    drawList->addRectFilled(decrement,
+                            decrementHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawList->addRectFilled(valueRect, theme_.inputBg, clip);
+    drawList->addRectFilled(increment,
+                            incrementHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+
+    const String displayed = String::number(value);
+    const TextMetrics valueMetrics = measureText(theme_.font, displayed, theme_.fontSize);
+    const TextMetrics minusMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
+    const TextMetrics plusMetrics = measureText(theme_.font, StringView("+"), theme_.fontSize);
+    drawText(*drawList, theme_.font, StringView("-"),
+             Vec2(decrement.x + (decrement.width - minusMetrics.width) * 0.5f,
+                  decrement.y + (decrement.height - minusMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, clip);
+    drawText(*drawList, theme_.font, displayed,
+             Vec2(valueRect.x + (valueRect.width - valueMetrics.width) * 0.5f,
+                  valueRect.y + (valueRect.height - valueMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, clip);
+    drawText(*drawList, theme_.font, StringView("+"),
+             Vec2(increment.x + (increment.width - plusMetrics.width) * 0.5f,
+                  increment.y + (increment.height - plusMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, clip);
+    return changed;
+}
+
 bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
 {
     WindowState *window = currentWindow();
@@ -600,6 +689,30 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     const bool changed = sliderFloat(labelText, value, minimum, maximum,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                           bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = sliderInt(labelText, value, minimum, maximum,
+                                   Rect(bounds.x - layout_.origin.x,
+                                        bounds.y - layout_.origin.y,
+                                        bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = stepperInt(labelText, value, minimum, maximum,
+                                    Rect(bounds.x - layout_.origin.x,
+                                         bounds.y - layout_.origin.y,
+                                         bounds.width, bounds.height));
     advanceLayout(bounds);
     return changed;
 }
