@@ -24,10 +24,11 @@ struct WindowState
     bool focused;
     uint64_t zOrder;
     DrawList drawList;
+    DrawList overlayDrawList;
 
     WindowState()
         : id(InvalidWidgetId), title(), bounds(), open(true), focused(false),
-          zOrder(0), drawList()
+          zOrder(0), drawList(), overlayDrawList()
     {
     }
 };

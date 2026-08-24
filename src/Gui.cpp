@@ -53,7 +53,10 @@ void Context::beginFrame(const FrameInfo &frame)
 
     frameDrawList_.clear();
     for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
+    {
         it->drawList.clear();
+        it->overlayDrawList.clear();
+    }
     hotWidget_ = InvalidWidgetId;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
@@ -82,7 +85,10 @@ const DrawData &Context::endFrame()
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
         if (window && window->open)
+        {
             frameDrawList_.append(window->drawList);
+            frameDrawList_.append(window->overlayDrawList);
+        }
     }
 
     currentWindow_ = WindowHandle();
@@ -373,7 +379,10 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         return false;
     }
 
-    drawList->addRectFilled(popup, theme_.selectableBackground, popupClip);
+    // Popups are deferred to the window overlay so controls declared after a
+    // combo box cannot paint over its open list.
+    DrawList &popupDrawList = window->overlayDrawList;
+    popupDrawList.addRectFilled(popup, theme_.selectableBackground, popupClip);
     for (Span<const StringView>::size_type i = 0; i < items.size(); ++i)
     {
         const Rect item(rect.x, rect.y + rect.height * static_cast<float>(i + 1u),
@@ -387,12 +396,12 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
             return true;
         }
         if (itemHoveredValue || static_cast<int>(i) == currentItem)
-            drawList->addRectFilled(item, static_cast<int>(i) == currentItem
-                                         ? theme_.selectableSelected : theme_.selectableHovered,
-                                    popupClip);
+            popupDrawList.addRectFilled(item, static_cast<int>(i) == currentItem
+                                            ? theme_.selectableSelected : theme_.selectableHovered,
+                                       popupClip);
 
         const TextMetrics itemMetrics = measureText(theme_.font, items[i], theme_.fontSize);
-        drawText(*drawList, theme_.font, items[i],
+        drawText(popupDrawList, theme_.font, items[i],
                  Vec2(item.x + theme_.windowPadding * 0.5f,
                       item.y + (item.height - itemMetrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, popupClip);

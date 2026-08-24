@@ -187,8 +187,42 @@ static void test_widget_gallery()
     assert(state.quality == 2);
 }
 
+static void test_combo_popup_overlay()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::StringView items[] = {
+        ig::StringView("low"), ig::StringView("medium"), ig::StringView("high")
+    };
+    int selected = 0;
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("popup ordering", ig::Rect(10.0f, 10.0f, 220.0f, 200.0f)));
+    context.comboBox("quality", selected, ig::Span<const ig::StringView>(items), 180.0f);
+    context.button("drawn after combo");
+    context.endWindow();
+    context.endFrame();
+
+    // Open the combo box. The button is declared after it, so the popup must
+    // still become the final layer in the generated draw data.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("popup ordering", ig::Rect(10.0f, 10.0f, 220.0f, 200.0f)));
+    context.comboBox("quality", selected, ig::Span<const ig::StringView>(items), 180.0f);
+    context.button("drawn after combo");
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(!data.commands.empty());
+    const ig::DrawCommand &lastCommand = data.commands.back();
+    assert(lastCommand.type == ig::DrawCommandType::Text);
+    assert(lastCommand.payload.text.position.y > 120.0f);
+}
+
 int main()
 {
     test_widget_gallery();
+    test_combo_popup_overlay();
     return 0;
 }
