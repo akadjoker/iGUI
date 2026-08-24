@@ -712,6 +712,53 @@ static void test_cross_window_drag_drop()
     assert(payload.source == 42u && payload.data == 9001u);
 }
 
+static bool drawTreeDrag(ig::Context &context, ig::TreeDrop &drop)
+{
+    bool sourceExpanded = false;
+    bool targetExpanded = false;
+    ig::TreeItemStyle sourceStyle;
+    sourceStyle.typeColor = ig::Color(105u, 170u, 245u, 255u);
+    ig::TreeItemStyle targetStyle;
+    targetStyle.typeColor = ig::Color(255u, 220u, 105u, 255u);
+    targetStyle.leaf = true;
+
+    assert(context.beginWindow("tree drag", ig::Rect(10.0f, 10.0f, 260.0f, 150.0f)));
+    context.treeItem(101u, "Camera3D", sourceExpanded, sourceStyle,
+                     ig::Rect(8.0f, 8.0f, 220.0f, 28.0f), &drop);
+    context.treeItem(202u, "DirectionalLight3D", targetExpanded, targetStyle,
+                     ig::Rect(8.0f, 40.0f, 220.0f, 28.0f), &drop);
+    context.endWindow();
+    return drop.source != ig::InvalidWidgetId;
+}
+
+static void test_tree_drag_drop_positions()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::TreeDrop drop;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 100.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(100.0f, 108.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 100.0f, 108.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(drawTreeDrag(context, drop));
+    context.endFrame();
+    assert(drop.source == 101u && drop.target == 202u);
+    assert(drop.position == ig::TreeDropPosition::After);
+}
+
 int main()
 {
     test_widget_gallery();
@@ -723,5 +770,6 @@ int main()
     test_responsive_window_layout();
     test_scene_tree_and_message_box();
     test_cross_window_drag_drop();
+    test_tree_drag_drop_positions();
     return 0;
 }

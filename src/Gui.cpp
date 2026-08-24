@@ -533,11 +533,17 @@ bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
 bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle &style,
                        const Rect &bounds)
 {
+    return treeItem(makeWidgetId(labelText), labelText, expanded, style, bounds, nullptr);
+}
+
+bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
+                       const TreeItemStyle &style, const Rect &bounds, TreeDrop *drop)
+{
     WindowState *window = currentWindow();
-    if (!window)
+    if (!window || nodeId == InvalidWidgetId)
         return false;
 
-    const WidgetId id = makeWidgetId(labelText);
+    const WidgetId id = combineIds(makeWidgetId(labelText), nodeId);
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
     DrawList *drawList = currentDrawList();
@@ -547,6 +553,34 @@ bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle
     const float arrowWidth = rect.height * 0.65f;
     const Rect arrowRect(rect.x, rect.y, arrowWidth, rect.height);
     const WidgetId arrowId = combineIds(id, 0x4152524f57ull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const Rect visible = intersect(rect, clip);
+    const bool pressedOnRow = !style.disabled && pointer_.pressed[left] &&
+                              currentWindow_ == focusedWindow_ &&
+                              activeWidget_ == InvalidWidgetId &&
+                              contains(visible, pointer_.pressedPosition[left]) &&
+                              !contains(arrowRect, pointer_.pressedPosition[left]);
+    if (pressedOnRow)
+    {
+        // Keep the regular row click available for selection. The item becomes a
+        // drag source only if it moves far enough on a subsequent frame.
+        dragDrop_.widget = id;
+        dragDrop_.payload.type = 0x545245454954454dull;
+        dragDrop_.payload.source = nodeId;
+        dragDrop_.payload.data = nodeId;
+        dragDrop_.preview = String(labelText.data(), labelText.size());
+        dragDrop_.pressedPosition = pointer_.pressedPosition[left];
+        dragDrop_.armed = true;
+        dragDrop_.active = false;
+        dragDrop_.accepted = false;
+    }
+    if (dragDrop_.armed && dragDrop_.widget == id && activeWidget_ == id)
+    {
+        const float deltaX = pointer_.position.x - dragDrop_.pressedPosition.x;
+        const float deltaY = pointer_.position.y - dragDrop_.pressedPosition.y;
+        if (pointer_.down[left] && deltaX * deltaX + deltaY * deltaY >= 16.0f)
+            dragDrop_.active = true;
+    }
     const bool rowHovered = !style.disabled && itemHovered(rect, clip, id);
     const bool arrowHovered = !style.disabled && !style.leaf && itemHovered(arrowRect, clip, arrowId);
     const bool expansionClicked = !style.disabled && !style.leaf &&
@@ -588,6 +622,29 @@ bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle
              Vec2(iconX + iconSize + theme_.windowPadding * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, textColor, clip);
+    if (drop && dragDrop_.active && dragDrop_.payload.type == 0x545245454954454dull &&
+        dragDrop_.payload.source != nodeId && !style.disabled && contains(visible, pointer_.position))
+    {
+        const float localY = pointer_.position.y - rect.y;
+        const TreeDropPosition position = localY < rect.height * 0.25f ? TreeDropPosition::Before
+                                       : (localY >= rect.height * 0.75f || style.leaf)
+                                           ? TreeDropPosition::After : TreeDropPosition::Inside;
+        if (position == TreeDropPosition::Inside)
+            drawList->addRect(rect, theme_.dialogBtnPrimary, clip, 2.0f);
+        else
+        {
+            const float lineY = position == TreeDropPosition::Before ? rect.y : rect.y + rect.height;
+            drawList->addLine(Vec2(rect.x, lineY), Vec2(rect.x + rect.width, lineY),
+                              theme_.dialogBtnPrimary, clip, 2.0f);
+        }
+        if (pointer_.released[left])
+        {
+            drop->source = dragDrop_.payload.source;
+            drop->target = nodeId;
+            drop->position = position;
+            dragDrop_.accepted = true;
+        }
+    }
     (void)arrowHovered;
     return selected;
 }
@@ -2059,6 +2116,19 @@ bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle
                                    Rect(bounds.x - layout_.origin.x,
                                         bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return selected;
+}
+
+bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
+                       const TreeItemStyle &style, TreeDrop *drop, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool selected = treeItem(nodeId, labelText, expanded, style,
+                                   Rect(bounds.x - layout_.origin.x,
+                                        bounds.y - layout_.origin.y,
+                                        bounds.width, bounds.height), drop);
     advanceLayout(bounds);
     return selected;
 }

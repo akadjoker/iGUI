@@ -47,6 +47,26 @@ struct TreeItemStyle
         : typeColor(120u, 170u, 230u, 255u), selected(false), leaf(false), disabled(false) {}
 };
 
+// The relation selected when a tree item is dropped over another item.
+enum class TreeDropPosition : uint8_t
+{
+    Before,
+    Inside,
+    After
+};
+
+// Returned by the draggable treeItem overload. Apply this operation to the
+// application's tree model after finishing its current draw pass.
+struct TreeDrop
+{
+    WidgetId source;
+    WidgetId target;
+    TreeDropPosition position;
+
+    TreeDrop()
+        : source(InvalidWidgetId), target(InvalidWidgetId), position(TreeDropPosition::Inside) {}
+};
+
 enum class MessageBoxResult : uint8_t
 {
     None,
@@ -123,6 +143,11 @@ public:
     // is changed only by pressing its disclosure arrow.
     bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
                   const Rect &bounds);
+    // Draggable scene-tree item. nodeId must be stable in the application's tree
+    // model. Drop over the upper, middle or lower area for Before, Inside or After.
+    // The source item cannot be its own target.
+    bool treeItem(WidgetId nodeId, StringView label, bool &expanded, const TreeItemStyle &style,
+                  const Rect &bounds, TreeDrop *drop = nullptr);
     // Renders a tab strip and returns true when the selected tab changes.
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
                 const Rect &bounds);
@@ -183,6 +208,8 @@ public:
     bool treeNode(StringView label, bool &expanded, float width = 0.0f);
     bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
                   float width = 0.0f);
+    bool treeItem(WidgetId nodeId, StringView label, bool &expanded, const TreeItemStyle &style,
+                  TreeDrop *drop = nullptr, float width = 0.0f);
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
                 float width = 0.0f);
     bool listBox(StringView label, int &currentItem, Span<const StringView> items,
