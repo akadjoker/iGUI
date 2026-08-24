@@ -80,7 +80,7 @@ Context::PointerState::PointerState()
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(),
-      windowOrder_(), idStack_(), childStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windowOrder_(), idStack_(), focusOrder_(), childStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
@@ -94,7 +94,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
-      copyRequested_(false), pasteRequested_(false), escapePressed_(false), keyPressed_(), keyControl_(), keyShift_()
+      copyRequested_(false), pasteRequested_(false), escapePressed_(false), tabPressed_(false), tabShiftPressed_(false),
+      keyPressed_(), keyControl_(), keyShift_()
 {
     events_.reserve(32);
     windows_.reserve(8);
@@ -105,6 +106,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     childScrolls_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
+    focusOrder_.reserve(32);
     childStack_.reserve(4);
     toasts_.reserve(4);
     for (uint32_t i = 0u; i < 32u; ++i)
@@ -158,6 +160,7 @@ void Context::beginFrame(const FrameInfo &frame)
     childStack_.clear();
     tableActive_ = false;
     propertyRowActive_ = false;
+    focusOrder_.clear();
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -169,6 +172,8 @@ void Context::beginFrame(const FrameInfo &frame)
     copyRequested_ = false;
     pasteRequested_ = false;
     escapePressed_ = false;
+    tabPressed_ = false;
+    tabShiftPressed_ = false;
     for (uint32_t i = 0u; i < 32u; ++i)
     {
         keyPressed_[i] = false;
@@ -217,6 +222,7 @@ const DrawData &Context::endFrame()
             activeWidget_ = InvalidWidgetId;
         dragDrop_ = DragDropState();
     }
+    advanceFocus();
 
     currentWindow_ = WindowHandle();
     drawData_ = frameDrawList_.data(frame_.displaySize, frame_.dpiScale);
@@ -2098,8 +2104,13 @@ bool Context::isHovered(StringView idText, const Rect &bounds)
     if (!currentWindow())
         return false;
     const Rect rect = contentRect(bounds);
-    const WidgetId id = combineIds(makeWidgetId(idText), 0x435553544f4d484full);
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x494e56495349424cull);
     return itemHovered(rect, contentClip(), id);
+}
+
+bool Context::isClicked(StringView idText, const Rect &bounds)
+{
+    return invisibleButton(idText, bounds);
 }
 
 void Context::drawRectFilled(const Rect &bounds, const Color &color)
@@ -2731,6 +2742,25 @@ bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, fl
     return changed;
 }
 
+bool Context::inputFloat4(StringView labelText, float &x, float &y, float &z, float &w,
+                          float width, int precision)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing * 3.0f) * 0.25f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputFloat("x", x, cell, precision);
+    sameLine();
+    changed = inputFloat("y", y, cell, precision) || changed;
+    sameLine();
+    changed = inputFloat("z", z, cell, precision) || changed;
+    sameLine();
+    changed = inputFloat("w", w, cell, precision) || changed;
+    popId();
+    return changed;
+}
+
 bool Context::dragFloat2(StringView labelText, float &x, float &y, float minimum, float maximum,
                          float speed, float width)
 {
@@ -2759,6 +2789,25 @@ bool Context::dragFloat3(StringView labelText, float &x, float &y, float &z, flo
     changed = dragFloat("y", y, minimum, maximum, speed, cell) || changed;
     sameLine();
     changed = dragFloat("z", z, minimum, maximum, speed, cell) || changed;
+    popId();
+    return changed;
+}
+
+bool Context::dragFloat4(StringView labelText, float &x, float &y, float &z, float &w,
+                         float minimum, float maximum, float speed, float width)
+{
+    const float total = width > 0.0f ? width : availableWidth();
+    const float cell = (total - theme_.itemSpacing * 3.0f) * 0.25f;
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragFloat("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragFloat("y", y, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragFloat("z", z, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragFloat("w", w, minimum, maximum, speed, cell) || changed;
     popId();
     return changed;
 }
@@ -3331,6 +3380,11 @@ void Context::consumeEvents()
                 backspacePressed_ = true;
             else if (event.key == KeyCode::Enter)
                 enterPressed_ = true;
+            else if (event.key == KeyCode::Tab)
+            {
+                tabPressed_ = true;
+                tabShiftPressed_ = event.shift;
+            }
             else if (event.key == KeyCode::Home)
                 homePressed_ = true;
             else if (event.key == KeyCode::End)
@@ -3346,6 +3400,8 @@ void Context::consumeEvents()
                 openMenu_ = InvalidWidgetId;
                 openContextMenu_ = InvalidWidgetId;
                 openSubMenu_ = InvalidWidgetId;
+                focusedWidget_ = InvalidWidgetId;
+                textInputWidget_ = InvalidWidgetId;
             }
             else if (event.control && event.key == KeyCode::C)
                 copyRequested_ = true;
@@ -3548,8 +3604,10 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     return hovered;
 }
 
-bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id)
+bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable)
 {
+    if (focusable)
+        registerFocusable(id);
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
@@ -3568,7 +3626,50 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id)
     const bool clicked = releasedHere && activeWidget_ == id;
     if (pointer_.released[left] && activeWidget_ == id)
         activeWidget_ = InvalidWidgetId;
-    return clicked;
+    return clicked || (focusedWidget_ == id && enterPressed_);
+}
+
+void Context::registerFocusable(WidgetId id)
+{
+    if (id == InvalidWidgetId)
+        return;
+    for (ct::Vector<WidgetId>::size_type i = 0u; i < focusOrder_.size(); ++i)
+    {
+        if (focusOrder_[i] == id)
+            return;
+    }
+    focusOrder_.push_back(id);
+}
+
+void Context::advanceFocus()
+{
+    if (!tabPressed_ || focusOrder_.empty())
+        return;
+
+    ct::Vector<WidgetId>::size_type selected = 0u;
+    bool found = false;
+    for (ct::Vector<WidgetId>::size_type i = 0u; i < focusOrder_.size(); ++i)
+    {
+        if (focusOrder_[i] == focusedWidget_)
+        {
+            selected = i;
+            found = true;
+            break;
+        }
+    }
+    if (tabShiftPressed_)
+    {
+        if (found)
+            selected = selected == 0u ? focusOrder_.size() - 1u : selected - 1u;
+        else
+            selected = focusOrder_.size() - 1u;
+    }
+    else if (found)
+    {
+        selected = selected + 1u == focusOrder_.size() ? 0u : selected + 1u;
+    }
+    focusedWidget_ = focusOrder_[selected];
+    textInputWidget_ = InvalidWidgetId;
 }
 
 bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
@@ -3576,6 +3677,7 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
 {
     if (rect.width <= 0.0f || maximum <= minimum)
         return false;
+    registerFocusable(id);
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
 
@@ -3626,7 +3728,7 @@ void Context::drawWindow(WindowState &window)
     const bool closeHovered = itemHovered(closeButton, viewport, closeId);
     const bool minimizeHovered = itemHovered(minimizeButton, viewport, minimizeId);
 
-    if (itemClicked(closeButton, viewport, closeId))
+    if (itemClicked(closeButton, viewport, closeId, false))
     {
         window.open = false;
         window.minimized = false;
@@ -3637,7 +3739,7 @@ void Context::drawWindow(WindowState &window)
         openCombo_ = InvalidWidgetId;
         return;
     }
-    if (itemClicked(minimizeButton, viewport, minimizeId))
+    if (itemClicked(minimizeButton, viewport, minimizeId, false))
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);

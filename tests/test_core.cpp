@@ -446,6 +446,76 @@ static void test_input_text_focus_and_utf8_backspace()
     assert(value[1] == 'l');
 }
 
+static bool draw_keyboard_focus_controls(ig::Context &context, ig::String &first, ig::String &second)
+{
+    assert(context.beginWindow("keyboard focus", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.inputText("first", first, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f));
+    context.inputText("second", second, ig::Rect(8.0f, 42.0f, 160.0f, 28.0f));
+    const bool activated = context.button("apply", ig::Rect(8.0f, 76.0f, 100.0f, 28.0f));
+    context.endWindow();
+    return activated;
+}
+
+static void test_keyboard_focus_navigation()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String first;
+    ig::String second;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::textInput("a"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "a");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::textInput("b"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(second == "b");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab, false, true));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::textInput("c"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "ac");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    context.pushEvent(ig::Event::textInput("d"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "ac");
+    assert(second == "b");
+}
+
 static void test_input_text_scrolls_to_caret()
 {
     TestBackend backend;
@@ -640,6 +710,7 @@ int main()
     test_automatic_selectable_and_progress_bar();
     test_slider_captures_pointer();
     test_input_text_focus_and_utf8_backspace();
+    test_keyboard_focus_navigation();
     test_input_text_scrolls_to_caret();
     test_window_can_reopen();
     test_content_clip_applies_to_checkbox_label();

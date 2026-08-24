@@ -221,6 +221,8 @@ public:
     // Minimal building blocks for application-defined immediate widgets.
     bool invisibleButton(StringView id, const Rect &bounds);
     bool isHovered(StringView id, const Rect &bounds);
+    // Equivalent to invisibleButton, named for custom widget interaction code.
+    bool isClicked(StringView id, const Rect &bounds);
     void drawRectFilled(const Rect &bounds, const Color &color);
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
@@ -273,10 +275,14 @@ public:
                  int speed = 1, float width = 0.0f);
     bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3);
     bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f, int precision = 3);
+    bool inputFloat4(StringView label, float &x, float &y, float &z, float &w,
+                     float width = 0.0f, int precision = 3);
     bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
                     float speed = 0.01f, float width = 0.0f);
     bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
                     float speed = 0.01f, float width = 0.0f);
+    bool dragFloat4(StringView label, float &x, float &y, float &z, float &w,
+                    float minimum, float maximum, float speed = 0.01f, float width = 0.0f);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 0.0f);
     bool inputText(StringView label, String &value, float width = 0.0f);
@@ -437,6 +443,7 @@ private:
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
+    ct::Vector<WidgetId> focusOrder_;
     ct::Vector<ChildState> childStack_;
     ct::Vector<ToastState> toasts_;
     DragDropState dragDrop_;
@@ -490,6 +497,8 @@ private:
     bool copyRequested_;
     bool pasteRequested_;
     bool escapePressed_;
+    bool tabPressed_;
+    bool tabShiftPressed_;
     bool keyPressed_[32];
     bool keyControl_[32];
     bool keyShift_[32];
@@ -514,7 +523,9 @@ private:
     Rect contentRect(const Rect &local) const;
     Rect contentClip() const;
     bool itemHovered(const Rect &rect, const Rect &clip, WidgetId id);
-    bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id);
+    bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable = true);
+    void registerFocusable(WidgetId id);
+    void advanceFocus();
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                      float &value, float minimum, float maximum);
     WindowHandle topWindowAt(const Vec2 &position) const;
