@@ -1,4 +1,4 @@
-#include <GUI.hpp>
+#include <igui/iGUI.hpp>
 #include <igui_sdl2/SdlBackend.hpp>
 
 #include <SDL.h>

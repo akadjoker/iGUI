@@ -2,10 +2,10 @@
 #include "Widget.hpp"
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
-#include <functional>
-#include <string>
+#include <ct/function.hpp>
+#include <igui/widgets/String.hpp>
 #include <variant>
-#include <vector>
+#include <ct/vector.hpp>
 
 
 namespace BuGUI
@@ -22,24 +22,24 @@ class PropertyGrid;
 class TreeNode
 {
 public:
-    explicit TreeNode(const std::string& text);
+    explicit TreeNode(const String& text);
     ~TreeNode();
 
     /// @brief Add a child node with the given text.
-    TreeNode*  addChild(const std::string& text);
+    TreeNode*  addChild(const String& text);
     /// @brief Remove a child by index.
     void       removeChild(int index);
     /// @brief Remove all children.
     void       clear();
     /// @brief Set the icon by name.
-    void       setIcon(const std::string& name);
+    void       setIcon(const String& name);
 
     /// @brief Get the node's display text.
-    const std::string&             text()        const { return text_; }
+    const String&             text()        const { return text_; }
     /// @brief Check if the node has children.
     bool                           hasChildren() const { return !children_.empty(); }
     /// @brief Get child nodes.
-    const std::vector<TreeNode*>&  children()    const { return children_; }
+    const ct::Vector<TreeNode*>&  children()    const { return children_; }
     /// @brief Check if the node is expanded.
     bool                           isExpanded()  const { return expanded_; }
     /// @brief Set expanded state.
@@ -50,11 +50,11 @@ public:
     TreeNode*                      parent()            { return parent_; }
 
 private:
-    std::string           text_;
-    std::string           iconStr_;
+    String           text_;
+    String           iconStr_;
     IconId                iconId_   = IconId::None;
     TreeNode*             parent_   = nullptr;
-    std::vector<TreeNode*> children_;
+    ct::Vector<TreeNode*> children_;
     bool                  expanded_ = true;
 };
 
@@ -68,7 +68,7 @@ public:
     ~TreeView() override;
 
     /// @brief Add a root-level tree node.
-    TreeNode* addRoot(const std::string& text);
+    TreeNode* addRoot(const String& text);
     /// @brief Clear all tree nodes.
     void      clear();
     /// @brief Set the selected node.
@@ -82,7 +82,7 @@ public:
     /// @brief Get the selected node.
     TreeNode*                     selectedNode() const { return selected_; }
     /// @brief Get root-level nodes.
-    const std::vector<TreeNode*>& roots()        const { return roots_; }
+    const ct::Vector<TreeNode*>& roots()        const { return roots_; }
 
     /// @brief Emitted when the selection changes.
     Signal<TreeNode*> selectionChanged;
@@ -103,8 +103,8 @@ private:
     void  flattenNode(TreeNode* n, int depth);
     float maxScroll() const;
 
-    std::vector<TreeNode*> roots_;
-    std::vector<FlatRow>   flatRows_;
+    ct::Vector<TreeNode*> roots_;
+    ct::Vector<FlatRow>   flatRows_;
     TreeNode*              selected_      = nullptr;
     TreeModel*             model_         = nullptr;
     float                  scrollOffset_  = 0.0f;
@@ -122,61 +122,61 @@ public:
     PropertyGrid();
 
     /// @brief Add a section header.
-    int addSection  (const std::string& title);
+    int addSection  (const String& title);
     /// @brief Add a string property.
-    int addString   (const std::string& name, const std::string& value,
-                     std::function<void(const std::string&)> onChange = nullptr,
-                     const std::string& desc = "");
+    int addString   (const String& name, const String& value,
+                     ct::Function<void(const String&)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a float property with range.
-    int addFloat    (const std::string& name, float value, float minVal, float maxVal,
-                     std::function<void(float)> onChange = nullptr,
-                     const std::string& desc = "");
+    int addFloat    (const String& name, float value, float minVal, float maxVal,
+                     ct::Function<void(float)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add an integer property with range.
-    int addInt      (const std::string& name, int value, int minVal, int maxVal,
-                     std::function<void(int)> onChange = nullptr,
-                     const std::string& desc = "");
+    int addInt      (const String& name, int value, int minVal, int maxVal,
+                     ct::Function<void(int)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a boolean toggle property.
-    int addBool     (const std::string& name, bool value,
-                     std::function<void(bool)> onChange = nullptr,
-                     const std::string& desc = "");
+    int addBool     (const String& name, bool value,
+                     ct::Function<void(bool)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a color property with picker.
-    int addColor    (const std::string& name, const Color& value,
-                     std::function<void(const Color&)> onChange = nullptr,
-                     const std::string& desc = "");
+    int addColor    (const String& name, const Color& value,
+                     ct::Function<void(const Color&)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a combo-box property.
-    int addCombo    (const std::string& name, const std::vector<std::string>& options,
+    int addCombo    (const String& name, const ct::Vector<String>& options,
                      int selected,
-                     std::function<void(int)> onChange = nullptr,
-                     const std::string& desc = "");
+                     ct::Function<void(int)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a 2D vector property with range.
-    int addVec2     (const std::string& name, float x, float y,
+    int addVec2     (const String& name, float x, float y,
                      float minVal, float maxVal,
-                     std::function<void(float,float)> onChange = nullptr,
-                     const std::string& desc = "");
+                     ct::Function<void(float,float)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a 3D vector property with range.
-    int addVec3     (const std::string& name, float x, float y, float z,
+    int addVec3     (const String& name, float x, float y, float z,
                      float minVal, float maxVal,
-                     std::function<void(float,float,float)> onChange = nullptr,
-                     const std::string& desc = "");
+                     ct::Function<void(float,float,float)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a 4D vector property with range.
-    int addVec4     (const std::string& name, float x, float y, float z, float w,
+    int addVec4     (const String& name, float x, float y, float z, float w,
                      float minVal, float maxVal,
-                     std::function<void(float,float,float,float)> onChange = nullptr,
-                     const std::string& desc = "");
+                     ct::Function<void(float,float,float,float)> onChange = nullptr,
+                     const String& desc = "");
     /// @brief Add a clickable button property.
-    int addButton   (const std::string& name,
-                     std::function<void()> onClick = nullptr,
-                     const std::string& desc = "");
+    int addButton   (const String& name,
+                     ct::Function<void()> onClick = nullptr,
+                     const String& desc = "");
     /// @brief Add a visual separator row.
     int addSeparator();
     /// @brief Add a min/max range slider property.
-    int addRange    (const std::string& name, float lo, float hi,
+    int addRange    (const String& name, float lo, float hi,
                      float minVal, float maxVal,
-                     std::function<void(float,float)> onChange = nullptr,
-                     const std::string& desc = "");
+                     ct::Function<void(float,float)> onChange = nullptr,
+                     const String& desc = "");
 
     /// @brief Set a string property value by row.
-    void setString (int row, const std::string& v);
+    void setString (int row, const String& v);
     /// @brief Set a float property value by row.
     void setFloat  (int row, float v);
     /// @brief Set an integer property value by row.
@@ -216,19 +216,19 @@ public:
 
     // ── Per-type value structs ───────────────────────────────────────────
     struct PropSection  { bool expanded = true; };
-    struct PropString   { std::string value; std::function<void(const std::string&)> onChange; };
-    struct PropFloat    { float value = 0.f, min = 0.f, max = 1.f; std::function<void(float)> onChange; };
-    struct PropInt      { int value = 0, min = 0, max = 100; std::function<void(int)> onChange; };
-    struct PropBool     { bool value = false; std::function<void(bool)> onChange; };
-    struct PropColor    { Color value = {255,255,255,255}; std::function<void(const Color&)> onChange; };
-    struct PropCombo    { std::vector<std::string> options; int index = 0; std::function<void(int)> onChange; };
+    struct PropString   { String value; ct::Function<void(const String&)> onChange; };
+    struct PropFloat    { float value = 0.f, min = 0.f, max = 1.f; ct::Function<void(float)> onChange; };
+    struct PropInt      { int value = 0, min = 0, max = 100; ct::Function<void(int)> onChange; };
+    struct PropBool     { bool value = false; ct::Function<void(bool)> onChange; };
+    struct PropColor    { Color value = {255,255,255,255}; ct::Function<void(const Color&)> onChange; };
+    struct PropCombo    { ct::Vector<String> options; int index = 0; ct::Function<void(int)> onChange; };
     struct PropVec      { float value[4] = {0,0,0,0}; int components = 2; float min = 0.f, max = 1.f;
-                          std::function<void(float,float)> onChange2;
-                          std::function<void(float,float,float)> onChange3;
-                          std::function<void(float,float,float,float)> onChange4; };
-    struct PropButton   { std::function<void()> onClick; };
+                          ct::Function<void(float,float)> onChange2;
+                          ct::Function<void(float,float,float)> onChange3;
+                          ct::Function<void(float,float,float,float)> onChange4; };
+    struct PropButton   { ct::Function<void()> onClick; };
     struct PropSeparator{};
-    struct PropRange    { float lo = 0, hi = 1, min = 0, max = 1; std::function<void(float,float)> onChange; };
+    struct PropRange    { float lo = 0, hi = 1, min = 0, max = 1; ct::Function<void(float,float)> onChange; };
 
     using PropData = std::variant<PropSection, PropString, PropFloat, PropInt,
                                   PropBool, PropColor, PropCombo, PropVec,
@@ -236,8 +236,8 @@ public:
 
     struct PropRow {
         PropType    type;
-        std::string name;
-        std::string description;
+        String name;
+        String description;
         PropData    data;
     };
 
@@ -245,7 +245,7 @@ public:
     template<typename T> T&       propData(int row)       { return std::get<T>(rows_[row].data); }
     template<typename T> const T& propData(int row) const { return std::get<T>(rows_[row].data); }
 
-    std::vector<PropRow> rows_;  // accessible by ColorPickerPopup_
+    ct::Vector<PropRow> rows_;  // accessible by ColorPickerPopup_
     /// @brief Set the description panel height.
     void setDescHeight(float h) { descHeight_ = h; markDirty(); }
 
@@ -260,10 +260,10 @@ private:
     float maxScroll()            const;
     float visibleTotalHeight()   const;
     float totalHeight()          const;
-    std::vector<int> visibleRows() const;
+    ct::Vector<int> visibleRows() const;
     int   hitRow(float localY) const;
 
-    mutable std::vector<int> cachedVisibleRows_;
+    mutable ct::Vector<int> cachedVisibleRows_;
     mutable bool             visDirty_ = true;
 
     int   selectedRow_   = -1;
@@ -275,7 +275,7 @@ private:
 
     bool  editing_       = false;
     int   activeRow_     = -1;
-    std::string editBuf_;
+    String editBuf_;
     int   editCursor_    = 0;
 
     bool  draggingSlider_ = false;

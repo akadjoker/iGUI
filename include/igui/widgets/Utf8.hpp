@@ -1,5 +1,5 @@
 #pragma once
-#include <string>
+#include <igui/widgets/String.hpp>
 #include <cstddef>
 
 namespace BuGUI
@@ -15,7 +15,7 @@ inline int utf8CharLen(const char* p)
     return 1;
 }
 
-inline int utf8Length(const std::string& s)
+inline int utf8Length(const String& s)
 {
     int count = 0;
     const char* p = s.c_str();
@@ -24,7 +24,7 @@ inline int utf8Length(const std::string& s)
     return count;
 }
 
-inline size_t utf8ByteOffset(const std::string& s, int cpIndex)
+inline size_t utf8ByteOffset(const String& s, int cpIndex)
 {
     const char* p = s.c_str();
     const char* end = p + s.size();
@@ -33,7 +33,7 @@ inline size_t utf8ByteOffset(const std::string& s, int cpIndex)
     return static_cast<size_t>(p - s.c_str());
 }
 
-inline std::string utf8Substr(const std::string& s, int cpStart, int cpEnd)
+inline String utf8Substr(const String& s, int cpStart, int cpEnd)
 {
     size_t byteStart = utf8ByteOffset(s, cpStart);
     size_t byteEnd   = utf8ByteOffset(s, cpEnd);

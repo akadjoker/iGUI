@@ -5,9 +5,9 @@
 //  Label
 // ═════════════════════════════════════════════════════════════════════════════
 
-Label::Label(const std::string& text) : text_(text) {}
+Label::Label(const String& text) : text_(text) {}
 
-void Label::setText(const std::string& t) { text_ = t; markDirty(); }
+void Label::setText(const String& t) { text_ = t; markDirty(); }
 void Label::setColor(const Color& c)      { color_ = c; }
 void Label::setAlign(TextAlign a)         { align_ = a; markDirty(); }
 
@@ -108,13 +108,13 @@ void Line::paint(PaintContext& ctx)
 //  Button
 // ═════════════════════════════════════════════════════════════════════════════
 
-Button::Button(const std::string& text) : text_(text)
+Button::Button(const String& text) : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
 }
 
-void Button::setText(const std::string& t) { text_ = t; markDirty(); }
+void Button::setText(const String& t) { text_ = t; markDirty(); }
 void Button::setAlign(TextAlign a)         { align_ = a; markDirty(); }
 
 Widget::Vec2f Button::sizeHint() const
@@ -502,7 +502,7 @@ void Panel::paint(PaintContext& ctx)
 //  CheckBox
 // ═════════════════════════════════════════════════════════════════════════════
 
-CheckBox::CheckBox(const std::string& text) : text_(text)
+CheckBox::CheckBox(const String& text) : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
@@ -514,7 +514,7 @@ CheckBox::CheckBox(const std::string& text) : text_(text)
     });
 }
 
-void CheckBox::setText(const std::string& t) { text_ = t; markDirty(); }
+void CheckBox::setText(const String& t) { text_ = t; markDirty(); }
 void CheckBox::setChecked(bool c)            { checked_ = c; markDirty(); }
 
 Widget::Vec2f CheckBox::sizeHint() const
@@ -632,7 +632,7 @@ void RadioGroup::select(RadioButton* rb)
 //  RadioButton
 // ═════════════════════════════════════════════════════════════════════════════
 
-RadioButton::RadioButton(const std::string& text, RadioGroup* group)
+RadioButton::RadioButton(const String& text, RadioGroup* group)
     : text_(text), group_(group)
 {
     acceptsFocus_ = true;
@@ -728,7 +728,7 @@ void RadioButton::paint(PaintContext& ctx)
 //  Switch
 // ═════════════════════════════════════════════════════════════════════════════
 
-Switch::Switch(const std::string& text) : text_(text)
+Switch::Switch(const String& text) : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
@@ -814,8 +814,8 @@ Toolbar::Toolbar(float height)
 {
 }
 
-IconButton* Toolbar::addButton(const std::string& tooltip, IconButton::Icon icon,
-                               std::function<void()> onClick)
+IconButton* Toolbar::addButton(const String& tooltip, IconButton::Icon icon,
+                               ct::Function<void()> onClick)
 {
     auto* btn = createChild<IconButton>(icon);
     btn->setSize(height_ - 4, height_ - 4);

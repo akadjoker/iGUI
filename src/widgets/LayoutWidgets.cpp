@@ -38,7 +38,7 @@ Widget::Vec2f GridLayout::sizeHint() const
 void GridLayout::layout()
 {
     // Collect visible children
-    std::vector<Widget*> vis;
+    ct::Vector<Widget*> vis;
     for (auto* c : children_)
         if (c->isVisible()) vis.push_back(c);
 
@@ -251,7 +251,7 @@ void BorderLayout::paint(PaintContext& ctx)
 //  Collapsible
 // ═════════════════════════════════════════════════════════════════════════════
 
-Collapsible::Collapsible(const std::string& title, bool expanded)
+Collapsible::Collapsible(const String& title, bool expanded)
     : title_(title), expanded_(expanded)
 {
     acceptsFocus_ = true;
@@ -755,7 +755,7 @@ void FlowLayout::layout()
     float x = 0, y = 0, rowH = 0;
 
     // Two passes: first measure row heights, then position
-    std::vector<Widget*> vis;
+    ct::Vector<Widget*> vis;
     for (auto* c : children_)
         if (c->isVisible()) vis.push_back(c);
 
@@ -1075,9 +1075,9 @@ void Splitter::onMouseLeave()
 //  TabLayout - tabbed container
 // ═════════════════════════════════════════════════════════════════════════════
 
-static const std::string kEmptyTabLabel;
+static const String kEmptyTabLabel;
 
-void TabLayout::addTabWidget(const std::string& label, Widget* content)
+void TabLayout::addTabWidget(const String& label, Widget* content)
 {
     tabs_.push_back({label, content});
     addChild(content);
@@ -1135,7 +1135,7 @@ Widget* TabLayout::currentWidget() const
     return nullptr;
 }
 
-void TabLayout::setTabLabel(int index, const std::string& label)
+void TabLayout::setTabLabel(int index, const String& label)
 {
     if (index >= 0 && index < static_cast<int>(tabs_.size()))
     {
@@ -1144,7 +1144,7 @@ void TabLayout::setTabLabel(int index, const std::string& label)
     }
 }
 
-const std::string& TabLayout::tabLabel(int index) const
+const String& TabLayout::tabLabel(int index) const
 {
     if (index >= 0 && index < static_cast<int>(tabs_.size()))
         return tabs_[index].label;

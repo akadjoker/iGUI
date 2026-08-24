@@ -2,10 +2,9 @@
 
 #include <igui/Backend.hpp>
 #include <igui/Events.hpp>
-#include <string>
-#include <vector>
-#include <functional>
-#include <unordered_map>
+#include <ct/hashmap.hpp>
+#include <ct/string.hpp>
+#include <ct/vector.hpp>
 
 using u8 = uint8_t;
 using u32 = uint32_t;
@@ -123,7 +122,7 @@ enum class WidgetState
 
 struct WindowData
 {
-    std::string id;
+    ct::String id;
     FloatRect bounds{};
     bool isOpen = true;
     bool isMinimized = false;
@@ -252,7 +251,7 @@ public:
 
 private:
     // Windows
-    WindowData *GetOrCreateWindow(const std::string &id);
+    WindowData *GetOrCreateWindow(const ct::String &id);
     WindowData *GetCurrentWindow();
     void UpdateWindowInteraction(WindowData *window);
     void RenderWindow(WindowData *window, const char *title);
@@ -261,7 +260,7 @@ private:
 
     // Helpers
     bool IsPointInRect(const Vec2 &point, const FloatRect &rect) const;
-    WidgetState GetWidgetState(const FloatRect &rect, const std::string &widgetID);
+    WidgetState GetWidgetState(const FloatRect &rect, const ct::String &widgetID);
 
     float GetTextWidth(const char *text);
     float GetTextHeight(const char *text);
@@ -273,7 +272,7 @@ private:
                          bool filled, float thickness = 1.0f);
 
     // Ids
-    // std::string GenerateID(const char *label);
+    // ct::String GenerateID(const char *label);
     bool IsMouseInWindow() const;
 
 private:
@@ -293,10 +292,10 @@ private:
         bool mousePressed = false;
         bool mouseReleased = false;
         bool keys[static_cast<unsigned>(ig::KeyCode::Z) + 1] = {};
-        std::vector<int> chars;
+        ct::Vector<int> chars;
         size_t nextChar = 0;
     } m_input;
-    std::vector<ig::Event> m_events;
+    ct::Vector<ig::Event> m_events;
 
     bool IsMouseDown() const { return m_input.mouseDown; }
     bool IsMousePressed() const { return m_input.mousePressed; }
@@ -316,16 +315,16 @@ private:
     Vec2 m_mousePos{};
 
     // Windows
-    std::unordered_map<std::string, WindowData> m_windows;
-    std::vector<WindowData *> m_windowOrder;
+    ct::HashMap<ct::String, WindowData> m_windows;
+    ct::Vector<WindowData *> m_windowOrder;
     WindowData *m_currentWindow = nullptr;
     WindowData *m_focusedWindow = nullptr;
     WindowData *m_draggingWindow = nullptr;
 
     // Widget state
-    std::string m_activeID;
-    std::string m_hotID;
-    std::string m_lastWidgetID;
+    ct::String m_activeID;
+    ct::String m_hotID;
+    ct::String m_lastWidgetID;
 
     // Layout base (mantida para referências internas)
     Vec2 m_cursorPos{};
@@ -366,13 +365,13 @@ private:
         }
     };
     int m_focusedControl = -1;
-    // std::vector<Control> m_controls;
-    std::unordered_map<u32, Control> m_controls;
+    // ct::Vector<Control> m_controls;
+    ct::HashMap<u32, Control> m_controls;
     Control *AddControl();
     u32 m_nextControlID = 0;
     u32 GetNextControlID();
     u32 m_activeControl;
     bool m_isFocused = false;
     u32 focusCounter;
-    bool AnyControlActive() const;
+    bool AnyControlActive();
 };

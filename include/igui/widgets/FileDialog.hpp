@@ -18,7 +18,7 @@ class Button;
 //    auto* fd = app.addFloat<FileDialog>("Open File");
 //    fd->setMode(FileDialog::Mode::Open);
 //    fd->setFilter("*.cpp;*.hpp");
-//    fd->accepted.connect([](const std::string& path) { ... });
+//    fd->accepted.connect([](const String& path) { ... });
 //
 //  Features:
 //    - Open / Save / SelectFolder / OpenImage modes
@@ -38,7 +38,7 @@ public:
     enum class Mode { Open, Save, SelectFolder, OpenImage };
     enum class ViewMode { Detail, List, Icon };
 
-    explicit FileDialog(const std::string& title = "Open File");
+    explicit FileDialog(const String& title = "Open File");
     ~FileDialog() override;
 
     /// @brief Set the dialog mode (Open, Save, SelectFolder, OpenImage).
@@ -52,14 +52,14 @@ public:
     ViewMode viewMode() const { return viewMode_; }
 
     /// @brief Navigate to a directory path.
-    void setPath(const std::string& path);
+    void setPath(const String& path);
     /// @brief Get the current directory path.
-    const std::string& path() const { return currentPath_; }
+    const String& path() const { return currentPath_; }
 
     /// @brief Set extension filter (e.g. "*.cpp;*.hpp").
-    void setFilter(const std::string& filter);
+    void setFilter(const String& filter);
     /// @brief Get the extension filter.
-    const std::string& filter() const { return filter_; }
+    const String& filter() const { return filter_; }
 
     /// @brief Show or hide hidden files.
     void setShowHidden(bool show);
@@ -72,13 +72,13 @@ public:
     bool multiSelect() const     { return multiSelect_; }
 
     /// @brief Add a sidebar bookmark entry.
-    void addBookmark(const std::string& name, const std::string& path);
+    void addBookmark(const String& name, const String& path);
 
     /// @brief Get the selected file/folder path.
-    const std::string& selectedPath() const { return selectedPath_; }
+    const String& selectedPath() const { return selectedPath_; }
 
     /// @brief Emitted when a file is accepted.
-    Signal<std::string> accepted;
+    Signal<String> accepted;
     /// @brief Emitted when the dialog is cancelled.
     Signal<>            cancelled;
 
@@ -95,15 +95,15 @@ private:
     Mode     mode_     = Mode::Open;
     ViewMode viewMode_ = ViewMode::Detail;
 
-    std::string currentPath_;
-    std::string selectedPath_;
-    std::string filter_;
+    String currentPath_;
+    String selectedPath_;
+    String filter_;
     bool showHidden_  = false;
     bool multiSelect_ = false;
 
     // Bookmarks
-    struct Bookmark { std::string name; std::string path; };
-    std::vector<Bookmark> bookmarks_;
+    struct Bookmark { String name; String path; };
+    ct::Vector<Bookmark> bookmarks_;
 
     // Sort
     enum class SortField { Name, Size, Date };
@@ -111,39 +111,39 @@ private:
     bool      sortAscending_ = true;
 
     // Filter
-    std::vector<std::string> filterExts_;
+    ct::Vector<String> filterExts_;
     void parseFilter();
-    bool matchesFilter(const std::string& name) const;
-    static bool isImageExt(const std::string& ext);
+    bool matchesFilter(const String& name) const;
+    static bool isImageExt(const String& ext);
 
     // Directory listing (flat, sorted, filtered)
     struct FileEntry {
-        std::string name;
-        std::string path;
+        String name;
+        String path;
         uint64_t    size  = 0;
         time_t      mtime = 0;
         IconId      icon  = IconId::None;
         bool        isDir = false;
     };
-    std::vector<FileEntry> entries_;
+    ct::Vector<FileEntry> entries_;
     DirCache dirCache_;
 
     void refreshDir();
     void sortEntries();
-    void navigateTo(const std::string& path);
+    void navigateTo(const String& path);
 
     // Selection
     int  selectedIndex_ = -1;
     int  hoveredIndex_  = -1;
-    std::vector<bool> multiSel_;   // parallel to entries_
+    ct::Vector<bool> multiSel_;   // parallel to entries_
     int  lastClickIdx_  = -1;
 
     // Preview (image mode)
     BuGUI::TextureHandle previewTex_ = {0};
     int                  previewW_   = 0;
     int                  previewH_   = 0;
-    std::string          previewPath_;
-    void loadPreview(const std::string& path);
+    String          previewPath_;
+    void loadPreview(const String& path);
     void clearPreview();
 
     // ── UI child widgets (not owned — children_ owns them) ──────────────
@@ -173,7 +173,7 @@ private:
     float iconCellSize_ = 80.f;
 
     // Deferred nav
-    std::string pendingNav_;
+    String pendingNav_;
 
     // Column widths (detail view)
     struct Column { const char* name; float width; SortField field; };
@@ -205,7 +205,7 @@ private:
     void onCancel();
 
     // Icon mapping
-    static IconId iconForExt(const std::string& ext);
+    static IconId iconForExt(const String& ext);
 };
 
 } // namespace BuGUI

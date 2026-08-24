@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
-#include <vector>
-#include <string>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 namespace BuGUI
 {
@@ -31,16 +31,16 @@ enum class PinDir  { Input, Output };
 enum class PinType { Float, Vec2, Vec3, Vec4, Color, Bool, Int, String, Any };
 
 struct Pin {
-    std::string name;
+    String name;
     PinDir      dir;
     PinType     type;
 };
 
 struct Node {
-    std::string      title;
+    String      title;
     float            x = 0, y = 0;     // position in graph space
     float            w = 140, h = 0;   // width fixed, height computed
-    std::vector<Pin> pins;
+    ct::Vector<Pin> pins;
     Color            headerColor = Color(70, 90, 130, 255);
     bool             selected    = false;
     bool             collapsed   = false;
@@ -57,7 +57,7 @@ public:
     NodeEditor();
 
     /// @brief Add a node at position (x, y).
-    int  addNode(const std::string& title, float x, float y);
+    int  addNode(const String& title, float x, float y);
     /// @brief Remove a node by ID.
     void removeNode(int nodeId);
     /// @brief Remove all nodes and links.
@@ -74,7 +74,7 @@ public:
     void setNodeHeader(int nodeId, const Color& c);
 
     /// @brief Add a typed pin to a node.
-    int addPin(int nodeId, const std::string& name, PinDir dir, PinType type);
+    int addPin(int nodeId, const String& name, PinDir dir, PinType type);
 
     /// @brief Add a link between two pins.
     int  addLink(int srcNode, int srcPin, int dstNode, int dstPin);
@@ -114,8 +114,8 @@ public:
     void onMouseScroll(MouseEvent& e) override;
 
 private:
-    std::vector<Node> nodes_;
-    std::vector<Link> links_;
+    ct::Vector<Node> nodes_;
+    ct::Vector<Link> links_;
     Color bgColor_ = Color(32, 34, 38, 255);
 
     // View transform

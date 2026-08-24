@@ -11,15 +11,15 @@
 //  Dialog
 // ═════════════════════════════════════════════════════════════════════════════
 
-Dialog::Dialog(const std::string& title, const std::string& message)
+Dialog::Dialog(const String& title, const String& message)
     : title_(title), message_(message)
 {
     acceptsFocus_ = true;
     scrollable_   = false;
 }
 
-Dialog& Dialog::addButton(const std::string& label, Role role,
-                           std::function<void()> action)
+Dialog& Dialog::addButton(const String& label, Role role,
+                           ct::Function<void()> action)
 {
     buttons_.push_back({label, role, std::move(action)});
     return *this;
@@ -206,7 +206,7 @@ void Dialog::paint(PaintContext& ctx)
         while (start <= message_.size())
         {
             size_t end = message_.find('\n', start);
-            if (end == std::string::npos) end = message_.size();
+            if (end == String::npos) end = message_.size();
             ctx.font.Print(message_.substr(start, end - start).c_str(),
                            dr.x + kPad, ly);
             ly    += lineH;
@@ -242,15 +242,15 @@ void Dialog::paint(PaintContext& ctx)
 //  AlertDialog
 // ═════════════════════════════════════════════════════════════════════════════
 
-AlertDialog::AlertDialog(const std::string& title, const std::string& message)
+AlertDialog::AlertDialog(const String& title, const String& message)
     : Dialog(title, message)
 {
     addButton("OK", Role::Accept);
 }
 
-/*static*/ void AlertDialog::show(const std::string& title,
-                                    const std::string& message,
-                                    std::function<void()> onClose)
+/*static*/ void AlertDialog::show(const String& title,
+                                    const String& message,
+                                    ct::Function<void()> onClose)
 {
     auto* dlg = new AlertDialog(title, message);
     if (onClose) dlg->setOnClose(std::move(onClose));
@@ -261,19 +261,19 @@ AlertDialog::AlertDialog(const std::string& title, const std::string& message)
 //  ConfirmDialog
 // ═════════════════════════════════════════════════════════════════════════════
 
-ConfirmDialog::ConfirmDialog(const std::string& title, const std::string& message,
-                              std::function<void()> onConfirm,
-                              std::function<void()> onCancel)
+ConfirmDialog::ConfirmDialog(const String& title, const String& message,
+                              ct::Function<void()> onConfirm,
+                              ct::Function<void()> onCancel)
     : Dialog(title, message)
 {
     addButton("Cancel", Role::Cancel, std::move(onCancel));
     addButton("Confirm", Role::Accept, std::move(onConfirm));
 }
 
-/*static*/ void ConfirmDialog::show(const std::string& title,
-                                     const std::string& message,
-                                     std::function<void()> onConfirm,
-                                     std::function<void()> onCancel)
+/*static*/ void ConfirmDialog::show(const String& title,
+                                     const String& message,
+                                     ct::Function<void()> onConfirm,
+                                     ct::Function<void()> onCancel)
 {
     auto* dlg = new ConfirmDialog(title, message,
                                    std::move(onConfirm), std::move(onCancel));
@@ -284,13 +284,13 @@ ConfirmDialog::ConfirmDialog(const std::string& title, const std::string& messag
 //  Toast — static, no Widget, no popup
 // ═════════════════════════════════════════════════════════════════════════════
 
-/*static*/ std::vector<Toast::Entry>& Toast::entries()
+/*static*/ ct::Vector<Toast::Entry>& Toast::entries()
 {
-    static std::vector<Entry> s_entries;
+    static ct::Vector<Entry> s_entries;
     return s_entries;
 }
 
-/*static*/ void Toast::show(const std::string& message, Type type, float duration)
+/*static*/ void Toast::show(const String& message, Type type, float duration)
 {
     Entry e;
     e.message  = message;
@@ -413,7 +413,7 @@ ConfirmDialog::ConfirmDialog(const std::string& title, const std::string& messag
 //  MessageBox
 // ═════════════════════════════════════════════════════════════════════════════
 
-MessageBox::MessageBox(const std::string& title, const std::string& message,
+MessageBox::MessageBox(const String& title, const String& message,
                        Buttons buttons, Type type)
     : FloatWindow(title)
     , type_(type)
@@ -517,7 +517,7 @@ void MessageBox::onKeyPress(KeyEvent& e)
 //  InputBox
 // ═════════════════════════════════════════════════════════════════════════════
 
-InputBox::InputBox(const std::string& title, const std::string& prompt)
+InputBox::InputBox(const String& title, const String& prompt)
     : FloatWindow(title)
     , prompt_(prompt)
 {
@@ -561,17 +561,17 @@ void InputBox::buildUI()
     ok->clicked.connect([this] { onOk(); });
 }
 
-void InputBox::setText(const std::string& t)
+void InputBox::setText(const String& t)
 {
     if (textInput_) textInput_->setText(t);
 }
 
-std::string InputBox::text() const
+String InputBox::text() const
 {
     return textInput_ ? textInput_->text() : "";
 }
 
-void InputBox::setPlaceholder(const std::string& p)
+void InputBox::setPlaceholder(const String& p)
 {
     if (textInput_) textInput_->setPlaceholder(p);
 }

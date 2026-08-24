@@ -4,9 +4,9 @@
 #include "Signal.hpp"
 #include "Theme.hpp"
 #include "MenuWidgets.hpp"
-#include <string>
-#include <vector>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/function.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Breadcrumbs — navigation path display
@@ -25,11 +25,11 @@ public:
     Breadcrumbs();
 
     /// @brief Set the path segments.
-    void setPath(const std::vector<std::string>& segments);
+    void setPath(const ct::Vector<String>& segments);
     /// @brief Get the current path segments.
-    const std::vector<std::string>& path() const { return segments_; }
+    const ct::Vector<String>& path() const { return segments_; }
     /// @brief Set the separator string (default ">").
-    void setSeparator(const std::string& sep) { separator_ = sep; markDirty(); }
+    void setSeparator(const String& sep) { separator_ = sep; markDirty(); }
 
     /// @brief Emitted when a segment is clicked (index).
     Signal<int> itemClicked;
@@ -41,13 +41,13 @@ public:
     void  onMouseLeave() override;
 
 private:
-    std::vector<std::string> segments_;
-    std::string separator_ = ">";
+    ct::Vector<String> segments_;
+    String separator_ = ">";
     int hoveredIndex_ = -1;
 
     // Cached segment positions (rebuilt in paint)
     struct SegmentRect { float x, w; };
-    mutable std::vector<SegmentRect> segRects_;
+    mutable ct::Vector<SegmentRect> segRects_;
 
     int hitTestSegment(float localX, float localY) const;
 };
@@ -58,7 +58,7 @@ private:
 //  Usage:
 //      auto* sb = parent->createChild<SearchBar>();
 //      sb->setPlaceholder("Search...");
-//      sb->onSearch.connect([](const std::string& q) { /* filter */ });
+//      sb->onSearch.connect([](const String& q) { /* filter */ });
 // ═════════════════════════════════════════════════════════════════════════════
 
 class SearchBar : public Widget
@@ -67,20 +67,20 @@ public:
     SearchBar();
 
     /// @brief Set the placeholder text.
-    void setPlaceholder(const std::string& p) { placeholder_ = p; markDirty(); }
+    void setPlaceholder(const String& p) { placeholder_ = p; markDirty(); }
     /// @brief Get the placeholder text.
-    const std::string& placeholder() const { return placeholder_; }
+    const String& placeholder() const { return placeholder_; }
     /// @brief Set the current query text.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the current query text.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
     /// @brief Clear the search text.
     void clear();
 
     /// @brief Emitted when the text changes.
-    Signal<const std::string&> onTextChanged;
+    Signal<const String&> onTextChanged;
     /// @brief Emitted when Enter is pressed.
-    Signal<const std::string&> onSearch;
+    Signal<const String&> onSearch;
 
     Vec2f sizeHint() const override;
     void  paint(PaintContext& ctx) override;
@@ -89,8 +89,8 @@ public:
     void  onTextInput(KeyEvent& e) override;
 
 private:
-    std::string text_;
-    std::string placeholder_ = "Search...";
+    String text_;
+    String placeholder_ = "Search...";
     int  cursorPos_ = 0;
     float blinkTimer_ = 0;
     float scrollX_ = 0;
@@ -114,16 +114,16 @@ private:
 class SplitButton : public Widget
 {
 public:
-    explicit SplitButton(const std::string& text = "Action");
+    explicit SplitButton(const String& text = "Action");
     ~SplitButton() override;
 
     /// @brief Set the primary button text.
-    void setText(const std::string& t) { text_ = t; markDirty(); }
+    void setText(const String& t) { text_ = t; markDirty(); }
     /// @brief Get the primary button text.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
 
     /// @brief Add a dropdown action with text and callback.
-    void addAction(const std::string& text, std::function<void()> cb);
+    void addAction(const String& text, ct::Function<void()> cb);
     /// @brief Add a separator to the dropdown.
     void addSeparator();
 
@@ -134,7 +134,7 @@ public:
     void  onMouseLeave() override;
 
 private:
-    std::string text_;
+    String text_;
     Menu* dropMenu_ = nullptr;
     bool  hoverMain_ = false;
     bool  hoverDrop_ = false;
@@ -156,9 +156,9 @@ private:
 
 struct ContextMenuItem
 {
-    std::string text;                      // empty or "-" = separator
-    std::function<void()> callback;
-    std::string shortcut;
+    String text;                      // empty or "-" = separator
+    ct::Function<void()> callback;
+    String shortcut;
     bool enabled = true;
     bool checkable = false;
     bool checked = false;
@@ -168,7 +168,7 @@ class ContextMenuBuilder
 {
 public:
     /// @brief Build and attach a context menu to a widget.
-    static Menu* build(Widget* target, const std::vector<ContextMenuItem>& items);
+    static Menu* build(Widget* target, const ct::Vector<ContextMenuItem>& items);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -180,7 +180,7 @@ public:
 //      auto* cam  = root->addChild("Camera");
 //      auto* mesh = root->addChild("Cube");
 //      ol->setNodeVisible(mesh, false);
-//      ol->itemRenamed.connect([](TreeNode* n, const std::string& name) { ... });
+//      ol->itemRenamed.connect([](TreeNode* n, const String& name) { ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
 class TreeNode;
@@ -193,7 +193,7 @@ public:
     ~Outliner() override;
 
     /// @brief Add a root node.
-    TreeNode* addRoot(const std::string& text);
+    TreeNode* addRoot(const String& text);
     /// @brief Clear all nodes.
     void clear();
 
@@ -231,8 +231,8 @@ private:
     float maxScroll() const;
     int  hitTestRow(float localY) const;
 
-    std::vector<TreeNode*> roots_;
-    std::vector<FlatRow>   flatRows_;
+    ct::Vector<TreeNode*> roots_;
+    ct::Vector<FlatRow>   flatRows_;
     TreeNode* selected_ = nullptr;
     float scrollOffset_ = 0;
     float rowHeight_    = 22.0f;
@@ -241,8 +241,8 @@ private:
     int   hoveredRow_   = -1;
 
     // Per-node states (keyed by pointer)
-    std::unordered_map<TreeNode*, bool> visMap_;
-    std::unordered_map<TreeNode*, bool> lockMap_;
+    ct::HashMap<TreeNode*, bool> visMap_;
+    ct::HashMap<TreeNode*, bool> lockMap_;
 
     // Icon column positions
     float eyeColX() const;
@@ -266,12 +266,12 @@ public:
     RichText();
 
     /// @brief Set content from a markdown string.
-    void setMarkdown(const std::string& md);
+    void setMarkdown(const String& md);
     /// @brief Get the raw markdown string.
-    const std::string& markdown() const { return rawMd_; }
+    const String& markdown() const { return rawMd_; }
 
     /// @brief Emitted when a link is clicked.
-    Signal<const std::string&> linkClicked;
+    Signal<const String&> linkClicked;
 
     Vec2f sizeHint() const override;
     void  paint(PaintContext& ctx) override;
@@ -284,28 +284,28 @@ private:
     // Parsed inline span
     enum class SpanStyle { Normal, Bold, Italic, Code, Link };
     struct Span {
-        std::string text;
+        String text;
         SpanStyle   style = SpanStyle::Normal;
-        std::string url;   // for Link spans
+        String url;   // for Link spans
     };
 
     // Parsed block
     enum class BlockType { Paragraph, Heading1, Heading2, Heading3, ListItem, CodeBlock };
     struct Block {
         BlockType type = BlockType::Paragraph;
-        std::vector<Span> spans;
+        ct::Vector<Span> spans;
     };
 
     void parse();
 
-    std::string rawMd_;
-    std::vector<Block> blocks_;
+    String rawMd_;
+    ct::Vector<Block> blocks_;
     float scrollY_ = 0;
     int   hoveredLink_ = -1;
 
     // Link hit rects (rebuilt on paint)
-    struct LinkRect { float x, y, w, h; std::string url; };
-    mutable std::vector<LinkRect> linkRects_;
+    struct LinkRect { float x, y, w, h; String url; };
+    mutable ct::Vector<LinkRect> linkRects_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -15,7 +15,7 @@ inline float setupFont(PaintContext& ctx, const Color& color, float size = 14.f)
     return ctx.font.GetAscender();
 }
 
-inline bool containsCI(const std::string& haystack, const std::string& needle)
+inline bool containsCI(const String& haystack, const String& needle)
 {
     if (needle.empty()) return true;
     auto it = std::search(haystack.begin(), haystack.end(),
@@ -42,7 +42,7 @@ ConsoleWidget::ConsoleWidget()
 //  Logging API
 // ═════════════════════════════════════════════════════════════════════════════
 
-void ConsoleWidget::log(LogLevel level, const std::string& message)
+void ConsoleWidget::log(LogLevel level, const String& message)
 {
     float ts = BuGUI::GetIO().deltaTime; // approximate — callers can set real ts
 
@@ -111,7 +111,7 @@ bool ConsoleWidget::filter(LogLevel level) const
     return true;
 }
 
-void ConsoleWidget::setSearchText(const std::string& s)
+void ConsoleWidget::setSearchText(const String& s)
 {
     searchText_ = s;
     markDirty();
@@ -303,7 +303,7 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
             ctx.lineRoundedRect(px, by, sw, bh, 3.f);
 
             setupFont(ctx, {200, 210, 220, 255}, 12.f);
-            std::string disp = searchBuf_;
+            String disp = searchBuf_;
             if (disp.empty()) {
                 setupFont(ctx, {80, 80, 90, 255}, 12.f);
                 disp = "Search...";
@@ -461,7 +461,7 @@ void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
     if (inputFocused_) {
         float cw = 0;
         if (cursorPos_ > 0 && cursorPos_ <= (int)inputBuf_.size()) {
-            std::string sub = inputBuf_.substr(0, cursorPos_);
+            String sub = inputBuf_.substr(0, cursorPos_);
             cw = ctx.font.GetTextWidth(sub.c_str());
         }
         ctx.fill.SetColor(180, 200, 240, 200);
@@ -549,7 +549,7 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
         // Binary-ish search for cursor pos
         int best = (int)inputBuf_.size();
         for (int i = 0; i <= (int)inputBuf_.size(); i++) {
-            std::string sub = inputBuf_.substr(0, i);
+            String sub = inputBuf_.substr(0, i);
             // Need a temp context but we don't have one — just set to end
         }
         cursorPos_ = best;
@@ -769,7 +769,7 @@ void ConsoleWidget::onTextInput(KeyEvent& e)
     }
 
     if (inputFocused_) {
-        std::string ins(e.text);
+        String ins(e.text);
         inputBuf_.insert(cursorPos_, ins);
         cursorPos_ += (int)ins.size();
         markDirty();
@@ -794,7 +794,7 @@ void ConsoleWidget::submitCommand()
     log(LogLevel::Info, "> " + inputBuf_);
 
     // Emit signal
-    std::string cmd = inputBuf_;
+    String cmd = inputBuf_;
     inputBuf_.clear();
     cursorPos_ = 0;
     markDirty();

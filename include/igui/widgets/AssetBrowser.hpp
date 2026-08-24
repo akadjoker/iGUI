@@ -24,7 +24,7 @@ enum class AssetType { Folder, Image, Audio, Mesh, Script, Material, Scene, Gene
 
 struct AssetItem
 {
-    std::string name;
+    String name;
     AssetType   type       = AssetType::Generic;
     Color       thumbColor = Color(60, 64, 72, 255);
     bool        selected   = false;
@@ -43,9 +43,9 @@ public:
     int  itemCount() const { return static_cast<int>(items_.size()); }
 
     /// @brief Set the displayed path.
-    void setPath(const std::string& path) { path_ = path; markDirty(); }
+    void setPath(const String& path) { path_ = path; markDirty(); }
     /// @brief Get the current path.
-    const std::string& path() const       { return path_; }
+    const String& path() const       { return path_; }
 
     enum class ViewMode { Grid, List };
     /// @brief Set the view mode (Grid or List).
@@ -68,8 +68,8 @@ public:
     void onMouseScroll(MouseEvent& e) override;
 
 private:
-    std::vector<AssetItem> items_;
-    std::string            path_        = "/";
+    ct::Vector<AssetItem> items_;
+    String            path_        = "/";
     ViewMode               viewMode_    = ViewMode::Grid;
     float                  thumbSize_   = 64.f;
     float                  scrollY_     = 0.f;

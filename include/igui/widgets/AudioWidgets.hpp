@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
-#include <vector>
-#include <string>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 #include <cmath>
 
 namespace BuGUI
@@ -36,9 +36,9 @@ public:
     float maximum() const { return max_; }
 
     /// @brief Set the display label.
-    void setLabel(const std::string& l) { label_ = l; markDirty(); }
+    void setLabel(const String& l) { label_ = l; markDirty(); }
     /// @brief Get the current label.
-    const std::string& label() const    { return label_; }
+    const String& label() const    { return label_; }
 
     /// @brief Set the arc color.
     void setArcColor(const Color& c)    { arcColor_   = c; markDirty(); }
@@ -64,7 +64,7 @@ public:
 private:
     float value_ = 0.5f, min_ = 0.f, max_ = 1.f, default_ = 0.5f;
     float sensitivity_ = 120.f;
-    std::string label_;
+    String label_;
     bool  showValue_ = true;
     Color arcColor_   = Color(100, 180, 240, 255);
     Color trackColor_ = Color( 50,  55,  65, 255);
@@ -97,7 +97,7 @@ public:
     /// @brief Set the default value for double-click reset.
     void  setDefault(float v)          { default_ = v; }
     /// @brief Set the display label.
-    void  setLabel(const std::string& l) { label_ = l; markDirty(); }
+    void  setLabel(const String& l) { label_ = l; markDirty(); }
     /// @brief Set vertical or horizontal orientation.
     void  setOrientation(bool vertical)  { vertical_ = vertical; markDirty(); }
     /// @brief Set the fill color.
@@ -122,7 +122,7 @@ public:
 private:
     float value_ = 0.5f, min_ = 0.f, max_ = 1.f, default_ = 0.5f;
     bool  vertical_ = false;
-    std::string label_;
+    String label_;
     bool  showValue_ = true;
     Color fillColor_  = Color(100, 180, 240, 255);
     Color trackColor_ = Color( 40,  44,  52, 255);
@@ -236,7 +236,7 @@ public:
 
 private:
     struct Channel { float level = 0.f, peak = 0.f, peakTimer = 0.f; };
-    std::vector<Channel> levels_;
+    ct::Vector<Channel> levels_;
     Orientation orient_ = Orientation::Vertical;
     bool  showScale_  = true;
     bool  peakHold_   = true;
@@ -291,8 +291,8 @@ public:
 
 private:
     struct Bin { float value = 0.f, peak = 0.f, peakTimer = 0.f; };
-    std::vector<Bin>   bins_;
-    std::vector<float> freqLabels_;
+    ct::Vector<Bin>   bins_;
+    ct::Vector<float> freqLabels_;
     float sampleRate_ = 44100.f;
     bool  logFreq_    = false;
     bool  showLabels_ = true;
@@ -365,9 +365,9 @@ public:
 
 private:
     struct EnvPair { float mn, mx; };
-    std::vector<EnvPair> buildEnvelope(int ch, float vs, float ve, int pw) const;
+    ct::Vector<EnvPair> buildEnvelope(int ch, float vs, float ve, int pw) const;
 
-    std::vector<float> samples_;
+    ct::Vector<float> samples_;
     int   sampleCount_ = 0, channels_ = 1;
     float sampleRate_ = 44100.f;
     float playhead_ = 0.f;
@@ -404,7 +404,7 @@ public:
     /// @brief Remove all notes.
     void clearNotes();
     /// @brief Get the list of notes.
-    const std::vector<PianoNote>& notes() const { return notes_; }
+    const ct::Vector<PianoNote>& notes() const { return notes_; }
 
     /// @brief Set the visible pitch range (MIDI note numbers).
     void setPitchRange(int lo, int hi);
@@ -462,7 +462,7 @@ private:
     void  paintNotes(PaintContext& ctx, const Rect& ga) const;
     void  paintPlayhead(PaintContext& ctx, const Rect& ga) const;
 
-    std::vector<PianoNote> notes_;
+    ct::Vector<PianoNote> notes_;
     int   pitchLo_ = 48, pitchHi_ = 72;
     int   bpb_ = 4;
     float viewStart_ = 0.f, viewEnd_ = 8.f;

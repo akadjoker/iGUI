@@ -141,7 +141,7 @@ bool AssignLoadedPixelsToPixmap(BuImage &pixmap,
     return true;
 }
 
-bool BuildSaveBuffer(const BuImage &pixmap, std::vector<unsigned char> &scratch, int &saveComponents, const unsigned char *&savePixels)
+bool BuildSaveBuffer(const BuImage &pixmap, ct::Vector<unsigned char> &scratch, int &saveComponents, const unsigned char *&savePixels)
 {
     if (!pixmap.pixels || pixmap.width <= 0 || pixmap.height <= 0)
     {
@@ -203,7 +203,7 @@ bool SavePixmapAsTga(const BuImage &pixmap, const char *fileName)
         return false;
     }
 
-    std::vector<unsigned char> row(static_cast<size_t>(pixmap.width) * static_cast<size_t>(bitsPerPixel / 8));
+    ct::Vector<unsigned char> row(static_cast<size_t>(pixmap.width) * static_cast<size_t>(bitsPerPixel / 8));
     for (int y = 0; y < pixmap.height; y++)
     {
         if (grayscale)
@@ -520,7 +520,7 @@ bool BuImage::Save(const char *file_name)
         return SavePixmapAsTga(*this, file_name);
     }
 
-    std::vector<unsigned char> scratch;
+    ct::Vector<unsigned char> scratch;
     int saveComponents = 0;
     const unsigned char *savePixels = nullptr;
     if (!BuildSaveBuffer(*this, scratch, saveComponents, savePixels))

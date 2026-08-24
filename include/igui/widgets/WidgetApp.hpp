@@ -4,10 +4,10 @@
 #include "BuGUI_base.hpp"
 #include "BuGUI.hpp"
 #include <cstdint>
-#include <functional>
-#include <vector>
-#include <string>
-#include <unordered_map>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
+#include <ct/hashmap.hpp>
 
 
 
@@ -115,7 +115,7 @@ public:
     /// @brief Set clipboard text (platform-agnostic).
     void        setClipboardText(const char* text);
     /// @brief Get clipboard text.
-    std::string getClipboardText() const;
+    String getClipboardText() const;
 
     /// @brief Get the cached font from the last paint() call.
     const BuGUI::Font* font() const { return font_; }
@@ -134,7 +134,7 @@ public:
     void setDebugLayout(bool d) { debugLayout_ = d; }
 
     /// @brief Set per-frame overlay paint callback.
-    void setOverlayCallback(std::function<void(PaintContext&)> cb) { overlay_ = std::move(cb); }
+    void setOverlayCallback(ct::Function<void(PaintContext&)> cb) { overlay_ = std::move(cb); }
 
     // ── Drag & Drop state (read by widgets/app during frame) ──────────────
     /// @brief Check if a widget drag is in progress.
@@ -152,8 +152,8 @@ public:
     // ── Texture services (set by backend at init) ─────────────────────────
     // The backend registers these so widgets can create/destroy GPU textures
     // without depending on any specific graphics API.
-    using UploadTextureFn  = std::function<BuGUI::TextureHandle(const unsigned char* rgba, int w, int h)>;
-    using DestroyTextureFn = std::function<void(BuGUI::TextureHandle)>;
+    using UploadTextureFn  = ct::Function<BuGUI::TextureHandle(const unsigned char* rgba, int w, int h)>;
+    using DestroyTextureFn = ct::Function<void(BuGUI::TextureHandle)>;
 
     /// @brief Register a texture upload function.
     void setTextureUpload(UploadTextureFn fn)   { uploadTex_ = std::move(fn); }
@@ -190,14 +190,14 @@ public:
     //   app.setStage("game");  // switches to game, menu preserved
 
     /// @brief Create a named stage. Returns its root widget.
-    Widget* addStage(const std::string& name);
+    Widget* addStage(const String& name);
 
     /// @brief Switch to a named stage.
-    bool setStage(const std::string& name);
+    bool setStage(const String& name);
     /// @brief Switch with a specific transition.
-    bool setStage(const std::string& name, TransitionType transition);
+    bool setStage(const String& name, TransitionType transition);
     /// @brief Switch with transition and easing.
-    bool setStage(const std::string& name, TransitionType transition, EaseType ease);
+    bool setStage(const String& name, TransitionType transition, EaseType ease);
 
     /// @brief Set default transition type, easing and duration.
     void setTransition(TransitionType type, float durationSec = 0.3f, EaseType ease = EaseType::InOutCubic);
@@ -211,23 +211,23 @@ public:
     bool  isTransitioning()   const { return transActive_; }
 
     /// @brief Get a stage's root widget by name.
-    Widget* stage(const std::string& name) const;
+    Widget* stage(const String& name) const;
 
     /// @brief Get the current stage name (empty if unused).
-    const std::string& currentStageName() const { return currentStage_; }
+    const String& currentStageName() const { return currentStage_; }
 
     /// @brief Remove a stage and delete its widget tree.
-    bool removeStage(const std::string& name);
+    bool removeStage(const String& name);
 
     /// @brief Set a 2D camera for a named stage.
-    void setStageCamera(const std::string& name, const BuGUI::Camera2D& cam);
+    void setStageCamera(const String& name, const BuGUI::Camera2D& cam);
     /// @brief Get the camera for a named stage.
-    BuGUI::Camera2D stageCamera(const std::string& name) const;
+    BuGUI::Camera2D stageCamera(const String& name) const;
 
     /// @brief Set a per-stage background color.
-    void setStageBgColor(const std::string& name, const Color& c);
+    void setStageBgColor(const String& name, const Color& c);
     /// @brief Get a stage's background color.
-    Color stageBgColor(const std::string& name) const;
+    Color stageBgColor(const String& name) const;
 
     // ── Status bar (managed by WidgetApp, pinned to window bottom) ─────
     // One shared StatusBar across all stages. Painted and hit-tested by
@@ -235,7 +235,7 @@ public:
     /// @brief Get the shared status bar widget.
     StatusBar* statusBar() const { return statusBar_; }
     /// @brief Set the status bar text.
-    void setStatusText(const std::string& text);
+    void setStatusText(const String& text);
     /// @brief Show or hide the status bar.
     void setShowStatusBar(bool show) { showStatusBar_ = show; needsLayout_ = true; }
     /// @brief Check if the status bar is shown.
@@ -263,7 +263,7 @@ public:
     /// @brief Bring a float window to the top of the stack.
     void bringToFront(FloatWindow* fw);
     /// @brief Get the list of float windows.
-    const std::vector<FloatWindow*>& floats() const { return floats_; }
+    const ct::Vector<FloatWindow*>& floats() const { return floats_; }
 
     // ── Focus ─────────────────────────────────────────────────────────────
     /// @brief Set the focused widget.
@@ -273,19 +273,19 @@ public:
 
     // ── Widget lookup ─────────────────────────────────────────────────────
     /// @brief Find a widget by ID.
-    Widget* widget(const std::string& id) { return root_ ? root_->findById(id) : nullptr; }
+    Widget* widget(const String& id) { return root_ ? root_->findById(id) : nullptr; }
 
     /// @brief Find a widget by ID and cast to type T.
     template <typename T>
-    T* widget(const std::string& id) { return root_ ? root_->findById<T>(id) : nullptr; }
+    T* widget(const String& id) { return root_ ? root_->findById<T>(id) : nullptr; }
 
     /// @brief Find all widgets with a given tag.
-    std::vector<Widget*> widgetsByTag(const std::string& tag);
+    ct::Vector<Widget*> widgetsByTag(const String& tag);
 
     template <typename T>
-    std::vector<T*> widgetsByTag(const std::string& tag)
+    ct::Vector<T*> widgetsByTag(const String& tag)
     {
-        return root_ ? root_->findByTag<T>(tag) : std::vector<T*>{};
+        return root_ ? root_->findByTag<T>(tag) : ct::Vector<T*>{};
     }
 
     // ── Global event dispatcher ───────────────────────────────────────────
@@ -298,15 +298,15 @@ public:
     //   app.on("hover",   "panel",          [](Widget* w){ ... });
     //   app.on("leave",   "panel",          [](Widget* w){ ... });
     //   app.on("move",    "canvas",         [](Widget* w, float lx, float ly){ ... });
-    using EventCallback = std::function<void(Widget*)>;
-    void on(const std::string& event, const std::string& widgetId, EventCallback cb);
+    using EventCallback = ct::Function<void(Widget*)>;
+    void on(const String& event, const String& widgetId, EventCallback cb);
 
     // Global catch-all: fires for every widget on that event
     //   app.onAny("click", [](Widget* w){ if (w->hasTag("btn")) ... });
-    void onAny(const std::string& event, EventCallback cb);
+    void onAny(const String& event, EventCallback cb);
 
     // Fire a global event (called internally by WidgetApp after signal emit)
-    void fireEvent(const std::string& event, Widget* w);
+    void fireEvent(const String& event, Widget* w);
 
     // ── Popup overlay ─────────────────────────────────────────────────
     /// @brief Show a popup widget on top of everything.
@@ -335,7 +335,7 @@ private:
     void dispatchMouseRelease(float x, float y, int btn);
     void dispatchMouseScroll(float x, float y, float sx, float sy);
     void dispatchKeyEvent(const BuGUI::IO::KeyEvent& ke);
-    void dispatchTextInput(const std::vector<uint32_t>& chars);
+    void dispatchTextInput(const ct::Vector<uint32_t>& chars);
 
     // Build a MouseEvent pre-filled with current IO modifier state
     MouseEvent makeMouseEvent(float x, float y, int btn = 0) const;
@@ -347,7 +347,7 @@ private:
     template <typename Func>
     void bubble(Widget* target, MouseEvent& e, Func handler);
 
-    static std::vector<Widget*> buildChain(Widget* w);
+    static ct::Vector<Widget*> buildChain(Widget* w);
     void updateHover(Widget* newLeaf);
     void applyCursor(CursorType type);
 
@@ -386,7 +386,7 @@ private:
     int      clickSeq_     = 0;   // 0→1→2→3 then resets
 
     void        (*clipSet_)(const char*) = nullptr;
-    std::string (*clipGet_)()            = nullptr;
+    String (*clipGet_)()            = nullptr;
 
     // Subsystems
     IconAtlas* iconAtlas_ = nullptr;
@@ -398,7 +398,7 @@ private:
     Widget* focused_ = nullptr;
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
-    std::vector<Widget*> hoverChain_;   // root → ... → deepest hovered
+    ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered
     float   mouseX_  = 0;
     float   mouseY_  = 0;
 
@@ -420,8 +420,8 @@ private:
     bool    popupClosingOwned_  = true;
 
     // Float windows (painted above stage, below popup)
-    std::vector<FloatWindow*> floats_;
-    std::vector<FloatWindow*> pendingFloatDeletes_;  // deferred delete (safe after event loop)
+    ct::Vector<FloatWindow*> floats_;
+    ct::Vector<FloatWindow*> pendingFloatDeletes_;  // deferred delete (safe after event loop)
 
     // Tooltip
     float   tooltipTimer_   = 0.0f;
@@ -429,10 +429,10 @@ private:
     Widget* tooltipWidget_  = nullptr;
 
     // Stage system
-    std::unordered_map<std::string, Widget*>          stages_;       // name → root widget
-    std::unordered_map<std::string, BuGUI::Camera2D>  stageCameras_; // per-stage camera
-    std::unordered_map<std::string, Color>            stageBgColors_;// per-stage background
-    std::string currentStage_;
+    ct::HashMap<String, Widget*>          stages_;       // name → root widget
+    ct::HashMap<String, BuGUI::Camera2D>  stageCameras_; // per-stage camera
+    ct::HashMap<String, Color>            stageBgColors_;// per-stage background
+    String currentStage_;
 
     // Transition
     TransitionType transType_     = TransitionType::SlideLeft;
@@ -443,14 +443,14 @@ private:
     TransitionType transCurrent_  = TransitionType::None; // type of active transition
     EaseType       transEaseCur_  = EaseType::InOutCubic; // ease of active transition
     Widget*        transOldRoot_  = nullptr;
-    std::string    transOldStage_;
+    String    transOldStage_;
 
     // Status bar (owned, painted after stage)
     StatusBar* statusBar_    = nullptr;
     bool       showStatusBar_ = true;
 
     // Optional overlay callback
-    std::function<void(PaintContext&)> overlay_;
+    ct::Function<void(PaintContext&)> overlay_;
 
     // Texture service callbacks (set by backend)
     UploadTextureFn  uploadTex_;
@@ -458,7 +458,7 @@ private:
 
     // Global event dispatcher
     // Key = "event:widgetId" for targeted, "event:*" for catch-all
-    std::unordered_map<std::string, std::vector<EventCallback>> globalHandlers_;
+    ct::HashMap<String, ct::Vector<EventCallback>> globalHandlers_;
 
     // ── Drag & Drop state ─────────────────────────────────────────────────
     DragPayload* dragPayload_  = nullptr;   // active payload (owned)
@@ -467,7 +467,7 @@ private:
     bool         dragPending_  = false;     // mouse down on dragSource, waiting threshold
     float        dragThreshold_= 5.0f;     // pixels before drag begins
 
-    void dispatchDropEvents(const std::vector<BuGUI::IO::DropEvent>& drops);
+    void dispatchDropEvents(const ct::Vector<BuGUI::IO::DropEvent>& drops);
     void cancelDrag();
 };
 

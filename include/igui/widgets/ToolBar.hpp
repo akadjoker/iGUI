@@ -4,8 +4,8 @@
 #include "Signal.hpp"
 #include "IconAtlas.hpp"   // IconId for fallback icons
 #include "BuGUI.hpp"       // TextureHandle
-#include <string>
-#include <vector>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ToolBar — Delphi-style icon toolbar with sprite-sheet grid
@@ -40,7 +40,7 @@ public:
     void setImageGrid(BuGUI::BuImage* img, int cellW, int cellH);
 
     /// @brief Load a sprite sheet from a file path.
-    bool loadImageGrid(const std::string& path, int cellW, int cellH);
+    bool loadImageGrid(const String& path, int cellW, int cellH);
 
     /// @brief Set texture manually (if uploaded externally).
     void setTexture(BuGUI::TextureHandle tex, int texW, int texH, int cellW, int cellH);
@@ -59,15 +59,15 @@ public:
     enum class ItemType { Button, Toggle, Separator, Spacer };
 
     /// @brief Add a push button by grid cell index.
-    int addButton(int iconIndex, const std::string& tooltip = "");
+    int addButton(int iconIndex, const String& tooltip = "");
 
     /// @brief Add a push button using an IconAtlas icon.
-    int addButton(IconId icon, const std::string& tooltip = "");
+    int addButton(IconId icon, const String& tooltip = "");
 
     /// @brief Add a toggle button by grid cell index.
-    int addToggle(int iconIndex, const std::string& tooltip = "", bool checked = false);
+    int addToggle(int iconIndex, const String& tooltip = "", bool checked = false);
     /// @brief Add a toggle button using an IconAtlas icon.
-    int addToggle(IconId icon, const std::string& tooltip = "", bool checked = false);
+    int addToggle(IconId icon, const String& tooltip = "", bool checked = false);
 
     /// @brief Add a visual separator line.
     int addSeparator();
@@ -94,7 +94,7 @@ public:
     bool isItemVisible(int id) const;
 
     /// @brief Set an item's tooltip text.
-    void setItemTooltip(int id, const std::string& tip);
+    void setItemTooltip(int id, const String& tip);
 
     /// @brief Set whether an item can be reordered by drag.
     void setItemDraggable(int id, bool draggable);
@@ -140,7 +140,7 @@ private:
         ItemType    type      = ItemType::Button;
         int         iconIndex = -1;   // grid cell index (-1 = use iconId)
         IconId      iconId    = IconId::None;
-        std::string tooltip;
+        String tooltip;
         bool        enabled   = true;
         bool        visible   = true;
         bool        checked   = false; // for Toggle
@@ -167,7 +167,7 @@ private:
     void drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, float sz);
 
     // Items
-    std::vector<Item> items_;
+    ct::Vector<Item> items_;
     int nextId_ = 1;
 
     // Visual

@@ -4,11 +4,11 @@
 #include "BuGUI_base.hpp"
 #include "IconAtlas.hpp"
 #include "BuGUI.hpp"
-#include <string>
-#include <vector>
-#include <functional>
-#include <unordered_set>
-#include <unordered_map>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/function.hpp>
+#include <ct/hashset.hpp>
+#include <ct/hashmap.hpp>
 #include <any>
 
 
@@ -177,8 +177,8 @@ struct PaintContext
     void drawIcon(IconId id, float x, float y, float size, const Color& tint);
 
 private:
-    std::vector<Rect> clipStack_;
-    std::vector<const BuGUI::Font*> fontStack_;
+    ct::Vector<Rect> clipStack_;
+    ct::Vector<const BuGUI::Font*> fontStack_;
     mutable Rect      cachedClip_ = {0, 0, 99999, 99999};
 };
 
@@ -260,7 +260,7 @@ class Widget;   // forward decl for DragPayload::source
 
 struct DragPayload
 {
-    std::string   type;        // e.g. "color", "file", "widget"
+    String   type;        // e.g. "color", "file", "widget"
     std::any      data;        // arbitrary typed data
     Widget*       source = nullptr;
 };
@@ -310,7 +310,7 @@ public:
     /// @brief Get the parent widget (nullptr if root).
     Widget* parent() const { return parent_; }
     /// @brief Get the list of child widgets.
-    const std::vector<Widget*>& children() const { return children_; }
+    const ct::Vector<Widget*>& children() const { return children_; }
 
     // ── Geometry ──────────────────────────────────────────────────────────
     /// @brief Set position (top-left corner) in parent space.
@@ -402,7 +402,7 @@ public:
     virtual void        onDragEnd(bool accepted)         { (void)accepted; }
     virtual bool        acceptsDrop(const DragPayload& p){ (void)p; return false; }
     virtual void        onDropReceive(const DragPayload& p) { (void)p; }
-    virtual void        onFileDrop(const std::vector<std::string>& paths) { (void)paths; }
+    virtual void        onFileDrop(const ct::Vector<String>& paths) { (void)paths; }
 
     // ── Signals (connect from user code) ──────────────────────────────────
     Signal<int>        pressed;       // mouse button down (button id)
@@ -411,7 +411,7 @@ public:
     Signal<>           hoverEnter;    // mouse entered widget area
     Signal<>           hoverLeave;    // mouse left widget area
     Signal<float,float> moved;        // mouse moved (localX, localY)
-    Signal<const std::vector<std::string>&> fileDrop; // OS file drop
+    Signal<const ct::Vector<String>&> fileDrop; // OS file drop
 
     // ── Hover state (set by WidgetApp) ────────────────────────────────────
     /// @brief Check if the mouse is currently over this widget.
@@ -419,40 +419,40 @@ public:
 
     // ── ID (optional, for lookups) ────────────────────────────────────────
     /// @brief Set a unique string identifier for this widget.
-    void setId(const std::string& id) { id_ = id; }
+    void setId(const String& id) { id_ = id; }
     /// @brief Get the widget's unique identifier.
-    const std::string& id() const     { return id_; }
+    const String& id() const     { return id_; }
 
     /// @brief Find a descendant widget by ID (recursive).
-    Widget* findById(const std::string& id);
+    Widget* findById(const String& id);
 
     /// @brief Find by ID and cast to type T.
     template <typename T>
-    T* findById(const std::string& id)
+    T* findById(const String& id)
     {
         return dynamic_cast<T*>(findById(id));
     }
 
     // ── Tags (for grouping/filtering) ─────────────────────────────────────
     /// @brief Add a tag string for grouping/filtering.
-    void addTag(const std::string& tag)    { tags_.insert(tag); }
+    void addTag(const String& tag)    { tags_.insert(tag); }
     /// @brief Remove a tag.
-    void removeTag(const std::string& tag) { tags_.erase(tag); }
+    void removeTag(const String& tag) { tags_.erase(tag); }
     /// @brief Check if this widget has a given tag.
-    bool hasTag(const std::string& tag) const { return tags_.count(tag) > 0; }
+    bool hasTag(const String& tag) const { return tags_.contains(tag); }
     /// @brief Get all tags.
-    const std::unordered_set<std::string>& tags() const { return tags_; }
+    const ct::HashSet<String>& tags() const { return tags_; }
 
     /// @brief Find all descendants with a given tag.
-    void findByTag(const std::string& tag, std::vector<Widget*>& result);
+    void findByTag(const String& tag, ct::Vector<Widget*>& result);
 
     /// @brief Find descendants by tag, cast to type T.
     template <typename T>
-    std::vector<T*> findByTag(const std::string& tag)
+    ct::Vector<T*> findByTag(const String& tag)
     {
-        std::vector<Widget*> all;
+        ct::Vector<Widget*> all;
         findByTag(tag, all);
-        std::vector<T*> typed;
+        ct::Vector<T*> typed;
         for (auto* w : all)
             if (auto* t = dynamic_cast<T*>(w))
                 typed.push_back(t);
@@ -461,17 +461,17 @@ public:
 
     // ── User data (arbitrary key-value storage) ───────────────────────────
     /// @brief Store arbitrary user data by key.
-    void setData(const std::string& key, std::any value) { data_[key] = std::move(value); }
+    void setData(const String& key, std::any value) { data_[key] = std::move(value); }
     /// @brief Check if user data exists for a key.
-    bool hasData(const std::string& key) const { return data_.count(key) > 0; }
+    bool hasData(const String& key) const { return data_.contains(key); }
     /// @brief Remove user data by key.
-    void removeData(const std::string& key)    { data_.erase(key); }
+    void removeData(const String& key)    { data_.erase(key); }
 
     // ── Tooltip ───────────────────────────────────────────────────────────
     /// @brief Set the tooltip text shown on hover.
-    void setTooltip(const std::string& tip) { tooltip_ = tip; }
+    void setTooltip(const String& tip) { tooltip_ = tip; }
     /// @brief Get the tooltip text.
-    const std::string& tooltip() const      { return tooltip_; }
+    const String& tooltip() const      { return tooltip_; }
     /// @brief Set delay before tooltip appears (seconds).
     void setTooltipDelay(float seconds)     { tooltipDelay_ = seconds; }
     /// @brief Get tooltip delay in seconds.
@@ -497,21 +497,21 @@ public:
 
     /// @brief Get user data by key, with type cast.
     template <typename T>
-    T data(const std::string& key) const
+    T data(const String& key) const
     {
-        auto it = data_.find(key);
-        if (it != data_.end())
-            return std::any_cast<T>(it->second);
+        const std::any* value = data_.find(key);
+        if (value)
+            return std::any_cast<T>(*value);
         return T{};
     }
 
     /// @brief Get user data with fallback default.
     template <typename T>
-    T data(const std::string& key, const T& fallback) const
+    T data(const String& key, const T& fallback) const
     {
-        auto it = data_.find(key);
-        if (it != data_.end()) {
-            try { return std::any_cast<T>(it->second); }
+        const std::any* value = data_.find(key);
+        if (value) {
+            try { return std::any_cast<T>(*value); }
             catch (...) {}
         }
         return fallback;
@@ -542,7 +542,7 @@ public:
 protected:
     Rect rect_;
     Widget* parent_ = nullptr;
-    std::vector<Widget*> children_;
+    ct::Vector<Widget*> children_;
 
     bool visible_      = true;
     bool enabled_      = true;
@@ -558,10 +558,10 @@ protected:
     Align layoutAlign_ = Align::Fill;
     float stretch_     = 0.0f;
 
-    std::string id_;
-    std::unordered_set<std::string> tags_;
-    std::unordered_map<std::string, std::any> data_;
-    std::string tooltip_;
+    String id_;
+    ct::HashSet<String> tags_;
+    ct::HashMap<String, std::any> data_;
+    String tooltip_;
     float tooltipDelay_ = 0.6f;  // seconds before tooltip appears
     CursorType cursor_ = CursorType::Arrow;
     Menu* contextMenu_ = nullptr;  // owned - deleted in ~Widget

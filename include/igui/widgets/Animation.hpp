@@ -2,13 +2,12 @@
 
 #include "Signal.hpp"
 #include <cstdint>
-#include <functional>
-#include <vector>
-#include <string>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 #include <algorithm>
 #include <cmath>
-#include <memory>
-#include <unordered_map>
+#include <ct/hashmap.hpp>
 
 
 namespace BuGUI
@@ -55,9 +54,9 @@ public:
     /// @brief Set whether the animation auto-deletes on finish.
     void setAutoDelete(bool d)            { autoDelete_ = d; }
     /// @brief Set a tag string for identification.
-    void setTag(const std::string& t)     { tag_ = t; }
+    void setTag(const String& t)     { tag_ = t; }
     /// @brief Get the tag string.
-    const std::string& tag() const        { return tag_; }
+    const String& tag() const        { return tag_; }
 
     // ── Control ───────────────────────────────────────────────────────────
     /// @brief Start the animation.
@@ -116,7 +115,7 @@ private:
     int       loopCount_ = 1;    // 0 = infinite
     int       loopIndex_ = 0;
     bool      autoDelete_= true;
-    std::string tag_;
+    String tag_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -153,7 +152,7 @@ public:
 
 private:
     Mode mode_;
-    std::vector<Animation*> anims_;
+    ct::Vector<Animation*> anims_;
     int  currentIndex_ = 0;
     bool running_      = false;
     bool finished_     = false;
@@ -184,7 +183,7 @@ public:
     void remove(AnimationGroup* g);
 
     /// @brief Cancel all animations matching the given tag.
-    void cancelAll(const std::string& tag);
+    void cancelAll(const String& tag);
 
     /// @brief Advance all active animations by the given timestep.
     void tick(float dt);
@@ -198,8 +197,8 @@ public:
     /// @brief Create and register a float tween animation.
     static Animation* animate(float from, float to, float duration,
                                EaseType ease,
-                               std::function<void(float)> onUpdate,
-                               std::function<void()> onDone = nullptr);
+                               ct::Function<void(float)> onUpdate,
+                               ct::Function<void()> onDone = nullptr);
 
     /// @brief Fade a widget in (opacity 0 to 1).
     static Animation* fadeIn(Widget* w, float duration = 0.25f, EaseType ease = {});
@@ -215,13 +214,13 @@ private:
     Animator(const Animator&) = delete;
     Animator& operator=(const Animator&) = delete;
 
-    std::vector<Animation*>      anims_;
-    std::vector<AnimationGroup*> groups_;
+    ct::Vector<Animation*>      anims_;
+    ct::Vector<AnimationGroup*> groups_;
 
     // Deferred additions during tick to avoid iterator invalidation
     bool                         ticking_ = false;
-    std::vector<Animation*>      pendingAnims_;
-    std::vector<AnimationGroup*> pendingGroups_;
+    ct::Vector<Animation*>      pendingAnims_;
+    ct::Vector<AnimationGroup*> pendingGroups_;
 };
 
 } // namespace BuGUI

@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Signal.hpp"
-#include <string>
-#include <vector>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/function.hpp>
 #include <cstdint>
 #include <any>
 
@@ -80,17 +80,17 @@ public:
     virtual int  columnCount(const ModelIndex& parent = {}) const = 0;
 
     /// @brief Retrieve cell data for a given role.
-    virtual std::string data(const ModelIndex& index,
+    virtual String data(const ModelIndex& index,
                               ItemRole role = ItemRole::Display) const = 0;
 
     /// @brief Set cell data (returns true on success).
-    virtual bool setData(const ModelIndex& index, const std::string& value,
+    virtual bool setData(const ModelIndex& index, const String& value,
                           ItemRole role = ItemRole::Edit)
     { (void)index; (void)value; (void)role; return false; }
 
     /// @brief Get the header label for a section.
-    virtual std::string headerData(int section, bool horizontal = true) const
-    { (void)horizontal; return std::to_string(section); }
+    virtual String headerData(int section, bool horizontal = true) const
+    { (void)horizontal; return String::number(section); }
 
     /// @brief Get item flags for a cell index.
     enum Flag { None = 0, Selectable = 1, Editable = 2, Checkable = 4, Enabled = 8 };
@@ -151,7 +151,7 @@ public:
     int columnCount(const ModelIndex& = {}) const override { return numCols_; }
 
     // ── Data ──────────────────────────────────────────────────────────────
-    std::string data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
+    String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
     {
         if (role == ItemRole::Check && idx.row() >= 0 && idx.row() < static_cast<int>(checked_.size()))
             return checked_[idx.row()] ? "1" : "0";
@@ -160,7 +160,7 @@ public:
         return rows_[idx.row()][idx.column()];
     }
 
-    bool setData(const ModelIndex& idx, const std::string& value,
+    bool setData(const ModelIndex& idx, const String& value,
                   ItemRole role = ItemRole::Edit) override
     {
         if (role == ItemRole::Check) {
@@ -179,14 +179,14 @@ public:
     }
 
     // ── Headers ───────────────────────────────────────────────────────────
-    std::string headerData(int section, bool horizontal = true) const override
+    String headerData(int section, bool horizontal = true) const override
     {
         if (horizontal && section >= 0 && section < static_cast<int>(headers_.size()))
             return headers_[section];
         return AbstractItemModel::headerData(section, horizontal);
     }
 
-    void setHeaders(const std::vector<std::string>& h) { headers_ = h; }
+    void setHeaders(const ct::Vector<String>& h) { headers_ = h; }
 
     // ── Flags ─────────────────────────────────────────────────────────────
     int flags(const ModelIndex& idx) const override
@@ -202,7 +202,7 @@ public:
     }
 
     /// @brief Add a row with cell data.
-    int addRow(const std::vector<std::string>& cells)
+    int addRow(const ct::Vector<String>& cells)
     {
         beginInsertRows({}, static_cast<int>(rows_.size()), static_cast<int>(rows_.size()));
         rows_.push_back(cells);
@@ -244,14 +244,14 @@ public:
     void sort(int column, bool ascending = true) override;
 
     /// @brief Get all rows as string vectors.
-    const std::vector<std::vector<std::string>>& rows() const { return rows_; }
+    const ct::Vector<ct::Vector<String>>& rows() const { return rows_; }
 
 private:
     int numCols_ = 0;
-    std::vector<std::string>              headers_;
-    std::vector<std::vector<std::string>> rows_;
-    std::vector<bool>                     checked_;
-    std::vector<bool>                     readOnly_;
+    ct::Vector<String>              headers_;
+    ct::Vector<ct::Vector<String>> rows_;
+    ct::Vector<bool>                     checked_;
+    ct::Vector<bool>                     readOnly_;
     bool checkable_ = false;
 };
 
@@ -262,15 +262,15 @@ class TreeModel : public AbstractItemModel
 {
 public:
     struct Node {
-        std::vector<std::string> cells;
-        std::vector<Node*>       children;
+        ct::Vector<String> cells;
+        ct::Vector<Node*>       children;
         Node*                    parent  = nullptr;
         bool                     expanded = true;
-        std::string              iconName;
+        String              iconName;
 
         ~Node() { for (auto* c : children) delete c; }
 
-        Node* addChild(const std::vector<std::string>& data)
+        Node* addChild(const ct::Vector<String>& data)
         {
             auto* n = new Node();
             n->cells  = data;
@@ -295,7 +295,7 @@ public:
     int columnCount(const ModelIndex& = {}) const override { return numCols_; }
 
     // ── Data ──────────────────────────────────────────────────────────────
-    std::string data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
+    String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
     {
         (void)role;
         auto* n = nodeFromIndex(idx);
@@ -303,7 +303,7 @@ public:
         return n->cells[idx.column()];
     }
 
-    bool setData(const ModelIndex& idx, const std::string& value, ItemRole = ItemRole::Edit) override
+    bool setData(const ModelIndex& idx, const String& value, ItemRole = ItemRole::Edit) override
     {
         auto* n = nodeFromIndex(idx);
         if (!n || idx.column() < 0 || idx.column() >= static_cast<int>(n->cells.size())) return false;
@@ -313,14 +313,14 @@ public:
     }
 
     // ── Headers ───────────────────────────────────────────────────────────
-    std::string headerData(int section, bool horizontal = true) const override
+    String headerData(int section, bool horizontal = true) const override
     {
         if (horizontal && section >= 0 && section < static_cast<int>(headers_.size()))
             return headers_[section];
         return AbstractItemModel::headerData(section, horizontal);
     }
 
-    void setHeaders(const std::vector<std::string>& h) { headers_ = h; }
+    void setHeaders(const ct::Vector<String>& h) { headers_ = h; }
 
     // ── Hierarchy ─────────────────────────────────────────────────────────
     ModelIndex parent(const ModelIndex& idx) const override
@@ -350,7 +350,7 @@ public:
     }
 
     // ── Convenience mutations ─────────────────────────────────────────────
-    Node* addRoot(const std::vector<std::string>& cells)
+    Node* addRoot(const ct::Vector<String>& cells)
     {
         auto* n = new Node();
         n->cells = cells;
@@ -385,12 +385,12 @@ public:
         return ModelIndex(row, 0, n);
     }
 
-    const std::vector<Node*>& roots() const { return roots_; }
+    const ct::Vector<Node*>& roots() const { return roots_; }
 
 private:
     int numCols_ = 0;
-    std::vector<std::string> headers_;
-    std::vector<Node*>       roots_;
+    ct::Vector<String> headers_;
+    ct::Vector<Node*>       roots_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -403,15 +403,15 @@ public:
     ~SortFilterProxyModel() override = default;
 
     void setFilterColumn(int col)           { filterCol_ = col; invalidate(); }
-    void setFilterText(const std::string& t){ filterText_ = t; invalidate(); }
+    void setFilterText(const String& t){ filterText_ = t; invalidate(); }
     void setFilterCaseSensitive(bool cs)    { caseSensitive_ = cs; invalidate(); }
 
     // ── AbstractItemModel interface ───────────────────────────────────────
     int  rowCount(const ModelIndex& parent = {})    const override;
     int  columnCount(const ModelIndex& parent = {}) const override;
-    std::string data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override;
-    bool setData(const ModelIndex& idx, const std::string& value, ItemRole role = ItemRole::Edit) override;
-    std::string headerData(int section, bool horizontal = true) const override;
+    String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override;
+    bool setData(const ModelIndex& idx, const String& value, ItemRole role = ItemRole::Edit) override;
+    String headerData(int section, bool horizontal = true) const override;
     int  flags(const ModelIndex& idx) const override;
 
     void sort(int column, bool ascending = true) override;
@@ -428,12 +428,12 @@ private:
 
     AbstractItemModel*    source_;
     int                   filterCol_      = -1;
-    std::string           filterText_;
+    String           filterText_;
     bool                  caseSensitive_  = false;
     int                   sortCol_        = -1;
     bool                  sortAscending_  = true;
     mutable bool          dirty_          = true;
-    mutable std::vector<int> mapping_;  // proxy row → source row
+    mutable ct::Vector<int> mapping_;  // proxy row → source row
 };
 
 } // namespace BuGUI

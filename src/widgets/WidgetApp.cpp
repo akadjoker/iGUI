@@ -17,7 +17,7 @@ struct ContextMenu {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-static void collectFocusable(Widget* w, std::vector<Widget*>& out)
+static void collectFocusable(Widget* w, ct::Vector<Widget*>& out)
 {
     if (!w || !w->isVisible() || !w->isEnabled()) return;
     if (w->acceptsFocus()) out.push_back(w);
@@ -434,7 +434,7 @@ void WidgetApp::setClipboardText(const char* text)
     if (clipSet_) clipSet_(text);
 }
 
-std::string WidgetApp::getClipboardText() const
+String WidgetApp::getClipboardText() const
 {
     if (clipGet_) return clipGet_();
     return {};
@@ -461,7 +461,7 @@ void WidgetApp::dispatchKeyEvent(const BuGUI::IO::KeyEvent& ke)
             if (we.consumed) return;
         }
         // Collect all focusable widgets in DFS order
-        std::vector<Widget*> focusable;
+        ct::Vector<Widget*> focusable;
         collectFocusable(root_, focusable);
         for (auto* fw : floats_)
             collectFocusable(fw, focusable);
@@ -495,7 +495,7 @@ void WidgetApp::dispatchKeyEvent(const BuGUI::IO::KeyEvent& ke)
     }
 }
 
-void WidgetApp::dispatchTextInput(const std::vector<uint32_t>& chars)
+void WidgetApp::dispatchTextInput(const ct::Vector<uint32_t>& chars)
 {
     if (!focused_) return;
     KeyEvent ke;
@@ -533,11 +533,11 @@ void WidgetApp::setRoot(Widget* r)
 //  Stage management
 // ═════════════════════════════════════════════════════════════════════════════
 
-Widget* WidgetApp::addStage(const std::string& name)
+Widget* WidgetApp::addStage(const String& name)
 {
-    auto it = stages_.find(name);
-    if (it != stages_.end())
-        return it->second;
+    Widget* const* existing = stages_.find(name);
+    if (existing)
+        return *existing;
 
     auto* stageRoot = new Widget();
     stages_[name] = stageRoot;
@@ -551,20 +551,20 @@ void WidgetApp::setTransition(TransitionType type, float durationSec, EaseType e
     transEase_     = ease;
 }
 
-bool WidgetApp::setStage(const std::string& name)
+bool WidgetApp::setStage(const String& name)
 {
     return setStage(name, transType_, transEase_);
 }
 
-bool WidgetApp::setStage(const std::string& name, TransitionType transition)
+bool WidgetApp::setStage(const String& name, TransitionType transition)
 {
     return setStage(name, transition, transEase_);
 }
 
-bool WidgetApp::setStage(const std::string& name, TransitionType transition, EaseType ease)
+bool WidgetApp::setStage(const String& name, TransitionType transition, EaseType ease)
 {
-    auto it = stages_.find(name);
-    if (it == stages_.end()) return false;
+    Widget* const* stageRoot = stages_.find(name);
+    if (!stageRoot) return false;
     if (name == currentStage_) return true;
 
     // Clear interaction state (old tree pointers become invalid)
@@ -586,25 +586,25 @@ bool WidgetApp::setStage(const std::string& name, TransitionType transition, Eas
     }
 
     // Swap root to the new stage's widget
-    root_ = it->second;
+    root_ = *stageRoot;
     currentStage_ = name;
     return true;
 }
 
-Widget* WidgetApp::stage(const std::string& name) const
+Widget* WidgetApp::stage(const String& name) const
 {
-    auto it = stages_.find(name);
-    return (it != stages_.end()) ? it->second : nullptr;
+    Widget* const* stageRoot = stages_.find(name);
+    return stageRoot ? *stageRoot : nullptr;
 }
 
-bool WidgetApp::removeStage(const std::string& name)
+bool WidgetApp::removeStage(const String& name)
 {
     if (name == currentStage_) return false;  // cannot remove active stage
-    auto it = stages_.find(name);
-    if (it == stages_.end()) return false;
+    Widget* const* stageRoot = stages_.find(name);
+    if (!stageRoot) return false;
 
-    delete it->second;
-    stages_.erase(it);
+    delete *stageRoot;
+    stages_.erase(name);
     return true;
 }
 
@@ -618,9 +618,9 @@ IconAtlas& WidgetApp::iconAtlas()
 //  Widget lookup
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::vector<Widget*> WidgetApp::widgetsByTag(const std::string& tag)
+ct::Vector<Widget*> WidgetApp::widgetsByTag(const String& tag)
 {
-    std::vector<Widget*> result;
+    ct::Vector<Widget*> result;
     if (root_) root_->findByTag(tag, result);
     return result;
 }
@@ -629,33 +629,33 @@ std::vector<Widget*> WidgetApp::widgetsByTag(const std::string& tag)
 //  Global event dispatcher
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::on(const std::string& event, const std::string& widgetId, EventCallback cb)
+void WidgetApp::on(const String& event, const String& widgetId, EventCallback cb)
 {
     globalHandlers_[event + ":" + widgetId].push_back(std::move(cb));
 }
 
-void WidgetApp::onAny(const std::string& event, EventCallback cb)
+void WidgetApp::onAny(const String& event, EventCallback cb)
 {
     globalHandlers_[event + ":*"].push_back(std::move(cb));
 }
 
-void WidgetApp::fireEvent(const std::string& event, Widget* w)
+void WidgetApp::fireEvent(const String& event, Widget* w)
 {
     if (!w) return;
 
     // Targeted: by widget ID
     if (!w->id().empty())
     {
-        auto it = globalHandlers_.find(event + ":" + w->id());
-        if (it != globalHandlers_.end())
-            for (auto& cb : it->second)
+        ct::Vector<EventCallback>* callbacks = globalHandlers_.find(event + ":" + w->id());
+        if (callbacks)
+            for (auto& cb : *callbacks)
                 cb(w);
     }
 
     // Catch-all
-    auto it = globalHandlers_.find(event + ":*");
-    if (it != globalHandlers_.end())
-        for (auto& cb : it->second)
+    ct::Vector<EventCallback>* callbacks = globalHandlers_.find(event + ":*");
+    if (callbacks)
+        for (auto& cb : *callbacks)
             cb(w);
 }
 
@@ -854,9 +854,9 @@ void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
 //  Hover chain - track enter/leave for the full widget path
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::vector<Widget*> WidgetApp::buildChain(Widget* w)
+ct::Vector<Widget*> WidgetApp::buildChain(Widget* w)
 {
-    std::vector<Widget*> chain;
+    ct::Vector<Widget*> chain;
     while (w)
     {
         chain.push_back(w);
@@ -874,8 +874,8 @@ void WidgetApp::applyCursor(CursorType type)
 
 void WidgetApp::updateHover(Widget* newLeaf)
 {
-    std::vector<Widget*> newChain = newLeaf ? buildChain(newLeaf)
-                                            : std::vector<Widget*>{};
+    ct::Vector<Widget*> newChain = newLeaf ? buildChain(newLeaf)
+                                            : ct::Vector<Widget*>{};
 
     // Find common prefix length
     size_t common = 0;
@@ -1045,26 +1045,26 @@ float applyEasing(EaseType type, float t)
 //  paintTreeInto – fills background then paints widget tree
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::setStageCamera(const std::string& name, const BuGUI::Camera2D& cam)
+void WidgetApp::setStageCamera(const String& name, const BuGUI::Camera2D& cam)
 {
     stageCameras_[name] = cam;
 }
 
-BuGUI::Camera2D WidgetApp::stageCamera(const std::string& name) const
+BuGUI::Camera2D WidgetApp::stageCamera(const String& name) const
 {
-    auto it = stageCameras_.find(name);
-    return it != stageCameras_.end() ? it->second : BuGUI::Camera2D{};
+    const BuGUI::Camera2D* camera = stageCameras_.find(name);
+    return camera ? *camera : BuGUI::Camera2D{};
 }
 
-void WidgetApp::setStageBgColor(const std::string& name, const Color& c)
+void WidgetApp::setStageBgColor(const String& name, const Color& c)
 {
     stageBgColors_[name] = c;
 }
 
-Color WidgetApp::stageBgColor(const std::string& name) const
+Color WidgetApp::stageBgColor(const String& name) const
 {
-    auto it = stageBgColors_.find(name);
-    return it != stageBgColors_.end() ? it->second : bgColor_;
+    const Color* color = stageBgColors_.find(name);
+    return color ? *color : bgColor_;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1340,7 +1340,7 @@ void WidgetApp::paintTooltipInto(BuGUI::DrawList& dl, const BuGUI::Font* font)
     if (!tooltipWidget_ || tooltipWidget_->tooltip().empty()) return;
 
     const auto& t = Theme::instance();
-    const std::string& text = tooltipWidget_->tooltip();
+    const String& text = tooltipWidget_->tooltip();
 
     float w = static_cast<float>(width_);
     float h = static_cast<float>(height_);
@@ -1420,7 +1420,7 @@ void WidgetApp::cancelDrag()
     dragPending_ = false;
 }
 
-void WidgetApp::dispatchDropEvents(const std::vector<BuGUI::IO::DropEvent>& drops)
+void WidgetApp::dispatchDropEvents(const ct::Vector<BuGUI::IO::DropEvent>& drops)
 {
     for (const auto& drop : drops) {
         // Find the widget under the drop position

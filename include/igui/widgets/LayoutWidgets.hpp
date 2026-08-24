@@ -4,8 +4,8 @@
 #include "WidgetApp.hpp"
 #include "Theme.hpp"
 #include "BasicWidgets.hpp"
-#include <string>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
 
 
 namespace BuGUI
@@ -130,12 +130,12 @@ private:
 class Collapsible : public Widget
 {
 public:
-    explicit Collapsible(const std::string& title = "", bool expanded = true);
+    explicit Collapsible(const String& title = "", bool expanded = true);
 
     /// @brief Set the section title text.
-    void setTitle(const std::string& t) { title_ = t; markDirty(); }
+    void setTitle(const String& t) { title_ = t; markDirty(); }
     /// @brief Get the section title.
-    const std::string& title() const    { return title_; }
+    const String& title() const    { return title_; }
 
     /// @brief Expand or collapse the content area.
     void setExpanded(bool e);
@@ -171,7 +171,7 @@ public:
     void onMousePress(MouseEvent& e) override;
 
 private:
-    std::string title_;
+    String title_;
     bool  expanded_       = true;
     float headerH_        = 26.0f;
     float contentPad_     = 4.0f;
@@ -201,9 +201,9 @@ public:
     float spacing() const    { return spacing_; }
 
     /// @brief Set a text label shown on the left.
-    void setText(const std::string& t) { text_ = t; markDirty(); }
+    void setText(const String& t) { text_ = t; markDirty(); }
     /// @brief Get the status text.
-    const std::string& text() const    { return text_; }
+    const String& text() const    { return text_; }
 
     void layout() override;
     Vec2f sizeHint() const override;
@@ -212,7 +212,7 @@ public:
 private:
     Color bgColor_ = Color(35, 36, 40, 255);
     float spacing_  = 6.0f;
-    std::string text_;
+    String text_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -269,7 +269,7 @@ public:
 
     // Add a row: creates a Label + places widget side by side
     template <typename T, typename... Args>
-    T* addRow(const std::string& label, Args&&... args)
+    T* addRow(const String& label, Args&&... args)
     {
         createChild<Label>(label);
         return createChild<T>(std::forward<Args>(args)...);
@@ -427,7 +427,7 @@ public:
 
     // Add a tab with a label. Creates widget of type T as content. Returns it.
     template <typename T, typename... Args>
-    T* addTab(const std::string& label, Args&&... args)
+    T* addTab(const String& label, Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
         addTabWidget(label, w);
@@ -435,7 +435,7 @@ public:
     }
 
     /// @brief Add an existing widget as a tab page.
-    void addTabWidget(const std::string& label, Widget* content);
+    void addTabWidget(const String& label, Widget* content);
 
     /// @brief Remove a tab by index (deletes content widget).
     void removeTab(int index);
@@ -451,9 +451,9 @@ public:
     Widget* currentWidget() const;
 
     /// @brief Set the label for a tab.
-    void setTabLabel(int index, const std::string& label);
+    void setTabLabel(int index, const String& label);
     /// @brief Get a tab's label.
-    const std::string& tabLabel(int index) const;
+    const String& tabLabel(int index) const;
 
     /// @brief Set the tab bar position.
     void setTabPosition(TabPosition pos);
@@ -482,11 +482,11 @@ public:
 
 private:
     struct TabInfo {
-        std::string label;
+        String label;
         Widget*     content = nullptr;
     };
 
-    std::vector<TabInfo> tabs_;
+    ct::Vector<TabInfo> tabs_;
     int currentIndex_     = 0;
     TabPosition tabPosition_ = TabPosition::Top;
     bool closable_        = false;
@@ -626,7 +626,7 @@ public:
     void onMouseLeave() override;
 
 private:
-    std::vector<Widget*> pages_;
+    ct::Vector<Widget*> pages_;
     int   currentPage_   = 0;
 
     bool  autoPlay_      = false;

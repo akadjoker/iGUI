@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  immediate:
+    name: Immediate mode
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-immediate -G Ninja
+          -DIGUI_BUILD_TESTS=ON
+          -DIGUI_BUILD_RAYLIB_BACKEND=OFF
+
+      - name: Build
+        run: cmake --build build-immediate --parallel
+
+      - name: Test
+        run: ctest --test-dir build-immediate --output-on-failure
+
+  retained:
+    name: Retained widgets
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install SDL2
+        run: sudo apt-get update && sudo apt-get install --yes libsdl2-dev pkg-config
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-retained -G Ninja
+          -DIGUI_BUILD_TESTS=ON
+          -DIGUI_BUILD_SDL2_DEMO=ON
+          -DIGUI_BUILD_RAYLIB_BACKEND=OFF
+
+      - name: Build
+        run: cmake --build build-retained --parallel
+
+      - name: Test
+        run: ctest --test-dir build-retained --output-on-failure
+
+      - name: Legacy visual smoke test
+        run: ./build-retained/igui_sdl2_legacy_gui_demo --smoke

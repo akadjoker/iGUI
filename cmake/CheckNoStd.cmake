@@ -8,6 +8,9 @@ file(GLOB_RECURSE IG_CORE_FILES
 list(FILTER IG_CORE_FILES EXCLUDE REGEX "/include/igui/widgets/")
 list(FILTER IG_CORE_FILES EXCLUDE REGEX "/src/widgets/")
 list(FILTER IG_CORE_FILES EXCLUDE REGEX "/tests/test_original_widgets\\.cpp$")
+# The compatibility GUI was moved under include/src and intentionally uses STL.
+list(FILTER IG_CORE_FILES EXCLUDE REGEX "/include/igui/iGUI\\.hpp$")
+list(FILTER IG_CORE_FILES EXCLUDE REGEX "/src/iGUI\\.cpp$")
 
 foreach(IG_FILE IN LISTS IG_CORE_FILES)
     file(READ "${IG_FILE}" IG_CONTENT)

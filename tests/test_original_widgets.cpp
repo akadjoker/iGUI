@@ -8,18 +8,32 @@
 
 #include <cassert>
 #include <cmath>
-#include <string>
+#include <igui/widgets/String.hpp>
 
 int main()
 {
     using namespace BuGUI;
+
+    String edited("abc");
+    edited.append(2, '!');
+    assert(edited == "abc!!");
+    edited.insert(3, 2, '-');
+    assert(edited == "abc--!!");
+    edited.erase(edited.begin() + 3, edited.begin() + 5);
+    assert(edited == "abc!!");
+    assert(edited.compare(0, 3, "abc") == 0);
+    assert(String("  x").find_first_not_of(" ") == 2u);
+    assert(String("   ").find_first_not_of(" ") == String::npos);
+    assert(String("file.json").find_last_of(".") == 4u);
+    assert(String("42").to_int() == 42);
+    assert(std::fabs(String("3.5").to_float() - 3.5f) < 0.001f);
 
     assert(FileSystem::exists("include/igui/widgets"));
     assert(FileSystem::isDir("include/igui/widgets"));
     assert(FileSystem::isFile("include/igui/widgets/CodeEditor.hpp"));
     assert(FileSystem::fileName("include/igui/widgets/CodeEditor.hpp") == "CodeEditor.hpp");
     assert(FileSystem::extension("include/igui/widgets/CodeEditor.hpp") == ".hpp");
-    const std::vector<FileSystem::Entry> entries = FileSystem::listDir("include/igui/widgets");
+    const ct::Vector<FileSystem::Entry> entries = FileSystem::listDir("include/igui/widgets");
     assert(!entries.empty());
 
     WidgetSerializer::registerBuiltinTypes();
@@ -32,9 +46,14 @@ int main()
     source->createChild<Slider>(0.0f, 100.0f, 42.0f);
 
     const json saved = WidgetSerializer::save(source);
-    assert(saved.at("type").get<std::string>() == "BoxLayout");
+    assert(String(saved["type"].str()) == "BoxLayout");
     assert(saved.contains("children"));
-    assert(saved.at("children").size() == 4u);
+    assert(saved["children"].size() == 4u);
+
+    json::Error parseError;
+    const json parsed = json::parse(saved.dump(2), &parseError);
+    assert(!parseError);
+    assert(parsed == saved);
 
     Widget destination;
     Widget* loaded = WidgetSerializer::load(saved, &destination);

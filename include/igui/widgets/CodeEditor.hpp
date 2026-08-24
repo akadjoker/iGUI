@@ -1,10 +1,10 @@
 #pragma once
 
 #include "TextInputWidgets.hpp"
-#include <string>
-#include <vector>
-#include <unordered_set>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/hashset.hpp>
+#include <ct/function.hpp>
 
 namespace BuGUI
 {
@@ -22,9 +22,9 @@ namespace BuGUI
 //
 //  Usage:
 //      class MyLangHighlighter : public SyntaxHighlighter {
-//          HighlightResult highlightLine(int line, const std::string& text,
+//          HighlightResult highlightLine(int line, const String& text,
 //                                        int prevState) override;
-//          int foldDelta(int line, const std::string& text) override;
+//          int foldDelta(int line, const String& text) override;
 //      };
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -64,7 +64,7 @@ public:
     /// @brief Result of highlighting a single line.
     struct HighlightResult
     {
-        std::vector<Span> spans;   ///< Colored spans for this line.
+        ct::Vector<Span> spans;   ///< Colored spans for this line.
         int               state;   ///< Lexer state to pass to the next line.
     };
 
@@ -76,7 +76,7 @@ public:
     /// @param prevState  Lexer state from the previous line (0 = start of file).
     /// @return Colored spans and the new lexer state for the next line.
     virtual HighlightResult highlightLine(int lineIndex,
-                                          const std::string& text,
+                                          const String& text,
                                           int prevState) const = 0;
 
     /// @brief Compute the fold level delta for a line.
@@ -87,7 +87,7 @@ public:
     /// @param lineIndex  Zero-based line number.
     /// @param text       The line text.
     /// @return Fold level change: +N opens N regions, -N closes N.
-    virtual int foldDelta(int lineIndex, const std::string& text) const = 0;
+    virtual int foldDelta(int lineIndex, const String& text) const = 0;
 
     // ── Theme colors ──────────────────────────────────────────────────────
 
@@ -101,19 +101,19 @@ public:
     virtual const char* languageName() const = 0;
 
     /// @brief Get file extensions this highlighter handles (e.g. {"cpp","hpp","h"}).
-    virtual std::vector<std::string> extensions() const = 0;
+    virtual ct::Vector<String> extensions() const = 0;
 
 protected:
     // ── Helpers for subclass lexers ───────────────────────────────────────
 
     /// @brief Check if a word is in the keyword set.
-    bool isKeyword(const std::string& word) const;
+    bool isKeyword(const String& word) const;
 
     /// @brief Check if a word is in the type set.
-    bool isType(const std::string& word) const;
+    bool isType(const String& word) const;
 
     /// @brief Check if a word is a known constant.
-    bool isConstant(const std::string& word) const;
+    bool isConstant(const String& word) const;
 
     /// @brief Set the keyword list for this language.
     void setKeywords(std::initializer_list<const char*> words);
@@ -124,9 +124,9 @@ protected:
     /// @brief Set the constant list for this language.
     void setConstants(std::initializer_list<const char*> words);
 
-    std::unordered_set<std::string> keywords_;
-    std::unordered_set<std::string> types_;
-    std::unordered_set<std::string> constants_;
+    ct::HashSet<String> keywords_;
+    ct::HashSet<String> types_;
+    ct::HashSet<String> constants_;
 
     /// @brief Default colors per token type (dark theme).
     Color colors_[14] = {
@@ -160,11 +160,11 @@ class CppHighlighter : public SyntaxHighlighter
 {
 public:
     CppHighlighter();
-    HighlightResult highlightLine(int lineIndex, const std::string& text,
+    HighlightResult highlightLine(int lineIndex, const String& text,
                                   int prevState) const override;
-    int foldDelta(int lineIndex, const std::string& text) const override;
+    int foldDelta(int lineIndex, const String& text) const override;
     const char* languageName() const override { return "C++"; }
-    std::vector<std::string> extensions() const override
+    ct::Vector<String> extensions() const override
     { return {"c", "cpp", "cc", "cxx", "h", "hpp", "hxx", "inl"}; }
 };
 
@@ -177,11 +177,11 @@ class PythonHighlighter : public SyntaxHighlighter
 {
 public:
     PythonHighlighter();
-    HighlightResult highlightLine(int lineIndex, const std::string& text,
+    HighlightResult highlightLine(int lineIndex, const String& text,
                                   int prevState) const override;
-    int foldDelta(int lineIndex, const std::string& text) const override;
+    int foldDelta(int lineIndex, const String& text) const override;
     const char* languageName() const override { return "Python"; }
-    std::vector<std::string> extensions() const override
+    ct::Vector<String> extensions() const override
     { return {"py", "pyw", "pyi"}; }
 };
 
@@ -194,11 +194,11 @@ class JsHighlighter : public SyntaxHighlighter
 {
 public:
     JsHighlighter();
-    HighlightResult highlightLine(int lineIndex, const std::string& text,
+    HighlightResult highlightLine(int lineIndex, const String& text,
                                   int prevState) const override;
-    int foldDelta(int lineIndex, const std::string& text) const override;
+    int foldDelta(int lineIndex, const String& text) const override;
     const char* languageName() const override { return "JavaScript"; }
-    std::vector<std::string> extensions() const override
+    ct::Vector<String> extensions() const override
     { return {"js", "jsx", "ts", "tsx", "mjs"}; }
 };
 
@@ -210,11 +210,11 @@ class LuaHighlighter : public SyntaxHighlighter
 {
 public:
     LuaHighlighter();
-    HighlightResult highlightLine(int lineIndex, const std::string& text,
+    HighlightResult highlightLine(int lineIndex, const String& text,
                                   int prevState) const override;
-    int foldDelta(int lineIndex, const std::string& text) const override;
+    int foldDelta(int lineIndex, const String& text) const override;
     const char* languageName() const override { return "Lua"; }
-    std::vector<std::string> extensions() const override
+    ct::Vector<String> extensions() const override
     { return {"lua"}; }
 };
 
@@ -227,11 +227,11 @@ class GlslHighlighter : public SyntaxHighlighter
 {
 public:
     GlslHighlighter();
-    HighlightResult highlightLine(int lineIndex, const std::string& text,
+    HighlightResult highlightLine(int lineIndex, const String& text,
                                   int prevState) const override;
-    int foldDelta(int lineIndex, const std::string& text) const override;
+    int foldDelta(int lineIndex, const String& text) const override;
     const char* languageName() const override { return "GLSL"; }
-    std::vector<std::string> extensions() const override
+    ct::Vector<String> extensions() const override
     { return {"glsl", "vert", "frag", "geom", "comp", "tesc", "tese"}; }
 };
 
@@ -285,7 +285,7 @@ public:
     /// @brief Auto-detect and create highlighter from file extension.
     /// @param filename  File name or path (e.g. "main.cpp").
     /// @return The created highlighter, or nullptr if no match.
-    SyntaxHighlighter* setHighlighterForFile(const std::string& filename);
+    SyntaxHighlighter* setHighlighterForFile(const String& filename);
 
     // ── Code folding ──────────────────────────────────────────────────────
 
@@ -393,19 +393,19 @@ public:
     /// @param caseSensitive  Whether the search is case-sensitive.
     /// @param wholeWord  Only match whole words.
     /// @return true if a match was found.
-    bool findNext(const std::string& text, bool caseSensitive = false,
+    bool findNext(const String& text, bool caseSensitive = false,
                   bool wholeWord = false);
 
     /// @brief Find the previous occurrence.
-    bool findPrev(const std::string& text, bool caseSensitive = false,
+    bool findPrev(const String& text, bool caseSensitive = false,
                   bool wholeWord = false);
 
     /// @brief Replace the current selection (if it matches) and find next.
-    bool replaceNext(const std::string& find, const std::string& replace,
+    bool replaceNext(const String& find, const String& replace,
                      bool caseSensitive = false);
 
     /// @brief Replace all occurrences. Returns the number of replacements.
-    int replaceAll(const std::string& find, const std::string& replace,
+    int replaceAll(const String& find, const String& replace,
                    bool caseSensitive = false);
 
     // ── Movement ──────────────────────────────────────────────────────────
@@ -497,7 +497,7 @@ private:
     SyntaxHighlighter* highlighter_ = nullptr;   // owned, deleted in dtor
 
     // Cached highlight state per line (invalidated on edit)
-    mutable std::vector<int> lineStates_;     // lexer state after each line
+    mutable ct::Vector<int> lineStates_;     // lexer state after each line
     mutable bool             hlDirty_ = true; // full re-highlight needed
     void reHighlight() const;
     void reHighlightFrom(int line) const;
@@ -508,7 +508,7 @@ private:
     // ── Folding ──────────────────────────────────────────────────────────
     bool showFolding_ = true;
     struct FoldRange { int startLine, endLine; bool collapsed; };
-    std::vector<FoldRange> foldRanges_;
+    ct::Vector<FoldRange> foldRanges_;
     void rebuildFoldRanges();
     bool isLineHidden(int line) const;
     int  foldGutterWidth() const;
@@ -519,24 +519,24 @@ private:
         enum Type { Insert, Delete, Replace };
         Type type;
         TextPos pos;               // start position of the edit
-        std::string oldText;       // text before (for undo)
-        std::string newText;       // text after (for redo)
+        String oldText;       // text before (for undo)
+        String newText;       // text after (for redo)
         TextPos oldCursor;         // cursor before
         TextPos newCursor;         // cursor after
     };
-    std::vector<EditAction> undoStack_;
-    std::vector<EditAction> redoStack_;
+    ct::Vector<EditAction> undoStack_;
+    ct::Vector<EditAction> redoStack_;
     bool   recording_ = false;     // prevents recursive recording
-    void recordInsert(TextPos pos, const std::string& text,
+    void recordInsert(TextPos pos, const String& text,
                       TextPos oldCursor, TextPos newCursor);
-    void recordDelete(TextPos pos, const std::string& text,
+    void recordDelete(TextPos pos, const String& text,
                       TextPos oldCursor, TextPos newCursor);
     void applyAction(const EditAction& action, bool isUndo);
     void clearRedoStack();
 
     // ── Auto-indent ──────────────────────────────────────────────────────
     bool autoIndent_ = true;
-    std::string getLineIndent(int line) const;
+    String getLineIndent(int line) const;
     bool lineEndsWith(int line, char c) const;
 
     // ── Bracket matching ─────────────────────────────────────────────────
@@ -568,26 +568,26 @@ private:
     // ── Search ───────────────────────────────────────────────────────────
     bool        searchVisible_ = false;
     bool        replaceVisible_ = false;
-    std::string searchTerm_;
-    std::string replaceTerm_;
+    String searchTerm_;
+    String replaceTerm_;
     bool        searchCaseSensitive_ = false;
     bool        searchWholeWord_     = false;
-    std::vector<TextPos> searchMatches_;
+    ct::Vector<TextPos> searchMatches_;
     int                  searchMatchIdx_ = -1;
     void rebuildSearchMatches();
     void paintSearchHighlights(PaintContext& ctx, const Rect& abs);
     void paintSearchBar(PaintContext& ctx, const Rect& abs);
 
     // ── Multi-cursor ─────────────────────────────────────────────────────
-    std::vector<CursorState> extraCursors_;
+    ct::Vector<CursorState> extraCursors_;
     void mergeCursorsIfNeeded();
-    void applyToCursors(std::function<void(TextPos& pos, TextPos& anchor)> fn);
+    void applyToCursors(ct::Function<void(TextPos& pos, TextPos& anchor)> fn);
     void paintExtraCursors(PaintContext& ctx, const Rect& abs);
     void paintExtraSelections(PaintContext& ctx, const Rect& abs);
 
     // ── Word utilities (internal) ─────────────────────────────────────────
     bool isWordChar(char c) const;
-    std::string commentPrefix() const;
+    String commentPrefix() const;
 };
 
 } // namespace BuGUI

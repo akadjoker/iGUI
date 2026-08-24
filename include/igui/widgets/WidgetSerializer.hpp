@@ -1,11 +1,9 @@
 #pragma once
 
 #include "Widget.hpp"
-#include <nlohmann/json.hpp>
+#include <ct/json.hpp>
 
-using json = nlohmann::json;
-
-
+using json = ct::Json;
 
 namespace BuGUI
 {
@@ -16,24 +14,24 @@ namespace BuGUI
 class WidgetSerializer
 {
 public:
-    using WidgetFactory = std::function<Widget*(const json& j, Widget* parent)>;
+    using WidgetFactory = ct::Function<Widget*(const json& j, Widget* parent)>;
 
-    static void registerType(const std::string& typeName, WidgetFactory factory);
-    static std::string typeName(const Widget* w);
+    static void registerType(const String& typeName, WidgetFactory factory);
+    static String typeName(const Widget* w);
 
     // Serialize
     static json save(const Widget* root);
-    static bool saveToFile(const Widget* root, const std::string& path);
+    static bool saveToFile(const Widget* root, const String& path);
 
     // Deserialize
     static Widget* load(const json& j, Widget* parent);
-    static Widget* loadFromFile(const std::string& path, Widget* parent);
+    static Widget* loadFromFile(const String& path, Widget* parent);
 
     // Call once to register all standard BuGUI widget types
     static void registerBuiltinTypes();
 
 private:
-    static std::unordered_map<std::string, WidgetFactory>& factories();
+    static ct::HashMap<String, WidgetFactory>& factories();
 
     static json serializeBase(const Widget* w);
     static void deserializeBase(const json& j, Widget* w);

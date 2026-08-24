@@ -3,9 +3,9 @@
 #include "Widget.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
-#include <string>
-#include <functional>
-#include <vector>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
 
 
 namespace BuGUI
@@ -20,17 +20,17 @@ class TextInput : public Widget
 public:
     enum class Mode { Normal, Password, NumberOnly, ReadOnly };
 
-    explicit TextInput(const std::string& text = "", Mode mode = Mode::Normal);
+    explicit TextInput(const String& text = "", Mode mode = Mode::Normal);
 
     /// @brief Set the text content.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the text content.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
 
     /// @brief Set placeholder text shown when empty.
-    void setPlaceholder(const std::string& p) { placeholder_ = p; markDirty(); }
+    void setPlaceholder(const String& p) { placeholder_ = p; markDirty(); }
     /// @brief Get the placeholder text.
-    const std::string& placeholder() const    { return placeholder_; }
+    const String& placeholder() const    { return placeholder_; }
 
     /// @brief Set the input mode (Normal, Password, NumberOnly, ReadOnly).
     void setMode(Mode m) { mode_ = m; markDirty(); }
@@ -44,7 +44,7 @@ public:
     /// @brief Check if any text is selected.
     bool hasSelection() const { return selStart_ != selEnd_; }
     /// @brief Get the selected text.
-    std::string selectedText() const;
+    String selectedText() const;
 
     /// @brief Get the cursor position (character index).
     int cursorPos() const { return cursor_; }
@@ -52,9 +52,9 @@ public:
     void setCursorPos(int pos);
 
     /// @brief Emitted when the text content changes.
-    Signal<const std::string&> textChanged;
+    Signal<const String&> textChanged;
     /// @brief Emitted when Enter is pressed.
-    Signal<const std::string&> submitted;
+    Signal<const String&> submitted;
 
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
@@ -65,8 +65,8 @@ public:
     void onTextInput(KeyEvent& e) override;
 
 private:
-    std::string text_;
-    std::string placeholder_;
+    String text_;
+    String placeholder_;
     Mode mode_ = Mode::Normal;
 
     int   cursor_   = 0;
@@ -76,11 +76,11 @@ private:
     float blinkTimer_ = 0;
     bool  dragging_   = false;
 
-    std::string displayText() const;
+    String displayText() const;
     int   hitTestChar(const BuGUI::Font* font, float localX) const;
     float cursorXOffset(const BuGUI::Font* font, int pos) const;
     void  deleteSelection();
-    void  insertText(const std::string& t);
+    void  insertText(const String& t);
     void  ensureCursorVisible(const BuGUI::Font* font);
     void  clampCursor();
     bool  isNumberChar(char c) const;
@@ -114,18 +114,18 @@ public:
         Color color;
     };
 
-    using SyntaxCallback = std::function<std::vector<ColorSpan>(int lineIndex, const std::string& lineText)>;
+    using SyntaxCallback = ct::Function<ct::Vector<ColorSpan>(int lineIndex, const String& lineText)>;
 
-    explicit TextEdit(const std::string& text = "");
+    explicit TextEdit(const String& text = "");
 
     /// @brief Set the entire text content.
-    void setText(const std::string& text);
+    void setText(const String& text);
     /// @brief Get all text as a single string.
-    std::string text() const;
+    String text() const;
     /// @brief Get the number of lines.
     int lineCount() const { return static_cast<int>(lines_.size()); }
     /// @brief Get the text of line n.
-    const std::string& lineAt(int n) const;
+    const String& lineAt(int n) const;
 
     /// @brief Get the cursor position (line, col).
     TextPos cursorPos() const { return cursor_; }
@@ -145,7 +145,7 @@ public:
     /// @brief Check if there is a selection.
     bool hasSelection() const { return selAnchor_ != cursor_; }
     /// @brief Get the selected text.
-    std::string selectedText() const;
+    String selectedText() const;
     /// @brief Get the start of the selection.
     TextPos selectionStart() const { return cursor_ < selAnchor_ ? cursor_ : selAnchor_; }
     /// @brief Get the end of the selection.
@@ -189,7 +189,7 @@ public:
     void paste();
 
     /// @brief Insert text at a specific position (does not move cursor).
-    void insertTextAt(TextPos pos, const std::string& text);
+    void insertTextAt(TextPos pos, const String& text);
 
     // ── Gutter markers ────────────────────────────────────────────────────
     enum class MarkerType { Breakpoint, Error, Warning, Bookmark, Info };
@@ -232,9 +232,9 @@ public:
     void onTextInput(KeyEvent& e) override;
 
 protected:
-    static const std::string emptyLine_;
+    static const String emptyLine_;
 
-    std::vector<std::string> lines_;
+    ct::Vector<String> lines_;
     TextPos cursor_;
     TextPos selAnchor_;
 
@@ -252,10 +252,10 @@ protected:
     SyntaxCallback syntaxCb_;
 
     /// @brief Optional filter: return false to hide a line (used by CodeEditor folding).
-    std::function<bool(int)> lineFilterCb_;
+    ct::Function<bool(int)> lineFilterCb_;
 
     // Gutter markers: line → set of marker types
-    std::unordered_map<int, std::unordered_set<int>> markers_;  // int = MarkerType
+    ct::HashMap<int, ct::HashSet<int>> markers_;  // int = MarkerType
 
     // Computed each paint
     mutable float lineHeight_ = 0;
@@ -265,7 +265,7 @@ protected:
     int  lineColCount(int line) const;
     void clampPos(TextPos& p) const;
     void deleteSelection();
-    void insertTextAtCursor(const std::string& t);
+    void insertTextAtCursor(const String& t);
     void splitLine();
     void mergeWithPrevLine();
     void mergeWithNextLine();
@@ -274,15 +274,15 @@ protected:
     float computeLineHeight(const BuGUI::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
     int  logicalToVisualRow(int line, int row = 0) const;
-    std::string expandTabs(const std::string& text) const;
-    std::string expandTabs(const std::string& text, int startVisCol) const;
-    std::string expandTabsVisible(const std::string& text, int startVisCol) const;
+    String expandTabs(const String& text) const;
+    String expandTabs(const String& text, int startVisCol) const;
+    String expandTabsVisible(const String& text, int startVisCol) const;
     int  visColAt(int line, int col) const;
 
 private:
     // Word-wrap cache
     struct WrapRow { int startCol, endCol; };
-    std::vector<std::vector<WrapRow>> wrapRows_;
+    ct::Vector<ct::Vector<WrapRow>> wrapRows_;
     bool  wrapDirty_   = true;
     float wrapWidth_   = 0;
     float maxContentW_ = 0;

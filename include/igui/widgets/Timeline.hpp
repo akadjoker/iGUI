@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
-#include <vector>
-#include <string>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Timeline — Multi-track timeline with keyframes, clips, scrubbing, zoom
@@ -35,16 +35,16 @@ struct TimelineKeyframe {
 struct TimelineClip {
     float       start = 0;
     float       end   = 1;
-    std::string label;
+    String label;
     Color       color    = Color(80, 120, 180, 200);
     bool        selected = false;
 };
 
 struct TimelineTrack {
-    std::string                    name;
+    String                    name;
     Color                          color = Color(120, 140, 180, 255);
-    std::vector<TimelineKeyframe>  keyframes;
-    std::vector<TimelineClip>      clips;
+    ct::Vector<TimelineKeyframe>  keyframes;
+    ct::Vector<TimelineClip>      clips;
     bool muted  = false;
     bool locked = false;
 };
@@ -55,7 +55,7 @@ public:
     Timeline();
 
     /// @brief Add a named track with optional color.
-    int  addTrack(const std::string& name,
+    int  addTrack(const String& name,
                   const Color& color = Color(120, 140, 180, 255));
     /// @brief Remove a track by ID.
     void removeTrack(int trackId);
@@ -76,7 +76,7 @@ public:
 
     /// @brief Add a clip spanning a time range.
     int  addClip(int trackId, float start, float end,
-                 const std::string& label = "",
+                 const String& label = "",
                  const Color& color = Color(80, 120, 180, 200));
     /// @brief Remove a clip by index.
     void removeClip(int trackId, int clipIdx);
@@ -116,7 +116,7 @@ public:
     void onMouseScroll(MouseEvent& e) override;
 
 private:
-    std::vector<TimelineTrack> tracks_;
+    ct::Vector<TimelineTrack> tracks_;
     Color bgColor_ = Color(30, 32, 36, 255);
 
     float playhead_   = 0;

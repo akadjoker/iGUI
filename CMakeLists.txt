@@ -5,6 +5,31 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(IGUI_BUILD_TESTS "Build iGUI core tests" ON)
+option(IGUI_BUILD_FONT "Build the optional embedded font atlas module" OFF)
+set(IGUI_FONT_INPUT "" CACHE FILEPATH
+    "Optional TTF/OTF file embedded as iGUI's default font (defaults to Nuklear's Roboto)")
+option(IGUI_BUILD_SDL2_DEMO "Build the optional SDL2 integration example" OFF)
+option(IGUI_BUILD_RAYLIB_BACKEND "Build the Raylib backend when Raylib is installed" ON)
+option(IGUI_BUILD_RAYLIB_DEMO "Build the Raylib integration example" OFF)
+
+set(IGUI_RAYLIB_AVAILABLE OFF)
+if(IGUI_BUILD_RAYLIB_BACKEND)
+    # Raylib is deliberately consumed from the system installation: the header
+    # and static archive are not vendored into this repository.
+    find_path(IGUI_RAYLIB_INCLUDE_DIR NAMES raylib.h HINTS /usr/local/include)
+    find_library(IGUI_RAYLIB_LIBRARY NAMES raylib libraylib HINTS /usr/local/lib)
+    if(IGUI_RAYLIB_INCLUDE_DIR AND IGUI_RAYLIB_LIBRARY)
+        set(IGUI_RAYLIB_AVAILABLE ON)
+    else()
+        message(STATUS "Raylib header or library not found; igui::raylib is disabled")
+    endif()
+endif()
+
+if(IGUI_BUILD_SDL2_DEMO OR IGUI_RAYLIB_AVAILABLE)
+    set(IGUI_BUILD_FONT ON)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -21,12 +46,11 @@ add_library(ct INTERFACE)
 target_include_directories(ct INTERFACE "${igui_containers_SOURCE_DIR}/include")
 
 add_library(igui
-    GUI.cpp
     src/DrawList.cpp
     src/Gui.cpp
 )
 add_library(igui::igui ALIAS igui)
-target_include_directories(igui PUBLIC include "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(igui PUBLIC include)
 target_link_libraries(igui PUBLIC ct)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -41,25 +65,26 @@ add_custom_target(igui_no_std ALL
 )
 add_dependencies(igui igui_no_std)
 
-option(IGUI_BUILD_TESTS "Build iGUI core tests" ON)
+# The pre-existing retained GUI API is kept as a separate compatibility layer.
+# It uses STL containers, unlike the immediate-mode core above.
+add_library(igui_legacy src/iGUI.cpp)
+add_library(igui::legacy ALIAS igui_legacy)
+target_include_directories(igui_legacy PUBLIC include)
+target_link_libraries(igui_legacy PUBLIC igui)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(igui_legacy PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
 if(IGUI_BUILD_TESTS)
     enable_testing()
     add_executable(igui_tests tests/test_core.cpp)
-    target_link_libraries(igui_tests PRIVATE igui)
+    target_link_libraries(igui_tests PRIVATE igui_legacy)
     add_test(NAME igui_core COMMAND igui_tests)
 
     add_executable(igui_widget_gallery_tests tests/test_widgets.cpp)
     target_link_libraries(igui_widget_gallery_tests PRIVATE igui)
     add_test(NAME igui_widget_gallery COMMAND igui_widget_gallery_tests)
 
-endif()
-
-option(IGUI_BUILD_FONT "Build the optional embedded font atlas module" OFF)
-set(IGUI_FONT_INPUT "" CACHE FILEPATH
-    "Optional TTF/OTF file embedded as iGUI's default font (defaults to Nuklear's Roboto)")
-option(IGUI_BUILD_SDL2_DEMO "Build the optional SDL2 integration example" OFF)
-if(IGUI_BUILD_SDL2_DEMO)
-    set(IGUI_BUILD_FONT ON)
 endif()
 
 if(IGUI_BUILD_FONT)
@@ -107,6 +132,45 @@ if(IGUI_BUILD_FONT)
     endif()
 endif()
 
+if(IGUI_RAYLIB_AVAILABLE)
+    add_library(igui_raylib adapters/raylib/RaylibBackend.cpp)
+    add_library(igui::raylib ALIAS igui_raylib)
+    target_include_directories(igui_raylib PUBLIC adapters/raylib/include)
+
+    add_library(igui_raylib_native STATIC IMPORTED GLOBAL)
+    set_target_properties(igui_raylib_native PROPERTIES
+        IMPORTED_LOCATION "${IGUI_RAYLIB_LIBRARY}"
+        INTERFACE_INCLUDE_DIRECTORIES "${IGUI_RAYLIB_INCLUDE_DIR}")
+    add_library(igui::raylib_native ALIAS igui_raylib_native)
+
+    # Consumers receive Raylib's archive and headers through this target. On
+    # Linux, Raylib itself may additionally require the platform libraries
+    # selected when its static archive was built (for example GLFW and X11).
+    target_link_libraries(igui_raylib PUBLIC igui_font igui_raylib_native)
+    if(UNIX AND NOT APPLE)
+        find_package(Threads REQUIRED)
+        find_package(OpenGL QUIET)
+        find_library(IGUI_RAYLIB_GLFW_LIBRARY NAMES glfw glfw3)
+        target_link_libraries(igui_raylib PUBLIC Threads::Threads ${CMAKE_DL_LIBS} m)
+        if(OpenGL_FOUND)
+            target_link_libraries(igui_raylib PUBLIC OpenGL::GL)
+        endif()
+        if(IGUI_RAYLIB_GLFW_LIBRARY)
+            target_link_libraries(igui_raylib PUBLIC "${IGUI_RAYLIB_GLFW_LIBRARY}")
+        else()
+            message(STATUS "GLFW was not found; applications using the static Raylib archive must provide it")
+        endif()
+    endif()
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(igui_raylib PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    if(IGUI_BUILD_RAYLIB_DEMO)
+        add_executable(igui_raylib_demo examples/raylib_demo/main.cpp)
+        target_link_libraries(igui_raylib_demo PRIVATE igui_raylib)
+    endif()
+endif()
+
 if(IGUI_BUILD_SDL2_DEMO)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
@@ -123,7 +187,7 @@ if(IGUI_BUILD_SDL2_DEMO)
     target_link_libraries(igui_sdl2_demo PRIVATE igui_sdl2)
 
     add_executable(igui_sdl2_legacy_gui_demo examples/sdl2_legacy_gui_demo/main.cpp)
-    target_link_libraries(igui_sdl2_legacy_gui_demo PRIVATE igui_sdl2)
+    target_link_libraries(igui_sdl2_legacy_gui_demo PRIVATE igui_sdl2 igui_legacy)
 
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/stb_impl.cpp")
         add_library(igui_widgets_stb STATIC third_party/stb/stb_impl.cpp)
@@ -176,7 +240,9 @@ if(IGUI_BUILD_SDL2_DEMO)
         target_include_directories(igui_widgets
             PUBLIC include include/igui/widgets third_party
             PRIVATE src/widgets third_party/stb)
-        target_link_libraries(igui_widgets PRIVATE igui_widgets_stb)
+        # The retained widget headers expose ct containers, so propagate the
+        # core target (and therefore ct's include directory) to consumers.
+        target_link_libraries(igui_widgets PUBLIC igui PRIVATE igui_widgets_stb)
         target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
 
         add_executable(igui_sdl2_original_widgets_demo

@@ -2,7 +2,7 @@
 
 #include "Widget.hpp"
 #include "Theme.hpp"
-#include <string>
+#include <igui/widgets/String.hpp>
 
 namespace BuGUI
 {
@@ -74,9 +74,9 @@ public:
     LayoutDir orientation() const           { return orientation_; }
 
     /// @brief Set the overlay text.
-    void               setText(const std::string& t) { text_ = t; markDirty(); }
+    void               setText(const String& t) { text_ = t; markDirty(); }
     /// @brief Get the overlay text.
-    const std::string& text() const                  { return text_; }
+    const String& text() const                  { return text_; }
 
     /// @brief Set text alignment within the bar.
     void      setTextAlign(TextAlign a) { textAlign_ = a; markDirty(); }
@@ -100,7 +100,7 @@ public:
 private:
     float     min_, max_, value_;
     LayoutDir orientation_ = LayoutDir::Horizontal;
-    std::string text_;
+    String text_;
     TextAlign   textAlign_ = TextAlign::CENTER;
     Color barColor_  = Color(140, 140, 145, 255);
     Color textColor_ = Color(220, 220, 220, 255);
@@ -138,14 +138,14 @@ public:
     int  decimals() const   { return decimals_; }
 
     /// @brief Set a suffix string appended to the value.
-    void setSuffix(const std::string& s)  { suffix_ = s; markDirty(); }
+    void setSuffix(const String& s)  { suffix_ = s; markDirty(); }
     /// @brief Get the suffix.
-    const std::string& suffix() const     { return suffix_; }
+    const String& suffix() const     { return suffix_; }
 
     /// @brief Set a prefix string prepended to the value.
-    void setPrefix(const std::string& p)  { prefix_ = p; markDirty(); }
+    void setPrefix(const String& p)  { prefix_ = p; markDirty(); }
     /// @brief Get the prefix.
-    const std::string& prefix() const     { return prefix_; }
+    const String& prefix() const     { return prefix_; }
 
     /// @brief Set drag sensitivity for mouse-drag value adjustment.
     void  setDragSensitivity(float s) { dragSens_ = s; }
@@ -165,8 +165,8 @@ public:
 private:
     float min_, max_, value_, step_;
     int   decimals_ = 1;
-    std::string suffix_;
-    std::string prefix_;
+    String suffix_;
+    String prefix_;
 
     bool  dragging_   = false;
     float dragStartY_ = 0;
@@ -175,7 +175,7 @@ private:
 
     enum HitZone { None, Minus, Plus, Value };
     HitZone hitZone(float localX) const;
-    std::string formatValue() const;
+    String formatValue() const;
     float buttonWidth() const;
 };
 
@@ -223,7 +223,7 @@ private:
     Date  date_;
     bool  open_ = false;
 
-    std::string formatDate() const;
+    String formatDate() const;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -278,7 +278,7 @@ private:
     float separatorWidth() const;
     Field hitField(float localX) const;
     void  adjustField(Field f, int delta);
-    std::string formatTime() const;
+    String formatTime() const;
 };
 
 } // namespace BuGUI

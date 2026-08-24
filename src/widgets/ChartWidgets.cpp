@@ -307,7 +307,7 @@ HistogramWidget::HistogramWidget()
     bins_.resize(binCount_, 0.0f);
 }
 
-void HistogramWidget::setData(const std::vector<float>& values)
+void HistogramWidget::setData(const ct::Vector<float>& values)
 {
     rawData_ = values;
     if (autoRange_ && !values.empty()) {
@@ -320,7 +320,7 @@ void HistogramWidget::setData(const std::vector<float>& values)
     markDirty();
 }
 
-void HistogramWidget::setBins(const std::vector<float>& bins, float rangeMin, float rangeMax)
+void HistogramWidget::setBins(const ct::Vector<float>& bins, float rangeMin, float rangeMax)
 {
     bins_     = bins;
     rangeMin_ = rangeMin;
@@ -470,7 +470,7 @@ PlotWidget::PlotWidget()
     viewYMin_ = 0; viewYMax_ = 1;
 }
 
-int PlotWidget::addSeries(const std::string& name, const Color& color, PlotType type)
+int PlotWidget::addSeries(const String& name, const Color& color, PlotType type)
 {
     PlotSeries s;
     s.name  = name;
@@ -504,7 +504,7 @@ void PlotWidget::addPoint(int idx, float y)
     markDirty();
 }
 
-void PlotWidget::setPoints(int idx, const std::vector<float>& ys)
+void PlotWidget::setPoints(int idx, const ct::Vector<float>& ys)
 {
     if (idx < 0 || idx >= (int)series_.size()) return;
     series_[idx].values = ys;
@@ -793,7 +793,7 @@ CurveEditor::CurveEditor()
 {
 }
 
-int CurveEditor::addCurve(const std::string& name, const Color& color)
+int CurveEditor::addCurve(const String& name, const Color& color)
 {
     curves_.push_back({name, color, {}, true});
     markDirty();

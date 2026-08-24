@@ -14,7 +14,7 @@ Breadcrumbs::Breadcrumbs()
     acceptsFocus_ = false;
 }
 
-void Breadcrumbs::setPath(const std::vector<std::string>& segments)
+void Breadcrumbs::setPath(const ct::Vector<String>& segments)
 {
     segments_ = segments;
     hoveredIndex_ = -1;
@@ -140,7 +140,7 @@ float SearchBar::clearBtnW() const { return text_.empty() ? 0.0f : 20.0f; }
 float SearchBar::textAreaX() const { return iconW(); }
 float SearchBar::textAreaW() const { return rect_.w - iconW() - clearBtnW() - Theme::instance().padding; }
 
-void SearchBar::setText(const std::string& t)
+void SearchBar::setText(const String& t)
 {
     text_ = t;
     cursorPos_ = static_cast<int>(t.size());
@@ -211,7 +211,7 @@ void SearchBar::paint(PaintContext& ctx)
         if (isFocused()) {
             blinkTimer_ += WidgetApp::instance().deltaTime();
             if (std::fmod(blinkTimer_, 1.0f) < 0.5f) {
-                std::string beforeCursor = text_.substr(0, cursorPos_);
+                String beforeCursor = text_.substr(0, cursorPos_);
                 float curX = taX - scrollX_ + ctx.font.GetTextWidth(beforeCursor.c_str());
                 ctx.fill.SetColor(t.textColor);
                 ctx.fill.Rectangle(curX, abs.y + 3, 1.0f, abs.h - 6, true);
@@ -337,7 +337,7 @@ void SearchBar::onKeyPress(KeyEvent& e)
 void SearchBar::onTextInput(KeyEvent& e)
 {
     if (e.text[0] == '\0') return;
-    std::string inp(e.text);
+    String inp(e.text);
     text_.insert(cursorPos_, inp);
     cursorPos_ += static_cast<int>(inp.size());
     blinkTimer_ = 0;
@@ -350,7 +350,7 @@ void SearchBar::onTextInput(KeyEvent& e)
 //  SplitButton
 // ═════════════════════════════════════════════════════════════════════════════
 
-SplitButton::SplitButton(const std::string& text) : text_(text)
+SplitButton::SplitButton(const String& text) : text_(text)
 {
     dropMenu_ = new Menu();
 }
@@ -360,7 +360,7 @@ SplitButton::~SplitButton()
     delete dropMenu_;
 }
 
-void SplitButton::addAction(const std::string& text, std::function<void()> cb)
+void SplitButton::addAction(const String& text, ct::Function<void()> cb)
 {
     auto* act = dropMenu_->addAction(text);
     if (cb) act->triggered.connect(std::move(cb));
@@ -469,7 +469,7 @@ void SplitButton::onMouseLeave()
 //  ContextMenuBuilder
 // ═════════════════════════════════════════════════════════════════════════════
 
-Menu* ContextMenuBuilder::build(Widget* target, const std::vector<ContextMenuItem>& items)
+Menu* ContextMenuBuilder::build(Widget* target, const ct::Vector<ContextMenuItem>& items)
 {
     // Clean up previous context menu if one exists
     if (target)
@@ -513,7 +513,7 @@ Outliner::~Outliner()
     for (auto* r : roots_) delete r;
 }
 
-TreeNode* Outliner::addRoot(const std::string& text)
+TreeNode* Outliner::addRoot(const String& text)
 {
     auto* n = new TreeNode(text);
     roots_.push_back(n);
@@ -534,14 +534,14 @@ void Outliner::clear()
 
 void Outliner::setNodeVisible(TreeNode* node, bool vis) { visMap_[node] = vis; markDirty(); }
 bool Outliner::isNodeVisible(TreeNode* node) const {
-    auto it = visMap_.find(node);
-    return it == visMap_.end() ? true : it->second;
+    const bool* visible = visMap_.find(node);
+    return visible ? *visible : true;
 }
 
 void Outliner::setNodeLocked(TreeNode* node, bool locked) { lockMap_[node] = locked; markDirty(); }
 bool Outliner::isNodeLocked(TreeNode* node) const {
-    auto it = lockMap_.find(node);
-    return it == lockMap_.end() ? false : it->second;
+    const bool* locked = lockMap_.find(node);
+    return locked ? *locked : false;
 }
 
 TreeNode* Outliner::selectedNode() const { return selected_; }
@@ -757,7 +757,7 @@ RichText::RichText()
     acceptsFocus_ = false;
 }
 
-void RichText::setMarkdown(const std::string& md)
+void RichText::setMarkdown(const String& md)
 {
     rawMd_ = md;
     scrollY_ = 0;
@@ -772,11 +772,11 @@ void RichText::parse()
     if (rawMd_.empty()) return;
 
     // Split into lines
-    std::vector<std::string> lines;
+    ct::Vector<String> lines;
     size_t pos = 0;
     while (pos < rawMd_.size()) {
         size_t nl = rawMd_.find('\n', pos);
-        if (nl == std::string::npos) {
+        if (nl == String::npos) {
             lines.push_back(rawMd_.substr(pos));
             break;
         }
@@ -785,7 +785,7 @@ void RichText::parse()
     }
 
     bool inCodeBlock = false;
-    std::string codeAccum;
+    String codeAccum;
 
     for (const auto& line : lines) {
         // Code blocks (```)
@@ -837,17 +837,17 @@ void RichText::parse()
         if (line.size() >= 2 && (line.substr(0, 2) == "- " || line.substr(0, 2) == "* ")) {
             b.type = BlockType::ListItem;
             // Parse inline spans from the rest
-            std::string content = line.substr(2);
+            String content = line.substr(2);
             // Simple inline parsing
             size_t i = 0;
-            std::string accum;
+            String accum;
             while (i < content.size()) {
                 // Bold **...**
                 if (i + 1 < content.size() && content[i] == '*' && content[i+1] == '*') {
                     if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                     i += 2;
                     size_t end = content.find("**", i);
-                    if (end != std::string::npos) {
+                    if (end != String::npos) {
                         b.spans.push_back({content.substr(i, end - i), SpanStyle::Bold, ""});
                         i = end + 2;
                     }
@@ -858,7 +858,7 @@ void RichText::parse()
                     if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                     i++;
                     size_t end = content.find('*', i);
-                    if (end != std::string::npos) {
+                    if (end != String::npos) {
                         b.spans.push_back({content.substr(i, end - i), SpanStyle::Italic, ""});
                         i = end + 1;
                     }
@@ -869,7 +869,7 @@ void RichText::parse()
                     if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                     i++;
                     size_t end = content.find('`', i);
-                    if (end != std::string::npos) {
+                    if (end != String::npos) {
                         b.spans.push_back({content.substr(i, end - i), SpanStyle::Code, ""});
                         i = end + 1;
                     }
@@ -878,12 +878,12 @@ void RichText::parse()
                 // Link [text](url)
                 if (content[i] == '[') {
                     size_t rb = content.find(']', i);
-                    if (rb != std::string::npos && rb + 1 < content.size() && content[rb+1] == '(') {
+                    if (rb != String::npos && rb + 1 < content.size() && content[rb+1] == '(') {
                         size_t rp = content.find(')', rb + 2);
-                        if (rp != std::string::npos) {
+                        if (rp != String::npos) {
                             if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
-                            std::string text = content.substr(i + 1, rb - i - 1);
-                            std::string url  = content.substr(rb + 2, rp - rb - 2);
+                            String text = content.substr(i + 1, rb - i - 1);
+                            String url  = content.substr(rb + 2, rp - rb - 2);
                             b.spans.push_back({text, SpanStyle::Link, url});
                             i = rp + 1;
                             continue;
@@ -900,13 +900,13 @@ void RichText::parse()
         // Paragraph with inline parsing
         b.type = BlockType::Paragraph;
         size_t i = 0;
-        std::string accum;
+        String accum;
         while (i < line.size()) {
             if (i + 1 < line.size() && line[i] == '*' && line[i+1] == '*') {
                 if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                 i += 2;
                 size_t end = line.find("**", i);
-                if (end != std::string::npos) {
+                if (end != String::npos) {
                     b.spans.push_back({line.substr(i, end - i), SpanStyle::Bold, ""});
                     i = end + 2;
                 }
@@ -916,7 +916,7 @@ void RichText::parse()
                 if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                 i++;
                 size_t end = line.find('*', i);
-                if (end != std::string::npos) {
+                if (end != String::npos) {
                     b.spans.push_back({line.substr(i, end - i), SpanStyle::Italic, ""});
                     i = end + 1;
                 }
@@ -926,7 +926,7 @@ void RichText::parse()
                 if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                 i++;
                 size_t end = line.find('`', i);
-                if (end != std::string::npos) {
+                if (end != String::npos) {
                     b.spans.push_back({line.substr(i, end - i), SpanStyle::Code, ""});
                     i = end + 1;
                 }
@@ -934,9 +934,9 @@ void RichText::parse()
             }
             if (line[i] == '[') {
                 size_t rb = line.find(']', i);
-                if (rb != std::string::npos && rb + 1 < line.size() && line[rb+1] == '(') {
+                if (rb != String::npos && rb + 1 < line.size() && line[rb+1] == '(') {
                     size_t rp = line.find(')', rb + 2);
-                    if (rp != std::string::npos) {
+                    if (rp != String::npos) {
                         if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
                         b.spans.push_back({line.substr(i+1, rb-i-1), SpanStyle::Link, line.substr(rb+2, rp-rb-2)});
                         i = rp + 1;
@@ -1021,10 +1021,10 @@ void RichText::paint(PaintContext& ctx)
             for (auto& sp : block.spans) {
                 while (pos < sp.text.size()) {
                     size_t nl = sp.text.find('\n', pos);
-                    std::string ln = (nl == std::string::npos) ? sp.text.substr(pos) : sp.text.substr(pos, nl - pos);
+                    String ln = (nl == String::npos) ? sp.text.substr(pos) : sp.text.substr(pos, nl - pos);
                     ctx.font.Print(ln.c_str(), cx + 4, codeTy);
                     codeTy += lineH;
-                    pos = (nl == std::string::npos) ? sp.text.size() : nl + 1;
+                    pos = (nl == String::npos) ? sp.text.size() : nl + 1;
                 }
             }
             cy += codeLines * lineH + 12;

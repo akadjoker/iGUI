@@ -9,14 +9,14 @@
 //  Registry
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::unordered_map<std::string, WidgetSerializer::WidgetFactory>&
+ct::HashMap<String, WidgetSerializer::WidgetFactory>&
 WidgetSerializer::factories()
 {
-    static std::unordered_map<std::string, WidgetFactory> map;
+    static ct::HashMap<String, WidgetFactory> map;
     return map;
 }
 
-void WidgetSerializer::registerType(const std::string& typeName, WidgetFactory factory)
+void WidgetSerializer::registerType(const String& typeName, WidgetFactory factory)
 {
     factories()[typeName] = std::move(factory);
 }
@@ -25,7 +25,7 @@ void WidgetSerializer::registerType(const std::string& typeName, WidgetFactory f
 //  Type name from widget (dynamic_cast chain, most derived first)
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::string WidgetSerializer::typeName(const Widget* w)
+String WidgetSerializer::typeName(const Widget* w)
 {
     if (dynamic_cast<const ImageView*>(w))     return "ImageView";
     if (dynamic_cast<const ScrollView*>(w))    return "ScrollView";
@@ -61,26 +61,73 @@ std::string WidgetSerializer::typeName(const Widget* w)
 //  JSON helpers for Color, Rect, Edges, Align, etc.
 // ═════════════════════════════════════════════════════════════════════════════
 
+template <typename T>
+static T jsonValue(const json& value);
+
+template <>
+bool jsonValue<bool>(const json& value)
+{
+    return value.as_bool();
+}
+
+template <>
+int jsonValue<int>(const json& value)
+{
+    return static_cast<int>(value.as_int());
+}
+
+template <>
+uint8_t jsonValue<uint8_t>(const json& value)
+{
+    return static_cast<uint8_t>(value.as_uint());
+}
+
+template <>
+float jsonValue<float>(const json& value)
+{
+    return static_cast<float>(value.as_double());
+}
+
+template <>
+String jsonValue<String>(const json& value)
+{
+    return value.is_string() ? String(value.str()) : String();
+}
+
+template <typename T>
+static T jsonValue(const json& value, T fallback)
+{
+    return value.is_null() ? fallback : jsonValue<T>(value);
+}
+
+template <typename... Values>
+static json jsonArray(const Values&... values)
+{
+    json result = json::array();
+    (result.push_back(json(values)), ...);
+    return result;
+}
+
 static json colorToJson(const Color& c)
 {
-    return json::array({c.r, c.g, c.b, c.a});
+    return jsonArray(c.r, c.g, c.b, c.a);
 }
 
 static Color colorFromJson(const json& j)
 {
-    return Color(j[0].get<uint8_t>(), j[1].get<uint8_t>(),
-                 j[2].get<uint8_t>(), j[3].get<uint8_t>());
+    return Color(jsonValue<uint8_t>(j[0]), jsonValue<uint8_t>(j[1]),
+                 jsonValue<uint8_t>(j[2]), jsonValue<uint8_t>(j[3]));
 }
 
 static json edgesToJson(const Edges& e)
 {
-    return json::array({e.top, e.right, e.bottom, e.left});
+    return jsonArray(e.top, e.right, e.bottom, e.left);
 }
 
 static Edges edgesFromJson(const json& j)
 {
-    return Edges(j[0].get<float>(), j[1].get<float>(),
-                 j[2].get<float>(), j[3].get<float>());
+    return Edges(jsonValue<float>(j[0]), jsonValue<float>(j[1]),
+                 jsonValue<float>(j[2]), jsonValue<float>(j[3]));
 }
 
 static const char* alignToStr(Align a)
@@ -94,7 +141,7 @@ static const char* alignToStr(Align a)
     return "Fill";
 }
 
-static Align alignFromStr(const std::string& s)
+static Align alignFromStr(const String& s)
 {
     if (s == "Start")  return Align::Start;
     if (s == "Center") return Align::Center;
@@ -114,7 +161,7 @@ static const char* mainAlignToStr(MainAlign a)
     return "Start";
 }
 
-static MainAlign mainAlignFromStr(const std::string& s)
+static MainAlign mainAlignFromStr(const String& s)
 {
     if (s == "Center")       return MainAlign::Center;
     if (s == "End")          return MainAlign::End;
@@ -134,7 +181,7 @@ static const char* textAlignToStr(TextAlign a)
     return "Left";
 }
 
-static TextAlign textAlignFromStr(const std::string& s)
+static TextAlign textAlignFromStr(const String& s)
 {
     if (s == "Center") return TextAlign::CENTER;
     if (s == "Right")  return TextAlign::RIGHT;
@@ -155,7 +202,7 @@ json WidgetSerializer::serializeBase(const Widget* w)
 
     const auto& r = w->rect();
     if (r.x != 0 || r.y != 0 || r.w != 0 || r.h != 0)
-        j["rect"] = json::array({r.x, r.y, r.w, r.h});
+        j["rect"] = jsonArray(r.x, r.y, r.w, r.h);
 
     if (!w->isVisible())
         j["visible"] = false;
@@ -186,32 +233,32 @@ json WidgetSerializer::serializeBase(const Widget* w)
 void WidgetSerializer::deserializeBase(const json& j, Widget* w)
 {
     if (j.contains("id"))
-        w->setId(j["id"].get<std::string>());
+        w->setId(jsonValue<String>(j["id"]));
 
     if (j.contains("rect")) {
         const auto& r = j["rect"];
-        w->setRect({r[0].get<float>(), r[1].get<float>(),
-                     r[2].get<float>(), r[3].get<float>()});
+        w->setRect({jsonValue<float>(r[0]), jsonValue<float>(r[1]),
+                     jsonValue<float>(r[2]), jsonValue<float>(r[3])});
     }
 
     if (j.contains("visible"))
-        w->setVisible(j["visible"].get<bool>());
+        w->setVisible(jsonValue<bool>(j["visible"]));
 
     if (j.contains("enabled"))
-        w->setEnabled(j["enabled"].get<bool>());
+        w->setEnabled(jsonValue<bool>(j["enabled"]));
 
     if (j.contains("margins"))
         w->setMargins(edgesFromJson(j["margins"]));
 
     if (j.contains("align"))
-        w->setLayoutAlign(alignFromStr(j["align"].get<std::string>()));
+        w->setLayoutAlign(alignFromStr(jsonValue<String>(j["align"])));
 
     if (j.contains("stretch"))
-        w->setStretch(j["stretch"].get<float>());
+        w->setStretch(jsonValue<float>(j["stretch"]));
 
     if (j.contains("tags"))
-        for (const auto& t : j["tags"])
-            w->addTag(t.get<std::string>());
+        for (const auto& t : j["tags"].items())
+            w->addTag(jsonValue<String>(t));
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -229,7 +276,8 @@ json WidgetSerializer::serializeChildren(const Widget* w)
 void WidgetSerializer::deserializeChildren(const json& j, Widget* w)
 {
     if (!j.contains("children")) return;
-    for (const auto& cj : j["children"])
+    if (!j["children"].is_array()) return;
+    for (const auto& cj : j["children"].items())
         load(cj, w);
 }
 
@@ -240,7 +288,7 @@ void WidgetSerializer::deserializeChildren(const json& j, Widget* w)
 json WidgetSerializer::save(const Widget* root)
 {
     json j = serializeBase(root);
-    const std::string type = typeName(root);
+    const String type = typeName(root);
 
     if (type == "Label") {
         auto* w = static_cast<const Label*>(root);
@@ -355,7 +403,7 @@ json WidgetSerializer::save(const Widget* root)
     else if (type == "ImageView") {
         auto* w = static_cast<const ImageView*>(root);
         if (w->offsetX() != 0 || w->offsetY() != 0)
-            j["offset"] = json::array({w->offsetX(), w->offsetY()});
+            j["offset"] = jsonArray(w->offsetX(), w->offsetY());
     }
     else if (type == "GridLayout") {
         auto* w = static_cast<const GridLayout*>(root);
@@ -443,7 +491,7 @@ json WidgetSerializer::save(const Widget* root)
 //  File I/O — uses IO callbacks (no SDL dependency)
 // ═════════════════════════════════════════════════════════════════════════════
 
-bool WidgetSerializer::saveToFile(const Widget* root, const std::string& path)
+bool WidgetSerializer::saveToFile(const Widget* root, const String& path)
 {
     auto& io = BuGUI::GetIO();
     if (!io.writeFile) {
@@ -462,15 +510,15 @@ Widget* WidgetSerializer::load(const json& j, Widget* parent)
 {
     if (!j.contains("type")) return nullptr;
 
-    std::string type = j["type"].get<std::string>();
+    String type = jsonValue<String>(j["type"]);
     auto& fmap = factories();
-    auto it = fmap.find(type);
-    if (it == fmap.end()) {
+    WidgetFactory* factory = fmap.find(type);
+    if (!factory) {
         fprintf(stderr, "WidgetSerializer: unknown type '%s'\n", type.c_str());
         return nullptr;
     }
 
-    Widget* w = it->second(j, parent);
+    Widget* w = (*factory)(j, parent);
     if (!w) return nullptr;
 
     deserializeBase(j, w);
@@ -478,7 +526,7 @@ Widget* WidgetSerializer::load(const json& j, Widget* parent)
     return w;
 }
 
-Widget* WidgetSerializer::loadFromFile(const std::string& path, Widget* parent)
+Widget* WidgetSerializer::loadFromFile(const String& path, Widget* parent)
 {
     auto& io = BuGUI::GetIO();
     if (!io.readFile) {
@@ -486,18 +534,17 @@ Widget* WidgetSerializer::loadFromFile(const std::string& path, Widget* parent)
         return nullptr;
     }
 
-    std::string data = io.readFile(path);
+    String data = io.readFile(path);
     if (data.empty()) {
         fprintf(stderr, "WidgetSerializer: cannot read '%s'\n", path.c_str());
         return nullptr;
     }
 
-    json j;
-    try {
-        j = json::parse(data);
-    } catch (const json::parse_error& e) {
-        fprintf(stderr, "WidgetSerializer: parse error in '%s': %s\n",
-                path.c_str(), e.what());
+    json::Error error;
+    json j = json::parse(data, &error);
+    if (error) {
+        fprintf(stderr, "WidgetSerializer: parse error in '%s' at %zu:%zu: %s\n",
+                path.c_str(), error.line, error.column, error.message);
         return nullptr;
     }
 
@@ -515,20 +562,20 @@ void WidgetSerializer::registerBuiltinTypes()
     });
 
     registerType("Label", [](const json& j, Widget* parent) -> Widget* {
-        std::string text = j.value("text", "");
+        String text = jsonValue<String>(j["text"], "");
         auto* w = parent->createChild<Label>(text);
         if (j.contains("textAlign"))
-            w->setAlign(textAlignFromStr(j["textAlign"].get<std::string>()));
+            w->setAlign(textAlignFromStr(jsonValue<String>(j["textAlign"])));
         return w;
     });
 
     registerType("Spacer", [](const json& j, Widget* parent) -> Widget* {
-        float size = j.value("size", 0.0f);
+        float size = jsonValue<float>(j["size"], 0.0f);
         return parent->createChild<Spacer>(size);
     });
 
     registerType("Line", [](const json& j, Widget* parent) -> Widget* {
-        float thickness = j.value("thickness", 1.0f);
+        float thickness = jsonValue<float>(j["thickness"], 1.0f);
         auto* w = parent->createChild<Line>(thickness);
         if (j.contains("color"))
             w->setColor(colorFromJson(j["color"]));
@@ -536,10 +583,10 @@ void WidgetSerializer::registerBuiltinTypes()
     });
 
     registerType("Button", [](const json& j, Widget* parent) -> Widget* {
-        std::string text = j.value("text", "");
+        String text = jsonValue<String>(j["text"], "");
         auto* w = parent->createChild<Button>(text);
         if (j.contains("textAlign"))
-            w->setAlign(textAlignFromStr(j["textAlign"].get<std::string>()));
+            w->setAlign(textAlignFromStr(jsonValue<String>(j["textAlign"])));
         return w;
     });
 
@@ -551,77 +598,77 @@ void WidgetSerializer::registerBuiltinTypes()
     });
 
     registerType("CheckBox", [](const json& j, Widget* parent) -> Widget* {
-        std::string text = j.value("text", "");
+        String text = jsonValue<String>(j["text"], "");
         auto* w = parent->createChild<CheckBox>(text);
         if (j.contains("checked"))
-            w->setChecked(j["checked"].get<bool>());
+            w->setChecked(jsonValue<bool>(j["checked"]));
         return w;
     });
 
     registerType("RadioButton", [](const json& j, Widget* parent) -> Widget* {
-        std::string text = j.value("text", "");
+        String text = jsonValue<String>(j["text"], "");
         auto* w = parent->createChild<RadioButton>(text);
-        if (j.contains("selected") && j["selected"].get<bool>())
+        if (j.contains("selected") && jsonValue<bool>(j["selected"]))
             w->setSelected(true);
         return w;
     });
 
     registerType("Switch", [](const json& j, Widget* parent) -> Widget* {
-        std::string text = j.value("text", "");
+        String text = jsonValue<String>(j["text"], "");
         auto* w = parent->createChild<Switch>(text);
         if (j.contains("on"))
-            w->setOn(j["on"].get<bool>());
+            w->setOn(jsonValue<bool>(j["on"]));
         return w;
     });
 
     registerType("ListBox", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<ListBox>();
         if (j.contains("items") && j["items"].is_array())
-            for (auto& item : j["items"])
-                w->addItem(item.get<std::string>());
+            for (const auto& item : j["items"].items())
+                w->addItem(jsonValue<String>(item));
         if (j.contains("selected"))
-            w->setSelectedIndex(j["selected"].get<int>());
+            w->setSelectedIndex(jsonValue<int>(j["selected"]));
         return w;
     });
 
     registerType("ComboBox", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<ComboBox>();
         if (j.contains("items") && j["items"].is_array())
-            for (auto& item : j["items"])
-                w->addItem(item.get<std::string>());
+            for (const auto& item : j["items"].items())
+                w->addItem(jsonValue<String>(item));
         if (j.contains("selected"))
-            w->setSelectedIndex(j["selected"].get<int>());
+            w->setSelectedIndex(jsonValue<int>(j["selected"]));
         return w;
     });
 
     registerType("ListWidget", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<ListWidget>();
         if (j.contains("selected"))
-            w->setSelectedIndex(j["selected"].get<int>());
+            w->setSelectedIndex(jsonValue<int>(j["selected"]));
         return w;
     });
 
     registerType("Slider", [](const json& j, Widget* parent) -> Widget* {
-        float minV = j.value("min", 0.0f);
-        float maxV = j.value("max", 1.0f);
-        float val  = j.value("value", 0.5f);
+        float minV = jsonValue<float>(j["min"], 0.0f);
+        float maxV = jsonValue<float>(j["max"], 1.0f);
+        float val  = jsonValue<float>(j["value"], 0.5f);
         auto* w = parent->createChild<Slider>(minV, maxV, val);
-        if (j.contains("orientation") && j["orientation"].get<std::string>() == "Vertical")
+        if (j.contains("orientation") && jsonValue<String>(j["orientation"]) == "Vertical")
             w->setOrientation(LayoutDir::Vertical);
         return w;
     });
 
     registerType("ProgressBar", [](const json& j, Widget* parent) -> Widget* {
-        float minV = j.value("min", 0.0f);
-        float maxV = j.value("max", 1.0f);
-        float val  = j.value("value", 0.0f);
+        float minV = jsonValue<float>(j["min"], 0.0f);
+        float maxV = jsonValue<float>(j["max"], 1.0f);
+        float val  = jsonValue<float>(j["value"], 0.0f);
         auto* w = parent->createChild<ProgressBar>(minV, maxV, val);
-        if (j.contains("orientation") && j["orientation"].get<std::string>() == "Vertical")
+        if (j.contains("orientation") && jsonValue<String>(j["orientation"]) == "Vertical")
             w->setOrientation(LayoutDir::Vertical);
         if (j.contains("text"))
-            w->setText(j["text"].get<std::string>());
+            w->setText(jsonValue<String>(j["text"]));
         if (j.contains("textAlign"))
-            w->setTextAlign(textAlignFromStr(j["textAlign"].get<std::string>()));
+            w->setTextAlign(textAlignFromStr(jsonValue<String>(j["textAlign"])));
         if (j.contains("barColor"))
             w->setBarColor(colorFromJson(j["barColor"]));
         return w;
@@ -629,17 +676,17 @@ void WidgetSerializer::registerBuiltinTypes()
 
     registerType("ScrollBar", [](const json& j, Widget* parent) -> Widget* {
         ScrollBarOrientation dir = ScrollBarOrientation::Vertical;
-        if (j.contains("orientation") && j["orientation"].get<std::string>() == "Horizontal")
+        if (j.contains("orientation") && jsonValue<String>(j["orientation"]) == "Horizontal")
             dir = ScrollBarOrientation::Horizontal;
         auto* w = parent->createChild<ScrollBar>(dir);
-        if (j.contains("value")) w->setValue(j["value"].get<float>());
+        if (j.contains("value")) w->setValue(jsonValue<float>(j["value"]));
         return w;
     });
 
     registerType("ScrollView", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<ScrollView>();
-        if (j.contains("scrollX"))  w->setScrollX(j["scrollX"].get<float>());
-        if (j.contains("scrollY"))  w->setScrollY(j["scrollY"].get<float>());
+        if (j.contains("scrollX"))  w->setScrollX(jsonValue<float>(j["scrollX"]));
+        if (j.contains("scrollY"))  w->setScrollY(jsonValue<float>(j["scrollY"]));
         return w;
     });
 
@@ -654,7 +701,7 @@ void WidgetSerializer::registerBuiltinTypes()
         auto* w = parent->createChild<ImageView>();
         if (j.contains("offset")) {
             const auto& o = j["offset"];
-            w->setOffset(o[0].get<float>(), o[1].get<float>());
+            w->setOffset(jsonValue<float>(o[0]), jsonValue<float>(o[1]));
         }
         return w;
     });
@@ -662,21 +709,21 @@ void WidgetSerializer::registerBuiltinTypes()
     registerType("StatusBar", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<StatusBar>();
         if (j.contains("bgColor")) w->setBgColor(colorFromJson(j["bgColor"]));
-        if (j.contains("spacing")) w->setSpacing(j["spacing"].get<float>());
-        if (j.contains("text")) w->setText(j["text"].get<std::string>());
+        if (j.contains("spacing")) w->setSpacing(jsonValue<float>(j["spacing"]));
+        if (j.contains("text")) w->setText(jsonValue<String>(j["text"]));
         return w;
     });
 
     registerType("Collapsible", [](const json& j, Widget* parent) -> Widget* {
-        std::string title = j.value("title", "");
-        bool expanded = j.value("expanded", true);
+        String title = jsonValue<String>(j["title"], "");
+        bool expanded = jsonValue<bool>(j["expanded"], true);
         auto* w = parent->createChild<Collapsible>(title, expanded);
         if (j.contains("headerHeight"))
-            w->setHeaderHeight(j["headerHeight"].get<float>());
+            w->setHeaderHeight(jsonValue<float>(j["headerHeight"]));
         if (j.contains("contentPadding"))
-            w->setContentPadding(j["contentPadding"].get<float>());
+            w->setContentPadding(jsonValue<float>(j["contentPadding"]));
         if (j.contains("contentSpacing"))
-            w->setContentSpacing(j["contentSpacing"].get<float>());
+            w->setContentSpacing(jsonValue<float>(j["contentSpacing"]));
         if (j.contains("headerColor"))
             w->setHeaderColor(colorFromJson(j["headerColor"]));
         return w;
@@ -685,24 +732,24 @@ void WidgetSerializer::registerBuiltinTypes()
     registerType("BorderLayout", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<BorderLayout>();
         if (j.contains("spacing"))
-            w->setSpacing(j["spacing"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacing"]));
         if (j.contains("padding"))
             w->setPadding(edgesFromJson(j["padding"]));
         const char* regionNames[] = {"topSize", "bottomSize", "leftSize", "rightSize", "centerSize"};
         for (int i = 0; i < 5; ++i) {
             if (j.contains(regionNames[i]))
-                w->setRegionSize(static_cast<BorderRegion>(i), j[regionNames[i]].get<float>());
+                w->setRegionSize(static_cast<BorderRegion>(i), jsonValue<float>(j[regionNames[i]]));
         }
         return w;
     });
 
     registerType("GridLayout", [](const json& j, Widget* parent) -> Widget* {
-        int cols = j.value("cols", 2);
+        int cols = jsonValue<int>(j["cols"], 2);
         auto* w = parent->createChild<GridLayout>(cols);
         if (j.contains("spacingH") && j.contains("spacingV"))
-            w->setSpacing(j["spacingH"].get<float>(), j["spacingV"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacingH"]), jsonValue<float>(j["spacingV"]));
         else if (j.contains("spacing"))
-            w->setSpacing(j["spacing"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacing"]));
         if (j.contains("padding"))
             w->setPadding(edgesFromJson(j["padding"]));
         return w;
@@ -711,16 +758,16 @@ void WidgetSerializer::registerBuiltinTypes()
     registerType("StackLayout", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<StackLayout>();
         if (j.contains("currentIndex"))
-            w->setCurrentIndex(j["currentIndex"].get<int>());
+            w->setCurrentIndex(jsonValue<int>(j["currentIndex"]));
         return w;
     });
 
     registerType("FormLayout", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<FormLayout>();
         if (j.contains("labelWidth"))
-            w->setLabelWidth(j["labelWidth"].get<float>());
+            w->setLabelWidth(jsonValue<float>(j["labelWidth"]));
         if (j.contains("spacingH") && j.contains("spacingV"))
-            w->setSpacing(j["spacingH"].get<float>(), j["spacingV"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacingH"]), jsonValue<float>(j["spacingV"]));
         if (j.contains("padding"))
             w->setPadding(edgesFromJson(j["padding"]));
         return w;
@@ -729,7 +776,7 @@ void WidgetSerializer::registerBuiltinTypes()
     registerType("FlowLayout", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<FlowLayout>();
         if (j.contains("spacingH") && j.contains("spacingV"))
-            w->setSpacing(j["spacingH"].get<float>(), j["spacingV"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacingH"]), jsonValue<float>(j["spacingV"]));
         if (j.contains("padding"))
             w->setPadding(edgesFromJson(j["padding"]));
         return w;
@@ -742,46 +789,46 @@ void WidgetSerializer::registerBuiltinTypes()
 
     registerType("Splitter", [](const json& j, Widget* parent) -> Widget* {
         LayoutDir dir = LayoutDir::Horizontal;
-        if (j.contains("dir") && j["dir"].get<std::string>() == "Vertical")
+        if (j.contains("dir") && jsonValue<String>(j["dir"]) == "Vertical")
             dir = LayoutDir::Vertical;
         auto* w = parent->createChild<Splitter>(dir);
         if (j.contains("ratio"))
-            w->setRatio(j["ratio"].get<float>());
+            w->setRatio(jsonValue<float>(j["ratio"]));
         if (j.contains("handleSize"))
-            w->setHandleSize(j["handleSize"].get<float>());
+            w->setHandleSize(jsonValue<float>(j["handleSize"]));
         if (j.contains("minSize"))
-            w->setMinSize(j["minSize"].get<float>());
+            w->setMinSize(jsonValue<float>(j["minSize"]));
         return w;
     });
 
     registerType("BoxLayout", [](const json& j, Widget* parent) -> Widget* {
         LayoutDir dir = LayoutDir::Vertical;
         if (j.contains("dir")) {
-            std::string d = j["dir"].get<std::string>();
+            String d = jsonValue<String>(j["dir"]);
             if (d == "Horizontal") dir = LayoutDir::Horizontal;
         }
         auto* w = parent->createChild<BoxLayout>(dir);
         if (j.contains("spacing"))
-            w->setSpacing(j["spacing"].get<float>());
+            w->setSpacing(jsonValue<float>(j["spacing"]));
         if (j.contains("padding"))
             w->setPadding(edgesFromJson(j["padding"]));
         if (j.contains("mainAlign"))
-            w->setMainAlign(mainAlignFromStr(j["mainAlign"].get<std::string>()));
+            w->setMainAlign(mainAlignFromStr(jsonValue<String>(j["mainAlign"])));
         return w;
     });
 
     registerType("TabLayout", [](const json& j, Widget* parent) -> Widget* {
         auto* w = parent->createChild<TabLayout>();
         if (j.contains("tabPosition")) {
-            std::string p = j["tabPosition"].get<std::string>();
+            String p = jsonValue<String>(j["tabPosition"]);
             if (p == "Bottom") w->setTabPosition(TabPosition::Bottom);
             else if (p == "Left") w->setTabPosition(TabPosition::Left);
             else if (p == "Right") w->setTabPosition(TabPosition::Right);
         }
         if (j.contains("closable"))
-            w->setTabsClosable(j["closable"].get<bool>());
+            w->setTabsClosable(jsonValue<bool>(j["closable"]));
         if (j.contains("tabBarSize"))
-            w->setTabBarSize(j["tabBarSize"].get<float>());
+            w->setTabBarSize(jsonValue<float>(j["tabBarSize"]));
         return w;
     });
 

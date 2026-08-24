@@ -3,8 +3,8 @@
 #include "Widget.hpp"
 #include "Theme.hpp"
 #include "Signal.hpp"
-#include <string>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  FloatWindow - draggable, resizable floating panel with title bar
@@ -24,14 +24,14 @@ namespace BuGUI
 class FloatWindow : public Widget
 {
 public:
-    explicit FloatWindow(const std::string& title = "Window");
+    explicit FloatWindow(const String& title = "Window");
     ~FloatWindow() override;
 
     // ── Title bar ────────────────────────────────────────────────────────
     /// @brief Set the window title.
-    void setTitle(const std::string& t) { title_ = t; markDirty(); }
+    void setTitle(const String& t) { title_ = t; markDirty(); }
     /// @brief Get the window title.
-    const std::string& title() const    { return title_; }
+    const String& title() const    { return title_; }
 
     // ── Floating position (absolute screen coords) ───────────────────────
     /// @brief Set absolute screen position.
@@ -93,7 +93,7 @@ public:
     Vec2f sizeHint() const override;
 
 private:
-    std::string title_;
+    String title_;
     Widget*     content_    = nullptr;
     float floatX_     = 50,  floatY_    = 50;
     float floatW_     = 300, floatH_    = 200;
@@ -145,7 +145,7 @@ public:
     const Color& bgColor() const    { return bgColor_; }
 
     /// @brief Set a custom paint callback.
-    using PaintCallback = std::function<void(PaintContext& ctx, const Rect& bounds)>;
+    using PaintCallback = ct::Function<void(PaintContext& ctx, const Rect& bounds)>;
     void setOnPaint(PaintCallback cb) { onPaint_ = std::move(cb); }
 
     void layout() override;
@@ -237,7 +237,7 @@ public:
 private:
     void addPageImpl(Widget* w);
 
-    std::vector<Widget*> pages_;
+    ct::Vector<Widget*> pages_;
     int   currentIdx_   = -1;
     int   prevIdx_      = -1;
     float transProgress_ = 1.0f;

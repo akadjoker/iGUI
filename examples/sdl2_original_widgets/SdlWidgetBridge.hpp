@@ -2,7 +2,7 @@
 
 #include <SDL.h>
 #include <BuGUI.hpp>
-#include <vector>
+#include <ct/vector.hpp>
 
 class SdlWidgetBridge
 {
@@ -14,6 +14,6 @@ public:
 
 private:
     SDL_Renderer *renderer_;
-    std::vector<SDL_Vertex> vertices_;
-    std::vector<int> indices_;
+    ct::Vector<SDL_Vertex> vertices_;
+    ct::Vector<int> indices_;
 };

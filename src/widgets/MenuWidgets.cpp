@@ -19,7 +19,7 @@ Menu::~Menu()
     for (auto* a : actions_) delete a;
 }
 
-MenuAction* Menu::addAction(const std::string& text)
+MenuAction* Menu::addAction(const String& text)
 {
     auto* a = new MenuAction();
     a->text_ = text;
@@ -27,14 +27,14 @@ MenuAction* Menu::addAction(const std::string& text)
     return a;
 }
 
-MenuAction* Menu::addAction(const std::string& text, std::function<void()> cb)
+MenuAction* Menu::addAction(const String& text, ct::Function<void()> cb)
 {
     auto* a = addAction(text);
     a->triggered.connect(std::move(cb));
     return a;
 }
 
-MenuAction* Menu::addCheckable(const std::string& text, bool checked)
+MenuAction* Menu::addCheckable(const String& text, bool checked)
 {
     auto* a = addAction(text);
     a->checkable_ = true;
@@ -357,7 +357,7 @@ MenuBar::~MenuBar()
     for (auto& e : entries_) delete e.menu;
 }
 
-Menu* MenuBar::addMenu(const std::string& title)
+Menu* MenuBar::addMenu(const String& title)
 {
     Entry e;
     e.title = title;
@@ -372,9 +372,9 @@ Menu* MenuBar::menu(int i) const
     return entries_[i].menu;
 }
 
-const std::string& MenuBar::menuTitle(int i) const
+const String& MenuBar::menuTitle(int i) const
 {
-    static const std::string empty;
+    static const String empty;
     if (i < 0 || i >= static_cast<int>(entries_.size())) return empty;
     return entries_[i].title;
 }

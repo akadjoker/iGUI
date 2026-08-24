@@ -2,11 +2,11 @@
 #include "Widget.hpp"
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
-#include <functional>
-#include <string>
-#include <vector>
+#include <ct/function.hpp>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
 #include <numeric>
-#include <unordered_set>
+#include <ct/hashset.hpp>
 
 namespace BuGUI
 {
@@ -23,18 +23,18 @@ public:
     DataGrid();
 
     /// @brief Add a column with name, width and sortability.
-    int  addColumn(const std::string& name, float width, bool sortable = true);
+    int  addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column's width.
     void setColumnWidth(int col, float w);
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
 
     /// @brief Add a row with cell values.
-    int         addRow(const std::vector<std::string>& cells);
+    int         addRow(const ct::Vector<String>& cells);
     /// @brief Set a cell value.
-    void        setCell(int row, int col, const std::string& value);
+    void        setCell(int row, int col, const String& value);
     /// @brief Get a cell value.
-    std::string cell(int row, int col) const;
+    String cell(int row, int col) const;
     /// @brief Remove a row by index.
     void        removeRow(int row);
     /// @brief Clear all rows.
@@ -45,7 +45,7 @@ public:
     /// @brief Set a row's checkbox state.
     void             setRowChecked(int row, bool checked);
     /// @brief Get indices of all checked rows.
-    std::vector<int> checkedRows() const;
+    ct::Vector<int> checkedRows() const;
 
     /// @brief Select a single row.
     void setSelectedRow(int row);
@@ -56,7 +56,7 @@ public:
     /// @brief Get the primary selected row index.
     int  selectedRow() const { return selectedRow_; }
     /// @brief Get all selected row indices.
-    const std::vector<int>& selectedRows() const { return selectedRows_; }
+    const ct::Vector<int>& selectedRows() const { return selectedRows_; }
     /// @brief Set a data model (overrides internal row storage).
     void setModel(AbstractItemModel* model);
     /// @brief Get the attached data model.
@@ -90,14 +90,14 @@ public:
 
 private:
     struct Column {
-        std::string name;
+        String name;
         float       width    = 100.f;
         float       minWidth =  40.f;
         bool        sortable = true;
         bool        readOnly = false;
     };
     struct Row {
-        std::vector<std::string> cells;
+        ct::Vector<String> cells;
         bool checked = false;
     };
 
@@ -114,13 +114,13 @@ private:
     int   displayRow(int idx) const;
     float contentX() const { return showCheckboxes_ ? checkboxColW_ : 0.f; }
 
-    std::vector<Column> columns_;
-    std::vector<Row>    rows_;
-    std::vector<int>    sortedIndices_;
+    ct::Vector<Column> columns_;
+    ct::Vector<Row>    rows_;
+    ct::Vector<int>    sortedIndices_;
 
     int  selectedRow_   = -1;
-    std::vector<int> selectedRows_;
-    std::unordered_set<int> selectedSet_;  // O(1) lookup for isSelected
+    ct::Vector<int> selectedRows_;
+    ct::HashSet<int> selectedSet_;  // O(1) lookup for isSelected
     int  hoveredRow_    = -1;
     int  hoveredCol_    = -1;
 
@@ -141,7 +141,7 @@ private:
     bool        editing_    = false;
     int         editRow_    = -1;
     int         editCol_    = -1;
-    std::string editBuf_;
+    String editBuf_;
     int         editCursor_ = 0;
 
     int   resizeCol_    = -1;
@@ -162,8 +162,8 @@ private:
     // Model data accessors (use model if set, otherwise internal rows_)
     int   modelRowCount() const;
     int   modelColCount() const;
-    std::string modelCell(int row, int col) const;
-    std::string modelHeader(int col) const;
+    String modelCell(int row, int col) const;
+    String modelHeader(int col) const;
     bool  modelIsChecked(int row) const;
     bool  modelIsEditable(int row, int col) const;
 };
@@ -175,8 +175,8 @@ class TreeGrid : public Widget
 {
 public:
     struct Node {
-        std::vector<std::string> cells;
-        std::vector<Node*>       children;
+        ct::Vector<String> cells;
+        ct::Vector<Node*>       children;
         Node*      parent   = nullptr;
         TreeGrid*  owner_   = nullptr;
         int        depth    = 0;
@@ -185,7 +185,7 @@ public:
         IconId     iconId   = IconId::None;
 
         /// @brief Add a child node with cell data.
-        Node* addChild(const std::vector<std::string>& cellData);
+        Node* addChild(const ct::Vector<String>& cellData);
         /// @brief Set whether this node is expanded or collapsed.
         void  setExpanded(bool e);
     };
@@ -194,7 +194,7 @@ public:
     ~TreeGrid() override;
 
     /// @brief Add a root-level node with cell data.
-    Node* addRoot(const std::vector<std::string>& cells);
+    Node* addRoot(const ct::Vector<String>& cells);
     /// @brief Clear all nodes.
     void  clearAll();
     /// @brief Get total visible node count.
@@ -202,11 +202,11 @@ public:
     /// @brief Rebuild the flat list after structural changes.
     void  rebuild() { rebuildFlatList(); markDirty(); }
     /// @brief Get the root nodes.
-    const std::vector<Node*>& roots() const { return roots_; }
+    const ct::Vector<Node*>& roots() const { return roots_; }
 
     // ── Columns ───────────────────────────────────────────────────────────
     /// @brief Add a column with name, width and sortability.
-    int  addColumn(const std::string& name, float width, bool sortable = true);
+    int  addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
 
@@ -218,7 +218,7 @@ public:
     /// @brief Get the primary selected node.
     Node* selectedNode() const { return selectedNode_; }
     /// @brief Get all selected nodes.
-    const std::vector<Node*>& selectedNodes() const { return selectedNodes_; }
+    const ct::Vector<Node*>& selectedNodes() const { return selectedNodes_; }
 
     // ── Config ────────────────────────────────────────────────────────────
     /// @brief Enable multi-node selection.
@@ -253,7 +253,7 @@ public:
 
 private:
     struct Column {
-        std::string name;
+        String name;
         float       width    = 100.f;
         float       minWidth =  40.f;
         bool        sortable = true;
@@ -273,12 +273,12 @@ private:
     int   hitRow(float localY) const;
     int   hitResizeEdge(float localX) const;
 
-    std::vector<Node*>    roots_;
-    std::vector<Column>   columns_;
-    std::vector<FlatEntry> flatList_;
+    ct::Vector<Node*>    roots_;
+    ct::Vector<Column>   columns_;
+    ct::Vector<FlatEntry> flatList_;
 
     Node* selectedNode_  = nullptr;
-    std::vector<Node*> selectedNodes_;
+    ct::Vector<Node*> selectedNodes_;
     int   hoveredRow_    = -1;
 
     bool  multiSelect_   = false;
@@ -299,7 +299,7 @@ private:
     bool        editing_    = false;
     Node*       editNode_   = nullptr;
     int         editCol_    = -1;
-    std::string editBuf_;
+    String editBuf_;
     int         editCursor_ = 0;
 
     int   resizeCol_    = -1;

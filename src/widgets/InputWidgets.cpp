@@ -327,11 +327,11 @@ void SpinBox::setRange(float minVal, float maxVal)
 
 float SpinBox::buttonWidth() const { return rect_.h; }
 
-std::string SpinBox::formatValue() const
+String SpinBox::formatValue() const
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%.*f", decimals_, static_cast<double>(value_));
-    std::string result;
+    String result;
     if (!prefix_.empty()) result += prefix_;
     result += buf;
     if (!suffix_.empty()) result += suffix_;
@@ -398,7 +398,7 @@ void SpinBox::paint(PaintContext& ctx)
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
-    std::string txt = formatValue();
+    String txt = formatValue();
     float tw = ctx.font.GetTextWidth(txt.c_str());
     float asc = ctx.font.GetAscender();
     float tx = abs.x + bw + (abs.w - 2 * bw - tw) * 0.5f;
@@ -838,7 +838,7 @@ void DatePicker::setDate(int year, int month, int day)
     setDate(Date{year, month, day});
 }
 
-std::string DatePicker::formatDate() const
+String DatePicker::formatDate() const
 {
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%04d-%02d-%02d", date_.year, date_.month, date_.day);
@@ -866,7 +866,7 @@ void DatePicker::paint(PaintContext& ctx)
     // Text
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
-    std::string txt = formatDate();
+    String txt = formatDate();
     float asc = ctx.font.GetAscender();
     ctx.font.SetColor(t.textColor);
     ctx.font.Print(txt.c_str(), abs.x + t.padding, abs.y + (abs.h + asc) * 0.5f);
@@ -984,7 +984,7 @@ void TimePicker::adjustField(Field f, int delta)
     setTime(t);
 }
 
-std::string TimePicker::formatTime() const
+String TimePicker::formatTime() const
 {
     char buf[16];
     if (showSeconds_)

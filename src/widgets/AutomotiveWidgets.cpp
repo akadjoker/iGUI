@@ -322,8 +322,8 @@ void PowerBar::paint(PaintContext& ctx)
 //  InfoTile
 // ═════════════════════════════════════════════════════════════════════════════
 
-InfoTile::InfoTile(const std::string& icon, const std::string& value,
-                   const std::string& suffix)
+InfoTile::InfoTile(const String& icon, const String& value,
+                   const String& suffix)
     : icon_(icon), value_(value), suffix_(suffix)
 {
     setSize(100, 28);
@@ -372,7 +372,7 @@ DriveMode::DriveMode()
     setSize(120, 28);
 }
 
-int DriveMode::addMode(const std::string& name, const Color& color)
+int DriveMode::addMode(const String& name, const Color& color)
 {
     modes_.push_back({name, color});
     markDirty();
@@ -388,9 +388,9 @@ void DriveMode::setMode(int index)
     onModeChanged.emit(current_);
 }
 
-const std::string& DriveMode::modeName() const
+const String& DriveMode::modeName() const
 {
-    static const std::string empty;
+    static const String empty;
     if (current_ >= 0 && current_ < static_cast<int>(modes_.size()))
         return modes_[current_].name;
     return empty;

@@ -2,7 +2,7 @@
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
-#include <string>
+#include <igui/widgets/String.hpp>
 using namespace BuGUI;
 
 void registerScrollStage(WidgetApp& app)
@@ -34,7 +34,7 @@ void registerScrollStage(WidgetApp& app)
     auto* longCol = sv->setContent<BoxLayout>(LayoutDir::Vertical);
     longCol->setPadding(8.0f); longCol->setSpacing(4.0f);
     for (int i = 0; i < 60; ++i)
-        longCol->createChild<Label>("Log line " + std::to_string(i + 1));
+        longCol->createChild<Label>("Log line " + String::number(i + 1));
 
     // ── ListBox ──────────────────────────────────────────────────────────────
     auto* col2 = row->createChild<Panel>();
@@ -45,7 +45,7 @@ void registerScrollStage(WidgetApp& app)
     auto* lb = c2->createChild<ListBox>();
     lb->setStretch(1);
     for (int i = 0; i < 30; ++i)
-        lb->addItem("Asset_" + std::to_string(i + 1));
+        lb->addItem("Asset_" + String::number(i + 1));
     lb->selectionChanged.connect([status, lb](int idx) {
         if (idx >= 0) status->setText("Selected: " + lb->itemText(idx));
     });
@@ -61,10 +61,10 @@ void registerScrollStage(WidgetApp& app)
     for (int i = 0; i < 20; ++i) {
         auto* itemRow = lw->addRow<BoxLayout>(LayoutDir::Horizontal);
         itemRow->setSpacing(8.0f);
-        itemRow->createChild<Label>("Object " + std::to_string(i + 1));
+        itemRow->createChild<Label>("Object " + String::number(i + 1));
         itemRow->createChild<Button>("Edit");
     }
     lw->selectionChanged.connect([status](int idx) {
-        if (idx >= 0) status->setText("ListWidget row: " + std::to_string(idx));
+        if (idx >= 0) status->setText("ListWidget row: " + String::number(idx));
     });
 }

@@ -186,7 +186,7 @@ public:
 private:
     PropertyGrid*            grid_;
     int                      row_;
-    std::vector<std::string> items_;
+    ct::Vector<String> items_;
     int                      selected_ = -1;
     int                      hovered_  = -1;
 };
@@ -195,14 +195,14 @@ private:
 //  TreeNode
 // ═════════════════════════════════════════════════════════════════════════════
 
-TreeNode::TreeNode(const std::string& text) : text_(text) {}
+TreeNode::TreeNode(const String& text) : text_(text) {}
 
 TreeNode::~TreeNode()
 {
     for (auto* c : children_) delete c;
 }
 
-TreeNode* TreeNode::addChild(const std::string& text)
+TreeNode* TreeNode::addChild(const String& text)
 {
     auto* n = new TreeNode(text);
     n->parent_ = this;
@@ -223,7 +223,7 @@ void TreeNode::clear()
     children_.clear();
 }
 
-void TreeNode::setIcon(const std::string& name)
+void TreeNode::setIcon(const String& name)
 {
     iconStr_ = name;
     if      (name == "folder")      iconId_ = IconId::Folder;
@@ -276,7 +276,7 @@ void TreeView::setModel(TreeModel* model)
         // Rebuild tree nodes from model
         clear();
         if (!model_) return;
-        std::function<void(TreeModel::Node*, TreeNode*)> syncNode;
+        ct::Function<void(TreeModel::Node*, TreeNode*)> syncNode;
         syncNode = [&](TreeModel::Node* mn, TreeNode* parent) {
             for (auto* mc : mn->children) {
                 auto* tn = parent ? parent->addChild(mc->cells.empty() ? "" : mc->cells[0])
@@ -302,7 +302,7 @@ void TreeView::setModel(TreeModel* model)
     model_->endResetModel();
 }
 
-TreeNode* TreeView::addRoot(const std::string& text)
+TreeNode* TreeView::addRoot(const String& text)
 {
     auto* n = new TreeNode(text);
     roots_.push_back(n);
@@ -462,63 +462,63 @@ void TreeView::onMouseScroll(MouseEvent& e)
 
 PropertyGrid::PropertyGrid() { acceptsFocus_ = true; }
 
-int PropertyGrid::addSection(const std::string& title)
+int PropertyGrid::addSection(const String& title)
 {
     PropRow r{PropType::Section, title, "", PropSection{}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addString(const std::string& name, const std::string& value,
-                             std::function<void(const std::string&)> onChange, const std::string& desc)
+int PropertyGrid::addString(const String& name, const String& value,
+                             ct::Function<void(const String&)> onChange, const String& desc)
 {
     PropRow r{PropType::String, name, desc, PropString{value, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addFloat(const std::string& name, float value, float mn, float mx,
-                            std::function<void(float)> onChange, const std::string& desc)
+int PropertyGrid::addFloat(const String& name, float value, float mn, float mx,
+                            ct::Function<void(float)> onChange, const String& desc)
 {
     PropRow r{PropType::Float, name, desc, PropFloat{value, mn, mx, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addInt(const std::string& name, int value, int mn, int mx,
-                          std::function<void(int)> onChange, const std::string& desc)
+int PropertyGrid::addInt(const String& name, int value, int mn, int mx,
+                          ct::Function<void(int)> onChange, const String& desc)
 {
     PropRow r{PropType::Int, name, desc, PropInt{value, mn, mx, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addBool(const std::string& name, bool value,
-                           std::function<void(bool)> onChange, const std::string& desc)
+int PropertyGrid::addBool(const String& name, bool value,
+                           ct::Function<void(bool)> onChange, const String& desc)
 {
     PropRow r{PropType::Bool, name, desc, PropBool{value, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addColor(const std::string& name, const Color& value,
-                            std::function<void(const Color&)> onChange, const std::string& desc)
+int PropertyGrid::addColor(const String& name, const Color& value,
+                            ct::Function<void(const Color&)> onChange, const String& desc)
 {
     PropRow r{PropType::Color, name, desc, PropColor{value, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addCombo(const std::string& name, const std::vector<std::string>& opts,
-                            int sel, std::function<void(int)> onChange, const std::string& desc)
+int PropertyGrid::addCombo(const String& name, const ct::Vector<String>& opts,
+                            int sel, ct::Function<void(int)> onChange, const String& desc)
 {
     PropRow r{PropType::Combo, name, desc, PropCombo{opts, sel, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addVec2(const std::string& name, float x, float y, float mn, float mx,
-                           std::function<void(float,float)> onChange, const std::string& desc)
+int PropertyGrid::addVec2(const String& name, float x, float y, float mn, float mx,
+                           ct::Function<void(float,float)> onChange, const String& desc)
 {
     PropVec v; v.value[0]=x; v.value[1]=y; v.components=2; v.min=mn; v.max=mx;
     v.onChange2=std::move(onChange);
@@ -527,8 +527,8 @@ int PropertyGrid::addVec2(const std::string& name, float x, float y, float mn, f
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addVec3(const std::string& name, float x, float y, float z, float mn, float mx,
-                           std::function<void(float,float,float)> onChange, const std::string& desc)
+int PropertyGrid::addVec3(const String& name, float x, float y, float z, float mn, float mx,
+                           ct::Function<void(float,float,float)> onChange, const String& desc)
 {
     PropVec v; v.value[0]=x; v.value[1]=y; v.value[2]=z; v.components=3; v.min=mn; v.max=mx;
     v.onChange3=std::move(onChange);
@@ -537,9 +537,9 @@ int PropertyGrid::addVec3(const std::string& name, float x, float y, float z, fl
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addVec4(const std::string& name, float x, float y, float z, float w,
+int PropertyGrid::addVec4(const String& name, float x, float y, float z, float w,
                            float mn, float mx,
-                           std::function<void(float,float,float,float)> onChange, const std::string& desc)
+                           ct::Function<void(float,float,float,float)> onChange, const String& desc)
 {
     PropVec v; v.value[0]=x; v.value[1]=y; v.value[2]=z; v.value[3]=w;
     v.components=4; v.min=mn; v.max=mx;
@@ -549,7 +549,7 @@ int PropertyGrid::addVec4(const std::string& name, float x, float y, float z, fl
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addButton(const std::string& name, std::function<void()> onClick, const std::string& desc)
+int PropertyGrid::addButton(const String& name, ct::Function<void()> onClick, const String& desc)
 {
     PropRow r{PropType::Button, name, desc, PropButton{std::move(onClick)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
@@ -563,15 +563,15 @@ int PropertyGrid::addSeparator()
     return static_cast<int>(rows_.size()) - 1;
 }
 
-int PropertyGrid::addRange(const std::string& name, float lo, float hi, float mn, float mx,
-                            std::function<void(float,float)> onChange, const std::string& desc)
+int PropertyGrid::addRange(const String& name, float lo, float hi, float mn, float mx,
+                            ct::Function<void(float,float)> onChange, const String& desc)
 {
     PropRow r{PropType::Range, name, desc, PropRange{lo, hi, mn, mx, std::move(onChange)}};
     rows_.push_back(std::move(r)); visDirty_=true; markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
 
-void PropertyGrid::setString(int row, const std::string& v)
+void PropertyGrid::setString(int row, const String& v)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::String) std::get<PropString>(rows_[row].data).value=v; markDirty(); }
 void PropertyGrid::setFloat(int row, float v)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Float) { auto& d=std::get<PropFloat>(rows_[row].data); d.value=clamp(v,d.min,d.max); } markDirty(); }
@@ -592,7 +592,7 @@ void PropertyGrid::setVec4(int row, float x, float y, float z, float w)
 void PropertyGrid::setRange(int row, float lo, float hi)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Range) { auto& d=std::get<PropRange>(rows_[row].data); d.lo=clamp(lo,d.min,d.max); d.hi=clamp(hi,d.min,d.max); if (d.lo>d.hi) std::swap(d.lo,d.hi); markDirty(); } }
 
-std::vector<int> PropertyGrid::visibleRows() const
+ct::Vector<int> PropertyGrid::visibleRows() const
 {
     if (!visDirty_) return cachedVisibleRows_;
     cachedVisibleRows_.clear();
@@ -663,8 +663,8 @@ void PropertyGrid::commitEdit()
     auto& r = rows_[activeRow_];
     switch (r.type) {
     case PropType::String: { auto& d=std::get<PropString>(r.data); d.value=editBuf_; if (d.onChange) d.onChange(d.value); break; }
-    case PropType::Float:  { auto& d=std::get<PropFloat>(r.data); float v=0; try{v=std::stof(editBuf_);}catch(...){} d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
-    case PropType::Int:    { auto& d=std::get<PropInt>(r.data); int v=0; try{v=std::stoi(editBuf_);}catch(...){} d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
+    case PropType::Float:  { auto& d=std::get<PropFloat>(r.data); float v=editBuf_.to_float(); d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
+    case PropType::Int:    { auto& d=std::get<PropInt>(r.data); int v=editBuf_.to_int(); d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
     default: break;
     }
     propertyChanged.emit(activeRow_);
@@ -795,7 +795,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         auto& d = std::get<PropCombo>(row.data);
         ctx.fill.SetColor(t.inputBg.r,t.inputBg.g,t.inputBg.b,t.inputBg.a); ctx.fillRect(valTextX,y+2,valW,rowHeight_-4);
         ctx.line.SetColor(t.inputBorder.r,t.inputBorder.g,t.inputBorder.b,t.inputBorder.a); ctx.lineRect(valTextX,y+2,valW,rowHeight_-4);
-        const std::string& txt = (d.index>=0&&d.index<(int)d.options.size()) ? d.options[d.index] : "";
+        const String& txt = (d.index>=0&&d.index<(int)d.options.size()) ? d.options[d.index] : "";
         ctx.font.SetColor(Color(180,220,180,255)); ctx.font.Print(txt.c_str(), valTextX+3, textY);
         float ax=valueX+valueW-14.f, ay=y+rowHeight_*0.5f;
         ctx.fill.SetColor(t.textColor.r,t.textColor.g,t.textColor.b,t.textColor.a); ctx.fillTriangle(ax,ay-3,ax+8,ay-3,ax+4,ay+3);

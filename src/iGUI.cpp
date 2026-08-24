@@ -1,4 +1,6 @@
-#include "GUI.hpp"
+#include <igui/iGUI.hpp>
+
+#include <ct/sort.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -112,7 +114,8 @@ bool GUI::BeginFrame(const ig::FrameInfo &frame)
     m_drawList.clear();
     m_input.mousePressed = false;
     m_input.mouseReleased = false;
-    std::fill(std::begin(m_input.keys), std::end(m_input.keys), false);
+    for (bool &key : m_input.keys)
+        key = false;
     m_input.chars.clear();
     m_input.nextChar = 0;
 
@@ -208,7 +211,7 @@ bool GUI::BeginFrame(const ig::FrameInfo &frame)
     {
         // Clique no vazio → limpa foco
         for (auto &p : m_windows)
-            p.second.isFocused = false;
+            p.value.isFocused = false;
         m_focusedWindow = nullptr;
     }
 
@@ -484,7 +487,7 @@ bool GUI::IsPointInRect(const Vec2 &p, const FloatRect &r) const
            p.y >= r.y && p.y <= r.y + r.height;
 }
 
-WidgetState GUI::GetWidgetState(const FloatRect &rect, const std::string &widgetID)
+WidgetState GUI::GetWidgetState(const FloatRect &rect, const ct::String &widgetID)
 {
     if (IsPointInRect(m_mousePos, rect))
     {
@@ -621,8 +624,8 @@ bool GUI::IsMouseInWindow() const
 GUI::Control *GUI::AddControl()
 {
     u32 id = GetNextControlID();
-    auto it = m_controls.find(id);
-    if (it == m_controls.end())
+    Control *existing = m_controls.find(id);
+    if (!existing)
     {
         Control c;
         c.id = id;
@@ -633,7 +636,7 @@ GUI::Control *GUI::AddControl()
         m_controls[id] = c;
         return &m_controls[id];
     }
-    return &it->second;
+    return existing;
 }
 
 u32 GUI::GetNextControlID()
@@ -641,11 +644,11 @@ u32 GUI::GetNextControlID()
     return m_nextControlID++;
 }
 
-bool GUI::AnyControlActive() const
+bool GUI::AnyControlActive()
 {
     for (const auto &kv : m_controls)
     {
-        if (kv.second.active)
+        if (kv.value.active)
             return true;
     }
     return false;
@@ -663,7 +666,7 @@ bool GUI::BeginWindow(const char *title, float x, float y, float w, float h, boo
 bool GUI::BeginWindow(const char *title, const FloatRect &bounds, bool *open)
 {
     m_widgetCounter = 0;
-    std::string id = title;
+    ct::String id = title;
     WindowData *window = GetOrCreateWindow(id);
 
     // Next-window settings
@@ -746,10 +749,10 @@ void GUI::SetWindowFlags(bool canClose, bool canMinimize, bool canResize, bool c
     m_windowFlagsSet = true;
 }
 
-WindowData *GUI::GetOrCreateWindow(const std::string &id)
+WindowData *GUI::GetOrCreateWindow(const ct::String &id)
 {
-    auto it = m_windows.find(id);
-    if (it == m_windows.end())
+    WindowData *existing = m_windows.find(id);
+    if (!existing)
     {
         WindowData w;
         w.id = id;
@@ -758,7 +761,7 @@ WindowData *GUI::GetOrCreateWindow(const std::string &id)
         m_windowOrder.push_back(&m_windows[id]);
         return &m_windows[id];
     }
-    return &it->second;
+    return existing;
 }
 
 WindowData *GUI::GetCurrentWindow()
@@ -806,7 +809,7 @@ void GUI::UpdateWindowInteraction(WindowData *window)
     if (IsMousePressed() && mouseInWindow)
     {
         for (auto &p : m_windows)
-            p.second.isFocused = false;
+            p.value.isFocused = false;
         window->isFocused = true;
         m_focusedWindow = window;
         window->zOrder = 1000 + m_frameCounter;
@@ -921,9 +924,9 @@ void GUI::RenderWindow(WindowData *window, const char *title)
 
 void GUI::SortWindowsByZOrder()
 {
-    std::sort(m_windowOrder.begin(), m_windowOrder.end(),
-              [](WindowData *a, WindowData *b)
-              { return a->zOrder < b->zOrder; });
+    ct::sort(m_windowOrder.begin(), m_windowOrder.end(),
+             [](WindowData *a, WindowData *b)
+             { return a->zOrder < b->zOrder; });
 }
 
 void GUI::BringCurrentWindowToFront()
@@ -1523,7 +1526,7 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
         bool showCursor = (control->ftag < 0.5f);
         if (showCursor)
         {
-            std::string before(buffer, (size_t)control->itag);
+            ct::String before(buffer, (size_t)control->itag);
             float cursorX = textX + GetTextWidth(before.c_str());
 
             DrawRectFilled(FloatRect{cursorX, rect.y + 4.0f, 2.0f, rect.height - 8.0f},
@@ -1631,12 +1634,12 @@ bool GUI::ColorPicker(const char *label, Color *color, float x, float y, float w
     }
 
     // Estado HSV por controlo
-    static std::unordered_map<u32, Vec3> hsvState;
+    static ct::HashMap<u32, Vec3> hsvState;
 
     float h0, s0, v0;
     RGBtoHSV(color->r / 255.0f, color->g / 255.0f, color->b / 255.0f, h0, s0, v0);
 
-    if (hsvState.find(control->id) == hsvState.end())
+    if (!hsvState.find(control->id))
         hsvState[control->id] = Vec3(h0, s0, v0);
 
     Vec3 &hsv = hsvState[control->id];
@@ -1845,7 +1848,7 @@ bool GUI::ListBox(const char *label, int *selectedIndex, const char **items, int
     if (itemCount < visibleItems)
         itemH = h / (float)itemCount;
 
-    static std::unordered_map<u32, float> scrollMap;
+    static ct::HashMap<u32, float> scrollMap;
     float &scrollOffset = scrollMap[control->id];
 
     float maxScroll = (itemCount - visibleItems) * itemH;
@@ -1951,7 +1954,7 @@ bool GUI::Dropdown(const char *label, int *selectedIndex, const char **items, in
     FloatRect rect = MakeContentRect(x, y, w, h);
 
     // Estado aberto/fechado
-    static std::unordered_map<u32, bool> openMap;
+    static ct::HashMap<u32, bool> openMap;
     bool &isOpen = openMap[control->id];
 
     // Label opcional por cima

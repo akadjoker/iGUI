@@ -280,7 +280,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
 //  ListBox
 // ═════════════════════════════════════════════════════════════════════════════
 
-void ListBox::addItem(const std::string& text)
+void ListBox::addItem(const String& text)
 {
     items_.push_back(text);
     markDirty();
@@ -307,8 +307,8 @@ void ListBox::clearItems()
     markDirty();
 }
 
-static const std::string kEmptyString;
-const std::string& ListBox::itemText(int index) const
+static const String kEmptyString;
+const String& ListBox::itemText(int index) const
 {
     if (index < 0 || index >= static_cast<int>(items_.size())) return kEmptyString;
     return items_[static_cast<size_t>(index)];

@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     BuGUI::SetCurrentContext(BuGUI::CreateContext());
     auto &io = BuGUI::GetIO();
     io.setClipboardText = [](const char *text) { SDL_SetClipboardText(text); };
-    io.getClipboardText = [] { char *value = SDL_GetClipboardText(); std::string result = value ? value : ""; SDL_free(value); return result; };
+    io.getClipboardText = [] { char *value = SDL_GetClipboardText(); BuGUI::String result = value ? value : ""; SDL_free(value); return result; };
 
     BuGUI::FontAtlas atlas;
     const BuGUI::Font *font = nullptr;
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     registerToolsStage(app);
     registerGalleryStage(app);
     registerSpecialtyStage(app);
-    const std::string initialStage = argc > 1 ? argv[1] : "menu";
+    const BuGUI::String initialStage = argc > 1 ? argv[1] : "menu";
     const bool testDockColor = initialStage == "--test-dock-color";
     const bool showFileDialog = initialStage == "filedialog";
     app.setStage(showFileDialog ? "tools" : testDockColor ? "dock" : initialStage);

@@ -3,9 +3,30 @@
 #include "BuGUI_base.hpp"
 #include <cstdint>
 #include <cstddef>
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/hashmap.hpp>
+
+// The retained API still accepts String at its public boundary. ct's
+// default Hash expects a .hash() member, so provide a stable byte hash while
+// the text API is migrated separately to ct::String.
+namespace ct
+{
+template <>
+struct Hash<String>
+{
+    uint64_t operator()(const String &value) const
+    {
+        uint64_t hash = 14695981039346656037ull;
+        for (String::size_type i = 0; i < value.size(); ++i)
+        {
+            hash ^= static_cast<unsigned char>(value[i]);
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+};
+} // namespace ct
 
 namespace BuGUI
 {
@@ -107,7 +128,7 @@ namespace BuGUI
         bool keyShift = false;
         bool keyAlt = false;
 
-        std::vector<uint32_t> inputChars;
+        ct::Vector<uint32_t> inputChars;
 
         // Per-frame key press / release events (cleared by NewFrame)
         struct KeyEvent
@@ -119,7 +140,7 @@ namespace BuGUI
             bool alt      = false;
             bool down     = true;   // true = press, false = release
         };
-        std::vector<KeyEvent> keyEvents;
+        ct::Vector<KeyEvent> keyEvents;
 
         // Cursor hint written by WidgetApp::update(), read by backend.
         // Matches CursorType: 0=Arrow 1=Hand 2=IBeam 3=Crosshair
@@ -129,25 +150,25 @@ namespace BuGUI
         // ── Clipboard (set by backend) ───────────────────────────────────
         // Assign captureless lambdas or plain function pointers.
         void        (*setClipboardText)(const char*)        = nullptr;
-        std::string (*getClipboardText)()                   = nullptr;
+        String (*getClipboardText)()                   = nullptr;
 
         // ── File I/O (set by backend) ────────────────────────────────────
         // readFile:  path → file contents (empty string on failure)
         // writeFile: path, data → true on success
-        std::string (*readFile )(const std::string& path)                          = nullptr;
-        bool        (*writeFile)(const std::string& path, const std::string& data) = nullptr;
+        String (*readFile )(const String& path)                          = nullptr;
+        bool        (*writeFile)(const String& path, const String& data) = nullptr;
 
         // ── OS-level file/text drop (set by backend) ─────────────────────
         // Backend pushes drop events each frame; WidgetApp consumes them.
         struct DropEvent {
             float x = 0, y = 0;                   // mouse position at drop
-            std::vector<std::string> filePaths;    // files dropped (OS DnD)
-            std::string text;                      // text dropped (if any)
+            ct::Vector<String> filePaths;    // files dropped (OS DnD)
+            String text;                      // text dropped (if any)
         };
-        std::vector<DropEvent> dropEvents;
+        ct::Vector<DropEvent> dropEvents;
 
-        void addDropEvent(float x, float y, const std::vector<std::string>& paths,
-                          const std::string& txt = "")
+        void addDropEvent(float x, float y, const ct::Vector<String>& paths,
+                          const String& txt = "")
         {
             dropEvents.push_back({x, y, paths, txt});
         }
@@ -246,7 +267,7 @@ namespace BuGUI
         TextureHandle texture_;
         float lineHeight_ = 0.0f;
         float ascender_   = 0.0f;
-        std::unordered_map<uint32_t, FontGlyph> glyphs_;
+        ct::HashMap<uint32_t, FontGlyph> glyphs_;
     };
 
     class FontAtlas
@@ -291,9 +312,9 @@ namespace BuGUI
         TextureHandle texture_;
         Vec2          whitePixelUV_ = {0.0f, 0.0f};
         Font          fallback_;          // empty sentinel
-        std::vector<Font>       fonts_;
-        std::vector<FontConfig> pending_; // configs waiting for build()
-        std::vector<unsigned char> pixels_;
+        ct::Vector<Font>       fonts_;
+        ct::Vector<FontConfig> pending_; // configs waiting for build()
+        ct::Vector<unsigned char> pixels_;
     };
 
     class DrawList
@@ -343,9 +364,9 @@ namespace BuGUI
         void pathStroke(const Color &color, float thickness, bool closed);
         void pathClear();
 
-        const std::vector<DrawVertex> &vertices() const { return vertices_; }
-        const std::vector<uint32_t> &indices() const { return indices_; }
-        const std::vector<DrawCmd> &commands() const { return commands_; }
+        const ct::Vector<DrawVertex> &vertices() const { return vertices_; }
+        const ct::Vector<uint32_t> &indices() const { return indices_; }
+        const ct::Vector<DrawCmd> &commands() const { return commands_; }
         int pushClipCount() const { return pushClipCount_; }
 
     private:
@@ -353,18 +374,18 @@ namespace BuGUI
         void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
         uint32_t addVertex(float x, float y, const Color &color);
         uint32_t addVertex(float x, float y, float u, float v, const Color &color);
-        void addConvexPolyFilled(const std::vector<Vec2> &points, const Color &color);
-        void addPolyline(const std::vector<Vec2> &points, const Color &color, float thickness, bool closed);
+        void addConvexPolyFilled(const ct::Vector<Vec2> &points, const Color &color);
+        void addPolyline(const ct::Vector<Vec2> &points, const Color &color, float thickness, bool closed);
 
-        std::vector<Rect>       clipStack_;
-        std::vector<Vec2>       path_;
+        ct::Vector<Rect>       clipStack_;
+        ct::Vector<Vec2>       path_;
         TextureHandle           fontTexture_;
         Vec2                    whiteUV_;
-        std::vector<DrawVertex> vertices_;
-        std::vector<uint32_t>   indices_;
-        std::vector<DrawCmd>    commands_;
+        ct::Vector<DrawVertex> vertices_;
+        ct::Vector<uint32_t>   indices_;
+        ct::Vector<DrawCmd>    commands_;
         int                     pushClipCount_ = 0;
-           std::unordered_map<uint32_t, FontGlyph> glyphs_;
+           ct::HashMap<uint32_t, FontGlyph> glyphs_;
     };
 
     struct RenderStats
@@ -410,7 +431,7 @@ namespace BuGUI
 
     struct DrawData
     {
-        std::vector<DrawPass> passes;          // populated by WidgetApp::paint()
+        ct::Vector<DrawPass> passes;          // populated by WidgetApp::paint()
         float  displayWidth      = 0.0f;
         float  displayHeight     = 0.0f;
         float  framebufferScaleX = 1.0f;

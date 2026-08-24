@@ -27,7 +27,7 @@ Timeline::Timeline() {}
 //  Track / Keyframe / Clip management
 // ─────────────────────────────────────────────────────────────────────────────
 
-int Timeline::addTrack(const std::string& name, const Color& color)
+int Timeline::addTrack(const String& name, const Color& color)
 {
     tracks_.push_back({name, color, {}, {}, false, false});
     markDirty();
@@ -73,7 +73,7 @@ void Timeline::removeKeyframe(int trackId, int keyIdx)
 }
 
 int Timeline::addClip(int trackId, float start, float end,
-                      const std::string& label, const Color& color)
+                      const String& label, const Color& color)
 {
     if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return -1;
     TimelineClip clip;

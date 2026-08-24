@@ -6,7 +6,7 @@
 //  FloatWindow
 // ═════════════════════════════════════════════════════════════════════════════
 
-FloatWindow::FloatWindow(const std::string& title)
+FloatWindow::FloatWindow(const String& title)
     : title_(title)
 {
 }

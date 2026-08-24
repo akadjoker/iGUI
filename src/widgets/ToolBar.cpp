@@ -33,7 +33,7 @@ void ToolBar::setImageGrid(BuGUI::BuImage* img, int cellW, int cellH)
     markDirty();
 }
 
-bool ToolBar::loadImageGrid(const std::string& path, int cellW, int cellH)
+bool ToolBar::loadImageGrid(const String& path, int cellW, int cellH)
 {
     auto* img = new BuGUI::BuImage();
     if (!img->Load(path.c_str())) {
@@ -66,7 +66,7 @@ int ToolBar::cellCount() const
 
 // ── Item management ──────────────────────────────────────────────────────────
 
-int ToolBar::addButton(int iconIndex, const std::string& tooltip)
+int ToolBar::addButton(int iconIndex, const String& tooltip)
 {
     Item it;
     it.id        = nextId_++;
@@ -78,7 +78,7 @@ int ToolBar::addButton(int iconIndex, const std::string& tooltip)
     return items_.back().id;
 }
 
-int ToolBar::addButton(IconId icon, const std::string& tooltip)
+int ToolBar::addButton(IconId icon, const String& tooltip)
 {
     Item it;
     it.id      = nextId_++;
@@ -90,7 +90,7 @@ int ToolBar::addButton(IconId icon, const std::string& tooltip)
     return items_.back().id;
 }
 
-int ToolBar::addToggle(int iconIndex, const std::string& tooltip, bool checked)
+int ToolBar::addToggle(int iconIndex, const String& tooltip, bool checked)
 {
     Item it;
     it.id        = nextId_++;
@@ -103,7 +103,7 @@ int ToolBar::addToggle(int iconIndex, const std::string& tooltip, bool checked)
     return items_.back().id;
 }
 
-int ToolBar::addToggle(IconId icon, const std::string& tooltip, bool checked)
+int ToolBar::addToggle(IconId icon, const String& tooltip, bool checked)
 {
     Item it;
     it.id      = nextId_++;
@@ -191,7 +191,7 @@ bool ToolBar::isItemVisible(int id) const
     return it ? it->visible : true;
 }
 
-void ToolBar::setItemTooltip(int id, const std::string& tip)
+void ToolBar::setItemTooltip(int id, const String& tip)
 {
     if (auto* it = findItem(id)) it->tooltip = tip;
 }

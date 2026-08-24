@@ -2,9 +2,9 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
-#include <vector>
-#include <string>
-#include <functional>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
 
 namespace BuGUI
 {
@@ -34,7 +34,7 @@ public:
     void clearStops();
 
     /// @brief Get the list of gradient stops.
-    const std::vector<GradientStop>& stops() const { return stops_; }
+    const ct::Vector<GradientStop>& stops() const { return stops_; }
     /// @brief Get the number of stops.
     int  stopCount() const { return static_cast<int>(stops_.size()); }
     /// @brief Get the currently selected stop index.
@@ -53,7 +53,7 @@ public:
     bool  showAlpha() const     { return showAlpha_; }
 
     /// @brief Emitted when any stop changes.
-    Signal<const std::vector<GradientStop>&> onChanged;
+    Signal<const ct::Vector<GradientStop>&> onChanged;
     /// @brief Emitted when a stop is double-clicked for editing.
     Signal<int, Color>                       onEditStop;
 
@@ -64,7 +64,7 @@ public:
     void onMouseMove(MouseEvent& e) override;
 
 private:
-    std::vector<GradientStop> stops_;
+    ct::Vector<GradientStop> stops_;
     int   selected_   = -1;
     int   dragging_   = -1;
     float dragOffX_   = 0;
@@ -88,9 +88,9 @@ public:
     HistogramWidget();
 
     /// @brief Set the raw data values and recompute bins.
-    void setData(const std::vector<float>& values);
+    void setData(const ct::Vector<float>& values);
     /// @brief Set pre-computed bin values and range.
-    void setBins(const std::vector<float>& bins, float rangeMin, float rangeMax);
+    void setBins(const ct::Vector<float>& bins, float rangeMin, float rangeMax);
     /// @brief Clear all data and bins.
     void clearData();
     /// @brief Set the number of bins.
@@ -113,7 +113,7 @@ public:
     Color barColor() const            { return barColor_; }
 
     /// @brief Set the chart title.
-    void setTitle(const std::string& t) { title_ = t; markDirty(); }
+    void setTitle(const String& t) { title_ = t; markDirty(); }
     /// @brief Set whether to show value labels on bars.
     void setShowValues(bool s) { showValues_ = s; markDirty(); }
     /// @brief Set whether to show the mean line.
@@ -130,8 +130,8 @@ public:
     void  paint(PaintContext& ctx) override;
 
 private:
-    std::vector<float> rawData_;
-    std::vector<float> bins_;
+    ct::Vector<float> rawData_;
+    ct::Vector<float> bins_;
 
     int   binCount_   = 32;
     float rangeMin_   = 0, rangeMax_ = 1;
@@ -143,7 +143,7 @@ private:
     float stddev_     = 0;
 
     Color barColor_ = Color(100, 160, 230, 200);
-    std::string title_;
+    String title_;
 
     static constexpr float kPadL = 8.0f;
     static constexpr float kPadR = 8.0f;
@@ -161,12 +161,12 @@ private:
 enum class PlotType { Line, Bar, Scatter };
 
 struct PlotSeries {
-    std::string name;
+    String name;
     Color       color;
     PlotType    type    = PlotType::Line;
     bool        visible = true;
     float       lineWidth = 2.0f;
-    std::vector<float> values;
+    ct::Vector<float> values;
 };
 
 class PlotWidget : public Widget
@@ -175,7 +175,7 @@ public:
     PlotWidget();
 
     /// @brief Add a named data series and return its index.
-    int  addSeries(const std::string& name, const Color& color, PlotType type = PlotType::Line);
+    int  addSeries(const String& name, const Color& color, PlotType type = PlotType::Line);
     /// @brief Remove a series by index.
     void removeSeries(int idx);
     /// @brief Remove all series.
@@ -184,7 +184,7 @@ public:
     /// @brief Append a data point to a series.
     void addPoint(int seriesIdx, float y);
     /// @brief Replace all points in a series.
-    void setPoints(int seriesIdx, const std::vector<float>& ys);
+    void setPoints(int seriesIdx, const ct::Vector<float>& ys);
     /// @brief Clear all points from a series.
     void clearPoints(int seriesIdx);
 
@@ -196,11 +196,11 @@ public:
     void setSeriesVisible(int idx, bool v) { series_[idx].visible = v; markDirty(); }
 
     /// @brief Set the chart title.
-    void setTitle(const std::string& t)  { title_ = t; markDirty(); }
+    void setTitle(const String& t)  { title_ = t; markDirty(); }
     /// @brief Set the x-axis label.
-    void setXLabel(const std::string& l) { xLabel_ = l; markDirty(); }
+    void setXLabel(const String& l) { xLabel_ = l; markDirty(); }
     /// @brief Set the y-axis label.
-    void setYLabel(const std::string& l) { yLabel_ = l; markDirty(); }
+    void setYLabel(const String& l) { yLabel_ = l; markDirty(); }
 
     /// @brief Set the y-axis range and disable auto range.
     void setYRange(float yMin, float yMax) { yMin_ = yMin; yMax_ = yMax; autoY_ = false; markDirty(); }
@@ -225,11 +225,11 @@ public:
     void onMouseScroll(MouseEvent& e) override;
 
 private:
-    std::vector<PlotSeries> series_;
+    ct::Vector<PlotSeries> series_;
 
-    std::string title_;
-    std::string xLabel_;
-    std::string yLabel_;
+    String title_;
+    String xLabel_;
+    String yLabel_;
 
     float yMin_ = 0, yMax_ = 1;
     bool  autoY_ = true;
@@ -274,9 +274,9 @@ struct CurveKey {
 };
 
 struct CurveData {
-    std::string name;
+    String name;
     Color       color;
-    std::vector<CurveKey> keys;
+    ct::Vector<CurveKey> keys;
     bool visible = true;
 };
 
@@ -286,7 +286,7 @@ public:
     CurveEditor();
 
     /// @brief Add a named curve and return its id.
-    int  addCurve(const std::string& name, const Color& color);
+    int  addCurve(const String& name, const Color& color);
     /// @brief Remove a curve by id.
     void removeCurve(int curveId);
     /// @brief Remove all curves.
@@ -355,7 +355,7 @@ public:
     void onMouseScroll(MouseEvent& e) override;
 
 private:
-    std::vector<CurveData> curves_;
+    ct::Vector<CurveData> curves_;
     Color bgColor_ = Color(28, 30, 34, 255);
 
     float viewMinT_ = 0, viewMaxT_ = 2;

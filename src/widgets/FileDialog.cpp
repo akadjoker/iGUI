@@ -24,9 +24,9 @@ namespace {
         return ctx.font.GetAscender();
     }
 
-    inline std::string toLowerStr(const std::string& s)
+    inline String toLowerStr(const String& s)
     {
-        std::string r = s;
+        String r = s;
         for (auto& c : r) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
         return r;
     }
@@ -36,7 +36,7 @@ namespace {
 //  Constructor / Destructor
 // ═════════════════════════════════════════════════════════════════════════════
 
-FileDialog::FileDialog(const std::string& title)
+FileDialog::FileDialog(const String& title)
     : FloatWindow(title)
 {
     setFloatSize(700, 480);
@@ -96,9 +96,9 @@ void FileDialog::setViewMode(ViewMode vm)
     markDirty();
 }
 
-void FileDialog::setPath(const std::string& path) { navigateTo(path); }
+void FileDialog::setPath(const String& path) { navigateTo(path); }
 
-void FileDialog::setFilter(const std::string& f)
+void FileDialog::setFilter(const String& f)
 {
     filter_ = f;
     parseFilter();
@@ -116,7 +116,7 @@ void FileDialog::setShowHidden(bool show)
     refreshDir();
 }
 
-void FileDialog::addBookmark(const std::string& name, const std::string& path)
+void FileDialog::addBookmark(const String& name, const String& path)
 {
     bookmarks_.push_back({name, path});
     buildSidebar();
@@ -134,27 +134,27 @@ void FileDialog::parseFilter()
     size_t pos = 0;
     while (pos < filter_.size()) {
         size_t semi = filter_.find(';', pos);
-        if (semi == std::string::npos) semi = filter_.size();
-        std::string tok = filter_.substr(pos, semi - pos);
+        if (semi == String::npos) semi = filter_.size();
+        String tok = filter_.substr(pos, semi - pos);
         if (tok.size() >= 2 && tok[0] == '*' && tok[1] == '.') tok = tok.substr(1);
         if (!tok.empty()) filterExts_.push_back(tok);
         pos = semi + 1;
     }
 }
 
-bool FileDialog::matchesFilter(const std::string& name) const
+bool FileDialog::matchesFilter(const String& name) const
 {
     if (filterExts_.empty()) return true;
-    std::string ext = toLowerStr(FileSystem::extension(name));
+    String ext = toLowerStr(FileSystem::extension(name));
     for (auto& fe : filterExts_) {
         if (ext == toLowerStr(fe)) return true;
     }
     return false;
 }
 
-bool FileDialog::isImageExt(const std::string& ext)
+bool FileDialog::isImageExt(const String& ext)
 {
-    std::string e = toLowerStr(ext);
+    String e = toLowerStr(ext);
     return e == ".png" || e == ".jpg" || e == ".jpeg" || e == ".bmp" ||
            e == ".tga" || e == ".gif" || e == ".hdr";
 }
@@ -217,7 +217,7 @@ void FileDialog::sortEntries()
             return sortAscending_ ? a.mtime < b.mtime : a.mtime > b.mtime;
         case SortField::Name:
         default: {
-            std::string na = toLowerStr(a.name), nb = toLowerStr(b.name);
+            String na = toLowerStr(a.name), nb = toLowerStr(b.name);
             return sortAscending_ ? na < nb : na > nb;
         }
         }
@@ -225,7 +225,7 @@ void FileDialog::sortEntries()
     std::stable_sort(entries_.begin(), entries_.end(), cmp);
 }
 
-void FileDialog::navigateTo(const std::string& path)
+void FileDialog::navigateTo(const String& path)
 {
     if (!FileSystem::isDir(path)) return;
     pendingNav_ = FileSystem::normalizePath(path);
@@ -236,7 +236,7 @@ void FileDialog::navigateTo(const std::string& path)
 //  Preview
 // ═════════════════════════════════════════════════════════════════════════════
 
-void FileDialog::loadPreview(const std::string& path)
+void FileDialog::loadPreview(const String& path)
 {
     if (path == previewPath_) return;
     clearPreview();
@@ -262,7 +262,7 @@ void FileDialog::clearPreview()
 //  Icon mapping
 // ═════════════════════════════════════════════════════════════════════════════
 
-IconId FileDialog::iconForExt(const std::string& ext)
+IconId FileDialog::iconForExt(const String& ext)
 {
     if (ext == ".cpp" || ext == ".c" || ext == ".hpp" || ext == ".h" ||
         ext == ".py" || ext == ".js" || ext == ".ts" || ext == ".java" ||
@@ -373,18 +373,18 @@ void FileDialog::buildBreadcrumbs()
     while (!breadcrumbBar_->children().empty())
         breadcrumbBar_->removeChild(breadcrumbBar_->children().back());
 
-    std::vector<std::pair<std::string, std::string>> parts;
+    ct::Vector<std::pair<String, String>> parts;
 #if defined(_WIN32)
     parts.push_back({"C:", "C:\\"});
-    std::string accum = "C:";
+    String accum = "C:";
 #else
     parts.push_back({"/", "/"});
-    std::string accum;
+    String accum;
 #endif
     size_t start = 1;
     for (size_t i = start; i <= currentPath_.size(); ++i) {
         if (i == currentPath_.size() || currentPath_[i] == '/') {
-            std::string seg = currentPath_.substr(start, i - start);
+            String seg = currentPath_.substr(start, i - start);
             if (!seg.empty()) {
                 accum += "/" + seg;
                 parts.push_back({seg, accum});
@@ -398,7 +398,7 @@ void FileDialog::buildBreadcrumbs()
             auto* sep = breadcrumbBar_->createChild<Label>(">");
             sep->setSize(12, 0);
         }
-        std::string target = parts[i].second;
+        String target = parts[i].second;
         auto* btn = breadcrumbBar_->createChild<Button>(parts[i].first);
         btn->setSize(0, 22);
         btn->clicked.connect([this, target] { navigateTo(target); });
@@ -415,7 +415,7 @@ void FileDialog::buildSidebar()
     (void)bookLabel;
 
     for (size_t i = 0; i < bookmarks_.size(); ++i) {
-        std::string target = bookmarks_[i].path;
+        String target = bookmarks_[i].path;
         auto* btn = sidebarLayout_->createChild<Button>(bookmarks_[i].name);
         btn->setSize(0, 22);
         btn->clicked.connect([this, target] { navigateTo(target); });
@@ -429,14 +429,14 @@ void FileDialog::buildSidebar()
 void FileDialog::layout()
 {
     if (!pendingNav_.empty()) {
-        std::string nav = std::move(pendingNav_);
+        String nav = std::move(pendingNav_);
         pendingNav_.clear();
         currentPath_ = nav;
         // Update DirCache root if path outside current root
         if (nav.find(dirCache_.rootPath()) != 0 || dirCache_.rootPath().empty()) {
             dirCache_.clearCache();
             // Set root to parent of target for broader caching
-            std::string rootDir = FileSystem::parentPath(nav);
+            String rootDir = FileSystem::parentPath(nav);
             if (rootDir.empty() || rootDir == nav) rootDir = nav;
             dirCache_.setRoot(rootDir);
         }
@@ -689,7 +689,7 @@ void FileDialog::paintIcons(PaintContext& ctx, const Rect& area)
         if (fe.icon != IconId::None) ctx.drawIcon(fe.icon, ix, iy, isz);
 
         // Truncated label
-        std::string disp = fe.name;
+        String disp = fe.name;
         if (disp.size() > 12) disp = disp.substr(0, 10) + "..";
         float tw = ctx.font.GetTextWidth(disp.c_str());
         float tx = cx + (cell - tw) * 0.5f;
@@ -985,7 +985,7 @@ void FileDialog::onOk()
         return;
     }
 
-    std::string fname;
+    String fname;
     if (fileNameInput_) fname = fileNameInput_->text();
 
     if (fname.empty() && selectedIndex_ >= 0 && selectedIndex_ < static_cast<int>(entries_.size())) {

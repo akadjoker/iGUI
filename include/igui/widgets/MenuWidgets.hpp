@@ -2,9 +2,9 @@
 
 #include "Widget.hpp"
 #include "Theme.hpp"
-#include <string>
-#include <vector>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/function.hpp>
 
 
 namespace BuGUI
@@ -22,9 +22,9 @@ class MenuAction
 {
 public:
     /// @brief Get the action display text.
-    const std::string& text()      const { return text_; }
+    const String& text()      const { return text_; }
     /// @brief Get the keyboard shortcut string.
-    const std::string& shortcut()  const { return shortcut_; }
+    const String& shortcut()  const { return shortcut_; }
     /// @brief Check if the action is enabled.
     bool  isEnabled()   const { return enabled_; }
     /// @brief Check if the action is checkable.
@@ -37,9 +37,9 @@ public:
     Menu* submenu()     const { return submenu_; }
 
     /// @brief Set the display text.
-    void  setText(const std::string& t)     { text_ = t; }
+    void  setText(const String& t)     { text_ = t; }
     /// @brief Set the keyboard shortcut label.
-    void  setShortcut(const std::string& s) { shortcut_ = s; }
+    void  setShortcut(const String& s) { shortcut_ = s; }
     /// @brief Enable or disable the action.
     void  setEnabled(bool e)                { enabled_ = e; }
     /// @brief Set whether the action is checkable.
@@ -56,8 +56,8 @@ private:
     friend class Menu;
     MenuAction() = default;
 
-    std::string text_;
-    std::string shortcut_;
+    String text_;
+    String shortcut_;
     bool        enabled_   = true;
     bool        checkable_ = false;
     bool        checked_   = false;
@@ -82,11 +82,11 @@ public:
     ~Menu() override;
 
     /// @brief Add a text action to the menu.
-    MenuAction* addAction(const std::string& text);
+    MenuAction* addAction(const String& text);
     /// @brief Add a text action with a callback.
-    MenuAction* addAction(const std::string& text, std::function<void()> cb);
+    MenuAction* addAction(const String& text, ct::Function<void()> cb);
     /// @brief Add a checkable action.
-    MenuAction* addCheckable(const std::string& text, bool checked = false);
+    MenuAction* addCheckable(const String& text, bool checked = false);
     /// @brief Add a separator line.
     MenuAction* addSeparator();
 
@@ -117,7 +117,7 @@ private:
     static constexpr float kIconW  = 22.0f;
     static constexpr float kPadX   = 12.0f;
 
-    std::vector<MenuAction*> actions_;  // owned
+    ct::Vector<MenuAction*> actions_;  // owned
     int    hoveredIdx_       = -1;
     Menu*  activeSubmenu_    = nullptr;  // not owned (belongs to MenuAction)
     int    activeSubmenuIdx_ = -1;
@@ -144,13 +144,13 @@ public:
     ~MenuBar() override;
 
     /// @brief Add a top-level menu with a title.
-    Menu*              addMenu(const std::string& title);
+    Menu*              addMenu(const String& title);
     /// @brief Get the number of menus.
     int                menuCount()      const { return static_cast<int>(entries_.size()); }
     /// @brief Get a menu by index.
     Menu*              menu(int i)      const;
     /// @brief Get a menu title by index.
-    const std::string& menuTitle(int i) const;
+    const String& menuTitle(int i) const;
 
     Vec2f sizeHint() const override;
     void  layout()   override;
@@ -162,7 +162,7 @@ public:
 
 private:
     struct Entry {
-        std::string title;
+        String title;
         Menu*       menu  = nullptr;  // owned by MenuBar
         float       x     = 0;
         float       w     = 0;
@@ -170,7 +170,7 @@ private:
 
     static constexpr float kPadX = 14.0f;
 
-    std::vector<Entry> entries_;
+    ct::Vector<Entry> entries_;
     int hoveredIdx_ = -1;
 
     int  hitEntry_(float localX) const;

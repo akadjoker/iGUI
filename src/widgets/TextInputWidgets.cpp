@@ -10,7 +10,7 @@
 //  TextInput - single-line text input
 // ─────────────────────────────────────────────────────────────────────────────
 
-TextInput::TextInput(const std::string& text, Mode mode)
+TextInput::TextInput(const String& text, Mode mode)
     : text_(text), mode_(mode)
 {
     acceptsFocus_ = true;
@@ -19,7 +19,7 @@ TextInput::TextInput(const std::string& text, Mode mode)
     selStart_ = selEnd_ = cursor_;
 }
 
-void TextInput::setText(const std::string& t)
+void TextInput::setText(const String& t)
 {
     if (text_ == t) return;
     text_ = t;
@@ -45,7 +45,7 @@ void TextInput::clearSelection()
     markDirty();
 }
 
-std::string TextInput::selectedText() const
+String TextInput::selectedText() const
 {
     if (selStart_ == selEnd_) return {};
     int lo = std::min(selStart_, selEnd_);
@@ -67,12 +67,12 @@ Widget::Vec2f TextInput::sizeHint() const
     return {120.0f, t.inputHeight};
 }
 
-std::string TextInput::displayText() const
+String TextInput::displayText() const
 {
     if (mode_ == Mode::Password)
     {
         int len = utf8Length(text_);
-        std::string result;
+        String result;
         result.reserve(static_cast<size_t>(len) * 3);
         for (int i = 0; i < len; ++i)
             result += "\xe2\x80\xa2";  // UTF-8 bullet •
@@ -84,14 +84,14 @@ std::string TextInput::displayText() const
 int TextInput::hitTestChar(const BuGUI::Font* /*font*/, float localX) const
 {
     auto& wa = WidgetApp::instance();
-    std::string disp = displayText();
+    String disp = displayText();
     int len = utf8Length(text_);
     float pad = Theme::instance().padding;
     float x = pad - scrollX_;
 
     for (int i = 0; i < len; ++i)
     {
-        std::string ch = utf8Substr(disp, i, i + 1);
+        String ch = utf8Substr(disp, i, i + 1);
         float cw = wa.textWidth(ch.c_str());
         if (localX < x + cw * 0.5f) return i;
         x += cw;
@@ -101,8 +101,8 @@ int TextInput::hitTestChar(const BuGUI::Font* /*font*/, float localX) const
 
 float TextInput::cursorXOffset(const BuGUI::Font* /*font*/, int pos) const
 {
-    std::string disp = displayText();
-    std::string sub = utf8Substr(disp, 0, pos);
+    String disp = displayText();
+    String sub = utf8Substr(disp, 0, pos);
     return WidgetApp::instance().textWidth(sub.c_str());
 }
 
@@ -118,7 +118,7 @@ void TextInput::deleteSelection()
     selStart_ = selEnd_ = cursor_;
 }
 
-void TextInput::insertText(const std::string& t)
+void TextInput::insertText(const String& t)
 {
     if (mode_ == Mode::ReadOnly) return;
     if (mode_ == Mode::NumberOnly)
@@ -291,21 +291,21 @@ void TextInput::onKeyPress(KeyEvent& e)
         case BuGUI::Key::A: selectAll(); e.consumed = true; return;
         case BuGUI::Key::C:
         {
-            std::string sel = selectedText();
+            String sel = selectedText();
             if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
             e.consumed = true; return;
         }
         case BuGUI::Key::X:
         {
             if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
-            std::string sel = selectedText();
+            String sel = selectedText();
             if (!sel.empty()) { WidgetApp::instance().setClipboardText(sel.c_str()); deleteSelection(); markDirty(); textChanged.emit(text_); }
             e.consumed = true; return;
         }
         case BuGUI::Key::V:
         {
             if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
-            std::string clip = WidgetApp::instance().getClipboardText();
+            String clip = WidgetApp::instance().getClipboardText();
             if (!clip.empty()) {
                 clip.erase(std::remove(clip.begin(), clip.end(), '\n'), clip.end());
                 clip.erase(std::remove(clip.begin(), clip.end(), '\r'), clip.end());
@@ -380,7 +380,7 @@ void TextInput::onKeyPress(KeyEvent& e)
 void TextInput::onTextInput(KeyEvent& e)
 {
     if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
-    std::string t(e.text);
+    String t(e.text);
     if (t.empty()) return;
     insertText(t);
     blinkTimer_ = 0;
@@ -391,9 +391,9 @@ void TextInput::onTextInput(KeyEvent& e)
 //  TextEdit - multi-line text editor
 // ─────────────────────────────────────────────────────────────────────────────
 
-const std::string TextEdit::emptyLine_;
+const String TextEdit::emptyLine_;
 
-TextEdit::TextEdit(const std::string& text)
+TextEdit::TextEdit(const String& text)
 {
     acceptsFocus_ = true;
     setCursor(CursorType::IBeam);
@@ -416,10 +416,10 @@ void TextEdit::clearMarker(int line)
 
 void TextEdit::clearMarker(int line, MarkerType type)
 {
-    auto it = markers_.find(line);
-    if (it != markers_.end()) {
-        it->second.erase(static_cast<int>(type));
-        if (it->second.empty()) markers_.erase(it);
+    ct::HashSet<int>* lineMarkers = markers_.find(line);
+    if (lineMarkers) {
+        lineMarkers->erase(static_cast<int>(type));
+        if (lineMarkers->empty()) markers_.erase(line);
     }
     markDirty();
 }
@@ -428,19 +428,19 @@ void TextEdit::clearAllMarkers() { markers_.clear(); markDirty(); }
 
 bool TextEdit::hasMarker(int line) const
 {
-    return markers_.count(line) > 0;
+    return markers_.contains(line);
 }
 
 bool TextEdit::hasMarker(int line, MarkerType type) const
 {
-    auto it = markers_.find(line);
-    return it != markers_.end() && it->second.count(static_cast<int>(type)) > 0;
+    const ct::HashSet<int>* lineMarkers = markers_.find(line);
+    return lineMarkers && lineMarkers->contains(static_cast<int>(type));
 }
 
-void TextEdit::setText(const std::string& text)
+void TextEdit::setText(const String& text)
 {
     lines_.clear();
-    std::string line;
+    String line;
     for (char c : text)
     {
         if (c == '\n')   { lines_.push_back(std::move(line)); line.clear(); }
@@ -454,9 +454,9 @@ void TextEdit::setText(const std::string& text)
     markDirty();
 }
 
-std::string TextEdit::text() const
+String TextEdit::text() const
 {
-    std::string result;
+    String result;
     for (size_t i = 0; i < lines_.size(); ++i)
     {
         if (i > 0) result += '\n';
@@ -465,7 +465,7 @@ std::string TextEdit::text() const
     return result;
 }
 
-const std::string& TextEdit::lineAt(int n) const
+const String& TextEdit::lineAt(int n) const
 {
     if (n < 0 || n >= static_cast<int>(lines_.size())) return emptyLine_;
     return lines_[n];
@@ -501,7 +501,7 @@ void TextEdit::setSelection(TextPos start, TextPos end)
 
 void TextEdit::copy()
 {
-    std::string sel = selectedText();
+    String sel = selectedText();
     if (!sel.empty())
         WidgetApp::instance().setClipboardText(sel.c_str());
 }
@@ -509,7 +509,7 @@ void TextEdit::copy()
 void TextEdit::cut()
 {
     if (readOnly_) return;
-    std::string sel = selectedText();
+    String sel = selectedText();
     if (!sel.empty()) {
         WidgetApp::instance().setClipboardText(sel.c_str());
         deleteSelection();
@@ -522,12 +522,12 @@ void TextEdit::cut()
 void TextEdit::paste()
 {
     if (readOnly_) return;
-    std::string clip = WidgetApp::instance().getClipboardText();
+    String clip = WidgetApp::instance().getClipboardText();
     if (!clip.empty())
         insertTextAtCursor(clip);
 }
 
-void TextEdit::insertTextAt(TextPos pos, const std::string& text)
+void TextEdit::insertTextAt(TextPos pos, const String& text)
 {
     if (readOnly_) return;
     clampPos(pos);
@@ -549,12 +549,12 @@ void TextEdit::insertTextAt(TextPos pos, const std::string& text)
     markDirty();
 }
 
-std::string TextEdit::selectedText() const
+String TextEdit::selectedText() const
 {
     if (!hasSelection()) return {};
     TextPos s = selectionStart(), e = selectionEnd();
     if (s.line == e.line) return utf8Substr(lines_[s.line], s.col, e.col);
-    std::string result = utf8Substr(lines_[s.line], s.col, lineColCount(s.line));
+    String result = utf8Substr(lines_[s.line], s.col, lineColCount(s.line));
     result += '\n';
     for (int i = s.line + 1; i < e.line; ++i) { result += lines_[i]; result += '\n'; }
     result += utf8Substr(lines_[e.line], 0, e.col);
@@ -584,14 +584,14 @@ void TextEdit::scrollToLine(int n)
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-std::string TextEdit::expandTabs(const std::string& text) const
+String TextEdit::expandTabs(const String& text) const
 {
     return expandTabs(text, 0);
 }
 
-std::string TextEdit::expandTabs(const std::string& text, int startVisCol) const
+String TextEdit::expandTabs(const String& text, int startVisCol) const
 {
-    std::string out;
+    String out;
     out.reserve(text.size());
     int visCol = startVisCol;
     for (size_t i = 0; i < text.size(); ) {
@@ -616,10 +616,10 @@ std::string TextEdit::expandTabs(const std::string& text, int startVisCol) const
     return out;
 }
 
-std::string TextEdit::expandTabsVisible(const std::string& text, int startVisCol) const
+String TextEdit::expandTabsVisible(const String& text, int startVisCol) const
 {
     // Like expandTabs but replaces spaces with · and tab first pos with ·
-    std::string out;
+    String out;
     out.reserve(text.size() * 2);
     int visCol = startVisCol;
     for (size_t i = 0; i < text.size(); ) {
@@ -662,7 +662,7 @@ int TextEdit::visColAt(int line, int col) const
     int len = std::min(col, lineColCount(line));
     for (int i = 0; i < len; ++i)
     {
-        std::string ch = utf8Substr(lines_[line], i, i + 1);
+        String ch = utf8Substr(lines_[line], i, i + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
         else visCol++;
     }
@@ -679,7 +679,7 @@ void TextEdit::clampPos(TextPos& p) const
 float TextEdit::colToX(PaintContext& ctx, int line, int col) const
 {
     if (line < 0 || line >= static_cast<int>(lines_.size())) return 0;
-    std::string sub = expandTabs(utf8Substr(lines_[line], 0, col));
+    String sub = expandTabs(utf8Substr(lines_[line], 0, col));
     return ctx.font.GetTextWidth(sub.c_str());
 }
 
@@ -691,7 +691,7 @@ int TextEdit::xToCol(PaintContext& ctx, int line, float x) const
     int visCol = 0;
     for (int i = 0; i < len; ++i)
     {
-        std::string ch = utf8Substr(lines_[line], i, i + 1);
+        String ch = utf8Substr(lines_[line], i, i + 1);
         float cw;
         if (ch[0] == '\t') {
             int spaces = tabSize_ - (visCol % tabSize_);
@@ -730,13 +730,13 @@ TextEdit::TextPos TextEdit::hitTestMouse(float localX, float localY) const
     int visCol = 0;
     // Compute visual col of startCol
     for (int k = 0; k < startCol; k++) {
-        std::string ch = utf8Substr(lines_[line], k, k + 1);
+        String ch = utf8Substr(lines_[line], k, k + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
         else visCol++;
     }
     for (int i = 0; i < endCol - startCol; ++i)
     {
-        std::string ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
+        String ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
         float cw;
         if (ch[0] == '\t') {
             int spaces = tabSize_ - (visCol % tabSize_);
@@ -772,13 +772,13 @@ TextEdit::TextPos TextEdit::hitTest(PaintContext& ctx, float localX, float local
     float cx = 0;
     int visCol = 0;
     for (int k = 0; k < startCol; k++) {
-        std::string ch = utf8Substr(lines_[line], k, k + 1);
+        String ch = utf8Substr(lines_[line], k, k + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
         else visCol++;
     }
     for (int i = 0; i < endCol - startCol; ++i)
     {
-        std::string ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
+        String ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
         float cw;
         if (ch[0] == '\t') {
             int spaces = tabSize_ - (visCol % tabSize_);
@@ -806,20 +806,20 @@ void TextEdit::deleteSelection()
     }
     else
     {
-        std::string head = utf8Substr(lines_[s.line], 0, s.col);
-        std::string tail = utf8Substr(lines_[e.line], e.col, lineColCount(e.line));
+        String head = utf8Substr(lines_[s.line], 0, s.col);
+        String tail = utf8Substr(lines_[e.line], e.col, lineColCount(e.line));
         lines_[s.line] = head + tail;
         lines_.erase(lines_.begin() + s.line + 1, lines_.begin() + e.line + 1);
     }
     cursor_ = s; selAnchor_ = cursor_;
 }
 
-void TextEdit::insertTextAtCursor(const std::string& t)
+void TextEdit::insertTextAtCursor(const String& t)
 {
     if (readOnly_) return;
     deleteSelection();
-    std::vector<std::string> insertLines;
-    std::string line;
+    ct::Vector<String> insertLines;
+    String line;
     for (char c : t) {
         if (c == '\n') { insertLines.push_back(std::move(line)); line.clear(); }
         else if (c != '\r') line += c;
@@ -833,7 +833,7 @@ void TextEdit::insertTextAtCursor(const std::string& t)
     }
     else
     {
-        std::string tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
+        String tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
         lines_[cursor_.line] = utf8Substr(lines_[cursor_.line], 0, cursor_.col) + insertLines[0];
         for (size_t i = 1; i < insertLines.size() - 1; ++i)
             lines_.insert(lines_.begin() + cursor_.line + static_cast<int>(i), insertLines[i]);
@@ -853,7 +853,7 @@ void TextEdit::splitLine()
 {
     if (readOnly_) return;
     deleteSelection();
-    std::string tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
+    String tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
     lines_[cursor_.line] = utf8Substr(lines_[cursor_.line], 0, cursor_.col);
     lines_.insert(lines_.begin() + cursor_.line + 1, tail);
     cursor_.line++;
@@ -911,7 +911,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
     for (int i = 0; i < static_cast<int>(lines_.size()); ++i)
     {
         int len    = lineColCount(i);
-        std::string expanded = expandTabs(lines_[i]);
+        String expanded = expandTabs(lines_[i]);
         float lineW = ctx.font.GetTextWidth(expanded.c_str());
         if (lineW > maxContentW_) maxContentW_ = lineW;
 
@@ -1086,8 +1086,8 @@ void TextEdit::paint(PaintContext& ctx)
         int startCol = rows[rowIdx].startCol;
         int endCol   = rows[rowIdx].endCol;
         int startVisCol = visColAt(i, startCol);
-        std::string rowTextRaw = utf8Substr(lines_[i], startCol, endCol);
-        std::string rowText = expandTabs(rowTextRaw, startVisCol);
+        String rowTextRaw = utf8Substr(lines_[i], startCol, endCol);
+        String rowText = expandTabs(rowTextRaw, startVisCol);
 
         float ly  = abs.y + vr * lineHeight_ - scrollY_;
         float lty = ly + lineHeight_ - t.lineSpacing;  // baseline
@@ -1106,8 +1106,8 @@ void TextEdit::paint(PaintContext& ctx)
                 if (i > s.line && i < e.line) { selS = startCol; selE = endCol; }
                 if (selS < selE)
                 {
-                    std::string pre = expandTabs(utf8Substr(lines_[i], startCol, selS), startVisCol);
-                    std::string sel = expandTabs(utf8Substr(lines_[i], startCol, selE), startVisCol);
+                    String pre = expandTabs(utf8Substr(lines_[i], startCol, selS), startVisCol);
+                    String sel = expandTabs(utf8Substr(lines_[i], startCol, selE), startVisCol);
                     float sx1 = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
                     float sx2 = textArea.x + pad + ctx.font.GetTextWidth(sel.c_str()) - scrollX_;
                     if (i < e.line && selE == endCol) sx2 += 6;
@@ -1150,22 +1150,22 @@ void TextEdit::paint(PaintContext& ctx)
             ctx.font.Print(numBuf, abs.x + numGutterW - numW - t.gutterPadding, lty);
 
             // Gutter markers (left of line numbers)
-            auto mit = markers_.find(i);
-            if (mit != markers_.end()) {
+            ct::HashSet<int>* lineMarkers = markers_.find(i);
+            if (lineMarkers) {
                 float markerR = lineHeight_ * 0.3f;
                 float mx = abs.x + markerR + 3.0f;
                 float my = ly + lineHeight_ * 0.5f;
                 // Pick highest-priority marker color
                 Color mc = {100, 100, 100, 255}; // default grey
-                if (mit->second.count(static_cast<int>(MarkerType::Error)))
+                if (lineMarkers->contains(static_cast<int>(MarkerType::Error)))
                     mc = {220, 50, 50, 255};
-                else if (mit->second.count(static_cast<int>(MarkerType::Breakpoint)))
+                else if (lineMarkers->contains(static_cast<int>(MarkerType::Breakpoint)))
                     mc = {200, 60, 60, 255};
-                else if (mit->second.count(static_cast<int>(MarkerType::Warning)))
+                else if (lineMarkers->contains(static_cast<int>(MarkerType::Warning)))
                     mc = {220, 180, 40, 255};
-                else if (mit->second.count(static_cast<int>(MarkerType::Bookmark)))
+                else if (lineMarkers->contains(static_cast<int>(MarkerType::Bookmark)))
                     mc = {60, 120, 220, 255};
-                else if (mit->second.count(static_cast<int>(MarkerType::Info)))
+                else if (lineMarkers->contains(static_cast<int>(MarkerType::Info)))
                     mc = {80, 180, 80, 255};
                 ctx.fill.SetColor(mc.r, mc.g, mc.b, mc.a);
                 ctx.fillCircle(mx, my, markerR);
@@ -1190,14 +1190,14 @@ void TextEdit::paint(PaintContext& ctx)
                     if (s0 >= s1) continue;
                     // Gap before span (default color)
                     if (s0 > prevCol) {
-                        std::string gap = expandTabs(utf8Substr(lines_[i], prevCol, s0), curVisCol);
+                        String gap = expandTabs(utf8Substr(lines_[i], prevCol, s0), curVisCol);
                         ctx.font.SetColor(t.textColor);
                         ctx.font.Print(gap.c_str(), cx, lty);
                         cx += ctx.font.GetTextWidth(gap.c_str());
                         curVisCol += utf8Length(gap);
                     }
                     // Colored span
-                    std::string seg = expandTabs(utf8Substr(lines_[i], s0, s1), curVisCol);
+                    String seg = expandTabs(utf8Substr(lines_[i], s0, s1), curVisCol);
                     ctx.font.SetColor(sp.color);
                     ctx.font.Print(seg.c_str(), cx, lty);
                     cx += ctx.font.GetTextWidth(seg.c_str());
@@ -1206,7 +1206,7 @@ void TextEdit::paint(PaintContext& ctx)
                 }
                 // Trailing text after last span
                 if (prevCol < endCol) {
-                    std::string tail = expandTabs(utf8Substr(lines_[i], prevCol, endCol), curVisCol);
+                    String tail = expandTabs(utf8Substr(lines_[i], prevCol, endCol), curVisCol);
                     ctx.font.SetColor(t.textColor);
                     ctx.font.Print(tail.c_str(), cx, lty);
                 }
@@ -1227,7 +1227,7 @@ void TextEdit::paint(PaintContext& ctx)
             rowStart = wrapRows_[cursor_.line][cursorRowInLine].startCol;
 
         int rowStartVisCol = visColAt(cursor_.line, rowStart);
-        std::string pre = expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
+        String pre = expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
         float cx = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
 
         if (cx >= textArea.x && cx <= textArea.x + textArea.w &&
@@ -1279,9 +1279,9 @@ void TextEdit::onMousePress(MouseEvent& e)
         int clickedLine = static_cast<int>((e.localY + scrollY_) / lineHeight_);
         if (clickedLine >= 0 && clickedLine < static_cast<int>(lines_.size())) {
             // Find the highest-priority marker on this line
-            auto it = markers_.find(clickedLine);
-            if (it != markers_.end() && !it->second.empty()) {
-                MarkerType mt = static_cast<MarkerType>(*it->second.begin());
+            ct::HashSet<int>* lineMarkers = markers_.find(clickedLine);
+            if (lineMarkers && !lineMarkers->empty()) {
+                MarkerType mt = static_cast<MarkerType>(*lineMarkers->begin());
                 markerClicked.emit(clickedLine, mt);
             } else {
                 // No marker yet → emit as Breakpoint toggle
@@ -1473,7 +1473,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
 void TextEdit::onTextInput(KeyEvent& e)
 {
     if (readOnly_) { e.consumed = true; return; }
-    std::string t(e.text);
+    String t(e.text);
     if (t.empty()) return;
     insertTextAtCursor(t);
     ensureCursorVisible();

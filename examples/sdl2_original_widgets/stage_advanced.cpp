@@ -17,7 +17,7 @@
 #include "AppWidgets.hpp"
 
 #include <cmath>
-#include <vector>
+#include <ct/vector.hpp>
 
 using namespace BuGUI;
 
@@ -243,7 +243,7 @@ void registerGalleryStage(WidgetApp& app)
     auto* histogram = chartRow->createChild<HistogramWidget>();
     histogram->setStretch(1.0f);
     histogram->setTitle("Distribution");
-    std::vector<float> values;
+    ct::Vector<float> values;
     for (int i = 0; i < 180; ++i)
         values.push_back(0.5f + std::sin(i * 0.31f) * 0.25f + std::cos(i * 0.07f) * 0.12f);
     histogram->setData(values);
@@ -281,7 +281,7 @@ void registerGalleryStage(WidgetApp& app)
     spectrum->setMagnitudes(magnitudes, 32);
     auto* waveform = audio->createChild<WaveformView>();
     waveform->setStretch(0.7f);
-    std::vector<float> samples(2048);
+    ct::Vector<float> samples(2048);
     for (int i = 0; i < static_cast<int>(samples.size()); ++i)
         samples[i] = std::sin(i * 0.045f) * (0.55f + 0.35f * std::sin(i * 0.002f));
     waveform->setSamples(samples.data(), static_cast<int>(samples.size()));

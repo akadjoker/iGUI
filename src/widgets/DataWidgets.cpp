@@ -22,7 +22,7 @@ DataGrid::DataGrid()
 //  Columns
 // ═════════════════════════════════════════════════════════════════════════════
 
-int DataGrid::addColumn(const std::string& name, float width, bool sortable)
+int DataGrid::addColumn(const String& name, float width, bool sortable)
 {
     Column c;
     c.name = name;
@@ -46,7 +46,7 @@ void DataGrid::setColumnWidth(int col, float w)
 //  Rows
 // ═════════════════════════════════════════════════════════════════════════════
 
-int DataGrid::addRow(const std::vector<std::string>& cells)
+int DataGrid::addRow(const ct::Vector<String>& cells)
 {
     Row r;
     r.cells = cells;
@@ -58,7 +58,7 @@ int DataGrid::addRow(const std::vector<std::string>& cells)
     return static_cast<int>(rows_.size()) - 1;
 }
 
-void DataGrid::setCell(int row, int col, const std::string& value)
+void DataGrid::setCell(int row, int col, const String& value)
 {
     if (row >= 0 && row < static_cast<int>(rows_.size()) &&
         col >= 0 && col < static_cast<int>(columns_.size())) {
@@ -67,7 +67,7 @@ void DataGrid::setCell(int row, int col, const std::string& value)
     }
 }
 
-std::string DataGrid::cell(int row, int col) const
+String DataGrid::cell(int row, int col) const
 {
     if (row >= 0 && row < static_cast<int>(rows_.size()) &&
         col >= 0 && col < static_cast<int>(columns_.size()))
@@ -116,9 +116,9 @@ void DataGrid::setRowChecked(int row, bool checked)
     }
 }
 
-std::vector<int> DataGrid::checkedRows() const
+ct::Vector<int> DataGrid::checkedRows() const
 {
-    std::vector<int> result;
+    ct::Vector<int> result;
     for (int i = 0; i < static_cast<int>(rows_.size()); ++i)
         if (rows_[i].checked) result.push_back(i);
     return result;
@@ -148,7 +148,7 @@ void DataGrid::clearSelection()
 bool DataGrid::isSelected(int row) const
 {
     if (!multiSelect_) return row == selectedRow_;
-    return selectedSet_.count(row) > 0;
+    return selectedSet_.contains(row);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -186,8 +186,8 @@ void DataGrid::sortByColumn(int col)
     } else {
         std::stable_sort(sortedIndices_.begin(), sortedIndices_.end(),
             [&](int a, int b) {
-                const std::string& sa = rows_[a].cells[col];
-                const std::string& sb = rows_[b].cells[col];
+                const String& sa = rows_[a].cells[col];
+                const String& sb = rows_[b].cells[col];
                 char* endA; char* endB;
                 double da = strtod(sa.c_str(), &endA);
                 double db = strtod(sb.c_str(), &endB);
@@ -451,12 +451,12 @@ void DataGrid::paint(PaintContext& ctx)
                     ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                     ctx.font.SetColor(Color(255, 255, 255, 255));
                     ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
-                    std::string beforeCursor = editBuf_.substr(0, editCursor_);
+                    String beforeCursor = editBuf_.substr(0, editCursor_);
                     float cursorX = cx + 4 + ctx.font.GetTextWidth(beforeCursor.c_str());
                     ctx.line.SetColor(255, 255, 255, 200);
                     ctx.drawLine(cursorX, ry + 3, cursorX, ry + rowHeight_ - 3);
                 } else {
-                    std::string cellText = modelCell(dataIdx, ci);
+                    String cellText = modelCell(dataIdx, ci);
                     if (!cellText.empty()) {
                         ctx.font.SetColor(isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
                         ctx.font.Print(cellText.c_str(), cx + 4, textY);
@@ -642,12 +642,14 @@ void DataGrid::onMousePress(MouseEvent& e)
         } else {
             selectedRow_  = dataIdx;
             selectedRows_ = {dataIdx};
-            selectedSet_ = {dataIdx};
+            selectedSet_.clear();
+            selectedSet_.insert(dataIdx);
         }
     } else {
         selectedRow_  = dataIdx;
         selectedRows_ = {dataIdx};
-        selectedSet_ = {dataIdx};
+        selectedSet_.clear();
+        selectedSet_.insert(dataIdx);
     }
     selectionChanged.emit(dataIdx);
     markDirty();
@@ -768,7 +770,7 @@ void DataGrid::onKeyPress(KeyEvent& e)
             break;
         case BuGUI::Key::V:
             if (e.ctrl) {
-                std::string clip = WidgetApp::instance().getClipboardText();
+                String clip = WidgetApp::instance().getClipboardText();
                 if (!clip.empty()) {
                     editBuf_.insert(editCursor_, clip);
                     editCursor_ += static_cast<int>(clip.size());
@@ -783,7 +785,7 @@ void DataGrid::onKeyPress(KeyEvent& e)
     if (!editing_ && e.ctrl) {
         if (e.key == BuGUI::Key::C) {
             e.consumed = true;
-            std::string text;
+            String text;
             int nc = static_cast<int>(columns_.size());
             for (int c = 0; c < nc; ++c) {
                 if (c > 0) text += '\t';
@@ -900,7 +902,7 @@ int DataGrid::modelColCount() const
     return static_cast<int>(columns_.size());
 }
 
-std::string DataGrid::modelCell(int row, int col) const
+String DataGrid::modelCell(int row, int col) const
 {
     if (model_) return model_->data(model_->index(row, col));
     if (row >= 0 && row < static_cast<int>(rows_.size()) &&
@@ -909,7 +911,7 @@ std::string DataGrid::modelCell(int row, int col) const
     return {};
 }
 
-std::string DataGrid::modelHeader(int col) const
+String DataGrid::modelHeader(int col) const
 {
     if (model_) return model_->headerData(col);
     if (col >= 0 && col < static_cast<int>(columns_.size()))
@@ -936,7 +938,7 @@ bool DataGrid::modelIsEditable(int row, int col) const
 //  TreeGrid::Node
 // ═════════════════════════════════════════════════════════════════════════════
 
-TreeGrid::Node* TreeGrid::Node::addChild(const std::vector<std::string>& cellData)
+TreeGrid::Node* TreeGrid::Node::addChild(const ct::Vector<String>& cellData)
 {
     auto* child = new Node();
     child->cells  = cellData;
@@ -987,7 +989,7 @@ void TreeGrid::clearAll()
 int TreeGrid::nodeCount() const
 {
     int count = 0;
-    std::vector<const Node*> stack;
+    ct::Vector<const Node*> stack;
     for (auto* r : roots_) stack.push_back(r);
     while (!stack.empty()) {
         auto* n = stack.back(); stack.pop_back();
@@ -1001,7 +1003,7 @@ int TreeGrid::nodeCount() const
 //  Columns
 // ═════════════════════════════════════════════════════════════════════════════
 
-int TreeGrid::addColumn(const std::string& name, float width, bool sortable)
+int TreeGrid::addColumn(const String& name, float width, bool sortable)
 {
     Column c;
     c.name     = name;
@@ -1016,7 +1018,7 @@ int TreeGrid::addColumn(const std::string& name, float width, bool sortable)
 //  Roots
 // ═════════════════════════════════════════════════════════════════════════════
 
-TreeGrid::Node* TreeGrid::addRoot(const std::vector<std::string>& cells)
+TreeGrid::Node* TreeGrid::addRoot(const ct::Vector<String>& cells)
 {
     auto* n = new Node();
     n->cells  = cells;
@@ -1059,8 +1061,8 @@ void TreeGrid::sortChildren(Node* parent)
     bool asc = (sortOrder_ == DataGrid::SortOrder::Ascending);
 
     auto cmp = [col, asc](Node* a, Node* b) {
-        const std::string& sa = (col < static_cast<int>(a->cells.size())) ? a->cells[col] : "";
-        const std::string& sb = (col < static_cast<int>(b->cells.size())) ? b->cells[col] : "";
+        const String& sa = (col < static_cast<int>(a->cells.size())) ? a->cells[col] : "";
+        const String& sb = (col < static_cast<int>(b->cells.size())) ? b->cells[col] : "";
         char* endA; char* endB;
         double da = strtod(sa.c_str(), &endA);
         double db = strtod(sb.c_str(), &endB);
@@ -1325,7 +1327,7 @@ void TreeGrid::paint(PaintContext& ctx)
                         ctx.lineRect(textX - 1, ry + 1, colW - indent - 16, rowHeight_ - 2);
                         ctx.font.SetColor(Color(255, 255, 255, 255));
                         ctx.font.Print(editBuf_.c_str(), textX + 2, textY);
-                        std::string bc = editBuf_.substr(0, editCursor_);
+                        String bc = editBuf_.substr(0, editCursor_);
                         float curX = textX + 2 + ctx.font.GetTextWidth(bc.c_str());
                         ctx.line.SetColor(255, 255, 255, 200);
                         ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
@@ -1343,7 +1345,7 @@ void TreeGrid::paint(PaintContext& ctx)
                         ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                         ctx.font.SetColor(Color(255, 255, 255, 255));
                         ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
-                        std::string bc = editBuf_.substr(0, editCursor_);
+                        String bc = editBuf_.substr(0, editCursor_);
                         float curX = cx + 4 + ctx.font.GetTextWidth(bc.c_str());
                         ctx.line.SetColor(255, 255, 255, 200);
                         ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
@@ -1582,7 +1584,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
             break;
         case BuGUI::Key::V:
             if (e.ctrl) {
-                std::string clip = WidgetApp::instance().getClipboardText();
+                String clip = WidgetApp::instance().getClipboardText();
                 if (!clip.empty()) { editBuf_.insert(editCursor_, clip); editCursor_ += static_cast<int>(clip.size()); markDirty(); }
                 return;
             } break;
@@ -1636,7 +1638,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
             startEdit(selectedNode_, 0);
         } else if (e.key == BuGUI::Key::C && e.ctrl && selectedNode_) {
             e.consumed = true;
-            std::string text;
+            String text;
             for (int c = 0; c < static_cast<int>(selectedNode_->cells.size()); ++c) {
                 if (c > 0) text += '\t';
                 text += selectedNode_->cells[c];

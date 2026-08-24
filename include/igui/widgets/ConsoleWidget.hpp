@@ -10,7 +10,7 @@
 //    con->log(LogLevel::Info,  "Server started on port 8080");
 //    con->log(LogLevel::Warn,  "Texture not found: grass.png");
 //    con->log(LogLevel::Error, "Shader compile failed");
-//    con->onCommand.connect([](const std::string& cmd) { eval(cmd); });
+//    con->onCommand.connect([](const String& cmd) { eval(cmd); });
 //
 //  Features:
 //    - Log levels: Trace, Info, Warn, Error with per-level color + filter
@@ -30,7 +30,7 @@ enum class LogLevel { Trace, Info, Warn, Error };
 
 struct LogEntry {
     LogLevel    level     = LogLevel::Info;
-    std::string message;
+    String message;
     float       timestamp = 0;    // seconds since app start
     int         count     = 1;    // collapse duplicate consecutive messages
 };
@@ -41,7 +41,7 @@ public:
     ConsoleWidget();
 
     /// @brief Log a message at a given level.
-    void log(LogLevel level, const std::string& message);
+    void log(LogLevel level, const String& message);
     /// @brief Log a printf-style formatted message.
     void logf(LogLevel level, const char* fmt, ...);
     /// @brief Clear all log entries.
@@ -72,15 +72,15 @@ public:
     /// @brief Check if a log level is visible.
     bool filter(LogLevel level) const;
     /// @brief Set text search/highlight filter.
-    void setSearchText(const std::string& s);
+    void setSearchText(const String& s);
     /// @brief Get the current search filter text.
-    const std::string& searchText() const { return searchText_; }
+    const String& searchText() const { return searchText_; }
 
     /// @brief Set the console background color.
     void setBgColor(const Color& c) { bgColor_ = c; }
 
     /// @brief Emitted when a command is submitted.
-    Signal<const std::string&> onCommand;
+    Signal<const String&> onCommand;
 
     // ── Overrides ────────────────────────────────────────────────────────
     Vec2f sizeHint() const override { return {400, 250}; }
@@ -94,7 +94,7 @@ public:
 
 private:
     // ── Entries ──────────────────────────────────────────────────────────
-    std::vector<LogEntry> entries_;
+    ct::Vector<LogEntry> entries_;
     int maxLines_ = 10000;
     bool collapse_      = true;
     bool showTimestamp_  = false;
@@ -107,7 +107,7 @@ private:
     bool showInfo_  = true;
     bool showWarn_  = true;
     bool showError_ = true;
-    std::string searchText_;
+    String searchText_;
 
     bool passesFilter(const LogEntry& e) const;
 
@@ -123,17 +123,17 @@ private:
     int  selectedLine_ = -1;
 
     // ── Command input ────────────────────────────────────────────────────
-    std::string inputBuf_;
+    String inputBuf_;
     bool        inputFocused_ = false;
     int         cursorPos_    = 0;
 
     // ── Command history ──────────────────────────────────────────────────
-    std::vector<std::string> history_;
+    ct::Vector<String> history_;
     int                      historyIdx_ = -1;
 
     // ── Search mode ──────────────────────────────────────────────────────
     bool searchMode_   = false;
-    std::string searchBuf_;
+    String searchBuf_;
 
     // ── Layout rects ─────────────────────────────────────────────────────
     static constexpr float kToolbarH  = 24.f;

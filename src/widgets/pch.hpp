@@ -24,11 +24,10 @@
 #include <cstdio>
 #include <cstring>
 #include <fstream>
-#include <functional>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
+#include <ct/function.hpp>
+#include <igui/widgets/String.hpp>
+#include <ct/hashmap.hpp>
+#include <ct/vector.hpp>
 
 // BuGUI internal code uses bare Color/Vec2f/etc. without BuGUI:: prefix.
 using namespace BuGUI;

@@ -27,9 +27,9 @@ public:
     // ── DirNode — single node in the cached tree ─────────────────────────
     struct DirNode
     {
-        std::string name;
-        std::string path;
-        std::string ext;        // lowercase, with dot: ".png"
+        String name;
+        String path;
+        String ext;        // lowercase, with dot: ".png"
         uint64_t    size    = 0;
         time_t      mtime   = 0;
         DirNode*    parent  = nullptr;
@@ -56,32 +56,32 @@ public:
     DirCache& operator=(const DirCache&) = delete;
 
     /// @brief Set the root directory path and reset the cache.
-    void setRoot(const std::string& path);
+    void setRoot(const String& path);
     /// @brief Get the root directory path.
-    const std::string& rootPath() const { return rootPath_; }
+    const String& rootPath() const { return rootPath_; }
 
     /// @brief Get the root node of the cached tree.
     DirNode* root();
 
     /// @brief Navigate to a path, expanding intermediates as needed.
-    DirNode* navigate(const std::string& path);
+    DirNode* navigate(const String& path);
 
     /// @brief Expand a directory node (no-op if already scanned).
     void expand(DirNode* node);
 
     // ── Search ───────────────────────────────────────────────────────────
-    using SearchResult = std::vector<DirNode*>;
+    using SearchResult = ct::Vector<DirNode*>;
     /// @brief Search for files matching a glob pattern.
-    SearchResult search(const std::string& pattern, int maxResults = 200) const;
+    SearchResult search(const String& pattern, int maxResults = 200) const;
     /// @brief Search for files by extension (e.g. ".png").
-    SearchResult searchByExt(const std::string& ext, int maxResults = 200) const;
+    SearchResult searchByExt(const String& ext, int maxResults = 200) const;
 
     /// @brief Recursively scan directories up to the given depth.
     void deepScan(DirNode* node, int maxDepth = 4);
 
     // ── Cache management ─────────────────────────────────────────────────
     /// @brief Invalidate the cache for a specific path.
-    void invalidate(const std::string& path);
+    void invalidate(const String& path);
     /// @brief Clear the entire directory cache.
     void clearCache();
 
@@ -117,22 +117,22 @@ private:
     DirNode** allocKids(int count);
 
     // ── Tree data ────────────────────────────────────────────────────────
-    std::string rootPath_;
+    String rootPath_;
     DirNode*    root_       = nullptr;
     bool        showHidden_ = false;
     int         nodeCount_  = 0;
     int         dirCount_   = 0;
 
     // Path → node index (fast lookup)
-    std::unordered_map<std::string, DirNode*> index_;
+    ct::HashMap<String, DirNode*> index_;
 
     void doScan(DirNode* node);
     void indexNode(DirNode* n);
 
-    void collectSearch(DirNode* n, const std::string& pattern,
+    void collectSearch(DirNode* n, const String& pattern,
                        bool isExtSearch, SearchResult& out, int maxResults) const;
-    static bool globMatch(const std::string& pattern, const std::string& text);
-    static std::string toLower(const std::string& s);
+    static bool globMatch(const String& pattern, const String& text);
+    static String toLower(const String& s);
 
     void freeArena();
 };

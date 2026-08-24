@@ -1,12 +1,12 @@
 #pragma once
 #include <cstdint>
-#include <vector>
+#include <ct/vector.hpp>
 #include <type_traits>  // ~6k lines — replaces <functional> (~28k) + <algorithm> (~17k)
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Signal<Args...>  — lightweight signal/slot, Qt-style type erasure.
 //
-//  No std::function: stores callable as heap-allocated closure + raw fn ptr,
+//  No ct::Function: stores callable as heap-allocated closure + raw fn ptr,
 //  same technique Qt's moc generates but in pure C++17, header-only.
 //
 //  Usage:
@@ -84,7 +84,7 @@ private:
         void  (*destroy)(void*);
     };
 
-    std::vector<Slot> slots_;
+    ct::Vector<Slot> slots_;
     SlotId nextId_ = 1;
 };
 

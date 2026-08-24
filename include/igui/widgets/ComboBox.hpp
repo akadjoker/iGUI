@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Theme.hpp"
-#include <string>
-#include <vector>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ComboBox - dropdown selector
@@ -20,11 +20,11 @@ public:
     ComboBox();
 
     /// @brief Add an item to the dropdown list.
-    void addItem(const std::string& text);
+    void addItem(const String& text);
     /// @brief Replace all items with the given list.
-    void setItems(const std::vector<std::string>& texts) { clear(); for (auto& t : texts) addItem(t); }
+    void setItems(const ct::Vector<String>& texts) { clear(); for (auto& t : texts) addItem(t); }
     /// @brief Insert an item at the given index.
-    void insertItem(int index, const std::string& text);
+    void insertItem(int index, const String& text);
     /// @brief Remove the item at the given index.
     void removeItem(int index);
     /// @brief Remove all items from the combo box.
@@ -33,9 +33,9 @@ public:
     /// @brief Get the number of items.
     int  itemCount() const { return static_cast<int>(items_.size()); }
     /// @brief Get the text of the item at the given index.
-    const std::string& itemText(int index) const;
+    const String& itemText(int index) const;
     /// @brief Set the text of the item at the given index.
-    void setItemText(int index, const std::string& text);
+    void setItemText(int index, const String& text);
 
     /// @brief Get the currently selected index.
     int  selectedIndex() const { return selectedIndex_; }
@@ -43,7 +43,7 @@ public:
     void setSelectedIndex(int idx);
 
     /// @brief Get the text of the currently selected item.
-    const std::string& currentText() const;
+    const String& currentText() const;
 
     /// @brief Set the maximum number of visible dropdown items.
     void setMaxVisible(int n) { maxVisible_ = n; }
@@ -63,7 +63,7 @@ public:
     void closeDropdown();
 
 private:
-    std::vector<std::string> items_;
+    ct::Vector<String> items_;
     int   selectedIndex_ = -1;
     int   maxVisible_    = 8;
     bool  open_          = false;

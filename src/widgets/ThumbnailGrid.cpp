@@ -15,7 +15,7 @@ namespace {
 
 ThumbnailGrid::ThumbnailGrid() {}
 
-int ThumbnailGrid::addItem(const std::string& label, const Color& color)
+int ThumbnailGrid::addItem(const String& label, const Color& color)
 {
     items_.push_back({label, color, {}, false});
     markDirty();

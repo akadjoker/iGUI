@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Theme.hpp"
-#include <string>
-#include <vector>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
 #include <cmath>
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -42,9 +42,9 @@ public:
     void  setSweepAngle(float deg) { sweepAngle_ = deg; markDirty(); }
 
     /// @brief Set the unit label (e.g. "km/h").
-    void setUnit(const std::string& u)  { unit_ = u; markDirty(); }
+    void setUnit(const String& u)  { unit_ = u; markDirty(); }
     /// @brief Set the display label text.
-    void setLabel(const std::string& l)  { label_ = l; markDirty(); }
+    void setLabel(const String& l)  { label_ = l; markDirty(); }
     /// @brief Set whether to show tick marks.
     void setShowTicks(bool s)            { showTicks_ = s; markDirty(); }
     /// @brief Set the interval between tick marks.
@@ -90,8 +90,8 @@ private:
     float sweepAngle_ = 270.0f;
     float arcWidth_   = 6.0f;
 
-    std::string unit_;
-    std::string label_;
+    String unit_;
+    String label_;
     bool  showTicks_    = true;
     float tickInterval_ = 20.0f;
     int   decimals_     = 0;
@@ -137,7 +137,7 @@ public:
     void  setRange(float minVal, float maxVal);
 
     /// @brief Set the unit label (e.g. "kW").
-    void setUnit(const std::string& u)   { unit_ = u; markDirty(); }
+    void setUnit(const String& u)   { unit_ = u; markDirty(); }
     /// @brief Set whether to show tick marks.
     void setShowTicks(bool s)            { showTicks_ = s; markDirty(); }
     /// @brief Set the number of tick marks.
@@ -158,7 +158,7 @@ public:
 
 private:
     float min_, max_, value_;
-    std::string unit_ = "kW";
+    String unit_ = "kW";
     bool  showTicks_ = true;
     int   tickCount_ = 15;
 
@@ -175,15 +175,15 @@ private:
 class InfoTile : public Widget
 {
 public:
-    InfoTile(const std::string& icon = "", const std::string& value = "",
-             const std::string& suffix = "");
+    InfoTile(const String& icon = "", const String& value = "",
+             const String& suffix = "");
 
     /// @brief Set the icon text (e.g. emoji or symbol).
-    void setIcon(const std::string& i)   { icon_ = i; markDirty(); }
+    void setIcon(const String& i)   { icon_ = i; markDirty(); }
     /// @brief Set the displayed value text.
-    void setValue(const std::string& v)   { value_ = v; markDirty(); }
+    void setValue(const String& v)   { value_ = v; markDirty(); }
     /// @brief Set the suffix text (e.g. "km", "%").
-    void setSuffix(const std::string& s)  { suffix_ = s; markDirty(); }
+    void setSuffix(const String& s)  { suffix_ = s; markDirty(); }
 
     /// @brief Set the icon color.
     void setIconColor(const Color& c)     { iconColor_ = c; markDirty(); }
@@ -194,9 +194,9 @@ public:
     void  paint(PaintContext& ctx) override;
 
 private:
-    std::string icon_;
-    std::string value_;
-    std::string suffix_;
+    String icon_;
+    String value_;
+    String suffix_;
     Color iconColor_  = Color(140, 140, 140, 255);
     Color valueColor_ = Color(220, 220, 220, 255);
 };
@@ -211,13 +211,13 @@ public:
     DriveMode();
 
     /// @brief Add a drive mode and return its index.
-    int  addMode(const std::string& name, const Color& color);
+    int  addMode(const String& name, const Color& color);
     /// @brief Set the active mode by index.
     void setMode(int index);
     /// @brief Get the current mode index.
     int  mode() const { return current_; }
     /// @brief Get the current mode name.
-    const std::string& modeName() const;
+    const String& modeName() const;
 
     /// @brief Emitted when the active mode changes.
     Signal<int> onModeChanged;
@@ -229,8 +229,8 @@ public:
     void  onKeyPress(KeyEvent& e) override;
 
 private:
-    struct ModeEntry { std::string name; Color color; };
-    std::vector<ModeEntry> modes_;
+    struct ModeEntry { String name; Color color; };
+    ct::Vector<ModeEntry> modes_;
     int current_ = 0;
 };
 
@@ -250,7 +250,7 @@ public:
     void  setValue(float v);
 
     /// @brief Set the unit label (e.g. "km/h").
-    void setUnit(const std::string& u)   { unit_ = u; markDirty(); }
+    void setUnit(const String& u)   { unit_ = u; markDirty(); }
     /// @brief Set the value text color.
     void setValueColor(const Color& c)   { valueColor_ = c; markDirty(); }
     /// @brief Set the unit text color.
@@ -268,7 +268,7 @@ public:
 private:
     float value_;
     float scale_ = 4.0f;
-    std::string unit_ = "km/h";
+    String unit_ = "km/h";
     Color valueColor_ = Color(240, 240, 240, 255);
     Color unitColor_  = Color(160, 160, 165, 255);
 };

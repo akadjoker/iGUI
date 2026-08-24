@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Theme.hpp"
-#include <string>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
 
 namespace BuGUI
 {
@@ -14,12 +14,12 @@ class RadioButton;
 class Label : public Widget
 {
 public:
-    explicit Label(const std::string& text = "");
+    explicit Label(const String& text = "");
 
     /// @brief Set the display text.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the current display text.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
 
     /// @brief Set the text color.
     void setColor(const Color& c);
@@ -32,7 +32,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    std::string text_;
+    String text_;
     Color color_ = Theme::instance().textColor;
     TextAlign align_ = TextAlign::LEFT;
 };
@@ -87,12 +87,12 @@ private:
 class Button : public Widget
 {
 public:
-    explicit Button(const std::string& text = "");
+    explicit Button(const String& text = "");
 
     /// @brief Set the button label text.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the button label text.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
 
     /// @brief Set the text alignment within the button.
     void setAlign(TextAlign a);
@@ -113,7 +113,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    std::string text_;
+    String text_;
     TextAlign align_ = TextAlign::CENTER;
     Color bgColor_ = Color(0, 0, 0, 0);
     IconId iconId_ = IconId::None;
@@ -256,12 +256,12 @@ private:
 class CheckBox : public Widget
 {
 public:
-    explicit CheckBox(const std::string& text = "");
+    explicit CheckBox(const String& text = "");
 
     /// @brief Set the checkbox label text.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the checkbox label text.
-    const std::string& text() const { return text_; }
+    const String& text() const { return text_; }
     /// @brief Check if the checkbox is checked.
     bool isChecked() const { return checked_; }
     /// @brief Set the checked state programmatically.
@@ -274,7 +274,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    std::string text_;
+    String text_;
     bool checked_ = false;
 };
 
@@ -303,7 +303,7 @@ public:
 
 private:
     friend class RadioButton;
-    std::vector<RadioButton*> buttons_;
+    ct::Vector<RadioButton*> buttons_;
     RadioButton* selected_ = nullptr;
     void select(RadioButton* rb);
 };
@@ -315,13 +315,13 @@ private:
 class RadioButton : public Widget
 {
 public:
-    explicit RadioButton(const std::string& text = "", RadioGroup* group = nullptr);
+    explicit RadioButton(const String& text = "", RadioGroup* group = nullptr);
     ~RadioButton() override;
 
     /// @brief Set the radio button label text.
-    void setText(const std::string& t) { text_ = t; markDirty(); }
+    void setText(const String& t) { text_ = t; markDirty(); }
     /// @brief Get the radio button label text.
-    const std::string& text() const    { return text_; }
+    const String& text() const    { return text_; }
 
     /// @brief Check if this radio button is selected.
     bool isSelected() const { return selected_; }
@@ -341,7 +341,7 @@ public:
 
 private:
     friend class RadioGroup;
-    std::string text_;
+    String text_;
     bool selected_    = false;
     RadioGroup* group_ = nullptr;
 };
@@ -353,12 +353,12 @@ private:
 class Switch : public Widget
 {
 public:
-    explicit Switch(const std::string& text = "");
+    explicit Switch(const String& text = "");
 
     /// @brief Set the switch label text.
-    void setText(const std::string& t) { text_ = t; markDirty(); }
+    void setText(const String& t) { text_ = t; markDirty(); }
     /// @brief Get the switch label text.
-    const std::string& text() const    { return text_; }
+    const String& text() const    { return text_; }
 
     /// @brief Check if the switch is on.
     bool isOn() const { return on_; }
@@ -377,7 +377,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    std::string text_;
+    String text_;
     bool on_ = false;
     Color onColor_  = Color(80, 160, 80, 255);
     Color offColor_ = Color(70, 70, 75, 255);
@@ -398,8 +398,8 @@ public:
     explicit Toolbar(float height = 32.0f);
 
     /// @brief Add an icon button with callback.
-    IconButton* addButton(const std::string& tooltip, IconButton::Icon icon,
-                          std::function<void()> onClick = {});
+    IconButton* addButton(const String& tooltip, IconButton::Icon icon,
+                          ct::Function<void()> onClick = {});
 
     /// @brief Add an arbitrary widget to the toolbar.
     Widget* addWidget(Widget* w);

@@ -10,7 +10,7 @@
 class ComboPopup_ : public Widget
 {
 public:
-    ComboPopup_(ComboBox* owner, const std::vector<std::string>& items,
+    ComboPopup_(ComboBox* owner, const ct::Vector<String>& items,
                 int selected, int maxVis, float rowH)
         : owner_(owner), items_(items), selected_(selected), rowHeight_(rowH)
     {
@@ -114,7 +114,7 @@ public:
 
 private:
     ComboBox* owner_;
-    std::vector<std::string> items_;
+    ct::Vector<String> items_;
     int   selected_  = -1;
     int   hovered_   = -1;
     float rowHeight_ = 24.0f;
@@ -125,7 +125,7 @@ private:
 //  ComboBox
 // ─────────────────────────────────────────────────────────────────────────────
 
-static const std::string kEmptyCombo;
+static const String kEmptyCombo;
 
 ComboBox::ComboBox()
 {
@@ -133,9 +133,9 @@ ComboBox::ComboBox()
     setCursor(CursorType::Hand);
 }
 
-void ComboBox::addItem(const std::string& text)     { items_.push_back(text); markDirty(); }
+void ComboBox::addItem(const String& text)     { items_.push_back(text); markDirty(); }
 
-void ComboBox::insertItem(int index, const std::string& text)
+void ComboBox::insertItem(int index, const String& text)
 {
     if (index < 0) index = 0;
     if (index > static_cast<int>(items_.size())) index = static_cast<int>(items_.size());
@@ -155,18 +155,18 @@ void ComboBox::removeItem(int index)
 
 void ComboBox::clear() { items_.clear(); selectedIndex_ = -1; markDirty(); }
 
-const std::string& ComboBox::itemText(int index) const
+const String& ComboBox::itemText(int index) const
 {
     if (index >= 0 && index < static_cast<int>(items_.size())) return items_[index];
     return kEmptyCombo;
 }
 
-void ComboBox::setItemText(int index, const std::string& text)
+void ComboBox::setItemText(int index, const String& text)
 {
     if (index >= 0 && index < static_cast<int>(items_.size())) { items_[index] = text; markDirty(); }
 }
 
-const std::string& ComboBox::currentText() const { return itemText(selectedIndex_); }
+const String& ComboBox::currentText() const { return itemText(selectedIndex_); }
 
 void ComboBox::setSelectedIndex(int idx)
 {

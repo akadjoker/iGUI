@@ -128,13 +128,13 @@ namespace BuGUI
 
     const FontGlyph *Font::findGlyph(uint32_t codepoint) const
     {
-        auto it = glyphs_.find(codepoint);
-        if (it != glyphs_.end())
-            return &it->second;
+        const FontGlyph *glyph = glyphs_.find(codepoint);
+        if (glyph)
+            return glyph;
 
-        it = glyphs_.find('?');
-        if (it != glyphs_.end())
-            return &it->second;
+        glyph = glyphs_.find('?');
+        if (glyph)
+            return glyph;
 
         return nullptr;
     }
@@ -162,7 +162,7 @@ namespace BuGUI
 
         width_  = 2048;
         height_ = 1024;
-        std::vector<unsigned char> alpha(static_cast<size_t>(width_ * height_), 0);
+        ct::Vector<unsigned char> alpha(static_cast<size_t>(width_ * height_), 0);
 
         stbtt_pack_context pack = {};
         if (!stbtt_PackBegin(&pack, alpha.data(), width_, height_, 0, 1, nullptr))
@@ -188,12 +188,12 @@ namespace BuGUI
             const unsigned char* data;
             int   dataSize;
             float pixelHeight;
-            std::vector<std::vector<stbtt_packedchar>> rangePacked; // [range][char]
+            ct::Vector<ct::Vector<stbtt_packedchar>> rangePacked; // [range][char]
         };
-        std::vector<FontPack> packs(pending_.size());
+        ct::Vector<FontPack> packs(pending_.size());
 
         // Build stb ranges for all fonts
-        std::vector<stbtt_pack_range> allRanges;
+        ct::Vector<stbtt_pack_range> allRanges;
         for (size_t fi = 0; fi < pending_.size(); ++fi) {
             auto& cfg = pending_[fi];
             auto& fp  = packs[fi];
@@ -408,8 +408,8 @@ namespace BuGUI
         uint32_t offset = static_cast<uint32_t>(indices_.size());
 
         // Miter-joined outline — IM_FIXNORMAL2F style (no extra sqrt, capped)
-        std::vector<uint32_t> vL(static_cast<size_t>(n));
-        std::vector<uint32_t> vR(static_cast<size_t>(n));
+        ct::Vector<uint32_t> vL(static_cast<size_t>(n));
+        ct::Vector<uint32_t> vR(static_cast<size_t>(n));
 
         for (int i = 0; i < n; ++i)
         {
@@ -447,8 +447,12 @@ namespace BuGUI
         for (int i = 0; i < segs; ++i)
         {
             int j = (i + 1) % n;
-            indices_.insert(indices_.end(),
-                {vL[i], vL[j], vR[j], vL[i], vR[j], vR[i]});
+            indices_.push_back(vL[i]);
+            indices_.push_back(vL[j]);
+            indices_.push_back(vR[j]);
+            indices_.push_back(vL[i]);
+            indices_.push_back(vR[j]);
+            indices_.push_back(vR[i]);
         }
 
         addCmd(offset, idxCount, fontTexture_);
@@ -463,7 +467,12 @@ namespace BuGUI
         uint32_t v2 = addVertex(rect.x + rect.w, rect.y + rect.h, color);
         uint32_t v3 = addVertex(rect.x, rect.y + rect.h, color);
 
-        indices_.insert(indices_.end(), {v0, v1, v2, v0, v2, v3});
+        indices_.push_back(v0);
+        indices_.push_back(v1);
+        indices_.push_back(v2);
+        indices_.push_back(v0);
+        indices_.push_back(v2);
+        indices_.push_back(v3);
         addCmd(offset, 6, fontTexture_);
     }
     void DrawList::addRectOutline(const Rect &rect, const Color &color, float thickness)
@@ -553,7 +562,9 @@ namespace BuGUI
         uint32_t v1 = addVertex(b.x, b.y, color);
         uint32_t v2 = addVertex(c.x, c.y, color);
 
-        indices_.insert(indices_.end(), {v0, v1, v2});
+        indices_.push_back(v0);
+        indices_.push_back(v1);
+        indices_.push_back(v2);
         addCmd(offset, 3, fontTexture_);
     }
 
@@ -573,7 +584,12 @@ namespace BuGUI
         uint32_t v2 = addVertex(rect.x + rect.w, rect.y + rect.h, uv.x + uv.w, uv.y + uv.h, color);
         uint32_t v3 = addVertex(rect.x, rect.y + rect.h, uv.x, uv.y + uv.h, color);
 
-        indices_.insert(indices_.end(), {v0, v1, v2, v0, v2, v3});
+        indices_.push_back(v0);
+        indices_.push_back(v1);
+        indices_.push_back(v2);
+        indices_.push_back(v0);
+        indices_.push_back(v2);
+        indices_.push_back(v3);
         addCmd(offset, 6, texture);
     }
 
@@ -612,7 +628,12 @@ namespace BuGUI
                 uint32_t v1 = addVertex(rect.x + rect.w, rect.y, uv.x + uv.w, uv.y, color);
                 uint32_t v2 = addVertex(rect.x + rect.w, rect.y + rect.h, uv.x + uv.w, uv.y + uv.h, color);
                 uint32_t v3 = addVertex(rect.x, rect.y + rect.h, uv.x, uv.y + uv.h, color);
-                indices_.insert(indices_.end(), {v0, v1, v2, v0, v2, v3});
+                indices_.push_back(v0);
+                indices_.push_back(v1);
+                indices_.push_back(v2);
+                indices_.push_back(v0);
+                indices_.push_back(v2);
+                indices_.push_back(v3);
             }
 
             pen.x += glyph->advanceX * scale;
@@ -764,20 +785,27 @@ namespace BuGUI
         uint32_t v2 = addVertex(b.x - nx, b.y - ny, color);
         uint32_t v3 = addVertex(a.x - nx, a.y - ny, color);
 
-        indices_.insert(indices_.end(), {v0, v1, v2, v0, v2, v3});
+        indices_.push_back(v0);
+        indices_.push_back(v1);
+        indices_.push_back(v2);
+        indices_.push_back(v0);
+        indices_.push_back(v2);
+        indices_.push_back(v3);
         addCmd(offset, 6, fontTexture_);
     }
 
-    void DrawList::addConvexPolyFilled(const std::vector<Vec2> &points, const Color &color)
+    void DrawList::addConvexPolyFilled(const ct::Vector<Vec2> &points, const Color &color)
     {
-        path_.insert(path_.end(), points.begin(), points.end());
+        for (ct::Vector<Vec2>::const_iterator it = points.begin(); it != points.end(); ++it)
+            path_.push_back(*it);
         pathFillConvex(color);
     }
 
-    void DrawList::addPolyline(const std::vector<Vec2> &points,
+    void DrawList::addPolyline(const ct::Vector<Vec2> &points,
                                const Color &color, float thickness, bool closed)
     {
-        path_.insert(path_.end(), points.begin(), points.end());
+        for (ct::Vector<Vec2>::const_iterator it = points.begin(); it != points.end(); ++it)
+            path_.push_back(*it);
         pathStroke(color, thickness, closed);
     }
 

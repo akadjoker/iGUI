@@ -377,7 +377,7 @@ Rect Widget::absoluteRect() const
     return r;
 }
 
-Widget* Widget::findById(const std::string& searchId)
+Widget* Widget::findById(const String& searchId)
 {
     if (id_ == searchId) return this;
     for (auto* c : children_) {
@@ -387,7 +387,7 @@ Widget* Widget::findById(const std::string& searchId)
     return nullptr;
 }
 
-void Widget::findByTag(const std::string& tag, std::vector<Widget*>& result)
+void Widget::findByTag(const String& tag, ct::Vector<Widget*>& result)
 {
     if (hasTag(tag))
         result.push_back(this);
@@ -493,7 +493,7 @@ void BoxLayout::layout()
         float   crossMargin;
     };
 
-    std::vector<Item> items;
+    ct::Vector<Item> items;
     items.reserve(children_.size());
 
     float totalFixed   = 0;
@@ -559,7 +559,7 @@ void BoxLayout::layout()
 
     // ── Pass 2: compute main-axis sizes ──────────────────────────────────
     struct Placed { float pos; float size; };
-    std::vector<Placed> mainPlaced(count);
+    ct::Vector<Placed> mainPlaced(count);
 
     float usedMain = 0;
     for (int i = 0; i < count; ++i)

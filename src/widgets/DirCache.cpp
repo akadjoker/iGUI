@@ -76,9 +76,9 @@ void DirCache::freeArena()
         Block* next = b->next;
         int used = (b == firstBlock_) ? blockUsed_ : kBlockSize;
         for (int i = 0; i < used; ++i) {
-            b->nodes[i].name.~basic_string();
-            b->nodes[i].path.~basic_string();
-            b->nodes[i].ext.~basic_string();
+            b->nodes[i].name.~String();
+            b->nodes[i].path.~String();
+            b->nodes[i].ext.~String();
         }
         std::free(b);
         b = next;
@@ -105,7 +105,7 @@ DirCache::~DirCache()
     freeArena();
 }
 
-void DirCache::setRoot(const std::string& path)
+void DirCache::setRoot(const String& path)
 {
     clearCache();
     rootPath_ = FileSystem::normalizePath(path);
@@ -184,17 +184,17 @@ void DirCache::doScan(DirNode* node)
     node->scanned = true;
 }
 
-DirCache::DirNode* DirCache::navigate(const std::string& path)
+DirCache::DirNode* DirCache::navigate(const String& path)
 {
-    std::string norm = FileSystem::normalizePath(path);
+    String norm = FileSystem::normalizePath(path);
 
-    auto it = index_.find(norm);
-    if (it != index_.end()) return it->second;
+    DirNode** cached = index_.find(norm);
+    if (cached) return *cached;
 
     if (!root()) return nullptr;
     if (norm.find(rootPath_) != 0) return nullptr;
 
-    std::string rel = norm.substr(rootPath_.size());
+    String rel = norm.substr(rootPath_.size());
     if (!rel.empty() && rel[0] == '/') rel = rel.substr(1);
 
     DirNode* cur = root_;
@@ -203,9 +203,9 @@ DirCache::DirNode* DirCache::navigate(const std::string& path)
     size_t pos = 0;
     while (pos < rel.size()) {
         size_t slash = rel.find('/', pos);
-        std::string seg = (slash == std::string::npos)
+        String seg = (slash == String::npos)
             ? rel.substr(pos) : rel.substr(pos, slash - pos);
-        pos = (slash == std::string::npos) ? rel.size() : slash + 1;
+        pos = (slash == String::npos) ? rel.size() : slash + 1;
 
         if (!cur->scanned) doScan(cur);
 
@@ -222,16 +222,16 @@ DirCache::DirNode* DirCache::navigate(const std::string& path)
 
 // ── Search ───────────────────────────────────────────────────────────────
 
-DirCache::SearchResult DirCache::search(const std::string& pattern, int maxResults) const
+DirCache::SearchResult DirCache::search(const String& pattern, int maxResults) const
 {
     SearchResult out;
     if (root_) collectSearch(root_, toLower(pattern), false, out, maxResults);
     return out;
 }
 
-DirCache::SearchResult DirCache::searchByExt(const std::string& ext, int maxResults) const
+DirCache::SearchResult DirCache::searchByExt(const String& ext, int maxResults) const
 {
-    std::string lext = toLower(ext);
+    String lext = toLower(ext);
     if (!lext.empty() && lext[0] != '.') lext = "." + lext;
     SearchResult out;
     if (root_) collectSearch(root_, lext, true, out, maxResults);
@@ -250,13 +250,13 @@ void DirCache::deepScan(DirNode* node, int maxDepth)
 
 // ── Cache management ─────────────────────────────────────────────────────
 
-void DirCache::invalidate(const std::string& path)
+void DirCache::invalidate(const String& path)
 {
-    std::string norm = FileSystem::normalizePath(path);
-    auto it = index_.find(norm);
-    if (it == index_.end()) return;
+    String norm = FileSystem::normalizePath(path);
+    DirNode** indexed = index_.find(norm);
+    if (!indexed) return;
 
-    DirNode* n = it->second;
+    DirNode* n = *indexed;
     if (n->isDir && n->scanned) {
         // Just mark as not scanned — nodes stay in arena, will be orphaned
         // (arena freed all at once on clearCache)
@@ -282,7 +282,7 @@ void DirCache::indexNode(DirNode* n)
     if (n) index_[n->path] = n;
 }
 
-void DirCache::collectSearch(DirNode* n, const std::string& pattern,
+void DirCache::collectSearch(DirNode* n, const String& pattern,
                              bool isExtSearch, SearchResult& out, int maxResults) const
 {
     if (static_cast<int>(out.size()) >= maxResults) return;
@@ -306,7 +306,7 @@ void DirCache::collectSearch(DirNode* n, const std::string& pattern,
     }
 }
 
-bool DirCache::globMatch(const std::string& pattern, const std::string& text)
+bool DirCache::globMatch(const String& pattern, const String& text)
 {
     int pi = 0, ti = 0;
     int pn = static_cast<int>(pattern.size());
@@ -328,9 +328,9 @@ bool DirCache::globMatch(const std::string& pattern, const std::string& text)
     return pi == pn;
 }
 
-std::string DirCache::toLower(const std::string& s)
+String DirCache::toLower(const String& s)
 {
-    std::string r = s;
+    String r = s;
     for (auto& c : r)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return r;

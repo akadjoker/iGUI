@@ -10,7 +10,7 @@
 #include "BuGUI_base.hpp"
 #include "BuGUI.hpp"     // BuGUI::TextureHandle
 #include "BuImage.hpp"   // BuGUI::BuImage
-#include <vector>
+#include <ct/vector.hpp>
 
 
 namespace BuGUI

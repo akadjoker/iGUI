@@ -28,11 +28,11 @@ struct DockNode
 
     // ── Leaf ──────────────────────────────────────────────────────────────
     struct Tab {
-        std::string name;
+        String name;
         Widget*     content      = nullptr;
         float       cachedWidth  = 0.f;   // measured during paint
     };
-    std::vector<Tab> tabs;
+    ct::Vector<Tab> tabs;
     int currentTab = 0;
 
     // DockPanel-local geometry (assigned in layoutNode)
@@ -42,7 +42,7 @@ struct DockNode
     bool isEmpty() const { return !isSplit && tabs.empty(); }
 
     /// @brief Find a tab by name, optionally returning its index.
-    DockNode* findTab(const std::string& name, int* outIdx = nullptr);
+    DockNode* findTab(const String& name, int* outIdx = nullptr);
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -69,11 +69,11 @@ public:
     ~DockPanel() override;
 
     /// @brief Add a widget as a named panel tab.
-    void addPanel(const std::string& name, Widget* content);
+    void addPanel(const String& name, Widget* content);
 
     /// @brief Create and add a typed panel.
     template <typename T, typename... Args>
-    T* addPanel(const std::string& name, Args&&... args)
+    T* addPanel(const String& name, Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
         addPanel(name, w);
@@ -81,13 +81,13 @@ public:
     }
 
     /// @brief Split a panel off to a given side with ratio.
-    void splitOff(const std::string& tabName, DockSide side, float ratio = 0.5f);
+    void splitOff(const String& tabName, DockSide side, float ratio = 0.5f);
     /// @brief Close and remove a panel by name.
-    void closePanel(const std::string& name);
+    void closePanel(const String& name);
     /// @brief Bring a panel to front in its tab group.
-    void showPanel(const std::string& name);
+    void showPanel(const String& name);
     /// @brief Move a panel tab into the same leaf as another named panel.
-    void moveTabToLeaf(const std::string& sourceName, const std::string& targetName);
+    void moveTabToLeaf(const String& sourceName, const String& targetName);
 
     /// @brief Set the tab bar height.
     void  setTabBarHeight(float h) { tabBarH_ = h; markDirty(); }
@@ -100,9 +100,9 @@ public:
     float handleSize()       const { return handleW_; }
 
     /// @brief Emitted when a panel tab is activated.
-    Signal<std::string> panelActivated;
+    Signal<String> panelActivated;
     /// @brief Emitted when a panel is closed.
-    Signal<std::string> panelClosed;
+    Signal<String> panelClosed;
 
     // ── Widget overrides ──────────────────────────────────────────────────
     void  layout() override;

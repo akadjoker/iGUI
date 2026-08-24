@@ -24,14 +24,14 @@ void SyntaxHighlighter::setColor(TokenType type, const Color& c)
     if (idx >= 0 && idx < 14) colors_[idx] = c;
 }
 
-bool SyntaxHighlighter::isKeyword(const std::string& word) const
-{ return keywords_.count(word) > 0; }
+bool SyntaxHighlighter::isKeyword(const String& word) const
+{ return keywords_.contains(word); }
 
-bool SyntaxHighlighter::isType(const std::string& word) const
-{ return types_.count(word) > 0; }
+bool SyntaxHighlighter::isType(const String& word) const
+{ return types_.contains(word); }
 
-bool SyntaxHighlighter::isConstant(const std::string& word) const
-{ return constants_.count(word) > 0; }
+bool SyntaxHighlighter::isConstant(const String& word) const
+{ return constants_.contains(word); }
 
 void SyntaxHighlighter::setKeywords(std::initializer_list<const char*> words)
 { keywords_.clear(); for (auto* w : words) keywords_.insert(w); }
@@ -80,7 +80,7 @@ enum LexState {
 };
 
 // Scan a number literal (int, float, hex, bin, oct)
-int scanNumber(const std::string& text, int i)
+int scanNumber(const String& text, int i)
 {
     int n = static_cast<int>(text.size());
     if (i >= n) return i;
@@ -115,7 +115,7 @@ int scanNumber(const std::string& text, int i)
 }
 
 // Count leading whitespace
-int leadingIndent(const std::string& text, int tabSize = 4)
+int leadingIndent(const String& text, int tabSize = 4)
 {
     int visCol = 0;
     int n = static_cast<int>(text.size());
@@ -128,7 +128,7 @@ int leadingIndent(const std::string& text, int tabSize = 4)
 }
 
 // Count leading whitespace bytes (for syntax highlighter char-index comparisons)
-int leadingSpaceBytes(const std::string& text)
+int leadingSpaceBytes(const String& text)
 {
     int i = 0, n = static_cast<int>(text.size());
     while (i < n && (text[i] == ' ' || text[i] == '\t')) i++;
@@ -136,7 +136,7 @@ int leadingSpaceBytes(const std::string& text)
 }
 
 // Count net brace delta (for C-like languages)
-int braceDelta(const std::string& text)
+int braceDelta(const String& text)
 {
     int delta = 0;
     bool inStr = false;
@@ -197,7 +197,7 @@ CppHighlighter::CppHighlighter()
 }
 
 SyntaxHighlighter::HighlightResult
-CppHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
+CppHighlighter::highlightLine(int /*lineIndex*/, const String& text,
                                int prevState) const
 {
     HighlightResult result;
@@ -292,7 +292,7 @@ CppHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
         if (isIdStart(c)) {
             int start = i;
             while (i < n && isIdChar(text[i])) i++;
-            std::string word = text.substr(start, i - start);
+            String word = text.substr(start, i - start);
             TT type = TT::Default;
             if (isKeyword(word))       type = TT::Keyword;
             else if (isType(word))     type = TT::Type;
@@ -330,7 +330,7 @@ CppHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
     return result;
 }
 
-int CppHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
+int CppHighlighter::foldDelta(int /*lineIndex*/, const String& text) const
 {
     return braceDelta(text);
 }
@@ -359,7 +359,7 @@ PythonHighlighter::PythonHighlighter()
 }
 
 SyntaxHighlighter::HighlightResult
-PythonHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
+PythonHighlighter::highlightLine(int /*lineIndex*/, const String& text,
                                   int prevState) const
 {
     HighlightResult result;
@@ -467,7 +467,7 @@ PythonHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
         if (isIdStart(c)) {
             int start = i;
             while (i < n && isIdChar(text[i])) i++;
-            std::string word = text.substr(start, i - start);
+            String word = text.substr(start, i - start);
             TT type = TT::Default;
             if (isKeyword(word))       type = TT::Keyword;
             else if (isType(word))     type = TT::Type;
@@ -495,7 +495,7 @@ PythonHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
     return result;
 }
 
-int PythonHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
+int PythonHighlighter::foldDelta(int /*lineIndex*/, const String& text) const
 {
     // Python folds by trailing colon (def, class, if, for, etc.)
     // A line ending with ':' opens a fold; closing is implicit
@@ -539,7 +539,7 @@ JsHighlighter::JsHighlighter()
 }
 
 SyntaxHighlighter::HighlightResult
-JsHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
+JsHighlighter::highlightLine(int /*lineIndex*/, const String& text,
                               int prevState) const
 {
     HighlightResult result;
@@ -621,7 +621,7 @@ JsHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
         if (isIdStart(c) || c == '$') {
             int start = i;
             while (i < n && (isIdChar(text[i]) || text[i] == '$')) i++;
-            std::string word = text.substr(start, i - start);
+            String word = text.substr(start, i - start);
             TT type = TT::Default;
             if (isKeyword(word))       type = TT::Keyword;
             else if (isType(word))     type = TT::Type;
@@ -653,7 +653,7 @@ JsHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
     return result;
 }
 
-int JsHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
+int JsHighlighter::foldDelta(int /*lineIndex*/, const String& text) const
 {
     return braceDelta(text);
 }
@@ -679,7 +679,7 @@ LuaHighlighter::LuaHighlighter()
 }
 
 SyntaxHighlighter::HighlightResult
-LuaHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
+LuaHighlighter::highlightLine(int /*lineIndex*/, const String& text,
                                int prevState) const
 {
     HighlightResult result;
@@ -782,7 +782,7 @@ LuaHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
         if (isIdStart(c)) {
             int start = i;
             while (i < n && isIdChar(text[i])) i++;
-            std::string word = text.substr(start, i - start);
+            String word = text.substr(start, i - start);
             TT type = TT::Default;
             if (isKeyword(word))       type = TT::Keyword;
             else if (isType(word))     type = TT::Type;
@@ -810,7 +810,7 @@ LuaHighlighter::highlightLine(int /*lineIndex*/, const std::string& text,
     return result;
 }
 
-int LuaHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
+int LuaHighlighter::foldDelta(int /*lineIndex*/, const String& text) const
 {
     // Scan for opening/closing keywords
     int delta = 0;
@@ -820,7 +820,7 @@ int LuaHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
         if (!isIdStart(text[i])) { i++; continue; }
         int start = i;
         while (i < n && isIdChar(text[i])) i++;
-        std::string word = text.substr(start, i - start);
+        String word = text.substr(start, i - start);
         if (word == "function" || word == "do" || word == "then" ||
             word == "repeat" || word == "if")
             delta++;
@@ -865,7 +865,7 @@ GlslHighlighter::GlslHighlighter()
 }
 
 SyntaxHighlighter::HighlightResult
-GlslHighlighter::highlightLine(int lineIndex, const std::string& text,
+GlslHighlighter::highlightLine(int lineIndex, const String& text,
                                 int prevState) const
 {
     // GLSL uses the same comment/string/number syntax as C++
@@ -919,7 +919,7 @@ GlslHighlighter::highlightLine(int lineIndex, const std::string& text,
         if (isIdStart(c)) {
             int start = i;
             while (i < n && isIdChar(text[i])) i++;
-            std::string word = text.substr(start, i - start);
+            String word = text.substr(start, i - start);
             TT type = TT::Default;
             if (isKeyword(word))       type = TT::Keyword;
             else if (isType(word))     type = TT::Type;
@@ -944,7 +944,7 @@ GlslHighlighter::highlightLine(int lineIndex, const std::string& text,
     return result;
 }
 
-int GlslHighlighter::foldDelta(int /*lineIndex*/, const std::string& text) const
+int GlslHighlighter::foldDelta(int /*lineIndex*/, const String& text) const
 {
     return braceDelta(text);
 }
@@ -980,18 +980,18 @@ void CodeEditor::setHighlighterRaw(SyntaxHighlighter* hl)
     markDirty();
 }
 
-SyntaxHighlighter* CodeEditor::setHighlighterForFile(const std::string& filename)
+SyntaxHighlighter* CodeEditor::setHighlighterForFile(const String& filename)
 {
     // Extract extension
     auto dot = filename.rfind('.');
-    if (dot == std::string::npos) return nullptr;
-    std::string ext = filename.substr(dot + 1);
+    if (dot == String::npos) return nullptr;
+    String ext = filename.substr(dot + 1);
     // Lowercase
     for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
     // Try each built-in highlighter
     struct Factory {
-        std::vector<std::string> exts;
+        ct::Vector<String> exts;
         SyntaxHighlighter* (*create)();
     };
     Factory factories[] = {
@@ -1021,8 +1021,8 @@ void CodeEditor::installSyntaxCallback()
     }
 
     // Bridge: SyntaxHighlighter → TextEdit::SyntaxCallback
-    setSyntaxCallback([this](int lineIndex, const std::string& lineText)
-                      -> std::vector<TextEdit::ColorSpan>
+    setSyntaxCallback([this](int lineIndex, const String& lineText)
+                      -> ct::Vector<TextEdit::ColorSpan>
     {
         // Get previous line's state
         int prevState = 0;
@@ -1037,7 +1037,7 @@ void CodeEditor::installSyntaxCallback()
         lineStates_[lineIndex] = result.state;
 
         // Convert Span → ColorSpan
-        std::vector<TextEdit::ColorSpan> out;
+        ct::Vector<TextEdit::ColorSpan> out;
         out.reserve(result.spans.size());
         for (auto& sp : result.spans) {
             out.push_back({sp.startCol, sp.endCol,
@@ -1086,7 +1086,7 @@ void CodeEditor::rebuildFoldRanges()
     if (!highlighter_) return;
 
     int lc = lineCount();
-    std::vector<int> foldStack; // stack of line indices that opened a fold
+    ct::Vector<int> foldStack; // stack of line indices that opened a fold
 
     for (int i = 0; i < lc; i++) {
         int delta = highlighter_->foldDelta(i, lineAt(i));
@@ -1226,7 +1226,7 @@ void CodeEditor::paintFoldGutter(PaintContext& ctx, const Rect& abs)
 
 // ── Undo / Redo ──────────────────────────────────────────────────────────────
 
-void CodeEditor::recordInsert(TextPos pos, const std::string& text,
+void CodeEditor::recordInsert(TextPos pos, const String& text,
                                TextPos oldCursor, TextPos newCursor)
 {
     if (recording_) return;
@@ -1235,7 +1235,7 @@ void CodeEditor::recordInsert(TextPos pos, const std::string& text,
     undoRedoChanged.emit(canUndo(), canRedo());
 }
 
-void CodeEditor::recordDelete(TextPos pos, const std::string& text,
+void CodeEditor::recordDelete(TextPos pos, const String& text,
                                TextPos oldCursor, TextPos newCursor)
 {
     if (recording_) return;
@@ -1344,7 +1344,7 @@ void CodeEditor::applyAction(const EditAction& action, bool isUndo)
 
 // ── Auto-indent ──────────────────────────────────────────────────────────────
 
-std::string CodeEditor::getLineIndent(int line) const
+String CodeEditor::getLineIndent(int line) const
 {
     if (line < 0 || line >= lineCount()) return "";
     const auto& ln = lineAt(line);
@@ -1430,7 +1430,7 @@ float CodeEditor::colToPixelX(int line, int col) const
     int ts = tabSize();
     if (ts <= 0) ts = 4;
 
-    const std::string& text = lineAt(line);
+    const String& text = lineAt(line);
     float penX = 0.0f;
     int visCol = 0;
     int curCol = 0;
@@ -1484,7 +1484,7 @@ float CodeEditor::colCharWidth(int line, int col) const
     const BuGUI::FontGlyph* spaceG = font->findGlyph(' ');
     float spaceAdv = spaceG ? spaceG->advanceX * scale : 8.0f;
 
-    const std::string& text = lineAt(line);
+    const String& text = lineAt(line);
     int curCol = 0;
     for (size_t i = 0; i < text.size(); ) {
         if (curCol == col) {
@@ -1647,10 +1647,10 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
         if (y + lh < abs.y) continue;
         if (y > abs.y + abs.h) break;
 
-        const std::string& text = lineAt(line);
+        const String& text = lineAt(line);
         if (text.empty()) continue;
 
-        std::string expanded = expandTabs(text);
+        String expanded = expandTabs(text);
         float midY = y + lh * 0.5f;
 
         // Walk original text, tracking visCol (same as expandTabs),
@@ -1762,7 +1762,7 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
         if (fr.collapsed) continue;
 
         // Calculate indent of the opening line to position the vertical line
-        const std::string& openLine = lineAt(fr.startLine);
+        const String& openLine = lineAt(fr.startLine);
         int indent = leadingIndent(openLine);
 
         // Determine nesting depth by counting how many ranges contain this one
@@ -1850,9 +1850,9 @@ void CodeEditor::rebuildSearchMatches()
                                           return std::tolower(static_cast<unsigned char>(a)) ==
                                                  std::tolower(static_cast<unsigned char>(b));
                                       });
-                found = (it != ln.end()) ? static_cast<size_t>(it - ln.begin()) : std::string::npos;
+                found = (it != ln.end()) ? static_cast<size_t>(it - ln.begin()) : String::npos;
             }
-            if (found == std::string::npos) break;
+            if (found == String::npos) break;
 
             if (searchWholeWord_) {
                 int s = static_cast<int>(found);
@@ -1868,7 +1868,7 @@ void CodeEditor::rebuildSearchMatches()
     }
 }
 
-bool CodeEditor::findNext(const std::string& text, bool caseSensitive, bool wholeWord)
+bool CodeEditor::findNext(const String& text, bool caseSensitive, bool wholeWord)
 {
     searchTerm_ = text;
     searchCaseSensitive_ = caseSensitive;
@@ -1900,7 +1900,7 @@ bool CodeEditor::findNext(const std::string& text, bool caseSensitive, bool whol
     return true;
 }
 
-bool CodeEditor::findPrev(const std::string& text, bool caseSensitive, bool wholeWord)
+bool CodeEditor::findPrev(const String& text, bool caseSensitive, bool wholeWord)
 {
     searchTerm_ = text;
     searchCaseSensitive_ = caseSensitive;
@@ -1931,7 +1931,7 @@ bool CodeEditor::findPrev(const std::string& text, bool caseSensitive, bool whol
     return true;
 }
 
-bool CodeEditor::replaceNext(const std::string& find, const std::string& replace,
+bool CodeEditor::replaceNext(const String& find, const String& replace,
                               bool caseSensitive)
 {
     if (hasSelection() && selectedText() == find) {
@@ -1945,7 +1945,7 @@ bool CodeEditor::replaceNext(const std::string& find, const std::string& replace
     return findNext(find, caseSensitive, false);
 }
 
-int CodeEditor::replaceAll(const std::string& find, const std::string& replace,
+int CodeEditor::replaceAll(const String& find, const String& replace,
                             bool caseSensitive)
 {
     searchTerm_ = find;
@@ -2033,7 +2033,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
     if (lc == 0) { ctx.popClip(); return; }
 
     // Build visible-line index for O(1) mapping
-    std::vector<int> visLineMap;  // visLineMap[visIdx] → logical line
+    ct::Vector<int> visLineMap;  // visLineMap[visIdx] → logical line
     visLineMap.reserve(lc);
     for (int i = 0; i < lc; i++) {
         if (!isLineHidden(i)) visLineMap.push_back(i);
@@ -2105,11 +2105,11 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
             ctx.fill.Rectangle(mmX, ly, mmW, lineH, true);
         }
 
-        const std::string& text = lineAt(logLine);
+        const String& text = lineAt(logLine);
         if (text.empty()) continue;
 
         // Get syntax spans
-        std::vector<SyntaxHighlighter::Span> spans;
+        ct::Vector<SyntaxHighlighter::Span> spans;
         if (highlighter_ && logLine < static_cast<int>(lineStates_.size())) {
             int prevState = (logLine > 0) ? lineStates_[logLine - 1] : 0;
             auto result = highlighter_->highlightLine(logLine, text, prevState);
@@ -2410,14 +2410,14 @@ void CodeEditor::onKeyPress(KeyEvent& e)
         if (!extraCursors_.empty()) clearExtraCursors();
 
         TextPos oldCur = cursor_;
-        std::string indent = getLineIndent(cursor_.line);
+        String indent = getLineIndent(cursor_.line);
 
         // Extra indent after { or :
         if (lineEndsWith(cursor_.line, '{') || lineEndsWith(cursor_.line, ':'))
             indent += "\t";
 
         // Record for undo
-        std::string insertedText = "\n" + indent;
+        String insertedText = "\n" + indent;
 
         splitLine();
 
@@ -2439,7 +2439,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
         (e.key == BuGUI::Key::Backspace || e.key == BuGUI::Key::Delete))
     {
         struct CursorInfo { TextPos pos; TextPos anchor; int idx; };
-        std::vector<CursorInfo> all;
+        ct::Vector<CursorInfo> all;
         all.push_back({cursor_, selAnchor_, -1});
         for (int i = 0; i < static_cast<int>(extraCursors_.size()); i++)
             all.push_back({extraCursors_[i].pos, extraCursors_[i].anchor, i});
@@ -2507,15 +2507,15 @@ void CodeEditor::onKeyPress(KeyEvent& e)
         TextPos before = cursor_;
 
         if (e.key == BuGUI::Key::Backspace || e.key == BuGUI::Key::Delete) {
-            std::string deletedText;
+            String deletedText;
             if (hasSelection()) {
                 deletedText = selectedText();
             } else if (e.key == BuGUI::Key::Backspace && cursor_.col > 0) {
-                deletedText = std::string(1, lineAt(cursor_.line)[cursor_.col - 1]);
+                deletedText = String(1, lineAt(cursor_.line)[cursor_.col - 1]);
             } else if (e.key == BuGUI::Key::Backspace && cursor_.line > 0) {
                 deletedText = "\n";
             } else if (e.key == BuGUI::Key::Delete && cursor_.col < lineColCount(cursor_.line)) {
-                deletedText = std::string(1, lineAt(cursor_.line)[cursor_.col]);
+                deletedText = String(1, lineAt(cursor_.line)[cursor_.col]);
             } else if (e.key == BuGUI::Key::Delete && cursor_.line < lineCount() - 1) {
                 deletedText = "\n";
             }
@@ -2538,12 +2538,12 @@ void CodeEditor::onTextInput(KeyEvent& e)
     if (readOnly_) { e.consumed = true; return; }
 
     TextPos before = cursor_;
-    std::string inputText = e.text;
+    String inputText = e.text;
 
     if (!extraCursors_.empty() && !inputText.empty()) {
         // Collect all cursor info as VALUES (not pointers)
         struct CursorInfo { TextPos pos; TextPos anchor; int idx; }; // idx: -1 = primary
-        std::vector<CursorInfo> all;
+        ct::Vector<CursorInfo> all;
         all.push_back({cursor_, selAnchor_, -1});
         for (int i = 0; i < static_cast<int>(extraCursors_.size()); i++)
             all.push_back({extraCursors_[i].pos, extraCursors_[i].anchor, i});
@@ -2993,10 +2993,10 @@ void CodeEditor::unindent()
     markDirty(); textChanged.emit();
 }
 
-std::string CodeEditor::commentPrefix() const
+String CodeEditor::commentPrefix() const
 {
     if (highlighter_) {
-        std::string name = highlighter_->languageName();
+        String name = highlighter_->languageName();
         if (name == "Python" || name == "Lua") return "# ";
     }
     return "// ";
@@ -3006,11 +3006,11 @@ void CodeEditor::toggleComment()
 {
     if (readOnly_) return;
     int ln = cursor_.line;
-    std::string prefix = commentPrefix();
+    String prefix = commentPrefix();
     // Check if line starts with comment prefix (ignoring leading whitespace)
-    std::string& line = lines_[ln];
+    String& line = lines_[ln];
     size_t ws = line.find_first_not_of(" \t");
-    if (ws == std::string::npos) return;
+    if (ws == String::npos) return;
     if (line.compare(ws, prefix.size(), prefix) == 0) {
         // Remove comment
         line.erase(ws, prefix.size());
@@ -3041,7 +3041,7 @@ TextEdit::TextPos CodeEditor::findWordStart(TextPos pos) const
 {
     clampPos(pos);
     if (pos.col <= 0) return pos;
-    const std::string& line = lineAt(pos.line);
+    const String& line = lineAt(pos.line);
     size_t byte = utf8ByteOffset(line, pos.col);
     if (byte == 0) return pos;
     // Move back over word chars
@@ -3056,7 +3056,7 @@ TextEdit::TextPos CodeEditor::findWordStart(TextPos pos) const
 TextEdit::TextPos CodeEditor::findWordEnd(TextPos pos) const
 {
     clampPos(pos);
-    const std::string& line = lineAt(pos.line);
+    const String& line = lineAt(pos.line);
     int maxCol = lineColCount(pos.line);
     if (pos.col >= maxCol) return pos;
     size_t byte = utf8ByteOffset(line, pos.col);
@@ -3084,7 +3084,7 @@ void CodeEditor::addCursor(int line, int col)
 
 void CodeEditor::addCursorForNextOccurrence()
 {
-    std::string sel = selectedText();
+    String sel = selectedText();
     if (sel.empty()) {
         // Select the word under cursor
         TextPos ws = findWordStart(cursor_);
@@ -3111,12 +3111,12 @@ void CodeEditor::addCursorForNextOccurrence()
         int startLine = (pass == 0) ? searchFrom.line : 0;
         int endLine   = (pass == 0) ? lc : searchFrom.line + 1;
         for (int i = startLine; i < endLine; i++) {
-            const std::string& line = lineAt(i);
+            const String& line = lineAt(i);
             int startCol = (i == searchFrom.line && pass == 0) ? searchFrom.col : 0;
             size_t startByte = utf8ByteOffset(line, startCol);
             size_t selLen = sel.size();
             size_t found = line.find(sel, startByte);
-            if (found != std::string::npos) {
+            if (found != String::npos) {
                 // Convert byte pos to col
                 int foundCol = 0;
                 size_t b = 0;
@@ -3142,16 +3142,16 @@ void CodeEditor::addCursorForNextOccurrence()
 
 void CodeEditor::selectAllOccurrences()
 {
-    std::string sel = selectedText();
+    String sel = selectedText();
     if (sel.empty()) return;
 
     extraCursors_.clear();
     int lc = lineCount();
     bool first = true;
     for (int i = 0; i < lc; i++) {
-        const std::string& line = lineAt(i);
+        const String& line = lineAt(i);
         size_t pos = 0;
-        while ((pos = line.find(sel, pos)) != std::string::npos) {
+        while ((pos = line.find(sel, pos)) != String::npos) {
             int col = 0;
             size_t b = 0;
             while (b < pos) { b += utf8CharLen(line.c_str() + b); col++; }
@@ -3222,7 +3222,7 @@ void CodeEditor::mergeCursorsIfNeeded()
     }
 }
 
-void CodeEditor::applyToCursors(std::function<void(TextPos& pos, TextPos& anchor)> fn)
+void CodeEditor::applyToCursors(ct::Function<void(TextPos& pos, TextPos& anchor)> fn)
 {
     fn(cursor_, selAnchor_);
     for (auto& ec : extraCursors_)

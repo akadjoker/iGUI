@@ -3,9 +3,9 @@
 #include "Widget.hpp"
 #include "Signal.hpp"
 #include "Theme.hpp"
-#include <string>
-#include <vector>
-#include <functional>
+#include <igui/widgets/String.hpp>
+#include <ct/vector.hpp>
+#include <ct/function.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ScrollBar
@@ -129,7 +129,7 @@ public:
     ListBox() = default;
 
     /// @brief Add a string item to the list.
-    void addItem(const std::string& text);
+    void addItem(const String& text);
     /// @brief Remove an item by index.
     void removeItem(int index);
     /// @brief Remove all items.
@@ -137,7 +137,7 @@ public:
     /// @brief Get the number of items.
     int  itemCount() const { return static_cast<int>(items_.size()); }
     /// @brief Get the text of an item.
-    const std::string& itemText(int index) const;
+    const String& itemText(int index) const;
 
     /// @brief Get the selected item index (-1 if none).
     int  selectedIndex() const { return selectedIdx_; }
@@ -159,7 +159,7 @@ private:
     float itemHeight() const;
     int   itemAtY(float absY) const;
 
-    std::vector<std::string> items_;
+    ct::Vector<String> items_;
     int   selectedIdx_  = -1;
     float scrollOffset_ = 0.0f;
     ScrollBar* vbar_    = nullptr;
@@ -220,7 +220,7 @@ private:
     int  rowAtY(float absY) const;
     float rowH() const;
 
-    std::vector<Widget*> rows_;
+    ct::Vector<Widget*> rows_;
     int         selectedIdx_  = -1;
     float       scrollOffset_ = 0.0f;
     ScrollBar*  vbar_         = nullptr;

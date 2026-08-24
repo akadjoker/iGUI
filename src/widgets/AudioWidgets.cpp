@@ -788,9 +788,9 @@ void WaveformView::setViewRange(float start, float end)
     markDirty();
 }
 
-std::vector<WaveformView::EnvPair> WaveformView::buildEnvelope(int ch, float vs, float ve, int pw) const
+ct::Vector<WaveformView::EnvPair> WaveformView::buildEnvelope(int ch, float vs, float ve, int pw) const
 {
-    std::vector<EnvPair> env(pw, {0.f, 0.f});
+    ct::Vector<EnvPair> env(pw, {0.f, 0.f});
     if (sampleCount_ <= 0 || pw <= 0) return env;
     for (int px = 0; px < pw; ++px) {
         float t0 = vs + (ve - vs) * (float(px)     / pw);

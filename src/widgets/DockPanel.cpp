@@ -22,7 +22,7 @@ inline float setupFont(PaintContext& ctx, const Color& color, float size = 12.f)
 //  DockNode helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-DockNode* DockNode::findTab(const std::string& name, int* outIdx)
+DockNode* DockNode::findTab(const String& name, int* outIdx)
 {
     if (isSplit) {
         DockNode* r = first  ? first->findTab(name, outIdx)  : nullptr;
@@ -67,7 +67,7 @@ void DockPanel::ensureRoot()
 //  Panel management
 // ─────────────────────────────────────────────────────────────────────────────
 
-void DockPanel::addPanel(const std::string& name, Widget* content)
+void DockPanel::addPanel(const String& name, Widget* content)
 {
     ensureRoot();
     addChild(content);
@@ -88,7 +88,7 @@ void DockPanel::addPanel(const std::string& name, Widget* content)
     markDirty();
 }
 
-void DockPanel::splitOff(const std::string& tabName, DockSide side, float ratio)
+void DockPanel::splitOff(const String& tabName, DockSide side, float ratio)
 {
     ensureRoot();
     int tabIdx = -1;
@@ -136,7 +136,7 @@ void DockPanel::splitOff(const std::string& tabName, DockSide side, float ratio)
     markDirty();
 }
 
-void DockPanel::closePanel(const std::string& name)
+void DockPanel::closePanel(const String& name)
 {
     ensureRoot();
     int tabIdx = -1;
@@ -159,7 +159,7 @@ void DockPanel::closePanel(const std::string& name)
     markDirty();
 }
 
-void DockPanel::moveTabToLeaf(const std::string& sourceName, const std::string& targetName)
+void DockPanel::moveTabToLeaf(const String& sourceName, const String& targetName)
 {
     ensureRoot();
     int srcIdx = -1;
@@ -184,7 +184,7 @@ void DockPanel::moveTabToLeaf(const std::string& sourceName, const std::string& 
     markDirty();
 }
 
-void DockPanel::showPanel(const std::string& name)
+void DockPanel::showPanel(const String& name)
 {
     ensureRoot();
     int idx = -1;

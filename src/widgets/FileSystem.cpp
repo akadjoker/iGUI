@@ -35,30 +35,30 @@ static char pathSep()
 #endif
 }
 
-std::string fileName(const std::string& path)
+String fileName(const String& path)
 {
     auto pos = path.find_last_of("/\\");
-    return (pos == std::string::npos) ? path : path.substr(pos + 1);
+    return (pos == String::npos) ? path : path.substr(pos + 1);
 }
 
-std::string extension(const std::string& path)
+String extension(const String& path)
 {
-    std::string name = fileName(path);
+    String name = fileName(path);
     auto pos = name.rfind('.');
-    return (pos == std::string::npos || pos == 0) ? "" : name.substr(pos);
+    return (pos == String::npos || pos == 0) ? "" : name.substr(pos);
 }
 
-std::string parentPath(const std::string& path)
+String parentPath(const String& path)
 {
-    std::string p = normalizePath(path);
+    String p = normalizePath(path);
     if (p.empty()) return ".";
     auto pos = p.find_last_of("/\\");
-    if (pos == std::string::npos) return ".";
+    if (pos == String::npos) return ".";
     if (pos == 0) return p.substr(0, 1); // root "/"
     return p.substr(0, pos);
 }
 
-std::string joinPath(const std::string& a, const std::string& b)
+String joinPath(const String& a, const String& b)
 {
     if (a.empty()) return b;
     if (b.empty()) return a;
@@ -67,10 +67,10 @@ std::string joinPath(const std::string& a, const std::string& b)
     return a + pathSep() + b;
 }
 
-std::string normalizePath(const std::string& path)
+String normalizePath(const String& path)
 {
     if (path.empty()) return path;
-    std::string result;
+    String result;
     result.reserve(path.size());
     char prev = 0;
     for (char c : path) {
@@ -85,7 +85,7 @@ std::string normalizePath(const std::string& path)
     return result;
 }
 
-bool isAbsolute(const std::string& path)
+bool isAbsolute(const String& path)
 {
     if (path.empty()) return false;
 #if defined(_WIN32)
@@ -103,7 +103,7 @@ bool isAbsolute(const std::string& path)
 //  Human-readable helpers
 // ═════════════════════════════════════════════════════════════════════════════
 
-std::string humanSize(uint64_t bytes)
+String humanSize(uint64_t bytes)
 {
     char buf[32];
     if (bytes < 1024)
@@ -117,7 +117,7 @@ std::string humanSize(uint64_t bytes)
     return buf;
 }
 
-std::string humanDate(time_t t)
+String humanDate(time_t t)
 {
     if (t == 0) return "";
     struct tm tm;
@@ -139,9 +139,9 @@ std::string humanDate(time_t t)
 
 #if !defined(_WIN32)
 
-std::vector<Entry> listDir(const std::string& path)
+ct::Vector<Entry> listDir(const String& path)
 {
-    std::vector<Entry> entries;
+    ct::Vector<Entry> entries;
     DIR* dir = opendir(path.c_str());
     if (!dir) return entries;
 
@@ -170,41 +170,41 @@ std::vector<Entry> listDir(const std::string& path)
     return entries;
 }
 
-bool exists(const std::string& path)
+bool exists(const String& path)
 {
     struct stat st;
     return stat(path.c_str(), &st) == 0;
 }
 
-bool isDir(const std::string& path)
+bool isDir(const String& path)
 {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return false;
     return S_ISDIR(st.st_mode);
 }
 
-bool isFile(const std::string& path)
+bool isFile(const String& path)
 {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return false;
     return S_ISREG(st.st_mode);
 }
 
-uint64_t fileSize(const std::string& path)
+uint64_t fileSize(const String& path)
 {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return 0;
     return static_cast<uint64_t>(st.st_size);
 }
 
-time_t modTime(const std::string& path)
+time_t modTime(const String& path)
 {
     struct stat st;
     if (stat(path.c_str(), &st) != 0) return 0;
     return st.st_mtime;
 }
 
-std::string homePath()
+String homePath()
 {
     const char* h = getenv("HOME");
     if (h) return h;
@@ -212,7 +212,7 @@ std::string homePath()
     return pw ? pw->pw_dir : "/";
 }
 
-std::string currentDir()
+String currentDir()
 {
     char buf[4096];
     if (getcwd(buf, sizeof(buf)))
@@ -220,20 +220,20 @@ std::string currentDir()
     return ".";
 }
 
-bool createDir(const std::string& path)
+bool createDir(const String& path)
 {
     if (path.empty()) return false;
     if (isDir(path)) return true;
 
     // Recursive: ensure parent exists
-    std::string parent = parentPath(path);
+    String parent = parentPath(path);
     if (!parent.empty() && parent != path && !isDir(parent)) {
         if (!createDir(parent)) return false;
     }
     return mkdir(path.c_str(), 0755) == 0;
 }
 
-bool removeFile(const std::string& path)
+bool removeFile(const String& path)
 {
     return unlink(path.c_str()) == 0;
 }
@@ -244,10 +244,10 @@ bool removeFile(const std::string& path)
 
 #else // _WIN32
 
-std::vector<Entry> listDir(const std::string& path)
+ct::Vector<Entry> listDir(const String& path)
 {
-    std::vector<Entry> entries;
-    std::string search = joinPath(path, "*");
+    ct::Vector<Entry> entries;
+    String search = joinPath(path, "*");
 
     WIN32_FIND_DATAA fd;
     HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
@@ -284,24 +284,24 @@ std::vector<Entry> listDir(const std::string& path)
     return entries;
 }
 
-bool exists(const std::string& path)
+bool exists(const String& path)
 {
     return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES;
 }
 
-bool isDir(const std::string& path)
+bool isDir(const String& path)
 {
     DWORD attr = GetFileAttributesA(path.c_str());
     return (attr != INVALID_FILE_ATTRIBUTES) && (attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-bool isFile(const std::string& path)
+bool isFile(const String& path)
 {
     DWORD attr = GetFileAttributesA(path.c_str());
     return (attr != INVALID_FILE_ATTRIBUTES) && !(attr & FILE_ATTRIBUTE_DIRECTORY);
 }
 
-uint64_t fileSize(const std::string& path)
+uint64_t fileSize(const String& path)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
     if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad))
@@ -312,7 +312,7 @@ uint64_t fileSize(const std::string& path)
     return uli.QuadPart;
 }
 
-time_t modTime(const std::string& path)
+time_t modTime(const String& path)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
     if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad))
@@ -323,7 +323,7 @@ time_t modTime(const std::string& path)
     return static_cast<time_t>((ft.QuadPart - 116444736000000000ULL) / 10000000ULL);
 }
 
-std::string homePath()
+String homePath()
 {
     char buf[MAX_PATH];
     if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, buf) == S_OK)
@@ -332,7 +332,7 @@ std::string homePath()
     return h ? h : "C:\\";
 }
 
-std::string currentDir()
+String currentDir()
 {
     char buf[4096];
     if (_getcwd(buf, sizeof(buf)))
@@ -340,18 +340,18 @@ std::string currentDir()
     return ".";
 }
 
-bool createDir(const std::string& path)
+bool createDir(const String& path)
 {
     if (path.empty()) return false;
     if (isDir(path)) return true;
-    std::string parent = parentPath(path);
+    String parent = parentPath(path);
     if (!parent.empty() && parent != path && !isDir(parent)) {
         if (!createDir(parent)) return false;
     }
     return CreateDirectoryA(path.c_str(), NULL) != 0;
 }
 
-bool removeFile(const std::string& path)
+bool removeFile(const String& path)
 {
     return DeleteFileA(path.c_str()) != 0;
 }

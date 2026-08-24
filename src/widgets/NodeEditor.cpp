@@ -28,7 +28,7 @@ NodeEditor::NodeEditor() {}
 //  Node / Pin / Link management
 // ─────────────────────────────────────────────────────────────────────────────
 
-int NodeEditor::addNode(const std::string& title, float x, float y)
+int NodeEditor::addNode(const String& title, float x, float y)
 {
     Node n;
     n.title = title;
@@ -68,7 +68,7 @@ void NodeEditor::setNodeHeader(int nodeId, const Color& c)
     markDirty();
 }
 
-int NodeEditor::addPin(int nodeId, const std::string& name, PinDir dir, PinType type)
+int NodeEditor::addPin(int nodeId, const String& name, PinDir dir, PinType type)
 {
     if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return -1;
     auto& n = nodes_[nodeId];

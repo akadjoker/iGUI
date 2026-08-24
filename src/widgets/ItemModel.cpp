@@ -11,7 +11,7 @@ void ListModel::sort(int column, bool ascending)
     if (column < 0 || column >= numCols_) return;
 
     // Build index vector
-    std::vector<int> idx(rows_.size());
+    ct::Vector<int> idx(rows_.size());
     for (int i = 0; i < static_cast<int>(idx.size()); ++i) idx[i] = i;
 
     std::sort(idx.begin(), idx.end(), [&](int a, int b) {
@@ -21,8 +21,8 @@ void ListModel::sort(int column, bool ascending)
     });
 
     // Reorder rows and checked according to idx
-    std::vector<std::vector<std::string>> newRows(rows_.size());
-    std::vector<bool> newChecked(checked_.size());
+    ct::Vector<ct::Vector<String>> newRows(rows_.size());
+    ct::Vector<bool> newChecked(checked_.size());
     for (int i = 0; i < static_cast<int>(idx.size()); ++i) {
         newRows[i]    = std::move(rows_[idx[i]]);
         newChecked[i] = checked_[idx[i]];
@@ -57,17 +57,17 @@ int SortFilterProxyModel::columnCount(const ModelIndex& parent) const
     return source_->columnCount(parent);
 }
 
-std::string SortFilterProxyModel::data(const ModelIndex& idx, ItemRole role) const
+String SortFilterProxyModel::data(const ModelIndex& idx, ItemRole role) const
 {
     return source_->data(mapToSource(idx), role);
 }
 
-bool SortFilterProxyModel::setData(const ModelIndex& idx, const std::string& value, ItemRole role)
+bool SortFilterProxyModel::setData(const ModelIndex& idx, const String& value, ItemRole role)
 {
     return source_->setData(mapToSource(idx), value, role);
 }
 
-std::string SortFilterProxyModel::headerData(int section, bool horizontal) const
+String SortFilterProxyModel::headerData(int section, bool horizontal) const
 {
     return source_->headerData(section, horizontal);
 }
@@ -108,7 +108,7 @@ void SortFilterProxyModel::invalidate()
     modelReset.emit();
 }
 
-static bool containsCI(const std::string& haystack, const std::string& needle)
+static bool containsCI(const String& haystack, const String& needle)
 {
     if (needle.empty()) return true;
     auto it = std::search(haystack.begin(), haystack.end(),
@@ -132,7 +132,7 @@ void SortFilterProxyModel::rebuild() const
         if (filterCol_ >= 0 && !filterText_.empty()) {
             auto cellVal = source_->data(source_->index(i, filterCol_));
             if (caseSensitive_) {
-                if (cellVal.find(filterText_) == std::string::npos) continue;
+                if (cellVal.find(filterText_) == String::npos) continue;
             } else {
                 if (!containsCI(cellVal, filterText_)) continue;
             }

@@ -1,6 +1,6 @@
 #include <assert.h>
 
-#include <GUI.hpp>
+#include <igui/iGUI.hpp>
 #include <igui/Gui.hpp>
 
 class TestBackend : public ig::Backend

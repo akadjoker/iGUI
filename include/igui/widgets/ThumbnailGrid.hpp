@@ -2,8 +2,8 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
-#include <vector>
-#include <string>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 
 namespace BuGUI
@@ -23,7 +23,7 @@ namespace BuGUI
 // ═════════════════════════════════════════════════════════════════════════════
 
 struct ThumbnailItem {
-    std::string          label;
+    String          label;
     Color                color = Color(80, 90, 110, 255);
     BuGUI::TextureHandle tex   = {};
     bool                 selected = false;
@@ -35,7 +35,7 @@ public:
     ThumbnailGrid();
 
     /// @brief Add a thumbnail item with label and color.
-    int  addItem(const std::string& label, const Color& color = Color(80, 90, 110, 255));
+    int  addItem(const String& label, const Color& color = Color(80, 90, 110, 255));
     /// @brief Remove a thumbnail by index.
     void removeItem(int idx);
     /// @brief Remove all thumbnails.
@@ -73,7 +73,7 @@ public:
     void  onMousePress(MouseEvent& e) override;
 
 private:
-    std::vector<ThumbnailItem> items_;
+    ct::Vector<ThumbnailItem> items_;
     int   selected_ = -1;
     float thumbW_   = 80.f;
     float thumbH_   = 80.f;

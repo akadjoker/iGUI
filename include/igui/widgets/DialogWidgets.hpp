@@ -3,9 +3,9 @@
 #include "Widget.hpp"
 #include "Theme.hpp"
 #include "ViewWidgets.hpp"
-#include <string>
-#include <functional>
-#include <vector>
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
 
 namespace BuGUI
 {
@@ -29,20 +29,20 @@ public:
     enum class Role { Normal, Cancel, Accept, Danger };
 
     struct ButtonDef {
-        std::string          label;
+        String          label;
         Role                 role     = Role::Normal;
-        std::function<void()> action;
+        ct::Function<void()> action;
     };
 
-    Dialog(const std::string& title, const std::string& message);
+    Dialog(const String& title, const String& message);
 
     /// @brief Add an action button to the dialog.
-    Dialog& addButton(const std::string& label,
+    Dialog& addButton(const String& label,
                       Role role = Role::Normal,
-                      std::function<void()> action = nullptr);
+                      ct::Function<void()> action = nullptr);
 
     /// @brief Set a callback invoked on close.
-    void setOnClose(std::function<void()> cb) { onClose_ = std::move(cb); }
+    void setOnClose(ct::Function<void()> cb) { onClose_ = std::move(cb); }
 
     /// @brief Show the dialog as a modal popup.
     void show();
@@ -66,10 +66,10 @@ public:
     static constexpr float kTitleH   = 44.0f;
     static constexpr float kMsgPad   = 16.0f;
 
-    std::string              title_;
-    std::string              message_;
-    std::vector<ButtonDef>   buttons_;
-    std::function<void()>    onClose_;
+    String              title_;
+    String              message_;
+    ct::Vector<ButtonDef>   buttons_;
+    ct::Function<void()>    onClose_;
 
     int hoveredBtn_ = -1;
 
@@ -87,11 +87,11 @@ public:
 class AlertDialog : public Dialog
 {
 public:
-    AlertDialog(const std::string& title, const std::string& message);
+    AlertDialog(const String& title, const String& message);
 
     /// @brief Show a simple alert with a single OK button.
-    static void show(const std::string& title, const std::string& message,
-                     std::function<void()> onClose = nullptr);
+    static void show(const String& title, const String& message,
+                     ct::Function<void()> onClose = nullptr);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -103,14 +103,14 @@ public:
 class ConfirmDialog : public Dialog
 {
 public:
-    ConfirmDialog(const std::string& title, const std::string& message,
-                  std::function<void()> onConfirm = nullptr,
-                  std::function<void()> onCancel  = nullptr);
+    ConfirmDialog(const String& title, const String& message,
+                  ct::Function<void()> onConfirm = nullptr,
+                  ct::Function<void()> onCancel  = nullptr);
 
     /// @brief Show a confirmation dialog with Cancel and Confirm.
-    static void show(const std::string& title, const std::string& message,
-                     std::function<void()> onConfirm,
-                     std::function<void()> onCancel = nullptr);
+    static void show(const String& title, const String& message,
+                     ct::Function<void()> onConfirm,
+                     ct::Function<void()> onCancel = nullptr);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -132,7 +132,7 @@ public:
     static constexpr float kFadeOut         = 0.35f;
 
     /// @brief Show a brief notification message.
-    static void show(const std::string& message,
+    static void show(const String& message,
                      Type               type     = Type::Info,
                      float              duration = kDefaultDuration);
 
@@ -144,7 +144,7 @@ public:
     static void paint(PaintContext& ctx, float screenW, float screenH);
 
     struct Entry {
-        std::string message;
+        String message;
         Type        type;
         float       lifetime = kDefaultDuration;
         float       elapsed  = 0.0f;
@@ -152,7 +152,7 @@ public:
     };
 
 private:
-    static std::vector<Entry>& entries();
+    static ct::Vector<Entry>& entries();
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -175,7 +175,7 @@ public:
     enum Buttons  { Ok, OkCancel, YesNo, YesNoCancel };
     enum Result   { ResultOk, ResultCancel, ResultYes, ResultNo };
 
-    MessageBox(const std::string& title, const std::string& message,
+    MessageBox(const String& title, const String& message,
                Buttons buttons = Ok, Type type = Info);
 
     /// @brief Emitted with the user's chosen result.
@@ -184,7 +184,7 @@ public:
 private:
     Type     type_;
     Buttons  buttons_;
-    std::string message_;
+    String message_;
 
     BoxLayout* mainLayout_ = nullptr;
     Label*     msgLabel_   = nullptr;
@@ -199,28 +199,28 @@ private:
 //
 //    auto* ib = app.addFloat<InputBox>("Rename", "Enter new name:");
 //    ib->setText("old_name.txt");
-//    ib->accepted.connect([](const std::string& text) { ... });
+//    ib->accepted.connect([](const String& text) { ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
 class InputBox : public FloatWindow
 {
 public:
-    InputBox(const std::string& title, const std::string& prompt = "");
+    InputBox(const String& title, const String& prompt = "");
 
     /// @brief Set the input text.
-    void setText(const std::string& t);
+    void setText(const String& t);
     /// @brief Get the input text.
-    std::string text() const;
+    String text() const;
     /// @brief Set placeholder text.
-    void setPlaceholder(const std::string& p);
+    void setPlaceholder(const String& p);
 
     /// @brief Emitted with the text when OK is pressed.
-    Signal<std::string> accepted;
+    Signal<String> accepted;
     /// @brief Emitted when Cancel is pressed.
     Signal<>            cancelled;
 
 private:
-    std::string prompt_;
+    String prompt_;
 
     BoxLayout* mainLayout_  = nullptr;
     Label*     promptLabel_ = nullptr;

@@ -215,7 +215,7 @@ void Animator::remove(AnimationGroup* g)
     groups_.erase(std::remove(groups_.begin(), groups_.end(), g), groups_.end());
 }
 
-void Animator::cancelAll(const std::string& tag)
+void Animator::cancelAll(const String& tag)
 {
     if (tag.empty()) {
         // No tag: clear everything
@@ -281,8 +281,8 @@ void Animator::tick(float dt)
 
 Animation* Animator::animate(float from, float to, float duration,
                               EaseType ease,
-                              std::function<void(float)> onUpdate,
-                              std::function<void()> onDone)
+                              ct::Function<void(float)> onUpdate,
+                              ct::Function<void()> onDone)
 {
     auto* a = new Animation(from, to, duration, ease);
     if (onUpdate) a->onUpdate.connect(std::move(onUpdate));
