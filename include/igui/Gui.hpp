@@ -189,7 +189,8 @@ public:
                      const Rect &bounds);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
                    const Rect &bounds);
-    // Horizontal relative drag. The value changes by speed for each moved pixel.
+    // Horizontal relative drag. The value changes by speed for each moved pixel;
+    // click its value field to enter a precise number.
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
                    float speed, const Rect &bounds);
     bool dragInt(StringView label, int &value, int minimum, int maximum,

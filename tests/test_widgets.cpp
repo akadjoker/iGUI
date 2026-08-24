@@ -691,6 +691,21 @@ static void test_multiline_scroll_and_drag_widgets()
     context.endFrame();
     assert(floatChanged && exposure > 0.4f);
 
+    exposure = 0.0f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 190.0f, 50.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 190.0f, 50.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("0.75"));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("drag controls", ig::Rect(10.0f, 10.0f, 300.0f, 150.0f)));
+    assert(context.dragFloat("exposure", exposure, -1.0f, 1.0f, 0.1f,
+                             ig::Rect(8.0f, 8.0f, 220.0f, 28.0f)));
+    context.dragInt("iterations", iterations, 0, 20, 1, ig::Rect(8.0f, 42.0f, 220.0f, 28.0f));
+    context.separatorText("Advanced", 220.0f);
+    context.endWindow();
+    context.endFrame();
+    assert(exposure > 0.74f && exposure < 0.76f);
+
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 60.0f, 84.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 64.0f, 84.0f));
     context.beginFrame(ig::FrameInfo(360.0f, 240.0f));

@@ -1332,11 +1332,15 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const float valueWidth = rect.width * 0.42f;
+    const Rect valueRect(rect.x + rect.width - valueWidth, rect.y, valueWidth, rect.height);
+    const Rect dragRect(rect.x, rect.y, rect.width - valueWidth - theme_.itemSpacing, rect.height);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool hovered = itemHovered(rect, clip, id);
+    const bool hovered = itemHovered(dragRect, clip, id);
     const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
                              activeWidget_ == InvalidWidgetId &&
-                             contains(intersect(rect, clip), pointer_.pressedPosition[left]);
+                             contains(intersect(dragRect, clip), pointer_.pressedPosition[left]);
     if (pressedHere)
     {
         activeWidget_ = id;
@@ -1361,22 +1365,21 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
         dragWidget_ = InvalidWidgetId;
     }
 
-    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
-    const float valueWidth = rect.width * 0.42f;
-    const Rect valueRect(rect.x + rect.width - valueWidth, rect.y, valueWidth, rect.height);
-    const Color background = dragging ? theme_.buttonPressed
-                                      : (hovered ? theme_.buttonHovered : theme_.inputBg);
+    const Color labelColor = dragging ? theme_.buttonText
+                                      : (hovered ? theme_.buttonText : theme_.labelText);
     drawText(*drawList, theme_.font, labelText,
              Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
-             theme_.fontSize, theme_.labelText, clip);
-    drawList->addRectFilled(valueRect, background, clip);
-    const String displayed = String::number(static_cast<double>(value), 3);
-    const TextMetrics valueMetrics = measureText(theme_.font, displayed, theme_.fontSize);
-    drawText(*drawList, theme_.font, displayed,
-             Vec2(valueRect.x + (valueRect.width - valueMetrics.width) * 0.5f,
-                  valueRect.y + (valueRect.height - valueMetrics.height) * 0.5f),
-             theme_.fontSize, theme_.buttonText, clip);
-    return changed;
+             theme_.fontSize, labelColor, clip);
+
+    pushId(id);
+    const bool textChanged = inputFloat("value", value,
+                                        Rect(valueRect.x - layout_.origin.x,
+                                             valueRect.y - layout_.origin.y,
+                                             valueRect.width, valueRect.height), 3);
+    popId();
+    if (textChanged)
+        value = clamp(value, minimum, maximum);
+    return changed || textChanged;
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
