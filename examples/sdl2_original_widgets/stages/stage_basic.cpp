@@ -2,7 +2,7 @@
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "InputWidgets.hpp"
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerBasicStage(WidgetApp& app)
 {

@@ -17,7 +17,7 @@
 #endif
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 namespace FileSystem {
@@ -360,4 +360,5 @@ bool removeFile(const String& path)
 
 } // namespace FileSystem
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

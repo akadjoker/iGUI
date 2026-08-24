@@ -2,7 +2,7 @@
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerMenuStage(WidgetApp& app)
 {
@@ -14,7 +14,7 @@ void registerMenuStage(WidgetApp& app)
     vbox->setSpacing(10.0f);
     vbox->setPadding(40.0f);
 
-    vbox->createChild<Label>("BuGUI + Raylib — Port Demo");
+    vbox->createChild<Label>("ig::retained + Raylib — Port Demo");
     vbox->createChild<Spacer>(20.0f);
 
     struct { const char* label; const char* stage; } entries[] = {

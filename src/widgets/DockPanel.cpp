@@ -1,6 +1,6 @@
 #include "DockPanel.hpp"
 
-using namespace BuGUI;
+using namespace ig::retained;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Helpers

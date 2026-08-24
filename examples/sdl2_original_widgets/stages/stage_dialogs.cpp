@@ -3,7 +3,7 @@
 #include "LayoutWidgets.hpp"
 #include "DialogWidgets.hpp"
 #include <cstdio>
-using namespace BuGUI;
+using namespace ig::retained;
 
 static Label* s_dlgStatus = nullptr;
 

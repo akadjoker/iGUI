@@ -260,7 +260,7 @@ void ImageButton::paint(PaintContext& ctx)
 
         float tw = static_cast<float>(texW_);
         float th = static_cast<float>(texH_);
-        BuGUI::Rect uv = { srcRect_.x / tw, srcRect_.y / th,
+        ig::retained::Rect uv = { srcRect_.x / tw, srcRect_.y / th,
                            srcRect_.width / tw, srcRect_.height / th };
         Rect dst = { ix, iy, iw, ih };
         ctx.drawImage(tex_, dst, uv, tint_);

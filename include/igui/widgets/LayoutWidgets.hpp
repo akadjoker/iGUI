@@ -8,7 +8,7 @@
 #include <ct/function.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -724,4 +724,5 @@ private:
 };
 
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -3,7 +3,7 @@
 #include "Widget.hpp"
 #include "IconAtlas.hpp"
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  AssetBrowser — thumbnail grid (or list) file/asset browser
@@ -91,4 +91,5 @@ private:
     GridLayout computeGrid(const Rect& b) const;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

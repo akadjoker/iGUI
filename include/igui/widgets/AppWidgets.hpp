@@ -17,7 +17,7 @@
 //      bc->itemClicked.connect([](int index) { /* navigate */ });
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class Breadcrumbs : public Widget
 {
@@ -329,9 +329,9 @@ public:
     Viewport3D();
 
     /// @brief Set the texture to display (FBO color attachment).
-    void setTexture(BuGUI::TextureHandle tex, int w, int h);
+    void setTexture(ig::retained::TextureHandle tex, int w, int h);
     /// @brief Get the current texture handle.
-    BuGUI::TextureHandle texture() const { return tex_; }
+    ig::retained::TextureHandle texture() const { return tex_; }
 
     /// @brief Set orbit speed (degrees per pixel).
     void setOrbitSpeed(float s) { orbitSpeed_ = s; }
@@ -365,7 +365,7 @@ public:
     void  onMouseScroll(MouseEvent& e) override;
 
 private:
-    BuGUI::TextureHandle tex_ = {};
+    ig::retained::TextureHandle tex_ = {};
     int texW_ = 0, texH_ = 0;
 
     float orbitSpeed_ = 0.3f;
@@ -383,4 +383,5 @@ private:
     int lastW_ = 0, lastH_ = 0; // for resize detection
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -5,7 +5,7 @@
 
 using json = ct::Json;
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  WidgetSerializer - save / load widget trees to/from JSON
@@ -27,7 +27,7 @@ public:
     static Widget* load(const json& j, Widget* parent);
     static Widget* loadFromFile(const String& path, Widget* parent);
 
-    // Call once to register all standard BuGUI widget types
+    // Call once to register all standard ig::retained widget types
     static void registerBuiltinTypes();
 
 private:
@@ -41,4 +41,5 @@ private:
 };
 
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

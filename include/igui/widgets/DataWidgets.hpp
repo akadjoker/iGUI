@@ -8,7 +8,7 @@
 #include <numeric>
 #include <ct/hashset.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  DataGrid — spreadsheet table with sortable columns, inline edit,
@@ -307,4 +307,5 @@ private:
     float resizeStartW_ = 0.f;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

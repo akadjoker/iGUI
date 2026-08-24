@@ -6,7 +6,7 @@
 #include <igui/widgets/String.hpp>
 #include <ct/function.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  GradientEditor - horizontal color gradient with draggable stops
@@ -395,4 +395,5 @@ private:
     void paintPlayhead(PaintContext& ctx, const Rect& b);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

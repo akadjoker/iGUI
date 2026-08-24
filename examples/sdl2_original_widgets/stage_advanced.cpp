@@ -19,7 +19,7 @@
 #include <cmath>
 #include <ct/vector.hpp>
 
-using namespace BuGUI;
+using namespace ig::retained;
 
 namespace
 {
@@ -75,10 +75,10 @@ void registerEditorStage(WidgetApp& app)
         "class EditorStage final\n"
         "{\n"
         "public:\n"
-        "    void build(BuGUI::WidgetApp& app)\n"
+        "    void build(ig::retained::WidgetApp& app)\n"
         "    {\n"
         "        auto* root = app.addStage(\"editor\");\n"
-        "        auto* editor = root->createChild<BuGUI::CodeEditor>();\n"
+        "        auto* editor = root->createChild<ig::retained::CodeEditor>();\n"
         "        editor->setHighlighterForFile(\"main.cpp\");\n"
         "        editor->setShowFolding(true);\n"
         "        editor->setShowMinimap(true);\n"

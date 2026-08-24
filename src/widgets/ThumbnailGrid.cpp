@@ -22,7 +22,7 @@ int ThumbnailGrid::addItem(const String& label, const Color& color)
     return static_cast<int>(items_.size()) - 1;
 }
 
-void ThumbnailGrid::setItemTexture(int idx, BuGUI::TextureHandle tex)
+void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex)
 {
     if (idx < 0 || idx >= static_cast<int>(items_.size())) return;
     items_[idx].tex = tex;

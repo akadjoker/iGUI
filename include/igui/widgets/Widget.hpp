@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Signal.hpp"
-#include "BuGUI_base.hpp"
+#include "RetainedBase.hpp"
 #include "IconAtlas.hpp"
-#include "BuGUI.hpp"
+#include "Retained.hpp"
 #include <igui/widgets/String.hpp>
 #include <ct/vector.hpp>
 #include <ct/function.hpp>
@@ -12,7 +12,7 @@
 #include <any>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 class Menu;
@@ -21,7 +21,7 @@ class Menu;
 //  PaintContext
 //
 //  Self-contained — zero references to GL, RenderBatch, Texture, glm, SDL.
-//  All drawing goes into BuGUI::DrawList; the backend owns everything else.
+//  All drawing goes into ig::retained::DrawList; the backend owns everything else.
 //
 //  Backward compatibility:
 //    ctx.fill.SetColor(r,g,b,a)      — stores colour, no batch needed
@@ -97,8 +97,8 @@ struct FontProxy
 
 struct PaintContext
 {
-    BuGUI::DrawList&    drawList;
-    const BuGUI::Font*  buFont  = nullptr;
+    ig::retained::DrawList&    drawList;
+    const ig::retained::Font*  buFont  = nullptr;
 
     // ── Compatibility proxies (existing widget .cpp files unchanged) ──────
     ColorProxy fill;   // ctx.fill.SetColor / ctx.fill.Rectangle / ...
@@ -111,16 +111,16 @@ struct PaintContext
     // Optional procedural icon atlas (TextureHandle resolved internally)
     IconAtlas* icons = nullptr;
 
-    PaintContext(BuGUI::DrawList& dl,
-                 const BuGUI::Font* f = nullptr,
+    PaintContext(ig::retained::DrawList& dl,
+                 const ig::retained::Font* f = nullptr,
                  IconAtlas* ico = nullptr);
 
     /// @brief Push a font onto the font stack.
-    void pushFont(const BuGUI::Font* f);
+    void pushFont(const ig::retained::Font* f);
     /// @brief Pop the topmost font from the stack.
     void popFont();
     /// @brief Get the currently active font.
-    const BuGUI::Font* currentFont() const { return buFont; }
+    const ig::retained::Font* currentFont() const { return buFont; }
 
     /// @brief Push a clip rectangle onto the clip stack.
     void pushClip(const Rect& r);
@@ -159,16 +159,16 @@ struct PaintContext
     void  drawText(float x, float y, const char* text);
     /// @brief Draw text aligned within a bounding rectangle.
     void  drawTextAligned(const Rect& bounds, const char* text,
-                          BuGUI::AlignX ax = BuGUI::AlignX::Left,
-                          BuGUI::AlignY ay = BuGUI::AlignY::Top);
+                          ig::retained::AlignX ax = ig::retained::AlignX::Left,
+                          ig::retained::AlignY ay = ig::retained::AlignY::Top);
     /// @brief Measure text width using the current font.
     float textWidth(const char* text)  const;
     /// @brief Get text line height.
     float textHeight()                 const;
 
     /// @brief Draw a textured image in dst rect with UV and tint.
-    void drawImage(BuGUI::TextureHandle tex, const Rect& dst,
-                   BuGUI::Rect uv   = {0.0f, 0.0f, 1.0f, 1.0f},
+    void drawImage(ig::retained::TextureHandle tex, const Rect& dst,
+                   ig::retained::Rect uv   = {0.0f, 0.0f, 1.0f, 1.0f},
                    Color       tint = Color(255, 255, 255, 255));
 
     /// @brief Draw an icon from the atlas at (x, y) with given size.
@@ -178,7 +178,7 @@ struct PaintContext
 
 private:
     ct::Vector<Rect> clipStack_;
-    ct::Vector<const BuGUI::Font*> fontStack_;
+    ct::Vector<const ig::retained::Font*> fontStack_;
     mutable Rect      cachedClip_ = {0, 0, 99999, 99999};
 };
 
@@ -479,9 +479,9 @@ public:
 
     // ── Custom font (per-widget override) ─────────────────────────────────
     /// @brief Override the font for this widget.
-    void setFont(const BuGUI::Font* f) { overrideFont_ = f; markDirty(); }
+    void setFont(const ig::retained::Font* f) { overrideFont_ = f; markDirty(); }
     /// @brief Get the per-widget font override (nullptr = inherit).
-    const BuGUI::Font* overrideFont() const { return overrideFont_; }
+    const ig::retained::Font* overrideFont() const { return overrideFont_; }
 
     // ── Cursor ────────────────────────────────────────────────────────────
     /// @brief Set the mouse cursor type for this widget.
@@ -565,7 +565,7 @@ protected:
     float tooltipDelay_ = 0.6f;  // seconds before tooltip appears
     CursorType cursor_ = CursorType::Arrow;
     Menu* contextMenu_ = nullptr;  // owned - deleted in ~Widget
-    const BuGUI::Font* overrideFont_ = nullptr;  // optional per-widget font
+    const ig::retained::Font* overrideFont_ = nullptr;  // optional per-widget font
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -605,4 +605,5 @@ private:
 using VBoxLayout = BoxLayout;   // construct with LayoutDir::Vertical
 using HBoxLayout = BoxLayout;   // construct with LayoutDir::Horizontal
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -1,18 +1,21 @@
-#include <BasicWidgets.hpp>
-#include <FileSystem.hpp>
-#include <InputWidgets.hpp>
-#include <LayoutWidgets.hpp>
-#include <WidgetSerializer.hpp>
-#include <Animation.hpp>
-#include <WidgetApp.hpp>
+#include <igui/Widgets.hpp>
 
 #include <cassert>
 #include <cmath>
-#include <igui/widgets/String.hpp>
+#include <type_traits>
+
+static_assert(std::is_same<ig::Color, ig::retained::Color>::value,
+              "retained widgets must use ig::Color");
+static_assert(std::is_same<ig::Vec2, ig::retained::Vec2>::value,
+              "retained widgets must use ig::Vec2");
+static_assert(std::is_same<ig::Rect, ig::retained::Rect>::value,
+              "retained widgets must use ig::Rect");
+static_assert(std::is_same<ig::Widget, ig::retained::Widget>::value,
+              "retained widgets must be exposed as ig::Widget");
 
 int main()
 {
-    using namespace BuGUI;
+    using namespace ig;
 
     String edited("abc");
     edited.append(2, '!');

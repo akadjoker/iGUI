@@ -1,6 +1,6 @@
 #include "pch.hpp"
 
-using BuImage = BuGUI::BuImage;
+using BuImage = ig::retained::BuImage;
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  IconAtlas
@@ -8,7 +8,7 @@ using BuImage = BuGUI::BuImage;
 
 IconAtlas::~IconAtlas() {}
 
-BuGUI::BuImage* IconAtlas::buildImage(int cellSize)
+ig::retained::BuImage* IconAtlas::buildImage(int cellSize)
 {
     cellSize_ = cellSize;
     cols_ = 8;

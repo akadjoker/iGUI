@@ -16,13 +16,25 @@ struct Rect
 {
     float x;
     float y;
-    float width;
-    float height;
+    union { float width; float w; };
+    union { float height; float h; };
 
     Rect() : x(0.0f), y(0.0f), width(0.0f), height(0.0f) {}
     Rect(float xValue, float yValue, float widthValue, float heightValue)
         : x(xValue), y(yValue), width(widthValue), height(heightValue)
     {
+    }
+
+    float right() const { return x + width; }
+    float bottom() const { return y + height; }
+    bool contains(float pointX, float pointY) const
+    {
+        return pointX >= x && pointX < right() && pointY >= y && pointY < bottom();
+    }
+    Rect shrunk(float padding) const
+    {
+        return Rect(x + padding, y + padding, width - padding * 2.0f,
+                    height - padding * 2.0f);
     }
 };
 

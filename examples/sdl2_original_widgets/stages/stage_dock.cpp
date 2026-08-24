@@ -5,7 +5,7 @@
 #include "TreePropertyColorWidgets.hpp"
 #include "TextInputWidgets.hpp"
 #include "ConsoleWidget.hpp"
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerDockStage(WidgetApp& app)
 {

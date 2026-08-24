@@ -7,7 +7,7 @@
 #include <cstring>
 #include <numeric>
 
-using BuGUI::clamp;
+using ig::retained::clamp;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  DataGrid - constructor
@@ -733,31 +733,31 @@ void DataGrid::onKeyPress(KeyEvent& e)
     if (editing_) {
         e.consumed = true;
         switch (e.key) {
-        case BuGUI::Key::Return:
-        case BuGUI::Key::KPEnter:
+        case ig::retained::Key::Return:
+        case ig::retained::Key::KPEnter:
             commitEdit(); return;
-        case BuGUI::Key::Escape:
+        case ig::retained::Key::Escape:
             cancelEdit(); return;
-        case BuGUI::Key::Backspace:
+        case ig::retained::Key::Backspace:
             if (editCursor_ > 0 && !editBuf_.empty()) {
                 editBuf_.erase(editCursor_ - 1, 1);
                 editCursor_--;
                 markDirty();
             } return;
-        case BuGUI::Key::Delete:
+        case ig::retained::Key::Delete:
             if (editCursor_ < static_cast<int>(editBuf_.size())) {
                 editBuf_.erase(editCursor_, 1);
                 markDirty();
             } return;
-        case BuGUI::Key::Left:
+        case ig::retained::Key::Left:
             if (editCursor_ > 0) { editCursor_--; markDirty(); } return;
-        case BuGUI::Key::Right:
+        case ig::retained::Key::Right:
             if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_++; markDirty(); } return;
-        case BuGUI::Key::Home:
+        case ig::retained::Key::Home:
             editCursor_ = 0; markDirty(); return;
-        case BuGUI::Key::End:
+        case ig::retained::Key::End:
             editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
-        case BuGUI::Key::Tab: {
+        case ig::retained::Key::Tab: {
             commitEdit();
             int nextCol = editCol_ + 1;
             int nextRow = editRow_;
@@ -765,10 +765,10 @@ void DataGrid::onKeyPress(KeyEvent& e)
             if (nextRow < modelRowCount()) startEdit(nextRow, nextCol);
             return;
         }
-        case BuGUI::Key::C:
+        case ig::retained::Key::C:
             if (e.ctrl) { WidgetApp::instance().setClipboardText(editBuf_.c_str()); return; }
             break;
-        case BuGUI::Key::V:
+        case ig::retained::Key::V:
             if (e.ctrl) {
                 String clip = WidgetApp::instance().getClipboardText();
                 if (!clip.empty()) {
@@ -783,7 +783,7 @@ void DataGrid::onKeyPress(KeyEvent& e)
     }
 
     if (!editing_ && e.ctrl) {
-        if (e.key == BuGUI::Key::C) {
+        if (e.key == ig::retained::Key::C) {
             e.consumed = true;
             String text;
             int nc = static_cast<int>(columns_.size());
@@ -803,7 +803,7 @@ void DataGrid::onKeyPress(KeyEvent& e)
             if (!text.empty()) WidgetApp::instance().setClipboardText(text.c_str());
             return;
         }
-        if (e.key == BuGUI::Key::A) {
+        if (e.key == ig::retained::Key::A) {
             e.consumed = true;
             selectedRows_.clear();
             selectedSet_.clear();
@@ -819,18 +819,18 @@ void DataGrid::onKeyPress(KeyEvent& e)
     }
 
     if (!editing_) {
-        if (e.key == BuGUI::Key::Up) {
+        if (e.key == ig::retained::Key::Up) {
             e.consumed = true;
             if (selectedRow_ > 0) { setSelectedRow(selectedRow_ - 1); selectionChanged.emit(selectedRow_); }
-        } else if (e.key == BuGUI::Key::Down) {
+        } else if (e.key == ig::retained::Key::Down) {
             e.consumed = true;
             if (selectedRow_ < modelRowCount() - 1) {
                 setSelectedRow(selectedRow_ + 1); selectionChanged.emit(selectedRow_);
             }
-        } else if (e.key == BuGUI::Key::Return || e.key == BuGUI::Key::KPEnter) {
+        } else if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) {
             e.consumed = true;
             if (selectedRow_ >= 0) startEdit(selectedRow_, 0);
-        } else if (e.key == BuGUI::Key::Space && showCheckboxes_) {
+        } else if (e.key == ig::retained::Key::Space && showCheckboxes_) {
             e.consumed = true;
             if (selectedRow_ >= 0 && selectedRow_ < modelRowCount()) {
                 if (model_) {
@@ -1560,29 +1560,29 @@ void TreeGrid::onKeyPress(KeyEvent& e)
     if (editing_) {
         e.consumed = true;
         switch (e.key) {
-        case BuGUI::Key::Return: case BuGUI::Key::KPEnter:
+        case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
             commitEdit(); return;
-        case BuGUI::Key::Escape:
+        case ig::retained::Key::Escape:
             cancelEdit(); return;
-        case BuGUI::Key::Backspace:
+        case ig::retained::Key::Backspace:
             if (editCursor_ > 0 && !editBuf_.empty()) {
                 editBuf_.erase(editCursor_ - 1, 1);
                 editCursor_--; markDirty();
             } return;
-        case BuGUI::Key::Delete:
+        case ig::retained::Key::Delete:
             if (editCursor_ < static_cast<int>(editBuf_.size())) {
                 editBuf_.erase(editCursor_, 1); markDirty();
             } return;
-        case BuGUI::Key::Left:
+        case ig::retained::Key::Left:
             if (editCursor_ > 0) { editCursor_--; markDirty(); } return;
-        case BuGUI::Key::Right:
+        case ig::retained::Key::Right:
             if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_++; markDirty(); } return;
-        case BuGUI::Key::Home: editCursor_ = 0; markDirty(); return;
-        case BuGUI::Key::End:  editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
-        case BuGUI::Key::C:
+        case ig::retained::Key::Home: editCursor_ = 0; markDirty(); return;
+        case ig::retained::Key::End:  editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
+        case ig::retained::Key::C:
             if (e.ctrl) { WidgetApp::instance().setClipboardText(editBuf_.c_str()); return; }
             break;
-        case BuGUI::Key::V:
+        case ig::retained::Key::V:
             if (e.ctrl) {
                 String clip = WidgetApp::instance().getClipboardText();
                 if (!clip.empty()) { editBuf_.insert(editCursor_, clip); editCursor_ += static_cast<int>(clip.size()); markDirty(); }
@@ -1597,19 +1597,19 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
             if (flatList_[i].node == selectedNode_) { curIdx = i; break; }
 
-        if (e.key == BuGUI::Key::Up && curIdx > 0) {
+        if (e.key == ig::retained::Key::Up && curIdx > 0) {
             e.consumed = true;
             selectedNode_  = flatList_[curIdx - 1].node;
             selectedNodes_ = {selectedNode_};
             selectionChanged.emit(selectedNode_);
             markDirty();
-        } else if (e.key == BuGUI::Key::Down && curIdx < static_cast<int>(flatList_.size()) - 1) {
+        } else if (e.key == ig::retained::Key::Down && curIdx < static_cast<int>(flatList_.size()) - 1) {
             e.consumed = true;
             selectedNode_  = flatList_[curIdx + 1].node;
             selectedNodes_ = {selectedNode_};
             selectionChanged.emit(selectedNode_);
             markDirty();
-        } else if (e.key == BuGUI::Key::Left && selectedNode_) {
+        } else if (e.key == ig::retained::Key::Left && selectedNode_) {
             e.consumed = true;
             if (selectedNode_->expanded && !selectedNode_->children.empty()) {
                 selectedNode_->expanded = false;
@@ -1621,7 +1621,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
-        } else if (e.key == BuGUI::Key::Right && selectedNode_) {
+        } else if (e.key == ig::retained::Key::Right && selectedNode_) {
             e.consumed = true;
             if (!selectedNode_->expanded && !selectedNode_->children.empty()) {
                 selectedNode_->expanded = true;
@@ -1633,10 +1633,10 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
-        } else if (e.key == BuGUI::Key::Return && selectedNode_) {
+        } else if (e.key == ig::retained::Key::Return && selectedNode_) {
             e.consumed = true;
             startEdit(selectedNode_, 0);
-        } else if (e.key == BuGUI::Key::C && e.ctrl && selectedNode_) {
+        } else if (e.key == ig::retained::Key::C && e.ctrl && selectedNode_) {
             e.consumed = true;
             String text;
             for (int c = 0; c < static_cast<int>(selectedNode_->cells.size()); ++c) {

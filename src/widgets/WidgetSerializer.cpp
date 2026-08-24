@@ -493,7 +493,7 @@ json WidgetSerializer::save(const Widget* root)
 
 bool WidgetSerializer::saveToFile(const Widget* root, const String& path)
 {
-    auto& io = BuGUI::GetIO();
+    auto& io = ig::retained::GetIO();
     if (!io.writeFile) {
         fprintf(stderr, "WidgetSerializer: writeFile callback not set\n");
         return false;
@@ -528,7 +528,7 @@ Widget* WidgetSerializer::load(const json& j, Widget* parent)
 
 Widget* WidgetSerializer::loadFromFile(const String& path, Widget* parent)
 {
-    auto& io = BuGUI::GetIO();
+    auto& io = ig::retained::GetIO();
     if (!io.readFile) {
         fprintf(stderr, "WidgetSerializer: readFile callback not set\n");
         return nullptr;

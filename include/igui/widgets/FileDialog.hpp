@@ -5,7 +5,7 @@
 #include "Signal.hpp"
 #include "IconAtlas.hpp"
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class BoxLayout;
 class Label;
@@ -139,7 +139,7 @@ private:
     int  lastClickIdx_  = -1;
 
     // Preview (image mode)
-    BuGUI::TextureHandle previewTex_ = {0};
+    ig::retained::TextureHandle previewTex_ = {0};
     int                  previewW_   = 0;
     int                  previewH_   = 0;
     String          previewPath_;
@@ -208,4 +208,5 @@ private:
     static IconId iconForExt(const String& ext);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

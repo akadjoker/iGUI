@@ -81,7 +81,7 @@ String TextInput::displayText() const
     return text_;
 }
 
-int TextInput::hitTestChar(const BuGUI::Font* /*font*/, float localX) const
+int TextInput::hitTestChar(const ig::retained::Font* /*font*/, float localX) const
 {
     auto& wa = WidgetApp::instance();
     String disp = displayText();
@@ -99,7 +99,7 @@ int TextInput::hitTestChar(const BuGUI::Font* /*font*/, float localX) const
     return len;
 }
 
-float TextInput::cursorXOffset(const BuGUI::Font* /*font*/, int pos) const
+float TextInput::cursorXOffset(const ig::retained::Font* /*font*/, int pos) const
 {
     String disp = displayText();
     String sub = utf8Substr(disp, 0, pos);
@@ -133,7 +133,7 @@ void TextInput::insertText(const String& t)
     textChanged.emit(text_);
 }
 
-void TextInput::ensureCursorVisible(const BuGUI::Font* font)
+void TextInput::ensureCursorVisible(const ig::retained::Font* font)
 {
     if (!font) return;
     float pad    = Theme::instance().padding;
@@ -192,7 +192,7 @@ void TextInput::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
 
-    const BuGUI::Font* font = ctx.buFont;
+    const ig::retained::Font* font = ctx.buFont;
     ensureCursorVisible(font);
 
     Rect textArea = {abs.x + pad, abs.y, abs.w - pad * 2, abs.h};
@@ -250,7 +250,7 @@ void TextInput::paint(PaintContext& ctx)
 
 void TextInput::onMousePress(MouseEvent& e)
 {
-    const BuGUI::Font* font = WidgetApp::instance().font();
+    const ig::retained::Font* font = WidgetApp::instance().font();
     cursor_   = hitTestChar(font, e.localX);
     selStart_ = selEnd_ = cursor_;
     dragging_ = true;
@@ -268,7 +268,7 @@ void TextInput::onMouseMove(MouseEvent& e)
 {
     if (dragging_)
     {
-        const BuGUI::Font* font = WidgetApp::instance().font();
+        const ig::retained::Font* font = WidgetApp::instance().font();
         cursor_ = hitTestChar(font, e.localX);
         selEnd_ = cursor_;
         blinkTimer_ = 0;
@@ -279,7 +279,7 @@ void TextInput::onMouseMove(MouseEvent& e)
 
 void TextInput::onKeyPress(KeyEvent& e)
 {
-    if (mode_ == Mode::ReadOnly && !(e.ctrl && e.key == BuGUI::Key::C)) return;
+    if (mode_ == Mode::ReadOnly && !(e.ctrl && e.key == ig::retained::Key::C)) return;
 
     int len = utf8Length(text_);
     blinkTimer_ = 0;
@@ -288,21 +288,21 @@ void TextInput::onKeyPress(KeyEvent& e)
     {
         switch (e.key)
         {
-        case BuGUI::Key::A: selectAll(); e.consumed = true; return;
-        case BuGUI::Key::C:
+        case ig::retained::Key::A: selectAll(); e.consumed = true; return;
+        case ig::retained::Key::C:
         {
             String sel = selectedText();
             if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
             e.consumed = true; return;
         }
-        case BuGUI::Key::X:
+        case ig::retained::Key::X:
         {
             if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
             String sel = selectedText();
             if (!sel.empty()) { WidgetApp::instance().setClipboardText(sel.c_str()); deleteSelection(); markDirty(); textChanged.emit(text_); }
             e.consumed = true; return;
         }
-        case BuGUI::Key::V:
+        case ig::retained::Key::V:
         {
             if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
             String clip = WidgetApp::instance().getClipboardText();
@@ -319,31 +319,31 @@ void TextInput::onKeyPress(KeyEvent& e)
 
     switch (e.key)
     {
-    case BuGUI::Key::Left:
+    case ig::retained::Key::Left:
         if (cursor_ > 0) {
             if (e.shift) { cursor_--; selEnd_ = cursor_; }
             else { cursor_ = hasSelection() ? std::min(selStart_, selEnd_) : cursor_ - 1; selStart_ = selEnd_ = cursor_; }
         } else if (!e.shift) selStart_ = selEnd_ = cursor_;
         markDirty(); e.consumed = true; break;
 
-    case BuGUI::Key::Right:
+    case ig::retained::Key::Right:
         if (cursor_ < len) {
             if (e.shift) { cursor_++; selEnd_ = cursor_; }
             else { cursor_ = hasSelection() ? std::max(selStart_, selEnd_) : cursor_ + 1; selStart_ = selEnd_ = cursor_; }
         } else if (!e.shift) selStart_ = selEnd_ = cursor_;
         markDirty(); e.consumed = true; break;
 
-    case BuGUI::Key::Home:
+    case ig::retained::Key::Home:
         cursor_ = 0;
         if (e.shift) selEnd_ = cursor_; else selStart_ = selEnd_ = cursor_;
         markDirty(); e.consumed = true; break;
 
-    case BuGUI::Key::End:
+    case ig::retained::Key::End:
         cursor_ = len;
         if (e.shift) selEnd_ = cursor_; else selStart_ = selEnd_ = cursor_;
         markDirty(); e.consumed = true; break;
 
-    case BuGUI::Key::Backspace:
+    case ig::retained::Key::Backspace:
         if (mode_ == Mode::ReadOnly) { e.consumed = true; break; }
         if (hasSelection()) { deleteSelection(); }
         else if (cursor_ > 0) {
@@ -355,7 +355,7 @@ void TextInput::onKeyPress(KeyEvent& e)
         }
         markDirty(); textChanged.emit(text_); e.consumed = true; break;
 
-    case BuGUI::Key::Delete:
+    case ig::retained::Key::Delete:
         if (mode_ == Mode::ReadOnly) { e.consumed = true; break; }
         if (hasSelection()) { deleteSelection(); }
         else if (cursor_ < len) {
@@ -366,11 +366,11 @@ void TextInput::onKeyPress(KeyEvent& e)
         }
         markDirty(); textChanged.emit(text_); e.consumed = true; break;
 
-    case BuGUI::Key::Return:
-    case BuGUI::Key::KPEnter:
+    case ig::retained::Key::Return:
+    case ig::retained::Key::KPEnter:
         submitted.emit(text_); e.consumed = true; break;
 
-    case BuGUI::Key::Escape:
+    case ig::retained::Key::Escape:
         clearSelection(); e.consumed = true; break;
 
     default: break;
@@ -884,7 +884,7 @@ void TextEdit::mergeWithNextLine()
     wrapDirty_ = true;
 }
 
-float TextEdit::computeGutterWidth(const BuGUI::Font& font) const
+float TextEdit::computeGutterWidth(const ig::retained::Font& font) const
 {
     if (!showLineNumbers_) return 0;
     char buf[16];
@@ -892,7 +892,7 @@ float TextEdit::computeGutterWidth(const BuGUI::Font& font) const
     return WidgetApp::instance().textWidth(buf) + Theme::instance().gutterPadding * 2;
 }
 
-float TextEdit::computeLineHeight(const BuGUI::Font& font) const
+float TextEdit::computeLineHeight(const ig::retained::Font& font) const
 {
     (void)font;
     return Theme::instance().fontSize + Theme::instance().lineSpacing;
@@ -1015,7 +1015,7 @@ void TextEdit::paint(PaintContext& ctx)
 
     // Compute line height and gutter from font proxy (scaled)
     lineHeight_ = (t.fontSize + t.lineSpacing) * fontScale_;
-    const BuGUI::Font* buFont = ctx.buFont;
+    const ig::retained::Font* buFont = ctx.buFont;
     if (buFont) {
         gutterW_ = computeGutterWidth(*buFont) * fontScale_ + extraGutterW_;
     } else {
@@ -1370,56 +1370,56 @@ void TextEdit::onKeyPress(KeyEvent& e)
     {
         switch (e.key)
         {
-        case BuGUI::Key::A: selectAll(); e.consumed = true; return;
-        case BuGUI::Key::C: copy(); e.consumed = true; return;
-        case BuGUI::Key::X: cut(); e.consumed = true; return;
-        case BuGUI::Key::V: paste(); e.consumed = true; return;
-        case BuGUI::Key::Home: cursor_ = {0,0}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
-        case BuGUI::Key::End: cursor_ = {lc-1, lineColCount(lc-1)}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
+        case ig::retained::Key::A: selectAll(); e.consumed = true; return;
+        case ig::retained::Key::C: copy(); e.consumed = true; return;
+        case ig::retained::Key::X: cut(); e.consumed = true; return;
+        case ig::retained::Key::V: paste(); e.consumed = true; return;
+        case ig::retained::Key::Home: cursor_ = {0,0}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
+        case ig::retained::Key::End: cursor_ = {lc-1, lineColCount(lc-1)}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
         default: break;
         }
     }
 
     switch (e.key)
     {
-    case BuGUI::Key::Left:
+    case ig::retained::Key::Left:
         if (cursor_.col > 0) cursor_.col--;
         else if (cursor_.line > 0) { cursor_.line--; cursor_.col = lineColCount(cursor_.line); }
         if (!e.shift) selAnchor_ = cursor_;
         ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::Right:
+    case ig::retained::Key::Right:
         if (cursor_.col < lineColCount(cursor_.line)) cursor_.col++;
         else if (cursor_.line < lc - 1) { cursor_.line++; cursor_.col = 0; }
         if (!e.shift) selAnchor_ = cursor_;
         ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::Up:
+    case ig::retained::Key::Up:
         if (cursor_.line > 0) { cursor_.line--; cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line)); }
         if (!e.shift) selAnchor_ = cursor_;
         ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::Down:
+    case ig::retained::Key::Down:
         if (cursor_.line < lc - 1) { cursor_.line++; cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line)); }
         if (!e.shift) selAnchor_ = cursor_;
         ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::Home:
+    case ig::retained::Key::Home:
         cursor_.col = 0; if (!e.shift) selAnchor_ = cursor_;
         markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::End:
+    case ig::retained::Key::End:
         cursor_.col = lineColCount(cursor_.line); if (!e.shift) selAnchor_ = cursor_;
         markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
 
-    case BuGUI::Key::PageUp: {
+    case ig::retained::Key::PageUp: {
         int jump = std::max(1, visibleLineCount() - 1);
         cursor_.line = std::max(0, cursor_.line - jump);
         cursor_.col  = std::min(cursor_.col, lineColCount(cursor_.line));
         if (!e.shift) selAnchor_ = cursor_;
         ensureCursorVisible(); markDirty(); e.consumed = true; break;
     }
-    case BuGUI::Key::PageDown: {
+    case ig::retained::Key::PageDown: {
         int jump = std::max(1, visibleLineCount() - 1);
         cursor_.line = std::min(lc - 1, cursor_.line + jump);
         cursor_.col  = std::min(cursor_.col, lineColCount(cursor_.line));
@@ -1427,15 +1427,15 @@ void TextEdit::onKeyPress(KeyEvent& e)
         ensureCursorVisible(); markDirty(); e.consumed = true; break;
     }
 
-    case BuGUI::Key::Return: case BuGUI::Key::KPEnter:
+    case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
         splitLine(); ensureCursorVisible(); e.consumed = true; break;
 
-    case BuGUI::Key::Tab: {
+    case ig::retained::Key::Tab: {
         if (!readOnly_) { insertTextAtCursor("\t"); ensureCursorVisible(); }
         e.consumed = true; break;
     }
 
-    case BuGUI::Key::Backspace:
+    case ig::retained::Key::Backspace:
         if (!readOnly_) {
             if (hasSelection()) { deleteSelection(); }
             else if (cursor_.col > 0) {
@@ -1450,7 +1450,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
         }
         e.consumed = true; break;
 
-    case BuGUI::Key::Delete:
+    case ig::retained::Key::Delete:
         if (!readOnly_) {
             if (hasSelection()) { deleteSelection(); }
             else if (cursor_.col < lineColCount(cursor_.line)) {
@@ -1464,7 +1464,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
         }
         e.consumed = true; break;
 
-    case BuGUI::Key::Escape: clearSelection(); e.consumed = true; break;
+    case ig::retained::Key::Escape: clearSelection(); e.consumed = true; break;
 
     default: break;
     }

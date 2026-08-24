@@ -3,10 +3,10 @@
 #include "Widget.hpp"
 #include "Theme.hpp"
 #include "Signal.hpp"
-#include "BuGUI_base.hpp"   // Vec3f, Mat4f
+#include "RetainedBase.hpp"   // Vec3f, Mat4f
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Gizmo2D - interactive 2D transform handles (Translate / Rotate / Scale)
@@ -228,7 +228,7 @@ private:
     static inline const Color kYellow {255, 255, 100, 255};
     static inline const Color kHover  {255, 128,  16, 220};
 
-    BuGUI::Vec2f project(const Vec3f& world) const;
+    ig::retained::Vec2f project(const Vec3f& world) const;
     void    unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const;
     float computeScale() const;
     float snap(float val, float grid) const;
@@ -240,4 +240,5 @@ private:
     void paintScale3D(PaintContext& ctx);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

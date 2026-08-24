@@ -5,7 +5,7 @@
 #include <igui/widgets/String.hpp>
 #include <ct/function.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class RadioButton;
 
@@ -133,10 +133,10 @@ public:
     ImageButton() = default;
 
     /// @brief Set the texture, dimensions for UV calculation.
-    void setTexture(BuGUI::TextureHandle tex, int texW, int texH)
+    void setTexture(ig::retained::TextureHandle tex, int texW, int texH)
     { tex_ = tex; texW_ = texW; texH_ = texH; markDirty(); }
     /// @brief Get the texture handle.
-    BuGUI::TextureHandle texture() const { return tex_; }
+    ig::retained::TextureHandle texture() const { return tex_; }
 
     /// @brief Source pixel rect within the texture.
     void setSrcRect(const FloatRect& r) { srcRect_ = r; markDirty(); }
@@ -162,7 +162,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    BuGUI::TextureHandle tex_;
+    ig::retained::TextureHandle tex_;
     int       texW_    = 0;
     int       texH_    = 0;
     FloatRect srcRect_ = {0, 0, 0, 0};
@@ -431,4 +431,5 @@ private:
 };
 
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

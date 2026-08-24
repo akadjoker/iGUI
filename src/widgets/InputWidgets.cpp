@@ -459,10 +459,10 @@ void SpinBox::onMouseScroll(MouseEvent& e)
 
 void SpinBox::onKeyPress(KeyEvent& e)
 {
-    if (e.key == BuGUI::Key::Up) {
+    if (e.key == ig::retained::Key::Up) {
         setValue(value_ + step_);
         e.consumed = true;
-    } else if (e.key == BuGUI::Key::Down) {
+    } else if (e.key == ig::retained::Key::Down) {
         setValue(value_ - step_);
         e.consumed = true;
     }
@@ -780,7 +780,7 @@ public:
 
     void onKeyPress(KeyEvent& e) override
     {
-        if (e.key == BuGUI::Key::Escape) {
+        if (e.key == ig::retained::Key::Escape) {
             if (mode_ == YearPick) {
                 mode_ = Calendar;
                 markDirty();
@@ -906,7 +906,7 @@ void DatePicker::openCalendar()
     float popH = 8 * 22.0f + 40;  // header + dow + 6 rows + padding
 
     auto* popup = new CalendarPopup_(this, date_);
-    const auto& io = BuGUI::GetIO();
+    const auto& io = ig::retained::GetIO();
     float popX = abs.x;
     float popY = abs.y + abs.h + 2;
     if (popX + popW > io.displayWidth)  popX = io.displayWidth  - popW;
@@ -1124,19 +1124,19 @@ void TimePicker::onMouseScroll(MouseEvent& e)
 
 void TimePicker::onKeyPress(KeyEvent& e)
 {
-    if (e.key == BuGUI::Key::Up) {
+    if (e.key == ig::retained::Key::Up) {
         adjustField(activeField_, 1);
         e.consumed = true;
-    } else if (e.key == BuGUI::Key::Down) {
+    } else if (e.key == ig::retained::Key::Down) {
         adjustField(activeField_, -1);
         e.consumed = true;
-    } else if (e.key == BuGUI::Key::Left) {
+    } else if (e.key == ig::retained::Key::Left) {
         if (activeField_ > Hour) {
             activeField_ = static_cast<Field>(activeField_ - 1);
             markDirty();
         }
         e.consumed = true;
-    } else if (e.key == BuGUI::Key::Right) {
+    } else if (e.key == ig::retained::Key::Right) {
         int maxField = showSeconds_ ? Second : Minute;
         if (activeField_ < maxField) {
             activeField_ = static_cast<Field>(activeField_ + 1);

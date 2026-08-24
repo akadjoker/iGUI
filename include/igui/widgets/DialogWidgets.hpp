@@ -7,7 +7,7 @@
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Dialog — modal overlay with scrim, title, message, action buttons
@@ -232,4 +232,5 @@ private:
     void onKeyPress(KeyEvent& e) override;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

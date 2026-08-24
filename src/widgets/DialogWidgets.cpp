@@ -124,7 +124,7 @@ void Dialog::onMousePress(MouseEvent& e)
 void Dialog::onKeyPress(KeyEvent& e)
 {
     // Escape → cancel (find Cancel button, or just close)
-    if (e.key == BuGUI::Key::Escape)
+    if (e.key == ig::retained::Key::Escape)
     {
         for (auto& b : buttons_)
             if (b.role == Role::Cancel)
@@ -139,7 +139,7 @@ void Dialog::onKeyPress(KeyEvent& e)
         e.consumed = true;
     }
     // Enter → accept
-    else if (e.key == BuGUI::Key::Return)
+    else if (e.key == ig::retained::Key::Return)
     {
         for (auto& b : buttons_)
             if (b.role == Role::Accept)
@@ -426,7 +426,7 @@ MessageBox::MessageBox(const String& title, const String& message,
 
     float fw = 400, fh = 180;
     setFloatSize(fw, fh);
-    auto& io = BuGUI::GetIO();
+    auto& io = ig::retained::GetIO();
     setFloatPos((io.displayWidth - fw) * 0.5f, (io.displayHeight - fh) * 0.5f);
 }
 
@@ -498,13 +498,13 @@ void MessageBox::close(Result r)
 
 void MessageBox::onKeyPress(KeyEvent& e)
 {
-    if (e.key == BuGUI::Key::Escape) {
+    if (e.key == ig::retained::Key::Escape) {
         e.consumed = true;
         if (buttons_ == Ok) close(ResultOk);
         else close(ResultCancel);
         return;
     }
-    if (e.key == BuGUI::Key::Return || e.key == BuGUI::Key::KPEnter) {
+    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) {
         e.consumed = true;
         if (buttons_ == YesNo || buttons_ == YesNoCancel) close(ResultYes);
         else close(ResultOk);
@@ -527,7 +527,7 @@ InputBox::InputBox(const String& title, const String& prompt)
 
     float fw = 400, fh = 170;
     setFloatSize(fw, fh);
-    auto& io = BuGUI::GetIO();
+    auto& io = ig::retained::GetIO();
     setFloatPos((io.displayWidth - fw) * 0.5f, (io.displayHeight - fh) * 0.5f);
 }
 
@@ -590,8 +590,8 @@ void InputBox::onCancel()
 
 void InputBox::onKeyPress(KeyEvent& e)
 {
-    if (e.key == BuGUI::Key::Escape)  { e.consumed = true; onCancel(); return; }
-    if (e.key == BuGUI::Key::Return || e.key == BuGUI::Key::KPEnter) { e.consumed = true; onOk(); return; }
+    if (e.key == ig::retained::Key::Escape)  { e.consumed = true; onCancel(); return; }
+    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) { e.consumed = true; onOk(); return; }
     FloatWindow::onKeyPress(e);
 }
 

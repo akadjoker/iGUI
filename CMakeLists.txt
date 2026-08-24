@@ -205,7 +205,7 @@ if(IGUI_BUILD_SDL2_DEMO)
             src/widgets/AudioWidgets.cpp
             src/widgets/AutomotiveWidgets.cpp
             src/widgets/BasicWidgets.cpp
-            src/widgets/BuGUI.cpp
+            src/widgets/Retained.cpp
             src/widgets/BuImage.cpp
             src/widgets/ChartWidgets.cpp
             src/widgets/CodeEditor.cpp

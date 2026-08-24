@@ -2,7 +2,7 @@
 #include <stb_image.h>
 #include <stb_image_write.h>
 
-namespace BuGUI {
+namespace ig { namespace retained {
 
 namespace
 {
@@ -389,7 +389,7 @@ u32 BuImage::GetPixel(u32 x, u32 y) const
 Color BuImage::GetPixelColor(u32 x, u32 y) const
 {
 
-    Color color = Color::BLACK;
+    Color color(0, 0, 0, 255);
 
     if ((x < (u32)width) && (y < (u32)height))
     {
@@ -1461,4 +1461,5 @@ BuImage* BuImage::CropExtended(const IntRect &rect, bool fillTransparent) const
     return result;
 }
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

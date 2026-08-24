@@ -6,7 +6,7 @@
 #include <ctime>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  FileSystem — cross-platform file/directory operations
@@ -74,4 +74,5 @@ String humanDate(time_t t);  // "2025-01-15 14:30"
 
 } // namespace FileSystem
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

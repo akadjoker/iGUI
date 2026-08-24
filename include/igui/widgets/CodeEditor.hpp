@@ -6,7 +6,7 @@
 #include <ct/hashset.hpp>
 #include <ct/function.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  SyntaxHighlighter — abstract base for language-specific highlighting
@@ -550,7 +550,7 @@ private:
     bool showIndentGuides_     = true;
     bool showWhitespace_       = false;
     bool showScopeLines_       = true;
-    const BuGUI::Font* lastPaintFont_ = nullptr;  // cached during paint
+    const ig::retained::Font* lastPaintFont_ = nullptr;  // cached during paint
     float colToPixelX(int line, int col) const;
     float colCharWidth(int line, int col) const;
     void paintCurrentLineHighlight(PaintContext& ctx, const Rect& abs);
@@ -590,4 +590,5 @@ private:
     String commentPrefix() const;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -10,7 +10,7 @@
 #include <ct/hashmap.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
     
 class Widget;
@@ -223,4 +223,5 @@ private:
     ct::Vector<AnimationGroup*> pendingGroups_;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

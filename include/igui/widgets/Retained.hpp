@@ -1,8 +1,9 @@
 #pragma once
 
-#include "BuGUI_base.hpp"
+#include "RetainedBase.hpp"
 #include <cstdint>
 #include <cstddef>
+#include <igui/Math.hpp>
 #include <igui/widgets/String.hpp>
 #include <ct/vector.hpp>
 #include <ct/hashmap.hpp>
@@ -28,7 +29,7 @@ struct Hash<String>
 };
 } // namespace ct
 
-namespace BuGUI
+namespace ig { namespace retained
 {
     // ── Platform-agnostic key constants ──────────────────────────────────
     // Values chosen so the SDL backend can pass its keycodes directly.
@@ -75,32 +76,8 @@ namespace BuGUI
         Bottom
     };
 
-    struct Vec2
-    {
-        float x = 0.0f;
-        float y = 0.0f;
-    };
-
-    struct Rect
-    {
-        float x = 0.0f;
-        float y = 0.0f;
-        float w = 0.0f;
-        float h = 0.0f;
-
-        float right()  const { return x + w; }
-        float bottom() const { return y + h; }
-
-        bool contains(float px, float py) const
-        {
-            return px >= x && px < x + w && py >= y && py < y + h;
-        }
-
-        Rect shrunk(float pad) const
-        {
-            return {x + pad, y + pad, w - pad * 2, h - pad * 2};
-        }
-    };
+    using Vec2 = ::ig::Vec2;
+    using Rect = ::ig::Rect;
 
     struct TextureHandle
     {
@@ -333,7 +310,8 @@ namespace BuGUI
         void addCircle(Vec2 center, float radius, const Color &color, float thickness = 1.0f, int segments = 32);
         void addTriangleFilled(Vec2 a, Vec2 b, Vec2 c, const Color &color);
         void addTriangle(Vec2 a, Vec2 b, Vec2 c, const Color &color, float thickness = 1.0f);
-        void addImage(TextureHandle texture, const Rect &rect, const Rect &uv, const Color &color = Color::WHITE);
+        void addImage(TextureHandle texture, const Rect &rect, const Rect &uv,
+                      const Color &color = Color(255, 255, 255, 255));
         void addText(const Font &font, Vec2 pos, const Color &color, const char *text, float scale = 1.0f);
 
 
@@ -460,4 +438,5 @@ namespace BuGUI
     DrawData *GetDrawData();
 
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

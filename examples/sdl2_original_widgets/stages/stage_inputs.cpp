@@ -4,7 +4,7 @@
 #include "InputWidgets.hpp"
 #include "TextInputWidgets.hpp"
 #include <cstdio>
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerInputsStage(WidgetApp& app)
 {

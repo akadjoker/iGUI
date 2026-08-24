@@ -15,7 +15,7 @@
 //  Emits scrolled(value) when the user drags or clicks in the track.
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 enum class ScrollBarOrientation { Horizontal, Vertical };
 
@@ -228,4 +228,5 @@ private:
     static constexpr float kRowPad = 4.0f;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

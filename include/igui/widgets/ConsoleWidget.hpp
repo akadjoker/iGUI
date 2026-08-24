@@ -24,7 +24,7 @@
 //    - Scrollbar
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 enum class LogLevel { Trace, Info, Warn, Error };
 
@@ -157,4 +157,5 @@ private:
     void historyDown();
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

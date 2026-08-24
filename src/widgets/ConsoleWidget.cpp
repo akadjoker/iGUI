@@ -44,7 +44,7 @@ ConsoleWidget::ConsoleWidget()
 
 void ConsoleWidget::log(LogLevel level, const String& message)
 {
-    float ts = BuGUI::GetIO().deltaTime; // approximate — callers can set real ts
+    float ts = ig::retained::GetIO().deltaTime; // approximate — callers can set real ts
 
     if (collapse_ && !entries_.empty()) {
         auto& last = entries_.back();
@@ -599,7 +599,7 @@ void ConsoleWidget::onMouseScroll(MouseEvent& e)
 void ConsoleWidget::onKeyPress(KeyEvent& e)
 {
     // Ctrl+F — toggle search
-    if (e.ctrl && e.key == BuGUI::Key::F) {
+    if (e.ctrl && e.key == ig::retained::Key::F) {
         searchMode_ = !searchMode_;
         if (!searchMode_) {
             searchBuf_.clear();
@@ -612,13 +612,13 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // Ctrl+C — copy selected line
-    if (e.ctrl && e.key == BuGUI::Key::C) {
+    if (e.ctrl && e.key == ig::retained::Key::C) {
         if (selectedLine_ >= 0) {
             int vis = 0;
             for (auto& en : entries_) {
                 if (!passesFilter(en)) continue;
                 if (vis == selectedLine_) {
-                    auto& io = BuGUI::GetIO();
+                    auto& io = ig::retained::GetIO();
                     if (io.setClipboardText)
                         io.setClipboardText(en.message.c_str());
                     break;
@@ -631,14 +631,14 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // Ctrl+L — clear
-    if (e.ctrl && e.key == BuGUI::Key::L) {
+    if (e.ctrl && e.key == ig::retained::Key::L) {
         clear();
         e.consumed = true;
         return;
     }
 
     // Escape — clear search or deselect
-    if (e.key == BuGUI::Key::Escape) {
+    if (e.key == ig::retained::Key::Escape) {
         if (searchMode_) {
             searchMode_ = false;
             searchBuf_.clear();
@@ -653,14 +653,14 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
 
     // If search mode, route keys to search buffer
     if (searchMode_ && !inputFocused_) {
-        if (e.key == BuGUI::Key::Backspace) {
+        if (e.key == ig::retained::Key::Backspace) {
             if (!searchBuf_.empty()) searchBuf_.pop_back();
             searchText_ = searchBuf_;
             markDirty();
             e.consumed = true;
             return;
         }
-        if (e.key == BuGUI::Key::Return) {
+        if (e.key == ig::retained::Key::Return) {
             searchMode_ = false;
             inputFocused_ = true;
             markDirty();
@@ -675,12 +675,12 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     // Input focused — command line keys
     if (inputFocused_) {
         switch (e.key) {
-        case BuGUI::Key::Return: case BuGUI::Key::KPEnter:
+        case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
             submitCommand();
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Backspace:
+        case ig::retained::Key::Backspace:
             if (cursorPos_ > 0 && !inputBuf_.empty()) {
                 inputBuf_.erase(cursorPos_ - 1, 1);
                 cursorPos_--;
@@ -689,7 +689,7 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Delete:
+        case ig::retained::Key::Delete:
             if (cursorPos_ < (int)inputBuf_.size()) {
                 inputBuf_.erase(cursorPos_, 1);
                 markDirty();
@@ -697,47 +697,47 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Left:
+        case ig::retained::Key::Left:
             if (cursorPos_ > 0) { cursorPos_--; markDirty(); }
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Right:
+        case ig::retained::Key::Right:
             if (cursorPos_ < (int)inputBuf_.size()) { cursorPos_++; markDirty(); }
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Home:
+        case ig::retained::Key::Home:
             cursorPos_ = 0;
             markDirty();
             e.consumed = true;
             return;
 
-        case BuGUI::Key::End:
+        case ig::retained::Key::End:
             cursorPos_ = (int)inputBuf_.size();
             markDirty();
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Up:
+        case ig::retained::Key::Up:
             historyUp();
             e.consumed = true;
             return;
 
-        case BuGUI::Key::Down:
+        case ig::retained::Key::Down:
             historyDown();
             e.consumed = true;
             return;
         }
     } else {
         // Not in input — arrow keys scroll log / move selection
-        if (e.key == BuGUI::Key::Up) {
+        if (e.key == ig::retained::Key::Up) {
             if (selectedLine_ > 0) selectedLine_--;
             markDirty();
             e.consumed = true;
             return;
         }
-        if (e.key == BuGUI::Key::Down) {
+        if (e.key == ig::retained::Key::Down) {
             int visCount = 0;
             for (auto& en : entries_)
                 if (passesFilter(en)) visCount++;
@@ -747,7 +747,7 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             return;
         }
         // Tab to focus input
-        if (e.key == BuGUI::Key::Tab) {
+        if (e.key == ig::retained::Key::Tab) {
             inputFocused_ = true;
             markDirty();
             e.consumed = true;

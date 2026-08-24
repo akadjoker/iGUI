@@ -268,7 +268,7 @@ void ComboBox::openDropdown()
     auto* popup = new ComboPopup_(this, items_, selectedIndex_, maxVisible_, rowH);
 
     // Open upward if there is not enough space below. Clamp horizontally too.
-    const auto& io = BuGUI::GetIO();
+    const auto& io = ig::retained::GetIO();
     float popX = abs.x;
     float popY = (abs.y + abs.h + popH > io.displayHeight && abs.y - popH >= 0.0f)
                  ? abs.y - popH

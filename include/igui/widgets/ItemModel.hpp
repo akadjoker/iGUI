@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <any>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Model/View Architecture  (Qt-inspired)
@@ -436,4 +436,5 @@ private:
     mutable ct::Vector<int> mapping_;  // proxy row → source row
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

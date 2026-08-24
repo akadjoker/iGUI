@@ -265,12 +265,12 @@ void SearchBar::onMousePress(MouseEvent& e)
 
 void SearchBar::onKeyPress(KeyEvent& e)
 {
-    if (e.key == BuGUI::Key::Return || e.key == BuGUI::Key::KPEnter) {
+    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) {
         onSearch.emit(text_);
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Backspace) {
+    if (e.key == ig::retained::Key::Backspace) {
         if (cursorPos_ > 0) {
             text_.erase(cursorPos_ - 1, 1);
             cursorPos_--;
@@ -281,7 +281,7 @@ void SearchBar::onKeyPress(KeyEvent& e)
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Delete) {
+    if (e.key == ig::retained::Key::Delete) {
         if (cursorPos_ < static_cast<int>(text_.size())) {
             text_.erase(cursorPos_, 1);
             blinkTimer_ = 0;
@@ -291,41 +291,41 @@ void SearchBar::onKeyPress(KeyEvent& e)
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Left) {
+    if (e.key == ig::retained::Key::Left) {
         if (cursorPos_ > 0) cursorPos_--;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Right) {
+    if (e.key == ig::retained::Key::Right) {
         if (cursorPos_ < static_cast<int>(text_.size())) cursorPos_++;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Home) {
+    if (e.key == ig::retained::Key::Home) {
         cursorPos_ = 0;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::End) {
+    if (e.key == ig::retained::Key::End) {
         cursorPos_ = static_cast<int>(text_.size());
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == BuGUI::Key::Escape) {
+    if (e.key == ig::retained::Key::Escape) {
         clear();
         e.consumed = true;
         return;
     }
     // Ctrl+A select all (just move cursor to end for now)
-    if (e.ctrl && e.key == BuGUI::Key::A) {
+    if (e.ctrl && e.key == ig::retained::Key::A) {
         cursorPos_ = static_cast<int>(text_.size());
         blinkTimer_ = 0;
         markDirty();
@@ -1146,7 +1146,7 @@ Viewport3D::Viewport3D()
     acceptsFocus_ = true;
 }
 
-void Viewport3D::setTexture(BuGUI::TextureHandle tex, int w, int h)
+void Viewport3D::setTexture(ig::retained::TextureHandle tex, int w, int h)
 {
     tex_ = tex;
     texW_ = w;

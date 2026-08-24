@@ -16,7 +16,7 @@
 //      onValueChanged.disconnect(id);
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 template <typename... Args>
@@ -88,4 +88,5 @@ private:
     SlotId nextId_ = 1;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

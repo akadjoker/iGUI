@@ -450,10 +450,10 @@ void DriveMode::onMouseScroll(MouseEvent& e)
 void DriveMode::onKeyPress(KeyEvent& e)
 {
     if (modes_.empty()) return;
-    if (e.key == BuGUI::Key::Up) {
+    if (e.key == ig::retained::Key::Up) {
         setMode((current_ + 1) % static_cast<int>(modes_.size()));
         e.consumed = true;
-    } else if (e.key == BuGUI::Key::Down) {
+    } else if (e.key == ig::retained::Key::Down) {
         setMode((current_ - 1 + static_cast<int>(modes_.size())) % static_cast<int>(modes_.size()));
         e.consumed = true;
     }

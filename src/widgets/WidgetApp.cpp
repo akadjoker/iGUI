@@ -5,7 +5,7 @@
 #include "MenuWidgets.hpp"   // Menu::exec (for context menu)
 #include "DialogWidgets.hpp" // Toast
 
-namespace BuGUI {
+namespace ig { namespace retained {
 
 struct ContextMenu {
     static void show(Menu* menu, float x, float y, Widget* /*owner*/) {
@@ -88,7 +88,7 @@ bool WidgetApp::init()
 //  Per-frame input dispatch
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::update(const BuGUI::IO& io)
+void WidgetApp::update(const ig::retained::IO& io)
 {
     dt_     = io.deltaTime;
     elapsedMs_ += static_cast<uint32_t>(dt_ * 1000.0f);
@@ -206,7 +206,7 @@ void WidgetApp::update(const BuGUI::IO& io)
         prevMouseDown_[i] = io.mouseDown[i];
 
     // Write cursor hint into IO so backend can read it
-    BuGUI::GetIO().wantedCursor = static_cast<int>(wantedCursor_);
+    ig::retained::GetIO().wantedCursor = static_cast<int>(wantedCursor_);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -448,10 +448,10 @@ void WidgetApp::dispatchMouseScroll(float x, float y, float sx, float sy)
     bubble(hovered_, me, &Widget::onMouseScroll);
 }
 
-void WidgetApp::dispatchKeyEvent(const BuGUI::IO::KeyEvent& ke)
+void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
 {
     // ── Tab / Shift+Tab focus cycling ────────────────────────────────────
-    if (ke.down && ke.key == BuGUI::Key::Tab && !ke.ctrl && !ke.alt) {
+    if (ke.down && ke.key == ig::retained::Key::Tab && !ke.ctrl && !ke.alt) {
         // First give the focused widget a chance to consume Tab
         if (focused_) {
             KeyEvent we;
@@ -951,11 +951,11 @@ static Color debugColor(int depth)
     return colors[depth % 7];
 }
 
-void debugPaintWidget(Widget* w, BuGUI::DrawList& dl, int depth)
+void debugPaintWidget(Widget* w, ig::retained::DrawList& dl, int depth)
 {
     if (!w || !w->isVisible()) return;
 
-    BuGUI::Rect abs = { w->absoluteRect().x, w->absoluteRect().y,
+    ig::retained::Rect abs = { w->absoluteRect().x, w->absoluteRect().y,
                         w->absoluteRect().w, w->absoluteRect().h };
     Color c = debugColor(depth);
     dl.addRectOutline(abs, c);
@@ -963,7 +963,7 @@ void debugPaintWidget(Widget* w, BuGUI::DrawList& dl, int depth)
     const Edges& m = w->margins();
     if (m.top > 0 || m.right > 0 || m.bottom > 0 || m.left > 0)
     {
-        BuGUI::Rect outer = { abs.x - m.left, abs.y - m.top,
+        ig::retained::Rect outer = { abs.x - m.left, abs.y - m.top,
                               abs.w + m.left + m.right, abs.h + m.top + m.bottom };
         Color dim = {c.r, c.g, c.b, 80};
         dl.addRectOutline(outer, dim);
@@ -1045,15 +1045,15 @@ float applyEasing(EaseType type, float t)
 //  paintTreeInto – fills background then paints widget tree
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::setStageCamera(const String& name, const BuGUI::Camera2D& cam)
+void WidgetApp::setStageCamera(const String& name, const ig::retained::Camera2D& cam)
 {
     stageCameras_[name] = cam;
 }
 
-BuGUI::Camera2D WidgetApp::stageCamera(const String& name) const
+ig::retained::Camera2D WidgetApp::stageCamera(const String& name) const
 {
-    const BuGUI::Camera2D* camera = stageCameras_.find(name);
-    return camera ? *camera : BuGUI::Camera2D{};
+    const ig::retained::Camera2D* camera = stageCameras_.find(name);
+    return camera ? *camera : ig::retained::Camera2D{};
 }
 
 void WidgetApp::setStageBgColor(const String& name, const Color& c)
@@ -1071,8 +1071,8 @@ Color WidgetApp::stageBgColor(const String& name) const
 //  paintTreeInto – fills background then paints widget tree
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::paintTreeInto(Widget* tree, BuGUI::DrawList& dl,
-                               const BuGUI::Font* font, IconAtlas* icons,
+void WidgetApp::paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
+                               const ig::retained::Font* font, IconAtlas* icons,
                                float w, float h, const Color& bgColor)
 {
     if (!tree) return;
@@ -1093,15 +1093,15 @@ void WidgetApp::paintTreeInto(Widget* tree, BuGUI::DrawList& dl,
 //  paint – layout + paint the full widget tree, pushing DrawPasses into data.
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::paint(BuGUI::DrawData& data,
-                      const BuGUI::Font* font,
+void WidgetApp::paint(ig::retained::DrawData& data,
+                      const ig::retained::Font* font,
                       IconAtlas* icons)
 {
     float w = static_cast<float>(width_);
     float h = static_cast<float>(height_);
     if (w <= 0 || h <= 0) return;
     font_  = font;  // cache for text measurement in mouse events
-    drawList_ = &BuGUI::GetDrawList();
+    drawList_ = &ig::retained::GetDrawList();
 
     // Layout pass
     if (needsLayout_ && root_)
@@ -1134,14 +1134,14 @@ void WidgetApp::paint(BuGUI::DrawData& data,
         // Each stage gets its own DrawList + Camera2D.
         // The base camera comes from the per-stage camera map;
         // transitions add a pan/scale offset on top.
-        BuGUI::Camera2D baseCur = stageCamera(currentStage_);
-        BuGUI::Camera2D baseOld = stageCamera(transOldStage_);
+        ig::retained::Camera2D baseCur = stageCamera(currentStage_);
+        ig::retained::Camera2D baseOld = stageCamera(transOldStage_);
 
-        BuGUI::Camera2D camOld = baseOld;
-        BuGUI::Camera2D camNew = baseCur;
+        ig::retained::Camera2D camOld = baseOld;
+        ig::retained::Camera2D camNew = baseCur;
 
-        BuGUI::DrawList& dlNew  = BuGUI::GetDrawList();
-        BuGUI::DrawList& dlOld  = BuGUI::GetTransDrawList();
+        ig::retained::DrawList& dlNew  = ig::retained::GetDrawList();
+        ig::retained::DrawList& dlOld  = ig::retained::GetTransDrawList();
 
         switch (transCurrent_)
         {
@@ -1229,8 +1229,8 @@ void WidgetApp::paint(BuGUI::DrawData& data,
     else
     {
         // Normal render: single pass with this stage's camera
-        BuGUI::DrawList& dl = BuGUI::GetDrawList();
-        BuGUI::Camera2D  cam = stageCamera(currentStage_);
+        ig::retained::DrawList& dl = ig::retained::GetDrawList();
+        ig::retained::Camera2D  cam = stageCamera(currentStage_);
 
         // Fill stage background first so there are no transparent holes.
         dl.addRect({0, 0, w, h}, stageBgColor(currentStage_));
@@ -1291,14 +1291,14 @@ void WidgetApp::paint(BuGUI::DrawData& data,
     if (debugLayout_ && root_)
     {
         // Debug overlay goes into the current (new) stage's DrawList
-        BuGUI::DrawList& dlDbg = BuGUI::GetDrawList();
+        ig::retained::DrawList& dlDbg = ig::retained::GetDrawList();
         paintDebugOverlay(root_, dlDbg, 0);
     }
 
     // Overlay callback
     if (overlay_)
     {
-        BuGUI::DrawList& dlOv = BuGUI::GetDrawList();
+        ig::retained::DrawList& dlOv = ig::retained::GetDrawList();
         PaintContext octx{dlOv, font, icons};
         overlay_(octx);
         // If not already in passes (transition case already pushed), ensure
@@ -1308,7 +1308,7 @@ void WidgetApp::paint(BuGUI::DrawData& data,
     // Tooltip
     if (tooltipVisible_ && tooltipWidget_ && font)
     {
-        BuGUI::DrawList& dlTt = BuGUI::GetDrawList();
+        ig::retained::DrawList& dlTt = ig::retained::GetDrawList();
         paintTooltipInto(dlTt, font);
     }
 
@@ -1316,7 +1316,7 @@ void WidgetApp::paint(BuGUI::DrawData& data,
     Toast::tick(dt_);
     if (Toast::hasActive())
     {
-        BuGUI::DrawList& dlToast = BuGUI::GetDrawList();
+        ig::retained::DrawList& dlToast = ig::retained::GetDrawList();
         PaintContext tctx{dlToast, font, icons};
         Toast::paint(tctx, w, h);
     }
@@ -1326,7 +1326,7 @@ void WidgetApp::paint(BuGUI::DrawData& data,
 //  paintDebugOverlay
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::paintDebugOverlay(Widget* w, BuGUI::DrawList& dl, int depth)
+void WidgetApp::paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int depth)
 {
     debugPaintWidget(w, dl, depth);
 }
@@ -1335,7 +1335,7 @@ void WidgetApp::paintDebugOverlay(Widget* w, BuGUI::DrawList& dl, int depth)
 //  paintTooltipInto
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::paintTooltipInto(BuGUI::DrawList& dl, const BuGUI::Font* font)
+void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font)
 {
     if (!tooltipWidget_ || tooltipWidget_->tooltip().empty()) return;
 
@@ -1380,18 +1380,18 @@ float WidgetApp::textWidth(const char* text) const
     return drawList_->calcTextSize(*font_, text).x;
 }
 
-BuGUI::TextureHandle WidgetApp::loadImageTexture(const char* path, int& outW, int& outH)
+ig::retained::TextureHandle WidgetApp::loadImageTexture(const char* path, int& outW, int& outH)
 {
     outW = outH = 0;
-    if (!uploadTex_ || !path) return BuGUI::TextureHandle{0};
+    if (!uploadTex_ || !path) return ig::retained::TextureHandle{0};
 
     BuImage img;
-    if (!img.Load(path) || !img.IsValid()) return BuGUI::TextureHandle{0};
+    if (!img.Load(path) || !img.IsValid()) return ig::retained::TextureHandle{0};
 
     // Ensure RGBA
     if (img.components != 4) {
         BuImage* rgba = img.ConvertToRGBA();
-        if (!rgba || !rgba->IsValid()) { delete rgba; return BuGUI::TextureHandle{0}; }
+        if (!rgba || !rgba->IsValid()) { delete rgba; return ig::retained::TextureHandle{0}; }
         outW = rgba->width;
         outH = rgba->height;
         auto tex = uploadTex_(rgba->pixels, rgba->width, rgba->height);
@@ -1420,7 +1420,7 @@ void WidgetApp::cancelDrag()
     dragPending_ = false;
 }
 
-void WidgetApp::dispatchDropEvents(const ct::Vector<BuGUI::IO::DropEvent>& drops)
+void WidgetApp::dispatchDropEvents(const ct::Vector<ig::retained::IO::DropEvent>& drops)
 {
     for (const auto& drop : drops) {
         // Find the widget under the drop position
@@ -1448,4 +1448,5 @@ void WidgetApp::dispatchDropEvents(const ct::Vector<BuGUI::IO::DropEvent>& drops
     }
 }
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

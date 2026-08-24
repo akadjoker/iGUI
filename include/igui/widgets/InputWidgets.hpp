@@ -4,7 +4,7 @@
 #include "Theme.hpp"
 #include <igui/widgets/String.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Slider — draggable value control (horizontal or vertical)
@@ -281,4 +281,5 @@ private:
     String formatTime() const;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

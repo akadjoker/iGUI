@@ -315,7 +315,7 @@ void Canvas::paint(PaintContext& ctx)
 //  ImageView
 // ═════════════════════════════════════════════════════════════════════════════
 
-void ImageView::setTexture(BuGUI::TextureHandle tex, int w, int h)
+void ImageView::setTexture(ig::retained::TextureHandle tex, int w, int h)
 {
     texture_ = tex;
     texW_ = w;

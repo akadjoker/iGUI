@@ -1,9 +1,9 @@
 #pragma once
 
-#include "BuGUI_base.hpp"
+#include "RetainedBase.hpp"
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Theme - centralized colors/sizes for all widgets
@@ -249,4 +249,5 @@ struct Theme
     }
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

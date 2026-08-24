@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Widget.hpp"
-#include "BuGUI_base.hpp"
-#include "BuGUI.hpp"
+#include "RetainedBase.hpp"
+#include "Retained.hpp"
 #include <cstdint>
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
@@ -11,7 +11,7 @@
 
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -65,10 +65,10 @@ class StatusBar;
 //  WidgetApp manages the widget tree, layout, input dispatch and painting.
 //
 //  Typical frame:
-//      widgetApp.update(BuGUI::GetIO());                    // input → widgets
-//      widgetApp.paint(*BuGUI::GetDrawData(), font, icons); // layout + draw
-//      BuGUI::Render();
-//      backend.render(*BuGUI::GetDrawData());
+//      widgetApp.update(ig::retained::GetIO());                    // input → widgets
+//      widgetApp.paint(*ig::retained::GetDrawData(), font, icons); // layout + draw
+//      ig::retained::Render();
+//      backend.render(*ig::retained::GetDrawData());
 // ═════════════════════════════════════════════════════════════════════════════
 
 class WidgetApp
@@ -85,11 +85,11 @@ public:
 
     // ── Per-frame API ──────────────────────────────────────────────────────
     /// @brief Dispatch IO events to the widget tree.
-    void update(const BuGUI::IO& io);
+    void update(const ig::retained::IO& io);
 
     /// @brief Layout and paint the widget tree into draw data.
-    void paint(BuGUI::DrawData& data,
-               const BuGUI::Font* font  = nullptr,
+    void paint(ig::retained::DrawData& data,
+               const ig::retained::Font* font  = nullptr,
                IconAtlas*         icons = nullptr);
 
     /// @brief Get the cursor type the backend should apply.
@@ -118,7 +118,7 @@ public:
     String getClipboardText() const;
 
     /// @brief Get the cached font from the last paint() call.
-    const BuGUI::Font* font() const { return font_; }
+    const ig::retained::Font* font() const { return font_; }
     /// @brief Measure text width using the cached font.
     float textWidth(const char* text) const;
     /// @brief Get approximate frames per second.
@@ -152,8 +152,8 @@ public:
     // ── Texture services (set by backend at init) ─────────────────────────
     // The backend registers these so widgets can create/destroy GPU textures
     // without depending on any specific graphics API.
-    using UploadTextureFn  = ct::Function<BuGUI::TextureHandle(const unsigned char* rgba, int w, int h)>;
-    using DestroyTextureFn = ct::Function<void(BuGUI::TextureHandle)>;
+    using UploadTextureFn  = ct::Function<ig::retained::TextureHandle(const unsigned char* rgba, int w, int h)>;
+    using DestroyTextureFn = ct::Function<void(ig::retained::TextureHandle)>;
 
     /// @brief Register a texture upload function.
     void setTextureUpload(UploadTextureFn fn)   { uploadTex_ = std::move(fn); }
@@ -161,15 +161,15 @@ public:
     void setTextureDestroy(DestroyTextureFn fn)  { destroyTex_ = std::move(fn); }
 
     /// @brief Upload RGBA pixels to GPU texture.
-    BuGUI::TextureHandle uploadTexture(const unsigned char* rgba, int w, int h)
-    { return uploadTex_ ? uploadTex_(rgba, w, h) : BuGUI::TextureHandle{0}; }
+    ig::retained::TextureHandle uploadTexture(const unsigned char* rgba, int w, int h)
+    { return uploadTex_ ? uploadTex_(rgba, w, h) : ig::retained::TextureHandle{0}; }
 
     /// @brief Free a previously uploaded texture.
-    void destroyTexture(BuGUI::TextureHandle tex)
+    void destroyTexture(ig::retained::TextureHandle tex)
     { if (destroyTex_ && tex) destroyTex_(tex); }
 
     /// @brief Load an image file to GPU texture.
-    BuGUI::TextureHandle loadImageTexture(const char* path, int& outW, int& outH);
+    ig::retained::TextureHandle loadImageTexture(const char* path, int& outW, int& outH);
 
     // ── Root widget ───────────────────────────────────────────────────────
     /// @brief Get the root widget.
@@ -220,9 +220,9 @@ public:
     bool removeStage(const String& name);
 
     /// @brief Set a 2D camera for a named stage.
-    void setStageCamera(const String& name, const BuGUI::Camera2D& cam);
+    void setStageCamera(const String& name, const ig::retained::Camera2D& cam);
     /// @brief Get the camera for a named stage.
-    BuGUI::Camera2D stageCamera(const String& name) const;
+    ig::retained::Camera2D stageCamera(const String& name) const;
 
     /// @brief Set a per-stage background color.
     void setStageBgColor(const String& name, const Color& c);
@@ -334,7 +334,7 @@ private:
     void dispatchMousePress(float x, float y, int btn);
     void dispatchMouseRelease(float x, float y, int btn);
     void dispatchMouseScroll(float x, float y, float sx, float sy);
-    void dispatchKeyEvent(const BuGUI::IO::KeyEvent& ke);
+    void dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke);
     void dispatchTextInput(const ct::Vector<uint32_t>& chars);
 
     // Build a MouseEvent pre-filled with current IO modifier state
@@ -352,11 +352,11 @@ private:
     void applyCursor(CursorType type);
 
     // Paint helpers
-    void paintTreeInto(Widget* tree, BuGUI::DrawList& dl,
-                       const BuGUI::Font* font, IconAtlas* icons,
+    void paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
+                       const ig::retained::Font* font, IconAtlas* icons,
                        float w, float h, const Color& bgColor = Color(30,30,30,255));
-    void paintDebugOverlay(Widget* w, BuGUI::DrawList& dl, int depth = 0);
-    void paintTooltipInto(BuGUI::DrawList& dl, const BuGUI::Font* font);
+    void paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int depth = 0);
+    void paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font);
 
     // State
     bool  inited_      = false;
@@ -390,8 +390,8 @@ private:
 
     // Subsystems
     IconAtlas* iconAtlas_ = nullptr;
-    const BuGUI::Font*  font_      = nullptr;  // cached from last paint()
-    BuGUI::DrawList*    drawList_  = nullptr;  // cached from last paint()
+    const ig::retained::Font*  font_      = nullptr;  // cached from last paint()
+    ig::retained::DrawList*    drawList_  = nullptr;  // cached from last paint()
 
     // Widget tree
     Widget* root_    = nullptr;
@@ -430,7 +430,7 @@ private:
 
     // Stage system
     ct::HashMap<String, Widget*>          stages_;       // name → root widget
-    ct::HashMap<String, BuGUI::Camera2D>  stageCameras_; // per-stage camera
+    ct::HashMap<String, ig::retained::Camera2D>  stageCameras_; // per-stage camera
     ct::HashMap<String, Color>            stageBgColors_;// per-stage background
     String currentStage_;
 
@@ -467,8 +467,9 @@ private:
     bool         dragPending_  = false;     // mouse down on dragSource, waiting threshold
     float        dragThreshold_= 5.0f;     // pixels before drag begins
 
-    void dispatchDropEvents(const ct::Vector<BuGUI::IO::DropEvent>& drops);
+    void dispatchDropEvents(const ct::Vector<ig::retained::IO::DropEvent>& drops);
     void cancelDrag();
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

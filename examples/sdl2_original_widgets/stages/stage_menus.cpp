@@ -3,7 +3,7 @@
 #include "LayoutWidgets.hpp"
 #include "MenuWidgets.hpp"
 #include <cstdio>
-using namespace BuGUI;
+using namespace ig::retained;
 
 static Label* s_menuStatus  = nullptr;
 static Menu*  s_menuCtxMenu = nullptr;

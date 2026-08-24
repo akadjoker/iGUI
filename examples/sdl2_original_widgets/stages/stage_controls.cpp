@@ -3,7 +3,7 @@
 #include "LayoutWidgets.hpp"
 #include "InputWidgets.hpp"
 #include <cstdio>
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerControlsStage(WidgetApp& app)
 {
@@ -72,7 +72,7 @@ void registerControlsStage(WidgetApp& app)
     flowPage->createChild<Label>("FlowLayout tags");
     auto* flow = flowPage->createChild<FlowLayout>();
     flow->setSpacing(6.0f, 6.0f);
-    for (const char* t : { "C++", "OpenGL", "Raylib", "BuGUI", "CMake",
+    for (const char* t : { "C++", "OpenGL", "Raylib", "ig::retained", "CMake",
                             "Widgets", "Rendering", "Signals", "Layouts" })
         flow->createChild<Button>(t);
 }

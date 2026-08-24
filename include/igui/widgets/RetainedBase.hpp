@@ -1,11 +1,13 @@
 #pragma once
 // ═════════════════════════════════════════════════════════════════════════════
-//  BuGUI_base.hpp — self-contained foundation for the BuGUI widget layer.
+//  RetainedBase.hpp — self-contained foundation for the ig::retained widget layer.
 //  Zero external dependencies beyond <cstdint>.
 // ═════════════════════════════════════════════════════════════════════════════
 
 #include <cstdint>
 #include <cmath>
+
+#include <igui/Color.hpp>
 
 // ── Raw integer typedefs (global, used everywhere) ───────────────────────────
 typedef uint8_t   u8;
@@ -31,11 +33,11 @@ typedef double    f64;
 #endif
 
 // ─────────────────────────────────────────────────────────────────────────────
-namespace BuGUI {
+namespace ig { namespace retained {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════════════════════
-//  BuGUI::Math — scalar helpers and constants
+//  ig::retained::Math — scalar helpers and constants
 // ══════════════════════════════════════════════════════════════════════════════
 namespace Math {
 
@@ -60,7 +62,7 @@ inline float toDegrees(float rad)               { return rad * Rad2Deg; }
 
 } // namespace Math
 
-// Bring scalar helpers into BuGUI scope for convenience
+// Bring scalar helpers into ig::retained scope for convenience
 using Math::clamp;
 using Math::lerp;
 using Math::min2;
@@ -174,104 +176,7 @@ struct Mat4f
     static Mat4f identity() { return Mat4f{}; }
 };
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  Color — RGBA u8
-// ══════════════════════════════════════════════════════════════════════════════
-
-struct Color
-{
-    u8 r = 255, g = 255, b = 255, a = 255;
-
-    Color() = default;
-    Color(u8 r, u8 g, u8 b, u8 a = 255) : r(r), g(g), b(b), a(a) {}
-    Color(u32 rgba)
-        : r((rgba >> 24) & 0xFF)
-        , g((rgba >> 16) & 0xFF)
-        , b((rgba >>  8) & 0xFF)
-        , a( rgba        & 0xFF) {}
-
-    void Set(u8 r_, u8 g_, u8 b_, u8 a_ = 255) { r=r_; g=g_; b=b_; a=a_; }
-
-    Color Lerp(const Color& o, float t) const
-    {
-        float it = 1.0f - t;
-        return Color(
-            static_cast<u8>(r * it + o.r * t),
-            static_cast<u8>(g * it + o.g * t),
-            static_cast<u8>(b * it + o.b * t),
-            static_cast<u8>(a * it + o.a * t));
-    }
-
-    static Color FromFloat(float r, float g, float b, float a = 1.0f)
-    {
-        return Color(static_cast<u8>(r * 255.f),
-                     static_cast<u8>(g * 255.f),
-                     static_cast<u8>(b * 255.f),
-                     static_cast<u8>(a * 255.f));
-    }
-
-    u32 ToRGBA() const
-    {
-        return (static_cast<u32>(r) << 24)
-             | (static_cast<u32>(g) << 16)
-             | (static_cast<u32>(b) <<  8)
-             |  static_cast<u32>(a);
-    }
-    u32 ToUInt() const { return ToRGBA(); }
-
-    bool operator==(const Color& o) const { return r==o.r && g==o.g && b==o.b && a==o.a; }
-    bool operator!=(const Color& o) const { return !(*this == o); }
-
-    static const Color WHITE;
-    static const Color BLACK;
-    static const Color TRANSPARENT;
-    static const Color RED;
-    static const Color GREEN;
-    static const Color BLUE;
-    static const Color GRAY;
-    static const Color CYAN;
-    static const Color MAGENTA;
-    static const Color YELLOW;
-
-    // ── HSV conversion ───────────────────────────────────────────────────
-    /// h∈[0,360), s∈[0,1], v∈[0,1], a∈[0,1]
-    static Color FromHSV(float h, float s, float v, float a = 1.0f)
-    {
-        float r = v, g = v, b = v;
-        if (s > 0.0f) {
-            h = h / 60.0f;
-            int   i = static_cast<int>(h);
-            float f = h - static_cast<float>(i);
-            float p = v * (1.0f - s);
-            float q = v * (1.0f - s * f);
-            float t = v * (1.0f - s * (1.0f - f));
-            switch (i % 6) {
-            case 0: r=v; g=t; b=p; break;
-            case 1: r=q; g=v; b=p; break;
-            case 2: r=p; g=v; b=t; break;
-            case 3: r=p; g=q; b=v; break;
-            case 4: r=t; g=p; b=v; break;
-            default:r=v; g=p; b=q; break;
-            }
-        }
-        return FromFloat(r, g, b, a);
-    }
-
-    /// Returns h∈[0,360), s∈[0,1], v∈[0,1]. Alpha passed through.
-    void ToHSV(float& h, float& s, float& v) const
-    {
-        float rf = r / 255.f, gf = g / 255.f, bf = b / 255.f;
-        float mx = rf > gf ? (rf > bf ? rf : bf) : (gf > bf ? gf : bf);
-        float mn = rf < gf ? (rf < bf ? rf : bf) : (gf < bf ? gf : bf);
-        float d  = mx - mn;
-        v = mx;
-        s = (mx > 0.00001f) ? d / mx : 0.0f;
-        if (d < 0.00001f) { h = 0.0f; return; }
-        if      (mx == rf) h = 60.0f * (gf - bf) / d + (gf < bf ? 360.0f : 0.0f);
-        else if (mx == gf) h = 60.0f * (bf - rf) / d + 120.0f;
-        else               h = 60.0f * (rf - gf) / d + 240.0f;
-    }
-};
+using Color = ::ig::Color;
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  PixelFormat
@@ -324,9 +229,9 @@ using IntRect   = Rectangle<int>;
 using FloatRect = Rectangle<float>;
 
 // ─────────────────────────────────────────────────────────────────────────────
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig
 // ─────────────────────────────────────────────────────────────────────────────
 
-// All types (Color, Vec2f, IntRect, …) live in namespace BuGUI.
-// Consumer code: add  using namespace BuGUI;  or qualify with  BuGUI::
-
+// All types (Color, Vec2f, IntRect, …) live in namespace ig { namespace retained.
+// Consumer code: add  using namespace ig::retained;  or qualify with  ig::retained::

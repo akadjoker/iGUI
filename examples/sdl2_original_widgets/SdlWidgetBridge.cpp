@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-BuGUI::TextureHandle SdlWidgetBridge::createTexture(int width, int height,
+ig::retained::TextureHandle SdlWidgetBridge::createTexture(int width, int height,
                                                      const unsigned char *rgba)
 {
     SDL_Texture *texture = SDL_CreateTexture(renderer_, SDL_PIXELFORMAT_RGBA32,
@@ -19,16 +19,16 @@ BuGUI::TextureHandle SdlWidgetBridge::createTexture(int width, int height,
     return {reinterpret_cast<uintptr_t>(texture)};
 }
 
-void SdlWidgetBridge::destroyTexture(BuGUI::TextureHandle handle)
+void SdlWidgetBridge::destroyTexture(ig::retained::TextureHandle handle)
 {
     if (handle)
         SDL_DestroyTexture(reinterpret_cast<SDL_Texture *>(handle.value));
 }
 
-bool SdlWidgetBridge::render(BuGUI::DrawData &data)
+bool SdlWidgetBridge::render(ig::retained::DrawData &data)
 {
     data.stats.reset();
-    for (const BuGUI::DrawPass &pass : data.passes)
+    for (const ig::retained::DrawPass &pass : data.passes)
     {
         if (!pass.list) continue;
         const auto &sourceVertices = pass.list->vertices();
@@ -47,7 +47,7 @@ bool SdlWidgetBridge::render(BuGUI::DrawData &data)
 
         for (size_t i = 0; i < sourceVertices.size(); ++i)
         {
-            const BuGUI::DrawVertex &source = sourceVertices[i];
+            const ig::retained::DrawVertex &source = sourceVertices[i];
             SDL_Vertex &target = vertices_[i];
             target.position = {cosine * source.x - sine * source.y + translateX,
                                sine * source.x + cosine * source.y + translateY};
@@ -57,7 +57,7 @@ bool SdlWidgetBridge::render(BuGUI::DrawData &data)
         for (size_t i = 0; i < sourceIndices.size(); ++i)
             indices_[i] = static_cast<int>(sourceIndices[i]);
 
-        for (const BuGUI::DrawCmd &command : pass.list->commands())
+        for (const ig::retained::DrawCmd &command : pass.list->commands())
         {
             SDL_Rect clip;
             if (pass.camera.angle == 0.0f)

@@ -7,7 +7,7 @@
 #include <ct/function.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  MenuAction — a single item in a Menu
@@ -180,4 +180,5 @@ private:
     void computeEntryWidths_();
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -6,7 +6,7 @@
 #include <cmath>
 #include <cstdio>
 
-using BuGUI::clamp;
+using ig::retained::clamp;
 // ─────────────────────────────────────────────────────────────────────────────
 //  ColorPickerPopup_ — popup wrapper for PropertyGrid color editing
 // ─────────────────────────────────────────────────────────────────────────────
@@ -964,7 +964,7 @@ void PropertyGrid::onMousePress(MouseEvent& e)
         auto& d=std::get<PropCombo>(row.data);
         auto vis=visibleRows(); float rowY=abs.y;
         for (int vi=0;vi<(int)vis.size();++vi) { if (vis[vi]==idx) { rowY=abs.y+vi*rowHeight_-scrollOffset_; break; } }
-        const auto& io2=BuGUI::GetIO();
+        const auto& io2=ig::retained::GetIO();
         int n=(int)d.options.size(); float itemH=22.f, popH=n*itemH+2, popW=abs.w-abs.w*labelRatio_;
         float popX=abs.x+abs.w*labelRatio_;
         float popY=rowY+rowHeight_;
@@ -993,7 +993,7 @@ void PropertyGrid::onMousePress(MouseEvent& e)
     case PropType::Color: {
         auto vis=visibleRows(); float rowY=abs.y;
         for (int vi=0;vi<(int)vis.size();++vi) { if (vis[vi]==idx) { rowY=abs.y+vi*rowHeight_-scrollOffset_; break; } }
-        const auto& io=BuGUI::GetIO();
+        const auto& io=ig::retained::GetIO();
         float popW=230.f, popH=270.f;
         float popX=abs.x+abs.w*labelRatio_;
         float popY=rowY+rowHeight_;
@@ -1087,22 +1087,22 @@ void PropertyGrid::onKeyPress(KeyEvent& e)
     if (editing_) {
         e.consumed=true;
         switch (e.key) {
-        case BuGUI::Key::Return: case BuGUI::Key::KPEnter: commitEdit(); return;
-        case BuGUI::Key::Escape: cancelEdit(); return;
-        case BuGUI::Key::Backspace: if (editCursor_>0&&!editBuf_.empty()) { editBuf_.erase(editCursor_-1,1); editCursor_--; markDirty(); } return;
-        case BuGUI::Key::Delete: if (editCursor_<(int)editBuf_.size()) { editBuf_.erase(editCursor_,1); markDirty(); } return;
-        case BuGUI::Key::Right: if (editCursor_<(int)editBuf_.size()) { editCursor_++; markDirty(); } return;
-        case BuGUI::Key::Left:  if (editCursor_>0) { editCursor_--; markDirty(); } return;
-        case BuGUI::Key::Home: editCursor_=0; markDirty(); return;
-        case BuGUI::Key::End:  editCursor_=(int)editBuf_.size(); markDirty(); return;
+        case ig::retained::Key::Return: case ig::retained::Key::KPEnter: commitEdit(); return;
+        case ig::retained::Key::Escape: cancelEdit(); return;
+        case ig::retained::Key::Backspace: if (editCursor_>0&&!editBuf_.empty()) { editBuf_.erase(editCursor_-1,1); editCursor_--; markDirty(); } return;
+        case ig::retained::Key::Delete: if (editCursor_<(int)editBuf_.size()) { editBuf_.erase(editCursor_,1); markDirty(); } return;
+        case ig::retained::Key::Right: if (editCursor_<(int)editBuf_.size()) { editCursor_++; markDirty(); } return;
+        case ig::retained::Key::Left:  if (editCursor_>0) { editCursor_--; markDirty(); } return;
+        case ig::retained::Key::Home: editCursor_=0; markDirty(); return;
+        case ig::retained::Key::End:  editCursor_=(int)editBuf_.size(); markDirty(); return;
         }
     }
     if (!editing_) {
         auto vis=visibleRows(); int visIdx=-1;
         for (int i=0;i<(int)vis.size();++i) if (vis[i]==selectedRow_) { visIdx=i; break; }
-        if (e.key==BuGUI::Key::Up) { e.consumed=true; if (visIdx>0) { selectedRow_=vis[visIdx-1]; markDirty(); } }
-        else if (e.key==BuGUI::Key::Down) { e.consumed=true; if (visIdx<(int)vis.size()-1) { selectedRow_=vis[visIdx+1]; markDirty(); } }
-        else if (e.key==BuGUI::Key::Return||e.key==BuGUI::Key::KPEnter) {
+        if (e.key==ig::retained::Key::Up) { e.consumed=true; if (visIdx>0) { selectedRow_=vis[visIdx-1]; markDirty(); } }
+        else if (e.key==ig::retained::Key::Down) { e.consumed=true; if (visIdx<(int)vis.size()-1) { selectedRow_=vis[visIdx+1]; markDirty(); } }
+        else if (e.key==ig::retained::Key::Return||e.key==ig::retained::Key::KPEnter) {
             e.consumed=true;
             if (selectedRow_>=0&&selectedRow_<(int)rows_.size()) {
                 auto& row=rows_[selectedRow_];

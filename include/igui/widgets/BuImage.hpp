@@ -1,8 +1,8 @@
 #pragma once
 #include <ct/vector.hpp>
-#include "BuGUI_base.hpp"
+#include "RetainedBase.hpp"
 
-namespace BuGUI {
+namespace ig { namespace retained {
 
 class BuImage
 {
@@ -126,7 +126,8 @@ public:
 
 
 // Global alias so existing code compiles without changes
-using BuGUI::BuImage;
+using ig::retained::BuImage;
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig
  

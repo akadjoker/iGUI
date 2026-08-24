@@ -22,7 +22,7 @@ ToolBar::~ToolBar()
 
 // ── Sprite sheet ─────────────────────────────────────────────────────────────
 
-void ToolBar::setImageGrid(BuGUI::BuImage* img, int cellW, int cellH)
+void ToolBar::setImageGrid(ig::retained::BuImage* img, int cellW, int cellH)
 {
     delete gridImg_;
     gridImg_  = img;
@@ -35,7 +35,7 @@ void ToolBar::setImageGrid(BuGUI::BuImage* img, int cellW, int cellH)
 
 bool ToolBar::loadImageGrid(const String& path, int cellW, int cellH)
 {
-    auto* img = new BuGUI::BuImage();
+    auto* img = new ig::retained::BuImage();
     if (!img->Load(path.c_str())) {
         delete img;
         return false;
@@ -44,7 +44,7 @@ bool ToolBar::loadImageGrid(const String& path, int cellW, int cellH)
     return true;
 }
 
-void ToolBar::setTexture(BuGUI::TextureHandle tex, int texW, int texH, int cellW, int cellH)
+void ToolBar::setTexture(ig::retained::TextureHandle tex, int texW, int texH, int cellW, int cellH)
 {
     gridTex_  = tex;
     gridTexW_ = texW;
@@ -294,7 +294,7 @@ void ToolBar::ensureTexture(PaintContext& /*ctx*/)
     texDirty_ = false;
 
     // Ensure the image is RGBA (4 components) for GPU upload
-    BuGUI::BuImage* rgba = gridImg_;
+    ig::retained::BuImage* rgba = gridImg_;
     bool ownsRgba = false;
     if (gridImg_->components != 4) {
         rgba = gridImg_->ConvertToRGBA();
@@ -329,7 +329,7 @@ void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, flo
     float th = static_cast<float>(gridTexH_);
     if (tw <= 0 || th <= 0) return;
 
-    BuGUI::Rect uv{
+    ig::retained::Rect uv{
         srcX / tw,
         srcY / th,
         static_cast<float>(cellW_) / tw,

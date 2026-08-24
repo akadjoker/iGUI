@@ -6,7 +6,7 @@
 #include <igui/widgets/String.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  ThumbnailGrid — Grid of thumbnail cards with label + selection
@@ -25,7 +25,7 @@ namespace BuGUI
 struct ThumbnailItem {
     String          label;
     Color                color = Color(80, 90, 110, 255);
-    BuGUI::TextureHandle tex   = {};
+    ig::retained::TextureHandle tex   = {};
     bool                 selected = false;
 };
 
@@ -42,7 +42,7 @@ public:
     void clearItems();
 
     /// @brief Set the texture for an existing item.
-    void setItemTexture(int idx, BuGUI::TextureHandle tex);
+    void setItemTexture(int idx, ig::retained::TextureHandle tex);
 
     /// @brief Get the number of items.
     int  itemCount() const { return static_cast<int>(items_.size()); }
@@ -84,4 +84,5 @@ private:
     int hitTest(float mx, float my) const;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -3,7 +3,7 @@
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
 #include "TreePropertyColorWidgets.hpp"
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerPropertiesStage(WidgetApp& app)
 {

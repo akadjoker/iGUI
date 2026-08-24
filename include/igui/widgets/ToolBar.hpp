@@ -3,7 +3,7 @@
 #include "Widget.hpp"
 #include "Signal.hpp"
 #include "IconAtlas.hpp"   // IconId for fallback icons
-#include "BuGUI.hpp"       // TextureHandle
+#include "Retained.hpp"       // TextureHandle
 #include <igui/widgets/String.hpp>
 #include <ct/vector.hpp>
 
@@ -27,7 +27,7 @@
 //  (requires a valid GL context at that point).
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class ToolBar : public Widget
 {
@@ -37,13 +37,13 @@ public:
 
     // ── Sprite sheet ──────────────────────────────────────────────────────
     /// @brief Set the icon sprite sheet image (takes ownership).
-    void setImageGrid(BuGUI::BuImage* img, int cellW, int cellH);
+    void setImageGrid(ig::retained::BuImage* img, int cellW, int cellH);
 
     /// @brief Load a sprite sheet from a file path.
     bool loadImageGrid(const String& path, int cellW, int cellH);
 
     /// @brief Set texture manually (if uploaded externally).
-    void setTexture(BuGUI::TextureHandle tex, int texW, int texH, int cellW, int cellH);
+    void setTexture(ig::retained::TextureHandle tex, int texW, int texH, int cellW, int cellH);
 
     // Alternative: use existing IconAtlas icons (no sprite sheet needed).
     // Buttons added with addButton(IconId, ...) will draw from the atlas.
@@ -154,8 +154,8 @@ private:
     const Item* findItem(int id) const;
 
     // Sprite sheet
-    BuGUI::BuImage*      gridImg_    = nullptr;   // owned
-    BuGUI::TextureHandle  gridTex_   {};          // uploaded on first paint
+    ig::retained::BuImage*      gridImg_    = nullptr;   // owned
+    ig::retained::TextureHandle  gridTex_   {};          // uploaded on first paint
     int                   gridTexW_  = 0;
     int                   gridTexH_  = 0;
     int                   cellW_     = 24;
@@ -188,4 +188,5 @@ private:
     int hitItem(float absX, float absY) const;  // returns item id or -1
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

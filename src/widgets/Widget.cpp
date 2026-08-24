@@ -2,7 +2,7 @@
 #include "MenuWidgets.hpp"   // Menu — complete type needed for delete contextMenu_
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  ColorProxy — bridges ctx.fill.* / ctx.line.* to BuGUI::DrawList
+//  ColorProxy — bridges ctx.fill.* / ctx.line.* to ig::retained::DrawList
 //  The bool doFill parameter mirrors the old RenderBatch API.
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -42,7 +42,7 @@ void ColorProxy::Line2D(float x1, float y1, float x2, float y2)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  FontProxy — bridges ctx.font.* to BuGUI::DrawList
+//  FontProxy — bridges ctx.font.* to ig::retained::DrawList
 // ═════════════════════════════════════════════════════════════════════════════
 
 void FontProxy::SetColor(const Color& c)
@@ -74,11 +74,11 @@ void FontProxy::Print(const char* text, float x, float y, const void* /*clipHint
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  PaintContext — wraps BuGUI::DrawList, zero backend dependencies
+//  PaintContext — wraps ig::retained::DrawList, zero backend dependencies
 // ═════════════════════════════════════════════════════════════════════════════
 
-PaintContext::PaintContext(BuGUI::DrawList& dl,
-                           const BuGUI::Font* f,
+PaintContext::PaintContext(ig::retained::DrawList& dl,
+                           const ig::retained::Font* f,
                            IconAtlas* ico)
     : drawList(dl), buFont(f), icons(ico)
 {
@@ -90,7 +90,7 @@ PaintContext::PaintContext(BuGUI::DrawList& dl,
 
 // ── Font stack ────────────────────────────────────────────────────────────
 
-void PaintContext::pushFont(const BuGUI::Font* f)
+void PaintContext::pushFont(const ig::retained::Font* f)
 {
     fontStack_.push_back(buFont);
     buFont = f;
@@ -214,7 +214,7 @@ void PaintContext::drawText(float x, float y, const char* text)
 }
 
 void PaintContext::drawTextAligned(const Rect& bounds, const char* text,
-                                   BuGUI::AlignX ax, BuGUI::AlignY ay)
+                                   ig::retained::AlignX ax, ig::retained::AlignY ay)
 {
     if (!buFont || !text) return;
     drawList.addTextAligned(*buFont,
@@ -235,8 +235,8 @@ float PaintContext::textHeight() const
 
 // ── Image ─────────────────────────────────────────────────────────────────
 
-void PaintContext::drawImage(BuGUI::TextureHandle tex, const Rect& dst,
-                             BuGUI::Rect uv, Color tint)
+void PaintContext::drawImage(ig::retained::TextureHandle tex, const Rect& dst,
+                             ig::retained::Rect uv, Color tint)
 {
     drawList.addImage(tex, {dst.x, dst.y, dst.w, dst.h}, uv, tint);
 }
@@ -312,7 +312,7 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
     if (!glyphText) return;
 
     const float scale = size / buFont->lineHeight();
-    const BuGUI::Vec2 glyphSize = drawList.calcTextSize(*buFont, glyphText, scale);
+    const ig::retained::Vec2 glyphSize = drawList.calcTextSize(*buFont, glyphText, scale);
     drawList.addText(*buFont,
                      {x + (size - glyphSize.x) * 0.5f,
                       y + (size - glyphSize.y) * 0.5f},

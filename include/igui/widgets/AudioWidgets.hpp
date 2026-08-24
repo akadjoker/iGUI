@@ -6,7 +6,7 @@
 #include <igui/widgets/String.hpp>
 #include <cmath>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Knob — Rotary knob control (270° arc style)
@@ -480,4 +480,5 @@ private:
     float newNoteStart_ = 0.f;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

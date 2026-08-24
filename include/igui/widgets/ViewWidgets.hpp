@@ -19,7 +19,7 @@
 //  The FloatWindow lives in WidgetApp's float layer (above stages, below popups).
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class FloatWindow : public Widget
 {
@@ -170,9 +170,9 @@ public:
     ImageView() = default;
 
     /// @brief Set the texture, width and height.
-    void setTexture(BuGUI::TextureHandle tex, int w, int h);
+    void setTexture(ig::retained::TextureHandle tex, int w, int h);
     /// @brief Get the texture handle.
-    BuGUI::TextureHandle texture() const { return texture_; }
+    ig::retained::TextureHandle texture() const { return texture_; }
 
     /// @brief Set the image offset.
     void setOffset(float ox, float oy) { offsetX_ = ox; offsetY_ = oy; markDirty(); }
@@ -187,7 +187,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    BuGUI::TextureHandle texture_;
+    ig::retained::TextureHandle texture_;
     int   texW_ = 0, texH_ = 0;
     float offsetX_ = 0, offsetY_ = 0;
     Color tint_ = Color(255, 255, 255, 255);
@@ -245,4 +245,5 @@ private:
     Transition transType_ = None;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -8,7 +8,7 @@
 #include <ct/vector.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Forward declarations
@@ -337,4 +337,5 @@ private:
     DragTarget dragTarget_ = DragNone;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -3,7 +3,7 @@
 #include "Widget.hpp"
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ─────────────────────────────────────────────────────────────────────────────
 //  DockSide - where to dock relative to a panel
@@ -169,4 +169,5 @@ private:
     void       pruneNode (DockNode*& slot);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

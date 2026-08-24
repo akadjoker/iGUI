@@ -2,7 +2,7 @@
 #include <igui/widgets/String.hpp>
 #include <cstddef>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ── UTF-8 helpers (inline) ──────────────────────────────────────────────
 inline int utf8CharLen(const char* p)
@@ -40,4 +40,5 @@ inline String utf8Substr(const String& s, int cpStart, int cpEnd)
     return s.substr(byteStart, byteEnd - byteStart);
 }
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

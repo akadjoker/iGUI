@@ -1,6 +1,9 @@
 #pragma once
 
-#include "BuGUI.hpp"
+#include "Retained.hpp"
+#include "Animation.hpp"
+#include "BasicWidgets.hpp"
+#include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
 #include "InputWidgets.hpp"
 #include "TextInputWidgets.hpp"
@@ -21,5 +24,6 @@
 #include "DockPanel.hpp"
 #include "WidgetSerializer.hpp"
 #include "AssetBrowser.hpp"
-
+#include "AutomotiveWidgets.hpp"
+#include "WidgetApp.hpp"
 

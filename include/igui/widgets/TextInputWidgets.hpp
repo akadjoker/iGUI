@@ -8,7 +8,7 @@
 #include <ct/vector.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  TextInput - single-line text input field
@@ -77,11 +77,11 @@ private:
     bool  dragging_   = false;
 
     String displayText() const;
-    int   hitTestChar(const BuGUI::Font* font, float localX) const;
-    float cursorXOffset(const BuGUI::Font* font, int pos) const;
+    int   hitTestChar(const ig::retained::Font* font, float localX) const;
+    float cursorXOffset(const ig::retained::Font* font, int pos) const;
     void  deleteSelection();
     void  insertText(const String& t);
-    void  ensureCursorVisible(const BuGUI::Font* font);
+    void  ensureCursorVisible(const ig::retained::Font* font);
     void  clampCursor();
     bool  isNumberChar(char c) const;
 };
@@ -270,8 +270,8 @@ protected:
     void mergeWithPrevLine();
     void mergeWithNextLine();
     void ensureCursorVisible();
-    float computeGutterWidth(const BuGUI::Font& font) const;
-    float computeLineHeight(const BuGUI::Font& font) const;
+    float computeGutterWidth(const ig::retained::Font& font) const;
+    float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
     int  logicalToVisualRow(int line, int row = 0) const;
     String expandTabs(const String& text) const;
@@ -300,4 +300,5 @@ private:
     VisualPos  visualToLogical(int visualRow) const;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

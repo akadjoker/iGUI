@@ -5,24 +5,24 @@
 
 #include <cstdio>
 
-void registerDemoStage(BuGUI::WidgetApp &app);
-void registerMenuStage(BuGUI::WidgetApp &app);
-void registerBasicStage(BuGUI::WidgetApp &app);
-void registerControlsStage(BuGUI::WidgetApp &app);
-void registerScrollStage(BuGUI::WidgetApp &app);
-void registerInputsStage(BuGUI::WidgetApp &app);
-void registerMenusStage(BuGUI::WidgetApp &app);
-void registerDialogsStage(BuGUI::WidgetApp &app);
-void registerDockStage(BuGUI::WidgetApp &app);
-void registerPropertiesStage(BuGUI::WidgetApp &app);
-void registerEditorStage(BuGUI::WidgetApp &app);
-void registerNodeStage(BuGUI::WidgetApp &app);
-void registerTimelineStage(BuGUI::WidgetApp &app);
-void registerGizmosStage(BuGUI::WidgetApp &app);
-void registerToolsStage(BuGUI::WidgetApp &app);
-void registerGalleryStage(BuGUI::WidgetApp &app);
-void registerSpecialtyStage(BuGUI::WidgetApp &app);
-void showFileDialogDemo(BuGUI::WidgetApp &app);
+void registerDemoStage(ig::retained::WidgetApp &app);
+void registerMenuStage(ig::retained::WidgetApp &app);
+void registerBasicStage(ig::retained::WidgetApp &app);
+void registerControlsStage(ig::retained::WidgetApp &app);
+void registerScrollStage(ig::retained::WidgetApp &app);
+void registerInputsStage(ig::retained::WidgetApp &app);
+void registerMenusStage(ig::retained::WidgetApp &app);
+void registerDialogsStage(ig::retained::WidgetApp &app);
+void registerDockStage(ig::retained::WidgetApp &app);
+void registerPropertiesStage(ig::retained::WidgetApp &app);
+void registerEditorStage(ig::retained::WidgetApp &app);
+void registerNodeStage(ig::retained::WidgetApp &app);
+void registerTimelineStage(ig::retained::WidgetApp &app);
+void registerGizmosStage(ig::retained::WidgetApp &app);
+void registerToolsStage(ig::retained::WidgetApp &app);
+void registerGalleryStage(ig::retained::WidgetApp &app);
+void registerSpecialtyStage(ig::retained::WidgetApp &app);
+void showFileDialogDemo(ig::retained::WidgetApp &app);
 
 namespace
 {
@@ -47,23 +47,23 @@ int main(int argc, char **argv)
     if (!renderer) return 2;
 
     SdlWidgetBridge bridge(renderer);
-    BuGUI::SetCurrentContext(BuGUI::CreateContext());
-    auto &io = BuGUI::GetIO();
+    ig::retained::SetCurrentContext(ig::retained::CreateContext());
+    auto &io = ig::retained::GetIO();
     io.setClipboardText = [](const char *text) { SDL_SetClipboardText(text); };
-    io.getClipboardText = [] { char *value = SDL_GetClipboardText(); BuGUI::String result = value ? value : ""; SDL_free(value); return result; };
+    io.getClipboardText = [] { char *value = SDL_GetClipboardText(); ig::retained::String result = value ? value : ""; SDL_free(value); return result; };
 
-    BuGUI::FontAtlas atlas;
-    const BuGUI::Font *font = nullptr;
+    ig::retained::FontAtlas atlas;
+    const ig::retained::Font *font = nullptr;
     if (atlas.buildDefault())
     {
         atlas.setTexture(bridge.createTexture(atlas.width(), atlas.height(), atlas.pixels()));
         font = &atlas.defaultFont();
-        BuGUI::SetWhitePixel(atlas.texture(), atlas.whitePixelUV());
+        ig::retained::SetWhitePixel(atlas.texture(), atlas.whitePixelUV());
     }
 
-    auto &app = BuGUI::WidgetApp::instance();
+    auto &app = ig::retained::WidgetApp::instance();
     app.setTextureUpload([&bridge](const unsigned char *p, int w, int h) { return bridge.createTexture(w, h, p); });
-    app.setTextureDestroy([&bridge](BuGUI::TextureHandle t) { bridge.destroyTexture(t); });
+    app.setTextureDestroy([&bridge](ig::retained::TextureHandle t) { bridge.destroyTexture(t); });
     registerDemoStage(app);
     registerMenuStage(app);
     registerBasicStage(app);
@@ -81,7 +81,7 @@ int main(int argc, char **argv)
     registerToolsStage(app);
     registerGalleryStage(app);
     registerSpecialtyStage(app);
-    const BuGUI::String initialStage = argc > 1 ? argv[1] : "menu";
+    const ig::retained::String initialStage = argc > 1 ? argv[1] : "menu";
     const bool testDockColor = initialStage == "--test-dock-color";
     const bool showFileDialog = initialStage == "filedialog";
     app.setStage(showFileDialog ? "tools" : testDockColor ? "dock" : initialStage);
@@ -135,18 +135,18 @@ int main(int argc, char **argv)
             dockColorTestPhase = 2;
         }
 
-        BuGUI::NewFrame();
+        ig::retained::NewFrame();
         app.update(io);
-        app.paint(*BuGUI::GetDrawData(), font, nullptr);
+        app.paint(*ig::retained::GetDrawData(), font, nullptr);
 
         // Headless-friendly regression check for DockPanel -> PropertyGrid -> ColorPickerPopup.
         // Run after the first paint so the complete dock tree has final rectangles.
         if (testDockColor && dockColorTestPhase == 0)
         {
-            BuGUI::PropertyGrid *grid = nullptr;
-            auto findGrid = [&](auto &&self, BuGUI::Widget *widget) -> void {
+            ig::retained::PropertyGrid *grid = nullptr;
+            auto findGrid = [&](auto &&self, ig::retained::Widget *widget) -> void {
                 if (!widget || grid) return;
-                if (auto *candidate = dynamic_cast<BuGUI::PropertyGrid *>(widget);
+                if (auto *candidate = dynamic_cast<ig::retained::PropertyGrid *>(widget);
                     candidate && candidate->isVisible()) {
                     grid = candidate;
                     return;
@@ -159,7 +159,7 @@ int main(int argc, char **argv)
                 exitCode = 3;
                 running = false;
             } else {
-                const BuGUI::Rect rect = grid->absoluteRect();
+                const ig::retained::Rect rect = grid->absoluteRect();
                 dockColorTestX = rect.x + rect.w * 0.70f;
                 dockColorTestY = rect.y + 5.0f * 24.0f + 12.0f;
                 dockColorTestPhase = 1;
@@ -175,13 +175,13 @@ int main(int argc, char **argv)
             }
             running = false;
         }
-        BuGUI::Render();
+        ig::retained::Render();
         SDL_SetRenderDrawColor(renderer, 24, 26, 30, 255); SDL_RenderClear(renderer);
-        if (!bridge.render(*BuGUI::GetDrawData())) running = false;
+        if (!bridge.render(*ig::retained::GetDrawData())) running = false;
         SDL_RenderPresent(renderer);
     }
     bridge.destroyTexture(atlas.texture());
-    BuGUI::DestroyContext(BuGUI::GetCurrentContext());
+    ig::retained::DestroyContext(ig::retained::GetCurrentContext());
     SDL_DestroyRenderer(renderer); SDL_DestroyWindow(window); SDL_Quit();
     return exitCode;
 }

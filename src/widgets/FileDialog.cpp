@@ -9,7 +9,7 @@
 #include <cctype>
 #include <cstdio>
 
-using namespace BuGUI;
+using namespace ig::retained;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Helpers
@@ -814,7 +814,7 @@ void FileDialog::onMousePress(MouseEvent& e)
         if (idx < 0 || idx >= total) return;
 
         // Modifiers from IO
-        auto& io = BuGUI::GetIO();
+        auto& io = ig::retained::GetIO();
         bool ctrl  = io.keyCtrl;
         bool shift = io.keyShift;
 

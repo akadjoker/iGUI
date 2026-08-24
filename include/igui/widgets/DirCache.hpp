@@ -19,7 +19,7 @@
 //    cache.invalidate("/home/user/project/textures");
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 class DirCache
 {
@@ -137,4 +137,5 @@ private:
     void freeArena();
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

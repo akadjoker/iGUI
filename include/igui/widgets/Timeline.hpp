@@ -25,7 +25,7 @@
 //    tl->onPlayheadChanged.connect([](float t) { ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 struct TimelineKeyframe {
     float time     = 0;
@@ -149,4 +149,5 @@ private:
     void paintPlayhead(PaintContext& ctx, const Rect& b);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -3,17 +3,17 @@
 // Legacy widget-system icon atlas.
 //
 // This belongs to the old Texture/BuImage/RenderBatch path and is only kept for
-// BUGUI_BUILD_EXTRA_WIDGETS while the migration is in progress. New BuGUI code
-// should use BuGUI::DrawList::addIcon() for vector icons or FontAtlas merged
+// BUGUI_BUILD_EXTRA_WIDGETS while the migration is in progress. New ig::retained code
+// should use ig::retained::DrawList::addIcon() for vector icons or FontAtlas merged
 // icon glyphs for richer icon sets.
 
-#include "BuGUI_base.hpp"
-#include "BuGUI.hpp"     // BuGUI::TextureHandle
-#include "BuImage.hpp"   // BuGUI::BuImage
+#include "RetainedBase.hpp"
+#include "Retained.hpp"     // ig::retained::TextureHandle
+#include "BuImage.hpp"   // ig::retained::BuImage
 #include <ct/vector.hpp>
 
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -36,16 +36,16 @@ public:
     ~IconAtlas();
 
     /// @brief Generate all icons into a BuImage (caller uploads to GPU).
-    BuGUI::BuImage* buildImage(int cellSize = 24);
+    ig::retained::BuImage* buildImage(int cellSize = 24);
 
     /// @brief Check if the atlas has been initialized.
     bool ready() const { return (bool)tex_; }
 
     /// @brief Get the opaque GPU texture handle.
-    BuGUI::TextureHandle texture() const { return tex_; }
+    ig::retained::TextureHandle texture() const { return tex_; }
 
     /// @brief Set the texture handle after GPU upload.
-    void setTexture(BuGUI::TextureHandle h, int w, int h_) { tex_ = h; atlasW_ = w; atlasH_ = h_; }
+    void setTexture(ig::retained::TextureHandle h, int w, int h_) { tex_ = h; atlasW_ = w; atlasH_ = h_; }
 
     /// @brief Get the atlas texture width in pixels.
     int textureWidth()  const { return atlasW_; }
@@ -104,11 +104,12 @@ private:
     void drawStepBack   (BuImage& pm, int ox, int oy, int sz);
     void drawRecord     (BuImage& pm, int ox, int oy, int sz);
 
-    BuGUI::TextureHandle tex_;
+    ig::retained::TextureHandle tex_;
     int atlasW_    = 0;
     int atlasH_    = 0;
     int cellSize_  = 24;
     int cols_      = 0;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

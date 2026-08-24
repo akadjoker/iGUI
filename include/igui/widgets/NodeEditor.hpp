@@ -5,7 +5,7 @@
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  NodeEditor — Visual node graph (shaders, AI, scripting)
@@ -157,4 +157,5 @@ private:
     void paintDragLink(PaintContext& ctx);
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -2,9 +2,10 @@
 
 #include <ct/string.hpp>
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 using String = ct::String;
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

@@ -1,16 +1,16 @@
 #pragma once
 
 #include <SDL.h>
-#include <BuGUI.hpp>
+#include <igui/widgets/Retained.hpp>
 #include <ct/vector.hpp>
 
 class SdlWidgetBridge
 {
 public:
     explicit SdlWidgetBridge(SDL_Renderer *renderer) : renderer_(renderer) {}
-    BuGUI::TextureHandle createTexture(int width, int height, const unsigned char *rgba);
-    void destroyTexture(BuGUI::TextureHandle texture);
-    bool render(BuGUI::DrawData &data);
+    ig::retained::TextureHandle createTexture(int width, int height, const unsigned char *rgba);
+    void destroyTexture(ig::retained::TextureHandle texture);
+    bool render(ig::retained::DrawData &data);
 
 private:
     SDL_Renderer *renderer_;

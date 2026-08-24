@@ -3,7 +3,7 @@
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
 #include <igui/widgets/String.hpp>
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerScrollStage(WidgetApp& app)
 {

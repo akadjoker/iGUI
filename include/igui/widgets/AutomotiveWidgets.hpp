@@ -17,7 +17,7 @@
 //    and a large center readout
 // ─────────────────────────────────────────────────────────────────────────────
 
-namespace BuGUI
+namespace ig { namespace retained
 {
 
 class RadialGauge : public Widget
@@ -303,4 +303,5 @@ private:
     bool  charging_ = false;
 };
 
-} // namespace BuGUI
+} // namespace retained
+} // namespace ig

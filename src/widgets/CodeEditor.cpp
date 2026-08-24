@@ -1425,7 +1425,7 @@ float CodeEditor::colToPixelX(int line, int col) const
     if (!font) return 0.0f;
 
     float scale = fontScale_;
-    const BuGUI::FontGlyph* spaceG = font->findGlyph(' ');
+    const ig::retained::FontGlyph* spaceG = font->findGlyph(' ');
     float spaceAdv = spaceG ? spaceG->advanceX * scale : 8.0f;
     int ts = tabSize();
     if (ts <= 0) ts = 4;
@@ -1463,7 +1463,7 @@ float CodeEditor::colToPixelX(int line, int col) const
             else if (seqLen == 4 && i + 3 < text.size())
                 cp = ((uc & 0x07) << 18) | ((text[i+1] & 0x3F) << 12) | ((text[i+2] & 0x3F) << 6) | (text[i+3] & 0x3F);
 
-            const BuGUI::FontGlyph* g = font->findGlyph(cp);
+            const ig::retained::FontGlyph* g = font->findGlyph(cp);
             penX += g ? g->advanceX * scale : spaceAdv;
             visCol++;
             curCol++;
@@ -1481,7 +1481,7 @@ float CodeEditor::colCharWidth(int line, int col) const
     if (!font) return 8.0f;
 
     float scale = fontScale_;
-    const BuGUI::FontGlyph* spaceG = font->findGlyph(' ');
+    const ig::retained::FontGlyph* spaceG = font->findGlyph(' ');
     float spaceAdv = spaceG ? spaceG->advanceX * scale : 8.0f;
 
     const String& text = lineAt(line);
@@ -1507,7 +1507,7 @@ float CodeEditor::colCharWidth(int line, int col) const
                     cp = ((uc & 0x0F) << 12) | ((text[i+1] & 0x3F) << 6) | (text[i+2] & 0x3F);
                 else if (seqLen == 4 && i + 3 < text.size())
                     cp = ((uc & 0x07) << 18) | ((text[i+1] & 0x3F) << 12) | ((text[i+2] & 0x3F) << 6) | (text[i+3] & 0x3F);
-                const BuGUI::FontGlyph* g = font->findGlyph(cp);
+                const ig::retained::FontGlyph* g = font->findGlyph(cp);
                 return g ? g->advanceX * scale : spaceAdv;
             }
         }
@@ -1619,7 +1619,7 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
 {
     if (!showWhitespace_) return;
 
-    const BuGUI::Font* font = ctx.buFont;
+    const ig::retained::Font* font = ctx.buFont;
     if (!font) return;
 
     float lh = lineHeight_;
@@ -1631,7 +1631,7 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
     if (ts <= 0) ts = 4;
 
     // Space advance — same value addText uses for ' '
-    const BuGUI::FontGlyph* spaceGlyph = font->findGlyph(' ');
+    const ig::retained::FontGlyph* spaceGlyph = font->findGlyph(' ');
     float spaceAdv = spaceGlyph ? spaceGlyph->advanceX * scale : 8.0f;
 
     ctx.fill.SetColor(100, 110, 130, 100);
@@ -1710,7 +1710,7 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
                     else if (seqLen == 4 && ei + 3 < expanded.size())
                         cp = ((uc & 0x07) << 18) | ((expanded[ei+1] & 0x3F) << 12) | ((expanded[ei+2] & 0x3F) << 6) | (expanded[ei+3] & 0x3F);
 
-                    const BuGUI::FontGlyph* g = font->findGlyph(cp);
+                    const ig::retained::FontGlyph* g = font->findGlyph(cp);
                     penX += g ? g->advanceX * scale : spaceAdv;
                     ei += seqLen;
                 }
@@ -2296,21 +2296,21 @@ void CodeEditor::paint(PaintContext& ctx)
 void CodeEditor::onKeyPress(KeyEvent& e)
 {
     // Multi-cursor: Ctrl+D = add cursor for next occurrence
-    if (e.ctrl && e.key == BuGUI::Key::D) {
+    if (e.ctrl && e.key == ig::retained::Key::D) {
         addCursorForNextOccurrence();
         e.consumed = true;
         return;
     }
 
     // Escape clears extra cursors
-    if (e.key == BuGUI::Key::Escape && !extraCursors_.empty()) {
+    if (e.key == ig::retained::Key::Escape && !extraCursors_.empty()) {
         clearExtraCursors();
         e.consumed = true;
         return;
     }
 
     // Ctrl+Shift+L = select all occurrences
-    if (e.ctrl && e.shift && e.key == BuGUI::Key::L) {
+    if (e.ctrl && e.shift && e.key == ig::retained::Key::L) {
         selectAllOccurrences();
         e.consumed = true;
         return;
@@ -2318,19 +2318,19 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
     // Alt+Up/Down = move line up/down
     if (e.alt && !e.ctrl && !e.shift) {
-        if (e.key == BuGUI::Key::Up) { moveLineUp(); e.consumed = true; return; }
-        if (e.key == BuGUI::Key::Down) { moveLineDown(); e.consumed = true; return; }
+        if (e.key == ig::retained::Key::Up) { moveLineUp(); e.consumed = true; return; }
+        if (e.key == ig::retained::Key::Down) { moveLineDown(); e.consumed = true; return; }
     }
 
     // Ctrl+Shift+K = remove line
-    if (e.ctrl && e.shift && e.key == BuGUI::Key::K) {
+    if (e.ctrl && e.shift && e.key == ig::retained::Key::K) {
         removeLine();
         e.consumed = true;
         return;
     }
 
     // Ctrl+Shift+D = duplicate line
-    if (e.ctrl && e.shift && e.key == BuGUI::Key::D) {
+    if (e.ctrl && e.shift && e.key == ig::retained::Key::D) {
         // Ctrl+D without shift is addCursorForNextOccurrence (handled above)
         duplicateLine();
         e.consumed = true;
@@ -2338,7 +2338,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
     }
 
     // Ctrl+/ = toggle comment
-    if (e.ctrl && e.key == BuGUI::Key::Slash) {
+    if (e.ctrl && e.key == ig::retained::Key::Slash) {
         toggleComment();
         e.consumed = true;
         return;
@@ -2350,23 +2350,23 @@ void CodeEditor::onKeyPress(KeyEvent& e)
     if (!extraCursors_.empty()) {
         bool handled = true;
         switch (e.key) {
-        case BuGUI::Key::Left:
+        case ig::retained::Key::Left:
             moveLeft(e.shift, e.ctrl); break;
-        case BuGUI::Key::Right:
+        case ig::retained::Key::Right:
             moveRight(e.shift, e.ctrl); break;
-        case BuGUI::Key::Up:
+        case ig::retained::Key::Up:
             moveUp(1, e.shift); break;
-        case BuGUI::Key::Down:
+        case ig::retained::Key::Down:
             moveDown(1, e.shift); break;
-        case BuGUI::Key::Home:
+        case ig::retained::Key::Home:
             if (e.ctrl) moveTop(e.shift);
             else moveHome(e.shift);
             break;
-        case BuGUI::Key::End:
+        case ig::retained::Key::End:
             if (e.ctrl) moveBottom(e.shift);
             else moveEnd(e.shift);
             break;
-        case BuGUI::Key::Tab:
+        case ig::retained::Key::Tab:
             if (!readOnly_) {
                 // Insert tab at all cursors (reuse onTextInput path)
                 KeyEvent tabE;
@@ -2374,20 +2374,20 @@ void CodeEditor::onKeyPress(KeyEvent& e)
                 onTextInput(tabE);
             }
             break;
-        case BuGUI::Key::Return: case BuGUI::Key::KPEnter:
+        case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
             clearExtraCursors();
             handled = false; // fall through to normal Enter handler
             break;
-        case BuGUI::Key::Backspace: case BuGUI::Key::Delete:
+        case ig::retained::Key::Backspace: case ig::retained::Key::Delete:
             handled = false; // fall through to multi-cursor backspace handler below
             break;
-        case BuGUI::Key::PageUp:
+        case ig::retained::Key::PageUp:
             moveUp(std::max(1, visibleLineCount() - 1), e.shift); break;
-        case BuGUI::Key::PageDown:
+        case ig::retained::Key::PageDown:
             moveDown(std::max(1, visibleLineCount() - 1), e.shift); break;
         default:
             // Ctrl+A = select all, clears extra cursors
-            if (e.ctrl && e.key == BuGUI::Key::A) {
+            if (e.ctrl && e.key == ig::retained::Key::A) {
                 clearExtraCursors();
                 handled = false; break;
             }
@@ -2404,7 +2404,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
     // Enter with auto-indent
     if (autoIndent_ && !readOnly_ &&
-        (e.key == BuGUI::Key::Return || e.key == BuGUI::Key::KPEnter))
+        (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter))
     {
         // Multi-cursor: clear extras for Enter (too complex to handle per-cursor)
         if (!extraCursors_.empty()) clearExtraCursors();
@@ -2436,7 +2436,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
     // Multi-cursor backspace / delete
     if (!extraCursors_.empty() && !readOnly_ && !e.ctrl &&
-        (e.key == BuGUI::Key::Backspace || e.key == BuGUI::Key::Delete))
+        (e.key == ig::retained::Key::Backspace || e.key == ig::retained::Key::Delete))
     {
         struct CursorInfo { TextPos pos; TextPos anchor; int idx; };
         ct::Vector<CursorInfo> all;
@@ -2457,7 +2457,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
             if (hasSelection()) {
                 deleteSelection();
-            } else if (e.key == BuGUI::Key::Backspace) {
+            } else if (e.key == ig::retained::Key::Backspace) {
                 if (cursor_.col > 0) {
                     size_t byteEnd   = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
                     cursor_.col--;
@@ -2506,17 +2506,17 @@ void CodeEditor::onKeyPress(KeyEvent& e)
     if (!readOnly_ && !e.ctrl) {
         TextPos before = cursor_;
 
-        if (e.key == BuGUI::Key::Backspace || e.key == BuGUI::Key::Delete) {
+        if (e.key == ig::retained::Key::Backspace || e.key == ig::retained::Key::Delete) {
             String deletedText;
             if (hasSelection()) {
                 deletedText = selectedText();
-            } else if (e.key == BuGUI::Key::Backspace && cursor_.col > 0) {
+            } else if (e.key == ig::retained::Key::Backspace && cursor_.col > 0) {
                 deletedText = String(1, lineAt(cursor_.line)[cursor_.col - 1]);
-            } else if (e.key == BuGUI::Key::Backspace && cursor_.line > 0) {
+            } else if (e.key == ig::retained::Key::Backspace && cursor_.line > 0) {
                 deletedText = "\n";
-            } else if (e.key == BuGUI::Key::Delete && cursor_.col < lineColCount(cursor_.line)) {
+            } else if (e.key == ig::retained::Key::Delete && cursor_.col < lineColCount(cursor_.line)) {
                 deletedText = String(1, lineAt(cursor_.line)[cursor_.col]);
-            } else if (e.key == BuGUI::Key::Delete && cursor_.line < lineCount() - 1) {
+            } else if (e.key == ig::retained::Key::Delete && cursor_.line < lineCount() - 1) {
                 deletedText = "\n";
             }
 

@@ -1,7 +1,7 @@
 #include "WidgetApp.hpp"
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
-using namespace BuGUI;
+using namespace ig::retained;
 
 void registerDemoStage(WidgetApp& app)
 {
@@ -10,7 +10,7 @@ void registerDemoStage(WidgetApp& app)
     vbox->setSpacing(8.0f);
     vbox->setPadding(20.0f);
 
-    vbox->createChild<Label>("BuGUI + Raylib");
+    vbox->createChild<Label>("ig::retained + Raylib");
     vbox->createChild<Line>();
 
     vbox->createChild<Button>("Click me");
