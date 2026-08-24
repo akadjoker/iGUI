@@ -28,9 +28,7 @@ struct DemoState
     bool workspaceOpen;
     bool windowManagerOpen;
     bool sceneExpanded;
-    bool cameraExpanded;
-    bool renderExpanded;
-    bool floorExpanded;
+    bool sceneNodeExpanded[5];
     bool selectedPreset;
     bool deleteNodeDialog;
     bool renameNodeDialog;
@@ -44,7 +42,8 @@ struct DemoState
     int workspaceTab;
     int selectedAsset;
     int selectedSceneNode;
-    ig::WidgetId sceneOrder[3];
+    int sceneParent[5];
+    int sceneOrder[4];
     uint64_t droppedImageAsset;
     float gamma;
     float dragExposure;
@@ -56,8 +55,7 @@ struct DemoState
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
-          workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
-          renderExpanded(false), floorExpanded(false), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
+          workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), droppedImageAsset(0u),
           gamma(2.2f), dragExposure(0.25f),
@@ -71,41 +69,166 @@ struct DemoState
                 "This final line demonstrates vertical scrolling."),
           accent(90u, 160u, 230u, 255u)
     {
-        sceneOrder[0] = CameraNode;
-        sceneOrder[1] = LightNode;
-        sceneOrder[2] = EnvironmentNode;
+        sceneNodeExpanded[0] = false;
+        sceneNodeExpanded[1] = false;
+        sceneNodeExpanded[2] = false;
+        sceneNodeExpanded[3] = true;
+        sceneNodeExpanded[4] = false;
+        sceneParent[0] = -1;
+        sceneParent[1] = 0;
+        sceneParent[2] = 0;
+        sceneParent[3] = 0;
+        sceneParent[4] = 3;
+        sceneOrder[0] = 1;
+        sceneOrder[1] = 2;
+        sceneOrder[2] = 3;
+        sceneOrder[3] = 4;
     }
 };
 
-bool reorderSceneNodes(DemoState &state, const ig::TreeDrop &drop)
+ig::WidgetId sceneNodeId(int node)
 {
-    if (drop.position == ig::TreeDropPosition::Inside)
-        return false;
-    const ig::WidgetId source = drop.source;
-    const ig::WidgetId target = drop.target;
+    switch (node)
+    {
+    case 1: return CameraNode;
+    case 2: return LightNode;
+    case 3: return EnvironmentNode;
+    case 4: return WorldEnvironmentNode;
+    default: return ig::InvalidWidgetId;
+    }
+}
+
+int sceneNodeIndex(ig::WidgetId id)
+{
+    for (int node = 1; node <= 4; ++node)
+    {
+        if (sceneNodeId(node) == id)
+            return node;
+    }
+    return -1;
+}
+
+bool sceneNodeHasChildren(const DemoState &state, int parent)
+{
+    for (int node = 1; node <= 4; ++node)
+    {
+        if (state.sceneParent[node] == parent)
+            return true;
+    }
+    return false;
+}
+
+bool sceneNodeIsDescendant(const DemoState &state, int node, int ancestor)
+{
+    for (int parent = state.sceneParent[node]; parent > 0; parent = state.sceneParent[parent])
+    {
+        if (parent == ancestor)
+            return true;
+    }
+    return false;
+}
+
+void moveSceneOrder(DemoState &state, int source, int insertion)
+{
     int sourceIndex = -1;
-    int targetIndex = -1;
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
     {
         if (state.sceneOrder[i] == source)
+        {
             sourceIndex = i;
-        if (state.sceneOrder[i] == target)
-            targetIndex = i;
+            break;
+        }
     }
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex == targetIndex)
+    if (sourceIndex < 0)
+        return;
+    for (int i = sourceIndex; i < 3; ++i)
+        state.sceneOrder[i] = state.sceneOrder[i + 1];
+    if (sourceIndex < insertion)
+        --insertion;
+    for (int i = 3; i > insertion; --i)
+        state.sceneOrder[i] = state.sceneOrder[i - 1];
+    state.sceneOrder[insertion] = source;
+}
+
+bool applySceneTreeDrop(DemoState &state, const ig::TreeDrop &drop)
+{
+    const int source = sceneNodeIndex(drop.source);
+    const int target = sceneNodeIndex(drop.target);
+    if (source < 0 || target < 0 || source == target || sceneNodeIsDescendant(state, target, source))
         return false;
 
-    const ig::WidgetId node = state.sceneOrder[sourceIndex];
-    for (int i = sourceIndex; i < 2; ++i)
-        state.sceneOrder[i] = state.sceneOrder[i + 1];
-    if (sourceIndex < targetIndex)
-        --targetIndex;
-    if (drop.position == ig::TreeDropPosition::After)
-        ++targetIndex;
-    for (int i = 2; i > targetIndex; --i)
-        state.sceneOrder[i] = state.sceneOrder[i - 1];
-    state.sceneOrder[targetIndex] = node;
+    int targetIndex = -1;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (state.sceneOrder[i] == target)
+        {
+            targetIndex = i;
+            break;
+        }
+    }
+    if (targetIndex < 0)
+        return false;
+
+    if (drop.position == ig::TreeDropPosition::Inside)
+    {
+        state.sceneParent[source] = target;
+        int insertion = targetIndex + 1;
+        while (insertion < 4 && sceneNodeIsDescendant(state, state.sceneOrder[insertion], target))
+            ++insertion;
+        moveSceneOrder(state, source, insertion);
+        state.sceneNodeExpanded[target] = true;
+    }
+    else
+    {
+        state.sceneParent[source] = state.sceneParent[target];
+        moveSceneOrder(state, source, targetIndex +
+                       (drop.position == ig::TreeDropPosition::After ? 1 : 0));
+    }
     return true;
+}
+
+void drawSceneChildren(ig::Context &ui, DemoState &state, int parent, ig::TreeDrop &drop)
+{
+    for (int i = 0; i < 4; ++i)
+    {
+        const int node = state.sceneOrder[i];
+        if (state.sceneParent[node] != parent)
+            continue;
+
+        ig::TreeItemStyle style;
+        ig::StringView label;
+        if (node == 1)
+        {
+            style.typeColor = ig::Color(125u, 205u, 250u, 255u);
+            label = ig::StringView("Camera3D");
+        }
+        else if (node == 2)
+        {
+            style.typeColor = ig::Color(255u, 220u, 105u, 255u);
+            label = ig::StringView("DirectionalLight3D");
+        }
+        else if (node == 3)
+        {
+            style.typeColor = ig::Color(115u, 225u, 155u, 255u);
+            label = ig::StringView("Environment");
+        }
+        else
+        {
+            style.typeColor = ig::Color(165u, 125u, 240u, 255u);
+            label = ig::StringView("WorldEnvironment");
+        }
+        style.leaf = !sceneNodeHasChildren(state, node);
+        style.acceptsChildren = true;
+        style.selected = state.selectedSceneNode == node;
+        if (ui.treeItem(sceneNodeId(node), label, state.sceneNodeExpanded[node], style, &drop))
+            state.selectedSceneNode = node;
+        if (!style.leaf && state.sceneNodeExpanded[node])
+        {
+            ui.indent();
+            drawSceneChildren(ui, state, node, drop);
+            ui.unindent();
+        }
+    }
 }
 
 void drawProfileWindow(ig::Context &ui, DemoState &state)
@@ -173,59 +296,23 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         if (state.sceneExpanded)
         {
             ui.indent();
-            for (int i = 0; i < 3; ++i)
-            {
-                if (state.sceneOrder[i] == CameraNode)
-                {
-                    ig::TreeItemStyle cameraStyle;
-                    cameraStyle.typeColor = ig::Color(125u, 205u, 250u, 255u);
-                    cameraStyle.leaf = true;
-                    cameraStyle.selected = state.selectedSceneNode == 1;
-                    if (ui.treeItem(CameraNode, "Camera3D", state.cameraExpanded, cameraStyle, &sceneDrop))
-                        state.selectedSceneNode = 1;
-                }
-                else if (state.sceneOrder[i] == LightNode)
-                {
-                    ig::TreeItemStyle lightStyle;
-                    lightStyle.typeColor = ig::Color(255u, 220u, 105u, 255u);
-                    lightStyle.leaf = true;
-                    lightStyle.selected = state.selectedSceneNode == 2;
-                    if (ui.treeItem(LightNode, "DirectionalLight3D", state.renderExpanded, lightStyle, &sceneDrop))
-                        state.selectedSceneNode = 2;
-                }
-                else
-                {
-                    ig::TreeItemStyle environmentStyle;
-                    environmentStyle.typeColor = ig::Color(115u, 225u, 155u, 255u);
-                    environmentStyle.selected = state.selectedSceneNode == 3;
-                    if (ui.treeItem(EnvironmentNode, "Environment", state.renderExpanded, environmentStyle, &sceneDrop))
-                        state.selectedSceneNode = 3;
-                    if (state.renderExpanded)
-                    {
-                        ui.indent();
-                        ig::TreeItemStyle childStyle;
-                        childStyle.typeColor = ig::Color(165u, 125u, 240u, 255u);
-                        childStyle.leaf = true;
-                        childStyle.selected = state.selectedSceneNode == 4;
-                        if (ui.treeItem(WorldEnvironmentNode, "WorldEnvironment", state.floorExpanded, childStyle, &sceneDrop))
-                            state.selectedSceneNode = 4;
-                        ui.unindent();
-                    }
-                }
-            }
+            drawSceneChildren(ui, state, 0, sceneDrop);
             ig::TreeItemStyle hiddenStyle;
             hiddenStyle.typeColor = ig::Color(180u, 180u, 190u, 255u);
             hiddenStyle.leaf = true;
             hiddenStyle.disabled = true;
-            ui.treeItem("Floor mesh (locked)", state.floorExpanded, hiddenStyle);
+            ui.treeItem("Floor mesh (locked)", state.sceneNodeExpanded[4], hiddenStyle);
             ui.unindent();
         }
         if (sceneDrop.source != ig::InvalidWidgetId)
         {
-            if (reorderSceneNodes(state, sceneDrop))
-                ui.showToast("scene tree reorder", "Scene node reordered", ig::ToastPosition::BottomRight);
-            else if (sceneDrop.position == ig::TreeDropPosition::Inside)
-                ui.showToast("scene tree reparent", "Drop accepted: reparent this node in your scene model", ig::ToastPosition::BottomRight);
+            if (applySceneTreeDrop(state, sceneDrop))
+                ui.showToast("scene tree move",
+                             sceneDrop.position == ig::TreeDropPosition::Inside
+                                 ? "Scene node reparented" : "Scene node reordered",
+                             ig::ToastPosition::BottomRight);
+            else
+                ui.showToast("scene tree invalid move", "Cannot move a node inside one of its children", ig::ToastPosition::BottomRight);
         }
         if (ui.button("Delete selected node"))
             state.deleteNodeDialog = true;

@@ -712,7 +712,7 @@ static void test_cross_window_drag_drop()
     assert(payload.source == 42u && payload.data == 9001u);
 }
 
-static bool drawTreeDrag(ig::Context &context, ig::TreeDrop &drop)
+static bool drawTreeDrag(ig::Context &context, ig::TreeDrop &drop, bool targetAcceptsChildren = false)
 {
     bool sourceExpanded = false;
     bool targetExpanded = false;
@@ -721,6 +721,7 @@ static bool drawTreeDrag(ig::Context &context, ig::TreeDrop &drop)
     ig::TreeItemStyle targetStyle;
     targetStyle.typeColor = ig::Color(255u, 220u, 105u, 255u);
     targetStyle.leaf = true;
+    targetStyle.acceptsChildren = targetAcceptsChildren;
 
     assert(context.beginWindow("tree drag", ig::Rect(10.0f, 10.0f, 260.0f, 150.0f)));
     context.treeItem(101u, "Camera3D", sourceExpanded, sourceStyle,
@@ -757,6 +758,28 @@ static void test_tree_drag_drop_positions()
     context.endFrame();
     assert(drop.source == 101u && drop.target == 202u);
     assert(drop.position == ig::TreeDropPosition::After);
+
+    drop = ig::TreeDrop();
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop, true));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 100.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop, true));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(100.0f, 102.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawTreeDrag(context, drop, true));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 100.0f, 102.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(drawTreeDrag(context, drop, true));
+    context.endFrame();
+    assert(drop.source == 101u && drop.target == 202u);
+    assert(drop.position == ig::TreeDropPosition::Inside);
 }
 
 int main()

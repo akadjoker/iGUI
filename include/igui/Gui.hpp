@@ -42,9 +42,13 @@ struct TreeItemStyle
     bool selected;
     bool leaf;
     bool disabled;
+    // A leaf can still accept a child; it gains an expansion arrow once the
+    // application's tree model reports that child on the next frame.
+    bool acceptsChildren;
 
     TreeItemStyle()
-        : typeColor(120u, 170u, 230u, 255u), selected(false), leaf(false), disabled(false) {}
+        : typeColor(120u, 170u, 230u, 255u), selected(false), leaf(false), disabled(false),
+          acceptsChildren(false) {}
 };
 
 // The relation selected when a tree item is dropped over another item.

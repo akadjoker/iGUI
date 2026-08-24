@@ -627,7 +627,8 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     {
         const float localY = pointer_.position.y - rect.y;
         const TreeDropPosition position = localY < rect.height * 0.25f ? TreeDropPosition::Before
-                                       : (localY >= rect.height * 0.75f || style.leaf)
+                                       : (localY >= rect.height * 0.75f ||
+                                          (style.leaf && !style.acceptsChildren))
                                            ? TreeDropPosition::After : TreeDropPosition::Inside;
         if (position == TreeDropPosition::Inside)
             drawList->addRect(rect, theme_.dialogBtnPrimary, clip, 2.0f);
