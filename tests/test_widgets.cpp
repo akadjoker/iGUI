@@ -488,6 +488,105 @@ static void test_editor_widgets()
     assert(color.g > color.r && color.r > color.b);
 }
 
+static void drawScrollableEditor(ig::Context &context, ig::String &text)
+{
+    assert(context.beginWindow("scroll editor", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    context.inputTextMultiline("document", text, ig::Rect(8.0f, 8.0f, 220.0f, 58.0f));
+    context.endWindow();
+}
+
+static float multilineTextY(const ig::DrawData &data, uint32_t textSize)
+{
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == textSize)
+            return command.payload.text.position.y;
+    }
+    return -1.0f;
+}
+
+static void test_multiline_scroll_and_drag_widgets()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::String text("one\ntwo\nthree\nfour\nfive\nsix");
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawScrollableEditor(context, text);
+    const ig::DrawData &initial = context.endFrame();
+    const float initialY = multilineTextY(initial, static_cast<uint32_t>(text.size()));
+    assert(initialY >= 0.0f);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawScrollableEditor(context, text);
+    const ig::DrawData &scrolled = context.endFrame();
+    assert(multilineTextY(scrolled, static_cast<uint32_t>(text.size())) < initialY);
+
+    float exposure = 0.0f;
+    int iterations = 4;
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("drag controls", ig::Rect(10.0f, 10.0f, 300.0f, 150.0f)));
+    context.dragFloat("exposure", exposure, -1.0f, 1.0f, 0.1f, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f));
+    context.dragInt("iterations", iterations, 0, 20, 1, ig::Rect(8.0f, 42.0f, 220.0f, 28.0f));
+    context.separatorText("Advanced", 220.0f);
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 60.0f, 50.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 65.0f, 50.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("drag controls", ig::Rect(10.0f, 10.0f, 300.0f, 150.0f)));
+    const bool floatChanged = context.dragFloat("exposure", exposure, -1.0f, 1.0f, 0.1f,
+                                                ig::Rect(8.0f, 8.0f, 220.0f, 28.0f));
+    context.dragInt("iterations", iterations, 0, 20, 1, ig::Rect(8.0f, 42.0f, 220.0f, 28.0f));
+    context.separatorText("Advanced", 220.0f);
+    context.endWindow();
+    context.endFrame();
+    assert(floatChanged && exposure > 0.4f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 60.0f, 84.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 64.0f, 84.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("drag controls", ig::Rect(10.0f, 10.0f, 300.0f, 150.0f)));
+    context.dragFloat("exposure", exposure, -1.0f, 1.0f, 0.1f, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f));
+    const bool intChanged = context.dragInt("iterations", iterations, 0, 20, 1,
+                                            ig::Rect(8.0f, 42.0f, 220.0f, 28.0f));
+    context.separatorText("Advanced", 220.0f);
+    context.endWindow();
+    context.endFrame();
+    assert(intChanged && iterations == 8);
+}
+
+static void test_responsive_window_layout()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::String value("resize me");
+
+    context.beginFrame(ig::FrameInfo(480.0f, 260.0f));
+    assert(context.beginWindow("responsive", ig::Rect(10.0f, 10.0f, 220.0f, 130.0f)));
+    const float initialWidth = context.availableWidth();
+    context.inputText("auto width", value);
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 224.0f, 134.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 344.0f, 164.0f));
+    context.beginFrame(ig::FrameInfo(480.0f, 260.0f));
+    assert(context.beginWindow("responsive", ig::Rect(10.0f, 10.0f, 220.0f, 130.0f)));
+    const float resizedWidth = context.availableWidth();
+    context.inputText("auto width", value);
+    context.endWindow();
+    context.endFrame();
+    assert(resizedWidth > initialWidth + 100.0f);
+}
+
 int main()
 {
     test_widget_gallery();
@@ -495,5 +594,7 @@ int main()
     test_image_widgets();
     test_navigation_widgets();
     test_editor_widgets();
+    test_multiline_scroll_and_drag_widgets();
+    test_responsive_window_layout();
     return 0;
 }

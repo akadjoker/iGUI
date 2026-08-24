@@ -79,6 +79,11 @@ public:
                      const Rect &bounds);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
                    const Rect &bounds);
+    // Horizontal relative drag. The value changes by speed for each moved pixel.
+    bool dragFloat(StringView label, float &value, float minimum, float maximum,
+                   float speed, const Rect &bounds);
+    bool dragInt(StringView label, int &value, int minimum, int maximum,
+                 int speed, const Rect &bounds);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
@@ -108,38 +113,45 @@ public:
     bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
     bool treeNode(StringView label, bool &expanded, float width = 0.0f);
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
-                float width = 180.0f);
+                float width = 0.0f);
     bool listBox(StringView label, int &currentItem, Span<const StringView> items,
-                 float width = 180.0f, int visibleItems = 4);
+                 float width = 0.0f, int visibleItems = 4);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
-                  float width = 180.0f);
+                  float width = 0.0f);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     float width = 180.0f);
+                     float width = 0.0f);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   float width = 180.0f);
+                   float width = 0.0f);
+    bool dragFloat(StringView label, float &value, float minimum, float maximum,
+                   float speed = 0.01f, float width = 0.0f);
+    bool dragInt(StringView label, int &value, int minimum, int maximum,
+                 int speed = 1, float width = 0.0f);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
-                    float width = 180.0f);
-    bool inputText(StringView label, String &value, float width = 180.0f);
-    bool inputTextMultiline(StringView label, String &value, float width = 180.0f,
+                    float width = 0.0f);
+    bool inputText(StringView label, String &value, float width = 0.0f);
+    bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
                             float height = 120.0f);
-    bool inputInt(StringView label, int &value, float width = 180.0f);
-    bool inputFloat(StringView label, float &value, float width = 180.0f, int precision = 6);
-    bool colorEdit(StringView label, Color &value, float width = 180.0f, float height = 128.0f);
+    bool inputInt(StringView label, int &value, float width = 0.0f);
+    bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6);
+    bool colorEdit(StringView label, Color &value, float width = 0.0f, float height = 128.0f);
     void image(TextureId texture, float width, float height,
                const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                const Color &tint = Color());
     bool imageButton(StringView label, TextureId texture, float width, float height,
                      const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                      const Color &tint = Color());
-    void progressBar(float value, float maximum, float width = 180.0f);
+    void progressBar(float value, float maximum, float width = 0.0f);
     void label(StringView text);
     void sameLine(float spacing = -1.0f);
     void spacing(float pixels);
     void indent(float pixels = 16.0f);
     void unindent(float pixels = 16.0f);
     void separator(float thickness = 1.0f);
+    void separatorText(StringView text, float width = 0.0f);
     void setCursor(const Vec2 &localPosition);
     Vec2 cursor() const;
+    // Remaining horizontal content space at the current layout cursor.
+    float availableWidth() const;
 
 private:
     struct PointerState
@@ -190,6 +202,7 @@ private:
     ct::SlotMap<WindowState> windows_;
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
     ct::HashMap<WidgetId, int> listScrolls_;
+    ct::HashMap<WidgetId, int> textScrolls_;
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
@@ -205,10 +218,13 @@ private:
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;
+    WidgetId dragWidget_;
     String::size_type textCursor_;
     uint64_t frameNumber_;
     uint64_t nextZOrder_;
     Vec2 windowDragOffset_;
+    float dragStartValue_;
+    float dragStartX_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;

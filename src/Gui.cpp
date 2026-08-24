@@ -79,11 +79,12 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
-      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
+      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
+      dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
       copyRequested_(false), pasteRequested_(false)
@@ -92,6 +93,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     windows_.reserve(8);
     windowsById_.reserve(8);
     listScrolls_.reserve(8);
+    textScrolls_.reserve(8);
     colorPickers_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
@@ -822,6 +824,85 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
     return valueChanged;
 }
 
+bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
+                        float speed, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window || maximum <= minimum || speed <= 0.0f)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                             activeWidget_ == InvalidWidgetId &&
+                             contains(intersect(rect, clip), pointer_.pressedPosition[left]);
+    if (pressedHere)
+    {
+        activeWidget_ = id;
+        focusedWidget_ = id;
+        dragWidget_ = id;
+        dragStartValue_ = value;
+        dragStartX_ = pointer_.pressedPosition[left].x;
+    }
+
+    bool changed = false;
+    const bool dragging = activeWidget_ == id && dragWidget_ == id;
+    if (dragging && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
+    {
+        const float next = clamp(dragStartValue_ + (pointer_.position.x - dragStartX_) * speed,
+                                 minimum, maximum);
+        changed = next != value;
+        value = next;
+    }
+    if (dragging && pointer_.released[left])
+    {
+        activeWidget_ = InvalidWidgetId;
+        dragWidget_ = InvalidWidgetId;
+    }
+
+    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const float valueWidth = rect.width * 0.42f;
+    const Rect valueRect(rect.x + rect.width - valueWidth, rect.y, valueWidth, rect.height);
+    const Color background = dragging ? theme_.buttonPressed
+                                      : (hovered ? theme_.buttonHovered : theme_.inputBg);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    drawList->addRectFilled(valueRect, background, clip);
+    const String displayed = String::number(static_cast<double>(value), 3);
+    const TextMetrics valueMetrics = measureText(theme_.font, displayed, theme_.fontSize);
+    drawText(*drawList, theme_.font, displayed,
+             Vec2(valueRect.x + (valueRect.width - valueMetrics.width) * 0.5f,
+                  valueRect.y + (valueRect.height - valueMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, clip);
+    return changed;
+}
+
+bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
+                      int speed, const Rect &bounds)
+{
+    if (maximum <= minimum || speed <= 0)
+        return false;
+    float temporary = static_cast<float>(value);
+    const bool dragged = dragFloat(labelText, temporary, static_cast<float>(minimum),
+                                   static_cast<float>(maximum), static_cast<float>(speed), bounds);
+    if (!dragged)
+        return false;
+    const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
+                                          : static_cast<int>(temporary - 0.5f);
+    const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
+    const bool changed = value != clamped;
+    value = clamped;
+    return changed;
+}
+
 bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum,
                          const Rect &bounds)
 {
@@ -987,13 +1068,94 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
-    const Rect textClip = intersect(rect, clip);
     DrawList *drawList = currentDrawList();
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
-    const bool hovered = itemHovered(rect, clip, id);
-    itemClicked(rect, clip, id);
+    uint32_t lineCount = 1u;
+    for (String::size_type i = 0u; i < value.size(); ++i)
+    {
+        if (value[i] == '\n')
+            ++lineCount;
+    }
+    const TextMetrics lineMetrics = measureText(theme_.font, StringView("M"), theme_.fontSize);
+    const float lineHeight = lineMetrics.height > 0.0f ? lineMetrics.height : theme_.fontSize;
+    const float padding = theme_.textEditPadding;
+    const float innerHeight = rect.height - padding * 2.0f;
+    const int visibleLines = innerHeight >= lineHeight
+        ? static_cast<int>(innerHeight / lineHeight) : 1;
+    const int maximumScroll = static_cast<int>(lineCount) - visibleLines;
+    const bool hasScrollbar = maximumScroll > 0;
+    const float scrollbarWidth = hasScrollbar ? theme_.scrollbarWidth : 0.0f;
+    const Rect textArea(rect.x, rect.y, rect.width - scrollbarWidth, rect.height);
+    const Rect textClip = intersect(Rect(textArea.x + padding, textArea.y + padding,
+                                         textArea.width - padding * 2.0f,
+                                         textArea.height - padding * 2.0f), clip);
+    const Rect scrollbar(rect.x + rect.width - scrollbarWidth, rect.y, scrollbarWidth, rect.height);
+    const WidgetId scrollbarId = combineIds(id, 0x544558545343524Cull);
+    int *scroll = textScrolls_.find(id);
+    if (!scroll)
+    {
+        textScrolls_.put(id, 0);
+        scroll = textScrolls_.find(id);
+    }
+    if (!scroll)
+        return false;
+    if (*scroll < 0)
+        *scroll = 0;
+    if (*scroll > maximumScroll)
+        *scroll = maximumScroll > 0 ? maximumScroll : 0;
+
+    const bool hovered = itemHovered(textArea, clip, id);
+    itemClicked(textArea, clip, id);
+    if (hasScrollbar && currentWindowReceivesPointer() &&
+        contains(intersect(rect, clip), pointer_.position) && pointer_.wheelY != 0.0f)
+    {
+        const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
+        *scroll += delta;
+        if (*scroll < 0)
+            *scroll = 0;
+        if (*scroll > maximumScroll)
+            *scroll = maximumScroll;
+    }
+
+    Rect thumb;
+    if (hasScrollbar)
+    {
+        const float requestedThumb = scrollbar.height * static_cast<float>(visibleLines) /
+                                     static_cast<float>(lineCount);
+        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+            ? requestedThumb : theme_.scrollbarMinThumb;
+        const float travel = scrollbar.height - thumbHeight;
+        const float offset = maximumScroll > 0
+            ? travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll) : 0.0f;
+        thumb = Rect(scrollbar.x, scrollbar.y + offset, scrollbar.width, thumbHeight);
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                                  activeWidget_ == InvalidWidgetId &&
+                                  contains(intersect(thumb, clip), pointer_.pressedPosition[left]);
+        if (pressedThumb)
+        {
+            activeWidget_ = scrollbarId;
+            focusedWidget_ = id;
+        }
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+            {
+                const float normalized = travel > 0.0f
+                    ? clamp((pointer_.position.y - scrollbar.y - thumb.height * 0.5f) / travel,
+                            0.0f, 1.0f) : 0.0f;
+                *scroll = static_cast<int>(normalized * static_cast<float>(maximumScroll) + 0.5f);
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        const float updatedOffset = maximumScroll > 0
+            ? travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll) : 0.0f;
+        thumb.y = scrollbar.y + updatedOffset;
+    }
+
     const bool focused = focusedWidget_ == id;
     bool changed = false;
     if (focused)
@@ -1046,12 +1208,33 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
         }
     }
 
+    if (focused)
+    {
+        uint32_t cursorLine = 0u;
+        for (String::size_type i = 0u; i < textCursor_; ++i)
+        {
+            if (value[i] == '\n')
+                ++cursorLine;
+        }
+        if (static_cast<int>(cursorLine) < *scroll)
+            *scroll = static_cast<int>(cursorLine);
+        else if (static_cast<int>(cursorLine) >= *scroll + visibleLines)
+            *scroll = static_cast<int>(cursorLine) - visibleLines + 1;
+        if (*scroll > maximumScroll)
+            *scroll = maximumScroll > 0 ? maximumScroll : 0;
+    }
+
     const Color background = focused ? theme_.buttonHovered
                                      : (hovered ? theme_.buttonHovered : theme_.inputBg);
     drawList->addRectFilled(rect, background, clip);
-    const float padding = theme_.textEditPadding;
-    drawText(*drawList, theme_.font, value, Vec2(rect.x + padding, rect.y + padding),
+    drawText(*drawList, theme_.font, value,
+             Vec2(textArea.x + padding, textArea.y + padding - static_cast<float>(*scroll) * lineHeight),
              theme_.fontSize, theme_.buttonText, textClip);
+    if (hasScrollbar)
+    {
+        drawList->addRectFilled(scrollbar, theme_.sliderBackground, clip);
+        drawList->addRectFilled(thumb, theme_.scrollbarThumb, clip);
+    }
     if (focused)
     {
         String::size_type lineStart = 0u;
@@ -1066,9 +1249,10 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
         }
         const StringView linePrefix(value.data() + lineStart, textCursor_ - lineStart);
         const TextMetrics prefixMetrics = measureText(theme_.font, linePrefix, theme_.fontSize);
-        const float caretX = rect.x + padding + prefixMetrics.width;
-        const float caretY = rect.y + padding + static_cast<float>(line) * theme_.fontSize;
-        if (caretY < rect.y + rect.height - padding)
+        const float caretX = textArea.x + padding + prefixMetrics.width;
+        const float caretY = textArea.y + padding +
+                             (static_cast<float>(line) - static_cast<float>(*scroll)) * lineHeight;
+        if (caretY >= textArea.y + padding && caretY < textArea.y + textArea.height - padding)
             drawList->addRectFilled(Rect(caretX, caretY, 1.0f, theme_.fontSize),
                                     theme_.buttonText, textClip);
     }
@@ -1453,7 +1637,7 @@ bool Context::radioButton(StringView labelText, bool selected)
 
 bool Context::selectable(StringView labelText, bool selected, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : autoButtonWidth(labelText);
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool clicked = selectable(labelText, selected,
                                     Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
@@ -1464,7 +1648,7 @@ bool Context::selectable(StringView labelText, bool selected, float width)
 
 bool Context::collapsingHeader(StringView labelText, bool &expanded, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool open = collapsingHeader(labelText, expanded,
                                        Rect(bounds.x - layout_.origin.x,
@@ -1476,7 +1660,7 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, float width
 
 bool Context::treeNode(StringView labelText, bool &expanded, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool open = treeNode(labelText, expanded,
                                Rect(bounds.x - layout_.origin.x,
@@ -1489,7 +1673,7 @@ bool Context::treeNode(StringView labelText, bool &expanded, float width)
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
                      float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = tabBar(labelText, currentItem, items,
                                 Rect(bounds.x - layout_.origin.x,
@@ -1502,7 +1686,7 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
 bool Context::listBox(StringView labelText, int &currentItem, Span<const StringView> items,
                       float width, int visibleItems)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const int resolvedRows = visibleItems > 0 ? visibleItems : 1;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth,
                       theme_.widgetHeight * static_cast<float>(resolvedRows));
@@ -1517,7 +1701,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,
                        float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = comboBox(labelText, currentItem, items,
                                   Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
@@ -1529,7 +1713,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
                           float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderFloat(labelText, value, minimum, maximum,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
@@ -1540,7 +1724,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderInt(labelText, value, minimum, maximum,
                                    Rect(bounds.x - layout_.origin.x,
@@ -1550,9 +1734,33 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
     return changed;
 }
 
+bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
+                        float speed, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = dragFloat(labelText, value, minimum, maximum, speed,
+                                   Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                                        bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
+                      int speed, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = dragInt(labelText, value, minimum, maximum, speed,
+                                 Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                                      bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
 bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = stepperInt(labelText, value, minimum, maximum,
                                     Rect(bounds.x - layout_.origin.x,
@@ -1564,7 +1772,7 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
 
 bool Context::inputText(StringView labelText, String &value, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = inputText(labelText, value,
                                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
@@ -1575,7 +1783,7 @@ bool Context::inputText(StringView labelText, String &value, float width)
 
 bool Context::inputTextMultiline(StringView labelText, String &value, float width, float height)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const float resolvedHeight = height > theme_.widgetHeight ? height : theme_.widgetHeight;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
     const bool changed = inputTextMultiline(labelText, value,
@@ -1588,7 +1796,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, float widt
 
 bool Context::inputInt(StringView labelText, int &value, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = inputInt(labelText, value,
                                   Rect(bounds.x - layout_.origin.x,
@@ -1600,7 +1808,7 @@ bool Context::inputInt(StringView labelText, int &value, float width)
 
 bool Context::inputFloat(StringView labelText, float &value, float width, int precision)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = inputFloat(labelText, value,
                                     Rect(bounds.x - layout_.origin.x,
@@ -1612,7 +1820,7 @@ bool Context::inputFloat(StringView labelText, float &value, float width, int pr
 
 bool Context::colorEdit(StringView labelText, Color &value, float width, float height)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const float minimumHeight = theme_.widgetHeight * 3.0f;
     const float resolvedHeight = height > minimumHeight ? height : minimumHeight;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
@@ -1652,7 +1860,7 @@ bool Context::imageButton(StringView labelText, TextureId texture, float width, 
 
 void Context::progressBar(float value, float maximum, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     progressBar(value, maximum,
                 Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
@@ -1715,6 +1923,26 @@ void Context::separator(float thickness)
     advanceLayout(line);
 }
 
+void Context::separatorText(StringView text, float width)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return;
+
+    const Rect clip = contentClip();
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float available = window->bounds.x + window->bounds.width - theme_.windowPadding - layout_.cursor.x;
+    const float resolvedWidth = width > 0.0f && width < available ? width : available;
+    const float lineY = layout_.cursor.y + metrics.height * 0.5f;
+    drawText(*drawList, theme_.font, text, layout_.cursor, theme_.fontSize, theme_.labelText, clip);
+    const float lineX = layout_.cursor.x + metrics.width + theme_.windowPadding;
+    if (resolvedWidth > lineX - layout_.cursor.x)
+        drawList->addRectFilled(Rect(lineX, lineY, resolvedWidth - (lineX - layout_.cursor.x), 1.0f),
+                                theme_.titleBarBackground, clip);
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, resolvedWidth, metrics.height));
+}
+
 void Context::setCursor(const Vec2 &localPosition)
 {
     layout_.cursor = Vec2(layout_.origin.x + localPosition.x, layout_.origin.y + localPosition.y);
@@ -1724,6 +1952,15 @@ void Context::setCursor(const Vec2 &localPosition)
 Vec2 Context::cursor() const
 {
     return Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y);
+}
+
+float Context::availableWidth() const
+{
+    const WindowState *window = currentWindow();
+    if (!window)
+        return 0.0f;
+    const float right = window->bounds.x + window->bounds.width - theme_.windowPadding;
+    return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
 }
 
 WidgetId Context::hashText(StringView text)

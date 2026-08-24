@@ -31,9 +31,11 @@ struct DemoState
     int samples;
     int retries;
     int sampleOffset;
+    int dragIterations;
     int workspaceTab;
     int selectedAsset;
     float gamma;
+    float dragExposure;
     ig::String name;
     ig::String notes;
     ig::Color accent;
@@ -44,8 +46,14 @@ struct DemoState
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
           renderExpanded(false), floorExpanded(false),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), workspaceTab(2), selectedAsset(1), gamma(2.2f),
-          name("Raylib user"), notes("Use this workspace to configure the demo."),
+          sampleOffset(4), dragIterations(12), workspaceTab(2), selectedAsset(1), gamma(2.2f), dragExposure(0.25f),
+          name("Raylib user"),
+          notes("A multiline text editor now has a real scrollbar.\n"
+                "Use the wheel over this area.\n"
+                "You can also drag the scrollbar thumb.\n"
+                "New lines keep the caret visible.\n"
+                "Clipboard, Home and End are supported too.\n"
+                "This final line demonstrates vertical scrolling."),
           accent(90u, 160u, 230u, 255u)
     {
     }
@@ -58,7 +66,7 @@ void drawProfileWindow(ig::Context &ui, DemoState &state)
 
     ui.label("Text input and binary controls");
     ui.separator();
-    ui.inputText("Display name", state.name, 320.0f);
+    ui.inputText("Display name", state.name);
     ui.checkbox("Enable renderer", state.enabled);
     ui.checkbox("Desktop notifications", state.notifications);
     ui.toggleSwitch("Live updates", state.liveUpdates);
@@ -92,38 +100,38 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         ig::StringView("wood.mat"), ig::StringView("character.mesh"), ig::StringView("postfx.shader")
     };
 
-    if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 440.0f, 420.0f, 350.0f), &state.workspaceOpen))
+    if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 492.0f, 420.0f, 310.0f), &state.workspaceOpen))
         return;
 
-    ui.tabBar("workspace tabs", state.workspaceTab, ig::Span<const ig::StringView>(tabs), 350.0f);
+    ui.tabBar("workspace tabs", state.workspaceTab, ig::Span<const ig::StringView>(tabs));
     ui.spacing(6.0f);
     if (state.workspaceTab == 0)
     {
-        if (ui.treeNode("Demo scene", state.sceneExpanded, 350.0f))
+        if (ui.treeNode("Demo scene", state.sceneExpanded))
         {
             ui.indent();
-            ui.treeNode("Camera", state.cameraExpanded, 320.0f);
+            ui.treeNode("Camera", state.cameraExpanded);
             ui.tooltip("Camera settings are nested under the scene");
-            if (ui.treeNode("Renderer", state.renderExpanded, 320.0f))
+            if (ui.treeNode("Renderer", state.renderExpanded))
             {
                 ui.indent();
                 ui.label("Deferred lighting");
                 ui.label("Bloom enabled");
                 ui.unindent();
             }
-            ui.treeNode("Floor mesh", state.floorExpanded, 320.0f);
+            ui.treeNode("Floor mesh", state.floorExpanded);
             ui.unindent();
         }
     }
     else if (state.workspaceTab == 1)
     {
         ui.label("Project assets");
-        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 350.0f, 4);
+        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 0.0f, 4);
     }
     else
     {
-        ui.inputTextMultiline("Notes", state.notes, 350.0f, 78.0f);
-        ui.colorEdit("Accent color", state.accent, 350.0f, 142.0f);
+        ui.inputTextMultiline("Notes", state.notes, 0.0f, 78.0f);
+        ui.colorEdit("Accent color", state.accent, 0.0f, 142.0f);
     }
     ui.endWindow();
 }
@@ -148,19 +156,22 @@ void drawWindowManager(ig::Context &ui, DemoState &state)
 
 void drawNumericWindow(ig::Context &ui, DemoState &state)
 {
-    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 350.0f), &state.numericOpen))
+    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 410.0f), &state.numericOpen))
         return;
 
     ui.label("Continuous and discrete values");
     ui.separator();
-    ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f, 330.0f);
-    ui.sliderInt("Samples", state.samples, 1, 16, 330.0f);
-    ui.stepperInt("Retries", state.retries, 0, 5, 330.0f);
+    ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f);
+    ui.sliderInt("Samples", state.samples, 1, 16);
+    ui.separatorText("Relative drag controls");
+    ui.dragFloat("Exposure", state.dragExposure, -2.0f, 2.0f);
+    ui.dragInt("Iterations", state.dragIterations, 1, 64);
+    ui.stepperInt("Retries", state.retries, 0, 5);
     ui.label("Sample offset");
-    ui.inputInt("sample offset", state.sampleOffset, 330.0f);
+    ui.inputInt("sample offset", state.sampleOffset);
     ui.label("Gamma");
-    ui.inputFloat("gamma", state.gamma, 330.0f, 3);
-    ui.progressBar(state.volume, 1.0f, 330.0f);
+    ui.inputFloat("gamma", state.gamma, 0.0f, 3);
+    ui.progressBar(state.volume, 1.0f);
     ui.endWindow();
 }
 
@@ -176,17 +187,17 @@ void drawSelectionWindow(ig::Context &ui, DemoState &state)
     ui.label("Lists, radio buttons and selection");
     ui.separator();
     ui.comboBox("Quality", state.quality,
-                ig::Span<const ig::StringView>(qualityItems), 320.0f);
+                ig::Span<const ig::StringView>(qualityItems));
     ui.spacing(6.0f);
     ui.label("Preset");
     if (ui.radioButton("Safe defaults", !state.selectedPreset))
         state.selectedPreset = false;
     if (ui.radioButton("Performance", state.selectedPreset))
         state.selectedPreset = true;
-    if (ui.collapsingHeader("Advanced options", state.advanced, 320.0f))
+    if (ui.collapsingHeader("Advanced options", state.advanced))
     {
         ui.checkbox("Use experimental pipeline", state.experimental);
-        ui.sliderFloat("Exposure", state.volume, 0.0f, 1.0f, 320.0f);
+        ui.sliderFloat("Exposure", state.volume, 0.0f, 1.0f);
     }
     ui.endWindow();
 }
@@ -207,10 +218,10 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     ui.label("Renderer: iGUI immediate");
     ui.separator();
     ui.label(state.enabled ? "Status: rendering" : "Status: paused");
-    ui.progressBar(state.progress, 1.0f, 330.0f);
+    ui.progressBar(state.progress, 1.0f);
     ui.spacing(4.0f);
     ui.checkbox("Animate preview", state.enabled);
-    ui.selectable("Click to focus this window", true, 330.0f);
+    ui.selectable("Click to focus this window", true);
     ui.endWindow();
 }
 
