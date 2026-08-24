@@ -3263,16 +3263,9 @@ WindowState *Context::getOrCreateWindow(WidgetId id, StringView title,
 
 Rect Context::contentRect(const Rect &local) const
 {
-    const WindowState *window = currentWindow();
-    if (!window)
+    if (!currentWindow())
         return Rect();
-    if (!childStack_.empty())
-    {
-        const Rect &child = childStack_.back().content;
-        return Rect(child.x + local.x, child.y + local.y, local.width, local.height);
-    }
-    return Rect(window->bounds.x + theme_.windowPadding + local.x,
-                window->bounds.y + theme_.titleBarHeight + theme_.windowPadding + local.y,
+    return Rect(layout_.origin.x + local.x, layout_.origin.y + local.y,
                 local.width, local.height);
 }
 
