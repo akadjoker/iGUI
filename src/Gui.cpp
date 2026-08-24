@@ -79,7 +79,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
@@ -92,6 +92,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     windows_.reserve(8);
     windowsById_.reserve(8);
     listScrolls_.reserve(8);
+    colorPickers_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     textEvents_.reserve(4);
@@ -1120,10 +1121,35 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
                       hueWidth, pickerSize);
     const Rect alphaBar(hueBar.x + hueBar.width + spacing, contentY,
                         hueWidth, pickerSize);
-    float hue = 0.0f;
-    float saturation = 0.0f;
-    float brightness = 0.0f;
-    colorToHsv(value, hue, saturation, brightness);
+    ColorPickerState *picker = colorPickers_.find(id);
+    if (!picker)
+    {
+        colorPickers_.put(id, ColorPickerState());
+        picker = colorPickers_.find(id);
+    }
+    if (!picker)
+        return false;
+
+    // RGB cannot represent hue for greys and black.  Keep the last hue chosen
+    // by the user so dragging through the left/bottom edge of the SV square
+    // does not make the next drag jump back to red.
+    if (!picker->initialized || picker->lastColor != value)
+    {
+        float nextHue = 0.0f;
+        float nextSaturation = 0.0f;
+        float nextBrightness = 0.0f;
+        colorToHsv(value, nextHue, nextSaturation, nextBrightness);
+        if (!picker->initialized || nextSaturation > 0.0001f)
+            picker->hue = nextHue;
+        picker->saturation = nextSaturation;
+        picker->brightness = nextBrightness;
+        picker->lastColor = value;
+        picker->initialized = true;
+    }
+
+    float hue = picker->hue;
+    float saturation = picker->saturation;
+    float brightness = picker->brightness;
     float alpha = static_cast<float>(value.a) / 255.0f;
     bool changed = false;
     const uint32_t left = buttonIndex(PointerButton::Left);
@@ -1199,8 +1225,14 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     }
 
     if (changed)
+    {
         value = colorFromHsv(hue, saturation, brightness,
                              static_cast<uint8_t>(alpha * 255.0f + 0.5f));
+        picker->hue = hue;
+        picker->saturation = saturation;
+        picker->brightness = brightness;
+        picker->lastColor = value;
+    }
 
     drawText(*drawList, theme_.font, labelText, Vec2(rect.x, rect.y), theme_.fontSize,
              theme_.labelText, clip);

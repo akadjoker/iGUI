@@ -464,6 +464,28 @@ static void test_editor_widgets()
     drawEditorWidgets(context, notes, color);
     context.endFrame();
     assert(color != originalColor);
+
+    // A fully desaturated RGB value has no encoded hue.  The picker must keep
+    // the hue selected afterwards so returning to the SV plane is predictable.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 26.0f, 184.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 26.0f, 184.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
+    drawEditorWidgets(context, notes, color);
+    context.endFrame();
+    assert(color.r == color.g && color.g == color.b);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 140.0f, 194.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 140.0f, 194.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
+    drawEditorWidgets(context, notes, color);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 122.0f, 184.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 122.0f, 184.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
+    drawEditorWidgets(context, notes, color);
+    context.endFrame();
+    assert(color.g > color.r && color.r > color.b);
 }
 
 int main()

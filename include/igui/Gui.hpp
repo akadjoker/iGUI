@@ -167,6 +167,18 @@ private:
         LayoutState() : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false) {}
     };
 
+    struct ColorPickerState
+    {
+        float hue;
+        float saturation;
+        float brightness;
+        Color lastColor;
+        bool initialized;
+
+        ColorPickerState()
+            : hue(0.0f), saturation(0.0f), brightness(0.0f), lastColor(), initialized(false) {}
+    };
+
     Backend &backend_;
     TextProvider *textProvider_;
     Theme theme_;
@@ -178,6 +190,7 @@ private:
     ct::SlotMap<WindowState> windows_;
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
     ct::HashMap<WidgetId, int> listScrolls_;
+    ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     DrawList frameDrawList_;
