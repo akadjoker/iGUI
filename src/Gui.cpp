@@ -1119,7 +1119,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     const Rect hueBar(saturationValue.x + saturationValue.width + spacing, contentY,
                       hueWidth, pickerSize);
     const Rect alphaBar(hueBar.x + hueBar.width + spacing, contentY,
-                        rect.x + rect.width - (hueBar.x + hueBar.width + spacing), pickerSize);
+                        hueWidth, pickerSize);
     float hue = 0.0f;
     float saturation = 0.0f;
     float brightness = 0.0f;
@@ -1190,7 +1190,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     {
         if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
         {
-            const float nextAlpha = clamp((pointer_.position.x - alphaBar.x) / alphaBar.width, 0.0f, 1.0f);
+            const float nextAlpha = clamp((pointer_.position.y - alphaBar.y) / alphaBar.height, 0.0f, 1.0f);
             changed = changed || nextAlpha != alpha;
             alpha = nextAlpha;
         }
@@ -1202,11 +1202,32 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
         value = colorFromHsv(hue, saturation, brightness,
                              static_cast<uint8_t>(alpha * 255.0f + 0.5f));
 
-    const Color hueColor = colorFromHsv(hue, 1.0f, 1.0f, 255u);
     drawText(*drawList, theme_.font, labelText, Vec2(rect.x, rect.y), theme_.fontSize,
              theme_.labelText, clip);
-    drawList->addRectGradient(saturationValue, Color(255u, 255u, 255u, 255u), hueColor,
-                              Color(0u, 0u, 0u, 255u), Color(0u, 0u, 0u, 255u), clip);
+    // A single quad has a visible diagonal because the GPU splits it into two
+    // triangles. Thin horizontal bands preserve the SV curve without a seam.
+    const uint32_t saturationValueBands = 32u;
+    for (uint32_t band = 0u; band < saturationValueBands; ++band)
+    {
+        const float topValue = 1.0f - static_cast<float>(band) /
+                                       static_cast<float>(saturationValueBands);
+        const float bottomValue = 1.0f - static_cast<float>(band + 1u) /
+                                          static_cast<float>(saturationValueBands);
+        const Rect bandRect(saturationValue.x,
+                            saturationValue.y + saturationValue.height * static_cast<float>(band) /
+                                                    static_cast<float>(saturationValueBands),
+                            saturationValue.width,
+                            saturationValue.height / static_cast<float>(saturationValueBands));
+        const Color topGray(static_cast<uint8_t>(topValue * 255.0f + 0.5f),
+                             static_cast<uint8_t>(topValue * 255.0f + 0.5f),
+                             static_cast<uint8_t>(topValue * 255.0f + 0.5f), 255u);
+        const Color bottomGray(static_cast<uint8_t>(bottomValue * 255.0f + 0.5f),
+                                static_cast<uint8_t>(bottomValue * 255.0f + 0.5f),
+                                static_cast<uint8_t>(bottomValue * 255.0f + 0.5f), 255u);
+        drawList->addRectGradient(bandRect, topGray,
+                                  colorFromHsv(hue, 1.0f, topValue, 255u),
+                                  colorFromHsv(hue, 1.0f, bottomValue, 255u), bottomGray, clip);
+    }
     for (uint32_t segment = 0u; segment < 6u; ++segment)
     {
         const float segmentHeight = hueBar.height / 6.0f;
@@ -1216,22 +1237,22 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
         const Color bottom = colorFromHsv(static_cast<float>(segment + 1u) / 6.0f, 1.0f, 1.0f, 255u);
         drawList->addRectGradient(segmentRect, top, top, bottom, bottom, clip);
     }
-    const float checkerSize = alphaBar.width > 0.0f ? alphaBar.width / 8.0f : 0.0f;
+    const float checkerSize = alphaBar.height > 0.0f ? alphaBar.height / 8.0f : 0.0f;
     if (checkerSize > 0.0f)
     {
-        for (uint32_t y = 0u; y < 2u; ++y)
+        for (uint32_t y = 0u; y < 8u; ++y)
         {
-            for (uint32_t x = 0u; x < 8u; ++x)
+            for (uint32_t x = 0u; x < 2u; ++x)
             {
                 const Color checker = (x + y) % 2u == 0u ? Color(68u, 68u, 75u, 255u)
                                                            : Color(108u, 108u, 115u, 255u);
-                drawList->addRectFilled(Rect(alphaBar.x + checkerSize * static_cast<float>(x),
-                                             alphaBar.y + alphaBar.height * 0.5f * static_cast<float>(y),
-                                             checkerSize, alphaBar.height * 0.5f), checker, clip);
+                drawList->addRectFilled(Rect(alphaBar.x + alphaBar.width * 0.5f * static_cast<float>(x),
+                                             alphaBar.y + checkerSize * static_cast<float>(y),
+                                             alphaBar.width * 0.5f, checkerSize), checker, clip);
             }
         }
         const Color transparent(value.r, value.g, value.b, 0u);
-        drawList->addRectGradient(alphaBar, transparent, value, value, transparent, clip);
+        drawList->addRectGradient(alphaBar, transparent, transparent, value, value, clip);
     }
 
     const Vec2 saturationValueCursor(saturationValue.x + saturation * saturationValue.width,
@@ -1242,8 +1263,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     const float hueCursorY = hueBar.y + hue * hueBar.height;
     drawList->addRectFilled(Rect(hueBar.x - 2.0f, hueCursorY - 1.0f, hueBar.width + 4.0f, 2.0f),
                             Color(255u, 255u, 255u, 255u), clip);
-    const float alphaCursorX = alphaBar.x + alpha * alphaBar.width;
-    drawList->addRectFilled(Rect(alphaCursorX - 1.0f, alphaBar.y - 2.0f, 2.0f, alphaBar.height + 4.0f),
+    const float alphaCursorY = alphaBar.y + alpha * alphaBar.height;
+    drawList->addRectFilled(Rect(alphaBar.x - 2.0f, alphaCursorY - 1.0f, alphaBar.width + 4.0f, 2.0f),
                             Color(255u, 255u, 255u, 255u), clip);
     return changed;
 }
