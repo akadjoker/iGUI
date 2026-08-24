@@ -54,6 +54,31 @@ enum class MessageBoxResult : uint8_t
     Cancelled
 };
 
+enum class MessageBoxKind : uint8_t
+{
+    Information,
+    Warning,
+    Error,
+    Input
+};
+
+struct MessageBoxOptions
+{
+    MessageBoxKind kind;
+    bool showCancel;
+    String *inputValue;
+
+    MessageBoxOptions()
+        : kind(MessageBoxKind::Information), showCancel(false), inputValue(nullptr) {}
+};
+
+enum class ToastPosition : uint8_t
+{
+    TopLeft, TopCenter, TopRight,
+    MiddleLeft, Center, MiddleRight,
+    BottomLeft, BottomCenter, BottomRight
+};
+
 class Context
 {
 public:
@@ -126,6 +151,11 @@ public:
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
                                 bool showCancel = false);
+    MessageBoxResult messageBox(StringView title, StringView message, bool &open,
+                                const MessageBoxOptions &options);
+    // Starts or refreshes a short notification. The id differentiates concurrent toasts.
+    void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::TopRight,
+                   float duration = 3.0f);
     void label(StringView text, const Vec2 &position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
@@ -218,6 +248,16 @@ private:
             : hue(0.0f), saturation(0.0f), brightness(0.0f), lastColor(), initialized(false) {}
     };
 
+    struct ToastState
+    {
+        WidgetId id;
+        String text;
+        ToastPosition position;
+        float remaining;
+
+        ToastState() : id(InvalidWidgetId), text(), position(ToastPosition::TopRight), remaining(0.0f) {}
+    };
+
     Backend &backend_;
     TextProvider *textProvider_;
     Theme theme_;
@@ -233,7 +273,9 @@ private:
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
+    ct::Vector<ToastState> toasts_;
     DrawList frameDrawList_;
+    DrawList toastDrawList_;
     DrawList modalDrawList_;
     DrawData drawData_;
     WindowHandle currentWindow_;
@@ -276,6 +318,7 @@ private:
     TextMetrics measureText(FontId font, StringView text, float logicalSize) const;
     void drawText(DrawList &drawList, FontId font, StringView text, const Vec2 &position,
                   float logicalSize, const Color &color, const Rect &clip);
+    void drawToasts();
     void beginLayout(const WindowState &window);
     void advanceLayout(const Rect &item);
     float autoButtonWidth(StringView label) const;

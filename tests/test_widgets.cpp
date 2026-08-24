@@ -632,6 +632,43 @@ static void test_scene_tree_and_message_box()
            ig::MessageBoxResult::Accepted);
     context.endFrame();
     assert(!open);
+
+    ig::String nodeName("Node");
+    ig::MessageBoxOptions inputOptions;
+    inputOptions.kind = ig::MessageBoxKind::Input;
+    inputOptions.showCancel = true;
+    inputOptions.inputValue = &nodeName;
+    open = true;
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    context.messageBox("Rename", "Enter a name.", open, inputOptions);
+    context.endFrame();
+    context.pushEvent(ig::Event::textInput("3D"));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    context.messageBox("Rename", "Enter a name.", open, inputOptions);
+    context.endFrame();
+    assert(nodeName == ig::String("Node3D"));
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    context.showToast("left", "left", ig::ToastPosition::TopLeft, 2.0f);
+    context.showToast("center", "center", ig::ToastPosition::Center, 2.0f);
+    context.showToast("right", "right", ig::ToastPosition::BottomRight, 2.0f);
+    const ig::DrawData &toasts = context.endFrame();
+    float leftX = -1.0f;
+    float centerX = -1.0f;
+    float rightX = -1.0f;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < toasts.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = toasts.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        if (command.payload.text.textSize == 4u)
+            leftX = command.payload.text.position.x;
+        else if (command.payload.text.textSize == 6u)
+            centerX = command.payload.text.position.x;
+        else if (command.payload.text.textSize == 5u)
+            rightX = command.payload.text.position.x;
+    }
+    assert(leftX >= 0.0f && centerX > leftX && rightX > centerX);
 }
 
 int main()

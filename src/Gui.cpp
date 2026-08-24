@@ -79,7 +79,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), modalDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), toasts_(), frameDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
@@ -97,6 +97,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     colorPickers_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
+    toasts_.reserve(4);
     textEvents_.reserve(4);
 }
 
@@ -118,7 +119,17 @@ void Context::beginFrame(const FrameInfo &frame)
     }
 
     frameDrawList_.clear();
+    toastDrawList_.clear();
     modalDrawList_.clear();
+    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
+    {
+        if (toasts_[i].remaining > 0.0f)
+        {
+            toasts_[i].remaining -= frame_.deltaSeconds;
+            if (toasts_[i].remaining < 0.0f)
+                toasts_[i].remaining = 0.0f;
+        }
+    }
     for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
     {
         it->drawList.clear();
@@ -165,6 +176,8 @@ const DrawData &Context::endFrame()
             frameDrawList_.append(window->overlayDrawList);
         }
     }
+    drawToasts();
+    frameDrawList_.append(toastDrawList_);
     frameDrawList_.append(modalDrawList_);
 
     currentWindow_ = WindowHandle();
@@ -1609,6 +1622,14 @@ void Context::progressBar(float value, float maximum, const Rect &bounds)
 MessageBoxResult Context::messageBox(StringView title, StringView message, bool &open,
                                      bool showCancel)
 {
+    MessageBoxOptions options;
+    options.showCancel = showCancel;
+    return messageBox(title, message, open, options);
+}
+
+MessageBoxResult Context::messageBox(StringView title, StringView message, bool &open,
+                                     const MessageBoxOptions &options)
+{
     const WidgetId id = combineIds(hashText(title), hashText(message));
     if (!open)
     {
@@ -1625,8 +1646,10 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     const float desiredWidth = messageMetrics.width + padding;
     const float width = desiredWidth < 300.0f ? 300.0f
                       : (desiredWidth > viewport.width - 24.0f ? viewport.width - 24.0f : desiredWidth);
-    const float height = titleMetrics.height + messageMetrics.height + theme_.widgetHeight + padding * 2.0f +
-                         theme_.itemSpacing * 2.0f;
+    const bool inputMode = options.kind == MessageBoxKind::Input && options.inputValue;
+    const float inputHeight = inputMode ? theme_.widgetHeight + theme_.itemSpacing : 0.0f;
+    const float height = titleMetrics.height + messageMetrics.height + inputHeight + theme_.widgetHeight +
+                         padding * 2.0f + theme_.itemSpacing * 2.0f;
     const Rect dialog((viewport.width - width) * 0.5f, (viewport.height - height) * 0.5f,
                       width > 0.0f ? width : 0.0f, height > 0.0f ? height : 0.0f);
     const Rect titleBar(dialog.x, dialog.y, dialog.width, titleMetrics.height + theme_.windowPadding * 1.5f);
@@ -1636,16 +1659,19 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
                             buttonY, buttonWidth, theme_.widgetHeight);
     const Rect cancelButton(acceptButton.x - theme_.itemSpacing - buttonWidth,
                             buttonY, buttonWidth, theme_.widgetHeight);
+    const Rect inputRect(dialog.x + theme_.windowPadding,
+                         titleBar.y + titleBar.height + messageMetrics.height + theme_.itemSpacing * 2.0f,
+                         dialog.width - theme_.windowPadding * 2.0f, theme_.widgetHeight);
     const WidgetId acceptId = combineIds(id, 0x4f4bull);
     const WidgetId cancelId = combineIds(id, 0x43414e43454cull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const bool hoveredAccept = contains(acceptButton, pointer_.position);
-    const bool hoveredCancel = showCancel && contains(cancelButton, pointer_.position);
+    const bool hoveredCancel = options.showCancel && contains(cancelButton, pointer_.position);
     if (pointer_.pressed[left] && activeWidget_ == InvalidWidgetId)
     {
         if (contains(acceptButton, pointer_.pressedPosition[left]))
             activeWidget_ = acceptId;
-        else if (showCancel && contains(cancelButton, pointer_.pressedPosition[left]))
+        else if (options.showCancel && contains(cancelButton, pointer_.pressedPosition[left]))
             activeWidget_ = cancelId;
     }
 
@@ -1671,16 +1697,110 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
         activeWidget_ = InvalidWidgetId;
     }
 
+    if (inputMode)
+    {
+        String &input = *options.inputValue;
+        const WidgetId inputId = combineIds(id, 0x494e505554ull);
+        if (textInputWidget_ != inputId)
+            textCursor_ = input.size();
+        textInputWidget_ = inputId;
+        wantsKeyboard_ = true;
+        wantsTextInput_ = true;
+        if (textCursor_ > input.size())
+            textCursor_ = input.size();
+        if (homePressed_)
+            textCursor_ = 0u;
+        if (endPressed_)
+            textCursor_ = input.size();
+        if (copyRequested_)
+            backend_.setClipboardText(input);
+        if (pasteRequested_)
+        {
+            const String clipboard = backend_.clipboardText();
+            if (!clipboard.empty())
+            {
+                input.insert(textCursor_, clipboard.data(), clipboard.size());
+                textCursor_ += clipboard.size();
+            }
+        }
+        for (ct::Vector<Event>::size_type i = 0u; i < textEvents_.size(); ++i)
+        {
+            const Event &event = textEvents_[i];
+            input.insert(textCursor_, event.text, event.textLength);
+            textCursor_ += event.textLength;
+        }
+        if (backspacePressed_ && textCursor_ != 0u)
+        {
+            String::size_type eraseBegin = textCursor_ - 1u;
+            while (eraseBegin != 0u && (static_cast<uint8_t>(input[eraseBegin]) & 0xC0u) == 0x80u)
+                --eraseBegin;
+            input.erase(eraseBegin, textCursor_ - eraseBegin);
+            textCursor_ = eraseBegin;
+        }
+    }
+
+    Color kindColor = theme_.dialogBtnPrimary;
+    StringView kindText("i");
+    if (options.kind == MessageBoxKind::Warning)
+    {
+        kindColor = Color(235u, 180u, 65u, 255u);
+        kindText = StringView("!");
+    }
+    else if (options.kind == MessageBoxKind::Error)
+    {
+        kindColor = theme_.dialogBtnDanger;
+        kindText = StringView("x");
+    }
+    else if (options.kind == MessageBoxKind::Input)
+    {
+        kindColor = Color(160u, 125u, 230u, 255u);
+        kindText = StringView(">");
+    }
+
     modalDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
     modalDrawList_.addRectFilled(dialog, theme_.dialogBg, viewport);
     modalDrawList_.addRect(dialog, theme_.dialogBorder, viewport);
     modalDrawList_.addRectFilled(titleBar, theme_.floatTitleBg, viewport);
+    modalDrawList_.addRectFilled(Rect(dialog.x, dialog.y, 4.0f, dialog.height), kindColor, viewport);
+    modalDrawList_.addCircleFilled(Vec2(dialog.x + theme_.windowPadding * 1.5f,
+                                         titleBar.y + titleBar.height * 0.5f),
+                                    theme_.fontSize * 0.42f, kindColor, viewport);
+    const TextMetrics kindMetrics = measureText(theme_.font, kindText, theme_.fontSize * 0.75f);
+    drawText(modalDrawList_, theme_.font, kindText,
+             Vec2(dialog.x + theme_.windowPadding * 1.5f - kindMetrics.width * 0.5f,
+                  titleBar.y + (titleBar.height - kindMetrics.height) * 0.5f),
+             theme_.fontSize * 0.75f, theme_.buttonText, viewport);
     drawText(modalDrawList_, theme_.font, title,
-             Vec2(titleBar.x + theme_.windowPadding, titleBar.y + theme_.windowPadding * 0.5f),
+             Vec2(titleBar.x + theme_.windowPadding * 3.0f, titleBar.y + theme_.windowPadding * 0.5f),
              theme_.fontSize, theme_.dialogTitleText, viewport);
     drawText(modalDrawList_, theme_.font, message,
              Vec2(dialog.x + theme_.windowPadding, titleBar.y + titleBar.height + theme_.itemSpacing),
              theme_.fontSize, theme_.dialogText, viewport);
+    if (inputMode)
+    {
+        String &input = *options.inputValue;
+        modalDrawList_.addRectFilled(inputRect, theme_.inputBg, viewport);
+        modalDrawList_.addRect(inputRect, theme_.inputBorderHover, viewport);
+        const float leftPadding = theme_.textEditPadding;
+        const StringView prefix(input.data(), textCursor_);
+        const TextMetrics allMetrics = measureText(theme_.font, input, theme_.fontSize);
+        const TextMetrics prefixMetrics = measureText(theme_.font, prefix, theme_.fontSize);
+        const float available = inputRect.width - leftPadding * 2.0f;
+        float horizontalOffset = allMetrics.width > available ? available - allMetrics.width : 0.0f;
+        if (prefixMetrics.width + horizontalOffset < 0.0f)
+            horizontalOffset = -prefixMetrics.width;
+        else if (prefixMetrics.width + horizontalOffset > available)
+            horizontalOffset = available - prefixMetrics.width;
+        const Rect inputClip(inputRect.x + leftPadding, inputRect.y + leftPadding,
+                             available, inputRect.height - leftPadding * 2.0f);
+        const Vec2 inputTextPosition(inputRect.x + leftPadding + horizontalOffset,
+                                     inputRect.y + (inputRect.height - allMetrics.height) * 0.5f);
+        drawText(modalDrawList_, theme_.font, input, inputTextPosition, theme_.fontSize,
+                 theme_.buttonText, inputClip);
+        modalDrawList_.addRectFilled(Rect(inputTextPosition.x + prefixMetrics.width,
+                                          inputRect.y + 5.0f, 1.0f, inputRect.height - 10.0f),
+                                     theme_.buttonText, inputClip);
+    }
     modalDrawList_.addRectFilled(acceptButton,
                                  hoveredAccept ? theme_.dialogBtnPrimaryHover : theme_.dialogBtnPrimary,
                                  viewport);
@@ -1690,7 +1810,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
              Vec2(acceptButton.x + (acceptButton.width - acceptMetrics.width) * 0.5f,
                   acceptButton.y + (acceptButton.height - acceptMetrics.height) * 0.5f),
              theme_.fontSize, theme_.buttonText, viewport);
-    if (showCancel)
+    if (options.showCancel)
     {
         modalDrawList_.addRectFilled(cancelButton,
                                      hoveredCancel ? theme_.dialogBtnHover : theme_.dialogBtnBg, viewport);
@@ -1702,6 +1822,30 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
                  theme_.fontSize, theme_.buttonText, viewport);
     }
     return result;
+}
+
+void Context::showToast(StringView idText, StringView text, ToastPosition position, float duration)
+{
+    if (duration <= 0.0f || text.empty())
+        return;
+    const WidgetId id = hashText(idText);
+    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
+    {
+        ToastState &toast = toasts_[i];
+        if (toast.id == id)
+        {
+            toast.text = String(text.data(), text.size());
+            toast.position = position;
+            toast.remaining = duration;
+            return;
+        }
+    }
+    ToastState toast;
+    toast.id = id;
+    toast.text = String(text.data(), text.size());
+    toast.position = position;
+    toast.remaining = duration;
+    toasts_.push_back(toast);
 }
 
 void Context::label(StringView text, const Vec2 &position)
@@ -2267,6 +2411,42 @@ void Context::drawText(DrawList &drawList, FontId font, StringView text, const V
     if (!textProvider_ || !textProvider_->appendText(drawList, font, text, position,
                                                       logicalSize, color, clip))
         drawList.addText(text, position, font, logicalSize, color, clip);
+}
+
+void Context::drawToasts()
+{
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const float padding = theme_.tooltipPadX;
+    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
+    {
+        const ToastState &toast = toasts_[i];
+        if (toast.remaining <= 0.0f)
+            continue;
+        const TextMetrics metrics = measureText(theme_.font, toast.text, theme_.fontSize);
+        const float width = metrics.width + padding * 2.0f + 4.0f;
+        const float height = metrics.height + theme_.tooltipPadY * 2.0f;
+        float x = padding;
+        float y = padding;
+        const uint8_t anchor = static_cast<uint8_t>(toast.position);
+        const uint8_t horizontal = anchor % 3u;
+        const uint8_t vertical = anchor / 3u;
+        if (horizontal == 1u)
+            x = (viewport.width - width) * 0.5f;
+        else if (horizontal == 2u)
+            x = viewport.width - width - padding;
+        if (vertical == 1u)
+            y = (viewport.height - height) * 0.5f;
+        else if (vertical == 2u)
+            y = viewport.height - height - padding;
+        const Rect bounds(x, y, width, height);
+        toastDrawList_.addRectFilled(bounds, theme_.tooltipBg, viewport);
+        toastDrawList_.addRect(bounds, theme_.tooltipBorder, viewport);
+        toastDrawList_.addRectFilled(Rect(bounds.x, bounds.y, 4.0f, bounds.height),
+                                     theme_.dialogBtnPrimary, viewport);
+        drawText(toastDrawList_, theme_.font, toast.text,
+                 Vec2(bounds.x + padding + 4.0f, bounds.y + theme_.tooltipPadY),
+                 theme_.fontSize, theme_.tooltipText, viewport);
+    }
 }
 
 void Context::beginLayout(const WindowState &window)

@@ -26,6 +26,7 @@ struct DemoState
     bool floorExpanded;
     bool selectedPreset;
     bool deleteNodeDialog;
+    bool renameNodeDialog;
     float volume;
     float progress;
     int quality;
@@ -40,17 +41,19 @@ struct DemoState
     float dragExposure;
     ig::String name;
     ig::String notes;
+    ig::String nodeName;
     ig::Color accent;
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
-          renderExpanded(false), floorExpanded(false), selectedPreset(false), deleteNodeDialog(false),
+          renderExpanded(false), floorExpanded(false), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0),
           gamma(2.2f), dragExposure(0.25f),
           name("Raylib user"),
+          nodeName("DirectionalLight3D"),
           notes("A multiline text editor now has a real scrollbar.\n"
                 "Use the wheel over this area.\n"
                 "You can also drag the scrollbar thumb.\n"
@@ -81,7 +84,7 @@ void drawProfileWindow(ig::Context &ui, DemoState &state)
 
 void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTexture)
 {
-    if (!ui.beginWindow("Images", ig::Rect(926.0f, 530.0f, 410.0f, 240.0f), &state.imagesOpen))
+    if (!ui.beginWindow("Images", ig::Rect(926.0f, 566.0f, 410.0f, 240.0f), &state.imagesOpen))
         return;
 
     ui.label("Texture previews and image buttons");
@@ -155,6 +158,9 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         }
         if (ui.button("Delete selected node"))
             state.deleteNodeDialog = true;
+        ui.sameLine(6.0f);
+        if (ui.button("Rename node"))
+            state.renameNodeDialog = true;
     }
     else if (state.workspaceTab == 1)
     {
@@ -171,7 +177,7 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
 
 void drawWindowManager(ig::Context &ui, DemoState &state)
 {
-    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 126.0f), &state.windowManagerOpen))
+    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 166.0f), &state.windowManagerOpen))
         return;
 
     ui.checkbox("Profile", state.profileOpen);
@@ -184,6 +190,14 @@ void drawWindowManager(ig::Context &ui, DemoState &state)
     ui.checkbox("Workspace", state.workspaceOpen);
     ui.sameLine();
     ui.checkbox("Images", state.imagesOpen);
+    if (ui.button("Toast left"))
+        ui.showToast("left toast", "Scene hierarchy refreshed", ig::ToastPosition::MiddleLeft);
+    ui.sameLine();
+    if (ui.button("Toast center"))
+        ui.showToast("center toast", "Build complete", ig::ToastPosition::Center);
+    ui.sameLine();
+    if (ui.button("Toast right"))
+        ui.showToast("right toast", "Saved successfully", ig::ToastPosition::BottomRight);
     ui.endWindow();
 }
 
@@ -240,7 +254,7 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     if (!state.showInspector)
         return;
 
-    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 214.0f, 410.0f, 300.0f), &state.showInspector))
+    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 252.0f, 410.0f, 300.0f), &state.showInspector))
         return;
 
     state.progress += deltaSeconds * (state.enabled ? 0.18f : 0.04f);
@@ -296,7 +310,15 @@ int main()
         drawWorkspaceWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
-        ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog, true);
+        ig::MessageBoxOptions deleteOptions;
+        deleteOptions.kind = ig::MessageBoxKind::Error;
+        deleteOptions.showCancel = true;
+        ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog, deleteOptions);
+        ig::MessageBoxOptions renameOptions;
+        renameOptions.kind = ig::MessageBoxKind::Input;
+        renameOptions.showCancel = true;
+        renameOptions.inputValue = &state.nodeName;
+        ui.messageBox("Rename scene node", "Enter the new node name.", state.renameNodeDialog, renameOptions);
         const ig::DrawData &drawData = ui.endFrame();
 
         BeginDrawing();
