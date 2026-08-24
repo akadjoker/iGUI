@@ -79,10 +79,10 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), frameDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
-      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
+      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -118,6 +118,7 @@ void Context::beginFrame(const FrameInfo &frame)
     }
 
     frameDrawList_.clear();
+    modalDrawList_.clear();
     for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
     {
         it->drawList.clear();
@@ -164,6 +165,7 @@ const DrawData &Context::endFrame()
             frameDrawList_.append(window->overlayDrawList);
         }
     }
+    frameDrawList_.append(modalDrawList_);
 
     currentWindow_ = WindowHandle();
     drawData_ = frameDrawList_.data(frame_.displaySize, frame_.dpiScale);
@@ -259,7 +261,7 @@ const Theme &Context::theme() const
 
 bool Context::wantsPointer() const
 {
-    return activeWidget_ != InvalidWidgetId || hotWidget_ != InvalidWidgetId;
+    return activeModal_ != InvalidWidgetId || activeWidget_ != InvalidWidgetId || hotWidget_ != InvalidWidgetId;
 }
 
 bool Context::wantsKeyboard() const
@@ -502,6 +504,68 @@ bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
     return expanded;
+}
+
+bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle &style,
+                       const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const float arrowWidth = rect.height * 0.65f;
+    const Rect arrowRect(rect.x, rect.y, arrowWidth, rect.height);
+    const WidgetId arrowId = combineIds(id, 0x4152524f57ull);
+    const bool rowHovered = !style.disabled && itemHovered(rect, clip, id);
+    const bool arrowHovered = !style.disabled && !style.leaf && itemHovered(arrowRect, clip, arrowId);
+    const bool expansionClicked = !style.disabled && !style.leaf &&
+                                  itemClicked(arrowRect, clip, arrowId);
+    if (expansionClicked)
+        expanded = !expanded;
+    const bool selected = !style.disabled && !expansionClicked && itemClicked(rect, clip, id);
+
+    const Color rowColor = style.selected ? theme_.selectableSelected
+                         : (rowHovered ? theme_.selectableHovered : theme_.inputBg);
+    if (style.selected || rowHovered)
+        drawList->addRectFilled(rect, rowColor, clip);
+
+    const float centerY = rect.y + rect.height * 0.5f;
+    const float iconSize = rect.height * 0.38f;
+    const float iconX = rect.x + arrowWidth + theme_.windowPadding * 0.25f;
+    if (!style.leaf)
+    {
+        const float arrowSize = rect.height * 0.20f;
+        const float arrowX = rect.x + arrowWidth * 0.35f;
+        const Vec2 arrow[] = {
+            expanded ? Vec2(arrowX, centerY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, centerY - arrowSize),
+            expanded ? Vec2(arrowX + arrowSize, centerY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, centerY + arrowSize),
+            expanded ? Vec2(arrowX + arrowSize * 0.5f, centerY + arrowSize * 0.5f)
+                     : Vec2(arrowX + arrowSize * 0.75f, centerY)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+    }
+    const Color iconColor = style.disabled
+        ? Color(style.typeColor.r, style.typeColor.g, style.typeColor.b, 90u) : style.typeColor;
+    drawList->addRectFilled(Rect(iconX, centerY - iconSize * 0.5f, iconSize, iconSize), iconColor, clip);
+
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const Color textColor = style.disabled
+        ? Color(theme_.labelText.r, theme_.labelText.g, theme_.labelText.b, 110u) : theme_.labelText;
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(iconX + iconSize + theme_.windowPadding * 0.5f,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, textColor, clip);
+    (void)arrowHovered;
+    return selected;
 }
 
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
@@ -1542,6 +1606,104 @@ void Context::progressBar(float value, float maximum, const Rect &bounds)
                             theme_.progressFilled, clip);
 }
 
+MessageBoxResult Context::messageBox(StringView title, StringView message, bool &open,
+                                     bool showCancel)
+{
+    const WidgetId id = combineIds(hashText(title), hashText(message));
+    if (!open)
+    {
+        if (activeModal_ == id)
+            activeModal_ = InvalidWidgetId;
+        return MessageBoxResult::None;
+    }
+
+    activeModal_ = id;
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const TextMetrics titleMetrics = measureText(theme_.font, title, theme_.fontSize);
+    const TextMetrics messageMetrics = measureText(theme_.font, message, theme_.fontSize);
+    const float padding = theme_.windowPadding * 2.0f;
+    const float desiredWidth = messageMetrics.width + padding;
+    const float width = desiredWidth < 300.0f ? 300.0f
+                      : (desiredWidth > viewport.width - 24.0f ? viewport.width - 24.0f : desiredWidth);
+    const float height = titleMetrics.height + messageMetrics.height + theme_.widgetHeight + padding * 2.0f +
+                         theme_.itemSpacing * 2.0f;
+    const Rect dialog((viewport.width - width) * 0.5f, (viewport.height - height) * 0.5f,
+                      width > 0.0f ? width : 0.0f, height > 0.0f ? height : 0.0f);
+    const Rect titleBar(dialog.x, dialog.y, dialog.width, titleMetrics.height + theme_.windowPadding * 1.5f);
+    const float buttonWidth = 80.0f;
+    const float buttonY = dialog.y + dialog.height - theme_.windowPadding - theme_.widgetHeight;
+    const Rect acceptButton(dialog.x + dialog.width - theme_.windowPadding - buttonWidth,
+                            buttonY, buttonWidth, theme_.widgetHeight);
+    const Rect cancelButton(acceptButton.x - theme_.itemSpacing - buttonWidth,
+                            buttonY, buttonWidth, theme_.widgetHeight);
+    const WidgetId acceptId = combineIds(id, 0x4f4bull);
+    const WidgetId cancelId = combineIds(id, 0x43414e43454cull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool hoveredAccept = contains(acceptButton, pointer_.position);
+    const bool hoveredCancel = showCancel && contains(cancelButton, pointer_.position);
+    if (pointer_.pressed[left] && activeWidget_ == InvalidWidgetId)
+    {
+        if (contains(acceptButton, pointer_.pressedPosition[left]))
+            activeWidget_ = acceptId;
+        else if (showCancel && contains(cancelButton, pointer_.pressedPosition[left]))
+            activeWidget_ = cancelId;
+    }
+
+    MessageBoxResult result = MessageBoxResult::None;
+    if (pointer_.released[left] && activeWidget_ == acceptId)
+    {
+        if (contains(acceptButton, pointer_.releasedPosition[left]))
+        {
+            open = false;
+            activeModal_ = InvalidWidgetId;
+            result = MessageBoxResult::Accepted;
+        }
+        activeWidget_ = InvalidWidgetId;
+    }
+    else if (pointer_.released[left] && activeWidget_ == cancelId)
+    {
+        if (contains(cancelButton, pointer_.releasedPosition[left]))
+        {
+            open = false;
+            activeModal_ = InvalidWidgetId;
+            result = MessageBoxResult::Cancelled;
+        }
+        activeWidget_ = InvalidWidgetId;
+    }
+
+    modalDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
+    modalDrawList_.addRectFilled(dialog, theme_.dialogBg, viewport);
+    modalDrawList_.addRect(dialog, theme_.dialogBorder, viewport);
+    modalDrawList_.addRectFilled(titleBar, theme_.floatTitleBg, viewport);
+    drawText(modalDrawList_, theme_.font, title,
+             Vec2(titleBar.x + theme_.windowPadding, titleBar.y + theme_.windowPadding * 0.5f),
+             theme_.fontSize, theme_.dialogTitleText, viewport);
+    drawText(modalDrawList_, theme_.font, message,
+             Vec2(dialog.x + theme_.windowPadding, titleBar.y + titleBar.height + theme_.itemSpacing),
+             theme_.fontSize, theme_.dialogText, viewport);
+    modalDrawList_.addRectFilled(acceptButton,
+                                 hoveredAccept ? theme_.dialogBtnPrimaryHover : theme_.dialogBtnPrimary,
+                                 viewport);
+    const StringView acceptText("OK");
+    const TextMetrics acceptMetrics = measureText(theme_.font, acceptText, theme_.fontSize);
+    drawText(modalDrawList_, theme_.font, acceptText,
+             Vec2(acceptButton.x + (acceptButton.width - acceptMetrics.width) * 0.5f,
+                  acceptButton.y + (acceptButton.height - acceptMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, viewport);
+    if (showCancel)
+    {
+        modalDrawList_.addRectFilled(cancelButton,
+                                     hoveredCancel ? theme_.dialogBtnHover : theme_.dialogBtnBg, viewport);
+        const StringView cancelText("Cancel");
+        const TextMetrics cancelMetrics = measureText(theme_.font, cancelText, theme_.fontSize);
+        drawText(modalDrawList_, theme_.font, cancelText,
+                 Vec2(cancelButton.x + (cancelButton.width - cancelMetrics.width) * 0.5f,
+                      cancelButton.y + (cancelButton.height - cancelMetrics.height) * 0.5f),
+                 theme_.fontSize, theme_.buttonText, viewport);
+    }
+    return result;
+}
+
 void Context::label(StringView text, const Vec2 &position)
 {
     WindowState *window = currentWindow();
@@ -1668,6 +1830,19 @@ bool Context::treeNode(StringView labelText, bool &expanded, float width)
                                     bounds.width, bounds.height));
     advanceLayout(bounds);
     return open;
+}
+
+bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle &style,
+                       float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool selected = treeItem(labelText, expanded, style,
+                                   Rect(bounds.x - layout_.origin.x,
+                                        bounds.y - layout_.origin.y,
+                                        bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return selected;
 }
 
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
@@ -2387,7 +2562,8 @@ void Context::focusWindow(WindowHandle handle)
 
 bool Context::currentWindowReceivesPointer() const
 {
-    return currentWindow_ && currentWindow_ == topWindowAt(pointer_.position);
+    return activeModal_ == InvalidWidgetId && currentWindow_ &&
+           currentWindow_ == topWindowAt(pointer_.position);
 }
 
 uint32_t Context::buttonIndex(PointerButton button)

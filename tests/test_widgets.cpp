@@ -587,6 +587,53 @@ static void test_responsive_window_layout()
     assert(resizedWidth > initialWidth + 100.0f);
 }
 
+static void test_scene_tree_and_message_box()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool expanded = false;
+    ig::TreeItemStyle style;
+    style.typeColor = ig::Color(255u, 210u, 90u, 255u);
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("scene tree", ig::Rect(10.0f, 10.0f, 260.0f, 140.0f)));
+    context.treeItem("DirectionalLight3D", expanded, style, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 32.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 32.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("scene tree", ig::Rect(10.0f, 10.0f, 260.0f, 140.0f)));
+    assert(!context.treeItem("DirectionalLight3D", expanded, style, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(expanded);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 100.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 100.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("scene tree", ig::Rect(10.0f, 10.0f, 260.0f, 140.0f)));
+    assert(context.treeItem("DirectionalLight3D", expanded, style, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    bool open = true;
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.messageBox("Delete node", "This action cannot be undone.", open, true) ==
+           ig::MessageBoxResult::None);
+    const ig::DrawData &dialog = context.endFrame();
+    assert(!dialog.commands.empty());
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 280.0f, 150.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 280.0f, 150.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.messageBox("Delete node", "This action cannot be undone.", open, true) ==
+           ig::MessageBoxResult::Accepted);
+    context.endFrame();
+    assert(!open);
+}
+
 int main()
 {
     test_widget_gallery();
@@ -596,5 +643,6 @@ int main()
     test_editor_widgets();
     test_multiline_scroll_and_drag_widgets();
     test_responsive_window_layout();
+    test_scene_tree_and_message_box();
     return 0;
 }

@@ -25,6 +25,7 @@ struct DemoState
     bool renderExpanded;
     bool floorExpanded;
     bool selectedPreset;
+    bool deleteNodeDialog;
     float volume;
     float progress;
     int quality;
@@ -34,6 +35,7 @@ struct DemoState
     int dragIterations;
     int workspaceTab;
     int selectedAsset;
+    int selectedSceneNode;
     float gamma;
     float dragExposure;
     ig::String name;
@@ -44,9 +46,10 @@ struct DemoState
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
-          renderExpanded(false), floorExpanded(false),
-          selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), dragIterations(12), workspaceTab(2), selectedAsset(1), gamma(2.2f), dragExposure(0.25f),
+          renderExpanded(false), floorExpanded(false), selectedPreset(false), deleteNodeDialog(false),
+          volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
+          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0),
+          gamma(2.2f), dragExposure(0.25f),
           name("Raylib user"),
           notes("A multiline text editor now has a real scrollbar.\n"
                 "Use the wheel over this area.\n"
@@ -107,21 +110,51 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     ui.spacing(6.0f);
     if (state.workspaceTab == 0)
     {
-        if (ui.treeNode("Demo scene", state.sceneExpanded))
+        ig::TreeItemStyle sceneStyle;
+        sceneStyle.typeColor = ig::Color(105u, 170u, 245u, 255u);
+        sceneStyle.selected = state.selectedSceneNode == 0;
+        if (ui.treeItem("Demo scene", state.sceneExpanded, sceneStyle))
+            state.selectedSceneNode = 0;
+        if (state.sceneExpanded)
         {
             ui.indent();
-            ui.treeNode("Camera", state.cameraExpanded);
-            ui.tooltip("Camera settings are nested under the scene");
-            if (ui.treeNode("Renderer", state.renderExpanded))
+            ig::TreeItemStyle cameraStyle;
+            cameraStyle.typeColor = ig::Color(125u, 205u, 250u, 255u);
+            cameraStyle.leaf = true;
+            cameraStyle.selected = state.selectedSceneNode == 1;
+            if (ui.treeItem("Camera3D", state.cameraExpanded, cameraStyle))
+                state.selectedSceneNode = 1;
+            ig::TreeItemStyle lightStyle;
+            lightStyle.typeColor = ig::Color(255u, 220u, 105u, 255u);
+            lightStyle.leaf = true;
+            lightStyle.selected = state.selectedSceneNode == 2;
+            if (ui.treeItem("DirectionalLight3D", state.renderExpanded, lightStyle))
+                state.selectedSceneNode = 2;
+            ig::TreeItemStyle meshStyle;
+            meshStyle.typeColor = ig::Color(115u, 225u, 155u, 255u);
+            meshStyle.selected = state.selectedSceneNode == 3;
+            if (ui.treeItem("Environment", state.renderExpanded, meshStyle))
+                state.selectedSceneNode = 3;
+            if (state.renderExpanded)
             {
                 ui.indent();
-                ui.label("Deferred lighting");
-                ui.label("Bloom enabled");
+                ig::TreeItemStyle childStyle;
+                childStyle.typeColor = ig::Color(165u, 125u, 240u, 255u);
+                childStyle.leaf = true;
+                childStyle.selected = state.selectedSceneNode == 4;
+                if (ui.treeItem("WorldEnvironment", state.floorExpanded, childStyle))
+                    state.selectedSceneNode = 4;
                 ui.unindent();
             }
-            ui.treeNode("Floor mesh", state.floorExpanded);
+            ig::TreeItemStyle hiddenStyle;
+            hiddenStyle.typeColor = ig::Color(180u, 180u, 190u, 255u);
+            hiddenStyle.leaf = true;
+            hiddenStyle.disabled = true;
+            ui.treeItem("Floor mesh (locked)", state.floorExpanded, hiddenStyle);
             ui.unindent();
         }
+        if (ui.button("Delete selected node"))
+            state.deleteNodeDialog = true;
     }
     else if (state.workspaceTab == 1)
     {
@@ -263,6 +296,7 @@ int main()
         drawWorkspaceWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
+        ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog, true);
         const ig::DrawData &drawData = ui.endFrame();
 
         BeginDrawing();

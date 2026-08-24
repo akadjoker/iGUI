@@ -36,6 +36,24 @@ struct WindowState
 
 using WindowHandle = ct::Handle<WindowState>;
 
+struct TreeItemStyle
+{
+    Color typeColor;
+    bool selected;
+    bool leaf;
+    bool disabled;
+
+    TreeItemStyle()
+        : typeColor(120u, 170u, 230u, 255u), selected(false), leaf(false), disabled(false) {}
+};
+
+enum class MessageBoxResult : uint8_t
+{
+    None,
+    Accepted,
+    Cancelled
+};
+
 class Context
 {
 public:
@@ -67,6 +85,10 @@ public:
     bool collapsingHeader(StringView label, bool &expanded, const Rect &bounds);
     // A compact expandable row for hierarchies. Use indent()/unindent() for its children.
     bool treeNode(StringView label, bool &expanded, const Rect &bounds);
+    // Scene-oriented tree row. Returns true when the row is selected; expansion
+    // is changed only by pressing its disclosure arrow.
+    bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
+                  const Rect &bounds);
     // Renders a tab strip and returns true when the selected tab changes.
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
                 const Rect &bounds);
@@ -101,6 +123,9 @@ public:
                      const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                      const Color &tint = Color());
     void progressBar(float value, float maximum, const Rect &bounds);
+    // Draws an application-modal OK or OK/Cancel message box above all windows.
+    MessageBoxResult messageBox(StringView title, StringView message, bool &open,
+                                bool showCancel = false);
     void label(StringView text, const Vec2 &position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
@@ -112,6 +137,8 @@ public:
     bool selectable(StringView label, bool selected, float width = 0.0f);
     bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
     bool treeNode(StringView label, bool &expanded, float width = 0.0f);
+    bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
+                  float width = 0.0f);
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
                 float width = 0.0f);
     bool listBox(StringView label, int &currentItem, Span<const StringView> items,
@@ -207,6 +234,7 @@ private:
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     DrawList frameDrawList_;
+    DrawList modalDrawList_;
     DrawData drawData_;
     WindowHandle currentWindow_;
     WindowHandle focusedWindow_;
@@ -218,6 +246,7 @@ private:
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;
+    WidgetId activeModal_;
     WidgetId dragWidget_;
     String::size_type textCursor_;
     uint64_t frameNumber_;
