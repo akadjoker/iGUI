@@ -364,6 +364,27 @@ static void test_menu_and_context_menu()
     context.endFrame();
     assert(!inspectorVisible);
 
+    // A checkable submenu item closes the menu. It must be possible to open
+    // the same submenu again on the following interaction.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 35.0f, 80.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 35.0f, 80.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 205.0f, 80.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 205.0f, 80.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
+    assert(inspectorVisible);
+
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Right, 100.0f, 110.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Right, 100.0f, 110.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));

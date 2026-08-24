@@ -1140,7 +1140,7 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
 
 void Context::endSubMenu()
 {
-    if (subMenuParent_ == InvalidWidgetId || activeMenu_ != openSubMenu_)
+    if (subMenuParent_ == InvalidWidgetId)
         return;
     WindowState *window = currentWindow();
     if (window && activeMenuBounds_.height > 0.0f)
