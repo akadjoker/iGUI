@@ -35,7 +35,7 @@ include(FetchContent)
 FetchContent_Declare(
     igui_containers
     GIT_REPOSITORY https://github.com/akadjoker/containers.git
-    GIT_TAG fa22048488b4da6d1e370ad739cb8119c0562df6
+    GIT_TAG f94b31807048ff5e4df8cb3884094a63675544d9
 )
 FetchContent_GetProperties(igui_containers)
 if(NOT igui_containers_POPULATED)
