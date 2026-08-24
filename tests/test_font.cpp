@@ -58,10 +58,21 @@ static void test_custom_ranges_and_atlas_size()
     assert(atlas.glyph(atlas.defaultFont(), 0xE1u));
 }
 
+static void test_high_resolution_atlas()
+{
+    const ig::Span<const ig::FontRange> ranges = ig::defaultFontRanges();
+    ig::FontAtlas atlas(ranges, 2048u, 1024u, 28.0f);
+    assert(atlas.valid());
+    assert(atlas.bakedSize() == 28.0f);
+    assert(atlas.glyph(atlas.defaultFont(), static_cast<uint32_t>('A')));
+    assert(atlas.measureText(atlas.defaultFont(), "Sharp text", 14.0f).width > 0.0f);
+}
+
 int main()
 {
     test_utf8_decoder();
     test_default_font();
     test_custom_ranges_and_atlas_size();
+    test_high_resolution_atlas();
     return 0;
 }

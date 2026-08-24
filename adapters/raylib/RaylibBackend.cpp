@@ -1,6 +1,5 @@
 #include "igui_raylib/RaylibBackend.hpp"
 
-#include <cstdio>
 #include <math.h>
 
 #include <rlgl.h>
@@ -154,7 +153,9 @@ TextureId textureId(const ::Texture2D &texture)
 }
 
 Backend::Backend()
-    : fontAtlas_(), fontTexture_(), fontPixels_()
+    // Rasterize at twice the usual UI size. Text is normally displayed at
+    // 14 px, so downsampling this atlas keeps curved glyph edges sharp.
+    : fontAtlas_(defaultFontRanges(), 2048u, 1024u, 28.0f), fontTexture_(), fontPixels_()
 {
 }
 
@@ -213,16 +214,16 @@ bool Backend::ensureFontTexture()
     fontTexture_ = ::LoadTextureFromImage(image);
     if (fontTexture_.id == 0u)
         return false;
-    ::SetTextureFilter(fontTexture_, TEXTURE_FILTER_POINT);
+    // A font atlas contains alpha coverage, not pixel art. Bilinear sampling
+    // keeps the high-resolution glyphs smooth when their logical size differs
+    // from the baked size.
+    ::SetTextureFilter(fontTexture_, TEXTURE_FILTER_BILINEAR);
     fontAtlas_.setTexture(textureId(fontTexture_));
     return true;
 }
 
 bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &command)
 {
-    std::fprintf(stderr, "[DBG] renderGeometry: tex=%llu indexCount=%u vtx=%zu clip=(%.0f,%.0f,%.0f,%.0f)\n",
-                 static_cast<unsigned long long>(command.texture.value), command.indexCount,
-                 data.vertices.size(), command.clip.x, command.clip.y, command.clip.width, command.clip.height);
     if (command.firstIndex > data.indices.size() ||
         command.indexCount > data.indices.size() - command.firstIndex)
         return false;
@@ -236,13 +237,19 @@ bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &comman
 
     ::rlSetTexture(static_cast<unsigned int>(command.texture.value));
     ::rlBegin(RL_TRIANGLES);
-    for (uint32_t i = 0u; i < command.indexCount; ++i)
+    // Emit triangles with inverted winding so they are front-facing under
+    // Raylib's default backface culling (GL_CULL_FACE is enabled by rlgl).
+    for (uint32_t tri = 0u; tri + 2u < command.indexCount; tri += 3u)
     {
-        const DrawVertex &vertex = data.vertices[static_cast<uint32_t>(
-            static_cast<int32_t>(data.indices[command.firstIndex + i]) + command.vertexOffset)];
-        ::rlColor4ub(vertex.color.r, vertex.color.g, vertex.color.b, vertex.color.a);
-        ::rlTexCoord2f(vertex.uv.x, vertex.uv.y);
-        ::rlVertex2f(vertex.position.x, vertex.position.y);
+        for (uint32_t k = 0u; k < 3u; ++k)
+        {
+            const uint32_t i = tri + (2u - k);
+            const DrawVertex &vertex = data.vertices[static_cast<uint32_t>(
+                static_cast<int32_t>(data.indices[command.firstIndex + i]) + command.vertexOffset)];
+            ::rlColor4ub(vertex.color.r, vertex.color.g, vertex.color.b, vertex.color.a);
+            ::rlTexCoord2f(vertex.uv.x, vertex.uv.y);
+            ::rlVertex2f(vertex.position.x, vertex.position.y);
+        }
     }
     ::rlEnd();
     ::rlSetTexture(0u);
@@ -251,9 +258,6 @@ bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &comman
 
 bool Backend::renderText(const DrawData &data, const TextCommand &command)
 {
-    std::fprintf(stderr, "[DBG] renderText: size=%u pos=(%.1f,%.1f) logicalSize=%.1f color=(%u,%u,%u,%u)\n",
-                 command.textSize, command.position.x, command.position.y, command.logicalSize,
-                 command.color.r, command.color.g, command.color.b, command.color.a);
     if (command.textOffset > data.textBytes.size() ||
         command.textSize > data.textBytes.size() - command.textOffset || !ensureFontTexture())
         return false;
@@ -279,8 +283,8 @@ bool Backend::renderText(const DrawData &data, const TextCommand &command)
         {
             const ::Rectangle source = {static_cast<float>(glyph->x), static_cast<float>(glyph->y),
                                         static_cast<float>(glyph->width), static_cast<float>(glyph->height)};
-            const ::Rectangle destination = {penX + glyph->offsetX * scale,
-                                             penY + glyph->offsetY * scale,
+            const ::Rectangle destination = {floorf(penX + glyph->offsetX * scale + 0.5f),
+                                             floorf(penY + glyph->offsetY * scale + 0.5f),
                                              static_cast<float>(glyph->width) * scale,
                                              static_cast<float>(glyph->height) * scale};
             ::DrawTexturePro(fontTexture_, source, destination, ::Vector2{0.0f, 0.0f},
@@ -296,7 +300,15 @@ bool Backend::render(const DrawData &data)
     if (!::IsWindowReady())
         return false;
 
-    std::fprintf(stderr, "[DBG] render: %zu commands\n", data.commands.size());
+    // Raw rlBegin/rlEnd immediate mode bypasses Raylib's 2D state management.
+    // rlEnd() bumps the depth per draw, so with the depth test enabled later
+    // commands would be rejected against earlier ones. 2D UI needs no depth.
+    ::rlDisableDepthTest();
+    ::rlDisableDepthMask();
+    ::rlDisableBackfaceCulling();
+    ::rlEnableColorBlend();
+    ::rlSetBlendMode(RL_BLEND_ALPHA);
+
     for (Span<const DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
     {
         const DrawCommand &command = data.commands[i];

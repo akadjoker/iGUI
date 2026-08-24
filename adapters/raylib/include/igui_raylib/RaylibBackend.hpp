@@ -30,7 +30,7 @@ class Backend : public ig::Backend
 public:
     Backend();
     Backend(Span<const FontRange> ranges, uint32_t atlasWidth,
-            uint32_t atlasHeight, float bakedSize = 14.0f);
+            uint32_t atlasHeight, float bakedSize = 28.0f);
     ~Backend() override;
 
     FontAtlas &fontAtlas();
