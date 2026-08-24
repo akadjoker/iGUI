@@ -1051,6 +1051,66 @@ static void test_editor_infrastructure()
     context.endFrame();
 }
 
+static bool drawGizmo2D(ig::Context &context, ig::Transform2D &transform, ig::Gizmo2DMode mode)
+{
+    assert(context.beginWindow("gizmo canvas", ig::Rect(10.0f, 10.0f, 300.0f, 220.0f)));
+    context.drawRectFilled(ig::Rect(8.0f, 8.0f, 240.0f, 160.0f), ig::Color(30u, 34u, 42u, 255u));
+    const bool changed = context.gizmo2D("sprite", transform, mode, ig::Rect(8.0f, 8.0f, 240.0f, 160.0f));
+    context.endWindow();
+    return changed;
+}
+
+static void test_gizmo2d_transform_handles()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::Transform2D transform;
+    transform.position = ig::Vec2(100.0f, 70.0f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 126.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(!drawGizmo2D(context, transform, ig::Gizmo2DMode::Translate));
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(146.0f, 132.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(drawGizmo2D(context, transform, ig::Gizmo2DMode::Translate));
+    context.endFrame();
+    assert(transform.position.x == 120.0f && transform.position.y == 82.0f);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 146.0f, 132.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    drawGizmo2D(context, transform, ig::Gizmo2DMode::Translate);
+    context.endFrame();
+
+    transform.position = ig::Vec2(100.0f, 70.0f);
+    transform.rotation = 0.0f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 175.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(!drawGizmo2D(context, transform, ig::Gizmo2DMode::Rotate));
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(126.0f, 169.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(drawGizmo2D(context, transform, ig::Gizmo2DMode::Rotate));
+    context.endFrame();
+    assert(transform.rotation > 85.0f && transform.rotation < 95.0f);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 126.0f, 169.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    drawGizmo2D(context, transform, ig::Gizmo2DMode::Rotate);
+    context.endFrame();
+
+    transform.rotation = 0.0f;
+    transform.scale = ig::Vec2(1.0f, 1.0f);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 186.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(!drawGizmo2D(context, transform, ig::Gizmo2DMode::Scale));
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(216.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(drawGizmo2D(context, transform, ig::Gizmo2DMode::Scale));
+    context.endFrame();
+    assert(transform.scale.x > 1.49f && transform.scale.x < 1.51f);
+    assert(transform.scale.y == 1.0f);
+}
+
 int main()
 {
     test_widget_gallery();
@@ -1067,5 +1127,6 @@ int main()
     test_cross_window_drag_drop();
     test_tree_drag_drop_positions();
     test_editor_infrastructure();
+    test_gizmo2d_transform_handles();
     return 0;
 }

@@ -1,5 +1,7 @@
 #include <raylib.h>
 
+#include <math.h>
+
 #include <igui/Gui.hpp>
 #include <igui_raylib/RaylibBackend.hpp>
 
@@ -57,6 +59,8 @@ struct DemoState
     float uvY;
     float uvWidth;
     float uvHeight;
+    ig::Transform2D gizmoTransform;
+    ig::Gizmo2DMode gizmoMode;
     ig::String name;
     ig::String notes;
     ig::String nodeName;
@@ -72,6 +76,7 @@ struct DemoState
           positionX(0.0f), positionY(1.25f), positionZ(-3.5f),
           scaleX(1.0f), scaleY(1.0f), scaleZ(1.0f),
           uvX(0.0f), uvY(0.0f), uvWidth(1.0f), uvHeight(1.0f),
+          gizmoTransform(), gizmoMode(ig::Gizmo2DMode::Translate),
           name("Raylib user"),
           nodeName("DirectionalLight3D"),
           notes("A multiline text editor now has a real scrollbar.\n"
@@ -92,6 +97,7 @@ struct DemoState
         sceneParent[2] = 0;
         sceneParent[3] = 0;
         sceneParent[4] = 3;
+        gizmoTransform.position = ig::Vec2(190.0f, 76.0f);
         sceneOrder[0] = 1;
         sceneOrder[1] = 2;
         sceneOrder[2] = 3;
@@ -405,8 +411,54 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     }
     else
     {
-        ui.inputTextMultiline("Notes", state.notes, 0.0f, 78.0f);
-        ui.colorEdit("Accent color", state.accent, 0.0f, 142.0f);
+        ui.label("2D viewport gizmo");
+        if (ui.smallButton("Translate"))
+            state.gizmoMode = ig::Gizmo2DMode::Translate;
+        ui.sameLine();
+        if (ui.smallButton("Rotate"))
+            state.gizmoMode = ig::Gizmo2DMode::Rotate;
+        ui.sameLine();
+        if (ui.smallButton("Scale"))
+            state.gizmoMode = ig::Gizmo2DMode::Scale;
+        const ig::Vec2 canvasPosition = ui.cursor();
+        const float canvasWidth = ui.availableWidth();
+        const ig::Rect canvas(canvasPosition.x, canvasPosition.y, canvasWidth, 152.0f);
+        ui.drawRectFilled(canvas, ig::Color(28u, 32u, 42u, 255u));
+        for (float x = 0.0f; x < canvas.width; x += 24.0f)
+            ui.drawLine(ig::Vec2(canvas.x + x, canvas.y),
+                        ig::Vec2(canvas.x + x, canvas.y + canvas.height),
+                        ig::Color(45u, 51u, 66u, 255u));
+        for (float y = 0.0f; y < canvas.height; y += 24.0f)
+            ui.drawLine(ig::Vec2(canvas.x, canvas.y + y),
+                        ig::Vec2(canvas.x + canvas.width, canvas.y + y),
+                        ig::Color(45u, 51u, 66u, 255u));
+        const float objectHalfWidth = 21.0f * state.gizmoTransform.scale.x;
+        const float objectHalfHeight = 15.0f * state.gizmoTransform.scale.y;
+        const float rotation = state.gizmoTransform.rotation * 3.14159265358979323846f / 180.0f;
+        const float cosine = cosf(rotation);
+        const float sine = sinf(rotation);
+        const float centerX = canvas.x + state.gizmoTransform.position.x;
+        const float centerY = canvas.y + state.gizmoTransform.position.y;
+        const ig::Vec2 corner0(centerX - objectHalfWidth * cosine + objectHalfHeight * sine,
+                               centerY - objectHalfWidth * sine - objectHalfHeight * cosine);
+        const ig::Vec2 corner1(centerX + objectHalfWidth * cosine + objectHalfHeight * sine,
+                               centerY + objectHalfWidth * sine - objectHalfHeight * cosine);
+        const ig::Vec2 corner2(centerX + objectHalfWidth * cosine - objectHalfHeight * sine,
+                               centerY + objectHalfWidth * sine + objectHalfHeight * cosine);
+        const ig::Vec2 corner3(centerX - objectHalfWidth * cosine - objectHalfHeight * sine,
+                               centerY - objectHalfWidth * sine + objectHalfHeight * cosine);
+        ui.drawLine(corner0, corner1, state.accent, 2.0f);
+        ui.drawLine(corner1, corner2, state.accent, 2.0f);
+        ui.drawLine(corner2, corner3, state.accent, 2.0f);
+        ui.drawLine(corner3, corner0, state.accent, 2.0f);
+        ig::Gizmo2DOptions gizmoOptions;
+        gizmoOptions.translateSnap = 1.0f;
+        gizmoOptions.rotateSnap = 15.0f;
+        gizmoOptions.scaleSnap = 0.1f;
+        ui.gizmo2D("viewport sprite", state.gizmoTransform, state.gizmoMode, canvas, gizmoOptions);
+        ui.setCursor(ig::Vec2(canvas.x, canvas.y + canvas.height + ui.theme().itemSpacing));
+        ui.inputFloat2("gizmo position", state.gizmoTransform.position.x, state.gizmoTransform.position.y);
+        ui.dragFloat("gizmo rotation", state.gizmoTransform.rotation, -180.0f, 180.0f, 0.5f);
     }
     ui.endWindow();
 }

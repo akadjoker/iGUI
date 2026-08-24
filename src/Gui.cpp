@@ -1,5 +1,7 @@
 #include "igui/Gui.hpp"
 
+#include <math.h>
+
 #include <ct/sort.hpp>
 
 namespace ig
@@ -7,6 +9,48 @@ namespace ig
 
 namespace
 {
+
+const float GizmoPi = 3.14159265358979323846f;
+
+enum GizmoAxis2D : uint8_t
+{
+    GizmoAxisNone,
+    GizmoAxisX,
+    GizmoAxisY,
+    GizmoAxisXY
+};
+
+float snapGizmoValue(float value, float increment)
+{
+    return increment > 0.0f ? roundf(value / increment) * increment : value;
+}
+
+float absoluteValue(float value)
+{
+    return value < 0.0f ? -value : value;
+}
+
+GizmoAxis2D hitGizmo2D(Gizmo2DMode mode, const Vec2 &pointer, const Vec2 &center,
+                       const Vec2 &axisX, const Vec2 &axisY, float axisLength)
+{
+    const float deltaX = pointer.x - center.x;
+    const float deltaY = pointer.y - center.y;
+    if (mode == Gizmo2DMode::Rotate)
+    {
+        const float distance = sqrtf(deltaX * deltaX + deltaY * deltaY);
+        return absoluteValue(distance - axisLength * 0.82f) <= 8.0f ? GizmoAxisXY : GizmoAxisNone;
+    }
+
+    const float localX = deltaX * axisX.x + deltaY * axisX.y;
+    const float localY = deltaX * axisY.x + deltaY * axisY.y;
+    if (absoluteValue(localX) <= 9.0f && absoluteValue(localY) <= 9.0f)
+        return GizmoAxisXY;
+    if (localX >= 8.0f && localX <= axisLength + 10.0f && absoluteValue(localY) <= 8.0f)
+        return GizmoAxisX;
+    if (localY >= 8.0f && localY <= axisLength + 10.0f && absoluteValue(localX) <= 8.0f)
+        return GizmoAxisY;
+    return GizmoAxisNone;
+}
 
 Color colorFromHsv(float hue, float saturation, float value, uint8_t alpha)
 {
@@ -79,7 +123,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(),
       windowOrder_(), idStack_(), focusOrder_(), childStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
@@ -104,6 +148,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     textScrolls_.reserve(8);
     colorPickers_.reserve(8);
     childScrolls_.reserve(8);
+    gizmo2DStates_.reserve(4);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     focusOrder_.reserve(32);
@@ -1440,6 +1485,177 @@ bool Context::splitter(StringView idText, float &value, float minimum, float max
             activeWidget_ = InvalidWidgetId;
     }
     drawList->addRectFilled(handle, hovered || activeWidget_ == id ? theme_.dialogBtnPrimary : theme_.borderColor, clip);
+    return changed;
+}
+
+bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mode,
+                      const Rect &bounds, const Gizmo2DOptions &options)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || bounds.width <= 0.0f || bounds.height <= 0.0f ||
+        options.axisLength <= 12.0f)
+        return false;
+
+    const Rect canvas = contentRect(bounds);
+    const Rect clip = intersect(canvas, contentClip());
+    if (clip.width <= 0.0f || clip.height <= 0.0f)
+        return false;
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x47495a4d4f3244ull);
+    Gizmo2DState *state = gizmo2DStates_.find(id);
+    if (!state)
+    {
+        gizmo2DStates_.put(id, Gizmo2DState());
+        state = gizmo2DStates_.find(id);
+    }
+    if (!state)
+        return false;
+
+    const float rotationRadians = transform.rotation * GizmoPi / 180.0f;
+    const Vec2 axisX(cosf(rotationRadians), sinf(rotationRadians));
+    const Vec2 axisY(sinf(rotationRadians), -cosf(rotationRadians));
+    const Vec2 center(canvas.x + transform.position.x, canvas.y + transform.position.y);
+    const GizmoAxis2D hoveredAxis = hitGizmo2D(mode, pointer_.position, center,
+                                                axisX, axisY, options.axisLength);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                             activeWidget_ == InvalidWidgetId &&
+                             contains(clip, pointer_.pressedPosition[left]);
+    if (pressedHere && hoveredAxis != GizmoAxisNone)
+    {
+        activeWidget_ = id;
+        focusedWidget_ = id;
+        state->axis = static_cast<uint8_t>(hoveredAxis);
+        state->pointerStart = pointer_.pressedPosition[left];
+        state->transformStart = transform;
+    }
+
+    bool changed = false;
+    if (activeWidget_ == id)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+        {
+            const GizmoAxis2D activeAxis = static_cast<GizmoAxis2D>(state->axis);
+            const float deltaX = pointer_.position.x - state->pointerStart.x;
+            const float deltaY = pointer_.position.y - state->pointerStart.y;
+            const float alongX = deltaX * axisX.x + deltaY * axisX.y;
+            const float alongY = deltaX * axisY.x + deltaY * axisY.y;
+            const Transform2D previous = transform;
+            if (mode == Gizmo2DMode::Translate)
+            {
+                if (activeAxis == GizmoAxisXY)
+                {
+                    transform.position.x = snapGizmoValue(state->transformStart.position.x + deltaX,
+                                                          options.translateSnap);
+                    transform.position.y = snapGizmoValue(state->transformStart.position.y + deltaY,
+                                                          options.translateSnap);
+                }
+                else if (activeAxis == GizmoAxisX)
+                {
+                    transform.position.x = snapGizmoValue(state->transformStart.position.x + axisX.x * alongX,
+                                                          options.translateSnap);
+                    transform.position.y = snapGizmoValue(state->transformStart.position.y + axisX.y * alongX,
+                                                          options.translateSnap);
+                }
+                else if (activeAxis == GizmoAxisY)
+                {
+                    transform.position.x = snapGizmoValue(state->transformStart.position.x + axisY.x * alongY,
+                                                          options.translateSnap);
+                    transform.position.y = snapGizmoValue(state->transformStart.position.y + axisY.y * alongY,
+                                                          options.translateSnap);
+                }
+            }
+            else if (mode == Gizmo2DMode::Rotate)
+            {
+                const float startAngle = atan2f(state->pointerStart.y - center.y,
+                                                state->pointerStart.x - center.x);
+                const float currentAngle = atan2f(pointer_.position.y - center.y,
+                                                  pointer_.position.x - center.x);
+                const float deltaDegrees = (currentAngle - startAngle) * 180.0f / GizmoPi;
+                transform.rotation = snapGizmoValue(state->transformStart.rotation + deltaDegrees,
+                                                    options.rotateSnap);
+            }
+            else if (mode == Gizmo2DMode::Scale)
+            {
+                if (activeAxis == GizmoAxisXY)
+                {
+                    const float factor = 1.0f + (alongX + alongY) * 0.5f / options.axisLength;
+                    transform.scale.x = state->transformStart.scale.x * factor;
+                    transform.scale.y = state->transformStart.scale.y * factor;
+                }
+                else if (activeAxis == GizmoAxisX)
+                {
+                    transform.scale.x = state->transformStart.scale.x *
+                                        (1.0f + alongX / options.axisLength);
+                }
+                else if (activeAxis == GizmoAxisY)
+                {
+                    transform.scale.y = state->transformStart.scale.y *
+                                        (1.0f + alongY / options.axisLength);
+                }
+                if (transform.scale.x < 0.01f)
+                    transform.scale.x = 0.01f;
+                if (transform.scale.y < 0.01f)
+                    transform.scale.y = 0.01f;
+                transform.scale.x = snapGizmoValue(transform.scale.x, options.scaleSnap);
+                transform.scale.y = snapGizmoValue(transform.scale.y, options.scaleSnap);
+            }
+            changed = previous.position.x != transform.position.x ||
+                      previous.position.y != transform.position.y ||
+                      previous.rotation != transform.rotation ||
+                      previous.scale.x != transform.scale.x || previous.scale.y != transform.scale.y;
+        }
+        if (pointer_.released[left])
+        {
+            activeWidget_ = InvalidWidgetId;
+            state->axis = static_cast<uint8_t>(GizmoAxisNone);
+        }
+    }
+
+    const GizmoAxis2D activeAxis = activeWidget_ == id
+        ? static_cast<GizmoAxis2D>(state->axis) : GizmoAxisNone;
+    const Color xColor = hoveredAxis == GizmoAxisX || activeAxis == GizmoAxisX
+        ? Color(255u, 160u, 50u, 255u) : Color(225u, 75u, 75u, 255u);
+    const Color yColor = hoveredAxis == GizmoAxisY || activeAxis == GizmoAxisY
+        ? Color(255u, 160u, 50u, 255u) : Color(75u, 210u, 110u, 255u);
+    const Color centerColor = hoveredAxis == GizmoAxisXY || activeAxis == GizmoAxisXY
+        ? Color(255u, 160u, 50u, 255u) : Color(245u, 200u, 75u, 255u);
+    if (mode == Gizmo2DMode::Rotate)
+    {
+        const float radius = options.axisLength * 0.82f;
+        const Color ringColor = hoveredAxis == GizmoAxisXY || activeAxis == GizmoAxisXY
+            ? Color(255u, 160u, 50u, 255u) : Color(100u, 165u, 245u, 255u);
+        const int segments = 32;
+        for (int i = 0; i < segments; ++i)
+        {
+            const float first = GizmoPi * 2.0f * static_cast<float>(i) / static_cast<float>(segments);
+            const float second = GizmoPi * 2.0f * static_cast<float>(i + 1) / static_cast<float>(segments);
+            drawList->addLine(Vec2(center.x + cosf(first) * radius, center.y + sinf(first) * radius),
+                              Vec2(center.x + cosf(second) * radius, center.y + sinf(second) * radius),
+                              ringColor, clip, 2.0f);
+        }
+        drawList->addCircleFilled(center, 5.0f, centerColor, clip);
+    }
+    else
+    {
+        const Vec2 endX(center.x + axisX.x * options.axisLength,
+                        center.y + axisX.y * options.axisLength);
+        const Vec2 endY(center.x + axisY.x * options.axisLength,
+                        center.y + axisY.y * options.axisLength);
+        drawList->addLine(center, endX, xColor, clip, 3.0f);
+        drawList->addLine(center, endY, yColor, clip, 3.0f);
+        if (mode == Gizmo2DMode::Scale)
+        {
+            drawList->addRectFilled(Rect(endX.x - 5.0f, endX.y - 5.0f, 10.0f, 10.0f), xColor, clip);
+            drawList->addRectFilled(Rect(endY.x - 5.0f, endY.y - 5.0f, 10.0f, 10.0f), yColor, clip);
+        }
+        else
+        {
+            drawList->addCircleFilled(endX, 5.0f, xColor, clip);
+            drawList->addCircleFilled(endY, 5.0f, yColor, clip);
+        }
+        drawList->addCircleFilled(center, 7.0f, centerColor, clip);
+    }
     return changed;
 }
 

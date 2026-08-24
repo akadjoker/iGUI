@@ -118,6 +118,35 @@ enum class SplitterAxis : uint8_t
     Horizontal
 };
 
+enum class Gizmo2DMode : uint8_t
+{
+    Translate,
+    Rotate,
+    Scale
+};
+
+// Transform values are expressed in pixels relative to the gizmo canvas.
+// rotation is in degrees and scale starts at (1, 1).
+struct Transform2D
+{
+    Vec2 position;
+    float rotation;
+    Vec2 scale;
+
+    Transform2D() : position(), rotation(0.0f), scale(1.0f, 1.0f) {}
+};
+
+struct Gizmo2DOptions
+{
+    float axisLength;
+    float translateSnap;
+    float rotateSnap;
+    float scaleSnap;
+
+    Gizmo2DOptions()
+        : axisLength(60.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
+};
+
 class Context
 {
 public:
@@ -198,6 +227,9 @@ public:
     // Draggable divider. value is the local x/y coordinate inside bounds.
     bool splitter(StringView id, float &value, float minimum, float maximum,
                   SplitterAxis axis, const Rect &bounds, float thickness = 5.0f);
+    // Transparent editor overlay for a 2D transform inside bounds.
+    bool gizmo2D(StringView id, Transform2D &transform, Gizmo2DMode mode, const Rect &bounds,
+                 const Gizmo2DOptions &options = Gizmo2DOptions());
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
@@ -371,6 +403,15 @@ private:
         ChildScrollState() : offset(0.0f), contentHeight(0.0f) {}
     };
 
+    struct Gizmo2DState
+    {
+        uint8_t axis;
+        Vec2 pointerStart;
+        Transform2D transformStart;
+
+        Gizmo2DState() : axis(0u), pointerStart(), transformStart() {}
+    };
+
     struct ChildState
     {
         LayoutState parentLayout;
@@ -441,6 +482,7 @@ private:
     ct::HashMap<WidgetId, int> textScrolls_;
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
+    ct::HashMap<WidgetId, Gizmo2DState> gizmo2DStates_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     ct::Vector<WidgetId> focusOrder_;
