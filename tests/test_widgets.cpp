@@ -566,11 +566,207 @@ static void test_navigation_widgets()
     context.pushEvent(ig::Event::pointerMove(40.0f, 100.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
     drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f, 1.0f, 0.5f));
+    drawNavigationWidgets(context, state);
     const ig::DrawData &data = context.endFrame();
     assert(!data.commands.empty());
     const ig::DrawCommand &tooltip = data.commands.back();
     assert(tooltip.type == ig::DrawCommandType::Text);
     assert(tooltip.payload.text.textSize == 15u);
+}
+
+static void test_history_and_keyboard_navigation()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int value = 8;
+    context.pushUndo("set value", [&value]() { value = 3; }, [&value]() { value = 8; });
+    assert(context.canUndo());
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Z, true));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    context.endFrame();
+    assert(value == 3);
+    assert(context.canRedo());
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Y, true));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    context.endFrame();
+    assert(value == 8);
+
+    int tab = 0;
+    int combo = 0;
+    const ig::StringView tabs[] = {ig::StringView("one"), ig::StringView("two"), ig::StringView("three")};
+    const ig::StringView choices[] = {ig::StringView("red"), ig::StringView("green"), ig::StringView("blue")};
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 35.0f, 62.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 35.0f, 62.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("keyboard selectors", ig::Rect(10.0f, 10.0f, 250.0f, 180.0f)));
+    context.tabBar("tabs", tab, ig::Span<const ig::StringView>(tabs), ig::Rect(8.0f, 8.0f, 180.0f, 28.0f));
+    context.comboBox("combo", combo, ig::Span<const ig::StringView>(choices), ig::Rect(8.0f, 46.0f, 180.0f, 28.0f));
+    context.endWindow();
+    context.endFrame();
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Right));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("keyboard selectors", ig::Rect(10.0f, 10.0f, 250.0f, 180.0f)));
+    assert(context.tabBar("tabs", tab, ig::Span<const ig::StringView>(tabs), ig::Rect(8.0f, 8.0f, 180.0f, 28.0f)));
+    context.comboBox("combo", combo, ig::Span<const ig::StringView>(choices), ig::Rect(8.0f, 46.0f, 180.0f, 28.0f));
+    context.endWindow();
+    context.endFrame();
+    assert(tab == 1);
+}
+
+static void drawDockSpace(ig::Context &context, bool &hierarchyVisible, bool &assetsVisible,
+                          bool &inspectorVisible, bool &consoleVisible)
+{
+    hierarchyVisible = false;
+    assetsVisible = false;
+    inspectorVisible = false;
+    consoleVisible = false;
+    assert(context.beginWindow("dock host", ig::Rect(10.0f, 10.0f, 520.0f, 400.0f)));
+    assert(context.beginDockSpace("editor", ig::Rect(8.0f, 8.0f, 480.0f, 330.0f)));
+    if (context.beginDockPanel("Hierarchy", ig::DockSlot::Left))
+    {
+        hierarchyVisible = true;
+        context.label("scene");
+        context.endDockPanel();
+    }
+    if (context.beginDockPanel("Assets", ig::DockSlot::Left))
+    {
+        assetsVisible = true;
+        context.label("assets");
+        context.endDockPanel();
+    }
+    if (context.beginDockPanel("Inspector", ig::DockSlot::Right))
+    {
+        inspectorVisible = true;
+        context.label("properties");
+        context.endDockPanel();
+    }
+    if (context.beginDockPanel("Console", ig::DockSlot::Bottom))
+    {
+        consoleVisible = true;
+        context.label("output");
+        context.endDockPanel();
+    }
+    context.endDockSpace();
+    context.endWindow();
+}
+
+static void test_dock_space()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool hierarchy = false;
+    bool assets = false;
+    bool inspector = false;
+    bool console = false;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    assert(hierarchy && !assets && inspector && console);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 192.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 192.0f, 64.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 70.0f, 120.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 70.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    assert(!hierarchy && assets && inspector && console);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 140.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(290.0f, 100.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 290.0f, 100.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    drawDockSpace(context, hierarchy, assets, inspector, console);
+    context.endFrame();
+    assert(hierarchy && assets && inspector && console);
+}
+
+static void test_full_client_dock_space_and_theme_presets()
+{
+    const ig::Theme dark = ig::makeTheme(ig::ThemePreset::Dark);
+    const ig::Theme light = ig::makeTheme(ig::ThemePreset::Light);
+    const ig::Theme blender = ig::makeTheme(ig::ThemePreset::Blender);
+    const ig::Theme vscode = ig::makeTheme(ig::ThemePreset::VSCode);
+    assert(dark.windowBackground != light.windowBackground);
+    assert(blender.focusColor != vscode.focusColor);
+
+    WidgetBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginMainWindow("full client"));
+    assert(context.beginDockSpace("root"));
+    if (context.beginDockPanel("Viewport", ig::DockSlot::Center))
+    {
+        context.label("viewport");
+        context.endDockPanel();
+    }
+    context.endDockSpace();
+    context.endWindow();
+    context.endFrame();
+
+    context.beginFrame(ig::FrameInfo(800.0f, 600.0f));
+    assert(context.beginMainWindow("full client"));
+    assert(context.beginDockSpace("root"));
+    if (context.beginDockPanel("Viewport", ig::DockSlot::Center))
+    {
+        context.label("viewport");
+        context.endDockPanel();
+    }
+    context.endDockSpace();
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+    bool reachedResizedClientEdge = false;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].position.x >= 799.0f)
+        {
+            reachedResizedClientEdge = true;
+            break;
+        }
+    }
+    assert(reachedResizedClientEdge);
+}
+
+static void test_dock_panel_close_button()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool open = true;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("closable dock", ig::Rect(10.0f, 10.0f, 520.0f, 400.0f)));
+    assert(context.beginDockSpace("dock", ig::Rect(8.0f, 8.0f, 480.0f, 330.0f)));
+    if (context.beginDockPanel("Closable", ig::DockSlot::Center, &open))
+        context.endDockPanel();
+    context.endDockSpace();
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 285.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 285.0f, 64.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("closable dock", ig::Rect(10.0f, 10.0f, 520.0f, 400.0f)));
+    assert(context.beginDockSpace("dock", ig::Rect(8.0f, 8.0f, 480.0f, 330.0f)));
+    assert(!context.beginDockPanel("Closable", ig::DockSlot::Center, &open));
+    context.endDockSpace();
+    context.endWindow();
+    context.endFrame();
+    assert(!open);
 }
 
 static void drawEditorWidgets(ig::Context &context, ig::String &notes, ig::Color &color)
@@ -774,6 +970,175 @@ static void test_child_table_and_property_row()
     drawInspectorContainers(context, name, exposure);
     const ig::DrawData &scrolled = context.endFrame();
     assert(multilineTextY(scrolled, 10u) < initialY);
+}
+
+static void test_weighted_table_layout()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const float weights[] = {3.0f, 1.0f};
+    float firstWidth = 0.0f;
+    float secondWidth = 0.0f;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("weighted table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(context.beginTable("properties", ig::Span<const float>(weights)));
+    assert(context.tableNextColumn());
+    firstWidth = context.availableWidth();
+    context.label("Name");
+    assert(context.tableNextColumn());
+    secondWidth = context.availableWidth();
+    context.label("Value");
+    context.endTable();
+    context.endWindow();
+    context.endFrame();
+
+    assert(firstWidth > secondWidth * 2.9f);
+    assert(firstWidth < secondWidth * 3.1f);
+}
+
+static void drawVirtualList(ig::Context &context, int &selectedItem,
+                            int &firstVisible, int &lastVisible)
+{
+    assert(context.beginWindow("virtual list", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    if (context.beginVirtualList("assets", 1000, 28.0f, 84.0f, firstVisible, lastVisible))
+    {
+        for (int item = firstVisible; item < lastVisible; ++item)
+        {
+            context.pushId(static_cast<uint64_t>(item));
+            if (context.selectable("asset", selectedItem == item, context.virtualListItemRect(item)))
+                selectedItem = item;
+            context.popId();
+        }
+        context.endVirtualList();
+    }
+    context.endWindow();
+}
+
+static void test_virtual_list()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int selectedItem = 0;
+    int firstVisible = 0;
+    int lastVisible = 0;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualList(context, selectedItem, firstVisible, lastVisible);
+    context.endFrame();
+    assert(firstVisible == 0);
+    assert(lastVisible > firstVisible && lastVisible < 10);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualList(context, selectedItem, firstVisible, lastVisible);
+    context.endFrame();
+    assert(firstVisible > 0);
+    assert(lastVisible - firstVisible < 10);
+}
+
+static void drawVirtualTable(ig::Context &context, int &firstVisible, int &lastVisible,
+                             ig::Rect &firstCell, ig::Rect &lastCell)
+{
+    assert(context.beginWindow("virtual table", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    if (context.beginVirtualTable("asset table", 1000, 3, 28.0f, 84.0f, firstVisible, lastVisible))
+    {
+        for (int row = firstVisible; row < lastVisible; ++row)
+        {
+            context.pushId(static_cast<uint64_t>(row));
+            context.selectable("name", false, context.virtualTableCellRect(row, 0));
+            context.selectable("type", false, context.virtualTableCellRect(row, 1));
+            context.selectable("size", false, context.virtualTableCellRect(row, 2));
+            context.popId();
+        }
+        firstCell = context.virtualTableCellRect(firstVisible, 0);
+        lastCell = context.virtualTableCellRect(firstVisible, 2);
+        context.endVirtualTable();
+    }
+    context.endWindow();
+}
+
+static void test_virtual_table()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int firstVisible = 0;
+    int lastVisible = 0;
+    ig::Rect firstCell;
+    ig::Rect lastCell;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualTable(context, firstVisible, lastVisible, firstCell, lastCell);
+    context.endFrame();
+    assert(firstVisible == 0);
+    assert(lastVisible > firstVisible && lastVisible < 10);
+    const float widthDifference = firstCell.width > lastCell.width
+        ? firstCell.width - lastCell.width : lastCell.width - firstCell.width;
+    assert(firstCell.width > 0.0f && lastCell.width > 0.0f && widthDifference < 0.01f);
+    assert(lastCell.x > firstCell.x);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualTable(context, firstVisible, lastVisible, firstCell, lastCell);
+    context.endFrame();
+    assert(firstVisible > 0);
+}
+
+static void drawVirtualTree(ig::Context &context, int &firstVisible, int &lastVisible,
+                            ig::Rect &rootRow, ig::Rect &childRow)
+{
+    assert(context.beginWindow("virtual tree", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    if (context.beginVirtualTree("hierarchy", 1000, 28.0f, 84.0f, firstVisible, lastVisible))
+    {
+        for (int row = firstVisible; row < lastVisible; ++row)
+        {
+            const int depth = row % 3;
+            bool expanded = true;
+            ig::TreeItemStyle style;
+            style.leaf = depth == 2;
+            context.treeItem(static_cast<ig::WidgetId>(row + 1), "node", expanded, style,
+                             context.virtualTreeItemRect(row, depth));
+        }
+        rootRow = context.virtualTreeItemRect(firstVisible, 0);
+        childRow = context.virtualTreeItemRect(firstVisible, 2);
+        context.endVirtualTree();
+    }
+    context.endWindow();
+}
+
+static void test_virtual_tree()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int firstVisible = 0;
+    int lastVisible = 0;
+    ig::Rect rootRow;
+    ig::Rect childRow;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualTree(context, firstVisible, lastVisible, rootRow, childRow);
+    context.endFrame();
+    assert(firstVisible == 0);
+    assert(lastVisible > firstVisible && lastVisible < 10);
+    assert(childRow.x > rootRow.x && childRow.width < rootRow.width);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawVirtualTree(context, firstVisible, lastVisible, rootRow, childRow);
+    context.endFrame();
+    assert(firstVisible > 0);
 }
 
 static void test_responsive_window_layout()
@@ -1111,6 +1476,335 @@ static void test_gizmo2d_transform_handles()
     assert(transform.scale.y == 1.0f);
 }
 
+static bool drawGizmo3D(ig::Context &context, ig::Transform3D &transform)
+{
+    const float identity[16] = {
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
+    };
+    ig::Gizmo3DOptions options;
+    options.axisLength = 0.4f;
+    assert(context.beginWindow("gizmo 3d canvas", ig::Rect(10.0f, 10.0f, 300.0f, 220.0f)));
+    const bool changed = context.gizmo3D("cube", transform, ig::Gizmo3DMode::Translate,
+                                         ig::Rect(8.0f, 8.0f, 240.0f, 160.0f),
+                                         identity, identity, options);
+    context.endWindow();
+    return changed;
+}
+
+static void test_gizmo3d_transform_handles()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::Transform3D transform;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 175.0f, 130.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(!drawGizmo3D(context, transform));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(185.0f, 130.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    assert(drawGizmo3D(context, transform));
+    context.endFrame();
+    assert(transform.position.x > 0.07f && transform.position.x < 0.10f);
+}
+
+class DialogProvider : public ig::FileDialogProvider
+{
+public:
+    int listCalls = 0;
+    bool createdFolder = false;
+
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries) override
+    {
+        ++listCalls;
+        ig::FileDialogEntry folder;
+        folder.name = "assets";
+        folder.path = ig::String(path.data(), path.size()) + "/assets";
+        folder.directory = true;
+        entries.push_back(folder);
+        ig::FileDialogEntry image;
+        image.name = "preview.png";
+        image.path = ig::String(path.data(), path.size()) + "/preview.png";
+        image.size = 1024u;
+        entries.push_back(image);
+        if (createdFolder)
+        {
+            ig::FileDialogEntry created;
+            created.name = "My Folder";
+            created.path = ig::String(path.data(), path.size());
+            if (created.path != "/")
+                created.path += "/";
+            created.path += "My Folder";
+            created.directory = true;
+            entries.push_back(created);
+        }
+        return true;
+    }
+
+    ig::String parentDirectory(ig::StringView) override { return "/"; }
+    ig::String homeDirectory() override { return "/home/test"; }
+    ig::String createDirectory(ig::StringView path, ig::StringView name) override
+    {
+        createdFolder = true;
+        ig::String result(path.data(), path.size());
+        if (result != "/")
+            result += "/";
+        result += ig::String(name.data(), name.size());
+        return result;
+    }
+
+    ig::FileDialogPreview imagePreview(ig::StringView) override
+    {
+        ig::FileDialogPreview preview;
+        preview.texture = ig::TextureId(1u);
+        preview.width = 128.0f;
+        preview.height = 64.0f;
+        return preview;
+    }
+};
+
+static void test_file_dialog_choose_folder()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.title = "Choose Folder";
+    options.initialPath = "/project";
+    options.mode = ig::FileDialogMode::ChooseFolder;
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    assert(context.fileDialog("folder dialog", open, state, options, provider).kind == ig::FileDialogResultKind::None);
+    context.endFrame();
+    assert(state.entries.size() == 2u);
+    assert(provider.listCalls == 1);
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("folder dialog", open, state, options, provider);
+    context.endFrame();
+    assert(provider.listCalls == 1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 570.0f, 578.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 570.0f, 578.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    const ig::FileDialogResult result = context.fileDialog("folder dialog", open, state, options, provider);
+    context.endFrame();
+    assert(!open);
+    assert(result.kind == ig::FileDialogResultKind::Accepted);
+    assert(result.path == "/project");
+}
+
+static void test_file_dialog_resize()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("resize dialog", open, state, options, provider);
+    context.endFrame();
+    const ig::Vec2 initialSize = state.size;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 620.0f, 592.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("resize dialog", open, state, options, provider);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(540.0f, 520.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("resize dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.size.x < initialSize.x);
+    assert(state.size.y < initialSize.y);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 540.0f, 520.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("resize dialog", open, state, options, provider);
+    context.endFrame();
+    assert(!state.resizing);
+}
+
+static void test_file_dialog_navigation_and_create_folder()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("navigate dialog", open, state, options, provider);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 190.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 190.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("navigate dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.selectedIndex == -1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 190.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 190.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("navigate dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.path == "/");
+    assert(provider.listCalls == 2);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 136.0f, 98.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 136.0f, 98.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("navigate dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.creatingFolder);
+
+    context.pushEvent(ig::Event::textInput("My Folder"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("navigate dialog", open, state, options, provider);
+    context.endFrame();
+    assert(provider.createdFolder);
+    assert(!state.creatingFolder);
+    assert(state.selectedPath == "/My Folder");
+}
+
+static void test_file_dialog_image_preview_zoom()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    options.mode = ig::FileDialogMode::OpenImage;
+    options.filter = ".png";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("image dialog", open, state, options, provider);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("image dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.selectedPath == "/project/preview.png");
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = 1.0f;
+    context.pushEvent(ig::Event::pointerMove(520.0f, 300.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("image dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.previewZoom > 1.0f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 520.0f, 300.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("image dialog", open, state, options, provider);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerMove(550.0f, 324.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("image dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.previewPan.x > 29.0f && state.previewPan.y > 23.0f);
+}
+
+static void test_file_dialog_double_click_accepts_file()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    options.mode = ig::FileDialogMode::OpenImage;
+    options.filter = ".png";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("double click dialog", open, state, options, provider);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("double click dialog", open, state, options, provider);
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 246.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    const ig::FileDialogResult result = context.fileDialog("double click dialog", open, state, options, provider);
+    context.endFrame();
+    assert(!open);
+    assert(result.kind == ig::FileDialogResultKind::Accepted);
+    assert(result.path == "/project/preview.png");
+}
+
+class SortDialogProvider : public ig::FileDialogProvider
+{
+public:
+    bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry> &entries) override
+    {
+        ig::FileDialogEntry alpha;
+        alpha.name = "alpha.bin";
+        alpha.path = "/project/alpha.bin";
+        alpha.size = 200u;
+        entries.push_back(alpha);
+        ig::FileDialogEntry zeta;
+        zeta.name = "zeta.bin";
+        zeta.path = "/project/zeta.bin";
+        zeta.size = 10u;
+        entries.push_back(zeta);
+        return true;
+    }
+
+    ig::String parentDirectory(ig::StringView) override { return "/"; }
+    ig::String homeDirectory() override { return "/project"; }
+};
+
+static void test_file_dialog_detail_sorting()
+{
+    WidgetBackend backend;
+    SortDialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("sort dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.entries[0].name == "alpha.bin");
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 450.0f, 132.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 450.0f, 132.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("sort dialog", open, state, options, provider);
+    context.endFrame();
+    assert(state.sortField == ig::FileDialogSortField::Size);
+    assert(state.sortAscending);
+    assert(state.entries[0].name == "zeta.bin");
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 450.0f, 132.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 450.0f, 132.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("sort dialog", open, state, options, provider);
+    context.endFrame();
+    assert(!state.sortAscending);
+    assert(state.entries[0].name == "alpha.bin");
+}
+
 int main()
 {
     test_widget_gallery();
@@ -1119,14 +1813,29 @@ int main()
     test_image_widgets();
     test_small_buttons();
     test_navigation_widgets();
+    test_history_and_keyboard_navigation();
+    test_dock_space();
+    test_full_client_dock_space_and_theme_presets();
+    test_dock_panel_close_button();
     test_editor_widgets();
     test_multiline_scroll_and_drag_widgets();
     test_child_table_and_property_row();
+    test_weighted_table_layout();
+    test_virtual_list();
+    test_virtual_table();
+    test_virtual_tree();
     test_responsive_window_layout();
     test_scene_tree_and_message_box();
     test_cross_window_drag_drop();
     test_tree_drag_drop_positions();
     test_editor_infrastructure();
     test_gizmo2d_transform_handles();
+    test_gizmo3d_transform_handles();
+    test_file_dialog_choose_folder();
+    test_file_dialog_resize();
+    test_file_dialog_navigation_and_create_folder();
+    test_file_dialog_image_preview_zoom();
+    test_file_dialog_double_click_accepts_file();
+    test_file_dialog_detail_sorting();
     return 0;
 }

@@ -1,6 +1,8 @@
 #include <raylib.h>
+#include <raymath.h>
 
 #include <math.h>
+#include <stdio.h>
 
 #include <igui/Gui.hpp>
 #include <igui_raylib/RaylibBackend.hpp>
@@ -44,8 +46,10 @@ struct DemoState
     int workspaceTab;
     int selectedAsset;
     int selectedSceneNode;
+    int virtualTreeSelected;
     int sceneParent[5];
     int sceneOrder[4];
+    bool virtualTreeExpanded[100];
     uint64_t droppedImageAsset;
     float gamma;
     float dragExposure;
@@ -61,6 +65,8 @@ struct DemoState
     float uvHeight;
     ig::Transform2D gizmoTransform;
     ig::Gizmo2DMode gizmoMode;
+    ig::Transform3D gizmo3DTransform;
+    ig::Gizmo3DMode gizmo3DMode;
     ig::String name;
     ig::String notes;
     ig::String nodeName;
@@ -71,12 +77,13 @@ struct DemoState
           profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), droppedImageAsset(0u),
+          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), virtualTreeSelected(-1), droppedImageAsset(0u),
           gamma(2.2f), dragExposure(0.25f),
           positionX(0.0f), positionY(1.25f), positionZ(-3.5f),
           scaleX(1.0f), scaleY(1.0f), scaleZ(1.0f),
           uvX(0.0f), uvY(0.0f), uvWidth(1.0f), uvHeight(1.0f),
           gizmoTransform(), gizmoMode(ig::Gizmo2DMode::Translate),
+          gizmo3DTransform(), gizmo3DMode(ig::Gizmo3DMode::Translate),
           name("Raylib user"),
           nodeName("DirectionalLight3D"),
           notes("A multiline text editor now has a real scrollbar.\n"
@@ -102,6 +109,9 @@ struct DemoState
         sceneOrder[1] = 2;
         sceneOrder[2] = 3;
         sceneOrder[3] = 4;
+        gizmo3DTransform.position = ig::Vec3(0.0f, 0.0f, 0.0f);
+        for (int group = 0; group < 100; ++group)
+            virtualTreeExpanded[group] = true;
     }
 };
 
@@ -293,10 +303,80 @@ void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTex
     ui.endWindow();
 }
 
+int virtualTreeRowCount(const DemoState &state)
+{
+    int rowCount = 0;
+    for (int group = 0; group < 100; ++group)
+    {
+        ++rowCount;
+        if (state.virtualTreeExpanded[group])
+            rowCount += 9;
+    }
+    return rowCount;
+}
+
+bool virtualTreeNodeAt(const DemoState &state, int row, int &group, int &child)
+{
+    for (group = 0; group < 100; ++group)
+    {
+        if (row == 0)
+        {
+            child = -1;
+            return true;
+        }
+        --row;
+        if (state.virtualTreeExpanded[group])
+        {
+            if (row < 9)
+            {
+                child = row;
+                return true;
+            }
+            row -= 9;
+        }
+    }
+    child = -1;
+    return false;
+}
+
+bool projectDemo3D(const ::Matrix &view, const ::Matrix &projection, const ig::Rect &viewport,
+                   const ig::Vec3 &world, ig::Vec2 &screen)
+{
+    const float viewX = view.m0 * world.x + view.m4 * world.y + view.m8 * world.z + view.m12;
+    const float viewY = view.m1 * world.x + view.m5 * world.y + view.m9 * world.z + view.m13;
+    const float viewZ = view.m2 * world.x + view.m6 * world.y + view.m10 * world.z + view.m14;
+    const float viewW = view.m3 * world.x + view.m7 * world.y + view.m11 * world.z + view.m15;
+    const float clipX = projection.m0 * viewX + projection.m4 * viewY + projection.m8 * viewZ + projection.m12 * viewW;
+    const float clipY = projection.m1 * viewX + projection.m5 * viewY + projection.m9 * viewZ + projection.m13 * viewW;
+    const float clipW = projection.m3 * viewX + projection.m7 * viewY + projection.m11 * viewZ + projection.m15 * viewW;
+    if (clipW < 0.00001f && clipW > -0.00001f)
+        return false;
+    screen.x = viewport.x + (clipX / clipW * 0.5f + 0.5f) * viewport.width;
+    screen.y = viewport.y + (0.5f - clipY / clipW * 0.5f) * viewport.height;
+    return true;
+}
+
+ig::Vec3 rotateDemo3D(const ig::Vec3 &value, const ig::Vec3 &rotation)
+{
+    const float radians = DEG2RAD;
+    const float cosX = cosf(rotation.x * radians);
+    const float sinX = sinf(rotation.x * radians);
+    const float cosY = cosf(rotation.y * radians);
+    const float sinY = sinf(rotation.y * radians);
+    const float cosZ = cosf(rotation.z * radians);
+    const float sinZ = sinf(rotation.z * radians);
+    const float y = value.y * cosX - value.z * sinX;
+    const float z = value.y * sinX + value.z * cosX;
+    const float x = value.x * cosY + z * sinY;
+    const float rotatedZ = -value.x * sinY + z * cosY;
+    return ig::Vec3(x * cosZ - y * sinZ, x * sinZ + y * cosZ, rotatedZ);
+}
+
 void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
 {
     const ig::StringView tabs[] = {
-        ig::StringView("Scene"), ig::StringView("Assets"), ig::StringView("Settings")
+        ig::StringView("Scene"), ig::StringView("Assets"), ig::StringView("Settings"),
+        ig::StringView("Hierarchy"), ig::StringView("Gizmo3D"), ig::StringView("Docking")
     };
     const ig::StringView assets[] = {
         ig::StringView("skybox.hdr"), ig::StringView("albedo.png"), ig::StringView("normal.png"),
@@ -396,20 +476,37 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     }
     else if (state.workspaceTab == 1)
     {
-        ui.label("Drag an image into the Images preview");
-        for (uint64_t i = 0u; i < 3u; ++i)
+        ui.label("Virtual asset table (1,000 items)");
+        int firstVisible = 0;
+        int lastVisible = 0;
+        if (ui.beginVirtualTable("asset table", 1000, 2, ui.theme().widgetHeight, 190.0f,
+                                 firstVisible, lastVisible))
         {
-            const ig::Vec2 position = ui.cursor();
-            const ig::Rect row(position.x, position.y, ui.availableWidth(), ui.theme().widgetHeight);
-            ui.beginDragSource(i + 1u, ImageAssetPayload, i + 1u, assets[i], row);
-            ui.selectable(assets[i], state.selectedAsset == static_cast<int>(i));
+            for (int item = firstVisible; item < lastVisible; ++item)
+            {
+                char generatedAsset[32];
+                const ig::StringView asset = item < 6
+                    ? assets[item]
+                    : (snprintf(generatedAsset, sizeof(generatedAsset), "texture_%04d.png", item),
+                       ig::StringView(generatedAsset));
+                const ig::StringView type = item < 3 ? ig::StringView("image")
+                                                      : ig::StringView("texture");
+                const ig::Rect assetCell = ui.virtualTableCellRect(item, 0);
+                const ig::Rect typeCell = ui.virtualTableCellRect(item, 1);
+                const ig::Rect row(assetCell.x, assetCell.y,
+                                   assetCell.width + typeCell.width, assetCell.height);
+                ui.pushId(static_cast<uint64_t>(item));
+                ui.beginDragSource(static_cast<ig::WidgetId>(item + 1), ImageAssetPayload,
+                                   static_cast<uint64_t>(item + 1), asset, row);
+                if (ui.selectable(asset, state.selectedAsset == item, assetCell) ||
+                    ui.selectable(type, state.selectedAsset == item, typeCell))
+                    state.selectedAsset = item;
+                ui.popId();
+            }
+            ui.endVirtualTable();
         }
-        ui.label("Materials");
-        ui.label("wood.mat");
-        ui.label("character.mesh");
-        ui.label("postfx.shader");
     }
-    else
+    else if (state.workspaceTab == 2)
     {
         ui.label("2D viewport gizmo");
         if (ui.smallButton("Translate"))
@@ -460,6 +557,177 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         ui.inputFloat2("gizmo position", state.gizmoTransform.position.x, state.gizmoTransform.position.y);
         ui.dragFloat("gizmo rotation", state.gizmoTransform.rotation, -180.0f, 180.0f, 0.5f);
     }
+    else if (state.workspaceTab == 3)
+    {
+        ui.label("Virtual hierarchy (100 collections / up to 1,000 nodes)");
+        const int rowCount = virtualTreeRowCount(state);
+        int firstVisible = 0;
+        int lastVisible = 0;
+        int toggledGroup = -1;
+        bool toggledValue = false;
+        if (ui.beginVirtualTree("large hierarchy", rowCount, ui.theme().widgetHeight, 190.0f,
+                                firstVisible, lastVisible))
+        {
+            for (int row = firstVisible; row < lastVisible; ++row)
+            {
+                int group = 0;
+                int child = -1;
+                if (!virtualTreeNodeAt(state, row, group, child))
+                    continue;
+
+                char label[40];
+                ig::TreeItemStyle style;
+                const bool isGroup = child < 0;
+                const int node = isGroup ? group * 10 : group * 10 + child + 1;
+                bool expanded = state.virtualTreeExpanded[group];
+                if (isGroup)
+                {
+                    snprintf(label, sizeof(label), "Collection %03d", group + 1);
+                    style.typeColor = ig::Color(105u, 170u, 245u, 255u);
+                    style.leaf = false;
+                    style.acceptsChildren = true;
+                }
+                else
+                {
+                    snprintf(label, sizeof(label), "Mesh %03d-%02d", group + 1, child + 1);
+                    style.typeColor = ig::Color(120u, 225u, 165u, 255u);
+                    style.leaf = true;
+                }
+                style.selected = state.virtualTreeSelected == node;
+                const ig::WidgetId nodeId = isGroup
+                    ? static_cast<ig::WidgetId>(0x5647524f55500000ull + static_cast<uint64_t>(group))
+                    : static_cast<ig::WidgetId>(0x56474348494c4400ull +
+                                                 static_cast<uint64_t>(group * 9 + child));
+                if (ui.treeItem(nodeId, ig::StringView(label), expanded, style,
+                                ui.virtualTreeItemRect(row, isGroup ? 0 : 1)))
+                    state.virtualTreeSelected = node;
+                if (isGroup && expanded != state.virtualTreeExpanded[group])
+                {
+                    toggledGroup = group;
+                    toggledValue = expanded;
+                }
+            }
+            ui.endVirtualTree();
+        }
+        if (toggledGroup >= 0)
+            state.virtualTreeExpanded[toggledGroup] = toggledValue;
+    }
+    else if (state.workspaceTab == 4)
+    {
+        ui.label("Perspective 3D gizmo");
+        if (ui.smallButton("Translate 3D"))
+            state.gizmo3DMode = ig::Gizmo3DMode::Translate;
+        ui.sameLine();
+        if (ui.smallButton("Rotate 3D"))
+            state.gizmo3DMode = ig::Gizmo3DMode::Rotate;
+        ui.sameLine();
+        if (ui.smallButton("Scale 3D"))
+            state.gizmo3DMode = ig::Gizmo3DMode::Scale;
+        const ig::Vec2 canvasPosition = ui.cursor();
+        const ig::Rect canvas(canvasPosition.x, canvasPosition.y, ui.availableWidth(), 152.0f);
+        ui.drawRectFilled(canvas, ig::Color(28u, 32u, 42u, 255u));
+        const ::Matrix view = ::MatrixLookAt(::Vector3{1.8f, 1.35f, 2.6f},
+                                              ::Vector3{0.0f, 0.0f, 0.0f},
+                                              ::Vector3{0.0f, 1.0f, 0.0f});
+        const ::Matrix projection = ::MatrixPerspective(55.0f * DEG2RAD,
+                                                         canvas.width / canvas.height,
+                                                         0.1f, 20.0f);
+        const float viewData[16] = {
+            view.m0, view.m1, view.m2, view.m3, view.m4, view.m5, view.m6, view.m7,
+            view.m8, view.m9, view.m10, view.m11, view.m12, view.m13, view.m14, view.m15
+        };
+        const float projectionData[16] = {
+            projection.m0, projection.m1, projection.m2, projection.m3,
+            projection.m4, projection.m5, projection.m6, projection.m7,
+            projection.m8, projection.m9, projection.m10, projection.m11,
+            projection.m12, projection.m13, projection.m14, projection.m15
+        };
+        for (int line = -3; line <= 3; ++line)
+        {
+            ig::Vec2 from;
+            ig::Vec2 to;
+            if (projectDemo3D(view, projection, canvas, ig::Vec3(-1.5f, -0.45f, line * 0.5f), from) &&
+                projectDemo3D(view, projection, canvas, ig::Vec3(1.5f, -0.45f, line * 0.5f), to))
+                ui.drawLine(from, to, ig::Color(47u, 59u, 76u, 255u));
+            if (projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, -1.5f), from) &&
+                projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, 1.5f), to))
+                ui.drawLine(from, to, ig::Color(47u, 59u, 76u, 255u));
+        }
+        const float halfX = 0.2f * state.gizmo3DTransform.scale.x;
+        const float halfY = 0.2f * state.gizmo3DTransform.scale.y;
+        const float halfZ = 0.2f * state.gizmo3DTransform.scale.z;
+        const ig::Vec3 position = state.gizmo3DTransform.position;
+        const ig::Vec3 localCorners[] = {
+            ig::Vec3(-halfX, -halfY, -halfZ), ig::Vec3(halfX, -halfY, -halfZ),
+            ig::Vec3(halfX, halfY, -halfZ), ig::Vec3(-halfX, halfY, -halfZ),
+            ig::Vec3(-halfX, -halfY, halfZ), ig::Vec3(halfX, -halfY, halfZ),
+            ig::Vec3(halfX, halfY, halfZ), ig::Vec3(-halfX, halfY, halfZ)
+        };
+        ig::Vec3 corners[8];
+        for (int corner = 0; corner < 8; ++corner)
+        {
+            const ig::Vec3 rotated = rotateDemo3D(localCorners[corner], state.gizmo3DTransform.rotation);
+            corners[corner] = ig::Vec3(position.x + rotated.x, position.y + rotated.y, position.z + rotated.z);
+        }
+        const int edges[][2] = {
+            {0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4},
+            {0, 4}, {1, 5}, {2, 6}, {3, 7}
+        };
+        for (int edge = 0; edge < 12; ++edge)
+        {
+            ig::Vec2 from;
+            ig::Vec2 to;
+            if (projectDemo3D(view, projection, canvas, corners[edges[edge][0]], from) &&
+                projectDemo3D(view, projection, canvas, corners[edges[edge][1]], to))
+                ui.drawLine(from, to, state.accent, 2.0f);
+        }
+        ig::Gizmo3DOptions gizmo3DOptions;
+        gizmo3DOptions.axisLength = 0.65f;
+        gizmo3DOptions.translateSnap = 0.1f;
+        gizmo3DOptions.rotateSnap = 15.0f;
+        gizmo3DOptions.scaleSnap = 0.1f;
+        ui.gizmo3D("viewport object", state.gizmo3DTransform, state.gizmo3DMode, canvas,
+                   viewData, projectionData, gizmo3DOptions);
+        ui.setCursor(ig::Vec2(canvas.x, canvas.y + canvas.height + ui.theme().itemSpacing));
+        ui.inputFloat3("gizmo 3d position", state.gizmo3DTransform.position.x,
+                       state.gizmo3DTransform.position.y, state.gizmo3DTransform.position.z);
+    }
+    else
+    {
+        const ig::Vec2 dockPosition = ui.cursor();
+        if (ui.beginDockSpace("workspace dock", ig::Rect(dockPosition.x, dockPosition.y,
+                                                           ui.availableWidth(), 184.0f)))
+        {
+            if (ui.beginDockPanel("Hierarchy", ig::DockSlot::Left))
+            {
+                ui.label("Demo scene");
+                ui.label("Camera");
+                ui.label("Directional light");
+                ui.endDockPanel();
+            }
+            if (ui.beginDockPanel("Assets", ig::DockSlot::Left))
+            {
+                ui.label("skybox.hdr");
+                ui.label("character.mesh");
+                ui.label("postfx.shader");
+                ui.endDockPanel();
+            }
+            if (ui.beginDockPanel("Inspector", ig::DockSlot::Right))
+            {
+                ui.label("Transform");
+                ui.dragFloat("X", state.positionX, -10.0f, 10.0f, 0.05f);
+                ui.dragFloat("Y", state.positionY, -10.0f, 10.0f, 0.05f);
+                ui.endDockPanel();
+            }
+            if (ui.beginDockPanel("Console", ig::DockSlot::Bottom))
+            {
+                ui.label("Renderer ready");
+                ui.label("Drag the separators or switch the left tabs");
+                ui.endDockPanel();
+            }
+            ui.endDockSpace();
+        }
+    }
     ui.endWindow();
 }
 
@@ -497,8 +765,20 @@ void drawNumericWindow(ig::Context &ui, DemoState &state)
     ui.label("Continuous and discrete values");
     ui.label("Tab changes focus; Enter activates buttons; Esc leaves text fields.");
     ui.separator();
-    ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f);
-    ui.sliderInt("Samples", state.samples, 1, 16);
+    const float previousVolume = state.volume;
+    if (ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f))
+    {
+        const float nextVolume = state.volume;
+        ui.pushUndo("Volume", [&state, previousVolume]() { state.volume = previousVolume; },
+                    [&state, nextVolume]() { state.volume = nextVolume; });
+    }
+    const int previousSamples = state.samples;
+    if (ui.sliderInt("Samples", state.samples, 1, 16))
+    {
+        const int nextSamples = state.samples;
+        ui.pushUndo("Samples", [&state, previousSamples]() { state.samples = previousSamples; },
+                    [&state, nextSamples]() { state.samples = nextSamples; });
+    }
     ui.separatorText("Relative drag controls");
     ui.dragFloat("Exposure", state.dragExposure, -2.0f, 2.0f);
     ui.dragInt("Iterations", state.dragIterations, 1, 64);
@@ -579,7 +859,8 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
             ui.endPropertyRow();
         }
         ui.separator();
-        if (ui.beginTable("runtime summary", 2))
+        const float runtimeSummaryWeights[] = {1.0f, 2.0f};
+        if (ui.beginTable("runtime summary", ig::Span<const float>(runtimeSummaryWeights)))
         {
             ui.tableNextColumn();
             ui.label("Status");
@@ -638,11 +919,10 @@ int main()
         ui.beginFrame(ig::raylib::frameInfo(GetFrameTime()));
         if (ui.shortcut(ig::KeyCode::S))
             ui.showToast("save shortcut", "Ctrl+S: scene saved", ig::ToastPosition::BottomRight);
-        if (ui.shortcut(ig::KeyCode::Z))
-        {
-            state.progress = 0.0f;
-            ui.showToast("undo shortcut", "Ctrl+Z: progress reset", ig::ToastPosition::BottomRight);
-        }
+        if (ui.shortcut(ig::KeyCode::Z) && ui.canRedo())
+            ui.showToast("undo shortcut", "Undo applied", ig::ToastPosition::BottomRight);
+        if ((ui.shortcut(ig::KeyCode::Y) || ui.shortcut(ig::KeyCode::Z, true, true)) && ui.canUndo())
+            ui.showToast("redo shortcut", "Redo applied", ig::ToastPosition::BottomRight);
         drawProfileWindow(ui, state);
         drawNumericWindow(ui, state);
         drawSelectionWindow(ui, state);

@@ -1,6 +1,7 @@
 #include "igui/Gui.hpp"
 
 #include <math.h>
+#include <stdio.h>
 
 #include <ct/sort.hpp>
 
@@ -18,6 +19,25 @@ enum GizmoAxis2D : uint8_t
     GizmoAxisX,
     GizmoAxisY,
     GizmoAxisXY
+};
+
+enum GizmoAxis3D : uint8_t
+{
+    Gizmo3DAxisNone,
+    Gizmo3DAxisX,
+    Gizmo3DAxisY,
+    Gizmo3DAxisZ,
+    Gizmo3DAxisXYZ,
+    Gizmo3DAxisXY,
+    Gizmo3DAxisXZ,
+    Gizmo3DAxisYZ
+};
+
+struct Gizmo3DProjector
+{
+    Rect viewport;
+    const float *view;
+    const float *projection;
 };
 
 float snapGizmoValue(float value, float increment)
@@ -50,6 +70,186 @@ GizmoAxis2D hitGizmo2D(Gizmo2DMode mode, const Vec2 &pointer, const Vec2 &center
     if (localY >= 8.0f && localY <= axisLength + 10.0f && absoluteValue(localX) <= 8.0f)
         return GizmoAxisY;
     return GizmoAxisNone;
+}
+
+Vec3 addGizmo3D(const Vec3 &a, const Vec3 &b)
+{
+    return Vec3(a.x + b.x, a.y + b.y, a.z + b.z);
+}
+
+Vec3 scaleGizmo3D(const Vec3 &value, float scale)
+{
+    return Vec3(value.x * scale, value.y * scale, value.z * scale);
+}
+
+Vec3 gizmo3DAxisVector(GizmoAxis3D axis)
+{
+    if (axis == Gizmo3DAxisX)
+        return Vec3(1.0f, 0.0f, 0.0f);
+    if (axis == Gizmo3DAxisY)
+        return Vec3(0.0f, 1.0f, 0.0f);
+    return Vec3(0.0f, 0.0f, 1.0f);
+}
+
+bool projectGizmo3D(const Gizmo3DProjector &projector, const Vec3 &world, Vec2 &screen)
+{
+    const float viewX = projector.view[0] * world.x + projector.view[4] * world.y +
+                        projector.view[8] * world.z + projector.view[12];
+    const float viewY = projector.view[1] * world.x + projector.view[5] * world.y +
+                        projector.view[9] * world.z + projector.view[13];
+    const float viewZ = projector.view[2] * world.x + projector.view[6] * world.y +
+                        projector.view[10] * world.z + projector.view[14];
+    const float viewW = projector.view[3] * world.x + projector.view[7] * world.y +
+                        projector.view[11] * world.z + projector.view[15];
+    const float clipX = projector.projection[0] * viewX + projector.projection[4] * viewY +
+                        projector.projection[8] * viewZ + projector.projection[12] * viewW;
+    const float clipY = projector.projection[1] * viewX + projector.projection[5] * viewY +
+                        projector.projection[9] * viewZ + projector.projection[13] * viewW;
+    const float clipW = projector.projection[3] * viewX + projector.projection[7] * viewY +
+                        projector.projection[11] * viewZ + projector.projection[15] * viewW;
+    if (clipW < 0.00001f && clipW > -0.00001f)
+        return false;
+    const float inverseW = 1.0f / clipW;
+    screen.x = projector.viewport.x + (clipX * inverseW * 0.5f + 0.5f) * projector.viewport.width;
+    screen.y = projector.viewport.y + (0.5f - clipY * inverseW * 0.5f) * projector.viewport.height;
+    return true;
+}
+
+float gizmo3DSegmentDistance(const Vec2 &point, const Vec2 &from, const Vec2 &to)
+{
+    const float dx = to.x - from.x;
+    const float dy = to.y - from.y;
+    const float lengthSquared = dx * dx + dy * dy;
+    if (lengthSquared <= 0.0001f)
+        return 100000.0f;
+    float t = ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared;
+    t = clamp(t, 0.0f, 1.0f);
+    const float offsetX = from.x + dx * t - point.x;
+    const float offsetY = from.y + dy * t - point.y;
+    return sqrtf(offsetX * offsetX + offsetY * offsetY);
+}
+
+float gizmo3DCross(const Vec2 &a, const Vec2 &b, const Vec2 &point)
+{
+    return (a.x - point.x) * (b.y - point.y) - (a.y - point.y) * (b.x - point.x);
+}
+
+bool gizmo3DPointInQuad(const Vec2 &point, const Vec2 &a, const Vec2 &b,
+                        const Vec2 &c, const Vec2 &d)
+{
+    const float first = gizmo3DCross(a, b, point);
+    const float second = gizmo3DCross(b, c, point);
+    const float third = gizmo3DCross(c, d, point);
+    const float fourth = gizmo3DCross(d, a, point);
+    const bool hasNegative = first < 0.0f || second < 0.0f || third < 0.0f || fourth < 0.0f;
+    const bool hasPositive = first > 0.0f || second > 0.0f || third > 0.0f || fourth > 0.0f;
+    return !(hasNegative && hasPositive);
+}
+
+void gizmo3DRingBasis(GizmoAxis3D axis, Vec3 &u, Vec3 &v)
+{
+    if (axis == Gizmo3DAxisX)
+    {
+        u = Vec3(0.0f, 1.0f, 0.0f);
+        v = Vec3(0.0f, 0.0f, 1.0f);
+    }
+    else if (axis == Gizmo3DAxisY)
+    {
+        u = Vec3(1.0f, 0.0f, 0.0f);
+        v = Vec3(0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        u = Vec3(1.0f, 0.0f, 0.0f);
+        v = Vec3(0.0f, 1.0f, 0.0f);
+    }
+}
+
+GizmoAxis3D hitGizmo3D(Gizmo3DMode mode, const Vec2 &pointer, const Transform3D &transform,
+                       const Gizmo3DProjector &projector, float axisLength)
+{
+    Vec2 center;
+    if (!projectGizmo3D(projector, transform.position, center))
+        return Gizmo3DAxisNone;
+    const float centerX = pointer.x - center.x;
+    const float centerY = pointer.y - center.y;
+    if (centerX * centerX + centerY * centerY <= 64.0f)
+        return Gizmo3DAxisXYZ;
+
+    float bestDistance = 9.0f;
+    GizmoAxis3D bestAxis = Gizmo3DAxisNone;
+    for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+    {
+        const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
+        if (mode == Gizmo3DMode::Rotate)
+        {
+            Vec3 u;
+            Vec3 v;
+            gizmo3DRingBasis(axis, u, v);
+            Vec2 previous;
+            bool hasPrevious = false;
+            for (int segment = 0; segment <= 32; ++segment)
+            {
+                const float angle = GizmoPi * 2.0f * static_cast<float>(segment) / 32.0f;
+                const Vec3 point = addGizmo3D(transform.position,
+                    addGizmo3D(scaleGizmo3D(u, cosf(angle) * axisLength),
+                                scaleGizmo3D(v, sinf(angle) * axisLength)));
+                Vec2 current;
+                if (!projectGizmo3D(projector, point, current))
+                    continue;
+                if (hasPrevious)
+                {
+                    const float distance = gizmo3DSegmentDistance(pointer, previous, current);
+                    if (distance < bestDistance)
+                    {
+                        bestDistance = distance;
+                        bestAxis = axis;
+                    }
+                }
+                previous = current;
+                hasPrevious = true;
+            }
+        }
+        else
+        {
+            Vec2 endpoint;
+            if (!projectGizmo3D(projector,
+                                addGizmo3D(transform.position,
+                                            scaleGizmo3D(gizmo3DAxisVector(axis), axisLength)), endpoint))
+                continue;
+            const float distance = gizmo3DSegmentDistance(pointer, center, endpoint);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestAxis = axis;
+            }
+        }
+    }
+    if (bestAxis != Gizmo3DAxisNone || mode == Gizmo3DMode::Rotate)
+        return bestAxis;
+
+    const GizmoAxis3D planeAxes[] = {Gizmo3DAxisXY, Gizmo3DAxisXZ, Gizmo3DAxisYZ};
+    const int planeFirst[] = {0, 0, 1};
+    const int planeSecond[] = {1, 2, 2};
+    for (int plane = 0; plane < 3; ++plane)
+    {
+        const Vec3 firstAxis = gizmo3DAxisVector(static_cast<GizmoAxis3D>(planeFirst[plane] + Gizmo3DAxisX));
+        const Vec3 secondAxis = gizmo3DAxisVector(static_cast<GizmoAxis3D>(planeSecond[plane] + Gizmo3DAxisX));
+        Vec2 corners[4];
+        bool valid = true;
+        const float offsets[][2] = {{0.28f, 0.28f}, {0.62f, 0.28f}, {0.62f, 0.62f}, {0.28f, 0.62f}};
+        for (int corner = 0; corner < 4; ++corner)
+        {
+            const Vec3 world = addGizmo3D(transform.position,
+                addGizmo3D(scaleGizmo3D(firstAxis, offsets[corner][0] * axisLength),
+                            scaleGizmo3D(secondAxis, offsets[corner][1] * axisLength)));
+            if (!projectGizmo3D(projector, world, corners[corner]))
+                valid = false;
+        }
+        if (valid && gizmo3DPointInQuad(pointer, corners[0], corners[1], corners[2], corners[3]))
+            return planeAxes[plane];
+    }
+    return Gizmo3DAxisNone;
 }
 
 Color colorFromHsv(float hue, float saturation, float value, uint8_t alpha)
@@ -123,21 +323,24 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(),
-      windowOrder_(), idStack_(), focusOrder_(), childStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(),
+      windowOrder_(), idStack_(), focusOrder_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
-      activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
-      textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), menuBarBounds_(),
+      activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
+      dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
+      textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
-      menuBarCursorX_(0.0f), menuBarActive_(false),
+      menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), propertyRow_(), tableActive_(false), propertyRowActive_(false),
-      dragStartValue_(0.0f), dragStartX_(0.0f),
+      dragStartValue_(0.0f), dragStartX_(0.0f), tooltipDelay_(0.45f), tooltipHoverSeconds_(0.0f),
+      tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
+      leftPressed_(false), rightPressed_(false), pageUpPressed_(false), pageDownPressed_(false),
       copyRequested_(false), pasteRequested_(false), escapePressed_(false), tabPressed_(false), tabShiftPressed_(false),
       keyPressed_(), keyControl_(), keyShift_()
 {
@@ -149,11 +352,19 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     colorPickers_.reserve(8);
     childScrolls_.reserve(8);
     gizmo2DStates_.reserve(4);
+    gizmo3DStates_.reserve(4);
+    dockSpaces_.reserve(2);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     focusOrder_.reserve(32);
     childStack_.reserve(4);
+    virtualListStack_.reserve(2);
+    virtualTableStack_.reserve(2);
+    virtualTreeStack_.reserve(2);
+    dockPanelStack_.reserve(2);
     toasts_.reserve(4);
+    undoStack_.reserve(32);
+    redoStack_.reserve(32);
     for (uint32_t i = 0u; i < 32u; ++i)
     {
         keyPressed_[i] = false;
@@ -203,6 +414,11 @@ void Context::beginFrame(const FrameInfo &frame)
     activeMenu_ = InvalidWidgetId;
     menuBarActive_ = false;
     childStack_.clear();
+    virtualListStack_.clear();
+    virtualTableStack_.clear();
+    virtualTreeStack_.clear();
+    dockPanelStack_.clear();
+    activeDockSpace_ = InvalidWidgetId;
     tableActive_ = false;
     propertyRowActive_ = false;
     focusOrder_.clear();
@@ -214,6 +430,10 @@ void Context::beginFrame(const FrameInfo &frame)
     endPressed_ = false;
     upPressed_ = false;
     downPressed_ = false;
+    leftPressed_ = false;
+    rightPressed_ = false;
+    pageUpPressed_ = false;
+    pageDownPressed_ = false;
     copyRequested_ = false;
     pasteRequested_ = false;
     escapePressed_ = false;
@@ -227,6 +447,11 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     textEvents_.clear();
     consumeEvents();
+
+    if (shortcut(KeyCode::Z))
+        undo();
+    else if (shortcut(KeyCode::Y) || shortcut(KeyCode::Z, true, true))
+        redo();
 
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
     if (pointer_.pressed[leftButton])
@@ -281,6 +506,16 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     if (!window)
         return false;
 
+    if (forceWindowBounds_)
+    {
+        window->bounds = initialBounds;
+        window->showWindowControls = false;
+        window->showTitleBar = false;
+        window->useClientArea = true;
+        window->allowMove = false;
+        window->allowResize = false;
+    }
+
     if (open)
         window->open = *open;
 
@@ -313,10 +548,18 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     return true;
 }
 
+bool Context::beginMainWindow(StringView title, bool *open)
+{
+    forceWindowBounds_ = true;
+    const bool opened = beginWindow(title, Rect(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y), open);
+    forceWindowBounds_ = false;
+    return opened;
+}
+
 void Context::endWindow()
 {
     WindowState *window = currentWindow();
-    if (window && !window->minimized)
+    if (window && !window->minimized && window->allowResize)
     {
         const float gripSize = 12.0f;
         const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
@@ -374,6 +617,57 @@ bool Context::wantsKeyboard() const
 bool Context::wantsTextInput() const
 {
     return wantsTextInput_;
+}
+
+void Context::pushUndo(StringView label, ct::Function<void()> undoCallback,
+                       ct::Function<void()> redoCallback)
+{
+    if (!undoCallback || !redoCallback)
+        return;
+    UndoState entry;
+    entry.label = String(label.data(), label.size());
+    entry.undo = undoCallback;
+    entry.redo = redoCallback;
+    undoStack_.push_back(entry);
+    redoStack_.clear();
+}
+
+bool Context::undo()
+{
+    if (undoStack_.empty())
+        return false;
+    UndoState entry = undoStack_.back();
+    undoStack_.pop_back();
+    entry.undo();
+    redoStack_.push_back(entry);
+    return true;
+}
+
+bool Context::redo()
+{
+    if (redoStack_.empty())
+        return false;
+    UndoState entry = redoStack_.back();
+    redoStack_.pop_back();
+    entry.redo();
+    undoStack_.push_back(entry);
+    return true;
+}
+
+bool Context::canUndo() const
+{
+    return !undoStack_.empty();
+}
+
+bool Context::canRedo() const
+{
+    return !redoStack_.empty();
+}
+
+void Context::clearUndoHistory()
+{
+    undoStack_.clear();
+    redoStack_.clear();
 }
 
 bool Context::isKeyPressed(KeyCode key) const
@@ -782,6 +1076,20 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
 
     const float tabWidth = rect.width / static_cast<float>(items.size());
     bool changed = false;
+    registerFocusable(id);
+    if (focusedWidget_ == id)
+    {
+        const int previous = currentItem;
+        if ((leftPressed_ || upPressed_) && currentItem > 0)
+            --currentItem;
+        if ((rightPressed_ || downPressed_) && currentItem + 1 < static_cast<int>(items.size()))
+            ++currentItem;
+        if (homePressed_)
+            currentItem = 0;
+        if (endPressed_)
+            currentItem = static_cast<int>(items.size()) - 1;
+        changed = currentItem != previous;
+    }
     for (Span<const StringView>::size_type i = 0u; i < items.size(); ++i)
     {
         const Rect tab(rect.x + tabWidth * static_cast<float>(i), rect.y,
@@ -790,10 +1098,14 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
                        rect.height);
         const WidgetId tabId = combineIds(id, static_cast<WidgetId>(i + 1u));
         const bool hovered = itemHovered(tab, clip, tabId);
-        if (itemClicked(tab, clip, tabId) && currentItem != static_cast<int>(i))
+        if (itemClicked(tab, clip, tabId, false))
         {
-            currentItem = static_cast<int>(i);
-            changed = true;
+            focusedWidget_ = id;
+            if (currentItem != static_cast<int>(i))
+            {
+                currentItem = static_cast<int>(i);
+                changed = true;
+            }
         }
         const Color background = static_cast<int>(i) == currentItem ? theme_.selectableSelected
                                : (hovered ? theme_.selectableHovered : theme_.buttonBackground);
@@ -827,6 +1139,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
 
     const int rowCount = static_cast<int>(rect.height / theme_.widgetHeight);
     const int visibleRows = rowCount > 0 ? rowCount : 1;
+    registerFocusable(id);
     const int maximumScroll = static_cast<int>(items.size()) - visibleRows;
     int *scroll = listScrolls_.find(id);
     if (!scroll)
@@ -853,13 +1166,26 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
     }
 
     bool changed = false;
-    if (focusedWidget_ == id && (upPressed_ || downPressed_))
+    if (focusedWidget_ == id && (upPressed_ || downPressed_ || pageUpPressed_ || pageDownPressed_ ||
+                                 homePressed_ || endPressed_))
     {
         const int previous = currentItem;
         if (upPressed_ && currentItem > 0)
             --currentItem;
         if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
             ++currentItem;
+        if (pageUpPressed_)
+            currentItem -= visibleRows;
+        if (pageDownPressed_)
+            currentItem += visibleRows;
+        if (homePressed_)
+            currentItem = 0;
+        if (endPressed_)
+            currentItem = static_cast<int>(items.size()) - 1;
+        if (currentItem < 0)
+            currentItem = 0;
+        if (currentItem >= static_cast<int>(items.size()))
+            currentItem = static_cast<int>(items.size()) - 1;
         changed = currentItem != previous;
         if (currentItem < *scroll)
             *scroll = currentItem;
@@ -968,6 +1294,21 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (!drawList)
         return false;
 
+    bool changed = false;
+    if (focusedWidget_ == id && (upPressed_ || downPressed_ || homePressed_ || endPressed_))
+    {
+        const int previous = currentItem;
+        if (upPressed_ && currentItem > 0)
+            --currentItem;
+        if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
+            ++currentItem;
+        if (homePressed_)
+            currentItem = 0;
+        if (endPressed_)
+            currentItem = static_cast<int>(items.size()) - 1;
+        changed = currentItem != previous;
+    }
+
     const bool hovered = itemHovered(rect, clip, id);
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
@@ -989,7 +1330,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
 
     if (openCombo_ != id)
-        return false;
+        return changed;
 
     const Rect popup(rect.x, rect.y + rect.height, rect.width, rect.height * static_cast<float>(items.size()));
     const Rect popupClip = intersect(popup, clip);
@@ -1029,7 +1370,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                       item.y + (item.height - itemMetrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, popupClip);
     }
-    return false;
+    return changed;
 }
 
 bool Context::beginMenuBar(const Rect &bounds)
@@ -1634,6 +1975,33 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
                               Vec2(center.x + cosf(second) * radius, center.y + sinf(second) * radius),
                               ringColor, clip, 2.0f);
         }
+
+        if (activeAxis == GizmoAxisXY)
+        {
+            const float startAngle = atan2f(state->pointerStart.y - center.y,
+                                            state->pointerStart.x - center.x);
+            const float endAngle = atan2f(pointer_.position.y - center.y,
+                                          pointer_.position.x - center.x);
+            const Vec2 startPoint(center.x + cosf(startAngle) * radius,
+                                  center.y + sinf(startAngle) * radius);
+            const Vec2 endPoint(center.x + cosf(endAngle) * radius,
+                                center.y + sinf(endAngle) * radius);
+            const Color startColor(185u, 205u, 230u, 220u);
+            const Color endColor(255u, 160u, 50u, 220u);
+
+            drawList->addLine(center, startPoint, startColor, clip, 1.5f);
+            drawList->addLine(center, endPoint, endColor, clip, 2.0f);
+
+            char angleText[32];
+            snprintf(angleText, sizeof(angleText), "%.1f deg", transform.rotation);
+            const TextMetrics metrics = measureText(theme_.font, StringView(angleText), theme_.fontSize);
+            const float labelAngle = startAngle + (endAngle - startAngle) * 0.5f;
+            const float labelRadius = radius + 14.0f;
+            const Vec2 labelPosition(center.x + cosf(labelAngle) * labelRadius - metrics.width * 0.5f,
+                                     center.y + sinf(labelAngle) * labelRadius - metrics.height * 0.5f);
+            drawText(*drawList, theme_.font, StringView(angleText), labelPosition, theme_.fontSize,
+                     theme_.labelText, clip);
+        }
         drawList->addCircleFilled(center, 5.0f, centerColor, clip);
     }
     else
@@ -1656,6 +2024,291 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
         }
         drawList->addCircleFilled(center, 7.0f, centerColor, clip);
     }
+    return changed;
+}
+
+bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mode,
+                      const Rect &bounds, const float *view, const float *projection,
+                      const Gizmo3DOptions &options)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || !view || !projection || options.axisLength <= 0.0f)
+        return false;
+    const Rect viewport = contentRect(bounds);
+    const Rect clip = intersect(viewport, contentClip());
+    if (viewport.width <= 0.0f || viewport.height <= 0.0f || clip.width <= 0.0f || clip.height <= 0.0f)
+        return false;
+
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x47495a4d4f3344ull);
+    Gizmo3DState *state = gizmo3DStates_.find(id);
+    if (!state)
+    {
+        gizmo3DStates_.put(id, Gizmo3DState());
+        state = gizmo3DStates_.find(id);
+    }
+    if (!state)
+        return false;
+
+    const Gizmo3DProjector projector = {viewport, view, projection};
+    const GizmoAxis3D hoveredAxis = hitGizmo3D(mode, pointer_.position, transform, projector,
+                                               options.axisLength);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                             activeWidget_ == InvalidWidgetId &&
+                             contains(clip, pointer_.pressedPosition[left]);
+    if (pressedHere && hoveredAxis != Gizmo3DAxisNone)
+    {
+        activeWidget_ = id;
+        focusedWidget_ = id;
+        state->axis = static_cast<uint8_t>(hoveredAxis);
+        state->pointerStart = pointer_.pressedPosition[left];
+        state->transformStart = transform;
+    }
+
+    bool changed = false;
+    const GizmoAxis3D activeAxis = activeWidget_ == id
+        ? static_cast<GizmoAxis3D>(state->axis) : Gizmo3DAxisNone;
+    if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
+    {
+        const float deltaX = pointer_.position.x - state->pointerStart.x;
+        const float deltaY = pointer_.position.y - state->pointerStart.y;
+        const Transform3D previous = transform;
+        Vec2 center;
+        projectGizmo3D(projector, state->transformStart.position, center);
+        if (mode == Gizmo3DMode::Translate)
+        {
+            if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY ||
+                activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ)
+            {
+                const float horizontal = deltaX * options.axisLength / viewport.width;
+                const float vertical = -deltaY * options.axisLength / viewport.height;
+                transform.position = state->transformStart.position;
+                if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisXZ)
+                    transform.position.x = snapGizmoValue(transform.position.x + horizontal, options.translateSnap);
+                if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisYZ)
+                    transform.position.y = snapGizmoValue(transform.position.y + vertical, options.translateSnap);
+                if (activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ)
+                    transform.position.z = snapGizmoValue(transform.position.z + horizontal, options.translateSnap);
+            }
+            else if (activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ)
+            {
+                Vec2 endpoint;
+                projectGizmo3D(projector, addGizmo3D(state->transformStart.position,
+                    scaleGizmo3D(gizmo3DAxisVector(activeAxis), options.axisLength)), endpoint);
+                const float axisX = endpoint.x - center.x;
+                const float axisY = endpoint.y - center.y;
+                const float lengthSquared = axisX * axisX + axisY * axisY;
+                if (lengthSquared > 0.0001f)
+                {
+                    const float amount = (deltaX * axisX + deltaY * axisY) * options.axisLength / lengthSquared;
+                    const Vec3 axis = gizmo3DAxisVector(activeAxis);
+                    transform.position = addGizmo3D(state->transformStart.position,
+                        scaleGizmo3D(axis, snapGizmoValue(amount, options.translateSnap)));
+                }
+            }
+        }
+        else if (mode == Gizmo3DMode::Rotate)
+        {
+            const float startAngle = atan2f(state->pointerStart.y - center.y, state->pointerStart.x - center.x);
+            const float currentAngle = atan2f(pointer_.position.y - center.y, pointer_.position.x - center.x);
+            const float amount = snapGizmoValue((currentAngle - startAngle) * 180.0f / GizmoPi,
+                                                options.rotateSnap);
+            transform.rotation = state->transformStart.rotation;
+            if (activeAxis == Gizmo3DAxisX) transform.rotation.x += amount;
+            if (activeAxis == Gizmo3DAxisY || activeAxis == Gizmo3DAxisXYZ) transform.rotation.y += amount;
+            if (activeAxis == Gizmo3DAxisZ) transform.rotation.z += amount;
+        }
+        else if (mode == Gizmo3DMode::Scale)
+        {
+            const float factor = 1.0f + (deltaX - deltaY) * 0.005f;
+            transform.scale = state->transformStart.scale;
+            if (activeAxis == Gizmo3DAxisX || activeAxis == Gizmo3DAxisXYZ ||
+                activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisXZ) transform.scale.x *= factor;
+            if (activeAxis == Gizmo3DAxisY || activeAxis == Gizmo3DAxisXYZ ||
+                activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisYZ) transform.scale.y *= factor;
+            if (activeAxis == Gizmo3DAxisZ || activeAxis == Gizmo3DAxisXYZ ||
+                activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ) transform.scale.z *= factor;
+            if (transform.scale.x < 0.01f) transform.scale.x = 0.01f;
+            if (transform.scale.y < 0.01f) transform.scale.y = 0.01f;
+            if (transform.scale.z < 0.01f) transform.scale.z = 0.01f;
+            transform.scale.x = snapGizmoValue(transform.scale.x, options.scaleSnap);
+            transform.scale.y = snapGizmoValue(transform.scale.y, options.scaleSnap);
+            transform.scale.z = snapGizmoValue(transform.scale.z, options.scaleSnap);
+        }
+        changed = previous.position.x != transform.position.x || previous.position.y != transform.position.y ||
+                  previous.position.z != transform.position.z || previous.rotation.x != transform.rotation.x ||
+                  previous.rotation.y != transform.rotation.y || previous.rotation.z != transform.rotation.z ||
+                  previous.scale.x != transform.scale.x || previous.scale.y != transform.scale.y ||
+                  previous.scale.z != transform.scale.z;
+        if (pointer_.released[left])
+        {
+            activeWidget_ = InvalidWidgetId;
+            state->axis = static_cast<uint8_t>(Gizmo3DAxisNone);
+        }
+    }
+
+    Vec2 center;
+    if (!projectGizmo3D(projector, transform.position, center))
+        return changed;
+    const Color colors[] = {Color(225u, 75u, 75u, 255u), Color(75u, 210u, 110u, 255u),
+                            Color(90u, 130u, 245u, 255u)};
+    const GizmoAxis3D planeIds[] = {Gizmo3DAxisXY, Gizmo3DAxisXZ, Gizmo3DAxisYZ};
+    const int planeFirst[] = {0, 0, 1};
+    const int planeSecond[] = {1, 2, 2};
+    const Color planeColors[] = {colors[2], colors[1], colors[0]};
+    if (mode != Gizmo3DMode::Rotate)
+    {
+        const float offsets[][2] = {{0.28f, 0.28f}, {0.62f, 0.28f}, {0.62f, 0.62f}, {0.28f, 0.62f}};
+        for (int plane = 0; plane < 3; ++plane)
+        {
+            const Vec3 firstAxis = gizmo3DAxisVector(static_cast<GizmoAxis3D>(planeFirst[plane] + Gizmo3DAxisX));
+            const Vec3 secondAxis = gizmo3DAxisVector(static_cast<GizmoAxis3D>(planeSecond[plane] + Gizmo3DAxisX));
+            Vec2 corners[4];
+            bool valid = true;
+            for (int corner = 0; corner < 4; ++corner)
+            {
+                const Vec3 world = addGizmo3D(transform.position,
+                    addGizmo3D(scaleGizmo3D(firstAxis, offsets[corner][0] * options.axisLength),
+                                scaleGizmo3D(secondAxis, offsets[corner][1] * options.axisLength)));
+                if (!projectGizmo3D(projector, world, corners[corner]))
+                    valid = false;
+            }
+            if (!valid)
+                continue;
+            const bool highlighted = planeIds[plane] == hoveredAxis || planeIds[plane] == activeAxis;
+            const Color color = highlighted ? Color(255u, 160u, 50u, 100u)
+                                            : Color(planeColors[plane].r, planeColors[plane].g,
+                                                    planeColors[plane].b, 55u);
+            drawList->addPolygonFilled(Span<const Vec2>(corners), color, clip);
+            for (int corner = 0; corner < 4; ++corner)
+                drawList->addLine(corners[corner], corners[(corner + 1) % 4],
+                                  Color(color.r, color.g, color.b, 180u), clip, 1.0f);
+        }
+    }
+    for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+    {
+        const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
+        const Color color = axis == hoveredAxis || axis == activeAxis
+            ? Color(255u, 160u, 50u, 255u) : colors[index - Gizmo3DAxisX];
+        if (mode == Gizmo3DMode::Rotate)
+        {
+            Vec3 u;
+            Vec3 v;
+            gizmo3DRingBasis(axis, u, v);
+            Vec2 previous;
+            bool hasPrevious = false;
+            for (int segment = 0; segment <= 40; ++segment)
+            {
+                const float angle = GizmoPi * 2.0f * static_cast<float>(segment) / 40.0f;
+                Vec2 current;
+                if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                    addGizmo3D(scaleGizmo3D(u, cosf(angle) * options.axisLength),
+                                scaleGizmo3D(v, sinf(angle) * options.axisLength))), current))
+                    continue;
+                if (hasPrevious)
+                {
+                    const float middle = angle - GizmoPi / 40.0f;
+                    const float radialX = u.x * cosf(middle) + v.x * sinf(middle);
+                    const float radialY = u.y * cosf(middle) + v.y * sinf(middle);
+                    const float radialZ = u.z * cosf(middle) + v.z * sinf(middle);
+                    const float facing = radialX * -view[8] + radialY * -view[9] + radialZ * -view[10];
+                    const Color ringColor = facing < 0.0f ? color : Color(color.r, color.g, color.b, 65u);
+                    drawList->addLine(previous, current, ringColor, clip, facing < 0.0f ? 2.5f : 1.0f);
+                }
+                previous = current;
+                hasPrevious = true;
+            }
+        }
+        else
+        {
+            Vec2 endpoint;
+            if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                scaleGizmo3D(gizmo3DAxisVector(axis), options.axisLength)), endpoint))
+                continue;
+            drawList->addLine(center, endpoint, color, clip, 3.0f);
+            if (mode == Gizmo3DMode::Scale)
+                drawList->addRectFilled(Rect(endpoint.x - 5.0f, endpoint.y - 5.0f, 10.0f, 10.0f), color, clip);
+            else
+            {
+                const float directionX = endpoint.x - center.x;
+                const float directionY = endpoint.y - center.y;
+                const float length = sqrtf(directionX * directionX + directionY * directionY);
+                if (length > 0.001f)
+                {
+                    const float unitX = directionX / length;
+                    const float unitY = directionY / length;
+                    const Vec2 arrow[] = {
+                        Vec2(endpoint.x + unitX * 12.0f, endpoint.y + unitY * 12.0f),
+                        Vec2(endpoint.x - unitY * 5.0f, endpoint.y + unitX * 5.0f),
+                        Vec2(endpoint.x + unitY * 5.0f, endpoint.y - unitX * 5.0f)
+                    };
+                    drawList->addPolygonFilled(Span<const Vec2>(arrow), color, clip);
+                }
+            }
+        }
+    }
+    if (mode == Gizmo3DMode::Rotate)
+    {
+        float outerRadius = 0.0f;
+        for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+        {
+            Vec2 endpoint;
+            if (projectGizmo3D(projector, addGizmo3D(transform.position,
+                scaleGizmo3D(gizmo3DAxisVector(static_cast<GizmoAxis3D>(index)), options.axisLength)), endpoint))
+            {
+                const float dx = endpoint.x - center.x;
+                const float dy = endpoint.y - center.y;
+                const float radius = sqrtf(dx * dx + dy * dy);
+                if (radius > outerRadius)
+                    outerRadius = radius;
+            }
+        }
+        outerRadius *= 1.15f;
+        const Color outerColor = activeAxis == Gizmo3DAxisXYZ || hoveredAxis == Gizmo3DAxisXYZ
+            ? Color(255u, 160u, 50u, 255u) : Color(185u, 185u, 190u, 120u);
+        for (int segment = 0; segment < 40; ++segment)
+        {
+            const float first = GizmoPi * 2.0f * static_cast<float>(segment) / 40.0f;
+            const float second = GizmoPi * 2.0f * static_cast<float>(segment + 1) / 40.0f;
+            drawList->addLine(Vec2(center.x + cosf(first) * outerRadius, center.y + sinf(first) * outerRadius),
+                              Vec2(center.x + cosf(second) * outerRadius, center.y + sinf(second) * outerRadius),
+                              outerColor, clip, 1.5f);
+        }
+        if (activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ)
+        {
+            const float start = atan2f(state->pointerStart.y - center.y, state->pointerStart.x - center.x);
+            const float end = atan2f(pointer_.position.y - center.y, pointer_.position.x - center.x);
+            const float radius = outerRadius * 0.92f;
+            const Color feedback(255u, 160u, 50u, 65u);
+            for (int segment = 0; segment < 24; ++segment)
+            {
+                const float first = start + (end - start) * static_cast<float>(segment) / 24.0f;
+                const float second = start + (end - start) * static_cast<float>(segment + 1) / 24.0f;
+                const Vec2 wedge[] = {center,
+                    Vec2(center.x + cosf(first) * radius, center.y + sinf(first) * radius),
+                    Vec2(center.x + cosf(second) * radius, center.y + sinf(second) * radius)};
+                drawList->addPolygonFilled(Span<const Vec2>(wedge), feedback, clip);
+            }
+            drawList->addLine(center, Vec2(center.x + cosf(start) * radius, center.y + sinf(start) * radius),
+                              Color(255u, 160u, 50u, 200u), clip, 1.5f);
+            drawList->addLine(center, Vec2(center.x + cosf(end) * radius, center.y + sinf(end) * radius),
+                              Color(255u, 160u, 50u, 200u), clip, 1.5f);
+        }
+        char rotationText[64];
+        snprintf(rotationText, sizeof(rotationText), "X %.1f  Y %.1f  Z %.1f",
+                 transform.rotation.x, transform.rotation.y, transform.rotation.z);
+        const TextMetrics metrics = measureText(theme_.font, StringView(rotationText), theme_.fontSize);
+        const Vec2 textPosition(center.x - metrics.width * 0.5f, center.y + outerRadius + 8.0f);
+        drawText(*drawList, theme_.font, StringView(rotationText),
+                 Vec2(textPosition.x + 1.0f, textPosition.y + 1.0f), theme_.fontSize,
+                 Color(0u, 0u, 0u, 180u), clip);
+        drawText(*drawList, theme_.font, StringView(rotationText), textPosition, theme_.fontSize,
+                 theme_.labelText, clip);
+    }
+    drawList->addCircleFilled(center, 6.0f,
+                              hoveredAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXYZ
+                                  ? Color(255u, 160u, 50u, 255u) : Color(245u, 200u, 75u, 255u), clip);
     return changed;
 }
 
@@ -2690,6 +3343,20 @@ void Context::tooltip(StringView text)
     if (!window || hotWidget_ != lastItemId_ || text.empty())
         return;
 
+    const float pointerDeltaX = pointer_.position.x - tooltipPointerPosition_.x;
+    const float pointerDeltaY = pointer_.position.y - tooltipPointerPosition_.y;
+    const bool moved = pointerDeltaX * pointerDeltaX + pointerDeltaY * pointerDeltaY > 1.0f;
+    if (tooltipWidget_ != lastItemId_ || moved)
+    {
+        tooltipWidget_ = lastItemId_;
+        tooltipHoverSeconds_ = 0.0f;
+        tooltipPointerPosition_ = pointer_.position;
+        return;
+    }
+    tooltipHoverSeconds_ += frame_.deltaSeconds;
+    if (tooltipHoverSeconds_ < tooltipDelay_)
+        return;
+
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float paddingX = theme_.tooltipPadX;
@@ -2711,6 +3378,16 @@ void Context::tooltip(StringView text)
     drawText(window->overlayDrawList, theme_.font, text,
              Vec2(x + paddingX, y + paddingY), theme_.fontSize,
              theme_.tooltipText, viewport);
+}
+
+void Context::setTooltipDelay(float seconds)
+{
+    tooltipDelay_ = seconds > 0.0f ? seconds : 0.0f;
+}
+
+float Context::tooltipDelay() const
+{
+    return tooltipDelay_;
 }
 
 bool Context::button(StringView labelText)
@@ -3284,6 +3961,612 @@ void Context::endChild()
     advanceLayout(state.outer);
 }
 
+bool Context::beginDockSpace(StringView idText, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    return beginDockSpaceInternal(idText, contentRect(bounds), contentClip());
+}
+
+bool Context::beginDockSpace(StringView idText)
+{
+    return beginDockSpace(idText, 0.0f);
+}
+
+bool Context::beginDockSpace(StringView idText, float topInset)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
+    const float inset = topInset > 0.0f ? topInset : 0.0f;
+    const float clientHeight = window->bounds.height - titleHeight;
+    const Rect client(window->bounds.x, window->bounds.y + titleHeight + inset,
+                      window->bounds.width, clientHeight > inset ? clientHeight - inset : 0.0f);
+    return beginDockSpaceInternal(idText, client, intersect(client, viewport));
+}
+
+bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const Rect &clip)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || activeDockSpace_ != InvalidWidgetId || !dockPanelStack_.empty() ||
+        outer.width <= 0.0f || outer.height <= 0.0f || intersect(outer, clip).width <= 0.0f ||
+        intersect(outer, clip).height <= 0.0f)
+        return false;
+
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x444f434b53504143ull);
+    DockSpaceState *dockSpace = dockSpaces_.find(id);
+    if (!dockSpace)
+    {
+        dockSpaces_.put(id, DockSpaceState());
+        dockSpace = dockSpaces_.find(id);
+    }
+    if (!dockSpace)
+        return false;
+
+    dockSpace->bounds = outer;
+    dockSpace->clip = clip;
+    const float minimumCenter = 160.0f;
+    const float minimumSide = 96.0f;
+    const float maximumSide = outer.width - minimumCenter - minimumSide;
+    if (dockSpace->leftWidth < minimumSide)
+        dockSpace->leftWidth = minimumSide;
+    if (dockSpace->rightWidth < minimumSide)
+        dockSpace->rightWidth = minimumSide;
+    if (maximumSide > minimumSide)
+    {
+        if (dockSpace->leftWidth > maximumSide)
+            dockSpace->leftWidth = maximumSide;
+        if (dockSpace->rightWidth > maximumSide)
+            dockSpace->rightWidth = maximumSide;
+    }
+    else
+    {
+        dockSpace->leftWidth = minimumSide;
+        dockSpace->rightWidth = minimumSide;
+    }
+    const float sideBudget = outer.width - minimumCenter;
+    if (dockSpace->leftWidth + dockSpace->rightWidth > sideBudget)
+    {
+        dockSpace->rightWidth = sideBudget - dockSpace->leftWidth;
+        if (dockSpace->rightWidth < minimumSide)
+        {
+            dockSpace->rightWidth = minimumSide;
+            dockSpace->leftWidth = sideBudget - minimumSide;
+        }
+    }
+    const float maximumBottom = outer.height - theme_.widgetHeight * 3.0f;
+    const float sideMaximum = maximumSide > minimumSide ? maximumSide : minimumSide;
+    const float bottomMaximum = maximumBottom > theme_.widgetHeight * 2.0f
+        ? maximumBottom : theme_.widgetHeight * 2.0f;
+    if (dockSpace->bottomHeight < theme_.widgetHeight * 2.0f)
+        dockSpace->bottomHeight = theme_.widgetHeight * 2.0f;
+    if (maximumBottom > theme_.widgetHeight * 2.0f && dockSpace->bottomHeight > maximumBottom)
+        dockSpace->bottomHeight = maximumBottom;
+
+    drawList->addRectFilled(outer, theme_.panelColor, clip);
+    drawList->addRect(outer, theme_.borderColor, clip);
+
+    const float splitterThickness = 5.0f;
+    const Rect leftRegion = dockSlotBounds(*dockSpace, DockSlot::Left);
+    const Rect rightRegion = dockSlotBounds(*dockSpace, DockSlot::Right);
+    const Rect bottomRegion = dockSlotBounds(*dockSpace, DockSlot::Bottom);
+    const Rect leftSplitter(leftRegion.x + leftRegion.width - splitterThickness * 0.5f,
+                            outer.y, splitterThickness, outer.height - dockSpace->bottomHeight);
+    const Rect rightSplitter(rightRegion.x - splitterThickness * 0.5f,
+                             outer.y, splitterThickness, outer.height - dockSpace->bottomHeight);
+    const Rect bottomSplitter(outer.x, bottomRegion.y - splitterThickness * 0.5f,
+                              outer.width, splitterThickness);
+    const WidgetId leftId = combineIds(id, 0x4c454654ull);
+    const WidgetId rightId = combineIds(id, 0x5249474854ull);
+    const WidgetId bottomId = combineIds(id, 0x424f54544f4dull);
+    const uint32_t leftButton = buttonIndex(PointerButton::Left);
+    const WidgetId splitterIds[] = {leftId, rightId, bottomId};
+    const Rect splitters[] = {leftSplitter, rightSplitter, bottomSplitter};
+    for (uint32_t splitter = 0u; splitter < 3u; ++splitter)
+    {
+        const Rect visible = intersect(splitters[splitter], clip);
+        const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position);
+        if (pointer_.pressed[leftButton] && activeWidget_ == InvalidWidgetId &&
+            currentWindow_ == focusedWindow_ && contains(visible, pointer_.pressedPosition[leftButton]))
+            activeWidget_ = splitterIds[splitter];
+        if (activeWidget_ == splitterIds[splitter])
+        {
+            if (pointer_.down[leftButton] || pointer_.pressed[leftButton])
+            {
+                if (splitter == 0u)
+                    dockSpace->leftWidth = clamp(pointer_.position.x - outer.x, minimumSide, sideMaximum);
+                else if (splitter == 1u)
+                    dockSpace->rightWidth = clamp(outer.x + outer.width - pointer_.position.x,
+                                                  minimumSide, sideMaximum);
+                else
+                    dockSpace->bottomHeight = clamp(outer.y + outer.height - pointer_.position.y,
+                                                    theme_.widgetHeight * 2.0f, bottomMaximum);
+            }
+            if (pointer_.released[leftButton])
+                activeWidget_ = InvalidWidgetId;
+        }
+        drawList->addRectFilled(splitters[splitter], hovered || activeWidget_ == splitterIds[splitter]
+                                                ? theme_.focusColor : theme_.borderColor, clip);
+    }
+
+    activeDockSpace_ = id;
+    return true;
+}
+
+void Context::endDockSpace()
+{
+    if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty())
+        return;
+    DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
+    if (dockSpace)
+    {
+        for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size();)
+        {
+            if ((dockSpace->tabs[i].open && !*dockSpace->tabs[i].open) ||
+                dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_)
+                dockSpace->tabs.erase(dockSpace->tabs.begin() + i);
+            else
+                ++i;
+        }
+        for (uint32_t slot = 0u; slot < 4u; ++slot)
+        {
+            bool selectedExists = false;
+            for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+            {
+                if (dockSlotIndex(dockSpace->tabs[i].slot) == slot && dockSpace->tabs[i].id == dockSpace->selected[slot])
+                {
+                    selectedExists = true;
+                    break;
+                }
+            }
+            if (!selectedExists)
+                dockSpace->selected[slot] = InvalidWidgetId;
+        }
+        advanceLayout(dockSpace->bounds);
+    }
+    activeDockSpace_ = InvalidWidgetId;
+}
+
+bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
+{
+    if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty() || (open && !*open))
+        return false;
+    DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
+    DrawList *drawList = currentDrawList();
+    if (!dockSpace || !drawList)
+        return false;
+
+    const WidgetId id = combineIds(activeDockSpace_, hashText(title));
+    DockTabState *tabState = nullptr;
+    for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+    {
+        if (dockSpace->tabs[i].id == id)
+        {
+            tabState = &dockSpace->tabs[i];
+            break;
+        }
+    }
+    if (!tabState)
+    {
+        DockTabState tab;
+        tab.id = id;
+        tab.title = String(title.data(), title.size());
+        tab.slot = slot;
+        dockSpace->tabs.push_back(tab);
+        tabState = &dockSpace->tabs.back();
+    }
+    tabState->lastSeenFrame = frameNumber_;
+    tabState->open = open;
+    const DockSlot resolvedSlot = tabState->slot;
+    const uint32_t slotIndex = dockSlotIndex(resolvedSlot);
+    if (dockSpace->selected[slotIndex] == InvalidWidgetId)
+        dockSpace->selected[slotIndex] = id;
+
+    const Rect region = dockSlotBounds(*dockSpace, resolvedSlot);
+    const Rect clip = contentClip();
+    if (region.width <= 0.0f || region.height <= theme_.widgetHeight)
+        return false;
+    drawList->addRectFilled(region, theme_.inputBg, clip);
+    drawList->addRect(region, theme_.borderColor, clip);
+
+    int tabCount = 0;
+    for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+    {
+        if (dockSpace->tabs[i].slot == resolvedSlot)
+            ++tabCount;
+    }
+    const Rect tabBar(region.x, region.y, region.width, theme_.widgetHeight);
+    const bool tabBarVisible = tabCount != 1 || !dockSpace->tabBarHidden[slotIndex];
+    const float hiddenTabBarHeight = 10.0f;
+    if (!tabBarVisible)
+    {
+        const Rect hiddenTabBar(region.x, region.y, region.width, hiddenTabBarHeight);
+        const Rect showTabButton(region.x, region.y, theme_.widgetHeight, hiddenTabBarHeight);
+        const WidgetId showTabId = combineIds(activeDockSpace_, 0x53484f57544142ull + slotIndex);
+        const bool hovered = itemHovered(showTabButton, clip, showTabId);
+        if (itemClicked(showTabButton, clip, showTabId, false))
+            dockSpace->tabBarHidden[slotIndex] = false;
+        drawList->addRectFilled(hiddenTabBar, theme_.buttonBackground, clip);
+        drawList->addRectFilled(showTabButton, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+        drawList->addLine(Vec2(hiddenTabBar.x, hiddenTabBar.y + hiddenTabBar.height - 1.0f),
+                          Vec2(hiddenTabBar.x + hiddenTabBar.width, hiddenTabBar.y + hiddenTabBar.height - 1.0f),
+                          theme_.borderColor, clip);
+        const float arrowSize = showTabButton.height * 0.28f;
+        const Vec2 arrow[] = {
+            Vec2(showTabButton.x + showTabButton.width * 0.5f - arrowSize, showTabButton.y + showTabButton.height * 0.58f),
+            Vec2(showTabButton.x + showTabButton.width * 0.5f + arrowSize, showTabButton.y + showTabButton.height * 0.58f),
+            Vec2(showTabButton.x + showTabButton.width * 0.5f, showTabButton.y + showTabButton.height * 0.36f)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+    }
+    else
+    {
+    const float tabListWidth = tabBar.height;
+    const Rect tabListButton(tabBar.x + tabBar.width - tabListWidth, tabBar.y,
+                             tabListWidth, tabListWidth);
+    const float tabRight = tabListButton.x;
+    const bool handleTabInput = dockSpace->tabBarFrame[slotIndex] != frameNumber_;
+    if (handleTabInput)
+        dockSpace->tabBarFrame[slotIndex] = frameNumber_;
+    float tabX = region.x;
+    for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+    {
+        const DockTabState &candidate = dockSpace->tabs[i];
+        if (candidate.slot != resolvedSlot)
+            continue;
+        const TextMetrics metrics = measureText(theme_.font, candidate.title, theme_.fontSize);
+        const float closeSize = candidate.open ? tabBar.height * 0.55f : 0.0f;
+        const float requestedWidth = metrics.width + theme_.windowPadding * 2.0f + closeSize;
+        const float remaining = tabRight - tabX;
+        const float tabWidth = requestedWidth < remaining ? requestedWidth : remaining;
+        if (tabWidth <= 0.0f)
+            break;
+        const Rect tab(tabX, tabBar.y, tabWidth, tabBar.height);
+        const Rect closeButton(tab.x + tab.width - closeSize - theme_.windowPadding * 0.35f,
+                               tab.y + (tab.height - closeSize) * 0.5f, closeSize, closeSize);
+        const bool hovered = itemHovered(tab, clip, candidate.id);
+        const WidgetId closeId = combineIds(candidate.id, 0x444f434b434c4f53ull);
+        const bool closeVisible = candidate.open && hovered;
+        const bool closeHovered = closeVisible && itemHovered(closeButton, clip, closeId);
+        if (closeVisible && handleTabInput && itemClicked(closeButton, clip, closeId, false))
+        {
+            *candidate.open = false;
+            if (dockSpace->selected[slotIndex] == candidate.id)
+                dockSpace->selected[slotIndex] = InvalidWidgetId;
+            tabX += tabWidth;
+            continue;
+        }
+        const bool pressedHere = handleTabInput && pointer_.pressed[buttonIndex(PointerButton::Left)] &&
+            currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
+            contains(intersect(tab, clip), pointer_.pressedPosition[buttonIndex(PointerButton::Left)]);
+        if (pressedHere)
+        {
+            activeWidget_ = candidate.id;
+            dockDragSpace_ = activeDockSpace_;
+            dockDragTab_ = candidate.id;
+            dockDragStart_ = pointer_.pressedPosition[buttonIndex(PointerButton::Left)];
+        }
+        const float dragX = pointer_.position.x - dockDragStart_.x;
+        const float dragY = pointer_.position.y - dockDragStart_.y;
+        const bool draggingTab = dockDragSpace_ == activeDockSpace_ && dockDragTab_ == candidate.id &&
+            activeWidget_ == candidate.id && (dragX * dragX + dragY * dragY >= 16.0f);
+        if (draggingTab)
+        {
+            DockSlot target = candidate.slot;
+            for (uint32_t targetIndex = 0u; targetIndex < 4u; ++targetIndex)
+            {
+                const DockSlot targetSlot = static_cast<DockSlot>(targetIndex);
+                if (contains(dockSlotBounds(*dockSpace, targetSlot), pointer_.position))
+                {
+                    target = targetSlot;
+                    break;
+                }
+            }
+            const Rect targetBounds = dockSlotBounds(*dockSpace, target);
+            WindowState *window = currentWindow();
+            if (window)
+            {
+                const Color preview(theme_.focusColor.r, theme_.focusColor.g, theme_.focusColor.b, 145u);
+                window->overlayDrawList.addRectFilled(targetBounds, preview, clip);
+                window->overlayDrawList.addRect(targetBounds, theme_.focusColor, clip, 2.0f);
+            }
+            if (pointer_.released[buttonIndex(PointerButton::Left)])
+            {
+                const uint32_t targetIndex = dockSlotIndex(target);
+                dockSpace->tabs[i].slot = target;
+                dockSpace->selected[targetIndex] = candidate.id;
+                activeWidget_ = InvalidWidgetId;
+                dockDragSpace_ = InvalidWidgetId;
+                dockDragTab_ = InvalidWidgetId;
+            }
+        }
+        else if (handleTabInput && itemClicked(tab, clip, candidate.id, false))
+        {
+            dockSpace->selected[slotIndex] = candidate.id;
+            focusedWidget_ = activeDockSpace_;
+            dockDragSpace_ = InvalidWidgetId;
+            dockDragTab_ = InvalidWidgetId;
+        }
+        const bool selected = dockSpace->selected[slotIndex] == candidate.id;
+        drawList->addRectFilled(tab, selected ? theme_.selectableSelected
+                                               : (hovered ? theme_.selectableHovered : theme_.buttonBackground), clip);
+        drawText(*drawList, theme_.font, candidate.title,
+                 Vec2(tab.x + theme_.windowPadding,
+                      tab.y + (tab.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.buttonText, clip);
+        if (closeVisible)
+        {
+            const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize * 0.78f);
+            drawList->addRectFilled(closeButton, closeHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+            drawText(*drawList, theme_.font, StringView("x"),
+                     Vec2(closeButton.x + (closeButton.width - closeMetrics.width) * 0.5f,
+                          closeButton.y + (closeButton.height - closeMetrics.height) * 0.5f),
+                     theme_.fontSize * 0.78f, theme_.buttonText, clip);
+        }
+        tabX += tabWidth;
+    }
+
+    const WidgetId tabListId = combineIds(activeDockSpace_, 0x5441424c495354ull + slotIndex);
+    const bool tabListHovered = itemHovered(tabListButton, clip, tabListId);
+    if (handleTabInput && itemClicked(tabListButton, clip, tabListId, false))
+        dockSpace->tabListOpen[slotIndex] = !dockSpace->tabListOpen[slotIndex];
+    drawList->addRectFilled(tabListButton, tabListHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    const float arrowSize = tabListButton.height * 0.26f;
+    const Vec2 arrow[] = {
+        Vec2(tabListButton.x + tabListButton.width * 0.5f - arrowSize, tabListButton.y + tabListButton.height * 0.42f),
+        Vec2(tabListButton.x + tabListButton.width * 0.5f + arrowSize, tabListButton.y + tabListButton.height * 0.42f),
+        Vec2(tabListButton.x + tabListButton.width * 0.5f, tabListButton.y + tabListButton.height * 0.64f)
+    };
+    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+
+    const float requestedPopupWidth = theme_.menuMinWidth;
+    const float popupWidth = requestedPopupWidth < region.width ? requestedPopupWidth : region.width;
+    const Rect tabListPopup(tabListButton.x + tabListButton.width - popupWidth,
+                            tabListButton.y + tabListButton.height, popupWidth,
+                            tabBar.height * static_cast<float>(tabCount + (tabCount == 1 ? 1 : 0)));
+    if (handleTabInput && dockSpace->tabListOpen[slotIndex] && pointer_.pressed[buttonIndex(PointerButton::Left)] &&
+        !contains(tabListButton, pointer_.pressedPosition[buttonIndex(PointerButton::Left)]) &&
+        !contains(tabListPopup, pointer_.pressedPosition[buttonIndex(PointerButton::Left)]))
+        dockSpace->tabListOpen[slotIndex] = false;
+    if (dockSpace->tabListOpen[slotIndex] && tabCount > 0)
+    {
+        WindowState *window = currentWindow();
+        if (window)
+        {
+            window->overlayDrawList.addRectFilled(tabListPopup, theme_.menuBg, clip);
+            window->overlayDrawList.addRect(tabListPopup, theme_.menuBorder, clip);
+            int row = 0;
+            for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+            {
+                const DockTabState &candidate = dockSpace->tabs[i];
+                if (candidate.slot != resolvedSlot)
+                    continue;
+                const Rect item(tabListPopup.x, tabListPopup.y + tabBar.height * static_cast<float>(row),
+                                tabListPopup.width, tabBar.height);
+                const WidgetId itemId = combineIds(candidate.id, 0x5441424c495354ull);
+                const bool hovered = itemHovered(item, clip, itemId);
+                if (handleTabInput && itemClicked(item, clip, itemId, false))
+                {
+                    dockSpace->selected[slotIndex] = candidate.id;
+                    dockSpace->tabListOpen[slotIndex] = false;
+                }
+                const bool selected = dockSpace->selected[slotIndex] == candidate.id;
+                if (selected || hovered)
+                    window->overlayDrawList.addRectFilled(item, selected ? theme_.selectableSelected
+                                                                          : theme_.menuItemHover, clip);
+                const TextMetrics metrics = measureText(theme_.font, candidate.title, theme_.fontSize);
+                drawText(window->overlayDrawList, theme_.font, candidate.title,
+                         Vec2(item.x + theme_.menuItemPadX,
+                              item.y + (item.height - metrics.height) * 0.5f),
+                         theme_.fontSize, theme_.menuItemText, clip);
+                ++row;
+            }
+            if (tabCount == 1)
+            {
+                const Rect hideItem(tabListPopup.x, tabListPopup.y + tabBar.height,
+                                    tabListPopup.width, tabBar.height);
+                const WidgetId hideId = combineIds(activeDockSpace_, 0x48494445544142ull + slotIndex);
+                const bool hovered = itemHovered(hideItem, clip, hideId);
+                if (handleTabInput && itemClicked(hideItem, clip, hideId, false))
+                {
+                    dockSpace->tabBarHidden[slotIndex] = true;
+                    dockSpace->tabListOpen[slotIndex] = false;
+                }
+                if (hovered)
+                    window->overlayDrawList.addRectFilled(hideItem, theme_.menuItemHover, clip);
+                const StringView hideText("Hide tab bar");
+                const TextMetrics metrics = measureText(theme_.font, hideText, theme_.fontSize);
+                drawText(window->overlayDrawList, theme_.font, hideText,
+                         Vec2(hideItem.x + theme_.menuItemPadX,
+                              hideItem.y + (hideItem.height - metrics.height) * 0.5f),
+                         theme_.fontSize, theme_.menuItemText, clip);
+            }
+        }
+    }
+    }
+
+    if (dockSpace->selected[slotIndex] != id)
+        return false;
+    DockPanelState panel;
+    panel.parentLayout = layout_;
+    const float contentTop = region.y + (tabBarVisible ? theme_.widgetHeight : hiddenTabBarHeight);
+    panel.content = Rect(region.x + theme_.padding, contentTop + theme_.padding,
+                         region.width - theme_.padding * 2.0f,
+                         region.height - (tabBarVisible ? theme_.widgetHeight : hiddenTabBarHeight) - theme_.padding * 2.0f);
+    panel.id = id;
+    if (panel.content.width <= 0.0f || panel.content.height <= 0.0f)
+        return false;
+    dockPanelStack_.push_back(panel);
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    idStack_.push_back(combineIds(parentId, id));
+    layout_.origin = Vec2(panel.content.x, panel.content.y);
+    layout_.cursor = layout_.origin;
+    layout_.baseOriginX = panel.content.x;
+    layout_.lastItem = Rect();
+    layout_.hasLastItem = false;
+    return true;
+}
+
+void Context::endDockPanel()
+{
+    if (dockPanelStack_.empty())
+        return;
+    const DockPanelState panel = dockPanelStack_.back();
+    dockPanelStack_.pop_back();
+    if (!idStack_.empty())
+        idStack_.pop_back();
+    layout_ = panel.parentLayout;
+}
+
+bool Context::beginVirtualList(StringView idText, int itemCount, float itemHeight, float height,
+                               int &firstVisible, int &lastVisible, bool border, float width)
+{
+    firstVisible = 0;
+    lastVisible = 0;
+    if (itemCount < 0 || itemHeight <= 0.0f || !beginChild(idText, height, border, width))
+        return false;
+
+    const ChildState &child = childStack_.back();
+    ChildScrollState *scroll = childScrolls_.find(child.id);
+    if (!scroll)
+    {
+        endChild();
+        return false;
+    }
+
+    const int first = static_cast<int>(scroll->offset / itemHeight);
+    int last = static_cast<int>((scroll->offset + child.content.height) / itemHeight) + 1;
+    firstVisible = first < itemCount ? first : itemCount;
+    lastVisible = last < itemCount ? last : itemCount;
+
+    VirtualListState state;
+    state.childId = child.id;
+    state.content = child.content;
+    state.itemCount = itemCount;
+    state.itemHeight = itemHeight;
+    state.scrollOffset = scroll->offset;
+    virtualListStack_.push_back(state);
+    return true;
+}
+
+Rect Context::virtualListItemRect(int itemIndex) const
+{
+    if (virtualListStack_.empty())
+        return Rect();
+    const VirtualListState &state = virtualListStack_.back();
+    if (itemIndex < 0 || itemIndex >= state.itemCount)
+        return Rect();
+    return Rect(state.content.x - layout_.origin.x,
+                state.content.y - layout_.origin.y +
+                    static_cast<float>(itemIndex) * state.itemHeight - state.scrollOffset,
+                state.content.width, state.itemHeight);
+}
+
+void Context::endVirtualList()
+{
+    if (virtualListStack_.empty())
+        return;
+    const VirtualListState state = virtualListStack_.back();
+    virtualListStack_.pop_back();
+    if (childStack_.empty() || childStack_.back().id != state.childId)
+        return;
+
+    layout_.lastItem = Rect(state.content.x,
+                            state.content.y - state.scrollOffset +
+                                static_cast<float>(state.itemCount) * state.itemHeight,
+                            state.content.width, 0.0f);
+    layout_.hasLastItem = true;
+    endChild();
+}
+
+bool Context::beginVirtualTable(StringView idText, int rowCount, int columns, float rowHeight,
+                                float height, int &firstVisibleRow, int &lastVisibleRow,
+                                bool border, float width)
+{
+    firstVisibleRow = 0;
+    lastVisibleRow = 0;
+    if (columns <= 0 || !beginVirtualList(idText, rowCount, rowHeight, height,
+                                          firstVisibleRow, lastVisibleRow, border, width))
+        return false;
+
+    VirtualTableState state;
+    state.childId = virtualListStack_.back().childId;
+    state.columns = columns;
+    virtualTableStack_.push_back(state);
+    return true;
+}
+
+Rect Context::virtualTableCellRect(int row, int column) const
+{
+    if (virtualTableStack_.empty() || virtualListStack_.empty())
+        return Rect();
+    const VirtualTableState &table = virtualTableStack_.back();
+    if (table.childId != virtualListStack_.back().childId || column < 0 || column >= table.columns)
+        return Rect();
+
+    const Rect rowRect = virtualListItemRect(row);
+    if (rowRect.width <= 0.0f || rowRect.height <= 0.0f)
+        return Rect();
+    const float cellWidth = rowRect.width / static_cast<float>(table.columns);
+    const float cellX = rowRect.x + cellWidth * static_cast<float>(column);
+    const float width = column + 1 == table.columns ? rowRect.x + rowRect.width - cellX : cellWidth;
+    return Rect(cellX, rowRect.y, width, rowRect.height);
+}
+
+void Context::endVirtualTable()
+{
+    if (virtualTableStack_.empty())
+        return;
+    const VirtualTableState state = virtualTableStack_.back();
+    virtualTableStack_.pop_back();
+    if (virtualListStack_.empty() || virtualListStack_.back().childId != state.childId)
+        return;
+    endVirtualList();
+}
+
+bool Context::beginVirtualTree(StringView idText, int rowCount, float rowHeight, float height,
+                               int &firstVisibleRow, int &lastVisibleRow, bool border, float width)
+{
+    firstVisibleRow = 0;
+    lastVisibleRow = 0;
+    if (!beginVirtualList(idText, rowCount, rowHeight, height,
+                          firstVisibleRow, lastVisibleRow, border, width))
+        return false;
+
+    VirtualTreeState state;
+    state.childId = virtualListStack_.back().childId;
+    virtualTreeStack_.push_back(state);
+    return true;
+}
+
+Rect Context::virtualTreeItemRect(int row, int depth, float indentWidth) const
+{
+    if (virtualTreeStack_.empty() || virtualListStack_.empty() || depth < 0 || indentWidth < 0.0f ||
+        virtualTreeStack_.back().childId != virtualListStack_.back().childId)
+        return Rect();
+
+    const Rect rowRect = virtualListItemRect(row);
+    const float indentation = static_cast<float>(depth) * indentWidth;
+    if (rowRect.width <= indentation || rowRect.height <= 0.0f)
+        return Rect();
+    return Rect(rowRect.x + indentation, rowRect.y, rowRect.width - indentation, rowRect.height);
+}
+
+void Context::endVirtualTree()
+{
+    if (virtualTreeStack_.empty())
+        return;
+    const VirtualTreeState state = virtualTreeStack_.back();
+    virtualTreeStack_.pop_back();
+    if (virtualListStack_.empty() || virtualListStack_.back().childId != state.childId)
+        return;
+    endVirtualList();
+}
+
 bool Context::beginTable(StringView idText, int columns, float width)
 {
     if (!currentWindow() || columns <= 0 || tableActive_ || propertyRowActive_)
@@ -3301,6 +4584,45 @@ bool Context::beginTable(StringView idText, int columns, float width)
     const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     idStack_.push_back(combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull)));
     return true;
+}
+
+bool Context::beginTable(StringView idText, Span<const float> columnWeights, float width)
+{
+    if (columnWeights.empty())
+        return false;
+    float totalWeight = 0.0f;
+    for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
+    {
+        if (columnWeights[i] <= 0.0f)
+            return false;
+        totalWeight += columnWeights[i];
+    }
+    if (totalWeight <= 0.0f ||
+        !beginTable(idText, static_cast<int>(columnWeights.size()), width))
+        return false;
+
+    table_.columnWeights = &columnWeights[0];
+    table_.totalColumnWeight = totalWeight;
+    return true;
+}
+
+float Context::tableColumnX(int column) const
+{
+    float x = table_.bounds.x;
+    for (int index = 0; index < column; ++index)
+        x += tableColumnWidth(index);
+    return x;
+}
+
+float Context::tableColumnWidth(int column) const
+{
+    if (column < 0 || column >= table_.columns || table_.columns <= 0)
+        return 0.0f;
+    if (!table_.columnWeights || table_.totalColumnWeight <= 0.0f)
+        return table_.bounds.width / static_cast<float>(table_.columns);
+    if (column + 1 == table_.columns)
+        return table_.bounds.x + table_.bounds.width - tableColumnX(column);
+    return table_.bounds.width * table_.columnWeights[column] / table_.totalColumnWeight;
 }
 
 bool Context::tableNextColumn()
@@ -3324,8 +4646,7 @@ bool Context::tableNextColumn()
     {
         ++table_.column;
     }
-    const float cellWidth = table_.bounds.width / static_cast<float>(table_.columns);
-    const float cellX = table_.bounds.x + cellWidth * static_cast<float>(table_.column);
+    const float cellX = tableColumnX(table_.column);
     layout_.origin.x = cellX;
     layout_.baseOriginX = cellX;
     layout_.cursor = Vec2(cellX, table_.rowY);
@@ -3515,12 +4836,14 @@ float Context::availableWidth() const
     const WindowState *window = currentWindow();
     if (!window)
         return 0.0f;
-    float right = window->bounds.x + window->bounds.width - theme_.windowPadding;
+    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+    float right = window->bounds.x + window->bounds.width - padding;
     if (!childStack_.empty())
         right = childStack_.back().content.x + childStack_.back().content.width;
+    if (!dockPanelStack_.empty())
+        right = dockPanelStack_.back().content.x + dockPanelStack_.back().content.width;
     if (tableActive_ && table_.columns > 0 && table_.column >= 0)
-        right = table_.bounds.x + table_.bounds.width / static_cast<float>(table_.columns) *
-                static_cast<float>(table_.column + 1);
+        right = tableColumnX(table_.column) + tableColumnWidth(table_.column);
     if (propertyRowActive_)
         right = propertyRow_.bounds.x + propertyRow_.bounds.width;
     return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
@@ -3609,6 +4932,14 @@ void Context::consumeEvents()
                 upPressed_ = true;
             else if (event.key == KeyCode::Down)
                 downPressed_ = true;
+            else if (event.key == KeyCode::Left)
+                leftPressed_ = true;
+            else if (event.key == KeyCode::Right)
+                rightPressed_ = true;
+            else if (event.key == KeyCode::PageUp)
+                pageUpPressed_ = true;
+            else if (event.key == KeyCode::PageDown)
+                pageDownPressed_ = true;
             else if (event.key == KeyCode::Escape)
             {
                 escapePressed_ = true;
@@ -3640,6 +4971,8 @@ void Context::consumeEvents()
             pointer_.released[1] = false;
             pointer_.released[2] = false;
             activeWidget_ = InvalidWidgetId;
+            dockDragSpace_ = InvalidWidgetId;
+            dockDragTab_ = InvalidWidgetId;
             draggingWindow_ = WindowHandle();
             resizingWindow_ = WindowHandle();
             focusedWidget_ = InvalidWidgetId;
@@ -3735,8 +5068,9 @@ void Context::drawToasts()
 
 void Context::beginLayout(const WindowState &window)
 {
-    const Vec2 origin(window.bounds.x + theme_.windowPadding,
-                      window.bounds.y + theme_.titleBarHeight + theme_.windowPadding);
+    const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
+    const float padding = window.useClientArea ? 0.0f : theme_.windowPadding;
+    const Vec2 origin(window.bounds.x + padding, window.bounds.y + titleHeight + padding);
     layout_.origin = origin;
     layout_.cursor = origin;
     layout_.baseOriginX = origin.x;
@@ -3796,16 +5130,26 @@ Rect Context::contentClip() const
     if (!window)
         return Rect();
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
-    const float contentWidth = window->bounds.width - theme_.windowPadding * 2.0f;
-    const float contentHeight = window->bounds.height - theme_.titleBarHeight - theme_.windowPadding * 2.0f;
-    const Rect content(window->bounds.x + theme_.windowPadding,
-                       window->bounds.y + theme_.titleBarHeight + theme_.windowPadding,
+    const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
+    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+    const float contentWidth = window->bounds.width - padding * 2.0f;
+    const float contentHeight = window->bounds.height - titleHeight - padding * 2.0f;
+    const Rect content(window->bounds.x + padding, window->bounds.y + titleHeight + padding,
                        contentWidth > 0.0f ? contentWidth : 0.0f,
                        contentHeight > 0.0f ? contentHeight : 0.0f);
     const Rect windowClip = intersect(content, viewport);
-    if (childStack_.empty())
-        return windowClip;
-    return intersect(windowClip, childStack_.back().content);
+    Rect clip = windowClip;
+    if (activeDockSpace_ != InvalidWidgetId)
+    {
+        const DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
+        if (dockSpace)
+            clip = dockSpace->clip;
+    }
+    if (!childStack_.empty())
+        clip = intersect(clip, childStack_.back().content);
+    if (!dockPanelStack_.empty())
+        clip = intersect(clip, dockPanelStack_.back().content);
+    return clip;
 }
 
 bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
@@ -3923,15 +5267,15 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
 void Context::drawWindow(WindowState &window)
 {
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
-    const float titleHeight = theme_.titleBarHeight;
-    const float controlWidth = titleHeight;
+    const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
+    const float controlWidth = theme_.titleBarHeight;
+    const float controlsWidth = window.showWindowControls ? controlWidth * 2.0f : 0.0f;
     const Rect closeButton(window.bounds.x + window.bounds.width - controlWidth,
                            window.bounds.y, controlWidth, titleHeight);
     const Rect minimizeButton(closeButton.x - controlWidth, window.bounds.y,
                               controlWidth, titleHeight);
     const Rect dragArea(window.bounds.x, window.bounds.y,
-                        window.bounds.width > controlWidth * 2.0f
-                            ? window.bounds.width - controlWidth * 2.0f : 0.0f,
+                        window.bounds.width > controlsWidth ? window.bounds.width - controlsWidth : 0.0f,
                         titleHeight);
     const float resizeGripSize = 12.0f;
     const Rect resizeGrip(window.bounds.x + window.bounds.width - resizeGripSize,
@@ -3941,10 +5285,10 @@ void Context::drawWindow(WindowState &window)
     const WidgetId minimizeId = combineIds(window.id, 0x4d494e494d495a45ull);
     const WidgetId dragId = combineIds(window.id, 0x44524147ull);
     const WidgetId resizeId = combineIds(window.id, 0x524553495a45ull);
-    const bool closeHovered = itemHovered(closeButton, viewport, closeId);
-    const bool minimizeHovered = itemHovered(minimizeButton, viewport, minimizeId);
+    const bool closeHovered = window.showWindowControls && itemHovered(closeButton, viewport, closeId);
+    const bool minimizeHovered = window.showWindowControls && itemHovered(minimizeButton, viewport, minimizeId);
 
-    if (itemClicked(closeButton, viewport, closeId, false))
+    if (window.showWindowControls && itemClicked(closeButton, viewport, closeId, false))
     {
         window.open = false;
         window.minimized = false;
@@ -3955,11 +5299,11 @@ void Context::drawWindow(WindowState &window)
         openCombo_ = InvalidWidgetId;
         return;
     }
-    if (itemClicked(minimizeButton, viewport, minimizeId, false))
+    if (window.showWindowControls && itemClicked(minimizeButton, viewport, minimizeId, false))
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedResize = !window.minimized && pointer_.pressed[left] &&
+    const bool pressedResize = window.allowResize && !window.minimized && pointer_.pressed[left] &&
                                currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
                                contains(intersect(resizeGrip, viewport), pointer_.pressedPosition[left]);
     if (pressedResize)
@@ -3984,7 +5328,7 @@ void Context::drawWindow(WindowState &window)
             resizingWindow_ = WindowHandle();
         }
     }
-    const bool pressedTitle = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+    const bool pressedTitle = window.allowMove && pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
                               activeWidget_ == InvalidWidgetId &&
                               contains(intersect(dragArea, viewport), pointer_.pressedPosition[left]);
     if (pressedTitle)
@@ -4011,30 +5355,37 @@ void Context::drawWindow(WindowState &window)
     const Rect resolvedTitleBar(window.bounds.x, window.bounds.y, window.bounds.width, titleHeight);
     if (!window.minimized)
         window.drawList.addRectFilled(window.bounds, theme_.windowBackground, viewport);
-    window.drawList.addRectFilled(resolvedTitleBar, theme_.titleBarBackground, viewport);
+    if (window.showTitleBar)
+        window.drawList.addRectFilled(resolvedTitleBar, theme_.titleBarBackground, viewport);
     const Rect resolvedCloseButton(window.bounds.x + window.bounds.width - controlWidth,
                                    window.bounds.y, controlWidth, titleHeight);
     const Rect resolvedMinimizeButton(resolvedCloseButton.x - controlWidth, window.bounds.y,
                                       controlWidth, titleHeight);
-    if (minimizeHovered)
+    if (window.showWindowControls && minimizeHovered)
         window.drawList.addRectFilled(resolvedMinimizeButton, theme_.buttonHovered, viewport);
-    if (closeHovered)
+    if (window.showWindowControls && closeHovered)
         window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
-    const TextMetrics metrics = measureText(theme_.font, window.title, theme_.fontSize);
-    const Vec2 titlePosition(window.bounds.x + theme_.windowPadding,
-                             window.bounds.y + (titleHeight - metrics.height) * 0.5f);
-    drawText(window.drawList, theme_.font, window.title, titlePosition, theme_.fontSize,
-             theme_.labelText, viewport);
-    const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
-    const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize);
-    drawText(window.drawList, theme_.font, StringView("-"),
-             Vec2(resolvedMinimizeButton.x + (controlWidth - minimizeMetrics.width) * 0.5f,
-                  resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
-             theme_.fontSize, theme_.labelText, viewport);
-    drawText(window.drawList, theme_.font, StringView("x"),
-             Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
-                  resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
-             theme_.fontSize, theme_.labelText, viewport);
+    if (window.showTitleBar)
+    {
+        const TextMetrics metrics = measureText(theme_.font, window.title, theme_.fontSize);
+        const Vec2 titlePosition(window.bounds.x + theme_.windowPadding,
+                                 window.bounds.y + (titleHeight - metrics.height) * 0.5f);
+        drawText(window.drawList, theme_.font, window.title, titlePosition, theme_.fontSize,
+                 theme_.labelText, viewport);
+    }
+    if (window.showWindowControls)
+    {
+        const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
+        const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize);
+        drawText(window.drawList, theme_.font, StringView("-"),
+                 Vec2(resolvedMinimizeButton.x + (controlWidth - minimizeMetrics.width) * 0.5f,
+                      resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, viewport);
+        drawText(window.drawList, theme_.font, StringView("x"),
+                 Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
+                      resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, viewport);
+    }
 }
 
 WindowHandle Context::topWindowAt(const Vec2 &position) const
@@ -4075,6 +5426,31 @@ bool Context::currentWindowReceivesPointer() const
 {
     return activeModal_ == InvalidWidgetId && currentWindow_ &&
            currentWindow_ == topWindowAt(pointer_.position);
+}
+
+uint32_t Context::dockSlotIndex(DockSlot slot)
+{
+    return static_cast<uint32_t>(slot);
+}
+
+Rect Context::dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const
+{
+    const Rect &outer = dockSpace.bounds;
+    const float topHeight = outer.height - dockSpace.bottomHeight;
+    const float centerWidth = outer.width - dockSpace.leftWidth - dockSpace.rightWidth;
+    switch (slot)
+    {
+    case DockSlot::Left:
+        return Rect(outer.x, outer.y, dockSpace.leftWidth, topHeight);
+    case DockSlot::Right:
+        return Rect(outer.x + outer.width - dockSpace.rightWidth, outer.y,
+                    dockSpace.rightWidth, topHeight);
+    case DockSlot::Bottom:
+        return Rect(outer.x, outer.y + topHeight, outer.width, dockSpace.bottomHeight);
+    case DockSlot::Center:
+    default:
+        return Rect(outer.x + dockSpace.leftWidth, outer.y, centerWidth, topHeight);
+    }
 }
 
 uint32_t Context::buttonIndex(PointerButton button)

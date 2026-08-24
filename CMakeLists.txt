@@ -47,6 +47,7 @@ target_include_directories(ct INTERFACE "${igui_containers_SOURCE_DIR}/include")
 
 add_library(igui
     src/DrawList.cpp
+    src/FileDialog.cpp
     src/Gui.cpp
 )
 add_library(igui::igui ALIAS igui)
@@ -168,6 +169,9 @@ if(IGUI_RAYLIB_AVAILABLE)
     if(IGUI_BUILD_RAYLIB_DEMO)
         add_executable(igui_raylib_demo examples/raylib_demo/main.cpp)
         target_link_libraries(igui_raylib_demo PRIVATE igui_raylib)
+
+        add_executable(igui_raylib_dock_demo examples/raylib_dock_demo/main.cpp)
+        target_link_libraries(igui_raylib_dock_demo PRIVATE igui_raylib)
     endif()
 endif()
 

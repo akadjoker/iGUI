@@ -145,25 +145,25 @@ struct Theme
           buttonBorder(90, 90, 95, 255),
           buttonText(255, 255, 255, 255),
           checkboxBackground(55, 55, 65, 255),
-          checkboxChecked(90, 160, 230, 255),
+          checkboxChecked(155, 155, 160, 255),
           radioBackground(55, 55, 65, 255),
-          radioChecked(90, 160, 230, 255),
+          radioChecked(155, 155, 160, 255),
           selectableBackground(55, 55, 65, 255),
           selectableHovered(75, 75, 90, 255),
-          selectableSelected(70, 125, 185, 255),
+          selectableSelected(88, 88, 94, 255),
           sliderBackground(55, 55, 58, 255),
           sliderTrackHover(68, 68, 72, 255),
           sliderTrackFocused(75, 75, 80, 255),
-          sliderFilled(90, 160, 230, 255),
+          sliderFilled(165, 165, 170, 255),
           sliderFillHover(165, 165, 170, 255),
           sliderHandle(230, 230, 235, 255),
           sliderThumbHover(195, 195, 200, 255),
           sliderThumbPressed(220, 220, 225, 255),
-          focusColor(180, 180, 185, 255),
-          menuCheckMark(100, 160, 220, 255),
+          focusColor(190, 190, 195, 255),
+          menuCheckMark(185, 185, 190, 255),
           menuSubmenuArrow(180, 180, 185, 255),
           progressBackground(55, 55, 65, 255),
-          progressFilled(90, 160, 230, 255),
+          progressFilled(165, 165, 170, 255),
           labelText(230, 230, 230, 255),
           bgColor(30, 30, 30, 255), textDisabled(120, 120, 120, 255),
           buttonNormal(60, 60, 65, 255), buttonHover(75, 75, 80, 255),
@@ -181,12 +181,12 @@ struct Theme
           dialogBg(48, 48, 52, 255), dialogBorder(80, 80, 85, 255),
           dialogTitleText(220, 220, 225, 255), dialogText(190, 190, 195, 255),
           dialogBtnBg(65, 65, 70, 255), dialogBtnHover(80, 80, 85, 255),
-          dialogBtnPrimary(70, 130, 180, 255), dialogBtnPrimaryHover(90, 150, 200, 255),
+          dialogBtnPrimary(118, 118, 125, 255), dialogBtnPrimaryHover(145, 145, 152, 255),
           dialogBtnDanger(180, 60, 60, 255), dialogBtnDangerHover(200, 80, 80, 255),
           gutterBg(38, 38, 42, 255), lineNumberColor(120, 120, 120, 255),
           lineNumberActive(220, 220, 220, 255), currentLineHighlight(255, 255, 255, 8),
           scrollbarThumb(120, 120, 120, 80), carouselArrowBg(0, 0, 0, 140),
-          carouselArrowFg(230, 230, 235, 240), carouselDotActive(100, 160, 220, 255),
+          carouselArrowFg(230, 230, 235, 240), carouselDotActive(180, 180, 185, 255),
           carouselDotInactive(100, 100, 105, 180), collapsibleHeaderBg(50, 52, 58, 255),
           menuBarBg(45, 45, 48, 255), menuBarItemHover(65, 65, 70, 255),
           menuBg(45, 45, 48, 255), menuBorder(70, 70, 75, 255),
@@ -197,5 +197,102 @@ struct Theme
     {
     }
 };
+
+enum class ThemePreset : uint8_t
+{
+    Dark,
+    Light,
+    Blender,
+    VSCode
+};
+
+inline Theme makeTheme(ThemePreset preset)
+{
+    Theme theme;
+    if (preset == ThemePreset::Dark)
+        return theme;
+
+    if (preset == ThemePreset::Light)
+    {
+        theme.windowBackground = Color(245, 246, 248, 255);
+        theme.panelColor = Color(235, 237, 241, 255);
+        theme.borderColor = Color(186, 190, 198, 255);
+        theme.textColor = Color(35, 38, 44, 255);
+        theme.labelText = theme.textColor;
+        theme.buttonText = theme.textColor;
+        theme.buttonBackground = Color(224, 227, 232, 255);
+        theme.buttonHovered = Color(207, 219, 235, 255);
+        theme.buttonBorder = Color(170, 176, 188, 255);
+        theme.selectableBackground = Color(247, 248, 250, 255);
+        theme.selectableHovered = Color(221, 231, 244, 255);
+        theme.selectableSelected = Color(111, 161, 214, 255);
+        theme.inputBg = Color(255, 255, 255, 255);
+        theme.inputBgHover = Color(247, 249, 252, 255);
+        theme.inputBorder = Color(176, 182, 193, 255);
+        theme.inputBorderHover = Color(91, 140, 197, 255);
+        theme.focusColor = Color(54, 124, 196, 255);
+        theme.sliderFilled = theme.focusColor;
+        theme.checkboxChecked = theme.focusColor;
+        theme.radioChecked = theme.focusColor;
+        theme.titleBarBackground = Color(224, 227, 232, 255);
+        theme.menuBarBg = Color(232, 234, 238, 255);
+        theme.menuBg = Color(250, 251, 253, 255);
+        theme.menuBorder = theme.borderColor;
+        theme.menuItemText = theme.textColor;
+        theme.menuItemTextHover = theme.textColor;
+        theme.menuItemHover = Color(218, 229, 243, 255);
+        theme.tooltipBg = Color(40, 44, 52, 245);
+        theme.tooltipText = Color(245, 246, 248, 255);
+        theme.scrollbarThumb = Color(116, 126, 142, 145);
+        return theme;
+    }
+
+    if (preset == ThemePreset::Blender)
+    {
+        theme.windowBackground = Color(50, 50, 50, 255);
+        theme.panelColor = Color(58, 58, 58, 255);
+        theme.borderColor = Color(30, 30, 30, 255);
+        theme.buttonBackground = Color(70, 70, 70, 255);
+        theme.buttonHovered = Color(91, 91, 91, 255);
+        theme.selectableBackground = Color(55, 55, 55, 255);
+        theme.selectableHovered = Color(77, 88, 96, 255);
+        theme.selectableSelected = Color(54, 124, 176, 255);
+        theme.inputBg = Color(42, 42, 42, 255);
+        theme.inputBorder = Color(22, 22, 22, 255);
+        theme.inputBorderHover = Color(217, 119, 28, 255);
+        theme.focusColor = Color(237, 135, 35, 255);
+        theme.sliderFilled = theme.focusColor;
+        theme.checkboxChecked = theme.focusColor;
+        theme.radioChecked = theme.focusColor;
+        theme.dialogBtnPrimary = theme.focusColor;
+        theme.menuBarBg = Color(48, 48, 48, 255);
+        theme.menuBg = Color(58, 58, 58, 255);
+        theme.menuItemHover = Color(83, 83, 83, 255);
+        return theme;
+    }
+
+    theme.windowBackground = Color(30, 30, 30, 255);
+    theme.panelColor = Color(37, 37, 38, 255);
+    theme.borderColor = Color(60, 60, 60, 255);
+    theme.titleBarBackground = Color(37, 37, 38, 255);
+    theme.buttonBackground = Color(51, 51, 55, 255);
+    theme.buttonHovered = Color(67, 67, 72, 255);
+    theme.selectableBackground = Color(37, 37, 38, 255);
+    theme.selectableHovered = Color(45, 71, 95, 255);
+    theme.selectableSelected = Color(9, 71, 113, 255);
+    theme.inputBg = Color(30, 30, 30, 255);
+    theme.inputBorder = Color(63, 63, 70, 255);
+    theme.inputBorderHover = Color(0, 122, 204, 255);
+    theme.focusColor = Color(0, 122, 204, 255);
+    theme.sliderFilled = theme.focusColor;
+    theme.checkboxChecked = theme.focusColor;
+    theme.radioChecked = theme.focusColor;
+    theme.menuBarBg = Color(45, 45, 48, 255);
+    theme.menuBg = Color(37, 37, 38, 255);
+    theme.menuBorder = Color(69, 69, 69, 255);
+    theme.menuItemHover = Color(9, 71, 113, 255);
+    theme.dialogBtnPrimary = theme.focusColor;
+    return theme;
+}
 
 } // namespace ig

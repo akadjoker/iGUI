@@ -3,12 +3,14 @@
 #include <stdint.h>
 
 #include <ct/deque.hpp>
+#include <ct/function.hpp>
 #include <ct/hashmap.hpp>
 #include <ct/slotmap.hpp>
 #include <ct/vector.hpp>
 
 #include "Backend.hpp"
 #include "Events.hpp"
+#include "FileDialog.hpp"
 #include "Math.hpp"
 #include "Theme.hpp"
 
@@ -23,12 +25,18 @@ struct WindowState
     bool open;
     bool minimized;
     bool focused;
+    bool showWindowControls;
+    bool showTitleBar;
+    bool useClientArea;
+    bool allowMove;
+    bool allowResize;
     uint64_t zOrder;
     DrawList drawList;
     DrawList overlayDrawList;
 
     WindowState()
         : id(InvalidWidgetId), title(), bounds(), open(true), minimized(false), focused(false),
+          showWindowControls(true), showTitleBar(true), useClientArea(false), allowMove(true), allowResize(true),
           zOrder(0), drawList(), overlayDrawList()
     {
     }
@@ -118,7 +126,23 @@ enum class SplitterAxis : uint8_t
     Horizontal
 };
 
+// A dockspace divides one editor surface into persistent tab regions.
+enum class DockSlot : uint8_t
+{
+    Left,
+    Center,
+    Right,
+    Bottom
+};
+
 enum class Gizmo2DMode : uint8_t
+{
+    Translate,
+    Rotate,
+    Scale
+};
+
+enum class Gizmo3DMode : uint8_t
 {
     Translate,
     Rotate,
@@ -147,6 +171,26 @@ struct Gizmo2DOptions
         : axisLength(60.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
 };
 
+struct Transform3D
+{
+    Vec3 position;
+    Vec3 rotation;
+    Vec3 scale;
+
+    Transform3D() : position(), rotation(), scale(1.0f, 1.0f, 1.0f) {}
+};
+
+struct Gizmo3DOptions
+{
+    float axisLength;
+    float translateSnap;
+    float rotateSnap;
+    float scaleSnap;
+
+    Gizmo3DOptions()
+        : axisLength(1.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
+};
+
 class Context
 {
 public:
@@ -157,6 +201,8 @@ public:
     const DrawData &endFrame();
 
     bool beginWindow(StringView title, const Rect &initialBounds, bool *open = nullptr);
+    // A root window that follows the current viewport every frame.
+    bool beginMainWindow(StringView title, bool *open = nullptr);
     void endWindow();
 
     void pushId(uint64_t id);
@@ -168,6 +214,15 @@ public:
     bool wantsPointer() const;
     bool wantsKeyboard() const;
     bool wantsTextInput() const;
+
+    // Application-owned history entries. The callbacks must remain valid for
+    // as long as the entry stays in this Context's history.
+    void pushUndo(StringView label, ct::Function<void()> undo, ct::Function<void()> redo);
+    bool undo();
+    bool redo();
+    bool canUndo() const;
+    bool canRedo() const;
+    void clearUndoHistory();
 
     bool button(StringView label, const Rect &bounds);
     // Compact text action for inspectors and toolbars.
@@ -230,6 +285,10 @@ public:
     // Transparent editor overlay for a 2D transform inside bounds.
     bool gizmo2D(StringView id, Transform2D &transform, Gizmo2DMode mode, const Rect &bounds,
                  const Gizmo2DOptions &options = Gizmo2DOptions());
+    // Projected 3D transform handles. view and projection are column-major 4x4 matrices.
+    bool gizmo3D(StringView id, Transform3D &transform, Gizmo3DMode mode, const Rect &bounds,
+                 const float *view, const float *projection,
+                 const Gizmo3DOptions &options = Gizmo3DOptions());
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
@@ -267,6 +326,10 @@ public:
                                 bool showCancel = false);
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
                                 const MessageBoxOptions &options);
+    // Application-modal filesystem browser. Its provider performs OS or
+    // sandbox access; this Context owns only interaction and rendering.
+    FileDialogResult fileDialog(StringView id, bool &open, FileDialogState &state,
+                                const FileDialogOptions &options, FileDialogProvider &provider);
     // Starts or refreshes a short notification. The id differentiates concurrent toasts.
     void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::TopRight,
                    float duration = 3.0f);
@@ -278,6 +341,9 @@ public:
     void label(StringView text, const Vec2 &position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
+    // Tooltips appear after this much stationary hover time. The default is 0.45 seconds.
+    void setTooltipDelay(float seconds);
+    float tooltipDelay() const;
 
     bool button(StringView label);
     bool smallButton(StringView label);
@@ -336,8 +402,43 @@ public:
     // defaults to the remaining window width.
     bool beginChild(StringView id, float height, bool border = true, float width = 0.0f);
     void endChild();
+    // Editor-style docking. Register panels each frame; only the active tab in
+    // each region returns true. Tabs can be dragged between regions; tabs and
+    // splitter sizes persist in the Context.
+    bool beginDockSpace(StringView id);
+    // Reserves topInset logical pixels for a menu bar or toolbar in the current window.
+    bool beginDockSpace(StringView id, float topInset);
+    bool beginDockSpace(StringView id, const Rect &bounds);
+    void endDockSpace();
+    // Pass open to render a close button in the tab; closing it sets *open to false.
+    bool beginDockPanel(StringView title, DockSlot slot = DockSlot::Center, bool *open = nullptr);
+    void endDockPanel();
+    // Virtualized child content. Only render rows in [firstVisible, lastVisible)
+    // and use virtualListItemRect() with the bounds-based widget overloads.
+    bool beginVirtualList(StringView id, int itemCount, float itemHeight, float height,
+                          int &firstVisible, int &lastVisible,
+                          bool border = true, float width = 0.0f);
+    Rect virtualListItemRect(int itemIndex) const;
+    void endVirtualList();
+    // Virtualized table rows. Render only [firstVisibleRow, lastVisibleRow) and
+    // use virtualTableCellRect() for bounds-based widgets in each cell.
+    bool beginVirtualTable(StringView id, int rowCount, int columns, float rowHeight, float height,
+                           int &firstVisibleRow, int &lastVisibleRow,
+                           bool border = true, float width = 0.0f);
+    Rect virtualTableCellRect(int row, int column) const;
+    void endVirtualTable();
+    // Virtualized rows for an application-owned, flattened tree. depth controls
+    // indentation; use the bounds with treeItem() to keep its existing behavior.
+    bool beginVirtualTree(StringView id, int rowCount, float rowHeight, float height,
+                          int &firstVisibleRow, int &lastVisibleRow,
+                          bool border = true, float width = 0.0f);
+    Rect virtualTreeItemRect(int row, int depth, float indentWidth = 16.0f) const;
+    void endVirtualTree();
     // Lightweight immediate table. Call tableNextColumn() before each cell.
     bool beginTable(StringView id, int columns, float width = 0.0f);
+    // Weighted table columns. All weights must be positive and remain valid
+    // until endTable(); for example, {3.0f, 1.0f} creates a 75/25 split.
+    bool beginTable(StringView id, Span<const float> columnWeights, float width = 0.0f);
     bool tableNextColumn();
     void endTable();
     // Aligned label/value row for inspectors. Render the value widgets between
@@ -412,6 +513,15 @@ private:
         Gizmo2DState() : axis(0u), pointerStart(), transformStart() {}
     };
 
+    struct Gizmo3DState
+    {
+        uint8_t axis;
+        Vec2 pointerStart;
+        Transform3D transformStart;
+
+        Gizmo3DState() : axis(0u), pointerStart(), transformStart() {}
+    };
+
     struct ChildState
     {
         LayoutState parentLayout;
@@ -424,6 +534,85 @@ private:
         ChildState() : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true) {}
     };
 
+    struct UndoState
+    {
+        String label;
+        ct::Function<void()> undo;
+        ct::Function<void()> redo;
+    };
+
+    struct DockTabState
+    {
+        WidgetId id;
+        String title;
+        DockSlot slot;
+        uint64_t lastSeenFrame;
+        bool *open;
+
+        DockTabState() : id(InvalidWidgetId), title(), slot(DockSlot::Center), lastSeenFrame(0u), open(nullptr) {}
+    };
+
+    struct DockSpaceState
+    {
+        Rect bounds;
+        Rect clip;
+        float leftWidth;
+        float rightWidth;
+        float bottomHeight;
+        WidgetId selected[4];
+        bool tabListOpen[4];
+        bool tabBarHidden[4];
+        uint64_t tabBarFrame[4];
+        ct::Vector<DockTabState> tabs;
+
+        DockSpaceState() : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f), tabs()
+        {
+            for (uint32_t i = 0u; i < 4u; ++i)
+            {
+                selected[i] = InvalidWidgetId;
+                tabListOpen[i] = false;
+                tabBarHidden[i] = false;
+                tabBarFrame[i] = 0u;
+            }
+        }
+    };
+
+    struct DockPanelState
+    {
+        LayoutState parentLayout;
+        Rect content;
+        WidgetId id;
+
+        DockPanelState() : parentLayout(), content(), id(InvalidWidgetId) {}
+    };
+
+    struct VirtualListState
+    {
+        WidgetId childId;
+        Rect content;
+        int itemCount;
+        float itemHeight;
+        float scrollOffset;
+
+        VirtualListState()
+            : childId(InvalidWidgetId), content(), itemCount(0), itemHeight(0.0f), scrollOffset(0.0f) {}
+    };
+
+    struct VirtualTableState
+    {
+        WidgetId childId;
+        int columns;
+
+        VirtualTableState() : childId(InvalidWidgetId), columns(0) {}
+    };
+
+    struct VirtualTreeState
+    {
+        WidgetId childId;
+
+        VirtualTreeState() : childId(InvalidWidgetId) {}
+    };
+
     struct TableState
     {
         LayoutState parentLayout;
@@ -432,8 +621,12 @@ private:
         int column;
         float rowY;
         float rowHeight;
+        const float *columnWeights;
+        float totalColumnWeight;
 
-        TableState() : parentLayout(), bounds(), columns(0), column(-1), rowY(0.0f), rowHeight(0.0f) {}
+        TableState()
+            : parentLayout(), bounds(), columns(0), column(-1), rowY(0.0f), rowHeight(0.0f),
+              columnWeights(nullptr), totalColumnWeight(0.0f) {}
     };
 
     struct PropertyRowState
@@ -483,11 +676,19 @@ private:
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
     ct::HashMap<WidgetId, Gizmo2DState> gizmo2DStates_;
+    ct::HashMap<WidgetId, Gizmo3DState> gizmo3DStates_;
+    ct::HashMap<WidgetId, DockSpaceState> dockSpaces_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     ct::Vector<WidgetId> focusOrder_;
     ct::Vector<ChildState> childStack_;
+    ct::Vector<VirtualListState> virtualListStack_;
+    ct::Vector<VirtualTableState> virtualTableStack_;
+    ct::Vector<VirtualTreeState> virtualTreeStack_;
+    ct::Vector<DockPanelState> dockPanelStack_;
     ct::Vector<ToastState> toasts_;
+    ct::Vector<UndoState> undoStack_;
+    ct::Vector<UndoState> redoStack_;
     DragDropState dragDrop_;
     DrawList frameDrawList_;
     DrawList dragDropDrawList_;
@@ -511,10 +712,14 @@ private:
     WidgetId subMenuParent_;
     WidgetId activeModal_;
     WidgetId dragWidget_;
+    WidgetId activeDockSpace_;
+    WidgetId dockDragSpace_;
+    WidgetId dockDragTab_;
     String::size_type textCursor_;
     uint64_t frameNumber_;
     uint64_t nextZOrder_;
     Vec2 windowDragOffset_;
+    Vec2 dockDragStart_;
     Rect menuBarBounds_;
     Rect menuPopupBounds_;
     Rect activeMenuBounds_;
@@ -522,12 +727,17 @@ private:
     Rect subMenuParentBounds_;
     float menuBarCursorX_;
     bool menuBarActive_;
+    bool forceWindowBounds_;
     TableState table_;
     PropertyRowState propertyRow_;
     bool tableActive_;
     bool propertyRowActive_;
     float dragStartValue_;
     float dragStartX_;
+    float tooltipDelay_;
+    float tooltipHoverSeconds_;
+    Vec2 tooltipPointerPosition_;
+    WidgetId tooltipWidget_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
@@ -536,6 +746,10 @@ private:
     bool endPressed_;
     bool upPressed_;
     bool downPressed_;
+    bool leftPressed_;
+    bool rightPressed_;
+    bool pageUpPressed_;
+    bool pageDownPressed_;
     bool copyRequested_;
     bool pasteRequested_;
     bool escapePressed_;
@@ -573,6 +787,11 @@ private:
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
+    Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
+    bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
+    static uint32_t dockSlotIndex(DockSlot slot);
+    float tableColumnX(int column) const;
+    float tableColumnWidth(int column) const;
     bool menuItemInternal(StringView label, bool enabled, bool *checked);
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);
