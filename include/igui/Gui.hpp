@@ -21,13 +21,14 @@ struct WindowState
     String title;
     Rect bounds;
     bool open;
+    bool minimized;
     bool focused;
     uint64_t zOrder;
     DrawList drawList;
     DrawList overlayDrawList;
 
     WindowState()
-        : id(InvalidWidgetId), title(), bounds(), open(true), focused(false),
+        : id(InvalidWidgetId), title(), bounds(), open(true), minimized(false), focused(false),
           zOrder(0), drawList(), overlayDrawList()
     {
     }
@@ -158,6 +159,7 @@ private:
     DrawData drawData_;
     WindowHandle currentWindow_;
     WindowHandle focusedWindow_;
+    WindowHandle draggingWindow_;
     WidgetId activeWidget_;
     WidgetId hotWidget_;
     WidgetId focusedWidget_;
@@ -166,6 +168,7 @@ private:
     String::size_type textCursor_;
     uint64_t frameNumber_;
     uint64_t nextZOrder_;
+    Vec2 windowDragOffset_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;

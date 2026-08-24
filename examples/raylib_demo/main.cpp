@@ -14,6 +14,10 @@ struct DemoState
     bool advanced;
     bool experimental;
     bool showInspector;
+    bool profileOpen;
+    bool numericOpen;
+    bool selectionOpen;
+    bool imagesOpen;
     bool selectedPreset;
     float volume;
     float progress;
@@ -26,6 +30,7 @@ struct DemoState
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
+          profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
           sampleOffset(4), gamma(2.2f),
           name("Raylib user")
@@ -35,7 +40,7 @@ struct DemoState
 
 void drawProfileWindow(ig::Context &ui, DemoState &state)
 {
-    if (!ui.beginWindow("Profile and toggles", ig::Rect(42.0f, 72.0f, 390.0f, 330.0f)))
+    if (!ui.beginWindow("Profile and toggles", ig::Rect(42.0f, 72.0f, 390.0f, 330.0f), &state.profileOpen))
         return;
 
     ui.label("Text input and binary controls");
@@ -50,9 +55,9 @@ void drawProfileWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawImageWindow(ig::Context &ui, ig::TextureId previewTexture)
+void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTexture)
 {
-    if (!ui.beginWindow("Images", ig::Rect(926.0f, 530.0f, 410.0f, 240.0f)))
+    if (!ui.beginWindow("Images", ig::Rect(926.0f, 530.0f, 410.0f, 240.0f), &state.imagesOpen))
         return;
 
     ui.label("Texture previews and image buttons");
@@ -65,7 +70,7 @@ void drawImageWindow(ig::Context &ui, ig::TextureId previewTexture)
 
 void drawNumericWindow(ig::Context &ui, DemoState &state)
 {
-    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 350.0f)))
+    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 350.0f), &state.numericOpen))
         return;
 
     ui.label("Continuous and discrete values");
@@ -87,7 +92,7 @@ void drawSelectionWindow(ig::Context &ui, DemoState &state)
         ig::StringView("Low"), ig::StringView("Balanced"), ig::StringView("Ultra")
     };
 
-    if (!ui.beginWindow("Selection widgets", ig::Rect(42.0f, 440.0f, 390.0f, 350.0f)))
+    if (!ui.beginWindow("Selection widgets", ig::Rect(42.0f, 440.0f, 390.0f, 350.0f), &state.selectionOpen))
         return;
 
     ui.label("Lists, radio buttons and selection");
@@ -113,7 +118,7 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     if (!state.showInspector)
         return;
 
-    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 190.0f, 410.0f, 300.0f)))
+    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 190.0f, 410.0f, 300.0f), &state.showInspector))
         return;
 
     state.progress += deltaSeconds * (state.enabled ? 0.18f : 0.04f);
@@ -166,7 +171,7 @@ int main()
         drawNumericWindow(ui, state);
         drawSelectionWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
-        drawImageWindow(ui, ig::raylib::textureId(previewTexture));
+        drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
         const ig::DrawData &drawData = ui.endFrame();
 
         BeginDrawing();

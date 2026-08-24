@@ -522,6 +522,55 @@ static void test_clicked_window_is_composed_on_top()
     assert(data.vertices[0].position.y == 20.0f);
 }
 
+static void test_window_chrome_drag_minimize_and_close()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool open = true;
+    const ig::Rect initialBounds(20.0f, 20.0f, 200.0f, 120.0f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 50.0f, 30.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(130.0f, 90.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    const ig::DrawData &movedData = context.endFrame();
+    assert(movedData.vertices[0].position.x == 100.0f);
+    assert(movedData.vertices[0].position.y == 80.0f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 130.0f, 90.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 264.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 264.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("managed", initialBounds, &open));
+    context.endFrame();
+    assert(open);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 264.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 264.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 288.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 288.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("managed", initialBounds, &open));
+    context.endFrame();
+    assert(!open);
+}
+
 int main()
 {
     test_draw_data_and_label();
@@ -545,5 +594,6 @@ int main()
     test_content_clip_applies_to_checkbox_label();
     test_clipped_button_cannot_be_clicked();
     test_clicked_window_is_composed_on_top();
+    test_window_chrome_drag_minimize_and_close();
     return 0;
 }

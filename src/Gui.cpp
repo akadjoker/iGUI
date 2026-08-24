@@ -21,9 +21,9 @@ Context::PointerState::PointerState()
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
-      currentWindow_(), focusedWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
+      currentWindow_(), focusedWindow_(), draggingWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
-      textCursor_(0), frameNumber_(0), nextZOrder_(1),
+      textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false),
       homePressed_(false), endPressed_(false), copyRequested_(false), pasteRequested_(false)
 {
@@ -125,6 +125,15 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     if (!focused || !focused->open)
         focusWindow(currentWindow_);
     drawWindow(*window);
+    if (open)
+        *open = window->open;
+    if (!window->open || window->minimized)
+    {
+        currentWindow_ = WindowHandle();
+        idStack_.clear();
+        layout_ = LayoutState();
+        return false;
+    }
     beginLayout(*window);
     idStack_.clear();
     idStack_.push_back(id);
@@ -1073,6 +1082,7 @@ void Context::consumeEvents()
             pointer_.released[1] = false;
             pointer_.released[2] = false;
             activeWidget_ = InvalidWidgetId;
+            draggingWindow_ = WindowHandle();
             focusedWidget_ = InvalidWidgetId;
             textInputWidget_ = InvalidWidgetId;
             openCombo_ = InvalidWidgetId;
@@ -1253,15 +1263,87 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
 void Context::drawWindow(WindowState &window)
 {
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
-    window.drawList.addRectFilled(window.bounds, theme_.windowBackground, viewport);
-    window.drawList.addRectFilled(Rect(window.bounds.x, window.bounds.y,
-                                 window.bounds.width, theme_.titleBarHeight),
-                            theme_.titleBarBackground, viewport);
+    const float titleHeight = theme_.titleBarHeight;
+    const float controlWidth = titleHeight;
+    const Rect closeButton(window.bounds.x + window.bounds.width - controlWidth,
+                           window.bounds.y, controlWidth, titleHeight);
+    const Rect minimizeButton(closeButton.x - controlWidth, window.bounds.y,
+                              controlWidth, titleHeight);
+    const Rect dragArea(window.bounds.x, window.bounds.y,
+                        window.bounds.width > controlWidth * 2.0f
+                            ? window.bounds.width - controlWidth * 2.0f : 0.0f,
+                        titleHeight);
+    const WidgetId closeId = combineIds(window.id, 0x434c4f5345ull);
+    const WidgetId minimizeId = combineIds(window.id, 0x4d494e494d495a45ull);
+    const WidgetId dragId = combineIds(window.id, 0x44524147ull);
+    const bool closeHovered = itemHovered(closeButton, viewport, closeId);
+    const bool minimizeHovered = itemHovered(minimizeButton, viewport, minimizeId);
+
+    if (itemClicked(closeButton, viewport, closeId))
+    {
+        window.open = false;
+        window.minimized = false;
+        draggingWindow_ = WindowHandle();
+        focusedWidget_ = InvalidWidgetId;
+        textInputWidget_ = InvalidWidgetId;
+        openCombo_ = InvalidWidgetId;
+        return;
+    }
+    if (itemClicked(minimizeButton, viewport, minimizeId))
+        window.minimized = !window.minimized;
+
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool pressedTitle = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                              activeWidget_ == InvalidWidgetId &&
+                              contains(intersect(dragArea, viewport), pointer_.pressedPosition[left]);
+    if (pressedTitle)
+    {
+        activeWidget_ = dragId;
+        draggingWindow_ = currentWindow_;
+        windowDragOffset_ = Vec2(pointer_.pressedPosition[left].x - window.bounds.x,
+                                 pointer_.pressedPosition[left].y - window.bounds.y);
+    }
+    if (draggingWindow_ == currentWindow_ && activeWidget_ == dragId)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left])
+        {
+            window.bounds.x = pointer_.position.x - windowDragOffset_.x;
+            window.bounds.y = pointer_.position.y - windowDragOffset_.y;
+        }
+        if (pointer_.released[left])
+        {
+            activeWidget_ = InvalidWidgetId;
+            draggingWindow_ = WindowHandle();
+        }
+    }
+
+    const Rect resolvedTitleBar(window.bounds.x, window.bounds.y, window.bounds.width, titleHeight);
+    if (!window.minimized)
+        window.drawList.addRectFilled(window.bounds, theme_.windowBackground, viewport);
+    window.drawList.addRectFilled(resolvedTitleBar, theme_.titleBarBackground, viewport);
+    const Rect resolvedCloseButton(window.bounds.x + window.bounds.width - controlWidth,
+                                   window.bounds.y, controlWidth, titleHeight);
+    const Rect resolvedMinimizeButton(resolvedCloseButton.x - controlWidth, window.bounds.y,
+                                      controlWidth, titleHeight);
+    if (minimizeHovered)
+        window.drawList.addRectFilled(resolvedMinimizeButton, theme_.buttonHovered, viewport);
+    if (closeHovered)
+        window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
     const TextMetrics metrics = measureText(theme_.font, window.title, theme_.fontSize);
     const Vec2 titlePosition(window.bounds.x + theme_.windowPadding,
-                             window.bounds.y + (theme_.titleBarHeight - metrics.height) * 0.5f);
+                             window.bounds.y + (titleHeight - metrics.height) * 0.5f);
     drawText(window.drawList, theme_.font, window.title, titlePosition, theme_.fontSize,
              theme_.labelText, viewport);
+    const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
+    const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize);
+    drawText(window.drawList, theme_.font, StringView("-"),
+             Vec2(resolvedMinimizeButton.x + (controlWidth - minimizeMetrics.width) * 0.5f,
+                  resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, viewport);
+    drawText(window.drawList, theme_.font, StringView("x"),
+             Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
+                  resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, viewport);
 }
 
 WindowHandle Context::topWindowAt(const Vec2 &position) const
@@ -1271,7 +1353,11 @@ WindowHandle Context::topWindowAt(const Vec2 &position) const
     for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
-        if (window && window->open && contains(window->bounds, position) && window->zOrder >= highestZ)
+        const Rect hitBounds(window ? window->bounds.x : 0.0f, window ? window->bounds.y : 0.0f,
+                             window ? window->bounds.width : 0.0f,
+                             window && window->minimized ? theme_.titleBarHeight
+                                                          : (window ? window->bounds.height : 0.0f));
+        if (window && window->open && contains(hitBounds, position) && window->zOrder >= highestZ)
         {
             highestZ = window->zOrder;
             result = windowOrder_[i];
