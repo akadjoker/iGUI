@@ -267,6 +267,10 @@ void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTex
     ui.sameLine(14.0f);
     ui.imageButton("texture preview action", previewTexture, 92.0f, 92.0f);
     ui.tooltip("Use this texture preview as an action button");
+    ui.sameLine(8.0f);
+    if (ui.smallImageButton("small texture action", previewTexture))
+        ui.showToast("small texture action", "Compact image action", ig::ToastPosition::BottomRight);
+    ui.tooltip("Compact icon button");
     ui.endWindow();
 }
 
@@ -487,6 +491,12 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     ui.progressBar(state.progress, 1.0f);
     ui.spacing(4.0f);
     ui.checkbox("Animate preview", state.enabled);
+    ui.sameLine(6.0f);
+    if (ui.smallButton("Refresh"))
+        ui.showToast("inspector refresh", "Inspector refreshed", ig::ToastPosition::BottomRight);
+    ui.sameLine(5.0f);
+    if (ui.smallButton("Reset"))
+        state.progress = 0.0f;
     ui.selectable("Click to focus this window", true);
     ui.endWindow();
 }

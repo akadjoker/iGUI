@@ -411,6 +411,38 @@ static void test_image_widgets()
     context.endFrame();
 }
 
+static void test_small_buttons()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::TextureId texture(99u);
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("small buttons", ig::Rect(10.0f, 10.0f, 220.0f, 120.0f)));
+    assert(!context.smallButton("Reload", ig::Rect(8.0f, 8.0f, 60.0f, 20.0f)));
+    assert(!context.smallImageButton("icon reload", texture, ig::Rect(76.0f, 8.0f, 20.0f, 20.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 42.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 42.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("small buttons", ig::Rect(10.0f, 10.0f, 220.0f, 120.0f)));
+    assert(context.smallButton("Reload", ig::Rect(8.0f, 8.0f, 60.0f, 20.0f)));
+    assert(!context.smallImageButton("icon reload", texture, ig::Rect(76.0f, 8.0f, 20.0f, 20.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 104.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 104.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("small buttons", ig::Rect(10.0f, 10.0f, 220.0f, 120.0f)));
+    assert(!context.smallButton("Reload", ig::Rect(8.0f, 8.0f, 60.0f, 20.0f)));
+    assert(context.smallImageButton("icon reload", texture, ig::Rect(76.0f, 8.0f, 20.0f, 20.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
 struct NavigationState
 {
     int tab;
@@ -876,6 +908,7 @@ int main()
     test_combo_popup_overlay();
     test_menu_and_context_menu();
     test_image_widgets();
+    test_small_buttons();
     test_navigation_widgets();
     test_editor_widgets();
     test_multiline_scroll_and_drag_widgets();

@@ -330,6 +330,29 @@ bool Context::button(StringView labelText, const Rect &bounds)
     return clicked;
 }
 
+bool Context::smallButton(StringView labelText, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+    const WidgetId id = combineIds(makeWidgetId(labelText), 0x534d414c4c42544eull);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    const float fontSize = theme_.fontSize * 0.82f;
+    const TextMetrics metrics = measureText(theme_.font, labelText, fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(rect.x + (rect.width - metrics.width) * 0.5f,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             fontSize, theme_.buttonText, clip);
+    return clicked;
+}
+
 bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
 {
     WindowState *window = currentWindow();
@@ -1928,6 +1951,30 @@ bool Context::imageButton(StringView labelText, TextureId texture, const Rect &b
     return clicked;
 }
 
+bool Context::smallImageButton(StringView labelText, TextureId texture, const Rect &bounds,
+                               const Vec2 &uvMin, const Vec2 &uvMax, const Color &tint)
+{
+    WindowState *window = currentWindow();
+    if (!window || texture.value == 0u)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+    const WidgetId id = combineIds(makeWidgetId(labelText), 0x534d414c4c494d47ull);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+    const float inset = rect.width < rect.height ? rect.width * 0.16f : rect.height * 0.16f;
+    const Rect imageRect(rect.x + inset, rect.y + inset,
+                         rect.width - inset * 2.0f, rect.height - inset * 2.0f);
+    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawList->addImage(texture, imageRect, uvMin, uvMax, tint, clip);
+    if (hovered)
+        drawList->addRect(imageRect, theme_.focusColor, clip);
+    return clicked;
+}
+
 void Context::progressBar(float value, float maximum, const Rect &bounds)
 {
     if (!currentWindow())
@@ -2289,6 +2336,21 @@ bool Context::button(StringView labelText)
     return clicked;
 }
 
+bool Context::smallButton(StringView labelText)
+{
+    const float fontSize = theme_.fontSize * 0.82f;
+    const TextMetrics metrics = measureText(theme_.font, labelText, fontSize);
+    const float paddingX = theme_.padding * 1.25f;
+    const float paddingY = theme_.padding * 0.55f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, metrics.width + paddingX * 2.0f,
+                      metrics.height + paddingY * 2.0f);
+    const bool clicked = smallButton(labelText, Rect(bounds.x - layout_.origin.x,
+                                                     bounds.y - layout_.origin.y,
+                                                     bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return clicked;
+}
+
 bool Context::checkbox(StringView labelText, bool &value)
 {
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
@@ -2575,6 +2637,20 @@ bool Context::imageButton(StringView labelText, TextureId texture, float width, 
                                           bounds.y - layout_.origin.y,
                                           bounds.width, bounds.height),
                                      uvMin, uvMax, tint);
+    advanceLayout(bounds);
+    return clicked;
+}
+
+bool Context::smallImageButton(StringView labelText, TextureId texture, float size,
+                               const Vec2 &uvMin, const Vec2 &uvMax, const Color &tint)
+{
+    const float resolvedSize = size > 0.0f ? size : theme_.fontSize + theme_.padding * 1.4f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedSize, resolvedSize);
+    const bool clicked = smallImageButton(labelText, texture,
+                                          Rect(bounds.x - layout_.origin.x,
+                                               bounds.y - layout_.origin.y,
+                                               bounds.width, bounds.height),
+                                          uvMin, uvMax, tint);
     advanceLayout(bounds);
     return clicked;
 }

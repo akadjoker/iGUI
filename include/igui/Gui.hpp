@@ -135,6 +135,8 @@ public:
     bool wantsTextInput() const;
 
     bool button(StringView label, const Rect &bounds);
+    // Compact text action for inspectors and toolbars.
+    bool smallButton(StringView label, const Rect &bounds);
     bool checkbox(StringView label, bool &value, const Rect &bounds);
     bool toggleSwitch(StringView label, bool &value, const Rect &bounds);
     bool radioButton(StringView label, bool selected, const Rect &bounds);
@@ -202,6 +204,10 @@ public:
     bool imageButton(StringView label, TextureId texture, const Rect &bounds,
                      const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                      const Color &tint = Color());
+    // Compact icon-only button. label is an identifier, not rendered text.
+    bool smallImageButton(StringView label, TextureId texture, const Rect &bounds,
+                          const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+                          const Color &tint = Color());
     void progressBar(float value, float maximum, const Rect &bounds);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
@@ -221,6 +227,7 @@ public:
     void tooltip(StringView text);
 
     bool button(StringView label);
+    bool smallButton(StringView label);
     bool checkbox(StringView label, bool &value);
     bool toggleSwitch(StringView label, bool &value);
     bool radioButton(StringView label, bool selected);
@@ -259,6 +266,9 @@ public:
     bool imageButton(StringView label, TextureId texture, float width, float height,
                      const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                      const Color &tint = Color());
+    bool smallImageButton(StringView label, TextureId texture, float size = 0.0f,
+                          const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
+                          const Color &tint = Color());
     void progressBar(float value, float maximum, float width = 0.0f);
     void label(StringView text);
     void sameLine(float spacing = -1.0f);
