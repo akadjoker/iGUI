@@ -198,8 +198,11 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
 
     if (segments < 3u)
     {
-        segments = static_cast<uint32_t>(radius * 0.5f) + 8u;
-        segments = segments < 8u ? 8u : (segments > 64u ? 64u : segments);
+        // UI controls are often small, where a low polygon count is especially
+        // noticeable.  Keep their silhouette round before adding the soft edge
+        // below.
+        segments = static_cast<uint32_t>(radius * 0.8f) + 12u;
+        segments = segments < 12u ? 12u : (segments > 64u ? 64u : segments);
     }
     segments = segments > 256u ? 256u : segments;
 
@@ -207,6 +210,9 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
     const Vec2 uv(0.0f, 0.0f);
     const float step = 6.28318530717958647692f / static_cast<float>(segments);
+    const Color transparentEdge(color.r, color.g, color.b, 0u);
+    const float fringe = radius < 2.0f ? 0.5f : 1.0f;
+
     vertices_.push_back(DrawVertex{center, uv, color});
     for (uint32_t i = 0; i < segments; ++i)
     {
@@ -216,11 +222,33 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     }
     for (uint32_t i = 0; i < segments; ++i)
     {
-        indices_.push_back(firstVertex);
-        indices_.push_back(firstVertex + 1u + i);
-        indices_.push_back(firstVertex + 1u + ((i + 1u) % segments));
+        const float angle = step * static_cast<float>(i);
+        vertices_.push_back(DrawVertex{Vec2(center.x + cosf(angle) * (radius + fringe),
+                                            center.y + sinf(angle) * (radius + fringe)),
+                                       uv, transparentEdge});
     }
-    addGeometryCommand(commands_, firstIndex, segments * 3u, clip);
+    for (uint32_t i = 0; i < segments; ++i)
+    {
+        const uint32_t next = (i + 1u) % segments;
+        const uint32_t inner = firstVertex + 1u + i;
+        const uint32_t innerNext = firstVertex + 1u + next;
+        const uint32_t outer = firstVertex + 1u + segments + i;
+        const uint32_t outerNext = firstVertex + 1u + segments + next;
+
+        indices_.push_back(firstVertex);
+        indices_.push_back(inner);
+        indices_.push_back(innerNext);
+
+        // One transparent pixel of geometry gives the circle a stable
+        // anti-aliased edge on every backend, without needing a font glyph.
+        indices_.push_back(inner);
+        indices_.push_back(outer);
+        indices_.push_back(outerNext);
+        indices_.push_back(inner);
+        indices_.push_back(outerNext);
+        indices_.push_back(innerNext);
+    }
+    addGeometryCommand(commands_, firstIndex, segments * 9u, clip);
 }
 
 void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip)

@@ -226,9 +226,9 @@ static void test_draw_primitives()
     const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
 
     assert(data.commands.size() == 1u);
-    assert(data.vertices.size() == 34u);
-    assert(data.indices.size() == 63u);
-    assert(data.commands[0].payload.geometry.indexCount == 63u);
+    assert(data.vertices.size() == 42u);
+    assert(data.indices.size() == 111u);
+    assert(data.commands[0].payload.geometry.indexCount == 111u);
 }
 
 static void test_automatic_layout()
