@@ -235,8 +235,11 @@ bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &comman
             return false;
     }
 
-    ::rlSetTexture(static_cast<unsigned int>(command.texture.value));
+    // rlBegin() resets the active batch texture when the primitive mode
+    // changes. Select the image after it so glyph quads sample their atlas
+    // instead of Raylib's solid-white default texture.
     ::rlBegin(RL_TRIANGLES);
+    ::rlSetTexture(static_cast<unsigned int>(command.texture.value));
     // Emit triangles with inverted winding so they are front-facing under
     // Raylib's default backface culling (GL_CULL_FACE is enabled by rlgl).
     for (uint32_t tri = 0u; tri + 2u < command.indexCount; tri += 3u)
