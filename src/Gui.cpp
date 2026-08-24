@@ -1103,7 +1103,16 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     if (enabled && (hovered || clicked))
     {
         openSubMenu_ = id;
-        subMenuPopupBounds_ = Rect(item.x + item.width, item.y, theme_.menuMinWidth, 0.0f);
+        float popupX = item.x + item.width;
+        const float clipRight = clip.x + clip.width;
+        if (popupX + theme_.menuMinWidth > clipRight)
+        {
+            const float leftPopupX = item.x - theme_.menuMinWidth;
+            popupX = leftPopupX >= clip.x ? leftPopupX : clipRight - theme_.menuMinWidth;
+        }
+        if (popupX < clip.x)
+            popupX = clip.x;
+        subMenuPopupBounds_ = Rect(popupX, item.y, theme_.menuMinWidth, 0.0f);
     }
     popup.addRectFilled(item, openSubMenu_ == id || hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
@@ -1152,6 +1161,7 @@ void Context::menuSeparator()
     const Rect separator(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
                          activeMenuBounds_.width, theme_.itemSpacing);
     activeMenuBounds_.height += separator.height;
+    window->overlayDrawList.addRectFilled(separator, theme_.menuBg, contentClip());
     window->overlayDrawList.addRectFilled(Rect(separator.x + theme_.menuItemPadX,
                                                separator.y + separator.height * 0.5f,
                                                separator.width - theme_.menuItemPadX * 2.0f, 1.0f),
