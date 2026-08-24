@@ -20,7 +20,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
@@ -30,6 +30,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     events_.reserve(32);
     windows_.reserve(8);
     windowsById_.reserve(8);
+    listScrolls_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     textEvents_.reserve(4);
@@ -379,6 +380,185 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect 
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
     return expanded;
+}
+
+bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+
+    const bool hovered = itemHovered(rect, clip, id);
+    if (itemClicked(rect, clip, id))
+        expanded = !expanded;
+
+    if (hovered)
+        drawList->addRectFilled(rect, theme_.buttonHovered, clip);
+    const float arrowSize = rect.height * 0.20f;
+    const float arrowX = rect.x + theme_.windowPadding * 0.75f;
+    const float arrowY = rect.y + rect.height * 0.5f;
+    const Vec2 arrow[] = {
+        expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
+                 : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
+        expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
+                 : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
+        expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
+                 : Vec2(arrowX + arrowSize * 0.75f, arrowY)
+    };
+    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(arrowX + arrowSize + theme_.windowPadding * 0.75f,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    return expanded;
+}
+
+bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
+                     const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window || items.empty())
+        return false;
+
+    if (currentItem < 0 || static_cast<Span<const StringView>::size_type>(currentItem) >= items.size())
+        currentItem = 0;
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const float tabWidth = rect.width / static_cast<float>(items.size());
+    bool changed = false;
+    for (Span<const StringView>::size_type i = 0u; i < items.size(); ++i)
+    {
+        const Rect tab(rect.x + tabWidth * static_cast<float>(i), rect.y,
+                       i + 1u == items.size() ? rect.x + rect.width -
+                           (rect.x + tabWidth * static_cast<float>(i)) : tabWidth,
+                       rect.height);
+        const WidgetId tabId = combineIds(id, static_cast<WidgetId>(i + 1u));
+        const bool hovered = itemHovered(tab, clip, tabId);
+        if (itemClicked(tab, clip, tabId) && currentItem != static_cast<int>(i))
+        {
+            currentItem = static_cast<int>(i);
+            changed = true;
+        }
+        const Color background = static_cast<int>(i) == currentItem ? theme_.selectableSelected
+                               : (hovered ? theme_.selectableHovered : theme_.buttonBackground);
+        drawList->addRectFilled(tab, background, clip);
+        const TextMetrics metrics = measureText(theme_.font, items[i], theme_.fontSize);
+        drawText(*drawList, theme_.font, items[i],
+                 Vec2(tab.x + (tab.width - metrics.width) * 0.5f,
+                      tab.y + (tab.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.buttonText, clip);
+    }
+    return changed;
+}
+
+bool Context::listBox(StringView labelText, int &currentItem, Span<const StringView> items,
+                      const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window || items.empty())
+        return false;
+
+    if (currentItem < 0 || static_cast<Span<const StringView>::size_type>(currentItem) >= items.size())
+        currentItem = 0;
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    const Rect visible = intersect(rect, clip);
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f ||
+        visible.width <= 0.0f || visible.height <= 0.0f)
+        return false;
+
+    const int rowCount = static_cast<int>(rect.height / theme_.widgetHeight);
+    const int visibleRows = rowCount > 0 ? rowCount : 1;
+    const int maximumScroll = static_cast<int>(items.size()) - visibleRows;
+    int *scroll = listScrolls_.find(id);
+    if (!scroll)
+    {
+        listScrolls_.put(id, 0);
+        scroll = listScrolls_.find(id);
+    }
+    if (!scroll)
+        return false;
+    if (*scroll < 0)
+        *scroll = 0;
+    if (*scroll > maximumScroll)
+        *scroll = maximumScroll > 0 ? maximumScroll : 0;
+
+    const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position);
+    if (hovered && pointer_.wheelY != 0.0f && maximumScroll > 0)
+    {
+        const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
+        *scroll += delta;
+        if (*scroll < 0)
+            *scroll = 0;
+        if (*scroll > maximumScroll)
+            *scroll = maximumScroll;
+    }
+
+    drawList->addRectFilled(rect, theme_.selectableBackground, visible);
+    bool changed = false;
+    const int itemCount = static_cast<int>(items.size());
+    for (int row = 0; row < visibleRows; ++row)
+    {
+        const int itemIndex = *scroll + row;
+        if (itemIndex >= itemCount)
+            break;
+        const Rect item(rect.x, rect.y + theme_.widgetHeight * static_cast<float>(row),
+                        rect.width, theme_.widgetHeight);
+        const WidgetId itemId = combineIds(id, static_cast<WidgetId>(itemIndex + 1));
+        const bool itemHoveredValue = itemHovered(item, visible, itemId);
+        if (itemClicked(item, visible, itemId) && currentItem != itemIndex)
+        {
+            currentItem = itemIndex;
+            changed = true;
+        }
+        if (itemIndex == currentItem || itemHoveredValue)
+            drawList->addRectFilled(item, itemIndex == currentItem
+                                            ? theme_.selectableSelected : theme_.selectableHovered,
+                                    visible);
+        const TextMetrics metrics = measureText(theme_.font,
+                                                 items[static_cast<Span<const StringView>::size_type>(itemIndex)],
+                                                 theme_.fontSize);
+        drawText(*drawList, theme_.font,
+                 items[static_cast<Span<const StringView>::size_type>(itemIndex)],
+                 Vec2(item.x + theme_.windowPadding * 0.5f,
+                      item.y + (item.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, visible);
+    }
+
+    if (maximumScroll > 0)
+    {
+        const float scrollbarWidth = theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f : 4.0f;
+        const float fraction = static_cast<float>(visibleRows) / static_cast<float>(items.size());
+        const float minimumThumb = theme_.scrollbarMinThumb < rect.height
+                                       ? theme_.scrollbarMinThumb : rect.height;
+        const float thumbHeight = rect.height * fraction > minimumThumb
+                                      ? rect.height * fraction : minimumThumb;
+        const float travel = rect.height - thumbHeight;
+        const float offset = maximumScroll > 0
+                                 ? travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll)
+                                 : 0.0f;
+        drawList->addRectFilled(Rect(rect.x + rect.width - scrollbarWidth, rect.y,
+                                     scrollbarWidth, rect.height), theme_.inputBg, visible);
+        drawList->addRectFilled(Rect(rect.x + rect.width - scrollbarWidth, rect.y + offset,
+                                     scrollbarWidth, thumbHeight), theme_.scrollbarThumb, visible);
+    }
+    return changed;
 }
 
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,
@@ -758,6 +938,35 @@ void Context::label(StringView text, const Vec2 &position)
              theme_.fontSize, theme_.labelText, contentClip());
 }
 
+void Context::tooltip(StringView text)
+{
+    WindowState *window = currentWindow();
+    if (!window || hotWidget_ == InvalidWidgetId || text.empty())
+        return;
+
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float paddingX = theme_.tooltipPadX;
+    const float paddingY = theme_.tooltipPadY;
+    float x = pointer_.position.x + 14.0f;
+    float y = pointer_.position.y + 18.0f;
+    const float width = metrics.width + paddingX * 2.0f;
+    const float height = metrics.height + paddingY * 2.0f;
+    if (x + width > viewport.width)
+        x = viewport.width - width;
+    if (y + height > viewport.height)
+        y = pointer_.position.y - height - 10.0f;
+    if (x < 0.0f)
+        x = 0.0f;
+    if (y < 0.0f)
+        y = 0.0f;
+    const Rect bounds(x, y, width, height);
+    window->overlayDrawList.addRectFilled(bounds, theme_.tooltipBg, viewport);
+    drawText(window->overlayDrawList, theme_.font, text,
+             Vec2(x + paddingX, y + paddingY), theme_.fontSize,
+             theme_.tooltipText, viewport);
+}
+
 bool Context::button(StringView labelText)
 {
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, autoButtonWidth(labelText), theme_.widgetHeight);
@@ -830,6 +1039,46 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, float width
                                             bounds.width, bounds.height));
     advanceLayout(bounds);
     return open;
+}
+
+bool Context::treeNode(StringView labelText, bool &expanded, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool open = treeNode(labelText, expanded,
+                               Rect(bounds.x - layout_.origin.x,
+                                    bounds.y - layout_.origin.y,
+                                    bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return open;
+}
+
+bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
+                     float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = tabBar(labelText, currentItem, items,
+                                Rect(bounds.x - layout_.origin.x,
+                                     bounds.y - layout_.origin.y,
+                                     bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::listBox(StringView labelText, int &currentItem, Span<const StringView> items,
+                      float width, int visibleItems)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const int resolvedRows = visibleItems > 0 ? visibleItems : 1;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth,
+                      theme_.widgetHeight * static_cast<float>(resolvedRows));
+    const bool changed = listBox(labelText, currentItem, items,
+                                 Rect(bounds.x - layout_.origin.x,
+                                      bounds.y - layout_.origin.y,
+                                      bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
 }
 
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,
@@ -971,6 +1220,25 @@ void Context::spacing(float pixels)
 {
     if (pixels > 0.0f)
         layout_.cursor.y += pixels;
+}
+
+void Context::indent(float pixels)
+{
+    if (!currentWindow() || pixels <= 0.0f)
+        return;
+    layout_.origin.x += pixels;
+    layout_.cursor.x = layout_.origin.x;
+    layout_.hasLastItem = false;
+}
+
+void Context::unindent(float pixels)
+{
+    if (!currentWindow() || pixels <= 0.0f)
+        return;
+    const float nextOrigin = layout_.origin.x - pixels;
+    layout_.origin.x = nextOrigin > layout_.baseOriginX ? nextOrigin : layout_.baseOriginX;
+    layout_.cursor.x = layout_.origin.x;
+    layout_.hasLastItem = false;
 }
 
 void Context::separator(float thickness)
@@ -1128,6 +1396,7 @@ void Context::beginLayout(const WindowState &window)
                       window.bounds.y + theme_.titleBarHeight + theme_.windowPadding);
     layout_.origin = origin;
     layout_.cursor = origin;
+    layout_.baseOriginX = origin.x;
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
 }

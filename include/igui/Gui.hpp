@@ -65,6 +65,14 @@ public:
     bool selectable(StringView label, bool selected, const Rect &bounds);
     // Returns whether the section is expanded. The bool stores its persistent state.
     bool collapsingHeader(StringView label, bool &expanded, const Rect &bounds);
+    // A compact expandable row for hierarchies. Use indent()/unindent() for its children.
+    bool treeNode(StringView label, bool &expanded, const Rect &bounds);
+    // Renders a tab strip and returns true when the selected tab changes.
+    bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
+                const Rect &bounds);
+    // A scrollable list. The label is an identifier; render a separate label when needed.
+    bool listBox(StringView label, int &currentItem, Span<const StringView> items,
+                 const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   const Rect &bounds);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
@@ -86,6 +94,8 @@ public:
                      const Color &tint = Color());
     void progressBar(float value, float maximum, const Rect &bounds);
     void label(StringView text, const Vec2 &position);
+    // Call immediately after the widget that owns this help text.
+    void tooltip(StringView text);
 
     bool button(StringView label);
     bool checkbox(StringView label, bool &value);
@@ -93,6 +103,11 @@ public:
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
     bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
+    bool treeNode(StringView label, bool &expanded, float width = 0.0f);
+    bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
+                float width = 180.0f);
+    bool listBox(StringView label, int &currentItem, Span<const StringView> items,
+                 float width = 180.0f, int visibleItems = 4);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   float width = 180.0f);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
@@ -114,6 +129,8 @@ public:
     void label(StringView text);
     void sameLine(float spacing = -1.0f);
     void spacing(float pixels);
+    void indent(float pixels = 16.0f);
+    void unindent(float pixels = 16.0f);
     void separator(float thickness = 1.0f);
     void setCursor(const Vec2 &localPosition);
     Vec2 cursor() const;
@@ -137,10 +154,11 @@ private:
     {
         Vec2 origin;
         Vec2 cursor;
+        float baseOriginX;
         Rect lastItem;
         bool hasLastItem;
 
-        LayoutState() : origin(), cursor(), lastItem(), hasLastItem(false) {}
+        LayoutState() : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false) {}
     };
 
     Backend &backend_;
@@ -153,6 +171,7 @@ private:
     ct::Vector<Event> textEvents_;
     ct::SlotMap<WindowState> windows_;
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
+    ct::HashMap<WidgetId, int> listScrolls_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     DrawList frameDrawList_;

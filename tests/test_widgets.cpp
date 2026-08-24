@@ -323,10 +323,90 @@ static void test_image_widgets()
     context.endFrame();
 }
 
+struct NavigationState
+{
+    int tab;
+    int selectedItem;
+    bool sceneExpanded;
+
+    NavigationState() : tab(0), selectedItem(0), sceneExpanded(false) {}
+};
+
+static void drawNavigationWidgets(ig::Context &context, NavigationState &state)
+{
+    const ig::StringView tabs[] = {
+        ig::StringView("scene"), ig::StringView("assets"), ig::StringView("settings")
+    };
+    const ig::StringView items[] = {
+        ig::StringView("camera"), ig::StringView("light"), ig::StringView("mesh"),
+        ig::StringView("material"), ig::StringView("environment"), ig::StringView("post process")
+    };
+
+    assert(context.beginWindow("navigation", ig::Rect(10.0f, 10.0f, 240.0f, 240.0f)));
+    context.tabBar("navigator tabs", state.tab, ig::Span<const ig::StringView>(tabs),
+                   ig::Rect(8.0f, 8.0f, 180.0f, 28.0f));
+    context.treeNode("Scene", state.sceneExpanded, ig::Rect(8.0f, 44.0f, 180.0f, 28.0f));
+    context.tooltip("Scene hierarchy");
+    context.listBox("scene items", state.selectedItem, ig::Span<const ig::StringView>(items),
+                    ig::Rect(8.0f, 80.0f, 180.0f, 84.0f));
+    context.endWindow();
+}
+
+static void test_navigation_widgets()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    NavigationState state;
+
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 110.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 110.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+    assert(state.tab == 1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 100.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 100.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+    assert(state.sceneExpanded);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 140.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 190.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 190.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    context.endFrame();
+    assert(state.selectedItem == 3);
+
+    context.pushEvent(ig::Event::pointerMove(40.0f, 100.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 280.0f));
+    drawNavigationWidgets(context, state);
+    const ig::DrawData &data = context.endFrame();
+    assert(!data.commands.empty());
+    const ig::DrawCommand &tooltip = data.commands.back();
+    assert(tooltip.type == ig::DrawCommandType::Text);
+    assert(tooltip.payload.text.textSize == 15u);
+}
+
 int main()
 {
     test_widget_gallery();
     test_combo_popup_overlay();
     test_image_widgets();
+    test_navigation_widgets();
     return 0;
 }

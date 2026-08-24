@@ -18,6 +18,12 @@ struct DemoState
     bool numericOpen;
     bool selectionOpen;
     bool imagesOpen;
+    bool workspaceOpen;
+    bool windowManagerOpen;
+    bool sceneExpanded;
+    bool cameraExpanded;
+    bool renderExpanded;
+    bool floorExpanded;
     bool selectedPreset;
     float volume;
     float progress;
@@ -25,14 +31,18 @@ struct DemoState
     int samples;
     int retries;
     int sampleOffset;
+    int workspaceTab;
+    int selectedAsset;
     float gamma;
     ig::String name;
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
+          workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
+          renderExpanded(false), floorExpanded(false),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), gamma(2.2f),
+          sampleOffset(4), workspaceTab(0), selectedAsset(1), gamma(2.2f),
           name("Raylib user")
     {
     }
@@ -65,6 +75,73 @@ void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTex
     ui.image(previewTexture, 128.0f, 128.0f);
     ui.sameLine(14.0f);
     ui.imageButton("texture preview action", previewTexture, 92.0f, 92.0f);
+    ui.tooltip("Use this texture preview as an action button");
+    ui.endWindow();
+}
+
+void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
+{
+    const ig::StringView tabs[] = {
+        ig::StringView("Scene"), ig::StringView("Assets"), ig::StringView("Settings")
+    };
+    const ig::StringView assets[] = {
+        ig::StringView("skybox.hdr"), ig::StringView("albedo.png"), ig::StringView("normal.png"),
+        ig::StringView("wood.mat"), ig::StringView("character.mesh"), ig::StringView("postfx.shader")
+    };
+
+    if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 440.0f, 420.0f, 350.0f), &state.workspaceOpen))
+        return;
+
+    ui.tabBar("workspace tabs", state.workspaceTab, ig::Span<const ig::StringView>(tabs), 350.0f);
+    ui.spacing(6.0f);
+    if (state.workspaceTab == 0)
+    {
+        if (ui.treeNode("Demo scene", state.sceneExpanded, 350.0f))
+        {
+            ui.indent();
+            ui.treeNode("Camera", state.cameraExpanded, 320.0f);
+            ui.tooltip("Camera settings are nested under the scene");
+            if (ui.treeNode("Renderer", state.renderExpanded, 320.0f))
+            {
+                ui.indent();
+                ui.label("Deferred lighting");
+                ui.label("Bloom enabled");
+                ui.unindent();
+            }
+            ui.treeNode("Floor mesh", state.floorExpanded, 320.0f);
+            ui.unindent();
+        }
+    }
+    else if (state.workspaceTab == 1)
+    {
+        ui.label("Project assets");
+        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 350.0f, 6);
+    }
+    else
+    {
+        ui.label("Workspace defaults");
+        ui.checkbox("Grid visible", state.enabled);
+        ui.toggleSwitch("Realtime previews", state.liveUpdates);
+        ui.sliderFloat("UI scale", state.gamma, 1.0f, 3.0f, 350.0f);
+    }
+    ui.endWindow();
+}
+
+void drawWindowManager(ig::Context &ui, DemoState &state)
+{
+    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 126.0f), &state.windowManagerOpen))
+        return;
+
+    ui.checkbox("Profile", state.profileOpen);
+    ui.sameLine();
+    ui.checkbox("Numeric", state.numericOpen);
+    ui.sameLine();
+    ui.checkbox("Selection", state.selectionOpen);
+    ui.checkbox("Inspector", state.showInspector);
+    ui.sameLine();
+    ui.checkbox("Workspace", state.workspaceOpen);
+    ui.sameLine();
+    ui.checkbox("Images", state.imagesOpen);
     ui.endWindow();
 }
 
@@ -118,7 +195,7 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     if (!state.showInspector)
         return;
 
-    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 190.0f, 410.0f, 300.0f), &state.showInspector))
+    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 214.0f, 410.0f, 300.0f), &state.showInspector))
         return;
 
     state.progress += deltaSeconds * (state.enabled ? 0.18f : 0.04f);
@@ -170,6 +247,8 @@ int main()
         drawProfileWindow(ui, state);
         drawNumericWindow(ui, state);
         drawSelectionWindow(ui, state);
+        drawWindowManager(ui, state);
+        drawWorkspaceWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
         const ig::DrawData &drawData = ui.endFrame();
