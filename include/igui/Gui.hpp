@@ -188,6 +188,7 @@ private:
     WindowHandle resizingWindow_;
     WidgetId activeWidget_;
     WidgetId hotWidget_;
+    WidgetId lastItemId_;
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;

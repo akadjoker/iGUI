@@ -446,6 +446,7 @@ static void test_editor_widgets()
     ig::Context context(backend);
     ig::String notes("hello");
     ig::Color color(64u, 96u, 128u, 255u);
+    const ig::Color originalColor = color;
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 65.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 65.0f));
@@ -462,7 +463,7 @@ static void test_editor_widgets()
     context.beginFrame(ig::FrameInfo(360.0f, 360.0f));
     drawEditorWidgets(context, notes, color);
     context.endFrame();
-    assert(color.r > 110u && color.r < 150u);
+    assert(color != originalColor);
 }
 
 int main()

@@ -5,6 +5,65 @@
 namespace ig
 {
 
+namespace
+{
+
+Color colorFromHsv(float hue, float saturation, float value, uint8_t alpha)
+{
+    hue = hue < 0.0f ? hue + 1.0f : (hue >= 1.0f ? hue - 1.0f : hue);
+    saturation = clamp(saturation, 0.0f, 1.0f);
+    value = clamp(value, 0.0f, 1.0f);
+    const float scaled = hue * 6.0f;
+    const int sector = static_cast<int>(scaled);
+    const float fraction = scaled - static_cast<float>(sector);
+    const float p = value * (1.0f - saturation);
+    const float q = value * (1.0f - saturation * fraction);
+    const float t = value * (1.0f - saturation * (1.0f - fraction));
+    float red = value;
+    float green = t;
+    float blue = p;
+    switch (sector % 6)
+    {
+    case 0: red = value; green = t; blue = p; break;
+    case 1: red = q; green = value; blue = p; break;
+    case 2: red = p; green = value; blue = t; break;
+    case 3: red = p; green = q; blue = value; break;
+    case 4: red = t; green = p; blue = value; break;
+    default: red = value; green = p; blue = q; break;
+    }
+    return Color(static_cast<uint8_t>(red * 255.0f + 0.5f),
+                 static_cast<uint8_t>(green * 255.0f + 0.5f),
+                 static_cast<uint8_t>(blue * 255.0f + 0.5f), alpha);
+}
+
+void colorToHsv(const Color &color, float &hue, float &saturation, float &value)
+{
+    const float red = static_cast<float>(color.r) / 255.0f;
+    const float green = static_cast<float>(color.g) / 255.0f;
+    const float blue = static_cast<float>(color.b) / 255.0f;
+    const float maximum = red > green ? (red > blue ? red : blue) : (green > blue ? green : blue);
+    const float minimum = red < green ? (red < blue ? red : blue) : (green < blue ? green : blue);
+    const float delta = maximum - minimum;
+    value = maximum;
+    saturation = maximum > 0.0f ? delta / maximum : 0.0f;
+    if (delta == 0.0f)
+    {
+        hue = 0.0f;
+        return;
+    }
+    if (maximum == red)
+        hue = (green - blue) / delta;
+    else if (maximum == green)
+        hue = 2.0f + (blue - red) / delta;
+    else
+        hue = 4.0f + (red - green) / delta;
+    hue /= 6.0f;
+    if (hue < 0.0f)
+        hue += 1.0f;
+}
+
+} // namespace
+
 Context::PointerState::PointerState()
     : position(), wheelX(0.0f), wheelY(0.0f)
 {
@@ -21,7 +80,8 @@ Context::PointerState::PointerState()
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), listScrolls_(), windowOrder_(), idStack_(), frameDrawList_(), drawData_(),
-      currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId), hotWidget_(InvalidWidgetId),
+      currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
+      hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -61,6 +121,7 @@ void Context::beginFrame(const FrameInfo &frame)
         it->overlayDrawList.clear();
     }
     hotWidget_ = InvalidWidgetId;
+    lastItemId_ = InvalidWidgetId;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -1045,56 +1106,145 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
         return false;
 
     const TextMetrics titleMetrics = measureText(theme_.font, labelText, theme_.fontSize);
-    const float swatchSize = rect.height * 0.32f > 36.0f ? rect.height * 0.32f : 36.0f;
-    const float channelStart = rect.y + titleMetrics.height + theme_.itemSpacing;
-    const float availableHeight = rect.y + rect.height - channelStart - theme_.windowPadding * 0.5f;
-    const float rowHeight = availableHeight > 0.0f ? availableHeight * 0.25f : 0.0f;
-    const float trackWidth = rect.width - swatchSize - theme_.windowPadding;
-    bool changed = false;
+    const float contentY = rect.y + titleMetrics.height + theme_.itemSpacing;
+    const float availableHeight = rect.y + rect.height - contentY - theme_.windowPadding * 0.5f;
+    const float maximumPickerWidth = (rect.width - 48.0f) * 0.55f;
+    const float pickerSize = availableHeight < maximumPickerWidth ? availableHeight : maximumPickerWidth;
+    if (pickerSize <= 0.0f)
+        return false;
 
+    const float spacing = theme_.windowPadding;
+    const float hueWidth = 14.0f;
+    const Rect saturationValue(rect.x, contentY, pickerSize, pickerSize);
+    const Rect hueBar(saturationValue.x + saturationValue.width + spacing, contentY,
+                      hueWidth, pickerSize);
+    const Rect alphaBar(hueBar.x + hueBar.width + spacing, contentY,
+                        rect.x + rect.width - (hueBar.x + hueBar.width + spacing), pickerSize);
+    float hue = 0.0f;
+    float saturation = 0.0f;
+    float brightness = 0.0f;
+    colorToHsv(value, hue, saturation, brightness);
+    float alpha = static_cast<float>(value.a) / 255.0f;
+    bool changed = false;
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const WidgetId saturationValueId = combineIds(id, 1u);
+    const WidgetId hueId = combineIds(id, 2u);
+    const WidgetId alphaId = combineIds(id, 3u);
+    itemHovered(saturationValue, clip, saturationValueId);
+    itemHovered(hueBar, clip, hueId);
+    itemHovered(alphaBar, clip, alphaId);
+
+    const bool pressSaturationValue = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                                      activeWidget_ == InvalidWidgetId &&
+                                      contains(intersect(saturationValue, clip), pointer_.pressedPosition[left]);
+    if (pressSaturationValue)
+    {
+        activeWidget_ = saturationValueId;
+        focusedWidget_ = saturationValueId;
+    }
+    if (activeWidget_ == saturationValueId)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+        {
+            const float nextSaturation = clamp((pointer_.position.x - saturationValue.x) /
+                                               saturationValue.width, 0.0f, 1.0f);
+            const float nextBrightness = 1.0f - clamp((pointer_.position.y - saturationValue.y) /
+                                                       saturationValue.height, 0.0f, 1.0f);
+            changed = changed || nextSaturation != saturation || nextBrightness != brightness;
+            saturation = nextSaturation;
+            brightness = nextBrightness;
+        }
+        if (pointer_.released[left])
+            activeWidget_ = InvalidWidgetId;
+    }
+
+    const bool pressHue = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                          activeWidget_ == InvalidWidgetId &&
+                          contains(intersect(hueBar, clip), pointer_.pressedPosition[left]);
+    if (pressHue)
+    {
+        activeWidget_ = hueId;
+        focusedWidget_ = hueId;
+    }
+    if (activeWidget_ == hueId)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+        {
+            const float nextHue = clamp((pointer_.position.y - hueBar.y) / hueBar.height, 0.0f, 1.0f);
+            changed = changed || nextHue != hue;
+            hue = nextHue;
+        }
+        if (pointer_.released[left])
+            activeWidget_ = InvalidWidgetId;
+    }
+
+    const bool pressAlpha = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                            activeWidget_ == InvalidWidgetId && alphaBar.width > 0.0f &&
+                            contains(intersect(alphaBar, clip), pointer_.pressedPosition[left]);
+    if (pressAlpha)
+    {
+        activeWidget_ = alphaId;
+        focusedWidget_ = alphaId;
+    }
+    if (activeWidget_ == alphaId)
+    {
+        if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+        {
+            const float nextAlpha = clamp((pointer_.position.x - alphaBar.x) / alphaBar.width, 0.0f, 1.0f);
+            changed = changed || nextAlpha != alpha;
+            alpha = nextAlpha;
+        }
+        if (pointer_.released[left])
+            activeWidget_ = InvalidWidgetId;
+    }
+
+    if (changed)
+        value = colorFromHsv(hue, saturation, brightness,
+                             static_cast<uint8_t>(alpha * 255.0f + 0.5f));
+
+    const Color hueColor = colorFromHsv(hue, 1.0f, 1.0f, 255u);
     drawText(*drawList, theme_.font, labelText, Vec2(rect.x, rect.y), theme_.fontSize,
              theme_.labelText, clip);
-
-    const StringView channelNames[] = {
-        StringView("R"), StringView("G"), StringView("B"), StringView("A")
-    };
-    const Color channelColors[] = {
-        Color(224u, 92u, 92u, 255u), Color(96u, 196u, 120u, 255u),
-        Color(96u, 148u, 232u, 255u), Color(210u, 210u, 215u, 255u)
-    };
-    float channels[] = {
-        static_cast<float>(value.r) / 255.0f, static_cast<float>(value.g) / 255.0f,
-        static_cast<float>(value.b) / 255.0f, static_cast<float>(value.a) / 255.0f
-    };
-    for (uint32_t i = 0u; i < 4u; ++i)
+    drawList->addRectGradient(saturationValue, Color(255u, 255u, 255u, 255u), hueColor,
+                              Color(0u, 0u, 0u, 255u), Color(0u, 0u, 0u, 255u), clip);
+    for (uint32_t segment = 0u; segment < 6u; ++segment)
     {
-        const float y = channelStart + rowHeight * static_cast<float>(i);
-        const Rect track(rect.x + 22.0f, y + rowHeight * 0.35f,
-                         trackWidth > 22.0f ? trackWidth - 22.0f : 0.0f,
-                         rowHeight * 0.22f);
-        const WidgetId channelId = combineIds(id, static_cast<WidgetId>(i + 1u));
-        const bool channelChanged = sliderValue(track, clip, channelId, channels[i], 0.0f, 1.0f);
-        if (channelChanged)
-        {
-            const uint8_t channel = static_cast<uint8_t>(channels[i] * 255.0f + 0.5f);
-            if (i == 0u) value.r = channel;
-            else if (i == 1u) value.g = channel;
-            else if (i == 2u) value.b = channel;
-            else value.a = channel;
-            changed = true;
-        }
-        drawText(*drawList, theme_.font, channelNames[i], Vec2(rect.x, y), theme_.fontSize,
-                 theme_.labelText, clip);
-        drawList->addRectFilled(track, theme_.sliderBackground, clip);
-        drawList->addRectFilled(Rect(track.x, track.y, track.width * channels[i], track.height),
-                                channelColors[i], clip);
-        drawList->addCircleFilled(Vec2(track.x + track.width * channels[i],
-                                       track.y + track.height * 0.5f),
-                                  rowHeight * 0.20f, theme_.sliderHandle, clip);
+        const float segmentHeight = hueBar.height / 6.0f;
+        const Rect segmentRect(hueBar.x, hueBar.y + segmentHeight * static_cast<float>(segment),
+                               hueBar.width, segmentHeight);
+        const Color top = colorFromHsv(static_cast<float>(segment) / 6.0f, 1.0f, 1.0f, 255u);
+        const Color bottom = colorFromHsv(static_cast<float>(segment + 1u) / 6.0f, 1.0f, 1.0f, 255u);
+        drawList->addRectGradient(segmentRect, top, top, bottom, bottom, clip);
     }
-    drawList->addRectFilled(Rect(rect.x + rect.width - swatchSize,
-                                 rect.y + titleMetrics.height + theme_.itemSpacing,
-                                 swatchSize, swatchSize), value, clip);
+    const float checkerSize = alphaBar.width > 0.0f ? alphaBar.width / 8.0f : 0.0f;
+    if (checkerSize > 0.0f)
+    {
+        for (uint32_t y = 0u; y < 2u; ++y)
+        {
+            for (uint32_t x = 0u; x < 8u; ++x)
+            {
+                const Color checker = (x + y) % 2u == 0u ? Color(68u, 68u, 75u, 255u)
+                                                           : Color(108u, 108u, 115u, 255u);
+                drawList->addRectFilled(Rect(alphaBar.x + checkerSize * static_cast<float>(x),
+                                             alphaBar.y + alphaBar.height * 0.5f * static_cast<float>(y),
+                                             checkerSize, alphaBar.height * 0.5f), checker, clip);
+            }
+        }
+        const Color transparent(value.r, value.g, value.b, 0u);
+        drawList->addRectGradient(alphaBar, transparent, value, value, transparent, clip);
+    }
+
+    const Vec2 saturationValueCursor(saturationValue.x + saturation * saturationValue.width,
+                                     saturationValue.y + (1.0f - brightness) * saturationValue.height);
+    drawList->addCircleFilled(saturationValueCursor, 6.0f, Color(255u, 255u, 255u, 255u), clip);
+    drawList->addCircleFilled(saturationValueCursor, 3.5f,
+                              colorFromHsv(hue, saturation, brightness, 255u), clip);
+    const float hueCursorY = hueBar.y + hue * hueBar.height;
+    drawList->addRectFilled(Rect(hueBar.x - 2.0f, hueCursorY - 1.0f, hueBar.width + 4.0f, 2.0f),
+                            Color(255u, 255u, 255u, 255u), clip);
+    const float alphaCursorX = alphaBar.x + alpha * alphaBar.width;
+    drawList->addRectFilled(Rect(alphaCursorX - 1.0f, alphaBar.y - 2.0f, 2.0f, alphaBar.height + 4.0f),
+                            Color(255u, 255u, 255u, 255u), clip);
     return changed;
 }
 
@@ -1171,7 +1321,7 @@ void Context::label(StringView text, const Vec2 &position)
 void Context::tooltip(StringView text)
 {
     WindowState *window = currentWindow();
-    if (!window || hotWidget_ == InvalidWidgetId || text.empty())
+    if (!window || hotWidget_ != lastItemId_ || text.empty())
         return;
 
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
@@ -1730,6 +1880,7 @@ Rect Context::contentClip() const
 
 bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
 {
+    lastItemId_ = id;
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
     const Rect visible = intersect(rect, clip);

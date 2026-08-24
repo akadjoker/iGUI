@@ -166,6 +166,28 @@ void DrawList::addRectFilled(const Rect &rect, const Color &color, const Rect &c
     addGeometryCommand(commands_, firstIndex, 6u, clip);
 }
 
+void DrawList::addRectGradient(const Rect &rect, const Color &topLeft, const Color &topRight,
+                               const Color &bottomRight, const Color &bottomLeft, const Rect &clip)
+{
+    if (rect.width <= 0.0f || rect.height <= 0.0f)
+        return;
+
+    const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
+    const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
+    const Vec2 uv(0.0f, 0.0f);
+    vertices_.push_back(DrawVertex{Vec2(rect.x, rect.y), uv, topLeft});
+    vertices_.push_back(DrawVertex{Vec2(rect.x + rect.width, rect.y), uv, topRight});
+    vertices_.push_back(DrawVertex{Vec2(rect.x + rect.width, rect.y + rect.height), uv, bottomRight});
+    vertices_.push_back(DrawVertex{Vec2(rect.x, rect.y + rect.height), uv, bottomLeft});
+    indices_.push_back(firstVertex + 0u);
+    indices_.push_back(firstVertex + 1u);
+    indices_.push_back(firstVertex + 2u);
+    indices_.push_back(firstVertex + 0u);
+    indices_.push_back(firstVertex + 2u);
+    indices_.push_back(firstVertex + 3u);
+    addGeometryCommand(commands_, firstIndex, 6u, clip);
+}
+
 void DrawList::addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
                         const Vec2 &uvMax, const Color &color, const Rect &clip)
 {

@@ -223,12 +223,17 @@ static void test_draw_primitives()
     drawList.addRect(ig::Rect(10.0f, 10.0f, 20.0f, 10.0f), color, clip);
     drawList.addCircleFilled(ig::Vec2(40.0f, 40.0f), 8.0f, color, clip, 8u);
     drawList.addPolygonFilled(ig::Span<const ig::Vec2>(polygon), color, clip);
+    drawList.addRectGradient(ig::Rect(60.0f, 60.0f, 20.0f, 20.0f),
+                             ig::Color(255u, 0u, 0u, 255u), ig::Color(0u, 255u, 0u, 255u),
+                             ig::Color(0u, 0u, 255u, 255u), ig::Color(255u, 255u, 255u, 255u), clip);
     const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
 
     assert(data.commands.size() == 1u);
-    assert(data.vertices.size() == 42u);
-    assert(data.indices.size() == 111u);
-    assert(data.commands[0].payload.geometry.indexCount == 111u);
+    assert(data.vertices.size() == 46u);
+    assert(data.indices.size() == 117u);
+    assert(data.commands[0].payload.geometry.indexCount == 117u);
+    assert(data.vertices[42].color == ig::Color(255u, 0u, 0u, 255u));
+    assert(data.vertices[44].color == ig::Color(0u, 0u, 255u, 255u));
 }
 
 static void test_automatic_layout()

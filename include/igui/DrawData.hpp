@@ -138,6 +138,9 @@ public:
     void addRect(const Rect &rect,
                  const Color &color, const Rect &clip, float thickness = 1.0f);
     void addRectFilled(const Rect &rect, const Color &color, const Rect &clip);
+    // Per-corner colours are linearly interpolated by the backend.
+    void addRectGradient(const Rect &rect, const Color &topLeft, const Color &topRight,
+                         const Color &bottomRight, const Color &bottomLeft, const Rect &clip);
     void addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
                   const Vec2 &uvMax, const Color &color, const Rect &clip);
     void addCircleFilled(const Vec2 &center, float radius,

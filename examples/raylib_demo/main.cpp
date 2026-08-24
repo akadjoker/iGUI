@@ -44,7 +44,7 @@ struct DemoState
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
           renderExpanded(false), floorExpanded(false),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), workspaceTab(0), selectedAsset(1), gamma(2.2f),
+          sampleOffset(4), workspaceTab(2), selectedAsset(1), gamma(2.2f),
           name("Raylib user"), notes("Use this workspace to configure the demo."),
           accent(90u, 160u, 230u, 255u)
     {
