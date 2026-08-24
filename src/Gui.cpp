@@ -661,6 +661,24 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     return changed;
 }
 
+bool Context::inputInt(StringView labelText, int &value, const Rect &bounds)
+{
+    String text = String::number(value);
+    if (!inputText(labelText, text, bounds))
+        return false;
+    value = text.to_int();
+    return true;
+}
+
+bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds, int precision)
+{
+    String text = String::number(static_cast<double>(value), precision);
+    if (!inputText(labelText, text, bounds))
+        return false;
+    value = text.to_float();
+    return true;
+}
+
 void Context::progressBar(float value, float maximum, const Rect &bounds)
 {
     if (!currentWindow())
@@ -820,6 +838,30 @@ bool Context::inputText(StringView labelText, String &value, float width)
     const bool changed = inputText(labelText, value,
                                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::inputInt(StringView labelText, int &value, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = inputInt(labelText, value,
+                                  Rect(bounds.x - layout_.origin.x,
+                                       bounds.y - layout_.origin.y,
+                                       bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return changed;
+}
+
+bool Context::inputFloat(StringView labelText, float &value, float width, int precision)
+{
+    const float resolvedWidth = width > 0.0f ? width : 180.0f;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = inputFloat(labelText, value,
+                                    Rect(bounds.x - layout_.origin.x,
+                                         bounds.y - layout_.origin.y,
+                                         bounds.width, bounds.height), precision);
     advanceLayout(bounds);
     return changed;
 }

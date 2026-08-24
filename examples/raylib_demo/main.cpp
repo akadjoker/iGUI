@@ -20,11 +20,14 @@ struct DemoState
     int quality;
     int samples;
     int retries;
+    int sampleOffset;
+    float gamma;
     ig::String name;
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
           selectedPreset(false), volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
+          sampleOffset(4), gamma(2.2f),
           name("Raylib user")
     {
     }
@@ -57,6 +60,10 @@ void drawNumericWindow(ig::Context &ui, DemoState &state)
     ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f, 330.0f);
     ui.sliderInt("Samples", state.samples, 1, 16, 330.0f);
     ui.stepperInt("Retries", state.retries, 0, 5, 330.0f);
+    ui.label("Sample offset");
+    ui.inputInt("sample offset", state.sampleOffset, 330.0f);
+    ui.label("Gamma");
+    ui.inputFloat("gamma", state.gamma, 330.0f, 3);
     ui.progressBar(state.volume, 1.0f, 330.0f);
     ui.endWindow();
 }

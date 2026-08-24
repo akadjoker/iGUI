@@ -73,6 +73,8 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
+    bool inputInt(StringView label, int &value, const Rect &bounds);
+    bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
     void progressBar(float value, float maximum, const Rect &bounds);
     void label(StringView text, const Vec2 &position);
 
@@ -91,6 +93,8 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 180.0f);
     bool inputText(StringView label, String &value, float width = 180.0f);
+    bool inputInt(StringView label, int &value, float width = 180.0f);
+    bool inputFloat(StringView label, float &value, float width = 180.0f, int precision = 6);
     void progressBar(float value, float maximum, float width = 180.0f);
     void label(StringView text);
     void sameLine(float spacing = -1.0f);

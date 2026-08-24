@@ -41,6 +41,8 @@ struct GalleryState
     float volume;
     int steps;
     int retries;
+    int inputCount;
+    float inputScale;
     ig::String name;
     int quality;
     bool buttonClicked;
@@ -52,13 +54,15 @@ struct GalleryState
     bool integerSliderChanged;
     bool stepperChanged;
     bool inputChanged;
+    bool integerInputChanged;
+    bool floatInputChanged;
     bool comboChanged;
 
     GalleryState()
-        : checked(false), switched(false), firstChoice(false), selected(false), headerExpanded(false), volume(0.0f), steps(1), retries(2), name(), quality(0),
+        : checked(false), switched(false), firstChoice(false), selected(false), headerExpanded(false), volume(0.0f), steps(1), retries(2), inputCount(7), inputScale(1.5f), name(), quality(0),
           buttonClicked(false), checkboxClicked(false), switchClicked(false), radioClicked(false),
           selectableClicked(false), sliderChanged(false), integerSliderChanged(false), stepperChanged(false),
-          inputChanged(false), comboChanged(false)
+          inputChanged(false), integerInputChanged(false), floatInputChanged(false), comboChanged(false)
     {
     }
 };
@@ -87,6 +91,8 @@ static void drawGallery(ig::Context &context, GalleryState &state)
     state.comboChanged = context.comboBox("quality", state.quality,
                                           ig::Span<const ig::StringView>(qualityItems), 200.0f);
     state.headerExpanded = context.collapsingHeader("advanced", state.headerExpanded, 200.0f);
+    state.integerInputChanged = context.inputInt("input count", state.inputCount, 200.0f);
+    state.floatInputChanged = context.inputFloat("input scale", state.inputScale, 200.0f, 3);
     context.endWindow();
 }
 
@@ -115,6 +121,8 @@ static void test_widget_gallery()
     assert(state.quality == 0);
     assert(state.steps == 1);
     assert(state.retries == 2);
+    assert(state.inputCount == 7);
+    assert(state.inputScale == 1.5f);
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 55.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 55.0f));
@@ -229,6 +237,24 @@ static void test_widget_gallery()
     beginAndDraw(context, state);
     context.endFrame();
     assert(state.headerExpanded);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 480.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 480.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("3"));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.integerInputChanged);
+    assert(state.inputCount == 37);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 25.0f, 512.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 25.0f, 512.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("2"));
+    beginAndDraw(context, state);
+    context.endFrame();
+    assert(state.floatInputChanged);
+    assert(state.inputScale > 21.4f && state.inputScale < 21.6f);
 }
 
 static void test_combo_popup_overlay()
