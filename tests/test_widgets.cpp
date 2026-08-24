@@ -290,12 +290,17 @@ static void test_combo_popup_overlay()
     assert(lastCommand.payload.text.position.y > 120.0f);
 }
 
-static void drawMenus(ig::Context &context, int &menuActions, int &contextActions)
+static void drawMenus(ig::Context &context, int &menuActions, int &contextActions, bool &inspectorVisible)
 {
     assert(context.beginWindow("menus", ig::Rect(10.0f, 10.0f, 240.0f, 190.0f)));
     assert(context.beginMenuBar(ig::Rect(0.0f, 0.0f, 220.0f, 26.0f)));
     if (context.beginMenu("File"))
     {
+        if (context.beginSubMenu("Panels"))
+        {
+            context.menuCheckbox("Inspector", inspectorVisible);
+            context.endSubMenu();
+        }
         if (context.menuItem("New scene"))
             ++menuActions;
         context.menuSeparator();
@@ -320,35 +325,55 @@ static void test_menu_and_context_menu()
     ig::Context context(backend);
     int menuActions = 0;
     int contextActions = 0;
+    bool inspectorVisible = true;
 
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
-    drawMenus(context, menuActions, contextActions);
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
     context.endFrame();
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
-    drawMenus(context, menuActions, contextActions);
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
     const ig::DrawData &menuData = context.endFrame();
     assert(!menuData.commands.empty());
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 35.0f, 105.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 35.0f, 105.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
+    assert(menuActions == 1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 35.0f, 80.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 35.0f, 80.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
-    drawMenus(context, menuActions, contextActions);
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
     context.endFrame();
-    assert(menuActions == 1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 205.0f, 80.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 205.0f, 80.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
+    context.endFrame();
+    assert(!inspectorVisible);
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Right, 100.0f, 110.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Right, 100.0f, 110.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
-    drawMenus(context, menuActions, contextActions);
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
     context.endFrame();
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 120.0f, 120.0f));
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 120.0f, 120.0f));
     context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
-    drawMenus(context, menuActions, contextActions);
+    drawMenus(context, menuActions, contextActions, inspectorVisible);
     context.endFrame();
     assert(contextActions == 1);
 }

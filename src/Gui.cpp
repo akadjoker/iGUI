@@ -83,10 +83,12 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
-      openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), activeMenu_(InvalidWidgetId),
+      openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
+      activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), menuBarBounds_(),
-      menuPopupBounds_(), activeMenuBounds_(), menuBarCursorX_(0.0f), menuBarActive_(false),
+      menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
+      menuBarCursorX_(0.0f), menuBarActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
@@ -959,14 +961,19 @@ bool Context::beginMenu(StringView labelText)
     const uint32_t left = buttonIndex(PointerButton::Left);
     if (openMenu_ == id && pointer_.pressed[left] && currentWindowReceivesPointer() &&
         !contains(button, pointer_.pressedPosition[left]) &&
-        !contains(menuPopupBounds_, pointer_.pressedPosition[left]))
+        !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
+        !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
+    {
         openMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
+    }
 
     const bool hovered = itemHovered(button, contentClip(), id);
     if (itemClicked(button, contentClip(), id))
     {
         openMenu_ = openMenu_ == id ? InvalidWidgetId : id;
         openContextMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
         if (openMenu_ == id)
             menuPopupBounds_ = Rect(button.x, button.y + button.height, theme_.menuMinWidth, 0.0f);
     }
@@ -1002,7 +1009,7 @@ void Context::endMenu()
     activeMenu_ = InvalidWidgetId;
 }
 
-bool Context::menuItem(StringView labelText, bool enabled)
+bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked)
 {
     WindowState *window = currentWindow();
     if (!window || activeMenu_ == InvalidWidgetId)
@@ -1017,17 +1024,101 @@ bool Context::menuItem(StringView labelText, bool enabled)
     const bool clicked = enabled && itemClicked(item, clip, id);
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const float checkWidth = checked ? theme_.menuItemHeight : 0.0f;
+    if (checked && *checked)
+    {
+        const float checkSize = theme_.menuItemHeight * 0.38f;
+        const float checkX = item.x + theme_.menuItemPadX + (theme_.menuItemHeight - checkSize) * 0.5f;
+        const float checkY = item.y + (item.height - checkSize) * 0.5f;
+        popup.addLine(Vec2(checkX, checkY + checkSize * 0.50f),
+                      Vec2(checkX + checkSize * 0.35f, checkY + checkSize),
+                      theme_.menuCheckMark, clip, 2.0f);
+        popup.addLine(Vec2(checkX + checkSize * 0.35f, checkY + checkSize),
+                      Vec2(checkX + checkSize, checkY), theme_.menuCheckMark, clip, 2.0f);
+    }
     drawText(popup, theme_.font, labelText,
-             Vec2(item.x + theme_.menuItemPadX, item.y + (item.height - metrics.height) * 0.5f),
+             Vec2(item.x + theme_.menuItemPadX + checkWidth,
+                  item.y + (item.height - metrics.height) * 0.5f),
              theme_.fontSize, enabled ? (hovered ? theme_.menuItemTextHover : theme_.menuItemText)
                                 : theme_.menuItemDisabled,
              clip);
     if (clicked)
     {
+        if (checked)
+            *checked = !*checked;
         openMenu_ = InvalidWidgetId;
         openContextMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
     }
     return clicked;
+}
+
+bool Context::menuItem(StringView labelText, bool enabled)
+{
+    return menuItemInternal(labelText, enabled, nullptr);
+}
+
+bool Context::menuCheckbox(StringView labelText, bool &checked, bool enabled)
+{
+    return menuItemInternal(labelText, enabled, &checked);
+}
+
+bool Context::beginSubMenu(StringView labelText, bool enabled)
+{
+    WindowState *window = currentWindow();
+    if (!window || activeMenu_ == InvalidWidgetId || subMenuParent_ != InvalidWidgetId)
+        return false;
+    const Rect clip = contentClip();
+    DrawList &popup = window->overlayDrawList;
+    const Rect item(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
+                    activeMenuBounds_.width, theme_.menuItemHeight);
+    activeMenuBounds_.height += item.height;
+    const WidgetId parentId = activeMenu_;
+    const WidgetId id = combineIds(parentId, combineIds(makeWidgetId(labelText), 0x5355424d454e55ull));
+    const bool hovered = enabled && itemHovered(item, clip, id);
+    const bool clicked = enabled && itemClicked(item, clip, id);
+    if (enabled && (hovered || clicked))
+    {
+        openSubMenu_ = id;
+        subMenuPopupBounds_ = Rect(item.x + item.width, item.y, theme_.menuMinWidth, 0.0f);
+    }
+    popup.addRectFilled(item, openSubMenu_ == id || hovered ? theme_.menuItemHover : theme_.menuBg, clip);
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(popup, theme_.font, labelText,
+             Vec2(item.x + theme_.menuItemPadX, item.y + (item.height - metrics.height) * 0.5f),
+             theme_.fontSize, enabled ? theme_.menuItemText : theme_.menuItemDisabled, clip);
+    const float arrowSize = item.height * 0.18f;
+    const float arrowX = item.x + item.width - theme_.menuItemPadX - arrowSize;
+    const float arrowY = item.y + item.height * 0.5f;
+    const Vec2 arrow[] = {
+        Vec2(arrowX, arrowY - arrowSize), Vec2(arrowX, arrowY + arrowSize),
+        Vec2(arrowX + arrowSize, arrowY)
+    };
+    popup.addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+    if (openSubMenu_ != id)
+        return false;
+
+    subMenuParent_ = parentId;
+    subMenuParentBounds_ = activeMenuBounds_;
+    activeMenu_ = id;
+    activeMenuBounds_ = subMenuPopupBounds_;
+    activeMenuBounds_.height = 0.0f;
+    return true;
+}
+
+void Context::endSubMenu()
+{
+    if (subMenuParent_ == InvalidWidgetId || activeMenu_ != openSubMenu_)
+        return;
+    WindowState *window = currentWindow();
+    if (window && activeMenuBounds_.height > 0.0f)
+    {
+        window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, contentClip());
+        subMenuPopupBounds_ = activeMenuBounds_;
+    }
+    activeMenu_ = subMenuParent_;
+    activeMenuBounds_ = subMenuParentBounds_;
+    subMenuParent_ = InvalidWidgetId;
 }
 
 void Context::menuSeparator()
@@ -1059,15 +1150,18 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     {
         openContextMenu_ = id;
         openMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
         menuPopupBounds_ = Rect(pointer_.pressedPosition[right].x, pointer_.pressedPosition[right].y,
                                 theme_.menuMinWidth, 0.0f);
     }
     if (openContextMenu_ != id)
         return false;
     if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
-        !contains(menuPopupBounds_, pointer_.pressedPosition[left]))
+        !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
+        !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
     {
         openContextMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
         return false;
     }
     activeMenu_ = id;

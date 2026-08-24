@@ -167,6 +167,11 @@ public:
     bool beginMenu(StringView label);
     void endMenu();
     bool menuItem(StringView label, bool enabled = true);
+    // Checkable menu entry. Returns true when its value changed.
+    bool menuCheckbox(StringView label, bool &checked, bool enabled = true);
+    // One-level submenu, opened by hover or click. End it before ending its parent menu.
+    bool beginSubMenu(StringView label, bool enabled = true);
+    void endSubMenu();
     void menuSeparator();
     // Opens a popup at the pointer on a right click over bounds. Use menuItem()
     // and menuSeparator(), then close it with endContextMenu().
@@ -363,7 +368,9 @@ private:
     WidgetId openCombo_;
     WidgetId openMenu_;
     WidgetId openContextMenu_;
+    WidgetId openSubMenu_;
     WidgetId activeMenu_;
+    WidgetId subMenuParent_;
     WidgetId activeModal_;
     WidgetId dragWidget_;
     String::size_type textCursor_;
@@ -373,6 +380,8 @@ private:
     Rect menuBarBounds_;
     Rect menuPopupBounds_;
     Rect activeMenuBounds_;
+    Rect subMenuPopupBounds_;
+    Rect subMenuParentBounds_;
     float menuBarCursorX_;
     bool menuBarActive_;
     float dragStartValue_;
@@ -414,6 +423,7 @@ private:
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
+    bool menuItemInternal(StringView label, bool enabled, bool *checked);
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);
 };

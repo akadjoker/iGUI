@@ -307,6 +307,17 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
                 ui.showToast("scene refresh", "Scene hierarchy refreshed", ig::ToastPosition::BottomRight);
             ui.endMenu();
         }
+        if (ui.beginMenu("View"))
+        {
+            if (ui.beginSubMenu("Panels"))
+            {
+                ui.menuCheckbox("Inspector", state.showInspector);
+                ui.menuCheckbox("Images", state.imagesOpen);
+                ui.menuCheckbox("Workspace", state.workspaceOpen);
+                ui.endSubMenu();
+            }
+            ui.endMenu();
+        }
         ui.endMenuBar();
     }
     ui.spacing(ui.theme().menuBarHeight + ui.theme().itemSpacing);
