@@ -79,7 +79,8 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(),
+      windowOrder_(), idStack_(), childStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
@@ -89,6 +90,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       menuBarCursorX_(0.0f), menuBarActive_(false),
+      table_(), propertyRow_(), tableActive_(false), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
@@ -100,8 +102,10 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     listScrolls_.reserve(8);
     textScrolls_.reserve(8);
     colorPickers_.reserve(8);
+    childScrolls_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
+    childStack_.reserve(4);
     toasts_.reserve(4);
     textEvents_.reserve(4);
 }
@@ -145,6 +149,9 @@ void Context::beginFrame(const FrameInfo &frame)
     lastItemId_ = InvalidWidgetId;
     activeMenu_ = InvalidWidgetId;
     menuBarActive_ = false;
+    childStack_.clear();
+    tableActive_ = false;
+    propertyRowActive_ = false;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -2665,6 +2672,251 @@ bool Context::smallImageButton(StringView labelText, TextureId texture, float si
     return clicked;
 }
 
+bool Context::beginChild(StringView idText, float height, bool border, float width)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || height <= 0.0f || tableActive_ || propertyRowActive_)
+        return false;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    if (resolvedWidth <= 0.0f)
+        return false;
+    const Rect outer(layout_.cursor.x, layout_.cursor.y, resolvedWidth, height);
+    const Rect parentClip = contentClip();
+    if (intersect(outer, parentClip).width <= 0.0f || intersect(outer, parentClip).height <= 0.0f)
+        return false;
+
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x4348494c44ull);
+    ChildScrollState *scroll = childScrolls_.find(id);
+    if (!scroll)
+    {
+        childScrolls_.put(id, ChildScrollState());
+        scroll = childScrolls_.find(id);
+    }
+    if (!scroll)
+        return false;
+
+    const float padding = theme_.padding;
+    const float usableHeight = height - padding * 2.0f;
+    const bool hadScrollbar = scroll->contentHeight > usableHeight;
+    const float scrollbarWidth = hadScrollbar ? theme_.scrollbarWidth * 0.65f : 0.0f;
+    const Rect content(outer.x + padding, outer.y + padding,
+                       resolvedWidth - padding * 2.0f - scrollbarWidth,
+                       usableHeight > 0.0f ? usableHeight : 0.0f);
+    if (content.width <= 0.0f || content.height <= 0.0f)
+        return false;
+    const float maximumScroll = scroll->contentHeight > content.height
+        ? scroll->contentHeight - content.height : 0.0f;
+    if (scroll->offset > maximumScroll)
+        scroll->offset = maximumScroll;
+    if (scroll->offset < 0.0f)
+        scroll->offset = 0.0f;
+    if (pointer_.wheelY != 0.0f && currentWindowReceivesPointer() && contains(outer, pointer_.position))
+    {
+        scroll->offset -= pointer_.wheelY * theme_.widgetHeight;
+        if (scroll->offset < 0.0f)
+            scroll->offset = 0.0f;
+        if (scroll->offset > maximumScroll)
+            scroll->offset = maximumScroll;
+        pointer_.wheelY = 0.0f;
+    }
+
+    drawList->addRectFilled(outer, theme_.panelColor, parentClip);
+    if (border)
+        drawList->addRect(outer, theme_.borderColor, parentClip);
+    ChildState state;
+    state.parentLayout = layout_;
+    state.outer = outer;
+    state.content = content;
+    state.parentClip = parentClip;
+    state.id = id;
+    state.border = border;
+    childStack_.push_back(state);
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    idStack_.push_back(combineIds(parentId, id));
+    layout_.origin = Vec2(content.x, content.y);
+    layout_.cursor = Vec2(content.x, content.y - scroll->offset);
+    layout_.baseOriginX = content.x;
+    layout_.lastItem = Rect();
+    layout_.hasLastItem = false;
+    return true;
+}
+
+void Context::endChild()
+{
+    if (childStack_.empty())
+        return;
+    const ChildState state = childStack_.back();
+    ChildScrollState *scroll = childScrolls_.find(state.id);
+    const float offset = scroll ? scroll->offset : 0.0f;
+    const float contentBottom = layout_.hasLastItem
+        ? layout_.lastItem.y + layout_.lastItem.height + offset : state.content.y;
+    const float contentHeight = contentBottom > state.content.y ? contentBottom - state.content.y : 0.0f;
+    if (scroll)
+    {
+        scroll->contentHeight = contentHeight;
+        const float maximumScroll = contentHeight > state.content.height
+            ? contentHeight - state.content.height : 0.0f;
+        if (scroll->offset > maximumScroll)
+            scroll->offset = maximumScroll;
+        if (scroll->offset < 0.0f)
+            scroll->offset = 0.0f;
+        if (maximumScroll > 0.0f)
+        {
+            DrawList *drawList = currentDrawList();
+            if (drawList)
+            {
+                const float barWidth = theme_.scrollbarWidth * 0.65f;
+                const Rect bar(state.outer.x + state.outer.width - theme_.padding - barWidth,
+                               state.content.y, barWidth, state.content.height);
+                const float requestedThumb = bar.height * bar.height / contentHeight;
+                const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+                    ? requestedThumb : theme_.scrollbarMinThumb;
+                const float travel = bar.height - thumbHeight;
+                const float thumbY = travel > 0.0f ? bar.y + travel * scroll->offset / maximumScroll : bar.y;
+                drawList->addRectFilled(bar, theme_.inputBg, state.parentClip);
+                drawList->addRectFilled(Rect(bar.x, thumbY, bar.width, thumbHeight),
+                                         theme_.scrollbarThumb, state.parentClip);
+            }
+        }
+    }
+    childStack_.pop_back();
+    if (!idStack_.empty())
+        idStack_.pop_back();
+    layout_ = state.parentLayout;
+    advanceLayout(state.outer);
+}
+
+bool Context::beginTable(StringView idText, int columns, float width)
+{
+    if (!currentWindow() || columns <= 0 || tableActive_ || propertyRowActive_)
+        return false;
+    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    if (resolvedWidth <= 0.0f)
+        return false;
+    table_.parentLayout = layout_;
+    table_.bounds = Rect(layout_.cursor.x, layout_.cursor.y, resolvedWidth, 0.0f);
+    table_.columns = columns;
+    table_.column = -1;
+    table_.rowY = layout_.cursor.y;
+    table_.rowHeight = 0.0f;
+    tableActive_ = true;
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    idStack_.push_back(combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull)));
+    return true;
+}
+
+bool Context::tableNextColumn()
+{
+    if (!tableActive_)
+        return false;
+    if (table_.column >= 0 && layout_.hasLastItem)
+    {
+        const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - table_.rowY;
+        if (itemHeight > table_.rowHeight)
+            table_.rowHeight = itemHeight;
+    }
+    if (table_.column + 1 >= table_.columns)
+    {
+        const float rowHeight = table_.rowHeight > theme_.widgetHeight ? table_.rowHeight : theme_.widgetHeight;
+        table_.rowY += rowHeight + theme_.itemSpacing;
+        table_.column = 0;
+        table_.rowHeight = 0.0f;
+    }
+    else
+    {
+        ++table_.column;
+    }
+    const float cellWidth = table_.bounds.width / static_cast<float>(table_.columns);
+    const float cellX = table_.bounds.x + cellWidth * static_cast<float>(table_.column);
+    layout_.origin.x = cellX;
+    layout_.baseOriginX = cellX;
+    layout_.cursor = Vec2(cellX, table_.rowY);
+    layout_.lastItem = Rect();
+    layout_.hasLastItem = false;
+    return true;
+}
+
+void Context::endTable()
+{
+    if (!tableActive_)
+        return;
+    if (table_.column >= 0 && layout_.hasLastItem)
+    {
+        const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - table_.rowY;
+        if (itemHeight > table_.rowHeight)
+            table_.rowHeight = itemHeight;
+    }
+    float height = 0.0f;
+    if (table_.column >= 0)
+    {
+        const float rowHeight = table_.rowHeight > theme_.widgetHeight ? table_.rowHeight : theme_.widgetHeight;
+        height = table_.rowY + rowHeight - table_.bounds.y;
+    }
+    const LayoutState parent = table_.parentLayout;
+    const Rect bounds(parent.cursor.x, parent.cursor.y, table_.bounds.width, height);
+    table_ = TableState();
+    tableActive_ = false;
+    if (!idStack_.empty())
+        idStack_.pop_back();
+    layout_ = parent;
+    if (height > 0.0f)
+        advanceLayout(bounds);
+}
+
+bool Context::beginPropertyRow(StringView labelText, float labelWidth)
+{
+    if (!currentWindow() || propertyRowActive_ || tableActive_)
+        return false;
+    const float width = availableWidth();
+    if (width <= 0.0f)
+        return false;
+    const float resolvedLabelWidth = labelWidth > 0.0f ? labelWidth : width * 0.38f;
+    const float valueX = layout_.cursor.x + resolvedLabelWidth;
+    if (valueX >= layout_.cursor.x + width)
+        return false;
+    propertyRow_.parentLayout = layout_;
+    propertyRow_.bounds = Rect(layout_.cursor.x, layout_.cursor.y, width, theme_.widgetHeight);
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(propertyRow_.bounds.x, propertyRow_.bounds.y +
+                  (propertyRow_.bounds.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, contentClip());
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    idStack_.push_back(combineIds(parentId, combineIds(makeWidgetId(labelText), 0x50524f50524f57ull)));
+    layout_.origin.x = valueX;
+    layout_.baseOriginX = valueX;
+    layout_.cursor = Vec2(valueX, propertyRow_.bounds.y);
+    layout_.lastItem = Rect();
+    layout_.hasLastItem = false;
+    propertyRowActive_ = true;
+    return true;
+}
+
+void Context::endPropertyRow()
+{
+    if (!propertyRowActive_)
+        return;
+    float height = propertyRow_.bounds.height;
+    if (layout_.hasLastItem)
+    {
+        const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - propertyRow_.bounds.y;
+        if (itemHeight > height)
+            height = itemHeight;
+    }
+    const LayoutState parent = propertyRow_.parentLayout;
+    const Rect bounds(parent.cursor.x, parent.cursor.y, propertyRow_.bounds.width, height);
+    propertyRow_ = PropertyRowState();
+    propertyRowActive_ = false;
+    if (!idStack_.empty())
+        idStack_.pop_back();
+    layout_ = parent;
+    advanceLayout(bounds);
+}
+
 void Context::progressBar(float value, float maximum, float width)
 {
     const float resolvedWidth = width > 0.0f ? width : availableWidth();
@@ -2766,7 +3018,14 @@ float Context::availableWidth() const
     const WindowState *window = currentWindow();
     if (!window)
         return 0.0f;
-    const float right = window->bounds.x + window->bounds.width - theme_.windowPadding;
+    float right = window->bounds.x + window->bounds.width - theme_.windowPadding;
+    if (!childStack_.empty())
+        right = childStack_.back().content.x + childStack_.back().content.width;
+    if (tableActive_ && table_.columns > 0 && table_.column >= 0)
+        right = table_.bounds.x + table_.bounds.width / static_cast<float>(table_.columns) *
+                static_cast<float>(table_.column + 1);
+    if (propertyRowActive_)
+        right = propertyRow_.bounds.x + propertyRow_.bounds.width;
     return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
 }
 
@@ -3007,6 +3266,11 @@ Rect Context::contentRect(const Rect &local) const
     const WindowState *window = currentWindow();
     if (!window)
         return Rect();
+    if (!childStack_.empty())
+    {
+        const Rect &child = childStack_.back().content;
+        return Rect(child.x + local.x, child.y + local.y, local.width, local.height);
+    }
     return Rect(window->bounds.x + theme_.windowPadding + local.x,
                 window->bounds.y + theme_.titleBarHeight + theme_.windowPadding + local.y,
                 local.width, local.height);
@@ -3024,7 +3288,10 @@ Rect Context::contentClip() const
                        window->bounds.y + theme_.titleBarHeight + theme_.windowPadding,
                        contentWidth > 0.0f ? contentWidth : 0.0f,
                        contentHeight > 0.0f ? contentHeight : 0.0f);
-    return intersect(content, viewport);
+    const Rect windowClip = intersect(content, viewport);
+    if (childStack_.empty())
+        return windowClip;
+    return intersect(windowClip, childStack_.back().content);
 }
 
 bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)

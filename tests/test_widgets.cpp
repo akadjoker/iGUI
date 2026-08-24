@@ -704,6 +704,63 @@ static void test_multiline_scroll_and_drag_widgets()
     assert(intChanged && iterations == 8);
 }
 
+static void drawInspectorContainers(ig::Context &context, ig::String &name, float &exposure)
+{
+    assert(context.beginWindow("inspector containers", ig::Rect(10.0f, 10.0f, 300.0f, 220.0f)));
+    if (context.beginChild("components", 64.0f))
+    {
+        context.label("child-one");
+        context.label("child-two");
+        context.label("child-three");
+        context.label("child-four");
+        context.label("child-five");
+        context.label("child-last");
+        context.endChild();
+    }
+    if (context.beginTable("summary", 2))
+    {
+        context.tableNextColumn();
+        context.label("Name");
+        context.tableNextColumn();
+        context.inputText("table name", name);
+        context.tableNextColumn();
+        context.label("Exposure");
+        context.tableNextColumn();
+        context.inputFloat("table exposure", exposure);
+        context.endTable();
+    }
+    if (context.beginPropertyRow("Strength"))
+    {
+        context.sliderFloat("property strength", exposure, 0.0f, 1.0f);
+        context.endPropertyRow();
+    }
+    context.endWindow();
+}
+
+static void test_child_table_and_property_row()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::String name("Scene root");
+    float exposure = 0.5f;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    drawInspectorContainers(context, name, exposure);
+    const ig::DrawData &initial = context.endFrame();
+    const float initialY = multilineTextY(initial, 10u);
+    assert(initialY >= 0.0f);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    drawInspectorContainers(context, name, exposure);
+    const ig::DrawData &scrolled = context.endFrame();
+    assert(multilineTextY(scrolled, 10u) < initialY);
+}
+
 static void test_responsive_window_layout()
 {
     WidgetBackend backend;
@@ -933,6 +990,7 @@ int main()
     test_navigation_widgets();
     test_editor_widgets();
     test_multiline_scroll_and_drag_widgets();
+    test_child_table_and_property_row();
     test_responsive_window_layout();
     test_scene_tree_and_message_box();
     test_cross_window_drag_drop();

@@ -269,6 +269,18 @@ public:
     bool smallImageButton(StringView label, TextureId texture, float size = 0.0f,
                           const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                           const Color &tint = Color());
+    // Clipped, vertically scrollable content region. height is required; width
+    // defaults to the remaining window width.
+    bool beginChild(StringView id, float height, bool border = true, float width = 0.0f);
+    void endChild();
+    // Lightweight immediate table. Call tableNextColumn() before each cell.
+    bool beginTable(StringView id, int columns, float width = 0.0f);
+    bool tableNextColumn();
+    void endTable();
+    // Aligned label/value row for inspectors. Render the value widgets between
+    // beginPropertyRow() and endPropertyRow().
+    bool beginPropertyRow(StringView label, float labelWidth = 0.0f);
+    void endPropertyRow();
     void progressBar(float value, float maximum, float width = 0.0f);
     void label(StringView text);
     void sameLine(float spacing = -1.0f);
@@ -320,6 +332,46 @@ private:
             : hue(0.0f), saturation(0.0f), brightness(0.0f), lastColor(), initialized(false) {}
     };
 
+    struct ChildScrollState
+    {
+        float offset;
+        float contentHeight;
+
+        ChildScrollState() : offset(0.0f), contentHeight(0.0f) {}
+    };
+
+    struct ChildState
+    {
+        LayoutState parentLayout;
+        Rect outer;
+        Rect content;
+        Rect parentClip;
+        WidgetId id;
+        bool border;
+
+        ChildState() : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true) {}
+    };
+
+    struct TableState
+    {
+        LayoutState parentLayout;
+        Rect bounds;
+        int columns;
+        int column;
+        float rowY;
+        float rowHeight;
+
+        TableState() : parentLayout(), bounds(), columns(0), column(-1), rowY(0.0f), rowHeight(0.0f) {}
+    };
+
+    struct PropertyRowState
+    {
+        LayoutState parentLayout;
+        Rect bounds;
+
+        PropertyRowState() : parentLayout(), bounds() {}
+    };
+
     struct ToastState
     {
         WidgetId id;
@@ -357,8 +409,10 @@ private:
     ct::HashMap<WidgetId, int> listScrolls_;
     ct::HashMap<WidgetId, int> textScrolls_;
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
+    ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
+    ct::Vector<ChildState> childStack_;
     ct::Vector<ToastState> toasts_;
     DragDropState dragDrop_;
     DrawList frameDrawList_;
@@ -394,6 +448,10 @@ private:
     Rect subMenuParentBounds_;
     float menuBarCursorX_;
     bool menuBarActive_;
+    TableState table_;
+    PropertyRowState propertyRow_;
+    bool tableActive_;
+    bool propertyRowActive_;
     float dragStartValue_;
     float dragStartX_;
     bool wantsKeyboard_;

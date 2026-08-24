@@ -484,14 +484,36 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     if (state.progress > 1.0f)
         state.progress = 0.0f;
 
-    ui.label("Backend: Raylib");
-    ui.label("Renderer: iGUI immediate");
-    ui.separator();
-    ui.label(state.enabled ? "Status: rendering" : "Status: paused");
-    ui.progressBar(state.progress, 1.0f);
+    if (ui.beginChild("inspector properties", 174.0f))
+    {
+        if (ui.beginPropertyRow("Backend"))
+        {
+            ui.label("Raylib");
+            ui.endPropertyRow();
+        }
+        if (ui.beginPropertyRow("Renderer"))
+        {
+            ui.label("iGUI immediate");
+            ui.endPropertyRow();
+        }
+        ui.separator();
+        if (ui.beginTable("runtime summary", 2))
+        {
+            ui.tableNextColumn();
+            ui.label("Status");
+            ui.tableNextColumn();
+            ui.label(state.enabled ? "Rendering" : "Paused");
+            ui.tableNextColumn();
+            ui.label("Progress");
+            ui.tableNextColumn();
+            ui.progressBar(state.progress, 1.0f);
+            ui.endTable();
+        }
+        ui.spacing(4.0f);
+        ui.checkbox("Animate preview", state.enabled);
+        ui.endChild();
+    }
     ui.spacing(4.0f);
-    ui.checkbox("Animate preview", state.enabled);
-    ui.sameLine(6.0f);
     if (ui.smallButton("Refresh"))
         ui.showToast("inspector refresh", "Inspector refreshed", ig::ToastPosition::BottomRight);
     ui.sameLine(5.0f);
