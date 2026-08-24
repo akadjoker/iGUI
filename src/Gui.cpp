@@ -82,8 +82,11 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
-      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
-      textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(),
+      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
+      openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), activeMenu_(InvalidWidgetId),
+      activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
+      textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), menuBarBounds_(),
+      menuPopupBounds_(), activeMenuBounds_(), menuBarCursorX_(0.0f), menuBarActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
@@ -138,6 +141,8 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     hotWidget_ = InvalidWidgetId;
     lastItemId_ = InvalidWidgetId;
+    activeMenu_ = InvalidWidgetId;
+    menuBarActive_ = false;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -916,6 +921,164 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                  theme_.fontSize, theme_.labelText, popupClip);
     }
     return false;
+}
+
+bool Context::beginMenuBar(const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return false;
+    const Rect rect = contentRect(bounds);
+    if (rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+    menuBarBounds_ = rect;
+    menuBarCursorX_ = rect.x;
+    menuBarActive_ = true;
+    drawList->addRectFilled(rect, theme_.menuBarBg, contentClip());
+    return true;
+}
+
+void Context::endMenuBar()
+{
+    menuBarActive_ = false;
+}
+
+bool Context::beginMenu(StringView labelText)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || !menuBarActive_)
+        return false;
+
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const float width = metrics.width + theme_.menuItemPadX * 2.0f;
+    const Rect button(menuBarCursorX_, menuBarBounds_.y, width, menuBarBounds_.height);
+    menuBarCursorX_ += width;
+    const WidgetId id = combineIds(makeWidgetId(labelText), 0x4d454e55ull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    if (openMenu_ == id && pointer_.pressed[left] && currentWindowReceivesPointer() &&
+        !contains(button, pointer_.pressedPosition[left]) &&
+        !contains(menuPopupBounds_, pointer_.pressedPosition[left]))
+        openMenu_ = InvalidWidgetId;
+
+    const bool hovered = itemHovered(button, contentClip(), id);
+    if (itemClicked(button, contentClip(), id))
+    {
+        openMenu_ = openMenu_ == id ? InvalidWidgetId : id;
+        openContextMenu_ = InvalidWidgetId;
+        if (openMenu_ == id)
+            menuPopupBounds_ = Rect(button.x, button.y + button.height, theme_.menuMinWidth, 0.0f);
+    }
+    drawList->addRectFilled(button, openMenu_ == id || hovered ? theme_.menuBarItemHover : theme_.menuBarBg,
+                            contentClip());
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(button.x + theme_.menuItemPadX,
+                  button.y + (button.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.menuItemText, contentClip());
+
+    if (openMenu_ != id)
+        return false;
+    activeMenu_ = id;
+    activeMenuBounds_ = menuPopupBounds_;
+    activeMenuBounds_.x = button.x;
+    activeMenuBounds_.y = button.y + button.height;
+    activeMenuBounds_.width = theme_.menuMinWidth;
+    activeMenuBounds_.height = 0.0f;
+    return true;
+}
+
+void Context::endMenu()
+{
+    if (activeMenu_ == InvalidWidgetId)
+        return;
+    WindowState *window = currentWindow();
+    if (window && activeMenuBounds_.height > 0.0f)
+    {
+        const Rect clip = contentClip();
+        window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, clip);
+        menuPopupBounds_ = activeMenuBounds_;
+    }
+    activeMenu_ = InvalidWidgetId;
+}
+
+bool Context::menuItem(StringView labelText, bool enabled)
+{
+    WindowState *window = currentWindow();
+    if (!window || activeMenu_ == InvalidWidgetId)
+        return false;
+    const Rect clip = contentClip();
+    DrawList &popup = window->overlayDrawList;
+    const Rect item(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
+                    activeMenuBounds_.width, theme_.menuItemHeight);
+    activeMenuBounds_.height += item.height;
+    const WidgetId id = combineIds(activeMenu_, static_cast<WidgetId>(activeMenuBounds_.height * 100.0f));
+    const bool hovered = enabled && itemHovered(item, clip, id);
+    const bool clicked = enabled && itemClicked(item, clip, id);
+    popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(popup, theme_.font, labelText,
+             Vec2(item.x + theme_.menuItemPadX, item.y + (item.height - metrics.height) * 0.5f),
+             theme_.fontSize, enabled ? (hovered ? theme_.menuItemTextHover : theme_.menuItemText)
+                                : theme_.menuItemDisabled,
+             clip);
+    if (clicked)
+    {
+        openMenu_ = InvalidWidgetId;
+        openContextMenu_ = InvalidWidgetId;
+    }
+    return clicked;
+}
+
+void Context::menuSeparator()
+{
+    WindowState *window = currentWindow();
+    if (!window || activeMenu_ == InvalidWidgetId)
+        return;
+    const Rect separator(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
+                         activeMenuBounds_.width, theme_.itemSpacing);
+    activeMenuBounds_.height += separator.height;
+    window->overlayDrawList.addRectFilled(Rect(separator.x + theme_.menuItemPadX,
+                                               separator.y + separator.height * 0.5f,
+                                               separator.width - theme_.menuItemPadX * 2.0f, 1.0f),
+                                         theme_.menuSeparator, contentClip());
+}
+
+bool Context::beginContextMenu(StringView idText, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x434f4e54455854ull);
+    const Rect target = contentRect(bounds);
+    const Rect visible = intersect(target, contentClip());
+    const uint32_t right = buttonIndex(PointerButton::Right);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    if (pointer_.pressed[right] && currentWindowReceivesPointer() &&
+        contains(visible, pointer_.pressedPosition[right]))
+    {
+        openContextMenu_ = id;
+        openMenu_ = InvalidWidgetId;
+        menuPopupBounds_ = Rect(pointer_.pressedPosition[right].x, pointer_.pressedPosition[right].y,
+                                theme_.menuMinWidth, 0.0f);
+    }
+    if (openContextMenu_ != id)
+        return false;
+    if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
+        !contains(menuPopupBounds_, pointer_.pressedPosition[left]))
+    {
+        openContextMenu_ = InvalidWidgetId;
+        return false;
+    }
+    activeMenu_ = id;
+    activeMenuBounds_ = menuPopupBounds_;
+    activeMenuBounds_.height = 0.0f;
+    return true;
+}
+
+void Context::endContextMenu()
+{
+    endMenu();
 }
 
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,

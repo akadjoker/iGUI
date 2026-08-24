@@ -283,10 +283,38 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 492.0f, 420.0f, 310.0f), &state.workspaceOpen))
         return;
 
+    if (ui.beginMenuBar(ig::Rect(0.0f, 0.0f, ui.availableWidth(), ui.theme().menuBarHeight)))
+    {
+        if (ui.beginMenu("File"))
+        {
+            if (ui.menuItem("New scene"))
+                ui.showToast("new scene", "New scene created", ig::ToastPosition::BottomRight);
+            ui.menuSeparator();
+            if (ui.menuItem("Close workspace"))
+                state.workspaceOpen = false;
+            ui.endMenu();
+        }
+        if (ui.beginMenu("Edit"))
+        {
+            if (ui.menuItem("Rename selected"))
+                state.renameNodeDialog = true;
+            ui.menuItem("Paste", false);
+            ui.endMenu();
+        }
+        if (ui.beginMenu("Scene"))
+        {
+            if (ui.menuItem("Refresh hierarchy"))
+                ui.showToast("scene refresh", "Scene hierarchy refreshed", ig::ToastPosition::BottomRight);
+            ui.endMenu();
+        }
+        ui.endMenuBar();
+    }
+    ui.spacing(ui.theme().menuBarHeight + ui.theme().itemSpacing);
     ui.tabBar("workspace tabs", state.workspaceTab, ig::Span<const ig::StringView>(tabs));
     ui.spacing(6.0f);
     if (state.workspaceTab == 0)
     {
+        const ig::Vec2 sceneArea = ui.cursor();
         ig::TreeDrop sceneDrop;
         ig::TreeItemStyle sceneStyle;
         sceneStyle.typeColor = ig::Color(105u, 170u, 245u, 255u);
@@ -319,6 +347,18 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         ui.sameLine(6.0f);
         if (ui.button("Rename node"))
             state.renameNodeDialog = true;
+        if (ui.beginContextMenu("scene context", ig::Rect(sceneArea.x, sceneArea.y,
+                                ui.availableWidth(), 176.0f)))
+        {
+            if (ui.menuItem("Duplicate selected"))
+                ui.showToast("duplicate node", "Selected node duplicated", ig::ToastPosition::BottomRight);
+            if (ui.menuItem("Rename"))
+                state.renameNodeDialog = true;
+            ui.menuSeparator();
+            if (ui.menuItem("Delete selected"))
+                state.deleteNodeDialog = true;
+            ui.endContextMenu();
+        }
     }
     else if (state.workspaceTab == 1)
     {

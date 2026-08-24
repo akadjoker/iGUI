@@ -290,6 +290,69 @@ static void test_combo_popup_overlay()
     assert(lastCommand.payload.text.position.y > 120.0f);
 }
 
+static void drawMenus(ig::Context &context, int &menuActions, int &contextActions)
+{
+    assert(context.beginWindow("menus", ig::Rect(10.0f, 10.0f, 240.0f, 190.0f)));
+    assert(context.beginMenuBar(ig::Rect(0.0f, 0.0f, 220.0f, 26.0f)));
+    if (context.beginMenu("File"))
+    {
+        if (context.menuItem("New scene"))
+            ++menuActions;
+        context.menuSeparator();
+        context.menuItem("Save", false);
+        context.endMenu();
+    }
+    context.endMenuBar();
+
+    if (context.beginContextMenu("scene context", ig::Rect(0.0f, 40.0f, 220.0f, 100.0f)))
+    {
+        if (context.menuItem("Duplicate"))
+            ++contextActions;
+        context.menuItem("Delete", false);
+        context.endContextMenu();
+    }
+    context.endWindow();
+}
+
+static void test_menu_and_context_menu()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int menuActions = 0;
+    int contextActions = 0;
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions);
+    const ig::DrawData &menuData = context.endFrame();
+    assert(!menuData.commands.empty());
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 35.0f, 80.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 35.0f, 80.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions);
+    context.endFrame();
+    assert(menuActions == 1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Right, 100.0f, 110.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Right, 100.0f, 110.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 120.0f, 120.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 120.0f, 120.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    drawMenus(context, menuActions, contextActions);
+    context.endFrame();
+    assert(contextActions == 1);
+}
+
 static void test_image_widgets()
 {
     WidgetBackend backend;
@@ -786,6 +849,7 @@ int main()
 {
     test_widget_gallery();
     test_combo_popup_overlay();
+    test_menu_and_context_menu();
     test_image_widgets();
     test_navigation_widgets();
     test_editor_widgets();

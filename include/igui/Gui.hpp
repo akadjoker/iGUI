@@ -160,6 +160,18 @@ public:
                  const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   const Rect &bounds);
+    // A horizontal menu strip. Call beginMenu()/endMenu() between these calls.
+    bool beginMenuBar(const Rect &bounds);
+    void endMenuBar();
+    // Opens a popup menu from the current menu bar.
+    bool beginMenu(StringView label);
+    void endMenu();
+    bool menuItem(StringView label, bool enabled = true);
+    void menuSeparator();
+    // Opens a popup at the pointer on a right click over bounds. Use menuItem()
+    // and menuSeparator(), then close it with endContextMenu().
+    bool beginContextMenu(StringView id, const Rect &bounds);
+    void endContextMenu();
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
@@ -349,12 +361,20 @@ private:
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;
+    WidgetId openMenu_;
+    WidgetId openContextMenu_;
+    WidgetId activeMenu_;
     WidgetId activeModal_;
     WidgetId dragWidget_;
     String::size_type textCursor_;
     uint64_t frameNumber_;
     uint64_t nextZOrder_;
     Vec2 windowDragOffset_;
+    Rect menuBarBounds_;
+    Rect menuPopupBounds_;
+    Rect activeMenuBounds_;
+    float menuBarCursorX_;
+    bool menuBarActive_;
     float dragStartValue_;
     float dragStartX_;
     bool wantsKeyboard_;
