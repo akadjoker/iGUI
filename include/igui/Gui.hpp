@@ -79,6 +79,15 @@ enum class ToastPosition : uint8_t
     BottomLeft, BottomCenter, BottomRight
 };
 
+struct DragDropPayload
+{
+    WidgetId type;
+    WidgetId source;
+    uint64_t data;
+
+    DragDropPayload() : type(InvalidWidgetId), source(InvalidWidgetId), data(0u) {}
+};
+
 class Context
 {
 public:
@@ -156,6 +165,11 @@ public:
     // Starts or refreshes a short notification. The id differentiates concurrent toasts.
     void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::TopRight,
                    float duration = 3.0f);
+    // Call after drawing a local item. The item becomes draggable after a short mouse move.
+    bool beginDragSource(WidgetId source, WidgetId type, uint64_t data, StringView preview,
+                         const Rect &bounds);
+    // Call over a local drop zone. On release, returns the compatible payload.
+    bool acceptDragDropTarget(WidgetId acceptedType, const Rect &bounds, DragDropPayload &payload);
     void label(StringView text, const Vec2 &position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
@@ -258,6 +272,20 @@ private:
         ToastState() : id(InvalidWidgetId), text(), position(ToastPosition::TopRight), remaining(0.0f) {}
     };
 
+    struct DragDropState
+    {
+        WidgetId widget;
+        DragDropPayload payload;
+        String preview;
+        Vec2 pressedPosition;
+        bool armed;
+        bool active;
+        bool accepted;
+
+        DragDropState()
+            : widget(InvalidWidgetId), payload(), preview(), pressedPosition(), armed(false), active(false), accepted(false) {}
+    };
+
     Backend &backend_;
     TextProvider *textProvider_;
     Theme theme_;
@@ -274,7 +302,9 @@ private:
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     ct::Vector<ToastState> toasts_;
+    DragDropState dragDrop_;
     DrawList frameDrawList_;
+    DrawList dragDropDrawList_;
     DrawList toastDrawList_;
     DrawList modalDrawList_;
     DrawData drawData_;
@@ -318,6 +348,7 @@ private:
     TextMetrics measureText(FontId font, StringView text, float logicalSize) const;
     void drawText(DrawList &drawList, FontId font, StringView text, const Vec2 &position,
                   float logicalSize, const Color &color, const Rect &clip);
+    void drawDragDropPreview();
     void drawToasts();
     void beginLayout(const WindowState &window);
     void advanceLayout(const Rect &item);

@@ -671,6 +671,47 @@ static void test_scene_tree_and_message_box()
     assert(leftX >= 0.0f && centerX > leftX && rightX > centerX);
 }
 
+static bool drawDragDropWindows(ig::Context &context, ig::DragDropPayload &payload)
+{
+    const ig::WidgetId imageAsset = 0x494d414745415353ull;
+    assert(context.beginWindow("asset source", ig::Rect(10.0f, 10.0f, 160.0f, 120.0f)));
+    context.beginDragSource(42u, imageAsset, 9001u, "albedo.png", ig::Rect(8.0f, 8.0f, 120.0f, 28.0f));
+    context.selectable("albedo.png", false, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f));
+    context.endWindow();
+
+    assert(context.beginWindow("image target", ig::Rect(200.0f, 10.0f, 160.0f, 120.0f)));
+    const bool dropped = context.acceptDragDropTarget(imageAsset, ig::Rect(8.0f, 8.0f, 120.0f, 80.0f), payload);
+    context.endWindow();
+    return dropped;
+}
+
+static void test_cross_window_drag_drop()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::DragDropPayload payload;
+
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawDragDropWindows(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawDragDropWindows(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(240.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawDragDropWindows(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 240.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(drawDragDropWindows(context, payload));
+    context.endFrame();
+    assert(payload.source == 42u && payload.data == 9001u);
+}
+
 int main()
 {
     test_widget_gallery();
@@ -681,5 +722,6 @@ int main()
     test_multiline_scroll_and_drag_widgets();
     test_responsive_window_layout();
     test_scene_tree_and_message_box();
+    test_cross_window_drag_drop();
     return 0;
 }

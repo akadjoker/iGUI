@@ -6,6 +6,8 @@
 namespace
 {
 
+const ig::WidgetId ImageAssetPayload = 0x494d414745415353ull;
+
 struct DemoState
 {
     bool enabled;
@@ -37,6 +39,7 @@ struct DemoState
     int workspaceTab;
     int selectedAsset;
     int selectedSceneNode;
+    uint64_t droppedImageAsset;
     float gamma;
     float dragExposure;
     ig::String name;
@@ -50,7 +53,7 @@ struct DemoState
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), cameraExpanded(false),
           renderExpanded(false), floorExpanded(false), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0),
+          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), droppedImageAsset(0u),
           gamma(2.2f), dragExposure(0.25f),
           name("Raylib user"),
           nodeName("DirectionalLight3D"),
@@ -89,7 +92,15 @@ void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTex
 
     ui.label("Texture previews and image buttons");
     ui.separator();
+    const ig::Vec2 previewPosition = ui.cursor();
     ui.image(previewTexture, 128.0f, 128.0f);
+    ig::DragDropPayload payload;
+    if (ui.acceptDragDropTarget(ImageAssetPayload,
+                                ig::Rect(previewPosition.x, previewPosition.y, 128.0f, 128.0f), payload))
+    {
+        state.droppedImageAsset = payload.data;
+        ui.showToast("asset assigned", "Image asset assigned to preview", ig::ToastPosition::BottomRight);
+    }
     ui.sameLine(14.0f);
     ui.imageButton("texture preview action", previewTexture, 92.0f, 92.0f);
     ui.tooltip("Use this texture preview as an action button");
@@ -164,8 +175,18 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     }
     else if (state.workspaceTab == 1)
     {
-        ui.label("Project assets");
-        ui.listBox("project assets", state.selectedAsset, ig::Span<const ig::StringView>(assets), 0.0f, 4);
+        ui.label("Drag an image into the Images preview");
+        for (uint64_t i = 0u; i < 3u; ++i)
+        {
+            const ig::Vec2 position = ui.cursor();
+            const ig::Rect row(position.x, position.y, ui.availableWidth(), ui.theme().widgetHeight);
+            ui.beginDragSource(i + 1u, ImageAssetPayload, i + 1u, assets[i], row);
+            ui.selectable(assets[i], state.selectedAsset == static_cast<int>(i));
+        }
+        ui.label("Materials");
+        ui.label("wood.mat");
+        ui.label("character.mesh");
+        ui.label("postfx.shader");
     }
     else
     {

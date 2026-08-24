@@ -79,7 +79,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), toasts_(), frameDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), windowOrder_(), idStack_(), toasts_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId), activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
@@ -119,6 +119,7 @@ void Context::beginFrame(const FrameInfo &frame)
     }
 
     frameDrawList_.clear();
+    dragDropDrawList_.clear();
     toastDrawList_.clear();
     modalDrawList_.clear();
     for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
@@ -176,9 +177,19 @@ const DrawData &Context::endFrame()
             frameDrawList_.append(window->overlayDrawList);
         }
     }
+    drawDragDropPreview();
+    frameDrawList_.append(dragDropDrawList_);
     drawToasts();
     frameDrawList_.append(toastDrawList_);
     frameDrawList_.append(modalDrawList_);
+
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    if (dragDrop_.armed && pointer_.released[left])
+    {
+        if (activeWidget_ == dragDrop_.widget)
+            activeWidget_ = InvalidWidgetId;
+        dragDrop_ = DragDropState();
+    }
 
     currentWindow_ = WindowHandle();
     drawData_ = frameDrawList_.data(frame_.displaySize, frame_.dpiScale);
@@ -1848,6 +1859,69 @@ void Context::showToast(StringView idText, StringView text, ToastPosition positi
     toasts_.push_back(toast);
 }
 
+bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, StringView preview,
+                              const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window || source == InvalidWidgetId || type == InvalidWidgetId)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const Rect visible = intersect(rect, contentClip());
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const WidgetId widget = combineIds(makeWidgetId(StringView("drag source")), source);
+    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+                             activeWidget_ == InvalidWidgetId && contains(visible, pointer_.pressedPosition[left]);
+    if (pressedHere)
+    {
+        activeWidget_ = widget;
+        dragDrop_.widget = widget;
+        dragDrop_.payload.type = type;
+        dragDrop_.payload.source = source;
+        dragDrop_.payload.data = data;
+        dragDrop_.preview = String(preview.data(), preview.size());
+        dragDrop_.pressedPosition = pointer_.pressedPosition[left];
+        dragDrop_.armed = true;
+        dragDrop_.active = false;
+        dragDrop_.accepted = false;
+    }
+
+    if (dragDrop_.armed && dragDrop_.widget == widget && activeWidget_ == widget)
+    {
+        const float deltaX = pointer_.position.x - dragDrop_.pressedPosition.x;
+        const float deltaY = pointer_.position.y - dragDrop_.pressedPosition.y;
+        if (pointer_.down[left] && deltaX * deltaX + deltaY * deltaY >= 16.0f)
+            dragDrop_.active = true;
+        return dragDrop_.active;
+    }
+    return false;
+}
+
+bool Context::acceptDragDropTarget(WidgetId acceptedType, const Rect &bounds,
+                                   DragDropPayload &payload)
+{
+    if (!dragDrop_.active || dragDrop_.payload.type != acceptedType)
+        return false;
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const Rect visible = intersect(rect, contentClip());
+    const bool hovered = contains(visible, pointer_.position);
+    if (hovered)
+    {
+        drawList->addRect(rect, theme_.dialogBtnPrimary, contentClip(), 2.0f);
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        if (pointer_.released[left])
+        {
+            payload = dragDrop_.payload;
+            dragDrop_.accepted = true;
+            return true;
+        }
+    }
+    return false;
+}
+
 void Context::label(StringView text, const Vec2 &position)
 {
     WindowState *window = currentWindow();
@@ -2411,6 +2485,22 @@ void Context::drawText(DrawList &drawList, FontId font, StringView text, const V
     if (!textProvider_ || !textProvider_->appendText(drawList, font, text, position,
                                                       logicalSize, color, clip))
         drawList.addText(text, position, font, logicalSize, color, clip);
+}
+
+void Context::drawDragDropPreview()
+{
+    if (!dragDrop_.active || dragDrop_.preview.empty())
+        return;
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const TextMetrics metrics = measureText(theme_.font, dragDrop_.preview, theme_.fontSize);
+    const float padding = theme_.tooltipPadX;
+    const Rect preview(pointer_.position.x + 14.0f, pointer_.position.y + 16.0f,
+                       metrics.width + padding * 2.0f, metrics.height + theme_.tooltipPadY * 2.0f);
+    dragDropDrawList_.addRectFilled(preview, theme_.tooltipBg, viewport);
+    dragDropDrawList_.addRect(preview, theme_.dialogBtnPrimary, viewport);
+    drawText(dragDropDrawList_, theme_.font, dragDrop_.preview,
+             Vec2(preview.x + padding, preview.y + theme_.tooltipPadY),
+             theme_.fontSize, theme_.tooltipText, viewport);
 }
 
 void Context::drawToasts()
