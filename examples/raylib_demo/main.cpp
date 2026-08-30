@@ -1,6 +1,7 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -29,6 +30,7 @@ struct DemoState
     bool numericOpen;
     bool selectionOpen;
     bool imagesOpen;
+    bool dataTableOpen;
     bool workspaceOpen;
     bool windowManagerOpen;
     bool sceneExpanded;
@@ -47,6 +49,8 @@ struct DemoState
     int selectedAsset;
     int selectedSceneNode;
     int virtualTreeSelected;
+    int assetSortColumn;
+    bool assetSortAscending;
     int sceneParent[5];
     int sceneOrder[4];
     bool virtualTreeExpanded[100];
@@ -71,13 +75,15 @@ struct DemoState
     ig::String notes;
     ig::String nodeName;
     ig::Color accent;
+    float assetTableWeights[3];
 
     DemoState()
         : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
-          profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true),
+          profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true), dataTableOpen(true),
           workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
           volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), virtualTreeSelected(-1), droppedImageAsset(0u),
+          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), virtualTreeSelected(-1),
+          assetSortColumn(0), assetSortAscending(true), droppedImageAsset(0u),
           gamma(2.2f), dragExposure(0.25f),
           positionX(0.0f), positionY(1.25f), positionZ(-3.5f),
           scaleX(1.0f), scaleY(1.0f), scaleZ(1.0f),
@@ -94,6 +100,9 @@ struct DemoState
                 "This final line demonstrates vertical scrolling."),
           accent(90u, 160u, 230u, 255u)
     {
+        assetTableWeights[0] = 2.2f;
+        assetTableWeights[1] = 1.1f;
+        assetTableWeights[2] = 0.8f;
         sceneNodeExpanded[0] = false;
         sceneNodeExpanded[1] = false;
         sceneNodeExpanded[2] = false;
@@ -114,6 +123,34 @@ struct DemoState
             virtualTreeExpanded[group] = true;
     }
 };
+
+struct DemoAssetRow
+{
+    const char *name;
+    const char *kind;
+    int sizeKiB;
+};
+
+int compareText(const char *left, const char *right)
+{
+    for (int i = 0; left[i] != '\0' || right[i] != '\0'; ++i)
+    {
+        if (left[i] < right[i])
+            return -1;
+        if (left[i] > right[i])
+            return 1;
+    }
+    return 0;
+}
+
+int compareAssets(const DemoAssetRow &left, const DemoAssetRow &right, int column)
+{
+    if (column == 0)
+        return compareText(left.name, right.name);
+    if (column == 1)
+        return compareText(left.kind, right.kind);
+    return left.sizeKiB < right.sizeKiB ? -1 : (left.sizeKiB > right.sizeKiB ? 1 : 0);
+}
 
 ig::WidgetId sceneNodeId(int node)
 {
@@ -886,6 +923,69 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     ui.endWindow();
 }
 
+void drawDataTableWindow(ig::Context &ui, DemoState &state)
+{
+    static const DemoAssetRow assets[] = {
+        {"albedo.png", "Texture", 2048},
+        {"environment.hdr", "Texture", 8192},
+        {"player.mesh", "Mesh", 1536},
+        {"scene.json", "Data", 96},
+        {"theme.igui", "Theme", 12}
+    };
+    const int assetCount = static_cast<int>(sizeof(assets) / sizeof(assets[0]));
+
+    if (!ui.beginWindow("Data table", ig::Rect(458.0f, 560.0f, 420.0f, 258.0f), &state.dataTableOpen))
+        return;
+
+    ui.label("Click a header to sort. Drag its separator to resize columns.");
+    ui.separator();
+    if (ui.beginTable("asset browser table", ig::Span<float>(state.assetTableWeights, 3u)))
+    {
+        bool sortChanged = false;
+        assert(ui.tableNextColumn());
+        sortChanged = ui.tableHeader("Name", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        assert(ui.tableNextColumn());
+        sortChanged = ui.tableHeader("Type", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        assert(ui.tableNextColumn());
+        sortChanged = ui.tableHeader("Size", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        if (sortChanged)
+            ui.showToast("asset table sort", "Asset table sorted", ig::ToastPosition::BottomRight);
+
+        int order[assetCount];
+        for (int i = 0; i < assetCount; ++i)
+            order[i] = i;
+        for (int i = 0; i < assetCount - 1; ++i)
+        {
+            for (int j = i + 1; j < assetCount; ++j)
+            {
+                const int comparison = compareAssets(assets[order[i]], assets[order[j]], state.assetSortColumn);
+                const bool swap = state.assetSortAscending ? comparison > 0 : comparison < 0;
+                if (swap)
+                {
+                    const int index = order[i];
+                    order[i] = order[j];
+                    order[j] = index;
+                }
+            }
+        }
+
+        for (int row = 0; row < assetCount; ++row)
+        {
+            const DemoAssetRow &asset = assets[order[row]];
+            char size[32];
+            snprintf(size, sizeof(size), "%d KiB", asset.sizeKiB);
+            assert(ui.tableNextColumn());
+            ui.label(asset.name);
+            assert(ui.tableNextColumn());
+            ui.label(asset.kind);
+            assert(ui.tableNextColumn());
+            ui.label(size);
+        }
+        ui.endTable();
+    }
+    ui.endWindow();
+}
+
 } // namespace
 
 int main()
@@ -929,6 +1029,7 @@ int main()
         drawWindowManager(ui, state);
         drawWorkspaceWindow(ui, state);
         drawInspector(ui, state, GetFrameTime());
+        drawDataTableWindow(ui, state);
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
         ig::MessageBoxOptions deleteOptions;
         deleteOptions.kind = ig::MessageBoxKind::Error;

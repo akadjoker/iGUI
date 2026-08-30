@@ -147,7 +147,7 @@ if(IGUI_RAYLIB_AVAILABLE)
     # Consumers receive Raylib's archive and headers through this target. On
     # Linux, Raylib itself may additionally require the platform libraries
     # selected when its static archive was built (for example GLFW and X11).
-    target_link_libraries(igui_raylib PUBLIC igui_font igui_raylib_native)
+    target_link_libraries(igui_raylib PUBLIC igui igui_font igui_raylib_native)
     if(UNIX AND NOT APPLE)
         find_package(Threads REQUIRED)
         find_package(OpenGL QUIET)
