@@ -4659,6 +4659,69 @@ bool Context::tableNextColumn()
     return true;
 }
 
+bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscending)
+{
+    if (!tableActive_ || table_.column < 0 || table_.column >= table_.columns)
+        return false;
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+
+    const float width = availableWidth();
+    if (width <= 0.0f)
+        return false;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, theme_.widgetHeight);
+    const Rect clip = contentClip();
+    const WidgetId columnId = combineIds(makeWidgetId(labelText),
+                                         static_cast<uint64_t>(table_.column + 1));
+    const WidgetId id = combineIds(columnId, 0x5441424c45484452ull);
+    const bool hovered = itemHovered(bounds, clip, id);
+    const bool clicked = itemClicked(bounds, clip, id);
+    bool changed = false;
+    if (clicked)
+    {
+        if (sortColumn == table_.column)
+            sortAscending = !sortAscending;
+        else
+        {
+            sortColumn = table_.column;
+            sortAscending = true;
+        }
+        changed = true;
+    }
+
+    const bool sorted = sortColumn == table_.column;
+    const Color background = sorted ? theme_.selectableSelected
+                           : (hovered ? theme_.buttonHovered : theme_.panelColor);
+    drawList->addRectFilled(bounds, background, clip);
+    drawList->addRect(bounds, theme_.borderColor, clip);
+
+    const float padding = theme_.windowPadding * 0.5f;
+    const float arrowSize = bounds.height * 0.28f;
+    const float arrowReserve = sorted ? arrowSize + padding : 0.0f;
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(bounds.x + padding,
+                  bounds.y + (bounds.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    if (sorted && bounds.width > padding * 2.0f + arrowReserve)
+    {
+        const float centerX = bounds.x + bounds.width - padding - arrowSize * 0.5f;
+        const float centerY = bounds.y + bounds.height * 0.5f;
+        const Vec2 arrow[] = {
+            sortAscending ? Vec2(centerX - arrowSize * 0.5f, centerY + arrowSize * 0.35f)
+                          : Vec2(centerX - arrowSize * 0.5f, centerY - arrowSize * 0.35f),
+            sortAscending ? Vec2(centerX + arrowSize * 0.5f, centerY + arrowSize * 0.35f)
+                          : Vec2(centerX + arrowSize * 0.5f, centerY - arrowSize * 0.35f),
+            sortAscending ? Vec2(centerX, centerY - arrowSize * 0.5f)
+                          : Vec2(centerX, centerY + arrowSize * 0.5f)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.labelText, clip);
+    }
+    advanceLayout(bounds);
+    return changed;
+}
+
 void Context::endTable()
 {
     if (!tableActive_)

@@ -1027,6 +1027,58 @@ static void test_weighted_table_owns_weights()
     assert(firstWidth < secondWidth * 3.1f);
 }
 
+static bool drawSortableTable(ig::Context &context, int &sortColumn, bool &sortAscending)
+{
+    bool changed = false;
+    assert(context.beginWindow("sortable table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(context.beginTable("assets", 2));
+    assert(context.tableNextColumn());
+    changed = context.tableHeader("Name", sortColumn, sortAscending) || changed;
+    assert(context.tableNextColumn());
+    changed = context.tableHeader("Size", sortColumn, sortAscending) || changed;
+    assert(context.tableNextColumn());
+    context.label("albedo.png");
+    assert(context.tableNextColumn());
+    context.label("2 MB");
+    context.endTable();
+    context.endWindow();
+    return changed;
+}
+
+static void test_sortable_table_headers()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    int sortColumn = -1;
+    bool sortAscending = false;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawSortableTable(context, sortColumn, sortAscending));
+    context.endFrame();
+    assert(sortColumn == -1);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 55.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 55.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(drawSortableTable(context, sortColumn, sortAscending));
+    context.endFrame();
+    assert(sortColumn == 0 && sortAscending);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 55.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 55.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(drawSortableTable(context, sortColumn, sortAscending));
+    context.endFrame();
+    assert(sortColumn == 0 && !sortAscending);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 190.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 190.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(drawSortableTable(context, sortColumn, sortAscending));
+    context.endFrame();
+    assert(sortColumn == 1 && sortAscending);
+}
+
 static void drawVirtualList(ig::Context &context, int &selectedItem,
                             int &firstVisible, int &lastVisible)
 {
@@ -1938,6 +1990,7 @@ int main()
     test_child_table_and_property_row();
     test_weighted_table_layout();
     test_weighted_table_owns_weights();
+    test_sortable_table_headers();
     test_virtual_list();
     test_virtual_table();
     test_virtual_tree();

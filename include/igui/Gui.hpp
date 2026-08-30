@@ -440,6 +440,11 @@ public:
     // until endTable(); for example, {3.0f, 1.0f} creates a 75/25 split.
     bool beginTable(StringView id, Span<const float> columnWeights, float width = 0.0f);
     bool tableNextColumn();
+    // Draw a clickable header in the current table cell. sortColumn starts at
+    // -1; clicking a new column selects ascending order and clicking the
+    // selected column toggles sortAscending. Returns true when the sort state
+    // changes. Call tableNextColumn() before every header and cell.
+    bool tableHeader(StringView label, int &sortColumn, bool &sortAscending);
     void endTable();
     // Aligned label/value row for inspectors. Render the value widgets between
     // beginPropertyRow() and endPropertyRow().
