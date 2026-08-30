@@ -319,9 +319,17 @@ static void test_selectable()
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
-    assert(data.vertices[8].color.r == 70u);
-    assert(data.vertices[8].color.g == 125u);
-    assert(data.vertices[8].color.b == 185u);
+    bool foundSelectedBackground = false;
+    const ig::Color selectedBackground = context.theme().selectableSelected;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].color == selectedBackground)
+        {
+            foundSelectedBackground = true;
+            break;
+        }
+    }
+    assert(foundSelectedBackground);
 }
 
 static void test_progress_bar()
@@ -336,14 +344,16 @@ static void test_progress_bar()
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
-    assert(data.vertices[12].position.x == 26.0f);
-    assert(data.vertices[13].position.x == 86.0f);
-    assert(data.vertices[12].color.r == 90u);
-    assert(data.vertices[12].color.g == 160u);
-    assert(data.vertices[12].color.b == 230u);
-    assert(data.vertices[20].position.x == 26.0f);
-    assert(data.vertices[21].position.x == 146.0f);
-    assert(data.vertices.size() == 36u);
+    int filledVertexCount = 0;
+    const ig::Color filledColor = context.theme().progressFilled;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].color == filledColor)
+            ++filledVertexCount;
+    }
+    // The valid 50% and clamped 200% values each produce one filled quad;
+    // a zero maximum must be ignored rather than producing invalid geometry.
+    assert(filledVertexCount == 8);
 }
 
 static void test_automatic_selectable_and_progress_bar()

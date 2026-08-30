@@ -997,6 +997,36 @@ static void test_weighted_table_layout()
     assert(firstWidth < secondWidth * 3.1f);
 }
 
+static bool beginTableWithTemporaryWeights(ig::Context &context)
+{
+    ct::Vector<float> weights;
+    weights.push_back(3.0f);
+    weights.push_back(1.0f);
+    return context.beginTable("temporary weights", ig::Span<const float>(weights));
+}
+
+static void test_weighted_table_owns_weights()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("temporary weighted table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(beginTableWithTemporaryWeights(context));
+    assert(context.tableNextColumn());
+    const float firstWidth = context.availableWidth();
+    context.label("Name");
+    assert(context.tableNextColumn());
+    const float secondWidth = context.availableWidth();
+    context.label("Value");
+    context.endTable();
+    context.endWindow();
+    context.endFrame();
+
+    assert(firstWidth > secondWidth * 2.9f);
+    assert(firstWidth < secondWidth * 3.1f);
+}
+
 static void drawVirtualList(ig::Context &context, int &selectedItem,
                             int &firstVisible, int &lastVisible)
 {
@@ -1358,6 +1388,92 @@ static void test_tree_drag_drop_positions()
     context.endFrame();
     assert(drop.source == 101u && drop.target == 202u);
     assert(drop.position == ig::TreeDropPosition::Inside);
+}
+
+static bool drawPlainTreeAndDropTarget(ig::Context &context, ig::TreeDrop &drop)
+{
+    bool sourceExpanded = false;
+    bool targetExpanded = false;
+    ig::TreeItemStyle style;
+    style.leaf = true;
+    assert(context.beginWindow("plain tree", ig::Rect(10.0f, 10.0f, 260.0f, 150.0f)));
+    context.treeItem("plain item", sourceExpanded, style,
+                     ig::Rect(8.0f, 8.0f, 220.0f, 28.0f));
+    context.treeItem(202u, "drop target", targetExpanded, style,
+                     ig::Rect(8.0f, 40.0f, 220.0f, 28.0f), &drop);
+    context.endWindow();
+    return drop.source != ig::InvalidWidgetId;
+}
+
+static void test_plain_tree_item_is_not_a_drag_source()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::TreeDrop drop;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawPlainTreeAndDropTarget(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 100.0f, 70.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawPlainTreeAndDropTarget(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(100.0f, 108.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawPlainTreeAndDropTarget(context, drop));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 100.0f, 108.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(!drawPlainTreeAndDropTarget(context, drop));
+    context.endFrame();
+}
+
+static bool drawFocusLostDragDrop(ig::Context &context, ig::DragDropPayload &payload)
+{
+    const ig::WidgetId payloadType = 0x464f43555344524full;
+    assert(context.beginWindow("focus source", ig::Rect(10.0f, 10.0f, 160.0f, 120.0f)));
+    context.beginDragSource(42u, payloadType, 9001u, "albedo.png", ig::Rect(8.0f, 8.0f, 120.0f, 28.0f));
+    context.endWindow();
+    assert(context.beginWindow("focus target", ig::Rect(200.0f, 10.0f, 160.0f, 120.0f)));
+    const bool dropped = context.acceptDragDropTarget(payloadType,
+                                                       ig::Rect(8.0f, 8.0f, 120.0f, 80.0f), payload);
+    context.endWindow();
+    return dropped;
+}
+
+static void test_focus_lost_cancels_drag_drop()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::DragDropPayload payload;
+
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawFocusLostDragDrop(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawFocusLostDragDrop(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(240.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawFocusLostDragDrop(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::focusLost());
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawFocusLostDragDrop(context, payload));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 240.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 240.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(400.0f, 180.0f));
+    assert(!drawFocusLostDragDrop(context, payload));
+    context.endFrame();
 }
 
 static bool drawEditorInfrastructure(ig::Context &context, float &split, float &x, float &y, float &z,
@@ -1821,6 +1937,7 @@ int main()
     test_multiline_scroll_and_drag_widgets();
     test_child_table_and_property_row();
     test_weighted_table_layout();
+    test_weighted_table_owns_weights();
     test_virtual_list();
     test_virtual_table();
     test_virtual_tree();
@@ -1828,6 +1945,8 @@ int main()
     test_scene_tree_and_message_box();
     test_cross_window_drag_drop();
     test_tree_drag_drop_positions();
+    test_plain_tree_item_is_not_a_drag_source();
+    test_focus_lost_cancels_drag_drop();
     test_editor_infrastructure();
     test_gizmo2d_transform_handles();
     test_gizmo3d_transform_handles();

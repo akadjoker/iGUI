@@ -621,12 +621,12 @@ private:
         int column;
         float rowY;
         float rowHeight;
-        const float *columnWeights;
+        ct::Vector<float> columnWeights;
         float totalColumnWeight;
 
         TableState()
             : parentLayout(), bounds(), columns(0), column(-1), rowY(0.0f), rowHeight(0.0f),
-              columnWeights(nullptr), totalColumnWeight(0.0f) {}
+              columnWeights(), totalColumnWeight(0.0f) {}
     };
 
     struct PropertyRowState

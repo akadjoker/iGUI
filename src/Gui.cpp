@@ -963,7 +963,7 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     const WidgetId arrowId = combineIds(id, 0x4152524f57ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
-    const bool pressedOnRow = !style.disabled && pointer_.pressed[left] &&
+    const bool pressedOnRow = drop != nullptr && !style.disabled && pointer_.pressed[left] &&
                               currentWindow_ == focusedWindow_ &&
                               activeWidget_ == InvalidWidgetId &&
                               contains(visible, pointer_.pressedPosition[left]) &&
@@ -4601,7 +4601,10 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights, flo
         !beginTable(idText, static_cast<int>(columnWeights.size()), width))
         return false;
 
-    table_.columnWeights = &columnWeights[0];
+    table_.columnWeights.clear();
+    table_.columnWeights.reserve(columnWeights.size());
+    for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
+        table_.columnWeights.push_back(columnWeights[i]);
     table_.totalColumnWeight = totalWeight;
     return true;
 }
@@ -4618,11 +4621,12 @@ float Context::tableColumnWidth(int column) const
 {
     if (column < 0 || column >= table_.columns || table_.columns <= 0)
         return 0.0f;
-    if (!table_.columnWeights || table_.totalColumnWeight <= 0.0f)
+    if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
         return table_.bounds.width / static_cast<float>(table_.columns);
     if (column + 1 == table_.columns)
         return table_.bounds.x + table_.bounds.width - tableColumnX(column);
-    return table_.bounds.width * table_.columnWeights[column] / table_.totalColumnWeight;
+    return table_.bounds.width * table_.columnWeights[static_cast<ct::Vector<float>::size_type>(column)] /
+           table_.totalColumnWeight;
 }
 
 bool Context::tableNextColumn()
@@ -4978,6 +4982,7 @@ void Context::consumeEvents()
             focusedWidget_ = InvalidWidgetId;
             textInputWidget_ = InvalidWidgetId;
             openCombo_ = InvalidWidgetId;
+            dragDrop_ = DragDropState();
             break;
         case EventType::ViewportChanged:
             frame_.displaySize = event.viewportSize;
