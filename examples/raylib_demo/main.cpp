@@ -74,6 +74,7 @@ struct DemoState
     ig::String name;
     ig::String notes;
     ig::String nodeName;
+    ig::String assetFilter;
     ig::Color accent;
     float assetTableWeights[3];
 
@@ -92,6 +93,7 @@ struct DemoState
           gizmo3DTransform(), gizmo3DMode(ig::Gizmo3DMode::Translate),
           name("Raylib user"),
           nodeName("DirectionalLight3D"),
+          assetFilter(),
           notes("A multiline text editor now has a real scrollbar.\n"
                 "Use the wheel over this area.\n"
                 "You can also drag the scrollbar thumb.\n"
@@ -150,6 +152,33 @@ int compareAssets(const DemoAssetRow &left, const DemoAssetRow &right, int colum
     if (column == 1)
         return compareText(left.kind, right.kind);
     return left.sizeKiB < right.sizeKiB ? -1 : (left.sizeKiB > right.sizeKiB ? 1 : 0);
+}
+
+bool containsAsciiIgnoreCase(ig::StringView text, ig::StringView query)
+{
+    if (query.empty())
+        return true;
+    if (query.size() > text.size())
+        return false;
+    for (ig::StringView::size_type start = 0u; start + query.size() <= text.size(); ++start)
+    {
+        bool match = true;
+        for (ig::StringView::size_type index = 0u; index < query.size(); ++index)
+        {
+            char left = text[start + index];
+            char right = query[index];
+            if (left >= 'A' && left <= 'Z') left = static_cast<char>(left + ('a' - 'A'));
+            if (right >= 'A' && right <= 'Z') right = static_cast<char>(right + ('a' - 'A'));
+            if (left != right)
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+            return true;
+    }
+    return false;
 }
 
 ig::WidgetId sceneNodeId(int node)
@@ -940,6 +969,9 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
 
     ui.label("Click a header to sort. Drag its separator to resize columns.");
     ui.separator();
+    ui.inputText("Filter assets", state.assetFilter);
+    if (ui.smallButton("Clear filter"))
+        state.assetFilter.clear();
     bool sortChanged = false;
     if (ui.beginTable("asset browser header", ig::Span<float>(state.assetTableWeights, 3u)))
     {
@@ -955,11 +987,19 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
         ui.showToast("asset table sort", "Asset table sorted", ig::ToastPosition::BottomRight);
 
     int order[assetCount];
+    int filteredCount = 0;
     for (int i = 0; i < assetCount; ++i)
-        order[i] = i;
-    for (int i = 0; i < assetCount - 1; ++i)
     {
-        for (int j = i + 1; j < assetCount; ++j)
+        const DemoAssetRow &asset = assets[i % baseAssetCount];
+        char name[64];
+        snprintf(name, sizeof(name), "%s #%03d", asset.name, i + 1);
+        if (containsAsciiIgnoreCase(name, state.assetFilter) ||
+            containsAsciiIgnoreCase(asset.kind, state.assetFilter))
+            order[filteredCount++] = i;
+    }
+    for (int i = 0; i < filteredCount - 1; ++i)
+    {
+        for (int j = i + 1; j < filteredCount; ++j)
         {
             const DemoAssetRow &left = assets[order[i] % baseAssetCount];
             const DemoAssetRow &right = assets[order[j] % baseAssetCount];
@@ -984,9 +1024,9 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
 
     int firstVisible = 0;
     int lastVisible = 0;
-    if (ui.beginVirtualTable("asset browser rows", assetCount,
+    if (ui.beginVirtualTable("asset browser rows", filteredCount,
                              ig::Span<const float>(state.assetTableWeights, 3u),
-                             ui.theme().widgetHeight, 142.0f,
+                             ui.theme().widgetHeight, 108.0f,
                              firstVisible, lastVisible, false))
     {
         for (int row = firstVisible; row < lastVisible; ++row)
