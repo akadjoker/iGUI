@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdio.h>
 
 #include <igui/Gui.hpp>
 
@@ -1800,6 +1801,101 @@ public:
     }
 };
 
+class ManyEntriesDialogProvider : public ig::FileDialogProvider
+{
+public:
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries) override
+    {
+        for (int index = 0; index < 12; ++index)
+        {
+            char name[24];
+            snprintf(name, sizeof(name), "asset_%02d.png", index);
+            ig::FileDialogEntry entry;
+            entry.name = name;
+            entry.path = ig::String(path.data(), path.size()) + "/" + name;
+            entry.size = static_cast<uint64_t>(index + 1) * 1024u;
+            entries.push_back(entry);
+        }
+        return true;
+    }
+
+    ig::String parentDirectory(ig::StringView) override { return "/"; }
+    ig::String homeDirectory() override { return "/home/test"; }
+};
+
+static void test_file_dialog_utf8_folder_backspace()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    bool open = true;
+    state.initialized = true;
+    state.path = "/project";
+    state.creatingFolder = true;
+    state.newFolderName = "caf\xc3\xa9";
+    state.newFolderCursor = state.newFolderName.size();
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("utf8 folder", open, state, options, provider);
+    context.endFrame();
+
+    assert(state.newFolderName == "caf");
+    assert(state.newFolderCursor == 3u);
+}
+
+static void test_file_dialog_scroll_is_clamped()
+{
+    WidgetBackend backend;
+    ManyEntriesDialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("scroll clamp", open, state, options, provider);
+    context.endFrame();
+    state.view = ig::FileDialogView::List;
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -100.0f;
+    context.pushEvent(ig::Event::pointerMove(50.0f, 130.0f));
+    context.pushEvent(wheel);
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("scroll clamp", open, state, options, provider);
+    context.endFrame();
+
+    assert(state.scrollOffset == 0.0f);
+}
+
+static void test_file_dialog_icon_margin_does_not_select()
+{
+    WidgetBackend backend;
+    ManyEntriesDialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("icon margin", open, state, options, provider);
+    context.endFrame();
+    state.view = ig::FileDialogView::Icons;
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 590.0f, 110.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+    context.fileDialog("icon margin", open, state, options, provider);
+    context.endFrame();
+
+    assert(state.selectedIndex == -3);
+}
+
 static void test_file_dialog_choose_folder()
 {
     WidgetBackend backend;
@@ -2073,6 +2169,9 @@ int main()
     test_editor_infrastructure();
     test_gizmo2d_transform_handles();
     test_gizmo3d_transform_handles();
+    test_file_dialog_utf8_folder_backspace();
+    test_file_dialog_scroll_is_clamped();
+    test_file_dialog_icon_margin_does_not_select();
     test_file_dialog_choose_folder();
     test_file_dialog_resize();
     test_file_dialog_navigation_and_create_folder();

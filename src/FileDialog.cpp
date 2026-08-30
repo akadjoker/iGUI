@@ -61,6 +61,19 @@ bool matchesFileDialogFilter(StringView name, StringView filter)
     return false;
 }
 
+String::size_type previousUtf8Offset(StringView text, String::size_type offset)
+{
+    if (offset > text.size())
+        offset = text.size();
+    if (offset == 0u)
+        return 0u;
+    --offset;
+    while (offset != 0u &&
+           (static_cast<uint8_t>(text[offset]) & 0xc0u) == 0x80u)
+        --offset;
+    return offset;
+}
+
 String fileDialogSize(uint64_t bytes)
 {
     char text[32];
@@ -398,8 +411,10 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
         if (backspacePressed_ && state.newFolderCursor != 0u)
         {
-            --state.newFolderCursor;
-            state.newFolderName.erase(state.newFolderCursor, 1u);
+            const String::size_type previous = previousUtf8Offset(state.newFolderName,
+                                                                    state.newFolderCursor);
+            state.newFolderName.erase(previous, state.newFolderCursor - previous);
+            state.newFolderCursor = previous;
             state.newFolderError.clear();
         }
         if (escapePressed_)
@@ -516,6 +531,19 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             continue;
         visibleEntries.push_back(static_cast<int>(i));
     }
+    float contentHeight = static_cast<float>(visibleEntries.size()) * rowHeight;
+    if (state.view == FileDialogView::Icons)
+    {
+        const float cell = 92.0f;
+        int columns = static_cast<int>(entriesArea.width / cell);
+        if (columns < 1)
+            columns = 1;
+        const int rows = (static_cast<int>(visibleEntries.size()) + columns - 1) / columns;
+        contentHeight = static_cast<float>(rows) * cell;
+    }
+    const float maximumScroll = contentHeight > entriesArea.height ? contentHeight - entriesArea.height : 0.0f;
+    if (state.scrollOffset > maximumScroll)
+        state.scrollOffset = maximumScroll;
     int hitEntry = -3;
     bool activateSelected = false;
     if (pointer_.released[left] && contains(entriesArea, pointer_.releasedPosition[left]))
@@ -528,7 +556,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             if (columns < 1) columns = 1;
             const int column = static_cast<int>((released.x - entriesArea.x) / cell);
             const int row = static_cast<int>((released.y - entriesArea.y + state.scrollOffset) / cell);
-            hitEntry = row * columns + column;
+            if (column >= 0 && column < columns)
+                hitEntry = row * columns + column;
         }
         else
             hitEntry = static_cast<int>((released.y - entriesArea.y + state.scrollOffset) / rowHeight);
