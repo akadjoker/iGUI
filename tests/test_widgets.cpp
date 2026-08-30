@@ -1124,6 +1124,29 @@ static void test_resizable_table_columns()
     context.endFrame();
 }
 
+static void test_weighted_virtual_table_layout()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const float weights[] = {3.0f, 1.0f};
+    int firstVisible = 0;
+    int lastVisible = 0;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("weighted virtual table", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.beginVirtualTable("assets", 100, ig::Span<const float>(weights), 28.0f, 84.0f,
+                                     firstVisible, lastVisible));
+    const ig::Rect first = context.virtualTableCellRect(firstVisible, 0);
+    const ig::Rect second = context.virtualTableCellRect(firstVisible, 1);
+    context.endVirtualTable();
+    context.endWindow();
+    context.endFrame();
+
+    assert(first.width > second.width * 2.9f);
+    assert(first.width < second.width * 3.1f);
+    assert(second.x == first.right());
+}
+
 static void drawVirtualList(ig::Context &context, int &selectedItem,
                             int &firstVisible, int &lastVisible)
 {
@@ -2037,6 +2060,7 @@ int main()
     test_weighted_table_owns_weights();
     test_sortable_table_headers();
     test_resizable_table_columns();
+    test_weighted_virtual_table_layout();
     test_virtual_list();
     test_virtual_table();
     test_virtual_tree();

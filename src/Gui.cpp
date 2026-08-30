@@ -4500,6 +4500,33 @@ bool Context::beginVirtualTable(StringView idText, int rowCount, int columns, fl
     return true;
 }
 
+bool Context::beginVirtualTable(StringView idText, int rowCount, Span<const float> columnWeights,
+                                float rowHeight, float height,
+                                int &firstVisibleRow, int &lastVisibleRow,
+                                bool border, float width)
+{
+    if (columnWeights.empty())
+        return false;
+    float totalWeight = 0.0f;
+    for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
+    {
+        if (columnWeights[i] <= 0.0f)
+            return false;
+        totalWeight += columnWeights[i];
+    }
+    if (totalWeight <= 0.0f ||
+        !beginVirtualTable(idText, rowCount, static_cast<int>(columnWeights.size()), rowHeight, height,
+                           firstVisibleRow, lastVisibleRow, border, width))
+        return false;
+
+    VirtualTableState &state = virtualTableStack_.back();
+    state.columnWeights.reserve(columnWeights.size());
+    for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
+        state.columnWeights.push_back(columnWeights[i]);
+    state.totalColumnWeight = totalWeight;
+    return true;
+}
+
 Rect Context::virtualTableCellRect(int row, int column) const
 {
     if (virtualTableStack_.empty() || virtualListStack_.empty())
@@ -4511,9 +4538,25 @@ Rect Context::virtualTableCellRect(int row, int column) const
     const Rect rowRect = virtualListItemRect(row);
     if (rowRect.width <= 0.0f || rowRect.height <= 0.0f)
         return Rect();
-    const float cellWidth = rowRect.width / static_cast<float>(table.columns);
-    const float cellX = rowRect.x + cellWidth * static_cast<float>(column);
-    const float width = column + 1 == table.columns ? rowRect.x + rowRect.width - cellX : cellWidth;
+    float cellX = rowRect.x;
+    if (!table.columnWeights.empty() && table.totalColumnWeight > 0.0f)
+    {
+        for (int index = 0; index < column; ++index)
+        {
+            cellX += rowRect.width *
+                     table.columnWeights[static_cast<ct::Vector<float>::size_type>(index)] /
+                     table.totalColumnWeight;
+        }
+    }
+    else
+    {
+        cellX += rowRect.width * static_cast<float>(column) / static_cast<float>(table.columns);
+    }
+    const float width = column + 1 == table.columns ? rowRect.x + rowRect.width - cellX
+                       : (!table.columnWeights.empty() && table.totalColumnWeight > 0.0f
+                           ? rowRect.width * table.columnWeights[static_cast<ct::Vector<float>::size_type>(column)] /
+                             table.totalColumnWeight
+                           : rowRect.width / static_cast<float>(table.columns));
     return Rect(cellX, rowRect.y, width, rowRect.height);
 }
 

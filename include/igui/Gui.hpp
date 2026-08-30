@@ -425,6 +425,13 @@ public:
     bool beginVirtualTable(StringView id, int rowCount, int columns, float rowHeight, float height,
                            int &firstVisibleRow, int &lastVisibleRow,
                            bool border = true, float width = 0.0f);
+    // Virtualized rows with weighted columns. Use the same weights as a
+    // preceding beginTable()/tableHeader() row to create a fixed, resizable
+    // header aligned with the scrolling cells.
+    bool beginVirtualTable(StringView id, int rowCount, Span<const float> columnWeights,
+                           float rowHeight, float height,
+                           int &firstVisibleRow, int &lastVisibleRow,
+                           bool border = true, float width = 0.0f);
     Rect virtualTableCellRect(int row, int column) const;
     void endVirtualTable();
     // Virtualized rows for an application-owned, flattened tree. depth controls
@@ -611,8 +618,11 @@ private:
     {
         WidgetId childId;
         int columns;
+        ct::Vector<float> columnWeights;
+        float totalColumnWeight;
 
-        VirtualTableState() : childId(InvalidWidgetId), columns(0) {}
+        VirtualTableState()
+            : childId(InvalidWidgetId), columns(0), columnWeights(), totalColumnWeight(0.0f) {}
     };
 
     struct VirtualTreeState

@@ -932,56 +932,82 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
         {"scene.json", "Data", 96},
         {"theme.igui", "Theme", 12}
     };
-    const int assetCount = static_cast<int>(sizeof(assets) / sizeof(assets[0]));
+    const int baseAssetCount = static_cast<int>(sizeof(assets) / sizeof(assets[0]));
+    const int assetCount = 120;
 
     if (!ui.beginWindow("Data table", ig::Rect(458.0f, 560.0f, 420.0f, 258.0f), &state.dataTableOpen))
         return;
 
     ui.label("Click a header to sort. Drag its separator to resize columns.");
     ui.separator();
-    if (ui.beginTable("asset browser table", ig::Span<float>(state.assetTableWeights, 3u)))
+    bool sortChanged = false;
+    if (ui.beginTable("asset browser header", ig::Span<float>(state.assetTableWeights, 3u)))
     {
-        bool sortChanged = false;
         assert(ui.tableNextColumn());
         sortChanged = ui.tableHeader("Name", state.assetSortColumn, state.assetSortAscending) || sortChanged;
         assert(ui.tableNextColumn());
         sortChanged = ui.tableHeader("Type", state.assetSortColumn, state.assetSortAscending) || sortChanged;
         assert(ui.tableNextColumn());
         sortChanged = ui.tableHeader("Size", state.assetSortColumn, state.assetSortAscending) || sortChanged;
-        if (sortChanged)
-            ui.showToast("asset table sort", "Asset table sorted", ig::ToastPosition::BottomRight);
+        ui.endTable();
+    }
+    if (sortChanged)
+        ui.showToast("asset table sort", "Asset table sorted", ig::ToastPosition::BottomRight);
 
-        int order[assetCount];
-        for (int i = 0; i < assetCount; ++i)
-            order[i] = i;
-        for (int i = 0; i < assetCount - 1; ++i)
+    int order[assetCount];
+    for (int i = 0; i < assetCount; ++i)
+        order[i] = i;
+    for (int i = 0; i < assetCount - 1; ++i)
+    {
+        for (int j = i + 1; j < assetCount; ++j)
         {
-            for (int j = i + 1; j < assetCount; ++j)
+            const DemoAssetRow &left = assets[order[i] % baseAssetCount];
+            const DemoAssetRow &right = assets[order[j] % baseAssetCount];
+            int comparison = compareAssets(left, right, state.assetSortColumn);
+            if (state.assetSortColumn == 2)
             {
-                const int comparison = compareAssets(assets[order[i]], assets[order[j]], state.assetSortColumn);
-                const bool swap = state.assetSortAscending ? comparison > 0 : comparison < 0;
-                if (swap)
-                {
-                    const int index = order[i];
-                    order[i] = order[j];
-                    order[j] = index;
-                }
+                const int leftSize = left.sizeKiB + (order[i] / baseAssetCount) * 64;
+                const int rightSize = right.sizeKiB + (order[j] / baseAssetCount) * 64;
+                comparison = leftSize < rightSize ? -1 : (leftSize > rightSize ? 1 : 0);
+            }
+            if (comparison == 0)
+                comparison = order[i] < order[j] ? -1 : (order[i] > order[j] ? 1 : 0);
+            const bool swap = state.assetSortAscending ? comparison > 0 : comparison < 0;
+            if (swap)
+            {
+                const int index = order[i];
+                order[i] = order[j];
+                order[j] = index;
             }
         }
+    }
 
-        for (int row = 0; row < assetCount; ++row)
+    int firstVisible = 0;
+    int lastVisible = 0;
+    if (ui.beginVirtualTable("asset browser rows", assetCount,
+                             ig::Span<const float>(state.assetTableWeights, 3u),
+                             ui.theme().widgetHeight, 142.0f,
+                             firstVisible, lastVisible, false))
+    {
+        for (int row = firstVisible; row < lastVisible; ++row)
         {
-            const DemoAssetRow &asset = assets[order[row]];
+            const int assetIndex = order[row];
+            const DemoAssetRow &asset = assets[assetIndex % baseAssetCount];
+            char name[64];
             char size[32];
-            snprintf(size, sizeof(size), "%d KiB", asset.sizeKiB);
-            assert(ui.tableNextColumn());
-            ui.label(asset.name);
-            assert(ui.tableNextColumn());
-            ui.label(asset.kind);
-            assert(ui.tableNextColumn());
-            ui.label(size);
+            snprintf(name, sizeof(name), "%s #%03d", asset.name, assetIndex + 1);
+            snprintf(size, sizeof(size), "%d KiB", asset.sizeKiB + (assetIndex / baseAssetCount) * 64);
+            ui.pushId(static_cast<uint64_t>(assetIndex + 1));
+            if (ui.selectable(name, state.selectedAsset == assetIndex,
+                              ui.virtualTableCellRect(row, 0)))
+                state.selectedAsset = assetIndex;
+            ui.selectable(asset.kind, state.selectedAsset == assetIndex,
+                          ui.virtualTableCellRect(row, 1));
+            ui.selectable(size, state.selectedAsset == assetIndex,
+                          ui.virtualTableCellRect(row, 2));
+            ui.popId();
         }
-        ui.endTable();
+        ui.endVirtualTable();
     }
     ui.endWindow();
 }
