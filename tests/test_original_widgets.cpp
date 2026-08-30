@@ -68,6 +68,24 @@ int main()
     assert(WidgetSerializer::typeName(loaded->children()[2]) == "CheckBox");
     assert(WidgetSerializer::typeName(loaded->children()[3]) == "Slider");
 
+    json malformed = json::object();
+    malformed["type"] = "Label";
+    malformed["rect"] = "not an array";
+    malformed["tags"] = "also not an array";
+    Widget* malformedLoaded = WidgetSerializer::load(malformed, &destination);
+    assert(malformedLoaded != nullptr);
+    assert(malformedLoaded->rect().w == 0.0f && malformedLoaded->rect().h == 0.0f);
+    assert(malformedLoaded->tags().empty());
+
+    malformed["rect"] = json::array();
+    malformed["rect"].push_back(1.0f);
+    malformed["tags"] = json::array();
+    malformed["tags"].push_back("safe");
+    Widget* shortRectLoaded = WidgetSerializer::load(malformed, &destination);
+    assert(shortRectLoaded != nullptr);
+    assert(shortRectLoaded->rect().w == 0.0f && shortRectLoaded->rect().h == 0.0f);
+    assert(shortRectLoaded->tags().size() == 1u);
+
     Animation animation(0.0f, 10.0f, 1.0f, EaseType::Linear);
     animation.setAutoDelete(false);
     animation.start();

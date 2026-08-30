@@ -235,7 +235,7 @@ void WidgetSerializer::deserializeBase(const json& j, Widget* w)
     if (j.contains("id"))
         w->setId(jsonValue<String>(j["id"]));
 
-    if (j.contains("rect")) {
+    if (j.contains("rect") && j["rect"].is_array() && j["rect"].size() >= 4u) {
         const auto& r = j["rect"];
         w->setRect({jsonValue<float>(r[0]), jsonValue<float>(r[1]),
                      jsonValue<float>(r[2]), jsonValue<float>(r[3])});
@@ -256,7 +256,7 @@ void WidgetSerializer::deserializeBase(const json& j, Widget* w)
     if (j.contains("stretch"))
         w->setStretch(jsonValue<float>(j["stretch"]));
 
-    if (j.contains("tags"))
+    if (j.contains("tags") && j["tags"].is_array())
         for (const auto& t : j["tags"].items())
             w->addTag(jsonValue<String>(t));
 }
