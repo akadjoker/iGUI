@@ -335,7 +335,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
-      table_(), propertyRow_(), tableActive_(false), propertyRowActive_(false),
+      table_(), tableResize_(), propertyRow_(), tableActive_(false), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), tooltipDelay_(0.45f), tooltipHoverSeconds_(0.0f),
       tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -4576,13 +4576,14 @@ bool Context::beginTable(StringView idText, int columns, float width)
         return false;
     table_.parentLayout = layout_;
     table_.bounds = Rect(layout_.cursor.x, layout_.cursor.y, resolvedWidth, 0.0f);
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    table_.id = combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull));
     table_.columns = columns;
     table_.column = -1;
     table_.rowY = layout_.cursor.y;
     table_.rowHeight = 0.0f;
     tableActive_ = true;
-    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
-    idStack_.push_back(combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull)));
+    idStack_.push_back(table_.id);
     return true;
 }
 
@@ -4606,6 +4607,16 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights, flo
     for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
         table_.columnWeights.push_back(columnWeights[i]);
     table_.totalColumnWeight = totalWeight;
+    return true;
+}
+
+bool Context::beginTable(StringView idText, Span<float> columnWeights, float width)
+{
+    if (columnWeights.empty())
+        return false;
+    if (!beginTable(idText, Span<const float>(columnWeights.data(), columnWeights.size()), width))
+        return false;
+    table_.resizableColumnWeights = columnWeights.data();
     return true;
 }
 
@@ -4675,8 +4686,53 @@ bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscen
     const WidgetId columnId = combineIds(makeWidgetId(labelText),
                                          static_cast<uint64_t>(table_.column + 1));
     const WidgetId id = combineIds(columnId, 0x5441424c45484452ull);
-    const bool hovered = itemHovered(bounds, clip, id);
-    const bool clicked = itemClicked(bounds, clip, id);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const bool canResize = table_.resizableColumnWeights != nullptr && table_.column + 1 < table_.columns;
+    const float gripWidth = 6.0f;
+    const Rect resizeGrip(bounds.right() - gripWidth * 0.5f, bounds.y, gripWidth, bounds.height);
+    const WidgetId resizeId = combineIds(id, 0x54424c5253495a45ull);
+    const bool pressedResize = canResize && pointer_.pressed[left] &&
+                               currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
+                               contains(intersect(resizeGrip, clip), pointer_.pressedPosition[left]);
+    if (pressedResize)
+    {
+        activeWidget_ = resizeId;
+        focusedWidget_ = resizeId;
+        tableResize_.tableId = table_.id;
+        tableResize_.column = table_.column;
+        tableResize_.lastPointerX = pointer_.position.x;
+    }
+
+    const bool resizing = activeWidget_ == resizeId && tableResize_.tableId == table_.id &&
+                           tableResize_.column == table_.column;
+    if (resizing && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
+    {
+        const float deltaX = pointer_.position.x - tableResize_.lastPointerX;
+        const float leftWidth = tableColumnWidth(table_.column);
+        const float rightWidth = tableColumnWidth(table_.column + 1);
+        const float pairWidth = leftWidth + rightWidth;
+        const float minimumWidth = 32.0f;
+        if (pairWidth > minimumWidth * 2.0f && deltaX != 0.0f)
+        {
+            const float nextLeftWidth = clamp(leftWidth + deltaX, minimumWidth, pairWidth - minimumWidth);
+            const float nextRightWidth = pairWidth - nextLeftWidth;
+            const float scale = table_.totalColumnWeight / table_.bounds.width;
+            const ct::Vector<float>::size_type column = static_cast<ct::Vector<float>::size_type>(table_.column);
+            table_.columnWeights[column] = nextLeftWidth * scale;
+            table_.columnWeights[column + 1u] = nextRightWidth * scale;
+            table_.resizableColumnWeights[table_.column] = table_.columnWeights[column];
+            table_.resizableColumnWeights[table_.column + 1] = table_.columnWeights[column + 1u];
+        }
+        tableResize_.lastPointerX = pointer_.position.x;
+    }
+    if (resizing && pointer_.released[left])
+    {
+        activeWidget_ = InvalidWidgetId;
+        tableResize_ = TableResizeState();
+    }
+
+    const bool hovered = !resizing && itemHovered(bounds, clip, id);
+    const bool clicked = !resizing && itemClicked(bounds, clip, id);
     bool changed = false;
     if (clicked)
     {
@@ -4695,6 +4751,14 @@ bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscen
                            : (hovered ? theme_.buttonHovered : theme_.panelColor);
     drawList->addRectFilled(bounds, background, clip);
     drawList->addRect(bounds, theme_.borderColor, clip);
+    if (canResize)
+    {
+        const bool resizeHovered = resizing || contains(intersect(resizeGrip, clip), pointer_.position);
+        const Color gripColor = resizeHovered ? theme_.dialogBtnPrimary : theme_.borderColor;
+        drawList->addLine(Vec2(bounds.right(), bounds.y + 2.0f),
+                          Vec2(bounds.right(), bounds.bottom() - 2.0f), gripColor, clip,
+                          resizeHovered ? 2.0f : 1.0f);
+    }
 
     const float padding = theme_.windowPadding * 0.5f;
     const float arrowSize = bounds.height * 0.28f;
@@ -5046,6 +5110,7 @@ void Context::consumeEvents()
             textInputWidget_ = InvalidWidgetId;
             openCombo_ = InvalidWidgetId;
             dragDrop_ = DragDropState();
+            tableResize_ = TableResizeState();
             break;
         case EventType::ViewportChanged:
             frame_.displaySize = event.viewportSize;

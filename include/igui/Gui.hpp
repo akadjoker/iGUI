@@ -436,9 +436,13 @@ public:
     void endVirtualTree();
     // Lightweight immediate table. Call tableNextColumn() before each cell.
     bool beginTable(StringView id, int columns, float width = 0.0f);
-    // Weighted table columns. All weights must be positive and remain valid
-    // until endTable(); for example, {3.0f, 1.0f} creates a 75/25 split.
+    // Weighted table columns. All weights must be positive; they are copied
+    // for the frame. For example, {3.0f, 1.0f} creates a 75/25 split.
     bool beginTable(StringView id, Span<const float> columnWeights, float width = 0.0f);
+    // Mutable weights opt into resizing through tableHeader() grips. The
+    // adjusted weights are written back to the caller and should be kept for
+    // the next frame to preserve the chosen column widths.
+    bool beginTable(StringView id, Span<float> columnWeights, float width = 0.0f);
     bool tableNextColumn();
     // Draw a clickable header in the current table cell. sortColumn starts at
     // -1; clicking a new column selects ascending order and clicking the
@@ -622,16 +626,27 @@ private:
     {
         LayoutState parentLayout;
         Rect bounds;
+        WidgetId id;
         int columns;
         int column;
         float rowY;
         float rowHeight;
         ct::Vector<float> columnWeights;
+        float *resizableColumnWeights;
         float totalColumnWeight;
 
         TableState()
-            : parentLayout(), bounds(), columns(0), column(-1), rowY(0.0f), rowHeight(0.0f),
-              columnWeights(), totalColumnWeight(0.0f) {}
+            : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
+              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr), totalColumnWeight(0.0f) {}
+    };
+
+    struct TableResizeState
+    {
+        WidgetId tableId;
+        int column;
+        float lastPointerX;
+
+        TableResizeState() : tableId(InvalidWidgetId), column(-1), lastPointerX(0.0f) {}
     };
 
     struct PropertyRowState
@@ -734,6 +749,7 @@ private:
     bool menuBarActive_;
     bool forceWindowBounds_;
     TableState table_;
+    TableResizeState tableResize_;
     PropertyRowState propertyRow_;
     bool tableActive_;
     bool propertyRowActive_;

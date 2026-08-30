@@ -1079,6 +1079,51 @@ static void test_sortable_table_headers()
     assert(sortColumn == 1 && sortAscending);
 }
 
+static void drawResizableTable(ig::Context &context, float *weights)
+{
+    int sortColumn = -1;
+    bool sortAscending = true;
+    assert(context.beginWindow("resizable table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(context.beginTable("columns", ig::Span<float>(weights, 2u)));
+    assert(context.tableNextColumn());
+    context.tableHeader("Name", sortColumn, sortAscending);
+    assert(context.tableNextColumn());
+    context.tableHeader("Size", sortColumn, sortAscending);
+    assert(context.tableNextColumn());
+    context.label("albedo.png");
+    assert(context.tableNextColumn());
+    context.label("2 MB");
+    context.endTable();
+    context.endWindow();
+}
+
+static void test_resizable_table_columns()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float weights[] = {1.0f, 1.0f};
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawResizableTable(context, weights);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawResizableTable(context, weights);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(190.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawResizableTable(context, weights);
+    context.endFrame();
+    assert(weights[0] > weights[1] * 1.4f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 190.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawResizableTable(context, weights);
+    context.endFrame();
+}
+
 static void drawVirtualList(ig::Context &context, int &selectedItem,
                             int &firstVisible, int &lastVisible)
 {
@@ -1991,6 +2036,7 @@ int main()
     test_weighted_table_layout();
     test_weighted_table_owns_weights();
     test_sortable_table_headers();
+    test_resizable_table_columns();
     test_virtual_list();
     test_virtual_table();
     test_virtual_tree();
