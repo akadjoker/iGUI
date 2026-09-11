@@ -12,6 +12,9 @@ set(IGUI_FONT_INPUT "" CACHE FILEPATH
 option(IGUI_BUILD_SDL2_DEMO "Build the optional SDL2 integration example" OFF)
 option(IGUI_BUILD_RAYLIB_BACKEND "Build the Raylib backend when Raylib is installed" ON)
 option(IGUI_BUILD_RAYLIB_DEMO "Build the Raylib integration example" OFF)
+option(IGUI_BUILD_IMMEDIATE "Build the immediate-mode Context API (igui)" ON)
+option(IGUI_BUILD_RETAINED "Build the retained widget toolkit (igui_widgets)" ON)
+option(IGUI_BUILD_LEGACY "Build the old retained GUI compatibility layer (igui_legacy)" ON)
 
 set(IGUI_RAYLIB_AVAILABLE OFF)
 if(IGUI_BUILD_RAYLIB_BACKEND)
@@ -45,17 +48,16 @@ endif()
 add_library(ct INTERFACE)
 target_include_directories(ct INTERFACE "${igui_containers_SOURCE_DIR}/include")
 
-add_library(igui
-    src/DrawList.cpp
-    src/FileDialog.cpp
-    src/Gui.cpp
-)
-add_library(igui::igui ALIAS igui)
-target_include_directories(igui PUBLIC include)
-target_link_libraries(igui PUBLIC ct)
-
+# Shared drawing engine: DrawList/DrawData/Backend. This is the only thing
+# the immediate-mode Context and the retained widget toolkit actually have
+# in common (see BUILD_SPLIT_PLAN.md) - everything else below depends on
+# this, never on each other.
+add_library(igui_core src/DrawList.cpp)
+add_library(igui::core ALIAS igui_core)
+target_include_directories(igui_core PUBLIC include)
+target_link_libraries(igui_core PUBLIC ct)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(igui PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(igui_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 add_custom_target(igui_no_std ALL
@@ -64,28 +66,120 @@ add_custom_target(igui_no_std ALL
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckNoStd.cmake
     VERBATIM
 )
-add_dependencies(igui igui_no_std)
+add_dependencies(igui_core igui_no_std)
+
+if(IGUI_BUILD_IMMEDIATE)
+    add_library(igui src/FileDialog.cpp src/Gui.cpp)
+    add_library(igui::igui ALIAS igui)
+    target_include_directories(igui PUBLIC include)
+    target_link_libraries(igui PUBLIC igui_core)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(igui PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endif()
 
 # The pre-existing retained GUI API is kept as a separate compatibility layer.
-# It uses STL containers, unlike the immediate-mode core above.
-add_library(igui_legacy src/iGUI.cpp)
-add_library(igui::legacy ALIAS igui_legacy)
-target_include_directories(igui_legacy PUBLIC include)
-target_link_libraries(igui_legacy PUBLIC igui)
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(igui_legacy PRIVATE -Wall -Wextra -Wpedantic)
+# It uses STL containers, unlike igui_core/igui above.
+if(IGUI_BUILD_LEGACY)
+    add_library(igui_legacy src/iGUI.cpp)
+    add_library(igui::legacy ALIAS igui_legacy)
+    target_include_directories(igui_legacy PUBLIC include)
+    target_link_libraries(igui_legacy PUBLIC igui_core)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(igui_legacy PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
 endif()
 
 if(IGUI_BUILD_TESTS)
     enable_testing()
-    add_executable(igui_tests tests/test_core.cpp)
-    target_link_libraries(igui_tests PRIVATE igui_legacy)
-    add_test(NAME igui_core COMMAND igui_tests)
+    # test_core.cpp exercises both the legacy compat API and ig::Context
+    # directly in the same binary - it needs both modes, not just legacy
+    # (it only linked before because igui_legacy used to publicly depend on
+    # igui; that link is now igui_legacy -> igui_core only, see above).
+    if(IGUI_BUILD_LEGACY AND IGUI_BUILD_IMMEDIATE)
+        add_executable(igui_tests tests/test_core.cpp)
+        target_link_libraries(igui_tests PRIVATE igui_legacy igui)
+        add_test(NAME igui_core COMMAND igui_tests)
+    endif()
 
-    add_executable(igui_widget_gallery_tests tests/test_widgets.cpp)
-    target_link_libraries(igui_widget_gallery_tests PRIVATE igui)
-    add_test(NAME igui_widget_gallery COMMAND igui_widget_gallery_tests)
+    if(IGUI_BUILD_IMMEDIATE)
+        add_executable(igui_widget_gallery_tests tests/test_widgets.cpp)
+        target_link_libraries(igui_widget_gallery_tests PRIVATE igui)
+        add_test(NAME igui_widget_gallery COMMAND igui_widget_gallery_tests)
+    endif()
+endif()
 
+# Retained widget toolkit: independent of both the immediate-mode Context
+# and of building any SDL2 demo - only needs the shared drawing engine.
+if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/stb_impl.cpp")
+    add_library(igui_widgets_stb STATIC third_party/stb/stb_impl.cpp)
+    target_include_directories(igui_widgets_stb PUBLIC third_party/stb)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(igui_widgets_stb PRIVATE
+            -Wno-unused-function -Wno-unused-but-set-variable
+            -Wno-array-bounds)
+    endif()
+
+    set(IGUI_WIDGET_SOURCES
+        src/widgets/Animation.cpp
+        src/widgets/AppWidgets.cpp
+        src/widgets/AssetBrowser.cpp
+        src/widgets/AudioWidgets.cpp
+        src/widgets/AutomotiveWidgets.cpp
+        src/widgets/BasicWidgets.cpp
+        src/widgets/Retained.cpp
+        src/widgets/BuImage.cpp
+        src/widgets/ChartWidgets.cpp
+        src/widgets/CodeEditor.cpp
+        src/widgets/ComboBox.cpp
+        src/widgets/ConsoleWidget.cpp
+        src/widgets/DataWidgets.cpp
+        src/widgets/DialogWidgets.cpp
+        src/widgets/DirCache.cpp
+        src/widgets/DockPanel.cpp
+        src/widgets/FileDialog.cpp
+        src/widgets/FileSystem.cpp
+        src/widgets/GizmoWidgets.cpp
+        src/widgets/IconAtlas.cpp
+        src/widgets/InputWidgets.cpp
+        src/widgets/ItemModel.cpp
+        src/widgets/LayoutWidgets.cpp
+        src/widgets/MenuWidgets.cpp
+        src/widgets/NodeEditor.cpp
+        src/widgets/ScrollWidgets.cpp
+        src/widgets/TextInputWidgets.cpp
+        src/widgets/ThumbnailGrid.cpp
+        src/widgets/Timeline.cpp
+        src/widgets/ToolBar.cpp
+        src/widgets/TreePropertyColorWidgets.cpp
+        src/widgets/ViewWidgets.cpp
+        src/widgets/Widget.cpp
+        src/widgets/WidgetApp.cpp
+        src/widgets/WidgetSerializer.cpp)
+    add_library(igui_widgets STATIC ${IGUI_WIDGET_SOURCES})
+    add_library(igui::widgets ALIAS igui_widgets)
+    target_compile_features(igui_widgets PUBLIC cxx_std_17)
+    target_include_directories(igui_widgets
+        PUBLIC include include/igui/widgets third_party
+        PRIVATE src/widgets third_party/stb)
+    # The retained widget headers expose ct containers, so propagate the
+    # core target (and therefore ct's include directory) to consumers.
+    target_link_libraries(igui_widgets PUBLIC igui_core PRIVATE igui_widgets_stb)
+    target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
+
+    if(IGUI_BUILD_TESTS)
+        add_executable(igui_original_widgets_tests tests/test_original_widgets.cpp)
+        target_compile_features(igui_original_widgets_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_original_widgets_tests PRIVATE
+            igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_original_widgets_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_original_widgets_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_original_widgets COMMAND igui_original_widgets_tests)
+        set_tests_properties(igui_original_widgets PROPERTIES
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
 endif()
 
 if(IGUI_BUILD_FONT)
@@ -122,7 +216,9 @@ if(IGUI_BUILD_FONT)
         PUBLIC include
         PRIVATE "${igui_nuklear_assets_SOURCE_DIR}/src"
     )
-    target_link_libraries(igui_font PUBLIC igui)
+    # FontAtlas only uses Backend.hpp/ct::Vector (igui_core), not the
+    # immediate-mode Context - it must not require IGUI_BUILD_IMMEDIATE.
+    target_link_libraries(igui_font PUBLIC igui_core)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(igui_font PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -187,68 +283,23 @@ if(IGUI_BUILD_SDL2_DEMO)
         target_compile_options(igui_sdl2 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 
-    add_executable(igui_sdl2_demo examples/sdl2_demo/main.cpp)
-    target_link_libraries(igui_sdl2_demo PRIVATE igui_sdl2)
+    if(IGUI_BUILD_IMMEDIATE)
+        # main.cpp calls ig::Context directly - used to link transitively
+        # through the old igui_font -> igui edge; igui_font is igui_core-only
+        # now (it never needed Context), so link igui explicitly here.
+        add_executable(igui_sdl2_demo examples/sdl2_demo/main.cpp)
+        target_link_libraries(igui_sdl2_demo PRIVATE igui_sdl2 igui)
+    endif()
 
-    add_executable(igui_sdl2_legacy_gui_demo examples/sdl2_legacy_gui_demo/main.cpp)
-    target_link_libraries(igui_sdl2_legacy_gui_demo PRIVATE igui_sdl2 igui_legacy)
+    if(IGUI_BUILD_LEGACY)
+        add_executable(igui_sdl2_legacy_gui_demo examples/sdl2_legacy_gui_demo/main.cpp)
+        target_link_libraries(igui_sdl2_legacy_gui_demo PRIVATE igui_sdl2 igui_legacy)
+    endif()
 
-    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/stb_impl.cpp")
-        add_library(igui_widgets_stb STATIC third_party/stb/stb_impl.cpp)
-        target_include_directories(igui_widgets_stb PUBLIC third_party/stb)
-        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-            target_compile_options(igui_widgets_stb PRIVATE
-                -Wno-unused-function -Wno-unused-but-set-variable
-                -Wno-array-bounds)
-        endif()
-
-        set(IGUI_WIDGET_SOURCES
-            src/widgets/Animation.cpp
-            src/widgets/AppWidgets.cpp
-            src/widgets/AssetBrowser.cpp
-            src/widgets/AudioWidgets.cpp
-            src/widgets/AutomotiveWidgets.cpp
-            src/widgets/BasicWidgets.cpp
-            src/widgets/Retained.cpp
-            src/widgets/BuImage.cpp
-            src/widgets/ChartWidgets.cpp
-            src/widgets/CodeEditor.cpp
-            src/widgets/ComboBox.cpp
-            src/widgets/ConsoleWidget.cpp
-            src/widgets/DataWidgets.cpp
-            src/widgets/DialogWidgets.cpp
-            src/widgets/DirCache.cpp
-            src/widgets/DockPanel.cpp
-            src/widgets/FileDialog.cpp
-            src/widgets/FileSystem.cpp
-            src/widgets/GizmoWidgets.cpp
-            src/widgets/IconAtlas.cpp
-            src/widgets/InputWidgets.cpp
-            src/widgets/ItemModel.cpp
-            src/widgets/LayoutWidgets.cpp
-            src/widgets/MenuWidgets.cpp
-            src/widgets/NodeEditor.cpp
-            src/widgets/ScrollWidgets.cpp
-            src/widgets/TextInputWidgets.cpp
-            src/widgets/ThumbnailGrid.cpp
-            src/widgets/Timeline.cpp
-            src/widgets/ToolBar.cpp
-            src/widgets/TreePropertyColorWidgets.cpp
-            src/widgets/ViewWidgets.cpp
-            src/widgets/Widget.cpp
-            src/widgets/WidgetApp.cpp
-            src/widgets/WidgetSerializer.cpp)
-        add_library(igui_widgets STATIC ${IGUI_WIDGET_SOURCES})
-        add_library(igui::widgets ALIAS igui_widgets)
-        target_compile_features(igui_widgets PUBLIC cxx_std_17)
-        target_include_directories(igui_widgets
-            PUBLIC include include/igui/widgets third_party
-            PRIVATE src/widgets third_party/stb)
-        # The retained widget headers expose ct containers, so propagate the
-        # core target (and therefore ct's include directory) to consumers.
-        target_link_libraries(igui_widgets PUBLIC igui PRIVATE igui_widgets_stb)
-        target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
-
+    # igui_widgets itself (and its own test) is built above, gated only on
+    # IGUI_BUILD_RETAINED - this only adds the SDL2-backed demo for it, so
+    # it additionally needs an SDL2 window to run in.
+    if(TARGET igui_widgets)
         add_executable(igui_sdl2_original_widgets_demo
             examples/sdl2_original_widgets/main.cpp
             examples/sdl2_original_widgets/SdlWidgetBridge.cpp
@@ -272,24 +323,12 @@ if(IGUI_BUILD_SDL2_DEMO)
             target_compile_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)
             target_link_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)
         endif()
-        if(IGUI_BUILD_TESTS)
-            add_executable(igui_original_widgets_tests tests/test_original_widgets.cpp)
-            target_compile_features(igui_original_widgets_tests PRIVATE cxx_std_17)
-            target_link_libraries(igui_original_widgets_tests PRIVATE
-                igui_widgets)
-            if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-                target_compile_options(igui_original_widgets_tests PRIVATE -fsanitize=address)
-                target_link_options(igui_original_widgets_tests PRIVATE -fsanitize=address)
-            endif()
-            add_test(NAME igui_original_widgets COMMAND igui_original_widgets_tests)
-            set_tests_properties(igui_original_widgets PROPERTIES
-                WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-        endif()
     endif()
 
-    if(IGUI_BUILD_TESTS)
+    # Also calls ig::Context directly - same reasoning as igui_sdl2_demo.
+    if(IGUI_BUILD_TESTS AND IGUI_BUILD_IMMEDIATE)
         add_executable(igui_sdl2_tests tests/test_sdl2.cpp)
-        target_link_libraries(igui_sdl2_tests PRIVATE igui_sdl2)
+        target_link_libraries(igui_sdl2_tests PRIVATE igui_sdl2 igui)
         add_test(NAME igui_sdl2 COMMAND igui_sdl2_tests)
     endif()
 endif()

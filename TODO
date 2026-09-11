@@ -1,0 +1,8 @@
+Tabela e árvore virtualizadas: para inspectors, assets e listas grandes sem perder fluidez.
+Navegação completa por teclado: foco visível, Tab/setas/Enter/Escape consistentes e atalhos por widget.
+Layout mais expressivo: colunas, grids, alinhamento e tamanhos flexíveis, sem exigir posicionamento manual em painéis mais densos.
+Undo/redo integrado: especialmente para dragFloat, inputs, gizmos e edição de propriedades.
+Docking persistente: guardar/restaurar layout, tamanhos de painéis e abas.
+Tooltips e validação de inputs: ajuda contextual e estados de erro/aviso.
+Acessibilidade e escala DPI: contraste, tamanho de fonte, navegação sem rato.
+Mais ferramentas de editor: color picker avançado, curve editor, gradient editor, timeline, node editor e file dialog imediato.
