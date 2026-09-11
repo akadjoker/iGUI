@@ -57,6 +57,7 @@ public:
     void  layout()   override;
     void  paint(PaintContext& ctx) override;
     void  onMousePress(MouseEvent& e) override;
+    void  onMouseRelease(MouseEvent& e) override;
     void  onKeyPress(KeyEvent& e)     override;
 
     static constexpr float kWidth    = 360.0f;
@@ -72,6 +73,7 @@ public:
     ct::Function<void()>    onClose_;
 
     int hoveredBtn_ = -1;
+    int pressedBtn_ = -1;
 
     float dialogH_() const;
     Rect  btnRect_(int idx) const;
@@ -213,6 +215,9 @@ public:
     String text() const;
     /// @brief Set placeholder text.
     void setPlaceholder(const String& p);
+    void setAcceptLabel(const String& label);
+    // Return an empty string to accept; otherwise display the validation error.
+    void setValidator(ct::Function<String(const String&)> validator) { validator_ = std::move(validator); }
 
     /// @brief Emitted with the text when OK is pressed.
     Signal<String> accepted;
@@ -225,6 +230,9 @@ private:
     BoxLayout* mainLayout_  = nullptr;
     Label*     promptLabel_ = nullptr;
     TextInput* textInput_   = nullptr;
+    Button* acceptButton_ = nullptr;
+    Label* errorLabel_ = nullptr;
+    ct::Function<String(const String&)> validator_;
 
     void buildUI();
     void onOk();

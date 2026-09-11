@@ -267,6 +267,7 @@ if(IGUI_RAYLIB_AVAILABLE)
         target_link_libraries(igui_raylib_demo PRIVATE igui_raylib)
 
         add_executable(igui_raylib_dock_demo examples/raylib_dock_demo/main.cpp)
+        target_include_directories(igui_raylib_dock_demo PRIVATE third_party/stb)
         target_link_libraries(igui_raylib_dock_demo PRIVATE igui_raylib)
     endif()
 endif()

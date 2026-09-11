@@ -1,4 +1,6 @@
 #include <igui/Widgets.hpp>
+#include <igui/widgets/CodeEditor.hpp>
+#include <igui/widgets/Timeline.hpp>
 
 #include <cassert>
 #include <cmath>
@@ -16,6 +18,96 @@ static_assert(std::is_same<ig::Widget, ig::retained::Widget>::value,
 int main()
 {
     using namespace ig;
+
+    using namespace ig::retained;
+    PropertyGrid transformGrid;
+    transformGrid.setRect({0, 0, 400, 180});
+    float editedX = 1, editedY = 2, editedZ = 3;
+    int changes = 0;
+    transformGrid.addVec3("Position", 1, 2, 3, -100, 100,
+        [&](float x, float y, float z) { editedX=x; editedY=y; editedZ=z; ++changes; });
+    MouseEvent numericMouse;
+    numericMouse.x=180; numericMouse.y=12;
+    transformGrid.onMousePress(numericMouse);
+    assert(changes == 0); // pressing must not jump to the pointer's absolute value
+    transformGrid.onMouseRelease(numericMouse);
+    KeyEvent editKey;
+    editKey.key=ig::retained::Key::Home;
+    transformGrid.onKeyPress(editKey);
+    editKey.key=ig::retained::Key::Delete;
+    for (int i=0; i<32; ++i) transformGrid.onKeyPress(editKey);
+    KeyEvent numericText;
+    numericText.text[0]='4'; numericText.text[1]='.'; numericText.text[2]='5';
+    transformGrid.onTextInput(numericText);
+    editKey.key=ig::retained::Key::Return;
+    transformGrid.onKeyPress(editKey);
+    assert(editedX == 4.5f && editedY == 2 && editedZ == 3 && changes == 1);
+    transformGrid.onMousePress(numericMouse);
+    numericMouse.x += 20;
+    transformGrid.onMouseMove(numericMouse);
+    transformGrid.onMouseRelease(numericMouse);
+    assert(editedX > 4.5f && editedY == 2 && editedZ == 3);
+    Timeline timeline;
+    timeline.setRect({0, 0, 600, 240});
+    timeline.setTimeRange(0, 5);
+    const int rootJoint = timeline.addJoint("Root");
+    const int handJoint = timeline.addJoint("Hand", rootJoint);
+    const int fingerJoint = timeline.addJoint("Finger", handJoint);
+    assert(fingerJoint == 2 && timeline.visibleTracks().size() == 3);
+    timeline.setExpanded(handJoint, false);
+    assert(timeline.visibleTracks().size() == 2);
+    timeline.setExpanded(handJoint, true);
+    timeline.addKeyframe(rootJoint, 0);
+    timeline.addKeyframe(rootJoint, 5);
+    MouseEvent mouse;
+    mouse.x = 176; mouse.y = 38;
+    timeline.onMousePress(mouse);
+    assert(timeline.track(rootJoint).keyframes[0].selected);
+    mouse.x = 190;
+    timeline.onMouseMove(mouse);
+    timeline.onMouseRelease(mouse);
+    assert(timeline.track(rootJoint).keyframes[0].time > 0);
+    mouse.x = 584;
+    timeline.onMousePress(mouse);
+    assert(timeline.track(rootJoint).keyframes[1].selected);
+    mouse.x = 599;
+    timeline.onMouseMove(mouse);
+    timeline.onMouseRelease(mouse);
+    assert(timeline.track(rootJoint).keyframes[1].time == 5);
+    mouse.x = 380; mouse.y = 66; mouse.clickCount = 2;
+    timeline.onMousePress(mouse);
+    assert(timeline.track(handJoint).keyframes.size() == 1);
+    timeline.setTimeRange(2, 2);
+    assert(timeline.viewStart() == 0 && timeline.viewEnd() == 5);
+    SyntaxLanguage language;
+    language.name = "Example";
+    language.extensions = {"example"};
+    language.keywords = {"emit"};
+    language.constants = {"yes"};
+    DefinedHighlighter defined(language);
+    auto tokens = defined.highlightLine(0, "emit yes // comment", 0);
+    assert(tokens.spans[0].type == SyntaxHighlighter::TokenType::Keyword);
+    assert(tokens.spans[2].type == SyntaxHighlighter::TokenType::Constant);
+    assert(tokens.spans.back().type == SyntaxHighlighter::TokenType::Comment);
+    auto block = defined.highlightLine(0, "/* start", 0);
+    assert(block.state == 1);
+    auto endBlock = defined.highlightLine(1, "end */ emit", block.state);
+    assert(endBlock.state == 0 && endBlock.spans.back().type == SyntaxHighlighter::TokenType::Keyword);
+    auto quoted = defined.highlightLine(0, "\"// text\"", 0);
+    assert(quoted.spans.size() == 1 && quoted.spans[0].type == SyntaxHighlighter::TokenType::String);
+    assert(defined.foldDelta(0, "{ \"}\" // }") == 1);
+    CodeEditor editor;
+    CodeEditor::registerLanguage(language);
+    assert(editor.setHighlighterForFile("test.EXAMPLE") != nullptr);
+    assert(String(editor.highlighter()->languageName()) == "Example");
+    assert(editor.setHighlighterForFile("query.sql") != nullptr);
+    auto sql = editor.highlighter()->highlightLine(0, "SELECT null", 0);
+    assert(sql.spans[0].type == SyntaxHighlighter::TokenType::Keyword);
+    assert(sql.spans.back().type == SyntaxHighlighter::TokenType::Constant);
+    assert(editor.setHighlighterForFile("data.json") != nullptr);
+    assert(editor.setHighlighterForFile("data.jsonc") != nullptr);
+    assert(editor.setHighlighterForFile("main.go") != nullptr);
+    assert(editor.setHighlighterForFile("notes.txt") == nullptr && editor.highlighter() == nullptr);
 
     String edited("abc");
     edited.append(2, '!');

@@ -110,8 +110,16 @@ void Dialog::layout()
 
 void Dialog::onMousePress(MouseEvent& e)
 {
+    pressedBtn_ = e.button == 0 ? hitButton_(e.x, e.y) : -1;
+    e.consumed = true;
+}
+
+void Dialog::onMouseRelease(MouseEvent& e)
+{
     int idx = hitButton_(e.x, e.y);
-    if (idx >= 0 && idx < static_cast<int>(buttons_.size()))
+    const int pressed = pressedBtn_;
+    pressedBtn_ = -1;
+    if (e.button == 0 && idx == pressed && idx >= 0 && idx < static_cast<int>(buttons_.size()))
     {
         auto action = buttons_[idx].action;
         close();
@@ -525,7 +533,7 @@ InputBox::InputBox(const String& title, const String& prompt)
     setMinimizable(false);
     buildUI();
 
-    float fw = 400, fh = 170;
+    float fw = 440, fh = 210;
     setFloatSize(fw, fh);
     auto& io = ig::retained::GetIO();
     setFloatPos((io.displayWidth - fw) * 0.5f, (io.displayHeight - fh) * 0.5f);
@@ -534,15 +542,17 @@ InputBox::InputBox(const String& title, const String& prompt)
 void InputBox::buildUI()
 {
     mainLayout_ = setContent<BoxLayout>(LayoutDir::Vertical);
-    mainLayout_->setSpacing(8);
-    mainLayout_->setPadding(12);
+    mainLayout_->setSpacing(12);
+    mainLayout_->setPadding(20);
 
     if (!prompt_.empty())
         promptLabel_ = mainLayout_->createChild<Label>(prompt_);
 
     textInput_ = mainLayout_->createChild<TextInput>();
     textInput_->setStretch(0);
-    textInput_->setSize(0, 28);
+    textInput_->setSize(0, 32);
+    errorLabel_ = mainLayout_->createChild<Label>("");
+    errorLabel_->setSize(0, 18);
 
     auto* spacer = mainLayout_->createChild<Widget>();
     spacer->setStretch(1);
@@ -557,13 +567,19 @@ void InputBox::buildUI()
     cancel->clicked.connect([this] { onCancel(); });
 
     auto* ok = btnRow->createChild<Button>("OK");
+    acceptButton_ = ok;
     ok->setSize(80, 0);
     ok->clicked.connect([this] { onOk(); });
 }
 
 void InputBox::setText(const String& t)
 {
-    if (textInput_) textInput_->setText(t);
+    if (textInput_) { textInput_->setText(t); textInput_->selectAll(); }
+}
+
+void InputBox::setAcceptLabel(const String& label)
+{
+    if (acceptButton_) acceptButton_->setText(label);
 }
 
 String InputBox::text() const
@@ -578,6 +594,11 @@ void InputBox::setPlaceholder(const String& p)
 
 void InputBox::onOk()
 {
+    if (validator_) {
+        const String error = validator_(text());
+        errorLabel_->setText(error);
+        if (!error.empty()) return;
+    }
     accepted.emit(text());
     WidgetApp::instance().removeFloat(this);
 }
@@ -594,4 +615,3 @@ void InputBox::onKeyPress(KeyEvent& e)
     if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) { e.consumed = true; onOk(); return; }
     FloatWindow::onKeyPress(e);
 }
-

@@ -651,6 +651,9 @@ void PropertyGrid::startEdit(int row)
     case PropType::String: editBuf_ = std::get<PropString>(r.data).value; break;
     case PropType::Float:  { char b[32]; snprintf(b,32,"%.2f",std::get<PropFloat>(r.data).value); editBuf_=b; break; }
     case PropType::Int:    { char b[32]; snprintf(b,32,"%d",std::get<PropInt>(r.data).value);     editBuf_=b; break; }
+    case PropType::Vec2: case PropType::Vec3: case PropType::Vec4: {
+        char b[48]; snprintf(b, sizeof(b), "%.9g", std::get<PropVec>(r.data).value[dragComponent_]); editBuf_ = b; break;
+    }
     default: editing_ = false; return;
     }
     editCursor_ = static_cast<int>(editBuf_.size());
@@ -661,10 +664,23 @@ void PropertyGrid::commitEdit()
 {
     if (!editing_ || activeRow_ < 0) return;
     auto& r = rows_[activeRow_];
+    if (r.type != PropType::String) {
+        char* end = nullptr;
+        const double number = std::strtod(editBuf_.c_str(), &end);
+        if (end == editBuf_.c_str() || *end != '\0' || !std::isfinite(number)) return;
+    }
     switch (r.type) {
     case PropType::String: { auto& d=std::get<PropString>(r.data); d.value=editBuf_; if (d.onChange) d.onChange(d.value); break; }
     case PropType::Float:  { auto& d=std::get<PropFloat>(r.data); float v=editBuf_.to_float(); d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
     case PropType::Int:    { auto& d=std::get<PropInt>(r.data); int v=editBuf_.to_int(); d.value=clamp(v,d.min,d.max); if (d.onChange) d.onChange(d.value); break; }
+    case PropType::Vec2: case PropType::Vec3: case PropType::Vec4: {
+        auto& d = std::get<PropVec>(r.data);
+        d.value[dragComponent_] = clamp(editBuf_.to_float(), d.min, d.max);
+        if (r.type == PropType::Vec2 && d.onChange2) d.onChange2(d.value[0], d.value[1]);
+        if (r.type == PropType::Vec3 && d.onChange3) d.onChange3(d.value[0], d.value[1], d.value[2]);
+        if (r.type == PropType::Vec4 && d.onChange4) d.onChange4(d.value[0], d.value[1], d.value[2], d.value[3]);
+        break;
+    }
     default: break;
     }
     propertyChanged.emit(activeRow_);
@@ -722,6 +738,12 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
 
     // ── Editing ──────────────────────────────────────────────────────────
     if (editing_ && activeRow_ == idx) {
+        if (row.type == PropType::Vec2 || row.type == PropType::Vec3 || row.type == PropType::Vec4) {
+            const int count = std::get<PropVec>(row.data).components;
+            const float componentWidth = (valW - 2.0f * (count - 1)) / count;
+            valTextX += dragComponent_ * (componentWidth + 2.0f);
+            valW = componentWidth;
+        }
         ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, t.inputBg.a);
         ctx.fillRect(valTextX, y+1, valW, rowHeight_-2);
         ctx.line.SetColor(t.focusColor.r, t.focusColor.g, t.focusColor.b, t.focusColor.a);
@@ -935,28 +957,24 @@ void PropertyGrid::onMousePress(MouseEvent& e)
         auto& d=std::get<PropFloat>(row.data);
         if (editing_&&activeRow_==idx) break;
         draggingSlider_=true; activeRow_=idx; dragStartX_=e.x; dragComponent_=0;
-        float ratio=clamp((e.x-valTextX)/valW,0.f,1.f);
-        d.value=d.min+ratio*(d.max-d.min); dragStartVal_=d.value;
-        if (d.onChange) d.onChange(d.value); markDirty(); break;
+        dragStartVal_=d.value;
+        markDirty(); break;
     }
     case PropType::Int: {
         auto& d=std::get<PropInt>(row.data);
         if (editing_&&activeRow_==idx) break;
         draggingSlider_=true; activeRow_=idx; dragStartX_=e.x; dragComponent_=0;
-        float ratio=clamp((e.x-valTextX)/valW,0.f,1.f);
-        d.value=static_cast<int>(d.min+ratio*(d.max-d.min)+0.5f); dragStartVal_=(float)d.value;
-        if (d.onChange) d.onChange(d.value); markDirty(); break;
+        dragStartVal_=(float)d.value;
+        markDirty(); break;
     }
     case PropType::Vec2: case PropType::Vec3: case PropType::Vec4: {
         auto& d=std::get<PropVec>(row.data);
+        if (editing_) { commitEdit(); if (editing_) break; }
         int nc=d.components; float gap=2.f, compW=(valW-gap*(nc-1))/nc;
         int comp=clamp((int)((e.x-valTextX)/(compW+gap)),0,nc-1);
         draggingSlider_=true; activeRow_=idx; dragStartX_=e.x; dragComponent_=comp;
-        float cx2=valTextX+comp*(compW+gap), ratio=clamp((e.x-cx2)/compW,0.f,1.f);
-        d.value[comp]=d.min+ratio*(d.max-d.min); dragStartVal_=d.value[comp];
-        if (row.type==PropType::Vec2&&d.onChange2) d.onChange2(d.value[0],d.value[1]);
-        else if (row.type==PropType::Vec3&&d.onChange3) d.onChange3(d.value[0],d.value[1],d.value[2]);
-        else if (row.type==PropType::Vec4&&d.onChange4) d.onChange4(d.value[0],d.value[1],d.value[2],d.value[3]);
+        activeRow_=idx;
+        dragStartVal_=d.value[comp];
         markDirty(); break;
     }
     case PropType::String: if (!editing_||activeRow_!=idx) startEdit(idx); break;
@@ -1016,7 +1034,7 @@ void PropertyGrid::onMouseRelease(MouseEvent& e)
             float dx = std::abs(e.x - dragStartX_);
             if (dx < 3.f) {
                 auto& row = rows_[activeRow_];
-                if (row.type==PropType::Float||row.type==PropType::Int) startEdit(activeRow_);
+                if (row.type==PropType::Float||row.type==PropType::Int||row.type==PropType::Vec2||row.type==PropType::Vec3||row.type==PropType::Vec4) startEdit(activeRow_);
             } else propertyChanged.emit(activeRow_);
             if (!editing_) activeRow_ = -1;
         }
@@ -1045,9 +1063,13 @@ void PropertyGrid::onMouseMove(MouseEvent& e)
 
         float range=mx2-mn;
         if (range>0.0001f&&sliderW>1.f) {
-            float ratio=clamp((e.x-sliderX)/sliderW,0.f,1.f), newVal=mn+ratio*range;
+            if (std::abs(e.x - dragStartX_) < 3.0f) return;
+            float ratio=clamp((e.x-sliderX)/sliderW,0.f,1.f);
+            const float sensitivity = e.shift ? 0.1f : (e.ctrl ? 10.0f : 1.0f);
+            float newVal = row.type == PropType::Range ? mn + ratio * range
+                : clamp(dragStartVal_ + (e.x - dragStartX_) * range / std::max(200.0f, sliderW) * sensitivity, mn, mx2);
             if (row.type==PropType::Float) { auto& d=std::get<PropFloat>(row.data); d.value=newVal; if (d.onChange) d.onChange(d.value); }
-            else if (row.type==PropType::Int) { auto& d=std::get<PropInt>(row.data); d.value=(int)(newVal+0.5f); if (d.onChange) d.onChange(d.value); }
+            else if (row.type==PropType::Int) { auto& d=std::get<PropInt>(row.data); d.value=(int)std::round(newVal); if (d.onChange) d.onChange(d.value); }
             else if (row.type==PropType::Range) {
                 auto& d=std::get<PropRange>(row.data);
                 if (dragComponent_==0) d.lo=clamp(newVal,d.min,d.hi);

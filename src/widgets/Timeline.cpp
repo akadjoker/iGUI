@@ -23,6 +23,39 @@ namespace {
 
 Timeline::Timeline() {}
 
+int Timeline::addJoint(const String& name, int parent)
+{
+    if (parent < -1 || parent >= trackCount()) return -1;
+    const int id = addTrack(name);
+    tracks_[id].parent = parent;
+    return id;
+}
+
+void Timeline::setExpanded(int joint, bool expanded)
+{
+    if (joint < 0 || joint >= trackCount()) return;
+    tracks_[joint].expanded = expanded;
+    dragMode_ = DragMode::None;
+    verticalScroll_ = 0;
+    markDirty();
+}
+
+void Timeline::setHeaderWidth(float width) { if (std::isfinite(width)) kHeaderW = std::max(40.0f, width); markDirty(); }
+void Timeline::setEdgePadding(float pixels) { if (std::isfinite(pixels)) edgePadding_ = std::max(8.0f, pixels); markDirty(); }
+
+ct::Vector<int> Timeline::visibleTracks() const
+{
+    ct::Vector<int> rows;
+    auto visit = [&](auto&& self, int parent) -> void {
+        for (int i = 0; i < trackCount(); ++i) if (tracks_[i].parent == parent) {
+            rows.push_back(i);
+            if (tracks_[i].expanded) self(self, i);
+        }
+    };
+    visit(visit, -1);
+    return rows;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Track / Keyframe / Clip management
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +71,12 @@ void Timeline::removeTrack(int trackId)
 {
     if (trackId >= 0 && trackId < static_cast<int>(tracks_.size())) {
         tracks_.erase(tracks_.begin() + trackId);
+        for (auto& tr : tracks_) {
+            if (tr.parent == trackId) tr.parent = -1;
+            else if (tr.parent > trackId) --tr.parent;
+        }
+        dragMode_ = DragMode::None;
+        verticalScroll_ = 0;
         markDirty();
     }
 }
@@ -45,17 +84,21 @@ void Timeline::removeTrack(int trackId)
 void Timeline::clearTracks()
 {
     tracks_.clear();
+    dragMode_ = DragMode::None;
+    verticalScroll_ = 0;
     markDirty();
 }
 
 int Timeline::addKeyframe(int trackId, float time)
 {
     if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return -1;
+    dragMode_ = DragMode::None;
     auto& kfs = tracks_[trackId].keyframes;
     TimelineKeyframe kf;
     kf.time = time;
-    auto it = std::lower_bound(kfs.begin(), kfs.end(), kf,
-        [](const TimelineKeyframe& a, const TimelineKeyframe& b) { return a.time < b.time; });
+    // Dragging preserves key indices, so the array need not remain sorted.
+    auto it = kfs.begin();
+    while (it != kfs.end() && it->time < time) ++it;
     int idx = static_cast<int>(it - kfs.begin());
     kfs.insert(it, kf);
     markDirty();
@@ -64,6 +107,7 @@ int Timeline::addKeyframe(int trackId, float time)
 
 void Timeline::removeKeyframe(int trackId, int keyIdx)
 {
+    dragMode_ = DragMode::None;
     if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return;
     auto& kfs = tracks_[trackId].keyframes;
     if (keyIdx >= 0 && keyIdx < static_cast<int>(kfs.size())) {
@@ -98,6 +142,7 @@ void Timeline::removeClip(int trackId, int clipIdx)
 
 void Timeline::setTimeRange(float start, float end)
 {
+    if (!std::isfinite(start) || !std::isfinite(end) || end - start < 0.0001f) return;
     viewStart_ = start;
     viewEnd_   = end;
     markDirty();
@@ -110,15 +155,15 @@ void Timeline::setTimeRange(float start, float end)
 float Timeline::timeToX(float t) const
 {
     Rect b = absoluteRect();
-    float contentW = b.w - kHeaderW;
-    return b.x + kHeaderW + (t - viewStart_) / (viewEnd_ - viewStart_) * contentW;
+    float contentW = std::max(1.0f, b.w - kHeaderW - edgePadding_ * 2);
+    return b.x + kHeaderW + edgePadding_ + (t - viewStart_) / (viewEnd_ - viewStart_) * contentW;
 }
 
 float Timeline::xToTime(float x) const
 {
     Rect b = absoluteRect();
-    float contentW = b.w - kHeaderW;
-    return viewStart_ + (x - b.x - kHeaderW) / contentW * (viewEnd_ - viewStart_);
+    float contentW = std::max(1.0f, b.w - kHeaderW - edgePadding_ * 2);
+    return viewStart_ + (x - b.x - kHeaderW - edgePadding_) / contentW * (viewEnd_ - viewStart_);
 }
 
 int Timeline::trackAtY(float y) const
@@ -126,9 +171,10 @@ int Timeline::trackAtY(float y) const
     Rect b = absoluteRect();
     float trackArea = y - b.y - kRulerH;
     if (trackArea < 0) return -1;
-    int idx = static_cast<int>(trackArea / kTrackH);
-    if (idx >= static_cast<int>(tracks_.size())) return -1;
-    return idx;
+    const auto rows = visibleTracks();
+    int idx = static_cast<int>((trackArea + verticalScroll_) / kTrackH);
+    if (idx >= static_cast<int>(rows.size()) || y >= b.bottom()) return -1;
+    return rows[idx];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -140,7 +186,7 @@ void Timeline::onMousePress(MouseEvent& e)
     Rect b = absoluteRect();
 
     // Middle button → pan
-    if (e.button == 1) {
+    if (e.button == 2) {
         dragMode_      = DragMode::Pan;
         dragStartX_    = e.x;
         panStartView_  = viewStart_;
@@ -164,11 +210,20 @@ void Timeline::onMousePress(MouseEvent& e)
     if (ti < 0) return;
 
     auto& trk = tracks_[ti];
+    if (e.x < b.x + kHeaderW) {
+        setExpanded(ti, !trk.expanded);
+        e.consumed = true;
+        return;
+    }
+    if (trk.locked) return;
+    const auto rows = visibleTracks();
+    int row = 0;
+    while (row < static_cast<int>(rows.size()) && rows[row] != ti) ++row;
 
     // Keyframe hit (diamond proximity)
     for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()); ++ki) {
         float kx = timeToX(trk.keyframes[ki].time);
-        float ky = b.y + kRulerH + ti * kTrackH + kTrackH * 0.5f;
+        float ky = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
         if (std::fabs(e.x - kx) + std::fabs(e.y - ky) < 8) {
             trk.keyframes[ki].selected = true;
             dragMode_     = DragMode::MoveKey;
@@ -186,7 +241,7 @@ void Timeline::onMousePress(MouseEvent& e)
     for (int ci = 0; ci < static_cast<int>(trk.clips.size()); ++ci) {
         float cx0 = timeToX(trk.clips[ci].start);
         float cx1 = timeToX(trk.clips[ci].end);
-        float cy  = b.y + kRulerH + ti * kTrackH + 3;
+        float cy  = b.y + kRulerH + row * kTrackH - verticalScroll_ + 3;
         float ch  = kTrackH - 6;
 
         if (e.x >= cx0 && e.x <= cx1 && e.y >= cy && e.y <= cy + ch) {
@@ -205,6 +260,11 @@ void Timeline::onMousePress(MouseEvent& e)
             e.consumed    = true;
             return;
         }
+    }
+    if (e.clickCount >= 2) {
+        const int key = addKeyframe(ti, std::clamp(xToTime(e.x), viewStart_, viewEnd_));
+        onKeyframeAdded.emit(ti, key);
+        e.consumed = true;
     }
 }
 
@@ -236,7 +296,9 @@ void Timeline::onMouseMove(MouseEvent& e)
     }
     case DragMode::MoveKey: {
         float dt = xToTime(e.x) - xToTime(dragStartX_);
-        tracks_[dragTrack_].keyframes[dragIndex_].time = dragOrigTime_ + dt;
+        const float time = std::clamp(dragOrigTime_ + dt, viewStart_, viewEnd_);
+        tracks_[dragTrack_].keyframes[dragIndex_].time = time;
+        onKeyframeMoved.emit(dragTrack_, dragIndex_, time);
         markDirty();
         e.consumed = true;
         break;
@@ -273,9 +335,17 @@ void Timeline::onMouseMove(MouseEvent& e)
 
 void Timeline::onMouseScroll(MouseEvent& e)
 {
+    if (e.scrollY == 0) return;
+    if (e.x < absoluteRect().x + kHeaderW) {
+        const float maxScroll = std::max(0.0f, visibleTracks().size() * kTrackH - (absoluteRect().h - kRulerH));
+        verticalScroll_ = std::clamp(verticalScroll_ - e.scrollY * kTrackH, 0.0f, maxScroll);
+        markDirty(); e.consumed = true; return;
+    }
     // Zoom centred on mouse X
     float tAtMouse = xToTime(e.x);
     float factor   = (e.scrollY > 0) ? 0.9f : 1.1f;
+    const float nextRange = (viewEnd_ - viewStart_) * factor;
+    if (!std::isfinite(nextRange) || nextRange < 0.001f || nextRange > 1000000.0f) return;
     viewStart_ = tAtMouse + (viewStart_ - tAtMouse) * factor;
     viewEnd_   = tAtMouse + (viewEnd_   - tAtMouse) * factor;
     markDirty();
@@ -298,7 +368,9 @@ void Timeline::paint(PaintContext& ctx)
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     paintRuler(ctx, b);
+    ctx.pushClip({b.x, b.y + kRulerH, b.w, std::max(0.0f, b.h - kRulerH)});
     paintTracks(ctx, b);
+    ctx.popClip();
     paintPlayhead(ctx, b);
 
     // Border (4 edges)
@@ -378,9 +450,12 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 {
     float ascName = setupFont(ctx, Color(180, 180, 180, 255), 10.0f);
 
-    for (int ti = 0; ti < static_cast<int>(tracks_.size()); ++ti) {
+    const auto rows = visibleTracks();
+    for (int row = 0; row < static_cast<int>(rows.size()); ++row) {
+        const int ti = rows[row];
         const auto& trk = tracks_[ti];
-        float ty = b.y + kRulerH + ti * kTrackH;
+        float ty = b.y + kRulerH + row * kTrackH - verticalScroll_;
+        if (ty + kTrackH <= b.y + kRulerH || ty >= b.bottom()) continue;
 
         // Track background (alternating)
         Color bg = (ti % 2 == 0) ? Color(34, 36, 40, 255) : Color(30, 32, 36, 255);
@@ -395,7 +470,15 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         Color tc = trk.muted ? Color(80, 80, 80, 180) : trk.color;
         ctx.font.SetColor(tc);
         float nameY = ty + (kTrackH - 10.0f) * 0.5f + ascName;
-        ctx.font.Print(trk.name.c_str(), b.x + 8, nameY);
+        int depth = 0;
+        for (int p = trk.parent; p >= 0; p = tracks_[p].parent) ++depth;
+        bool children = false;
+        for (const auto& child : tracks_) if (child.parent == ti) children = true;
+        ctx.pushClip({b.x, b.y + kRulerH, kHeaderW, std::max(0.0f, b.h - kRulerH)});
+        if (children) ctx.font.Print(trk.expanded ? "v" : ">", b.x + 6 + depth * 14, nameY);
+        ctx.font.Print(trk.name.c_str(), b.x + 20 + depth * 14, nameY);
+        ctx.popClip();
+        ctx.pushClip({b.x + kHeaderW, b.y + kRulerH, std::max(0.0f, b.w - kHeaderW), std::max(0.0f, b.h - kRulerH)});
 
         // Header separator
         ctx.fill.SetColor(50, 52, 58, 255);
@@ -447,6 +530,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             ctx.fillTriangle(kx, ky - ds, kx, ky + ds, kx - ds, ky);
         }
 
+        ctx.popClip();
         // Track separator
         ctx.fill.SetColor(45, 47, 52, 255);
         ctx.fillRect(b.x, ty + kTrackH, b.w, 1);

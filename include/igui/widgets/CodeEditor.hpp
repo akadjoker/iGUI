@@ -156,6 +156,32 @@ protected:
 /// Handles: keywords, types, preprocessor directives, single/multi-line
 /// comments, string/char literals, numbers (hex/oct/bin/float), operators.
 /// Fold regions: `{` opens, `}` closes.
+// Declarative lexer for languages with identifiers, quoted strings and comments.
+// Definitions are copied; callers may release or modify the original afterwards.
+struct SyntaxLanguage
+{
+    String name;
+    ct::Vector<String> extensions, keywords, types, constants;
+    String lineComment = "//";
+    String blockCommentStart = "/*", blockCommentEnd = "*/";
+    String quotes = "\"'";
+    // Optional single-byte delimiter for raw, multiline strings (e.g. Go `).
+    char rawQuote = '\0';
+    bool caseSensitive = true;
+};
+
+class DefinedHighlighter : public SyntaxHighlighter
+{
+public:
+    explicit DefinedHighlighter(const SyntaxLanguage& language);
+    HighlightResult highlightLine(int, const String&, int prevState) const override;
+    int foldDelta(int, const String&) const override;
+    const char* languageName() const override { return language_.name.c_str(); }
+    ct::Vector<String> extensions() const override { return language_.extensions; }
+private:
+    SyntaxLanguage language_;
+};
+
 class CppHighlighter : public SyntaxHighlighter
 {
 public:
@@ -286,6 +312,12 @@ public:
     /// @param filename  File name or path (e.g. "main.cpp").
     /// @return The created highlighter, or nullptr if no match.
     SyntaxHighlighter* setHighlighterForFile(const String& filename);
+    /// Install a copied declarative language definition on this editor.
+    DefinedHighlighter* setLanguage(const SyntaxLanguage& language)
+    { return setHighlighter<DefinedHighlighter>(language); }
+    /// Register/replace a definition by name for automatic extension detection.
+    /// Call on the UI thread; custom definitions take precedence over built-ins.
+    static void registerLanguage(const SyntaxLanguage& language);
 
     // ── Code folding ──────────────────────────────────────────────────────
 

@@ -87,17 +87,24 @@ struct FileDialogOptions
     StringView initialPath;
     // Semicolon-separated extensions: ".png;.jpg;.jpeg". Empty accepts all.
     StringView filter;
+    // Suggested leaf name for SaveFile (no directory separators).
+    StringView initialFileName;
     FileDialogMode mode;
     bool showHidden;
 
     FileDialogOptions()
-        : title("Open File"), initialPath(), filter(), mode(FileDialogMode::OpenFile), showHidden(false) {}
+        : title("Open File"), initialPath(), filter(), initialFileName(), mode(FileDialogMode::OpenFile), showHidden(false) {}
 };
 
 struct FileDialogState
 {
     String path;
     String selectedPath;
+    String fileName;
+    String overwritePath;
+    String fileError;
+    String directoryError;
+    String::size_type fileNameCursor = 0u;
     // Cached directory snapshot. Context refreshes this only after opening,
     // navigating, going up, or creating a folder; never every draw frame.
     ct::Vector<FileDialogEntry> entries;
@@ -109,6 +116,8 @@ struct FileDialogState
     Vec2 size;
     Vec2 resizePointerStart;
     Vec2 resizeSizeStart;
+    Vec2 resizePositionStart;
+    uint8_t resizeEdges = 0u; // left, right, top, bottom
     Vec2 previewPan;
     Vec2 previewPointerStart;
     Vec2 previewPanStart;
@@ -141,6 +150,11 @@ struct FileDialogState
     {
         path.clear();
         selectedPath.clear();
+        fileName.clear();
+        overwritePath.clear();
+        fileError.clear();
+        directoryError.clear();
+        fileNameCursor = 0u;
         entries.clear();
         backHistory.clear();
         forwardHistory.clear();
@@ -150,6 +164,8 @@ struct FileDialogState
         size = Vec2();
         resizePointerStart = Vec2();
         resizeSizeStart = Vec2();
+        resizePositionStart = Vec2();
+        resizeEdges = 0u;
         previewPan = Vec2();
         previewPointerStart = Vec2();
         previewPanStart = Vec2();

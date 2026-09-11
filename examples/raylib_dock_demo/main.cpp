@@ -1,4 +1,7 @@
 #include <raylib.h>
+#define STB_IMAGE_STATIC
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -91,7 +94,17 @@ public:
         {
             if (preview_.id != 0u)
                 UnloadTexture(preview_);
-            preview_ = LoadTexture(requested.c_str());
+            // Decode independently of the system Raylib's optional format flags.
+            int width = 0, height = 0, channels = 0;
+            unsigned char* pixels = stbi_load(requested.c_str(), &width, &height, &channels, 4);
+            preview_ = {};
+            if (pixels)
+            {
+                ::Image image = {pixels, width, height, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+                preview_ = LoadTextureFromImage(image);
+                if (preview_.id) SetTextureFilter(preview_, TEXTURE_FILTER_BILINEAR);
+                stbi_image_free(pixels);
+            }
             previewPath_ = requested;
         }
         ig::FileDialogPreview result;

@@ -136,6 +136,15 @@ void registerTimelineStage(WidgetApp& app)
     for (float t : {0.5f, 2.0f, 4.5f, 7.0f, 10.5f}) timeline->addKeyframe(camera, t);
 
     const int character = timeline->addTrack("Character", Color(220, 145, 75, 255));
+    timeline->setHeaderWidth(180);
+    timeline->setEdgePadding(20);
+    const int hips = timeline->addJoint("Hips", character);
+    const int spine = timeline->addJoint("Spine", hips);
+    const int hand = timeline->addJoint("Hand.L", spine);
+    timeline->addKeyframe(hips, timeline->viewStart());
+    timeline->addKeyframe(hips, timeline->viewEnd());
+    timeline->addKeyframe(spine, 3.0f);
+    timeline->addKeyframe(hand, 6.0f);
     timeline->addClip(character, 1.0f, 3.5f, "Idle");
     timeline->addClip(character, 3.5f, 8.0f, "Walk");
     timeline->addClip(character, 8.0f, 11.0f, "Jump");

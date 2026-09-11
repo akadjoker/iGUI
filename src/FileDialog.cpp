@@ -151,8 +151,16 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.initialized = true;
         state.selectedIndex = -3;
         state.selectedPath.clear();
+        state.fileName = String(options.initialFileName.data(), options.initialFileName.size());
+        state.fileNameCursor = state.fileName.size();
         state.scrollOffset = 0.0f;
-        provider.listDirectory(state.path, state.entries);
+        state.entries.clear();
+        state.directoryError.clear();
+        if (!provider.listDirectory(state.path, state.entries))
+        {
+            state.entries.clear();
+            state.directoryError = "Cannot read this folder. Check the path and permissions.";
+        }
         sortFileDialogEntries(state.entries, state.sortField, state.sortAscending);
     }
 
@@ -180,20 +188,46 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     const Rect resizeHitHandle(dialog.right() - 18.0f, dialog.bottom() - 18.0f, 18.0f, 18.0f);
     const WidgetId resizeId = combineIds(id, 0x524553495a45ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
+    const auto resizeEdgesAt = [&dialog, &resizeHitHandle](const Vec2& p) -> uint8_t {
+        if (!contains(Rect(dialog.x - 5.0f, dialog.y - 5.0f, dialog.width + 10.0f, dialog.height + 10.0f), p)) return 0u;
+        uint8_t edges = 0u;
+        if (p.x < dialog.x + 6.0f) edges |= 1u;
+        if (p.x >= dialog.right() - 6.0f) edges |= 2u;
+        if (p.y < dialog.y + 6.0f) edges |= 4u;
+        if (p.y >= dialog.bottom() - 6.0f) edges |= 8u;
+        if (contains(resizeHitHandle, p)) edges |= 10u;
+        return edges;
+    };
     if (pointer_.pressed[left] && activeWidget_ == InvalidWidgetId &&
-        contains(resizeHitHandle, pointer_.pressedPosition[left]))
+        resizeEdgesAt(pointer_.pressedPosition[left]) != 0u)
     {
         activeWidget_ = resizeId;
         state.resizing = true;
         state.resizePointerStart = pointer_.pressedPosition[left];
         state.resizeSizeStart = state.size;
+        state.resizePositionStart = state.position;
+        state.resizeEdges = resizeEdgesAt(pointer_.pressedPosition[left]);
     }
-    if (state.resizing && pointer_.down[left])
+    if (state.resizing && (pointer_.down[left] || pointer_.released[left]))
     {
-        state.size.x = clamp(state.resizeSizeStart.x + pointer_.position.x - state.resizePointerStart.x,
-                             allowedMinimumWidth, maximumWidth);
-        state.size.y = clamp(state.resizeSizeStart.y + pointer_.position.y - state.resizePointerStart.y,
-                             allowedMinimumHeight, maximumHeight);
+        const float dx = pointer_.position.x - state.resizePointerStart.x;
+        const float dy = pointer_.position.y - state.resizePointerStart.y;
+        const float right = state.resizePositionStart.x + state.resizeSizeStart.x;
+        const float bottom = state.resizePositionStart.y + state.resizeSizeStart.y;
+        if (state.resizeEdges & 1u) {
+            state.position.x = clamp(state.resizePositionStart.x + dx, 12.0f, right - allowedMinimumWidth);
+            state.size.x = right - state.position.x;
+        } else if (state.resizeEdges & 2u)
+            state.size.x = clamp(state.resizeSizeStart.x + dx, allowedMinimumWidth,
+                                 viewport.width - state.position.x - 12.0f);
+        if (state.resizeEdges & 4u) {
+            state.position.y = clamp(state.resizePositionStart.y + dy, 12.0f, bottom - allowedMinimumHeight);
+            state.size.y = bottom - state.position.y;
+        } else if (state.resizeEdges & 8u)
+            state.size.y = clamp(state.resizeSizeStart.y + dy, allowedMinimumHeight,
+                                 viewport.height - state.position.y - 12.0f);
+        dialog.x = state.position.x;
+        dialog.y = state.position.y;
         dialog.width = state.size.x;
         dialog.height = state.size.y;
     }
@@ -396,6 +430,46 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.path = path;
         refresh = true;
     };
+    if (options.mode == FileDialogMode::SaveFile && !state.creatingFolder)
+    {
+        wantsKeyboard_ = true;
+        wantsTextInput_ = true;
+        if (state.fileNameCursor > state.fileName.size()) state.fileNameCursor = state.fileName.size();
+        if (homePressed_) state.fileNameCursor = 0u;
+        if (endPressed_) state.fileNameCursor = state.fileName.size();
+        if (leftPressed_ && state.fileNameCursor > 0u)
+            state.fileNameCursor = previousUtf8Offset(state.fileName, state.fileNameCursor);
+        if (rightPressed_ && state.fileNameCursor < state.fileName.size())
+        {
+            ++state.fileNameCursor;
+            while (state.fileNameCursor < state.fileName.size() &&
+                   (static_cast<unsigned char>(state.fileName[state.fileNameCursor]) & 0xc0u) == 0x80u)
+                ++state.fileNameCursor;
+        }
+        for (const Event &event : textEvents_)
+        {
+            state.fileName.insert(state.fileNameCursor, event.text, event.textLength);
+            state.fileNameCursor += event.textLength;
+            state.overwritePath.clear();
+            state.fileError.clear();
+        }
+        if (backspacePressed_ && state.fileNameCursor > 0u)
+        {
+            const auto previous = previousUtf8Offset(state.fileName, state.fileNameCursor);
+            state.fileName.erase(previous, state.fileNameCursor - previous);
+            state.fileNameCursor = previous;
+            state.overwritePath.clear();
+            state.fileError.clear();
+        }
+        if (pasteRequested_)
+        {
+            const String pasted = backend_.clipboardText();
+            state.fileName.insert(state.fileNameCursor, pasted.data(), pasted.size());
+            state.fileNameCursor += pasted.size();
+            state.overwritePath.clear();
+            state.fileError.clear();
+        }
+    }
     if (state.creatingFolder)
     {
         wantsKeyboard_ = true;
@@ -527,7 +601,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     {
         const FileDialogEntry &entry = state.entries[i];
         if ((!options.showHidden && entry.hidden) ||
-            (!entry.directory && !matchesFileDialogFilter(entry.name, options.filter)))
+            (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))))
             continue;
         visibleEntries.push_back(static_cast<int>(i));
     }
@@ -546,6 +620,34 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.scrollOffset = maximumScroll;
     int hitEntry = -3;
     bool activateSelected = false;
+    if (!state.creatingFolder && (upPressed_ || downPressed_))
+    {
+        int row = -1;
+        for (int i = 0; i < static_cast<int>(visibleEntries.size()); ++i)
+            if (visibleEntries[i] == state.selectedIndex) row = i;
+        row += downPressed_ ? 1 : -1;
+        if (row < 0) row = 0;
+        if (row >= static_cast<int>(visibleEntries.size())) row = static_cast<int>(visibleEntries.size()) - 1;
+        state.selectedIndex = visibleEntries[row];
+        state.selectedPath = state.selectedIndex == -2 ? state.path : state.selectedIndex == -1
+            ? provider.parentDirectory(state.path) : state.entries[state.selectedIndex].path;
+        state.lastClickedIndex = -3;
+        if (options.mode == FileDialogMode::SaveFile && state.selectedIndex >= 0 && !state.entries[state.selectedIndex].directory)
+        {
+            state.fileName = state.entries[state.selectedIndex].name;
+            state.fileNameCursor = state.fileName.size();
+            state.overwritePath.clear();
+            state.fileError.clear();
+        }
+        int columns = state.view == FileDialogView::Icons ? static_cast<int>(entriesArea.width / 92.0f) : 1;
+        if (columns < 1) columns = 1;
+        const float height = state.view == FileDialogView::Icons ? 92.0f : rowHeight;
+        const float top = static_cast<float>(row / columns) * height;
+        if (top < state.scrollOffset) state.scrollOffset = top;
+        if (top + height > state.scrollOffset + entriesArea.height)
+            state.scrollOffset = top + height - entriesArea.height;
+        state.scrollOffset = clamp(state.scrollOffset, 0.0f, maximumScroll);
+    }
     if (pointer_.released[left] && contains(entriesArea, pointer_.releasedPosition[left]))
     {
         const Vec2 released = pointer_.releasedPosition[left];
@@ -578,6 +680,13 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
         state.selectedIndex = hitEntry;
         state.selectedPath = entry.path;
+        if (!entry.directory && options.mode == FileDialogMode::SaveFile)
+        {
+            state.fileName = entry.name;
+            state.fileNameCursor = state.fileName.size();
+            state.overwritePath.clear();
+            state.fileError.clear();
+        }
         state.lastClickedIndex = hitEntry;
         state.lastClickedFrame = frameNumber_;
         if (entry.directory && doubleClick)
@@ -605,10 +714,27 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
     }
 
+    // Enter/Open navigates a selected directory; folder selection accepts it.
+    if (!state.creatingFolder && !handledCreateEnter && options.mode != FileDialogMode::ChooseFolder &&
+        (options.mode != FileDialogMode::SaveFile || state.fileName.empty()) &&
+        (enterPressed_ || clicked == acceptId) && (state.selectedIndex == -1 || (state.selectedIndex >= 0 &&
+        state.entries[static_cast<ct::Vector<FileDialogEntry>::size_type>(state.selectedIndex)].directory)))
+    {
+        navigateTo(state.selectedPath, true);
+        handledCreateEnter = true;
+    }
+
     if (refresh)
     {
+        state.overwritePath.clear();
+        state.fileError.clear();
         state.entries.clear();
-        provider.listDirectory(state.path, state.entries);
+        state.directoryError.clear();
+        if (!provider.listDirectory(state.path, state.entries))
+        {
+            state.entries.clear();
+            state.directoryError = "Cannot read this folder. Check the path and permissions.";
+        }
         sortFileDialogEntries(state.entries, state.sortField, state.sortAscending);
         state.selectedIndex = -3;
         state.selectedPath.clear();
@@ -625,7 +751,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         {
             const FileDialogEntry &entry = state.entries[i];
             if ((!options.showHidden && entry.hidden) ||
-                (!entry.directory && !matchesFileDialogFilter(entry.name, options.filter)))
+                (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))))
                 continue;
             visibleEntries.push_back(static_cast<int>(i));
             if (!createdDirectory.empty() && entry.path == createdDirectory)
@@ -651,11 +777,46 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         if (chosen.empty())
             chosen = state.path;
     }
+    else if (options.mode == FileDialogMode::SaveFile)
+    {
+        bool validName = !state.fileName.empty() && state.fileName != "." && state.fileName != "..";
+        for (const char ch : state.fileName)
+            if (ch == '/' || ch == '\\' || static_cast<unsigned char>(ch) < 32u)
+                validName = false;
+        chosen = state.path;
+        if (!chosen.empty() && chosen.back() != '/' && chosen.back() != '\\') chosen += "/";
+        chosen += state.fileName;
+        if (!validName)
+        {
+            if (accepted) state.fileError = "Enter a file name without directory separators.";
+            accepted = false;
+        }
+        if (accepted)
+        {
+            for (const FileDialogEntry &entry : state.entries)
+            {
+                if (entry.name != state.fileName) continue;
+                if (entry.directory)
+                {
+                    state.fileError = "A folder already has this name.";
+                    accepted = false;
+                }
+                else if (state.overwritePath != chosen)
+                {
+                    state.overwritePath = chosen;
+                    state.fileError = "File exists. Press Replace to confirm.";
+                    accepted = false;
+                }
+                break;
+            }
+        }
+    }
     else if (state.selectedIndex < 0 ||
              state.entries[static_cast<ct::Vector<FileDialogEntry>::size_type>(state.selectedIndex)].directory)
     {
         accepted = false;
     }
+    if (!state.directoryError.empty()) accepted = false;
     if (accepted)
     {
         open = false;
@@ -934,9 +1095,31 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
     }
 
-    const StringView acceptText = options.mode == FileDialogMode::SaveFile ? StringView("Save")
+    const StringView acceptText = options.mode == FileDialogMode::SaveFile ? (state.overwritePath.empty() ? StringView("Save") : StringView("Replace"))
                               : (options.mode == FileDialogMode::ChooseFolder ? StringView("Choose") : StringView("Open"));
-    const bool canAccept = options.mode == FileDialogMode::ChooseFolder || state.selectedIndex >= 0;
+    const bool canAccept = state.directoryError.empty() && (options.mode == FileDialogMode::ChooseFolder || state.selectedIndex >= 0 ||
+                          (options.mode == FileDialogMode::SaveFile && !state.fileName.empty()));
+    if (!state.directoryError.empty())
+        drawText(modalDrawList_, theme_.font, state.directoryError,
+                 Vec2(newFolderInput.x, newFolderInput.y - theme_.fontSize - 3.0f),
+                 theme_.fontSize * 0.8f, theme_.dialogBtnDanger, viewport);
+    if (options.mode == FileDialogMode::SaveFile && !state.creatingFolder)
+    {
+        modalDrawList_.addRectFilled(newFolderInput, theme_.inputBg, viewport);
+        modalDrawList_.addRect(newFolderInput, theme_.inputBorderHover, viewport);
+        const StringView prefix(state.fileName.data(), state.fileNameCursor);
+        const float cursorWidth = measureText(theme_.font, prefix, theme_.fontSize).width;
+        const float textOffset = cursorWidth > newFolderInput.width - 20.0f ? cursorWidth - newFolderInput.width + 20.0f : 0.0f;
+        drawText(modalDrawList_, theme_.font, state.fileName.empty() ? StringView("File name...") : StringView(state.fileName),
+                 Vec2(newFolderInput.x + 8.0f - textOffset, newFolderInput.y + 5.0f), theme_.fontSize, theme_.dialogText, newFolderInput);
+        modalDrawList_.addRectFilled(Rect(newFolderInput.x + 8.0f + cursorWidth - textOffset,
+                                        newFolderInput.y + 5.0f, 1.0f, newFolderInput.height - 10.0f),
+                                    theme_.dialogText, newFolderInput);
+        if (!state.fileError.empty())
+            drawText(modalDrawList_, theme_.font, state.fileError,
+                     Vec2(newFolderInput.x, newFolderInput.y - theme_.fontSize - 3.0f),
+                     theme_.fontSize * 0.8f, theme_.dialogBtnDanger, viewport);
+    }
     if (state.creatingFolder)
     {
         modalDrawList_.addRectFilled(newFolderInput, theme_.inputBg, viewport);
@@ -987,6 +1170,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
              Vec2(cancelButton.x + (cancelButton.width - cancelMetrics.width) * 0.5f,
                   cancelButton.y + (cancelButton.height - cancelMetrics.height) * 0.5f), theme_.fontSize, iconColor, viewport);
     const Color resizeColor = contains(resizeHandle, pointer_.position) || state.resizing ? iconColor : theme_.dialogBorder;
+    if (state.resizing || resizeEdgesAt(pointer_.position))
+        modalDrawList_.addRect(dialog, theme_.focusColor, viewport, 2.0f);
     for (uint32_t line = 0u; line < 3u; ++line)
     {
         const float offset = static_cast<float>(line) * 4.0f;

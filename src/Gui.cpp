@@ -1417,6 +1417,16 @@ bool Context::beginMenu(StringView labelText)
     }
 
     const bool hovered = itemHovered(button, contentClip(), id);
+    if (hovered && openMenu_ != InvalidWidgetId && openMenu_ != id &&
+        currentWindow_ == focusedWindow_ && !pointer_.pressed[left] && !pointer_.released[left])
+    {
+        openMenu_ = id;
+        openContextMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
+        subMenuPopupBounds_ = Rect();
+        menuPopupBounds_ = Rect(button.x, button.bottom(), theme_.menuMinWidth, 0.0f);
+        focusedWidget_ = id;
+    }
     if (itemClicked(button, contentClip(), id))
     {
         openMenu_ = openMenu_ == id ? InvalidWidgetId : id;
@@ -4009,8 +4019,8 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
 
     dockSpace->bounds = outer;
     dockSpace->clip = clip;
-    const float minimumCenter = 160.0f;
-    const float minimumSide = 96.0f;
+    const float minimumCenter = outer.width < 352.0f ? outer.width * (160.0f / 352.0f) : 160.0f;
+    const float minimumSide = outer.width < 352.0f ? outer.width * (96.0f / 352.0f) : 96.0f;
     const float maximumSide = outer.width - minimumCenter - minimumSide;
     if (dockSpace->leftWidth < minimumSide)
         dockSpace->leftWidth = minimumSide;
@@ -4038,14 +4048,12 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
             dockSpace->leftWidth = sideBudget - minimumSide;
         }
     }
-    const float maximumBottom = outer.height - theme_.widgetHeight * 3.0f;
-    const float sideMaximum = maximumSide > minimumSide ? maximumSide : minimumSide;
-    const float bottomMaximum = maximumBottom > theme_.widgetHeight * 2.0f
-        ? maximumBottom : theme_.widgetHeight * 2.0f;
-    if (dockSpace->bottomHeight < theme_.widgetHeight * 2.0f)
-        dockSpace->bottomHeight = theme_.widgetHeight * 2.0f;
-    if (maximumBottom > theme_.widgetHeight * 2.0f && dockSpace->bottomHeight > maximumBottom)
-        dockSpace->bottomHeight = maximumBottom;
+    const float minimumBottom = outer.height < theme_.widgetHeight * 5.0f
+        ? outer.height * 0.4f : theme_.widgetHeight * 2.0f;
+    const float maximumBottom = outer.height - (outer.height < theme_.widgetHeight * 5.0f
+        ? outer.height * 0.6f : theme_.widgetHeight * 3.0f);
+    const float bottomMaximum = maximumBottom > minimumBottom ? maximumBottom : minimumBottom;
+    dockSpace->bottomHeight = clamp(dockSpace->bottomHeight, minimumBottom, bottomMaximum);
 
     drawList->addRectFilled(outer, theme_.panelColor, clip);
     drawList->addRect(outer, theme_.borderColor, clip);
@@ -4078,13 +4086,14 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
             if (pointer_.down[leftButton] || pointer_.pressed[leftButton])
             {
                 if (splitter == 0u)
-                    dockSpace->leftWidth = clamp(pointer_.position.x - outer.x, minimumSide, sideMaximum);
+                    dockSpace->leftWidth = clamp(pointer_.position.x - outer.x, minimumSide,
+                                                outer.width - minimumCenter - dockSpace->rightWidth);
                 else if (splitter == 1u)
                     dockSpace->rightWidth = clamp(outer.x + outer.width - pointer_.position.x,
-                                                  minimumSide, sideMaximum);
+                                                  minimumSide, outer.width - minimumCenter - dockSpace->leftWidth);
                 else
                     dockSpace->bottomHeight = clamp(outer.y + outer.height - pointer_.position.y,
-                                                    theme_.widgetHeight * 2.0f, bottomMaximum);
+                                                    minimumBottom, bottomMaximum);
             }
             if (pointer_.released[leftButton])
                 activeWidget_ = InvalidWidgetId;
@@ -4209,6 +4218,10 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect tabListButton(tabBar.x + tabBar.width - tabListWidth, tabBar.y,
                              tabListWidth, tabListWidth);
     const float tabRight = tabListButton.x;
+    // One continuous header; controls only gain a background on interaction.
+    drawList->addRectFilled(tabBar, theme_.panelColor, clip);
+    drawList->addLine(Vec2(tabBar.x, tabBar.bottom() - 1.0f),
+                      Vec2(tabBar.right(), tabBar.bottom() - 1.0f), theme_.borderColor, clip);
     const bool handleTabInput = dockSpace->tabBarFrame[slotIndex] != frameNumber_;
     if (handleTabInput)
         dockSpace->tabBarFrame[slotIndex] = frameNumber_;
@@ -4230,7 +4243,9 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                                tab.y + (tab.height - closeSize) * 0.5f, closeSize, closeSize);
         const bool hovered = itemHovered(tab, clip, candidate.id);
         const WidgetId closeId = combineIds(candidate.id, 0x444f434b434c4f53ull);
-        const bool closeVisible = candidate.open && hovered;
+        // Keep processing the close button while it owns the press: the tab's
+        // hover test deliberately rejects input captured by a different ID.
+        const bool closeVisible = candidate.open && (hovered || activeWidget_ == closeId);
         const bool closeHovered = closeVisible && itemHovered(closeButton, clip, closeId);
         if (closeVisible && handleTabInput && itemClicked(closeButton, clip, closeId, false))
         {
@@ -4292,20 +4307,26 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
             dockDragTab_ = InvalidWidgetId;
         }
         const bool selected = dockSpace->selected[slotIndex] == candidate.id;
-        drawList->addRectFilled(tab, selected ? theme_.selectableSelected
-                                               : (hovered ? theme_.selectableHovered : theme_.buttonBackground), clip);
+        if (selected || hovered)
+            drawList->addRectFilled(tab, selected ? theme_.inputBg : theme_.selectableHovered, clip);
+        if (selected)
+            drawList->addRectFilled(Rect(tab.x + 4.0f, tab.bottom() - 2.0f,
+                                         tab.width > 8.0f ? tab.width - 8.0f : 0.0f, 2.0f), theme_.focusColor, clip);
+        const Rect titleClip = intersect(clip, Rect(tab.x, tab.y,
+            candidate.open ? (closeButton.x > tab.x ? closeButton.x - tab.x : 0.0f) : tab.width, tab.height));
         drawText(*drawList, theme_.font, candidate.title,
                  Vec2(tab.x + theme_.windowPadding,
                       tab.y + (tab.height - metrics.height) * 0.5f),
-                 theme_.fontSize, theme_.buttonText, clip);
+                 theme_.fontSize, selected || hovered ? theme_.buttonText : theme_.textDisabled, titleClip);
         if (closeVisible)
         {
-            const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize * 0.78f);
-            drawList->addRectFilled(closeButton, closeHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
-            drawText(*drawList, theme_.font, StringView("x"),
-                     Vec2(closeButton.x + (closeButton.width - closeMetrics.width) * 0.5f,
-                          closeButton.y + (closeButton.height - closeMetrics.height) * 0.5f),
-                     theme_.fontSize * 0.78f, theme_.buttonText, clip);
+            if (closeHovered) drawList->addRectFilled(closeButton, theme_.buttonHovered, clip);
+            const float cx = closeButton.x + closeButton.width * 0.5f;
+            const float cy = closeButton.y + closeButton.height * 0.5f;
+            const float radius = closeButton.height * 0.2f;
+            const Color color = closeHovered ? theme_.buttonText : theme_.textDisabled;
+            drawList->addLine(Vec2(cx - radius, cy - radius), Vec2(cx + radius, cy + radius), color, clip);
+            drawList->addLine(Vec2(cx + radius, cy - radius), Vec2(cx - radius, cy + radius), color, clip);
         }
         tabX += tabWidth;
     }
@@ -4314,14 +4335,18 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const bool tabListHovered = itemHovered(tabListButton, clip, tabListId);
     if (handleTabInput && itemClicked(tabListButton, clip, tabListId, false))
         dockSpace->tabListOpen[slotIndex] = !dockSpace->tabListOpen[slotIndex];
-    drawList->addRectFilled(tabListButton, tabListHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
-    const float arrowSize = tabListButton.height * 0.26f;
+    if (tabListHovered || dockSpace->tabListOpen[slotIndex])
+        drawList->addRectFilled(Rect(tabListButton.x + 3.0f, tabListButton.y + 3.0f,
+                                    tabListButton.width - 6.0f, tabListButton.height - 6.0f), theme_.buttonHovered, clip);
+    const float arrowSize = tabListButton.height * 0.14f;
     const Vec2 arrow[] = {
         Vec2(tabListButton.x + tabListButton.width * 0.5f - arrowSize, tabListButton.y + tabListButton.height * 0.42f),
         Vec2(tabListButton.x + tabListButton.width * 0.5f + arrowSize, tabListButton.y + tabListButton.height * 0.42f),
         Vec2(tabListButton.x + tabListButton.width * 0.5f, tabListButton.y + tabListButton.height * 0.64f)
     };
-    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+    const Color arrowColor = tabListHovered || dockSpace->tabListOpen[slotIndex] ? theme_.buttonText : theme_.textDisabled;
+    drawList->addLine(arrow[0], arrow[2], arrowColor, clip);
+    drawList->addLine(arrow[2], arrow[1], arrowColor, clip);
 
     const float requestedPopupWidth = theme_.menuMinWidth;
     const float popupWidth = requestedPopupWidth < region.width ? requestedPopupWidth : region.width;

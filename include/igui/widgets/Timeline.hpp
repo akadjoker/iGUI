@@ -47,12 +47,24 @@ struct TimelineTrack {
     ct::Vector<TimelineClip>      clips;
     bool muted  = false;
     bool locked = false;
+    int parent = -1;
+    bool expanded = true;
 };
 
 class Timeline : public Widget
 {
 public:
     Timeline();
+    /// Joint IDs are track indices; removing tracks invalidates subsequent IDs.
+    int addJoint(const String& name, int parent = -1);
+    void setExpanded(int joint, bool expanded);
+    ct::Vector<int> visibleTracks() const;
+    void setHeaderWidth(float width);
+    /// Space in pixels inside both timeline edges (minimum 8 for full diamonds).
+    void setEdgePadding(float pixels);
+    float edgePadding() const { return edgePadding_; }
+    Signal<int, int, float> onKeyframeMoved;
+    Signal<int, int> onKeyframeAdded;
 
     /// @brief Add a named track with optional color.
     int  addTrack(const String& name,
@@ -125,7 +137,9 @@ private:
     float fps_        = 30.0f;
 
     static constexpr float kTrackH  = 28;
-    static constexpr float kHeaderW = 100;
+    float kHeaderW = 160;
+    float edgePadding_ = 16;
+    float verticalScroll_ = 0;
     static constexpr float kRulerH  = 24;
 
     // Interaction state

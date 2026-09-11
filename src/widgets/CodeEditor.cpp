@@ -964,6 +964,117 @@ CodeEditor::CodeEditor()
     };
 }
 
+namespace {
+String syntaxWord(String word, bool sensitive)
+{
+    if (!sensitive) for (char& c : word) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return word;
+}
+ct::Vector<SyntaxLanguage>& syntaxLanguages()
+{
+    static ct::Vector<SyntaxLanguage> languages = [] {
+        ct::Vector<SyntaxLanguage> result;
+        SyntaxLanguage json;
+        json.name = "JSON";
+        json.constants = {"true", "false", "null"}; json.quotes = "\"";
+        json.lineComment.clear(); json.blockCommentStart.clear(); json.blockCommentEnd.clear();
+        json.extensions = {"json"}; result.push_back(json);
+        json.name = "JSONC"; json.extensions = {"jsonc"}; json.lineComment = "//";
+        json.blockCommentStart = "/*"; json.blockCommentEnd = "*/"; result.push_back(json);
+        SyntaxLanguage sql;
+        sql.name = "SQL"; sql.extensions = {"sql"}; sql.lineComment = "--"; sql.caseSensitive = false;
+        sql.keywords = {"select", "from", "where", "join", "left", "right", "inner", "outer", "on", "as", "insert", "into", "values", "update", "set", "delete", "create", "table", "drop", "alter", "group", "by", "order", "having", "limit", "distinct", "union", "and", "or", "not", "in", "is", "like", "case", "when", "then", "else", "end", "with"};
+        sql.types = {"int", "integer", "text", "varchar", "boolean", "date", "timestamp", "decimal"};
+        sql.constants = {"null", "true", "false"}; result.push_back(sql);
+        SyntaxLanguage go;
+        go.name = "Go"; go.extensions = {"go"}; go.rawQuote = '`';
+        go.keywords = {"package", "import", "func", "var", "const", "type", "struct", "interface", "map", "chan", "go", "defer", "select", "case", "default", "if", "else", "for", "range", "return", "break", "continue", "switch", "fallthrough"};
+        go.types = {"string", "bool", "byte", "rune", "int", "int64", "uint", "float32", "float64", "error"};
+        go.constants = {"true", "false", "nil", "iota"}; result.push_back(go);
+        return result;
+    }();
+    return languages;
+}
+}
+
+DefinedHighlighter::DefinedHighlighter(const SyntaxLanguage& language) : language_(language)
+{
+    for (const auto& w : language.keywords) keywords_.insert(syntaxWord(w, language.caseSensitive));
+    for (const auto& w : language.types) types_.insert(syntaxWord(w, language.caseSensitive));
+    for (const auto& w : language.constants) constants_.insert(syntaxWord(w, language.caseSensitive));
+}
+
+SyntaxHighlighter::HighlightResult DefinedHighlighter::highlightLine(int, const String& text, int prevState) const
+{
+    HighlightResult result; result.state = prevState == 1 || (prevState == 2 && language_.rawQuote) ? prevState : 0;
+    int i = 0, n = static_cast<int>(text.size());
+    auto matches = [&](const String& token) {
+        return !token.empty() && token.size() <= text.size() - static_cast<size_t>(i) &&
+            text.compare(static_cast<size_t>(i), token.size(), token.c_str()) == 0;
+    };
+    while (i < n) {
+        const int start = i;
+        TokenType type = TokenType::Default;
+        if (result.state == 2 || (language_.rawQuote && text[i] == language_.rawQuote)) {
+            if (result.state != 2) ++i;
+            result.state = 2;
+            while (i < n && text[i] != language_.rawQuote) ++i;
+            if (i < n) { ++i; result.state = 0; }
+            type = TokenType::String;
+        } else if (result.state == 1 || (!language_.blockCommentEnd.empty() && matches(language_.blockCommentStart))) {
+            if (result.state != 1) i += static_cast<int>(language_.blockCommentStart.size());
+            result.state = 1;
+            while (i < n && !matches(language_.blockCommentEnd)) ++i;
+            if (i < n) { i += static_cast<int>(language_.blockCommentEnd.size()); result.state = 0; }
+            type = TokenType::Comment;
+        } else if (matches(language_.lineComment)) {
+            i = n; type = TokenType::Comment;
+        } else if (language_.quotes.find(text[i]) != String::npos) {
+            const char quote = text[i++]; type = TokenType::String;
+            while (i < n) {
+                if (text[i] == '\\' && i + 1 < n) { i += 2; continue; }
+                if (text[i++] == quote) break;
+            }
+        } else if (std::isalpha(static_cast<unsigned char>(text[i])) || text[i] == '_') {
+            ++i;
+            while (i < n && (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '_')) ++i;
+            const String word = syntaxWord(text.substr(start, i - start), language_.caseSensitive);
+            if (isKeyword(word)) type = TokenType::Keyword;
+            else if (isType(word)) type = TokenType::Type;
+            else if (isConstant(word)) type = TokenType::Constant;
+            else { int next = i; while (next < n && std::isspace(static_cast<unsigned char>(text[next]))) ++next;
+                if (next < n && text[next] == '(') type = TokenType::Function; }
+        } else if (std::isdigit(static_cast<unsigned char>(text[i]))) {
+            ++i; while (i < n && (std::isalnum(static_cast<unsigned char>(text[i])) || text[i] == '.' || text[i] == '_')) ++i;
+            type = TokenType::Number;
+        } else {
+            const char c = text[i++];
+            if (std::strchr("{}[]()", c)) type = TokenType::Bracket;
+            else if (std::strchr("+-*/%=!<>|&^~?:", c)) type = TokenType::Operator;
+        }
+        result.spans.push_back({start, i, type});
+    }
+    return result;
+}
+
+int DefinedHighlighter::foldDelta(int line, const String& text) const
+{
+    int delta = 0;
+    for (const auto& span : highlightLine(line, text, 0).spans)
+        if (span.type == TokenType::Bracket) {
+            if (text[span.startCol] == '{' || text[span.startCol] == '[') ++delta;
+            if (text[span.startCol] == '}' || text[span.startCol] == ']') --delta;
+        }
+    return delta;
+}
+
+void CodeEditor::registerLanguage(const SyntaxLanguage& language)
+{
+    for (auto& existing : syntaxLanguages())
+        if (existing.name == language.name) { existing = language; return; }
+    syntaxLanguages().push_back(language);
+}
+
 CodeEditor::~CodeEditor()
 {
     delete highlighter_;
@@ -973,8 +1084,10 @@ CodeEditor::~CodeEditor()
 
 void CodeEditor::setHighlighterRaw(SyntaxHighlighter* hl)
 {
+    if (highlighter_ == hl) return;
     delete highlighter_;
     highlighter_ = hl;
+    lineStates_.clear();
     hlDirty_ = true;
     installSyntaxCallback();
     markDirty();
@@ -984,10 +1097,16 @@ SyntaxHighlighter* CodeEditor::setHighlighterForFile(const String& filename)
 {
     // Extract extension
     auto dot = filename.rfind('.');
-    if (dot == String::npos) return nullptr;
+    if (dot == String::npos) { setHighlighterRaw(nullptr); return nullptr; }
     String ext = filename.substr(dot + 1);
     // Lowercase
     for (auto& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (auto it = syntaxLanguages().rbegin(); it != syntaxLanguages().rend(); ++it)
+    {
+        const auto& language = *it;
+        for (const auto& suffix : language.extensions)
+            if (syntaxWord(suffix, false) == ext) return setLanguage(language);
+    }
 
     // Try each built-in highlighter
     struct Factory {
@@ -1010,6 +1129,7 @@ SyntaxHighlighter* CodeEditor::setHighlighterForFile(const String& filename)
             }
         }
     }
+    setHighlighterRaw(nullptr);
     return nullptr;
 }
 

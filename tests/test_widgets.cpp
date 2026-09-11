@@ -759,6 +759,16 @@ static void test_dock_panel_close_button()
     context.endFrame();
 
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 285.0f, 64.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("closable dock", ig::Rect(10.0f, 10.0f, 520.0f, 400.0f)));
+    assert(context.beginDockSpace("dock", ig::Rect(8.0f, 8.0f, 480.0f, 330.0f)));
+    if (context.beginDockPanel("Closable", ig::DockSlot::Center, &open))
+        context.endDockPanel();
+    context.endDockSpace();
+    context.endWindow();
+    context.endFrame();
+    assert(open);
+
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 285.0f, 64.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("closable dock", ig::Rect(10.0f, 10.0f, 520.0f, 400.0f)));
@@ -2137,8 +2147,201 @@ static void test_file_dialog_detail_sorting()
     assert(state.entries[0].name == "alpha.bin");
 }
 
+static void test_save_file_names_and_overwrite()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogOptions options;
+    options.mode = ig::FileDialogMode::SaveFile;
+    options.initialPath = "/project";
+    ig::FileDialogState state;
+    bool open = true;
+    auto frame = [&]() {
+        context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+        auto result = context.fileDialog("save", open, state, options, provider);
+        context.endFrame();
+        return result;
+    };
+    frame();
+    context.pushEvent(ig::Event::textInput("new.txt"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    auto result = frame();
+    assert(result.kind == ig::FileDialogResultKind::Accepted && result.path == "/project/new.txt");
+
+    open = true;
+    options.initialFileName = "preview.png";
+    frame();
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    result = frame();
+    assert(open && result.kind == ig::FileDialogResultKind::None && !state.overwritePath.empty());
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    result = frame();
+    assert(!open && result.path == "/project/preview.png");
+
+    open = true;
+    options.initialFileName = "../outside";
+    frame();
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    result = frame();
+    assert(open && result.kind == ig::FileDialogResultKind::None && !state.fileError.empty());
+    state.fileName = "assets";
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    result = frame();
+    assert(open && result.kind == ig::FileDialogResultKind::None && !state.fileError.empty());
+}
+
+static void test_file_dialog_keyboard_navigation()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    ig::FileDialogState state;
+    bool open = true;
+    auto frame = [&]() {
+        context.beginFrame(ig::FrameInfo(640.0f, 640.0f));
+        auto result = context.fileDialog("keyboard", open, state, options, provider);
+        context.endFrame();
+        return result;
+    };
+    frame();
+    for (int i = 0; i < 3; ++i) {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+        frame();
+    }
+    assert(state.selectedPath == "/project/assets");
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    frame();
+    assert(open && state.path == "/project/assets");
+    options.mode = ig::FileDialogMode::ChooseFolder;
+    for (int i = 0; i < 5; ++i) {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+        frame();
+    }
+    assert(state.entries[state.selectedIndex].directory);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    auto result = frame();
+    assert(result.kind == ig::FileDialogResultKind::Accepted && result.path == "/project/assets/assets");
+}
+
+static void test_small_dock_space()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("small dock", ig::Rect(0, 0, 400, 400)));
+    assert(context.beginDockSpace("dock", ig::Rect(8, 8, 200, 200)));
+    assert(context.beginDockPanel("Left", ig::DockSlot::Left));
+    context.endDockPanel();
+    assert(context.beginDockPanel("Center", ig::DockSlot::Center));
+    context.endDockPanel();
+    assert(context.beginDockPanel("Right", ig::DockSlot::Right));
+    context.endDockPanel();
+    context.endDockSpace();
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_file_dialog_read_error_and_paste()
+{
+    class Unreadable : public DialogProvider {
+        bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry>& entries) override {
+            ig::FileDialogEntry partial; partial.name = "partial"; entries.push_back(partial);
+            return false;
+        }
+    } unreadable;
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::FileDialogOptions options;
+    options.mode = ig::FileDialogMode::ChooseFolder;
+    ig::FileDialogState state;
+    bool open = true;
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    context.beginFrame(ig::FrameInfo(640, 640));
+    auto result = context.fileDialog("read error", open, state, options, unreadable);
+    context.endFrame();
+    assert(open && result.kind == ig::FileDialogResultKind::None);
+    assert(!state.directoryError.empty() && state.entries.empty());
+
+    state.reset();
+    options.mode = ig::FileDialogMode::SaveFile;
+    DialogProvider provider;
+    backend.clipboard = "caf\xc3\xa9.txt";
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::V, true));
+    context.beginFrame(ig::FrameInfo(640, 640));
+    context.fileDialog("paste", open, state, options, provider);
+    context.endFrame();
+    assert(state.fileName == backend.clipboard && state.fileNameCursor == state.fileName.size());
+}
+
+static void test_menu_hover_switch()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool file = false, edit = false;
+    auto frame = [&]() {
+        context.beginFrame(ig::FrameInfo(320, 240));
+        assert(context.beginWindow("hover menus", ig::Rect(10, 10, 280, 210)));
+        assert(context.beginMenuBar(ig::Rect(0, 0, 260, 26)));
+        file = context.beginMenu("File");
+        if (file) { context.menuItem("Open"); context.endMenu(); }
+        edit = context.beginMenu("Edit");
+        if (edit) { context.menuItem("Copy"); context.endMenu(); }
+        context.endMenuBar(); context.endWindow(); context.endFrame();
+    };
+    frame();
+    context.pushEvent(ig::Event::pointerMove(90, 55));
+    frame(); assert(!file && !edit);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30, 55));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30, 55));
+    frame(); assert(file && !edit);
+    context.pushEvent(ig::Event::pointerMove(90, 55));
+    frame(); assert(edit);
+    frame(); assert(!file && edit);
+    context.pushEvent(ig::Event::pointerMove(30, 55));
+    frame(); assert(file && !edit);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    frame(); assert(!file && !edit);
+}
+
+static void test_file_dialog_resize_left_edge()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    bool open = true;
+    auto frame = [&]() {
+        context.beginFrame(ig::FrameInfo(1000, 800));
+        context.fileDialog("edge resize", open, state, options, provider);
+        context.endFrame();
+    };
+    frame();
+    const float right = state.position.x + state.size.x;
+    const float oldWidth = state.size.x;
+    const float x = state.position.x, y = state.position.y + 150.0f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+    frame();
+    assert(state.resizing);
+    context.pushEvent(ig::Event::pointerMove(x + 50, y));
+    frame();
+    assert(state.size.x == oldWidth - 50 && state.position.x + state.size.x == right);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x + 60, y));
+    frame();
+    assert(!state.resizing && state.size.x == oldWidth - 60);
+}
+
 int main()
 {
+    test_file_dialog_resize_left_edge();
+    test_menu_hover_switch();
+    test_file_dialog_read_error_and_paste();
+    test_save_file_names_and_overwrite();
+    test_file_dialog_keyboard_navigation();
+    test_small_dock_space();
     test_widget_gallery();
     test_combo_popup_overlay();
     test_menu_and_context_menu();
