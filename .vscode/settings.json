@@ -1,0 +1,12 @@
+{
+    "cmake.sourceDirectory": "${workspaceFolder}",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.configureArgs": [
+        "-DIGUI_BUILD_RAYLIB_BACKEND=ON",
+        "-DIGUI_BUILD_RAYLIB_DEMO=OFF",
+        "-DIGUI_BUILD_CODE_EDITOR_DEMO=ON",
+        "-DIGUI_BUILD_SDL2_DEMO=OFF",
+        "-DIGUI_BUILD_TESTS=ON"
+    ],
+    "cmake.configureOnOpen": true
+}

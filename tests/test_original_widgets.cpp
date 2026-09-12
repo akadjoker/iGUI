@@ -109,6 +109,31 @@ int main()
     assert(editor.setHighlighterForFile("main.go") != nullptr);
     assert(editor.setHighlighterForFile("notes.txt") == nullptr && editor.highlighter() == nullptr);
 
+    // ct::Regex-backed find/replace (see third_party/containers submodule)
+    editor.setText("foo bar foo baz");
+    TextEdit::TextPos expectCol3{0, 3};
+    TextEdit::TextPos expectCol11{0, 11};
+    assert(editor.findNext("foo", true, false, false));
+    assert(editor.cursorPos() == expectCol3);
+    assert(editor.findNext("foo", true, false, false));
+    assert(editor.cursorPos() == expectCol11);
+    assert(editor.findNext("foo", true, false, false)); // wraps
+    assert(editor.cursorPos() == expectCol3);
+
+    editor.setText("value1 = 10\nvalue2 = 20");
+    assert(editor.replaceAll("(\\w+) = (\\d+)", "\\2 -> \\1", false, true) == 2);
+    assert(editor.lineAt(0) == "10 -> value1");
+    assert(editor.lineAt(1) == "20 -> value2");
+
+    editor.setText("abc");
+    assert(!editor.findNext("(unterminated", true, false, true)); // invalid pattern, no crash
+    assert(editor.replaceAll("(unterminated", "x", true, true) == 0);
+    assert(editor.lineAt(0) == "abc");
+
+    editor.setText("Hello WORLD hello");
+    assert(editor.replaceAll("hello", "hi", false, true) == 2);
+    assert(editor.lineAt(0) == "hi WORLD hi");
+
     String edited("abc");
     edited.append(2, '!');
     assert(edited == "abc!!");

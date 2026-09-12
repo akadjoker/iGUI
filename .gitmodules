@@ -1,0 +1,3 @@
+[submodule "third_party/containers"]
+	path = third_party/containers
+	url = https://github.com/akadjoker/containers.git

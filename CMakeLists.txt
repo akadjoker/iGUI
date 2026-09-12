@@ -12,6 +12,7 @@ set(IGUI_FONT_INPUT "" CACHE FILEPATH
 option(IGUI_BUILD_SDL2_DEMO "Build the optional SDL2 integration example" OFF)
 option(IGUI_BUILD_RAYLIB_BACKEND "Build the Raylib backend when Raylib is installed" ON)
 option(IGUI_BUILD_RAYLIB_DEMO "Build the Raylib integration example" OFF)
+option(IGUI_BUILD_CODE_EDITOR_DEMO "Build the immediate-mode code editor demo (requires Raylib)" OFF)
 option(IGUI_BUILD_IMMEDIATE "Build the immediate-mode Context API (igui)" ON)
 option(IGUI_BUILD_RETAINED "Build the retained widget toolkit (igui_widgets)" ON)
 option(IGUI_BUILD_LEGACY "Build the old retained GUI compatibility layer (igui_legacy)" ON)
@@ -33,26 +34,24 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_RAYLIB_AVAILABLE)
     set(IGUI_BUILD_FONT ON)
 endif()
 
-include(FetchContent)
-
-FetchContent_Declare(
-    igui_containers
-    GIT_REPOSITORY https://github.com/akadjoker/containers.git
-    GIT_TAG f94b31807048ff5e4df8cb3884094a63675544d9
-)
-FetchContent_GetProperties(igui_containers)
-if(NOT igui_containers_POPULATED)
-    FetchContent_Populate(igui_containers)
+# containers (ct) is vendored as a git submodule under third_party/containers
+# rather than fetched by tag, so it tracks upstream via `git submodule update`
+# and includes newer headers (e.g. ct/regex.hpp) as soon as the submodule
+# pointer is bumped.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/containers/include/ct/vector.hpp")
+    message(FATAL_ERROR
+        "third_party/containers is empty. Run: git submodule update --init --recursive")
 endif()
 
 add_library(ct INTERFACE)
-target_include_directories(ct INTERFACE "${igui_containers_SOURCE_DIR}/include")
+target_include_directories(ct INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/containers/include")
 
-# Shared drawing engine: DrawList/DrawData/Backend. This is the only thing
-# the immediate-mode Context and the retained widget toolkit actually have
-# in common (see BUILD_SPLIT_PLAN.md) - everything else below depends on
-# this, never on each other.
-add_library(igui_core src/DrawList.cpp)
+# Shared drawing engine: DrawList/DrawData/Backend, plus the lexical syntax
+# highlighting layer (ig::syntax). Both are things the immediate-mode Context
+# and the retained widget toolkit actually have in common (see
+# BUILD_SPLIT_PLAN.md) - everything else below depends on this, never on
+# each other.
+add_library(igui_core src/DrawList.cpp src/Syntax.cpp)
 add_library(igui::core ALIAS igui_core)
 target_include_directories(igui_core PUBLIC include)
 target_link_libraries(igui_core PUBLIC ct)
@@ -69,7 +68,7 @@ add_custom_target(igui_no_std ALL
 add_dependencies(igui_core igui_no_std)
 
 if(IGUI_BUILD_IMMEDIATE)
-    add_library(igui src/FileDialog.cpp src/Gui.cpp)
+    add_library(igui src/FileDialog.cpp src/Gui.cpp src/CodeEditorImmediate.cpp)
     add_library(igui::igui ALIAS igui)
     target_include_directories(igui PUBLIC include)
     target_link_libraries(igui PUBLIC igui_core)
@@ -183,6 +182,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
 endif()
 
 if(IGUI_BUILD_FONT)
+    include(FetchContent)
     FetchContent_Declare(
         igui_nuklear_assets
         GIT_REPOSITORY https://github.com/Immediate-Mode-UI/Nuklear.git
@@ -269,6 +269,11 @@ if(IGUI_RAYLIB_AVAILABLE)
         add_executable(igui_raylib_dock_demo examples/raylib_dock_demo/main.cpp)
         target_include_directories(igui_raylib_dock_demo PRIVATE third_party/stb)
         target_link_libraries(igui_raylib_dock_demo PRIVATE igui_raylib)
+    endif()
+
+    if(IGUI_BUILD_CODE_EDITOR_DEMO)
+        add_executable(igui_code_editor_demo examples/code_editor_demo/main.cpp)
+        target_link_libraries(igui_code_editor_demo PRIVATE igui_raylib)
     endif()
 endif()
 

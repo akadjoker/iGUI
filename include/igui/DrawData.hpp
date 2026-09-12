@@ -147,6 +147,13 @@ public:
                          const Color &color, const Rect &clip, uint32_t segments = 0u);
     // Tessellates a simple polygon. Points may be clockwise or counter-clockwise.
     void addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip);
+    // Convenience wrapper for the common 3-point case (arrows, chevrons, ...).
+    void addTriangleFilled(const Vec2 &a, const Vec2 &b, const Vec2 &c,
+                           const Color &color, const Rect &clip)
+    {
+        const Vec2 points[3] = {a, b, c};
+        addPolygonFilled(Span<const Vec2>(points, 3), color, clip);
+    }
     void addText(StringView text, const Vec2 &position, FontId font,
                  float logicalSize, const Color &color, const Rect &clip);
 

@@ -2371,10 +2371,30 @@ static void test_file_dialog_incremental_search_uses_cached_entries()
     assert(open);
 }
 
+static void test_immediate_gradient_editor_sorts_stops()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ct::Vector<ig::GradientStop> stops;
+    stops.push_back(ig::GradientStop(0.8f, ig::Color(255, 0, 0)));
+    stops.push_back(ig::GradientStop(0.2f, ig::Color(0, 0, 255)));
+    int selected = -1;
+
+    context.beginFrame(ig::FrameInfo(400, 240));
+    assert(context.beginWindow("gradient", ig::Rect(10, 10, 300, 180)));
+    assert(!context.gradientEditor("stops", stops, selected, ig::Rect(10, 10, 220, 48)));
+    context.endWindow();
+    context.endFrame();
+
+    assert(stops.size() == 2u);
+    assert(stops[0].position == 0.2f && stops[1].position == 0.8f);
+}
+
 int main()
 {
     test_file_dialog_resize_left_edge();
     test_file_dialog_incremental_search_uses_cached_entries();
+    test_immediate_gradient_editor_sorts_stops();
     test_menu_hover_switch();
     test_file_dialog_read_error_and_paste();
     test_save_file_names_and_overwrite();

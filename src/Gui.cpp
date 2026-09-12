@@ -342,6 +342,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
       leftPressed_(false), rightPressed_(false), pageUpPressed_(false), pageDownPressed_(false),
       copyRequested_(false), pasteRequested_(false), escapePressed_(false), tabPressed_(false), tabShiftPressed_(false),
+      tabConsumedByWidget_(false),
       keyPressed_(), keyControl_(), keyShift_()
 {
     events_.reserve(32);
@@ -404,6 +405,9 @@ void Context::beginFrame(const FrameInfo &frame)
                 toasts_[i].remaining = 0.0f;
         }
     }
+    for (ct::Vector<ToastState>::size_type i = toasts_.size(); i > 0u; --i)
+        if (toasts_[i-1u].remaining <= 0.0f)
+            toasts_.erase(toasts_.begin() + (i-1u));
     for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
     {
         it->drawList.clear();
@@ -439,6 +443,7 @@ void Context::beginFrame(const FrameInfo &frame)
     escapePressed_ = false;
     tabPressed_ = false;
     tabShiftPressed_ = false;
+    tabConsumedByWidget_ = false;
     for (uint32_t i = 0u; i < 32u; ++i)
     {
         keyPressed_[i] = false;
@@ -581,6 +586,65 @@ void Context::pushId(uint64_t id)
 {
     const WidgetId parent = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     idStack_.push_back(combineIds(parent, id));
+}
+
+void Context::maximizeWindow(StringView title)
+{
+    auto handle = windowsById_.find(hashText(title));
+    WindowState* w = handle ? windows_.get(*handle) : nullptr;
+    if (!w || !w->open || !w->showWindowControls) return;
+    if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
+    w->maximized=true; w->minimized=false;
+    w->bounds=Rect(0,0,frame_.displaySize.x,frame_.displaySize.y);
+}
+
+void Context::restoreWindow(StringView title)
+{
+    auto handle = windowsById_.find(hashText(title));
+    WindowState* w = handle ? windows_.get(*handle) : nullptr;
+    if (!w || !w->showWindowControls) return;
+    if (w->hasRestoreBounds) w->bounds=w->restoreBounds;
+    w->hasRestoreBounds=false; w->maximized=false; w->minimized=false;
+}
+
+void Context::maximizeAllWindows()
+{
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open) maximizeWindow(w->title); }
+}
+void Context::restoreAllWindows()
+{
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open) restoreWindow(w->title); }
+}
+void Context::minimizeAllWindows()
+{
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls) w->minimized=true; }
+}
+void Context::tileAllWindows()
+{
+    int count=0;
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls) ++count; }
+    if (!count) return;
+    const int columns=static_cast<int>(ceilf(sqrtf(static_cast<float>(count))));
+    const int rows=(count+columns-1)/columns;
+    int i=0;
+    for (auto h : windowOrder_) {
+        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls) continue;
+        if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
+        w->maximized=false; w->minimized=false;
+        w->bounds=Rect((i%columns)*frame_.displaySize.x/columns,(i/columns)*frame_.displaySize.y/rows,
+                       frame_.displaySize.x/columns,frame_.displaySize.y/rows); ++i;
+    }
+}
+void Context::cascadeWindows()
+{
+    int i=0;
+    for (auto h : windowOrder_) {
+        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls) continue;
+        if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
+        w->maximized=false; w->minimized=false;
+        const float offset=(i++%8)*24.f;
+        w->bounds=Rect(offset,offset,frame_.displaySize.x*.65f,frame_.displaySize.y*.65f);
+    }
 }
 
 void Context::pushId(StringView id)
@@ -1734,54 +1798,76 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
-    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
-    const float valueWidth = rect.width * 0.42f;
-    const Rect valueRect(rect.x + rect.width - valueWidth, rect.y, valueWidth, rect.height);
-    const Rect dragRect(rect.x, rect.y, rect.width - valueWidth - theme_.itemSpacing, rect.height);
+    NumericEditState *edit = numericEdits_.find(id);
+    if (!edit) { numericEdits_.put(id, NumericEditState()); edit = numericEdits_.find(id); }
+    if (!edit) return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool hovered = itemHovered(dragRect, clip, id);
-    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                             activeWidget_ == InvalidWidgetId &&
-                             contains(intersect(dragRect, clip), pointer_.pressedPosition[left]);
-    if (pressedHere)
+    const Rect visible = intersect(rect, clip);
+    const bool hovered = itemHovered(rect, clip, id);
+    registerFocusable(id);
+    if (edit->editing && (escapePressed_ || focusedWidget_ != id))
+        edit->editing = false;
+    if (!edit->editing && pointer_.pressed[left] && currentWindowReceivesPointer() &&
+        activeWidget_ == InvalidWidgetId && contains(visible, pointer_.pressedPosition[left]))
     {
         activeWidget_ = id;
         focusedWidget_ = id;
         dragWidget_ = id;
         dragStartValue_ = value;
         dragStartX_ = pointer_.pressedPosition[left].x;
+        edit->moved = false;
     }
-
     bool changed = false;
-    const bool dragging = activeWidget_ == id && dragWidget_ == id;
-    if (dragging && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
+    if (activeWidget_ == id && dragWidget_ == id)
     {
-        const float next = clamp(dragStartValue_ + (pointer_.position.x - dragStartX_) * speed,
-                                 minimum, maximum);
-        changed = next != value;
-        value = next;
+        const float x = pointer_.released[left] ? pointer_.releasedPosition[left].x : pointer_.position.x;
+        const float delta = x - dragStartX_;
+        if (fabsf(delta) >= 3.0f) edit->moved = true;
+        if (edit->moved)
+        {
+            const float next = clamp(dragStartValue_ + delta * speed, minimum, maximum);
+            changed = next != value;
+            value = next;
+        }
+        if (pointer_.released[left])
+        {
+            activeWidget_ = InvalidWidgetId;
+            dragWidget_ = InvalidWidgetId;
+            if (!edit->moved && contains(visible, pointer_.releasedPosition[left]))
+            {
+                edit->editing = true;
+                edit->text = String::number(static_cast<double>(value), 3);
+                textCursor_ = edit->text.size();
+                textInputWidget_ = id;
+            }
+        }
     }
-    if (dragging && pointer_.released[left])
+    if (edit->editing)
     {
-        activeWidget_ = InvalidWidgetId;
-        dragWidget_ = InvalidWidgetId;
+        if (inputText(labelText, edit->text, bounds))
+        {
+            const float next = edit->text.to_float();
+            if (isfinite(next))
+            {
+                const float limited = clamp(next, minimum, maximum);
+                changed = changed || limited != value;
+                value = limited;
+            }
+        }
+        if (enterPressed_) { edit->editing = false; focusedWidget_ = InvalidWidgetId; }
     }
-
-    const Color labelColor = dragging ? theme_.buttonText
-                                      : (hovered ? theme_.buttonText : theme_.labelText);
-    drawText(*drawList, theme_.font, labelText,
-             Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
-             theme_.fontSize, labelColor, clip);
-
-    pushId(id);
-    const bool textChanged = inputFloat("value", value,
-                                        Rect(valueRect.x - layout_.origin.x,
-                                             valueRect.y - layout_.origin.y,
-                                             valueRect.width, valueRect.height), 3);
-    popId();
-    if (textChanged)
-        value = clamp(value, minimum, maximum);
-    return changed || textChanged;
+    else
+    {
+        char number[48];
+        snprintf(number, sizeof(number), "%.3f", static_cast<double>(value));
+        drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+        drawText(*drawList, theme_.font, labelText, Vec2(rect.x + 6, rect.y + 5),
+                 theme_.fontSize, theme_.buttonText, visible);
+        const TextMetrics metrics = measureText(theme_.font, number, theme_.fontSize);
+        drawText(*drawList, theme_.font, number, Vec2(rect.right() - metrics.width - 6, rect.y + 5),
+                 theme_.fontSize, theme_.buttonText, visible);
+    }
+    return changed;
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
@@ -2904,6 +2990,410 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     return changed;
 }
 
+bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
+                             int &selectedStop, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || bounds.width <= 12.0f || bounds.height <= 20.0f)
+        return false;
+
+    const Rect area = contentRect(bounds);
+    const Rect clip = contentClip();
+    const Rect bar(area.x + 6.0f, area.y + 5.0f, area.width - 12.0f,
+                   area.height - 18.0f);
+    if (bar.width <= 0.0f || bar.height <= 0.0f)
+        return false;
+
+    for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
+        stops[i].position = clamp(stops[i].position, 0.0f, 1.0f);
+    ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
+        return a.position < b.position;
+    });
+    if (selectedStop >= static_cast<int>(stops.size())) selectedStop = -1;
+
+    const auto sample = [&stops](float position) -> Color {
+        if (stops.empty()) return Color(255u, 255u, 255u, 255u);
+        if (position <= stops[0].position) return stops[0].color;
+        for (ct::Vector<GradientStop>::size_type i = 1u; i < stops.size(); ++i) {
+            if (position <= stops[i].position) {
+                const float span = stops[i].position - stops[i - 1u].position;
+                const float t = span > 0.00001f ? (position - stops[i - 1u].position) / span : 0.0f;
+                return stops[i - 1u].color.Lerp(stops[i].color, t);
+            }
+        }
+        return stops.back().color;
+    };
+    const auto handleRect = [&bar](float position) -> Rect {
+        const float x = bar.x + clamp(position, 0.0f, 1.0f) * bar.width;
+        return Rect(x - 5.0f, bar.bottom() + 2.0f, 10.0f, 10.0f);
+    };
+
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x4752414449454e54ull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const uint32_t right = buttonIndex(PointerButton::Right);
+    bool changed = false;
+    int hit = -1;
+    for (int i = static_cast<int>(stops.size()) - 1; i >= 0; --i) {
+        if (contains(handleRect(stops[static_cast<ct::Vector<GradientStop>::size_type>(i)].position), pointer_.position)) {
+            hit = i;
+            break;
+        }
+    }
+    if (pointer_.pressed[right] && currentWindow_ == focusedWindow_ && hit > 0 &&
+        hit + 1 < static_cast<int>(stops.size())) {
+        stops.erase(stops.begin() + hit);
+        selectedStop = -1;
+        changed = true;
+    }
+    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId) {
+        if (hit >= 0) {
+            selectedStop = hit;
+            activeWidget_ = id;
+        } else if (contains(bar, pointer_.pressedPosition[left])) {
+            const float position = clamp((pointer_.pressedPosition[left].x - bar.x) / bar.width, 0.0f, 1.0f);
+            stops.push_back(GradientStop(position, sample(position)));
+            ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
+                return a.position < b.position;
+            });
+            for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
+                if (stops[i].position == position) { selectedStop = static_cast<int>(i); break; }
+            activeWidget_ = id;
+            changed = true;
+        }
+    }
+    if (activeWidget_ == id) {
+        if (pointer_.down[left] && selectedStop >= 0 && selectedStop < static_cast<int>(stops.size())) {
+            GradientStop &stop = stops[static_cast<ct::Vector<GradientStop>::size_type>(selectedStop)];
+            const float next = clamp((pointer_.position.x - bar.x) / bar.width, 0.0f, 1.0f);
+            changed = changed || stop.position != next;
+            stop.position = next;
+        }
+        if (pointer_.released[left]) {
+            activeWidget_ = InvalidWidgetId;
+            if (selectedStop >= 0 && selectedStop < static_cast<int>(stops.size())) {
+                const float selectedPosition = stops[static_cast<ct::Vector<GradientStop>::size_type>(selectedStop)].position;
+                ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
+                    return a.position < b.position;
+                });
+                for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
+                    if (stops[i].position == selectedPosition) { selectedStop = static_cast<int>(i); break; }
+            }
+        }
+    }
+
+    const int slices = 32;
+    for (int i = 0; i < slices; ++i) {
+        const float a = static_cast<float>(i) / static_cast<float>(slices);
+        const float b = static_cast<float>(i + 1) / static_cast<float>(slices);
+        drawList->addRectGradient(Rect(bar.x + a * bar.width, bar.y, (b - a) * bar.width + 1.0f, bar.height),
+                                  sample(a), sample(b), sample(b), sample(a), clip);
+    }
+    drawList->addRect(bar, theme_.inputBorderHover, clip);
+    for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i) {
+        const Rect handle = handleRect(stops[i].position);
+        const Color border = static_cast<int>(i) == selectedStop ? theme_.focusColor : theme_.dialogBorder;
+        drawList->addRectFilled(handle, stops[i].color, clip);
+        drawList->addRect(handle, border, clip, static_cast<int>(i) == selectedStop ? 2.0f : 1.0f);
+    }
+    return changed;
+}
+
+bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int &selectedPoint,
+                          const Rect &bounds, const Vec2 &minimum, const Vec2 &maximum)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || bounds.width <= 24.0f || bounds.height <= 24.0f ||
+        maximum.x <= minimum.x || maximum.y <= minimum.y)
+        return false;
+    const Rect canvas = contentRect(bounds).shrunk(6.0f);
+    const Rect clip = contentClip();
+    const auto pointToScreen = [&canvas, &minimum, &maximum](const CurvePoint &point) -> Vec2 {
+        return Vec2(canvas.x + (point.x - minimum.x) / (maximum.x - minimum.x) * canvas.width,
+                    canvas.bottom() - (point.y - minimum.y) / (maximum.y - minimum.y) * canvas.height);
+    };
+    const auto screenToPoint = [&canvas, &minimum, &maximum](const Vec2 &position) -> CurvePoint {
+        return CurvePoint(clamp(minimum.x + (position.x - canvas.x) / canvas.width * (maximum.x - minimum.x), minimum.x, maximum.x),
+                          clamp(minimum.y + (canvas.bottom() - position.y) / canvas.height * (maximum.y - minimum.y), minimum.y, maximum.y));
+    };
+    ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
+    if (selectedPoint >= static_cast<int>(points.size())) selectedPoint = -1;
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x4355525645454449ull);
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const uint32_t right = buttonIndex(PointerButton::Right);
+    int hit = -1;
+    for (int i = static_cast<int>(points.size()) - 1; i >= 0; --i) {
+        const Vec2 p = pointToScreen(points[static_cast<ct::Vector<CurvePoint>::size_type>(i)]);
+        if (contains(Rect(p.x - 6.0f, p.y - 6.0f, 12.0f, 12.0f), pointer_.position)) { hit = i; break; }
+    }
+    bool changed = false;
+    if (pointer_.pressed[right] && currentWindow_ == focusedWindow_ && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
+        points.erase(points.begin() + hit);
+        selectedPoint = -1;
+        changed = true;
+    }
+    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId) {
+        if (hit >= 0) { selectedPoint = hit; activeWidget_ = id; }
+        else if (contains(canvas, pointer_.pressedPosition[left])) {
+            const CurvePoint point = screenToPoint(pointer_.pressedPosition[left]);
+            points.push_back(point);
+            ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
+            for (ct::Vector<CurvePoint>::size_type i = 0u; i < points.size(); ++i)
+                if (points[i].x == point.x && points[i].y == point.y) { selectedPoint = static_cast<int>(i); break; }
+            activeWidget_ = id;
+            changed = true;
+        }
+    }
+    if (activeWidget_ == id) {
+        if (pointer_.down[left] && selectedPoint >= 0 && selectedPoint < static_cast<int>(points.size())) {
+            CurvePoint next = screenToPoint(pointer_.position);
+            CurvePoint &point = points[static_cast<ct::Vector<CurvePoint>::size_type>(selectedPoint)];
+            changed = changed || point.x != next.x || point.y != next.y;
+            point = next;
+        }
+        if (pointer_.released[left]) {
+            activeWidget_ = InvalidWidgetId;
+            if (selectedPoint >= 0 && selectedPoint < static_cast<int>(points.size())) {
+                const CurvePoint selected = points[static_cast<ct::Vector<CurvePoint>::size_type>(selectedPoint)];
+                ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
+                for (ct::Vector<CurvePoint>::size_type i = 0u; i < points.size(); ++i)
+                    if (points[i].x == selected.x && points[i].y == selected.y) { selectedPoint = static_cast<int>(i); break; }
+            }
+        }
+    }
+    drawList->addRectFilled(canvas, theme_.inputBg, clip);
+    for (int line = 1; line < 4; ++line) {
+        const float x = canvas.x + canvas.width * static_cast<float>(line) * 0.25f;
+        const float y = canvas.y + canvas.height * static_cast<float>(line) * 0.25f;
+        drawList->addLine(Vec2(x, canvas.y), Vec2(x, canvas.bottom()), theme_.borderColor, clip);
+        drawList->addLine(Vec2(canvas.x, y), Vec2(canvas.right(), y), theme_.borderColor, clip);
+    }
+    for (ct::Vector<CurvePoint>::size_type i = 1u; i < points.size(); ++i)
+        drawList->addLine(pointToScreen(points[i - 1u]), pointToScreen(points[i]), theme_.dialogBtnPrimary, clip, 2.0f);
+    for (ct::Vector<CurvePoint>::size_type i = 0u; i < points.size(); ++i) {
+        const Vec2 p = pointToScreen(points[i]);
+        drawList->addCircleFilled(p, static_cast<int>(i) == selectedPoint ? 5.0f : 4.0f,
+                                  static_cast<int>(i) == selectedPoint ? theme_.focusColor : theme_.dialogBtnPrimary, clip);
+    }
+    drawList->addRect(canvas, theme_.inputBorderHover, clip);
+    return changed;
+}
+
+void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, TimeView& view)
+{
+    const WidgetId panId = combineIds(id, 0x50414e);
+    const auto middle = buttonIndex(PointerButton::Middle);
+    const Rect visible = intersect(area, contentClip());
+    const auto left = buttonIndex(PointerButton::Left);
+    const WidgetId scrollId = combineIds(id, 0x5343524f4c4c);
+    const Rect scroll(ruler.x, area.bottom(), ruler.width, 12);
+    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId && pointer_.pressed[left]) {
+        const Vec2 p = pointer_.pressedPosition[left];
+        for (int i=0;i<3;++i) {
+            const Rect button(area.x+2+i*36,area.y+2,34,20);
+            if (contains(intersect(button,contentClip()),p)) {
+                const float center = view.offset + .5f/view.zoom;
+                view.zoom = i==2 ? 1.f : clamp(view.zoom*(i==0 ? 1.f/1.5f : 1.5f),1,64);
+                view.offset = clamp(center-.5f/view.zoom,0,1-1/view.zoom);
+                // This press belongs to the viewport controls.
+                pointer_.pressed[left] = false;
+            }
+        }
+        if (contains(intersect(scroll,contentClip()),p)) activeWidget_ = scrollId;
+    }
+    if (activeWidget_ == scrollId) {
+        const float x = pointer_.released[left] ? pointer_.releasedPosition[left].x : pointer_.position.x;
+        view.offset = clamp((x-scroll.x)/scroll.width-.5f/view.zoom,0,1-1/view.zoom);
+        if (pointer_.released[left] || !pointer_.down[left]) {
+            activeWidget_ = InvalidWidgetId;
+            pointer_.pressed[left] = false;
+        }
+    }
+    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId &&
+        contains(visible, pointer_.position) && pointer_.wheelY != 0) {
+        const float anchor = clamp((pointer_.position.x-ruler.x)/ruler.width, 0, 1);
+        const float at = view.offset + anchor/view.zoom;
+        view.zoom = clamp(view.zoom * powf(1.2f, pointer_.wheelY), 1, 64);
+        view.offset = clamp(at-anchor/view.zoom, 0, 1-1/view.zoom);
+        pointer_.wheelY = 0;
+    }
+    if (pointer_.pressed[middle] && currentWindowReceivesPointer() &&
+        activeWidget_ == InvalidWidgetId && contains(visible,pointer_.pressedPosition[middle])) {
+        activeWidget_ = panId;
+        view.panX = pointer_.pressedPosition[middle].x; view.panOffset = view.offset;
+    }
+    if (activeWidget_ == panId) {
+        const float x = pointer_.released[middle] ? pointer_.releasedPosition[middle].x : pointer_.position.x;
+        view.offset = clamp(view.panOffset-(x-view.panX)/(ruler.width*view.zoom),0,1-1/view.zoom);
+        if (pointer_.released[middle] || !pointer_.down[middle]) activeWidget_ = InvalidWidgetId;
+    }
+}
+
+void Context::drawTimeRuler(const Rect& area, const Rect& ruler, const TimeView& view, int first, double count)
+{
+    DrawList* draw = currentDrawList();
+    if (!draw || count <= 0) return;
+    const Rect clip = intersect(contentClip(),Rect(ruler.x,area.y,ruler.width,area.height));
+    const double pixelsPerFrame = ruler.width*view.zoom/count;
+    double step = 1;
+    while (step*pixelsPerFrame < 60) step *= 2;
+    const double visibleFirst = first + view.offset*count;
+    const double visibleLast = visibleFirst + count/view.zoom;
+    for (double tick=ceil(visibleFirst/step)*step; tick<=visibleLast && tick<=first+count; tick+=step) {
+        const float x = ruler.x + static_cast<float>((tick-visibleFirst)*pixelsPerFrame);
+        char label[32]; snprintf(label,sizeof(label),"%.0f",tick);
+        draw->addLine(Vec2(x,area.y),Vec2(x,area.bottom()),theme_.borderColor,clip);
+        drawText(*draw,theme_.font,label,Vec2(x+3,area.y+4),theme_.fontSize*.75f,theme_.labelText,clip);
+    }
+}
+
+void Context::drawTimeView(const Rect& area, const Rect& ruler, const TimeView& view)
+{
+    DrawList* draw = currentDrawList();
+    if (!draw) return;
+    const Rect clip = contentClip();
+    const char* labels[] = {"-", "+", "Fit"};
+    for (int i=0;i<3;++i) {
+        const Rect button(area.x+2+i*36,area.y+2,34,20);
+        draw->addRectFilled(button,theme_.buttonBackground,clip);
+        drawText(*draw,theme_.font,labels[i],Vec2(button.x+6,button.y+3),theme_.fontSize*.8f,theme_.buttonText,intersect(button,clip));
+    }
+    const Rect scroll(ruler.x,area.bottom(),ruler.width,12);
+    draw->addRectFilled(scroll,theme_.panelColor,clip);
+    draw->addRectFilled(Rect(scroll.x+view.offset*scroll.width,scroll.y+2,
+                            scroll.width/view.zoom,8),theme_.sliderHandle,clip);
+}
+
+bool Context::sequencer(StringView idText, ct::Vector<SequencerTrack>& tracks, int firstFrame, int lastFrame,
+                        int& currentFrame, int& selectedTrack, const Rect& bounds)
+{
+    DrawList* list = currentDrawList();
+    if (!currentWindow() || !list || lastFrame < firstFrame || bounds.width < 100 || bounds.height < 48) return false;
+    Rect area = contentRect(bounds);
+    area.height -= 14;
+    const Rect clip = intersect(area, contentClip());
+    const float names = area.width < 180 ? area.width * .35f : 140.f, rulerHeight = 24.f, rowHeight = 24.f;
+    const Rect ruler(area.x + names, area.y, area.width - names, rulerHeight);
+    const int count = lastFrame - firstFrame + 1;
+    const WidgetId viewId = makeWidgetId(idText);
+    if (!timeViews_.find(viewId)) timeViews_.put(viewId, TimeView());
+    TimeView& view = *timeViews_.find(viewId);
+    updateTimeView(viewId, area, ruler, view);
+    const auto frameX = [&](int frame) { return ruler.x + ((frame-firstFrame)/static_cast<float>(count)-view.offset)*ruler.width*view.zoom; };
+    const auto frameAt = [&](float x) { return clamp(firstFrame + static_cast<int>(((x-ruler.x)/(ruler.width*view.zoom)+view.offset)*count), firstFrame,lastFrame); };
+    currentFrame = clamp(currentFrame, firstFrame, lastFrame);
+    const WidgetId id = makeWidgetId(idText);
+    SequenceDrag *drag = sequenceDrags_.find(id);
+    if (!drag) { sequenceDrags_.put(id, SequenceDrag()); drag = sequenceDrags_.find(id); }
+    if (!drag) return false;
+    bool changed = false; const uint32_t left = buttonIndex(PointerButton::Left);
+    if (pointer_.pressed[left] && activeWidget_ == InvalidWidgetId && currentWindow_ == focusedWindow_) {
+        const Vec2 p = pointer_.pressedPosition[left];
+        if (contains(ruler, p)) { const int next = frameAt(p.x); changed = next != currentFrame; currentFrame = next; }
+        else if (contains(intersect(area, clip), p) && p.y >= ruler.bottom()) {
+            const int row = static_cast<int>((p.y-ruler.bottom())/rowHeight);
+            if (row >= 0 && row < static_cast<int>(tracks.size())) {
+                selectedTrack = row;
+                const auto& t = tracks[row];
+                const Rect bar(frameX(t.startFrame), ruler.bottom()+row*rowHeight+3,
+                               frameX(t.endFrame+1)-frameX(t.startFrame), rowHeight-6);
+                if (contains(bar,p) && t.startFrame >= firstFrame && t.endFrame <= lastFrame && t.endFrame >= t.startFrame) {
+                    activeWidget_ = id;
+                    drag->row = row; drag->start = t.startFrame; drag->end = t.endFrame; drag->x = p.x;
+                    drag->mode = p.x < bar.x+5 ? 1 : (p.x > bar.right()-5 ? 2 : 3);
+                }
+            }
+        }
+    }
+    if (activeWidget_ == id && drag->row >= 0 && drag->row < static_cast<int>(tracks.size())) {
+        auto& t = tracks[drag->row];
+        const float x = pointer_.released[left] ? pointer_.releasedPosition[left].x : pointer_.position.x;
+        const int delta = static_cast<int>(roundf((x-drag->x)*count/(ruler.width*view.zoom)));
+        int start = drag->start, end = drag->end;
+        if (drag->mode == 1) start = clamp(start+delta, firstFrame, end);
+        else if (drag->mode == 2) end = clamp(end+delta, start, lastFrame);
+        else { start = clamp(start+delta, firstFrame, lastFrame-(end-start)); end = start+drag->end-drag->start; }
+        changed = changed || t.startFrame != start || t.endFrame != end;
+        t.startFrame = start; t.endFrame = end;
+        if (pointer_.released[left]) { activeWidget_ = InvalidWidgetId; drag->row = -1; }
+    }
+    list->addRectFilled(area, theme_.inputBg, clip);
+    list->addRectFilled(Rect(area.x,area.y,names,area.height), theme_.panelColor, clip);
+    const Rect timeClip = intersect(clip, Rect(ruler.x, area.y, ruler.width, area.height));
+    drawTimeRuler(area,ruler,view,firstFrame,count);
+    for (ct::Vector<SequencerTrack>::size_type i=0;i<tracks.size();++i) { const float y=ruler.bottom()+i*rowHeight; if(y>=area.bottom()) break; const SequencerTrack& t=tracks[i]; drawText(*list,theme_.font,t.label,Vec2(area.x+6,y+4),theme_.fontSize*.85f,theme_.dialogText,clip); Rect bar(frameX(t.startFrame),y+3,frameX(t.endFrame+1)-frameX(t.startFrame),rowHeight-6); list->addRectFilled(bar,t.color,timeClip); if (bar.width >= 10) { list->addRectFilled(Rect(bar.x+2,bar.y+3,2,bar.height-6),theme_.buttonText,timeClip); list->addRectFilled(Rect(bar.right()-4,bar.y+3,2,bar.height-6),theme_.buttonText,timeClip); } list->addRect(bar,static_cast<int>(i)==selectedTrack?theme_.focusColor:theme_.dialogBorder,timeClip); list->addLine(Vec2(area.x,y+rowHeight),Vec2(area.right(),y+rowHeight),theme_.borderColor,clip); }
+    const float playhead=frameX(currentFrame); list->addLine(Vec2(playhead,ruler.y),Vec2(playhead,area.bottom()),theme_.focusColor,timeClip,2); list->addRect(area,theme_.inputBorderHover,clip);
+    drawTimeView(area,ruler,view);
+    return changed;
+}
+
+bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int first, int last,
+                       int& frame, int& selectedTrack, int& selectedKey, const Rect& bounds)
+{
+    DrawList* draw = currentDrawList();
+    if (!currentWindow() || !draw || last <= first || bounds.width < 180 || bounds.height < 48) return false;
+    Rect area = contentRect(bounds);
+    area.height -= 14;
+    const Rect clip = intersect(area, contentClip());
+    const Rect ruler(area.x+120, area.y, area.width-126, 24);
+    const WidgetId viewId = makeWidgetId(idText);
+    if (!timeViews_.find(viewId)) timeViews_.put(viewId, TimeView());
+    TimeView& view = *timeViews_.find(viewId);
+    updateTimeView(viewId, area, ruler, view);
+    const auto xAt = [&](int f) { return ruler.x + ((static_cast<double>(f)-first)/(static_cast<double>(last)-first)-view.offset)*ruler.width*view.zoom; };
+    const auto frameAt = [&](float x) { return static_cast<int>(clamp(roundf(first+((x-ruler.x)/(ruler.width*view.zoom)+view.offset)*(static_cast<double>(last)-first)), first, last)); };
+    const WidgetId id = makeWidgetId(idText);
+    const auto left = buttonIndex(PointerButton::Left), right = buttonIndex(PointerButton::Right);
+    bool changed = false;
+    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId &&
+        (pointer_.pressed[left] || pointer_.pressed[right])) {
+        const bool remove = pointer_.pressed[right];
+        const Vec2 p = pointer_.pressedPosition[remove ? right : left];
+        if (contains(clip,p) && contains(ruler,p) && !remove) {
+            frame = frameAt(p.x); selectedTrack = -1; selectedKey = -1; activeWidget_ = id;
+        } else if (contains(clip,p) && p.x >= ruler.x && p.y >= ruler.bottom()) {
+            const int row = static_cast<int>((p.y-ruler.bottom())/24);
+            if (row < static_cast<int>(tracks.size())) {
+                auto& keys = tracks[row].keys;
+                int hit = -1;
+                for (int k=0;k<static_cast<int>(keys.size());++k)
+                    if (fabsf(p.x-xAt(keys[k])) <= 7) { hit=k; break; }
+                if (remove && hit >= 0) { keys.erase(keys.begin()+hit); selectedKey=-1; changed=true; }
+                else if (!remove) {
+                    if (hit < 0) { keys.push_back(frameAt(p.x)); hit=static_cast<int>(keys.size())-1; changed=true; }
+                    selectedTrack=row; selectedKey=hit; activeWidget_=id;
+                }
+            }
+        }
+    }
+    if (activeWidget_ == id) {
+        const int next = frameAt(pointer_.released[left] ? pointer_.releasedPosition[left].x : pointer_.position.x);
+        if (selectedTrack >= 0 && selectedTrack < static_cast<int>(tracks.size()) &&
+            selectedKey >= 0 && selectedKey < static_cast<int>(tracks[selectedTrack].keys.size())) {
+            int& key = tracks[selectedTrack].keys[selectedKey]; changed = changed || key!=next; key=next;
+        } else { changed = changed || frame!=next; frame=next; }
+        if (pointer_.released[left]) activeWidget_=InvalidWidgetId;
+    }
+    draw->addRectFilled(area,theme_.inputBg,clip);
+    const Rect timeClip = intersect(clip, Rect(ruler.x, area.y, ruler.width, area.height));
+    drawTimeRuler(area,ruler,view,first,static_cast<double>(last)-first);
+    for (int row=0;row<static_cast<int>(tracks.size());++row) {
+        const float y=ruler.bottom()+row*24;
+        if (y>=area.bottom()) break;
+        drawText(*draw,theme_.font,tracks[row].label,Vec2(area.x+4,y+4),theme_.fontSize*.8f,theme_.labelText,intersect(clip,Rect(area.x,y,116,24)));
+        for (int k=0;k<static_cast<int>(tracks[row].keys.size());++k) {
+            const float x=xAt(tracks[row].keys[k]), cy=y+12;
+            const Vec2 diamond[] = {Vec2(x,cy-5),Vec2(x+5,cy),Vec2(x,cy+5),Vec2(x-5,cy)};
+            draw->addPolygonFilled(Span<const Vec2>(diamond),row==selectedTrack && k==selectedKey ? theme_.focusColor : theme_.dialogBtnPrimary,timeClip);
+        }
+    }
+    draw->addLine(Vec2(xAt(frame),area.y),Vec2(xAt(frame),area.bottom()),theme_.focusColor,timeClip,2);
+    draw->addRect(area,theme_.inputBorderHover,clip);
+    drawTimeView(area,ruler,view);
+    return changed;
+}
+
 void Context::image(TextureId texture, const Rect &bounds, const Vec2 &uvMin,
                     const Vec2 &uvMax, const Color &tint)
 {
@@ -3082,6 +3572,8 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
                             buttonY, buttonWidth, theme_.widgetHeight);
     const Rect cancelButton(acceptButton.x - theme_.itemSpacing - buttonWidth,
                             buttonY, buttonWidth, theme_.widgetHeight);
+    const Rect discardButton(cancelButton.x-theme_.itemSpacing-buttonWidth,buttonY,buttonWidth,theme_.widgetHeight);
+    const WidgetId discardId=combineIds(id,0x44495343415244ull);
     const Rect inputRect(dialog.x + theme_.windowPadding,
                          titleBar.y + titleBar.height + messageMetrics.height + theme_.itemSpacing * 2.0f,
                          dialog.width - theme_.windowPadding * 2.0f, theme_.widgetHeight);
@@ -3096,9 +3588,20 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
             activeWidget_ = acceptId;
         else if (options.showCancel && contains(cancelButton, pointer_.pressedPosition[left]))
             activeWidget_ = cancelId;
+        else if (options.showDiscard && contains(discardButton,pointer_.pressedPosition[left]))
+            activeWidget_ = discardId;
     }
 
     MessageBoxResult result = MessageBoxResult::None;
+    if (pointer_.released[left] && activeWidget_ == discardId) {
+        if (contains(discardButton,pointer_.releasedPosition[left])) {
+            open=false; activeModal_=InvalidWidgetId; result=MessageBoxResult::Discarded;
+        }
+        activeWidget_=InvalidWidgetId;
+    }
+    if (escapePressed_ && options.showCancel) {
+        open=false; activeModal_=InvalidWidgetId; activeWidget_=InvalidWidgetId; result=MessageBoxResult::Cancelled;
+    }
     if (pointer_.released[left] && activeWidget_ == acceptId)
     {
         if (contains(acceptButton, pointer_.releasedPosition[left]))
@@ -3225,9 +3728,21 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
                                      theme_.buttonText, inputClip);
     }
     modalDrawList_.addRectFilled(acceptButton,
-                                 hoveredAccept ? theme_.dialogBtnPrimaryHover : theme_.dialogBtnPrimary,
+                                 hoveredAccept ? theme_.dialogBtnHover : theme_.dialogBtnBg,
                                  viewport);
-    const StringView acceptText("OK");
+    modalDrawList_.addRect(acceptButton, theme_.dialogBorder, viewport);
+    if (options.showDiscard) {
+        const bool hoveredDiscard = contains(discardButton, pointer_.position);
+        modalDrawList_.addRectFilled(discardButton,
+                                    hoveredDiscard ? theme_.dialogBtnHover : theme_.dialogBtnBg,viewport);
+        modalDrawList_.addRect(discardButton,theme_.dialogBorder,viewport);
+        const TextMetrics discardMetrics = measureText(theme_.font,"Discard",theme_.fontSize);
+        drawText(modalDrawList_,theme_.font,"Discard",
+                 Vec2(discardButton.x+(discardButton.width-discardMetrics.width)*0.5f,
+                      discardButton.y+(discardButton.height-discardMetrics.height)*0.5f),
+                 theme_.fontSize,theme_.buttonText,discardButton);
+    }
+    const StringView acceptText(options.acceptLabel);
     const TextMetrics acceptMetrics = measureText(theme_.font, acceptText, theme_.fontSize);
     drawText(modalDrawList_, theme_.font, acceptText,
              Vec2(acceptButton.x + (acceptButton.width - acceptMetrics.width) * 0.5f,
@@ -3237,7 +3752,8 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     {
         modalDrawList_.addRectFilled(cancelButton,
                                      hoveredCancel ? theme_.dialogBtnHover : theme_.dialogBtnBg, viewport);
-        const StringView cancelText("Cancel");
+        modalDrawList_.addRect(cancelButton,theme_.dialogBorder,viewport);
+        const StringView cancelText(options.cancelLabel);
         const TextMetrics cancelMetrics = measureText(theme_.font, cancelText, theme_.fontSize);
         drawText(modalDrawList_, theme_.font, cancelText,
                  Vec2(cancelButton.x + (cancelButton.width - cancelMetrics.width) * 0.5f,
@@ -3252,22 +3768,12 @@ void Context::showToast(StringView idText, StringView text, ToastPosition positi
     if (duration <= 0.0f || text.empty())
         return;
     const WidgetId id = hashText(idText);
-    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
-    {
-        ToastState &toast = toasts_[i];
-        if (toast.id == id)
-        {
-            toast.text = String(text.data(), text.size());
-            toast.position = position;
-            toast.remaining = duration;
-            return;
-        }
-    }
     ToastState toast;
     toast.id = id;
     toast.text = String(text.data(), text.size());
     toast.position = position;
     toast.remaining = duration;
+    toast.duration = duration;
     toasts_.push_back(toast);
 }
 
@@ -5233,11 +5739,13 @@ void Context::drawDragDropPreview()
 
 void Context::drawToasts()
 {
+    struct ToastStack { float offset = 0.0f; };
+    ToastStack stacks[9];
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const float padding = theme_.tooltipPadX;
-    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
+    for (ct::Vector<ToastState>::size_type i = toasts_.size(); i > 0u; --i)
     {
-        const ToastState &toast = toasts_[i];
+        const ToastState &toast = toasts_[i-1u];
         if (toast.remaining <= 0.0f)
             continue;
         const TextMetrics metrics = measureText(theme_.font, toast.text, theme_.fontSize);
@@ -5248,6 +5756,7 @@ void Context::drawToasts()
         const uint8_t anchor = static_cast<uint8_t>(toast.position);
         const uint8_t horizontal = anchor % 3u;
         const uint8_t vertical = anchor / 3u;
+        if (anchor >= 9u) continue;
         if (horizontal == 1u)
             x = (viewport.width - width) * 0.5f;
         else if (horizontal == 2u)
@@ -5256,14 +5765,24 @@ void Context::drawToasts()
             y = (viewport.height - height) * 0.5f;
         else if (vertical == 2u)
             y = viewport.height - height - padding;
+        y += vertical == 2u ? -stacks[anchor].offset : stacks[anchor].offset;
+        stacks[anchor].offset += height + 8.0f;
+        const float fadeTime = toast.duration < 0.4f ? toast.duration * 0.5f : 0.2f;
+        const float entering = clamp((toast.duration-toast.remaining)/fadeTime,0.0f,1.0f);
+        const float leaving = clamp(toast.remaining/fadeTime,0.0f,1.0f);
+        const float alpha = entering < leaving ? entering : leaving;
+        const auto faded = [alpha](Color color) {
+            color.a = static_cast<uint8_t>(color.a * alpha);
+            return color;
+        };
         const Rect bounds(x, y, width, height);
-        toastDrawList_.addRectFilled(bounds, theme_.tooltipBg, viewport);
-        toastDrawList_.addRect(bounds, theme_.tooltipBorder, viewport);
+        toastDrawList_.addRectFilled(bounds, faded(theme_.tooltipBg), viewport);
+        toastDrawList_.addRect(bounds, faded(theme_.tooltipBorder), viewport);
         toastDrawList_.addRectFilled(Rect(bounds.x, bounds.y, 4.0f, bounds.height),
-                                     theme_.dialogBtnPrimary, viewport);
+                                     faded(theme_.dialogBtnPrimary), viewport);
         drawText(toastDrawList_, theme_.font, toast.text,
                  Vec2(bounds.x + padding + 4.0f, bounds.y + theme_.tooltipPadY),
-                 theme_.fontSize, theme_.tooltipText, viewport);
+                 theme_.fontSize, faded(theme_.tooltipText), viewport);
     }
 }
 
@@ -5404,7 +5923,13 @@ void Context::registerFocusable(WidgetId id)
 
 void Context::advanceFocus()
 {
-    if (!tabPressed_ || focusOrder_.empty())
+    // A widget that used Tab itself this frame (codeEditor indenting or
+    // accepting an autocomplete suggestion, say) sets tabConsumedByWidget_
+    // so Tab does not ALSO silently move focus away from it here - without
+    // this, the widget would edit correctly but the very next keystroke
+    // would go to some other widget instead. inputText/inputTextMultiline
+    // never set this, so Tab still moves between ordinary text fields.
+    if (!tabPressed_ || focusOrder_.empty() || tabConsumedByWidget_)
         return;
 
     ct::Vector<WidgetId>::size_type selected = 0u;
@@ -5467,14 +5992,20 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
 
 void Context::drawWindow(WindowState &window)
 {
+    if (window.maximized) window.bounds=Rect(0,0,frame_.displaySize.x,frame_.displaySize.y);
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float controlWidth = theme_.titleBarHeight;
-    const float controlsWidth = window.showWindowControls ? controlWidth * 2.0f : 0.0f;
+    const float controlsWidth = window.showWindowControls ? controlWidth * 3.0f : 0.0f;
     const Rect closeButton(window.bounds.x + window.bounds.width - controlWidth,
                            window.bounds.y, controlWidth, titleHeight);
     const Rect minimizeButton(closeButton.x - controlWidth, window.bounds.y,
                               controlWidth, titleHeight);
+    const Rect maximizeButton(minimizeButton.x-controlWidth,window.bounds.y,controlWidth,titleHeight);
+    const WidgetId maximizeId=combineIds(window.id,0x4d415849);
+    if (window.showWindowControls && itemClicked(maximizeButton,viewport,maximizeId,false)) {
+        if(window.maximized) restoreWindow(window.title); else maximizeWindow(window.title);
+    }
     const Rect dragArea(window.bounds.x, window.bounds.y,
                         window.bounds.width > controlsWidth ? window.bounds.width - controlsWidth : 0.0f,
                         titleHeight);
@@ -5504,7 +6035,7 @@ void Context::drawWindow(WindowState &window)
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedResize = window.allowResize && !window.minimized && pointer_.pressed[left] &&
+    const bool pressedResize = window.allowResize && !window.maximized && !window.minimized && pointer_.pressed[left] &&
                                currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
                                contains(intersect(resizeGrip, viewport), pointer_.pressedPosition[left]);
     if (pressedResize)
@@ -5529,7 +6060,7 @@ void Context::drawWindow(WindowState &window)
             resizingWindow_ = WindowHandle();
         }
     }
-    const bool pressedTitle = window.allowMove && pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
+    const bool pressedTitle = window.allowMove && !window.maximized && pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
                               activeWidget_ == InvalidWidgetId &&
                               contains(intersect(dragArea, viewport), pointer_.pressedPosition[left]);
     if (pressedTitle)
@@ -5576,6 +6107,9 @@ void Context::drawWindow(WindowState &window)
     }
     if (window.showWindowControls)
     {
+        const Rect maximizeGlyph(window.bounds.right()-controlWidth*3+8,window.bounds.y+8,controlWidth-16,titleHeight-16);
+        window.drawList.addRect(maximizeGlyph,theme_.labelText,viewport);
+        if(window.maximized) window.drawList.addRect(Rect(maximizeGlyph.x+3,maximizeGlyph.y-3,maximizeGlyph.width,maximizeGlyph.height),theme_.labelText,viewport);
         const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
         const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize);
         drawText(window.drawList, theme_.font, StringView("-"),

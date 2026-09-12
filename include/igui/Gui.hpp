@@ -9,6 +9,7 @@
 #include <ct/vector.hpp>
 
 #include "Backend.hpp"
+#include "CodeEditor.hpp"
 #include "Events.hpp"
 #include "FileDialog.hpp"
 #include "Math.hpp"
@@ -22,6 +23,9 @@ struct WindowState
     WidgetId id;
     String title;
     Rect bounds;
+    Rect restoreBounds;
+    bool maximized = false;
+    bool hasRestoreBounds = false;
     bool open;
     bool minimized;
     bool focused;
@@ -83,7 +87,8 @@ enum class MessageBoxResult : uint8_t
 {
     None,
     Accepted,
-    Cancelled
+    Cancelled,
+    Discarded
 };
 
 enum class MessageBoxKind : uint8_t
@@ -96,6 +101,9 @@ enum class MessageBoxKind : uint8_t
 
 struct MessageBoxOptions
 {
+    StringView acceptLabel = "OK";
+    StringView cancelLabel = "Cancel";
+    bool showDiscard = false;
     MessageBoxKind kind;
     bool showCancel;
     String *inputValue;
@@ -191,6 +199,36 @@ struct Gizmo3DOptions
         : axisLength(1.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
 };
 
+// Application-owned stop for gradientEditor(). Positions are normalized to
+// [0, 1]; the editor keeps the vector sorted after every interaction.
+struct GradientStop
+{
+    float position;
+    Color color;
+
+    GradientStop() : position(0.0f), color() {}
+    GradientStop(float value, const Color &stopColor) : position(value), color(stopColor) {}
+};
+
+// Application-owned point for curveEditor(). Coordinates use the supplied
+// value range and are kept ordered by x after an edit.
+struct CurvePoint
+{
+    float x;
+    float y;
+
+    CurvePoint() : x(0.0f), y(0.0f) {}
+    CurvePoint(float pointX, float pointY) : x(pointX), y(pointY) {}
+};
+struct TimelineTrack
+{
+    String label;
+    ct::Vector<int> keys;
+};
+struct SequencerTrack { String label; int startFrame; int endFrame; Color color;
+    SequencerTrack() : label(), startFrame(0), endFrame(0), color(90,160,230) {}
+    SequencerTrack(StringView n, int s, int e, const Color& c) : label(n.data(),n.size()), startFrame(s), endFrame(e), color(c) {} };
+
 class Context
 {
 public:
@@ -204,6 +242,14 @@ public:
     // A root window that follows the current viewport every frame.
     bool beginMainWindow(StringView title, bool *open = nullptr);
     void endWindow();
+    // Operate on existing floating windows identified by their title.
+    void maximizeWindow(StringView title);
+    void restoreWindow(StringView title);
+    void maximizeAllWindows();
+    void minimizeAllWindows();
+    void restoreAllWindows();
+    void tileAllWindows();
+    void cascadeWindows();
 
     void pushId(uint64_t id);
     void pushId(StringView id);
@@ -293,10 +339,32 @@ public:
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
     bool inputTextMultiline(StringView label, String &value, const Rect &bounds);
+    // Syntax-highlighted source editor: line buffer, (line, column) cursor
+    // with selection, full undo/redo, and keyword/identifier autocomplete.
+    // state is application-owned and persists across frames (see
+    // CodeEditorState); use state.setText/setHighlighterForFile to load a
+    // document and pick a language. Returns true the frame the buffer changed.
+    bool codeEditor(StringView id, CodeEditorState &state, const Rect &bounds,
+                    const CodeEditorOptions &options = CodeEditorOptions());
     bool inputInt(StringView label, int &value, const Rect &bounds);
     bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
     // Inline RGBA editor with a preview swatch and four draggable channels.
     bool colorEdit(StringView label, Color &value, const Rect &bounds);
+    // Editable multi-stop gradient. Left-click an empty part of the bar to
+    // add an interpolated stop, drag a handle to move it, and right-click a
+    // non-endpoint handle to remove it. selectedStop is -1 when none is set.
+    bool gradientEditor(StringView id, ct::Vector<GradientStop> &stops, int &selectedStop,
+                        const Rect &bounds);
+    // Linear curve editor. Click empty canvas space to add a point, drag a
+    // point to edit it, and right-click a non-endpoint point to remove it.
+    bool curveEditor(StringView id, ct::Vector<CurvePoint> &points, int &selectedPoint,
+                     const Rect &bounds, const Vec2 &minimum = Vec2(),
+                     const Vec2 &maximum = Vec2(1.0f, 1.0f));
+    bool sequencer(StringView id, ct::Vector<SequencerTrack>& tracks, int firstFrame, int lastFrame,
+                   int& currentFrame, int& selectedTrack, const Rect& bounds);
+    // Click empty track space to add a key, drag diamonds, right-click to delete.
+    bool timeline(StringView id, ct::Vector<TimelineTrack>& tracks, int firstFrame, int lastFrame,
+                  int& currentFrame, int& selectedTrack, int& selectedKey, const Rect& bounds);
     // Draw an already-owned backend texture. TextureId remains backend-neutral.
     void image(TextureId texture, const Rect &bounds,
                const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
@@ -331,7 +399,7 @@ public:
     FileDialogResult fileDialog(StringView id, bool &open, FileDialogState &state,
                                 const FileDialogOptions &options, FileDialogProvider &provider);
     // Starts or refreshes a short notification. The id differentiates concurrent toasts.
-    void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::TopRight,
+    void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::BottomRight,
                    float duration = 3.0f);
     // Call after drawing a local item. The item becomes draggable after a short mouse move.
     bool beginDragSource(WidgetId source, WidgetId type, uint64_t data, StringView preview,
@@ -673,8 +741,9 @@ private:
         String text;
         ToastPosition position;
         float remaining;
+        float duration = 0.0f;
 
-        ToastState() : id(InvalidWidgetId), text(), position(ToastPosition::TopRight), remaining(0.0f) {}
+        ToastState() : id(InvalidWidgetId), text(), position(ToastPosition::BottomRight), remaining(0.0f) {}
     };
 
     struct DragDropState
@@ -703,6 +772,33 @@ private:
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
     ct::HashMap<WidgetId, int> listScrolls_;
     ct::HashMap<WidgetId, int> textScrolls_;
+    struct SequenceDrag
+    {
+        int row = -1;
+        int mode = 0;
+        int start = 0;
+        int end = 0;
+        float x = 0;
+    };
+    ct::HashMap<WidgetId, SequenceDrag> sequenceDrags_;
+    struct TimeView
+    {
+        float zoom = 1;
+        float offset = 0;
+        float panX = 0;
+        float panOffset = 0;
+    };
+    ct::HashMap<WidgetId, TimeView> timeViews_;
+    void updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, TimeView& view);
+    void drawTimeView(const Rect& area, const Rect& ruler, const TimeView& view);
+    void drawTimeRuler(const Rect& area, const Rect& ruler, const TimeView& view, int first, double count);
+    struct NumericEditState
+    {
+        String text;
+        bool editing = false;
+        bool moved = false;
+    };
+    ct::HashMap<WidgetId, NumericEditState> numericEdits_;
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
     ct::HashMap<WidgetId, Gizmo2DState> gizmo2DStates_;
@@ -786,6 +882,10 @@ private:
     bool escapePressed_;
     bool tabPressed_;
     bool tabShiftPressed_;
+    // Set by a widget (codeEditor) that used this frame's Tab itself
+    // (indent, accept an autocomplete suggestion) rather than leaving it for
+    // advanceFocus() to move focus with. Reset every frame in consumeEvents.
+    bool tabConsumedByWidget_;
     bool keyPressed_[32];
     bool keyControl_[32];
     bool keyShift_[32];
@@ -826,6 +926,32 @@ private:
     bool menuItemInternal(StringView label, bool enabled, bool *checked);
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);
+    // fontSize is the editor's effective size (theme_.fontSize * the
+    // CodeEditorState's zoom), never the theme's own fontSize directly - a
+    // zoomed editor must scale every one of these consistently or the
+    // caret/selection/click math drifts away from what is drawn.
+    void drawHighlightedLine(DrawList &drawList, const CodeEditorState &state,
+                             int line, const String &text, const Vec2 &position, const Rect &clip,
+                             int tabSize, float fontSize);
+    // Draws one run of plain text, honoring embedded '\t' bytes by advancing
+    // to the next tab stop (tabSize columns, in space-widths) instead of
+    // asking the font for a glyph it doesn't have. startVisCol is the
+    // column the run starts at, needed to land on the correct tab stop when
+    // a run doesn't start at column 0. Returns the x position past the run.
+    float drawCodeRun(DrawList &drawList, const StringView &run, const Vec2 &position,
+                      const Color &color, const Rect &clip, int tabSize, int startVisCol, float fontSize);
+    // Pixel X offset of a column on a line, measuring the real glyph widths
+    // of the prefix up to it - never assume a fixed per-character width,
+    // the font is not guaranteed to be monospaced. A '\t' byte advances to
+    // the next tab stop (tabSize columns, in space-widths) rather than
+    // being measured as a glyph.
+    float codeEditorColumnX(const CodeEditorState &state, int line, int column, int tabSize, float fontSize) const;
+    // Inverse of codeEditorColumnX: the column whose prefix width is closest
+    // to localX (measured from the start of the line, i.e. already relative
+    // to the text area's left edge + padding).
+    int codeEditorColumnAt(const CodeEditorState &state, int line, float localX, int tabSize, float fontSize) const;
+    void updateCodeCompletion(CodeEditorState &state, const CodeEditorOptions &options);
+    void acceptCodeCompletion(CodeEditorState &state);
 };
 
 } // namespace ig

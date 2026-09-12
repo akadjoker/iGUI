@@ -1,0 +1,36 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "CMake: configure",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S", "${workspaceFolder}",
+                "-B", "${workspaceFolder}/build",
+                "-DIGUI_BUILD_RAYLIB_BACKEND=ON",
+                "-DIGUI_BUILD_RAYLIB_DEMO=OFF",
+                "-DIGUI_BUILD_CODE_EDITOR_DEMO=ON",
+                "-DIGUI_BUILD_SDL2_DEMO=OFF",
+                "-DIGUI_BUILD_TESTS=ON"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "CMake: build igui_code_editor_demo",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build", "${workspaceFolder}/build",
+                "--target", "igui_code_editor_demo",
+                "-j"
+            ],
+            "dependsOn": "CMake: configure",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": ["$gcc"]
+        }
+    ]
+}

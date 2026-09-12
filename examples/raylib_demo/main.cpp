@@ -38,6 +38,7 @@ struct DemoState
     bool selectedPreset;
     bool deleteNodeDialog;
     bool renameNodeDialog;
+    bool unsavedDialog = false;
     float volume;
     float progress;
     int quality;
@@ -76,6 +77,13 @@ struct DemoState
     ig::String nodeName;
     ig::String assetFilter;
     ig::Color accent;
+    ct::Vector<ig::GradientStop> gradientStops;
+    ct::Vector<ig::CurvePoint> curvePoints;
+    int selectedGradientStop;
+    int selectedCurvePoint;
+    ct::Vector<ig::SequencerTrack> sequencerTracks;
+    int currentSequenceFrame;
+    int selectedSequencerTrack;
     float assetTableWeights[3];
 
     DemoState()
@@ -100,8 +108,18 @@ struct DemoState
                 "New lines keep the caret visible.\n"
                 "Clipboard, Home and End are supported too.\n"
                 "This final line demonstrates vertical scrolling."),
-          accent(90u, 160u, 230u, 255u)
+          accent(90u, 160u, 230u, 255u), selectedGradientStop(-1), selectedCurvePoint(-1), currentSequenceFrame(24), selectedSequencerTrack(-1)
     {
+        gradientStops.push_back(ig::GradientStop(0.0f, ig::Color(70u, 125u, 245u, 255u)));
+        gradientStops.push_back(ig::GradientStop(0.45f, ig::Color(190u, 90u, 245u, 255u)));
+        gradientStops.push_back(ig::GradientStop(1.0f, ig::Color(245u, 150u, 65u, 255u)));
+        curvePoints.push_back(ig::CurvePoint(0.0f, 0.15f));
+        curvePoints.push_back(ig::CurvePoint(0.28f, 0.72f));
+        curvePoints.push_back(ig::CurvePoint(0.65f, 0.35f));
+        curvePoints.push_back(ig::CurvePoint(1.0f, 0.82f));
+        sequencerTracks.push_back(ig::SequencerTrack("Camera",4,42,ig::Color(80,160,245)));
+        sequencerTracks.push_back(ig::SequencerTrack("Light",18,67,ig::Color(245,185,75)));
+        sequencerTracks.push_back(ig::SequencerTrack("Post FX",48,92,ig::Color(185,100,240)));
         assetTableWeights[0] = 2.2f;
         assetTableWeights[1] = 1.1f;
         assetTableWeights[2] = 0.8f;
@@ -442,7 +460,7 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
 {
     const ig::StringView tabs[] = {
         ig::StringView("Scene"), ig::StringView("Assets"), ig::StringView("Settings"),
-        ig::StringView("Hierarchy"), ig::StringView("Gizmo3D"), ig::StringView("Docking")
+        ig::StringView("Hierarchy"), ig::StringView("Gizmo3D"), ig::StringView("Editors"), ig::StringView("Docking")
     };
     const ig::StringView assets[] = {
         ig::StringView("skybox.hdr"), ig::StringView("albedo.png"), ig::StringView("normal.png"),
@@ -758,6 +776,34 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         ui.inputFloat3("gizmo 3d position", state.gizmo3DTransform.position.x,
                        state.gizmo3DTransform.position.y, state.gizmo3DTransform.position.z);
     }
+    else if (state.workspaceTab == 5)
+    {
+        // The editor widgets need more vertical room than this compact
+        // workspace panel. A child keeps them clipped and scrollable instead
+        // of drawing one over another.
+        if (ui.beginChild("editor widgets scroll", 340.0f))
+        {
+            ui.label("Immediate-mode editors");
+            ui.label("Gradient: left-click to add/drag; right-click an interior stop to remove.");
+            const ig::Vec2 gradientPosition = ui.cursor();
+            ui.gradientEditor("demo gradient", state.gradientStops, state.selectedGradientStop,
+                              ig::Rect(gradientPosition.x, gradientPosition.y, ui.availableWidth(), 48.0f));
+            // Explicit-rectangle widgets deliberately do not participate in
+            // automatic layout, so advance the cursor ourselves.
+            ui.setCursor(ig::Vec2(gradientPosition.x, gradientPosition.y + 60.0f));
+            ui.label("Curve: left-click to add/drag; right-click an interior point to remove.");
+            const ig::Vec2 curvePosition = ui.cursor();
+            ui.curveEditor("demo curve", state.curvePoints, state.selectedCurvePoint,
+                           ig::Rect(curvePosition.x, curvePosition.y, ui.availableWidth(), 82.0f));
+            ui.setCursor(ig::Vec2(curvePosition.x, curvePosition.y + 90.0f));
+            ui.label("Sequencer: click the ruler to seek.");
+            const ig::Vec2 sequencerPosition = ui.cursor();
+            ui.sequencer("demo sequencer", state.sequencerTracks, 0, 100, state.currentSequenceFrame,
+                         state.selectedSequencerTrack, ig::Rect(sequencerPosition.x, sequencerPosition.y, ui.availableWidth(), 102.0f));
+            ui.setCursor(ig::Vec2(curvePosition.x, curvePosition.y + 90.0f));
+            ui.endChild();
+        }
+    }
     else
     {
         const ig::Vec2 dockPosition = ui.cursor();
@@ -799,7 +845,7 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
 
 void drawWindowManager(ig::Context &ui, DemoState &state)
 {
-    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 166.0f), &state.windowManagerOpen))
+    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 270.0f), &state.windowManagerOpen))
         return;
 
     ui.checkbox("Profile", state.profileOpen);
@@ -812,11 +858,19 @@ void drawWindowManager(ig::Context &ui, DemoState &state)
     ui.checkbox("Workspace", state.workspaceOpen);
     ui.sameLine();
     ui.checkbox("Images", state.imagesOpen);
+    if (ui.button("Unsaved changes dialog")) state.unsavedDialog=true;
+    if (ui.button("Tile all")) ui.tileAllWindows();
+    ui.sameLine();
+    if (ui.button("Cascade")) ui.cascadeWindows();
+    if (ui.button("Minimize all")) ui.minimizeAllWindows();
+    ui.sameLine();
+    if (ui.button("Restore all")) ui.restoreAllWindows();
+    if (ui.button("Maximize all")) ui.maximizeAllWindows();
     if (ui.button("Toast left"))
-        ui.showToast("left toast", "Scene hierarchy refreshed", ig::ToastPosition::MiddleLeft);
+        ui.showToast("left toast", "Scene hierarchy refreshed", ig::ToastPosition::BottomLeft);
     ui.sameLine();
     if (ui.button("Toast center"))
-        ui.showToast("center toast", "Build complete", ig::ToastPosition::Center);
+        ui.showToast("center toast", "Build complete", ig::ToastPosition::BottomCenter);
     ui.sameLine();
     if (ui.button("Toast right"))
         ui.showToast("right toast", "Saved successfully", ig::ToastPosition::BottomRight);
@@ -1083,6 +1137,16 @@ int main()
     {
         ig::raylib::processInput(ui);
         ui.beginFrame(ig::raylib::frameInfo(GetFrameTime()));
+        static ct::Vector<ig::TimelineTrack> animationTracks;
+        static int animationFrame = 0, animationTrack = -1, animationKey = -1;
+        if (animationTracks.empty()) {
+            const char* names[] = {"Position X", "Position Y", "Rotation"};
+            for (int i=0;i<3;++i) {
+                ig::TimelineTrack track; track.label=names[i];
+                track.keys.push_back(0); track.keys.push_back(30+i*10); track.keys.push_back(100);
+                animationTracks.push_back(track);
+            }
+        }
         if (ui.shortcut(ig::KeyCode::S))
             ui.showToast("save shortcut", "Ctrl+S: scene saved", ig::ToastPosition::BottomRight);
         if (ui.shortcut(ig::KeyCode::Z) && ui.canRedo())
@@ -1097,7 +1161,24 @@ int main()
         drawInspector(ui, state, GetFrameTime());
         drawDataTableWindow(ui, state);
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
+        if (ui.beginWindow("Animation timeline", ig::Rect(240,240,740,360))) {
+            ui.label("Keys: click to add, drag to move, right-click to delete");
+            ui.timeline("animation keys", animationTracks, 0, 100, animationFrame, animationTrack, animationKey,
+                        ig::Rect(8,32,ui.availableWidth()-8,106));
+            ui.label("Clips: drag body to move; drag left/right edges to resize", ig::Vec2(8,150));
+            ui.sequencer("animation clips",state.sequencerTracks,0,100,state.currentSequenceFrame,
+                         state.selectedSequencerTrack,ig::Rect(8,178,ui.availableWidth()-8,106));
+            ui.endWindow();
+        }
         ig::MessageBoxOptions deleteOptions;
+        ig::MessageBoxOptions saveOptions;
+        saveOptions.acceptLabel="Save";
+        saveOptions.showCancel=true;
+        saveOptions.showDiscard=true;
+        const auto saveResult=ui.messageBox("Unsaved changes","Save changes before closing?",state.unsavedDialog,saveOptions);
+        if (saveResult != ig::MessageBoxResult::None)
+            ui.showToast("save decision",saveResult==ig::MessageBoxResult::Accepted ? "Save requested (demo)" :
+                         saveResult==ig::MessageBoxResult::Discarded ? "Discard requested (demo)" : "Cancelled");
         deleteOptions.kind = ig::MessageBoxKind::Error;
         deleteOptions.showCancel = true;
         ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog, deleteOptions);
