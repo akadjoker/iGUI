@@ -104,7 +104,11 @@ struct FileDialogState
     String overwritePath;
     String fileError;
     String directoryError;
+    // Incremental, case-insensitive filename search. This filters the cached
+    // directory snapshot; it never causes another provider query.
+    String searchQuery;
     String::size_type fileNameCursor = 0u;
+    String::size_type searchCursor = 0u;
     // Cached directory snapshot. Context refreshes this only after opening,
     // navigating, going up, or creating a folder; never every draw frame.
     ct::Vector<FileDialogEntry> entries;
@@ -134,6 +138,7 @@ struct FileDialogState
     bool resizing;
     bool creatingFolder;
     bool previewPanning;
+    bool searchFocused;
     bool sortAscending;
 
     FileDialogState()
@@ -142,7 +147,7 @@ struct FileDialogState
           resizePointerStart(), resizeSizeStart(), previewPan(), previewPointerStart(), previewPanStart(),
           newFolderName(), newFolderError(), previewPath(), scrollOffset(0.0f), previewZoom(1.0f),
           selectedIndex(-3), lastClickedIndex(-3), lastClickedFrame(0u), newFolderCursor(0u),
-          initialized(false), resizing(false), creatingFolder(false), previewPanning(false), sortAscending(true) {}
+          initialized(false), resizing(false), creatingFolder(false), previewPanning(false), searchFocused(false), sortAscending(true) {}
 
     // Call reset to discard navigation state manually. Context also resets it
     // after an accepted or cancelled dialog result.
@@ -154,7 +159,9 @@ struct FileDialogState
         overwritePath.clear();
         fileError.clear();
         directoryError.clear();
+        searchQuery.clear();
         fileNameCursor = 0u;
+        searchCursor = 0u;
         entries.clear();
         backHistory.clear();
         forwardHistory.clear();
@@ -182,6 +189,7 @@ struct FileDialogState
         resizing = false;
         creatingFolder = false;
         previewPanning = false;
+        searchFocused = false;
         sortAscending = true;
     }
 };

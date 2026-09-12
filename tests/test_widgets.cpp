@@ -2334,9 +2334,47 @@ static void test_file_dialog_resize_left_edge()
     assert(!state.resizing && state.size.x == oldWidth - 60);
 }
 
+static void test_file_dialog_incremental_search_uses_cached_entries()
+{
+    WidgetBackend backend;
+    DialogProvider provider;
+    ig::Context context(backend);
+    ig::FileDialogState state;
+    ig::FileDialogOptions options;
+    options.initialPath = "/project";
+    bool open = true;
+    auto frame = [&]() {
+        context.beginFrame(ig::FrameInfo(640, 640));
+        context.fileDialog("search", open, state, options, provider);
+        context.endFrame();
+    };
+
+    frame();
+    assert(provider.listCalls == 1);
+    state.searchFocused = true;
+    context.pushEvent(ig::Event::textInput("PREVIEW"));
+    frame();
+    assert(state.searchQuery == "PREVIEW");
+    assert(provider.listCalls == 1);
+
+    // The search leaves the navigation pseudo-entries intact, then exposes
+    // only the case-insensitive matching file.
+    for (int i = 0; i < 3; ++i) {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+        frame();
+    }
+    assert(state.selectedPath == "/project/preview.png");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    frame();
+    assert(state.searchQuery.empty());
+    assert(open);
+}
+
 int main()
 {
     test_file_dialog_resize_left_edge();
+    test_file_dialog_incremental_search_uses_cached_entries();
     test_menu_hover_switch();
     test_file_dialog_read_error_and_paste();
     test_save_file_names_and_overwrite();

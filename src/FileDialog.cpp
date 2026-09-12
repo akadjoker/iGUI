@@ -61,6 +61,29 @@ bool matchesFileDialogFilter(StringView name, StringView filter)
     return false;
 }
 
+bool containsAsciiIgnoreCase(StringView text, StringView query)
+{
+    if (query.empty())
+        return true;
+    if (query.size() > text.size())
+        return false;
+    for (StringView::size_type start = 0u; start + query.size() <= text.size(); ++start)
+    {
+        bool match = true;
+        for (StringView::size_type i = 0u; i < query.size(); ++i)
+        {
+            char a = text[start + i];
+            char b = query[i];
+            if (a >= 'A' && a <= 'Z') a = static_cast<char>(a + ('a' - 'A'));
+            if (b >= 'A' && b <= 'Z') b = static_cast<char>(b + ('a' - 'A'));
+            if (a != b) { match = false; break; }
+        }
+        if (match)
+            return true;
+    }
+    return false;
+}
+
 String::size_type previousUtf8Offset(StringView text, String::size_type offset)
 {
     if (offset > text.size())
@@ -273,6 +296,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
                             buttonsWidth, theme_.widgetHeight);
     const Rect newFolderInput(dialog.x + padding, acceptButton.y,
                               cancelButton.x - theme_.itemSpacing - (dialog.x + padding), theme_.widgetHeight);
+    const Rect searchClearButton(newFolderInput.right() - newFolderInput.height, newFolderInput.y,
+                                 newFolderInput.height, newFolderInput.height);
     const WidgetId backId = combineIds(id, 0x4241434bull);
     const WidgetId forwardId = combineIds(id, 0x464f5257415244ull);
     const WidgetId upId = combineIds(id, 0x5550ull);
@@ -286,6 +311,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     const WidgetId acceptId = combineIds(id, 0x4f4bull);
     const WidgetId cancelId = combineIds(id, 0x43414e43454cull);
     const WidgetId previewPanId = combineIds(id, 0x50524556494557ull);
+    const WidgetId searchClearId = combineIds(id, 0x534541524348434cull);
     ct::Vector<String> breadcrumbPaths;
     ct::Vector<String> breadcrumbLabels;
     ct::Vector<Rect> breadcrumbButtons;
@@ -352,6 +378,10 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         else if (contains(detailsButton, pressed)) activeWidget_ = detailsId;
         else if (contains(acceptButton, pressed)) activeWidget_ = acceptId;
         else if (contains(cancelButton, pressed)) activeWidget_ = cancelId;
+        else if (!state.creatingFolder && options.mode != FileDialogMode::SaveFile &&
+                 contains(searchClearButton, pressed) && !state.searchQuery.empty()) activeWidget_ = searchClearId;
+        else if (!state.creatingFolder && options.mode != FileDialogMode::SaveFile && contains(newFolderInput, pressed))
+            state.searchFocused = true;
         else if (state.view == FileDialogView::Details && contains(nameHeader, pressed)) activeWidget_ = sortNameId;
         else if (state.view == FileDialogView::Details && contains(sizeHeader, pressed)) activeWidget_ = sortSizeId;
         else if (state.view == FileDialogView::Details && contains(modifiedHeader, pressed)) activeWidget_ = sortModifiedId;
@@ -392,6 +422,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             (activeWidget_ == detailsId && contains(detailsButton, released)) ||
             (activeWidget_ == acceptId && contains(acceptButton, released)) ||
             (activeWidget_ == cancelId && contains(cancelButton, released)) ||
+            (activeWidget_ == searchClearId && contains(searchClearButton, released)) ||
             (activeWidget_ == sortNameId && contains(nameHeader, released)) ||
             (activeWidget_ == sortSizeId && contains(sizeHeader, released)) ||
             (activeWidget_ == sortModifiedId && contains(modifiedHeader, released)))
@@ -418,6 +449,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     bool refresh = false;
     String createdDirectory;
     bool handledCreateEnter = false;
+    bool searchChanged = false;
     const auto navigateTo = [&state, &refresh](const String &path, bool keepHistory)
     {
         if (path.empty() || path == state.path)
@@ -468,6 +500,55 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             state.fileNameCursor += pasted.size();
             state.overwritePath.clear();
             state.fileError.clear();
+        }
+    }
+    if (state.searchFocused && !state.creatingFolder && options.mode != FileDialogMode::SaveFile)
+    {
+        wantsKeyboard_ = true;
+        wantsTextInput_ = true;
+        if (state.searchCursor > state.searchQuery.size()) state.searchCursor = state.searchQuery.size();
+        if (homePressed_) state.searchCursor = 0u;
+        if (endPressed_) state.searchCursor = state.searchQuery.size();
+        if (leftPressed_ && state.searchCursor > 0u)
+            state.searchCursor = previousUtf8Offset(state.searchQuery, state.searchCursor);
+        if (rightPressed_ && state.searchCursor < state.searchQuery.size())
+        {
+            ++state.searchCursor;
+            while (state.searchCursor < state.searchQuery.size() &&
+                   (static_cast<unsigned char>(state.searchQuery[state.searchCursor]) & 0xc0u) == 0x80u)
+                ++state.searchCursor;
+        }
+        for (const Event &event : textEvents_)
+        {
+            state.searchQuery.insert(state.searchCursor, event.text, event.textLength);
+            state.searchCursor += event.textLength;
+            searchChanged = true;
+        }
+        if (backspacePressed_ && state.searchCursor > 0u)
+        {
+            const String::size_type previous = previousUtf8Offset(state.searchQuery, state.searchCursor);
+            state.searchQuery.erase(previous, state.searchCursor - previous);
+            state.searchCursor = previous;
+            searchChanged = true;
+        }
+        if (pasteRequested_)
+        {
+            const String pasted = backend_.clipboardText();
+            state.searchQuery.insert(state.searchCursor, pasted.data(), pasted.size());
+            state.searchCursor += pasted.size();
+            searchChanged = true;
+        }
+        if (escapePressed_)
+        {
+            if (!state.searchQuery.empty())
+            {
+                state.searchQuery.clear();
+                state.searchCursor = 0u;
+                searchChanged = true;
+            }
+            else
+                state.searchFocused = false;
+            escapePressed_ = false;
         }
     }
     if (state.creatingFolder)
@@ -543,6 +624,14 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.newFolderName.clear();
         state.newFolderError.clear();
         state.newFolderCursor = 0u;
+        state.searchFocused = false;
+    }
+    else if (clicked == searchClearId)
+    {
+        state.searchQuery.clear();
+        state.searchCursor = 0u;
+        state.searchFocused = true;
+        searchChanged = true;
     }
     else if (!breadcrumbNavigation.empty() && breadcrumbNavigation != state.path)
         navigateTo(breadcrumbNavigation, true);
@@ -577,6 +666,14 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
     }
 
+    if (searchChanged)
+    {
+        state.selectedIndex = -3;
+        state.selectedPath.clear();
+        state.lastClickedIndex = -3;
+        state.scrollOffset = 0.0f;
+    }
+
     if (imageDialog && contains(previewPanel, pointer_.position) && pointer_.wheelY != 0.0f)
     {
         const float zoomStep = pointer_.wheelY > 0.0f ? 1.15f : (1.0f / 1.15f);
@@ -601,7 +698,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     {
         const FileDialogEntry &entry = state.entries[i];
         if ((!options.showHidden && entry.hidden) ||
-            (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))))
+            (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))) ||
+            !containsAsciiIgnoreCase(entry.name, state.searchQuery))
             continue;
         visibleEntries.push_back(static_cast<int>(i));
     }
@@ -751,7 +849,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         {
             const FileDialogEntry &entry = state.entries[i];
             if ((!options.showHidden && entry.hidden) ||
-                (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))))
+                (!entry.directory && (options.mode == FileDialogMode::ChooseFolder || !matchesFileDialogFilter(entry.name, options.filter))) ||
+                !containsAsciiIgnoreCase(entry.name, state.searchQuery))
                 continue;
             visibleEntries.push_back(static_cast<int>(i));
             if (!createdDirectory.empty() && entry.path == createdDirectory)
@@ -1119,6 +1218,33 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             drawText(modalDrawList_, theme_.font, state.fileError,
                      Vec2(newFolderInput.x, newFolderInput.y - theme_.fontSize - 3.0f),
                      theme_.fontSize * 0.8f, theme_.dialogBtnDanger, viewport);
+    }
+    else if (!state.creatingFolder)
+    {
+        modalDrawList_.addRectFilled(newFolderInput, theme_.inputBg, viewport);
+        modalDrawList_.addRect(newFolderInput, state.searchFocused ? theme_.inputBorderHover : theme_.dialogBorder, viewport);
+        const StringView value(state.searchQuery);
+        const StringView display = value.empty() ? StringView("Search files and folders...") : value;
+        const Color textColor = value.empty() ? theme_.textDisabled : theme_.dialogText;
+        const StringView prefix(state.searchQuery.data(), state.searchCursor);
+        const float cursorWidth = measureText(theme_.font, prefix, theme_.fontSize).width;
+        const float textOffset = cursorWidth > newFolderInput.width - newFolderInput.height - 20.0f
+            ? cursorWidth - newFolderInput.width + newFolderInput.height + 20.0f : 0.0f;
+        drawText(modalDrawList_, theme_.font, display,
+                 Vec2(newFolderInput.x + 8.0f - textOffset, newFolderInput.y + 5.0f), theme_.fontSize, textColor, newFolderInput);
+        if (state.searchFocused)
+            modalDrawList_.addRectFilled(Rect(newFolderInput.x + 8.0f + cursorWidth - textOffset,
+                                              newFolderInput.y + 5.0f, 1.0f, newFolderInput.height - 10.0f),
+                                        theme_.dialogText, newFolderInput);
+        if (!state.searchQuery.empty())
+        {
+            const Color clearColor = contains(searchClearButton, pointer_.position) ? theme_.dialogBtnHover : theme_.dialogBtnBg;
+            modalDrawList_.addRectFilled(searchClearButton, clearColor, newFolderInput);
+            modalDrawList_.addLine(Vec2(searchClearButton.x + 8.0f, searchClearButton.y + 8.0f),
+                                   Vec2(searchClearButton.right() - 8.0f, searchClearButton.bottom() - 8.0f), iconColor, newFolderInput, 1.5f);
+            modalDrawList_.addLine(Vec2(searchClearButton.right() - 8.0f, searchClearButton.y + 8.0f),
+                                   Vec2(searchClearButton.x + 8.0f, searchClearButton.bottom() - 8.0f), iconColor, newFolderInput, 1.5f);
+        }
     }
     if (state.creatingFolder)
     {
