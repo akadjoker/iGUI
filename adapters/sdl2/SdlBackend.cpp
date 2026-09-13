@@ -84,6 +84,10 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
         case SDLK_PAGEUP: key = KeyCode::PageUp; break;
         case SDLK_PAGEDOWN: key = KeyCode::PageDown; break;
         case SDLK_ESCAPE: key = KeyCode::Escape; break;
+        case SDLK_n: key = KeyCode::N; break;
+        case SDLK_o: key = KeyCode::O; break;
+        case SDLK_F4: key = KeyCode::F4; break;
+        case SDLK_F5: key = KeyCode::F5; break;
         case SDLK_a: key = KeyCode::A; break;
         case SDLK_c: key = KeyCode::C; break;
         case SDLK_d: key = KeyCode::D; break;
@@ -227,7 +231,7 @@ bool Backend::ensureFontTexture()
     if (SDL_UpdateTexture(fontTexture_, nullptr, fontPixels_.data(),
                           static_cast<int>(fontAtlas_.width() * 4u)) != 0 ||
         SDL_SetTextureBlendMode(fontTexture_, SDL_BLENDMODE_BLEND) != 0 ||
-        SDL_SetTextureScaleMode(fontTexture_, SDL_ScaleModeNearest) != 0)
+        SDL_SetTextureScaleMode(fontTexture_, SDL_ScaleModeLinear) != 0)
     {
         SDL_DestroyTexture(fontTexture_);
         fontTexture_ = nullptr;
@@ -273,6 +277,9 @@ bool Backend::renderGeometry(const DrawData &data, const GeometryCommand &comman
     SDL_Texture *texture = command.texture.value == 0u
                                ? nullptr
                                : reinterpret_cast<SDL_Texture *>(static_cast<uintptr_t>(command.texture.value));
+    // Untextured geometry (including modal scrims) also needs alpha blending.
+    if (!texture && SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND) != 0)
+        return false;
     return SDL_RenderGeometry(renderer_, texture, vertices_.data(),
                               static_cast<int>(vertices_.size()), indices_.data(),
                               static_cast<int>(indices_.size())) == 0;

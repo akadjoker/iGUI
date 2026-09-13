@@ -187,6 +187,8 @@ public:
     void toggleFoldAt(int line);
     void foldAll();
     void unfoldAll();
+    // Cached visual row map, rebuilt only after text or folding changes.
+    const ct::Vector<int>& visibleLines() const;
 
     // ── Zoom ───────────────────────────────────────────────────────────────
     // Multiplies CodeEditorOptions/theme font size for this editor only.
@@ -213,6 +215,8 @@ private:
     uint64_t editGroup_ = 0;      // bumped whenever typing stops being contiguous
     bool lastEditWasTyping_ = false;
     ct::Vector<CodeEditorFoldRange> foldRanges_;
+    mutable ct::Vector<int> visibleLines_;
+    mutable bool visibleLinesDirty_ = true;
     float fontScale_ = 1.0f;
 
     void recordEdit(CodeEditorEdit::Kind kind, int line, int column,

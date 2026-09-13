@@ -239,15 +239,19 @@ const FontGlyph *FontAtlas::glyph(FontId font, uint32_t codepoint) const
 {
     if (!valid_ || font != defaultFont())
         return nullptr;
-    const FontGlyph *replacement = nullptr;
-    for (ct::Vector<FontGlyph>::size_type i = 0u; i < glyphs_.size(); ++i)
-    {
-        if (glyphs_[i].codepoint == codepoint)
-            return &glyphs_[i];
-        if (glyphs_[i].codepoint == ReplacementCodepoint)
-            replacement = &glyphs_[i];
+    GlyphCacheEntry& cached = glyphCache_[codepoint % 256u];
+    if (cached.occupied && cached.codepoint == codepoint)
+        return cached.index >= 0 ? &glyphs_[static_cast<size_t>(cached.index)] : nullptr;
+    int found = -1;
+    int replacement = -1;
+    for (size_t i = 0u; i < glyphs_.size(); ++i) {
+        if (glyphs_[i].codepoint == codepoint) { found = static_cast<int>(i); break; }
+        if (glyphs_[i].codepoint == ReplacementCodepoint) replacement = static_cast<int>(i);
     }
-    return replacement;
+    cached.occupied = true;
+    cached.codepoint = codepoint;
+    cached.index = found >= 0 ? found : replacement;
+    return cached.index >= 0 ? &glyphs_[static_cast<size_t>(cached.index)] : nullptr;
 }
 
 TextMetrics FontAtlas::measureText(FontId font, StringView text, float logicalSize) const

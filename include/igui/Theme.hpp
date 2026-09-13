@@ -244,6 +244,22 @@ inline Theme makeTheme(ThemePreset preset)
         theme.tooltipBg = Color(40, 44, 52, 245);
         theme.tooltipText = Color(245, 246, 248, 255);
         theme.scrollbarThumb = Color(116, 126, 142, 145);
+        // Complete the light palette for modal widgets as well as the main UI.
+        theme.dialogBg = theme.panelColor;
+        theme.dialogBorder = theme.borderColor;
+        theme.dialogTitleText = theme.dialogText = theme.textColor;
+        theme.dialogBtnBg = theme.buttonBackground;
+        theme.dialogBtnHover = theme.buttonHovered;
+        theme.dialogBtnPrimary = Color(177, 206, 237, 255);
+        theme.dialogBtnPrimaryHover = Color(153, 191, 233, 255);
+        theme.floatTitleBg = theme.titleBarBackground;
+        theme.floatTitleText = theme.textColor;
+        theme.floatBg = theme.windowBackground;
+        theme.floatBorder = theme.borderColor;
+        theme.menuBarItemHover = theme.menuItemHover;
+        theme.menuShortcutText = Color(85, 90, 100, 255);
+        theme.textDisabled = Color(105, 110, 120, 255);
+
         return theme;
     }
 

@@ -4,6 +4,7 @@
 
 #include <ct/vector.hpp>
 
+#include "Math.hpp"
 #include "Types.hpp"
 
 namespace ig
@@ -69,7 +70,19 @@ public:
 
     // Fill entries with the direct children of path. Entry paths must be full
     // paths. Return false when path cannot be read.
-    virtual bool listDirectory(StringView path, ct::Vector<FileDialogEntry> &entries) = 0;
+    //
+    // needMetadata says whether the caller will actually look at
+    // FileDialogEntry::size/modifiedTime this time (true when the dialog is
+    // in Details view, or sorting by Size/Modified) - on filesystems where
+    // getting that metadata costs a real syscall per entry (e.g. stat() on
+    // a FUSE/network mount), a provider can skip it when this is false and
+    // just leave size/modifiedTime at 0. Providers where metadata is free
+    // (it comes back from the same directory-listing call regardless) can
+    // ignore this parameter entirely - it's an optimization hint, not a
+    // contract change; entries.directory must always still be correct
+    // either way, since navigation depends on it regardless of view.
+    virtual bool listDirectory(StringView path, ct::Vector<FileDialogEntry> &entries,
+                               bool needMetadata = true) = 0;
     virtual String parentDirectory(StringView path) = 0;
     virtual String homeDirectory() = 0;
     // Create one direct child directory and return its full path. The default

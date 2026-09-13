@@ -69,6 +69,13 @@ private:
     uint32_t height_;
     TextureId texture_;
     bool valid_;
+    // Fixed-size, per-atlas lookup cache. Indices remain valid when copied.
+    struct GlyphCacheEntry {
+        uint32_t codepoint = 0;
+        int index = -1;
+        bool occupied = false;
+    };
+    mutable GlyphCacheEntry glyphCache_[256];
 };
 
 // Lê um codepoint UTF-8. Para uma sequência inválida devolve U+FFFD e avança um byte.

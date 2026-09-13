@@ -150,6 +150,16 @@ void sortFileDialogEntries(ct::Vector<FileDialogEntry> &entries, FileDialogSortF
     });
 }
 
+// Details view shows size/modified columns; sorting by either also reads
+// them for every entry regardless of which view is on screen right now.
+// Everything else (Icons/List sorted by Name) never looks at them.
+bool fileDialogNeedsMetadata(const FileDialogState &state)
+{
+    return state.view == FileDialogView::Details ||
+           state.sortField == FileDialogSortField::Size ||
+           state.sortField == FileDialogSortField::Modified;
+}
+
 } // namespace
 
 FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogState &state,
@@ -179,7 +189,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.scrollOffset = 0.0f;
         state.entries.clear();
         state.directoryError.clear();
-        if (!provider.listDirectory(state.path, state.entries))
+        if (!provider.listDirectory(state.path, state.entries, fileDialogNeedsMetadata(state)))
         {
             state.entries.clear();
             state.directoryError = "Cannot read this folder. Check the path and permissions.";
@@ -828,7 +838,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         state.fileError.clear();
         state.entries.clear();
         state.directoryError.clear();
-        if (!provider.listDirectory(state.path, state.entries))
+        if (!provider.listDirectory(state.path, state.entries, fileDialogNeedsMetadata(state)))
         {
             state.entries.clear();
             state.directoryError = "Cannot read this folder. Check the path and permissions.";

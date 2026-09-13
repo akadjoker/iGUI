@@ -53,7 +53,11 @@ enum class KeyCode : uint8_t
     V,
     X,
     Y,
-    Z
+    Z,
+    N,
+    O,
+    F4,
+    F5
 };
 
 struct FrameInfo

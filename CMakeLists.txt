@@ -182,20 +182,22 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
 endif()
 
 if(IGUI_BUILD_FONT)
-    include(FetchContent)
-    FetchContent_Declare(
-        igui_nuklear_assets
-        GIT_REPOSITORY https://github.com/Immediate-Mode-UI/Nuklear.git
-        GIT_TAG 0dbc52f86404f9e1f26ce0df3015ed23ff54a726
-    )
-    FetchContent_GetProperties(igui_nuklear_assets)
-    if(NOT igui_nuklear_assets_POPULATED)
-        FetchContent_Populate(igui_nuklear_assets)
-    endif()
-
     if(IGUI_FONT_INPUT)
         set(_igui_font_input "${IGUI_FONT_INPUT}")
+        if(NOT EXISTS "${_igui_font_input}")
+            message(FATAL_ERROR "IGUI_FONT_INPUT does not exist: ${_igui_font_input}")
+        endif()
     else()
+        include(FetchContent)
+        FetchContent_Declare(
+            igui_nuklear_assets
+            GIT_REPOSITORY https://github.com/Immediate-Mode-UI/Nuklear.git
+            GIT_TAG 0dbc52f86404f9e1f26ce0df3015ed23ff54a726
+        )
+        FetchContent_GetProperties(igui_nuklear_assets)
+        if(NOT igui_nuklear_assets_POPULATED)
+            FetchContent_Populate(igui_nuklear_assets)
+        endif()
         set(_igui_font_input "${igui_nuklear_assets_SOURCE_DIR}/extra_font/Roboto-Regular.ttf")
     endif()
 
@@ -214,7 +216,7 @@ if(IGUI_BUILD_FONT)
     add_library(igui::font ALIAS igui_font)
     target_include_directories(igui_font
         PUBLIC include
-        PRIVATE "${igui_nuklear_assets_SOURCE_DIR}/src"
+        PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb"
     )
     # FontAtlas only uses Backend.hpp/ct::Vector (igui_core), not the
     # immediate-mode Context - it must not require IGUI_BUILD_IMMEDIATE.
@@ -278,13 +280,35 @@ if(IGUI_RAYLIB_AVAILABLE)
 endif()
 
 if(IGUI_BUILD_SDL2_DEMO)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+    # SDL2 arrives one of two ways: a parent project already built or found
+    # it (target SDL2::SDL2 - e.g. a vendored submodule), or it is installed
+    # system-wide and pkg-config can see it. Prefer the target: pkg-config
+    # finds nothing on a plain Windows/MSYS2 or MSVC box, and REQUIRED there
+    # killed the whole configure step.
+    if(TARGET SDL2::SDL2)
+        # On Windows SDL.h renames main to SDL_main, so every executable
+        # below needs SDL2main's entry-point shim. Harmless elsewhere (the
+        # target only exists for in-tree SDL builds). SDL2main MUST be
+        # listed before SDL2: SDL2main.a's own undefined refs (SDL_strlen
+        # and friends) are resolved by whatever comes later on the link
+        # line, and GNU ld doesn't revisit a library it already passed -
+        # SDL2 first left igui_sdl2_demo with "undefined reference to
+        # SDL_strlen" out of libSDL2main.a.
+        set(IGUI_SDL2_LIBS "")
+        if(WIN32 AND TARGET SDL2::SDL2main)
+            list(APPEND IGUI_SDL2_LIBS SDL2::SDL2main)
+        endif()
+        list(APPEND IGUI_SDL2_LIBS SDL2::SDL2)
+    else()
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
+        set(IGUI_SDL2_LIBS PkgConfig::SDL2)
+    endif()
 
     add_library(igui_sdl2 adapters/sdl2/SdlBackend.cpp)
     add_library(igui::sdl2 ALIAS igui_sdl2)
     target_include_directories(igui_sdl2 PUBLIC adapters/sdl2/include)
-    target_link_libraries(igui_sdl2 PUBLIC igui_font PkgConfig::SDL2)
+    target_link_libraries(igui_sdl2 PUBLIC igui_font ${IGUI_SDL2_LIBS})
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(igui_sdl2 PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -324,7 +348,7 @@ if(IGUI_BUILD_SDL2_DEMO)
         target_include_directories(igui_sdl2_original_widgets_demo PRIVATE
             examples/sdl2_original_widgets)
         target_link_libraries(igui_sdl2_original_widgets_demo PRIVATE
-            igui_widgets PkgConfig::SDL2)
+            igui_widgets ${IGUI_SDL2_LIBS})
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)
             target_link_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)

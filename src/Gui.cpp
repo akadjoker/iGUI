@@ -5536,6 +5536,19 @@ Vec2 Context::cursor() const
     return Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y);
 }
 
+float Context::availableHeight() const
+{
+    const WindowState *window = currentWindow();
+    if (!window) return 0.0f;
+    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+    float bottom = window->bounds.y + window->bounds.height - padding;
+    if (!dockPanelStack_.empty())
+        bottom = dockPanelStack_.back().content.y + dockPanelStack_.back().content.height;
+    if (!childStack_.empty())
+        bottom = childStack_.back().content.y + childStack_.back().content.height;
+    return bottom > layout_.cursor.y ? bottom - layout_.cursor.y : 0.0f;
+}
+
 float Context::availableWidth() const
 {
     const WindowState *window = currentWindow();
@@ -5889,6 +5902,8 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     if (focusable)
         registerFocusable(id);
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
+        return false;
+    if (activeModal_ != InvalidWidgetId)
         return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);

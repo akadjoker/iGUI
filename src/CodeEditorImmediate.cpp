@@ -95,6 +95,7 @@ void CodeEditorState::rehighlightFrom(int line)
 
 void CodeEditorState::rebuildFoldRanges()
 {
+    visibleLinesDirty_ = true;
     // Remember which regions were collapsed so a rebuild after an edit
     // doesn't silently re-expand everything the user folded.
     ct::Vector<CodeEditorFoldRange> previous = foldRanges_;
@@ -134,6 +135,30 @@ void CodeEditorState::rebuildFoldRanges()
             }
 }
 
+const ct::Vector<int>& CodeEditorState::visibleLines() const
+{
+    if (!visibleLinesDirty_) return visibleLines_;
+    const int count = lineCount();
+    // Difference array merges nested/overlapping collapsed ranges in O(lines+folds).
+    ct::Vector<int> changes;
+    changes.resize(static_cast<size_t>(count)+1);
+    for (size_t i=0; i<changes.size(); ++i) changes[i]=0;
+    for (const auto& range : foldRanges_) {
+        if (!range.collapsed || range.endLine <= range.startLine) continue;
+        ++changes[static_cast<size_t>(range.startLine+1)];
+        --changes[static_cast<size_t>(range.endLine+1)];
+    }
+    visibleLines_.clear();
+    visibleLines_.reserve(static_cast<size_t>(count));
+    int depth=0;
+    for (int line=0; line<count; ++line) {
+        depth += changes[static_cast<size_t>(line)];
+        if (depth == 0) visibleLines_.push_back(line);
+    }
+    visibleLinesDirty_ = false;
+    return visibleLines_;
+}
+
 bool CodeEditorState::isFoldHeader(int line) const
 {
     for (const auto& range : foldRanges_)
@@ -152,16 +177,18 @@ bool CodeEditorState::isLineHidden(int line) const
 void CodeEditorState::toggleFoldAt(int line)
 {
     for (auto& range : foldRanges_)
-        if (range.startLine == line) { range.collapsed = !range.collapsed; return; }
+        if (range.startLine == line) { range.collapsed = !range.collapsed; visibleLinesDirty_ = true; return; }
 }
 
 void CodeEditorState::foldAll()
 {
+    visibleLinesDirty_ = true;
     for (auto& range : foldRanges_) range.collapsed = true;
 }
 
 void CodeEditorState::unfoldAll()
 {
+    visibleLinesDirty_ = true;
     for (auto& range : foldRanges_) range.collapsed = false;
 }
 
@@ -883,6 +910,31 @@ int Context::codeEditorColumnAt(const CodeEditorState& state, int line, float lo
     return n;
 }
 
+bool Context::codeEditorCopy(CodeEditorState &state)
+{
+    const String selected = state.selectedText();
+    if (!selected.empty()) backend_.setClipboardText(selected);
+    return false; // Copy never changes the buffer
+}
+
+bool Context::codeEditorCut(CodeEditorState &state)
+{
+    const String selected = state.selectedText();
+    if (selected.empty()) return false;
+    backend_.setClipboardText(selected);
+    return state.eraseSelection();
+}
+
+bool Context::codeEditorPaste(CodeEditorState &state)
+{
+    const String clipboard = backend_.clipboardText();
+    if (clipboard.empty()) return false;
+    state.eraseSelection();
+    state.insertText(state.cursorLine, state.cursorColumn, clipboard);
+    state.breakUndoCoalescing();
+    return true;
+}
+
 bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rect &bounds,
                          const CodeEditorOptions &options)
 {
@@ -917,19 +969,17 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
 
     const int totalLines = state.lineCount();
 
-    // Folding collapses a range to just its header line. visibleLogicalLines
-    // lists every line actually shown, top to bottom - everything below
-    // (scroll, click-to-position, up/down navigation, painting) walks this
-    // instead of the raw [0, totalLines) range, exactly once per frame.
-    ct::Vector<int> visibleLogicalLines;
-    visibleLogicalLines.reserve(static_cast<size_t>(totalLines));
-    for (int line = 0; line < totalLines; ++line)
-        if (!state.isLineHidden(line)) visibleLogicalLines.push_back(line);
-    const int visibleLineCount = static_cast<int>(visibleLogicalLines.size());
-    // Row (index into visibleLogicalLines) the cursor's logical line sits at.
-    int cursorRow = 0;
-    for (int row = 0; row < visibleLineCount; ++row)
-        if (visibleLogicalLines[static_cast<size_t>(row)] >= state.cursorLine) { cursorRow = row; break; }
+    // With folding disabled, visual and logical rows are identical. Avoid
+    // allocating a map and scanning every fold region for every source line.
+    const bool foldingAvailable = options.showFolding && state.highlighter() != nullptr;
+    auto rebuildVisibleLines = [&]() { if (foldingAvailable) state.visibleLines(); };
+    auto rowCount = [&]() { return foldingAvailable ? static_cast<int>(state.visibleLines().size()) : state.lineCount(); };
+    auto logicalLine = [&](int row) { return foldingAvailable ? state.visibleLines()[static_cast<size_t>(row)] : row; };
+    int visibleLineCount = rowCount();
+    int cursorRow = state.cursorLine;
+    if (foldingAvailable)
+        for (int row = 0; row < visibleLineCount; ++row)
+            if (logicalLine(row) >= state.cursorLine) { cursorRow = row; break; }
 
     float gutterWidth = 0.0f;
     if (options.showLineNumbers)
@@ -939,7 +989,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         const TextMetrics gutterMetrics = measureText(theme_.font, StringView(buf), fontSize);
         gutterWidth = gutterMetrics.width + theme_.gutterPadding * 2.0f;
     }
-    const bool foldingAvailable = options.showFolding && state.highlighter() != nullptr;
+
     const float foldGutterWidth = foldingAvailable ? lineHeight : 0.0f;
     gutterWidth += foldGutterWidth;
 
@@ -960,7 +1010,14 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     if (state.scrollLine > maximumScroll) state.scrollLine = maximumScroll;
 
     itemHovered(rect, clip, id); // registers hotWidget_/lastItemId_ for tooltips; no visual hover state here
-    itemClicked(rect, clip, id);
+    // The scrollbar is handled separately below and must not be claimed by
+    // the text-area click. itemClicked() on the full rect used to set
+    // activeWidget_ = id for a press anywhere inside it - including the
+    // scrollbar thumb - so the thumb-drag branch below never saw
+    // activeWidget_ == InvalidWidgetId and the cursor instead followed the
+    // pointer, selecting text while the user tried to scroll.
+    const Rect interactiveArea(rect.x, rect.y, rect.width - scrollbarWidth, rect.height);
+    itemClicked(interactiveArea, clip, id);
     if (hasScrollbar && currentWindowReceivesPointer() &&
         contains(intersect(rect, clip), pointer_.position) && pointer_.wheelY != 0.0f)
     {
@@ -1018,7 +1075,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
             if (row >= 0 && row < visibleLineCount)
             {
-                int line = visibleLogicalLines[static_cast<size_t>(row)];
+                int line = logicalLine(row);
                 if (state.isFoldHeader(line))
                 {
                     state.toggleFoldAt(line);
@@ -1044,7 +1101,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
         if (row < 0) row = 0;
         if (row >= visibleLineCount) row = visibleLineCount - 1;
-        int line = visibleLogicalLines[static_cast<size_t>(row)];
+        int line = logicalLine(row);
         int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding), options.tabSize, fontSize);
         if (column < 0) column = 0;
         if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
@@ -1064,7 +1121,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         int row = state.scrollLine + static_cast<int>((clampedY - (textArea.y + padding)) / lineHeight);
         if (row < 0) row = 0;
         if (row >= visibleLineCount) row = visibleLineCount - 1;
-        int line = visibleLogicalLines[static_cast<size_t>(row)];
+        int line = logicalLine(row);
         int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding), options.tabSize, fontSize);
         if (column < 0) column = 0;
         if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
@@ -1079,6 +1136,14 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         textInputWidget_ = id;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
+
+        // Cursor position at the start of the keyboard/typing block: the
+        // "keep the cursor visible" clamp below must only run when the
+        // cursor actually moved this frame. Gating it this way is what lets
+        // wheel/scrollbar scrolling leave the cursor off-screen without the
+        // view snapping straight back to it on the next frame.
+        const int focusedCursorLine = state.cursorLine;
+        const int focusedCursorColumn = state.cursorColumn;
 
         // A popup only stays valid while the cursor is still inside the
         // identifier that opened it - on the same line, at or after
@@ -1105,7 +1170,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         {
             // Step by visible row, not raw line number, so a collapsed fold
             // is skipped in one keypress instead of landing on a hidden line.
-            if (cursorRow > 0) state.cursorLine = visibleLogicalLines[static_cast<size_t>(cursorRow - 1)];
+            if (cursorRow > 0) state.cursorLine = logicalLine(cursorRow - 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
             if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)]) state.clearSelection();
@@ -1113,7 +1178,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         }
         else if (downPressed_)
         {
-            if (cursorRow + 1 < visibleLineCount) state.cursorLine = visibleLogicalLines[static_cast<size_t>(cursorRow + 1)];
+            if (cursorRow + 1 < visibleLineCount) state.cursorLine = logicalLine(cursorRow + 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
             if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)]) state.clearSelection();
@@ -1133,7 +1198,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 if (state.cursorColumn > 0) --state.cursorColumn;
                 else if (cursorRow > 0)
                 {
-                    state.cursorLine = visibleLogicalLines[static_cast<size_t>(cursorRow - 1)];
+                    state.cursorLine = logicalLine(cursorRow - 1);
                     state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
                 }
                 if (!keyShift_[static_cast<uint32_t>(KeyCode::Left)]) state.clearSelection();
@@ -1144,7 +1209,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 if (state.cursorColumn < static_cast<int>(state.lineAt(state.cursorLine).size())) ++state.cursorColumn;
                 else if (cursorRow + 1 < visibleLineCount)
                 {
-                    state.cursorLine = visibleLogicalLines[static_cast<size_t>(cursorRow + 1)];
+                    state.cursorLine = logicalLine(cursorRow + 1);
                     state.cursorColumn = 0;
                 }
                 if (!keyShift_[static_cast<uint32_t>(KeyCode::Right)]) state.clearSelection();
@@ -1181,22 +1246,17 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 state.redo();
                 changed = true;
             }
-            else if (copyRequested_ || shortcut(KeyCode::X, true, false))
+            else if (shortcut(KeyCode::X, true, false))
             {
-                const String selected = state.selectedText();
-                if (!selected.empty()) backend_.setClipboardText(selected);
-                if (shortcut(KeyCode::X, true, false) && state.eraseSelection()) changed = true;
+                if (codeEditorCut(state)) changed = true;
+            }
+            else if (copyRequested_)
+            {
+                codeEditorCopy(state);
             }
             else if (pasteRequested_)
             {
-                const String clipboard = backend_.clipboardText();
-                if (!clipboard.empty())
-                {
-                    state.eraseSelection();
-                    state.insertText(state.cursorLine, state.cursorColumn, clipboard);
-                    state.breakUndoCoalescing();
-                    changed = true;
-                }
+                if (codeEditorPaste(state)) changed = true;
             }
             else if (enterPressed_)
             {
@@ -1319,23 +1379,31 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             // per editor per frame, so a second pass here is the cheapest
             // correct fix rather than threading a mutable rebuild through
             // every edit path above.
-            visibleLogicalLines.clear();
-            for (int line = 0; line < state.lineCount(); ++line)
-                if (!state.isLineHidden(line)) visibleLogicalLines.push_back(line);
+            rebuildVisibleLines();
+            visibleLineCount = rowCount();
             updateCodeCompletion(state, options);
         }
         if (escapePressed_) state.completion.visible = false;
 
-        cursorRow = static_cast<int>(visibleLogicalLines.size()) - 1;
-        for (int row = 0; row < static_cast<int>(visibleLogicalLines.size()); ++row)
-            if (visibleLogicalLines[static_cast<size_t>(row)] >= state.cursorLine) { cursorRow = row; break; }
+        cursorRow = state.cursorLine;
+        if (foldingAvailable)
+            for (int row = 0; row < rowCount(); ++row)
+                if (logicalLine(row) >= state.cursorLine) { cursorRow = row; break; }
 
-        // Keep the cursor's row inside the visible window.
-        if (cursorRow < state.scrollLine) state.scrollLine = cursorRow;
-        else if (cursorRow >= state.scrollLine + visibleRows) state.scrollLine = cursorRow - visibleRows + 1;
+        // Keep the cursor's row inside the visible window - but only when
+        // the cursor moved this frame (typing, arrow keys, Home/End, ...).
+        // If the view was scrolled by wheel or the scrollbar thumb instead,
+        // the cursor may legitimately sit off-screen and must not pull the
+        // view back to it.
+        const bool cursorMoved = state.cursorLine != focusedCursorLine ||
+                                 state.cursorColumn != focusedCursorColumn;
+        if (cursorMoved)
+        {
+            if (cursorRow < state.scrollLine) state.scrollLine = cursorRow;
+            else if (cursorRow >= state.scrollLine + visibleRows) state.scrollLine = cursorRow - visibleRows + 1;
+        }
         if (state.scrollLine < 0) state.scrollLine = 0;
-        const int updatedMaxScroll = static_cast<int>(visibleLogicalLines.size()) - visibleRows > 0
-            ? static_cast<int>(visibleLogicalLines.size()) - visibleRows : 0;
+        const int updatedMaxScroll = rowCount() > visibleRows ? rowCount() - visibleRows : 0;
         if (state.scrollLine > updatedMaxScroll) state.scrollLine = updatedMaxScroll;
     }
     else
@@ -1366,7 +1434,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
 
     for (int row = firstRow; row <= lastRow; ++row)
     {
-        const int line = visibleLogicalLines[static_cast<size_t>(row)];
+        const int line = logicalLine(row);
         const float y = textArea.y + padding + static_cast<float>(row - firstRow) * lineHeight;
         const String &text = state.lineAt(line);
 

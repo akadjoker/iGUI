@@ -1175,8 +1175,8 @@ BlitzHighlighter::highlightLine(int /*lineIndex*/, const String& text,
         char c = text[i];
         if (c == ' ' || c == '\t') { i++; continue; }
 
-        // Line comment: REM ... or ' ...
-        if (c == '\'') { push(i, n, TT::Comment); i = n; continue; }
+        // Line comment: ; ... , REM ... or ' ...
+        if (c == ';' || c == '\'') { push(i, n, TT::Comment); i = n; continue; }
         if ((c == 'r' || c == 'R') && i + 2 < n &&
             lower(text[i+1]) == 'e' && lower(text[i+2]) == 'm' &&
             (i + 3 >= n || !isIdChar(text[i+3])) &&

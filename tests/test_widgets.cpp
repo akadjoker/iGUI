@@ -1762,7 +1762,7 @@ public:
     int listCalls = 0;
     bool createdFolder = false;
 
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries, bool = true) override
     {
         ++listCalls;
         ig::FileDialogEntry folder;
@@ -1814,7 +1814,7 @@ public:
 class ManyEntriesDialogProvider : public ig::FileDialogProvider
 {
 public:
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries, bool = true) override
     {
         for (int index = 0; index < 12; ++index)
         {
@@ -2095,7 +2095,7 @@ static void test_file_dialog_double_click_accepts_file()
 class SortDialogProvider : public ig::FileDialogProvider
 {
 public:
-    bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry> &entries) override
+    bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry> &entries, bool = true) override
     {
         ig::FileDialogEntry alpha;
         alpha.name = "alpha.bin";
@@ -2247,7 +2247,7 @@ static void test_small_dock_space()
 static void test_file_dialog_read_error_and_paste()
 {
     class Unreadable : public DialogProvider {
-        bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry>& entries) override {
+        bool listDirectory(ig::StringView, ct::Vector<ig::FileDialogEntry>& entries, bool = true) override {
             ig::FileDialogEntry partial; partial.name = "partial"; entries.push_back(partial);
             return false;
         }

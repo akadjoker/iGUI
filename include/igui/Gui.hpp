@@ -346,6 +346,15 @@ public:
     // document and pick a language. Returns true the frame the buffer changed.
     bool codeEditor(StringView id, CodeEditorState &state, const Rect &bounds,
                     const CodeEditorOptions &options = CodeEditorOptions());
+    // Programmatic equivalents of the Ctrl+C/X/V shortcuts codeEditor()
+    // already handles internally - for a context menu's Copy/Cut/Paste
+    // items, or any other caller that wants to trigger them without
+    // synthesizing key events. Safe to call with no selection (Copy/Cut
+    // become no-ops) or an empty clipboard (Paste becomes a no-op).
+    // Each returns true if it changed the buffer (Cut/Paste; Copy never does).
+    bool codeEditorCopy(CodeEditorState &state);
+    bool codeEditorCut(CodeEditorState &state);
+    bool codeEditorPaste(CodeEditorState &state);
     bool inputInt(StringView label, int &value, const Rect &bounds);
     bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
     // Inline RGBA editor with a preview swatch and four draggable channels.
@@ -541,6 +550,8 @@ public:
     Vec2 cursor() const;
     // Remaining horizontal content space at the current layout cursor.
     float availableWidth() const;
+    // Remaining vertical space in the current window or panel.
+    float availableHeight() const;
 
 private:
     struct PointerState

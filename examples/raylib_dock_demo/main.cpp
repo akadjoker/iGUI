@@ -26,7 +26,7 @@ public:
             UnloadTexture(preview_);
     }
 
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries, bool = true) override
     {
         const ig::String nativePath(path.data(), path.size());
         const ::FilePathList files = LoadDirectoryFiles(nativePath.c_str());

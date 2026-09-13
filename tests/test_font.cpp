@@ -68,8 +68,25 @@ static void test_high_resolution_atlas()
     assert(atlas.measureText(atlas.defaultFont(), "Sharp text", 14.0f).width > 0.0f);
 }
 
+static void test_glyph_cache()
+{
+    ig::FontAtlas atlas;
+    const auto font = atlas.defaultFont();
+    const uint32_t points[] = {'A', 'A'+256u, 'A', 0x10ffffu, '?', 0xE1u};
+    for (uint32_t point : points) {
+        const auto* first = atlas.glyph(font,point);
+        assert(first == atlas.glyph(font,point));
+    }
+    assert(atlas.glyph(font,0x10ffffu) == atlas.glyph(font,'?'));
+    assert(atlas.glyph(ig::FontId(9999),'A') == nullptr);
+    ig::FontAtlas copied = atlas;
+    assert(copied.glyph(font,'A')->codepoint == 'A');
+    assert(copied.glyph(font,'A') != atlas.glyph(font,'A'));
+}
+
 int main()
 {
+    test_glyph_cache();
     test_utf8_decoder();
     test_default_font();
     test_custom_ranges_and_atlas_size();
