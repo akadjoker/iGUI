@@ -1334,7 +1334,9 @@ DefinedHighlighter::DefinedHighlighter(const SyntaxLanguage& language) : languag
 
 SyntaxHighlighter::HighlightResult DefinedHighlighter::highlightLine(int, const String& text, int prevState) const
 {
-    HighlightResult result; result.state = prevState == 1 || (prevState == 2 && language_.rawQuote) ? prevState : 0;
+    HighlightResult result;
+    result.state = prevState == 1 || (prevState == 2 && language_.rawQuote) ||
+                    (prevState == 3 && !language_.verbatimPrefix.empty()) ? prevState : 0;
     int i = 0, n = static_cast<int>(text.size());
     auto matches = [&](const String& token) {
         return !token.empty() && token.size() <= text.size() - static_cast<size_t>(i) &&
@@ -1343,7 +1345,21 @@ SyntaxHighlighter::HighlightResult DefinedHighlighter::highlightLine(int, const 
     while (i < n) {
         const int start = i;
         TokenType type = TokenType::Default;
-        if (result.state == 2 || (language_.rawQuote && text[i] == language_.rawQuote)) {
+        if (result.state == 3 || (!language_.verbatimPrefix.empty() && matches(language_.verbatimPrefix))) {
+            // @"..." (C#/zenx style): "" inside is a literal quote, not the
+            // close - only a lone trailing " ends the string. Spans multiple
+            // lines exactly like rawQuote, via the carried state.
+            if (result.state != 3) i += static_cast<int>(language_.verbatimPrefix.size());
+            result.state = 3;
+            while (i < n) {
+                if (text[i] == '"') {
+                    if (i + 1 < n && text[i + 1] == '"') { i += 2; continue; }
+                    ++i; result.state = 0; break;
+                }
+                ++i;
+            }
+            type = TokenType::String;
+        } else if (result.state == 2 || (language_.rawQuote && text[i] == language_.rawQuote)) {
             if (result.state != 2) ++i;
             result.state = 2;
             while (i < n && text[i] != language_.rawQuote) ++i;
