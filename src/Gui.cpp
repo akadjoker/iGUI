@@ -309,7 +309,7 @@ void colorToHsv(const Color &color, float &hue, float &saturation, float &value)
 } // namespace
 
 Context::PointerState::PointerState()
-    : position(), wheelX(0.0f), wheelY(0.0f)
+    : position(), wheelX(0.0f), wheelY(0.0f), wheelControl(false)
 {
     for (uint32_t i = 0; i < 3u; ++i)
     {
@@ -386,6 +386,7 @@ void Context::beginFrame(const FrameInfo &frame)
     ++frameNumber_;
     pointer_.wheelX = 0.0f;
     pointer_.wheelY = 0.0f;
+    pointer_.wheelControl = false;
     for (uint32_t i = 0; i < 3u; ++i)
     {
         pointer_.pressed[i] = false;
@@ -1563,11 +1564,15 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     // popup for it. Only this menu's own items count: while a submenu's
     // items are being submitted subMenuParent_ is set, and the parent's
     // width must not grow to fit the submenu's labels.
+    const float itemWidth = metrics.width + theme_.menuItemPadX * 2.0f + checkWidth;
     if (subMenuParent_ == InvalidWidgetId)
     {
-        const float itemWidth = metrics.width + theme_.menuItemPadX * 2.0f + checkWidth;
         if (itemWidth > menuMeasuredWidth_)
             menuMeasuredWidth_ = itemWidth;
+    }
+    else if (itemWidth > subMenuMeasuredWidth_)
+    {
+        subMenuMeasuredWidth_ = itemWidth;
     }
     if (checked && *checked)
     {
@@ -1624,16 +1629,17 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     if (enabled && (hovered || clicked))
     {
         openSubMenu_ = id;
+        const float popupWidth = subMenuWidthId_ == id ? subMenuPopupWidth_ : theme_.menuMinWidth;
         float popupX = item.x + item.width;
         const float clipRight = clip.x + clip.width;
-        if (popupX + theme_.menuMinWidth > clipRight)
+        if (popupX + popupWidth > clipRight)
         {
-            const float leftPopupX = item.x - theme_.menuMinWidth;
-            popupX = leftPopupX >= clip.x ? leftPopupX : clipRight - theme_.menuMinWidth;
+            const float leftPopupX = item.x - popupWidth;
+            popupX = leftPopupX >= clip.x ? leftPopupX : clipRight - popupWidth;
         }
         if (popupX < clip.x)
             popupX = clip.x;
-        subMenuPopupBounds_ = Rect(popupX, item.y, theme_.menuMinWidth, 0.0f);
+        subMenuPopupBounds_ = Rect(popupX, item.y, popupWidth, 0.0f);
     }
     popup.addRectFilled(item, openSubMenu_ == id || hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
@@ -1668,7 +1674,13 @@ void Context::endSubMenu()
     {
         window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, contentClip());
         subMenuPopupBounds_ = activeMenuBounds_;
+        if (subMenuMeasuredWidth_ > 0.0f)
+        {
+            subMenuWidthId_ = activeMenu_;
+            subMenuPopupWidth_ = subMenuMeasuredWidth_ > theme_.menuMinWidth ? subMenuMeasuredWidth_ : theme_.menuMinWidth;
+        }
     }
+    subMenuMeasuredWidth_ = 0.0f;
     activeMenu_ = subMenuParent_;
     activeMenuBounds_ = subMenuParentBounds_;
     subMenuParent_ = InvalidWidgetId;
@@ -5671,6 +5683,7 @@ void Context::consumeEvents()
         case EventType::PointerWheel:
             pointer_.wheelX += event.wheelX;
             pointer_.wheelY += event.wheelY;
+            pointer_.wheelControl = event.control;
             break;
         case EventType::KeyDown:
         {
