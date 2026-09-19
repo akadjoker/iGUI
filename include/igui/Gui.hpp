@@ -854,6 +854,13 @@ private:
     WidgetId openSubMenu_;
     WidgetId activeMenu_;
     WidgetId subMenuParent_;
+    // Snapshot of openMenu_/openContextMenu_ and the popup rects, taken once
+    // in beginFrame before any beginMenu()/beginContextMenu() runs this
+    // frame - see pointerBlockedByOpenMenu's comment for why this can't just
+    // read openMenu_ live.
+    bool menuWasOpenAtFrameStart_;
+    Rect menuPopupBoundsAtFrameStart_;
+    Rect subMenuPopupBoundsAtFrameStart_;
     WidgetId activeModal_;
     WidgetId dragWidget_;
     WidgetId activeDockSpace_;
