@@ -5952,7 +5952,8 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
     const Rect visible = intersect(rect, clip);
-    const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position);
+    const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position) &&
+                         !pointerBlockedByOpenMenu(pointer_.position);
     if (hovered)
         hotWidget_ = id;
     return hovered;
@@ -5970,7 +5971,8 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     const Rect visible = intersect(rect, clip);
     const bool pressedHere = pointer_.pressed[left] &&
                              currentWindow_ == focusedWindow_ &&
-                             contains(visible, pointer_.pressedPosition[left]);
+                             contains(visible, pointer_.pressedPosition[left]) &&
+                             !pointerBlockedByOpenMenu(pointer_.pressedPosition[left]);
     if (pressedHere)
     {
         activeWidget_ = id;
@@ -6237,6 +6239,35 @@ bool Context::currentWindowReceivesPointer() const
 {
     return activeModal_ == InvalidWidgetId && currentWindow_ &&
            currentWindow_ == topWindowAt(pointer_.position);
+}
+
+// A menu bar dropdown/context menu is drawn into its window's overlay list
+// (endMenu), not a window of its own - topWindowAt() never sees it, so
+// currentWindowReceivesPointer() alone lets whatever sits underneath the
+// popup keep hovering/clicking through it (a symbol tree row, a tab, ...).
+// While a menu is open (openMenu_/openContextMenu_), any point outside its
+// popup rect (and any open submenu's) is blocked here; itemHovered/
+// itemClicked call this so every widget gets the guard for free. The menu's
+// own items are unaffected: they're submitted with activeMenu_ == the open
+// menu's id, and their rects live inside menuPopupBounds_/
+// subMenuPopupBounds_ by construction, so they never hit this early return.
+bool Context::pointerBlockedByOpenMenu(const Vec2 &point) const
+{
+    if (openMenu_ == InvalidWidgetId && openContextMenu_ == InvalidWidgetId)
+        return false;
+    if (activeMenu_ != InvalidWidgetId)
+        return false; // submitting the open menu's own items right now
+    if (contains(menuPopupBounds_, point))
+        return false;
+    if (contains(subMenuPopupBounds_, point))
+        return false;
+    // The menu bar strip itself stays live while a dropdown is open - that's
+    // what lets hovering "Edit" switch the open menu away from "File"
+    // (beginMenu's own hover-to-switch branch) and a click on another
+    // top-level entry work in the same frame it closes this one.
+    if (contains(menuBarBounds_, point))
+        return false;
+    return true;
 }
 
 uint32_t Context::dockSlotIndex(DockSlot slot)
