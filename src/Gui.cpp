@@ -330,6 +330,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
+      menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
@@ -416,6 +417,15 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     hotWidget_ = InvalidWidgetId;
     lastItemId_ = InvalidWidgetId;
+    // Snapshot taken before anything this frame can touch openMenu_/
+    // openContextMenu_ - see pointerBlockedByOpenMenu. A click that closes
+    // the menu (beginMenu's "clicked outside" branch) clears openMenu_
+    // mid-frame, but the popup was still on screen when the pointer went
+    // down, so widgets drawn later this same frame (a symbol tree, ...)
+    // must still treat that click as having landed on the menu, not on them.
+    menuWasOpenAtFrameStart_ = openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId;
+    menuPopupBoundsAtFrameStart_ = menuPopupBounds_;
+    subMenuPopupBoundsAtFrameStart_ = subMenuPopupBounds_;
     activeMenu_ = InvalidWidgetId;
     menuBarActive_ = false;
     childStack_.clear();
@@ -6245,21 +6255,31 @@ bool Context::currentWindowReceivesPointer() const
 // (endMenu), not a window of its own - topWindowAt() never sees it, so
 // currentWindowReceivesPointer() alone lets whatever sits underneath the
 // popup keep hovering/clicking through it (a symbol tree row, a tab, ...).
-// While a menu is open (openMenu_/openContextMenu_), any point outside its
-// popup rect (and any open submenu's) is blocked here; itemHovered/
-// itemClicked call this so every widget gets the guard for free. The menu's
-// own items are unaffected: they're submitted with activeMenu_ == the open
-// menu's id, and their rects live inside menuPopupBounds_/
-// subMenuPopupBounds_ by construction, so they never hit this early return.
+// While a menu is open, any point outside its popup rect (and any open
+// submenu's) is blocked here; itemHovered/itemClicked call this so every
+// widget gets the guard for free. The menu's own items are unaffected:
+// they're submitted with activeMenu_ == the open menu's id, and their rects
+// live inside menuPopupBounds_/subMenuPopupBounds_ by construction, so they
+// never hit this early return.
+//
+// Uses the frame-start snapshot (menuWasOpenAtFrameStart_/
+// menuPopupBoundsAtFrameStart_/subMenuPopupBoundsAtFrameStart_), not the
+// live openMenu_/menuPopupBounds_: beginMenu's "clicked outside the menu"
+// branch clears openMenu_ the instant that click is processed, which runs
+// well before later widgets (a symbol tree, further down the same frame)
+// get to see the same click via itemClicked - reading openMenu_ live would
+// have already forgotten the menu was open when that exact click landed,
+// so the click would fall through to whatever is underneath it instead of
+// being consumed by closing the menu.
 bool Context::pointerBlockedByOpenMenu(const Vec2 &point) const
 {
-    if (openMenu_ == InvalidWidgetId && openContextMenu_ == InvalidWidgetId)
+    if (!menuWasOpenAtFrameStart_)
         return false;
     if (activeMenu_ != InvalidWidgetId)
         return false; // submitting the open menu's own items right now
-    if (contains(menuPopupBounds_, point))
+    if (contains(menuPopupBoundsAtFrameStart_, point))
         return false;
-    if (contains(subMenuPopupBounds_, point))
+    if (contains(subMenuPopupBoundsAtFrameStart_, point))
         return false;
     // The menu bar strip itself stays live while a dropdown is open - that's
     // what lets hovering "Edit" switch the open menu away from "File"
