@@ -954,6 +954,7 @@ private:
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
+    bool pointerBlockedByOpenMenu(const Vec2 &point) const;
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);
