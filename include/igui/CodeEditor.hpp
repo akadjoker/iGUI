@@ -73,6 +73,15 @@ struct CodeEditorFoldRange
     bool collapsed = false;
 };
 
+// One secondary caret+selection added by Ctrl+D ("add next occurrence").
+// The primary cursor (CodeEditorState::cursorLine/cursorColumn/selectionAnchor*)
+// is never stored here - this only holds the EXTRA ones.
+struct CodeEditorCursor
+{
+    int line = 0, column = 0;
+    int anchorLine = 0, anchorColumn = 0;
+};
+
 // Autocomplete popup state, rebuilt whenever the identifier under the cursor
 // changes. Kept separate from CodeEditorState's edit history so accepting a
 // suggestion is just another Replace edit.
@@ -144,7 +153,7 @@ public:
     void clearUndoHistory();
     // Ends coalescing so the next insertText starts a new undo group (call
     // after moving the cursor without typing, e.g. a mouse click).
-    void breakUndoCoalescing() { lastEditWasTyping_ = false; }
+    void breakUndoCoalescing() { lastEditWasTyping_ = false; ++editGroup_; }
 
     // ── Cursor / selection (line/column, both zero-based) ───────────────
     int cursorLine = 0, cursorColumn = 0;
@@ -155,6 +164,32 @@ public:
     // Selection endpoints in document order (a <= b).
     void orderedSelection(int& startLine, int& startColumn, int& endLine, int& endColumn) const;
     String selectedText() const;
+
+    // ── Multi-cursor (Ctrl+D "add selection to next find match") ───────────
+    // Extra carets beyond the primary cursor/selection above. Empty in the
+    // common single-cursor case - most call sites can ignore this entirely.
+    int extraCursorCount() const { return static_cast<int>(extraCursors_.size()); }
+    const CodeEditorCursor& extraCursorAt(int i) const { return extraCursors_[static_cast<size_t>(i)]; }
+    bool hasMultipleCursors() const { return !extraCursors_.empty(); }
+    // Ctrl+D: with no selection, selects the word under the primary cursor.
+    // With a selection, adds a new cursor+selection at the next occurrence of
+    // the selected text (wrapping around the document), skipping any
+    // occurrence already covered by an existing cursor. No-op if nothing else
+    // matches.
+    void addNextOccurrenceCursor();
+    // Drops every extra cursor, keeping only the primary. Called on Escape or
+    // any plain (non-extending) cursor movement.
+    void clearExtraCursors() { extraCursors_.clear(); }
+
+    // Applies the same insert/erase every plain typing/Backspace/Delete/Enter
+    // path already does, but at the primary cursor AND every extra cursor at
+    // once, as a single undo step (one CodeEditorEdit per cursor, sharing the
+    // same group). With no extra cursors these behave exactly like the
+    // single-cursor primitives above.
+    void insertTextAtAllCursors(const String& text);
+    bool eraseSelectionsAtAllCursors(); // true if anything had a selection to erase
+    void backspaceAtAllCursors();
+    void deleteAtAllCursors();
 
     // ── Find / replace ───────────────────────────────────────────────────
     // Each match is independent per line: a regex pattern's ^/$ anchor to
@@ -218,10 +253,19 @@ private:
     mutable ct::Vector<int> visibleLines_;
     mutable bool visibleLinesDirty_ = true;
     float fontScale_ = 1.0f;
+    ct::Vector<CodeEditorCursor> extraCursors_;
 
     void recordEdit(CodeEditorEdit::Kind kind, int line, int column,
                     const String& removed, const String& inserted,
                     int beforeLine, int beforeColumn, bool coalesce);
+    void insertTextImpl(int line, int column, const String& text, bool bumpGroup);
+    String eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn, bool bumpGroup);
+    // Writes each per-cursor post-edit (line, column) back to extraCursors_
+    // (collapsing that cursor's selection) or, for the primary, to
+    // cursorLine/cursorColumn. AllCursorsResult is defined in
+    // CodeEditorImmediate.cpp; declared here only as an opaque template so
+    // the type doesn't need a public home.
+    template <typename ResultVector> void applyMultiCursorResults(const ResultVector& results);
     void applyEditForward(const CodeEditorEdit& edit);
     void applyEditBackward(const CodeEditorEdit& edit);
     void rehighlightFrom(int line);
