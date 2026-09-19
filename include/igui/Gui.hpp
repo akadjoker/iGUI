@@ -567,6 +567,7 @@ private:
         bool released[3];
         float wheelX;
         float wheelY;
+        bool wheelControl;
 
         PointerState();
     };
@@ -876,6 +877,13 @@ private:
     WidgetId menuWidthId_ = InvalidWidgetId;
     float menuPopupWidth_ = 0.0f;
     float menuMeasuredWidth_ = 0.0f;
+    // Same latching, one level down: a submenu's own widest item (Recent
+    // Files' longest path, say), tracked separately from the parent menu's
+    // menuMeasuredWidth_ above (menuItemInternal already keeps the two
+    // apart via subMenuParent_).
+    WidgetId subMenuWidthId_ = InvalidWidgetId;
+    float subMenuPopupWidth_ = 0.0f;
+    float subMenuMeasuredWidth_ = 0.0f;
     Rect activeMenuBounds_;
     Rect subMenuPopupBounds_;
     Rect subMenuParentBounds_;

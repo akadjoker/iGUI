@@ -55,6 +55,7 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
         return true;
     }
     case SDL_MOUSEWHEEL:
+    {
         event = Event();
         event.type = EventType::PointerWheel;
         event.wheelX = static_cast<float>(nativeEvent.wheel.x);
@@ -64,7 +65,11 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
             event.wheelX = -event.wheelX;
             event.wheelY = -event.wheelY;
         }
+        const SDL_Keymod modifiers = SDL_GetModState();
+        event.control = (modifiers & KMOD_CTRL) != 0;
+        event.shift = (modifiers & KMOD_SHIFT) != 0;
         return true;
+    }
     case SDL_KEYDOWN:
     {
         KeyCode key = KeyCode::None;
