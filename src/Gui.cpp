@@ -751,6 +751,11 @@ bool Context::isKeyPressed(KeyCode key) const
     return index < 32u && keyPressed_[index];
 }
 
+bool Context::isPointerButtonDown(PointerButton button) const
+{
+    return pointer_.down[buttonIndex(button)];
+}
+
 bool Context::shortcut(KeyCode key, bool control, bool shift) const
 {
     const uint32_t index = static_cast<uint32_t>(key);

@@ -400,6 +400,13 @@ public:
     void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
     bool isKeyPressed(KeyCode key) const;
     bool shortcut(KeyCode key, bool control = true, bool shift = false) const;
+    // True for every frame the given button is held down, from the press
+    // through the frame it's released (inclusive) - not just the one frame
+    // it went down. For a caller that needs to tell "the user is actively
+    // dragging something" from "a plain click landed", such as freezing a
+    // side panel's cursor-follow highlight while a drag-selection is live
+    // in the code editor next to it.
+    bool isPointerButtonDown(PointerButton button) const;
     void progressBar(float value, float maximum, const Rect &bounds);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,

@@ -1372,17 +1372,26 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // pointer, selecting text while the user tried to scroll.
     const Rect interactiveArea(rect.x, rect.y, rect.width - scrollbarWidth, rect.height);
     itemClicked(interactiveArea, clip, id);
+    // The pointer sitting over this editor with any wheel motion is this
+    // widget's to consume - zoom/scroll it here and clear wheelY/wheelX so
+    // nothing drawn later this same frame (the outline panel beside it,
+    // say) also sees a nonzero wheel delta and reacts to it. Mirrors
+    // beginChild's own "clear after consuming" (Gui.cpp).
     if (currentWindowReceivesPointer() && contains(intersect(rect, clip), pointer_.position) &&
-        pointer_.wheelY != 0.0f && pointer_.wheelControl)
+        pointer_.wheelY != 0.0f)
     {
-        if (pointer_.wheelY > 0.0f) state.zoomIn(); else state.zoomOut();
-    }
-    else if (hasScrollbar && currentWindowReceivesPointer() &&
-        contains(intersect(rect, clip), pointer_.position) && pointer_.wheelY != 0.0f)
-    {
-        state.scrollLine += pointer_.wheelY > 0.0f ? -1 : 1;
-        if (state.scrollLine < 0) state.scrollLine = 0;
-        if (state.scrollLine > maximumScroll) state.scrollLine = maximumScroll;
+        if (pointer_.wheelControl)
+        {
+            if (pointer_.wheelY > 0.0f) state.zoomIn(); else state.zoomOut();
+        }
+        else if (hasScrollbar)
+        {
+            state.scrollLine += pointer_.wheelY > 0.0f ? -1 : 1;
+            if (state.scrollLine < 0) state.scrollLine = 0;
+            if (state.scrollLine > maximumScroll) state.scrollLine = maximumScroll;
+        }
+        pointer_.wheelY = 0.0f;
+        pointer_.wheelX = 0.0f;
     }
 
     Rect thumb;
