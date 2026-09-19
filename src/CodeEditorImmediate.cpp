@@ -51,6 +51,7 @@ void CodeEditorState::setText(const String& text)
     cursorLine = 0;
     cursorColumn = 0;
     clearSelection();
+    clearExtraCursors();
     scrollLine = 0;
     completion = CodeEditorCompletion();
     clearUndoHistory();
@@ -217,21 +218,29 @@ void CodeEditorState::orderedSelection(int& startLine, int& startColumn, int& en
     }
 }
 
+namespace
+{
+String textBetween(const CodeEditorState& state, int sl, int sc, int el, int ec)
+{
+    if (sl == el) return state.lineAt(sl).substr(static_cast<size_t>(sc), static_cast<size_t>(ec - sc));
+    String out = state.lineAt(sl).substr(static_cast<size_t>(sc));
+    for (int i = sl + 1; i < el; ++i)
+    {
+        out.push_back('\n');
+        out.append(state.lineAt(i));
+    }
+    out.push_back('\n');
+    out.append(state.lineAt(el).substr(0, static_cast<size_t>(ec)));
+    return out;
+}
+} // anonymous namespace
+
 String CodeEditorState::selectedText() const
 {
     if (!hasSelection()) return String();
     int sl, sc, el, ec;
     orderedSelection(sl, sc, el, ec);
-    if (sl == el) return lineAt(sl).substr(static_cast<size_t>(sc), static_cast<size_t>(ec - sc));
-    String out = lineAt(sl).substr(static_cast<size_t>(sc));
-    for (int i = sl + 1; i < el; ++i)
-    {
-        out.push_back('\n');
-        out.append(lineAt(i));
-    }
-    out.push_back('\n');
-    out.append(lineAt(el).substr(0, static_cast<size_t>(ec)));
-    return out;
+    return textBetween(*this, sl, sc, el, ec);
 }
 
 // ── Find / replace ─────────────────────────────────────────────────────────
@@ -386,6 +395,79 @@ int CodeEditorState::replaceAll(const String& pattern, const String& replacement
     return static_cast<int>(matches.size());
 }
 
+// ── Multi-cursor (Ctrl+D) ─────────────────────────────────────────────────
+
+namespace
+{
+// True if [line, col..col+length) exactly coincides with an existing
+// cursor's selection (primary or extra) - used so repeated Ctrl+D never
+// re-adds an occurrence already covered.
+bool matchAlreadyCovered(const CodeEditorState& state, int line, int col, int length)
+{
+    int sl, sc, el, ec;
+    state.orderedSelection(sl, sc, el, ec);
+    if (state.hasSelection() && sl == line && sc == col && el == line && ec == col + length) return true;
+    for (int i = 0; i < state.extraCursorCount(); ++i)
+    {
+        const CodeEditorCursor& c = state.extraCursorAt(i);
+        int csl = c.line, csc = c.column, cel = c.anchorLine, cec = c.anchorColumn;
+        if (csl > cel || (csl == cel && csc > cec)) { int tl = csl, tc = csc; csl = cel; csc = cec; cel = tl; cec = tc; }
+        if (csl == line && csc == col && cel == line && cec == col + length) return true;
+    }
+    return false;
+}
+} // anonymous namespace
+
+void CodeEditorState::addNextOccurrenceCursor()
+{
+    if (!hasSelection())
+    {
+        const String& line = lineAt(cursorLine);
+        int start = cursorColumn, end = cursorColumn;
+        while (start > 0 && isIdentChar(line[static_cast<size_t>(start - 1)])) --start;
+        while (end < static_cast<int>(line.size()) && isIdentChar(line[static_cast<size_t>(end)])) ++end;
+        if (start == end) { breakUndoCoalescing(); return; }
+        selectionAnchorLine = cursorLine;
+        selectionAnchorColumn = start;
+        cursorColumn = end;
+        breakUndoCoalescing();
+        return;
+    }
+
+    int sl, sc, el, ec;
+    orderedSelection(sl, sc, el, ec);
+    const String needle = textBetween(*this, sl, sc, el, ec);
+    if (needle.empty() || needle.find('\n') != String::npos) { breakUndoCoalescing(); return; }
+
+    ct::Vector<FindMatch> matches = collectMatches(*this, needle, true, false);
+    if (matches.empty()) { breakUndoCoalescing(); return; }
+
+    // Search strictly after the end of the primary's selection (which always
+    // holds the most-recently-added cursor); wrap to the first uncovered
+    // match if nothing qualifies after it.
+    const FindMatch* found = nullptr;
+    const FindMatch* firstUncovered = nullptr;
+    for (const auto& m : matches)
+    {
+        if (matchAlreadyCovered(*this, m.line, m.column, m.length)) continue;
+        if (!firstUncovered) firstUncovered = &m;
+        if (m.line > el || (m.line == el && m.column >= ec)) { found = &m; break; }
+    }
+    if (!found) found = firstUncovered;
+    if (!found) { breakUndoCoalescing(); return; }
+
+    CodeEditorCursor preserved;
+    preserved.line = cursorLine; preserved.column = cursorColumn;
+    preserved.anchorLine = selectionAnchorLine; preserved.anchorColumn = selectionAnchorColumn;
+    extraCursors_.push_back(preserved);
+
+    selectionAnchorLine = found->line;
+    selectionAnchorColumn = found->column;
+    cursorLine = found->line;
+    cursorColumn = found->column + found->length;
+    breakUndoCoalescing();
+}
+
 // ── Raw buffer mutation (no undo bookkeeping) ─────────────────────────────
 // Both insertText/eraseRange funnel through these two, which is where the
 // undo stack is actually written to; see the public wrappers below.
@@ -505,7 +587,10 @@ void CodeEditorState::recordEdit(CodeEditorEdit::Kind kind, int line, int column
     undoStack_.push_back(edit);
 }
 
-void CodeEditorState::insertText(int line, int column, const String& text)
+// bumpGroup is false only when called from the multi-cursor entry points
+// below, which bump editGroup_ once for the whole action instead of once
+// per cursor - see insertTextAtAllCursors/eraseRangeAtAllCursors.
+void CodeEditorState::insertTextImpl(int line, int column, const String& text, bool bumpGroup)
 {
     if (text.empty()) return;
     const int beforeLine = cursorLine, beforeColumn = cursorColumn;
@@ -516,14 +601,19 @@ void CodeEditorState::insertText(int line, int column, const String& text)
     clearSelection();
 
     const bool isPlainTyping = text.size() == 1 && text[0] != '\n';
-    if (!isPlainTyping) ++editGroup_;
+    if (bumpGroup && !isPlainTyping) ++editGroup_;
     recordEdit(CodeEditorEdit::Insert, line, column, String(), text, beforeLine, beforeColumn, isPlainTyping);
     lastEditWasTyping_ = isPlainTyping;
 
     rehighlightFrom(line);
 }
 
-String CodeEditorState::eraseRange(int startLine, int startColumn, int endLine, int endColumn)
+void CodeEditorState::insertText(int line, int column, const String& text)
+{
+    insertTextImpl(line, column, text, true);
+}
+
+String CodeEditorState::eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn, bool bumpGroup)
 {
     if (startLine > endLine || (startLine == endLine && startColumn > endColumn))
     {
@@ -539,12 +629,17 @@ String CodeEditorState::eraseRange(int startLine, int startColumn, int endLine, 
     cursorColumn = startColumn;
     clearSelection();
 
-    ++editGroup_;
+    if (bumpGroup) ++editGroup_;
     recordEdit(CodeEditorEdit::Delete, startLine, startColumn, removed, String(), beforeLine, beforeColumn, false);
     lastEditWasTyping_ = false;
 
     rehighlightFrom(startLine);
     return removed;
+}
+
+String CodeEditorState::eraseRange(int startLine, int startColumn, int endLine, int endColumn)
+{
+    return eraseRangeImpl(startLine, startColumn, endLine, endColumn, true);
 }
 
 bool CodeEditorState::eraseSelection()
@@ -554,6 +649,230 @@ bool CodeEditorState::eraseSelection()
     orderedSelection(sl, sc, el, ec);
     eraseRange(sl, sc, el, ec);
     return true;
+}
+
+// ── Multi-cursor editing entry points ─────────────────────────────────────
+// Approach: temporarily point the primary cursor/selection fields at the
+// cursor being processed, run it through the existing single-cursor
+// primitive (which updates cursorLine/cursorColumn to the post-edit
+// position), stash that back into the cursor's slot, move on. Cursors are
+// processed bottom-to-top (descending document order) so an edit never
+// shifts the (line, column) of a cursor still waiting its turn - except
+// when two cursors share a line, where an edit still shifts every
+// already-processed result to its right on that same line; see
+// shiftResultsAfterEdit below, which corrects for exactly that.
+
+namespace
+{
+// extraIndex is -1 for the primary, else the entry's slot in extraCursors_ -
+// kept so results can be written back to the right place after sorting.
+struct AllCursorsEntry { int line, column, anchorLine, anchorColumn; int extraIndex; };
+// Where each entry's cursor ended up after its own edit; adjusted in place
+// as later (further left/up) entries' edits shift it.
+struct AllCursorsResult { int line, column; int extraIndex; };
+
+ct::Vector<AllCursorsEntry> collectCursorsDescending(const CodeEditorState& state)
+{
+    ct::Vector<AllCursorsEntry> entries;
+    entries.push_back({state.cursorLine, state.cursorColumn, state.selectionAnchorLine, state.selectionAnchorColumn, -1});
+    for (int i = 0; i < state.extraCursorCount(); ++i)
+    {
+        const CodeEditorCursor& c = state.extraCursorAt(i);
+        entries.push_back({c.line, c.column, c.anchorLine, c.anchorColumn, i});
+    }
+    ct::sort(entries.begin(), entries.end(), [](const AllCursorsEntry& a, const AllCursorsEntry& b) {
+        if (a.line != b.line) return a.line > b.line;
+        return a.column > b.column;
+    });
+    return entries;
+}
+
+// An edit removed [*, oldEndLine/oldEndColumn) and left the cursor at
+// (newEndLine, newEndColumn) - shift every already-processed result that
+// was at or after the removed span's end by the same amount, so a
+// same-line cursor to the left processed afterward doesn't invalidate an
+// already-recorded result to its right.
+void shiftResultsAfterEdit(ct::Vector<AllCursorsResult>& results,
+                           int oldEndLine, int oldEndColumn, int newEndLine, int newEndColumn)
+{
+    const int lineDelta = newEndLine - oldEndLine;
+    for (auto& r : results)
+    {
+        if (r.line < oldEndLine || (r.line == oldEndLine && r.column < oldEndColumn)) continue;
+        if (r.line == oldEndLine) r.column = newEndColumn + (r.column - oldEndColumn);
+        r.line += lineDelta;
+    }
+}
+} // anonymous namespace
+
+template <typename ResultVector>
+void CodeEditorState::applyMultiCursorResults(const ResultVector& results)
+{
+    for (const auto& r : results)
+    {
+        if (r.extraIndex >= 0)
+        {
+            CodeEditorCursor& c = extraCursors_[static_cast<size_t>(r.extraIndex)];
+            c.line = r.line; c.column = r.column;
+            c.anchorLine = r.line; c.anchorColumn = r.column;
+        }
+        else
+        {
+            cursorLine = r.line; cursorColumn = r.column;
+        }
+    }
+    clearSelection();
+}
+
+void CodeEditorState::insertTextAtAllCursors(const String& text)
+{
+    if (extraCursors_.empty()) { insertText(cursorLine, cursorColumn, text); return; }
+
+    // Mirrors insertText()'s own rule (see insertTextImpl) so typing over a
+    // multi-cursor selection - eraseSelectionsAtAllCursors() then this -
+    // stays one undo group exactly like the single-cursor path does: the
+    // erase bumps the group, a plain-typing insert right after does not.
+    const bool isPlainTyping = text.size() == 1 && text[0] != '\n';
+    if (!isPlainTyping) ++editGroup_;
+    ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
+    ct::Vector<AllCursorsResult> results;
+    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        AllCursorsResult& mine = results[i];
+        cursorLine = mine.line; cursorColumn = mine.column;
+        selectionAnchorLine = mine.line; selectionAnchorColumn = mine.column;
+        insertTextImpl(mine.line, mine.column, text, false);
+        // A plain insert removes nothing - its "old end" is its own start.
+        shiftResultsAfterEdit(results, mine.line, mine.column, cursorLine, cursorColumn);
+        mine.line = cursorLine; mine.column = cursorColumn;
+    }
+    applyMultiCursorResults(results);
+}
+
+bool CodeEditorState::eraseSelectionsAtAllCursors()
+{
+    if (extraCursors_.empty()) return eraseSelection();
+
+    bool anySelected = hasSelection();
+    for (int i = 0; i < extraCursorCount() && !anySelected; ++i)
+    {
+        const CodeEditorCursor& c = extraCursorAt(i);
+        anySelected = c.line != c.anchorLine || c.column != c.anchorColumn;
+    }
+    if (!anySelected) return false; // mirrors eraseSelection(): a no-op never touches editGroup_
+
+    bool erasedAny = false;
+    ++editGroup_;
+    ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
+    ct::Vector<AllCursorsResult> results;
+    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto& entry = entries[i];
+        AllCursorsResult& mine = results[i];
+        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        if (!hadSelection) continue;
+        int sl = entry.anchorLine, sc = entry.anchorColumn, el = entry.line, ec = entry.column;
+        if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+        eraseRangeImpl(sl, sc, el, ec, false);
+        erasedAny = true;
+        shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
+        mine.line = cursorLine; mine.column = cursorColumn;
+    }
+    applyMultiCursorResults(results);
+    return erasedAny;
+}
+
+void CodeEditorState::backspaceAtAllCursors()
+{
+    if (extraCursors_.empty())
+    {
+        if (eraseSelection()) return;
+        if (cursorColumn > 0) eraseRange(cursorLine, cursorColumn - 1, cursorLine, cursorColumn);
+        else if (cursorLine > 0)
+        {
+            int previousLen = static_cast<int>(lineAt(cursorLine - 1).size());
+            eraseRange(cursorLine - 1, previousLen, cursorLine, 0);
+        }
+        return;
+    }
+
+    ++editGroup_;
+    ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
+    ct::Vector<AllCursorsResult> results;
+    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto& entry = entries[i];
+        AllCursorsResult& mine = results[i];
+        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        int sl, sc, el, ec;
+        if (hadSelection)
+        {
+            sl = entry.anchorLine; sc = entry.anchorColumn; el = entry.line; ec = entry.column;
+            if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+        }
+        else if (mine.column > 0)
+        {
+            sl = mine.line; sc = mine.column - 1; el = mine.line; ec = mine.column;
+        }
+        else if (mine.line > 0)
+        {
+            sl = mine.line - 1; sc = static_cast<int>(lineAt(mine.line - 1).size()); el = mine.line; ec = 0;
+        }
+        else continue;
+
+        eraseRangeImpl(sl, sc, el, ec, false);
+        shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
+        mine.line = cursorLine; mine.column = cursorColumn;
+    }
+    applyMultiCursorResults(results);
+}
+
+void CodeEditorState::deleteAtAllCursors()
+{
+    if (extraCursors_.empty())
+    {
+        if (eraseSelection()) return;
+        const int len = static_cast<int>(lineAt(cursorLine).size());
+        if (cursorColumn < len) eraseRange(cursorLine, cursorColumn, cursorLine, cursorColumn + 1);
+        else if (cursorLine + 1 < lineCount()) eraseRange(cursorLine, cursorColumn, cursorLine + 1, 0);
+        return;
+    }
+
+    ++editGroup_;
+    ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
+    ct::Vector<AllCursorsResult> results;
+    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const auto& entry = entries[i];
+        AllCursorsResult& mine = results[i];
+        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        int sl, sc, el, ec;
+        if (hadSelection)
+        {
+            sl = entry.anchorLine; sc = entry.anchorColumn; el = entry.line; ec = entry.column;
+            if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+        }
+        else
+        {
+            const int len = static_cast<int>(lineAt(mine.line).size());
+            if (mine.column < len) { sl = mine.line; sc = mine.column; el = mine.line; ec = mine.column + 1; }
+            else if (mine.line + 1 < lineCount()) { sl = mine.line; sc = mine.column; el = mine.line + 1; ec = 0; }
+            else continue;
+        }
+
+        eraseRangeImpl(sl, sc, el, ec, false);
+        shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
+        mine.line = cursorLine; mine.column = cursorColumn;
+    }
+    applyMultiCursorResults(results);
 }
 
 // ── Undo / redo ────────────────────────────────────────────────────────────
@@ -620,33 +939,68 @@ void CodeEditorState::applyEditBackward(const CodeEditorEdit& edit)
 void CodeEditorState::undo()
 {
     if (undoStack_.empty()) return;
-    CodeEditorEdit edit = undoStack_.back();
-    undoStack_.pop_back();
-    applyEditBackward(edit);
-    cursorLine = edit.cursorLineBefore;
-    cursorColumn = edit.cursorColumnBefore;
+    clearExtraCursors();
+
+    // Edits sharing one group were pushed in the order they were applied
+    // (bottom-to-top document order for a multi-cursor edit - see
+    // insertTextAtAllCursors/eraseSelectionsAtAllCursors above), so
+    // undoStack_.back() is always the most-recently-applied one in the
+    // group; popping back-to-front and undoing in that same order is what
+    // keeps every other edit's stored (line, column) valid as we go. The
+    // FIRST edit popped is therefore the topmost (smallest line) one in the
+    // group - land the single surviving cursor at its
+    // cursorLineBefore/cursorColumnBefore.
+    const uint64_t group = undoStack_.back().group;
+    int minLine = undoStack_.back().line;
+    const int restoreLine = undoStack_.back().cursorLineBefore;
+    const int restoreColumn = undoStack_.back().cursorColumnBefore;
+
+    while (!undoStack_.empty() && undoStack_.back().group == group)
+    {
+        CodeEditorEdit edit = undoStack_.back();
+        undoStack_.pop_back();
+        applyEditBackward(edit);
+        if (edit.line < minLine) minLine = edit.line;
+        redoStack_.push_back(edit);
+    }
+    cursorLine = restoreLine;
+    cursorColumn = restoreColumn;
     clearSelection();
     clampCursor();
-    redoStack_.push_back(edit);
     lastEditWasTyping_ = false;
     ++editGroup_;
-    rehighlightFrom(edit.line);
+    rehighlightFrom(minLine);
 }
 
 void CodeEditorState::redo()
 {
     if (redoStack_.empty()) return;
-    CodeEditorEdit edit = redoStack_.back();
-    redoStack_.pop_back();
-    applyEditForward(edit);
-    cursorLine = edit.cursorLineAfter;
-    cursorColumn = edit.cursorColumnAfter;
+    clearExtraCursors();
+
+    // redoStack_ holds the same group in the opposite order undo popped
+    // them (bottom-to-top became top-to-bottom), so popping it back-to-front
+    // replays the edits in their original forward (bottom-to-top) order -
+    // the last one popped is therefore the last one originally applied.
+    const uint64_t group = redoStack_.back().group;
+    int minLine = redoStack_.back().line;
+    CodeEditorEdit lastApplied;
+
+    while (!redoStack_.empty() && redoStack_.back().group == group)
+    {
+        CodeEditorEdit edit = redoStack_.back();
+        redoStack_.pop_back();
+        applyEditForward(edit);
+        if (edit.line < minLine) minLine = edit.line;
+        lastApplied = edit;
+        undoStack_.push_back(edit);
+    }
+    cursorLine = lastApplied.cursorLineAfter;
+    cursorColumn = lastApplied.cursorColumnAfter;
     clearSelection();
     clampCursor();
-    undoStack_.push_back(edit);
     lastEditWasTyping_ = false;
     ++editGroup_;
-    rehighlightFrom(edit.line);
+    rehighlightFrom(minLine);
 }
 
 void CodeEditorState::clearUndoHistory()
@@ -1108,6 +1462,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         state.cursorLine = line;
         state.cursorColumn = column;
         state.clearSelection(); // anchor starts here; drag (below) or shift-click would extend it
+        state.clearExtraCursors();
         state.breakUndoCoalescing();
         state.completion.visible = false;
     }
@@ -1173,7 +1528,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (cursorRow > 0) state.cursorLine = logicalLine(cursorRow - 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
-            if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)]) state.clearSelection();
+            if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)]) { state.clearSelection(); state.clearExtraCursors(); }
             state.breakUndoCoalescing();
         }
         else if (downPressed_)
@@ -1181,7 +1536,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (cursorRow + 1 < visibleLineCount) state.cursorLine = logicalLine(cursorRow + 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
-            if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)]) state.clearSelection();
+            if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)]) { state.clearSelection(); state.clearExtraCursors(); }
             state.breakUndoCoalescing();
         }
 
@@ -1201,7 +1556,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                     state.cursorLine = logicalLine(cursorRow - 1);
                     state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
                 }
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Left)]) state.clearSelection();
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Left)]) { state.clearSelection(); state.clearExtraCursors(); }
                 state.breakUndoCoalescing();
             }
             if (rightPressed_)
@@ -1212,19 +1567,19 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                     state.cursorLine = logicalLine(cursorRow + 1);
                     state.cursorColumn = 0;
                 }
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Right)]) state.clearSelection();
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Right)]) { state.clearSelection(); state.clearExtraCursors(); }
                 state.breakUndoCoalescing();
             }
             if (homePressed_)
             {
                 state.cursorColumn = 0;
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Home)]) state.clearSelection();
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Home)]) { state.clearSelection(); state.clearExtraCursors(); }
                 state.breakUndoCoalescing();
             }
             if (endPressed_)
             {
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::End)]) state.clearSelection();
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::End)]) { state.clearSelection(); state.clearExtraCursors(); }
                 state.breakUndoCoalescing();
             }
 
@@ -1235,6 +1590,10 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 state.cursorLine = totalLines - 1;
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
                 state.breakUndoCoalescing();
+            }
+            else if (shortcut(KeyCode::D, true, false))
+            {
+                state.addNextOccurrenceCursor();
             }
             else if (shortcut(KeyCode::Z, true, false))
             {
@@ -1261,7 +1620,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             else if (enterPressed_)
             {
                 state.completion.visible = false; // an un-navigated popup never blocks Enter
-                state.eraseSelection();
+                state.eraseSelectionsAtAllCursors();
                 const String &currentLine = state.lineAt(state.cursorLine);
                 String currentIndent;
                 if (options.autoIndent)
@@ -1277,9 +1636,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 // "foo() {|}" or "[|]") opens the block onto its own,
                 // further-indented line and drops the closing bracket to a
                 // new line at the original indent - "foo() {\n    |\n}"
-                // instead of "foo() {\n    |}".
+                // instead of "foo() {\n    |}". Skipped with multiple
+                // cursors active - falls back to a plain newline+indent at
+                // every cursor instead (see report).
                 bool splitBracketPair = false;
-                if (options.autoIndent && state.cursorColumn > 0 &&
+                if (!state.hasMultipleCursors() && options.autoIndent && state.cursorColumn > 0 &&
                     state.cursorColumn < static_cast<int>(currentLine.size()))
                 {
                     char before = currentLine[static_cast<size_t>(state.cursorColumn - 1)];
@@ -1312,7 +1673,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 {
                     String toInsert = "\n";
                     toInsert.append(currentIndent);
-                    state.insertText(state.cursorLine, state.cursorColumn, toInsert);
+                    state.insertTextAtAllCursors(toInsert);
                 }
                 state.breakUndoCoalescing();
                 changed = true;
@@ -1321,51 +1682,34 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             {
                 tabConsumedByWidget_ = true; // Tab indented; don't also move focus
                 state.completion.visible = false; // an un-navigated popup never blocks Tab
-                state.eraseSelection();
+                state.eraseSelectionsAtAllCursors();
                 String indent;
                 if (options.insertSpacesForTab)
                     for (int i = 0; i < options.tabSize; ++i) indent.push_back(' ');
                 else
                     indent.push_back('\t');
-                state.insertText(state.cursorLine, state.cursorColumn, indent);
+                state.insertTextAtAllCursors(indent);
                 state.breakUndoCoalescing();
                 changed = true;
             }
             else if (backspacePressed_)
             {
-                if (!state.eraseSelection())
-                {
-                    if (state.cursorColumn > 0)
-                        state.eraseRange(state.cursorLine, state.cursorColumn - 1, state.cursorLine, state.cursorColumn);
-                    else if (state.cursorLine > 0)
-                    {
-                        int previousLen = static_cast<int>(state.lineAt(state.cursorLine - 1).size());
-                        state.eraseRange(state.cursorLine - 1, previousLen, state.cursorLine, 0);
-                    }
-                }
+                state.backspaceAtAllCursors();
                 changed = true;
             }
             else if (isKeyPressed(KeyCode::Delete))
             {
-                if (!state.eraseSelection())
-                {
-                    const int len = static_cast<int>(state.lineAt(state.cursorLine).size());
-                    if (state.cursorColumn < len)
-                        state.eraseRange(state.cursorLine, state.cursorColumn, state.cursorLine, state.cursorColumn + 1);
-                    else if (state.cursorLine + 1 < totalLines)
-                        state.eraseRange(state.cursorLine, state.cursorColumn, state.cursorLine + 1, 0);
-                }
+                state.deleteAtAllCursors();
                 changed = true;
             }
             else if (!textEvents_.empty())
             {
-                state.eraseSelection();
+                state.eraseSelectionsAtAllCursors();
                 for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
                 {
                     const Event &event = textEvents_[i];
                     if (event.textLength == 0u) continue;
-                    state.insertText(state.cursorLine, state.cursorColumn,
-                                     String(event.text, event.textLength));
+                    state.insertTextAtAllCursors(String(event.text, event.textLength));
                     changed = true;
                 }
             }
@@ -1383,7 +1727,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             visibleLineCount = rowCount();
             updateCodeCompletion(state, options);
         }
-        if (escapePressed_) state.completion.visible = false;
+        if (escapePressed_) { state.completion.visible = false; state.clearExtraCursors(); }
 
         cursorRow = state.cursorLine;
         if (foldingAvailable)
@@ -1421,7 +1765,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     if (options.showLineNumbers)
     {
         const Rect gutterRect(rect.x, rect.y, gutterWidth, rect.height);
-        drawList->addRectFilled(gutterRect, theme_.sliderBackground, clip);
+        drawList->addRectFilled(gutterRect, theme_.gutterBg, clip);
     }
 
     const int firstRow = state.scrollLine;
@@ -1431,6 +1775,21 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     int selStartLine = 0, selStartColumn = 0, selEndLine = 0, selEndColumn = 0;
     const bool hasSelection = state.hasSelection();
     if (hasSelection) state.orderedSelection(selStartLine, selStartColumn, selEndLine, selEndColumn);
+
+    // Extra cursors' selections, ordered the same way orderedSelection()
+    // orders the primary's (that method only sees the primary, so this
+    // mirrors its logic per extra cursor).
+    struct OrderedExtraSelection { int startLine, startColumn, endLine, endColumn; };
+    ct::Vector<OrderedExtraSelection> extraSelections;
+    for (int i = 0; i < state.extraCursorCount(); ++i)
+    {
+        const CodeEditorCursor &c = state.extraCursorAt(i);
+        if (c.line == c.anchorLine && c.column == c.anchorColumn) continue;
+        if (c.anchorLine > c.line || (c.anchorLine == c.line && c.anchorColumn > c.column))
+            extraSelections.push_back({c.line, c.column, c.anchorLine, c.anchorColumn});
+        else
+            extraSelections.push_back({c.anchorLine, c.anchorColumn, c.line, c.column});
+    }
 
     for (int row = firstRow; row <= lastRow; ++row)
     {
@@ -1443,9 +1802,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             char buf[16];
             snprintf(buf, sizeof(buf), "%d", line + 1);
             const TextMetrics numMetrics = measureText(theme_.font, StringView(buf), fontSize);
+            const Color numberColor = focused && line == state.cursorLine
+                ? theme_.lineNumberActive : theme_.lineNumberColor;
             drawText(*drawList, theme_.font, StringView(buf),
                     Vec2(rect.x + gutterWidth - foldGutterWidth - theme_.gutterPadding - numMetrics.width, y),
-                    fontSize, theme_.textColor, clip);
+                    fontSize, numberColor, clip);
         }
 
         if (foldingAvailable && state.isFoldHeader(line))
@@ -1476,6 +1837,17 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             const float fromX = textArea.x + padding + codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
             float toX = textArea.x + padding + codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
             if (line != selEndLine) toX += fontSize * 0.25f; // visually mark the line break
+            drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor, textClip);
+        }
+        for (const auto &sel : extraSelections)
+        {
+            if (line < sel.startLine || line > sel.endLine) continue;
+            const int lineLen = static_cast<int>(text.size());
+            const int fromCol = line == sel.startLine ? sel.startColumn : 0;
+            const int toCol = line == sel.endLine ? sel.endColumn : lineLen;
+            const float fromX = textArea.x + padding + codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
+            float toX = textArea.x + padding + codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
+            if (line != sel.endLine) toX += fontSize * 0.25f;
             drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor, textClip);
         }
 
@@ -1541,6 +1913,19 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         const float caretY = textArea.y + padding + static_cast<float>(cursorRow - state.scrollLine) * lineHeight;
         if (caretY >= textArea.y + padding && caretY < textArea.y + textArea.height - padding)
             drawList->addRectFilled(Rect(caretX, caretY, 1.0f, lineHeight), theme_.buttonText, textClip);
+
+        for (int i = 0; i < state.extraCursorCount(); ++i)
+        {
+            const CodeEditorCursor &c = state.extraCursorAt(i);
+            int row = c.line;
+            if (foldingAvailable)
+                for (int r = 0; r < rowCount(); ++r)
+                    if (logicalLine(r) >= c.line) { row = r; break; }
+            const float extraCaretX = textArea.x + padding + codeEditorColumnX(state, c.line, c.column, options.tabSize, fontSize);
+            const float extraCaretY = textArea.y + padding + static_cast<float>(row - state.scrollLine) * lineHeight;
+            if (extraCaretY >= textArea.y + padding && extraCaretY < textArea.y + textArea.height - padding)
+                drawList->addRectFilled(Rect(extraCaretX, extraCaretY, 1.0f, lineHeight), theme_.buttonText, textClip);
+        }
 
         if (state.completion.visible && !state.completion.items.empty())
         {
