@@ -1470,6 +1470,9 @@ bool Context::beginMenu(StringView labelText)
     const Rect button(menuBarCursorX_, menuBarBounds_.y, width, menuBarBounds_.height);
     menuBarCursorX_ += width;
     const WidgetId id = combineIds(makeWidgetId(labelText), 0x4d454e55ull);
+    // Size the popup at the width measured for this menu (menuMinWidth until
+    // its items have been submitted at least once - see endMenu).
+    const float popupWidth = menuWidthId_ == id ? menuPopupWidth_ : theme_.menuMinWidth;
     const uint32_t left = buttonIndex(PointerButton::Left);
     if (openMenu_ == id && pointer_.pressed[left] && currentWindowReceivesPointer() &&
         !contains(button, pointer_.pressedPosition[left]) &&
@@ -1488,7 +1491,7 @@ bool Context::beginMenu(StringView labelText)
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
         subMenuPopupBounds_ = Rect();
-        menuPopupBounds_ = Rect(button.x, button.bottom(), theme_.menuMinWidth, 0.0f);
+        menuPopupBounds_ = Rect(button.x, button.bottom(), popupWidth, 0.0f);
         focusedWidget_ = id;
     }
     if (itemClicked(button, contentClip(), id))
@@ -1497,7 +1500,7 @@ bool Context::beginMenu(StringView labelText)
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
         if (openMenu_ == id)
-            menuPopupBounds_ = Rect(button.x, button.y + button.height, theme_.menuMinWidth, 0.0f);
+            menuPopupBounds_ = Rect(button.x, button.y + button.height, popupWidth, 0.0f);
     }
     drawList->addRectFilled(button, openMenu_ == id || hovered ? theme_.menuBarItemHover : theme_.menuBarBg,
                             contentClip());
@@ -1512,7 +1515,7 @@ bool Context::beginMenu(StringView labelText)
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.x = button.x;
     activeMenuBounds_.y = button.y + button.height;
-    activeMenuBounds_.width = theme_.menuMinWidth;
+    activeMenuBounds_.width = popupWidth;
     activeMenuBounds_.height = 0.0f;
     return true;
 }
@@ -1527,7 +1530,16 @@ void Context::endMenu()
         const Rect clip = contentClip();
         window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, clip);
         menuPopupBounds_ = activeMenuBounds_;
+        // Latch the width measured while this menu's items were submitted:
+        // the panel just drawn used the previous frame's number, and the
+        // next frame's beginMenu picks this one up.
+        if (menuMeasuredWidth_ > 0.0f)
+        {
+            menuWidthId_ = activeMenu_;
+            menuPopupWidth_ = menuMeasuredWidth_ > theme_.menuMinWidth ? menuMeasuredWidth_ : theme_.menuMinWidth;
+        }
     }
+    menuMeasuredWidth_ = 0.0f;
     activeMenu_ = InvalidWidgetId;
 }
 
@@ -1547,6 +1559,16 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     const float checkWidth = checked ? theme_.menuItemHeight : 0.0f;
+    // Remember the widest label drawn this frame so endMenu can size the
+    // popup for it. Only this menu's own items count: while a submenu's
+    // items are being submitted subMenuParent_ is set, and the parent's
+    // width must not grow to fit the submenu's labels.
+    if (subMenuParent_ == InvalidWidgetId)
+    {
+        const float itemWidth = metrics.width + theme_.menuItemPadX * 2.0f + checkWidth;
+        if (itemWidth > menuMeasuredWidth_)
+            menuMeasuredWidth_ = itemWidth;
+    }
     if (checked && *checked)
     {
         const float checkSize = theme_.menuItemHeight * 0.38f;
@@ -1673,6 +1695,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     if (!window)
         return false;
     const WidgetId id = combineIds(makeWidgetId(idText), 0x434f4e54455854ull);
+    const float popupWidth = menuWidthId_ == id ? menuPopupWidth_ : theme_.menuMinWidth;
     const Rect target = contentRect(bounds);
     const Rect visible = intersect(target, contentClip());
     const uint32_t right = buttonIndex(PointerButton::Right);
@@ -1684,7 +1707,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
         openMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
         menuPopupBounds_ = Rect(pointer_.pressedPosition[right].x, pointer_.pressedPosition[right].y,
-                                theme_.menuMinWidth, 0.0f);
+                                popupWidth, 0.0f);
     }
     if (openContextMenu_ != id)
         return false;
@@ -1698,6 +1721,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     }
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
+    activeMenuBounds_.width = popupWidth;
     activeMenuBounds_.height = 0.0f;
     return true;
 }
@@ -2564,7 +2588,8 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     return changed;
 }
 
-bool Context::inputTextMultiline(StringView labelText, String &value, const Rect &bounds)
+bool Context::inputTextMultiline(StringView labelText, String &value, const Rect &bounds,
+                                 bool followTail)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -2727,6 +2752,27 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
             *scroll = static_cast<int>(cursorLine) - visibleLines + 1;
         if (*scroll > maximumScroll)
             *scroll = maximumScroll > 0 ? maximumScroll : 0;
+    }
+
+    // Tail follow (followTail callers - the editor's output console): when
+    // the text grew and the view was already at the end, keep the last line
+    // visible; a view scrolled up to read history is left where it is.
+    if (followTail && focusedWidget_ != id)
+    {
+        int *lastLineCount = textTailLines_.find(id);
+        if (!lastLineCount)
+        {
+            textTailLines_.put(id, 0);
+            lastLineCount = textTailLines_.find(id);
+        }
+        if (lastLineCount)
+        {
+            const int previousMaximum = *lastLineCount - visibleLines;
+            if (static_cast<int>(lineCount) > *lastLineCount &&
+                *scroll >= (previousMaximum > 0 ? previousMaximum : 0))
+                *scroll = maximumScroll > 0 ? maximumScroll : 0;
+            *lastLineCount = static_cast<int>(lineCount);
+        }
     }
 
     const Color background = focused ? theme_.buttonHovered
@@ -4244,7 +4290,8 @@ bool Context::inputText(StringView labelText, String &value, float width)
     return changed;
 }
 
-bool Context::inputTextMultiline(StringView labelText, String &value, float width, float height)
+bool Context::inputTextMultiline(StringView labelText, String &value, float width, float height,
+                                 bool followTail)
 {
     const float resolvedWidth = width > 0.0f ? width : availableWidth();
     const float resolvedHeight = height > theme_.widgetHeight ? height : theme_.widgetHeight;
@@ -4252,7 +4299,8 @@ bool Context::inputTextMultiline(StringView labelText, String &value, float widt
     const bool changed = inputTextMultiline(labelText, value,
                                             Rect(bounds.x - layout_.origin.x,
                                                  bounds.y - layout_.origin.y,
-                                                 bounds.width, bounds.height));
+                                                 bounds.width, bounds.height),
+                                            followTail);
     advanceLayout(bounds);
     return changed;
 }

@@ -338,7 +338,10 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
-    bool inputTextMultiline(StringView label, String &value, const Rect &bounds);
+    // followTail keeps the view pinned to the last line as value grows (a
+    // console/log), unless the user scrolled up to read back.
+    bool inputTextMultiline(StringView label, String &value, const Rect &bounds,
+                            bool followTail = false);
     // Syntax-highlighted source editor: line buffer, (line, column) cursor
     // with selection, full undo/redo, and keyword/identifier autocomplete.
     // state is application-owned and persists across frames (see
@@ -462,7 +465,7 @@ public:
                     float width = 0.0f);
     bool inputText(StringView label, String &value, float width = 0.0f);
     bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
-                            float height = 120.0f);
+                            float height = 120.0f, bool followTail = false);
     bool inputInt(StringView label, int &value, float width = 0.0f);
     bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6);
     bool colorEdit(StringView label, Color &value, float width = 0.0f, float height = 128.0f);
@@ -783,6 +786,9 @@ private:
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
     ct::HashMap<WidgetId, int> listScrolls_;
     ct::HashMap<WidgetId, int> textScrolls_;
+    // Line count drawn last frame, kept only for followTail widgets so the
+    // next frame can tell growth from a scroll-away (see inputTextMultiline).
+    ct::HashMap<WidgetId, int> textTailLines_;
     struct SequenceDrag
     {
         int row = -1;
@@ -859,6 +865,17 @@ private:
     Vec2 dockDragStart_;
     Rect menuBarBounds_;
     Rect menuPopupBounds_;
+    // Width of the open menu's popup, keyed by menu id. A dropdown cannot
+    // know how wide its widest item is before the items are submitted, so
+    // menuItemInternal records the widest label it drew and endMenu latches
+    // it here; beginMenu/beginContextMenu size the next frame's panel with
+    // it (menuMinWidth is the floor, so a menu reaches its full width from
+    // its second frame on). Without this the panel stayed at menuMinWidth
+    // and a long item ("Build and run native") drew its tail outside the
+    // border.
+    WidgetId menuWidthId_ = InvalidWidgetId;
+    float menuPopupWidth_ = 0.0f;
+    float menuMeasuredWidth_ = 0.0f;
     Rect activeMenuBounds_;
     Rect subMenuPopupBounds_;
     Rect subMenuParentBounds_;
