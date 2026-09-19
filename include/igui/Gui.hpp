@@ -260,6 +260,15 @@ public:
     bool wantsPointer() const;
     bool wantsKeyboard() const;
     bool wantsTextInput() const;
+    // True while a menu bar dropdown or context menu (beginMenu/
+    // beginContextMenu) is open, from the frame it opens through the frame
+    // it closes (inclusive - same snapshot pointerBlockedByOpenMenu and
+    // shortcut()/isKeyPressed() already use). A caller with its own
+    // pointer-reactive UI that sits near a menu bar - a button strip drawn
+    // right under it, say - can use this to skip its own hover/click
+    // handling outright instead of relying only on the guard already built
+    // into itemHovered/itemClicked.
+    bool isMenuOpen() const;
 
     // Application-owned history entries. The callbacks must remain valid for
     // as long as the entry stays in this Context's history.

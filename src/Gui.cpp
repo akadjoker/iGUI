@@ -747,6 +747,8 @@ void Context::clearUndoHistory()
 
 bool Context::isKeyPressed(KeyCode key) const
 {
+    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_)
+        return false; // a modal/open menu owns the keyboard this frame - see shortcut()
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index];
 }
@@ -756,8 +758,24 @@ bool Context::isPointerButtonDown(PointerButton button) const
     return pointer_.down[buttonIndex(button)];
 }
 
+bool Context::isMenuOpen() const
+{
+    return menuWasOpenAtFrameStart_;
+}
+
 bool Context::shortcut(KeyCode key, bool control, bool shift) const
 {
+    // A dropdown/context menu or a modal dialog is on screen and gets first
+    // say over the keyboard, same as it already does over the pointer (see
+    // pointerBlockedByOpenMenu) - otherwise a caller's F5/Ctrl+S-style
+    // shortcut() call, which every widget submits unconditionally every
+    // frame (Toolbar::draw does, at the bottom, regardless of what else is
+    // open), would still fire while the user is navigating a menu with
+    // that same key combination free for something else. Uses the same
+    // frame-start snapshot as pointerBlockedByOpenMenu: a menu that closes
+    // via a key this same frame (Escape) must still win that frame.
+    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_)
+        return false;
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index] && keyControl_[index] == control &&
            keyShift_[index] == shift;
