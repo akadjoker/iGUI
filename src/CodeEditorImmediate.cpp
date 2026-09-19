@@ -1372,7 +1372,12 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // pointer, selecting text while the user tried to scroll.
     const Rect interactiveArea(rect.x, rect.y, rect.width - scrollbarWidth, rect.height);
     itemClicked(interactiveArea, clip, id);
-    if (hasScrollbar && currentWindowReceivesPointer() &&
+    if (currentWindowReceivesPointer() && contains(intersect(rect, clip), pointer_.position) &&
+        pointer_.wheelY != 0.0f && pointer_.wheelControl)
+    {
+        if (pointer_.wheelY > 0.0f) state.zoomIn(); else state.zoomOut();
+    }
+    else if (hasScrollbar && currentWindowReceivesPointer() &&
         contains(intersect(rect, clip), pointer_.position) && pointer_.wheelY != 0.0f)
     {
         state.scrollLine += pointer_.wheelY > 0.0f ? -1 : 1;
