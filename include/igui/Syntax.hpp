@@ -180,6 +180,11 @@ struct SyntaxLanguage
     String quotes = "\"'";
     // Optional single-byte delimiter for raw, multiline strings (e.g. Go `).
     char rawQuote = '\0';
+    // Optional prefix for raw, multiline strings that double their closing
+    // quote to escape it instead of using a distinct delimiter (e.g. C#/zenx
+    // @"..."). Empty disables it. Mutually independent from rawQuote - a
+    // language can use either, both, or neither.
+    String verbatimPrefix;
     bool caseSensitive = true;
 };
 
