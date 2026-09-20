@@ -6369,9 +6369,17 @@ bool Context::windowBlockedByModal() const
 // While a menu is open, any point outside its popup rect (and any open
 // submenu's) is blocked here; itemHovered/itemClicked call this so every
 // widget gets the guard for free. The menu's own items are unaffected:
-// they're submitted with activeMenu_ == the open menu's id, and their rects
-// live inside menuPopupBounds_/subMenuPopupBounds_ by construction, so they
-// never hit this early return.
+// their rects live inside menuPopupBounds_/subMenuPopupBounds_ by
+// construction, so they never hit this early return - this used to also
+// short-circuit on activeMenu_ != InvalidWidgetId ("submitting the open
+// menu's own items right now"), but activeMenu_ is only set once
+// beginContextMenu/beginMenu itself has run this frame; a widget submitted
+// BEFORE that call in the same frame (e.g. Editor.cpp's codeEditor(), drawn
+// ahead of its own beginContextMenu) saw activeMenu_ still
+// InvalidWidgetId and slipped through unblocked even while sitting right
+// under the popup, stealing activeWidget_ out from under the menu item the
+// pointer was actually over. The bounds check below already covers the
+// menu's own items on its own, so the shortcut added nothing but this gap.
 //
 // Uses the frame-start snapshot (menuWasOpenAtFrameStart_/
 // menuPopupBoundsAtFrameStart_/subMenuPopupBoundsAtFrameStart_), not the
@@ -6386,8 +6394,6 @@ bool Context::pointerBlockedByOpenMenu(const Vec2 &point) const
 {
     if (!menuWasOpenAtFrameStart_)
         return false;
-    if (activeMenu_ != InvalidWidgetId)
-        return false; // submitting the open menu's own items right now
     if (contains(menuPopupBoundsAtFrameStart_, point))
         return false;
     if (contains(subMenuPopupBoundsAtFrameStart_, point))
