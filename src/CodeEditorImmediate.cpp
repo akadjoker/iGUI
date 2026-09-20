@@ -1434,7 +1434,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
 
     // Clicking the fold gutter (immediately left of the text area) toggles
     // the region whose header is on that row, if any.
-    if (foldingAvailable && focused && pointer_.pressed[leftButton])
+    if (foldingAvailable && focused && pointer_.pressed[leftButton] &&
+        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]))
     {
         const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
         if (contains(intersect(foldGutterRect, clip), pointer_.pressedPosition[leftButton]))
@@ -1461,7 +1462,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // the drag; a plain click with no movement leaves no selection, same as
     // before.
     const bool pressedInText = pointer_.pressed[leftButton] &&
-        contains(intersect(textArea, clip), pointer_.pressedPosition[leftButton]);
+        contains(intersect(textArea, clip), pointer_.pressedPosition[leftButton]) &&
+        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]);
     if (focused && pressedInText)
     {
         activeWidget_ = id;
