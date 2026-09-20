@@ -98,8 +98,14 @@ bool appendCodepointEvent(Context &context, int codepoint)
 
 void processInput(Context &context)
 {
-    if (!::IsWindowFocused())
+    // focusLost only on the transition: pushing it every frame while the
+    // window is unfocused kept wiping pointer state on the frames a click
+    // landing back in the window had just set it.
+    static bool wasFocused = true;
+    const bool focused = ::IsWindowFocused();
+    if (!focused && wasFocused)
         context.pushEvent(Event::focusLost());
+    wasFocused = focused;
 
     const ::Vector2 pointer = ::GetMousePosition();
     context.pushEvent(Event::pointerMove(pointer.x, pointer.y));
