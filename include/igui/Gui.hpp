@@ -30,6 +30,8 @@ struct WindowState
     bool minimized;
     bool focused;
     bool showWindowControls;
+    bool showMinimizeButton;
+    bool showMaximizeButton;
     bool showTitleBar;
     bool useClientArea;
     bool allowMove;
@@ -40,7 +42,8 @@ struct WindowState
 
     WindowState()
         : id(InvalidWidgetId), title(), bounds(), open(true), minimized(false), focused(false),
-          showWindowControls(true), showTitleBar(true), useClientArea(false), allowMove(true), allowResize(true),
+          showWindowControls(true), showMinimizeButton(true), showMaximizeButton(true),
+          showTitleBar(true), useClientArea(false), allowMove(true), allowResize(true),
           zOrder(0), drawList(), overlayDrawList()
     {
     }
@@ -245,6 +248,30 @@ public:
     // Operate on existing floating windows identified by their title.
     void maximizeWindow(StringView title);
     void restoreWindow(StringView title);
+    // Hides the minimize/maximize title-bar buttons of the window with this
+    // title (the close button stays) - for popups that shouldn't be
+    // minimised/maximised. Cheap enough to call every frame next to
+    // beginWindow; a window that doesn't exist yet records the choice and
+    // gets it when it is created (no first-frame flash).
+    void setWindowButtons(StringView title, bool minimize, bool maximize);
+    // Moves the open window with this title to the top of the z-order (a
+    // no-op when it doesn't exist). Call it every frame next to beginWindow
+    // for a window that must stay above everything else - otherwise a click
+    // on any other window raises that one over it, and the popup ends up
+    // invisible-but-open behind the main window. `focus` additionally makes
+    // it the focused window every frame: a window's widgets only accept a
+    // click while it is the focused one (itemClicked's
+    // currentWindow_ == focusedWindow_ gate), so without this a popup stops
+    // receiving events as soon as the user clicks outside it.
+    void raiseWindow(StringView title, bool focus = false);
+    // Marks (or unmarks) the window with this title as application-modal:
+    // while it is open, no other window's widgets accept hover, clicks or
+    // keyboard - same block messageBox gets from activeModal_, but scoped to
+    // this window so its own widgets keep working. The window stays drawn
+    // behind it, unlike the scrim messageBox paints. callers must unmark it
+    // when the window closes (Editor::update does, in the same frame the
+    // panel hides).
+    void setModalWindow(StringView title, bool modal);
     void maximizeAllWindows();
     void minimizeAllWindows();
     void restoreAllWindows();
@@ -801,6 +828,9 @@ private:
     ct::Vector<Event> textEvents_;
     ct::SlotMap<WindowState> windows_;
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
+    // Per-title button visibility (bit0 minimize, bit1 maximize), kept even
+    // for windows not created yet - see setWindowButtons.
+    ct::HashMap<WidgetId, uint8_t> windowButtons_;
     ct::HashMap<WidgetId, int> listScrolls_;
     ct::HashMap<WidgetId, int> textScrolls_;
     // Line count drawn last frame, kept only for followTail widgets so the
@@ -878,6 +908,7 @@ private:
     Rect menuPopupBoundsAtFrameStart_;
     Rect subMenuPopupBoundsAtFrameStart_;
     WidgetId activeModal_;
+    WidgetId modalWindowId_;
     WidgetId dragWidget_;
     WidgetId activeDockSpace_;
     WidgetId dockDragSpace_;
@@ -977,6 +1008,7 @@ private:
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
+    bool windowBlockedByModal() const;
     bool pointerBlockedByOpenMenu(const Vec2 &point) const;
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);

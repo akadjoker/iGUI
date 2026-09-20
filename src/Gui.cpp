@@ -323,7 +323,7 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(),
+      windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(),
       windowOrder_(), idStack_(), focusOrder_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
@@ -331,7 +331,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
-      activeModal_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
+      activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
@@ -618,6 +618,43 @@ void Context::restoreWindow(StringView title)
     w->hasRestoreBounds=false; w->maximized=false; w->minimized=false;
 }
 
+void Context::setWindowButtons(StringView title, bool minimize, bool maximize)
+{
+    const WidgetId id = hashText(title);
+    const uint8_t mask = static_cast<uint8_t>((minimize ? 1u : 0u) | (maximize ? 2u : 0u));
+    windowButtons_.put(id, mask);
+
+    WindowHandle *handle = windowsById_.find(id);
+    WindowState *window = handle ? windows_.get(*handle) : nullptr;
+    if (!window)
+        return;
+    window->showMinimizeButton = minimize;
+    window->showMaximizeButton = maximize;
+}
+
+void Context::raiseWindow(StringView title, bool focus)
+{
+    WindowHandle *handle = windowsById_.find(hashText(title));
+    WindowState *window = handle ? windows_.get(*handle) : nullptr;
+    if (!window || !window->open)
+        return;
+    window->zOrder = nextZOrder_++;
+    if (focus)
+    {
+        window->focused = true;
+        focusedWindow_ = *handle;
+    }
+}
+
+void Context::setModalWindow(StringView title, bool modal)
+{
+    const WidgetId id = hashText(title);
+    if (modal)
+        modalWindowId_ = id;
+    else if (modalWindowId_ == id)
+        modalWindowId_ = InvalidWidgetId;
+}
+
 void Context::maximizeAllWindows()
 {
     for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open) maximizeWindow(w->title); }
@@ -747,7 +784,7 @@ void Context::clearUndoHistory()
 
 bool Context::isKeyPressed(KeyCode key) const
 {
-    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_)
+    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal())
         return false; // a modal/open menu owns the keyboard this frame - see shortcut()
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index];
@@ -774,7 +811,7 @@ bool Context::shortcut(KeyCode key, bool control, bool shift) const
     // that same key combination free for something else. Uses the same
     // frame-start snapshot as pointerBlockedByOpenMenu: a menu that closes
     // via a key this same frame (Escape) must still win that frame.
-    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_)
+    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal())
         return false;
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index] && keyControl_[index] == control &&
@@ -5937,6 +5974,13 @@ WindowState *Context::getOrCreateWindow(WidgetId id, StringView title,
     state.title = String(title.data(), title.size());
     state.bounds = bounds;
     state.zOrder = nextZOrder_++;
+    // A choice recorded by setWindowButtons before this window existed.
+    uint8_t *mask = windowButtons_.find(id);
+    if (mask)
+    {
+        state.showMinimizeButton = (*mask & 1u) != 0;
+        state.showMaximizeButton = (*mask & 2u) != 0;
+    }
     const WindowHandle handle = windows_.emplace(state);
     windowsById_.put(id, handle);
     windowOrder_.push_back(handle);
@@ -5984,6 +6028,8 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     lastItemId_ = id;
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
+    if (windowBlockedByModal())
+        return false;
     const Rect visible = intersect(rect, clip);
     const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position) &&
                          !pointerBlockedByOpenMenu(pointer_.position);
@@ -5999,6 +6045,8 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
     if (activeModal_ != InvalidWidgetId)
+        return false;
+    if (windowBlockedByModal())
         return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
@@ -6107,14 +6155,27 @@ void Context::drawWindow(WindowState &window)
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float controlWidth = theme_.titleBarHeight;
-    const float controlsWidth = window.showWindowControls ? controlWidth * 3.0f : 0.0f;
+    const bool showMinimize = window.showWindowControls && window.showMinimizeButton;
+    const bool showMaximize = window.showWindowControls && window.showMaximizeButton;
+    const float controlsCount = 1.0f + (showMinimize ? 1.0f : 0.0f) + (showMaximize ? 1.0f : 0.0f);
+    const float controlsWidth = window.showWindowControls ? controlWidth * controlsCount : 0.0f;
     const Rect closeButton(window.bounds.x + window.bounds.width - controlWidth,
                            window.bounds.y, controlWidth, titleHeight);
-    const Rect minimizeButton(closeButton.x - controlWidth, window.bounds.y,
-                              controlWidth, titleHeight);
-    const Rect maximizeButton(minimizeButton.x-controlWidth,window.bounds.y,controlWidth,titleHeight);
+    float controlsX = closeButton.x;
+    Rect minimizeButton;
+    Rect maximizeButton;
+    if (showMinimize)
+    {
+        controlsX -= controlWidth;
+        minimizeButton = Rect(controlsX, window.bounds.y, controlWidth, titleHeight);
+    }
+    if (showMaximize)
+    {
+        controlsX -= controlWidth;
+        maximizeButton = Rect(controlsX, window.bounds.y, controlWidth, titleHeight);
+    }
     const WidgetId maximizeId=combineIds(window.id,0x4d415849);
-    if (window.showWindowControls && itemClicked(maximizeButton,viewport,maximizeId,false)) {
+    if (showMaximize && itemClicked(maximizeButton,viewport,maximizeId,false)) {
         if(window.maximized) restoreWindow(window.title); else maximizeWindow(window.title);
     }
     const Rect dragArea(window.bounds.x, window.bounds.y,
@@ -6129,7 +6190,7 @@ void Context::drawWindow(WindowState &window)
     const WidgetId dragId = combineIds(window.id, 0x44524147ull);
     const WidgetId resizeId = combineIds(window.id, 0x524553495a45ull);
     const bool closeHovered = window.showWindowControls && itemHovered(closeButton, viewport, closeId);
-    const bool minimizeHovered = window.showWindowControls && itemHovered(minimizeButton, viewport, minimizeId);
+    const bool minimizeHovered = showMinimize && itemHovered(minimizeButton, viewport, minimizeId);
 
     if (window.showWindowControls && itemClicked(closeButton, viewport, closeId, false))
     {
@@ -6142,7 +6203,7 @@ void Context::drawWindow(WindowState &window)
         openCombo_ = InvalidWidgetId;
         return;
     }
-    if (window.showWindowControls && itemClicked(minimizeButton, viewport, minimizeId, false))
+    if (showMinimize && itemClicked(minimizeButton, viewport, minimizeId, false))
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
@@ -6202,9 +6263,20 @@ void Context::drawWindow(WindowState &window)
         window.drawList.addRectFilled(resolvedTitleBar, theme_.titleBarBackground, viewport);
     const Rect resolvedCloseButton(window.bounds.x + window.bounds.width - controlWidth,
                                    window.bounds.y, controlWidth, titleHeight);
-    const Rect resolvedMinimizeButton(resolvedCloseButton.x - controlWidth, window.bounds.y,
-                                      controlWidth, titleHeight);
-    if (window.showWindowControls && minimizeHovered)
+    float resolvedControlsX = resolvedCloseButton.x;
+    Rect resolvedMinimizeButton;
+    Rect resolvedMaximizeButton;
+    if (showMinimize)
+    {
+        resolvedControlsX -= controlWidth;
+        resolvedMinimizeButton = Rect(resolvedControlsX, window.bounds.y, controlWidth, titleHeight);
+    }
+    if (showMaximize)
+    {
+        resolvedControlsX -= controlWidth;
+        resolvedMaximizeButton = Rect(resolvedControlsX, window.bounds.y, controlWidth, titleHeight);
+    }
+    if (showMinimize && minimizeHovered)
         window.drawList.addRectFilled(resolvedMinimizeButton, theme_.buttonHovered, viewport);
     if (window.showWindowControls && closeHovered)
         window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
@@ -6218,15 +6290,22 @@ void Context::drawWindow(WindowState &window)
     }
     if (window.showWindowControls)
     {
-        const Rect maximizeGlyph(window.bounds.right()-controlWidth*3+8,window.bounds.y+8,controlWidth-16,titleHeight-16);
-        window.drawList.addRect(maximizeGlyph,theme_.labelText,viewport);
-        if(window.maximized) window.drawList.addRect(Rect(maximizeGlyph.x+3,maximizeGlyph.y-3,maximizeGlyph.width,maximizeGlyph.height),theme_.labelText,viewport);
-        const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
+        if (showMaximize)
+        {
+            const Rect maximizeGlyph(resolvedMaximizeButton.x + 8.0f, resolvedMaximizeButton.y + 8.0f,
+                                     controlWidth - 16, titleHeight - 16);
+            window.drawList.addRect(maximizeGlyph,theme_.labelText,viewport);
+            if(window.maximized) window.drawList.addRect(Rect(maximizeGlyph.x+3,maximizeGlyph.y-3,maximizeGlyph.width,maximizeGlyph.height),theme_.labelText,viewport);
+        }
         const TextMetrics closeMetrics = measureText(theme_.font, StringView("x"), theme_.fontSize);
-        drawText(window.drawList, theme_.font, StringView("-"),
-                 Vec2(resolvedMinimizeButton.x + (controlWidth - minimizeMetrics.width) * 0.5f,
-                      resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
-                 theme_.fontSize, theme_.labelText, viewport);
+        if (showMinimize)
+        {
+            const TextMetrics minimizeMetrics = measureText(theme_.font, StringView("-"), theme_.fontSize);
+            drawText(window.drawList, theme_.font, StringView("-"),
+                     Vec2(resolvedMinimizeButton.x + (controlWidth - minimizeMetrics.width) * 0.5f,
+                          resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
+                     theme_.fontSize, theme_.labelText, viewport);
+        }
         drawText(window.drawList, theme_.font, StringView("x"),
                  Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
                       resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
@@ -6270,8 +6349,17 @@ void Context::focusWindow(WindowHandle handle)
 
 bool Context::currentWindowReceivesPointer() const
 {
-    return activeModal_ == InvalidWidgetId && currentWindow_ &&
-           currentWindow_ == topWindowAt(pointer_.position);
+    if (activeModal_ != InvalidWidgetId || windowBlockedByModal())
+        return false;
+    return currentWindow_ && currentWindow_ == topWindowAt(pointer_.position);
+}
+
+bool Context::windowBlockedByModal() const
+{
+    if (modalWindowId_ == InvalidWidgetId)
+        return false;
+    const WindowState *window = currentWindow();
+    return !window || window->id != modalWindowId_;
 }
 
 // A menu bar dropdown/context menu is drawn into its window's overlay list
