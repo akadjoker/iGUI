@@ -58,37 +58,17 @@ inline KnobDrag& knobDrag()
     return drag;
 }
 
+// One continuous band per arc. Stroking it as a fan of short lines leaves every
+// joint overlapping its neighbour's soft edge, and the alpha adds up there,
+// which reads as notches around the ring.
 inline void arcSegments(ig::Context& ui, float cx, float cy, float radius,
                         float fromTurn, float toTurn, const ig::Color& color,
                         float thickness)
 {
     if (toTurn <= fromTurn)
         return;
-
-    // Walking whole segments only and truncating the end made the arc grow in
-    // visible jumps and left its tip landing on a segment boundary, which read
-    // as a ragged edge. The last segment is drawn partially instead, so the tip
-    // sits exactly at the value and the arc grows smoothly.
-    const int segments = 56;
-    const float startStep = fromTurn * segments;
-    const float endStep = toTurn * segments;
-    int index = static_cast<int>(startStep);
-
-    while (static_cast<float>(index) < endStep)
-    {
-        const float from = (static_cast<float>(index) > startStep)
-                               ? static_cast<float>(index)
-                               : startStep;
-        const float to = (static_cast<float>(index + 1) < endStep)
-                             ? static_cast<float>(index + 1)
-                             : endStep;
-        const float a0 = kStartAngle + kSweepAngle * from / segments;
-        const float a1 = kStartAngle + kSweepAngle * to / segments;
-        ui.drawLine(ig::Vec2(cx + radius * cosf(a0), cy + radius * sinf(a0)),
-                    ig::Vec2(cx + radius * cosf(a1), cy + radius * sinf(a1)),
-                    color, thickness);
-        ++index;
-    }
+    ui.drawArc(ig::Vec2(cx, cy), radius, kStartAngle + kSweepAngle * fromTurn,
+               kStartAngle + kSweepAngle * toTurn, color, thickness);
 }
 
 // `displayText` is what appears under the dial, so the caller decides how a

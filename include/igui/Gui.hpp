@@ -445,6 +445,11 @@ public:
     void drawRectFilledRounded(const Rect &bounds, float radius, const Color &color);
     void drawRectRounded(const Rect &bounds, float radius, const Color &color,
                          float thickness = 1.0f);
+    // Arc as one continuous band. Prefer this over stroking an arc with
+    // drawLine per segment: every joint there overlaps its neighbour's soft
+    // edge and the alpha adds up, which makes a ring look notched.
+    void drawArc(const Vec2 &center, float radius, float fromRadians,
+                 float toRadians, const Color &color, float thickness = 1.0f);
     // Text in an explicit colour, and the width the theme font would need for
     // it. A custom widget that centres its own caption needs both: label()
     // always uses the theme's label colour and reports no width.

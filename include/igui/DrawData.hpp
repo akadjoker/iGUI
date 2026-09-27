@@ -156,6 +156,15 @@ public:
     void addRectRounded(const Rect &rect, float radius, const Color &color,
                         const Rect &clip, float thickness = 1.0f,
                         uint32_t cornerSegments = 0u);
+    // Circular arc as one continuous strip. Stroking an arc with addLine per
+    // segment leaves every joint overlapping its neighbour's soft edge, and the
+    // alpha adds up there - a knob ring drawn that way looks notched. Here the
+    // fringe runs along the outside and inside of the whole band instead, so
+    // there are no joints to show. Angles are radians, measured the usual way
+    // (x to the right, y downward), and `to` may be less than `from`.
+    void addArc(const Vec2 &center, float radius, float from, float to,
+                const Color &color, const Rect &clip, float thickness = 1.0f,
+                uint32_t segments = 0u);
     // Convenience wrapper for the common 3-point case (arrows, chevrons, ...).
     void addTriangleFilled(const Vec2 &a, const Vec2 &b, const Vec2 &c,
                            const Color &color, const Rect &clip)
