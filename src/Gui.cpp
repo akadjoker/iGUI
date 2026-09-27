@@ -2238,16 +2238,16 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
     const GizmoAxis2D activeAxis = activeWidget_ == id
         ? static_cast<GizmoAxis2D>(state->axis) : GizmoAxisNone;
     const Color xColor = hoveredAxis == GizmoAxisX || activeAxis == GizmoAxisX
-        ? Color(255u, 160u, 50u, 255u) : Color(225u, 75u, 75u, 255u);
+        ? theme_.gizmoHighlight : theme_.gizmoAxisX;
     const Color yColor = hoveredAxis == GizmoAxisY || activeAxis == GizmoAxisY
-        ? Color(255u, 160u, 50u, 255u) : Color(75u, 210u, 110u, 255u);
+        ? theme_.gizmoHighlight : theme_.gizmoAxisY;
     const Color centerColor = hoveredAxis == GizmoAxisXY || activeAxis == GizmoAxisXY
-        ? Color(255u, 160u, 50u, 255u) : Color(245u, 200u, 75u, 255u);
+        ? theme_.gizmoHighlight : Color(245u, 200u, 75u, 255u);
     if (mode == Gizmo2DMode::Rotate)
     {
         const float radius = options.axisLength * 0.82f;
         const Color ringColor = hoveredAxis == GizmoAxisXY || activeAxis == GizmoAxisXY
-            ? Color(255u, 160u, 50u, 255u) : Color(100u, 165u, 245u, 255u);
+            ? theme_.gizmoHighlight : theme_.gizmoAxisZ;
         const int segments = 32;
         for (int i = 0; i < segments; ++i)
         {
@@ -2269,7 +2269,7 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
             const Vec2 endPoint(center.x + cosf(endAngle) * radius,
                                 center.y + sinf(endAngle) * radius);
             const Color startColor(185u, 205u, 230u, 220u);
-            const Color endColor(255u, 160u, 50u, 220u);
+            const Color endColor(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 220u);
 
             drawList->addLine(center, startPoint, startColor, clip, 1.5f);
             drawList->addLine(center, endPoint, endColor, clip, 2.0f);
@@ -2433,8 +2433,8 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     Vec2 center;
     if (!projectGizmo3D(projector, transform.position, center))
         return changed;
-    const Color colors[] = {Color(225u, 75u, 75u, 255u), Color(75u, 210u, 110u, 255u),
-                            Color(90u, 130u, 245u, 255u)};
+    const Color colors[] = {theme_.gizmoAxisX, theme_.gizmoAxisY,
+                            theme_.gizmoAxisZ};
     const GizmoAxis3D planeIds[] = {Gizmo3DAxisXY, Gizmo3DAxisXZ, Gizmo3DAxisYZ};
     const int planeFirst[] = {0, 0, 1};
     const int planeSecond[] = {1, 2, 2};
@@ -2459,7 +2459,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
             if (!valid)
                 continue;
             const bool highlighted = planeIds[plane] == hoveredAxis || planeIds[plane] == activeAxis;
-            const Color color = highlighted ? Color(255u, 160u, 50u, 100u)
+            const Color color = highlighted ? Color(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 100u)
                                             : Color(planeColors[plane].r, planeColors[plane].g,
                                                     planeColors[plane].b, 55u);
             drawList->addPolygonFilled(Span<const Vec2>(corners), color, clip);
@@ -2472,7 +2472,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     {
         const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
         const Color color = axis == hoveredAxis || axis == activeAxis
-            ? Color(255u, 160u, 50u, 255u) : colors[index - Gizmo3DAxisX];
+            ? theme_.gizmoHighlight : colors[index - Gizmo3DAxisX];
         if (mode == Gizmo3DMode::Rotate)
         {
             Vec3 u;
@@ -2548,7 +2548,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         }
         outerRadius *= 1.15f;
         const Color outerColor = activeAxis == Gizmo3DAxisXYZ || hoveredAxis == Gizmo3DAxisXYZ
-            ? Color(255u, 160u, 50u, 255u) : Color(185u, 185u, 190u, 120u);
+            ? theme_.gizmoHighlight : Color(185u, 185u, 190u, 120u);
         for (int segment = 0; segment < 40; ++segment)
         {
             const float first = GizmoPi * 2.0f * static_cast<float>(segment) / 40.0f;
@@ -2573,9 +2573,9 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                 drawList->addPolygonFilled(Span<const Vec2>(wedge), feedback, clip);
             }
             drawList->addLine(center, Vec2(center.x + cosf(start) * radius, center.y + sinf(start) * radius),
-                              Color(255u, 160u, 50u, 200u), clip, 1.5f);
+                              Color(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 200u), clip, 1.5f);
             drawList->addLine(center, Vec2(center.x + cosf(end) * radius, center.y + sinf(end) * radius),
-                              Color(255u, 160u, 50u, 200u), clip, 1.5f);
+                              Color(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 200u), clip, 1.5f);
         }
         char rotationText[64];
         snprintf(rotationText, sizeof(rotationText), "X %.1f  Y %.1f  Z %.1f",
@@ -2590,7 +2590,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     }
     drawList->addCircleFilled(center, 6.0f,
                               hoveredAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXYZ
-                                  ? Color(255u, 160u, 50u, 255u) : Color(245u, 200u, 75u, 255u), clip);
+                                  ? theme_.gizmoHighlight : Color(245u, 200u, 75u, 255u), clip);
     return changed;
 }
 
@@ -3905,7 +3905,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     StringView kindText("i");
     if (options.kind == MessageBoxKind::Warning)
     {
-        kindColor = Color(235u, 180u, 65u, 255u);
+        kindColor = theme_.msgBoxWarning;
         kindText = StringView("!");
     }
     else if (options.kind == MessageBoxKind::Error)
@@ -3915,7 +3915,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     }
     else if (options.kind == MessageBoxKind::Input)
     {
-        kindColor = Color(160u, 125u, 230u, 255u);
+        kindColor = theme_.msgBoxQuestion;
         kindText = StringView(">");
     }
 
