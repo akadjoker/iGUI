@@ -17,3 +17,5 @@ example/bin/*
 /cmake_install.cmake
 /Makefile
 7tmp
+/beats/
+/scrape/
