@@ -236,6 +236,32 @@ static void test_draw_primitives()
     assert(data.vertices[44].color == ig::Color(0u, 0u, 255u, 255u));
 }
 
+// True when some vertex sits exactly at (x, y). The immediate-mode layout is
+// deterministic, so these are exact comparisons - the helper only removes the
+// dependency on *where in the buffer* a widget happens to land.
+static bool hasVertexAt(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return true;
+    }
+    return false;
+}
+
+// Colour of the first vertex found at (x, y), or a sentinel when none is there.
+// Same rationale as hasVertexAt: locate the widget by where it is drawn, not by
+// its index in the buffer.
+static ig::Color colorAtVertex(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return data.vertices[i].color;
+    }
+    return ig::Color(0u, 0u, 0u, 0u);
+}
+
 static void test_automatic_layout()
 {
     TestBackend backend;
@@ -252,11 +278,13 @@ static void test_automatic_layout()
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
-    assert(data.vertices[8].position.x == 18.0f);
-    assert(data.vertices[8].position.y == 42.0f);
-    assert(data.vertices[12].position.x == 88.0f);
-    assert(data.vertices[12].position.y == 42.0f);
-    assert(data.vertices[16].position.y == 76.0f);
+    // The two buttons and the separator are located by their geometry, not by a
+    // fixed vertex index: anything drawn earlier in the frame (the window chrome
+    // grew a maximize glyph in e2d7d42, for example) shifts every later index
+    // without moving a single widget, and this test is about the layout.
+    assert(hasVertexAt(data, 18.0f, 42.0f));   // button "one", top-left
+    assert(hasVertexAt(data, 88.0f, 42.0f));   // button "two", after sameLine()
+    assert(hasVertexAt(data, 18.0f, 76.0f));   // separator, below both buttons
 }
 
 static void test_slider_and_radio()
@@ -369,11 +397,13 @@ static void test_automatic_selectable_and_progress_bar()
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
-    assert(data.vertices[8].position.x == 18.0f);
-    assert(data.vertices[8].position.y == 42.0f);
-    assert(data.vertices[12].position.x == 18.0f);
-    assert(data.vertices[12].position.y == 76.0f);
-    assert(data.vertices[17].position.x == 68.0f);
+    // Located by geometry rather than by fixed vertex index - see the note in
+    // test_automatic_layout above.
+    assert(hasVertexAt(data, 18.0f, 42.0f));   // selectable, top-left
+    assert(hasVertexAt(data, 18.0f, 76.0f));   // progress bar, below it
+    // The bar is filled to 1.0 of 2.0, so its fill ends halfway across its
+    // 100-unit width: x == 18 + 50.
+    assert(hasVertexAt(data, 68.0f, 76.0f));
 }
 
 static void test_slider_captures_pointer()
@@ -400,9 +430,15 @@ static void test_slider_captures_pointer()
     const ig::DrawData &data = context.endFrame();
 
     assert(!checked);
-    assert(data.vertices[8].color.r == 55u);
-    assert(data.vertices[8].color.g == 55u);
-    assert(data.vertices[8].color.b == 65u);
+    // While the slider holds the pointer capture, the checkbox must stay in its
+    // normal colour even though the pointer moved over it. Its box is laid out
+    // at (26, 50) - the Rect passed to checkbox() is a size hint the automatic
+    // layout places, not an absolute offset. Located by that position rather
+    // than by a fixed vertex index (see test_automatic_layout).
+    const ig::Color checkboxColor = colorAtVertex(data, 26.0f, 50.0f);
+    assert(checkboxColor.r == 55u);
+    assert(checkboxColor.g == 55u);
+    assert(checkboxColor.b == 65u);
 
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
