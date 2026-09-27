@@ -133,6 +133,50 @@ void test_vertex_and_color_queries()
     assert(harness.vertexCount() > 0u);
 }
 
+// beginDialog() centres itself, paints a scrim, blocks the windows behind it,
+// and closes on Escape - the parts an application would otherwise hand-roll
+// around beginWindow() + setModalWindow().
+void test_dialog_blocks_and_closes()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool open = true;
+    bool clickedBehind = false;
+    bool clickedInside = false;
+    auto build = [&](ig::Context &c) {
+        clickedBehind = false;
+        clickedInside = false;
+        c.beginMainWindow("main");
+        if (c.button("behind", ig::Rect(0.0f, 0.0f, 200.0f, 40.0f)))
+            clickedBehind = true;
+        c.endWindow();
+        if (c.beginDialog("Settings", open, ig::Vec2(380.0f, 280.0f)))
+        {
+            if (c.button("inside", ig::Rect(0.0f, 0.0f, 120.0f, 30.0f)))
+                clickedInside = true;
+            c.endDialog();
+        }
+    };
+
+    harness.frame(build);
+    // Centred in the 1280x800 viewport: (450, 260)-(830, 540).
+    assert(harness.hasVertexAt(450.0f, 260.0f));
+    // Content starts below the title bar, at (450, 288).
+    assert(harness.hasVertexAt(450.0f, 288.0f));
+
+    harness.click(100.0f, 100.0f, build);
+    assert(!clickedBehind);
+
+    harness.click(510.0f, 303.0f, build);
+    assert(clickedInside);
+
+    harness.queue(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    assert(!open);
+}
+
 } // namespace
 
 int main()
@@ -141,6 +185,7 @@ int main()
     test_first_button_at_a_point_wins_the_overlap();
     test_drag_reports_intermediate_state();
     test_vertex_and_color_queries();
+    test_dialog_blocks_and_closes();
     printf("test_interaction_harness: all tests passed\n");
     return 0;
 }

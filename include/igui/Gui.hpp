@@ -477,6 +477,18 @@ public:
                                 bool showCancel = false);
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
                                 const MessageBoxOptions &options);
+    // Modal dialog with arbitrary content: centred, scrim behind it, Escape
+    // closes it, and every other window is blocked while it is open. Call
+    // endDialog() when it returns true.
+    //
+    //     if (ui.beginDialog("Settings", open, ig::Vec2(380.0f, 280.0f))) {
+    //         ui.label("Volume");
+    //         ui.sliderFloat("vol", volume, 0.0f, 1.0f);
+    //         if (ui.button("Close")) open = false;
+    //         ui.endDialog();
+    //     }
+    bool beginDialog(StringView title, bool &open, const Vec2 &size);
+    void endDialog();
     // Application-modal filesystem browser. Its provider performs OS or
     // sandbox access; this Context owns only interaction and rendering.
     FileDialogResult fileDialog(StringView id, bool &open, FileDialogState &state,
