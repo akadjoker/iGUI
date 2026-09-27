@@ -72,6 +72,11 @@ if(IGUI_BUILD_IMMEDIATE)
     add_library(igui::igui ALIAS igui)
     target_include_directories(igui PUBLIC include)
     target_link_libraries(igui PUBLIC igui_core)
+    # PUBLIC so consumers get the switch just by linking: <igui/All.hpp> then
+    # resolves to the immediate API with no #define on their side. A target that
+    # links both igui and igui_widgets receives both switches, which is exactly
+    # the IGUI_BOTH_MODES case (see include/igui/Modes.hpp).
+    target_compile_definitions(igui PUBLIC IGUI_IMMEDIATEMODE=1)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(igui PRIVATE -Wall -Wextra -Wpedantic)
     endif()
@@ -164,7 +169,19 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
     # The retained widget headers expose ct containers, so propagate the
     # core target (and therefore ct's include directory) to consumers.
     target_link_libraries(igui_widgets PUBLIC igui_core PRIVATE igui_widgets_stb)
+    # Same reasoning as igui above: linking selects the retained API.
+    target_compile_definitions(igui_widgets PUBLIC IGUI_RETAINEDMODE=1)
     target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
+
+    # Both widget APIs linked into one binary. Only possible when both were
+    # built, and the only target that compiles with IGUI_BOTH_MODES=1 - see
+    # tests/test_both_modes.cpp and include/igui/Modes.hpp.
+    if(IGUI_BUILD_TESTS AND IGUI_BUILD_IMMEDIATE)
+        add_executable(igui_both_modes_tests tests/test_both_modes.cpp)
+        target_compile_features(igui_both_modes_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_both_modes_tests PRIVATE igui igui_widgets)
+        add_test(NAME igui_both_modes COMMAND igui_both_modes_tests)
+    endif()
 
     if(IGUI_BUILD_TESTS)
         add_executable(igui_original_widgets_tests tests/test_original_widgets.cpp)

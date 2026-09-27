@@ -8,26 +8,12 @@
 #include <ct/vector.hpp>
 #include <ct/hashmap.hpp>
 
-// The retained API still accepts String at its public boundary. ct's
-// default Hash expects a .hash() member, so provide a stable byte hash while
-// the text API is migrated separately to ct::String.
-namespace ct
-{
-template <>
-struct Hash<String>
-{
-    uint64_t operator()(const String &value) const
-    {
-        uint64_t hash = 14695981039346656037ull;
-        for (String::size_type i = 0; i < value.size(); ++i)
-        {
-            hash ^= static_cast<unsigned char>(value[i]);
-            hash *= 1099511628211ull;
-        }
-        return hash;
-    }
-};
-} // namespace ct
+// String here is ct::String, which carries its own .hash() - exactly what ct's
+// primary Hash<K> template calls. This used to specialize ct::Hash<String> with
+// an identical FNV-1a byte hash; that specialization was not just redundant but
+// an ODR hazard, because a translation unit using both widget APIs reaches the
+// immediate headers (Syntax.hpp -> ct/hashset.hpp) first and instantiates the
+// primary template before this specialization is seen.
 
 namespace ig { namespace retained
 {

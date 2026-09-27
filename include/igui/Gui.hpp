@@ -1,5 +1,11 @@
 #pragma once
 
+#include "Modes.hpp"
+
+#if !IGUI_IMMEDIATEMODE
+#  error "iGUI: <igui/Gui.hpp> is the immediate-mode API, but IGUI_IMMEDIATEMODE is 0 (see igui/Modes.hpp)."
+#endif
+
 #include <stdint.h>
 
 #include <ct/deque.hpp>
