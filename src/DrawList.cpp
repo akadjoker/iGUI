@@ -107,23 +107,87 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     }
 
     const float inverseLength = 1.0f / sqrtf(lengthSquared);
-    const Vec2 perpendicular(-dy * inverseLength * halfThickness,
-                             dx * inverseLength * halfThickness);
+    const Vec2 unitPerpendicular(-dy * inverseLength, dx * inverseLength);
     const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
     const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
     const Vec2 uv(0.0f, 0.0f);
 
-    vertices_.push_back(DrawVertex{Vec2(from.x + perpendicular.x, from.y + perpendicular.y), uv, color});
-    vertices_.push_back(DrawVertex{Vec2(to.x + perpendicular.x, to.y + perpendicular.y), uv, color});
-    vertices_.push_back(DrawVertex{Vec2(to.x - perpendicular.x, to.y - perpendicular.y), uv, color});
-    vertices_.push_back(DrawVertex{Vec2(from.x - perpendicular.x, from.y - perpendicular.y), uv, color});
-    indices_.push_back(firstVertex + 0u);
-    indices_.push_back(firstVertex + 1u);
-    indices_.push_back(firstVertex + 2u);
-    indices_.push_back(firstVertex + 0u);
-    indices_.push_back(firstVertex + 2u);
-    indices_.push_back(firstVertex + 3u);
-    addGeometryCommand(commands_, firstIndex, 6u, clip);
+    // Soft edge, same idea as addCircleFilled: the quad is grown by a one-pixel
+    // fringe on each side whose outer vertices are fully transparent, so the
+    // rasterizer interpolates alpha across it instead of ending on a hard step.
+    // Without it every diagonal and every arc (an arc is a fan of short lines)
+    // comes out visibly stair-stepped - the single biggest difference from a
+    // canvas, which antialiases everything by default.
+    //
+    // A hairline is special-cased: below one pixel the core would be thinner
+    // than the fringe, so the core is pinned at one pixel and the colour is
+    // scaled by the requested coverage instead, which keeps a 0.5px line half
+    // as opaque rather than dropping it to a hard 1px line.
+    // An axis-aligned line at an integer thickness lands on whole pixels, so a
+    // fringe there would only blur a separator or a grid rule that is currently
+    // crisp - and these are by far the most common lines in a UI. Emit the
+    // plain quad for them and keep the soft edge for what actually needs it:
+    // diagonals and the short segments that arcs and curves are built from.
+    const bool axisAligned = (from.x == to.x) || (from.y == to.y);
+    if (axisAligned && thickness >= 1.0f &&
+        thickness == static_cast<float>(static_cast<int>(thickness)))
+    {
+        const Vec2 flatPerpendicular(-dy * inverseLength * halfThickness,
+                                     dx * inverseLength * halfThickness);
+        const uint32_t flatFirst = static_cast<uint32_t>(vertices_.size());
+        const uint32_t flatIndex = static_cast<uint32_t>(indices_.size());
+        const Vec2 flatUv(0.0f, 0.0f);
+        vertices_.push_back(DrawVertex{Vec2(from.x + flatPerpendicular.x, from.y + flatPerpendicular.y), flatUv, color});
+        vertices_.push_back(DrawVertex{Vec2(to.x + flatPerpendicular.x, to.y + flatPerpendicular.y), flatUv, color});
+        vertices_.push_back(DrawVertex{Vec2(to.x - flatPerpendicular.x, to.y - flatPerpendicular.y), flatUv, color});
+        vertices_.push_back(DrawVertex{Vec2(from.x - flatPerpendicular.x, from.y - flatPerpendicular.y), flatUv, color});
+        indices_.push_back(flatFirst + 0u);
+        indices_.push_back(flatFirst + 1u);
+        indices_.push_back(flatFirst + 2u);
+        indices_.push_back(flatFirst + 0u);
+        indices_.push_back(flatFirst + 2u);
+        indices_.push_back(flatFirst + 3u);
+        addGeometryCommand(commands_, flatIndex, 6u, clip);
+        return;
+    }
+
+    const float fringe = 1.0f;
+    float coreHalf = halfThickness;
+    Color coreColor = color;
+    if (thickness < 1.0f)
+    {
+        coreHalf = 0.5f;
+        coreColor.a = static_cast<uint8_t>(static_cast<float>(color.a) * thickness + 0.5f);
+    }
+    const Vec2 core(unitPerpendicular.x * coreHalf, unitPerpendicular.y * coreHalf);
+    const Vec2 outer(unitPerpendicular.x * (coreHalf + fringe),
+                     unitPerpendicular.y * (coreHalf + fringe));
+    const Color transparentEdge(coreColor.r, coreColor.g, coreColor.b, 0u);
+
+    // Six vertices per end: transparent outer, opaque core, opaque core,
+    // transparent outer - two fringe strips around one solid core strip.
+    vertices_.push_back(DrawVertex{Vec2(from.x + outer.x, from.y + outer.y), uv, transparentEdge});
+    vertices_.push_back(DrawVertex{Vec2(to.x + outer.x, to.y + outer.y), uv, transparentEdge});
+    vertices_.push_back(DrawVertex{Vec2(from.x + core.x, from.y + core.y), uv, coreColor});
+    vertices_.push_back(DrawVertex{Vec2(to.x + core.x, to.y + core.y), uv, coreColor});
+    vertices_.push_back(DrawVertex{Vec2(from.x - core.x, from.y - core.y), uv, coreColor});
+    vertices_.push_back(DrawVertex{Vec2(to.x - core.x, to.y - core.y), uv, coreColor});
+    vertices_.push_back(DrawVertex{Vec2(from.x - outer.x, from.y - outer.y), uv, transparentEdge});
+    vertices_.push_back(DrawVertex{Vec2(to.x - outer.x, to.y - outer.y), uv, transparentEdge});
+
+    // Three strips: fringe, core, fringe.
+    static const uint32_t stripOffsets[3] = {0u, 2u, 4u};
+    for (uint32_t strip = 0; strip < 3u; ++strip)
+    {
+        const uint32_t base = firstVertex + stripOffsets[strip];
+        indices_.push_back(base + 0u);
+        indices_.push_back(base + 1u);
+        indices_.push_back(base + 3u);
+        indices_.push_back(base + 0u);
+        indices_.push_back(base + 3u);
+        indices_.push_back(base + 2u);
+    }
+    addGeometryCommand(commands_, firstIndex, 18u, clip);
 }
 
 void DrawList::addRect(const Rect &rect,
