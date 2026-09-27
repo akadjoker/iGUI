@@ -3644,6 +3644,23 @@ void Context::drawLine(const Vec2 &from, const Vec2 &to, const Color &color, flo
                       Vec2(origin.x + to.x, origin.y + to.y), color, contentClip(), thickness);
 }
 
+void Context::drawRectFilledRounded(const Rect &bounds, float radius, const Color &color)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+    drawList->addRectFilledRounded(contentRect(bounds), radius, color, contentClip());
+}
+
+void Context::drawRectRounded(const Rect &bounds, float radius, const Color &color,
+                              float thickness)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+    drawList->addRectRounded(contentRect(bounds), radius, color, contentClip(), thickness);
+}
+
 void Context::drawCircleFilled(const Vec2 &center, float radius, const Color &color)
 {
     DrawList *drawList = currentDrawList();

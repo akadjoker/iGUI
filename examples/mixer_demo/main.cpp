@@ -86,6 +86,11 @@ bool knob(ig::Context& ui, ig::StringView id, const char* label, float& value,
     float norm = (value - minimum) / span;
     norm = norm < 0.0f ? 0.0f : (norm > 1.0f ? 1.0f : norm);
 
+    // Rounded plate behind the knob, the way a web UI would sit it on a card.
+    ui.drawRectFilledRounded(ig::Rect(box.x - 6.0f, box.y - 6.0f,
+                                      box.width + 12.0f, box.height + 10.0f),
+                             8.0f, ig::Color(22u, 27u, 40u, 255u));
+
     arc(ui, cx, cy, radius, 0.0f, 1.0f, style.track, style.thickness);
     arc(ui, cx, cy, radius, 0.0f, norm, style.fill, style.thickness);
 

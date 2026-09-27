@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 
 #include <igui/iGUI.hpp>
 #include <igui/Gui.hpp>
@@ -276,6 +277,64 @@ static ig::Color colorAtVertex(const ig::DrawData &data, float x, float y)
             return data.vertices[i].color;
     }
     return ig::Color(0u, 0u, 0u, 0u);
+}
+
+static void test_rounded_rect_geometry()
+{
+    const ig::Rect clip(0.0f, 0.0f, 500.0f, 500.0f);
+    const ig::Color white(255u, 255u, 255u, 255u);
+
+    // A rounded rect is a solid outline plus a one-pixel transparent fringe,
+    // exactly like addCircleFilled. The fringe must extend one pixel beyond
+    // the rectangle and no further: building the outline used to offset the
+    // edges *and* grow the corner radius, pushing the straight sides out by
+    // two pixels and leaving a visibly soft edge.
+    ig::DrawList rounded;
+    rounded.addRectFilledRounded(ig::Rect(10.0f, 10.0f, 100.0f, 40.0f), 6.0f, white, clip);
+    const ig::DrawData roundedData = rounded.data(ig::Vec2(500.0f, 500.0f), 1.0f);
+
+    float minX = 1e9f;
+    float maxX = -1e9f;
+    bool sawOpaque = false;
+    bool sawTransparent = false;
+    for (size_t i = 0; i < roundedData.vertices.size(); ++i)
+    {
+        const float x = roundedData.vertices[i].position.x;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (roundedData.vertices[i].color.a == 255u) sawOpaque = true;
+        if (roundedData.vertices[i].color.a == 0u) sawTransparent = true;
+    }
+    assert(sawOpaque && sawTransparent);
+    assert(minX == 9.0f);
+    assert(maxX == 111.0f);
+    for (size_t i = 0; i < roundedData.indices.size(); ++i)
+        assert(roundedData.indices[i] < roundedData.vertices.size());
+
+    // A radius past half the shorter side is clamped, so a square becomes a
+    // circle: every point of the solid outline sits at the same distance from
+    // the centre.
+    ig::DrawList circle;
+    circle.addRectFilledRounded(ig::Rect(0.0f, 0.0f, 40.0f, 40.0f), 999.0f, white, clip);
+    const ig::DrawData circleData = circle.data(ig::Vec2(100.0f, 100.0f), 1.0f);
+    const size_t outlinePoints = (circleData.vertices.size() - 1u) / 2u;
+    for (size_t i = 1; i <= outlinePoints; ++i)
+    {
+        const float dx = circleData.vertices[i].position.x - 20.0f;
+        const float dy = circleData.vertices[i].position.y - 20.0f;
+        const float distance = sqrtf(dx * dx + dy * dy);
+        assert(distance > 19.99f && distance < 20.01f);
+    }
+
+    // Zero radius falls through to the plain rectangle, and a degenerate
+    // rectangle emits nothing at all.
+    ig::DrawList square;
+    square.addRectFilledRounded(ig::Rect(10.0f, 10.0f, 100.0f, 40.0f), 0.0f, white, clip);
+    assert(square.data(ig::Vec2(500.0f, 500.0f), 1.0f).vertices.size() == 4u);
+
+    ig::DrawList empty;
+    empty.addRectFilledRounded(ig::Rect(0.0f, 0.0f, 0.0f, 40.0f), 4.0f, white, clip);
+    assert(empty.data(ig::Vec2(500.0f, 500.0f), 1.0f).vertices.size() == 0u);
 }
 
 static void test_automatic_layout()
@@ -764,6 +823,7 @@ int main()
     test_checkbox();
     test_focus_lost_cancels_capture();
     test_draw_primitives();
+    test_rounded_rect_geometry();
     test_automatic_layout();
     test_slider_and_radio();
     test_slider_float_value_editing();

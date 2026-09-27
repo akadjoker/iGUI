@@ -440,6 +440,11 @@ public:
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
     void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
+    // Rounded rectangles, filled and outline. A large radius on a square gives
+    // a circle, so one call covers pills, cards and step-sequencer cells.
+    void drawRectFilledRounded(const Rect &bounds, float radius, const Color &color);
+    void drawRectRounded(const Rect &bounds, float radius, const Color &color,
+                         float thickness = 1.0f);
     // Text in an explicit colour, and the width the theme font would need for
     // it. A custom widget that centres its own caption needs both: label()
     // always uses the theme's label colour and reports no width.

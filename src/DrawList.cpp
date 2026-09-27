@@ -337,6 +337,144 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     addGeometryCommand(commands_, firstIndex, segments * 9u, clip);
 }
 
+namespace
+{
+
+// Writes the outline of a rounded rectangle, walking the four corner arcs in
+// order. `inset` grows (or, when negative, shrinks) the outline away from the
+// rectangle - that is what produces the transparent fringe ring.
+// Returns the number of points written.
+uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegments,
+                             float inset, Vec2 *out)
+{
+    // The corner centres are fixed by the rectangle itself and must NOT move
+    // with the inset: only the arc radius grows. Offsetting the edges as well
+    // would push the fringe out by twice the inset on the straight sides.
+    const float left = rect.x;
+    const float top = rect.y;
+    const float right = rect.x + rect.width;
+    const float bottom = rect.y + rect.height;
+    const float cornerRadius = radius + inset;
+    const float cx[4] = {right - radius, right - radius, left + radius, left + radius};
+    const float cy[4] = {bottom - radius, top + radius, top + radius, bottom - radius};
+    // Start angles per corner: bottom-right, top-right, top-left, bottom-left.
+    static const float kQuarter = 1.57079632679489661923f;
+    uint32_t count = 0;
+    for (uint32_t corner = 0; corner < 4u; ++corner)
+    {
+        const float start = static_cast<float>(corner) * kQuarter;
+        for (uint32_t i = 0; i <= cornerSegments; ++i)
+        {
+            const float angle =
+                start + kQuarter * static_cast<float>(i) / static_cast<float>(cornerSegments);
+            out[count].x = cx[corner] + cosf(angle) * cornerRadius;
+            out[count].y = cy[corner] + sinf(angle) * cornerRadius;
+            ++count;
+        }
+    }
+    return count;
+}
+
+uint32_t roundedCornerSegments(float radius, uint32_t requested)
+{
+    if (requested > 0u)
+        return requested > 32u ? 32u : requested;
+    // Enough segments that a corner reads as a curve rather than a bevel, but
+    // no more than the radius can show.
+    uint32_t segments = static_cast<uint32_t>(radius * 0.5f) + 3u;
+    return segments > 16u ? 16u : segments;
+}
+
+} // namespace
+
+void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color &color,
+                                    const Rect &clip, uint32_t cornerSegments)
+{
+    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u)
+        return;
+
+    const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
+    if (radius > maxRadius)
+        radius = maxRadius;
+    if (radius <= 0.0f)
+    {
+        addRectFilled(rect, color, clip);
+        return;
+    }
+
+    const uint32_t segments = roundedCornerSegments(radius, cornerSegments);
+    // Four corners, each contributing segments+1 points.
+    const uint32_t pointCount = 4u * (segments + 1u);
+    Vec2 inner[4u * (32u + 1u)];
+    Vec2 outer[4u * (32u + 1u)];
+    buildRoundedOutline(rect, radius, segments, 0.0f, inner);
+    buildRoundedOutline(rect, radius, segments, 1.0f, outer);
+
+    const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
+    const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
+    const Vec2 uv(0.0f, 0.0f);
+    const Color transparentEdge(color.r, color.g, color.b, 0u);
+    const Vec2 centre(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f);
+
+    vertices_.push_back(DrawVertex{centre, uv, color});
+    for (uint32_t i = 0; i < pointCount; ++i)
+        vertices_.push_back(DrawVertex{inner[i], uv, color});
+    for (uint32_t i = 0; i < pointCount; ++i)
+        vertices_.push_back(DrawVertex{outer[i], uv, transparentEdge});
+
+    // Same construction as addCircleFilled: a fan over the solid interior plus
+    // a one-pixel transparent ring that gives the silhouette its soft edge.
+    for (uint32_t i = 0; i < pointCount; ++i)
+    {
+        const uint32_t next = (i + 1u) % pointCount;
+        const uint32_t innerIndex = firstVertex + 1u + i;
+        const uint32_t innerNext = firstVertex + 1u + next;
+        const uint32_t outerIndex = firstVertex + 1u + pointCount + i;
+        const uint32_t outerNext = firstVertex + 1u + pointCount + next;
+
+        indices_.push_back(firstVertex);
+        indices_.push_back(innerIndex);
+        indices_.push_back(innerNext);
+
+        indices_.push_back(innerIndex);
+        indices_.push_back(outerIndex);
+        indices_.push_back(outerNext);
+        indices_.push_back(innerIndex);
+        indices_.push_back(outerNext);
+        indices_.push_back(innerNext);
+    }
+    addGeometryCommand(commands_, firstIndex, pointCount * 9u, clip);
+}
+
+void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color,
+                              const Rect &clip, float thickness, uint32_t cornerSegments)
+{
+    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u || thickness <= 0.0f)
+        return;
+
+    const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
+    if (radius > maxRadius)
+        radius = maxRadius;
+    if (radius <= 0.0f)
+    {
+        addRect(rect, color, clip, thickness);
+        return;
+    }
+
+    const uint32_t segments = roundedCornerSegments(radius, cornerSegments);
+    const uint32_t pointCount = 4u * (segments + 1u);
+    Vec2 outline[4u * (32u + 1u)];
+    buildRoundedOutline(rect, radius, segments, 0.0f, outline);
+
+    // Stroke the outline segment by segment; addLine already anti-aliases the
+    // diagonals these arcs are made of.
+    for (uint32_t i = 0; i < pointCount; ++i)
+    {
+        const uint32_t next = (i + 1u) % pointCount;
+        addLine(outline[i], outline[next], color, clip, thickness);
+    }
+}
+
 void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip)
 {
     if (points.size() < 3u || color.a == 0u)
