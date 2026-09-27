@@ -3496,7 +3496,7 @@ bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int
                 auto& keys = tracks[row].keys;
                 int hit = -1;
                 for (int k=0;k<static_cast<int>(keys.size());++k)
-                    if (fabsf(p.x-xAt(keys[k])) <= 7) { hit=k; break; }
+                    if (fabs(static_cast<double>(p.x)-xAt(keys[k])) <= 7.0) { hit=k; break; }
                 if (remove && hit >= 0) { keys.erase(keys.begin()+hit); selectedKey=-1; changed=true; }
                 else if (!remove) {
                     if (hit < 0) { keys.push_back(frameAt(p.x)); hit=static_cast<int>(keys.size())-1; changed=true; }
