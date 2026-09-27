@@ -440,6 +440,11 @@ public:
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
     void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
+    // Text in an explicit colour, and the width the theme font would need for
+    // it. A custom widget that centres its own caption needs both: label()
+    // always uses the theme's label colour and reports no width.
+    void drawText(StringView text, const Vec2 &position, const Color &color);
+    float textWidth(StringView text) const;
     bool isKeyPressed(KeyCode key) const;
     bool shortcut(KeyCode key, bool control = true, bool shift = false) const;
     // True for every frame the given button is held down, from the press

@@ -3978,6 +3978,24 @@ bool Context::acceptDragDropTarget(WidgetId acceptedType, const Rect &bounds,
     return false;
 }
 
+void Context::drawText(StringView text, const Vec2 &position, const Color &color)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return;
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+    const Rect resolved = contentRect(Rect(position.x, position.y, 0.0f, 0.0f));
+    drawText(*drawList, theme_.font, text, Vec2(resolved.x, resolved.y),
+             theme_.fontSize, color, contentClip());
+}
+
+float Context::textWidth(StringView text) const
+{
+    return measureText(theme_.font, text, theme_.fontSize).width;
+}
+
 void Context::label(StringView text, const Vec2 &position)
 {
     WindowState *window = currentWindow();
