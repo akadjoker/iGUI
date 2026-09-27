@@ -392,6 +392,13 @@ inline void arrangement(ig::Context& ui, const ig::Rect& bounds,
 
 // ── Pattern grid ────────────────────────────────────────────────────────────
 
+// Only the steps between firstStep and firstStep+visibleSteps are drawn. That
+// window is what keeps a long song affordable: a five-minute pattern is around
+// 2400 steps per sound, and emitting geometry for all of them costs roughly
+// 90 ms a frame - about 11 FPS. Drawing only what fits on screen brings the
+// same pattern down to about 1 ms, because the cost follows the window rather
+// than the song. The DrawList has no culling of its own; the clip rectangle it
+// carries is a scissor for the GPU, not a reason to skip building vertices.
 inline bool patternGrid(ig::Context& ui, const ig::Rect& bounds, SoundRow* rows,
                         int rowCount, int firstStep, int visibleSteps,
                         int playheadStep, int& selectedRow, const Palette& palette)

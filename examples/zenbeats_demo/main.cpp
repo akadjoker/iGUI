@@ -25,7 +25,10 @@
 namespace
 {
 
-const int kSteps = 32;
+// A five-minute song at 122 BPM is about 152 bars, i.e. ~2440 sixteenth
+// steps. The grid only ever draws the window that fits on screen.
+const int kSteps = 2440;
+const int kVisibleSteps = 32;
 
 // The knob from the synth demo, kept here so this example stands alone.
 const float kPi = 3.14159265358979323846f;
@@ -43,28 +46,16 @@ struct KnobDrag
 
 KnobDrag gDrag;
 
+// One continuous band per arc: drawing it as a fan of short lines leaves every
+// joint overlapping its neighbour's soft edge, and the alpha adds up there -
+// which is exactly the notching the ring used to show.
 void arcSegments(ig::Context& ui, float cx, float cy, float radius, float fromTurn,
                  float toTurn, const ig::Color& color, float thickness)
 {
     if (toTurn <= fromTurn)
         return;
-    const int segments = 56;
-    const float startStep = fromTurn * segments;
-    const float endStep = toTurn * segments;
-    int index = static_cast<int>(startStep);
-    while (static_cast<float>(index) < endStep)
-    {
-        const float from = (static_cast<float>(index) > startStep)
-                               ? static_cast<float>(index) : startStep;
-        const float to = (static_cast<float>(index + 1) < endStep)
-                             ? static_cast<float>(index + 1) : endStep;
-        const float a0 = kStartAngle + kSweepAngle * from / segments;
-        const float a1 = kStartAngle + kSweepAngle * to / segments;
-        ui.drawLine(ig::Vec2(cx + radius * cosf(a0), cy + radius * sinf(a0)),
-                    ig::Vec2(cx + radius * cosf(a1), cy + radius * sinf(a1)),
-                    color, thickness);
-        ++index;
-    }
+    ui.drawArc(ig::Vec2(cx, cy), radius, kStartAngle + kSweepAngle * fromTurn,
+               kStartAngle + kSweepAngle * toTurn, color, thickness);
 }
 
 // Rotating-body knob: the cap turns and carries its notch, the value arc sits
@@ -210,6 +201,8 @@ int main()
     for (int r = 0; r < 9; ++r)
         for (int s = 0; s < kSteps; ++s)
             patternData[r][s] = zen::Cell::Off;
+    int gridFirstStep = 0;
+    bool followPlayhead = true;
     for (int s = 0; s < kSteps; s += 4) patternData[0][s] = zen::Cell::On;   // kick
     for (int s = 2; s < kSteps; s += 4) patternData[2][s] = zen::Cell::On;   // hi-hat
     for (int s = 0; s < kSteps; ++s)
@@ -393,14 +386,67 @@ int main()
                                           fullWidth, 386.0f);
                 zen::section(ui, patternBox, "PATTERN",
                              "Editing pattern A (Full composition)", palette);
+                // Keep the playhead on screen while playing, scrolling a
+                // window at a time so the grid does not slide under the cursor
+                // on every step.
+                if (followPlayhead && transport.playing)
+                {
+                    if (playheadStep < gridFirstStep ||
+                        playheadStep >= gridFirstStep + kVisibleSteps)
+                        gridFirstStep = (playheadStep / kVisibleSteps) * kVisibleSteps;
+                }
                 zen::patternGrid(ui,
                                  ig::Rect(patternBox.x + 10.0f, patternBox.y + 32.0f,
                                           patternBox.width - 20.0f, 340.0f),
-                                 patternRows, patternRowCount, 0, kSteps, playheadStep,
-                                 selectedPatternRow, palette);
+                                 patternRows, patternRowCount, gridFirstStep,
+                                 kVisibleSteps, playheadStep, selectedPatternRow,
+                                 palette);
+
+                // Scrollbar under the grid: drag it to move through the song.
+                {
+                    const ig::Rect bar(patternBox.x + 210.0f,
+                                       patternBox.y + patternBox.height - 16.0f,
+                                       patternBox.width - 230.0f, 8.0f);
+                    ui.drawRectFilledRounded(bar, 4.0f, ig::Color(24u, 30u, 43u, 255u));
+                    const float span = static_cast<float>(kSteps - kVisibleSteps);
+                    const float fraction =
+                        span > 0.0f ? static_cast<float>(gridFirstStep) / span : 0.0f;
+                    const float thumbWidth =
+                        bar.width * static_cast<float>(kVisibleSteps) /
+                        static_cast<float>(kSteps);
+                    ui.drawRectFilledRounded(
+                        ig::Rect(bar.x + (bar.width - thumbWidth) * fraction, bar.y,
+                                 thumbWidth < 24.0f ? 24.0f : thumbWidth, 8.0f),
+                        4.0f, palette.accent);
+                    const ig::Vec2 press =
+                        ui.pointerPressedPosition(ig::PointerButton::Left);
+                    if (ui.isPointerButtonDown(ig::PointerButton::Left) &&
+                        press.x >= bar.x && press.x <= bar.x + bar.width &&
+                        press.y >= bar.y - 8.0f && press.y <= bar.y + 16.0f)
+                    {
+                        float t = (ui.pointerPosition().x - bar.x) / bar.width;
+                        t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+                        gridFirstStep = static_cast<int>(t * span);
+                        followPlayhead = false;
+                    }
+                }
 
                 ui.setCursor(ig::Vec2(top.x, patternBox.y + patternBox.height + 8.0f));
-                ui.label("Tap a cell to cycle it: on, soft, off. Drag a knob or the BPM field.");
+                {
+                    char info[160];
+                    snprintf(info, sizeof(info),
+                             "Song %d steps (~5 min)  |  drawing steps %d-%d  |  %s",
+                             kSteps, gridFirstStep + 1,
+                             gridFirstStep + kVisibleSteps,
+                             followPlayhead ? "following playhead" : "free scroll");
+                    ui.label(ig::StringView(info));
+                }
+                if (zen::pill(ui, "pg.follow", "Follow",
+                              ig::Rect(top.x + 460.0f,
+                                       patternBox.y + patternBox.height + 6.0f, 68.0f,
+                                       20.0f),
+                              followPlayhead, palette.accent, palette))
+                    followPlayhead = !followPlayhead;
             }
             else
             {

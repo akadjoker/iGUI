@@ -450,6 +450,98 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
     addGeometryCommand(commands_, firstIndex, pointCount * 9u, clip);
 }
 
+void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
+                      const Color &color, const Rect &clip, float thickness,
+                      uint32_t segments)
+{
+    if (radius <= 0.0f || thickness <= 0.0f || color.a == 0u)
+        return;
+    if (to < from)
+    {
+        const float swap = from;
+        from = to;
+        to = swap;
+    }
+    const float sweep = to - from;
+    if (sweep <= 0.0f)
+        return;
+
+    if (segments == 0u)
+    {
+        // Enough that the chord error stays well under a pixel: the sagitta of
+        // one segment is r*(1-cos(step/2)), so tie the count to both the arc
+        // length and its angle.
+        const float lengthSegments = radius * sweep * 0.5f;
+        segments = static_cast<uint32_t>(lengthSegments) + 6u;
+    }
+    if (segments < 3u)
+        segments = 3u;
+    if (segments > 256u)
+        segments = 256u;
+
+    const float half = thickness * 0.5f;
+    const float fringe = 1.0f;
+    // A band thinner than a pixel keeps a one-pixel core and loses opacity
+    // instead, the same rule addLine uses for hairlines.
+    float coreHalf = half;
+    Color coreColor = color;
+    if (thickness < 1.0f)
+    {
+        coreHalf = 0.5f;
+        coreColor.a = static_cast<uint8_t>(static_cast<float>(color.a) * thickness + 0.5f);
+    }
+    const Color transparentEdge(coreColor.r, coreColor.g, coreColor.b, 0u);
+
+    const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
+    const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
+    const Vec2 uv(0.0f, 0.0f);
+    const uint32_t ringPoints = segments + 1u;
+
+    // Four concentric rings: outer fringe, outer core, inner core, inner
+    // fringe. Every ring shares the same angles, so the strips between them
+    // have no joints at all.
+    for (uint32_t ring = 0; ring < 4u; ++ring)
+    {
+        float offset = 0.0f;
+        Color ringColor = coreColor;
+        switch (ring)
+        {
+        case 0: offset = coreHalf + fringe; ringColor = transparentEdge; break;
+        case 1: offset = coreHalf; break;
+        case 2: offset = -coreHalf; break;
+        default: offset = -(coreHalf + fringe); ringColor = transparentEdge; break;
+        }
+        float ringRadius = radius + offset;
+        if (ringRadius < 0.0f)
+            ringRadius = 0.0f;
+        for (uint32_t i = 0; i < ringPoints; ++i)
+        {
+            const float angle =
+                from + sweep * static_cast<float>(i) / static_cast<float>(segments);
+            vertices_.push_back(DrawVertex{
+                Vec2(center.x + cosf(angle) * ringRadius,
+                     center.y + sinf(angle) * ringRadius),
+                uv, ringColor});
+        }
+    }
+
+    for (uint32_t strip = 0; strip < 3u; ++strip)
+    {
+        const uint32_t outerBase = firstVertex + strip * ringPoints;
+        const uint32_t innerBase = outerBase + ringPoints;
+        for (uint32_t i = 0; i + 1u < ringPoints; ++i)
+        {
+            indices_.push_back(outerBase + i);
+            indices_.push_back(outerBase + i + 1u);
+            indices_.push_back(innerBase + i + 1u);
+            indices_.push_back(outerBase + i);
+            indices_.push_back(innerBase + i + 1u);
+            indices_.push_back(innerBase + i);
+        }
+    }
+    addGeometryCommand(commands_, firstIndex, segments * 18u, clip);
+}
+
 void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color,
                               const Rect &clip, float thickness, uint32_t cornerSegments)
 {
