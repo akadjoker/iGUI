@@ -147,6 +147,15 @@ public:
                          const Color &color, const Rect &clip, uint32_t segments = 0u);
     // Tessellates a simple polygon. Points may be clockwise or counter-clockwise.
     void addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip);
+    // Filled rectangle with rounded corners and an anti-aliased outline. The
+    // radius is clamped to half the shorter side, so passing a large value on a
+    // square gives a circle. A radius of zero falls through to addRectFilled.
+    void addRectFilledRounded(const Rect &rect, float radius, const Color &color,
+                              const Rect &clip, uint32_t cornerSegments = 0u);
+    // Outline-only counterpart, for borders and focus rings.
+    void addRectRounded(const Rect &rect, float radius, const Color &color,
+                        const Rect &clip, float thickness = 1.0f,
+                        uint32_t cornerSegments = 0u);
     // Convenience wrapper for the common 3-point case (arrows, chevrons, ...).
     void addTriangleFilled(const Vec2 &a, const Vec2 &b, const Vec2 &c,
                            const Color &color, const Rect &clip)
