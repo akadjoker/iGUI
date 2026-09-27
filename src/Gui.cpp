@@ -795,6 +795,16 @@ bool Context::isPointerButtonDown(PointerButton button) const
     return pointer_.down[buttonIndex(button)];
 }
 
+Vec2 Context::pointerPosition() const
+{
+    return pointer_.position;
+}
+
+Vec2 Context::pointerPressedPosition(PointerButton button) const
+{
+    return pointer_.pressedPosition[buttonIndex(button)];
+}
+
 bool Context::isMenuOpen() const
 {
     return menuWasOpenAtFrameStart_;

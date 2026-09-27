@@ -449,6 +449,13 @@ public:
     // side panel's cursor-follow highlight while a drag-selection is live
     // in the code editor next to it.
     bool isPointerButtonDown(PointerButton button) const;
+    // Pointer position in display coordinates, and where the given button went
+    // down. Together with isPointerButtonDown they let an application-defined
+    // widget implement its own drag (a rotary knob, a custom scrubber) without
+    // reaching into the Context - the value-drag equivalent of the drawRect/
+    // drawLine building blocks above.
+    Vec2 pointerPosition() const;
+    Vec2 pointerPressedPosition(PointerButton button) const;
     void progressBar(float value, float maximum, const Rect &bounds);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
