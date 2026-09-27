@@ -469,8 +469,16 @@ public:
     // widget implement its own drag (a rotary knob, a custom scrubber) without
     // reaching into the Context - the value-drag equivalent of the drawRect/
     // drawLine building blocks above.
+    // Absolute (window) coordinates.
     Vec2 pointerPosition() const;
     Vec2 pointerPressedPosition(PointerButton button) const;
+    // The same points in the current content space - the one the Rects passed
+    // to the draw* primitives and the bounds-based widgets use. Inside a
+    // beginChild() or a scrolled window the two differ by the scroll offset, so
+    // custom widgets that draw with draw* and hit-test with the pointer must
+    // use these to stay aligned.
+    Vec2 pointerContentPosition() const;
+    Vec2 pointerPressedContentPosition(PointerButton button) const;
     void progressBar(float value, float maximum, const Rect &bounds);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
@@ -632,6 +640,10 @@ public:
     void unindent(float pixels = 16.0f);
     void separator(float thickness = 1.0f);
     void separatorText(StringView text, float width = 0.0f);
+    // Reserves a block of layout space without drawing anything, so custom
+    // content drawn with the draw* primitives still reports its extent to the
+    // enclosing beginChild()/window (which measure from the last laid-out item).
+    void dummy(float width, float height);
     void setCursor(const Vec2 &localPosition);
     Vec2 cursor() const;
     // Remaining horizontal content space at the current layout cursor.
@@ -1038,6 +1050,7 @@ private:
     float autoButtonWidth(StringView label) const;
     WindowState *getOrCreateWindow(WidgetId id, StringView title, const Rect &bounds);
     Rect contentRect(const Rect &local) const;
+    Vec2 toContentSpace(const Vec2 &absolute) const;
     Rect contentClip() const;
     bool itemHovered(const Rect &rect, const Rect &clip, WidgetId id);
     bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable = true);
