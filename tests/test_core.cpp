@@ -311,6 +311,30 @@ static void test_rounded_rect_geometry()
     for (size_t i = 0; i < roundedData.indices.size(); ++i)
         assert(roundedData.indices[i] < roundedData.vertices.size());
 
+    // Every outline point must lie ON the border, not inside it. Pairing a
+    // corner's centre with the wrong quadrant produced points in the middle of
+    // an edge - the path cut across the rectangle and back, drawing a spur at
+    // each corner. Total path length does not catch this (the two orderings
+    // happen to walk the same distance), but a point's distance to the border
+    // does: on the border it is zero.
+    const size_t outlineCount = (roundedData.vertices.size() - 1u) / 2u;
+    for (size_t i = 0; i < outlineCount; ++i)
+    {
+        const ig::Vec2 &point = roundedData.vertices[1u + i].position;
+        // Distance to the nearest of the four edges of (10,10)-(110,50).
+        const float toLeft = point.x - 10.0f;
+        const float toRight = 110.0f - point.x;
+        const float toTop = point.y - 10.0f;
+        const float toBottom = 50.0f - point.y;
+        float nearest = toLeft;
+        if (toRight < nearest) nearest = toRight;
+        if (toTop < nearest) nearest = toTop;
+        if (toBottom < nearest) nearest = toBottom;
+        // A rounded corner pulls in by at most the radius; anything deeper is
+        // a point that left the border.
+        assert(nearest <= 6.0f + 0.01f);
+    }
+
     // A radius past half the shorter side is clamped, so a square becomes a
     // circle: every point of the solid outline sits at the same distance from
     // the centre.
