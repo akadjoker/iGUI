@@ -355,9 +355,13 @@ uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegm
     const float right = rect.x + rect.width;
     const float bottom = rect.y + rect.height;
     const float cornerRadius = radius + inset;
-    const float cx[4] = {right - radius, right - radius, left + radius, left + radius};
-    const float cy[4] = {bottom - radius, top + radius, top + radius, bottom - radius};
-    // Start angles per corner: bottom-right, top-right, top-left, bottom-left.
+    // Y grows downward, so an angle sweeping from 0 upward visits the corners
+    // bottom-right, bottom-left, top-left, top-right in that order. The centre
+    // of each corner must match the quadrant its arc is drawn in; pairing them
+    // the wrong way round makes the outline jump straight across the rectangle
+    // between corners, which shows up as a spur at each corner.
+    const float cx[4] = {right - radius, left + radius, left + radius, right - radius};
+    const float cy[4] = {bottom - radius, bottom - radius, top + radius, top + radius};
     static const float kQuarter = 1.57079632679489661923f;
     uint32_t count = 0;
     for (uint32_t corner = 0; corner < 4u; ++corner)

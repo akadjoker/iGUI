@@ -62,16 +62,32 @@ inline void arcSegments(ig::Context& ui, float cx, float cy, float radius,
                         float fromTurn, float toTurn, const ig::Color& color,
                         float thickness)
 {
+    if (toTurn <= fromTurn)
+        return;
+
+    // Walking whole segments only and truncating the end made the arc grow in
+    // visible jumps and left its tip landing on a segment boundary, which read
+    // as a ragged edge. The last segment is drawn partially instead, so the tip
+    // sits exactly at the value and the arc grows smoothly.
     const int segments = 56;
-    const int first = static_cast<int>(fromTurn * segments);
-    const int last = static_cast<int>(toTurn * segments);
-    for (int i = first; i < last; ++i)
+    const float startStep = fromTurn * segments;
+    const float endStep = toTurn * segments;
+    int index = static_cast<int>(startStep);
+
+    while (static_cast<float>(index) < endStep)
     {
-        const float a0 = kStartAngle + kSweepAngle * static_cast<float>(i) / segments;
-        const float a1 = kStartAngle + kSweepAngle * static_cast<float>(i + 1) / segments;
+        const float from = (static_cast<float>(index) > startStep)
+                               ? static_cast<float>(index)
+                               : startStep;
+        const float to = (static_cast<float>(index + 1) < endStep)
+                             ? static_cast<float>(index + 1)
+                             : endStep;
+        const float a0 = kStartAngle + kSweepAngle * from / segments;
+        const float a1 = kStartAngle + kSweepAngle * to / segments;
         ui.drawLine(ig::Vec2(cx + radius * cosf(a0), cy + radius * sinf(a0)),
                     ig::Vec2(cx + radius * cosf(a1), cy + radius * sinf(a1)),
                     color, thickness);
+        ++index;
     }
 }
 
