@@ -875,6 +875,16 @@ Vec2 Context::pointerPressedPosition(PointerButton button) const
     return pointer_.pressedPosition[buttonIndex(button)];
 }
 
+Vec2 Context::pointerContentPosition() const
+{
+    return toContentSpace(pointer_.position);
+}
+
+Vec2 Context::pointerPressedContentPosition(PointerButton button) const
+{
+    return toContentSpace(pointer_.pressedPosition[buttonIndex(button)]);
+}
+
 bool Context::isMenuOpen() const
 {
     return menuWasOpenAtFrameStart_;
@@ -5728,6 +5738,13 @@ void Context::spacing(float pixels)
         layout_.cursor.y += pixels;
 }
 
+void Context::dummy(float width, float height)
+{
+    if (!currentWindow() || width <= 0.0f || height <= 0.0f)
+        return;
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, width, height));
+}
+
 void Context::indent(float pixels)
 {
     if (!currentWindow() || pixels <= 0.0f)
@@ -6119,6 +6136,13 @@ Rect Context::contentRect(const Rect &local) const
         return Rect();
     return Rect(layout_.origin.x + local.x, layout_.origin.y + local.y,
                 local.width, local.height);
+}
+
+Vec2 Context::toContentSpace(const Vec2 &absolute) const
+{
+    if (!currentWindow())
+        return absolute;
+    return Vec2(absolute.x - layout_.origin.x, absolute.y - layout_.origin.y);
 }
 
 Rect Context::contentClip() const
