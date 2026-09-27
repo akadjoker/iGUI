@@ -564,6 +564,76 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     return true;
 }
 
+bool Context::beginDialog(StringView title, bool &open, const Vec2 &size)
+{
+    const WidgetId id = combineIds(hashText(title), 0x4449414c4f47ull);
+    if (!open)
+    {
+        if (activeModal_ == id)
+            activeModal_ = InvalidWidgetId;
+        setModalWindow(title, false);
+        return false;
+    }
+
+    // Escape closes, like messageBox. Checked before the window is drawn so the
+    // content never sees the frame that dismissed it.
+    if (escapePressed_)
+    {
+        open = false;
+        activeModal_ = InvalidWidgetId;
+        activeWidget_ = InvalidWidgetId;
+        setModalWindow(title, false);
+        return false;
+    }
+
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const float width = size.x > 0.0f ? size.x : 320.0f;
+    const float height = size.y > 0.0f ? size.y : 200.0f;
+    const Rect bounds((viewport.width - width) * 0.5f, (viewport.height - height) * 0.5f,
+                      width, height);
+
+    // The scrim goes on the frame draw list rather than modalDrawList_, which
+    // messageBox owns - a message box raised from inside a dialog must still
+    // paint its own scrim over this one.
+    frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
+
+    forceWindowBounds_ = true;
+    const bool opened = beginWindow(title, bounds, &open);
+    forceWindowBounds_ = false;
+    if (!opened)
+    {
+        setModalWindow(title, false);
+        return false;
+    }
+
+    // forceWindowBounds_ strips the title bar, so draw one that matches the
+    // message box's.
+    WindowState *window = currentWindow();
+    if (window)
+    {
+        const TextMetrics titleMetrics = measureText(theme_.font, title, theme_.fontSize);
+        const Rect titleBar(bounds.x, bounds.y, bounds.width,
+                            titleMetrics.height + theme_.windowPadding * 1.5f);
+        window->drawList.addRectFilled(titleBar, theme_.floatTitleBg, viewport);
+        window->drawList.addRect(bounds, theme_.dialogBorder, viewport);
+        drawText(window->drawList, theme_.font, title,
+                 Vec2(titleBar.x + theme_.windowPadding,
+                      titleBar.y + (titleBar.height - titleMetrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, viewport);
+        layout_.origin.y += titleBar.height;
+        layout_.cursor.y += titleBar.height;
+    }
+
+    setModalWindow(title, true);
+    raiseWindow(title, true);
+    return true;
+}
+
+void Context::endDialog()
+{
+    endWindow();
+}
+
 bool Context::beginMainWindow(StringView title, bool *open)
 {
     forceWindowBounds_ = true;

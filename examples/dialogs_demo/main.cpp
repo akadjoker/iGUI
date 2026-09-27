@@ -245,43 +245,34 @@ int main()
             }
         }
 
-        if (settingsVisible)
+        // beginDialog() owns the modal handling: centred, scrim, Escape to
+        // close, windows behind it blocked.
+        if (ui.beginDialog("Settings", settingsVisible, ig::Vec2(380.0f, 300.0f)))
         {
-            // setModalWindow() is what turns an ordinary window into a modal:
-            // every other window's widgets stop reacting to hover/click/
-            // keyboard while it's set, and it must be cleared once the
-            // window closes.
-            ui.setModalWindow("Settings", true);
-            if (ui.beginWindow("Settings", ig::Rect(260.0f, 160.0f, 380.0f, 280.0f),
-                              &settingsVisible))
-            {
-                ui.label("Project name");
-                ui.inputText("settings.name", settings.projectName, 300.0f);
-                ui.spacing(8.0f);
+            ui.label("Project name");
+            ui.inputText("settings.name", settings.projectName, 320.0f);
+            ui.spacing(8.0f);
 
-                ui.label("Volume");
-                ui.sliderFloat("settings.volume", settings.volume, 0.0f, 1.0f,
-                              ig::Rect(0.0f, 0.0f, 300.0f, 24.0f));
-                ui.spacing(8.0f);
+            ui.label("Volume");
+            ui.sliderFloat("settings.volume", settings.volume, 0.0f, 1.0f,
+                          ig::Rect(0.0f, 0.0f, 320.0f, 24.0f));
+            ui.spacing(8.0f);
 
-                ui.checkbox("Autosave", settings.autosave,
-                           ig::Rect(0.0f, 0.0f, 20.0f, 20.0f));
-                ui.spacing(8.0f);
+            ui.checkbox("Autosave", settings.autosave,
+                       ig::Rect(0.0f, 0.0f, 20.0f, 20.0f));
+            ui.spacing(8.0f);
 
-                const ig::StringView themeItems[] = {ig::StringView("Dark"),
-                                                     ig::StringView("Light")};
-                ui.label("Theme");
-                ui.comboBox("settings.theme", settings.theme,
-                          ig::Span<const ig::StringView>(themeItems, 2));
-                ui.spacing(12.0f);
+            const ig::StringView themeItems[] = {ig::StringView("Dark"),
+                                                 ig::StringView("Light")};
+            ui.label("Theme");
+            ui.comboBox("settings.theme", settings.theme,
+                      ig::Span<const ig::StringView>(themeItems, 2));
+            ui.spacing(12.0f);
 
-                if (ui.button("Close"))
-                    settingsVisible = false;
+            if (ui.button("Close"))
+                settingsVisible = false;
 
-                ui.endWindow();
-            }
-            if (!settingsVisible)
-                ui.setModalWindow("Settings", false);
+            ui.endDialog();
         }
 
         const ig::DrawData &drawData = ui.endFrame();
