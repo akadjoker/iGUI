@@ -298,6 +298,7 @@ if(IGUI_RAYLIB_AVAILABLE)
 
     if(IGUI_BUILD_MIXER_DEMO)
         add_executable(igui_mixer_demo examples/mixer_demo/main.cpp)
+        target_include_directories(igui_mixer_demo PRIVATE examples/mixer_demo)
         target_link_libraries(igui_mixer_demo PRIVATE igui_raylib)
     endif()
 endif()
