@@ -254,12 +254,10 @@ int main()
             ui.spacing(8.0f);
 
             ui.label("Volume");
-            ui.sliderFloat("settings.volume", settings.volume, 0.0f, 1.0f,
-                          ig::Rect(0.0f, 0.0f, 320.0f, 24.0f));
+            ui.sliderFloat("settings.volume", settings.volume, 0.0f, 1.0f);
             ui.spacing(8.0f);
 
-            ui.checkbox("Autosave", settings.autosave,
-                       ig::Rect(0.0f, 0.0f, 20.0f, 20.0f));
+            ui.checkbox("Autosave", settings.autosave);
             ui.spacing(8.0f);
 
             const ig::StringView themeItems[] = {ig::StringView("Dark"),

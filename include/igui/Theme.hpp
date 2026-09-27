@@ -103,6 +103,14 @@ struct Theme
     Color dialogBtnPrimaryHover;
     Color dialogBtnDanger;
     Color dialogBtnDangerHover;
+    // Message box accent per kind, and the gizmo axis colours (X/Y/Z plus the
+    // highlight used for the hovered or dragged handle).
+    Color msgBoxWarning;
+    Color msgBoxQuestion;
+    Color gizmoAxisX;
+    Color gizmoAxisY;
+    Color gizmoAxisZ;
+    Color gizmoHighlight;
     Color gutterBg;
     Color lineNumberColor;
     Color lineNumberActive;
@@ -183,6 +191,9 @@ struct Theme
           dialogBtnBg(65, 65, 70, 255), dialogBtnHover(80, 80, 85, 255),
           dialogBtnPrimary(118, 118, 125, 255), dialogBtnPrimaryHover(145, 145, 152, 255),
           dialogBtnDanger(180, 60, 60, 255), dialogBtnDangerHover(200, 80, 80, 255),
+          msgBoxWarning(235, 180, 65, 255), msgBoxQuestion(160, 125, 230, 255),
+          gizmoAxisX(225, 75, 75, 255), gizmoAxisY(75, 210, 110, 255),
+          gizmoAxisZ(100, 165, 245, 255), gizmoHighlight(255, 160, 50, 255),
           gutterBg(38, 38, 42, 255), lineNumberColor(120, 120, 120, 255),
           lineNumberActive(220, 220, 220, 255), currentLineHighlight(255, 255, 255, 8),
           scrollbarThumb(120, 120, 120, 80), carouselArrowBg(0, 0, 0, 140),
