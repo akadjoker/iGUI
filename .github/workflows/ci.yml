@@ -15,6 +15,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Update containers to latest main
+        run: git submodule update --init --remote --recursive third_party/containers
+
       - name: Configure
         run: >-
           cmake -S . -B build-immediate -G Ninja
@@ -35,6 +38,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - name: Update containers to latest main
+        run: git submodule update --init --remote --recursive third_party/containers
 
       - name: Install SDL2
         run: sudo apt-get update && sudo apt-get install --yes libsdl2-dev pkg-config
