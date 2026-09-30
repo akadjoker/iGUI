@@ -43,6 +43,10 @@ struct WindowState
     bool allowMove;
     bool allowResize;
     uint64_t zOrder;
+    // frameNumber_ of the last beginWindow() for this window. A window the
+    // application stopped submitting is not on screen, so it must not keep
+    // catching the pointer (topWindowAt) or holding the modal lock.
+    uint64_t lastFrame = 0;
     DrawList drawList;
     DrawList overlayDrawList;
 
@@ -274,9 +278,10 @@ public:
     // while it is open, no other window's widgets accept hover, clicks or
     // keyboard - same block messageBox gets from activeModal_, but scoped to
     // this window so its own widgets keep working. The window stays drawn
-    // behind it, unlike the scrim messageBox paints. callers must unmark it
-    // when the window closes (Editor::update does, in the same frame the
-    // panel hides).
+    // behind it, unlike the scrim messageBox paints. The lock also ends by
+    // itself once the window is closed or no longer submitted, but callers
+    // should still unmark it when the window closes (Editor::update does, in
+    // the same frame the panel hides).
     void setModalWindow(StringView title, bool modal);
     void maximizeAllWindows();
     void minimizeAllWindows();
@@ -295,7 +300,7 @@ public:
     bool wantsTextInput() const;
     // True while a menu bar dropdown or context menu (beginMenu/
     // beginContextMenu) is open, from the frame it opens through the frame
-    // it closes (inclusive - same snapshot pointerBlockedByOpenMenu and
+    // it closes (inclusive - same snapshot pointerBlockedByOpenPopup and
     // shortcut()/isKeyPressed() already use). A caller with its own
     // pointer-reactive UI that sits near a menu bar - a button strip drawn
     // right under it, say - can use this to skip its own hover/click
@@ -954,11 +959,25 @@ private:
     WidgetId subMenuParent_;
     // Snapshot of openMenu_/openContextMenu_ and the popup rects, taken once
     // in beginFrame before any beginMenu()/beginContextMenu() runs this
-    // frame - see pointerBlockedByOpenMenu's comment for why this can't just
+    // frame - see pointerBlockedByOpenPopup's comment for why this can't just
     // read openMenu_ live.
     bool menuWasOpenAtFrameStart_;
     Rect menuPopupBoundsAtFrameStart_;
     Rect subMenuPopupBoundsAtFrameStart_;
+    // The same snapshot for an open comboBox popup: its header and list rects
+    // as drawn last frame - see pointerBlockedByOpenPopup.
+    bool comboWasOpenAtFrameStart_;
+    Rect comboBoundsAtFrameStart_;
+    Rect comboPopupBoundsAtFrameStart_;
+    Rect comboBounds_;
+    Rect comboPopupBounds_;
+    // frameNumber_ of the last frame each blocker was submitted. beginFrame
+    // drops a blocker the application stopped submitting (the usual
+    // `if (show) messageBox(...)`): it is off screen, so nothing is left for
+    // the user to dismiss, and holding on to it would freeze all input.
+    uint64_t activeModalFrame_;
+    uint64_t openMenuFrame_;
+    uint64_t openComboFrame_;
     WidgetId activeModal_;
     WidgetId modalWindowId_;
     WidgetId dragWidget_;
@@ -1062,7 +1081,22 @@ private:
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
     bool windowBlockedByModal() const;
-    bool pointerBlockedByOpenMenu(const Vec2 &point) const;
+    bool pointerBlockedByOpenPopup(const Vec2 &point) const;
+    void releaseUnsubmittedBlockers();
+    bool windowSubmittedRecently(const WindowState &window) const;
+    // Widgets of the current window may not take pointer or keyboard input:
+    // a messageBox/fileDialog is up, or another window is the modal one.
+    bool inputBlockedByModal() const;
+    // The single gate for "a press on this widget starts an interaction":
+    // pressed this frame inside visible, in the focused window, with no modal
+    // or open popup owning that point. Use it instead of reading
+    // pointer_.pressed directly.
+    bool pointerPressedIn(const Rect &visible, uint32_t button) const;
+    // The pointer is over visible and nothing (modal, popup, another window)
+    // sits on top of it - for hover and the wheel.
+    bool pointerOver(const Rect &visible) const;
+    // focusedWidget_ == id, unless a modal owns the keyboard.
+    bool hasKeyboardFocus(WidgetId id) const;
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);

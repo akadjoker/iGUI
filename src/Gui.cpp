@@ -331,6 +331,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
+      comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
+      comboBounds_(), comboPopupBounds_(), activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
       activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
@@ -417,8 +419,9 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     hotWidget_ = InvalidWidgetId;
     lastItemId_ = InvalidWidgetId;
+    releaseUnsubmittedBlockers();
     // Snapshot taken before anything this frame can touch openMenu_/
-    // openContextMenu_ - see pointerBlockedByOpenMenu. A click that closes
+    // openContextMenu_ - see pointerBlockedByOpenPopup. A click that closes
     // the menu (beginMenu's "clicked outside" branch) clears openMenu_
     // mid-frame, but the popup was still on screen when the pointer went
     // down, so widgets drawn later this same frame (a symbol tree, ...)
@@ -426,6 +429,9 @@ void Context::beginFrame(const FrameInfo &frame)
     menuWasOpenAtFrameStart_ = openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId;
     menuPopupBoundsAtFrameStart_ = menuPopupBounds_;
     subMenuPopupBoundsAtFrameStart_ = subMenuPopupBounds_;
+    comboWasOpenAtFrameStart_ = openCombo_ != InvalidWidgetId;
+    comboBoundsAtFrameStart_ = comboBounds_;
+    comboPopupBoundsAtFrameStart_ = comboPopupBounds_;
     activeMenu_ = InvalidWidgetId;
     menuBarActive_ = false;
     childStack_.clear();
@@ -469,9 +475,50 @@ void Context::beginFrame(const FrameInfo &frame)
     else if (shortcut(KeyCode::Y) || shortcut(KeyCode::Z, true, true))
         redo();
 
+    // A press raises and focuses the window under it - unless a modal owns
+    // the pointer: raising a background window over a setModalWindow() one
+    // would hide the modal behind the window it is meant to block.
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
-    if (pointer_.pressed[leftButton])
-        focusWindow(topWindowAt(pointer_.pressedPosition[buttonIndex(PointerButton::Left)]));
+    if (pointer_.pressed[leftButton] && activeModal_ == InvalidWidgetId)
+    {
+        const WindowHandle target = topWindowAt(pointer_.pressedPosition[leftButton]);
+        const WindowState *targetWindow = windows_.get(target);
+        if (modalWindowId_ == InvalidWidgetId || (targetWindow && targetWindow->id == modalWindowId_))
+            focusWindow(target);
+    }
+}
+
+void Context::releaseUnsubmittedBlockers()
+{
+    // frameNumber_ was just advanced: a blocker submitted during the previous
+    // frame has frame + 1 == frameNumber_.
+    if (activeModal_ != InvalidWidgetId && activeModalFrame_ + 1u < frameNumber_)
+    {
+        activeModal_ = InvalidWidgetId;
+        activeWidget_ = InvalidWidgetId;
+    }
+    if (modalWindowId_ != InvalidWidgetId)
+    {
+        WindowHandle *handle = windowsById_.find(modalWindowId_);
+        const WindowState *window = handle ? windows_.get(*handle) : nullptr;
+        if (!window || !window->open || !windowSubmittedRecently(*window))
+            modalWindowId_ = InvalidWidgetId;
+    }
+    if ((openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId) &&
+        openMenuFrame_ + 1u < frameNumber_)
+    {
+        openMenu_ = InvalidWidgetId;
+        openContextMenu_ = InvalidWidgetId;
+        openSubMenu_ = InvalidWidgetId;
+    }
+    if (openCombo_ != InvalidWidgetId && openComboFrame_ + 1u < frameNumber_)
+        openCombo_ = InvalidWidgetId;
+}
+
+bool Context::windowSubmittedRecently(const WindowState &window) const
+{
+    // Submitted this frame, or last frame and not yet this one.
+    return window.lastFrame + 1u >= frameNumber_;
 }
 
 const DrawData &Context::endFrame()
@@ -545,8 +592,9 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     }
 
     currentWindow_ = windowsById_[id];
+    window->lastFrame = frameNumber_;
     const WindowState *focused = windows_.get(focusedWindow_);
-    if (!focused || !focused->open)
+    if (!focused || !focused->open || !windowSubmittedRecently(*focused))
         focusWindow(currentWindow_);
     drawWindow(*window);
     if (open)
@@ -894,12 +942,12 @@ bool Context::shortcut(KeyCode key, bool control, bool shift) const
 {
     // A dropdown/context menu or a modal dialog is on screen and gets first
     // say over the keyboard, same as it already does over the pointer (see
-    // pointerBlockedByOpenMenu) - otherwise a caller's F5/Ctrl+S-style
+    // pointerBlockedByOpenPopup) - otherwise a caller's F5/Ctrl+S-style
     // shortcut() call, which every widget submits unconditionally every
     // frame (Toolbar::draw does, at the bottom, regardless of what else is
     // open), would still fire while the user is navigating a menu with
     // that same key combination free for something else. Uses the same
-    // frame-start snapshot as pointerBlockedByOpenMenu: a menu that closes
+    // frame-start snapshot as pointerBlockedByOpenPopup: a menu that closes
     // via a key this same frame (Escape) must still win that frame.
     if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal())
         return false;
@@ -1188,10 +1236,8 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     const WidgetId arrowId = combineIds(id, 0x4152524f57ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
-    const bool pressedOnRow = drop != nullptr && !style.disabled && pointer_.pressed[left] &&
-                              currentWindow_ == focusedWindow_ &&
+    const bool pressedOnRow = drop != nullptr && !style.disabled && pointerPressedIn(visible, left) &&
                               activeWidget_ == InvalidWidgetId &&
-                              contains(visible, pointer_.pressedPosition[left]) &&
                               !contains(arrowRect, pointer_.pressedPosition[left]);
     if (pressedOnRow)
     {
@@ -1302,7 +1348,7 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
     const float tabWidth = rect.width / static_cast<float>(items.size());
     bool changed = false;
     registerFocusable(id);
-    if (focusedWidget_ == id)
+    if (hasKeyboardFocus(id))
     {
         const int previous = currentItem;
         if ((leftPressed_ || upPressed_) && currentItem > 0)
@@ -1379,7 +1425,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
     if (*scroll > maximumScroll)
         *scroll = maximumScroll > 0 ? maximumScroll : 0;
 
-    const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position);
+    const bool hovered = pointerOver(visible);
     if (hovered && pointer_.wheelY != 0.0f && maximumScroll > 0)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
@@ -1391,7 +1437,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
     }
 
     bool changed = false;
-    if (focusedWidget_ == id && (upPressed_ || downPressed_ || pageUpPressed_ || pageDownPressed_ ||
+    if (hasKeyboardFocus(id) && (upPressed_ || downPressed_ || pageUpPressed_ || pageDownPressed_ ||
                                  homePressed_ || endPressed_))
     {
         const int previous = currentItem;
@@ -1436,9 +1482,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         thumb = Rect(scrollbar.x, rect.y + offset, scrollbarWidth, thumbHeight);
         scrollbarId = combineIds(id, 0x5343524f4c4cull);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                                  activeWidget_ == InvalidWidgetId &&
-                                  contains(intersect(thumb, visible), pointer_.pressedPosition[left]);
+        const bool pressedThumb = pointerPressedIn(intersect(thumb, visible), left) &&
+                                  activeWidget_ == InvalidWidgetId;
         if (pressedThumb)
         {
             activeWidget_ = scrollbarId;
@@ -1520,7 +1565,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         return false;
 
     bool changed = false;
-    if (focusedWidget_ == id && (upPressed_ || downPressed_ || homePressed_ || endPressed_))
+    if (hasKeyboardFocus(id) && (upPressed_ || downPressed_ || homePressed_ || endPressed_))
     {
         const int previous = currentItem;
         if (upPressed_ && currentItem > 0)
@@ -1560,13 +1605,19 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     const Rect popup(rect.x, rect.y + rect.height, rect.width, rect.height * static_cast<float>(items.size()));
     const Rect popupClip = intersect(popup, clip);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
+    // Any press outside the header and the list closes it, in whatever
+    // window it lands; pointerBlockedByOpenPopup keeps that press from also
+    // reaching the widget under it.
+    if (pointer_.pressed[left] &&
         !contains(rect, pointer_.pressedPosition[left]) &&
         !contains(popupClip, pointer_.pressedPosition[left]))
     {
         openCombo_ = InvalidWidgetId;
         return false;
     }
+    openComboFrame_ = frameNumber_;
+    comboBounds_ = intersect(rect, clip);
+    comboPopupBounds_ = popupClip;
 
     // Popups are deferred to the window overlay so controls declared after a
     // combo box cannot paint over its open list.
@@ -1635,7 +1686,10 @@ bool Context::beginMenu(StringView labelText)
     // its items have been submitted at least once - see endMenu).
     const float popupWidth = menuWidthId_ == id ? menuPopupWidth_ : theme_.menuMinWidth;
     const uint32_t left = buttonIndex(PointerButton::Left);
-    if (openMenu_ == id && pointer_.pressed[left] && currentWindowReceivesPointer() &&
+    // Any press outside closes the menu - in another window too, where
+    // pointerBlockedByOpenPopup already swallows it; checking only this
+    // window left the menu open and every click elsewhere eaten.
+    if (openMenu_ == id && pointer_.pressed[left] &&
         !contains(button, pointer_.pressedPosition[left]) &&
         !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
         !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
@@ -1672,6 +1726,7 @@ bool Context::beginMenu(StringView labelText)
 
     if (openMenu_ != id)
         return false;
+    openMenuFrame_ = frameNumber_;
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.x = button.x;
@@ -1872,8 +1927,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     const Rect visible = intersect(target, contentClip());
     const uint32_t right = buttonIndex(PointerButton::Right);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    if (pointer_.pressed[right] && currentWindowReceivesPointer() &&
-        contains(visible, pointer_.pressedPosition[right]))
+    if (pointerPressedIn(visible, right))
     {
         openContextMenu_ = id;
         openMenu_ = InvalidWidgetId;
@@ -1883,7 +1937,8 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     }
     if (openContextMenu_ != id)
         return false;
-    if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
+    // Any press outside closes it, in whatever window it lands (see beginMenu).
+    if (pointer_.pressed[left] &&
         !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
         !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
     {
@@ -1891,6 +1946,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
         openSubMenu_ = InvalidWidgetId;
         return false;
     }
+    openMenuFrame_ = frameNumber_;
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.width = popupWidth;
@@ -2003,8 +2059,7 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     registerFocusable(id);
     if (edit->editing && (escapePressed_ || focusedWidget_ != id))
         edit->editing = false;
-    if (!edit->editing && pointer_.pressed[left] && currentWindowReceivesPointer() &&
-        activeWidget_ == InvalidWidgetId && contains(visible, pointer_.pressedPosition[left]))
+    if (!edit->editing && pointerPressedIn(visible, left) && activeWidget_ == InvalidWidgetId)
     {
         activeWidget_ = id;
         focusedWidget_ = id;
@@ -2100,8 +2155,7 @@ bool Context::splitter(StringView idText, float &value, float minimum, float max
     const WidgetId id = combineIds(makeWidgetId(idText), 0x53504c4954544552ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const bool hovered = itemHovered(handle, clip, id);
-    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-        activeWidget_ == InvalidWidgetId && contains(intersect(handle, clip), pointer_.pressedPosition[left]))
+    if (pointerPressedIn(intersect(handle, clip), left) && activeWidget_ == InvalidWidgetId)
         activeWidget_ = id;
     bool changed = false;
     if (activeWidget_ == id)
@@ -2151,9 +2205,8 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
     const GizmoAxis2D hoveredAxis = hitGizmo2D(mode, pointer_.position, center,
                                                 axisX, axisY, options.axisLength);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                             activeWidget_ == InvalidWidgetId &&
-                             contains(clip, pointer_.pressedPosition[left]);
+    const bool pressedHere = pointerPressedIn(clip, left) &&
+                             activeWidget_ == InvalidWidgetId;
     if (pressedHere && hoveredAxis != GizmoAxisNone)
     {
         activeWidget_ = id;
@@ -2346,9 +2399,8 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     const GizmoAxis3D hoveredAxis = hitGizmo3D(mode, pointer_.position, transform, projector,
                                                options.axisLength);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                             activeWidget_ == InvalidWidgetId &&
-                             contains(clip, pointer_.pressedPosition[left]);
+    const bool pressedHere = pointerPressedIn(clip, left) &&
+                             activeWidget_ == InvalidWidgetId;
     if (pressedHere && hoveredAxis != Gizmo3DAxisNone)
     {
         activeWidget_ = id;
@@ -2688,7 +2740,7 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
         return false;
     const bool hovered = itemHovered(rect, clip, id);
     itemClicked(rect, clip, id);
-    const bool focused = focusedWidget_ == id;
+    const bool focused = hasKeyboardFocus(id);
     bool changed = false;
     if (focused)
     {
@@ -2810,8 +2862,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
 
     const bool hovered = itemHovered(textArea, clip, id);
     itemClicked(textArea, clip, id);
-    if (hasScrollbar && currentWindowReceivesPointer() &&
-        contains(intersect(rect, clip), pointer_.position) && pointer_.wheelY != 0.0f)
+    if (hasScrollbar && pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
         *scroll += delta;
@@ -2833,9 +2884,8 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
             ? travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll) : 0.0f;
         thumb = Rect(scrollbar.x, scrollbar.y + offset, scrollbar.width, thumbHeight);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                                  activeWidget_ == InvalidWidgetId &&
-                                  contains(intersect(thumb, clip), pointer_.pressedPosition[left]);
+        const bool pressedThumb = pointerPressedIn(intersect(thumb, clip), left) &&
+                                  activeWidget_ == InvalidWidgetId;
         if (pressedThumb)
         {
             activeWidget_ = scrollbarId;
@@ -2858,7 +2908,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
         thumb.y = scrollbar.y + updatedOffset;
     }
 
-    const bool focused = focusedWidget_ == id;
+    const bool focused = hasKeyboardFocus(id);
     bool changed = false;
     if (focused)
     {
@@ -3067,9 +3117,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     itemHovered(hueBar, clip, hueId);
     itemHovered(alphaBar, clip, alphaId);
 
-    const bool pressSaturationValue = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                                      activeWidget_ == InvalidWidgetId &&
-                                      contains(intersect(saturationValue, clip), pointer_.pressedPosition[left]);
+    const bool pressSaturationValue = pointerPressedIn(intersect(saturationValue, clip), left) &&
+                                      activeWidget_ == InvalidWidgetId;
     if (pressSaturationValue)
     {
         activeWidget_ = saturationValueId;
@@ -3091,9 +3140,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
             activeWidget_ = InvalidWidgetId;
     }
 
-    const bool pressHue = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                          activeWidget_ == InvalidWidgetId &&
-                          contains(intersect(hueBar, clip), pointer_.pressedPosition[left]);
+    const bool pressHue = pointerPressedIn(intersect(hueBar, clip), left) &&
+                          activeWidget_ == InvalidWidgetId;
     if (pressHue)
     {
         activeWidget_ = hueId;
@@ -3111,9 +3159,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
             activeWidget_ = InvalidWidgetId;
     }
 
-    const bool pressAlpha = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                            activeWidget_ == InvalidWidgetId && alphaBar.width > 0.0f &&
-                            contains(intersect(alphaBar, clip), pointer_.pressedPosition[left]);
+    const bool pressAlpha = pointerPressedIn(intersect(alphaBar, clip), left) &&
+                            activeWidget_ == InvalidWidgetId && alphaBar.width > 0.0f;
     if (pressAlpha)
     {
         activeWidget_ = alphaId;
@@ -3258,13 +3305,15 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
             break;
         }
     }
-    if (pointer_.pressed[right] && currentWindow_ == focusedWindow_ && hit > 0 &&
+    // Handles sit inside area, so one gate on it covers bar and handles.
+    const Rect visibleArea = intersect(area, clip);
+    if (pointerPressedIn(visibleArea, right) && hit > 0 &&
         hit + 1 < static_cast<int>(stops.size())) {
         stops.erase(stops.begin() + hit);
         selectedStop = -1;
         changed = true;
     }
-    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId) {
+    if (pointerPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
         if (hit >= 0) {
             selectedStop = hit;
             activeWidget_ = id;
@@ -3346,12 +3395,15 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
         if (contains(Rect(p.x - 6.0f, p.y - 6.0f, 12.0f, 12.0f), pointer_.position)) { hit = i; break; }
     }
     bool changed = false;
-    if (pointer_.pressed[right] && currentWindow_ == focusedWindow_ && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
+    // Point handles overhang canvas by 6px, which is exactly the margin
+    // canvas was shrunk by, so the widget's own rect covers them.
+    const Rect visibleArea = intersect(contentRect(bounds), clip);
+    if (pointerPressedIn(visibleArea, right) && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
         points.erase(points.begin() + hit);
         selectedPoint = -1;
         changed = true;
     }
-    if (pointer_.pressed[left] && currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId) {
+    if (pointerPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
         if (hit >= 0) { selectedPoint = hit; activeWidget_ = id; }
         else if (contains(canvas, pointer_.pressedPosition[left])) {
             const CurvePoint point = screenToPoint(pointer_.pressedPosition[left]);
@@ -3406,7 +3458,9 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
     const auto left = buttonIndex(PointerButton::Left);
     const WidgetId scrollId = combineIds(id, 0x5343524f4c4c);
     const Rect scroll(ruler.x, area.bottom(), ruler.width, 12);
-    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId && pointer_.pressed[left]) {
+    // The zoom buttons sit inside area; the scroll strip hangs 12px below it.
+    const Rect controls = intersect(Rect(area.x, area.y, area.width, area.height + 12.0f), contentClip());
+    if (pointerPressedIn(controls, left) && activeWidget_ == InvalidWidgetId) {
         const Vec2 p = pointer_.pressedPosition[left];
         for (int i=0;i<3;++i) {
             const Rect button(area.x+2+i*36,area.y+2,34,20);
@@ -3428,16 +3482,14 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
             pointer_.pressed[left] = false;
         }
     }
-    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId &&
-        contains(visible, pointer_.position) && pointer_.wheelY != 0) {
+    if (pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
         const float anchor = clamp((pointer_.position.x-ruler.x)/ruler.width, 0, 1);
         const float at = view.offset + anchor/view.zoom;
         view.zoom = clamp(view.zoom * powf(1.2f, pointer_.wheelY), 1, 64);
         view.offset = clamp(at-anchor/view.zoom, 0, 1-1/view.zoom);
         pointer_.wheelY = 0;
     }
-    if (pointer_.pressed[middle] && currentWindowReceivesPointer() &&
-        activeWidget_ == InvalidWidgetId && contains(visible,pointer_.pressedPosition[middle])) {
+    if (pointerPressedIn(visible, middle) && activeWidget_ == InvalidWidgetId) {
         activeWidget_ = panId;
         view.panX = pointer_.pressedPosition[middle].x; view.panOffset = view.offset;
     }
@@ -3506,7 +3558,7 @@ bool Context::sequencer(StringView idText, ct::Vector<SequencerTrack>& tracks, i
     if (!drag) { sequenceDrags_.put(id, SequenceDrag()); drag = sequenceDrags_.find(id); }
     if (!drag) return false;
     bool changed = false; const uint32_t left = buttonIndex(PointerButton::Left);
-    if (pointer_.pressed[left] && activeWidget_ == InvalidWidgetId && currentWindow_ == focusedWindow_) {
+    if (pointerPressedIn(clip, left) && activeWidget_ == InvalidWidgetId) {
         const Vec2 p = pointer_.pressedPosition[left];
         if (contains(ruler, p)) { const int next = frameAt(p.x); changed = next != currentFrame; currentFrame = next; }
         else if (contains(intersect(area, clip), p) && p.y >= ruler.bottom()) {
@@ -3564,8 +3616,8 @@ bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int
     const WidgetId id = makeWidgetId(idText);
     const auto left = buttonIndex(PointerButton::Left), right = buttonIndex(PointerButton::Right);
     bool changed = false;
-    if (currentWindowReceivesPointer() && activeWidget_ == InvalidWidgetId &&
-        (pointer_.pressed[left] || pointer_.pressed[right])) {
+    if (activeWidget_ == InvalidWidgetId &&
+        (pointerPressedIn(clip, left) || pointerPressedIn(clip, right))) {
         const bool remove = pointer_.pressed[right];
         const Vec2 p = pointer_.pressedPosition[remove ? right : left];
         if (contains(clip,p) && contains(ruler,p) && !remove) {
@@ -3798,6 +3850,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     }
 
     activeModal_ = id;
+    activeModalFrame_ = frameNumber_;
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const TextMetrics titleMetrics = measureText(theme_.font, title, theme_.fontSize);
     const TextMetrics messageMetrics = measureText(theme_.font, message, theme_.fontSize);
@@ -4033,8 +4086,7 @@ bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, Str
     const Rect visible = intersect(rect, contentClip());
     const uint32_t left = buttonIndex(PointerButton::Left);
     const WidgetId widget = combineIds(makeWidgetId(StringView("drag source")), source);
-    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                             activeWidget_ == InvalidWidgetId && contains(visible, pointer_.pressedPosition[left]);
+    const bool pressedHere = pointerPressedIn(visible, left) && activeWidget_ == InvalidWidgetId;
     if (pressedHere)
     {
         activeWidget_ = widget;
@@ -4652,8 +4704,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
         const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
         const WidgetId scrollbarId = combineIds(id, 0x5343524f4c4cull);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        if (pointer_.pressed[left] && currentWindowReceivesPointer() &&
-            activeWidget_ == InvalidWidgetId && contains(bar, pointer_.pressedPosition[left]))
+        if (pointerPressedIn(intersect(bar, parentClip), left) && activeWidget_ == InvalidWidgetId)
             activeWidget_ = scrollbarId;
         if (activeWidget_ == scrollbarId)
         {
@@ -4667,7 +4718,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
                 activeWidget_ = InvalidWidgetId;
         }
     }
-    if (pointer_.wheelY != 0.0f && currentWindowReceivesPointer() && contains(outer, pointer_.position))
+    if (pointer_.wheelY != 0.0f && pointerOver(intersect(outer, parentClip)))
     {
         scroll->offset -= pointer_.wheelY * theme_.widgetHeight;
         if (scroll->offset < 0.0f)
@@ -4849,9 +4900,8 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     for (uint32_t splitter = 0u; splitter < 3u; ++splitter)
     {
         const Rect visible = intersect(splitters[splitter], clip);
-        const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position);
-        if (pointer_.pressed[leftButton] && activeWidget_ == InvalidWidgetId &&
-            currentWindow_ == focusedWindow_ && contains(visible, pointer_.pressedPosition[leftButton]))
+        const bool hovered = pointerOver(visible);
+        if (pointerPressedIn(visible, leftButton) && activeWidget_ == InvalidWidgetId)
             activeWidget_ = splitterIds[splitter];
         if (activeWidget_ == splitterIds[splitter])
         {
@@ -5027,9 +5077,9 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
             tabX += tabWidth;
             continue;
         }
-        const bool pressedHere = handleTabInput && pointer_.pressed[buttonIndex(PointerButton::Left)] &&
-            currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
-            contains(intersect(tab, clip), pointer_.pressedPosition[buttonIndex(PointerButton::Left)]);
+        const bool pressedHere = handleTabInput &&
+            pointerPressedIn(intersect(tab, clip), buttonIndex(PointerButton::Left)) &&
+            activeWidget_ == InvalidWidgetId;
         if (pressedHere)
         {
             activeWidget_ = candidate.id;
@@ -5531,9 +5581,8 @@ bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscen
     const float gripWidth = 6.0f;
     const Rect resizeGrip(bounds.right() - gripWidth * 0.5f, bounds.y, gripWidth, bounds.height);
     const WidgetId resizeId = combineIds(id, 0x54424c5253495a45ull);
-    const bool pressedResize = canResize && pointer_.pressed[left] &&
-                               currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
-                               contains(intersect(resizeGrip, clip), pointer_.pressedPosition[left]);
+    const bool pressedResize = canResize && pointerPressedIn(intersect(resizeGrip, clip), left) &&
+                               activeWidget_ == InvalidWidgetId;
     if (pressedResize)
     {
         activeWidget_ = resizeId;
@@ -6178,11 +6227,7 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     lastItemId_ = id;
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
-    if (windowBlockedByModal())
-        return false;
-    const Rect visible = intersect(rect, clip);
-    const bool hovered = currentWindowReceivesPointer() && contains(visible, pointer_.position) &&
-                         !pointerBlockedByOpenMenu(pointer_.position);
+    const bool hovered = pointerOver(intersect(rect, clip));
     if (hovered)
         hotWidget_ = id;
     return hovered;
@@ -6194,16 +6239,11 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
         registerFocusable(id);
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
-    if (activeModal_ != InvalidWidgetId)
-        return false;
-    if (windowBlockedByModal())
+    if (inputBlockedByModal())
         return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
-    const bool pressedHere = pointer_.pressed[left] &&
-                             currentWindow_ == focusedWindow_ &&
-                             contains(visible, pointer_.pressedPosition[left]) &&
-                             !pointerBlockedByOpenMenu(pointer_.pressedPosition[left]);
+    const bool pressedHere = pointerPressedIn(visible, left);
     if (pressedHere)
     {
         activeWidget_ = id;
@@ -6220,7 +6260,9 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
 
 void Context::registerFocusable(WidgetId id)
 {
-    if (id == InvalidWidgetId)
+    // Behind a modal a widget is out of the Tab order, so Tab cannot walk
+    // focus (and then typing) into the blocked background.
+    if (id == InvalidWidgetId || inputBlockedByModal())
         return;
     for (ct::Vector<WidgetId>::size_type i = 0u; i < focusOrder_.size(); ++i)
     {
@@ -6277,9 +6319,7 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
         return false;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const Rect visible = intersect(rect, clip);
-    const bool pressedHere = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                             contains(visible, pointer_.pressedPosition[left]);
+    const bool pressedHere = pointerPressedIn(intersect(rect, clip), left);
     if (pressedHere)
     {
         activeWidget_ = id;
@@ -6357,9 +6397,8 @@ void Context::drawWindow(WindowState &window)
         window.minimized = !window.minimized;
 
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedResize = window.allowResize && !window.maximized && !window.minimized && pointer_.pressed[left] &&
-                               currentWindow_ == focusedWindow_ && activeWidget_ == InvalidWidgetId &&
-                               contains(intersect(resizeGrip, viewport), pointer_.pressedPosition[left]);
+    const bool pressedResize = window.allowResize && !window.maximized && !window.minimized && pointerPressedIn(intersect(resizeGrip, viewport), left) &&
+                               activeWidget_ == InvalidWidgetId;
     if (pressedResize)
     {
         activeWidget_ = resizeId;
@@ -6382,9 +6421,8 @@ void Context::drawWindow(WindowState &window)
             resizingWindow_ = WindowHandle();
         }
     }
-    const bool pressedTitle = window.allowMove && !window.maximized && pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                              activeWidget_ == InvalidWidgetId &&
-                              contains(intersect(dragArea, viewport), pointer_.pressedPosition[left]);
+    const bool pressedTitle = window.allowMove && !window.maximized && pointerPressedIn(intersect(dragArea, viewport), left) &&
+                              activeWidget_ == InvalidWidgetId;
     if (pressedTitle)
     {
         activeWidget_ = dragId;
@@ -6474,7 +6512,8 @@ WindowHandle Context::topWindowAt(const Vec2 &position) const
                              window ? window->bounds.width : 0.0f,
                              window && window->minimized ? theme_.titleBarHeight
                                                           : (window ? window->bounds.height : 0.0f));
-        if (window && window->open && contains(hitBounds, position) && window->zOrder >= highestZ)
+        if (window && window->open && windowSubmittedRecently(*window) &&
+            contains(hitBounds, position) && window->zOrder >= highestZ)
         {
             highestZ = window->zOrder;
             result = windowOrder_[i];
@@ -6540,8 +6579,16 @@ bool Context::windowBlockedByModal() const
 // have already forgotten the menu was open when that exact click landed,
 // so the click would fall through to whatever is underneath it instead of
 // being consumed by closing the menu.
-bool Context::pointerBlockedByOpenMenu(const Vec2 &point) const
+//
+// An open comboBox list is a popup of the same kind and gets the same rule:
+// only its header and its list stay live; a press anywhere else closes it
+// (comboBox) and is consumed by that.
+bool Context::pointerBlockedByOpenPopup(const Vec2 &point) const
 {
+    if (comboWasOpenAtFrameStart_ &&
+        !contains(comboBoundsAtFrameStart_, point) &&
+        !contains(comboPopupBoundsAtFrameStart_, point))
+        return true;
     if (!menuWasOpenAtFrameStart_)
         return false;
     if (contains(menuPopupBoundsAtFrameStart_, point))
@@ -6555,6 +6602,36 @@ bool Context::pointerBlockedByOpenMenu(const Vec2 &point) const
     if (contains(menuBarBounds_, point))
         return false;
     return true;
+}
+
+bool Context::inputBlockedByModal() const
+{
+    return activeModal_ != InvalidWidgetId || windowBlockedByModal();
+}
+
+bool Context::pointerPressedIn(const Rect &visible, uint32_t button) const
+{
+    if (!pointer_.pressed[button] || inputBlockedByModal())
+        return false;
+    const Vec2 &position = pointer_.pressedPosition[button];
+    // beginFrame focuses the window under a left press, so for the left
+    // button "focused" means "on top at the press". Right/middle presses do
+    // not change focus, so ask for the top window at the press directly.
+    const bool ownWindow = button == buttonIndex(PointerButton::Left)
+        ? currentWindow_ == focusedWindow_
+        : currentWindow_ && currentWindow_ == topWindowAt(position);
+    return ownWindow && contains(visible, position) && !pointerBlockedByOpenPopup(position);
+}
+
+bool Context::pointerOver(const Rect &visible) const
+{
+    return currentWindowReceivesPointer() && contains(visible, pointer_.position) &&
+           !pointerBlockedByOpenPopup(pointer_.position);
+}
+
+bool Context::hasKeyboardFocus(WidgetId id) const
+{
+    return focusedWidget_ == id && !inputBlockedByModal();
 }
 
 uint32_t Context::dockSlotIndex(DockSlot slot)
