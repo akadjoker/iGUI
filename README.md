@@ -43,6 +43,14 @@ If you already cloned without it:
 git submodule update --init --recursive
 ```
 
+The submodule tracks the `main` branch of `containers`. To move it to the latest `main`:
+
+```sh
+git submodule update --init --remote --recursive
+```
+
+CI always builds against the latest `containers` `main`, and Dependabot opens a pull request daily when the recorded submodule commit falls behind.
+
 CMake stops with a clear error if `third_party/containers` is empty.
 
 ## Building
