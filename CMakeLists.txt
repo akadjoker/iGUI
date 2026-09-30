@@ -122,6 +122,10 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_modal_input_tests tests/test_modal_input.cpp)
         target_link_libraries(igui_modal_input_tests PRIVATE igui)
         add_test(NAME igui_modal_input COMMAND igui_modal_input_tests)
+
+        add_executable(igui_culling_tests tests/test_culling.cpp)
+        target_link_libraries(igui_culling_tests PRIVATE igui)
+        add_test(NAME igui_culling COMMAND igui_culling_tests)
     endif()
 endif()
 
