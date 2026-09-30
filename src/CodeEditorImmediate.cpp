@@ -1377,8 +1377,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // nothing drawn later this same frame (the outline panel beside it,
     // say) also sees a nonzero wheel delta and reacts to it. Mirrors
     // beginChild's own "clear after consuming" (Gui.cpp).
-    if (currentWindowReceivesPointer() && contains(intersect(rect, clip), pointer_.position) &&
-        pointer_.wheelY != 0.0f)
+    if (pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
     {
         if (pointer_.wheelControl)
         {
@@ -1404,9 +1403,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             ? travel * static_cast<float>(state.scrollLine) / static_cast<float>(maximumScroll) : 0.0f;
         thumb = Rect(scrollbar.x, scrollbar.y + offset, scrollbar.width, thumbHeight);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                                  activeWidget_ == InvalidWidgetId &&
-                                  contains(intersect(thumb, clip), pointer_.pressedPosition[left]);
+        const bool pressedThumb = pointerPressedIn(intersect(thumb, clip), left) &&
+                                  activeWidget_ == InvalidWidgetId;
         if (pressedThumb)
         {
             activeWidget_ = scrollbarId;
@@ -1428,17 +1426,15 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         thumb.y = scrollbar.y + updatedOffset;
     }
 
-    const bool focused = focusedWidget_ == id;
+    const bool focused = hasKeyboardFocus(id);
     bool changed = false;
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
 
     // Clicking the fold gutter (immediately left of the text area) toggles
     // the region whose header is on that row, if any.
-    if (foldingAvailable && focused && pointer_.pressed[leftButton] &&
-        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]))
+    const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
+    if (foldingAvailable && focused && pointerPressedIn(intersect(foldGutterRect, clip), leftButton))
     {
-        const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
-        if (contains(intersect(foldGutterRect, clip), pointer_.pressedPosition[leftButton]))
         {
             const Vec2 local = pointer_.pressedPosition[leftButton];
             int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
@@ -1461,9 +1457,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // cursor and keeping the anchor fixed at the press point. Releasing ends
     // the drag; a plain click with no movement leaves no selection, same as
     // before.
-    const bool pressedInText = pointer_.pressed[leftButton] &&
-        contains(intersect(textArea, clip), pointer_.pressedPosition[leftButton]) &&
-        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]);
+    const bool pressedInText = pointerPressedIn(intersect(textArea, clip), leftButton);
     if (focused && pressedInText)
     {
         activeWidget_ = id;

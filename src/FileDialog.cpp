@@ -175,6 +175,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     }
 
     activeModal_ = id;
+    activeModalFrame_ = frameNumber_;
     if (!state.initialized)
     {
         state.path = options.initialPath.empty() ? provider.homeDirectory()

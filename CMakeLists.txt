@@ -118,6 +118,10 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_interaction_harness_tests tests/test_interaction_harness.cpp)
         target_link_libraries(igui_interaction_harness_tests PRIVATE igui)
         add_test(NAME igui_interaction_harness COMMAND igui_interaction_harness_tests)
+
+        add_executable(igui_modal_input_tests tests/test_modal_input.cpp)
+        target_link_libraries(igui_modal_input_tests PRIVATE igui)
+        add_test(NAME igui_modal_input COMMAND igui_modal_input_tests)
     endif()
 endif()
 
