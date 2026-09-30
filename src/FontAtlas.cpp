@@ -294,10 +294,32 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
     const float scale = logicalSize / bakedSize_;
     float penX = position.x;
     float penY = position.y + ascent_ * scale;
+    // Lines wholly outside the clip are skipped without decoding their glyphs
+    // (DrawList would cull every quad anyway, but a long multi-line text is
+    // thousands of glyph lookups per frame for nothing). A line's box is
+    // padded by half a line above and below: accents and descenders reach
+    // past ascent/lineHeight, and a false "visible" only costs the lookups.
+    const float line = lineHeight_ * scale;
+    const float clipRight = clip.x + clip.width + 2.0f;
+    const float clipBottom = clip.y + clip.height + 2.0f;
     StringView::size_type offset = 0u;
     uint32_t codepoint = 0u;
-    while (decodeUtf8(text, offset, codepoint))
+    while (offset < text.size())
     {
+        const float lineTop = penY - ascent_ * scale - line * 0.5f;
+        if (lineTop > clipBottom)
+            break; // text only moves down from here
+        if (lineTop + line * 2.0f < clip.y - 2.0f || penX > clipRight)
+        {
+            // Rest of this line is invisible: jump to its '\n' (a byte that
+            // never occurs inside a UTF-8 multi-byte sequence).
+            while (offset < text.size() && text[offset] != '\n')
+                ++offset;
+            if (offset == text.size())
+                break;
+        }
+        if (!decodeUtf8(text, offset, codepoint))
+            break;
         if (codepoint == static_cast<uint32_t>('\n'))
         {
             penX = position.x;

@@ -13,6 +13,34 @@ float cross(const Vec2 &a, const Vec2 &b, const Vec2 &c)
     return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
+// Off-clip culling. Backends scissor every command to its clip, so geometry
+// that lies entirely outside it costs vertices, indices, a command and GPU
+// work for zero visible pixels - a scrolled child with a few hundred rows, or
+// a multi-line text with thousands of lines, was >95% such geometry. Every
+// add* call tests its bounding box (including the antialiasing fringe, at
+// most 1px) here first and emits nothing when it cannot touch the clip.
+//
+// The test must never drop a visible pixel: backends round the scissor
+// outward to whole pixels (floor/ceil) and raylib snaps glyphs by up to half
+// a pixel, so anything within CullMargin of the clip is kept. A clip with no
+// area draws nothing on any backend (checked with SDL2's renderer), so it
+// culls everything.
+const float CullMargin = 2.0f;
+
+bool outsideClip(float minX, float minY, float maxX, float maxY, const Rect &clip)
+{
+    if (!(clip.width > 0.0f) || !(clip.height > 0.0f))
+        return true;
+    return maxX < clip.x - CullMargin || maxY < clip.y - CullMargin ||
+           minX > clip.x + clip.width + CullMargin || minY > clip.y + clip.height + CullMargin;
+}
+
+bool rectOutsideClip(const Rect &rect, float grow, const Rect &clip)
+{
+    return outsideClip(rect.x - grow, rect.y - grow, rect.x + rect.width + grow,
+                       rect.y + rect.height + grow, clip);
+}
+
 bool pointInTriangle(const Vec2 &point, const Vec2 &a, const Vec2 &b, const Vec2 &c)
 {
     const float ab = cross(a, b, point);
@@ -93,6 +121,11 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
                        const Color &color, const Rect &clip, float thickness)
 {
     if (thickness <= 0.0f || color.a == 0u)
+        return;
+    // Half the (at least 1px) core plus the 1px fringe on each side.
+    const float reach = (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f;
+    if (outsideClip((from.x < to.x ? from.x : to.x) - reach, (from.y < to.y ? from.y : to.y) - reach,
+                    (from.x > to.x ? from.x : to.x) + reach, (from.y > to.y ? from.y : to.y) + reach, clip))
         return;
 
     const float dx = to.x - from.x;
@@ -193,6 +226,8 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
 void DrawList::addRect(const Rect &rect,
                        const Color &color, const Rect &clip, float thickness)
 {
+    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip))
+        return;
     if (rect.width <= 0.0f || rect.height <= 0.0f)
         return;
 
@@ -209,6 +244,8 @@ void DrawList::addRect(const Rect &rect,
 void DrawList::addRectFilled(const Rect &rect, const Color &color, const Rect &clip)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u)
+        return;
+    if (rectOutsideClip(rect, 0.0f, clip))
         return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
@@ -235,6 +272,8 @@ void DrawList::addRectGradient(const Rect &rect, const Color &topLeft, const Col
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f)
         return;
+    if (rectOutsideClip(rect, 0.0f, clip))
+        return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
     const uint32_t firstIndex = static_cast<uint32_t>(indices_.size());
@@ -256,6 +295,8 @@ void DrawList::addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
                         const Vec2 &uvMax, const Color &color, const Rect &clip)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u)
+        return;
+    if (rectOutsideClip(rect, 0.0f, clip))
         return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(vertices_.size());
@@ -280,6 +321,9 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
                                const Color &color, const Rect &clip, uint32_t segments)
 {
     if (radius <= 0.0f || color.a == 0u)
+        return;
+    if (outsideClip(center.x - radius - 1.0f, center.y - radius - 1.0f,
+                    center.x + radius + 1.0f, center.y + radius + 1.0f, clip))
         return;
 
     if (segments < 3u)
@@ -396,6 +440,8 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u)
         return;
+    if (rectOutsideClip(rect, 1.0f, clip))
+        return;
 
     const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
     if (radius > maxRadius)
@@ -455,6 +501,10 @@ void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
                       uint32_t segments)
 {
     if (radius <= 0.0f || thickness <= 0.0f || color.a == 0u)
+        return;
+    // The whole circle's box: cheap, and never smaller than the arc's.
+    const float reach = radius + thickness * 0.5f + 1.0f;
+    if (outsideClip(center.x - reach, center.y - reach, center.x + reach, center.y + reach, clip))
         return;
     if (to < from)
     {
@@ -547,6 +597,8 @@ void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u || thickness <= 0.0f)
         return;
+    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip))
+        return;
 
     const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
     if (radius > maxRadius)
@@ -574,6 +626,16 @@ void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color
 void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip)
 {
     if (points.size() < 3u || color.a == 0u)
+        return;
+    float minX = points[0].x, minY = points[0].y, maxX = points[0].x, maxY = points[0].y;
+    for (Span<const Vec2>::size_type i = 1; i < points.size(); ++i)
+    {
+        minX = points[i].x < minX ? points[i].x : minX;
+        minY = points[i].y < minY ? points[i].y : minY;
+        maxX = points[i].x > maxX ? points[i].x : maxX;
+        maxY = points[i].y > maxY ? points[i].y : maxY;
+    }
+    if (outsideClip(minX - 1.0f, minY - 1.0f, maxX + 1.0f, maxY + 1.0f, clip))
         return;
 
     float signedArea = 0.0f;
@@ -649,6 +711,13 @@ void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, con
 void DrawList::addText(StringView text, const Vec2 &position, FontId font,
                        float logicalSize, const Color &color, const Rect &clip)
 {
+    // The backend shapes this text, so its width and line count are unknown
+    // here: only cull what certainly starts past the clip's right or bottom
+    // edge (text runs right and down from position).
+    if (!(clip.width > 0.0f) || !(clip.height > 0.0f) ||
+        position.x > clip.x + clip.width + CullMargin ||
+        position.y > clip.y + clip.height + CullMargin)
+        return;
     const uint32_t offset = static_cast<uint32_t>(textBytes_.size());
     for (StringView::size_type i = 0; i < text.size(); ++i)
         textBytes_.push_back(text[i]);
