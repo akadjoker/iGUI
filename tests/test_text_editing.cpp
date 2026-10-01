@@ -3,6 +3,8 @@
 
 #include "InteractionHarness.hpp"
 
+#include <igui/CodeEditor.hpp>
+
 #include <stdio.h>
 #include <string.h>
 
@@ -138,12 +140,72 @@ void test_multiline()
     expect("Enter splits at the caret", edit("ab", enter, 3, true), "a\nxb");
 }
 
+// Ctrl+Z / Ctrl+Y belong to the text field that has the keyboard, not to the
+// application's undo history: typing in a field and pressing Ctrl+Z must not
+// silently revert an unrelated application action (and in the code editor,
+// which has its own undo, it must not undo twice).
+void test_undo_shortcut_belongs_to_focused_text_field()
+{
+    for (int widget = 0; widget < 3; ++widget)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::CodeEditorState code;
+        code.setText("abc");
+        ig::String text("abc");
+        int appValue = 2;
+        int *value = &appValue;
+        auto build = [&](ig::Context &c)
+        {
+            c.beginMainWindow("main");
+            if (widget == 0)
+                c.codeEditor("code", code, ig::Rect(10.0f, 10.0f, 400.0f, 200.0f));
+            else if (widget == 1)
+                c.inputText("text", text, ig::Rect(10.0f, 10.0f, 400.0f, 28.0f));
+            else
+                c.inputTextMultiline("text", text, ig::Rect(10.0f, 10.0f, 400.0f, 100.0f));
+            c.button("button", ig::Rect(10.0f, 300.0f, 100.0f, 28.0f));
+            c.endWindow();
+        };
+        harness.frame(build);
+        context.pushUndo("set 2", [value]() { *value = 1; }, [value]() { *value = 2; });
+        harness.click(100.0f, 20.0f, build); // focus the text widget
+        context.pushEvent(ig::Event::textInput("X"));
+        harness.frame(build);
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Z, true));
+        harness.frame(build);
+        const char *names[] = {"codeEditor", "inputText", "inputTextMultiline"};
+        if (appValue != 2)
+        {
+            ++gFailures;
+            printf("FAIL Ctrl+Z in a focused %s undid an application action\n", names[widget]);
+        }
+        if (widget == 0 && code.text() != "abc")
+        {
+            ++gFailures;
+            printf("FAIL Ctrl+Z in the code editor did not undo its own typing\n");
+        }
+
+        // With no text field focused the application history gets it.
+        harness.click(50.0f, 314.0f, build); // the button takes focus
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Z, true));
+        harness.frame(build);
+        if (appValue != 1)
+        {
+            ++gFailures;
+            printf("FAIL Ctrl+Z with no text field focused did not reach the application (%s)\n", names[widget]);
+        }
+    }
+}
+
 } // namespace
 
 int main()
 {
     test_single_line();
     test_multiline();
+    test_undo_shortcut_belongs_to_focused_text_field();
     if (gFailures != 0)
     {
         printf("test_text_editing: %d failure(s)\n", gFailures);

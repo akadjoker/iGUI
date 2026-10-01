@@ -445,6 +445,9 @@ void Context::beginFrame(const FrameInfo &frame)
     tableActive_ = false;
     propertyRowActive_ = false;
     focusOrder_.clear();
+    // Whether a text field had the keyboard last frame - read before the
+    // reset below, for the undo shortcuts further down.
+    const bool textFieldHadKeyboard = wantsTextInput_;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -472,10 +475,17 @@ void Context::beginFrame(const FrameInfo &frame)
     textEvents_.clear();
     consumeEvents();
 
-    if (shortcut(KeyCode::Z))
-        undo();
-    else if (shortcut(KeyCode::Y) || shortcut(KeyCode::Z, true, true))
-        redo();
+    // While a text field has the keyboard, Ctrl+Z/Ctrl+Y are its own (the
+    // code editor has its own undo): taking them for the application's
+    // history reverted unrelated actions under the user's typing, and in the
+    // code editor undid twice.
+    if (!textFieldHadKeyboard)
+    {
+        if (shortcut(KeyCode::Z))
+            undo();
+        else if (shortcut(KeyCode::Y) || shortcut(KeyCode::Z, true, true))
+            redo();
+    }
 
     // A press raises and focuses the window under it - unless a modal owns
     // the pointer: raising a background window over a setModalWindow() one
