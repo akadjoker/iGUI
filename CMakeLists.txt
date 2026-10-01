@@ -142,6 +142,10 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_windows_tests tests/test_windows.cpp)
         target_link_libraries(igui_windows_tests PRIVATE igui)
         add_test(NAME igui_windows COMMAND igui_windows_tests)
+
+        add_executable(igui_code_editor_tests tests/test_code_editor.cpp)
+        target_link_libraries(igui_code_editor_tests PRIVATE igui)
+        add_test(NAME igui_code_editor COMMAND igui_code_editor_tests)
     endif()
 endif()
 
