@@ -134,6 +134,10 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_numeric_input_tests tests/test_numeric_input.cpp)
         target_link_libraries(igui_numeric_input_tests PRIVATE igui)
         add_test(NAME igui_numeric_input COMMAND igui_numeric_input_tests)
+
+        add_executable(igui_text_editing_tests tests/test_text_editing.cpp)
+        target_link_libraries(igui_text_editing_tests PRIVATE igui)
+        add_test(NAME igui_text_editing COMMAND igui_text_editing_tests)
     endif()
 endif()
 

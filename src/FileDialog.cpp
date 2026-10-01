@@ -84,19 +84,6 @@ bool containsAsciiIgnoreCase(StringView text, StringView query)
     return false;
 }
 
-String::size_type previousUtf8Offset(StringView text, String::size_type offset)
-{
-    if (offset > text.size())
-        offset = text.size();
-    if (offset == 0u)
-        return 0u;
-    --offset;
-    while (offset != 0u &&
-           (static_cast<uint8_t>(text[offset]) & 0xc0u) == 0x80u)
-        --offset;
-    return offset;
-}
-
 String fileDialogSize(uint64_t bytes)
 {
     char text[32];
@@ -477,38 +464,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     {
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (state.fileNameCursor > state.fileName.size()) state.fileNameCursor = state.fileName.size();
-        if (homePressed_) state.fileNameCursor = 0u;
-        if (endPressed_) state.fileNameCursor = state.fileName.size();
-        if (leftPressed_ && state.fileNameCursor > 0u)
-            state.fileNameCursor = previousUtf8Offset(state.fileName, state.fileNameCursor);
-        if (rightPressed_ && state.fileNameCursor < state.fileName.size())
+        if (editTextBuffer(state.fileName, state.fileNameCursor, false))
         {
-            ++state.fileNameCursor;
-            while (state.fileNameCursor < state.fileName.size() &&
-                   (static_cast<unsigned char>(state.fileName[state.fileNameCursor]) & 0xc0u) == 0x80u)
-                ++state.fileNameCursor;
-        }
-        for (const Event &event : textEvents_)
-        {
-            state.fileName.insert(state.fileNameCursor, event.text, event.textLength);
-            state.fileNameCursor += event.textLength;
-            state.overwritePath.clear();
-            state.fileError.clear();
-        }
-        if (backspacePressed_ && state.fileNameCursor > 0u)
-        {
-            const auto previous = previousUtf8Offset(state.fileName, state.fileNameCursor);
-            state.fileName.erase(previous, state.fileNameCursor - previous);
-            state.fileNameCursor = previous;
-            state.overwritePath.clear();
-            state.fileError.clear();
-        }
-        if (pasteRequested_)
-        {
-            const String pasted = backend_.clipboardText();
-            state.fileName.insert(state.fileNameCursor, pasted.data(), pasted.size());
-            state.fileNameCursor += pasted.size();
             state.overwritePath.clear();
             state.fileError.clear();
         }
@@ -517,38 +474,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     {
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (state.searchCursor > state.searchQuery.size()) state.searchCursor = state.searchQuery.size();
-        if (homePressed_) state.searchCursor = 0u;
-        if (endPressed_) state.searchCursor = state.searchQuery.size();
-        if (leftPressed_ && state.searchCursor > 0u)
-            state.searchCursor = previousUtf8Offset(state.searchQuery, state.searchCursor);
-        if (rightPressed_ && state.searchCursor < state.searchQuery.size())
-        {
-            ++state.searchCursor;
-            while (state.searchCursor < state.searchQuery.size() &&
-                   (static_cast<unsigned char>(state.searchQuery[state.searchCursor]) & 0xc0u) == 0x80u)
-                ++state.searchCursor;
-        }
-        for (const Event &event : textEvents_)
-        {
-            state.searchQuery.insert(state.searchCursor, event.text, event.textLength);
-            state.searchCursor += event.textLength;
+        if (editTextBuffer(state.searchQuery, state.searchCursor, false))
             searchChanged = true;
-        }
-        if (backspacePressed_ && state.searchCursor > 0u)
-        {
-            const String::size_type previous = previousUtf8Offset(state.searchQuery, state.searchCursor);
-            state.searchQuery.erase(previous, state.searchCursor - previous);
-            state.searchCursor = previous;
-            searchChanged = true;
-        }
-        if (pasteRequested_)
-        {
-            const String pasted = backend_.clipboardText();
-            state.searchQuery.insert(state.searchCursor, pasted.data(), pasted.size());
-            state.searchCursor += pasted.size();
-            searchChanged = true;
-        }
         if (escapePressed_)
         {
             if (!state.searchQuery.empty())
@@ -566,23 +493,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     {
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (state.newFolderCursor > state.newFolderName.size())
-            state.newFolderCursor = state.newFolderName.size();
-        for (ct::Vector<Event>::size_type i = 0u; i < textEvents_.size(); ++i)
-        {
-            const Event &event = textEvents_[i];
-            state.newFolderName.insert(state.newFolderCursor, event.text, event.textLength);
-            state.newFolderCursor += event.textLength;
+        if (editTextBuffer(state.newFolderName, state.newFolderCursor, false))
             state.newFolderError.clear();
-        }
-        if (backspacePressed_ && state.newFolderCursor != 0u)
-        {
-            const String::size_type previous = previousUtf8Offset(state.newFolderName,
-                                                                    state.newFolderCursor);
-            state.newFolderName.erase(previous, state.newFolderCursor - previous);
-            state.newFolderCursor = previous;
-            state.newFolderError.clear();
-        }
         if (escapePressed_)
         {
             state.creatingFolder = false;

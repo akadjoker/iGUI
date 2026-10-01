@@ -2727,6 +2727,143 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
     return changed;
 }
 
+namespace
+{
+
+bool isUtf8Continuation(char byte)
+{
+    return (static_cast<uint8_t>(byte) & 0xC0u) == 0x80u;
+}
+
+String::size_type previousCodePoint(const String &text, String::size_type offset)
+{
+    if (offset == 0u)
+        return 0u;
+    --offset;
+    while (offset != 0u && isUtf8Continuation(text[offset]))
+        --offset;
+    return offset;
+}
+
+String::size_type nextCodePoint(const String &text, String::size_type offset)
+{
+    if (offset >= text.size())
+        return text.size();
+    ++offset;
+    while (offset < text.size() && isUtf8Continuation(text[offset]))
+        ++offset;
+    return offset;
+}
+
+String::size_type lineStart(const String &text, String::size_type offset)
+{
+    while (offset != 0u && text[offset - 1u] != '\n')
+        --offset;
+    return offset;
+}
+
+String::size_type lineEnd(const String &text, String::size_type offset)
+{
+    while (offset < text.size() && text[offset] != '\n')
+        ++offset;
+    return offset;
+}
+
+// The offset `column` code points into the line starting at `start`,
+// clamped to that line's end.
+String::size_type offsetAtColumn(const String &text, String::size_type start, int column)
+{
+    const String::size_type end = lineEnd(text, start);
+    String::size_type offset = start;
+    for (int i = 0; i < column && offset < end; ++i)
+        offset = nextCodePoint(text, offset);
+    return offset;
+}
+
+int columnOf(const String &text, String::size_type offset)
+{
+    int column = 0;
+    for (String::size_type i = lineStart(text, offset); i < offset; i = nextCodePoint(text, i))
+        ++column;
+    return column;
+}
+
+// Inserts text at cursor; a single-line field drops line breaks.
+bool insertText(String &value, String::size_type &cursor, const char *text, String::size_type length,
+                bool multiline)
+{
+    bool inserted = false;
+    for (String::size_type i = 0u; i < length; ++i)
+    {
+        if (!multiline && (text[i] == '\n' || text[i] == '\r'))
+            continue;
+        value.insert(cursor, text + i, 1u);
+        ++cursor;
+        inserted = true;
+    }
+    return inserted;
+}
+
+} // namespace
+
+bool Context::editTextBuffer(String &value, String::size_type &cursor, bool multiline)
+{
+    bool changed = false;
+    if (cursor > value.size())
+        cursor = value.size();
+    if (homePressed_)
+        cursor = multiline ? lineStart(value, cursor) : 0u;
+    if (endPressed_)
+        cursor = multiline ? lineEnd(value, cursor) : value.size();
+    if (leftPressed_)
+        cursor = previousCodePoint(value, cursor);
+    if (rightPressed_)
+        cursor = nextCodePoint(value, cursor);
+    if (multiline && (upPressed_ || downPressed_))
+    {
+        const int column = columnOf(value, cursor);
+        const String::size_type start = lineStart(value, cursor);
+        if (upPressed_)
+            cursor = start == 0u ? 0u : offsetAtColumn(value, lineStart(value, start - 1u), column);
+        else
+        {
+            const String::size_type end = lineEnd(value, cursor);
+            cursor = end == value.size() ? end : offsetAtColumn(value, end + 1u, column);
+        }
+    }
+    if (copyRequested_)
+        backend_.setClipboardText(value);
+    if (pasteRequested_)
+    {
+        const String clipboard = backend_.clipboardText();
+        changed = insertText(value, cursor, clipboard.data(), clipboard.size(), multiline) || changed;
+    }
+    if (multiline && enterPressed_)
+    {
+        value.insert(cursor, "\n", 1u);
+        ++cursor;
+        changed = true;
+    }
+    for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
+    {
+        const Event &event = textEvents_[i];
+        changed = insertText(value, cursor, event.text, event.textLength, multiline) || changed;
+    }
+    if (backspacePressed_ && cursor != 0u)
+    {
+        const String::size_type eraseBegin = previousCodePoint(value, cursor);
+        value.erase(eraseBegin, cursor - eraseBegin);
+        cursor = eraseBegin;
+        changed = true;
+    }
+    if (keyPressed_[static_cast<uint32_t>(KeyCode::Delete)] && cursor < value.size())
+    {
+        value.erase(cursor, nextCodePoint(value, cursor) - cursor);
+        changed = true;
+    }
+    return changed;
+}
+
 bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
 {
     WindowState *window = currentWindow();
@@ -2751,41 +2888,7 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
         textInputWidget_ = id;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (textCursor_ > value.size())
-            textCursor_ = value.size();
-        if (homePressed_)
-            textCursor_ = 0u;
-        if (endPressed_)
-            textCursor_ = value.size();
-        if (copyRequested_)
-            backend_.setClipboardText(value);
-        if (pasteRequested_)
-        {
-            const String clipboard = backend_.clipboardText();
-            if (!clipboard.empty())
-            {
-                value.insert(textCursor_, clipboard.data(), clipboard.size());
-                textCursor_ += clipboard.size();
-                changed = true;
-            }
-        }
-        for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
-        {
-            const Event &event = textEvents_[i];
-            value.insert(textCursor_, event.text, event.textLength);
-            textCursor_ += event.textLength;
-            changed = event.textLength != 0u || changed;
-        }
-        if (backspacePressed_ && textCursor_ != 0u)
-        {
-            String::size_type eraseBegin = textCursor_ - 1u;
-            while (eraseBegin != 0u &&
-                   (static_cast<uint8_t>(value[eraseBegin]) & 0xC0u) == 0x80u)
-                --eraseBegin;
-            value.erase(eraseBegin, textCursor_ - eraseBegin);
-            textCursor_ = eraseBegin;
-            changed = true;
-        }
+        changed = editTextBuffer(value, textCursor_, false);
     }
 
     const Color background = focused ? theme_.buttonHovered
@@ -2919,47 +3022,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
         textInputWidget_ = id;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (textCursor_ > value.size())
-            textCursor_ = value.size();
-        if (homePressed_)
-            textCursor_ = 0u;
-        if (endPressed_)
-            textCursor_ = value.size();
-        if (copyRequested_)
-            backend_.setClipboardText(value);
-        if (pasteRequested_)
-        {
-            const String clipboard = backend_.clipboardText();
-            if (!clipboard.empty())
-            {
-                value.insert(textCursor_, clipboard.data(), clipboard.size());
-                textCursor_ += clipboard.size();
-                changed = true;
-            }
-        }
-        if (enterPressed_)
-        {
-            value.insert(textCursor_, "\n", 1u);
-            ++textCursor_;
-            changed = true;
-        }
-        for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
-        {
-            const Event &event = textEvents_[i];
-            value.insert(textCursor_, event.text, event.textLength);
-            textCursor_ += event.textLength;
-            changed = event.textLength != 0u || changed;
-        }
-        if (backspacePressed_ && textCursor_ != 0u)
-        {
-            String::size_type eraseBegin = textCursor_ - 1u;
-            while (eraseBegin != 0u &&
-                   (static_cast<uint8_t>(value[eraseBegin]) & 0xC0u) == 0x80u)
-                --eraseBegin;
-            value.erase(eraseBegin, textCursor_ - eraseBegin);
-            textCursor_ = eraseBegin;
-            changed = true;
-        }
+        changed = editTextBuffer(value, textCursor_, true);
     }
 
     if (focused)
@@ -4039,37 +4102,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
         textInputWidget_ = inputId;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        if (textCursor_ > input.size())
-            textCursor_ = input.size();
-        if (homePressed_)
-            textCursor_ = 0u;
-        if (endPressed_)
-            textCursor_ = input.size();
-        if (copyRequested_)
-            backend_.setClipboardText(input);
-        if (pasteRequested_)
-        {
-            const String clipboard = backend_.clipboardText();
-            if (!clipboard.empty())
-            {
-                input.insert(textCursor_, clipboard.data(), clipboard.size());
-                textCursor_ += clipboard.size();
-            }
-        }
-        for (ct::Vector<Event>::size_type i = 0u; i < textEvents_.size(); ++i)
-        {
-            const Event &event = textEvents_[i];
-            input.insert(textCursor_, event.text, event.textLength);
-            textCursor_ += event.textLength;
-        }
-        if (backspacePressed_ && textCursor_ != 0u)
-        {
-            String::size_type eraseBegin = textCursor_ - 1u;
-            while (eraseBegin != 0u && (static_cast<uint8_t>(input[eraseBegin]) & 0xC0u) == 0x80u)
-                --eraseBegin;
-            input.erase(eraseBegin, textCursor_ - eraseBegin);
-            textCursor_ = eraseBegin;
-        }
+        editTextBuffer(input, textCursor_, false);
     }
 
     Color kindColor = theme_.dialogBtnPrimary;

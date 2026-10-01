@@ -1109,6 +1109,12 @@ private:
     // the field is focused (see numericEditId_). Returns whether the text was
     // edited this frame; text holds what to parse.
     bool editNumericText(StringView label, String &text, double value, const Rect &bounds);
+    // This frame's editing keys and typed text applied to the focused text
+    // field's buffer at cursor (a byte offset kept on a UTF-8 code point
+    // boundary). Every text field (inputText, inputTextMultiline, the
+    // messageBox input, the fileDialog fields) edits through this, so they
+    // all get the same keys. Returns whether value changed.
+    bool editTextBuffer(String &value, String::size_type &cursor, bool multiline);
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);
