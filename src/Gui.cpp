@@ -775,28 +775,31 @@ void Context::setModalWindow(StringView title, bool modal)
         modalWindowId_ = InvalidWidgetId;
 }
 
+// The "all windows" operations act on the windows on screen: a window the
+// application stopped submitting keeps its WindowState but is not drawn,
+// and must not take a tile/cascade slot.
 void Context::maximizeAllWindows()
 {
-    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open) maximizeWindow(w->title); }
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && windowSubmittedRecently(*w)) maximizeWindow(w->title); }
 }
 void Context::restoreAllWindows()
 {
-    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open) restoreWindow(w->title); }
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && windowSubmittedRecently(*w)) restoreWindow(w->title); }
 }
 void Context::minimizeAllWindows()
 {
-    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls) w->minimized=true; }
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls && windowSubmittedRecently(*w)) w->minimized=true; }
 }
 void Context::tileAllWindows()
 {
     int count=0;
-    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls) ++count; }
+    for (auto h : windowOrder_) { auto w=windows_.get(h); if(w && w->open && w->showWindowControls && windowSubmittedRecently(*w)) ++count; }
     if (!count) return;
     const int columns=static_cast<int>(ceilf(sqrtf(static_cast<float>(count))));
     const int rows=(count+columns-1)/columns;
     int i=0;
     for (auto h : windowOrder_) {
-        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls) continue;
+        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls || !windowSubmittedRecently(*w)) continue;
         if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
         w->maximized=false; w->minimized=false;
         w->bounds=Rect((i%columns)*frame_.displaySize.x/columns,(i/columns)*frame_.displaySize.y/rows,
@@ -807,7 +810,7 @@ void Context::cascadeWindows()
 {
     int i=0;
     for (auto h : windowOrder_) {
-        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls) continue;
+        auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls || !windowSubmittedRecently(*w)) continue;
         if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
         w->maximized=false; w->minimized=false;
         const float offset=(i++%8)*24.f;
@@ -6577,6 +6580,23 @@ void Context::drawWindow(WindowState &window)
         {
             window.bounds.x = pointer_.position.x - windowDragOffset_.x;
             window.bounds.y = pointer_.position.y - windowDragOffset_.y;
+            // Backends keep reporting the pointer outside the viewport while
+            // a button is held, so a fling could park the title bar off
+            // screen, leaving nothing to grab the window by. Keep a grabbable
+            // strip of it on screen: 40px of draggable title past the
+            // controls when it leaves on the left, 40px on the right.
+            const float grip = 40.0f;
+            const float minimumX = grip + controlsWidth - window.bounds.width;
+            const float maximumX = viewport.width - grip;
+            const float maximumY = viewport.height - titleHeight;
+            if (window.bounds.x > maximumX)
+                window.bounds.x = maximumX;
+            if (window.bounds.x < minimumX)
+                window.bounds.x = minimumX;
+            if (window.bounds.y > maximumY)
+                window.bounds.y = maximumY;
+            if (window.bounds.y < 0.0f)
+                window.bounds.y = 0.0f;
         }
         if (pointer_.released[left])
         {
