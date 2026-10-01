@@ -202,6 +202,42 @@ void test_change_reported_only_for_new_values()
     check(f.changes == 1 && f.intValue == 50, "inputInt: a new value reports one change");
 }
 
+// Non-finite values handed in by the application must not turn into
+// non-finite geometry (backends would get NaN coordinates), and widgets
+// must not rewrite them without user input.
+void test_non_finite_values_draw_finite_geometry()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    const float nan = 0.0f / 0.0f;
+    const float infinity = 1.0f / 0.0f;
+    float values[] = {nan, infinity, -infinity, nan};
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderFloat("a", values[0], 0.0f, 1.0f);
+        c.sliderFloat("b", values[1], 0.0f, 1.0f);
+        c.sliderFloat("c", values[2], 0.0f, 1.0f);
+        c.dragFloat("d", values[3], 0.0f, 1.0f, 0.1f);
+        c.progressBar(nan, 1.0f);
+        c.progressBar(1.0f, nan);
+        c.progressBar(infinity, 1.0f);
+        c.endWindow();
+    };
+    harness.frame(build);
+    const ig::DrawData &data = harness.frame(build);
+    bool finite = true;
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        const ig::Vec2 &p = data.vertices[i].position;
+        finite = finite && p.x == p.x && p.y == p.y && p.x < 1e30f && p.x > -1e30f && p.y < 1e30f && p.y > -1e30f;
+    }
+    check(finite, "non-finite widget values produced non-finite vertices");
+    check(values[0] != values[0] && values[1] == infinity && values[2] == -infinity && values[3] != values[3],
+          "widgets rewrote non-finite values without user input");
+}
+
 } // namespace
 
 int main()
@@ -210,6 +246,7 @@ int main()
     test_float_typing();
     test_display_follows_value_when_not_editing();
     test_change_reported_only_for_new_values();
+    test_non_finite_values_draw_finite_geometry();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
