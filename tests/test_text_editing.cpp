@@ -199,6 +199,58 @@ void test_undo_shortcut_belongs_to_focused_text_field()
     }
 }
 
+// Enter accepts a message box - and the input box returns what was typed -
+// but not with the same Enter that opened it.
+void test_message_box_enter_accepts()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    bool open = false;
+    ig::String name;
+    ig::MessageBoxResult result = ig::MessageBoxResult::None;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        if (c.button("Rename", ig::Rect(10.0f, 10.0f, 120.0f, 28.0f)))
+            open = true;
+        c.endWindow();
+        if (open)
+        {
+            ig::MessageBoxOptions options;
+            options.kind = ig::MessageBoxKind::Input;
+            options.showCancel = true;
+            options.inputValue = &name;
+            const ig::MessageBoxResult r = c.messageBox("Rename", "New name", open, options);
+            if (r != ig::MessageBoxResult::None)
+                result = r;
+        }
+    };
+    harness.frame(build);
+    // Focus the button with a click, then open the box with Enter.
+    harness.click(50.0f, 24.0f, build);
+    open = false;
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    harness.frame(build);
+    harness.frame(build);
+    if (!open || result != ig::MessageBoxResult::None)
+    {
+        ++gFailures;
+        printf("FAIL the Enter that opened a message box also closed it\n");
+        return;
+    }
+    context.pushEvent(ig::Event::textInput("abc"));
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    harness.frame(build);
+    if (open || result != ig::MessageBoxResult::Accepted || name != "abc")
+    {
+        ++gFailures;
+        printf("FAIL Enter did not accept the input message box (open=%d name='%s')\n", open ? 1 : 0, name.c_str());
+    }
+}
+
 } // namespace
 
 int main()
@@ -206,6 +258,7 @@ int main()
     test_single_line();
     test_multiline();
     test_undo_shortcut_belongs_to_focused_text_field();
+    test_message_box_enter_accepts();
     if (gFailures != 0)
     {
         printf("test_text_editing: %d failure(s)\n", gFailures);

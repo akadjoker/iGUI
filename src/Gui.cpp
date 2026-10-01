@@ -4033,6 +4033,9 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
         return MessageBoxResult::None;
     }
 
+    // On screen since an earlier frame: only then may Enter accept it, so
+    // the Enter that opened it (on a focused button) cannot also close it.
+    const bool shownLastFrame = activeModal_ == id && activeModalFrame_ + 1u == frameNumber_;
     activeModal_ = id;
     activeModalFrame_ = frameNumber_;
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
@@ -4084,6 +4087,12 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     }
     if (escapePressed_ && options.showCancel) {
         open=false; activeModal_=InvalidWidgetId; activeWidget_=InvalidWidgetId; result=MessageBoxResult::Cancelled;
+    }
+    if (enterPressed_ && shownLastFrame && open)
+    {
+        open = false;
+        activeModal_ = InvalidWidgetId;
+        result = MessageBoxResult::Accepted;
     }
     if (pointer_.released[left] && activeWidget_ == acceptId)
     {
