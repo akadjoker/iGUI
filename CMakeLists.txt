@@ -126,6 +126,14 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_culling_tests tests/test_culling.cpp)
         target_link_libraries(igui_culling_tests PRIVATE igui)
         add_test(NAME igui_culling COMMAND igui_culling_tests)
+
+        add_executable(igui_fuzz_tests tests/test_fuzz.cpp)
+        target_link_libraries(igui_fuzz_tests PRIVATE igui)
+        add_test(NAME igui_fuzz COMMAND igui_fuzz_tests)
+
+        add_executable(igui_numeric_input_tests tests/test_numeric_input.cpp)
+        target_link_libraries(igui_numeric_input_tests PRIVATE igui)
+        add_test(NAME igui_numeric_input COMMAND igui_numeric_input_tests)
     endif()
 endif()
 

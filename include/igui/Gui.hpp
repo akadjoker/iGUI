@@ -999,6 +999,14 @@ private:
     // its second frame on). Without this the panel stayed at menuMinWidth
     // and a long item ("Build and run native") drew its tail outside the
     // border.
+    // Text of the inputInt/inputFloat being edited. Rebuilding the text from
+    // the value every frame destroyed what the user was typing ("-", "1.",
+    // an empty field are not numbers yet), so while one is focused its text
+    // lives here; numericEditValue_ is the value that text last produced, to
+    // spot the application changing the value underneath.
+    WidgetId numericEditId_ = InvalidWidgetId;
+    String numericEditText_;
+    double numericEditValue_ = 0.0;
     WidgetId menuWidthId_ = InvalidWidgetId;
     float menuPopupWidth_ = 0.0f;
     float menuMeasuredWidth_ = 0.0f;
@@ -1097,6 +1105,10 @@ private:
     bool pointerOver(const Rect &visible) const;
     // focusedWidget_ == id, unless a modal owns the keyboard.
     bool hasKeyboardFocus(WidgetId id) const;
+    // inputText for a numeric field: keeps the typed text across frames while
+    // the field is focused (see numericEditId_). Returns whether the text was
+    // edited this frame; text holds what to parse.
+    bool editNumericText(StringView label, String &text, double value, const Rect &bounds);
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);

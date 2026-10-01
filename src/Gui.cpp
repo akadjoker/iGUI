@@ -1,5 +1,7 @@
 #include "igui/Gui.hpp"
 
+#include <float.h>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -3032,22 +3034,128 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
     return changed;
 }
 
+namespace
+{
+
+// "[+-]digits", clamped to int's range. Anything else - including the
+// in-between states "", "-", "+" - is not a value yet.
+bool parseIntText(const String &text, int &result)
+{
+    String::size_type i = 0u;
+    const bool negative = i < text.size() && text[i] == '-';
+    if (i < text.size() && (text[i] == '-' || text[i] == '+'))
+        ++i;
+    if (i == text.size())
+        return false;
+    long long magnitude = 0;
+    for (; i < text.size(); ++i)
+    {
+        if (text[i] < '0' || text[i] > '9')
+            return false;
+        if (magnitude <= 4294967296LL) // stop growing well past int's range
+            magnitude = magnitude * 10 + (text[i] - '0');
+    }
+    const long long signedValue = negative ? -magnitude : magnitude;
+    result = signedValue > INT_MAX ? INT_MAX : (signedValue < INT_MIN ? INT_MIN : static_cast<int>(signedValue));
+    return true;
+}
+
+// A plain decimal literal: [+-]digits[.digits][(e|E)[+-]digits], at least one
+// mantissa digit. strtof alone would also take "nan", "inf" and hex, and
+// stop silently at trailing garbage. Non-finite results are rejected.
+bool parseFloatText(const String &text, float &result)
+{
+    String::size_type i = 0u;
+    if (i < text.size() && (text[i] == '-' || text[i] == '+'))
+        ++i;
+    bool digits = false;
+    while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+    {
+        ++i;
+        digits = true;
+    }
+    if (i < text.size() && text[i] == '.')
+    {
+        ++i;
+        while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+        {
+            ++i;
+            digits = true;
+        }
+    }
+    if (!digits)
+        return false;
+    if (i < text.size() && (text[i] == 'e' || text[i] == 'E'))
+    {
+        ++i;
+        if (i < text.size() && (text[i] == '-' || text[i] == '+'))
+            ++i;
+        bool exponentDigits = false;
+        while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+        {
+            ++i;
+            exponentDigits = true;
+        }
+        if (!exponentDigits)
+            return false;
+    }
+    if (i != text.size())
+        return false;
+    const float parsed = text.to_float();
+    if (!(parsed == parsed) || parsed > FLT_MAX || parsed < -FLT_MAX)
+        return false;
+    result = parsed;
+    return true;
+}
+
+} // namespace
+
+bool Context::editNumericText(StringView labelText, String &text, double value, const Rect &bounds)
+{
+    const WidgetId id = makeWidgetId(labelText);
+    // Resume the user's text unless the application changed the value since;
+    // then the field shows the new value, with the caret at its end.
+    if (numericEditId_ == id && numericEditValue_ == value)
+        text = numericEditText_;
+    else if (numericEditId_ == id && textInputWidget_ == id)
+        textCursor_ = text.size();
+    const bool edited = inputText(labelText, text, bounds);
+    if (focusedWidget_ == id)
+    {
+        numericEditId_ = id;
+        numericEditText_ = text;
+    }
+    else if (numericEditId_ == id)
+    {
+        numericEditId_ = InvalidWidgetId;
+    }
+    return edited;
+}
+
 bool Context::inputInt(StringView labelText, int &value, const Rect &bounds)
 {
     String text = String::number(value);
-    if (!inputText(labelText, text, bounds))
-        return false;
-    value = text.to_int();
-    return true;
+    const bool edited = editNumericText(labelText, text, static_cast<double>(value), bounds);
+    int parsed = value;
+    const bool changed = edited && parseIntText(text, parsed) && parsed != value;
+    if (changed)
+        value = parsed;
+    if (numericEditId_ == makeWidgetId(labelText))
+        numericEditValue_ = static_cast<double>(value);
+    return changed;
 }
 
 bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds, int precision)
 {
     String text = String::number(static_cast<double>(value), precision);
-    if (!inputText(labelText, text, bounds))
-        return false;
-    value = text.to_float();
-    return true;
+    const bool edited = editNumericText(labelText, text, static_cast<double>(value), bounds);
+    float parsed = value;
+    const bool changed = edited && parseFloatText(text, parsed) && parsed != value;
+    if (changed)
+        value = parsed;
+    if (numericEditId_ == makeWidgetId(labelText))
+        numericEditValue_ = static_cast<double>(value);
+    return changed;
 }
 
 bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
