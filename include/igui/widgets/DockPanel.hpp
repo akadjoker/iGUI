@@ -89,6 +89,13 @@ public:
     /// @brief Move a panel tab into the same leaf as another named panel.
     void moveTabToLeaf(const String& sourceName, const String& targetName);
 
+    /// @brief The split tree and tab arrangement as one line of text, by panel name.
+    String saveLayout() const;
+    /// @brief Rebuild the arrangement from saveLayout() text. Panels the text does
+    ///        not name go to the first leaf and unknown names are skipped. Returns
+    ///        false, keeping the current layout, when the text does not parse.
+    bool restoreLayout(const String& text);
+
     /// @brief Set the tab bar height.
     void  setTabBarHeight(float h) { tabBarH_ = h; markDirty(); }
     /// @brief Get the tab bar height.

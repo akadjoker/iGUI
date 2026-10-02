@@ -204,6 +204,7 @@ namespace ig { namespace retained
         StepForward,
         StepBack,
         Record,
+        FolderNew,
         COUNT  // must be last
     };
 
@@ -311,6 +312,8 @@ namespace ig { namespace retained
                             AlignY       ay = AlignY::Top);
 
         void addIcon(IconId icon, const Rect &rect, const Color &color, float thickness = 2.0f);
+        /// True when addIcon has a vector drawing for the icon.
+        static bool hasVectorIcon(IconId icon);
         void addLine(Vec2 a, Vec2 b, const Color &color, float thickness = 1.0f);
 
         // ── Single-texture mode (white pixel in font atlas) ───────────────

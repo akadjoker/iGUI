@@ -56,6 +56,9 @@ public:
     /// @brief Get the current directory path.
     const String& path() const { return currentPath_; }
 
+    /// @brief Prefill the file name field (what Save proposes).
+    void setFileName(const String& name);
+
     /// @brief Set extension filter (e.g. "*.cpp;*.hpp").
     void setFilter(const String& filter);
     /// @brief Get the extension filter.
@@ -165,7 +168,10 @@ private:
     Button* btnViewList_   = nullptr;
     Button* btnViewGrid_   = nullptr;
     Button* btnHidden_     = nullptr;
+    Button* btnNewFolder_  = nullptr;
     void         updateViewModeButtons();
+    /// Asks for a name and creates that folder in the current one, then enters it.
+    void         newFolderPrompt();
 
     // File list state
     float scrollY_      = 0.f;

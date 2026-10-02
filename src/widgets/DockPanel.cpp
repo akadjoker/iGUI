@@ -1,5 +1,7 @@
 #include "DockPanel.hpp"
 
+#include <cstdlib>
+
 using namespace ig::retained;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -196,6 +198,164 @@ void DockPanel::showPanel(const String& name)
     leaf->tabs[idx].content->setVisible(true);
     panelActivated.emit(name);
     markDirty();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Layout persistence
+//  One line of text: a split is H<permille>[<first>|<second>] (V for
+//  vertical), a leaf is {Tab,Tab/current}. Only panel names go in, so the
+//  text survives across runs as long as the panels keep their names.
+// ─────────────────────────────────────────────────────────────────────────────
+
+namespace {
+
+void saveNode(const DockNode* n, String& out)
+{
+    if (!n) { out.append("{}"); return; }
+    if (n->isSplit) {
+        out.push_back(n->splitDir == LayoutDir::Horizontal ? 'H' : 'V');
+        out.append(String::number((long long)(n->ratio * 1000.f + 0.5f)));
+        out.push_back('[');
+        saveNode(n->first, out);
+        out.push_back('|');
+        saveNode(n->second, out);
+        out.push_back(']');
+        return;
+    }
+    out.push_back('{');
+    for (int i = 0; i < (int)n->tabs.size(); ++i) {
+        if (i) out.push_back(',');
+        out.append(n->tabs[i].name);
+    }
+    if (n->currentTab > 0) {
+        out.push_back('/');
+        out.append(String::number((long long)n->currentTab));
+    }
+    out.push_back('}');
+}
+
+// Builds nodes from the text, taking tabs out of the pool as they are named.
+struct LayoutParser
+{
+    const char* p;
+    ct::Vector<DockNode::Tab>& pool;
+    bool ok = true;
+
+    LayoutParser(const char* text, ct::Vector<DockNode::Tab>& tabs) : p(text), pool(tabs) {}
+
+    DockNode* parse()
+    {
+        if (*p == '{') return parseLeaf();
+        if (*p == 'H' || *p == 'V') return parseSplit();
+        ok = false;
+        return nullptr;
+    }
+
+    DockNode* parseSplit()
+    {
+        auto* n = new DockNode();
+        n->isSplit  = true;
+        n->splitDir = *p++ == 'H' ? LayoutDir::Horizontal : LayoutDir::Vertical;
+        char* end = nullptr;
+        long permille = std::strtol(p, &end, 10);
+        if (end == p || permille < 0 || permille > 1000 || *end != '[') { ok = false; return n; }
+        n->ratio = (float)permille / 1000.f;
+        p = end + 1;
+        n->first = parse();
+        if (!ok || *p != '|') { ok = false; return n; }
+        ++p;
+        n->second = parse();
+        if (!ok || *p != ']') { ok = false; return n; }
+        ++p;
+        return n;
+    }
+
+    DockNode* parseLeaf()
+    {
+        auto* n = new DockNode();
+        ++p; // '{'
+        while (*p && *p != '}' && *p != '/') {
+            const char* start = p;
+            while (*p && *p != ',' && *p != '/' && *p != '}') ++p;
+            take(String(ct::StringView(start, (size_t)(p - start))), *n);
+            if (*p == ',') ++p;
+        }
+        if (*p == '/') {
+            char* end = nullptr;
+            n->currentTab = (int)std::strtol(p + 1, &end, 10);
+            p = end;
+        }
+        if (*p != '}') { ok = false; return n; }
+        ++p;
+        if (n->currentTab < 0 || n->currentTab >= (int)n->tabs.size()) n->currentTab = 0;
+        return n;
+    }
+
+    void take(const String& name, DockNode& leaf)
+    {
+        for (int i = 0; i < (int)pool.size(); ++i) {
+            if (pool[i].name == name) {
+                leaf.tabs.push_back(pool[i]);
+                pool.erase(pool.begin() + i);
+                return;
+            }
+        }
+    }
+};
+
+void collectTabs(const DockNode* n, ct::Vector<DockNode::Tab>& out)
+{
+    if (!n) return;
+    if (n->isSplit) { collectTabs(n->first, out); collectTabs(n->second, out); return; }
+    for (const auto& t : n->tabs) out.push_back(t);
+}
+
+DockNode* firstLeaf(DockNode* n)
+{
+    while (n && n->isSplit) n = n->first ? n->first : n->second;
+    return n;
+}
+
+void showCurrentTabs(DockNode* n)
+{
+    if (!n) return;
+    if (n->isSplit) { showCurrentTabs(n->first); showCurrentTabs(n->second); return; }
+    for (int i = 0; i < (int)n->tabs.size(); ++i)
+        n->tabs[i].content->setVisible(i == n->currentTab);
+}
+
+} // anon
+
+String DockPanel::saveLayout() const
+{
+    String out;
+    saveNode(root_, out);
+    return out;
+}
+
+bool DockPanel::restoreLayout(const String& text)
+{
+    ensureRoot();
+    ct::Vector<DockNode::Tab> pool;
+    collectTabs(root_, pool);
+
+    LayoutParser parser(text.c_str(), pool);
+    DockNode* tree = parser.parse();
+    if (!parser.ok || !tree || *parser.p != '\0') {
+        freeNode(tree);
+        return false;
+    }
+
+    // panels the text did not name keep a place in the first leaf
+    DockNode* leaf = firstLeaf(tree);
+    for (const auto& t : pool) leaf->tabs.push_back(t);
+    pruneNode(tree);
+
+    freeNode(root_);
+    root_ = tree;
+    showCurrentTabs(root_);
+    markDirty();
+    return true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
