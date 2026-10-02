@@ -168,8 +168,9 @@ void Button::paint(PaintContext& ctx)
     ctx.font.SetBatch(&ctx.text);
     float textW = ctx.font.GetTextWidth(text_.c_str());
 
-    float iconSz = t.fontSize;
-    float iconW  = (iconId_ != IconId::None) ? (iconSz + 2.f) : 0.f;
+    // an icon-only button gives the icon the button's height
+    float iconSz = text_.empty() ? std::max(t.fontSize, std::min(abs.w, abs.h) - 6.f) : t.fontSize;
+    float iconW  = (iconId_ != IconId::None) ? (iconSz + (text_.empty() ? 0.f : 2.f)) : 0.f;
     float totalW = iconW + textW;
 
     float tx;

@@ -303,10 +303,29 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size)
 
 void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color& tint)
 {
-    if (!buFont || id == IconId::None || size <= 0.0f) return;
+    if (id == IconId::None || size <= 0.0f) return;
 
     Rect bb{x, y, size, size};
     if (isClipped(bb)) return;
+
+    // Vector strokes when there is a drawing (sharp at any size), then the
+    // procedural atlas when the backend built one, then the glyph font.
+    if (ig::retained::DrawList::hasVectorIcon(id)) {
+        const float thickness = std::max(1.0f, size * 0.065f);
+        drawList.addIcon(id, bb, tint, thickness);
+        return;
+    }
+    if (icons && icons->ready()) {
+        const FloatRect src = icons->srcRect(id);
+        const float tw = static_cast<float>(icons->textureWidth());
+        const float th = static_cast<float>(icons->textureHeight());
+        if (src.width > 0.0f && tw > 0.0f && th > 0.0f) {
+            const ig::retained::Rect uv{src.x / tw, src.y / th, src.width / tw, src.height / th};
+            drawImage(icons->texture(), bb, uv, tint);
+            return;
+        }
+    }
+    if (!buFont) return;
 
     const char* glyphText = iconGlyph(id);
     if (!glyphText) return;

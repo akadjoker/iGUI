@@ -829,8 +829,136 @@ namespace ig { namespace retained
             addLine({cx + s * 0.12f, cy + s * 0.12f}, {x1 - p, y1 - p}, color, thickness);
             break;
 
-        case IconId::None:
+        case IconId::Folder:
+        case IconId::FolderOpen:
+        case IconId::FolderNew:
+        {
+            // tab on the top left, body below, filled lightly in the stroke colour
+            float l = x0 + s * 0.10f, r = x1 - s * 0.10f, t = y0 + s * 0.22f, b = y1 - s * 0.18f;
+            float tab = y0 + s * 0.12f;
+            Color body = color;
+            body.a = static_cast<uint8_t>(color.a * 0.35f);
+            addRect({l, t, r - l, b - t}, body);
+            ct::Vector<Vec2> outline;
+            outline.push_back({l, b});
+            outline.push_back({l, tab});
+            outline.push_back({l + s * 0.30f, tab});
+            outline.push_back({l + s * 0.38f, t});
+            outline.push_back({r, t});
+            outline.push_back({r, b});
+            addPolyline(outline, color, thickness, true);
+            if (icon == IconId::FolderNew) {
+                // a plus in the body
+                float mx = (l + r) * 0.5f, my = (t + b) * 0.5f, u = s * 0.16f;
+                addLine({mx - u, my}, {mx + u, my}, color, thickness * 1.3f);
+                addLine({mx, my - u}, {mx, my + u}, color, thickness * 1.3f);
+            }
             break;
+        }
+
+        case IconId::File:
+        case IconId::FileCode:
+        case IconId::FileImage:
+        case IconId::FileArchive:
+        {
+            // page with a folded corner, and a mark for the kind
+            float l = x0 + s * 0.20f, r = x1 - s * 0.20f, t = y0 + s * 0.08f, b = y1 - s * 0.08f;
+            float fold = s * 0.22f;
+            ct::Vector<Vec2> page;
+            page.push_back({l, t});
+            page.push_back({r - fold, t});
+            page.push_back({r, t + fold});
+            page.push_back({r, b});
+            page.push_back({l, b});
+            addPolyline(page, color, thickness, true);
+            addLine({r - fold, t}, {r - fold, t + fold}, color, thickness);
+            addLine({r - fold, t + fold}, {r, t + fold}, color, thickness);
+            float mx = (l + r) * 0.5f, my = (t + fold + b) * 0.5f;
+            float u = s * 0.11f;
+            if (icon == IconId::FileCode) {
+                addLine({mx - u * 0.4f, my - u}, {mx - u * 1.3f, my}, color, thickness);
+                addLine({mx - u * 1.3f, my}, {mx - u * 0.4f, my + u}, color, thickness);
+                addLine({mx + u * 0.4f, my - u}, {mx + u * 1.3f, my}, color, thickness);
+                addLine({mx + u * 1.3f, my}, {mx + u * 0.4f, my + u}, color, thickness);
+            } else if (icon == IconId::FileImage) {
+                addTriangleFilled({l + s * 0.06f, b - s * 0.06f}, {mx, my - u}, {r - s * 0.06f, b - s * 0.06f}, color);
+                addCircleFilled({r - s * 0.16f, t + fold + s * 0.08f}, s * 0.05f, color, 12);
+            } else if (icon == IconId::FileArchive) {
+                for (int i = 0; i < 3; ++i)
+                    addRect({mx - u * 0.5f, t + s * 0.06f + i * u * 1.6f, u, u * 0.8f}, color);
+            } else {
+                addLine({l + s * 0.10f, my - u}, {r - s * 0.10f, my - u}, color, thickness);
+                addLine({l + s * 0.10f, my + u * 0.6f}, {r - s * 0.10f, my + u * 0.6f}, color, thickness);
+            }
+            break;
+        }
+
+        case IconId::ViewDetail:
+            // small square + line, three rows
+            for (int i = 0; i < 3; ++i) {
+                float yy = y0 + p + (s - 2 * p) * i / 2.0f;
+                float d = s * 0.10f;
+                addRect({x0 + p, yy - d * 0.5f, d, d}, color);
+                addLine({x0 + p + s * 0.20f, yy}, {x1 - p, yy}, color, thickness);
+            }
+            break;
+
+        case IconId::ViewList:
+            for (int i = 0; i < 3; ++i) {
+                float yy = y0 + p + (s - 2 * p) * i / 2.0f;
+                addLine({x0 + p, yy}, {x1 - p, yy}, color, thickness);
+            }
+            break;
+
+        case IconId::ViewGrid:
+        {
+            float g = s * 0.12f, c = (s - 2 * p - g) * 0.5f;
+            for (int j = 0; j < 2; ++j)
+                for (int i = 0; i < 2; ++i)
+                    addRectOutline({x0 + p + i * (c + g), y0 + p + j * (c + g), c, c}, color, thickness);
+            break;
+        }
+
+        case IconId::Eye:
+        case IconId::EyeOff:
+        {
+            // almond outline from two arcs, a pupil, and a strike for "off"
+            ct::Vector<Vec2> eye;
+            const int n = 10;
+            float w = s * 0.5f - p * 0.6f, h = s * 0.26f;
+            for (int i = 0; i <= n; ++i) {
+                float a = 3.14159265f * i / n;
+                eye.push_back({cx - w * std::cos(a), cy - h * std::sin(a)});
+            }
+            for (int i = n - 1; i > 0; --i) {
+                float a = 3.14159265f * i / n;
+                eye.push_back({cx - w * std::cos(a), cy + h * std::sin(a)});
+            }
+            addPolyline(eye, color, thickness, true);
+            addCircleFilled({cx, cy}, s * 0.11f, color, 16);
+            if (icon == IconId::EyeOff)
+                addLine({x0 + p, y1 - p}, {x1 - p, y0 + p}, color, thickness);
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    bool DrawList::hasVectorIcon(IconId icon)
+    {
+        switch (icon)
+        {
+        case IconId::Check: case IconId::Cross: case IconId::Plus: case IconId::Minus:
+        case IconId::ArrowRight: case IconId::ArrowDown: case IconId::Search:
+        case IconId::Folder: case IconId::FolderOpen: case IconId::FolderNew:
+        case IconId::File: case IconId::FileCode: case IconId::FileImage: case IconId::FileArchive:
+        case IconId::ViewDetail: case IconId::ViewList: case IconId::ViewGrid:
+        case IconId::Eye: case IconId::EyeOff:
+            return true;
+        default:
+            return false;
         }
     }
 
