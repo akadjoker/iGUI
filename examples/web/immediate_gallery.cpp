@@ -9,7 +9,9 @@
 #include <emscripten/html5.h>
 #endif
 
+#include <algorithm>
 #include <cstdio>
+#include <cstring>
 
 namespace
 {
@@ -25,6 +27,8 @@ const ig::StringView kFruit[] = {
     ig::StringView("grape"), ig::StringView("lemon"), ig::StringView("mango"),
     ig::StringView("orange"), ig::StringView("peach")
 };
+
+const int kWeight[] = {182, 118, 8, 5, 58, 207, 131, 150};
 
 const char *kSample =
     "#include <cstdio>\n"
@@ -161,6 +165,22 @@ void listsSection(ig::Context &ui)
     ui.listBox("fruit", g.listChoice, ig::Span<const ig::StringView>(kFruit), 200.0f, 5);
 
     ui.separatorText("Table");
+    int order[6] = {0, 1, 2, 3, 4, 5};
+    if (g.sortColumn == 0)
+    {
+        std::sort(order, order + 6, [](int a, int b)
+        {
+            const int result = std::strcmp(kFruit[a].data(), kFruit[b].data());
+            return g.sortAscending ? result < 0 : result > 0;
+        });
+    }
+    else if (g.sortColumn == 2)
+    {
+        std::sort(order, order + 6, [](int a, int b)
+        {
+            return g.sortAscending ? kWeight[a] < kWeight[b] : kWeight[a] > kWeight[b];
+        });
+    }
     if (ui.beginTable("table", 3, 420.0f))
     {
         ui.tableNextColumn();
@@ -168,15 +188,16 @@ void listsSection(ig::Context &ui)
         ui.tableNextColumn();
         ui.tableHeader("kind", g.sortColumn, g.sortAscending);
         ui.tableNextColumn();
-        ui.tableHeader("size", g.sortColumn, g.sortAscending);
-        for (int row = 0; row < 4; ++row)
+        ui.tableHeader("weight", g.sortColumn, g.sortAscending);
+        for (int row = 0; row < 6; ++row)
         {
+            const int item = order[row];
             ui.tableNextColumn();
-            ui.label(kFruit[row]);
+            ui.label(kFruit[item]);
             ui.tableNextColumn();
             ui.label("fruit");
             ui.tableNextColumn();
-            ui.label(numbered("1", row, " g"));
+            ui.label(numbered("", kWeight[item], " g"));
         }
         ui.endTable();
     }
@@ -205,12 +226,12 @@ void layoutSection(ig::Context &ui)
     ui.separatorText("Property rows");
     if (ui.beginPropertyRow("position"))
     {
-        ui.dragFloat3("##pos", g.vec3[0], g.vec3[1], g.vec3[2], -10.0f, 10.0f, 0.05f, 220.0f);
+        ui.dragFloat3("position", g.vec3[0], g.vec3[1], g.vec3[2], -10.0f, 10.0f, 0.05f, 220.0f);
         ui.endPropertyRow();
     }
     if (ui.beginPropertyRow("enabled"))
     {
-        ui.checkbox("##enabled", g.enabled);
+        ui.checkbox("on", g.enabled);
         ui.endPropertyRow();
     }
 
@@ -298,6 +319,9 @@ void frame(void *)
         ui.unindent(10.0f);
         ui.endWindow();
     }
+
+    if (g.floatingOpen)
+        ui.raiseWindow("Floating window");
 
     if (g.dialogOpen && ui.beginDialog("Dialog", g.dialogOpen, ig::Vec2(320.0f, 150.0f)))
     {
