@@ -291,6 +291,7 @@ class ColorPicker : public Widget
 {
 public:
     ColorPicker();
+    ~ColorPicker() override;
 
     /// @brief Set the picker color.
     void  setColor(const Color& c);
@@ -335,6 +336,22 @@ private:
     float      alpha_      = 1.f;
     bool       showAlpha_  = false;
     DragTarget dragTarget_ = DragNone;
+
+    // The wheel and the bars are rendered per pixel at twice the size into
+    // textures, so their edges are anti-aliased and the gradients continuous.
+    void          releaseTextures();
+    TextureHandle buildWheelTexture(float radius);
+    TextureHandle buildBarTexture(int height, bool alphaBar);
+    TextureHandle wheelTex_{};
+    TextureHandle valueTex_{};
+    TextureHandle alphaTex_{};
+    float         wheelTexRadius_ = 0.f;
+    float         wheelTexVal_    = -1.f;
+    float         barTexHue_      = -1.f;
+    float         barTexSat_      = -1.f;
+    float         barTexVal_      = -1.f;
+    int           barTexHeight_   = 0;
+    ct::Vector<unsigned char> texPixels_;
 };
 
 } // namespace retained
