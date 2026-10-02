@@ -224,6 +224,28 @@ The SDL2 ([adapters/sdl2](adapters/sdl2)) and Raylib ([adapters/raylib](adapters
 
 The retained SDL2 demo is built with AddressSanitizer enabled on GCC and Clang.
 
+### Web gallery
+
+Both widget APIs also build to WebAssembly with Emscripten. The galleries run in the browser on SDL2's Emscripten port and are published to GitHub Pages by `.github/workflows/pages.yml` on every push to `main`.
+
+| Page | Target | Content |
+| --- | --- | --- |
+| `immediate.html` | `igui_web_immediate` | Immediate-mode widgets in six sections: basic, inputs, lists and tables, layout, windows and dialogs, code editor |
+| `retained.html` | `igui_web_retained` | The retained-mode stages, from basic widgets to dock panels, node editor, timeline and file dialog |
+| `index.html` | | Page with a tab for each gallery (`web/index.html`) |
+
+To build locally, activate an Emscripten SDK and run:
+
+```sh
+emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release \
+    -DIGUI_BUILD_WEB=ON -DIGUI_BUILD_TESTS=OFF -DIGUI_BUILD_LEGACY=OFF -DIGUI_BUILD_RAYLIB_BACKEND=OFF
+cmake --build build-web --target igui_web_immediate igui_web_retained
+cp web/index.html build-web/
+python3 -m http.server -d build-web 8000
+```
+
+The file dialog in the retained gallery browses the in-browser virtual filesystem, not the visitor's disk.
+
 ## Project layout
 
 ```
