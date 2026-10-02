@@ -255,4 +255,4 @@ Registered tests: `igui_core`, `igui_widget_gallery`, `igui_both_modes`, `igui_o
 
 ## License
 
-No license file is currently included in this repository. Add one before distributing or accepting contributions.
+Released under the [MIT License](LICENSE).
