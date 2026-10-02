@@ -1220,7 +1220,7 @@ TextureHandle ColorPicker::buildBarTexture(int height, bool alphaBar)
 
 void ColorPicker::setColor(const Color& c) { rgbToHsv(c,hue_,sat_,val_); alpha_=c.a/255.f; markDirty(); }
 Color ColorPicker::color() const { return hsvToRgb(hue_,sat_,val_,alpha_); }
-Widget::Vec2f ColorPicker::sizeHint() const { return {220.f,260.f}; }
+Widget::Vec2f ColorPicker::sizeHint() const { return {150.f,170.f}; }
 
 float ColorPicker::wheelRadius (const Rect& abs) const { float bs=30.f+(showAlpha_?30.f:0.f), av=std::min(abs.w-bs,abs.h-44.f); return std::max(20.f,av*0.5f); }
 float ColorPicker::wheelCenterX(const Rect& abs) const { return abs.x+wheelRadius(abs)+4.f; }
