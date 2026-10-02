@@ -38,7 +38,7 @@ class FontAtlas : public TextProvider
 public:
     FontAtlas();
     FontAtlas(Span<const FontRange> ranges, uint32_t width, uint32_t height,
-              float bakedSize = 14.0f);
+              float bakedSize = 16.0f);
 
     bool valid() const;
     FontId defaultFont() const;
