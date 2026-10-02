@@ -474,6 +474,26 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
 
     // Same construction as addCircleFilled: a fan over the solid interior plus
     // a one-pixel transparent ring that gives the silhouette its soft edge.
+    // A rectangle cut by its clip keeps only the triangles that can touch it.
+    auto emit = [this, &clip](uint32_t a, uint32_t b, uint32_t c) -> uint32_t
+    {
+        const Vec2 &pa = vertices_[a].position;
+        const Vec2 &pb = vertices_[b].position;
+        const Vec2 &pc = vertices_[c].position;
+        const float minX = pa.x < pb.x ? (pa.x < pc.x ? pa.x : pc.x) : (pb.x < pc.x ? pb.x : pc.x);
+        const float maxX = pa.x > pb.x ? (pa.x > pc.x ? pa.x : pc.x) : (pb.x > pc.x ? pb.x : pc.x);
+        const float minY = pa.y < pb.y ? (pa.y < pc.y ? pa.y : pc.y) : (pb.y < pc.y ? pb.y : pc.y);
+        const float maxY = pa.y > pb.y ? (pa.y > pc.y ? pa.y : pc.y) : (pb.y > pc.y ? pb.y : pc.y);
+        if (outsideClip(minX, minY, maxX, maxY, clip) ||
+            minX >= clip.x + clip.width + CullMargin || minY >= clip.y + clip.height + CullMargin ||
+            maxX <= clip.x - CullMargin || maxY <= clip.y - CullMargin)
+            return 0u;
+        indices_.push_back(static_cast<DrawIndex>(a));
+        indices_.push_back(static_cast<DrawIndex>(b));
+        indices_.push_back(static_cast<DrawIndex>(c));
+        return 3u;
+    };
+    uint32_t emitted = 0u;
     for (uint32_t i = 0; i < pointCount; ++i)
     {
         const uint32_t next = (i + 1u) % pointCount;
@@ -482,18 +502,16 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
         const uint32_t outerIndex = firstVertex + 1u + pointCount + i;
         const uint32_t outerNext = firstVertex + 1u + pointCount + next;
 
-        indices_.push_back(firstVertex);
-        indices_.push_back(innerIndex);
-        indices_.push_back(innerNext);
-
-        indices_.push_back(innerIndex);
-        indices_.push_back(outerIndex);
-        indices_.push_back(outerNext);
-        indices_.push_back(innerIndex);
-        indices_.push_back(outerNext);
-        indices_.push_back(innerNext);
+        emitted += emit(firstVertex, innerIndex, innerNext);
+        emitted += emit(innerIndex, outerIndex, outerNext);
+        emitted += emit(innerIndex, outerNext, innerNext);
     }
-    addGeometryCommand(commands_, firstIndex, pointCount * 9u, clip);
+    if (emitted == 0u)
+    {
+        vertices_.resize(firstVertex);
+        return;
+    }
+    addGeometryCommand(commands_, firstIndex, emitted, clip);
 }
 
 void DrawList::addArc(const Vec2 &center, float radius, float from, float to,

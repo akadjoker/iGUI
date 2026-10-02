@@ -15,6 +15,21 @@ namespace
 
 const float GizmoPi = 3.14159265358979323846f;
 
+// A one pixel border drawn as two nested rounded fills: cheaper than stroking
+// the outline segment by segment, and both silhouettes are anti-aliased.
+void drawFrame(DrawList &list, const Rect &rect, const Color &fill, const Color &border,
+               float radius, const Rect &clip)
+{
+    if (border.a == 0u || rect.width <= 2.0f || rect.height <= 2.0f)
+    {
+        list.addRectFilledRounded(rect, radius, fill, clip);
+        return;
+    }
+    list.addRectFilledRounded(rect, radius, border, clip);
+    list.addRectFilledRounded(Rect(rect.x + 1.0f, rect.y + 1.0f, rect.width - 2.0f, rect.height - 2.0f),
+                              radius > 1.0f ? radius - 1.0f : 0.0f, fill, clip);
+}
+
 enum GizmoAxis2D : uint8_t
 {
     GizmoAxisNone,
@@ -986,7 +1001,8 @@ bool Context::button(StringView labelText, const Rect &bounds)
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
     const Color background = hovered ? theme_.buttonHovered : theme_.buttonBackground;
-    drawList->addRectFilled(rect, background, clip);
+    drawFrame(*drawList, rect, background, hovered ? theme_.inputBorderHover : theme_.buttonBorder,
+              theme_.borderRadius, clip);
 
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     const Vec2 textPosition(rect.x + (rect.width - metrics.width) * 0.5f,
@@ -1009,7 +1025,8 @@ bool Context::smallButton(StringView labelText, const Rect &bounds)
     const WidgetId id = combineIds(makeWidgetId(labelText), 0x534d414c4c42544eull);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
-    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
+              hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
     const float fontSize = theme_.fontSize * 0.82f;
     const TextMetrics metrics = measureText(theme_.font, labelText, fontSize);
     drawText(*drawList, theme_.font, labelText,
@@ -1038,7 +1055,8 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
 
     const Color checkboxColor = value ? theme_.checkboxChecked
                                       : (hovered ? theme_.buttonHovered : theme_.checkboxBackground);
-    drawList->addRectFilled(box, checkboxColor, clip);
+    drawFrame(*drawList, box, checkboxColor, hovered ? theme_.inputBorderHover : theme_.inputBorder,
+              theme_.borderRadius, clip);
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     const Vec2 textPosition(box.x + box.width + theme_.windowPadding * 0.5f,
                             box.y + (box.height - metrics.height) * 0.5f);
@@ -1137,7 +1155,7 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
     const Color background = selected ? theme_.selectableSelected
                                       : (hovered ? theme_.selectableHovered
                                                  : theme_.selectableBackground);
-    drawList->addRectFilled(rect, background, clip);
+    drawList->addRectFilledRounded(rect, theme_.borderRadius, background, clip);
 
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
     const Vec2 textPosition(rect.x + theme_.windowPadding * 0.5f,
@@ -1164,7 +1182,8 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect 
     if (itemClicked(rect, clip, id))
         expanded = !expanded;
 
-    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.collapsibleHeaderBg, clip);
+    drawList->addRectFilledRounded(rect, theme_.borderRadius,
+                                   hovered ? theme_.buttonHovered : theme_.collapsibleHeaderBg, clip);
     const float arrowSize = rect.height * 0.22f;
     const float arrowX = rect.x + theme_.windowPadding;
     const float arrowY = rect.y + rect.height * 0.5f;
@@ -1598,7 +1617,8 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
 
-    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
+              hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
     const TextMetrics selectedMetrics = measureText(theme_.font, items[static_cast<Span<const StringView>::size_type>(currentItem)],
                                                     theme_.fontSize);
     drawText(*drawList, theme_.font, items[static_cast<Span<const StringView>::size_type>(currentItem)],
@@ -2008,9 +2028,10 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     drawText(*drawList, theme_.font, labelText,
              Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
-    drawList->addRectFilled(track, theme_.sliderBackground, clip);
-    drawList->addRectFilled(Rect(track.x, track.y, track.width * normalized, track.height),
-                            theme_.sliderFilled, clip);
+    const float trackRadius = track.height * 0.5f;
+    drawList->addRectFilledRounded(track, trackRadius, theme_.sliderBackground, clip);
+    drawList->addRectFilledRounded(Rect(track.x, track.y, track.width * normalized, track.height),
+                                   trackRadius, theme_.sliderFilled, clip);
     drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f),
                               rect.height * 0.28f, theme_.sliderHandle, clip);
 
@@ -2126,7 +2147,8 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     {
         char number[48];
         snprintf(number, sizeof(number), "%.3f", static_cast<double>(value));
-        drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+        drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
+                  hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
         drawText(*drawList, theme_.font, labelText, Vec2(rect.x + 6, rect.y + 5),
                  theme_.fontSize, theme_.buttonText, visible);
         const TextMetrics metrics = measureText(theme_.font, number, theme_.fontSize);
@@ -2715,11 +2737,11 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
     drawText(*drawList, theme_.font, labelText,
              Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
-    drawList->addRectFilled(decrement,
-                            decrementHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
-    drawList->addRectFilled(valueRect, theme_.inputBg, clip);
-    drawList->addRectFilled(increment,
-                            incrementHovered ? theme_.buttonHovered : theme_.buttonBackground, clip);
+    drawFrame(*drawList, decrement, decrementHovered ? theme_.buttonHovered : theme_.buttonBackground,
+              decrementHovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
+    drawFrame(*drawList, valueRect, theme_.inputBg, theme_.inputBorder, theme_.borderRadius, clip);
+    drawFrame(*drawList, increment, incrementHovered ? theme_.buttonHovered : theme_.buttonBackground,
+              incrementHovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
 
     const String displayed = String::number(value);
     const TextMetrics valueMetrics = measureText(theme_.font, displayed, theme_.fontSize);
@@ -2906,7 +2928,9 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
 
     const Color background = focused ? theme_.buttonHovered
                                      : (hovered ? theme_.buttonHovered : theme_.buttonBackground);
-    drawList->addRectFilled(rect, background, clip);
+    drawFrame(*drawList, rect, background,
+              focused ? theme_.focusColor : (hovered ? theme_.inputBorderHover : theme_.inputBorder),
+              theme_.borderRadius, clip);
     const TextMetrics metrics = measureText(theme_.font, value, theme_.fontSize);
     const float leftPadding = theme_.windowPadding * 0.5f;
     const float availableWidth = rect.width - theme_.windowPadding;
@@ -3077,7 +3101,9 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
 
     const Color background = focused ? theme_.buttonHovered
                                      : (hovered ? theme_.buttonHovered : theme_.inputBg);
-    drawList->addRectFilled(rect, background, clip);
+    drawFrame(*drawList, rect, background,
+              focused ? theme_.focusColor : (hovered ? theme_.inputBorderHover : theme_.inputBorder),
+              theme_.borderRadius, clip);
     drawText(*drawList, theme_.font, value,
              Vec2(textArea.x + padding, textArea.y + padding - static_cast<float>(*scroll) * lineHeight),
              theme_.fontSize, theme_.buttonText, textClip);
@@ -4009,9 +4035,9 @@ void Context::progressBar(float value, float maximum, const Rect &bounds)
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
     const float normalized = maximum > 0.0f ? clamp(value / maximum, 0.0f, 1.0f) : 0.0f;
-    drawList->addRectFilled(rect, theme_.progressBackground, clip);
-    drawList->addRectFilled(Rect(rect.x, rect.y, rect.width * normalized, rect.height),
-                            theme_.progressFilled, clip);
+    drawList->addRectFilledRounded(rect, theme_.borderRadius, theme_.progressBackground, clip);
+    drawList->addRectFilledRounded(Rect(rect.x, rect.y, rect.width * normalized, rect.height),
+                                   theme_.borderRadius, theme_.progressFilled, clip);
 }
 
 MessageBoxResult Context::messageBox(StringView title, StringView message, bool &open,

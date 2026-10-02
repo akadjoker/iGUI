@@ -275,6 +275,30 @@ size_t offClipTriangles(const ig::DrawData &data)
     return count;
 }
 
+size_t scrolledChildVertices(int rows)
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    auto build = [rows](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        if (c.beginChild("child", 150.0f, true, 300.0f))
+        {
+            for (int i = 0; i < rows; ++i)
+            {
+                char label[16];
+                snprintf(label, sizeof(label), "row %d", i);
+                c.button(label);
+            }
+            c.endChild();
+        }
+        c.endWindow();
+    };
+    harness.frame(build);
+    return harness.frame(build).vertices.size();
+}
+
 void test_scrolled_child_emits_only_visible_rows()
 {
     ig::TestBackend backend;
@@ -298,14 +322,15 @@ void test_scrolled_child_emits_only_visible_rows()
     harness.frame(build);
     const ig::DrawData &data = harness.frame(build);
     check(offClipTriangles(data) == 0u, "child: geometry outside its clip");
-    // 150px shows ~5 of the 28px rows; before culling this frame had 1232
-    // vertices and 300 text commands.
+    // 150px shows ~5 of the 28px rows.
     size_t text = 0u;
     for (size_t i = 0; i < data.commands.size(); ++i)
         if (data.commands[i].type == ig::DrawCommandType::Text)
             ++text;
     check(text <= 8u, "child: text commands for rows scrolled out of view");
-    check(data.vertices.size() < 120u, "child: vertex count does not scale with hidden rows");
+    // Hidden rows must cost nothing: ten times more rows, same geometry.
+    check(scrolledChildVertices(300) == scrolledChildVertices(30),
+          "child: vertex count does not scale with hidden rows");
 }
 
 void test_off_screen_window_emits_nothing()
@@ -347,7 +372,7 @@ void test_partly_visible_window_keeps_its_visible_part()
     const ig::DrawData &data = harness.frame(build);
     check(offClipTriangles(data) == 0u, "edge window: geometry outside its clip");
     // The button's left end (x 1208..1280) is on screen and still drawn.
-    check(harness.hasVertexAt(1208.0f, 132.0f), "edge window: visible part of the button missing");
+    check(harness.hasVertexNear(1208.0f, 132.0f, 6.0f), "edge window: visible part of the button missing");
     harness.click(1240.0f, 150.0f, build);
     check(clicked, "edge window: visible part of the button not clickable");
 }

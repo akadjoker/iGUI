@@ -301,6 +301,7 @@ bool Backend::renderText(const DrawData &data, const TextCommand &command)
         return false;
 
     const float scale = command.logicalSize / fontAtlas_.bakedSize();
+    const bool snapToPixels = std::fabs(scale - 1.0f) < 0.001f;
     float penX = command.position.x;
     float penY = command.position.y + fontAtlas_.ascent() * scale;
     StringView text(data.textBytes.data() + command.textOffset, command.textSize);
@@ -324,6 +325,11 @@ bool Backend::renderText(const DrawData &data, const TextCommand &command)
             SDL_FRect destination;
             destination.x = penX + glyphInfo->offsetX * scale;
             destination.y = penY + glyphInfo->offsetY * scale;
+            if (snapToPixels)
+            {
+                destination.x = std::floor(destination.x + 0.5f);
+                destination.y = std::floor(destination.y + 0.5f);
+            }
             destination.w = static_cast<float>(glyphInfo->width) * scale;
             destination.h = static_cast<float>(glyphInfo->height) * scale;
             if (SDL_RenderCopyF(renderer_, fontTexture_, &source, &destination) != 0)

@@ -107,7 +107,7 @@ bool decodeUtf8(StringView text, StringView::size_type &offset, uint32_t &codepo
     return true;
 }
 
-FontAtlas::FontAtlas() : FontAtlas(defaultFontRanges(), 2048u, 1024u, 14.0f) {}
+FontAtlas::FontAtlas() : FontAtlas(defaultFontRanges(), 2048u, 1024u, 16.0f) {}
 
 FontAtlas::FontAtlas(Span<const FontRange> requestedRanges, uint32_t atlasWidth,
                      uint32_t atlasHeight, float requestedBakedSize)
