@@ -326,6 +326,9 @@ namespace ig { namespace retained
         void pathArcToFast(Vec2 center, float radius, int aMinOf12, int aMaxOf12);
         void pathFillConvex(const Color &color);
         void pathStroke(const Color &color, float thickness, bool closed);
+        /// Anti-aliased edges on filled paths, strokes and lines (on by default).
+        void setAntiAliasing(bool on) { antiAliasing_ = on; }
+        bool antiAliasing() const { return antiAliasing_; }
         void pathClear();
 
         const ct::Vector<DrawVertex> &vertices() const { return vertices_; }
@@ -343,6 +346,7 @@ namespace ig { namespace retained
 
         ct::Vector<Rect>       clipStack_;
         ct::Vector<Vec2>       path_;
+        bool                   antiAliasing_ = true;
         TextureHandle           fontTexture_;
         Vec2                    whiteUV_;
         ct::Vector<DrawVertex> vertices_;
