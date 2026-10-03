@@ -38,8 +38,8 @@ void test_click_hits_only_its_own_button()
 
     harness.frame(build);
     // Window padding places the first widget at (8, 32), not (0, 0).
-    assert(harness.hasVertexAt(8.0f, 32.0f));
-    assert(harness.hasVertexAt(98.0f, 32.0f));
+    assert(harness.hasVertexNear(8.0f, 32.0f, 6.0f));
+    assert(harness.hasVertexNear(98.0f, 32.0f, 6.0f));
 
     harness.click(18.0f, 42.0f, build);
     assert(clickedA && !clickedB);
@@ -79,8 +79,8 @@ void test_first_button_at_a_point_wins_the_overlap()
     harness.frame(build);
     // base at (18, 42)-(118, 82), overlay at (68, 42)-(118, 82): they share
     // (68, 42)-(118, 82).
-    assert(harness.hasVertexAt(18.0f, 42.0f));
-    assert(harness.hasVertexAt(68.0f, 42.0f));
+    assert(harness.hasVertexNear(18.0f, 42.0f, 6.0f));
+    assert(harness.hasVertexNear(68.0f, 42.0f, 6.0f));
 
     harness.click(80.0f, 55.0f, build); // shared area: base was drawn first
     assert(clickedBase && !clickedOverlay);
@@ -105,7 +105,7 @@ void test_drag_reports_intermediate_state()
     };
 
     harness.frame(build);
-    assert(harness.hasVertexAt(32.0f, 51.2f)); // slider track top-left
+    assert(harness.hasVertexNear(32.0f, 51.2f, 6.0f)); // slider track top-left
 
     const int before = frameCount;
     harness.drag(32.0f, 54.0f, 114.0f, 54.0f, build, 5);
@@ -126,8 +126,8 @@ void test_vertex_and_color_queries()
         c.endWindow();
     });
 
-    assert(harness.hasVertexAt(28.0f, 52.0f));
-    assert(!harness.hasVertexAt(999.0f, 999.0f));
+    assert(harness.hasVertexNear(28.0f, 52.0f, 6.0f));
+    assert(!harness.hasVertexNear(999.0f, 999.0f, 6.0f));
     assert(harness.colorAtVertex(28.0f, 52.0f) == ig::Color(255u, 0u, 0u, 255u));
     assert(harness.colorAtVertex(999.0f, 999.0f).a == 0u);
     assert(harness.vertexCount() > 0u);
@@ -162,9 +162,9 @@ void test_dialog_blocks_and_closes()
 
     harness.frame(build);
     // Centred in the 1280x800 viewport: (450, 260)-(830, 540).
-    assert(harness.hasVertexAt(450.0f, 260.0f));
+    assert(harness.hasVertexNear(450.0f, 260.0f, 6.0f));
     // Content starts below the title bar, at (450, 288).
-    assert(harness.hasVertexAt(450.0f, 288.0f));
+    assert(harness.hasVertexNear(450.0f, 288.0f, 6.0f));
 
     harness.click(100.0f, 100.0f, build);
     assert(!clickedBehind);

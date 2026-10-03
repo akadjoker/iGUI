@@ -266,6 +266,32 @@ static bool hasVertexAt(const ig::DrawData &data, float x, float y)
     return false;
 }
 
+// Buttons have rounded corners, so no vertex sits exactly on the top-left
+// corner; the outline starts within the corner radius of it.
+static bool hasVertexNear(const ig::DrawData &data, float x, float y, float radius)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        const float dx = data.vertices[i].position.x - x;
+        const float dy = data.vertices[i].position.y - y;
+        if (dx * dx + dy * dy <= radius * radius)
+            return true;
+    }
+    return false;
+}
+
+// Colour of the last (topmost) vertex found at (x, y): a rounded frame draws its
+// border first and the fill over it, and both fans are centred on the box.
+static ig::Color colorAtTopVertex(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = data.vertices.size(); i-- > 0;)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return data.vertices[i].color;
+    }
+    return ig::Color(0u, 0u, 0u, 0u);
+}
+
 // Colour of the first vertex found at (x, y), or a sentinel when none is there.
 // Same rationale as hasVertexAt: locate the widget by where it is drawn, not by
 // its index in the buffer.
@@ -381,8 +407,8 @@ static void test_automatic_layout()
     // fixed vertex index: anything drawn earlier in the frame (the window chrome
     // grew a maximize glyph in e2d7d42, for example) shifts every later index
     // without moving a single widget, and this test is about the layout.
-    assert(hasVertexAt(data, 18.0f, 42.0f));   // button "one", top-left
-    assert(hasVertexAt(data, 88.0f, 42.0f));   // button "two", after sameLine()
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // button "one", top-left
+    assert(hasVertexNear(data, 88.0f, 42.0f, 6.0f));   // button "two", after sameLine()
     assert(hasVertexAt(data, 18.0f, 76.0f));   // separator, below both buttons
 }
 
@@ -459,7 +485,7 @@ static void test_selectable()
     assert(foundSelectedBackground);
 }
 
-static void test_progress_bar()
+static int filledVertexCountFor(bool withZeroMax)
 {
     TestBackend backend;
     ig::Context context(backend);
@@ -467,7 +493,8 @@ static void test_progress_bar()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.progressBar(50.0f, 100.0f, ig::Rect(8.0f, 8.0f, 120.0f, 20.0f));
     context.progressBar(200.0f, 100.0f, ig::Rect(8.0f, 36.0f, 120.0f, 20.0f));
-    context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
+    if (withZeroMax)
+        context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
     context.endWindow();
     const ig::DrawData &data = context.endFrame();
 
@@ -478,9 +505,17 @@ static void test_progress_bar()
         if (data.vertices[i].color == filledColor)
             ++filledVertexCount;
     }
-    // The valid 50% and clamped 200% values each produce one filled quad;
-    // a zero maximum must be ignored rather than producing invalid geometry.
-    assert(filledVertexCount == 8);
+    return filledVertexCount;
+}
+
+static void test_progress_bar()
+{
+    // The valid 50% and clamped 200% values each produce a filled shape (rounded
+    // by the theme, so no fixed vertex count); a zero maximum must be ignored
+    // rather than producing invalid geometry.
+    const int withTwo = filledVertexCountFor(false);
+    assert(withTwo > 0);
+    assert(filledVertexCountFor(true) == withTwo);
 }
 
 static void test_automatic_selectable_and_progress_bar()
@@ -498,11 +533,11 @@ static void test_automatic_selectable_and_progress_bar()
 
     // Located by geometry rather than by fixed vertex index - see the note in
     // test_automatic_layout above.
-    assert(hasVertexAt(data, 18.0f, 42.0f));   // selectable, top-left
-    assert(hasVertexAt(data, 18.0f, 76.0f));   // progress bar, below it
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // selectable, top-left
+    assert(hasVertexNear(data, 18.0f, 76.0f, 6.0f));   // progress bar, below it
     // The bar is filled to 1.0 of 2.0, so its fill ends halfway across its
     // 100-unit width: x == 18 + 50.
-    assert(hasVertexAt(data, 68.0f, 76.0f));
+    assert(hasVertexNear(data, 68.0f, 76.0f, 6.0f));
 }
 
 static void test_slider_captures_pointer()
@@ -531,10 +566,10 @@ static void test_slider_captures_pointer()
     assert(!checked);
     // While the slider holds the pointer capture, the checkbox must stay in its
     // normal colour even though the pointer moved over it. Its box is laid out
-    // at (26, 50) - the Rect passed to checkbox() is a size hint the automatic
+    // at (26, 50), 18 wide, so its fill fan is centred on (35, 59) - the Rect passed to checkbox() is a size hint the automatic
     // layout places, not an absolute offset. Located by that position rather
     // than by a fixed vertex index (see test_automatic_layout).
-    const ig::Color checkboxColor = colorAtVertex(data, 26.0f, 50.0f);
+    const ig::Color checkboxColor = colorAtTopVertex(data, 35.0f, 59.0f);
     assert(checkboxColor.r == 55u);
     assert(checkboxColor.g == 55u);
     assert(checkboxColor.b == 65u);
