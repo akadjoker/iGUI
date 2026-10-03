@@ -654,6 +654,155 @@ static void drawDockSpace(ig::Context &context, bool &hierarchyVisible, bool &as
     context.endWindow();
 }
 
+// Every tab of a slot calls beginDockPanel, and the inactive ones used to draw the region's background again, over the
+// content of the active tab that had been built before them.
+static void test_dock_tabs_of_one_slot_do_not_cover_each_other()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool hierarchy = false;
+    bool assets = false;
+    bool inspector = false;
+    bool console = false;
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+        drawDockSpace(context, hierarchy, assets, inspector, console);
+        const ig::DrawData &data = context.endFrame();
+        assert(hierarchy && !assets);
+
+        // The command of the label of the active tab of the left slot.
+        int label = -1;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text)
+                continue;
+            const ig::TextCommand &text = command.payload.text;
+            if (text.textSize == 5u && data.textBytes.size() >= text.textOffset + 5u &&
+                ig::StringView(data.textBytes.data() + text.textOffset, 5u) == ig::StringView("scene"))
+            {
+                label = static_cast<int>(i);
+            }
+        }
+        assert(label >= 0);
+
+        // After it, nothing may paint a panel-sized background of the region's colour.
+        const ig::Color regionColor = context.theme().inputBg;
+        for (size_t i = static_cast<size_t>(label) + 1u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Geometry)
+                continue;
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k + 2u < geometry.indexCount; k += 3u)
+            {
+                const ig::DrawVertex *corners[3];
+                for (uint32_t c = 0u; c < 3u; ++c)
+                {
+                    corners[c] = &data.vertices[static_cast<size_t>(geometry.vertexOffset) +
+                                                data.indices[geometry.firstIndex + k + c]];
+                }
+                if (!(corners[0]->color == regionColor))
+                    continue;
+                float minX = corners[0]->position.x, maxX = minX, minY = corners[0]->position.y, maxY = minY;
+                for (uint32_t c = 1u; c < 3u; ++c)
+                {
+                    minX = corners[c]->position.x < minX ? corners[c]->position.x : minX;
+                    maxX = corners[c]->position.x > maxX ? corners[c]->position.x : maxX;
+                    minY = corners[c]->position.y < minY ? corners[c]->position.y : minY;
+                    maxY = corners[c]->position.y > maxY ? corners[c]->position.y : maxY;
+                }
+                // The left region is 180 wide and 150 high; the other regions reach further right.
+                assert(!(maxX < 210.0f && maxX - minX > 150.0f && maxY - minY > 100.0f));
+            }
+        }
+    }
+}
+
+static void test_dock_sizes_can_be_set()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float leftWidth = 0.0f;
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(900.0f, 600.0f));
+        assert(context.beginWindow("dock host", ig::Rect(10.0f, 10.0f, 860.0f, 560.0f)));
+        assert(context.beginDockSpace("editor", ig::Rect(8.0f, 8.0f, 820.0f, 480.0f)));
+        if (frame == 0)
+            context.setDockSizes(300.0f, 0.0f, 0.0f);
+        if (context.beginDockPanel("Left", ig::DockSlot::Left))
+            context.endDockPanel();
+        context.endDockSpace();
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+
+        // The region of the left slot is the first big rectangle in the region colour.
+        const ig::Color regionColor = context.theme().inputBg;
+        leftWidth = 0.0f;
+        for (size_t i = 0u; i < data.commands.size() && leftWidth == 0.0f; ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Geometry)
+                continue;
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k + 2u < geometry.indexCount; k += 3u)
+            {
+                const ig::DrawVertex &a = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k]];
+                const ig::DrawVertex &b = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k + 1u]];
+                const ig::DrawVertex &c = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k + 2u]];
+                if (!(a.color == regionColor))
+                    continue;
+                const float minX = a.position.x < b.position.x ? (a.position.x < c.position.x ? a.position.x : c.position.x)
+                                                                : (b.position.x < c.position.x ? b.position.x : c.position.x);
+                const float maxX = a.position.x > b.position.x ? (a.position.x > c.position.x ? a.position.x : c.position.x)
+                                                                : (b.position.x > c.position.x ? b.position.x : c.position.x);
+                if (maxX - minX > 100.0f)
+                {
+                    leftWidth = maxX - minX;
+                    break;
+                }
+            }
+        }
+    }
+    // 300 asked for; the region may be a few pixels narrower for the splitter.
+    assert(leftWidth > 280.0f && leftWidth < 320.0f);
+}
+
+static void test_draw_polygon_filled()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(300.0f, 300.0f));
+    assert(context.beginWindow("poly", ig::Rect(20.0f, 20.0f, 200.0f, 200.0f)));
+    const ig::Vec2 triangle[] = {ig::Vec2(10.0f, 10.0f), ig::Vec2(60.0f, 10.0f), ig::Vec2(10.0f, 70.0f)};
+    context.drawPolygonFilled(ig::Span<const ig::Vec2>(triangle), ig::Color(1u, 2u, 3u, 255u));
+    // Fewer than three points draws nothing and is not an error.
+    context.drawPolygonFilled(ig::Span<const ig::Vec2>(triangle, 2u), ig::Color(9u, 9u, 9u, 255u));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+    // The triangle's vertices are the points shifted by the window's content origin, all of them in the colour asked for.
+    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+    int found = 0;
+    for (size_t i = 0u; i < data.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &v = data.vertices[i];
+        if (!(v.color == ig::Color(1u, 2u, 3u, 255u)))
+            continue;
+        ++found;
+        minX = v.position.x < minX ? v.position.x : minX;
+        maxX = v.position.x > maxX ? v.position.x : maxX;
+        minY = v.position.y < minY ? v.position.y : minY;
+        maxY = v.position.y > maxY ? v.position.y : maxY;
+    }
+    assert(found >= 3);
+    assert(maxX - minX > 49.5f && maxX - minX < 50.5f);
+    assert(maxY - minY > 59.5f && maxY - minY < 60.5f);
+    for (size_t i = 0u; i < data.vertices.size(); ++i)
+        assert(!(data.vertices[i].color == ig::Color(9u, 9u, 9u, 255u)));
+}
+
 static void test_dock_space()
 {
     WidgetBackend backend;
@@ -2408,6 +2557,9 @@ int main()
     test_navigation_widgets();
     test_history_and_keyboard_navigation();
     test_dock_space();
+    test_dock_tabs_of_one_slot_do_not_cover_each_other();
+    test_dock_sizes_can_be_set();
+    test_draw_polygon_filled();
     test_full_client_dock_space_and_theme_presets();
     test_dock_panel_close_button();
     test_editor_widgets();

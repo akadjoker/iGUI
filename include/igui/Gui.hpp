@@ -445,6 +445,8 @@ public:
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
     void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
+    // A filled simple polygon (convex or not), points in the same content space as the other draw* calls.
+    void drawPolygonFilled(Span<const Vec2> points, const Color &color);
     // Rounded rectangles, filled and outline. A large radius on a square gives
     // a circle, so one call covers pills, cards and step-sequencer cells.
     void drawRectFilledRounded(const Rect &bounds, float radius, const Color &color);
@@ -586,6 +588,9 @@ public:
     bool beginDockSpace(StringView id, float topInset);
     bool beginDockSpace(StringView id, const Rect &bounds);
     void endDockSpace();
+    // Sets the size of the side regions of the dock space being built (left and right width, bottom height); a value
+    // of 0 or less keeps the current one. Call it once, on the first frame: the user can drag the splitters after.
+    void setDockSizes(float leftWidth, float rightWidth, float bottomHeight);
     // Pass open to render a close button in the tab; closing it sets *open to false.
     bool beginDockPanel(StringView title, DockSlot slot = DockSlot::Center, bool *open = nullptr);
     void endDockPanel();
@@ -762,6 +767,8 @@ private:
         bool tabListOpen[4];
         bool tabBarHidden[4];
         uint64_t tabBarFrame[4];
+        // Frame in which the region of each slot was last drawn (every tab of a slot calls beginDockPanel).
+        uint64_t regionFrame[4];
         ct::Vector<DockTabState> tabs;
 
         DockSpaceState() : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f), tabs()
@@ -772,6 +779,7 @@ private:
                 tabListOpen[i] = false;
                 tabBarHidden[i] = false;
                 tabBarFrame[i] = 0u;
+                regionFrame[i] = 0u;
             }
         }
     };
