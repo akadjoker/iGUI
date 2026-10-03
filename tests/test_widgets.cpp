@@ -770,6 +770,39 @@ static void test_dock_sizes_can_be_set()
     assert(leftWidth > 280.0f && leftWidth < 320.0f);
 }
 
+static void test_draw_polygon_filled()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(300.0f, 300.0f));
+    assert(context.beginWindow("poly", ig::Rect(20.0f, 20.0f, 200.0f, 200.0f)));
+    const ig::Vec2 triangle[] = {ig::Vec2(10.0f, 10.0f), ig::Vec2(60.0f, 10.0f), ig::Vec2(10.0f, 70.0f)};
+    context.drawPolygonFilled(ig::Span<const ig::Vec2>(triangle), ig::Color(1u, 2u, 3u, 255u));
+    // Fewer than three points draws nothing and is not an error.
+    context.drawPolygonFilled(ig::Span<const ig::Vec2>(triangle, 2u), ig::Color(9u, 9u, 9u, 255u));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+    // The triangle's vertices are the points shifted by the window's content origin, all of them in the colour asked for.
+    float minX = 1e9f, minY = 1e9f, maxX = -1e9f, maxY = -1e9f;
+    int found = 0;
+    for (size_t i = 0u; i < data.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &v = data.vertices[i];
+        if (!(v.color == ig::Color(1u, 2u, 3u, 255u)))
+            continue;
+        ++found;
+        minX = v.position.x < minX ? v.position.x : minX;
+        maxX = v.position.x > maxX ? v.position.x : maxX;
+        minY = v.position.y < minY ? v.position.y : minY;
+        maxY = v.position.y > maxY ? v.position.y : maxY;
+    }
+    assert(found >= 3);
+    assert(maxX - minX > 49.5f && maxX - minX < 50.5f);
+    assert(maxY - minY > 59.5f && maxY - minY < 60.5f);
+    for (size_t i = 0u; i < data.vertices.size(); ++i)
+        assert(!(data.vertices[i].color == ig::Color(9u, 9u, 9u, 255u)));
+}
+
 static void test_dock_space()
 {
     WidgetBackend backend;
@@ -2526,6 +2559,7 @@ int main()
     test_dock_space();
     test_dock_tabs_of_one_slot_do_not_cover_each_other();
     test_dock_sizes_can_be_set();
+    test_draw_polygon_filled();
     test_full_client_dock_space_and_theme_presets();
     test_dock_panel_close_button();
     test_editor_widgets();
