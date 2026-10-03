@@ -3997,6 +3997,20 @@ void Context::drawArc(const Vec2 &center, float radius, float fromRadians,
                      fromRadians, toRadians, color, contentClip(), thickness);
 }
 
+void Context::drawPolygonFilled(Span<const Vec2> points, const Color &color)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList || points.size() < 3u)
+        return;
+    ct::Vector<Vec2> absolute;
+    for (size_t i = 0u; i < points.size(); ++i)
+    {
+        const Rect placed = contentRect(Rect(points[i].x, points[i].y, 0.0f, 0.0f));
+        absolute.push_back(Vec2(placed.x, placed.y));
+    }
+    drawList->addPolygonFilled(Span<const Vec2>(absolute.data(), absolute.size()), color, contentClip());
+}
+
 void Context::drawRectFilledRounded(const Rect &bounds, float radius, const Color &color)
 {
     DrawList *drawList = currentDrawList();
@@ -5151,6 +5165,19 @@ void Context::endDockSpace()
     activeDockSpace_ = InvalidWidgetId;
 }
 
+void Context::setDockSizes(float leftWidth, float rightWidth, float bottomHeight)
+{
+    DockSpaceState *dockSpace = activeDockSpace_ != InvalidWidgetId ? dockSpaces_.find(activeDockSpace_) : nullptr;
+    if (!dockSpace)
+        return;
+    if (leftWidth > 0.0f)
+        dockSpace->leftWidth = leftWidth;
+    if (rightWidth > 0.0f)
+        dockSpace->rightWidth = rightWidth;
+    if (bottomHeight > 0.0f)
+        dockSpace->bottomHeight = bottomHeight;
+}
+
 bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
 {
     if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty() || (open && !*open))
@@ -5190,8 +5217,14 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect clip = contentClip();
     if (region.width <= 0.0f || region.height <= theme_.widgetHeight)
         return false;
-    drawList->addRectFilled(region, theme_.inputBg, clip);
-    drawList->addRect(region, theme_.borderColor, clip);
+    // Every tab of a slot comes through here; the region is drawn by the first one of the frame. A second background
+    // would paint over the content of a tab that was built before it.
+    if (dockSpace->regionFrame[slotIndex] != frameNumber_)
+    {
+        dockSpace->regionFrame[slotIndex] = frameNumber_;
+        drawList->addRectFilled(region, theme_.inputBg, clip);
+        drawList->addRect(region, theme_.borderColor, clip);
+    }
 
     int tabCount = 0;
     for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
