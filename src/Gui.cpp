@@ -5151,6 +5151,19 @@ void Context::endDockSpace()
     activeDockSpace_ = InvalidWidgetId;
 }
 
+void Context::setDockSizes(float leftWidth, float rightWidth, float bottomHeight)
+{
+    DockSpaceState *dockSpace = activeDockSpace_ != InvalidWidgetId ? dockSpaces_.find(activeDockSpace_) : nullptr;
+    if (!dockSpace)
+        return;
+    if (leftWidth > 0.0f)
+        dockSpace->leftWidth = leftWidth;
+    if (rightWidth > 0.0f)
+        dockSpace->rightWidth = rightWidth;
+    if (bottomHeight > 0.0f)
+        dockSpace->bottomHeight = bottomHeight;
+}
+
 bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
 {
     if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty() || (open && !*open))

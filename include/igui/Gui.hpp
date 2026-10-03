@@ -586,6 +586,9 @@ public:
     bool beginDockSpace(StringView id, float topInset);
     bool beginDockSpace(StringView id, const Rect &bounds);
     void endDockSpace();
+    // Sets the size of the side regions of the dock space being built (left and right width, bottom height); a value
+    // of 0 or less keeps the current one. Call it once, on the first frame: the user can drag the splitters after.
+    void setDockSizes(float leftWidth, float rightWidth, float bottomHeight);
     // Pass open to render a close button in the tab; closing it sets *open to false.
     bool beginDockPanel(StringView title, DockSlot slot = DockSlot::Center, bool *open = nullptr);
     void endDockPanel();
