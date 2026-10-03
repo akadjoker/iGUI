@@ -720,6 +720,56 @@ static void test_dock_tabs_of_one_slot_do_not_cover_each_other()
     }
 }
 
+static void test_dock_sizes_can_be_set()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float leftWidth = 0.0f;
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(900.0f, 600.0f));
+        assert(context.beginWindow("dock host", ig::Rect(10.0f, 10.0f, 860.0f, 560.0f)));
+        assert(context.beginDockSpace("editor", ig::Rect(8.0f, 8.0f, 820.0f, 480.0f)));
+        if (frame == 0)
+            context.setDockSizes(300.0f, 0.0f, 0.0f);
+        if (context.beginDockPanel("Left", ig::DockSlot::Left))
+            context.endDockPanel();
+        context.endDockSpace();
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+
+        // The region of the left slot is the first big rectangle in the region colour.
+        const ig::Color regionColor = context.theme().inputBg;
+        leftWidth = 0.0f;
+        for (size_t i = 0u; i < data.commands.size() && leftWidth == 0.0f; ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Geometry)
+                continue;
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k + 2u < geometry.indexCount; k += 3u)
+            {
+                const ig::DrawVertex &a = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k]];
+                const ig::DrawVertex &b = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k + 1u]];
+                const ig::DrawVertex &c = data.vertices[static_cast<size_t>(geometry.vertexOffset) + data.indices[geometry.firstIndex + k + 2u]];
+                if (!(a.color == regionColor))
+                    continue;
+                const float minX = a.position.x < b.position.x ? (a.position.x < c.position.x ? a.position.x : c.position.x)
+                                                                : (b.position.x < c.position.x ? b.position.x : c.position.x);
+                const float maxX = a.position.x > b.position.x ? (a.position.x > c.position.x ? a.position.x : c.position.x)
+                                                                : (b.position.x > c.position.x ? b.position.x : c.position.x);
+                if (maxX - minX > 100.0f)
+                {
+                    leftWidth = maxX - minX;
+                    break;
+                }
+            }
+        }
+    }
+    // 300 asked for; the region may be a few pixels narrower for the splitter.
+    assert(leftWidth > 280.0f && leftWidth < 320.0f);
+}
+
 static void test_dock_space()
 {
     WidgetBackend backend;
@@ -2475,6 +2525,7 @@ int main()
     test_history_and_keyboard_navigation();
     test_dock_space();
     test_dock_tabs_of_one_slot_do_not_cover_each_other();
+    test_dock_sizes_can_be_set();
     test_full_client_dock_space_and_theme_presets();
     test_dock_panel_close_button();
     test_editor_widgets();
