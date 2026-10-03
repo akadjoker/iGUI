@@ -1,5 +1,6 @@
 #include "FileDialog.hpp"
 #include "BasicWidgets.hpp"
+#include "DialogWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "TextInputWidgets.hpp"
 #include "WidgetApp.hpp"
@@ -97,6 +98,34 @@ void FileDialog::setViewMode(ViewMode vm)
 }
 
 void FileDialog::setPath(const String& path) { navigateTo(path); }
+
+void FileDialog::setFileName(const String& name)
+{
+    if (fileNameInput_) fileNameInput_->setText(name);
+}
+
+void FileDialog::newFolderPrompt()
+{
+    String parent = currentPath_;
+    auto* box = WidgetApp::instance().addFloat<InputBox>("New folder", "Folder name:");
+    box->setText("New folder");
+    box->setAcceptLabel("Create");
+    box->setValidator([parent](const String& name) -> String {
+        if (name.empty() || name == "." || name == "..") return "Type a name";
+        if (name.find('/') != String::npos || name.find('\\') != String::npos) return "No slashes in a folder name";
+        if (FileSystem::exists(FileSystem::joinPath(parent, name))) return "That name is already taken";
+        return "";
+    });
+    box->accepted.connect([this, parent](const String& name) {
+        String path = FileSystem::joinPath(parent, name);
+        if (FileSystem::createDir(path)) {
+            dirCache_.clearCache();
+            navigateTo(path);
+        } else if (statusLabel_) {
+            statusLabel_->setText("Cannot create the folder");
+        }
+    });
+}
 
 void FileDialog::setFilter(const String& f)
 {
@@ -305,6 +334,11 @@ void FileDialog::buildUI()
     breadcrumbBar_->setStretch(1);
     breadcrumbBar_->setSpacing(2);
 
+    btnNewFolder_ = toolBar_->createChild<Button>();
+    btnNewFolder_->setIconId(IconId::FolderNew);
+    btnNewFolder_->setSize(24, 22); btnNewFolder_->setTooltip("New folder");
+    btnNewFolder_->clicked.connect([this] { newFolderPrompt(); });
+
     btnViewDetail_ = toolBar_->createChild<Button>();
     btnViewDetail_->setIconId(IconId::ViewDetail);
     btnViewDetail_->setSize(24, 22); btnViewDetail_->setTooltip("Detail view");
@@ -392,6 +426,19 @@ void FileDialog::buildBreadcrumbs()
             start = i + 1;
         }
     }
+
+    // Deep paths keep the root and the last few folders, with long names cut,
+    // so the bar does not run under the view buttons.
+    const size_t kTail = 2, kMaxName = 14;
+    if (parts.size() > kTail + 1) {
+        ct::Vector<std::pair<String, String>> shown;
+        shown.push_back(parts[0]);
+        shown.push_back({"...", parts[parts.size() - kTail - 1].second});
+        for (size_t i = parts.size() - kTail; i < parts.size(); ++i) shown.push_back(parts[i]);
+        parts = shown;
+    }
+    for (auto& part : parts)
+        if (part.first.size() > kMaxName) part.first = part.first.substr(0, kMaxName - 2) + "..";
 
     for (size_t i = 0; i < parts.size(); ++i) {
         if (i > 0) {

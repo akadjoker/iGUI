@@ -33,6 +33,15 @@ namespace ig { namespace retained
             return std::max(3, segments);
         }
 
+        int circleSegments(float radius, int requested)
+        {
+            // enough segments that no chord deviates more than a tenth of a pixel
+            float r = std::max(radius, 1.0f);
+            float a = std::acos(std::max(-1.0f, 1.0f - 0.1f / r));
+            int fromRadius = static_cast<int>(std::ceil(3.14159265f / std::max(a, 0.001f)));
+            return std::max(std::max(12, saneSegments(requested)), std::min(fromRadius, 512));
+        }
+
         bool intersectRects(const Rect &a, const Rect &b, Rect &out)
         {
             float x0 = std::max(a.x, b.x);
@@ -360,21 +369,79 @@ namespace ig { namespace retained
         int n = static_cast<int>(path_.size());
         if (n < 3) { path_.clear(); return; }
 
-        uint32_t idxCount = static_cast<uint32_t>((n - 2) * 3);
-        vertices_.reserve(vertices_.size() + static_cast<size_t>(n));
+        // Inner polygon plus a one pixel fringe fading to transparent, so the
+        // edge is anti-aliased whatever the renderer does with the triangles.
+        const float fringe = antiAliasing_ ? 1.0f : 0.0f;
+        uint32_t idxCount = static_cast<uint32_t>((n - 2) * 3 + (fringe > 0.0f ? n * 6 : 0));
+        vertices_.reserve(vertices_.size() + static_cast<size_t>(fringe > 0.0f ? n * 2 : n));
         indices_.reserve(indices_.size() + idxCount);
 
         uint32_t offset = static_cast<uint32_t>(indices_.size());
         uint32_t base   = static_cast<uint32_t>(vertices_.size());
+        Color transparent = color;
+        transparent.a = 0;
 
-        for (const auto &p : path_)
-            vertices_.push_back({p.x, p.y, whiteUV_.x, whiteUV_.y, color});
+        if (fringe <= 0.0f)
+        {
+            for (const auto &p : path_)
+                vertices_.push_back({p.x, p.y, whiteUV_.x, whiteUV_.y, color});
+            for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
+            {
+                indices_.push_back(base);
+                indices_.push_back(base + i - 1);
+                indices_.push_back(base + i);
+            }
+            addCmd(offset, idxCount, fontTexture_);
+            path_.clear();
+            return;
+        }
+
+        // Winding decides which side is outside.
+        float area = 0.0f;
+        for (int i = 0; i < n; ++i)
+        {
+            const Vec2 &a = path_[static_cast<size_t>(i)], &b = path_[static_cast<size_t>((i + 1) % n)];
+            area += a.x * b.y - b.x * a.y;
+        }
+        const float side = area >= 0.0f ? 1.0f : -1.0f;
+
+        for (int i = 0; i < n; ++i)
+        {
+            const Vec2 &p = path_[static_cast<size_t>(i)];
+            const Vec2 &prev = path_[static_cast<size_t>((i - 1 + n) % n)];
+            const Vec2 &next = path_[static_cast<size_t>((i + 1) % n)];
+            float dx1 = p.x - prev.x, dy1 = p.y - prev.y;
+            float l1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
+            if (l1 > 0.0001f) { dx1 /= l1; dy1 /= l1; }
+            float dx2 = next.x - p.x, dy2 = next.y - p.y;
+            float l2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
+            if (l2 > 0.0001f) { dx2 /= l2; dy2 /= l2; }
+            float nx = (-dy1 - dy2) * side, ny = (dx1 + dx2) * side;
+            float d2 = nx * nx + ny * ny;
+            if (d2 < 0.000001f) { nx = -dy1 * side; ny = dx1 * side; d2 = 1.0f; }
+            float inv = 1.0f / d2;
+            if (inv > 100.0f) inv = 100.0f;
+            nx *= inv * 2.0f * fringe * 0.5f;
+            ny *= inv * 2.0f * fringe * 0.5f;
+            vertices_.push_back({p.x - nx, p.y - ny, whiteUV_.x, whiteUV_.y, color});
+            vertices_.push_back({p.x + nx, p.y + ny, whiteUV_.x, whiteUV_.y, transparent});
+        }
 
         for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
         {
             indices_.push_back(base);
-            indices_.push_back(base + i - 1);
-            indices_.push_back(base + i);
+            indices_.push_back(base + (i - 1) * 2);
+            indices_.push_back(base + i * 2);
+        }
+        for (uint32_t i = 0; i < static_cast<uint32_t>(n); ++i)
+        {
+            uint32_t j = (i + 1) % static_cast<uint32_t>(n);
+            indices_.push_back(base + i * 2);
+            indices_.push_back(base + j * 2);
+            indices_.push_back(base + j * 2 + 1);
+            indices_.push_back(base + i * 2);
+            indices_.push_back(base + j * 2 + 1);
+            indices_.push_back(base + i * 2 + 1);
         }
 
         addCmd(offset, idxCount, fontTexture_);
@@ -387,60 +454,76 @@ namespace ig { namespace retained
         if (n < 2) { path_.clear(); return; }
         thickness = std::max(1.0f, thickness);
 
+        // Miter-joined band of the full thickness, plus on each side a one
+        // pixel fringe fading to transparent (anti-aliased edges).
+        const bool aa = antiAliasing_;
+        const float fringe = aa ? 1.0f : 0.0f;
+        const float core = aa ? std::max(0.0f, thickness - fringe) : thickness;
         int segs = closed ? n : n - 1;
-        uint32_t vtxCount = static_cast<uint32_t>(n * 2);
-        uint32_t idxCount = static_cast<uint32_t>(segs * 6);
+        const int perPoint = aa ? 4 : 2;
+        uint32_t vtxCount = static_cast<uint32_t>(n * perPoint);
+        uint32_t idxCount = static_cast<uint32_t>(segs * (aa ? 18 : 6));
         vertices_.reserve(vertices_.size() + vtxCount);
         indices_.reserve(indices_.size() + idxCount);
 
         uint32_t offset = static_cast<uint32_t>(indices_.size());
-
-        // Miter-joined outline — IM_FIXNORMAL2F style (no extra sqrt, capped)
-        ct::Vector<uint32_t> vL(static_cast<size_t>(n));
-        ct::Vector<uint32_t> vR(static_cast<size_t>(n));
+        uint32_t base = static_cast<uint32_t>(vertices_.size());
+        Color transparent = color;
+        transparent.a = 0;
 
         for (int i = 0; i < n; ++i)
         {
-            const Vec2 &p = path_[i];
+            const Vec2 &p = path_[static_cast<size_t>(i)];
             int iPrev = closed ? ((i - 1 + n) % n) : std::max(0, i - 1);
             int iNext = closed ? ((i + 1) % n)      : std::min(n - 1, i + 1);
 
-            // Incoming tangent (prev→curr), then left normal
-            float dx1 = p.x - path_[iPrev].x, dy1 = p.y - path_[iPrev].y;
+            float dx1 = p.x - path_[static_cast<size_t>(iPrev)].x, dy1 = p.y - path_[static_cast<size_t>(iPrev)].y;
             float l1 = std::sqrt(dx1*dx1 + dy1*dy1);
             if (l1 > 0.0001f) { dx1 /= l1; dy1 /= l1; }
             float nx1 = -dy1, ny1 = dx1;
 
-            // Outgoing tangent (curr→next), then left normal
-            float dx2 = path_[iNext].x - p.x, dy2 = path_[iNext].y - p.y;
+            float dx2 = path_[static_cast<size_t>(iNext)].x - p.x, dy2 = path_[static_cast<size_t>(iNext)].y - p.y;
             float l2 = std::sqrt(dx2*dx2 + dy2*dy2);
             if (l2 > 0.0001f) { dx2 /= l2; dy2 /= l2; }
             float nx2 = -dy2, ny2 = dx2;
 
-            // Bisector miter: (n1+n2) / |n1+n2|^2  (IM_FIXNORMAL2F pattern)
             float mx = nx1 + nx2, my = ny1 + ny2;
             float d2 = mx*mx + my*my;
             if (d2 < 0.000001f) { mx = nx1; my = ny1; d2 = 1.0f; }
             float inv2 = 1.0f / d2;
             if (inv2 > 100.0f) inv2 = 100.0f; // miter limit
-            mx *= inv2 * thickness;
-            my *= inv2 * thickness;
+            // (n1+n2)/|n1+n2|^2 has length 1/cos(half angle): the miter offset for a unit half width
+            float ux = mx * inv2 * 2.0f, uy = my * inv2 * 2.0f;
 
-            vL[i] = static_cast<uint32_t>(vertices_.size());
-            vertices_.push_back({p.x + mx, p.y + my, whiteUV_.x, whiteUV_.y, color});
-            vR[i] = static_cast<uint32_t>(vertices_.size());
-            vertices_.push_back({p.x - mx, p.y - my, whiteUV_.x, whiteUV_.y, color});
+            if (aa)
+            {
+                float hw = core * 0.5f, ow = hw + fringe;
+                vertices_.push_back({p.x + ux * ow, p.y + uy * ow, whiteUV_.x, whiteUV_.y, transparent});
+                vertices_.push_back({p.x + ux * hw, p.y + uy * hw, whiteUV_.x, whiteUV_.y, color});
+                vertices_.push_back({p.x - ux * hw, p.y - uy * hw, whiteUV_.x, whiteUV_.y, color});
+                vertices_.push_back({p.x - ux * ow, p.y - uy * ow, whiteUV_.x, whiteUV_.y, transparent});
+            }
+            else
+            {
+                float hw = thickness * 0.5f;
+                vertices_.push_back({p.x + ux * hw, p.y + uy * hw, whiteUV_.x, whiteUV_.y, color});
+                vertices_.push_back({p.x - ux * hw, p.y - uy * hw, whiteUV_.x, whiteUV_.y, color});
+            }
         }
 
         for (int i = 0; i < segs; ++i)
         {
-            int j = (i + 1) % n;
-            indices_.push_back(vL[i]);
-            indices_.push_back(vL[j]);
-            indices_.push_back(vR[j]);
-            indices_.push_back(vL[i]);
-            indices_.push_back(vR[j]);
-            indices_.push_back(vR[i]);
+            uint32_t a = base + static_cast<uint32_t>(i) * static_cast<uint32_t>(perPoint);
+            uint32_t b = base + static_cast<uint32_t>((i + 1) % n) * static_cast<uint32_t>(perPoint);
+            for (int k = 0; k + 1 < perPoint; ++k)
+            {
+                indices_.push_back(a + static_cast<uint32_t>(k));
+                indices_.push_back(b + static_cast<uint32_t>(k));
+                indices_.push_back(b + static_cast<uint32_t>(k) + 1);
+                indices_.push_back(a + static_cast<uint32_t>(k));
+                indices_.push_back(b + static_cast<uint32_t>(k) + 1);
+                indices_.push_back(a + static_cast<uint32_t>(k) + 1);
+            }
         }
 
         addCmd(offset, idxCount, fontTexture_);
@@ -518,7 +601,7 @@ namespace ig { namespace retained
     void DrawList::addCircleFilled(Vec2 center, float radius, const Color &color, int segments)
     {
         if (radius < 0.5f) return;
-        segments = saneSegments(segments);
+        segments = circleSegments(radius, segments);
         path_.reserve(static_cast<size_t>(segments));
         for (int i = 0; i < segments; ++i)
         {
@@ -532,7 +615,7 @@ namespace ig { namespace retained
     void DrawList::addCircle(Vec2 center, float radius, const Color &color, float thickness, int segments)
     {
         if (radius < 0.5f) return;
-        segments = saneSegments(segments);
+        segments = circleSegments(radius, segments);
         path_.reserve(static_cast<size_t>(segments));
         for (int i = 0; i < segments; ++i)
         {
@@ -545,15 +628,11 @@ namespace ig { namespace retained
 
     void DrawList::addTriangleFilled(Vec2 a, Vec2 b, Vec2 c, const Color &color)
     {
-        uint32_t offset = static_cast<uint32_t>(indices_.size());
-        uint32_t v0 = addVertex(a.x, a.y, color);
-        uint32_t v1 = addVertex(b.x, b.y, color);
-        uint32_t v2 = addVertex(c.x, c.y, color);
-
-        indices_.push_back(v0);
-        indices_.push_back(v1);
-        indices_.push_back(v2);
-        addCmd(offset, 3, fontTexture_);
+        path_.clear();
+        path_.push_back(a);
+        path_.push_back(b);
+        path_.push_back(c);
+        pathFillConvex(color);
     }
 
     void DrawList::addTriangle(Vec2 a, Vec2 b, Vec2 c, const Color &color, float thickness)
@@ -750,36 +829,149 @@ namespace ig { namespace retained
             addLine({cx + s * 0.12f, cy + s * 0.12f}, {x1 - p, y1 - p}, color, thickness);
             break;
 
-        case IconId::None:
+        case IconId::Folder:
+        case IconId::FolderOpen:
+        case IconId::FolderNew:
+        {
+            // tab on the top left, body below, filled lightly in the stroke colour
+            float l = x0 + s * 0.10f, r = x1 - s * 0.10f, t = y0 + s * 0.22f, b = y1 - s * 0.18f;
+            float tab = y0 + s * 0.12f;
+            Color body = color;
+            body.a = static_cast<uint8_t>(color.a * 0.35f);
+            addRect({l, t, r - l, b - t}, body);
+            ct::Vector<Vec2> outline;
+            outline.push_back({l, b});
+            outline.push_back({l, tab});
+            outline.push_back({l + s * 0.30f, tab});
+            outline.push_back({l + s * 0.38f, t});
+            outline.push_back({r, t});
+            outline.push_back({r, b});
+            addPolyline(outline, color, thickness, true);
+            if (icon == IconId::FolderNew) {
+                // a plus in the body
+                float mx = (l + r) * 0.5f, my = (t + b) * 0.5f, u = s * 0.16f;
+                addLine({mx - u, my}, {mx + u, my}, color, thickness * 1.3f);
+                addLine({mx, my - u}, {mx, my + u}, color, thickness * 1.3f);
+            }
             break;
+        }
+
+        case IconId::File:
+        case IconId::FileCode:
+        case IconId::FileImage:
+        case IconId::FileArchive:
+        {
+            // page with a folded corner, and a mark for the kind
+            float l = x0 + s * 0.20f, r = x1 - s * 0.20f, t = y0 + s * 0.08f, b = y1 - s * 0.08f;
+            float fold = s * 0.22f;
+            ct::Vector<Vec2> page;
+            page.push_back({l, t});
+            page.push_back({r - fold, t});
+            page.push_back({r, t + fold});
+            page.push_back({r, b});
+            page.push_back({l, b});
+            addPolyline(page, color, thickness, true);
+            addLine({r - fold, t}, {r - fold, t + fold}, color, thickness);
+            addLine({r - fold, t + fold}, {r, t + fold}, color, thickness);
+            float mx = (l + r) * 0.5f, my = (t + fold + b) * 0.5f;
+            float u = s * 0.11f;
+            if (icon == IconId::FileCode) {
+                addLine({mx - u * 0.4f, my - u}, {mx - u * 1.3f, my}, color, thickness);
+                addLine({mx - u * 1.3f, my}, {mx - u * 0.4f, my + u}, color, thickness);
+                addLine({mx + u * 0.4f, my - u}, {mx + u * 1.3f, my}, color, thickness);
+                addLine({mx + u * 1.3f, my}, {mx + u * 0.4f, my + u}, color, thickness);
+            } else if (icon == IconId::FileImage) {
+                addTriangleFilled({l + s * 0.06f, b - s * 0.06f}, {mx, my - u}, {r - s * 0.06f, b - s * 0.06f}, color);
+                addCircleFilled({r - s * 0.16f, t + fold + s * 0.08f}, s * 0.05f, color, 12);
+            } else if (icon == IconId::FileArchive) {
+                for (int i = 0; i < 3; ++i)
+                    addRect({mx - u * 0.5f, t + s * 0.06f + i * u * 1.6f, u, u * 0.8f}, color);
+            } else {
+                addLine({l + s * 0.10f, my - u}, {r - s * 0.10f, my - u}, color, thickness);
+                addLine({l + s * 0.10f, my + u * 0.6f}, {r - s * 0.10f, my + u * 0.6f}, color, thickness);
+            }
+            break;
+        }
+
+        case IconId::ViewDetail:
+            // small square + line, three rows
+            for (int i = 0; i < 3; ++i) {
+                float yy = y0 + p + (s - 2 * p) * i / 2.0f;
+                float d = s * 0.10f;
+                addRect({x0 + p, yy - d * 0.5f, d, d}, color);
+                addLine({x0 + p + s * 0.20f, yy}, {x1 - p, yy}, color, thickness);
+            }
+            break;
+
+        case IconId::ViewList:
+            for (int i = 0; i < 3; ++i) {
+                float yy = y0 + p + (s - 2 * p) * i / 2.0f;
+                addLine({x0 + p, yy}, {x1 - p, yy}, color, thickness);
+            }
+            break;
+
+        case IconId::ViewGrid:
+        {
+            float g = s * 0.12f, c = (s - 2 * p - g) * 0.5f;
+            for (int j = 0; j < 2; ++j)
+                for (int i = 0; i < 2; ++i)
+                    addRectOutline({x0 + p + i * (c + g), y0 + p + j * (c + g), c, c}, color, thickness);
+            break;
+        }
+
+        case IconId::Eye:
+        case IconId::EyeOff:
+        {
+            // almond outline from two arcs, a pupil, and a strike for "off"
+            ct::Vector<Vec2> eye;
+            const int n = 10;
+            float w = s * 0.5f - p * 0.6f, h = s * 0.26f;
+            for (int i = 0; i <= n; ++i) {
+                float a = 3.14159265f * i / n;
+                eye.push_back({cx - w * std::cos(a), cy - h * std::sin(a)});
+            }
+            for (int i = n - 1; i > 0; --i) {
+                float a = 3.14159265f * i / n;
+                eye.push_back({cx - w * std::cos(a), cy + h * std::sin(a)});
+            }
+            addPolyline(eye, color, thickness, true);
+            addCircleFilled({cx, cy}, s * 0.11f, color, 16);
+            if (icon == IconId::EyeOff)
+                addLine({x0 + p, y1 - p}, {x1 - p, y0 + p}, color, thickness);
+            break;
+        }
+
+        default:
+            break;
+        }
+    }
+
+    bool DrawList::hasVectorIcon(IconId icon)
+    {
+        switch (icon)
+        {
+        case IconId::Check: case IconId::Cross: case IconId::Plus: case IconId::Minus:
+        case IconId::ArrowRight: case IconId::ArrowDown: case IconId::Search:
+        case IconId::Folder: case IconId::FolderOpen: case IconId::FolderNew:
+        case IconId::File: case IconId::FileCode: case IconId::FileImage: case IconId::FileArchive:
+        case IconId::ViewDetail: case IconId::ViewList: case IconId::ViewGrid:
+        case IconId::Eye: case IconId::EyeOff:
+            return true;
+        default:
+            return false;
         }
     }
 
     void DrawList::addLine(Vec2 a, Vec2 b, const Color &color, float thickness)
     {
-        thickness = std::max(1.0f, thickness);
         float dx = b.x - a.x;
         float dy = b.y - a.y;
-        float len = std::sqrt(dx * dx + dy * dy);
-        if (len <= 0.0001f)
+        if (dx * dx + dy * dy <= 0.00000001f)
             return;
-
-        float nx = -dy / len * thickness * 0.5f;
-        float ny = dx / len * thickness * 0.5f;
-
-        uint32_t offset = static_cast<uint32_t>(indices_.size());
-        uint32_t v0 = addVertex(a.x + nx, a.y + ny, color);
-        uint32_t v1 = addVertex(b.x + nx, b.y + ny, color);
-        uint32_t v2 = addVertex(b.x - nx, b.y - ny, color);
-        uint32_t v3 = addVertex(a.x - nx, a.y - ny, color);
-
-        indices_.push_back(v0);
-        indices_.push_back(v1);
-        indices_.push_back(v2);
-        indices_.push_back(v0);
-        indices_.push_back(v2);
-        indices_.push_back(v3);
-        addCmd(offset, 6, fontTexture_);
+        path_.clear();
+        path_.push_back(a);
+        path_.push_back(b);
+        pathStroke(color, thickness, false);
     }
 
     void DrawList::addConvexPolyFilled(const ct::Vector<Vec2> &points, const Color &color)

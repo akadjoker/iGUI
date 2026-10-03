@@ -1,0 +1,64 @@
+name: Web gallery
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WebAssembly galleries
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: mymindstorm/setup-emscripten@v14
+        with:
+          version: 3.1.74
+
+      - name: Configure
+        run: >-
+          emcmake cmake -S . -B build-web -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DIGUI_BUILD_WEB=ON
+          -DIGUI_BUILD_TESTS=OFF
+          -DIGUI_BUILD_LEGACY=OFF
+          -DIGUI_BUILD_RAYLIB_BACKEND=OFF
+
+      - name: Build
+        run: cmake --build build-web --parallel --target igui_web_immediate igui_web_retained
+
+      - name: Assemble site
+        run: |
+          mkdir site
+          cp web/index.html site/
+          cp build-web/immediate.html build-web/immediate.js build-web/immediate.wasm site/
+          cp build-web/retained.html build-web/retained.js build-web/retained.wasm site/
+          touch site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

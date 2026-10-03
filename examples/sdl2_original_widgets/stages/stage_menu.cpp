@@ -14,7 +14,7 @@ void registerMenuStage(WidgetApp& app)
     vbox->setSpacing(10.0f);
     vbox->setPadding(40.0f);
 
-    vbox->createChild<Label>("ig::retained + Raylib — Port Demo");
+    vbox->createChild<Label>("iGUI retained widgets");
     vbox->createChild<Spacer>(20.0f);
 
     struct { const char* label; const char* stage; } entries[] = {
