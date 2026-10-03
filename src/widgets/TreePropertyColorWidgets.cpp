@@ -1161,10 +1161,66 @@ void PropertyGrid::onTextInput(KeyEvent& e)
 // ═════════════════════════════════════════════════════════════════════════════
 
 ColorPicker::ColorPicker() { acceptsFocus_=true; }
+ColorPicker::~ColorPicker() { releaseTextures(); }
+
+void ColorPicker::releaseTextures()
+{
+    WidgetApp& app=WidgetApp::instance();
+    if (wheelTex_) app.destroyTexture(wheelTex_);
+    if (valueTex_) app.destroyTexture(valueTex_);
+    if (alphaTex_) app.destroyTexture(alphaTex_);
+    wheelTex_=TextureHandle{}; valueTex_=TextureHandle{}; alphaTex_=TextureHandle{};
+}
+
+static unsigned char pickerChannel(float v) { return (unsigned char)(std::min(1.f,std::max(0.f,v))*255.f+0.5f); }
+
+TextureHandle ColorPicker::buildWheelTexture(float radius)
+{
+    const int scale=2;
+    const int n=(int)std::ceil(radius*2.f)*scale;
+    const float c=n*0.5f, outer=radius*scale, inner=outer*0.75f;
+    texPixels_.assign((size_t)n*n*4,0);
+    for (int y=0;y<n;++y) {
+        for (int x=0;x<n;++x) {
+            float dx=x+0.5f-c, dy=y+0.5f-c, d=std::sqrt(dx*dx+dy*dy);
+            float cover=std::min(1.f,std::max(0.f,outer-d+0.5f));
+            if (cover<=0.f) continue;
+            float h=std::atan2(dy,dx)/(2.f*3.14159265f); if (h<0.f) h+=1.f;
+            Color col = d>=inner ? hsvToRgb(h,1.f,1.f,1.f) : hsvToRgb(h,std::min(1.f,d/inner),val_,1.f);
+            // blend the ring over the disc across the inner edge
+            float ringMix=std::min(1.f,std::max(0.f,d-inner+0.5f));
+            if (ringMix>0.f && ringMix<1.f) {
+                Color disc=hsvToRgb(h,1.f,val_,1.f), ring=hsvToRgb(h,1.f,1.f,1.f);
+                col.r=(unsigned char)(disc.r+(ring.r-disc.r)*ringMix);
+                col.g=(unsigned char)(disc.g+(ring.g-disc.g)*ringMix);
+                col.b=(unsigned char)(disc.b+(ring.b-disc.b)*ringMix);
+            }
+            unsigned char* p=&texPixels_[((size_t)y*n+x)*4];
+            p[0]=col.r; p[1]=col.g; p[2]=col.b; p[3]=pickerChannel(cover);
+        }
+    }
+    return WidgetApp::instance().uploadTexture(texPixels_.data(),n,n);
+}
+
+TextureHandle ColorPicker::buildBarTexture(int height, bool alphaBar)
+{
+    const int scale=2, h=std::max(2,height*scale), w=2;
+    texPixels_.assign((size_t)w*h*4,255);
+    Color full=hsvToRgb(hue_,sat_,val_,1.f);
+    for (int y=0;y<h;++y) {
+        float t=1.f-(y+0.5f)/h;
+        Color col = alphaBar ? full : hsvToRgb(hue_,sat_,t,1.f);
+        for (int x=0;x<w;++x) {
+            unsigned char* p=&texPixels_[((size_t)y*w+x)*4];
+            p[0]=col.r; p[1]=col.g; p[2]=col.b; p[3]=alphaBar?pickerChannel(t):255;
+        }
+    }
+    return WidgetApp::instance().uploadTexture(texPixels_.data(),w,h);
+}
 
 void ColorPicker::setColor(const Color& c) { rgbToHsv(c,hue_,sat_,val_); alpha_=c.a/255.f; markDirty(); }
 Color ColorPicker::color() const { return hsvToRgb(hue_,sat_,val_,alpha_); }
-Widget::Vec2f ColorPicker::sizeHint() const { return {220.f,260.f}; }
+Widget::Vec2f ColorPicker::sizeHint() const { return {150.f,170.f}; }
 
 float ColorPicker::wheelRadius (const Rect& abs) const { float bs=30.f+(showAlpha_?30.f:0.f), av=std::min(abs.w-bs,abs.h-44.f); return std::max(20.f,av*0.5f); }
 float ColorPicker::wheelCenterX(const Rect& abs) const { return abs.x+wheelRadius(abs)+4.f; }
@@ -1222,32 +1278,14 @@ void ColorPicker::paint(PaintContext& ctx)
     ctx.pushClip(abs);
 
     float cx=wheelCenterX(abs), cy=wheelCenterY(abs), r=wheelRadius(abs);
+    float innerR=r*0.75f;
 
-    // Hue ring
-    const int segs=90; const float step=2.f*3.14159265f/segs;
-    float outerR=r, innerR=r*0.75f;
-    for (int i=0;i<segs;++i) {
-        float a0=step*i, a1=step*(i+1)+0.005f;
-        Color c=hsvToRgb((float)i/segs,1.f,1.f,1.f);
-        ctx.fill.SetColor(c.r,c.g,c.b,c.a);
-        ctx.fillTriangle(cx+cosf(a0)*outerR,cy+sinf(a0)*outerR,cx+cosf(a1)*outerR,cy+sinf(a1)*outerR,cx+cosf(a0)*innerR,cy+sinf(a0)*innerR);
-        ctx.fillTriangle(cx+cosf(a1)*outerR,cy+sinf(a1)*outerR,cx+cosf(a1)*innerR,cy+sinf(a1)*innerR,cx+cosf(a0)*innerR,cy+sinf(a0)*innerR);
+    // Wheel: hue ring and saturation disc for the current value
+    if (!wheelTex_ || wheelTexRadius_!=r || wheelTexVal_!=val_) {
+        if (wheelTex_) WidgetApp::instance().destroyTexture(wheelTex_);
+        wheelTex_=buildWheelTexture(r); wheelTexRadius_=r; wheelTexVal_=val_;
     }
-
-    // Saturation disc
-    for (int ring=0;ring<16;++ring) {
-        float r0=innerR*ring/16, r1=innerR*(ring+1)/16+0.5f;
-        float s0=(float)ring/16, s1=(float)(ring+1)/16;
-        for (int seg=0;seg<48;++seg) {
-            float a0=2.f*3.14159265f*seg/48, a1=2.f*3.14159265f*(seg+1)/48+0.005f;
-            float h=(float)seg/48;
-            Color c0=hsvToRgb(h,s0,val_,1.f), c1=hsvToRgb(h,s1,val_,1.f);
-            Color avg; avg.r=(c0.r+c1.r)/2; avg.g=(c0.g+c1.g)/2; avg.b=(c0.b+c1.b)/2; avg.a=255;
-            ctx.fill.SetColor(avg.r,avg.g,avg.b,avg.a);
-            ctx.fillTriangle(cx+cosf(a0)*r0,cy+sinf(a0)*r0,cx+cosf(a0)*r1,cy+sinf(a0)*r1,cx+cosf(a1)*r1,cy+sinf(a1)*r1);
-            ctx.fillTriangle(cx+cosf(a0)*r0,cy+sinf(a0)*r0,cx+cosf(a1)*r1,cy+sinf(a1)*r1,cx+cosf(a1)*r0,cy+sinf(a1)*r0);
-        }
-    }
+    if (wheelTex_) ctx.drawImage(wheelTex_,{cx-r,cy-r,r*2.f,r*2.f});
 
     // Hue/sat cursor
     float ca=hue_*2.f*3.14159265f, cd=sat_*innerR;
@@ -1256,11 +1294,16 @@ void ColorPicker::paint(PaintContext& ctx)
     ctx.line.SetColor(0,0,0,255);       ctx.lineCircle(curX,curY,4.f);
 
     // Value bar
-    Rect vb=valueBarRect(abs); float stepH=vb.h/20;
-    for (int i=0;i<20;++i) {
-        float v2=1.f-(float)i/20; Color c2=hsvToRgb(hue_,sat_,v2,1.f);
-        ctx.fill.SetColor(c2.r,c2.g,c2.b,255); ctx.fillRect(vb.x,vb.y+i*stepH,vb.w,stepH+1);
+    Rect vb=valueBarRect(abs);
+    const int barH=(int)vb.h;
+    if (!valueTex_ || barTexHue_!=hue_ || barTexSat_!=sat_ || barTexVal_!=val_ || barTexHeight_!=barH) {
+        if (valueTex_) WidgetApp::instance().destroyTexture(valueTex_);
+        if (alphaTex_) WidgetApp::instance().destroyTexture(alphaTex_);
+        valueTex_=buildBarTexture(barH,false);
+        alphaTex_=showAlpha_?buildBarTexture(barH,true):TextureHandle{};
+        barTexHue_=hue_; barTexSat_=sat_; barTexVal_=val_; barTexHeight_=barH;
     }
+    if (valueTex_) ctx.drawImage(valueTex_,vb);
     ctx.line.SetColor(t.borderColor.r,t.borderColor.g,t.borderColor.b,t.borderColor.a); ctx.lineRect(vb.x,vb.y,vb.w,vb.h);
     float valY=vb.y+(1.f-val_)*vb.h;
     ctx.fill.SetColor(255,255,255,255);
@@ -1269,11 +1312,8 @@ void ColorPicker::paint(PaintContext& ctx)
 
     // Alpha bar
     if (showAlpha_) {
-        Rect ab2=alphaBarRect(abs); Color full=hsvToRgb(hue_,sat_,val_,1.f);
-        for (int i=0;i<20;++i) {
-            float a=(1.f-(float)i/20); ctx.fill.SetColor(full.r,full.g,full.b,(u8)(a*255));
-            ctx.fillRect(ab2.x,ab2.y+i*stepH,ab2.w,stepH+1);
-        }
+        Rect ab2=alphaBarRect(abs);
+        if (alphaTex_) ctx.drawImage(alphaTex_,ab2);
         ctx.line.SetColor(t.borderColor.r,t.borderColor.g,t.borderColor.b,t.borderColor.a); ctx.lineRect(ab2.x,ab2.y,ab2.w,ab2.h);
         float alphaY=ab2.y+(1.f-alpha_)*ab2.h;
         ctx.fill.SetColor(255,255,255,255);

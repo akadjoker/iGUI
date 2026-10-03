@@ -16,6 +16,38 @@ inline bool isIdentChar(char c)
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
            (c >= '0' && c <= '9') || c == '_';
 }
+
+// Columns are byte offsets into a line. Every caret move and single-step
+// erase goes through these so a column never lands inside a multi-byte
+// UTF-8 sequence - stepping or erasing one byte split characters and left
+// invalid UTF-8 in the buffer.
+inline bool isContinuationByte(char c)
+{
+    return (static_cast<unsigned char>(c) & 0xC0u) == 0x80u;
+}
+
+// Start of the code point containing column (column itself if it is one).
+int codePointStart(const String& line, int column)
+{
+    if (column <= 0) return 0;
+    if (column >= static_cast<int>(line.size())) return static_cast<int>(line.size());
+    while (column > 0 && isContinuationByte(line[static_cast<size_t>(column)])) --column;
+    return column;
+}
+
+int previousCodePoint(const String& line, int column)
+{
+    return column <= 0 ? 0 : codePointStart(line, column - 1);
+}
+
+int nextCodePoint(const String& line, int column)
+{
+    const int size = static_cast<int>(line.size());
+    if (column >= size) return size;
+    ++column;
+    while (column < size && isContinuationByte(line[static_cast<size_t>(column)])) ++column;
+    return column;
+}
 } // anonymous namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -200,6 +232,7 @@ void CodeEditorState::clampCursor()
     const int len = static_cast<int>(lineAt(cursorLine).size());
     if (cursorColumn < 0) cursorColumn = 0;
     if (cursorColumn > len) cursorColumn = len;
+    cursorColumn = codePointStart(lineAt(cursorLine), cursorColumn);
 }
 
 void CodeEditorState::orderedSelection(int& startLine, int& startColumn, int& endLine, int& endColumn) const
@@ -791,7 +824,7 @@ void CodeEditorState::backspaceAtAllCursors()
     if (extraCursors_.empty())
     {
         if (eraseSelection()) return;
-        if (cursorColumn > 0) eraseRange(cursorLine, cursorColumn - 1, cursorLine, cursorColumn);
+        if (cursorColumn > 0) eraseRange(cursorLine, previousCodePoint(lineAt(cursorLine), cursorColumn), cursorLine, cursorColumn);
         else if (cursorLine > 0)
         {
             int previousLen = static_cast<int>(lineAt(cursorLine - 1).size());
@@ -818,7 +851,7 @@ void CodeEditorState::backspaceAtAllCursors()
         }
         else if (mine.column > 0)
         {
-            sl = mine.line; sc = mine.column - 1; el = mine.line; ec = mine.column;
+            sl = mine.line; sc = previousCodePoint(lineAt(mine.line), mine.column); el = mine.line; ec = mine.column;
         }
         else if (mine.line > 0)
         {
@@ -839,7 +872,7 @@ void CodeEditorState::deleteAtAllCursors()
     {
         if (eraseSelection()) return;
         const int len = static_cast<int>(lineAt(cursorLine).size());
-        if (cursorColumn < len) eraseRange(cursorLine, cursorColumn, cursorLine, cursorColumn + 1);
+        if (cursorColumn < len) eraseRange(cursorLine, cursorColumn, cursorLine, nextCodePoint(lineAt(cursorLine), cursorColumn));
         else if (cursorLine + 1 < lineCount()) eraseRange(cursorLine, cursorColumn, cursorLine + 1, 0);
         return;
     }
@@ -863,7 +896,7 @@ void CodeEditorState::deleteAtAllCursors()
         else
         {
             const int len = static_cast<int>(lineAt(mine.line).size());
-            if (mine.column < len) { sl = mine.line; sc = mine.column; el = mine.line; ec = mine.column + 1; }
+            if (mine.column < len) { sl = mine.line; sc = mine.column; el = mine.line; ec = nextCodePoint(lineAt(mine.line), mine.column); }
             else if (mine.line + 1 < lineCount()) { sl = mine.line; sc = mine.column; el = mine.line + 1; ec = 0; }
             else continue;
         }
@@ -1377,8 +1410,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // nothing drawn later this same frame (the outline panel beside it,
     // say) also sees a nonzero wheel delta and reacts to it. Mirrors
     // beginChild's own "clear after consuming" (Gui.cpp).
-    if (currentWindowReceivesPointer() && contains(intersect(rect, clip), pointer_.position) &&
-        pointer_.wheelY != 0.0f)
+    if (pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
     {
         if (pointer_.wheelControl)
         {
@@ -1404,9 +1436,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             ? travel * static_cast<float>(state.scrollLine) / static_cast<float>(maximumScroll) : 0.0f;
         thumb = Rect(scrollbar.x, scrollbar.y + offset, scrollbar.width, thumbHeight);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const bool pressedThumb = pointer_.pressed[left] && currentWindow_ == focusedWindow_ &&
-                                  activeWidget_ == InvalidWidgetId &&
-                                  contains(intersect(thumb, clip), pointer_.pressedPosition[left]);
+        const bool pressedThumb = pointerPressedIn(intersect(thumb, clip), left) &&
+                                  activeWidget_ == InvalidWidgetId;
         if (pressedThumb)
         {
             activeWidget_ = scrollbarId;
@@ -1428,17 +1459,15 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         thumb.y = scrollbar.y + updatedOffset;
     }
 
-    const bool focused = focusedWidget_ == id;
+    const bool focused = hasKeyboardFocus(id);
     bool changed = false;
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
 
     // Clicking the fold gutter (immediately left of the text area) toggles
     // the region whose header is on that row, if any.
-    if (foldingAvailable && focused && pointer_.pressed[leftButton] &&
-        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]))
+    const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
+    if (foldingAvailable && focused && pointerPressedIn(intersect(foldGutterRect, clip), leftButton))
     {
-        const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
-        if (contains(intersect(foldGutterRect, clip), pointer_.pressedPosition[leftButton]))
         {
             const Vec2 local = pointer_.pressedPosition[leftButton];
             int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
@@ -1461,9 +1490,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // cursor and keeping the anchor fixed at the press point. Releasing ends
     // the drag; a plain click with no movement leaves no selection, same as
     // before.
-    const bool pressedInText = pointer_.pressed[leftButton] &&
-        contains(intersect(textArea, clip), pointer_.pressedPosition[leftButton]) &&
-        !pointerBlockedByOpenMenu(pointer_.pressedPosition[leftButton]);
+    const bool pressedInText = pointerPressedIn(intersect(textArea, clip), leftButton);
     if (focused && pressedInText)
     {
         activeWidget_ = id;
@@ -1476,7 +1503,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         if (column < 0) column = 0;
         if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
         state.cursorLine = line;
-        state.cursorColumn = column;
+        state.cursorColumn = codePointStart(state.lineAt(line), column);
         state.clearSelection(); // anchor starts here; drag (below) or shift-click would extend it
         state.clearExtraCursors();
         state.breakUndoCoalescing();
@@ -1497,7 +1524,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         if (column < 0) column = 0;
         if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
         state.cursorLine = line;
-        state.cursorColumn = column;
+        state.cursorColumn = codePointStart(state.lineAt(line), column);
     }
     if (activeWidget_ == id && pointer_.released[leftButton])
         activeWidget_ = InvalidWidgetId;
@@ -1544,6 +1571,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (cursorRow > 0) state.cursorLine = logicalLine(cursorRow - 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
+            state.cursorColumn = codePointStart(state.lineAt(state.cursorLine), state.cursorColumn);
             if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)]) { state.clearSelection(); state.clearExtraCursors(); }
             state.breakUndoCoalescing();
         }
@@ -1552,6 +1580,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (cursorRow + 1 < visibleLineCount) state.cursorLine = logicalLine(cursorRow + 1);
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
+            state.cursorColumn = codePointStart(state.lineAt(state.cursorLine), state.cursorColumn);
             if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)]) { state.clearSelection(); state.clearExtraCursors(); }
             state.breakUndoCoalescing();
         }
@@ -1566,7 +1595,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         {
             if (leftPressed_)
             {
-                if (state.cursorColumn > 0) --state.cursorColumn;
+                if (state.cursorColumn > 0) state.cursorColumn = previousCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
                 else if (cursorRow > 0)
                 {
                     state.cursorLine = logicalLine(cursorRow - 1);
@@ -1577,7 +1606,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             }
             if (rightPressed_)
             {
-                if (state.cursorColumn < static_cast<int>(state.lineAt(state.cursorLine).size())) ++state.cursorColumn;
+                if (state.cursorColumn < static_cast<int>(state.lineAt(state.cursorLine).size()))
+                    state.cursorColumn = nextCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
                 else if (cursorRow + 1 < visibleLineCount)
                 {
                     state.cursorLine = logicalLine(cursorRow + 1);

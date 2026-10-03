@@ -10,6 +10,7 @@ option(IGUI_BUILD_FONT "Build the optional embedded font atlas module" OFF)
 set(IGUI_FONT_INPUT "" CACHE FILEPATH
     "Optional TTF/OTF file embedded as iGUI's default font (defaults to Nuklear's Roboto)")
 option(IGUI_BUILD_SDL2_DEMO "Build the optional SDL2 integration example" OFF)
+option(IGUI_BUILD_WEB "Build the WebAssembly galleries (Emscripten only)" OFF)
 option(IGUI_BUILD_RAYLIB_BACKEND "Build the Raylib backend when Raylib is installed" ON)
 option(IGUI_BUILD_RAYLIB_DEMO "Build the Raylib integration example" OFF)
 option(IGUI_BUILD_CODE_EDITOR_DEMO "Build the immediate-mode code editor demo (requires Raylib)" OFF)
@@ -34,7 +35,7 @@ if(IGUI_BUILD_RAYLIB_BACKEND)
     endif()
 endif()
 
-if(IGUI_BUILD_SDL2_DEMO OR IGUI_RAYLIB_AVAILABLE)
+if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB OR IGUI_RAYLIB_AVAILABLE)
     set(IGUI_BUILD_FONT ON)
 endif()
 
@@ -118,6 +119,34 @@ if(IGUI_BUILD_TESTS)
         add_executable(igui_interaction_harness_tests tests/test_interaction_harness.cpp)
         target_link_libraries(igui_interaction_harness_tests PRIVATE igui)
         add_test(NAME igui_interaction_harness COMMAND igui_interaction_harness_tests)
+
+        add_executable(igui_modal_input_tests tests/test_modal_input.cpp)
+        target_link_libraries(igui_modal_input_tests PRIVATE igui)
+        add_test(NAME igui_modal_input COMMAND igui_modal_input_tests)
+
+        add_executable(igui_culling_tests tests/test_culling.cpp)
+        target_link_libraries(igui_culling_tests PRIVATE igui)
+        add_test(NAME igui_culling COMMAND igui_culling_tests)
+
+        add_executable(igui_fuzz_tests tests/test_fuzz.cpp)
+        target_link_libraries(igui_fuzz_tests PRIVATE igui)
+        add_test(NAME igui_fuzz COMMAND igui_fuzz_tests)
+
+        add_executable(igui_numeric_input_tests tests/test_numeric_input.cpp)
+        target_link_libraries(igui_numeric_input_tests PRIVATE igui)
+        add_test(NAME igui_numeric_input COMMAND igui_numeric_input_tests)
+
+        add_executable(igui_text_editing_tests tests/test_text_editing.cpp)
+        target_link_libraries(igui_text_editing_tests PRIVATE igui)
+        add_test(NAME igui_text_editing COMMAND igui_text_editing_tests)
+
+        add_executable(igui_windows_tests tests/test_windows.cpp)
+        target_link_libraries(igui_windows_tests PRIVATE igui)
+        add_test(NAME igui_windows COMMAND igui_windows_tests)
+
+        add_executable(igui_code_editor_tests tests/test_code_editor.cpp)
+        target_link_libraries(igui_code_editor_tests PRIVATE igui)
+        add_test(NAME igui_code_editor COMMAND igui_code_editor_tests)
     endif()
 endif()
 
@@ -327,7 +356,7 @@ if(IGUI_RAYLIB_AVAILABLE)
     endif()
 endif()
 
-if(IGUI_BUILD_SDL2_DEMO)
+if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
     # SDL2 arrives one of two ways: a parent project already built or found
     # it (target SDL2::SDL2 - e.g. a vendored submodule), or it is installed
     # system-wide and pkg-config can see it. Prefer the target: pkg-config
@@ -347,6 +376,13 @@ if(IGUI_BUILD_SDL2_DEMO)
             list(APPEND IGUI_SDL2_LIBS SDL2::SDL2main)
         endif()
         list(APPEND IGUI_SDL2_LIBS SDL2::SDL2)
+    elseif(EMSCRIPTEN)
+        # Emscripten ships SDL2 as a port selected by a flag at compile and
+        # link time, so there is no package to find.
+        add_library(igui_emscripten_sdl2 INTERFACE)
+        target_compile_options(igui_emscripten_sdl2 INTERFACE -sUSE_SDL=2)
+        target_link_options(igui_emscripten_sdl2 INTERFACE -sUSE_SDL=2)
+        set(IGUI_SDL2_LIBS igui_emscripten_sdl2)
     else()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(SDL2 REQUIRED IMPORTED_TARGET sdl2)
@@ -400,6 +436,44 @@ if(IGUI_BUILD_SDL2_DEMO)
         if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
             target_compile_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)
             target_link_options(igui_sdl2_original_widgets_demo PRIVATE -fsanitize=address)
+        endif()
+    endif()
+
+    if(IGUI_BUILD_WEB AND EMSCRIPTEN)
+        set(IGUI_WEB_LINK_OPTIONS
+            -sALLOW_MEMORY_GROWTH=1
+            -sNO_EXIT_RUNTIME=1
+            --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/web/shell.html)
+
+        if(IGUI_BUILD_IMMEDIATE)
+            add_executable(igui_web_immediate examples/web/immediate_gallery.cpp)
+            target_link_libraries(igui_web_immediate PRIVATE igui_sdl2 igui)
+            target_link_options(igui_web_immediate PRIVATE ${IGUI_WEB_LINK_OPTIONS})
+            set_target_properties(igui_web_immediate PROPERTIES
+                OUTPUT_NAME immediate SUFFIX ".html")
+        endif()
+
+        if(TARGET igui_widgets)
+            add_executable(igui_web_retained
+                examples/web/retained_gallery.cpp
+                examples/sdl2_original_widgets/SdlWidgetBridge.cpp
+                examples/sdl2_original_widgets/stage_advanced.cpp
+                examples/sdl2_original_widgets/stages/stage_demo.cpp
+                examples/sdl2_original_widgets/stages/stage_menu.cpp
+                examples/sdl2_original_widgets/stages/stage_basic.cpp
+                examples/sdl2_original_widgets/stages/stage_controls.cpp
+                examples/sdl2_original_widgets/stages/stage_scroll.cpp
+                examples/sdl2_original_widgets/stages/stage_inputs.cpp
+                examples/sdl2_original_widgets/stages/stage_menus.cpp
+                examples/sdl2_original_widgets/stages/stage_dialogs.cpp
+                examples/sdl2_original_widgets/stages/stage_dock.cpp
+                examples/sdl2_original_widgets/stages/stage_properties.cpp)
+            target_compile_features(igui_web_retained PRIVATE cxx_std_17)
+            target_include_directories(igui_web_retained PRIVATE examples/sdl2_original_widgets)
+            target_link_libraries(igui_web_retained PRIVATE igui_widgets ${IGUI_SDL2_LIBS})
+            target_link_options(igui_web_retained PRIVATE ${IGUI_WEB_LINK_OPTIONS})
+            set_target_properties(igui_web_retained PROPERTIES
+                OUTPUT_NAME retained SUFFIX ".html")
         endif()
     endif()
 

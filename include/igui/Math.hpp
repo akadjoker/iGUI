@@ -48,8 +48,13 @@ struct Rect
     }
 };
 
+// NaN clamps to minimum: both comparisons are false for NaN, so it used to
+// pass straight through - a NaN slider value became a NaN handle position
+// and NaN vertices reached the backend.
 inline float clamp(float value, float minimum, float maximum)
 {
+    if (!(value == value))
+        return minimum;
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
