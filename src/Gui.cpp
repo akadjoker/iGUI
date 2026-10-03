@@ -3997,6 +3997,20 @@ void Context::drawArc(const Vec2 &center, float radius, float fromRadians,
                      fromRadians, toRadians, color, contentClip(), thickness);
 }
 
+void Context::drawPolygonFilled(Span<const Vec2> points, const Color &color)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList || points.size() < 3u)
+        return;
+    ct::Vector<Vec2> absolute;
+    for (size_t i = 0u; i < points.size(); ++i)
+    {
+        const Rect placed = contentRect(Rect(points[i].x, points[i].y, 0.0f, 0.0f));
+        absolute.push_back(Vec2(placed.x, placed.y));
+    }
+    drawList->addPolygonFilled(Span<const Vec2>(absolute.data(), absolute.size()), color, contentClip());
+}
+
 void Context::drawRectFilledRounded(const Rect &bounds, float radius, const Color &color)
 {
     DrawList *drawList = currentDrawList();

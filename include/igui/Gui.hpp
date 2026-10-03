@@ -445,6 +445,8 @@ public:
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
     void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
+    // A filled simple polygon (convex or not), points in the same content space as the other draw* calls.
+    void drawPolygonFilled(Span<const Vec2> points, const Color &color);
     // Rounded rectangles, filled and outline. A large radius on a square gives
     // a circle, so one call covers pills, cards and step-sequencer cells.
     void drawRectFilledRounded(const Rect &bounds, float radius, const Color &color);
