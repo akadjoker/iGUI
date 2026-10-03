@@ -762,6 +762,8 @@ private:
         bool tabListOpen[4];
         bool tabBarHidden[4];
         uint64_t tabBarFrame[4];
+        // Frame in which the region of each slot was last drawn (every tab of a slot calls beginDockPanel).
+        uint64_t regionFrame[4];
         ct::Vector<DockTabState> tabs;
 
         DockSpaceState() : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f), tabs()
@@ -772,6 +774,7 @@ private:
                 tabListOpen[i] = false;
                 tabBarHidden[i] = false;
                 tabBarFrame[i] = 0u;
+                regionFrame[i] = 0u;
             }
         }
     };

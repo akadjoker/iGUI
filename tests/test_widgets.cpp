@@ -654,6 +654,72 @@ static void drawDockSpace(ig::Context &context, bool &hierarchyVisible, bool &as
     context.endWindow();
 }
 
+// Every tab of a slot calls beginDockPanel, and the inactive ones used to draw the region's background again, over the
+// content of the active tab that had been built before them.
+static void test_dock_tabs_of_one_slot_do_not_cover_each_other()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool hierarchy = false;
+    bool assets = false;
+    bool inspector = false;
+    bool console = false;
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+        drawDockSpace(context, hierarchy, assets, inspector, console);
+        const ig::DrawData &data = context.endFrame();
+        assert(hierarchy && !assets);
+
+        // The command of the label of the active tab of the left slot.
+        int label = -1;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text)
+                continue;
+            const ig::TextCommand &text = command.payload.text;
+            if (text.textSize == 5u && data.textBytes.size() >= text.textOffset + 5u &&
+                ig::StringView(data.textBytes.data() + text.textOffset, 5u) == ig::StringView("scene"))
+            {
+                label = static_cast<int>(i);
+            }
+        }
+        assert(label >= 0);
+
+        // After it, nothing may paint a panel-sized background of the region's colour.
+        const ig::Color regionColor = context.theme().inputBg;
+        for (size_t i = static_cast<size_t>(label) + 1u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Geometry)
+                continue;
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k + 2u < geometry.indexCount; k += 3u)
+            {
+                const ig::DrawVertex *corners[3];
+                for (uint32_t c = 0u; c < 3u; ++c)
+                {
+                    corners[c] = &data.vertices[static_cast<size_t>(geometry.vertexOffset) +
+                                                data.indices[geometry.firstIndex + k + c]];
+                }
+                if (!(corners[0]->color == regionColor))
+                    continue;
+                float minX = corners[0]->position.x, maxX = minX, minY = corners[0]->position.y, maxY = minY;
+                for (uint32_t c = 1u; c < 3u; ++c)
+                {
+                    minX = corners[c]->position.x < minX ? corners[c]->position.x : minX;
+                    maxX = corners[c]->position.x > maxX ? corners[c]->position.x : maxX;
+                    minY = corners[c]->position.y < minY ? corners[c]->position.y : minY;
+                    maxY = corners[c]->position.y > maxY ? corners[c]->position.y : maxY;
+                }
+                // The left region is 180 wide and 150 high; the other regions reach further right.
+                assert(!(maxX < 210.0f && maxX - minX > 150.0f && maxY - minY > 100.0f));
+            }
+        }
+    }
+}
+
 static void test_dock_space()
 {
     WidgetBackend backend;
@@ -2408,6 +2474,7 @@ int main()
     test_navigation_widgets();
     test_history_and_keyboard_navigation();
     test_dock_space();
+    test_dock_tabs_of_one_slot_do_not_cover_each_other();
     test_full_client_dock_space_and_theme_presets();
     test_dock_panel_close_button();
     test_editor_widgets();

@@ -5190,8 +5190,14 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect clip = contentClip();
     if (region.width <= 0.0f || region.height <= theme_.widgetHeight)
         return false;
-    drawList->addRectFilled(region, theme_.inputBg, clip);
-    drawList->addRect(region, theme_.borderColor, clip);
+    // Every tab of a slot comes through here; the region is drawn by the first one of the frame. A second background
+    // would paint over the content of a tab that was built before it.
+    if (dockSpace->regionFrame[slotIndex] != frameNumber_)
+    {
+        dockSpace->regionFrame[slotIndex] = frameNumber_;
+        drawList->addRectFilled(region, theme_.inputBg, clip);
+        drawList->addRect(region, theme_.borderColor, clip);
+    }
 
     int tabCount = 0;
     for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
