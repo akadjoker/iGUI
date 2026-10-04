@@ -182,6 +182,161 @@ void gizmo3DRingBasis(GizmoAxis3D axis, Vec3 &u, Vec3 &v)
     }
 }
 
+// ── Ray helpers ──────────────────────────────────────────────────────────────
+// A rotation has to be measured on the ring the user grabbed, not on the screen:
+// the screen angle of an ellipse has nothing to do with the turn of the model.
+// That needs the pointer's ray, and therefore the inverse of the matrices the
+// caller handed in, so the immediate core inverts a 4x4 of its own (nothing
+// here may use the STL).
+
+void gizmo3DMultiply(const float *left, const float *right, float *out)
+{
+    for (int column = 0; column < 4; ++column)
+        for (int row = 0; row < 4; ++row)
+        {
+            float sum = 0.0f;
+            for (int step = 0; step < 4; ++step)
+                sum += left[step * 4 + row] * right[column * 4 + step];
+            out[column * 4 + row] = sum;
+        }
+}
+
+bool gizmo3DInvert(const float *matrix, float *out)
+{
+    const float c0 = matrix[0], c1 = matrix[1], c2 = matrix[2], c3 = matrix[3];
+    const float c4 = matrix[4], c5 = matrix[5], c6 = matrix[6], c7 = matrix[7];
+    const float c8 = matrix[8], c9 = matrix[9], c10 = matrix[10], c11 = matrix[11];
+    const float c12 = matrix[12], c13 = matrix[13], c14 = matrix[14], c15 = matrix[15];
+
+    const float s0 = c0 * c5 - c1 * c4;
+    const float s1 = c0 * c6 - c2 * c4;
+    const float s2 = c0 * c7 - c3 * c4;
+    const float s3 = c1 * c6 - c2 * c5;
+    const float s4 = c1 * c7 - c3 * c5;
+    const float s5 = c2 * c7 - c3 * c6;
+    const float s6 = c8 * c13 - c9 * c12;
+    const float s7 = c8 * c14 - c10 * c12;
+    const float s8 = c8 * c15 - c11 * c12;
+    const float s9 = c9 * c14 - c10 * c13;
+    const float s10 = c9 * c15 - c11 * c13;
+    const float s11 = c10 * c15 - c11 * c14;
+
+    const float determinant = s0 * s11 - s1 * s10 + s2 * s9 + s3 * s8 - s4 * s7 + s5 * s6;
+    if (absoluteValue(determinant) < 1e-20f)
+        return false;
+    const float inverse = 1.0f / determinant;
+
+    out[0] = (c5 * s11 - c6 * s10 + c7 * s9) * inverse;
+    out[1] = (c2 * s10 - c1 * s11 - c3 * s9) * inverse;
+    out[2] = (c13 * s5 - c14 * s4 + c15 * s3) * inverse;
+    out[3] = (c10 * s4 - c9 * s5 - c11 * s3) * inverse;
+    out[4] = (c6 * s8 - c4 * s11 - c7 * s7) * inverse;
+    out[5] = (c0 * s11 - c2 * s8 + c3 * s7) * inverse;
+    out[6] = (c14 * s2 - c12 * s5 - c15 * s1) * inverse;
+    out[7] = (c8 * s5 - c10 * s2 + c11 * s1) * inverse;
+    out[8] = (c4 * s10 - c5 * s8 + c7 * s6) * inverse;
+    out[9] = (c1 * s8 - c0 * s10 - c3 * s6) * inverse;
+    out[10] = (c12 * s4 - c13 * s2 + c15 * s0) * inverse;
+    out[11] = (c9 * s2 - c8 * s4 - c11 * s0) * inverse;
+    out[12] = (c5 * s7 - c4 * s9 - c6 * s6) * inverse;
+    out[13] = (c0 * s9 - c1 * s7 + c2 * s6) * inverse;
+    out[14] = (c13 * s1 - c12 * s3 - c14 * s0) * inverse;
+    out[15] = (c8 * s3 - c9 * s1 + c10 * s0) * inverse;
+    return true;
+}
+
+// The world ray under a pixel of the gizmo's viewport.
+bool gizmo3DRayThrough(const Gizmo3DProjector &projector, const Vec2 &pixel,
+                       Vec3 &origin, Vec3 &direction)
+{
+    float combined[16];
+    float inverse[16];
+    gizmo3DMultiply(projector.projection, projector.view, combined);
+    if (!gizmo3DInvert(combined, inverse))
+        return false;
+
+    const float horizontal = (pixel.x - projector.viewport.x) / projector.viewport.width * 2.0f - 1.0f;
+    const float vertical = 1.0f - (pixel.y - projector.viewport.y) / projector.viewport.height * 2.0f;
+    const float nearPoint[4] = {horizontal, vertical, -1.0f, 1.0f};
+    const float farPoint[4] = {horizontal, vertical, 1.0f, 1.0f};
+    float nearWorld[4];
+    float farWorld[4];
+    for (int row = 0; row < 4; ++row)
+    {
+        nearWorld[row] = inverse[row] * nearPoint[0] + inverse[4 + row] * nearPoint[1] +
+                         inverse[8 + row] * nearPoint[2] + inverse[12 + row] * nearPoint[3];
+        farWorld[row] = inverse[row] * farPoint[0] + inverse[4 + row] * farPoint[1] +
+                        inverse[8 + row] * farPoint[2] + inverse[12 + row] * farPoint[3];
+    }
+    if (absoluteValue(nearWorld[3]) < 1e-8f || absoluteValue(farWorld[3]) < 1e-8f)
+        return false;
+    const float nearScale = 1.0f / nearWorld[3];
+    const float farScale = 1.0f / farWorld[3];
+    origin = Vec3(nearWorld[0] * nearScale, nearWorld[1] * nearScale, nearWorld[2] * nearScale);
+    const Vec3 far(farWorld[0] * farScale, farWorld[1] * farScale, farWorld[2] * farScale);
+    const float dx = far.x - origin.x;
+    const float dy = far.y - origin.y;
+    const float dz = far.z - origin.z;
+    const float length = sqrtf(dx * dx + dy * dy + dz * dz);
+    if (length < 1e-8f)
+        return false;
+    direction = Vec3(dx / length, dy / length, dz / length);
+    return true;
+}
+
+// The direction the camera looks, into the scene: the third row of a view
+// matrix is the camera's own z axis, which points from the target back to the
+// eye.
+Vec3 gizmo3DViewDirection(const Gizmo3DProjector &projector)
+{
+    return Vec3(-projector.view[2], -projector.view[6], -projector.view[10]);
+}
+
+// Where the pointer's ray crosses the plane of a ring, measured from the target.
+bool gizmo3DRingPoint(const Gizmo3DProjector &projector, const Vec2 &pixel, const Vec3 &centre,
+                      const Vec3 &normal, Vec3 &local)
+{
+    Vec3 origin;
+    Vec3 direction;
+    if (!gizmo3DRayThrough(projector, pixel, origin, direction))
+        return false;
+    const float denominator = direction.x * normal.x + direction.y * normal.y + direction.z * normal.z;
+    if (absoluteValue(denominator) < 1e-6f)
+        return false;
+    const float toCentreX = centre.x - origin.x;
+    const float toCentreY = centre.y - origin.y;
+    const float toCentreZ = centre.z - origin.z;
+    const float distance = (toCentreX * normal.x + toCentreY * normal.y + toCentreZ * normal.z) / denominator;
+    local = Vec3(origin.x + direction.x * distance - centre.x,
+                 origin.y + direction.y * distance - centre.y,
+                 origin.z + direction.z * distance - centre.z);
+    return true;
+}
+
+// The turn from one vector to the other around `normal`, signed. This is the
+// measurement ImGuizmo makes in ComputeAngleOnPlan: an acos of the two unit
+// vectors, with the sign taken from the side the cross product falls on.
+float gizmo3DSweptAngle(const Vec3 &normal, const Vec3 &from, const Vec3 &to)
+{
+    const float fromLength = sqrtf(from.x * from.x + from.y * from.y + from.z * from.z);
+    const float toLength = sqrtf(to.x * to.x + to.y * to.y + to.z * to.z);
+    if (fromLength < 1e-6f || toLength < 1e-6f)
+        return 0.0f;
+    const Vec3 a(from.x / fromLength, from.y / fromLength, from.z / fromLength);
+    const Vec3 b(to.x / toLength, to.y / toLength, to.z / toLength);
+    const float dot = a.x * b.x + a.y * b.y + a.z * b.z;
+    const float crossX = a.y * b.z - a.z * b.y;
+    const float crossY = a.z * b.x - a.x * b.z;
+    const float crossZ = a.x * b.y - a.y * b.x;
+    const float side = crossX * normal.x + crossY * normal.y + crossZ * normal.z;
+    // atan2 of the cross product and the dot, not acos of the dot: two identical
+    // vectors have a dot of 1, where acos only gives zero to within its own
+    // rounding, and that rounding was enough to nudge the model on a press that
+    // did not move.
+    const float angle = atan2f(sqrtf(crossX * crossX + crossY * crossY + crossZ * crossZ), dot);
+    return side < 0.0f ? -angle : angle;
+}
+
 GizmoAxis3D hitGizmo3D(Gizmo3DMode mode, const Vec2 &pointer, const Transform3D &transform,
                        const Gizmo3DProjector &projector, float axisLength)
 {
@@ -200,31 +355,32 @@ GizmoAxis3D hitGizmo3D(Gizmo3DMode mode, const Vec2 &pointer, const Transform3D 
         const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
         if (mode == Gizmo3DMode::Rotate)
         {
-            Vec3 u;
-            Vec3 v;
-            gizmo3DRingBasis(axis, u, v);
-            Vec2 previous;
-            bool hasPrevious = false;
-            for (int segment = 0; segment <= 32; ++segment)
+            // The ring is grabbed where the pointer's ray crosses its plane, not
+            // where the nearest point of the drawn curve happens to be: the
+            // drawing is an ellipse, so measuring against it would make a ring
+            // seen edge-on grabbable along its whole length.
+            const Vec3 normal = gizmo3DAxisVector(axis);
+            Vec3 local;
+            if (!gizmo3DRingPoint(projector, pointer, transform.position, normal, local))
+                continue;
+            const Vec3 view = gizmo3DViewDirection(projector);
+            if (local.x * view.x + local.y * view.y + local.z * view.z > 0.0f)
+                continue;   // the far half, where nothing is drawn
+            const float localLength = sqrtf(local.x * local.x + local.y * local.y + local.z * local.z);
+            if (localLength < 1e-6f)
+                continue;
+            const float scale = axisLength / localLength;
+            Vec2 onRing;
+            if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                                                      scaleGizmo3D(local, scale)), onRing))
+                continue;
+            const float offsetX = onRing.x - pointer.x;
+            const float offsetY = onRing.y - pointer.y;
+            const float distance = sqrtf(offsetX * offsetX + offsetY * offsetY);
+            if (distance < bestDistance)
             {
-                const float angle = GizmoPi * 2.0f * static_cast<float>(segment) / 32.0f;
-                const Vec3 point = addGizmo3D(transform.position,
-                    addGizmo3D(scaleGizmo3D(u, cosf(angle) * axisLength),
-                                scaleGizmo3D(v, sinf(angle) * axisLength)));
-                Vec2 current;
-                if (!projectGizmo3D(projector, point, current))
-                    continue;
-                if (hasPrevious)
-                {
-                    const float distance = gizmo3DSegmentDistance(pointer, previous, current);
-                    if (distance < bestDistance)
-                    {
-                        bestDistance = distance;
-                        bestAxis = axis;
-                    }
-                }
-                previous = current;
-                hasPrevious = true;
+                bestDistance = distance;
+                bestAxis = axis;
             }
         }
         else
@@ -2458,9 +2614,16 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         state->axis = static_cast<uint8_t>(hoveredAxis);
         state->pointerStart = pointer_.pressedPosition[left];
         state->transformStart = transform;
+        state->ringStart = Vec3();
+        if (mode == Gizmo3DMode::Rotate && hoveredAxis >= Gizmo3DAxisX && hoveredAxis <= Gizmo3DAxisZ)
+            gizmo3DRingPoint(projector, pointer_.pressedPosition[left], transform.position,
+                             gizmo3DAxisVector(hoveredAxis), state->ringStart);
     }
 
     bool changed = false;
+    // The angle the live drag has swept on the ring's plane, for the wedge drawn
+    // around the centre below.
+    float ringSweep = 0.0f;
     const GizmoAxis3D activeAxis = activeWidget_ == id
         ? static_cast<GizmoAxis3D>(state->axis) : Gizmo3DAxisNone;
     if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
@@ -2504,10 +2667,23 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         }
         else if (mode == Gizmo3DMode::Rotate)
         {
+            // A ring is turned by its own plane's angle. Turning it by the angle
+            // the pointer sweeps on the screen instead reads as the model
+            // lagging the hand: the drawn ring is an ellipse, so equal steps
+            // across the screen are unequal steps around the model.
             const float startAngle = atan2f(state->pointerStart.y - center.y, state->pointerStart.x - center.x);
             const float currentAngle = atan2f(pointer_.position.y - center.y, pointer_.position.x - center.x);
-            const float amount = snapGizmoValue((currentAngle - startAngle) * 180.0f / GizmoPi,
-                                                options.rotateSnap);
+            float swept = currentAngle - startAngle;
+            if (activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ)
+            {
+                const Vec3 normal = gizmo3DAxisVector(activeAxis);
+                Vec3 local;
+                if (gizmo3DRingPoint(projector, pointer_.position, state->transformStart.position,
+                                     normal, local))
+                    swept = gizmo3DSweptAngle(normal, state->ringStart, local);
+            }
+            ringSweep = swept;
+            const float amount = snapGizmoValue(swept * 180.0f / GizmoPi, options.rotateSnap);
             transform.rotation = state->transformStart.rotation;
             if (activeAxis == Gizmo3DAxisX) transform.rotation.x += amount;
             if (activeAxis == Gizmo3DAxisY || activeAxis == Gizmo3DAxisXYZ) transform.rotation.y += amount;
@@ -2669,7 +2845,53 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                               Vec2(center.x + cosf(second) * outerRadius, center.y + sinf(second) * outerRadius),
                               outerColor, clip, 1.5f);
         }
-        if (activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ)
+        const bool turningRing = activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ &&
+            (state->ringStart.x != 0.0f || state->ringStart.y != 0.0f || state->ringStart.z != 0.0f);
+        if (turningRing)
+        {
+            // The wedge follows the ring, not the screen: it is the source vector
+            // turned around the ring's own axis by the angle the drag has swept,
+            // which is the angle the transform is being given.
+            const Vec3 normal = gizmo3DAxisVector(activeAxis);
+            const float sourceLength = sqrtf(state->ringStart.x * state->ringStart.x +
+                                             state->ringStart.y * state->ringStart.y +
+                                             state->ringStart.z * state->ringStart.z);
+            const Vec3 source(state->ringStart.x / sourceLength, state->ringStart.y / sourceLength,
+                              state->ringStart.z / sourceLength);
+            const int steps = 24;
+            Vec2 arc[steps + 1];
+            bool arcValid = true;
+            for (int step = 0; step <= steps; ++step)
+            {
+                const float angle = ringSweep * static_cast<float>(step) / static_cast<float>(steps);
+                const float cosine = cosf(angle);
+                const float sine = sinf(angle);
+                const float crossX = normal.y * source.z - normal.z * source.y;
+                const float crossY = normal.z * source.x - normal.x * source.z;
+                const float crossZ = normal.x * source.y - normal.y * source.x;
+                const float dot = normal.x * source.x + normal.y * source.y + normal.z * source.z;
+                const Vec3 turned(source.x * cosine + crossX * sine + normal.x * dot * (1.0f - cosine),
+                                  source.y * cosine + crossY * sine + normal.y * dot * (1.0f - cosine),
+                                  source.z * cosine + crossZ * sine + normal.z * dot * (1.0f - cosine));
+                if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                                                          scaleGizmo3D(turned, options.axisLength)), arc[step]))
+                    arcValid = false;
+            }
+            if (arcValid)
+            {
+                const Color feedback(255u, 160u, 50u, 65u);
+                for (int step = 0; step < steps; ++step)
+                {
+                    const Vec2 wedge[] = {center, arc[step], arc[step + 1]};
+                    drawList->addPolygonFilled(Span<const Vec2>(wedge), feedback, clip);
+                }
+                const Color edge(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g,
+                                 theme_.gizmoHighlight.b, 200u);
+                drawList->addLine(center, arc[0], edge, clip, 1.5f);
+                drawList->addLine(center, arc[steps], edge, clip, 1.5f);
+            }
+        }
+        else if (activeAxis == Gizmo3DAxisXYZ)
         {
             const float start = atan2f(state->pointerStart.y - center.y, state->pointerStart.x - center.x);
             const float end = atan2f(pointer_.position.y - center.y, pointer_.position.x - center.x);
@@ -2684,10 +2906,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                     Vec2(center.x + cosf(second) * radius, center.y + sinf(second) * radius)};
                 drawList->addPolygonFilled(Span<const Vec2>(wedge), feedback, clip);
             }
-            drawList->addLine(center, Vec2(center.x + cosf(start) * radius, center.y + sinf(start) * radius),
-                              Color(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 200u), clip, 1.5f);
-            drawList->addLine(center, Vec2(center.x + cosf(end) * radius, center.y + sinf(end) * radius),
-                              Color(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g, theme_.gizmoHighlight.b, 200u), clip, 1.5f);
         }
         char rotationText[64];
         snprintf(rotationText, sizeof(rotationText), "X %.1f  Y %.1f  Z %.1f",
