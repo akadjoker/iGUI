@@ -44,6 +44,26 @@ namespace {
     inline float todB(float v) { return (v < 1e-7f) ? -96.0f : 20.0f * std::log10(v); }
     inline float fromDB(float db) { return std::pow(10.0f, db / 20.0f); }
 
+    // One continuous band of a knob's value arc. Stroking it as a fan of short
+    // lines leaves the soft edge of every joint overlapping its neighbour, and
+    // the alpha adds up there, which reads as notches around the ring.
+    inline void strokeArcBand(ig::retained::DrawList& list, float cx, float cy, float radius,
+                              float startAngle, float sweepAngle, float fromTurn,
+                              float toTurn, const Color& color, float thickness)
+    {
+        if (toTurn <= fromTurn)
+            return;
+        const float span = toTurn - fromTurn;
+        const int steps = std::max(2, static_cast<int>(std::ceil(span * 48.0f)));
+        for (int i = 0; i <= steps; ++i)
+        {
+            const float t = fromTurn + span * static_cast<float>(i) / static_cast<float>(steps);
+            const float a = startAngle + sweepAngle * t;
+            list.pathLineTo({cx + std::cos(a) * radius, cy + std::sin(a) * radius});
+        }
+        list.pathStroke(color, thickness, false);
+    }
+
     static const char* kNoteNames[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
 }
 
@@ -62,87 +82,83 @@ void Knob::setValue(float v)
 
 void Knob::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
+
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 
     const float labelH = label_.empty() ? 0.f : 16.f;
     const float valH   = showValue_     ? 14.f :  0.f;
     const float knobH  = b.h - labelH - valH;
-    const float radius = std::min(b.w, knobH) * 0.5f - 4.f;
+    const float outerRadius = std::min(b.w, knobH) * 0.5f - 1.f;
     const float cx     = b.x + b.w * 0.5f;
     const float cy     = b.y + knobH * 0.5f;
     const float norm   = normalised();
 
-    // Body circle with subtle outer ring
-    ctx.fill.SetColor(40, 42, 48, 255);
-    ctx.fillCircle(cx, cy, radius + 1.f);
-    ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, 255);
-    ctx.fillCircle(cx, cy, radius);
+    const float arcThickness = 4.f;
+    const float arcRadius    = outerRadius - arcThickness * 0.5f;
+    const float bodyRadius   = outerRadius - arcThickness - 3.f;
 
-    // Track arc (full 270° background)
-    constexpr int kSegs = 48;
-    const float arcR = radius - 3.f;
-    ctx.line.SetColor(trackColor_.r, trackColor_.g, trackColor_.b, 255);
-    for (int i = 0; i < kSegs; ++i) {
-        float t0 = float(i)     / kSegs;
-        float t1 = float(i + 1) / kSegs;
-        float a0 = kStartAngle + t0 * kSweep;
-        float a1 = kStartAngle + t1 * kSweep;
-        ctx.drawLine(cx + arcR * std::cos(a0), cy + arcR * std::sin(a0),
-                     cx + arcR * std::cos(a1), cy + arcR * std::sin(a1));
+    // The value arc's colour is the application's choice: with none set the knob
+    // takes the theme accent rather than fixing one of its own.
+    const Color accent = hasArcColor_ ? arcColor_ : Theme::instance().focusColor;
+
+    // Value arc outside the body, one band per part so the ring stays clean.
+    strokeArcBand(ctx.drawList, cx, cy, arcRadius, kStartAngle, kSweep, 0.f, 1.f,
+                  trackColor_, arcThickness);
+    strokeArcBand(ctx.drawList, cx, cy, arcRadius, kStartAngle, kSweep, 0.f, norm,
+                  accent, arcThickness);
+
+    // Body: a stack of shrinking circles from the bottom colour up to the lit
+    // top one, gathered upward, which reads as a domed cap without a gradient
+    // primitive for circles.
+    const int shadeSteps = 7;
+    for (int i = 0; i < shadeSteps; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(shadeSteps - 1);
+        const Color shade = lerpColor(bgColor_, bodyTopColor_, t);
+        ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
+        ctx.fillCircle(cx, cy - t * bodyRadius * 0.30f, bodyRadius * (1.f - t * 0.55f));
     }
 
-    // Filled arc (value) with slight glow
-    int fillSegs = static_cast<int>(norm * kSegs);
-    if (fillSegs > 0) {
-        // Glow (wider, lower alpha)
-        ctx.line.SetColor(arcColor_.r, arcColor_.g, arcColor_.b, 60);
-        for (int i = 0; i < fillSegs; ++i) {
-            float t0 = float(i)     / kSegs;
-            float t1 = float(i + 1) / kSegs;
-            float a0 = kStartAngle + t0 * kSweep;
-            float a1 = kStartAngle + t1 * kSweep;
-            float r = arcR + 2.f;
-            ctx.drawLine(cx + r * std::cos(a0), cy + r * std::sin(a0),
-                         cx + r * std::cos(a1), cy + r * std::sin(a1));
-        }
-        // Main arc
-        ctx.line.SetColor(arcColor_.r, arcColor_.g, arcColor_.b, 255);
-        for (int i = 0; i < fillSegs; ++i) {
-            float t0 = float(i)     / kSegs;
-            float t1 = float(i + 1) / kSegs;
-            float a0 = kStartAngle + t0 * kSweep;
-            float a1 = kStartAngle + t1 * kSweep;
-            ctx.drawLine(cx + arcR * std::cos(a0), cy + arcR * std::sin(a0),
-                         cx + arcR * std::cos(a1), cy + arcR * std::sin(a1));
-        }
+    // Thin ring around the cap.
+    const int rimSegments = 40;
+    ctx.line.SetColor(rimColor_.r, rimColor_.g, rimColor_.b, 255);
+    for (int i = 0; i < rimSegments; ++i)
+    {
+        const float a0 = 2.f * kPi * static_cast<float>(i) / rimSegments;
+        const float a1 = 2.f * kPi * static_cast<float>(i + 1) / rimSegments;
+        ctx.drawLine(cx + bodyRadius * std::cos(a0), cy + bodyRadius * std::sin(a0),
+                     cx + bodyRadius * std::cos(a1), cy + bodyRadius * std::sin(a1));
     }
 
-    // Pointer line
-    float angle = kStartAngle + norm * kSweep;
-    float r0 = radius * 0.35f, r1 = radius - 5.f;
-    ctx.line.SetColor(arcColor_.r, arcColor_.g, arcColor_.b, 255);
-    ctx.drawLine(cx + r0 * std::cos(angle), cy + r0 * std::sin(angle),
-                 cx + r1 * std::cos(angle), cy + r1 * std::sin(angle));
+    // The needle turns with the value: a line cut from near the centre out to
+    // the edge of the cap, with a moulded dot near its tip. That is what makes
+    // the knob read as something you grab and turn rather than as a gauge.
+    const float angle = kStartAngle + kSweep * norm;
+    const float ca = std::cos(angle);
+    const float sa = std::sin(angle);
+    ctx.drawList.addLine({cx + ca * bodyRadius * 0.20f, cy + sa * bodyRadius * 0.20f},
+                         {cx + ca * bodyRadius * 0.92f, cy + sa * bodyRadius * 0.92f},
+                         indicatorColor_, 2.5f);
+    ctx.fill.SetColor(indicatorColor_.r, indicatorColor_.g, indicatorColor_.b, 255);
+    ctx.fillCircle(cx + ca * bodyRadius * 0.78f, cy + sa * bodyRadius * 0.78f, 1.6f);
 
-    // Centre dot
-    ctx.fill.SetColor(arcColor_.r, arcColor_.g, arcColor_.b, 255);
-    ctx.fillCircle(cx, cy, 3.f);
-    ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, 255);
-    ctx.fillCircle(cx, cy, 1.5f);
-
-    // Value text (centred)
+    // Value text (centred, under the dial)
     if (showValue_) {
-        char buf[16];
-        snprintf(buf, sizeof(buf), "%.2f", value_);
-        float asc = setupFont(ctx, Color(170, 175, 185, 255), 10.f);
+        char buf[32];
+        if (!valueText_.empty())
+            snprintf(buf, sizeof(buf), "%s", valueText_.c_str());
+        else
+            snprintf(buf, sizeof(buf), "%.2f", value_);
+        float asc = setupFont(ctx, Color(228, 234, 244, 255), 10.f);
         float tw  = ctx.font.GetTextWidth(buf);
         ctx.font.Print(buf, cx - tw * 0.5f, b.y + knobH + (valH - 10.f) * 0.5f + asc);
     }
 
     // Label (centred)
     if (!label_.empty()) {
-        float asc = setupFont(ctx, Color(200, 205, 215, 255), 10.f);
+        float asc = setupFont(ctx, Color(138, 148, 166, 255), 10.f);
         float tw  = ctx.font.GetTextWidth(label_.c_str());
         ctx.font.Print(label_.c_str(), cx - tw * 0.5f, b.y + knobH + valH + (labelH - 10.f) * 0.5f + asc);
     }

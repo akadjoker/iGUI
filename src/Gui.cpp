@@ -1043,23 +1043,36 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
         return false;
 
     const WidgetId id = makeWidgetId(labelText);
-    const Rect box = contentRect(bounds);
+    const Rect widget = contentRect(bounds);
     const Rect clip = contentClip();
     DrawList *drawList = currentDrawList();
-    if (!drawList)
+    if (!drawList || widget.width <= 0.0f || widget.height <= 0.0f)
         return false;
-    const bool hovered = itemHovered(box, clip, id);
-    const bool clicked = itemClicked(box, clip, id);
+    const bool hovered = itemHovered(widget, clip, id);
+    const bool clicked = itemClicked(widget, clip, id);
     if (clicked)
         value = !value;
 
-    const Color checkboxColor = value ? theme_.checkboxChecked
-                                      : (hovered ? theme_.buttonHovered : theme_.checkboxBackground);
-    drawFrame(*drawList, box, checkboxColor, hovered ? theme_.inputBorderHover : theme_.inputBorder,
-              theme_.borderRadius, clip);
+    /* A square mark with the label beside it, the way the retained-mode CheckBox
+       draws it: the box keeps the input colour and the tick is filled inside. */
+    const float boxSize = widget.height < theme_.fontSize ? widget.height : theme_.fontSize;
+    const Rect box(widget.x + (widget.width - boxSize) * 0.5f,
+                   widget.y + (widget.height - boxSize) * 0.5f, boxSize, boxSize);
+    drawFrame(*drawList, box, hovered ? theme_.buttonHovered : theme_.checkboxBackground,
+              hovered ? theme_.inputBorderHover : theme_.inputBorder,
+              theme_.borderRadius * 0.5f, clip);
+    if (value)
+    {
+        const float margin = 3.0f;
+        const float markSize = boxSize - margin * 2.0f;
+        if (markSize > 0.0f)
+            drawList->addRectFilled(Rect(box.x + margin, box.y + margin, markSize, markSize),
+                                    theme_.checkMark, clip);
+    }
+
     const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    const Vec2 textPosition(box.x + box.width + theme_.windowPadding * 0.5f,
-                            box.y + (box.height - metrics.height) * 0.5f);
+    const Vec2 textPosition(box.x + boxSize + theme_.windowPadding * 0.5f,
+                            widget.y + (widget.height - metrics.height) * 0.5f);
     drawText(*drawList, theme_.font, labelText, textPosition, theme_.fontSize,
              theme_.labelText, clip);
     return clicked;

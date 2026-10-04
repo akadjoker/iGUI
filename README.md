@@ -230,7 +230,7 @@ Both widget APIs also build to WebAssembly with Emscripten. The galleries run in
 
 | Page | Target | Content |
 | --- | --- | --- |
-| `immediate.html` | `igui_web_immediate` | Immediate-mode widgets in six sections: basic, inputs, lists and tables, layout, windows and dialogs, code editor |
+| `immediate.html` | `igui_web_immediate` | Immediate-mode widgets in nine sections: basic, inputs, lists and tables, layout, windows and dialogs, menus and submenus, icon buttons, a synth voice with knobs, code editor |
 | `retained.html` | `igui_web_retained` | The retained-mode stages, from basic widgets to dock panels, node editor, timeline and file dialog |
 | `index.html` | | Page with a tab for each gallery (`web/index.html`) |
 

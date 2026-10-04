@@ -40,12 +40,34 @@ public:
     /// @brief Get the current label.
     const String& label() const    { return label_; }
 
-    /// @brief Set the arc color.
-    void setArcColor(const Color& c)    { arcColor_   = c; markDirty(); }
+    /// @brief Text shown under the dial. Empty prints the raw value; set it (from
+    /// onChanged, say) to read "90%", "C" or "440 Hz" the way the immediate-mode
+    /// knob's displayText reads.
+    void setValueText(const String& t) { valueText_ = t; markDirty(); }
+    /// @brief Get the text shown under the dial.
+    const String& valueText() const    { return valueText_; }
+
+    /// @brief Set the arc color. Until one is set the knob follows the theme
+    /// accent, so no colour is fixed here: the voice picks it.
+    void setArcColor(const Color& c)    { arcColor_   = c; hasArcColor_ = true; markDirty(); }
+    /// @brief Forget the colour set with setArcColor and follow the theme again.
+    void clearArcColor()                { hasArcColor_ = false; markDirty(); }
     /// @brief Set the track background color.
     void setTrackColor(const Color& c)  { trackColor_ = c; markDirty(); }
-    /// @brief Set the background color.
-    void setBgColor(const Color& c)     { bgColor_    = c; markDirty(); }
+    /// @brief Set the background color. The cap is shaded from this colour up to
+    /// a lighter top, so one colour is enough for a domed body.
+    void setBgColor(const Color& c)     { setBodyColors(lighten(c, 0.45f), c); }
+    /// @brief Set the cap colours: the bright top and the dark bottom.
+    void setBodyColors(const Color& top, const Color& bottom)
+    {
+        bodyTopColor_ = top;
+        bgColor_      = bottom;
+        markDirty();
+    }
+    /// @brief Set the thin ring drawn around the cap.
+    void setRimColor(const Color& c)    { rimColor_ = c; markDirty(); }
+    /// @brief Set the colour of the needle and its tip dot.
+    void setIndicatorColor(const Color& c) { indicatorColor_ = c; markDirty(); }
     /// @brief Set whether to show the numeric value.
     void setShowValue(bool s)           { showValue_  = s; markDirty(); }
     /// @brief Set the drag sensitivity.
@@ -65,14 +87,29 @@ private:
     float value_ = 0.5f, min_ = 0.f, max_ = 1.f, default_ = 0.5f;
     float sensitivity_ = 120.f;
     String label_;
+    String valueText_;
     bool  showValue_ = true;
-    Color arcColor_   = Color(100, 180, 240, 255);
-    Color trackColor_ = Color( 50,  55,  65, 255);
-    Color bgColor_    = Color( 28,  30,  36, 255);
+    Color arcColor_   = Color(96, 212, 255, 255);
+    bool  hasArcColor_ = false;
+    Color trackColor_ = Color( 52,  58,  82, 255);
+    Color bgColor_    = Color( 34,  36,  44, 255);
+    Color bodyTopColor_   = Color( 58,  62,  74, 255);
+    Color rimColor_       = Color( 78,  84, 100, 255);
+    Color indicatorColor_ = Color(240, 243, 250, 255);
     bool  dragging_ = false;
     float dragStartY_ = 0.f, dragStartV_ = 0.f;
 
-    static constexpr float kStartAngle = 225.0f * (3.14159265f / 180.0f);
+    /// @brief Mix a colour toward white, for the lit top of the cap.
+    static Color lighten(const Color& c, float amount)
+    {
+        return Color(static_cast<uint8_t>(c.r + (255 - c.r) * amount),
+                     static_cast<uint8_t>(c.g + (255 - c.g) * amount),
+                     static_cast<uint8_t>(c.b + (255 - c.b) * amount), 255);
+    }
+
+    // Open at the bottom, like every hardware pot: 270 degrees from the lower
+    // left, which is also where the immediate-mode knob starts.
+    static constexpr float kStartAngle = 135.0f * (3.14159265f / 180.0f);
     static constexpr float kSweep      = 270.0f * (3.14159265f / 180.0f);
 };
 

@@ -28,17 +28,28 @@ struct KnobStyle
     ig::Color rim;         // thin ring around the body
     ig::Color indicator;   // the mark that rotates with the body
     ig::Color track;       // unfilled part of the value arc
-    ig::Color fill;        // filled part
+    ig::Color fill;        // filled part; fully transparent = follow the theme accent
     ig::Color value;
     ig::Color label;
     float arcThickness;
 
+    // The same defaults the retained-mode Knob paints with, so one voice reads
+    // the same in either API. No accent colour is fixed here: an unset fill
+    // takes the theme's, and the voice can pick its own.
     KnobStyle()
-        : bodyTop(72u, 80u, 98u, 255u), bodyBottom(38u, 43u, 56u, 255u),
-          rim(96u, 106u, 128u, 255u), indicator(238u, 243u, 252u, 255u),
-          track(44u, 50u, 64u, 255u), fill(96u, 212u, 255u, 255u),
+        : bodyTop(58u, 62u, 74u, 255u), bodyBottom(34u, 36u, 44u, 255u),
+          rim(78u, 84u, 100u, 255u), indicator(240u, 243u, 250u, 255u),
+          track(52u, 58u, 82u, 255u), fill(0u, 0u, 0u, 0u),
           value(228u, 234u, 244u, 255u), label(138u, 148u, 166u, 255u),
           arcThickness(4.0f) {}
+
+    /// The default look with one change: the accent of the value arc.
+    static KnobStyle accent(const ig::Color& colour)
+    {
+        KnobStyle style;
+        style.fill = colour;
+        return style;
+    }
 };
 
 // One knob may be dragging at a time; the application owns that state.
@@ -90,9 +101,13 @@ inline bool knob(ig::Context& ui, ig::StringView id, const char* label,
     norm = norm < 0.0f ? 0.0f : (norm > 1.0f ? 1.0f : norm);
     const float angle = kStartAngle + kSweepAngle * norm;
 
+    // The value arc's colour is the application's choice: with none set the knob
+    // takes the theme accent rather than fixing one of its own.
+    const ig::Color accent = style.fill.a == 0u ? ui.theme().focusColor : style.fill;
+
     // Value arc, outside the body.
     arcSegments(ui, cx, cy, arcRadius, 0.0f, 1.0f, style.track, style.arcThickness);
-    arcSegments(ui, cx, cy, arcRadius, 0.0f, norm, style.fill, style.arcThickness);
+    arcSegments(ui, cx, cy, arcRadius, 0.0f, norm, accent, style.arcThickness);
 
     // Body. Drawn as a stack of shrinking circles from bottom colour to top
     // colour: a cheap vertical shade that makes the cap look domed rather than
@@ -150,9 +165,11 @@ inline bool knob(ig::Context& ui, ig::StringView id, const char* label,
                 ig::Vec2(cx - labelWidth * 0.5f, topLeft.y + diameter + 21.0f),
                 style.label);
 
-    // Vertical drag: up raises the value.
+    // Vertical drag: up raises the value. The pointer is read in content
+    // coordinates, the same space the knob is drawn in, so the hit area stays on
+    // the dial when the layout is indented.
     const ig::Rect hit(topLeft.x, topLeft.y, diameter, diameter);
-    const ig::Vec2 press = ui.pointerPressedPosition(ig::PointerButton::Left);
+    const ig::Vec2 press = ui.pointerPressedContentPosition(ig::PointerButton::Left);
     const bool insideHit = press.x >= hit.x && press.x <= hit.x + hit.width &&
                            press.y >= hit.y && press.y <= hit.y + hit.height;
     const bool held = ui.isPointerButtonDown(ig::PointerButton::Left);
@@ -168,7 +185,7 @@ inline bool knob(ig::Context& ui, ig::StringView id, const char* label,
             drag.originY = hit.y;
             drag.valueAtPress = value;
         }
-        const float dy = press.y - ui.pointerPosition().y;
+        const float dy = press.y - ui.pointerContentPosition().y;
         float next = drag.valueAtPress + (dy / 160.0f) * span;
         next = next < minimum ? minimum : (next > maximum ? maximum : next);
         if (next != value)

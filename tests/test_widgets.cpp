@@ -3,6 +3,8 @@
 
 #include <igui/Gui.hpp>
 
+#include "SynthWidgets.hpp"
+
 class WidgetBackend : public ig::Backend
 {
 public:
@@ -2539,8 +2541,42 @@ static void test_immediate_gradient_editor_sorts_stops()
     assert(stops[0].position == 0.2f && stops[1].position == 0.8f);
 }
 
+// The knob takes its accent from the caller: with none set it follows the theme
+// accent instead of a colour fixed inside the widget, so a voice picks its own.
+static void test_knob_accent_comes_from_the_caller()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float value = 1.0f;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 420.0f, 260.0f)));
+    synth::knob(context, "theme accent", "Volume", "100%", value, 0.0f, 1.0f,
+                ig::Vec2(8.0f, 8.0f), 64.0f);
+    synth::knob(context, "custom accent", "Pan", "C", value, 0.0f, 1.0f,
+                ig::Vec2(100.0f, 8.0f), 64.0f,
+                synth::KnobStyle::accent(ig::Color(10u, 20u, 30u, 255u)));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    const ig::Color accent = context.theme().focusColor;
+    bool foundThemeAccent = false;
+    bool foundCustomAccent = false;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        const ig::Color &colour = data.vertices[i].color;
+        if (colour == accent)
+            foundThemeAccent = true;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
+            foundCustomAccent = true;
+    }
+    assert(foundThemeAccent);
+    assert(foundCustomAccent);
+}
+
 int main()
 {
+    test_knob_accent_comes_from_the_caller();
     test_file_dialog_resize_left_edge();
     test_file_dialog_incremental_search_uses_cached_entries();
     test_immediate_gradient_editor_sorts_stops();
