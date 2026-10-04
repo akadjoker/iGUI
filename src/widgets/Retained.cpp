@@ -42,6 +42,31 @@ namespace ig { namespace retained
             return std::max(std::max(12, saneSegments(requested)), std::min(fromRadius, 512));
         }
 
+        // Segments for one 90 degree corner of a rounded rectangle. The caller's
+        // hint is honoured, but never below the three steps of the fixed 30
+        // degree table this used to draw with, which left any radius above a few
+        // pixels visibly faceted next to the immediate-mode rectangles.
+        int cornerSegments(float radius, int requested)
+        {
+            if (requested > 0)
+                return std::max(requested, 3);
+            return std::max(static_cast<int>(radius * 0.5f) + 3, 3);
+        }
+
+        // Appends one corner arc, both endpoints included, in the same order and
+        // winding the fixed table produced.
+        void pushCornerArc(ct::Vector<Vec2> &path, Vec2 centre, float radius,
+                           float startAngle, int segments)
+        {
+            const float step = (Pi * 0.5f) / static_cast<float>(segments);
+            for (int i = 0; i <= segments; ++i)
+            {
+                const float angle = startAngle + step * static_cast<float>(i);
+                path.push_back({centre.x + std::cos(angle) * radius,
+                                centre.y + std::sin(angle) * radius});
+            }
+        }
+
         bool intersectRects(const Rect &a, const Rect &b, Rect &out)
         {
             float x0 = std::max(a.x, b.x);
@@ -458,7 +483,10 @@ namespace ig { namespace retained
         // pixel fringe fading to transparent (anti-aliased edges).
         const bool aa = antiAliasing_;
         const float fringe = aa ? 1.0f : 0.0f;
-        const float core = aa ? std::max(0.0f, thickness - fringe) : thickness;
+        // One pixel of core, the rule the immediate-mode lines use: thinning a
+        // hairline all the way to the fringe leaves a two pixel blur instead of
+        // a crisp rule, which is what every 1px border and icon stroke gets.
+        const float core = aa ? std::max(1.0f, thickness - fringe) : thickness;
         int segs = closed ? n : n - 1;
         const int perPoint = aa ? 4 : 2;
         uint32_t vtxCount = static_cast<uint32_t>(n * perPoint);
@@ -560,7 +588,7 @@ namespace ig { namespace retained
                  thickness, rect.h - thickness * 2.0f},
                 color);
     }
-    void DrawList::addRoundRectFilled(const Rect &rect, float radius, const Color &color, int /*segments*/)
+    void DrawList::addRoundRectFilled(const Rect &rect, float radius, const Color &color, int segments)
     {
         if (rect.w <= 0.0f || rect.h <= 0.0f)
             return;
@@ -569,16 +597,16 @@ namespace ig { namespace retained
         if (radius < 0.5f) { addRect(rect, color); return; }
 
         float x0 = rect.x, y0 = rect.y, x1 = rect.x + rect.w, y1 = rect.y + rect.h;
-        // Each arc: 4 points (index range covers 90° in 3 × 30° steps + endpoint)
-        //  TR: 270°→360°  BR: 0°→90°  BL: 90°→180°  TL: 180°→270°
-        pathArcToFast({x1 - radius, y0 + radius}, radius, 9, 12);
-        pathArcToFast({x1 - radius, y1 - radius}, radius, 0,  3);
-        pathArcToFast({x0 + radius, y1 - radius}, radius, 3,  6);
-        pathArcToFast({x0 + radius, y0 + radius}, radius, 6,  9);
+        const int steps = cornerSegments(radius, segments);
+        // TR: 270°→360°  BR: 0°→90°  BL: 90°→180°  TL: 180°→270°
+        pushCornerArc(path_, {x1 - radius, y0 + radius}, radius, -Pi * 0.5f, steps);
+        pushCornerArc(path_, {x1 - radius, y1 - radius}, radius, 0.0f, steps);
+        pushCornerArc(path_, {x0 + radius, y1 - radius}, radius, Pi * 0.5f, steps);
+        pushCornerArc(path_, {x0 + radius, y0 + radius}, radius, Pi, steps);
         pathFillConvex(color);
     }
 
-    void DrawList::addRoundRect(const Rect &rect, float radius, const Color &color, float thickness, int /*segments*/)
+    void DrawList::addRoundRect(const Rect &rect, float radius, const Color &color, float thickness, int segments)
     {
         if (rect.w <= 0.0f || rect.h <= 0.0f)
             return;
@@ -591,10 +619,11 @@ namespace ig { namespace retained
         if (radius < 0.5f) { addRectOutline(rect, color, thickness); return; }
 
         float x0 = r2.x, y0 = r2.y, x1 = r2.x + r2.w, y1 = r2.y + r2.h;
-        pathArcToFast({x1 - radius, y0 + radius}, radius, 9, 12);
-        pathArcToFast({x1 - radius, y1 - radius}, radius, 0,  3);
-        pathArcToFast({x0 + radius, y1 - radius}, radius, 3,  6);
-        pathArcToFast({x0 + radius, y0 + radius}, radius, 6,  9);
+        const int steps = cornerSegments(radius, segments);
+        pushCornerArc(path_, {x1 - radius, y0 + radius}, radius, -Pi * 0.5f, steps);
+        pushCornerArc(path_, {x1 - radius, y1 - radius}, radius, 0.0f, steps);
+        pushCornerArc(path_, {x0 + radius, y1 - radius}, radius, Pi * 0.5f, steps);
+        pushCornerArc(path_, {x0 + radius, y0 + radius}, radius, Pi, steps);
         pathStroke(color, thickness, true);
     }
 

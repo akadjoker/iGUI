@@ -1,6 +1,7 @@
 #include <igui/Widgets.hpp>
 #include <igui/widgets/CodeEditor.hpp>
 #include <igui/widgets/Timeline.hpp>
+#include <igui/widgets/Theme.hpp>
 
 #include <cassert>
 #include <cmath>
@@ -15,11 +16,160 @@ static_assert(std::is_same<ig::Rect, ig::retained::Rect>::value,
 static_assert(std::is_same<ig::Widget, ig::retained::Widget>::value,
               "retained widgets must be exposed as ig::Widget");
 
+// The rounded rectangle used to be built from a fixed 30 degree table: four
+// points per corner, which leaves a radius above a few pixels visibly faceted
+// next to the immediate-mode rectangles. The corner must now be a curve.
+static void test_round_rect_corner_is_a_curve()
+{
+    ig::retained::DrawList list;
+    const float radius = 12.0f;
+    const ig::Rect rect = {0.0f, 0.0f, 100.0f, 40.0f};
+    list.addRoundRectFilled(rect, radius, ig::Color(255u, 255u, 255u, 255u), 8);
+
+    // Outline plus the fringe ring the anti-aliasing adds, 4 * (8 + 1) each.
+    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
+    assert(vertices.size() == 2u * 4u * 9u);
+
+    const ig::Vec2 centres[4] = {
+        {rect.x + rect.w - radius, rect.y + radius},
+        {rect.x + rect.w - radius, rect.y + rect.h - radius},
+        {rect.x + radius, rect.y + rect.h - radius},
+        {rect.x + radius, rect.y + radius}
+    };
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        float minDistance = 1e9f;
+        float maxDistance = 0.0f;
+        float maxGap = 0.0f;
+        ig::Vec2 previous;
+        for (int i = 0; i <= 8; ++i)
+        {
+            // Odd vertices are the transparent fringe; the solid corner points
+            // are the even ones.
+            const ig::retained::DrawVertex &vertex =
+                vertices[static_cast<size_t>(2 * (corner * 9 + i))];
+            const float dx = vertex.x - centres[corner].x;
+            const float dy = vertex.y - centres[corner].y;
+            const float distance = std::sqrt(dx * dx + dy * dy);
+            minDistance = distance < minDistance ? distance : minDistance;
+            maxDistance = distance > maxDistance ? distance : maxDistance;
+            if (i > 0)
+            {
+                const float gapX = vertex.x - previous.x;
+                const float gapY = vertex.y - previous.y;
+                const float gap = std::sqrt(gapX * gapX + gapY * gapY);
+                maxGap = gap > maxGap ? gap : maxGap;
+            }
+            previous = {vertex.x, vertex.y};
+        }
+        // The nine points lie on one circle centred on the corner.
+        assert(maxDistance - minDistance < 0.01f);
+        assert(minDistance > radius - 1.0f && maxDistance < radius + 1.0f);
+        // Eight steps of 11.25 degrees: a chord of 2 * 12 * sin(5.625) = 2.35 px.
+        // The old 30 degree table stepped 6.2 px, and that is what read as a bevel.
+        assert(maxGap < 3.0f);
+    }
+}
+
+// The knob's arc is open at the bottom, like a hardware pot and like the
+// immediate-mode knob. The old table started at 225 degrees, which left the
+// opening on the left instead - the two knobs did not match.
+static void test_knob_arc_is_open_at_the_bottom()
+{
+    ig::retained::DrawList list;
+    ig::retained::PaintContext ctx(list);
+    ig::retained::Knob knob;
+    knob.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    knob.setShowValue(false);
+    knob.setValue(1.0f);
+    knob.paint(ctx);
+
+    const float cx = 32.0f;
+    const float cy = 32.0f;
+    const ig::Color track(52u, 58u, 82u, 255u);
+    int trackPoints = 0;
+    bool inBottomGap = false;
+    bool nearLeft = false;
+    bool nearTop = false;
+    bool nearRight = false;
+    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
+    for (size_t i = 0; i < vertices.size(); ++i)
+    {
+        const ig::retained::DrawVertex &vertex = vertices[i];
+        if (vertex.color.r != track.r || vertex.color.g != track.g || vertex.color.b != track.b)
+            continue;
+        const float dx = vertex.x - cx;
+        const float dy = vertex.y - cy;
+        const float distance = std::sqrt(dx * dx + dy * dy);
+        if (distance < 20.0f || distance > 34.0f)   // the value ring only
+            continue;
+        ++trackPoints;
+        float angle = std::atan2(dy, dx) * 180.0f / 3.14159265f;
+        if (angle < 0.0f) angle += 360.0f;
+        // Y grows down, so the bottom of the dial is 90 degrees.
+        if (angle > 50.0f && angle < 130.0f) inBottomGap = true;
+        if (angle > 165.0f && angle < 195.0f) nearLeft = true;
+        if (angle > 255.0f && angle < 285.0f) nearTop = true;
+        if (angle < 15.0f || angle > 345.0f) nearRight = true;
+    }
+    assert(trackPoints > 40);
+    assert(!inBottomGap);
+    assert(nearLeft && nearTop && nearRight);
+}
+
+// The knob takes its accent from the caller: with none set it follows the theme
+// accent instead of a colour fixed inside the widget, so a voice picks its own.
+static void test_knob_accent_comes_from_the_caller()
+{
+    const ig::Color accent = ig::retained::Theme::instance().focusColor;
+
+    ig::retained::DrawList themed;
+    ig::retained::PaintContext themedCtx(themed);
+    ig::retained::Knob plain;
+    plain.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    plain.setShowValue(false);
+    plain.setValue(1.0f);
+    plain.paint(themedCtx);
+
+    bool foundThemeAccent = false;
+    for (size_t i = 0; i < themed.vertices().size(); ++i)
+    {
+        if (themed.vertices()[i].color == accent)
+            foundThemeAccent = true;
+    }
+    assert(foundThemeAccent);
+
+    ig::retained::DrawList coloured;
+    ig::retained::PaintContext colouredCtx(coloured);
+    ig::retained::Knob picked;
+    picked.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    picked.setShowValue(false);
+    picked.setArcColor(ig::Color(10u, 20u, 30u, 255u));
+    picked.setValue(1.0f);
+    picked.paint(colouredCtx);
+
+    bool foundPicked = false;
+    bool foundTheme = false;
+    for (size_t i = 0; i < coloured.vertices().size(); ++i)
+    {
+        const ig::Color &colour = coloured.vertices()[i].color;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
+            foundPicked = true;
+        if (colour == accent)
+            foundTheme = true;
+    }
+    assert(foundPicked);
+    assert(!foundTheme);
+}
+
 int main()
 {
     using namespace ig;
 
     using namespace ig::retained;
+    test_round_rect_corner_is_a_curve();
+    test_knob_arc_is_open_at_the_bottom();
+    test_knob_accent_comes_from_the_caller();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;
