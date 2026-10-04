@@ -19,6 +19,17 @@ ig::retained::TextureHandle SdlWidgetBridge::createTexture(int width, int height
     return {reinterpret_cast<uintptr_t>(texture)};
 }
 
+bool SdlWidgetBridge::updateTexture(ig::retained::TextureHandle handle, const unsigned char *rgba,
+                                    int width, int height)
+{
+    SDL_Texture *texture = reinterpret_cast<SDL_Texture *>(handle.value);
+    if (!texture) return false;
+    int w = 0, h = 0;
+    if (SDL_QueryTexture(texture, nullptr, nullptr, &w, &h) != 0 || w != width || h != height)
+        return false;
+    return SDL_UpdateTexture(texture, nullptr, rgba, width * 4) == 0;
+}
+
 void SdlWidgetBridge::destroyTexture(ig::retained::TextureHandle handle)
 {
     if (handle)
