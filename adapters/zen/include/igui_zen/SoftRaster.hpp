@@ -4,6 +4,11 @@
 #include <ct/vector.hpp>
 #include <stdint.h>
 
+namespace ig
+{
+namespace zen
+{
+
 // Software rasteriser for the retained DrawData. Triangles are drawn into a
 // supersampled buffer and box-filtered down, so every edge is anti-aliased
 // and shared diagonals of a triangle fan leave no seam.
@@ -61,3 +66,6 @@ private:
     ct::Vector<uint32_t> scratch_;
     ct::Vector<Vertex> vertices_;
 };
+
+} // namespace zen
+} // namespace ig
