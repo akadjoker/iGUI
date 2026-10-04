@@ -215,6 +215,10 @@ private:
     Vec3f dragStartPos_;
     Vec3f dragStartRot_;
     Vec3f dragStartScale_;
+    // Where the pointer's ray crossed the grabbed ring's plane when the press
+    // landed, measured from the target: the turn is the angle from here to
+    // wherever the ray crosses now, on that plane (see ComputeAngleOnPlan).
+    Vec3f dragRingStart_;
 
     // Snapping
     float snapT_ = 0, snapR_ = 0, snapS_ = 0;
@@ -230,6 +234,13 @@ private:
 
     ig::retained::Vec2f project(const Vec3f& world) const;
     void    unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const;
+    // The area the camera's viewport is laid over: this widget's own rect.
+    Rect    viewportRect() const;
+    // Where the ray under a screen point crosses the plane through the target
+    // with the given normal, measured from the target.
+    bool    ringPointOn(float sx, float sy, const Vec3f& normal, Vec3f& local) const;
+    // The signed turn from one vector to the other around an axis, in radians.
+    static float sweptAngle(const Vec3f& normal, const Vec3f& from, const Vec3f& to);
     float computeScale() const;
     float snap(float val, float grid) const;
 

@@ -766,8 +766,13 @@ private:
         uint8_t axis;
         Vec2 pointerStart;
         Transform3D transformStart;
+        // Where the pointer's ray crossed the plane of the grabbed ring when the
+        // press landed, measured from the target. A rotation is the turn from
+        // here to wherever the ray crosses now, on that plane rather than on the
+        // screen - see gizmo3DSweptAngle.
+        Vec3 ringStart;
 
-        Gizmo3DState() : axis(0u), pointerStart(), transformStart() {}
+        Gizmo3DState() : axis(0u), pointerStart(), transformStart(), ringStart() {}
     };
 
     struct ChildState

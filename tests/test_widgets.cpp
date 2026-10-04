@@ -1954,16 +1954,22 @@ static void test_gizmo3d_transform_handles()
     assert(scaled.scale.x > 1.04f && scaled.scale.x < 1.06f);
     assert(scaled.scale.y == 1.0f && scaled.scale.z == 1.0f);
 
-    // Rotation turns the target by the angle the pointer sweeps around the
-    // centre, on the axis whose ring was grabbed: the Z ring, with the press
-    // between two of the segments it is built from.
+    // Rotation turns the target by the angle the pointer sweeps on the ring's
+    // own plane, not by the angle it sweeps on the screen: the drawn ring is an
+    // ellipse, so the two differ as soon as the camera is not square on to it.
+    // The Z ring lives in z = 0, and a pixel maps there to
+    // ((px - 146) / 120, (130 - py) / 80) - half the canvas each way, so the
+    // ring's world radius is the 0.4 the options asked for.
     ig::Transform3D turned;
     const float ringX = 146.0f + 48.0f * cosf(0.7f);
     const float ringY = 130.0f - 32.0f * sinf(0.7f);
     const float sweptX = 146.0f + 48.0f * cosf(1.1f);
     const float sweptY = 130.0f - 32.0f * sinf(1.1f);
-    const float expected = (atan2f(sweptY - 130.0f, sweptX - 146.0f) -
-                            atan2f(ringY - 130.0f, ringX - 146.0f)) * 180.0f / 3.14159265f;
+    const float fromX = (ringX - 146.0f) / 120.0f;
+    const float fromY = (130.0f - ringY) / 80.0f;
+    const float toX = (sweptX - 146.0f) / 120.0f;
+    const float toY = (130.0f - sweptY) / 80.0f;
+    const float expected = atan2f(fromX * toY - fromY * toX, fromX * toX + fromY * toY) * 180.0f / 3.14159265f;
     assert(gizmo3DDrag(context, turned, ringX, ringY, sweptX, sweptY, ig::Gizmo3DMode::Rotate));
     assert(turned.rotation.z > expected - 0.5f && turned.rotation.z < expected + 0.5f);
     assert(turned.rotation.x == 0.0f && turned.rotation.y == 0.0f);

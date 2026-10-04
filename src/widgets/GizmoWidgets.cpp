@@ -394,9 +394,20 @@ void Gizmo3D::setTarget(const float* pos3, const float* rotDeg3, const float* sc
 
 // ── Projection helpers ────────────────────────────────────────────────────────
 
+// The area the camera's viewport is laid over: the widget itself, so a gizmo
+// that shares its parent with other children still projects onto its own area,
+// and the viewport the application declared when it has no size yet.
+Rect Gizmo3D::viewportRect() const
+{
+    const Rect own = absoluteRect();
+    if (own.w > 0.0f && own.h > 0.0f)
+        return own;
+    return Rect{0, 0, static_cast<float>(vpW_), static_cast<float>(vpH_)};
+}
+
 ig::retained::Vec2f Gizmo3D::project(const Vec3f& world) const
 {
-    Rect pAbs = parent_ ? parent_->absoluteRect() : Rect{0, 0, (float)vpW_, (float)vpH_};
+    const Rect pAbs = viewportRect();
 
     // clip = proj * view * vec4(world, 1)
     Vec4f v4 = view_ * Vec4f(world, 1.0f);
@@ -415,7 +426,7 @@ ig::retained::Vec2f Gizmo3D::project(const Vec3f& world) const
 
 void Gizmo3D::unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const
 {
-    Rect pAbs = parent_ ? parent_->absoluteRect() : Rect{0, 0, (float)vpW_, (float)vpH_};
+    const Rect pAbs = viewportRect();
 
     float ndcX = ((sx - pAbs.x) / pAbs.w) * 2.0f - 1.0f;
     float ndcY = 1.0f - ((sy - pAbs.y) / pAbs.h) * 2.0f;
@@ -432,6 +443,38 @@ void Gizmo3D::unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const
     rayOrig = Vec3f(near4.x, near4.y, near4.z);
     Vec3f dir(far4.x - near4.x, far4.y - near4.y, far4.z - near4.z);
     rayDir = dir.normalized();
+}
+
+// Where the pointer's ray crosses the plane the ring lives in. A rotation is
+// measured here rather than on the screen: the drawn ring is an ellipse, so the
+// angle it sweeps across the screen is not the angle the model turns.
+bool Gizmo3D::ringPointOn(float sx, float sy, const Vec3f& normal, Vec3f& local) const
+{
+    Vec3f rayOrigin, rayDirection;
+    unproject(sx, sy, rayOrigin, rayDirection);
+    const float denominator = rayDirection.dot(normal);
+    if (std::fabs(denominator) < 1e-6f)
+        return false;
+    const float distance = (targetPos_ - rayOrigin).dot(normal) / denominator;
+    local = rayOrigin + rayDirection * distance - targetPos_;
+    return true;
+}
+
+// The signed turn from one vector to the other around `normal`: ImGuizmo's
+// ComputeAngleOnPlan, with atan2 of the cross product and the dot product so two
+// identical vectors give exactly no turn.
+float Gizmo3D::sweptAngle(const Vec3f& normal, const Vec3f& from, const Vec3f& to)
+{
+    const float fromLength = from.length();
+    const float toLength = to.length();
+    if (fromLength < 1e-6f || toLength < 1e-6f)
+        return 0.0f;
+    const Vec3f a = from * (1.0f / fromLength);
+    const Vec3f b = to * (1.0f / toLength);
+    const Vec3f cross = a.cross(b);
+    const float side = cross.dot(normal);
+    const float angle = std::atan2(cross.length(), a.dot(b));
+    return side < 0.0f ? -angle : angle;
 }
 
 float Gizmo3D::computeScale() const
@@ -524,47 +567,27 @@ GizmoAxis3D Gizmo3D::hitTest(float mx, float my) const
         }
     }
 
-    // Rotation rings
+    // Rotation rings. A ring is grabbed where the pointer's ray crosses its
+    // plane rather than where the drawn ellipse happens to be: on an edge-on
+    // ring the drawing is a line, and measuring against it makes the whole line
+    // grabbable.
     if (mode_ == GizmoMode3D::Rotate) {
+        Vec3f rayOrigin, rayDirection;
+        unproject(mx, my, rayOrigin, rayDirection);
         for (int i = 0; i < 3; ++i) {
             Vec3f normal = axes[i];
-            Vec3f u, v;
-            if (std::fabs(normal.x) < 0.9f)
-                u = normal.cross(Vec3f(1,0,0)).normalized();
-            else
-                u = normal.cross(Vec3f(0,1,0)).normalized();
-            v = normal.cross(u);
-
-            // The distance is to the ring itself, not to the nearest of a
-            // handful of points on it: sampling the circle left the gaps between
-            // two samples dead, so a ring was only grabbable in 36 places.
-            const int segs = 48;
-            float bestRingDist = 9999.0f;
-            Pt2 previous = project(targetPos_ + (u * std::cos(0.0f) + v * std::sin(0.0f)) * scale);
-            for (int s = 1; s <= segs; ++s) {
-                float a0 = (float(s) / segs) * 2.0f * kPi;
-                Vec3f rp = targetPos_ + (u * std::cos(a0) + v * std::sin(a0)) * scale;
-                Pt2 sp = project(rp);
-                if (std::fabs(sp.x) < 9000.0f && std::fabs(previous.x) < 9000.0f) {
-                    const float segX = sp.x - previous.x, segY = sp.y - previous.y;
-                    const float segLen2 = segX*segX + segY*segY;
-                    float d = 0.0f;
-                    if (segLen2 > 1e-6f) {
-                        float t = ((mx - previous.x)*segX + (my - previous.y)*segY) / segLen2;
-                        t = clamp(t, 0.0f, 1.0f);
-                        const float offX = previous.x + segX*t - mx;
-                        const float offY = previous.y + segY*t - my;
-                        d = std::sqrt(offX*offX + offY*offY);
-                    } else {
-                        const float offX = sp.x - mx, offY = sp.y - my;
-                        d = std::sqrt(offX*offX + offY*offY);
-                    }
-                    if (d < bestRingDist) bestRingDist = d;
-                }
-                previous = sp;
-            }
-            if (bestRingDist < hitR) return axisIds[i];
+            const float denominator = rayDirection.dot(normal);
+            if (std::fabs(denominator) < 1e-6f) continue;
+            const float distance = (targetPos_ - rayOrigin).dot(normal) / denominator;
+            const Vec3f local = rayOrigin + rayDirection * distance - targetPos_;
+            if (local.dot(rayDirection) > 0.0f) continue;   // the far half
+            const float localLength = local.length();
+            if (localLength < 1e-6f) continue;
+            const Pt2 onRing = project(targetPos_ + local * (scale / localLength));
+            const float offsetX = onRing.x - mx, offsetY = onRing.y - my;
+            if (std::sqrt(offsetX*offsetX + offsetY*offsetY) < hitR) return axisIds[i];
         }
+        return GizmoAxis3D::None;
     }
 
     return GizmoAxis3D::None;
@@ -585,6 +608,12 @@ void Gizmo3D::onMousePress(MouseEvent& e)
     dragStartPos_   = targetPos_;
     dragStartRot_   = targetRot_;
     dragStartScale_ = targetScale_;
+    dragRingStart_  = Vec3f();
+    if (mode_ == GizmoMode3D::Rotate && hit >= GizmoAxis3D::X && hit <= GizmoAxis3D::Z)
+    {
+        const Vec3f axes3[3] = {{1,0,0},{0,1,0},{0,0,1}};
+        ringPointOn(e.x, e.y, axes3[static_cast<int>(hit) - static_cast<int>(GizmoAxis3D::X)], dragRingStart_);
+    }
     e.consumed      = true;
     onDragStart.emit();
 }
@@ -651,6 +680,16 @@ void Gizmo3D::onMouseMove(MouseEvent& e)
         float a1 = std::atan2(dragStartY_ - center.y, dragStartX_ - center.x);
         float a2 = std::atan2(e.y - center.y, e.x - center.x);
         float da = (a2 - a1) * 180.0f / kPi;
+        if (activeAxis_ >= GizmoAxis3D::X && activeAxis_ <= GizmoAxis3D::Z)
+        {
+            // The ring's own plane decides how far it turned, so the handle
+            // stays under the pointer however the ring is foreshortened.
+            const Vec3f axes3[3] = {{1,0,0},{0,1,0},{0,0,1}};
+            const Vec3f normal = axes3[static_cast<int>(activeAxis_) - static_cast<int>(GizmoAxis3D::X)];
+            Vec3f local;
+            if (ringPointOn(e.x, e.y, normal, local))
+                da = sweptAngle(normal, dragRingStart_, local) * 180.0f / kPi;
+        }
         if (snapR_ > 0) da = snap(da, snapR_);
 
         Vec3f rot = dragStartRot_;

@@ -316,7 +316,19 @@ static void test_gizmo3d_grabs_the_handle_under_the_pointer()
     along.button = 0;
     ringPoint(55.0f, along.x, along.y);
     gizmo.onMouseMove(along);
-    assert(gizmo.targetRotation().z > 24.5f && gizmo.targetRotation().z < 25.5f);
+    // The turn is measured on the ring's plane, not on the screen: with this
+    // camera a pixel maps to the world point the ring lives in, so the expected
+    // angle is the angle between the two world vectors, which the ellipse's
+    // 25 degrees of screen are not.
+    const auto worldOnRing = [](float px, float py, float &x, float &y) {
+        x = (px / 400.0f) * 2.0f - 1.0f;
+        y = 1.0f - (py / 300.0f) * 2.0f;
+    };
+    float fromX = 0.0f, fromY = 0.0f, toX = 0.0f, toY = 0.0f;
+    worldOnRing(ring.x, ring.y, fromX, fromY);
+    worldOnRing(along.x, along.y, toX, toY);
+    const float expected = std::atan2(fromX * toY - fromY * toX, fromX * toX + fromY * toY) * 180.0f / 3.14159265f;
+    assert(gizmo.targetRotation().z > expected - 0.5f && gizmo.targetRotation().z < expected + 0.5f);
     assert(gizmo.targetRotation().x == 0.0f && gizmo.targetRotation().y == 0.0f);
     gizmo.onMouseRelease(along);
 }
