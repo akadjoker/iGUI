@@ -230,8 +230,8 @@ Both widget APIs also build to WebAssembly with Emscripten. The galleries run in
 
 | Page | Target | Content |
 | --- | --- | --- |
-| `immediate.html` | `igui_web_immediate` | Immediate-mode widgets in ten sections: basic, inputs, lists and tables, layout, windows and dialogs, menus and submenus, icon buttons, a synth voice with knobs and a mixer desk of faders, a 3D transform gizmo, code editor |
-| `retained.html` | `igui_web_retained` | The retained-mode stages, from basic widgets to dock panels, node editor, timeline and file dialog |
+| `immediate.html` | `igui_web_immediate` | Immediate-mode widgets in ten sections: basic, inputs, lists and tables, layout, windows and dialogs, menus and submenus, icon buttons, a synth voice with knobs and a mixer desk of faders, a 3D transform gizmo that draws the object it moves, code editor |
+| `retained.html` | `igui_web_retained` | The retained-mode stages - basic widgets, controls, gadgets, galleries, gizmos (2D and the same 3D modes), toolbars, dock panels, node editor, timeline and file dialog |
 | `index.html` | | Page with a tab for each gallery (`web/index.html`) |
 
 To build locally, activate an Emscripten SDK and run:
