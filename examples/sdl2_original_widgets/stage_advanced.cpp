@@ -176,44 +176,67 @@ void registerTimelineStage(WidgetApp& app)
     timeline->addClip(audio, 0.0f, 12.0f, "music_master.wav", Color(70, 145, 95, 220));
 }
 
+namespace
+{
+// The 3D gizmo maps the camera's [-1, 1] over its own rect, so a stage area that
+// is not square stretches the world unless the projection takes the aspect back
+// out. This one does, from the rect the layout hands it.
+class SquareGizmo3D : public Gizmo3D
+{
+public:
+    void setView(const float* view4x4)
+    {
+        for (int index = 0; index < 16; ++index)
+            view_[index] = view4x4[index];
+    }
+
+    void layout() override
+    {
+        Gizmo3D::layout();
+        float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+        if (rect_.w > 0.0f && rect_.h > 0.0f)
+            projection[0] = rect_.h / rect_.w;
+        setViewProjection(view_, projection, static_cast<int>(rect_.w), static_cast<int>(rect_.h));
+    }
+
+private:
+    float view_[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+};
+}
+
+// One tab per gizmo: sharing the stage between six of them left each one with a
+// corner of the window, and a 3D gizmo squeezed into a letterbox reads as
+// nothing at all.
 void registerGizmosStage(WidgetApp& app)
 {
     auto* outer = makeStage(app, "gizmos", "Gizmo2D e Gizmo3D — translate, rotate e scale");
-    auto* row = outer->createChild<BoxLayout>(LayoutDir::Horizontal);
-    row->setSpacing(1.0f);
-    row->setStretch(1.0f);
+    auto* tabs = outer->createChild<TabLayout>();
+    tabs->setStretch(1.0f);
 
     struct Entry { const char* label; GizmoMode mode; } entries[] = {
-        {"Translate", GizmoMode::Translate},
-        {"Rotate", GizmoMode::Rotate},
-        {"Scale", GizmoMode::Scale},
+        {"Translate 2D", GizmoMode::Translate},
+        {"Rotate 2D",    GizmoMode::Rotate},
+        {"Scale 2D",     GizmoMode::Scale},
     };
     for (const Entry& entry : entries)
     {
-        auto* panel = row->createChild<Panel>();
-        panel->setStretch(1.0f);
-        auto* box = panel->createChild<BoxLayout>(LayoutDir::Vertical);
-        box->setPadding(12.0f);
-        box->setSpacing(8.0f);
-        box->setStretch(1.0f);
-        box->createChild<Label>(entry.label);
-        auto* area = box->createChild<Panel>();
-        area->setStretch(1.0f);
-        auto* gizmo = area->createChild<Gizmo2D>();
-        gizmo->setStretch(1.0f);
-        gizmo->setPosition(125.0f, 170.0f);
+        auto* page = tabs->addTab<Panel>(entry.label);
+        auto* gizmo = page->createChild<Gizmo2D>();
+        gizmo->setPosition(340.0f, 260.0f);
         gizmo->setMode(entry.mode);
         gizmo->setSnapTranslate(8.0f);
         gizmo->setSnapRotate(15.0f);
         gizmo->setSnapScale(0.1f);
     }
 
-    // The same three modes for 3D. The camera looks at the origin from the
-    // upper right, so the three axes point three different ways on screen and
-    // the handles are big enough to grab.
-    const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    // The same three modes in 3D, each on the whole stage. The camera looks at
+    // the origin from the upper right, so the three axes point three different
+    // ways on screen and the handles are big enough to grab.
     float view[16];
     lookAtOrigin(view, 3.0f, 2.2f, 3.0f);
+    const float position[3] = {0.0f, 0.0f, 0.0f};
+    const float rotation[3] = {0.0f, 0.0f, 0.0f};
+    const float scale[3] = {1.0f, 1.0f, 1.0f};
 
     struct Entry3D { const char* label; GizmoMode3D mode; } entries3D[] = {
         {"Translate 3D", GizmoMode3D::Translate},
@@ -222,22 +245,11 @@ void registerGizmosStage(WidgetApp& app)
     };
     for (const Entry3D& entry : entries3D)
     {
-        auto* panel = row->createChild<Panel>();
-        panel->setStretch(1.0f);
-        auto* box = panel->createChild<BoxLayout>(LayoutDir::Vertical);
-        box->setPadding(12.0f);
-        box->setSpacing(8.0f);
-        box->setStretch(1.0f);
-        box->createChild<Label>(entry.label);
-        auto* area = box->createChild<Panel>();
-        area->setStretch(1.0f);
-        auto* gizmo = area->createChild<Gizmo3D>();
-        const float position[3] = {0.0f, 0.0f, 0.0f};
-        const float rotation[3] = {0.0f, 0.0f, 0.0f};
-        const float scale[3] = {1.0f, 1.0f, 1.0f};
-        gizmo->setViewProjection(view, identity, 400, 400);
+        auto* page = tabs->addTab<Panel>(entry.label);
+        auto* gizmo = page->createChild<SquareGizmo3D>();
+        gizmo->setView(view);
         gizmo->setTarget(position, rotation, scale);
-        gizmo->setScreenScale(70.0f);
+        gizmo->setScreenScale(100.0f);
         gizmo->setMode(entry.mode);
         gizmo->setSnapTranslate(0.1f);
         gizmo->setSnapRotate(15.0f);
@@ -405,7 +417,7 @@ void registerGalleryStage(WidgetApp& app)
 
 void registerSpecialtyStage(WidgetApp& app)
 {
-    auto* outer = makeStage(app, "specialty", "Curve, Piano, Tree, AppWidgets, ToolBar e Gizmo3D");
+    auto* outer = makeStage(app, "specialty", "Curve, Piano, Tree, AppWidgets e ToolBar");
     auto* tabs = outer->createChild<TabLayout>();
     tabs->setStretch(1.0f);
 
@@ -489,15 +501,4 @@ void registerSpecialtyStage(WidgetApp& app)
         "- Items are interactive\n"
         "- [Links](https://example.invalid) expose the original signal API");
 
-    auto* gizmo3d = tabs->addTab<Gizmo3D>("Gizmo3D");
-    static const float identity[16] = {
-        1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1
-    };
-    const float pos[3] = {0.0f, 0.0f, 0.0f};
-    const float rot[3] = {0.0f, 0.0f, 0.0f};
-    const float scl[3] = {1.0f, 1.0f, 1.0f};
-    gizmo3d->setViewProjection(identity, identity, 1280, 720);
-    gizmo3d->setTarget(pos, rot, scl);
-    gizmo3d->setMode(GizmoMode3D::Translate);
-    gizmo3d->setScreenScale(110.0f);
 }
