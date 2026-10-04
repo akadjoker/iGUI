@@ -49,6 +49,7 @@ struct TimelineClip {
     float sourceLength = 0;    // length of the media, 0 = unlimited (limits trimming)
     int   link         = -1;   // clips sharing a link are moved and trimmed together
     int   user         = -1;
+    int   generator    = -1;   // an overlay made by the application (a title, a balloon): no media, drawn on top
     // A curve over the media's own time (seconds), drawn on the clip between envelopeMin and envelopeMax.
     ct::Vector<CurveKey> envelope;
     bool  editableEnvelope = false; // double-click on the clip adds a point to the curve, drag moves it
