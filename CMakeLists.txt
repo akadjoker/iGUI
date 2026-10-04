@@ -43,13 +43,17 @@ endif()
 # rather than fetched by tag, so it tracks upstream via `git submodule update`
 # and includes newer headers (e.g. ct/regex.hpp) as soon as the submodule
 # pointer is bumped.
-if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/containers/include/ct/vector.hpp")
+# A parent project that vendors containers itself points IGUI_CONTAINERS_DIR at
+# its copy, so only one set of ct headers is in play.
+set(IGUI_CONTAINERS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/containers" CACHE PATH
+    "Path to the containers (ct) checkout")
+if(NOT EXISTS "${IGUI_CONTAINERS_DIR}/include/ct/vector.hpp")
     message(FATAL_ERROR
-        "third_party/containers is empty. Run: git submodule update --init --recursive")
+        "${IGUI_CONTAINERS_DIR} is empty. Run: git submodule update --init --recursive")
 endif()
 
 add_library(ct INTERFACE)
-target_include_directories(ct INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/containers/include")
+target_include_directories(ct INTERFACE "${IGUI_CONTAINERS_DIR}/include")
 
 # Shared drawing engine: DrawList/DrawData/Backend, plus the lexical syntax
 # highlighting layer (ig::syntax). Both are things the immediate-mode Context
@@ -358,33 +362,42 @@ if(IGUI_RAYLIB_AVAILABLE)
     endif()
 endif()
 
-# Retained widget gallery on zen_plataform, drawn by a software rasteriser.
+# zen_plataform adapter: a software rasteriser with anti-aliasing and the window
+# and input bridge for the retained widgets (igui_zen), plus the widget gallery.
+option(IGUI_BUILD_ZEN_ADAPTER "Build the zen_plataform adapter (igui_zen)" OFF)
 option(IGUI_BUILD_ZEN_DEMO "Build the retained widgets demo on zen_plataform" OFF)
 set(IGUI_ZEN_PLATFORM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../zen_plataform" CACHE PATH
-    "Path to the zen_plataform checkout")
-if(IGUI_BUILD_ZEN_DEMO AND TARGET igui_widgets)
-    enable_language(C)
-    set(PLATFORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    add_subdirectory(${IGUI_ZEN_PLATFORM_DIR} zen_plataform EXCLUDE_FROM_ALL)
-    add_executable(igui_zen_widgets
-        examples/zen_widgets/main.cpp
-        examples/zen_widgets/SoftRaster.cpp
-        examples/sdl2_original_widgets/stages/stage_video.cpp
-        examples/sdl2_original_widgets/stage_advanced.cpp
-        examples/sdl2_original_widgets/stages/stage_demo.cpp
-        examples/sdl2_original_widgets/stages/stage_menu.cpp
-        examples/sdl2_original_widgets/stages/stage_basic.cpp
-        examples/sdl2_original_widgets/stages/stage_controls.cpp
-        examples/sdl2_original_widgets/stages/stage_scroll.cpp
-        examples/sdl2_original_widgets/stages/stage_inputs.cpp
-        examples/sdl2_original_widgets/stages/stage_menus.cpp
-        examples/sdl2_original_widgets/stages/stage_dialogs.cpp
-        examples/sdl2_original_widgets/stages/stage_dock.cpp
-        examples/sdl2_original_widgets/stages/stage_properties.cpp)
-    target_compile_features(igui_zen_widgets PRIVATE cxx_std_17)
-    target_include_directories(igui_zen_widgets PRIVATE
-        examples/sdl2_original_widgets ${IGUI_ZEN_PLATFORM_DIR}/include)
-    target_link_libraries(igui_zen_widgets PRIVATE igui_widgets platform)
+    "Path to the zen_plataform checkout (used when the parent has no platform target)")
+if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
+    if(NOT TARGET platform)
+        enable_language(C)
+        set(PLATFORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        add_subdirectory(${IGUI_ZEN_PLATFORM_DIR} zen_plataform EXCLUDE_FROM_ALL)
+    endif()
+    add_library(igui_zen STATIC adapters/zen/SoftRaster.cpp adapters/zen/ZenApp.cpp)
+    add_library(igui::zen ALIAS igui_zen)
+    target_compile_features(igui_zen PUBLIC cxx_std_17)
+    target_include_directories(igui_zen PUBLIC adapters/zen/include)
+    target_link_libraries(igui_zen PUBLIC igui_widgets platform)
+
+    if(IGUI_BUILD_ZEN_DEMO)
+        add_executable(igui_zen_widgets
+            examples/zen_widgets/main.cpp
+            examples/sdl2_original_widgets/stage_advanced.cpp
+            examples/sdl2_original_widgets/stages/stage_demo.cpp
+            examples/sdl2_original_widgets/stages/stage_menu.cpp
+            examples/sdl2_original_widgets/stages/stage_basic.cpp
+            examples/sdl2_original_widgets/stages/stage_controls.cpp
+            examples/sdl2_original_widgets/stages/stage_scroll.cpp
+            examples/sdl2_original_widgets/stages/stage_inputs.cpp
+            examples/sdl2_original_widgets/stages/stage_menus.cpp
+            examples/sdl2_original_widgets/stages/stage_dialogs.cpp
+            examples/sdl2_original_widgets/stages/stage_dock.cpp
+            examples/sdl2_original_widgets/stages/stage_properties.cpp
+            examples/sdl2_original_widgets/stages/stage_video.cpp)
+        target_include_directories(igui_zen_widgets PRIVATE examples/sdl2_original_widgets)
+        target_link_libraries(igui_zen_widgets PRIVATE igui_zen)
+    endif()
 endif()
 
 if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
