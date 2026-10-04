@@ -154,15 +154,24 @@ public:
     // without depending on any specific graphics API.
     using UploadTextureFn  = ct::Function<ig::retained::TextureHandle(const unsigned char* rgba, int w, int h)>;
     using DestroyTextureFn = ct::Function<void(ig::retained::TextureHandle)>;
+    using UpdateTextureFn  = ct::Function<bool(ig::retained::TextureHandle, const unsigned char* rgba, int w, int h)>;
 
     /// @brief Register a texture upload function.
     void setTextureUpload(UploadTextureFn fn)   { uploadTex_ = std::move(fn); }
     /// @brief Register a texture destroy function.
     void setTextureDestroy(DestroyTextureFn fn)  { destroyTex_ = std::move(fn); }
 
+    /// @brief Register a function that replaces the pixels of an existing texture.
+    void setTextureUpdate(UpdateTextureFn fn)    { updateTex_ = std::move(fn); }
+
     /// @brief Upload RGBA pixels to GPU texture.
     ig::retained::TextureHandle uploadTexture(const unsigned char* rgba, int w, int h)
     { return uploadTex_ ? uploadTex_(rgba, w, h) : ig::retained::TextureHandle{0}; }
+
+    /// @brief Replace the pixels of a texture from uploadTexture; w and h must match its size.
+    /// Meant for video: call it once per frame (glTexSubImage2D on a GL backend).
+    bool updateTexture(ig::retained::TextureHandle tex, const unsigned char* rgba, int w, int h)
+    { return updateTex_ && tex ? updateTex_(tex, rgba, w, h) : false; }
 
     /// @brief Free a previously uploaded texture.
     void destroyTexture(ig::retained::TextureHandle tex)
@@ -455,6 +464,7 @@ private:
     // Texture service callbacks (set by backend)
     UploadTextureFn  uploadTex_;
     DestroyTextureFn destroyTex_;
+    UpdateTextureFn  updateTex_;
 
     // Global event dispatcher
     // Key = "event:widgetId" for targeted, "event:*" for catch-all

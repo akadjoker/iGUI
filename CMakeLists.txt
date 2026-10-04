@@ -358,6 +358,35 @@ if(IGUI_RAYLIB_AVAILABLE)
     endif()
 endif()
 
+# Retained widget gallery on zen_plataform, drawn by a software rasteriser.
+option(IGUI_BUILD_ZEN_DEMO "Build the retained widgets demo on zen_plataform" OFF)
+set(IGUI_ZEN_PLATFORM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../zen_plataform" CACHE PATH
+    "Path to the zen_plataform checkout")
+if(IGUI_BUILD_ZEN_DEMO AND TARGET igui_widgets)
+    enable_language(C)
+    set(PLATFORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${IGUI_ZEN_PLATFORM_DIR} zen_plataform EXCLUDE_FROM_ALL)
+    add_executable(igui_zen_widgets
+        examples/zen_widgets/main.cpp
+        examples/zen_widgets/SoftRaster.cpp
+        examples/sdl2_original_widgets/stages/stage_video.cpp
+        examples/sdl2_original_widgets/stage_advanced.cpp
+        examples/sdl2_original_widgets/stages/stage_demo.cpp
+        examples/sdl2_original_widgets/stages/stage_menu.cpp
+        examples/sdl2_original_widgets/stages/stage_basic.cpp
+        examples/sdl2_original_widgets/stages/stage_controls.cpp
+        examples/sdl2_original_widgets/stages/stage_scroll.cpp
+        examples/sdl2_original_widgets/stages/stage_inputs.cpp
+        examples/sdl2_original_widgets/stages/stage_menus.cpp
+        examples/sdl2_original_widgets/stages/stage_dialogs.cpp
+        examples/sdl2_original_widgets/stages/stage_dock.cpp
+        examples/sdl2_original_widgets/stages/stage_properties.cpp)
+    target_compile_features(igui_zen_widgets PRIVATE cxx_std_17)
+    target_include_directories(igui_zen_widgets PRIVATE
+        examples/sdl2_original_widgets ${IGUI_ZEN_PLATFORM_DIR}/include)
+    target_link_libraries(igui_zen_widgets PRIVATE igui_widgets platform)
+endif()
+
 if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
     # SDL2 arrives one of two ways: a parent project already built or found
     # it (target SDL2::SDL2 - e.g. a vendored submodule), or it is installed
@@ -429,7 +458,8 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
             examples/sdl2_original_widgets/stages/stage_menus.cpp
             examples/sdl2_original_widgets/stages/stage_dialogs.cpp
             examples/sdl2_original_widgets/stages/stage_dock.cpp
-            examples/sdl2_original_widgets/stages/stage_properties.cpp)
+            examples/sdl2_original_widgets/stages/stage_properties.cpp
+            examples/sdl2_original_widgets/stages/stage_video.cpp)
         target_compile_features(igui_sdl2_original_widgets_demo PRIVATE cxx_std_17)
         target_include_directories(igui_sdl2_original_widgets_demo PRIVATE
             examples/sdl2_original_widgets)
@@ -472,7 +502,8 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
                 examples/sdl2_original_widgets/stages/stage_menus.cpp
                 examples/sdl2_original_widgets/stages/stage_dialogs.cpp
                 examples/sdl2_original_widgets/stages/stage_dock.cpp
-                examples/sdl2_original_widgets/stages/stage_properties.cpp)
+                examples/sdl2_original_widgets/stages/stage_properties.cpp
+                examples/sdl2_original_widgets/stages/stage_video.cpp)
             target_compile_features(igui_web_retained PRIVATE cxx_std_17)
             target_include_directories(igui_web_retained PRIVATE examples/sdl2_original_widgets)
             target_link_libraries(igui_web_retained PRIVATE igui_widgets ${IGUI_SDL2_LIBS})
