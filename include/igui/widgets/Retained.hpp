@@ -208,6 +208,8 @@ namespace ig { namespace retained
     Scissors,   // cut / split
     Import,     // arrow into a tray
     Magnet,     // snapping
+    MarkIn,     // a bracket opening a range
+    MarkOut,    // a bracket closing it
         COUNT  // must be last
     };
 
