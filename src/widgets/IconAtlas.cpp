@@ -93,6 +93,10 @@ void IconAtlas::drawIcon(BuImage& pm, IconId id, int ox, int oy, int sz)
     case IconId::StepForward: drawStepForward(pm, ox, oy, sz); break;
     case IconId::StepBack:    drawStepBack(pm, ox, oy, sz);    break;
     case IconId::Record:      drawRecord(pm, ox, oy, sz);      break;
+    case IconId::FolderNew:   drawFolderNew(pm, ox, oy, sz);   break;
+    case IconId::Scissors:    drawScissors(pm, ox, oy, sz);    break;
+    case IconId::Import:      drawImport(pm, ox, oy, sz);      break;
+    case IconId::Magnet:      drawMagnet(pm, ox, oy, sz);      break;
     default: break;
     }
 }
@@ -634,4 +638,80 @@ void IconAtlas::drawRecord(BuImage& pm, int ox, int oy, int sz)
     int cy = oy + sz / 2;
     int r  = sz / 3;
     pm.DrawCircle(cx, cy, r, red, true);
+}
+
+
+// ── FolderNew (folder with a plus) ───────────────────────────────────────────
+
+void IconAtlas::drawFolderNew(BuImage& pm, int ox, int oy, int sz)
+{
+    drawFolder(pm, ox, oy, sz);
+    int cx = ox + sz * 2 / 3, cy = oy + sz * 2 / 3;
+    int r = std::max(2, sz / 5);
+    pm.DrawLine(cx - r, cy, cx + r, cy, IC3);
+    pm.DrawLine(cx, cy - r, cx, cy + r, IC3);
+    pm.DrawLine(cx - r, cy + 1, cx + r, cy + 1, IC3);
+    pm.DrawLine(cx + 1, cy - r, cx + 1, cy + r, IC3);
+}
+
+// ── Scissors ─────────────────────────────────────────────────────────────────
+
+void IconAtlas::drawScissors(BuImage& pm, int ox, int oy, int sz)
+{
+    auto X = [&](float f) { return ox + static_cast<int>(f * sz); };
+    auto Y = [&](float f) { return oy + static_cast<int>(f * sz); };
+    // Two blades crossing at the pivot, drawn twice for weight.
+    for (int d = 0; d < 2; ++d) {
+        pm.DrawLine(X(0.30f) + d, Y(0.10f), X(0.70f) + d, Y(0.70f), IC);
+        pm.DrawLine(X(0.70f) + d, Y(0.10f), X(0.30f) + d, Y(0.70f), IC);
+    }
+    // Finger rings
+    int r = std::max(2, sz / 7);
+    pm.DrawCircle(X(0.30f), Y(0.82f), r, IC2, false);
+    pm.DrawCircle(X(0.70f), Y(0.82f), r, IC2, false);
+}
+
+// ── Import (arrow into a tray) ───────────────────────────────────────────────
+
+void IconAtlas::drawImport(BuImage& pm, int ox, int oy, int sz)
+{
+    auto X = [&](float f) { return ox + static_cast<int>(f * sz); };
+    auto Y = [&](float f) { return oy + static_cast<int>(f * sz); };
+    for (int d = 0; d < 2; ++d) {
+        pm.DrawLine(X(0.50f) + d, Y(0.12f), X(0.50f) + d, Y(0.56f), IC);
+        pm.DrawLine(X(0.50f) + d, Y(0.60f), X(0.30f) + d, Y(0.40f), IC);
+        pm.DrawLine(X(0.50f) + d, Y(0.60f), X(0.70f) + d, Y(0.40f), IC);
+    }
+    pm.DrawLine(X(0.18f), Y(0.68f), X(0.18f), Y(0.86f), IC2);
+    pm.DrawLine(X(0.82f), Y(0.68f), X(0.82f), Y(0.86f), IC2);
+    pm.DrawLine(X(0.18f), Y(0.86f), X(0.82f), Y(0.86f), IC2);
+    pm.DrawLine(X(0.18f), Y(0.85f), X(0.82f), Y(0.85f), IC2);
+}
+
+// ── Magnet (snapping) ────────────────────────────────────────────────────────
+
+void IconAtlas::drawMagnet(BuImage& pm, int ox, int oy, int sz)
+{
+    const float cx = ox + sz * 0.5f, cy = oy + sz * 0.46f;
+    const float outer = sz * 0.34f, inner = sz * 0.17f;
+    const int steps = 14;
+    for (int i = 0; i < steps; ++i) {
+        const float a0 = 3.14159265f + 3.14159265f * i / steps;
+        const float a1 = 3.14159265f + 3.14159265f * (i + 1) / steps;
+        pm.DrawLine(static_cast<int>(cx + outer * std::cos(a0)), static_cast<int>(cy + outer * std::sin(a0)),
+                    static_cast<int>(cx + outer * std::cos(a1)), static_cast<int>(cy + outer * std::sin(a1)), IC);
+        pm.DrawLine(static_cast<int>(cx + inner * std::cos(a0)), static_cast<int>(cy + inner * std::sin(a0)),
+                    static_cast<int>(cx + inner * std::cos(a1)), static_cast<int>(cy + inner * std::sin(a1)), IC);
+    }
+    const int legTop = static_cast<int>(cy), legBottom = oy + static_cast<int>(sz * 0.82f);
+    const int leftOuter = static_cast<int>(cx - outer), leftInner = static_cast<int>(cx - inner);
+    const int rightOuter = static_cast<int>(cx + outer), rightInner = static_cast<int>(cx + inner);
+    pm.DrawLine(leftOuter, legTop, leftOuter, legBottom, IC);
+    pm.DrawLine(leftInner, legTop, leftInner, legBottom, IC);
+    pm.DrawLine(rightOuter, legTop, rightOuter, legBottom, IC);
+    pm.DrawLine(rightInner, legTop, rightInner, legBottom, IC);
+    // Poles
+    const int tip = std::max(2, sz / 7);
+    pm.DrawRect(leftOuter, legBottom - tip, leftInner - leftOuter + 1, tip, Color(220, 70, 70, 255), true);
+    pm.DrawRect(rightInner, legBottom - tip, rightOuter - rightInner + 1, tip, Color(90, 140, 230, 255), true);
 }

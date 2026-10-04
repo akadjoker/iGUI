@@ -1,5 +1,6 @@
 #pragma once
 
+#include <igui_zen/GlRaster.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
 #include <WidgetApp.hpp>
@@ -23,7 +24,14 @@ public:
         const char *title = "iGUI";
         int width = 1280;
         int height = 720;
-        int samples = 2; // anti-aliasing samples per axis, F2 cycles 1..4
+        // OpenGL when the machine has it, else the software rasteriser.
+        bool preferOpenGL = true;
+        int minGlMajor = 3; // the oldest OpenGL core the application accepts
+        int minGlMinor = 3;
+        int msaa = 4;    // OpenGL multisampling, 0 to disable
+        bool vsync = true;
+        bool showStats = true; // fps and size in the window title, once a second
+        int samples = 2; // software only: anti-aliasing samples per axis, F2 cycles 1..4
         uint32_t background = 0xff181a1eu;
     };
 
@@ -38,11 +46,20 @@ public:
 
     ig::retained::WidgetApp &widgets() { return ig::retained::WidgetApp::instance(); }
     SoftRaster &raster() { return raster_; }
+    // True when drawing with OpenGL. The GL context is current on the thread that runs the frame.
+    bool usesOpenGL() const { return useGl_; }
+    GlRaster &gl() { return gl_; }
     PlatformWindow *window() { return window_; }
 
 private:
     static void frameThunk(PlatformWindow *w, void *user);
     void frame();
+    void frameGl();
+    void framePixels();
+    ig::retained::TextureHandle createTexture(int w, int h, const unsigned char *rgba);
+    void destroyTexture(ig::retained::TextureHandle t);
+    bool updateTexture(ig::retained::TextureHandle t, const unsigned char *rgba, int w, int h);
+    void saveScreenshot(const uint32_t *pixels, int width, int height, int stride);
     void feedInput();
 
     PlatformWindow *window_ = nullptr;
@@ -50,6 +67,9 @@ private:
     ig::retained::FontAtlas atlas_;
     const ig::retained::Font *font_ = nullptr;
     SoftRaster raster_;
+    GlRaster gl_;
+    bool useGl_ = false;
+    bool showStats_ = true;
     uint32_t background_ = 0;
     double statsTime_ = 0.0;
     double lastFrame_ = 0.0;
