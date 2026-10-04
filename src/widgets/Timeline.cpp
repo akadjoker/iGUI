@@ -222,6 +222,7 @@ int Timeline::splitClip(int trackId, int clipIdx, float t)
     second.start    = t;
     second.selected = false;
     second.link     = -1;
+    second.transition = 0; // the two halves meet end to end: nothing to blend
     second.user     = -1;
     clips[clipIdx].end = t;
     clips.push_back(second);
@@ -890,6 +891,23 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             if (!clip.label.empty() && cx1 - cx0 > 30) {
                 float ascClip = setupFont(ctx, Color(240, 242, 250, 230), 9.0f);
                 ctx.font.Print(clip.label.c_str(), cx0 + 4, clipY + (clipH - 9.0f) * 0.5f + ascClip);
+            }
+        }
+
+        // ── Overlaps: where two clips of a track are on top of each other ──
+        for (int a = 0; a < static_cast<int>(trk.clips.size()); ++a) {
+            for (int o = a + 1; o < static_cast<int>(trk.clips.size()); ++o) {
+                const float s = std::max(trk.clips[a].start, trk.clips[o].start);
+                const float e = std::min(trk.clips[a].end, trk.clips[o].end);
+                if (e - s < 0.01f) continue;
+                const float x0 = timeToX(s), x1 = timeToX(e);
+                if (x1 < b.x + kHeaderW || x0 > b.x + b.w) continue;
+                ctx.fill.SetColor(255, 255, 255, 70);
+                ctx.fillRect(x0, ty + 3, x1 - x0, kTrackH - 6);
+                // a diagonal across the band: two clips crossing
+                ctx.fill.SetColor(255, 255, 255, 200);
+                ctx.fillTriangle(x0, ty + kTrackH - 4, x0 + 1.5f, ty + kTrackH - 4, x1, ty + 3);
+                ctx.fillTriangle(x0, ty + kTrackH - 4, x1, ty + 3, x1 - 1.5f, ty + 3);
             }
         }
 

@@ -44,6 +44,7 @@ struct TimelineClip {
     int   id           = -1;   // unique in the timeline, set by addClip
     int   media        = -1;   // what the clip plays
     float offset       = 0;    // where in the media the clip starts (seconds)
+    int   transition   = 0;    // how it comes in over the clip before it, when they overlap on a track (the application's list)
     float speed        = 1;    // how fast the media plays: it takes (length / speed) seconds on the timeline per second of media
     float sourceLength = 0;    // length of the media, 0 = unlimited (limits trimming)
     int   link         = -1;   // clips sharing a link are moved and trimmed together
