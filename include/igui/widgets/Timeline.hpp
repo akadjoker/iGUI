@@ -40,6 +40,9 @@ struct TimelineClip {
     bool        selected = false;
 };
 
+/// What a track carries; the timeline draws the same, the application decides.
+enum class TrackKind { Generic, Video, Audio };
+
 struct TimelineTrack {
     String                    name;
     Color                          color = Color(120, 140, 180, 255);
@@ -49,6 +52,7 @@ struct TimelineTrack {
     bool locked = false;
     int parent = -1;
     bool expanded = true;
+    TrackKind kind = TrackKind::Generic;
 };
 
 class Timeline : public Widget
@@ -63,12 +67,19 @@ public:
     /// Space in pixels inside both timeline edges (minimum 8 for full diamonds).
     void setEdgePadding(float pixels);
     float edgePadding() const { return edgePadding_; }
+    /// Header buttons: M toggles mute, L toggles lock. Emitted with the track id and new state.
+    Signal<int, bool> onTrackMuteChanged;
+    Signal<int, bool> onTrackLockChanged;
     Signal<int, int, float> onKeyframeMoved;
     Signal<int, int> onKeyframeAdded;
 
     /// @brief Add a named track with optional color.
     int  addTrack(const String& name,
                   const Color& color = Color(120, 140, 180, 255));
+    /// @brief Add a track of a kind (video or audio) with a default colour for it.
+    int  addTrack(const String& name, TrackKind kind);
+    /// @brief Mute or unmute a track (emits onTrackMuteChanged).
+    void setTrackMuted(int trackId, bool muted);
     /// @brief Remove a track by ID.
     void removeTrack(int trackId);
     /// @brief Remove all tracks.
