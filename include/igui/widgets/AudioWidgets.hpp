@@ -114,6 +114,105 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Fader — mixer fader: a recessed groove with a cap that is pushed along it
+//
+//  Interaction: press anywhere (a finger never lands on the cap) and the cap
+//  follows; a press on the cap keeps the gap it landed with, so it does not
+//  jump under the hand. A vertical fader reads upwards.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class Fader : public Widget
+{
+public:
+    Fader();
+
+    /// @brief Set the fader value (clamped to the range).
+    void  setValue(float v);
+    /// @brief Get the current value.
+    float value()      const { return value_; }
+    /// @brief Get the value normalised to 0..1.
+    float normalised() const { return (max_ - min_ > 0) ? (value_ - min_) / (max_ - min_) : 0.f; }
+    /// @brief Get the minimum value.
+    float minimum() const { return min_; }
+    /// @brief Get the maximum value.
+    float maximum() const { return max_; }
+
+    /// @brief Set the min/max range.
+    void  setRange(float mn, float mx) { min_ = mn; max_ = mx; setValue(value_); }
+    /// @brief Set vertical (reads upwards) or horizontal (reads left to right).
+    void      setOrientation(LayoutDir dir) { orientation_ = dir; markDirty(); }
+    /// @brief Get the orientation.
+    LayoutDir orientation() const           { return orientation_; }
+
+    /// @brief Set the display label, drawn under the control.
+    void setLabel(const String& l) { label_ = l; markDirty(); }
+    /// @brief Get the current label.
+    const String& label() const    { return label_; }
+
+    /// @brief Text shown under the control. Empty prints the raw value; set it
+    /// (from onChanged, say) to read "-6 dB" or "L50" the way the application
+    /// wants it.
+    void setValueText(const String& t) { valueText_ = t; markDirty(); }
+    /// @brief Get the text shown under the control.
+    const String& valueText() const    { return valueText_; }
+
+    /// @brief Set the accent of the filled part and of the line across the cap.
+    /// Until one is set the fader follows the theme accent, so no colour is
+    /// fixed here: the application picks it.
+    void setFillColor(const Color& c) { fillColor_ = c; hasFillColor_ = true; markDirty(); }
+    /// @brief Forget the colour set with setFillColor and follow the theme again.
+    void clearFillColor()             { hasFillColor_ = false; markDirty(); }
+    /// @brief Set the colour of the recessed groove.
+    void setTrackColor(const Color& c) { trackColor_ = c; markDirty(); }
+    /// @brief Set the colour of the cap, which is shaded from it.
+    void setCapColor(const Color& c)   { capColor_ = c; markDirty(); }
+    /// @brief Set whether to show the numeric value under the control.
+    void setShowValue(bool s)          { showValue_ = s; markDirty(); }
+    /// @brief Set whether to draw the marks down the side of the groove.
+    void setShowTicks(bool s)          { showTicks_ = s; markDirty(); }
+
+    /// @brief Emitted when the value changes.
+    Signal<float> onChanged;
+
+    Vec2f sizeHint() const override;
+    void  paint(PaintContext& ctx) override;
+    void  onMousePress(MouseEvent& e) override;
+    void  onMouseMove(MouseEvent& e) override;
+    void  onMouseRelease(MouseEvent& e) override;
+    void  onMouseScroll(MouseEvent& e) override;
+
+private:
+    // The part of the widget the control itself occupies, without the rows the
+    // value and the label take underneath, measured from the given origin. The
+    // painter passes the absolute rect; the pointer arrives in the widget's own
+    // coordinates, so the interaction passes a rect at the origin.
+    Rect  bodyRect(const Rect& origin) const;
+    Rect  localBody() const;
+    // Where the middle of the cap is, for a normalised value.
+    float capCentre(const Rect& body, float norm) const;
+    // Everything a press or a drag needs: the geometry of the body.
+    float trackThickness(const Rect& body) const;
+    float travel(const Rect& body) const;
+    // Moves the value to wherever the pointer is, keeping the grab offset.
+    void  updateFromPointer(float localX, float localY);
+
+    float min_ = 0.f, max_ = 1.f, value_ = 0.5f;
+    LayoutDir orientation_ = LayoutDir::Vertical;
+    String label_;
+    String valueText_;
+    bool  showValue_ = true;
+    bool  showTicks_ = true;
+    Color fillColor_  = Color(96, 212, 255, 255);
+    bool  hasFillColor_ = false;
+    Color trackColor_ = Color(55, 55, 58, 255);
+    Color capColor_   = Color(60, 60, 65, 255);
+    bool  dragging_ = false;
+    // Gap between the pointer and the middle of the cap when the press landed
+    // on the cap; zero for a press anywhere else, which jumps the cap there.
+    float grabOffset_ = 0.f;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  LinearKnob — Horizontal/vertical slider with thumb
 // ═════════════════════════════════════════════════════════════════════════════
 

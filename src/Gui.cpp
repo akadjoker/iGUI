@@ -343,7 +343,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(),
       windowOrder_(), idStack_(), focusOrder_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
-      hotWidget_(InvalidWidgetId), lastItemId_(InvalidWidgetId),
+      hotWidget_(InvalidWidgetId), faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
@@ -6573,6 +6573,164 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     }
     if (pointer_.released[left] && activeWidget_ == id)
         activeWidget_ = InvalidWidgetId;
+    return changed;
+}
+
+// Where the cap of a fader sits along its travel, at a normalized value: the
+// bottom for a vertical fader, the left for a horizontal one.
+static float faderCapCentre(const Rect &rect, float capAlong, float travel, float norm, bool vertical)
+{
+    return vertical ? rect.y + rect.height - capAlong * 0.5f - travel * norm
+                    : rect.x + capAlong * 0.5f + travel * norm;
+}
+
+// The lit top and the shaded bottom of a moulded cap. Cheaper than a gradient
+// and enough to read as something with a thickness you can push.
+static Color shade(const Color &color, float amount)
+{
+    float r = static_cast<float>(color.r) * amount;
+    float g = static_cast<float>(color.g) * amount;
+    float b = static_cast<float>(color.b) * amount;
+    r = r > 255.0f ? 255.0f : r;
+    g = g > 255.0f ? 255.0f : g;
+    b = b > 255.0f ? 255.0f : b;
+    return Color(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b), color.a);
+}
+
+FaderStyle FaderStyle::accent(const Color &color)
+{
+    FaderStyle style;
+    style.fill = color;
+    style.hasFill = true;
+    return style;
+}
+
+bool Context::fader(StringView idText, float &value, float minimum, float maximum,
+                    const Rect &bounds, FaderOrientation orientation, const FaderStyle &style)
+{
+    WindowState *window = currentWindow();
+    if (!window || maximum <= minimum)
+        return false;
+
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const WidgetId id = combineIds(makeWidgetId(idText), 0x4641444552000001ull);
+    registerFocusable(id);
+
+    const bool vertical = orientation == FaderOrientation::Vertical;
+    const float span = maximum - minimum;
+    float norm = clamp((value - minimum) / span, 0.0f, 1.0f);
+
+    // The groove runs the length of the control. The cap is the thicker piece
+    // in the middle that a finger pushes, and travels the groove minus its own
+    // thickness so it never hangs off either end.
+    const float grooveThickness = clamp((vertical ? rect.width : rect.height) * 0.24f, 6.0f, 12.0f);
+    const float capAlong = 14.0f;
+    const float capAcross = clamp(vertical ? rect.width : rect.height, capAlong + 6.0f, 30.0f);
+    float travel = (vertical ? rect.height : rect.width) - capAlong;
+    if (travel < 1.0f)
+        travel = 1.0f;
+
+    // The press is taken over the whole control, which is what makes it usable
+    // with a finger - but a press that lands on the cap keeps the gap it landed
+    // with, so the cap does not jump under the hand.
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const Vec2 pointer = pointer_.position;
+    float capCentre = faderCapCentre(rect, capAlong, travel, norm, vertical);
+    if (pointerPressedIn(rect, left))
+    {
+        activeWidget_ = id;
+        focusedWidget_ = id;
+        const Rect cap = vertical
+            ? Rect(rect.x + (rect.width - capAcross) * 0.5f, capCentre - capAlong * 0.5f,
+                   capAcross, capAlong)
+            : Rect(capCentre - capAlong * 0.5f, rect.y + (rect.height - capAcross) * 0.5f,
+                   capAlong, capAcross);
+        faderGrabOffset_ = cap.contains(pointer.x, pointer.y)
+            ? capCentre - (vertical ? pointer.y : pointer.x)
+            : 0.0f;
+    }
+
+    bool changed = false;
+    if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left]))
+    {
+        const float along = (vertical ? pointer.y : pointer.x) + faderGrabOffset_;
+        const float from = vertical
+            ? (rect.y + rect.height - capAlong * 0.5f - along) / travel
+            : (along - rect.x - capAlong * 0.5f) / travel;
+        norm = clamp(from, 0.0f, 1.0f);
+        const float nextValue = minimum + span * norm;
+        changed = nextValue != value;
+        value = nextValue;
+        capCentre = faderCapCentre(rect, capAlong, travel, norm, vertical);
+    }
+    if (pointer_.released[left] && activeWidget_ == id)
+        activeWidget_ = InvalidWidgetId;
+
+    const bool hovered = itemHovered(rect, clip, id);
+    const Color accent = style.hasFill ? style.fill : theme_.focusColor;
+    const Color grooveColour = style.hasGroove ? style.groove : theme_.sliderBackground;
+    const Color capColour = style.hasCap ? style.cap
+                                         : (hovered ? theme_.buttonHovered : theme_.buttonBackground);
+    const Color capLine = style.hasCapLine ? style.capLine : accent;
+
+    const Rect groove = vertical
+        ? Rect(rect.x + (rect.width - grooveThickness) * 0.5f, rect.y, grooveThickness, rect.height)
+        : Rect(rect.x, rect.y + (rect.height - grooveThickness) * 0.5f, rect.width, grooveThickness);
+    const float grooveRadius = grooveThickness * 0.5f;
+    drawList->addRectFilledRounded(groove, grooveRadius, grooveColour, clip);
+
+    // The value reads as the filled part of the groove, in the accent colour.
+    if (vertical)
+        drawList->addRectFilledRounded(
+            Rect(groove.x, capCentre, groove.width, rect.y + rect.height - capCentre),
+            grooveRadius, accent, clip);
+    else
+        drawList->addRectFilledRounded(
+            Rect(groove.x, groove.y, capCentre - groove.x, groove.height),
+            grooveRadius, accent, clip);
+
+    // Marks down the side of the groove, wherever the control is wide enough to
+    // hold them without reaching into a neighbour.
+    const float margin = ((vertical ? rect.width : rect.height) - grooveThickness) * 0.5f;
+    if (style.ticks && margin >= 8.0f && travel >= 48.0f)
+    {
+        const float tickLength = margin - 4.0f < 8.0f ? margin - 4.0f : 8.0f;
+        const float tickStart = vertical ? groove.right() + 3.0f : groove.bottom() + 3.0f;
+        for (int i = 0; i <= 10; ++i)
+        {
+            const float along = faderCapCentre(rect, capAlong, travel, static_cast<float>(i) / 10.0f,
+                                               vertical);
+            const float length = (i % 5 == 0) ? tickLength : tickLength * 0.6f;
+            if (vertical)
+                drawList->addLine(Vec2(tickStart, along), Vec2(tickStart + length, along),
+                                  theme_.borderColor, clip, 1.0f);
+            else
+                drawList->addLine(Vec2(along, tickStart), Vec2(along, tickStart + length),
+                                  theme_.borderColor, clip, 1.0f);
+        }
+    }
+
+    const Rect cap = vertical
+        ? Rect(rect.x + (rect.width - capAcross) * 0.5f, capCentre - capAlong * 0.5f,
+               capAcross, capAlong)
+        : Rect(capCentre - capAlong * 0.5f, rect.y + (rect.height - capAcross) * 0.5f,
+               capAlong, capAcross);
+    drawList->addRectFilledRounded(cap, 3.0f, capColour, clip);
+    drawList->addRectFilled(vertical ? Rect(cap.x + 2.0f, cap.y, cap.width - 4.0f, 1.0f)
+                                     : Rect(cap.x, cap.y + 2.0f, 1.0f, cap.height - 4.0f),
+                            shade(capColour, 1.6f), clip);
+    drawList->addRectFilled(vertical ? Rect(cap.x + 2.0f, cap.bottom() - 1.0f, cap.width - 4.0f, 1.0f)
+                                     : Rect(cap.right() - 1.0f, cap.y + 2.0f, 1.0f, cap.height - 4.0f),
+                            shade(capColour, 0.55f), clip);
+    // The line across the cap is what the eye lines up with the marks.
+    drawList->addRectFilled(vertical ? Rect(cap.x + 3.0f, capCentre - 1.0f, cap.width - 6.0f, 2.0f)
+                                     : Rect(capCentre - 1.0f, cap.y + 3.0f, 2.0f, cap.height - 6.0f),
+                            capLine, clip);
     return changed;
 }
 

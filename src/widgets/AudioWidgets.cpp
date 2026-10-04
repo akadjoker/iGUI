@@ -197,6 +197,234 @@ void Knob::onMouseScroll(MouseEvent& e)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Fader
+// ═════════════════════════════════════════════════════════════════════════════
+
+Fader::Fader()
+{
+    acceptsFocus_ = true;
+    cursor_ = CursorType::SizeV;
+}
+
+void Fader::setValue(float v)
+{
+    const float clamped = std::clamp(v, min_, max_);
+    if (clamped == value_)
+        return;
+    value_ = clamped;
+    onChanged.emit(value_);
+    markDirty();
+}
+
+Widget::Vec2f Fader::sizeHint() const
+{
+    if (orientation_ == LayoutDir::Vertical)
+        return {40, 132};
+    return {132, 40};
+}
+
+Rect Fader::bodyRect(const Rect& origin) const
+{
+    const float labelH = label_.empty() ? 0.f : 16.f;
+    const float valH   = showValue_     ? 14.f :  0.f;
+    const float height = origin.h - labelH - valH;
+    return {origin.x, origin.y, origin.w, height > 0.f ? height : origin.h};
+}
+
+// The body in the widget's own coordinates, which is the space a MouseEvent
+// arrives in: WidgetApp subtracts the widget's absolute origin before calling
+// onMousePress/onMouseMove. Painting uses the absolute one instead, and mixing
+// the two used to send a drag straight to the end of the range.
+Rect Fader::localBody() const
+{
+    return bodyRect({0.f, 0.f, rect_.w, rect_.h});
+}
+
+float Fader::trackThickness(const Rect& body) const
+{
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    return clamp((vertical ? body.w : body.h) * 0.24f, 6.f, 12.f);
+}
+
+float Fader::travel(const Rect& body) const
+{
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    // The cap is 14 thick along the travel and never hangs off either end.
+    const float span = (vertical ? body.h : body.w) - 14.f;
+    return span > 1.f ? span : 1.f;
+}
+
+float Fader::capCentre(const Rect& body, float norm) const
+{
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    return vertical ? body.y + body.h - 7.f - travel(body) * norm
+                    : body.x + 7.f + travel(body) * norm;
+}
+
+void Fader::updateFromPointer(float localX, float localY)
+{
+    const Rect body = localBody();
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    const float along = (vertical ? localY : localX) + grabOffset_;
+    const float from = vertical
+        ? (body.y + body.h - 7.f - along) / travel(body)
+        : (along - body.x - 7.f) / travel(body);
+    setValue(min_ + clamp(from, 0.f, 1.f) * (max_ - min_));
+}
+
+void Fader::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+
+    const Rect b = bodyRect(absoluteRect());
+    ctx.pushClip(b);
+
+    const auto& t = Theme::instance();
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    const float norm  = normalised();
+    const float thick = trackThickness(b);
+    const float capCentreNow = capCentre(b, norm);
+    const float capAcross = clamp(vertical ? b.w : b.h, 20.f, 30.f);
+
+    // The accent is the application's choice: with none set the fader takes the
+    // theme accent rather than fixing one of its own, like the knob beside it.
+    const Color accent = hasFillColor_ ? fillColor_ : t.focusColor;
+    const Color groove = hovered_ ? t.sliderTrackHover : trackColor_;
+    const Color cap    = hovered_ ? t.buttonHover : capColor_;
+
+    const Rect track = vertical
+        ? Rect{b.x + (b.w - thick) * 0.5f, b.y, thick, b.h}
+        : Rect{b.x, b.y + (b.h - thick) * 0.5f, b.w, thick};
+    const float radius = thick * 0.5f;
+
+    // Marks down the side, wherever the control is wide enough to hold them.
+    const float margin = ((vertical ? b.w : b.h) - thick) * 0.5f;
+    if (showTicks_ && margin >= 8.f && travel(b) >= 48.f)
+    {
+        const float length = std::min(margin - 4.f, 8.f);
+        ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 255);
+        for (int i = 0; i <= 10; ++i)
+        {
+            const float mark = capCentre(b, static_cast<float>(i) / 10.f);
+            const float len  = (i % 5 == 0) ? length : length * 0.6f;
+            if (vertical)
+            {
+                const float x = track.x + track.w + 3.f;
+                ctx.drawLine(x, mark, x + len, mark);
+            }
+            else
+            {
+                const float y = track.y + track.h + 3.f;
+                ctx.drawLine(mark, y, mark, y + len);
+            }
+        }
+    }
+
+    // The recessed groove, then the value as the filled part of it.
+    ctx.fill.SetColor(groove.r, groove.g, groove.b, 255);
+    ctx.fill.RoundedRectangle(track.x, track.y, track.w, track.h, radius, 6, true);
+
+    const Rect filled = vertical
+        ? Rect{track.x, capCentreNow, track.w, b.y + b.h - capCentreNow}
+        : Rect{track.x, track.y, capCentreNow - track.x, track.h};
+    ctx.fill.SetColor(accent.r, accent.g, accent.b, 255);
+    ctx.fill.RoundedRectangle(filled.x, filled.y, filled.w, filled.h, radius, 6, true);
+
+    // The cap: the piece a finger pushes, lit on top and shaded underneath so it
+    // reads as something with a thickness.
+    const Rect capRect = vertical
+        ? Rect{b.x + (b.w - capAcross) * 0.5f, capCentreNow - 7.f, capAcross, 14.f}
+        : Rect{capCentreNow - 7.f, b.y + (b.h - capAcross) * 0.5f, 14.f, capAcross};
+    ctx.fill.SetColor(cap.r, cap.g, cap.b, 255);
+    ctx.fill.RoundedRectangle(capRect.x, capRect.y, capRect.w, capRect.h, 3.f, 6, true);
+    const Color lit   = lerpColor(cap, Color(255, 255, 255, 255), 0.35f);
+    const Color shade = lerpColor(cap, Color(0, 0, 0, 255), 0.45f);
+    ctx.fill.SetColor(lit.r, lit.g, lit.b, 255);
+    if (vertical)
+        ctx.fill.Rectangle(capRect.x + 2.f, capRect.y, capRect.w - 4.f, 1.f, true);
+    else
+        ctx.fill.Rectangle(capRect.x, capRect.y + 2.f, 1.f, capRect.h - 4.f, true);
+    ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
+    if (vertical)
+        ctx.fill.Rectangle(capRect.x + 2.f, capRect.y + capRect.h - 1.f, capRect.w - 4.f, 1.f, true);
+    else
+        ctx.fill.Rectangle(capRect.x + capRect.w - 1.f, capRect.y + 2.f, 1.f, capRect.h - 4.f, true);
+
+    // The line across the cap, in the accent, is what the eye lines up with the
+    // marks - and what a finger aims at.
+    ctx.fill.SetColor(accent.r, accent.g, accent.b, 255);
+    if (vertical)
+        ctx.fill.Rectangle(capRect.x + 3.f, capCentreNow - 1.f, capRect.w - 6.f, 2.f, true);
+    else
+        ctx.fill.Rectangle(capCentreNow - 1.f, capRect.y + 3.f, 2.f, capRect.h - 6.f, true);
+
+    ctx.popClip();
+
+    // Value then label, centred under the control, the way the knob reads.
+    const Rect full = absoluteRect();
+    const float labelH = label_.empty() ? 0.f : 16.f;
+    const float valH   = showValue_     ? 14.f :  0.f;
+    const float cx     = full.x + full.w * 0.5f;
+    if (showValue_)
+    {
+        char buf[32];
+        if (!valueText_.empty())
+            snprintf(buf, sizeof(buf), "%s", valueText_.c_str());
+        else
+            snprintf(buf, sizeof(buf), "%.2f", value_);
+        const float asc = setupFont(ctx, Color(228, 234, 244, 255), 10.f);
+        const float tw  = ctx.font.GetTextWidth(buf);
+        ctx.font.Print(buf, cx - tw * 0.5f, b.y + b.h + (valH - 10.f) * 0.5f + asc);
+    }
+    if (!label_.empty())
+    {
+        const float asc = setupFont(ctx, Color(138, 148, 166, 255), 10.f);
+        const float tw  = ctx.font.GetTextWidth(label_.c_str());
+        ctx.font.Print(label_.c_str(), cx - tw * 0.5f, b.y + b.h + valH + (labelH - 10.f) * 0.5f + asc);
+    }
+}
+
+void Fader::onMousePress(MouseEvent& e)
+{
+    if (e.button != 0) return;
+    const Rect body = localBody();
+    const bool vertical = orientation_ == LayoutDir::Vertical;
+    const float capAcross = clamp(vertical ? body.w : body.h, 20.f, 30.f);
+    const float centre = capCentre(body, normalised());
+    const Rect cap = vertical
+        ? Rect{body.x + (body.w - capAcross) * 0.5f, centre - 7.f, capAcross, 14.f}
+        : Rect{centre - 7.f, body.y + (body.h - capAcross) * 0.5f, 14.f, capAcross};
+    // A press on the cap keeps the gap it landed with, so the cap stays where
+    // the hand found it; anywhere else jumps the cap under the pointer.
+    grabOffset_ = cap.contains(e.localX, e.localY)
+        ? centre - (vertical ? e.localY : e.localX)
+        : 0.f;
+    dragging_ = true;
+    updateFromPointer(e.localX, e.localY);
+    e.consumed = true;
+}
+
+void Fader::onMouseMove(MouseEvent& e)
+{
+    if (!dragging_) return;
+    updateFromPointer(e.localX, e.localY);
+    e.consumed = true;
+}
+
+void Fader::onMouseRelease(MouseEvent& e)
+{
+    if (e.button != 0) return;
+    dragging_ = false;
+}
+
+void Fader::onMouseScroll(MouseEvent& e)
+{
+    const float step = (max_ - min_) * 0.02f;
+    setValue(std::clamp(value_ + e.scrollY * step, min_, max_));
+    e.consumed = true;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  LinearKnob
 // ═════════════════════════════════════════════════════════════════════════════
 

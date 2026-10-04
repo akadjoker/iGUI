@@ -242,6 +242,42 @@ struct SequencerTrack { String label; int startFrame; int endFrame; Color color;
     SequencerTrack() : label(), startFrame(0), endFrame(0), color(90,160,230) {}
     SequencerTrack(StringView n, int s, int e, const Color& c) : label(n.data(),n.size()), startFrame(s), endFrame(e), color(c) {} };
 
+// Which way a mixer fader travels. A vertical one reads upwards, like the ones
+// on a desk: the maximum sits at the top.
+enum class FaderOrientation : uint8_t
+{
+    Vertical,
+    Horizontal
+};
+
+// A fader's colours. With none set it follows the theme - the groove and the
+// cap from the slider colours, the fill and the line across the cap from the
+// accent - so an application picks the accent instead of receiving a fixed one.
+struct FaderStyle
+{
+    Color fill;
+    Color groove;
+    Color cap;
+    Color capLine;
+    bool hasFill;
+    bool hasGroove;
+    bool hasCap;
+    bool hasCapLine;
+    // Marks down the side of the groove, long ones every half.
+    bool ticks;
+
+    FaderStyle()
+        : fill(0u, 0u, 0u, 0u), groove(0u, 0u, 0u, 0u), cap(0u, 0u, 0u, 0u),
+          capLine(0u, 0u, 0u, 0u), hasFill(false), hasGroove(false), hasCap(false),
+          hasCapLine(false), ticks(true)
+    {
+    }
+
+    // Only the accent changes; the groove and the cap stay as the theme draws
+    // them.
+    static FaderStyle accent(const Color &color);
+};
+
 class Context
 {
 public:
@@ -366,6 +402,14 @@ public:
                      const Rect &bounds);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
                    const Rect &bounds);
+    // A mixer fader: a recessed groove with a cap that travels along it. The
+    // whole bounds take the press and the cap follows the pointer from there,
+    // so it is pushed with a finger rather than grabbed by its handle; a press
+    // that lands on the cap keeps the gap between the two instead of jumping.
+    // Returns true when value changed.
+    bool fader(StringView id, float &value, float minimum, float maximum, const Rect &bounds,
+               FaderOrientation orientation = FaderOrientation::Vertical,
+               const FaderStyle &style = FaderStyle());
     // Horizontal relative drag. The value changes by speed for each moved pixel;
     // click its value field to enter a precise number.
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
@@ -956,6 +1000,10 @@ private:
     WindowHandle resizingWindow_;
     WidgetId activeWidget_;
     WidgetId hotWidget_;
+    // Gap between the pointer and the centre of the cap of the fader being
+    // dragged: only one widget is active at a time, so one float is enough to
+    // let a press on the cap carry on from where it landed.
+    float faderGrabOffset_;
     WidgetId lastItemId_;
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;

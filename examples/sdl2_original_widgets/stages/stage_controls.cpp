@@ -7,6 +7,9 @@
 #include <cmath>
 using namespace ig::retained;
 
+// The voices of the desk, matching the immediate-mode gallery's mixer strip.
+static const char* const kChannelNames[] = {"Kick", "Bass", "Lead", "Hats"};
+
 void registerControlsStage(WidgetApp& app)
 {
     auto* root = app.addStage("controls");
@@ -129,4 +132,37 @@ void registerControlsStage(WidgetApp& app)
     tune->setRange(-24.0f, 24.0f);
     tune->setDefault(0.0f);
     tune->setValue(0.0f);
+
+    // ── The desk: the same faders the immediate-mode gallery draws ───────────
+    // Vertical channels and the master across, on the accent the voice picked.
+    audioPage->createChild<Spacer>(10.0f);
+    audioPage->createChild<Label>("Desk");
+    auto* desk = audioPage->createChild<BoxLayout>(LayoutDir::Horizontal);
+    desk->setSpacing(8.0f);
+    const float channelLevels[] = {0.82f, 0.64f, 0.48f, 0.30f};
+    for (int i = 0; i < 4; ++i)
+    {
+        auto* channel = desk->createChild<Fader>();
+        channel->setFillColor(accent);
+        channel->setLabel(kChannelNames[i]);
+        channel->setRange(0.0f, 1.0f);
+        channel->setValue(channelLevels[i]);
+        channel->onChanged.connect([channel](float v) {
+            char buf[16];
+            std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
+            channel->setValueText(buf);
+        });
+    }
+
+    auto* master = audioPage->createChild<Fader>();
+    master->setFillColor(accent);
+    master->setOrientation(LayoutDir::Horizontal);
+    master->setLabel("master");
+    master->setRange(0.0f, 1.0f);
+    master->setValue(0.75f);
+    master->onChanged.connect([master](float v) {
+        char buf[16];
+        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
+        master->setValueText(buf);
+    });
 }

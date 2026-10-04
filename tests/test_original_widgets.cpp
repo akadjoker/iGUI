@@ -162,6 +162,112 @@ static void test_knob_accent_comes_from_the_caller()
     assert(!foundTheme);
 }
 
+// A mixer fader takes the press anywhere: a finger never lands on the cap, so
+// the whole control has to work, and the value has to go where the pointer is.
+static void test_fader_takes_a_press_anywhere()
+{
+    // Deliberately away from the origin: a press arrives in the widget's own
+    // coordinates, so the drag has to be measured from the widget, not from the
+    // top left of the screen.
+    ig::retained::Fader fader;
+    fader.setRect({30.0f, 210.0f, 40.0f, 120.0f});
+    fader.setShowTicks(false);
+    fader.setValue(0.5f);
+
+    // The control keeps 14 pixels for the value row, so the travel runs from
+    // y 7 to y 99 with the cap 14 thick: the bottom of it is the minimum.
+    ig::MouseEvent press;
+    press.button = 0;
+    press.localX = 20.0f;
+    press.localY = 99.0f;
+    fader.onMousePress(press);
+    assert(fader.value() == 0.0f);
+
+    // The top of the travel is the maximum, so a vertical fader reads upwards.
+    press.localY = 7.0f;
+    fader.onMousePress(press);
+    assert(fader.value() == 1.0f);
+
+    fader.onMouseRelease(press);
+    assert(fader.value() == 1.0f);
+
+    // A press on the cap keeps the gap it landed with. At half way the cap is
+    // centred on y 53, so a grab two pixels above that leaves the value alone.
+    fader.setValue(0.5f);
+    press.localY = 51.0f;
+    fader.onMousePress(press);
+    assert(fader.value() == 0.5f);
+
+    // Carrying the grab ten pixels up raises the value by ten pixels worth of
+    // travel (106 - 14).
+    press.localY = 41.0f;
+    fader.onMouseMove(press);
+    assert(fader.value() > 0.60f && fader.value() < 0.62f);
+    fader.onMouseRelease(press);
+
+    // Horizontal faders read left to right.
+    ig::retained::Fader across;
+    across.setRect({30.0f, 340.0f, 120.0f, 40.0f});
+    across.setOrientation(ig::LayoutDir::Horizontal);
+    across.setShowTicks(false);
+    across.setValue(0.0f);
+    press.localX = 113.0f;   // the right end of the travel
+    press.localY = 13.0f;
+    across.onMousePress(press);
+    assert(across.value() == 1.0f);
+    press.localX = 7.0f;     // the left end of the travel
+    across.onMousePress(press);
+    assert(across.value() == 0.0f);
+    across.onMouseRelease(press);
+}
+
+// The fader takes its accent from the caller like the knob does: with none set
+// it follows the theme rather than fixing a colour of its own.
+static void test_fader_accent_comes_from_the_caller()
+{
+    const ig::Color accent = ig::retained::Theme::instance().focusColor;
+
+    ig::retained::DrawList themed;
+    ig::retained::PaintContext themedCtx(themed);
+    ig::retained::Fader plain;
+    plain.setRect({0.0f, 0.0f, 40.0f, 120.0f});
+    plain.setShowValue(false);
+    plain.setShowTicks(false);
+    plain.setValue(1.0f);
+    plain.paint(themedCtx);
+
+    bool foundThemeAccent = false;
+    for (size_t i = 0; i < themed.vertices().size(); ++i)
+    {
+        if (themed.vertices()[i].color == accent)
+            foundThemeAccent = true;
+    }
+    assert(foundThemeAccent);
+
+    ig::retained::DrawList coloured;
+    ig::retained::PaintContext colouredCtx(coloured);
+    ig::retained::Fader picked;
+    picked.setRect({0.0f, 0.0f, 40.0f, 120.0f});
+    picked.setShowValue(false);
+    picked.setShowTicks(false);
+    picked.setFillColor(ig::Color(10u, 20u, 30u, 255u));
+    picked.setValue(1.0f);
+    picked.paint(colouredCtx);
+
+    bool foundPicked = false;
+    bool foundTheme = false;
+    for (size_t i = 0; i < coloured.vertices().size(); ++i)
+    {
+        const ig::Color &colour = coloured.vertices()[i].color;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
+            foundPicked = true;
+        if (colour == accent)
+            foundTheme = true;
+    }
+    assert(foundPicked);
+    assert(!foundTheme);
+}
+
 int main()
 {
     using namespace ig;
@@ -170,6 +276,8 @@ int main()
     test_round_rect_corner_is_a_curve();
     test_knob_arc_is_open_at_the_bottom();
     test_knob_accent_comes_from_the_caller();
+    test_fader_takes_a_press_anywhere();
+    test_fader_accent_comes_from_the_caller();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

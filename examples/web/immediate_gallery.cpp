@@ -47,6 +47,10 @@ const ig::Color kAccents[kAccentCount] = {
 const ig::StringView kQuality[] = {
     ig::StringView("low"), ig::StringView("medium"), ig::StringView("high")
 };
+// The mixer strip of the synth section: four voices on vertical faders and the
+// master across the bottom, like a desk.
+const int kChannelCount = 4;
+const char *const kChannelNames[kChannelCount] = {"Kick", "Bass", "Lead", "Hats"};
 const ig::StringView kFruit[] = {
     ig::StringView("apple"), ig::StringView("banana"), ig::StringView("cherry"),
     ig::StringView("grape"), ig::StringView("lemon"), ig::StringView("mango"),
@@ -153,6 +157,8 @@ struct Gallery
     int voicePage = 0;
     ig::Color voiceAccent = ig::Color(96, 212, 255, 255);
     bool accentFromTheme = false;
+    float channelLevels[kChannelCount] = {0.82f, 0.64f, 0.48f, 0.30f};
+    float masterLevel = 0.75f;
     int sortColumn = -1;
     bool sortAscending = true;
     int firstRow = 0;
@@ -543,6 +549,48 @@ void synthSection(ig::Context &ui)
     synth::knob(ui, "voice tune", "Tune", tuneText, g.voiceTune, -24.0f, 24.0f,
                 ig::Vec2(row.x + (diameter + gap) * 2.0f, row.y), diameter, style);
     ui.spacing(diameter + 30.0f);
+
+    ui.separatorText("Desk");
+    // A mixer strip on the same accent as the voice, drawn by the same code on
+    // both APIs. The whole control takes the press, which is what a finger
+    // needs: it never has to land on the cap.
+    const float faderWidth = 46.0f;
+    const float faderHeight = 120.0f;
+    const ig::FaderStyle faderStyle = g.accentFromTheme
+        ? ig::FaderStyle()
+        : ig::FaderStyle::accent(accent);
+    const ig::Vec2 desk = ui.cursor();
+    char levelText[16];
+    for (int i = 0; i < kChannelCount; ++i)
+    {
+        const float x = desk.x + static_cast<float>(i) * (faderWidth + 8.0f);
+        ui.fader(kChannelNames[i], g.channelLevels[i], 0.0f, 1.0f,
+                 ig::Rect(x, desk.y, faderWidth, faderHeight),
+                 ig::FaderOrientation::Vertical, faderStyle);
+        std::snprintf(levelText, sizeof levelText, "%d",
+                      static_cast<int>(g.channelLevels[i] * 100.0f + 0.5f));
+        const ig::StringView name(kChannelNames[i]);
+        const ig::StringView level(levelText);
+        ui.drawText(name, ig::Vec2(x + (faderWidth - ui.textWidth(name)) * 0.5f,
+                                   desk.y + faderHeight + 4.0f),
+                    ig::Color(186, 194, 210, 255));
+        ui.drawText(level, ig::Vec2(x + (faderWidth - ui.textWidth(level)) * 0.5f,
+                                    desk.y + faderHeight + 18.0f),
+                    ig::Color(120, 130, 148, 255));
+    }
+    ui.spacing(faderHeight + 32.0f);
+
+    // The master runs across, so the one control that takes the whole hand is
+    // the one that is widest.
+    const ig::Vec2 master = ui.cursor();
+    ui.fader("master level", g.masterLevel, 0.0f, 1.0f,
+             ig::Rect(master.x, master.y, 216.0f, 44.0f), ig::FaderOrientation::Horizontal,
+             faderStyle);
+    std::snprintf(levelText, sizeof levelText, "master %d",
+                  static_cast<int>(g.masterLevel * 100.0f + 0.5f));
+    ui.drawText(ig::StringView(levelText), ig::Vec2(master.x, master.y + 48.0f),
+                ig::Color(138, 148, 166, 255));
+    ui.spacing(66.0f);
 
     ui.separatorText("Accent colour of the voice");
     for (int i = 0; i < kAccentCount; ++i)
