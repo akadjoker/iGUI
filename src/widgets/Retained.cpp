@@ -1075,6 +1075,19 @@ namespace ig { namespace retained
             break;
         }
 
+        case IconId::MarkIn:
+        case IconId::MarkOut:
+        {
+            // a bracket: a tall line with short arms, opening towards the range
+            const float sx = icon == IconId::MarkIn ? 1.0f : -1.0f;
+            const float bx = icon == IconId::MarkIn ? x0 + p * 1.2f : x1 - p * 1.2f;
+            const float arm = s * 0.28f;
+            addLine({bx, y0 + p * 0.8f}, {bx, y1 - p * 0.8f}, color, thickness * 1.4f);
+            addLine({bx, y0 + p * 0.8f}, {bx + sx * arm, y0 + p * 0.8f}, color, thickness * 1.4f);
+            addLine({bx, y1 - p * 0.8f}, {bx + sx * arm, y1 - p * 0.8f}, color, thickness * 1.4f);
+            break;
+        }
+
         case IconId::Magnet:
         {
             float r = s * 0.27f, w = s * 0.14f, my = cy - s * 0.06f, bot = y1 - s * 0.14f;
@@ -1113,7 +1126,7 @@ namespace ig { namespace retained
         case IconId::Eye: case IconId::EyeOff:
         case IconId::Play: case IconId::Pause: case IconId::Stop: case IconId::StepForward: case IconId::StepBack:
         case IconId::Record: case IconId::Trash: case IconId::Lock: case IconId::Unlock:
-        case IconId::Scissors: case IconId::Import: case IconId::Magnet:
+        case IconId::Scissors: case IconId::Import: case IconId::Magnet: case IconId::MarkIn: case IconId::MarkOut:
             return true;
         default:
             return false;
