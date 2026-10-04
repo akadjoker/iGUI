@@ -2574,9 +2574,181 @@ static void test_knob_accent_comes_from_the_caller()
     assert(foundCustomAccent);
 }
 
+// One frame of a fader, the way an application runs it: the events are already
+// queued, then the widget is drawn. The window has to be drawn once before a
+// press can land in it, so the first call is also the warm-up.
+static bool drawFader(ig::Context &context, ig::StringView id, const ig::Rect &bounds,
+                      float &value, ig::FaderOrientation orientation,
+                      const ig::FaderStyle &style = ig::FaderStyle())
+{
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("fader", ig::Rect(10.0f, 10.0f, 300.0f, 240.0f)));
+    const bool changed = context.fader(id, value, 0.0f, 1.0f, bounds, orientation, style);
+    context.endWindow();
+    context.endFrame();
+    return changed;
+}
+
+// The bounds of a bounds-based widget are in content coordinates, which move
+// with the window's title bar and padding. Rather than assume them, the test
+// asks the widget: the first row that takes a press is the top of its travel.
+static float faderFirstRow(ig::Context &context, ig::StringView id, const ig::Rect &bounds,
+                           float &value, float x)
+{
+    for (float y = 0.0f; y < 300.0f; y += 1.0f)
+    {
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+        if (drawFader(context, id, bounds, value, ig::FaderOrientation::Vertical))
+            return y;
+    }
+    assert(false);
+    return 0.0f;
+}
+
+// The whole bounds take the press and the cap follows the pointer from there,
+// which is what makes a fader usable with a finger. A vertical one reads
+// upwards; a horizontal one reads left to right.
+static void test_fader_pushes_with_the_pointer()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Rect track(20.0f, 20.0f, 40.0f, 100.0f);
+    const ig::Rect across(20.0f, 140.0f, 100.0f, 30.0f);
+    float volume = 0.0f;
+    // Starts at the far end, so the first column that takes a press is the left
+    // edge of the horizontal fader and the value there has to fall to the floor.
+    float pan = 1.0f;
+
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+    const float top = faderFirstRow(context, "volume", track, volume, 68.0f);
+
+    // The top row is the top of the range, and the bottom row is its floor.
+    assert(volume == 1.0f);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 68.0f, top + 99.0f));
+    assert(drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical));
+    assert(volume == 0.0f);
+
+    // Still held, the cap follows the pointer: ten pixels up is ten pixels worth
+    // of travel (100 - 14), not a jump to the pointer.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 68.0f, top + 70.0f));
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+    const float before = volume;
+    context.pushEvent(ig::Event::pointerMove(68.0f, top + 60.0f));
+    assert(drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical));
+    assert(volume > before + 0.11f && volume < before + 0.12f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 68.0f, top + 60.0f));
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+
+    // Released: moving the pointer no longer pushes anything.
+    const float released = volume;
+    context.pushEvent(ig::Event::pointerMove(68.0f, top + 70.0f));
+    assert(!drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical));
+    assert(volume == released);
+
+    // A horizontal fader reads left to right. Its bounds sit 120 below the
+    // vertical one's, so its middle row is the one found above plus 120.
+    drawFader(context, "pan", across, pan, ig::FaderOrientation::Horizontal);
+    float left = 0.0f;
+    for (float x = 0.0f; x < 300.0f; x += 1.0f)
+    {
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, top + 135.0f));
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, top + 135.0f));
+        if (drawFader(context, "pan", across, pan, ig::FaderOrientation::Horizontal))
+        {
+            left = x;
+            break;
+        }
+    }
+    assert(pan == 0.0f);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, left + 93.0f, top + 135.0f));
+    assert(drawFader(context, "pan", across, pan, ig::FaderOrientation::Horizontal));
+    assert(pan == 1.0f);
+}
+
+// A press that lands on the cap keeps the gap it landed with, so the cap does
+// not jump under the hand that grabbed it.
+static void test_fader_cap_keeps_its_grab_offset()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Rect track(20.0f, 20.0f, 40.0f, 100.0f);
+    float volume = 0.5f;
+
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+    const float top = faderFirstRow(context, "volume", track, volume, 68.0f);
+
+    // At half way the cap is centred 50 pixels down the travel, so a grab two
+    // pixels above its middle leaves the value where it was: without the offset
+    // the cap would jump onto the pointer.
+    volume = 0.5f;
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 68.0f, top + 48.0f));
+    assert(!drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical));
+    assert(volume == 0.5f);
+
+    // Carrying that grab ten pixels further up raises the value by ten pixels
+    // worth of travel.
+    context.pushEvent(ig::Event::pointerMove(68.0f, top + 38.0f));
+    assert(drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical));
+    assert(volume > 0.61f && volume < 0.62f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 68.0f, top + 38.0f));
+    drawFader(context, "volume", track, volume, ig::FaderOrientation::Vertical);
+}
+
+// The fader takes its accent from the caller like the knob does: with none set
+// it follows the theme rather than fixing a colour of its own.
+static void test_fader_accent_comes_from_the_caller()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Rect track(20.0f, 20.0f, 40.0f, 100.0f);
+    float volume = 0.5f;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("fader", ig::Rect(10.0f, 10.0f, 300.0f, 240.0f)));
+    context.fader("volume", volume, 0.0f, 1.0f, track, ig::FaderOrientation::Vertical);
+    context.endWindow();
+    const ig::DrawData &themed = context.endFrame();
+
+    const ig::Color accent = context.theme().focusColor;
+    bool themedAccentFound = false;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < themed.vertices.size(); ++i)
+    {
+        if (themed.vertices[i].color == accent)
+            themedAccentFound = true;
+    }
+    assert(themedAccentFound);
+
+    const ig::FaderStyle picked = ig::FaderStyle::accent(ig::Color(10u, 20u, 30u, 255u));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("fader", ig::Rect(10.0f, 10.0f, 300.0f, 240.0f)));
+    context.fader("volume", volume, 0.0f, 1.0f, track, ig::FaderOrientation::Vertical, picked);
+    context.endWindow();
+    const ig::DrawData &coloured = context.endFrame();
+
+    bool pickedAccentFound = false;
+    bool themeAccentFound = false;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < coloured.vertices.size(); ++i)
+    {
+        const ig::Color &colour = coloured.vertices[i].color;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
+            pickedAccentFound = true;
+        if (colour == accent)
+            themeAccentFound = true;
+    }
+    assert(pickedAccentFound);
+    assert(!themeAccentFound);
+}
+
 int main()
 {
     test_knob_accent_comes_from_the_caller();
+    test_fader_pushes_with_the_pointer();
+    test_fader_cap_keeps_its_grab_offset();
+    test_fader_accent_comes_from_the_caller();
     test_file_dialog_resize_left_edge();
     test_file_dialog_incremental_search_uses_cached_entries();
     test_immediate_gradient_editor_sorts_stops();
