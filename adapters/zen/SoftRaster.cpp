@@ -1,7 +1,12 @@
-#include "SoftRaster.hpp"
+#include <igui_zen/SoftRaster.hpp>
 
 #include <math.h>
 #include <string.h>
+
+namespace ig
+{
+namespace zen
+{
 
 namespace
 {
@@ -433,3 +438,6 @@ void SoftRaster::storeCache(uint64_t sig, const uint32_t *src, int width, int he
     cacheWidth_ = width;
     cacheHeight_ = height;
 }
+
+} // namespace zen
+} // namespace ig
