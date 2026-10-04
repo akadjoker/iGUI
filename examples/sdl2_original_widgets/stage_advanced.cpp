@@ -17,6 +17,7 @@
 #include "AppWidgets.hpp"
 
 #include <cmath>
+#include <cmath>
 #include <ct/vector.hpp>
 
 using namespace ig::retained;
@@ -41,6 +42,27 @@ BoxLayout* makeStage(WidgetApp& app, const char* name, const char* title)
     header->createChild<Label>(title)->setAlign(TextAlign::RIGHT);
     outer->createChild<Line>();
     return outer;
+}
+
+// A camera at `eye` looking at the origin, in the column-major order the 3D
+// gizmo's setViewProjection expects. The gizmo measures its handles from the
+// camera distance, so the eye position is what decides how big they are: with
+// the identity matrices the demo used before, a target on the origin sat zero
+// units from the camera and the handles collapsed to nothing.
+void lookAtOrigin(float* out, float ex, float ey, float ez)
+{
+    const float length = std::sqrt(ex * ex + ey * ey + ez * ez);
+    const float f[3] = {ex / length, ey / length, ez / length};
+    float r[3] = {f[2], 0.0f, -f[0]};                 // (0,1,0) x f
+    const float rl = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+    r[0] /= rl; r[2] /= rl;
+    const float u[3] = {f[1] * r[2] - f[2] * r[1],
+                        f[2] * r[0] - f[0] * r[2],
+                        f[0] * r[1] - f[1] * r[0]};   // f x r
+    out[0] = r[0]; out[4] = r[1]; out[8]  = r[2];  out[12] = -(r[0] * ex + r[1] * ey + r[2] * ez);
+    out[1] = u[0]; out[5] = u[1]; out[9]  = u[2];  out[13] = -(u[0] * ex + u[1] * ey + u[2] * ez);
+    out[2] = f[0]; out[6] = f[1]; out[10] = f[2];  out[14] = -(f[0] * ex + f[1] * ey + f[2] * ez);
+    out[3] = 0.0f; out[7] = 0.0f; out[11] = 0.0f;  out[15] = 1.0f;
 }
 }
 
@@ -156,7 +178,7 @@ void registerTimelineStage(WidgetApp& app)
 
 void registerGizmosStage(WidgetApp& app)
 {
-    auto* outer = makeStage(app, "gizmos", "Gizmo2D — translate, rotate e scale");
+    auto* outer = makeStage(app, "gizmos", "Gizmo2D e Gizmo3D — translate, rotate e scale");
     auto* row = outer->createChild<BoxLayout>(LayoutDir::Horizontal);
     row->setSpacing(1.0f);
     row->setStretch(1.0f);
@@ -182,6 +204,42 @@ void registerGizmosStage(WidgetApp& app)
         gizmo->setPosition(125.0f, 170.0f);
         gizmo->setMode(entry.mode);
         gizmo->setSnapTranslate(8.0f);
+        gizmo->setSnapRotate(15.0f);
+        gizmo->setSnapScale(0.1f);
+    }
+
+    // The same three modes for 3D. The camera looks at the origin from the
+    // upper right, so the three axes point three different ways on screen and
+    // the handles are big enough to grab.
+    const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    float view[16];
+    lookAtOrigin(view, 3.0f, 2.2f, 3.0f);
+
+    struct Entry3D { const char* label; GizmoMode3D mode; } entries3D[] = {
+        {"Translate 3D", GizmoMode3D::Translate},
+        {"Rotate 3D",    GizmoMode3D::Rotate},
+        {"Scale 3D",     GizmoMode3D::Scale},
+    };
+    for (const Entry3D& entry : entries3D)
+    {
+        auto* panel = row->createChild<Panel>();
+        panel->setStretch(1.0f);
+        auto* box = panel->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(12.0f);
+        box->setSpacing(8.0f);
+        box->setStretch(1.0f);
+        box->createChild<Label>(entry.label);
+        auto* area = box->createChild<Panel>();
+        area->setStretch(1.0f);
+        auto* gizmo = area->createChild<Gizmo3D>();
+        const float position[3] = {0.0f, 0.0f, 0.0f};
+        const float rotation[3] = {0.0f, 0.0f, 0.0f};
+        const float scale[3] = {1.0f, 1.0f, 1.0f};
+        gizmo->setViewProjection(view, identity, 400, 400);
+        gizmo->setTarget(position, rotation, scale);
+        gizmo->setScreenScale(70.0f);
+        gizmo->setMode(entry.mode);
+        gizmo->setSnapTranslate(0.1f);
         gizmo->setSnapRotate(15.0f);
         gizmo->setSnapScale(0.1f);
     }
