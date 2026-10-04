@@ -858,6 +858,24 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             ctx.fillRect(cx0,         clipY,             1,         clipH);
             ctx.fillRect(cx1 - 1,     clipY,             1,         clipH);
 
+            // The waveform of the sound: a bar for every couple of pixels, as loud as the sound is there
+            if (peakProvider_ && trk.kind == TrackKind::Audio && clip.media >= 0) {
+                const float x0 = std::max(cx0, b.x + kHeaderW);
+                const float x1 = std::min(cx1, b.x + b.w);
+                const float mid = clipY + clipH * 0.5f;
+                float previous = clip.offset + (xToTime(x0) - clip.start) * clip.speed;
+                ctx.fill.SetColor(255, 255, 255, 105);
+                for (float x = x0; x < x1; x += 2.0f) {
+                    const float source = clip.offset + (xToTime(x + 2.0f) - clip.start) * clip.speed;
+                    const float peak = peakProvider_(clip.media, std::min(previous, source), std::max(previous, source));
+                    previous = source;
+                    if (peak <= 0.0f) continue;
+                    // the quiet parts show too: the loudness is drawn by its square root
+                    const float h = std::min(1.0f, std::sqrt(peak)) * (clipH * 0.5f - 1.0f);
+                    ctx.fillRect(x, mid - h, 2.0f, std::max(1.0f, h * 2.0f));
+                }
+            }
+
             // Envelope: the curve of the clip (volume), over the media's time
             if (!clip.envelope.empty() && clip.envelopeMax > clip.envelopeMin) {
                 ctx.fill.SetColor(255, 255, 255, 230);
