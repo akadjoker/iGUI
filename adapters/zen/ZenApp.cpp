@@ -147,6 +147,15 @@ void App::feedInput()
             io.mouseWheelX += e.data.wheel.x;
             io.mouseWheelY += e.data.wheel.y;
         }
+        else if (e.type == EVENT_WINDOW_DROP)
+        {
+            ct::Vector<rt::String> paths;
+            for (int i = 0; i < e.data.drop.count; ++i)
+                paths.push_back(rt::String(e.data.drop.paths[i]));
+            int dx = 0, dy = 0;
+            mouse_position(window_, &dx, &dy);
+            io.addDropEvent(static_cast<float>(dx), static_cast<float>(dy), paths);
+        }
         else if (e.type == EVENT_CHAR)
         {
             const uint32_t c = e.data.codepoint;
