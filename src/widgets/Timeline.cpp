@@ -40,6 +40,46 @@ void Timeline::setExpanded(int joint, bool expanded)
     markDirty();
 }
 
+namespace
+{
+constexpr float kBtn = 14.0f;
+constexpr float kBtnGap = 4.0f;
+
+// Header buttons sit at the right edge: [M][L].
+Rect lockButton(float headerX, float headerW, float trackY, float trackH)
+{
+    return { headerX + headerW - kBtn - 6.0f, trackY + (trackH - kBtn) * 0.5f, kBtn, kBtn };
+}
+
+Rect muteButton(float headerX, float headerW, float trackY, float trackH)
+{
+    Rect r = lockButton(headerX, headerW, trackY, trackH);
+    r.x -= kBtn + kBtnGap;
+    return r;
+}
+
+bool hitsButton(const Rect& r, float x, float y)
+{
+    return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+}
+}
+
+int Timeline::addTrack(const String& name, TrackKind kind)
+{
+    const int id = addTrack(name, kind == TrackKind::Audio ? Color(220, 145, 75, 255) : Color(90, 150, 220, 255));
+    tracks_[id].kind = kind;
+    return id;
+}
+
+void Timeline::setTrackMuted(int trackId, bool muted)
+{
+    if (trackId < 0 || trackId >= static_cast<int>(tracks_.size()) || tracks_[trackId].muted == muted)
+        return;
+    tracks_[trackId].muted = muted;
+    onTrackMuteChanged.emit(trackId, muted);
+    markDirty();
+}
+
 void Timeline::setHeaderWidth(float width) { if (std::isfinite(width)) kHeaderW = std::max(40.0f, width); markDirty(); }
 void Timeline::setEdgePadding(float pixels) { if (std::isfinite(pixels)) edgePadding_ = std::max(8.0f, pixels); markDirty(); }
 
@@ -211,7 +251,19 @@ void Timeline::onMousePress(MouseEvent& e)
 
     auto& trk = tracks_[ti];
     if (e.x < b.x + kHeaderW) {
-        setExpanded(ti, !trk.expanded);
+        const auto visible = visibleTracks();
+        int hrow = 0;
+        while (hrow < static_cast<int>(visible.size()) && visible[hrow] != ti) ++hrow;
+        const float hy = b.y + kRulerH + hrow * kTrackH - verticalScroll_;
+        if (hitsButton(muteButton(b.x, kHeaderW, hy, kTrackH), e.x, e.y)) {
+            setTrackMuted(ti, !trk.muted);
+        } else if (hitsButton(lockButton(b.x, kHeaderW, hy, kTrackH), e.x, e.y)) {
+            trk.locked = !trk.locked;
+            onTrackLockChanged.emit(ti, trk.locked);
+            markDirty();
+        } else {
+            setExpanded(ti, !trk.expanded);
+        }
         e.consumed = true;
         return;
     }
@@ -474,9 +526,22 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         for (int p = trk.parent; p >= 0; p = tracks_[p].parent) ++depth;
         bool children = false;
         for (const auto& child : tracks_) if (child.parent == ti) children = true;
-        ctx.pushClip({b.x, b.y + kRulerH, kHeaderW, std::max(0.0f, b.h - kRulerH)});
+        ctx.pushClip({b.x, b.y + kRulerH, kHeaderW - 2 * kBtn - kBtnGap - 10.0f, std::max(0.0f, b.h - kRulerH)});
         if (children) ctx.font.Print(trk.expanded ? "v" : ">", b.x + 6 + depth * 14, nameY);
         ctx.font.Print(trk.name.c_str(), b.x + 20 + depth * 14, nameY);
+        ctx.popClip();
+
+        // Mute and lock buttons
+        ctx.pushClip({b.x, std::max(ty, b.y + kRulerH), kHeaderW, kTrackH});
+        const Rect mb = muteButton(b.x, kHeaderW, ty, kTrackH);
+        const Rect lb = lockButton(b.x, kHeaderW, ty, kTrackH);
+        ctx.fill.SetColor(trk.muted ? Color(200, 70, 70, 255) : Color(56, 58, 66, 255));
+        ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
+        ctx.fill.SetColor(trk.locked ? Color(210, 170, 60, 255) : Color(56, 58, 66, 255));
+        ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
+        const float asc9 = setupFont(ctx, Color(235, 235, 240, 255), 9.0f);
+        ctx.font.Print("M", mb.x + 3.5f, mb.y + (kBtn - 9.0f) * 0.5f + asc9);
+        ctx.font.Print("L", lb.x + 4.5f, lb.y + (kBtn - 9.0f) * 0.5f + asc9);
         ctx.popClip();
         ctx.pushClip({b.x + kHeaderW, b.y + kRulerH, std::max(0.0f, b.w - kHeaderW), std::max(0.0f, b.h - kRulerH)});
 
