@@ -415,6 +415,9 @@ namespace ig { namespace retained
 
     struct Context;
 
+    /// The font built into the library (DejaVu Sans, with accents): its TrueType data, for applications that draw text themselves.
+    void GetDefaultFont(const unsigned char **data, int *size);
+
     Context *CreateContext();
     void DestroyContext(Context *ctx);
     void SetCurrentContext(Context *ctx);
