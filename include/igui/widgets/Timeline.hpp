@@ -3,6 +3,7 @@
 #include "Widget.hpp"
 #include "Signal.hpp"
 #include "ChartWidgets.hpp"
+#include <ct/function.hpp>
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
@@ -158,6 +159,10 @@ public:
     /// @brief Get the frame rate.
     float frameRate() const       { return fps_; }
 
+    /// @brief Where the loudness of a clip's sound comes from, to draw its waveform: media, the part of the media
+    /// (seconds), and the answer, 0 to 1 (or negative when it is not known yet).
+    void setPeakProvider(ct::Function<float(int, float, float)> provider) { peakProvider_ = std::move(provider); markDirty(); }
+
     /// @brief Set the background color.
     void setBgColor(const Color& c) { bgColor_ = c; markDirty(); }
 
@@ -223,6 +228,7 @@ private:
     int      nextClipId_    = 0;
     int      selectedTrack_ = -1;
 
+    ct::Function<float(int, float, float)> peakProvider_;
     float snap(float t, int track, int clip) const;
     // The curve of a clip is drawn inside its bar: where a point sits, and the reverse.
     float envelopeX(const TimelineClip& clip, const CurveKey& key) const;
