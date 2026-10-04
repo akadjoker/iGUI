@@ -103,6 +103,10 @@ private:
     void drawStepForward(BuImage& pm, int ox, int oy, int sz);
     void drawStepBack   (BuImage& pm, int ox, int oy, int sz);
     void drawRecord     (BuImage& pm, int ox, int oy, int sz);
+    void drawFolderNew  (BuImage& pm, int ox, int oy, int sz);
+    void drawScissors   (BuImage& pm, int ox, int oy, int sz);
+    void drawImport     (BuImage& pm, int ox, int oy, int sz);
+    void drawMagnet     (BuImage& pm, int ox, int oy, int sz);
 
     ig::retained::TextureHandle tex_;
     int atlasW_    = 0;

@@ -205,6 +205,9 @@ namespace ig { namespace retained
         StepBack,
         Record,
         FolderNew,
+    Scissors,   // cut / split
+    Import,     // arrow into a tray
+    Magnet,     // snapping
         COUNT  // must be last
     };
 

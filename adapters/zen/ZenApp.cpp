@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <igui_zen/ZenApp.hpp>
 
 #include <platform.h>
@@ -66,7 +67,8 @@ App::~App()
 {
     if (!window_)
         return;
-    raster_.destroyTexture(atlas_.texture());
+    destroyTexture(atlas_.texture());
+    gl_.shutdown();
     rt::DestroyContext(context_);
     window_destroy(window_);
     platform_shutdown();
@@ -84,9 +86,41 @@ bool App::create(const Config &config)
     cfg.height = config.height;
     cfg.x = WINDOW_POS_CENTERED;
     cfg.y = WINDOW_POS_CENTERED;
-    cfg.render = RENDER_PIXELS;
     cfg.resizable = true;
-    window_ = window_create(&cfg);
+    cfg.vsync = config.vsync;
+    cfg.gl.msaa = config.msaa;
+    if (config.preferOpenGL)
+    {
+        // Core profile only: the newest version the driver gives, then 3.3 as the floor.
+        static const int versions[][2] = {{4, 6}, {4, 5}, {4, 3}, {3, 3}};
+        cfg.render = RENDER_GL;
+        cfg.gl.profile = GL_PROFILE_CORE;
+        for (const auto &version : versions)
+        {
+            if (version[0] < config.minGlMajor || (version[0] == config.minGlMajor && version[1] < config.minGlMinor))
+                continue;
+            cfg.gl.major = version[0];
+            cfg.gl.minor = version[1];
+            window_ = window_create(&cfg);
+            if (!window_)
+                continue;
+            window_make_current(window_);
+            useGl_ = gl_.init(gl_proc_address);
+            if (useGl_)
+                break;
+            window_destroy(window_);
+            window_ = nullptr;
+        }
+        if (useGl_)
+            fprintf(stderr, "[ZenApp] OpenGL %d.%d core: %s\n", gl_.versionMajor(), gl_.versionMinor(), gl_.renderer());
+        else
+            fprintf(stderr, "[ZenApp] OpenGL core not available, using the software rasteriser\n");
+    }
+    if (!window_)
+    {
+        cfg.render = RENDER_PIXELS;
+        window_ = window_create(&cfg);
+    }
     if (!window_)
     {
         platform_shutdown();
@@ -94,6 +128,7 @@ bool App::create(const Config &config)
     }
 
     background_ = config.background;
+    showStats_ = config.showStats;
     raster_.setSamples(config.samples);
 
     context_ = rt::CreateContext();
@@ -104,20 +139,38 @@ bool App::create(const Config &config)
 
     if (atlas_.buildDefault())
     {
-        atlas_.setTexture(raster_.createTexture(atlas_.width(), atlas_.height(), atlas_.pixels()));
+        atlas_.setTexture(createTexture(atlas_.width(), atlas_.height(), atlas_.pixels()));
         font_ = &atlas_.defaultFont();
         rt::SetWhitePixel(atlas_.texture(), atlas_.whitePixelUV());
     }
 
     rt::WidgetApp &app = widgets();
-    app.setTextureUpload([this](const unsigned char *p, int w, int h) { return raster_.createTexture(w, h, p); });
+    app.setTextureUpload([this](const unsigned char *p, int w, int h) { return createTexture(w, h, p); });
     app.setTextureUpdate([this](rt::TextureHandle t, const unsigned char *p, int w, int h) {
-        return raster_.updateTexture(t, p, w, h);
+        return updateTexture(t, p, w, h);
     });
-    app.setTextureDestroy([this](rt::TextureHandle t) { raster_.destroyTexture(t); });
+    app.setTextureDestroy([this](rt::TextureHandle t) { destroyTexture(t); });
 
     window_text_input_start(window_);
     return true;
+}
+
+rt::TextureHandle App::createTexture(int w, int h, const unsigned char *rgba)
+{
+    return useGl_ ? gl_.createTexture(w, h, rgba) : raster_.createTexture(w, h, rgba);
+}
+
+void App::destroyTexture(rt::TextureHandle t)
+{
+    if (useGl_)
+        gl_.destroyTexture(t);
+    else
+        raster_.destroyTexture(t);
+}
+
+bool App::updateTexture(rt::TextureHandle t, const unsigned char *rgba, int w, int h)
+{
+    return useGl_ ? gl_.updateTexture(t, rgba, w, h) : raster_.updateTexture(t, rgba, w, h);
 }
 
 void App::run()
@@ -164,7 +217,7 @@ void App::feedInput()
         }
         else if (e.type == EVENT_KEY)
         {
-            if (e.data.key.down && e.data.key.key == KEY_F2)
+            if (e.data.key.down && e.data.key.key == KEY_F2 && !useGl_)
             {
                 raster_.setSamples(raster_.samples() % 4 + 1);
                 continue;
@@ -206,6 +259,55 @@ void App::frame()
     rt::Render();
     mouse_set_cursor(window_, cursorShape(io.wantedCursor));
 
+    if (useGl_)
+        frameGl();
+    else
+        framePixels();
+
+    ++statsFrames_;
+    const double elapsed = time_seconds() - statsTime_;
+    if (elapsed >= 1.0 && !showStats_)
+        statsTime_ = time_seconds();
+    else if (elapsed >= 1.0)
+    {
+        int fbW = 0, fbH = 0;
+        window_get_framebuffer_size(window_, &fbW, &fbH);
+        char title[160];
+        if (useGl_)
+            snprintf(title, sizeof title, "%dx%d - OpenGL - %.0f fps", fbW, fbH, statsFrames_ / elapsed);
+        else
+            snprintf(title, sizeof title, "%dx%d - AA %dx%d - %.0f fps - raster %.2f ms (%d/%d frames)", fbW, fbH,
+                     raster_.samples(), raster_.samples(), statsFrames_ / elapsed,
+                     rasterFrames_ ? rasterMs_ / rasterFrames_ : 0.0, rasterFrames_, statsFrames_);
+        window_set_title(window_, title);
+        statsTime_ = time_seconds();
+        rasterMs_ = 0.0;
+        statsFrames_ = 0;
+        rasterFrames_ = 0;
+    }
+}
+
+void App::frameGl()
+{
+    int width = 0, height = 0;
+    window_get_framebuffer_size(window_, &width, &height);
+    if (width <= 0 || height <= 0)
+        return;
+    window_make_current(window_);
+    gl_.render(*rt::GetDrawData(), width, height, background_);
+    static const char *shotPath = getenv("ZEN_SCREENSHOT");
+    if (shotPath)
+    {
+        ct::Vector<uint32_t> pixels;
+        pixels.resize(static_cast<size_t>(width) * height);
+        gl_.readPixels(pixels.data(), width, height);
+        saveScreenshot(pixels.data(), width, height, width);
+    }
+    // No window_swap here: app_run swaps after every frame callback.
+}
+
+void App::framePixels()
+{
     Framebuffer fb;
     if (!window_lock_pixels(window_, &fb))
         return;
@@ -216,21 +318,33 @@ void App::frame()
         ++rasterFrames_;
     }
     window_present_pixels(window_);
+    saveScreenshot(fb.pixels, fb.width, fb.height, fb.stride);
+}
 
-    ++statsFrames_;
-    const double elapsed = time_seconds() - statsTime_;
-    if (elapsed >= 1.0)
+// ZEN_SCREENSHOT=file.ppm saves the 30th frame and closes the window: a way to look at the UI without a screen grab.
+void App::saveScreenshot(const uint32_t *pixels, int width, int height, int stride)
+{
+    static const char *shotPath = getenv("ZEN_SCREENSHOT");
+    static const int shotAt = getenv("ZEN_SCREENSHOT_FRAME") ? atoi(getenv("ZEN_SCREENSHOT_FRAME")) : 30;
+    static int shotFrame = 0;
+    if (!shotPath || ++shotFrame != shotAt)
+        return;
+    if (FILE *f = fopen(shotPath, "wb"))
     {
-        char title[160];
-        snprintf(title, sizeof title, "%dx%d - AA %dx%d - %.0f fps - raster %.2f ms (%d/%d frames)",
-                 fb.width, fb.height, raster_.samples(), raster_.samples(), statsFrames_ / elapsed,
-                 rasterFrames_ ? rasterMs_ / rasterFrames_ : 0.0, rasterFrames_, statsFrames_);
-        window_set_title(window_, title);
-        statsTime_ = time_seconds();
-        rasterMs_ = 0.0;
-        statsFrames_ = 0;
-        rasterFrames_ = 0;
+        fprintf(f, "P6\n%d %d\n255\n", width, height);
+        for (int y = 0; y < height; ++y)
+        {
+            const uint32_t *row = pixels + static_cast<size_t>(y) * stride;
+            for (int x = 0; x < width; ++x)
+            {
+                const unsigned char rgb[3] = {static_cast<unsigned char>(row[x] >> 16), static_cast<unsigned char>(row[x] >> 8),
+                                              static_cast<unsigned char>(row[x])};
+                fwrite(rgb, 1, 3, f);
+            }
+        }
+        fclose(f);
     }
+    window_set_should_close(window_, true);
 }
 
 } // namespace zen

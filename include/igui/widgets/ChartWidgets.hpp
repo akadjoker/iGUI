@@ -337,6 +337,18 @@ public:
 
     /// @brief Evaluate a curve at the given time.
     float evaluate(int curveId, float time) const;
+    /// @brief Evaluate a list of keys (sorted by time) without an editor: the same Hermite/Bezier curve.
+    static float evaluateKeys(const ct::Vector<CurveKey>& keys, float time);
+    /// @brief The tangents of a key from its neighbours (what the Auto mode does while editing).
+    /// With monotone, the curve never goes beyond its points (no overshoot between them).
+    static void autoTangentsAt(ct::Vector<CurveKey>& keys, int keyIdx, bool monotone = false);
+    /// Use monotone tangents for the keys that are added or moved in this editor.
+    void setMonotoneTangents(bool on) { monotone_ = on; }
+
+    /// @brief Keep keys inside a time and value range while they are dragged or added (off by default).
+    void setKeyLimits(float minT, float maxT, float minV, float maxV);
+    /// @brief Double-click on empty space adds a key to the first curve, double-click on a key removes it.
+    void setDoubleClickEdit(bool on) { doubleClickEdit_ = on; }
 
     /// @brief Set the background color.
     void setBgColor(const Color& c) { bgColor_ = c; }
@@ -373,6 +385,10 @@ private:
 
     float snapTime_  = 0;
     float snapValue_ = 0;
+    bool  limited_   = false;
+    float limMinT_ = 0, limMaxT_ = 0, limMinV_ = 0, limMaxV_ = 0;
+    bool  doubleClickEdit_ = false;
+    bool  monotone_ = false;
 
     float playhead_     = 0;
     bool  showPlayhead_ = true;

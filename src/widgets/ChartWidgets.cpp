@@ -919,7 +919,18 @@ float CurveEditor::snap(float val, float grid) const
 
 void CurveEditor::autoTangents(CurveData& c, int idx)
 {
-    auto& keys = c.keys;
+    autoTangentsAt(c.keys, idx, monotone_);
+}
+
+void CurveEditor::setKeyLimits(float minT, float maxT, float minV, float maxV)
+{
+    limited_ = true;
+    limMinT_ = minT; limMaxT_ = maxT;
+    limMinV_ = minV; limMaxV_ = maxV;
+}
+
+void CurveEditor::autoTangentsAt(ct::Vector<CurveKey>& keys, int idx, bool monotone)
+{
     if (idx < 0 || idx >= (int)keys.size()) return;
     auto& k = keys[idx];
     if (k.tangentMode != TangentMode::Auto) return;
@@ -951,6 +962,19 @@ void CurveEditor::autoTangents(CurveData& c, int idx)
         if (std::fabs(dtNext) > 1e-6f) slope = dvNext / dtNext;
     }
 
+    if (monotone) {
+        // Fritsch-Carlson: flat at a peak or a valley, otherwise a weighted mean of the two
+        // slopes, so the curve stays between its points.
+        slope = 0;
+        if (idx > 0 && idx + 1 < (int)keys.size() && dtPrev > 1e-6f && dtNext > 1e-6f) {
+            const float sPrev = dvPrev / dtPrev, sNext = dvNext / dtNext;
+            if (sPrev * sNext > 0) {
+                const float w1 = 2 * dtNext + dtPrev, w2 = dtNext + 2 * dtPrev;
+                slope = (w1 + w2) / (w1 / sPrev + w2 / sNext);
+            }
+        }
+    }
+
     float tanLen = 0.33f;
     k.tanInX  = -(dtPrev > 0 ? dtPrev : 0.1f) * tanLen;
     k.tanInY  = k.tanInX * slope;
@@ -958,7 +982,7 @@ void CurveEditor::autoTangents(CurveData& c, int idx)
     k.tanOutY = k.tanOutX * slope;
 }
 
-float CurveEditor::evalSegment(const CurveKey& k0, const CurveKey& k1, float t) const
+static float evalSegmentKeys(const CurveKey& k0, const CurveKey& k1, float t)
 {
     float dt = k1.time - k0.time;
     if (std::fabs(dt) < 1e-8f) return k0.value;
@@ -975,10 +999,19 @@ float CurveEditor::evalSegment(const CurveKey& k0, const CurveKey& k1, float t) 
     return iu*iu*iu*p0 + 3*iu*iu*u*p1 + 3*iu*u*u*p2 + u*u*u*p3;
 }
 
+float CurveEditor::evalSegment(const CurveKey& k0, const CurveKey& k1, float t) const
+{
+    return evalSegmentKeys(k0, k1, t);
+}
+
 float CurveEditor::evaluate(int curveId, float time) const
 {
     if (curveId < 0 || curveId >= (int)curves_.size()) return 0;
-    auto& keys = curves_[curveId].keys;
+    return evaluateKeys(curves_[curveId].keys, time);
+}
+
+float CurveEditor::evaluateKeys(const ct::Vector<CurveKey>& keys, float time)
+{
     if (keys.empty()) return 0;
     if (keys.size() == 1) return keys[0].value;
 
@@ -987,7 +1020,7 @@ float CurveEditor::evaluate(int curveId, float time) const
 
     for (int i = 0; i + 1 < (int)keys.size(); ++i) {
         if (time >= keys[i].time && time <= keys[i + 1].time)
-            return evalSegment(keys[i], keys[i + 1], time);
+            return evalSegmentKeys(keys[i], keys[i + 1], time);
     }
     return keys.back().value;
 }
@@ -1041,6 +1074,21 @@ void CurveEditor::onMousePress(MouseEvent& e)
     if (e.button != 0) return;
 
     auto hit = hitTest(e.x, e.y);
+
+    if (doubleClickEdit_ && e.clickCount >= 2 && !curves_.empty()) {
+        if (hit.curve >= 0 && !hit.tangent) {
+            removeKey(hit.curve, hit.key);
+        } else if (hit.curve < 0) {
+            float t = xToTime(e.x), v = yToValue(e.y);
+            if (limited_) {
+                t = std::max(limMinT_, std::min(limMaxT_, t));
+                v = std::max(limMinV_, std::min(limMaxV_, v));
+            }
+            addKey(0, t, v);
+        }
+        e.consumed = true;
+        return;
+    }
 
     if (hit.curve >= 0) {
         auto& keys = curves_[hit.curve].keys;
@@ -1144,9 +1192,19 @@ void CurveEditor::onMouseMove(MouseEvent& e)
         }
         k.tangentMode = (k.tangentMode == TangentMode::Auto) ? TangentMode::Free : k.tangentMode;
     } else {
+        auto& all = curves_[dragCurve_].keys;
+        if (limited_) {
+            t = std::max(limMinT_, std::min(limMaxT_, t));
+            v = std::max(limMinV_, std::min(limMaxV_, v));
+        }
+        // Keys stay in time order, the curve is evaluated between neighbours.
+        if (dragKey_ > 0) t = std::max(t, all[dragKey_ - 1].time + 0.001f);
+        if (dragKey_ + 1 < (int)all.size()) t = std::min(t, all[dragKey_ + 1].time - 0.001f);
         k.time = t;
         k.value = v;
         autoTangents(curves_[dragCurve_], dragKey_);
+        if (dragKey_ > 0) autoTangents(curves_[dragCurve_], dragKey_ - 1);
+        if (dragKey_ + 1 < (int)all.size()) autoTangents(curves_[dragCurve_], dragKey_ + 1);
     }
 
     markDirty();

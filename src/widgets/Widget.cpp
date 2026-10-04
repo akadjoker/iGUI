@@ -289,6 +289,10 @@ const char* iconGlyph(IconId id)
     case IconId::StepForward: return "\u25b7"; // ▷
     case IconId::StepBack:    return "\u25c1"; // ◁
     case IconId::Record:      return "\u25cf"; // ●
+    case IconId::FolderNew:   return "\u25b0"; // ▰
+    case IconId::Scissors:    return "\u2702"; // ✂
+    case IconId::Import:      return "\u21e9"; // ⇩
+    case IconId::Magnet:      return "\u2229"; // ∩
     case IconId::None:
     case IconId::COUNT:       return nullptr;
     }

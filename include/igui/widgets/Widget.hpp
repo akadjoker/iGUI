@@ -263,6 +263,7 @@ struct DragPayload
     String   type;        // e.g. "color", "file", "widget"
     std::any      data;        // arbitrary typed data
     Widget*       source = nullptr;
+    float         dropX = 0, dropY = 0;   // where the button was released
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

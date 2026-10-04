@@ -191,6 +191,11 @@ bool ToolBar::isItemVisible(int id) const
     return it ? it->visible : true;
 }
 
+void ToolBar::setItemIcon(int id, IconId icon)
+{
+    if (auto* it = findItem(id)) { it->iconId = icon; it->iconIndex = -1; markDirty(); }
+}
+
 void ToolBar::setItemTooltip(int id, const String& tip)
 {
     if (auto* it = findItem(id)) it->tooltip = tip;
@@ -571,6 +576,13 @@ void ToolBar::onMouseMove(MouseEvent& e)
         bool wasHovered = it.hovered;
         it.hovered = ir.contains(e.x, e.y) && it.enabled;
         if (wasHovered != it.hovered) markDirty();
+    }
+    // The tooltip is the one of the button under the cursor.
+    {
+        String tip;
+        for (const auto& it : items_)
+            if (it.hovered) { tip = it.tooltip; break; }
+        if (tip != tooltip()) setTooltip(tip);
     }
 
     // Drag reorder

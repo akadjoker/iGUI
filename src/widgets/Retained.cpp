@@ -970,6 +970,118 @@ namespace ig { namespace retained
             break;
         }
 
+        case IconId::Play:
+            addTriangleFilled({cx - s * 0.18f, cy - s * 0.27f}, {cx - s * 0.18f, cy + s * 0.27f}, {cx + s * 0.30f, cy}, color);
+            break;
+
+        case IconId::Pause:
+            addRect({cx - s * 0.20f, cy - s * 0.25f, s * 0.14f, s * 0.50f}, color);
+            addRect({cx + s * 0.06f, cy - s * 0.25f, s * 0.14f, s * 0.50f}, color);
+            break;
+
+        case IconId::Stop:
+            addRect({cx - s * 0.22f, cy - s * 0.22f, s * 0.44f, s * 0.44f}, color);
+            break;
+
+        case IconId::StepForward:
+            addTriangleFilled({cx - s * 0.28f, cy - s * 0.25f}, {cx - s * 0.28f, cy + s * 0.25f}, {cx + s * 0.12f, cy}, color);
+            addRect({cx + s * 0.16f, cy - s * 0.25f, s * 0.11f, s * 0.50f}, color);
+            break;
+
+        case IconId::StepBack:
+            addTriangleFilled({cx + s * 0.28f, cy - s * 0.25f}, {cx + s * 0.28f, cy + s * 0.25f}, {cx - s * 0.12f, cy}, color);
+            addRect({cx - s * 0.27f, cy - s * 0.25f, s * 0.11f, s * 0.50f}, color);
+            break;
+
+        case IconId::Record:
+            addCircleFilled({cx, cy}, s * 0.26f, color, 24);
+            break;
+
+        case IconId::Trash:
+        {
+            float top = y0 + s * 0.30f, bot = y1 - s * 0.14f;
+            addLine({cx - s * 0.30f, top}, {cx + s * 0.30f, top}, color, thickness);
+            ct::Vector<Vec2> handle;
+            handle.push_back({cx - s * 0.10f, top});
+            handle.push_back({cx - s * 0.10f, y0 + s * 0.18f});
+            handle.push_back({cx + s * 0.10f, y0 + s * 0.18f});
+            handle.push_back({cx + s * 0.10f, top});
+            addPolyline(handle, color, thickness, false);
+            ct::Vector<Vec2> bin;
+            bin.push_back({cx - s * 0.22f, top});
+            bin.push_back({cx - s * 0.18f, bot});
+            bin.push_back({cx + s * 0.18f, bot});
+            bin.push_back({cx + s * 0.22f, top});
+            addPolyline(bin, color, thickness, false);
+            addLine({cx - s * 0.07f, top + s * 0.10f}, {cx - s * 0.06f, bot - s * 0.08f}, color, thickness);
+            addLine({cx + s * 0.07f, top + s * 0.10f}, {cx + s * 0.06f, bot - s * 0.08f}, color, thickness);
+            break;
+        }
+
+        case IconId::Lock:
+        case IconId::Unlock:
+        {
+            float body = cy + s * 0.02f, r = s * 0.17f;
+            addRect({cx - s * 0.25f, body, s * 0.50f, s * 0.34f}, color);
+            float lift = icon == IconId::Unlock ? s * 0.10f : 0.0f;
+            ct::Vector<Vec2> shackle;
+            shackle.push_back({cx - r, body});
+            shackle.push_back({cx - r, body - s * 0.08f - lift});
+            for (int i = 0; i <= 8; ++i) {
+                float a = 3.14159265f * (1.0f - i / 8.0f);
+                shackle.push_back({cx + r * std::cos(a), body - s * 0.08f - lift - r * std::sin(a)});
+            }
+            if (icon == IconId::Lock)
+                shackle.push_back({cx + r, body});
+            addPolyline(shackle, color, thickness, false);
+            break;
+        }
+
+        case IconId::Scissors:
+        {
+            // blades cross at the pivot and run to the finger rings
+            addLine({cx - s * 0.20f, y0 + s * 0.10f}, {cx + s * 0.20f, y1 - s * 0.34f}, color, thickness);
+            addLine({cx + s * 0.20f, y0 + s * 0.10f}, {cx - s * 0.20f, y1 - s * 0.34f}, color, thickness);
+            addCircle({cx - s * 0.20f, y1 - s * 0.21f}, s * 0.12f, color, thickness, 16);
+            addCircle({cx + s * 0.20f, y1 - s * 0.21f}, s * 0.12f, color, thickness, 16);
+            break;
+        }
+
+        case IconId::Import:
+        {
+            addLine({cx, y0 + s * 0.12f}, {cx, cy + s * 0.14f}, color, thickness * 1.2f);
+            addLine({cx, cy + s * 0.16f}, {cx - s * 0.17f, cy - s * 0.02f}, color, thickness * 1.2f);
+            addLine({cx, cy + s * 0.16f}, {cx + s * 0.17f, cy - s * 0.02f}, color, thickness * 1.2f);
+            ct::Vector<Vec2> tray;
+            tray.push_back({cx - s * 0.32f, cy + s * 0.12f});
+            tray.push_back({cx - s * 0.32f, y1 - s * 0.14f});
+            tray.push_back({cx + s * 0.32f, y1 - s * 0.14f});
+            tray.push_back({cx + s * 0.32f, cy + s * 0.12f});
+            addPolyline(tray, color, thickness, false);
+            break;
+        }
+
+        case IconId::Magnet:
+        {
+            float r = s * 0.27f, w = s * 0.14f, my = cy - s * 0.06f, bot = y1 - s * 0.14f;
+            ct::Vector<Vec2> outer, inner;
+            outer.push_back({cx - r - w * 0.5f, bot});
+            inner.push_back({cx - r + w * 0.5f, bot});
+            for (int i = 0; i <= 12; ++i) {
+                float a = 3.14159265f * (1.0f - i / 12.0f);
+                outer.push_back({cx + (r + w * 0.5f) * std::cos(a), my - (r + w * 0.5f) * std::sin(a)});
+                inner.push_back({cx + (r - w * 0.5f) * std::cos(a), my - (r - w * 0.5f) * std::sin(a)});
+            }
+            outer.push_back({cx + r + w * 0.5f, bot});
+            inner.push_back({cx + r - w * 0.5f, bot});
+            addPolyline(outer, color, thickness, false);
+            addPolyline(inner, color, thickness, false);
+            // the two poles
+            addRect({cx - r - w * 0.5f, bot - s * 0.12f, w, s * 0.12f}, Color(225, 80, 80, color.a));
+            addRect({cx + r - w * 0.5f, bot - s * 0.12f, w, s * 0.12f}, Color(95, 145, 235, color.a));
+            break;
+        }
+
         default:
             break;
         }
@@ -985,6 +1097,9 @@ namespace ig { namespace retained
         case IconId::File: case IconId::FileCode: case IconId::FileImage: case IconId::FileArchive:
         case IconId::ViewDetail: case IconId::ViewList: case IconId::ViewGrid:
         case IconId::Eye: case IconId::EyeOff:
+        case IconId::Play: case IconId::Pause: case IconId::Stop: case IconId::StepForward: case IconId::StepBack:
+        case IconId::Record: case IconId::Trash: case IconId::Lock: case IconId::Unlock:
+        case IconId::Scissors: case IconId::Import: case IconId::Magnet:
             return true;
         default:
             return false;
