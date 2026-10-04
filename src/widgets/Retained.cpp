@@ -853,6 +853,14 @@ namespace ig { namespace retained
             addTriangleFilled({cx, y1 - p}, {x0 + p, y0 + p}, {x1 - p, y0 + p}, color);
             break;
 
+        case IconId::ArrowLeft:
+            addTriangleFilled({x0 + p, cy}, {x1 - p, y0 + p}, {x1 - p, y1 - p}, color);
+            break;
+
+        case IconId::ArrowUp:
+            addTriangleFilled({cx, y0 + p}, {x0 + p, y1 - p}, {x1 - p, y1 - p}, color);
+            break;
+
         case IconId::Search:
             addCircle({cx - s * 0.08f, cy - s * 0.08f}, s * 0.23f, color, thickness);
             addLine({cx + s * 0.12f, cy + s * 0.12f}, {x1 - p, y1 - p}, color, thickness);
@@ -1092,7 +1100,7 @@ namespace ig { namespace retained
         switch (icon)
         {
         case IconId::Check: case IconId::Cross: case IconId::Plus: case IconId::Minus:
-        case IconId::ArrowRight: case IconId::ArrowDown: case IconId::Search:
+        case IconId::ArrowRight: case IconId::ArrowDown: case IconId::ArrowLeft: case IconId::ArrowUp: case IconId::Search:
         case IconId::Folder: case IconId::FolderOpen: case IconId::FolderNew:
         case IconId::File: case IconId::FileCode: case IconId::FileImage: case IconId::FileArchive:
         case IconId::ViewDetail: case IconId::ViewList: case IconId::ViewGrid:

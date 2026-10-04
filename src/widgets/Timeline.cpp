@@ -290,6 +290,27 @@ int Timeline::trackAtY(float y) const
     return rows[idx];
 }
 
+float Timeline::envelopeX(const TimelineClip& clip, const CurveKey& key) const
+{
+    return timeToX(clip.start + (key.time - clip.offset) / clip.speed);
+}
+
+float Timeline::envelopeY(const TimelineClip& clip, float value, float clipY, float clipH) const
+{
+    const float f = std::max(0.0f, std::min(1.0f, (value - clip.envelopeMin) / (clip.envelopeMax - clip.envelopeMin)));
+    return clipY + clipH - 2.0f - f * (clipH - 4.0f);
+}
+
+int Timeline::envelopeKeyAt(const TimelineClip& clip, float mx, float my, float clipY, float clipH) const
+{
+    for (int k = 0; k < static_cast<int>(clip.envelope.size()); ++k) {
+        const float kx = envelopeX(clip, clip.envelope[k]);
+        const float ky = envelopeY(clip, clip.envelope[k].value, clipY, clipH);
+        if (std::fabs(mx - kx) + std::fabs(my - ky) < 7.0f) return k;
+    }
+    return -1;
+}
+
 // Pulls t to the nearest edge of another clip, the playhead or zero when it is
 // within a few pixels. The clip being dragged and its linked partners are skipped.
 float Timeline::snap(float t, int track, int clip) const
@@ -406,6 +427,52 @@ void Timeline::onMousePress(MouseEvent& e)
             trk.clips[ci].selected = true;
             onClipSelected.emit(ti, ci);
 
+            // The volume curve inside the bar: a point is grabbed, a double-click adds or removes one.
+            TimelineClip& clip = trk.clips[ci];
+            if (clip.editableEnvelope && e.x > cx0 + 6 && e.x < cx1 - 6) {
+                const int hit = envelopeKeyAt(clip, e.x, e.y, cy, ch);
+                if (e.clickCount >= 2) {
+                    if (hit >= 0) {
+                        clip.envelope.erase(clip.envelope.begin() + hit);
+                    } else {
+                        const float time = std::max(clip.offset, std::min(clip.offset + (clip.end - clip.start) * clip.speed,
+                                                    clip.offset + (xToTime(e.x) - clip.start) * clip.speed));
+                        const float f = 1.0f - (e.y - cy - 2.0f) / (ch - 4.0f);
+                        const float value = std::max(clip.envelopeMin, std::min(clip.envelopeMax,
+                                                     clip.envelopeMin + f * (clip.envelopeMax - clip.envelopeMin)));
+                        CurveKey added;
+                        added.time = time;
+                        added.value = value;
+                        if (clip.envelope.empty()) {
+                            // A new curve starts flat from one end of the clip to the other.
+                            CurveKey first, last;
+                            first.time = clip.offset;
+                            last.time = clip.offset + (clip.end - clip.start) * clip.speed;
+                            first.value = last.value = clip.envelopeRest;
+                            clip.envelope.push_back(first);
+                            clip.envelope.push_back(last);
+                        }
+                        int at = 0;
+                        while (at < static_cast<int>(clip.envelope.size()) && clip.envelope[at].time < time) ++at;
+                        clip.envelope.insert(clip.envelope.begin() + at, added);
+                    }
+                    for (int k = 0; k < static_cast<int>(clip.envelope.size()); ++k)
+                        CurveEditor::autoTangentsAt(clip.envelope, k, true);
+                    onEnvelopeChanged.emit(ti, ci);
+                    markDirty();
+                    e.consumed = true;
+                    return;
+                }
+                if (hit >= 0) {
+                    dragMode_  = DragMode::MoveEnvelopeKey;
+                    dragTrack_ = ti;
+                    dragIndex_ = ci;
+                    dragKey_   = hit;
+                    e.consumed = true;
+                    return;
+                }
+            }
+
             if      (e.x < cx0 + 6)  dragMode_ = DragMode::ResizeClipL;
             else if (e.x > cx1 - 6)  dragMode_ = e.ctrl ? DragMode::StretchClipR : DragMode::ResizeClipR; // Ctrl: change the speed
             else                      dragMode_ = DragMode::MoveClip;
@@ -521,6 +588,33 @@ void Timeline::onMouseMove(MouseEvent& e)
         clip.end = end;
         dragMoved_ = true;
         onClipChanged.emit(dragTrack_, dragIndex_);
+        markDirty();
+        e.consumed = true;
+        break;
+    }
+    case DragMode::MoveEnvelopeKey: {
+        auto& clip = tracks_[dragTrack_].clips[dragIndex_];
+        if (dragKey_ < 0 || dragKey_ >= static_cast<int>(clip.envelope.size())) break;
+        Rect b = absoluteRect();
+        const auto rows = visibleTracks();
+        int row = 0;
+        while (row < static_cast<int>(rows.size()) && rows[row] != dragTrack_) ++row;
+        const float cy = b.y + kRulerH + row * kTrackH - verticalScroll_ + 3;
+        const float ch = kTrackH - 6;
+        float time = clip.offset + (xToTime(e.x) - clip.start) * clip.speed;
+        const float lo = clip.offset, hi = clip.offset + (clip.end - clip.start) * clip.speed;
+        time = std::max(lo, std::min(hi, time));
+        // Points keep their order along the clip.
+        if (dragKey_ > 0) time = std::max(time, clip.envelope[dragKey_ - 1].time + 0.001f);
+        if (dragKey_ + 1 < static_cast<int>(clip.envelope.size())) time = std::min(time, clip.envelope[dragKey_ + 1].time - 0.001f);
+        const float f = 1.0f - (e.y - cy - 2.0f) / (ch - 4.0f);
+        const float value = std::max(clip.envelopeMin, std::min(clip.envelopeMax,
+                                     clip.envelopeMin + f * (clip.envelopeMax - clip.envelopeMin)));
+        clip.envelope[dragKey_].time = time;
+        clip.envelope[dragKey_].value = value;
+        for (int k = std::max(0, dragKey_ - 1); k <= std::min(static_cast<int>(clip.envelope.size()) - 1, dragKey_ + 1); ++k)
+            CurveEditor::autoTangentsAt(clip.envelope, k, true);
+        onEnvelopeChanged.emit(dragTrack_, dragIndex_);
         markDirty();
         e.consumed = true;
         break;
@@ -776,6 +870,19 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                         }
                     }
                     px = xs; py = y;
+                }
+            }
+
+            // The points of the curve
+            if (clip.editableEnvelope && !clip.envelope.empty()) {
+                for (int k = 0; k < static_cast<int>(clip.envelope.size()); ++k) {
+                    const float kx = envelopeX(clip, clip.envelope[k]);
+                    if (kx < cx0 || kx > cx1) continue;
+                    const float ky = envelopeY(clip, clip.envelope[k].value, clipY, clipH);
+                    ctx.fill.SetColor(255, 255, 255, 255);
+                    ctx.fillRect(kx - 3, ky - 3, 6, 6);
+                    ctx.fill.SetColor(20, 20, 20, 255);
+                    ctx.fillRect(kx - 2, ky - 2, 4, 4);
                 }
             }
 

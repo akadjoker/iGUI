@@ -50,6 +50,8 @@ struct TimelineClip {
     int   user         = -1;
     // A curve over the media's own time (seconds), drawn on the clip between envelopeMin and envelopeMax.
     ct::Vector<CurveKey> envelope;
+    bool  editableEnvelope = false; // double-click on the clip adds a point to the curve, drag moves it
+    float envelopeRest = 0;         // the value a new curve starts flat at
     float envelopeMin  = -40;
     float envelopeMax  = 12;
     float params[4]    = {0, 0, 0, 0}; // free for the application (effects, volume); copied when a clip is split
@@ -162,6 +164,8 @@ public:
     Signal<int, int> onClipSelected;
     /// @brief A clip moved or was trimmed. Emitted on every step of the drag.
     Signal<int, int> onClipChanged;
+    /// @brief The curve of a clip changed (a point added, moved or removed): track and clip index.
+    Signal<int, int> onEnvelopeChanged;
     /// @brief The drag that moved or trimmed a clip ended. Track and clip index.
     Signal<int, int> onClipEdited;
     /// @brief A track header was clicked (-1: selection cleared).
@@ -197,13 +201,14 @@ private:
     static constexpr float kRulerH  = 24;
 
     // Interaction state
-    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR, StretchClipR };
+    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR, StretchClipR, MoveEnvelopeKey };
     DragMode dragMode_      = DragMode::None;
     float    dragStartX_    = 0;
     float    panStartView_  = 0;
     float    panStartEnd_   = 0;
     int      dragTrack_     = -1;
     int      dragIndex_     = -1;
+    int      dragKey_       = -1;
     float    dragOrigTime_  = 0;
     float    dragOrigEnd_   = 0;
     float    dragOrigOffset_ = 0;
@@ -214,6 +219,10 @@ private:
     int      selectedTrack_ = -1;
 
     float snap(float t, int track, int clip) const;
+    // The curve of a clip is drawn inside its bar: where a point sits, and the reverse.
+    float envelopeX(const TimelineClip& clip, const CurveKey& key) const;
+    float envelopeY(const TimelineClip& clip, float value, float clipY, float clipH) const;
+    int   envelopeKeyAt(const TimelineClip& clip, float mx, float my, float clipY, float clipH) const;
 
     // ── Helpers ──────────────────────────────────────────────────────────
     float timeToX(float t) const;
