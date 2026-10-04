@@ -343,6 +343,239 @@ void ImageView::paint(PaintContext& ctx)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  VideoCanvas
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace
+{
+constexpr float kMinScale = 0.02f;
+constexpr float kMaxScale = 64.0f;
+}
+
+void VideoCanvas::setTexture(ig::retained::TextureHandle tex, int w, int h)
+{
+    texture_ = tex;
+    texW_ = w;
+    texH_ = h;
+    markDirty();
+}
+
+void VideoCanvas::setPixelAspect(float par)
+{
+    if (par > 0.0f)
+        pixelAspect_ = par;
+    markDirty();
+}
+
+float VideoCanvas::baseScale() const
+{
+    if (texW_ <= 0 || texH_ <= 0 || fit_ == Fit::Actual)
+        return 1.0f;
+    const Rect r = absoluteRect();
+    const float sx = r.w / (texW_ * pixelAspect_);
+    const float sy = r.h / texH_;
+    return fit_ == Fit::Contain ? std::min(sx, sy) : std::max(sx, sy);
+}
+
+void VideoCanvas::setView(float zoom, float panX, float panY)
+{
+    const float base = baseScale();
+    const float lo = base > 0.0f ? kMinScale / base : 0.0f;
+    const float hi = base > 0.0f ? kMaxScale / base : 1.0f;
+    zoom_ = std::clamp(zoom, lo, hi);
+    panX_ = panX;
+    panY_ = panY;
+    markDirty();
+    viewChanged.emit();
+}
+
+void VideoCanvas::setFit(Fit fit)
+{
+    fit_ = fit;
+    setView(1.0f, 0.0f, 0.0f);
+}
+
+void VideoCanvas::setZoom(float zoom)
+{
+    setView(zoom, panX_, panY_);
+}
+
+void VideoCanvas::resetView()
+{
+    setFit(Fit::Contain);
+}
+
+void VideoCanvas::actualSize()
+{
+    setFit(Fit::Actual);
+}
+
+Rect VideoCanvas::imageRect() const
+{
+    const Rect r = absoluteRect();
+    const float s = scale();
+    const float w = texW_ * pixelAspect_ * s;
+    const float h = texH_ * s;
+    return { r.x + r.w * 0.5f + panX_ - w * 0.5f, r.y + r.h * 0.5f + panY_ - h * 0.5f, w, h };
+}
+
+Widget::Vec2f VideoCanvas::screenToImage(float x, float y) const
+{
+    const Rect img = imageRect();
+    if (img.w <= 0.0f || img.h <= 0.0f)
+        return {-1.0f, -1.0f};
+    return { (x - img.x) / img.w * texW_, (y - img.y) / img.h * texH_ };
+}
+
+Widget::Vec2f VideoCanvas::imageToScreen(float px, float py) const
+{
+    const Rect img = imageRect();
+    return { img.x + px / std::max(1, texW_) * img.w, img.y + py / std::max(1, texH_) * img.h };
+}
+
+void VideoCanvas::paint(PaintContext& ctx)
+{
+    const Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(background_);
+    ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
+
+    if (texture_ && texW_ > 0 && texH_ > 0)
+    {
+        const Rect img = imageRect();
+        const float x0 = std::max(img.x, abs.x), y0 = std::max(img.y, abs.y);
+        const float x1 = std::min(img.x + img.w, abs.x + abs.w), y1 = std::min(img.y + img.h, abs.y + abs.h);
+        if (x1 > x0 && y1 > y0)
+        {
+            // Only the visible part is drawn, so a deep zoom keeps small coordinates.
+            if (checker_)
+            {
+                const float cell = 12.0f;
+                ctx.fill.SetColor(Color(70, 70, 74, 255));
+                ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+                ctx.fill.SetColor(Color(104, 104, 108, 255));
+                for (float cy = y0, row = 0; cy < y1; cy += cell, row += 1.0f)
+                    for (float cx = x0 + (static_cast<int>(row) % 2 ? cell : 0.0f); cx < x1; cx += cell * 2.0f)
+                        ctx.fillRect(cx, cy, std::min(cell, x1 - cx), std::min(cell, y1 - cy));
+            }
+            const ig::retained::Rect uv = { (x0 - img.x) / img.w, (y0 - img.y) / img.h,
+                                            (x1 - x0) / img.w, (y1 - y0) / img.h };
+            ctx.drawImage(texture_, { x0, y0, x1 - x0, y1 - y0 }, uv);
+        }
+
+        const float s = scale();
+        if (grid_ && s >= 8.0f)
+        {
+            ctx.line.SetColor(Color(255, 255, 255, 46));
+            const float stepX = s * pixelAspect_;
+            for (float x = img.x + std::ceil((x0 - img.x) / stepX) * stepX; x < x1; x += stepX)
+                ctx.drawLine(x, y0, x, y1);
+            for (float y = img.y + std::ceil((y0 - img.y) / s) * s; y < y1; y += s)
+                ctx.drawLine(x0, y, x1, y);
+        }
+
+        if (safe_)
+        {
+            const float cx = img.x + img.w * 0.5f, cy = img.y + img.h * 0.5f;
+            ctx.line.SetColor(Color(255, 214, 64, 170));
+            ctx.lineRect(cx - img.w * 0.45f, cy - img.h * 0.45f, img.w * 0.9f, img.h * 0.9f);
+            ctx.line.SetColor(Color(64, 214, 255, 170));
+            ctx.lineRect(cx - img.w * 0.40f, cy - img.h * 0.40f, img.w * 0.8f, img.h * 0.8f);
+            ctx.line.SetColor(Color(255, 255, 255, 120));
+            ctx.drawLine(cx - 8.0f, cy, cx + 8.0f, cy);
+            ctx.drawLine(cx, cy - 8.0f, cx, cy + 8.0f);
+        }
+
+        ctx.line.SetColor(Color(255, 255, 255, 40));
+        ctx.lineRect(img.x, img.y, img.w, img.h);
+    }
+    else
+    {
+        ctx.font.SetColor(Color(120, 120, 126, 255));
+        ctx.drawTextAligned(abs, "No signal", AlignX::Center, AlignY::Middle);
+    }
+
+    Widget::paint(ctx);
+    ctx.popClip();
+}
+
+void VideoCanvas::onMousePress(MouseEvent& e)
+{
+    if (e.button != 0 && e.button != 2) return;
+    if (e.clickCount >= 2)
+    {
+        resetView();
+        e.consumed = true;
+        return;
+    }
+    dragging_ = true;
+    dragX_ = e.x;
+    dragY_ = e.y;
+    dragPanX_ = panX_;
+    dragPanY_ = panY_;
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseRelease(MouseEvent& e)
+{
+    dragging_ = false;
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseMove(MouseEvent& e)
+{
+    if (dragging_)
+    {
+        setView(zoom_, dragPanX_ + e.x - dragX_, dragPanY_ + e.y - dragY_);
+        e.consumed = true;
+    }
+
+    const Vec2f p = screenToImage(e.x, e.y);
+    int px = static_cast<int>(std::floor(p.x)), py = static_cast<int>(std::floor(p.y));
+    if (px < 0 || py < 0 || px >= texW_ || py >= texH_)
+        px = py = -1;
+    if (px != lastPixelX_ || py != lastPixelY_)
+    {
+        lastPixelX_ = px;
+        lastPixelY_ = py;
+        hoveredPixel.emit(px, py);
+    }
+}
+
+void VideoCanvas::onMouseScroll(MouseEvent& e)
+{
+    if (e.scrollY == 0.0f || texW_ <= 0) return;
+
+    // Keep the frame point under the cursor fixed while the scale changes.
+    const Rect before = imageRect();
+    const float u = before.w > 0.0f ? (e.x - before.x) / before.w : 0.5f;
+    const float v = before.h > 0.0f ? (e.y - before.y) / before.h : 0.5f;
+    const float oldZoom = zoom_;
+    setView(zoom_ * (e.scrollY > 0.0f ? 1.1f : 1.0f / 1.1f), panX_, panY_);
+    if (zoom_ == oldZoom) { e.consumed = true; return; }
+
+    const Rect r = absoluteRect();
+    const float w = texW_ * pixelAspect_ * scale();
+    const float h = texH_ * scale();
+    panX_ = e.x - u * w + w * 0.5f - (r.x + r.w * 0.5f);
+    panY_ = e.y - v * h + h * 0.5f - (r.y + r.h * 0.5f);
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseLeave()
+{
+    Widget::onMouseLeave();
+    dragging_ = false;
+    if (lastPixelX_ != -1 || lastPixelY_ != -1)
+    {
+        lastPixelX_ = lastPixelY_ = -1;
+        hoveredPixel.emit(-1, -1);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  PageView
 // ═════════════════════════════════════════════════════════════════════════════
 

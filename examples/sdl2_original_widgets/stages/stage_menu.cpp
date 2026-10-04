@@ -33,6 +33,7 @@ void registerMenuStage(WidgetApp& app)
         { "13 - Advanced Tools",   "tools"      },
         { "14 - Widget Gallery",   "gallery"    },
         { "15 - Specialty Widgets","specialty"  },
+        { "16 - Video Monitor",    "video"      },
     };
     for (auto& e : entries) {
         auto* btn = vbox->createChild<Button>(e.label);

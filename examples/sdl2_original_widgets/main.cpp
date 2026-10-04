@@ -22,6 +22,7 @@ void registerGizmosStage(ig::retained::WidgetApp &app);
 void registerToolsStage(ig::retained::WidgetApp &app);
 void registerGalleryStage(ig::retained::WidgetApp &app);
 void registerSpecialtyStage(ig::retained::WidgetApp &app);
+void registerVideoStage(ig::retained::WidgetApp &app);
 void showFileDialogDemo(ig::retained::WidgetApp &app);
 
 namespace
@@ -63,6 +64,7 @@ int main(int argc, char **argv)
 
     auto &app = ig::retained::WidgetApp::instance();
     app.setTextureUpload([&bridge](const unsigned char *p, int w, int h) { return bridge.createTexture(w, h, p); });
+    app.setTextureUpdate([&bridge](ig::retained::TextureHandle t, const unsigned char *p, int w, int h) { return bridge.updateTexture(t, p, w, h); });
     app.setTextureDestroy([&bridge](ig::retained::TextureHandle t) { bridge.destroyTexture(t); });
     registerDemoStage(app);
     registerMenuStage(app);
@@ -81,6 +83,7 @@ int main(int argc, char **argv)
     registerToolsStage(app);
     registerGalleryStage(app);
     registerSpecialtyStage(app);
+    registerVideoStage(app);
     const ig::retained::String initialStage = argc > 1 ? argv[1] : "menu";
     const bool testDockColor = initialStage == "--test-dock-color";
     const bool showFileDialog = initialStage == "filedialog";

@@ -194,6 +194,97 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  VideoCanvas - a video monitor: shows a frame texture with aspect fit, zoom
+//  and pan, and keeps the frame<->screen mapping so overlays (Gizmo2D, crop
+//  boxes) can be drawn on the image at the same scale.
+//
+//    auto* vc = parent->createChild<VideoCanvas>();
+//    vc->setTexture(tex, 1920, 1080);          // once
+//    app.updateTexture(tex, rgba, 1920, 1080); // each new frame...
+//    vc->refresh();                            // ...then repaint
+//
+//  Wheel zooms around the cursor, left or middle drag pans, double click
+//  returns to the fitted view.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class VideoCanvas : public Widget
+{
+public:
+    /// How the frame is sized at zoom 1.
+    enum class Fit { Contain, Cover, Actual };
+
+    VideoCanvas() = default;
+
+    /// @brief Set the frame texture and its size in pixels.
+    void setTexture(ig::retained::TextureHandle tex, int w, int h);
+    ig::retained::TextureHandle texture() const { return texture_; }
+    int frameWidth() const  { return texW_; }
+    int frameHeight() const { return texH_; }
+    /// @brief Repaint after the texture pixels changed.
+    void refresh() { markDirty(); }
+
+    /// @brief Pixel aspect ratio (width / height of one pixel); 1 = square.
+    void setPixelAspect(float par);
+
+    /// @brief Choose the base size and reset zoom and pan.
+    void setFit(Fit fit);
+    Fit  fit() const { return fit_; }
+    /// @brief Zoom as a multiplier over the base size (1 = unchanged).
+    void  setZoom(float zoom);
+    float zoom() const { return zoom_; }
+    /// @brief Screen pixels per frame pixel (1 = 100%).
+    float scale() const { return baseScale() * zoom_; }
+    /// @brief Contain, zoom 1, centred.
+    void resetView();
+    /// @brief 100%: one frame pixel per screen pixel, centred.
+    void actualSize();
+
+    void setBackground(const Color& c)  { background_ = c; markDirty(); }
+    /// @brief Checkerboard behind the frame, for frames with alpha.
+    void setCheckerboard(bool on)       { checker_ = on; markDirty(); }
+    /// @brief Pixel grid, drawn once one frame pixel covers 8 screen pixels or more.
+    void setShowGrid(bool on)           { grid_ = on; markDirty(); }
+    /// @brief Action safe (90%), title safe (80%) and centre cross.
+    void setShowSafeAreas(bool on)      { safe_ = on; markDirty(); }
+
+    /// @brief Absolute screen rect the frame is drawn in.
+    Rect imageRect() const;
+    /// @brief Screen position to frame pixel coordinates (fractional).
+    Vec2f screenToImage(float x, float y) const;
+    /// @brief Frame pixel coordinates to screen position.
+    Vec2f imageToScreen(float px, float py) const;
+
+    /// @brief Emitted when zoom or pan changed.
+    Signal<> viewChanged;
+    /// @brief Frame pixel under the cursor, or (-1, -1) when outside the frame.
+    Signal<int, int> hoveredPixel;
+
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onMouseLeave() override;
+
+private:
+    float baseScale() const;
+    void  setView(float zoom, float panX, float panY);
+
+    ig::retained::TextureHandle texture_;
+    int   texW_ = 0, texH_ = 0;
+    float pixelAspect_ = 1.0f;
+    Fit   fit_ = Fit::Contain;
+    float zoom_ = 1.0f;
+    float panX_ = 0.0f, panY_ = 0.0f;
+    Color background_ = Color(14, 14, 16, 255);
+    bool  checker_ = false, grid_ = false, safe_ = false;
+
+    bool  dragging_ = false;
+    float dragX_ = 0, dragY_ = 0, dragPanX_ = 0, dragPanY_ = 0;
+    int   lastPixelX_ = -2, lastPixelY_ = -2;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  PageView – Container showing one page at a time with transitions
 // ═════════════════════════════════════════════════════════════════════════════
 

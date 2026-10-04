@@ -27,6 +27,7 @@ void registerGizmosStage(ig::retained::WidgetApp &app);
 void registerToolsStage(ig::retained::WidgetApp &app);
 void registerGalleryStage(ig::retained::WidgetApp &app);
 void registerSpecialtyStage(ig::retained::WidgetApp &app);
+void registerVideoStage(ig::retained::WidgetApp &app);
 
 namespace
 {
@@ -168,6 +169,7 @@ int main(int, char **)
 
     auto &app = ig::retained::WidgetApp::instance();
     app.setTextureUpload([](const unsigned char *p, int w, int h) { return g.bridge->createTexture(w, h, p); });
+    app.setTextureUpdate([](ig::retained::TextureHandle t, const unsigned char *p, int w, int h) { return g.bridge->updateTexture(t, p, w, h); });
     app.setTextureDestroy([](ig::retained::TextureHandle t) { g.bridge->destroyTexture(t); });
     registerDemoStage(app);
     registerMenuStage(app);
@@ -186,6 +188,7 @@ int main(int, char **)
     registerToolsStage(app);
     registerGalleryStage(app);
     registerSpecialtyStage(app);
+    registerVideoStage(app);
     app.setStage("menu");
     SDL_StartTextInput();
     g.previous = SDL_GetPerformanceCounter();
