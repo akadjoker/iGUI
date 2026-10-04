@@ -327,6 +327,12 @@ namespace ig { namespace retained
         return build();
     }
 
+    void GetDefaultFont(const unsigned char **data, int *size)
+    {
+        *data = DejaVuSans_ttf_data;
+        *size = static_cast<int>(DejaVuSans_ttf_size);
+    }
+
     void FontAtlas::setTexture(TextureHandle texture)
     {
         texture_ = texture;

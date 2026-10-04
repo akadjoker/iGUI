@@ -899,7 +899,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             for (int o = a + 1; o < static_cast<int>(trk.clips.size()); ++o) {
                 const float s = std::max(trk.clips[a].start, trk.clips[o].start);
                 const float e = std::min(trk.clips[a].end, trk.clips[o].end);
-                if (e - s < 0.01f) continue;
+                if (e - s < 0.01f || trk.clips[a].generator >= 0 || trk.clips[o].generator >= 0) continue;
                 const float x0 = timeToX(s), x1 = timeToX(e);
                 if (x1 < b.x + kHeaderW || x0 > b.x + b.w) continue;
                 ctx.fill.SetColor(255, 255, 255, 70);
