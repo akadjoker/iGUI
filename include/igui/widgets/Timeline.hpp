@@ -111,6 +111,9 @@ public:
 
     /// @brief Get the number of tracks.
     int                trackCount() const { return static_cast<int>(tracks_.size()); }
+    /// @brief Every track, to keep a copy of the whole timeline (undo) and put it back.
+    const ct::Vector<TimelineTrack>& allTracks() const { return tracks_; }
+    void setAllTracks(const ct::Vector<TimelineTrack>& tracks);
     /// @brief Get a mutable track reference.
     TimelineTrack&       track(int id)       { return tracks_[id]; }
     /// @brief Get a const track reference.

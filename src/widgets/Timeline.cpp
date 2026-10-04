@@ -149,6 +149,15 @@ void Timeline::removeTrack(int trackId)
     }
 }
 
+void Timeline::setAllTracks(const ct::Vector<TimelineTrack>& tracks)
+{
+    tracks_ = tracks;
+    selectedTrack_ = -1;
+    dragMode_ = DragMode::None;
+    verticalScroll_ = 0;
+    markDirty();
+}
+
 void Timeline::clearTracks()
 {
     tracks_.clear();
