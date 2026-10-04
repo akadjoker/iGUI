@@ -1876,13 +1876,15 @@ static void test_gizmo2d_transform_handles()
 }
 
 static bool drawGizmo3D(ig::Context &context, ig::Transform3D &transform,
-                        ig::Gizmo3DMode mode = ig::Gizmo3DMode::Translate)
+                        ig::Gizmo3DMode mode = ig::Gizmo3DMode::Translate,
+                        bool showModel = true)
 {
     const float identity[16] = {
         1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
     };
     ig::Gizmo3DOptions options;
     options.axisLength = 0.4f;
+    options.showModel = showModel;
     assert(context.beginWindow("gizmo 3d canvas", ig::Rect(10.0f, 10.0f, 300.0f, 220.0f)));
     const bool changed = context.gizmo3D("cube", transform, mode,
                                          ig::Rect(8.0f, 8.0f, 240.0f, 160.0f),
@@ -1914,6 +1916,77 @@ static bool gizmo3DDrag(ig::Context &context, ig::Transform3D &transform,
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, toX, toY));
     gizmo3DFrame(context, transform, mode);
     return changed;
+}
+
+// The box the gizmo outlines, in screen pixels: the model outline is the only
+// geometry drawn in its colour, so its vertices measure the box.
+static ig::Rect modelOutlineBounds(const ig::DrawData &data)
+{
+    ig::Rect bounds = {0.0f, 0.0f, 0.0f, 0.0f};
+    float lowX = 1e9f, lowY = 1e9f, highX = -1e9f, highY = -1e9f;
+    for (size_t index = 0; index < data.vertices.size(); ++index)
+    {
+        const ig::Color &color = data.vertices[index].color;
+        if (color.r != 238u || color.g != 150u || color.b != 62u)
+            continue;
+        const float x = data.vertices[index].position.x;
+        const float y = data.vertices[index].position.y;
+        lowX = x < lowX ? x : lowX;
+        lowY = y < lowY ? y : lowY;
+        highX = x > highX ? x : highX;
+        highY = y > highY ? y : highY;
+    }
+    if (highX < lowX)
+        return bounds;
+    bounds.x = lowX;
+    bounds.y = lowY;
+    bounds.width = highX - lowX;
+    bounds.height = highY - lowY;
+    return bounds;
+}
+
+// One frame of the gizmo, handed back so the test can measure what it drew: the
+// frame lives until the next endFrame().
+static const ig::DrawData &gizmo3DModelFrame(ig::Context &context, ig::Transform3D &transform,
+                                             bool showModel = true)
+{
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    drawGizmo3D(context, transform, ig::Gizmo3DMode::Translate, showModel);
+    return context.endFrame();
+}
+
+// The gizmo draws the box it moves, and the box follows the turn and the
+// stretch: without it a ring drag changes nothing on screen, because the rings
+// themselves are pinned to the world.
+static void test_gizmo3d_draws_the_box_it_moves()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+
+    // The box spans the handles: 0.4 either side of the centre at x 146, which
+    // the identity projection turns into 48 pixels, and 32 on y.
+    ig::Transform3D upright;
+    const ig::Rect uprightBox = modelOutlineBounds(gizmo3DModelFrame(context, upright));
+    assert(uprightBox.width > 95.0f && uprightBox.width < 102.0f);
+    assert(uprightBox.height > 64.0f && uprightBox.height < 70.0f);
+    assert(uprightBox.x > 94.0f && uprightBox.x < 99.0f);
+
+    // Turned 45 degrees towards the eye its corners reach further across.
+    ig::Transform3D turned;
+    turned.rotation.y = 45.0f;
+    const ig::Rect turnedBox = modelOutlineBounds(gizmo3DModelFrame(context, turned));
+    assert(turnedBox.width > uprightBox.width + 25.0f);
+    assert(turnedBox.height > uprightBox.height - 1.0f &&
+           turnedBox.height < uprightBox.height + 1.0f);
+
+    // A stretch shows on the box as well.
+    ig::Transform3D stretched;
+    stretched.scale.x = 2.0f;
+    assert(modelOutlineBounds(gizmo3DModelFrame(context, stretched)).width >
+           uprightBox.width * 1.9f);
+
+    // The option leaves the rings alone on their own.
+    assert(modelOutlineBounds(gizmo3DModelFrame(context, upright, false)).width == 0.0f);
 }
 
 // The gizmo projects its handles through the caller's matrices, so the handles
@@ -2859,6 +2932,7 @@ int main()
     test_focus_lost_cancels_drag_drop();
     test_editor_infrastructure();
     test_gizmo2d_transform_handles();
+    test_gizmo3d_draws_the_box_it_moves();
     test_gizmo3d_transform_handles();
     test_file_dialog_utf8_folder_backspace();
     test_file_dialog_scroll_is_clamped();

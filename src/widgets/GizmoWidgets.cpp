@@ -572,6 +572,8 @@ GizmoAxis3D Gizmo3D::hitTest(float mx, float my) const
     // ring the drawing is a line, and measuring against it makes the whole line
     // grabbable.
     if (mode_ == GizmoMode3D::Rotate) {
+        float bestRingDistance = hitR;
+        GizmoAxis3D bestRing = GizmoAxis3D::None;
         Vec3f rayOrigin, rayDirection;
         unproject(mx, my, rayOrigin, rayDirection);
         for (int i = 0; i < 3; ++i) {
@@ -585,9 +587,30 @@ GizmoAxis3D Gizmo3D::hitTest(float mx, float my) const
             if (localLength < 1e-6f) continue;
             const Pt2 onRing = project(targetPos_ + local * (scale / localLength));
             const float offsetX = onRing.x - mx, offsetY = onRing.y - my;
-            if (std::sqrt(offsetX*offsetX + offsetY*offsetY) < hitR) return axisIds[i];
+            const float ringDistance = std::sqrt(offsetX*offsetX + offsetY*offsetY);
+            if (ringDistance < bestRingDistance) {
+                bestRingDistance = ringDistance;
+                bestRing = axisIds[i];
+            }
         }
-        return GizmoAxis3D::None;
+
+        // The ring around every handle turns the target the way the screen is
+        // turned: the handle a model that is not axis aligned needs, and the one
+        // the eye reaches for first.
+        float outerRadius = 0.0f;
+        for (int i = 0; i < 3; ++i) {
+            const Pt2 rp = project(targetPos_ + axes[i] * scale);
+            const float dx = rp.x - center.x, dy = rp.y - center.y;
+            const float radius = std::sqrt(dx*dx + dy*dy);
+            if (radius > outerRadius) outerRadius = radius;
+        }
+        outerRadius *= 1.15f;
+        if (outerRadius > 0.0f) {
+            const float fromCentre = std::sqrt((mx - center.x)*(mx - center.x) + (my - center.y)*(my - center.y));
+            if (std::fabs(fromCentre - outerRadius) < bestRingDistance)
+                bestRing = GizmoAxis3D::XYZ;
+        }
+        return bestRing;
     }
 
     return GizmoAxis3D::None;
@@ -723,9 +746,117 @@ void Gizmo3D::onMouseMove(MouseEvent& e)
 
 // ── Painting ──────────────────────────────────────────────────────────────────
 
+// The target's turn applied to a vector: euler degrees in X, then Y, then Z
+// order, the order the handles write.
+Vec3f Gizmo3D::rotateEuler(const Vec3f& v) const
+{
+    const float rx = targetRot_.x * kPi / 180.0f;
+    const float ry = targetRot_.y * kPi / 180.0f;
+    const float rz = targetRot_.z * kPi / 180.0f;
+    float x = v.x;
+    float y = v.y;
+    float z = v.z;
+    float turned = y * std::cos(rx) - z * std::sin(rx);
+    z = y * std::sin(rx) + z * std::cos(rx);
+    y = turned;
+    turned = x * std::cos(ry) + z * std::sin(ry);
+    z = -x * std::sin(ry) + z * std::cos(ry);
+    x = turned;
+    turned = x * std::cos(rz) - y * std::sin(rz);
+    y = x * std::sin(rz) + y * std::cos(rz);
+    x = turned;
+    return Vec3f(x, y, z);
+}
+
+// The object the handles move: the corner of a unit box at (corner * halfSize),
+// with the target's scale, turn and position.
+Vec3f Gizmo3D::modelPoint(const Vec3f& corner, float halfSize) const
+{
+    return targetPos_ + rotateEuler(Vec3f(corner.x * halfSize * targetScale_.x,
+                                          corner.y * halfSize * targetScale_.y,
+                                          corner.z * halfSize * targetScale_.z));
+}
+
+// The box the handles move, shaded with the faces sorted back to front: six
+// opaque quads need no depth buffer. The outline follows the faces that face
+// the camera only, the way a wireframe overlay hides the far edges behind the
+// solid.
+void Gizmo3D::paintModel(PaintContext& ctx)
+{
+    float scale = computeScale();
+
+    static const float signs[8][3] = {{-1,-1,-1}, {1,-1,-1}, {-1,1,-1}, {1,1,-1},
+                                      {-1,-1, 1}, {1,-1, 1}, {-1,1, 1}, {1,1, 1}};
+    Pt2 screen[8];
+    float depth[8];
+    for (int corner = 0; corner < 8; ++corner) {
+        const Vec3f world = modelPoint(Vec3f(signs[corner][0], signs[corner][1], signs[corner][2]),
+                                       scale);
+        screen[corner] = project(world);
+        depth[corner] = (view_ * Vec4f(world, 1.0f)).z;
+    }
+
+    static const int faces[6][4] = {{0, 2, 6, 4}, {1, 5, 7, 3}, {0, 4, 5, 1},
+                                    {2, 3, 7, 6}, {0, 1, 3, 2}, {4, 6, 7, 5}};
+    static const float normals[6][3] = {{-1, 0, 0}, {1, 0, 0}, {0, -1, 0},
+                                        {0, 1, 0}, {0, 0, -1}, {0, 0, 1}};
+    // A lamp just above the eye, so the top of the box reads brighter than its
+    // sides and the faces do not all come out the same grey.
+    Vec3f viewFwd(-view_.data[8], -view_.data[9], -view_.data[10]);
+    Vec3f light = (-viewFwd + Vec3f(0.0f, 0.75f, 0.0f)).normalized();
+
+    const Color base(206, 209, 216, 255);
+    const Color outline(238, 150, 62, 255);
+    int order[6] = {0, 1, 2, 3, 4, 5};
+    float faceDepth[6];
+    float faceLight[6];
+    bool visible[6];
+    for (int face = 0; face < 6; ++face) {
+        const Vec3f normal = rotateEuler(Vec3f(normals[face][0], normals[face][1],
+                                              normals[face][2]));
+        faceDepth[face] = (depth[faces[face][0]] + depth[faces[face][1]] +
+                           depth[faces[face][2]] + depth[faces[face][3]]) * 0.25f;
+        visible[face] = normal.dot(viewFwd) < 0.0f;
+        const float lambert = normal.dot(light);
+        faceLight[face] = 0.42f + 0.58f * (lambert > 0.0f ? lambert : 0.0f);
+    }
+    for (int index = 1; index < 6; ++index) {
+        const int value = order[index];
+        int position = index - 1;
+        while (position >= 0 && faceDepth[order[position]] > faceDepth[value]) {
+            order[position + 1] = order[position];
+            --position;
+        }
+        order[position + 1] = value;
+    }
+    for (int index = 0; index < 6; ++index) {
+        const int face = order[index];
+        float shade = faceLight[face] > 1.0f ? 1.0f : faceLight[face];
+        ctx.fill.SetColor(static_cast<uint8_t>(static_cast<float>(base.r) * shade),
+                          static_cast<uint8_t>(static_cast<float>(base.g) * shade),
+                          static_cast<uint8_t>(static_cast<float>(base.b) * shade), 255);
+        const Pt2 a = screen[faces[face][0]], b = screen[faces[face][1]];
+        const Pt2 c = screen[faces[face][2]], d = screen[faces[face][3]];
+        ctx.fillTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
+        ctx.fillTriangle(a.x, a.y, c.x, c.y, d.x, d.y);
+    }
+    for (int face = 0; face < 6; ++face) {
+        if (!visible[face]) continue;
+        for (int corner = 0; corner < 4; ++corner) {
+            const Pt2 a = screen[faces[face][corner]];
+            const Pt2 b = screen[faces[face][(corner + 1) % 4]];
+            thickLine(ctx, a.x, a.y, b.x, b.y, 1.5f, outline);
+        }
+    }
+}
+
 void Gizmo3D::paint(PaintContext& ctx)
 {
     if (!visible_) return;
+
+    // The object first, then the handles on top of it: a ring has to stay
+    // grabbable where the box covers it.
+    if (modelVisible_) paintModel(ctx);
 
     switch (mode_) {
         case GizmoMode3D::Translate: paintTranslate3D(ctx); break;
@@ -858,35 +989,64 @@ void Gizmo3D::paintRotate3D(PaintContext& ctx)
             float faceDot = midDir.dot(viewFwd);
 
             Pt2 sp0 = project(p0), sp1 = project(p1);
-            if (faceDot < 0) {
-                thickLine(ctx, sp0.x,sp0.y, sp1.x,sp1.y, 2.5f, c);
-            } else {
-                Color faded(c.r, c.g, c.b, 60);
-                ctx.line.SetColor(faded.r, faded.g, faded.b, faded.a);
-                ctx.drawLine(sp0.x, sp0.y, sp1.x, sp1.y);
-            }
+            // The whole ring is drawn, the way a modelling tool draws it: the
+            // far half faint, so the ring reads as one circle instead of an arc
+            // that stops halfway round.
+            if (faceDot < 0)
+                thickLine(ctx, sp0.x,sp0.y, sp1.x,sp1.y, 3.0f, c);
+            else
+                thickLine(ctx, sp0.x,sp0.y, sp1.x,sp1.y, 2.0f,
+                          Color(c.r, c.g, c.b, static_cast<uint8_t>(c.a / 3)));
         }
     }
 
     // Drag pie wedge
     if (dragging_ && activeAxis_ != GizmoAxis3D::None) {
-        float startAngle = std::atan2(dragStartY_ - center.y, dragStartX_ - center.x);
-
-        // Approximate ring radius on screen
-        float ringR = 0;
-        for (int i = 0; i < 3; ++i) {
-            Pt2 rp = project(targetPos_ + axes[i] * scale);
-            float dx = rp.x - center.x, dy = rp.y - center.y;
-            float d = std::sqrt(dx*dx + dy*dy);
-            if (d > ringR) ringR = d;
-        }
-
         float deltaAngle = 0.0f;
         if (activeAxis_ == GizmoAxis3D::X)      deltaAngle = (targetRot_.x - dragStartRot_.x) * kPi / 180.0f;
         else if (activeAxis_ == GizmoAxis3D::Y) deltaAngle = (targetRot_.y - dragStartRot_.y) * kPi / 180.0f;
         else if (activeAxis_ == GizmoAxis3D::Z) deltaAngle = (targetRot_.z - dragStartRot_.z) * kPi / 180.0f;
 
-        if (std::fabs(deltaAngle) > 0.001f) {
+        const bool onRing = (activeAxis_ >= GizmoAxis3D::X && activeAxis_ <= GizmoAxis3D::Z) &&
+                            dragRingStart_.length() > 1e-6f;
+        if (std::fabs(deltaAngle) > 0.001f && onRing) {
+            // The wedge follows the ring: the vector the press grabbed, turned
+            // around the ring's own axis by the angle the transform is being
+            // given, so the wedge and the model stay in step.
+            const Vec3f normal = axes[static_cast<int>(activeAxis_) - static_cast<int>(GizmoAxis3D::X)];
+            const Vec3f source = dragRingStart_.normalized();
+            const int wedgeSegs = 24;
+            Pt2 arc[wedgeSegs + 1];
+            bool valid = true;
+            for (int i = 0; i <= wedgeSegs; ++i) {
+                const float angle = deltaAngle * static_cast<float>(i) / static_cast<float>(wedgeSegs);
+                const float cosine = std::cos(angle);
+                const float sine = std::sin(angle);
+                const Vec3f turned = source * cosine + normal.cross(source) * sine +
+                                     normal * (normal.dot(source) * (1.0f - cosine));
+                arc[i] = project(targetPos_ + turned * scale);
+                if (std::fabs(arc[i].x) > 9000.0f) valid = false;
+            }
+            if (valid) {
+                Color wedge(255, 128, 16, 60);
+                for (int i = 0; i < wedgeSegs; ++i) {
+                    if (std::fabs(arc[i].x) > 9000.0f || std::fabs(arc[i+1].x) > 9000.0f) continue;
+                    ctx.fill.SetColor(wedge.r, wedge.g, wedge.b, wedge.a);
+                    ctx.fillTriangle(center.x, center.y, arc[i].x, arc[i].y, arc[i+1].x, arc[i+1].y);
+                }
+                Color wol(255, 128, 16, 180);
+                thickLine(ctx, center.x, center.y, arc[0].x, arc[0].y, 1.5f, wol);
+                thickLine(ctx, center.x, center.y, arc[wedgeSegs].x, arc[wedgeSegs].y, 1.5f, wol);
+            }
+        } else if (std::fabs(deltaAngle) > 0.001f) {
+            float startAngle = std::atan2(dragStartY_ - center.y, dragStartX_ - center.x);
+            float ringR = 0;
+            for (int i = 0; i < 3; ++i) {
+                Pt2 rp = project(targetPos_ + axes[i] * scale);
+                float dx = rp.x - center.x, dy = rp.y - center.y;
+                float d = std::sqrt(dx*dx + dy*dy);
+                if (d > ringR) ringR = d;
+            }
             int wedgeSegs = 32;
             Color wedge(255, 128, 16, 60);
             for (int i = 0; i < wedgeSegs; ++i) {

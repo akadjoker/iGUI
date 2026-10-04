@@ -207,9 +207,14 @@ struct Gizmo3DOptions
     float translateSnap;
     float rotateSnap;
     float scaleSnap;
+    // Draw the box the handles move, shaded and outlined. Without it a turn
+    // shows only a number: the rings are pinned to the world, so they stay put
+    // while the model turns.
+    bool showModel;
 
     Gizmo3DOptions()
-        : axisLength(1.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
+        : axisLength(1.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f),
+          showModel(true) {}
 };
 
 // Application-owned stop for gradientEditor(). Positions are normalized to
@@ -422,7 +427,9 @@ public:
     // Transparent editor overlay for a 2D transform inside bounds.
     bool gizmo2D(StringView id, Transform2D &transform, Gizmo2DMode mode, const Rect &bounds,
                  const Gizmo2DOptions &options = Gizmo2DOptions());
-    // Projected 3D transform handles. view and projection are column-major 4x4 matrices.
+    // Projected 3D transform handles. view and projection are column-major 4x4
+    // matrices. The transform's rotation is euler degrees in X, then Y, then Z
+    // order, and gizmo3DOptions::showModel draws the box it moves.
     bool gizmo3D(StringView id, Transform3D &transform, Gizmo3DMode mode, const Rect &bounds,
                  const float *view, const float *projection,
                  const Gizmo3DOptions &options = Gizmo3DOptions());

@@ -222,6 +222,84 @@ static void test_fader_takes_a_press_anywhere()
     across.onMouseRelease(press);
 }
 
+// The box the gizmo outlines, in pixels: the model outline is the only geometry
+// drawn in its colour, so its vertices measure the box.
+static ig::Rect modelOutlineBounds(const ig::retained::DrawList &list)
+{
+    ig::Rect bounds = {0.0f, 0.0f, 0.0f, 0.0f};
+    float lowX = 1e9f, lowY = 1e9f, highX = -1e9f, highY = -1e9f;
+    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
+    for (ct::Vector<ig::retained::DrawVertex>::size_type index = 0; index < vertices.size(); ++index)
+    {
+        const ig::retained::DrawVertex &vertex = vertices[index];
+        if (vertex.color.r != 238u || vertex.color.g != 150u || vertex.color.b != 62u)
+            continue;
+        lowX = vertex.x < lowX ? vertex.x : lowX;
+        lowY = vertex.y < lowY ? vertex.y : lowY;
+        highX = vertex.x > highX ? vertex.x : highX;
+        highY = vertex.y > highY ? vertex.y : highY;
+    }
+    if (highX < lowX)
+        return bounds;
+    bounds.x = lowX;
+    bounds.y = lowY;
+    bounds.width = highX - lowX;
+    bounds.height = highY - lowY;
+    return bounds;
+}
+
+// The gizmo draws the box it moves, and the box follows the turn: without it a
+// ring drag changes only the text under the centre, because the rings
+// themselves are pinned to the world.
+static void test_gizmo3d_draws_the_box_it_moves()
+{
+    const float view[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1};
+    const float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    const float position[3] = {0.0f, 0.0f, 0.0f};
+    const float scale[3] = {1.0f, 1.0f, 1.0f};
+    const float upright[3] = {0.0f, 0.0f, 0.0f};
+
+    ig::retained::Gizmo3D gizmo;
+    gizmo.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    gizmo.setViewProjection(view, projection, 400, 300);
+    gizmo.setScreenScale(50.0f);
+    gizmo.setMode(ig::retained::GizmoMode3D::Rotate);
+    gizmo.setTarget(position, upright, scale);
+
+    // The camera sits four units away, so the handles - and the box they move -
+    // measure 50 * 4 / 300 world units either side of the centre at (200, 150).
+    ig::retained::DrawList first;
+    ig::retained::PaintContext firstContext(first);
+    gizmo.paint(firstContext);
+    const ig::Rect uprightBox = modelOutlineBounds(first);
+    // The widget is 400 by 300, so a world unit is 200 pixels across and 150
+    // down: the box is 266 by 200 of them, its outline's anti-aliased fringe
+    // included.
+    assert(uprightBox.width > 266.0f && uprightBox.width < 272.0f);
+    assert(uprightBox.height > 197.0f && uprightBox.height < 204.0f);
+    assert(uprightBox.x > 64.0f && uprightBox.x < 70.0f);
+
+    // Turned 45 degrees towards the eye, its corners reach further across.
+    const float turned[3] = {0.0f, 45.0f, 0.0f};
+    ig::retained::Gizmo3D turning;
+    turning.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    turning.setViewProjection(view, projection, 400, 300);
+    turning.setScreenScale(50.0f);
+    turning.setMode(ig::retained::GizmoMode3D::Rotate);
+    turning.setTarget(position, turned, scale);
+    ig::retained::DrawList second;
+    ig::retained::PaintContext secondContext(second);
+    turning.paint(secondContext);
+    assert(modelOutlineBounds(second).width > uprightBox.width + 80.0f);
+
+    // The box can be turned off, and then the rings are on their own.
+    gizmo.setModelVisible(false);
+    ig::retained::DrawList third;
+    ig::retained::PaintContext thirdContext(third);
+    gizmo.paint(thirdContext);
+    assert(modelOutlineBounds(third).width == 0.0f);
+}
+
 // A 3D gizmo is grabbed by the handle under the pointer, and the drag has to
 // move the target on that axis alone. The camera looks down the Z axis, so the
 // X handle runs right from the centre and the Z ring is the ellipse the test
@@ -390,6 +468,7 @@ int main()
     test_knob_accent_comes_from_the_caller();
     test_fader_takes_a_press_anywhere();
     test_fader_accent_comes_from_the_caller();
+    test_gizmo3d_draws_the_box_it_moves();
     test_gizmo3d_grabs_the_handle_under_the_pointer();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});

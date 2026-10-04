@@ -284,12 +284,157 @@ bool gizmo3DRayThrough(const Gizmo3DProjector &projector, const Vec2 &pixel,
     return true;
 }
 
+// The radius of the ring that goes round every handle, which turns the target
+// the way the screen is turned. Zero when the handles do not project at all.
+float gizmo3DOuterRadius(const Gizmo3DProjector &projector, const Transform3D &transform,
+                         float axisLength)
+{
+    Vec2 center;
+    if (!projectGizmo3D(projector, transform.position, center))
+        return 0.0f;
+    float outer = 0.0f;
+    for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+    {
+        Vec2 endpoint;
+        if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                scaleGizmo3D(gizmo3DAxisVector(static_cast<GizmoAxis3D>(index)), axisLength)), endpoint))
+            continue;
+        const float dx = endpoint.x - center.x;
+        const float dy = endpoint.y - center.y;
+        const float radius = sqrtf(dx * dx + dy * dy);
+        if (radius > outer)
+            outer = radius;
+    }
+    return outer * 1.15f;
+}
+
 // The direction the camera looks, into the scene: the third row of a view
 // matrix is the camera's own z axis, which points from the target back to the
 // eye.
 Vec3 gizmo3DViewDirection(const Gizmo3DProjector &projector)
 {
     return Vec3(-projector.view[2], -projector.view[6], -projector.view[10]);
+}
+
+// A corner of the box the handles move, in world space: the transform's own
+// matrix, with its rotation read as Euler degrees in X, then Y, then Z order -
+// the order the handles write it in.
+Vec3 gizmo3DModelPoint(const Transform3D &transform, float cornerX, float cornerY,
+                       float cornerZ, float halfSize)
+{
+    const float rotationX = transform.rotation.x * GizmoPi / 180.0f;
+    const float rotationY = transform.rotation.y * GizmoPi / 180.0f;
+    const float rotationZ = transform.rotation.z * GizmoPi / 180.0f;
+    float x = cornerX * halfSize * transform.scale.x;
+    float y = cornerY * halfSize * transform.scale.y;
+    float z = cornerZ * halfSize * transform.scale.z;
+    float turned = y * cosf(rotationX) - z * sinf(rotationX);
+    z = y * sinf(rotationX) + z * cosf(rotationX);
+    y = turned;
+    turned = x * cosf(rotationY) + z * sinf(rotationY);
+    z = -x * sinf(rotationY) + z * cosf(rotationY);
+    x = turned;
+    turned = x * cosf(rotationZ) - y * sinf(rotationZ);
+    y = x * sinf(rotationZ) + y * cosf(rotationZ);
+    x = turned;
+    return Vec3(transform.position.x + x, transform.position.y + y, transform.position.z + z);
+}
+
+// The same turn without the scale, for a face normal.
+Vec3 gizmo3DModelNormal(const Transform3D &transform, float normalX, float normalY, float normalZ)
+{
+    Transform3D rotationOnly;
+    rotationOnly.rotation = transform.rotation;
+    return gizmo3DModelPoint(rotationOnly, normalX, normalY, normalZ, 1.0f);
+}
+
+// The box the handles move: the object a modelling tool would show, so a turn,
+// a shift or a stretch is visible while it happens. Six quads sorted back to
+// front and filled opaque need no depth buffer; the outline is drawn only round
+// the faces that face the camera, the way a wireframe overlay hides the edges
+// behind the solid.
+void drawGizmo3DModel(const Gizmo3DProjector &projector, const Transform3D &transform,
+                      float halfSize, const Rect &clip, DrawList *drawList)
+{
+    Vec2 corners[8];
+    float depth[8];
+    for (int corner = 0; corner < 8; ++corner)
+    {
+        const Vec3 world = gizmo3DModelPoint(transform, (corner & 1) ? 1.0f : -1.0f,
+                                            (corner & 2) ? 1.0f : -1.0f,
+                                            (corner & 4) ? 1.0f : -1.0f, halfSize);
+        if (!projectGizmo3D(projector, world, corners[corner]))
+            return;
+        depth[corner] = projector.view[2] * world.x + projector.view[6] * world.y +
+                        projector.view[10] * world.z + projector.view[14];
+    }
+
+    const int faces[6][4] = {{0, 2, 6, 4}, {1, 5, 7, 3}, {0, 4, 5, 1},
+                             {2, 3, 7, 6}, {0, 1, 3, 2}, {4, 6, 7, 5}};
+    const float normals[6][3] = {{-1.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f},
+                                 {0.0f, -1.0f, 0.0f}, {0.0f, 1.0f, 0.0f},
+                                 {0.0f, 0.0f, -1.0f}, {0.0f, 0.0f, 1.0f}};
+    // A lamp just above the eye, so the top of the box reads brighter than its
+    // sides and the faces do not all come out the same grey.
+    const Vec3 view = gizmo3DViewDirection(projector);
+    float lightX = -view.x;
+    float lightY = -view.y + 0.75f;
+    float lightZ = -view.z;
+    const float lightLength = sqrtf(lightX * lightX + lightY * lightY + lightZ * lightZ);
+    lightX /= lightLength;
+    lightY /= lightLength;
+    lightZ /= lightLength;
+
+    const Color base(206u, 209u, 216u, 255u);
+    const Color outline(238u, 150u, 62u, 255u);
+    int order[6] = {0, 1, 2, 3, 4, 5};
+    float faceDepth[6];
+    float faceLight[6];
+    bool visible[6];
+    for (int face = 0; face < 6; ++face)
+    {
+        const Vec3 normal = gizmo3DModelNormal(transform, normals[face][0], normals[face][1],
+                                               normals[face][2]);
+        faceDepth[face] = (depth[faces[face][0]] + depth[faces[face][1]] +
+                           depth[faces[face][2]] + depth[faces[face][3]]) * 0.25f;
+        visible[face] = normal.x * view.x + normal.y * view.y + normal.z * view.z < 0.0f;
+        const float lambert = normal.x * lightX + normal.y * lightY + normal.z * lightZ;
+        faceLight[face] = 0.42f + 0.58f * (lambert > 0.0f ? lambert : 0.0f);
+    }
+    for (int index = 1; index < 6; ++index)
+    {
+        const int value = order[index];
+        int position = index - 1;
+        while (position >= 0 && faceDepth[order[position]] > faceDepth[value])
+        {
+            order[position + 1] = order[position];
+            --position;
+        }
+        order[position + 1] = value;
+    }
+    for (int index = 0; index < 6; ++index)
+    {
+        const int face = order[index];
+        Vec2 quad[4];
+        for (int corner = 0; corner < 4; ++corner)
+            quad[corner] = corners[faces[face][corner]];
+        float shade = faceLight[face];
+        if (shade > 1.0f)
+            shade = 1.0f;
+        drawList->addPolygonFilled(Span<const Vec2>(quad),
+                                   Color(static_cast<uint8_t>(static_cast<float>(base.r) * shade),
+                                         static_cast<uint8_t>(static_cast<float>(base.g) * shade),
+                                         static_cast<uint8_t>(static_cast<float>(base.b) * shade),
+                                         base.a), clip);
+    }
+    for (int face = 0; face < 6; ++face)
+    {
+        if (!visible[face])
+            continue;
+        for (int corner = 0; corner < 4; ++corner)
+            drawList->addLine(corners[faces[face][corner]],
+                              corners[faces[face][(corner + 1) % 4]], outline, clip, 1.5f);
+    }
 }
 
 // Where the pointer's ray crosses the plane of a ring, measured from the target.
@@ -348,17 +493,17 @@ GizmoAxis3D hitGizmo3D(Gizmo3DMode mode, const Vec2 &pointer, const Transform3D 
     if (centerX * centerX + centerY * centerY <= 64.0f)
         return Gizmo3DAxisXYZ;
 
-    float bestDistance = 9.0f;
-    GizmoAxis3D bestAxis = Gizmo3DAxisNone;
-    for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+    // A ring is grabbed where the pointer's ray crosses its plane, not where the
+    // nearest point of the drawn curve happens to be: the drawing is an ellipse,
+    // so measuring against it would make a ring seen edge-on grabbable along its
+    // whole length.
+    if (mode == Gizmo3DMode::Rotate)
     {
-        const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
-        if (mode == Gizmo3DMode::Rotate)
+        float bestRingDistance = 9.0f;
+        GizmoAxis3D bestRing = Gizmo3DAxisNone;
+        for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
         {
-            // The ring is grabbed where the pointer's ray crosses its plane, not
-            // where the nearest point of the drawn curve happens to be: the
-            // drawing is an ellipse, so measuring against it would make a ring
-            // seen edge-on grabbable along its whole length.
+            const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
             const Vec3 normal = gizmo3DAxisVector(axis);
             Vec3 local;
             if (!gizmo3DRingPoint(projector, pointer, transform.position, normal, local))
@@ -369,36 +514,52 @@ GizmoAxis3D hitGizmo3D(Gizmo3DMode mode, const Vec2 &pointer, const Transform3D 
             const float localLength = sqrtf(local.x * local.x + local.y * local.y + local.z * local.z);
             if (localLength < 1e-6f)
                 continue;
-            const float scale = axisLength / localLength;
             Vec2 onRing;
             if (!projectGizmo3D(projector, addGizmo3D(transform.position,
-                                                      scaleGizmo3D(local, scale)), onRing))
+                    scaleGizmo3D(local, axisLength / localLength)), onRing))
                 continue;
             const float offsetX = onRing.x - pointer.x;
             const float offsetY = onRing.y - pointer.y;
             const float distance = sqrtf(offsetX * offsetX + offsetY * offsetY);
-            if (distance < bestDistance)
+            if (distance < bestRingDistance)
             {
-                bestDistance = distance;
-                bestAxis = axis;
+                bestRingDistance = distance;
+                bestRing = axis;
             }
         }
-        else
+
+        // The ring around every handle turns the target the way the screen is
+        // turned: the handle a model that is not axis aligned needs, and the one
+        // the eye reaches for first.
+        const float outerRadius = gizmo3DOuterRadius(projector, transform, axisLength);
+        if (outerRadius > 0.0f)
         {
-            Vec2 endpoint;
-            if (!projectGizmo3D(projector,
-                                addGizmo3D(transform.position,
-                                            scaleGizmo3D(gizmo3DAxisVector(axis), axisLength)), endpoint))
-                continue;
-            const float distance = gizmo3DSegmentDistance(pointer, center, endpoint);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                bestAxis = axis;
-            }
+            const float offsetX = pointer.x - center.x;
+            const float offsetY = pointer.y - center.y;
+            const float distance = absoluteValue(sqrtf(offsetX * offsetX + offsetY * offsetY) - outerRadius);
+            if (distance < bestRingDistance)
+                bestRing = Gizmo3DAxisXYZ;
+        }
+        return bestRing;
+    }
+
+    float bestDistance = 9.0f;
+    GizmoAxis3D bestAxis = Gizmo3DAxisNone;
+    for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
+    {
+        const GizmoAxis3D axis = static_cast<GizmoAxis3D>(index);
+        Vec2 endpoint;
+        if (!projectGizmo3D(projector, addGizmo3D(transform.position,
+                scaleGizmo3D(gizmo3DAxisVector(axis), axisLength)), endpoint))
+            continue;
+        const float distance = gizmo3DSegmentDistance(pointer, center, endpoint);
+        if (distance < bestDistance)
+        {
+            bestDistance = distance;
+            bestAxis = axis;
         }
     }
-    if (bestAxis != Gizmo3DAxisNone || mode == Gizmo3DMode::Rotate)
+    if (bestAxis != Gizmo3DAxisNone)
         return bestAxis;
 
     const GizmoAxis3D planeAxes[] = {Gizmo3DAxisXY, Gizmo3DAxisXZ, Gizmo3DAxisYZ};
@@ -2718,6 +2879,11 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         }
     }
 
+    // The object first, then the handles on top of it: a ring has to stay
+    // grabbable where the box covers it.
+    if (options.showModel)
+        drawGizmo3DModel(projector, transform, options.axisLength, clip, drawList);
+
     Vec2 center;
     if (!projectGizmo3D(projector, transform.position, center))
         return changed;
@@ -2778,13 +2944,19 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                     continue;
                 if (hasPrevious)
                 {
+                    // The whole ring is drawn, the way a modelling tool draws
+                    // it: the far half faint, so the ring reads as one circle
+                    // instead of an arc that stops halfway round.
                     const float middle = angle - GizmoPi / 40.0f;
                     const float radialX = u.x * cosf(middle) + v.x * sinf(middle);
                     const float radialY = u.y * cosf(middle) + v.y * sinf(middle);
                     const float radialZ = u.z * cosf(middle) + v.z * sinf(middle);
                     const float facing = radialX * -view[8] + radialY * -view[9] + radialZ * -view[10];
-                    const Color ringColor = facing < 0.0f ? color : Color(color.r, color.g, color.b, 65u);
-                    drawList->addLine(previous, current, ringColor, clip, facing < 0.0f ? 2.5f : 1.0f);
+                    if (facing < 0.0f)
+                        drawList->addLine(previous, current,
+                                          Color(color.r, color.g, color.b, 80u), clip, 2.0f);
+                    else
+                        drawList->addLine(previous, current, color, clip, 3.0f);
                 }
                 previous = current;
                 hasPrevious = true;
@@ -2820,21 +2992,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     }
     if (mode == Gizmo3DMode::Rotate)
     {
-        float outerRadius = 0.0f;
-        for (uint8_t index = Gizmo3DAxisX; index <= Gizmo3DAxisZ; ++index)
-        {
-            Vec2 endpoint;
-            if (projectGizmo3D(projector, addGizmo3D(transform.position,
-                scaleGizmo3D(gizmo3DAxisVector(static_cast<GizmoAxis3D>(index)), options.axisLength)), endpoint))
-            {
-                const float dx = endpoint.x - center.x;
-                const float dy = endpoint.y - center.y;
-                const float radius = sqrtf(dx * dx + dy * dy);
-                if (radius > outerRadius)
-                    outerRadius = radius;
-            }
-        }
-        outerRadius *= 1.15f;
+        const float outerRadius = gizmo3DOuterRadius(projector, transform, options.axisLength);
         const Color outerColor = activeAxis == Gizmo3DAxisXYZ || hoveredAxis == Gizmo3DAxisXYZ
             ? theme_.gizmoHighlight : Color(185u, 185u, 190u, 120u);
         for (int segment = 0; segment < 40; ++segment)
@@ -2906,6 +3064,12 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                     Vec2(center.x + cosf(second) * radius, center.y + sinf(second) * radius)};
                 drawList->addPolygonFilled(Span<const Vec2>(wedge), feedback, clip);
             }
+            const Color edge(theme_.gizmoHighlight.r, theme_.gizmoHighlight.g,
+                             theme_.gizmoHighlight.b, 200u);
+            drawList->addLine(center, Vec2(center.x + cosf(start) * radius, center.y + sinf(start) * radius),
+                              edge, clip, 1.5f);
+            drawList->addLine(center, Vec2(center.x + cosf(end) * radius, center.y + sinf(end) * radius),
+                              edge, clip, 1.5f);
         }
         char rotationText[64];
         snprintf(rotationText, sizeof(rotationText), "X %.1f  Y %.1f  Z %.1f",

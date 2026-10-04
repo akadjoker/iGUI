@@ -146,7 +146,8 @@ public:
     void setViewProjection(const float* view4x4, const float* proj4x4,
                            int vpWidth, int vpHeight);
 
-    /// @brief Set the transform target from float[3] arrays.
+    /// @brief Set the transform target from float[3] arrays. The rotation is
+    /// euler degrees in X, then Y, then Z order.
     void setTarget(const float* pos3, const float* rotDeg3, const float* scale3);
 
     /// @brief Get the target position.
@@ -172,6 +173,11 @@ public:
     void  setScreenScale(float s) { screenScale_ = s; }
     /// @brief Get the screen-space scale factor.
     float screenScale() const     { return screenScale_; }
+
+    /// @brief Show or hide the box the handles move.
+    void setModelVisible(bool visible) { modelVisible_ = visible; markDirty(); }
+    /// @brief Whether the box the handles move is drawn.
+    bool modelVisible() const          { return modelVisible_; }
 
     // ── Signals ──
     Signal<Vec3f> onTranslate3D;   ///< delta in world space
@@ -225,6 +231,9 @@ private:
 
     // Visual
     float screenScale_ = 80.0f;
+    // The box the transform is applied to: a turn of the rings is invisible
+    // without something to turn.
+    bool  modelVisible_ = true;
 
     static inline const Color kRed    {170,  50,  50, 255};
     static inline const Color kGreen  { 50, 170,  50, 255};
@@ -245,6 +254,12 @@ private:
     float snap(float val, float grid) const;
 
     GizmoAxis3D hitTest(float mx, float my) const;
+
+    // A corner of the box the handles move, in world space: euler degrees in X,
+    // then Y, then Z order, the order the handles write.
+    Vec3f rotateEuler(const Vec3f& v) const;
+    Vec3f modelPoint(const Vec3f& corner, float halfSize) const;
+    void  paintModel(PaintContext& ctx);
 
     void paintTranslate3D(PaintContext& ctx);
     void paintRotate3D(PaintContext& ctx);

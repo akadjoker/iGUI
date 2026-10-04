@@ -660,7 +660,8 @@ void synthSection(ig::Context &ui)
 void gizmoSection(ig::Context &ui)
 {
     ui.separatorText("3D transform gizmo");
-    ui.label("Drag a handle: a ring turns, an arrow slides, a square scales.");
+    ui.label("The box is the object. Drag a ring to turn it, an arrow to slide it,");
+    ui.label("a square to stretch it - the outer ring turns it the way you see it.");
 
     for (int i = 0; i < 3; ++i)
     {
@@ -679,6 +680,13 @@ void gizmoSection(ig::Context &ui)
     const float height = 300.0f;
     const ig::Vec2 canvas = ui.cursor();
     const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    // The canvas is wider than it is tall, and the gizmo maps the camera's
+    // [-1, 1] over it: without this the world would be stretched sideways and
+    // the rings would come out as ellipses.
+    float projection[16];
+    for (int i = 0; i < 16; ++i)
+        projection[i] = identity[i];
+    projection[0] = height / width;
     float view[16];
     lookAtOrigin(view, 3.0f, 2.2f, 3.0f);
 
@@ -687,12 +695,12 @@ void gizmoSection(ig::Context &ui)
     ui.drawRect(ig::Rect(canvas.x, canvas.y, width, height), ui.theme().borderColor);
 
     ig::Gizmo3DOptions options;
-    options.axisLength = 0.45f;
+    options.axisLength = 0.5f;
     options.translateSnap = 0.1f;
     options.rotateSnap = 15.0f;
     options.scaleSnap = 0.1f;
     if (ui.gizmo3D("transform", g.gizmoTransform, g.gizmoMode,
-                   ig::Rect(canvas.x, canvas.y, width, height), view, identity, options))
+                   ig::Rect(canvas.x, canvas.y, width, height), view, projection, options))
     {
         ++g.gizmoDrags;
         char buffer[96];
