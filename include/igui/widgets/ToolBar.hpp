@@ -93,6 +93,9 @@ public:
     /// @brief Check if an item is visible.
     bool isItemVisible(int id) const;
 
+    /// @brief Change the atlas icon of an item (a play button that turns into pause).
+    void setItemIcon(int id, IconId icon);
+
     /// @brief Set an item's tooltip text.
     void setItemTooltip(int id, const String& tip);
 

@@ -383,6 +383,8 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
             target = hitTest(root_, x, y);
 
         bool accepted = false;
+        dragPayload_->dropX = x;
+        dragPayload_->dropY = y;
         if (target) {
             // Walk up from target to find an acceptor
             Widget* w = target;

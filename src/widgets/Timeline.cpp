@@ -1,5 +1,6 @@
 #include "Timeline.hpp"
 #include "Theme.hpp"
+#include "Retained.hpp"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -21,7 +22,7 @@ namespace {
 //  Timeline
 // ═════════════════════════════════════════════════════════════════════════════
 
-Timeline::Timeline() {}
+Timeline::Timeline() { acceptsFocus_ = true; }
 
 int Timeline::addJoint(const String& name, int parent)
 {
@@ -107,6 +108,31 @@ int Timeline::addTrack(const String& name, const Color& color)
     return static_cast<int>(tracks_.size()) - 1;
 }
 
+int Timeline::insertTrack(int index, const String& name, TrackKind kind)
+{
+    index = std::max(0, std::min(index, trackCount()));
+    addTrack(name, kind);
+    TimelineTrack added = tracks_[tracks_.size() - 1];
+    tracks_.erase(tracks_.begin() + (tracks_.size() - 1));
+    tracks_.insert(tracks_.begin() + index, added);
+    for (int i = 0; i < trackCount(); ++i) {
+        if (i != index && tracks_[i].parent >= index) ++tracks_[i].parent;
+    }
+    if (selectedTrack_ >= index) ++selectedTrack_;
+    dragMode_ = DragMode::None;
+    markDirty();
+    return index;
+}
+
+void Timeline::setSelectedTrack(int trackId)
+{
+    if (trackId < -1 || trackId >= trackCount()) trackId = -1;
+    if (trackId == selectedTrack_) return;
+    selectedTrack_ = trackId;
+    onTrackSelected.emit(trackId);
+    markDirty();
+}
+
 void Timeline::removeTrack(int trackId)
 {
     if (trackId >= 0 && trackId < static_cast<int>(tracks_.size())) {
@@ -115,6 +141,8 @@ void Timeline::removeTrack(int trackId)
             if (tr.parent == trackId) tr.parent = -1;
             else if (tr.parent > trackId) --tr.parent;
         }
+        if (selectedTrack_ == trackId) selectedTrack_ = -1;
+        else if (selectedTrack_ > trackId) --selectedTrack_;
         dragMode_ = DragMode::None;
         verticalScroll_ = 0;
         markDirty();
@@ -124,6 +152,7 @@ void Timeline::removeTrack(int trackId)
 void Timeline::clearTracks()
 {
     tracks_.clear();
+    selectedTrack_ = -1;
     dragMode_ = DragMode::None;
     verticalScroll_ = 0;
     markDirty();
@@ -165,6 +194,7 @@ int Timeline::addClip(int trackId, float start, float end,
     clip.end   = end;
     clip.label = label;
     clip.color = color;
+    clip.id    = nextClipId_++;
     tracks_[trackId].clips.push_back(std::move(clip));
     markDirty();
     return static_cast<int>(tracks_[trackId].clips.size()) - 1;
@@ -178,6 +208,49 @@ void Timeline::removeClip(int trackId, int clipIdx)
         clips.erase(clips.begin() + clipIdx);
         markDirty();
     }
+}
+
+int Timeline::splitClip(int trackId, int clipIdx, float t)
+{
+    if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return -1;
+    auto& clips = tracks_[trackId].clips;
+    if (clipIdx < 0 || clipIdx >= static_cast<int>(clips.size())) return -1;
+    TimelineClip second = clips[clipIdx];
+    if (t <= second.start + 0.02f || t >= second.end - 0.02f) return -1;
+    second.id       = nextClipId_++;
+    second.offset   = second.offset + (t - second.start) * second.speed;
+    second.start    = t;
+    second.selected = false;
+    second.link     = -1;
+    second.user     = -1;
+    clips[clipIdx].end = t;
+    clips.push_back(second);
+    markDirty();
+    return static_cast<int>(clips.size()) - 1;
+}
+
+bool Timeline::selectedClip(int& trackId, int& clipIdx) const
+{
+    for (int ti = 0; ti < trackCount(); ++ti)
+        for (int ci = 0; ci < static_cast<int>(tracks_[ti].clips.size()); ++ci)
+            if (tracks_[ti].clips[ci].selected) { trackId = ti; clipIdx = ci; return true; }
+    return false;
+}
+
+void Timeline::clearSelection()
+{
+    for (auto& trk : tracks_)
+        for (auto& clip : trk.clips) clip.selected = false;
+    markDirty();
+}
+
+int Timeline::clipAt(int trackId, float t) const
+{
+    if (trackId < 0 || trackId >= trackCount()) return -1;
+    const auto& clips = tracks_[trackId].clips;
+    for (int ci = static_cast<int>(clips.size()) - 1; ci >= 0; --ci)
+        if (t >= clips[ci].start && t < clips[ci].end) return ci;
+    return -1;
 }
 
 void Timeline::setTimeRange(float start, float end)
@@ -215,6 +288,35 @@ int Timeline::trackAtY(float y) const
     int idx = static_cast<int>((trackArea + verticalScroll_) / kTrackH);
     if (idx >= static_cast<int>(rows.size()) || y >= b.bottom()) return -1;
     return rows[idx];
+}
+
+// Pulls t to the nearest edge of another clip, the playhead or zero when it is
+// within a few pixels. The clip being dragged and its linked partners are skipped.
+float Timeline::snap(float t, int track, int clip) const
+{
+    if (!snapping_) return t;
+    Rect b = absoluteRect();
+    const float contentW = std::max(1.0f, b.w - kHeaderW - edgePadding_ * 2);
+    const float limit = 8.0f * (viewEnd_ - viewStart_) / contentW;
+    const int link = tracks_[track].clips[clip].link;
+    float best = t;
+    float bestDist = limit;
+    auto consider = [&](float c) {
+        const float d = std::fabs(c - t);
+        if (d < bestDist) { bestDist = d; best = c; }
+    };
+    consider(0.0f);
+    consider(playhead_);
+    for (int ti = 0; ti < trackCount(); ++ti) {
+        const auto& clips = tracks_[ti].clips;
+        for (int ci = 0; ci < static_cast<int>(clips.size()); ++ci) {
+            if (ti == track && ci == clip) continue;
+            if (link >= 0 && clips[ci].link == link) continue;
+            consider(clips[ci].start);
+            consider(clips[ci].end);
+        }
+    }
+    return best;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -262,11 +364,15 @@ void Timeline::onMousePress(MouseEvent& e)
             onTrackLockChanged.emit(ti, trk.locked);
             markDirty();
         } else {
-            setExpanded(ti, !trk.expanded);
+            bool children = false;
+            for (const auto& child : tracks_) if (child.parent == ti) children = true;
+            if (children) setExpanded(ti, !trk.expanded);
+            setSelectedTrack(ti);
         }
         e.consumed = true;
         return;
     }
+    clearSelection();
     if (trk.locked) return;
     const auto rows = visibleTracks();
     int row = 0;
@@ -301,13 +407,16 @@ void Timeline::onMousePress(MouseEvent& e)
             onClipSelected.emit(ti, ci);
 
             if      (e.x < cx0 + 6)  dragMode_ = DragMode::ResizeClipL;
-            else if (e.x > cx1 - 6)  dragMode_ = DragMode::ResizeClipR;
+            else if (e.x > cx1 - 6)  dragMode_ = e.ctrl ? DragMode::StretchClipR : DragMode::ResizeClipR; // Ctrl: change the speed
             else                      dragMode_ = DragMode::MoveClip;
 
             dragTrack_    = ti;
             dragIndex_    = ci;
             dragOrigTime_ = trk.clips[ci].start;
             dragOrigEnd_  = trk.clips[ci].end;
+            dragOrigOffset_ = trk.clips[ci].offset;
+            dragOrigSpeed_  = trk.clips[ci].speed;
+            dragMoved_    = false;
             dragStartX_   = e.x;
             e.consumed    = true;
             return;
@@ -322,10 +431,17 @@ void Timeline::onMousePress(MouseEvent& e)
 
 void Timeline::onMouseRelease(MouseEvent& e)
 {
+    const bool edited = dragMoved_ && dragTrack_ >= 0 && dragIndex_ >= 0 &&
+        (dragMode_ == DragMode::MoveClip || dragMode_ == DragMode::ResizeClipL || dragMode_ == DragMode::ResizeClipR ||
+         dragMode_ == DragMode::StretchClipR);
+    const int editedTrack = dragTrack_;
+    const int editedClip = dragIndex_;
+    dragMoved_ = false;
     dragMode_  = DragMode::None;
     dragTrack_ = -1;
     dragIndex_ = -1;
     e.consumed = true;
+    if (edited) onClipEdited.emit(editedTrack, editedClip);
 }
 
 void Timeline::onMouseMove(MouseEvent& e)
@@ -356,26 +472,72 @@ void Timeline::onMouseMove(MouseEvent& e)
         break;
     }
     case DragMode::MoveClip: {
-        float dt = xToTime(e.x) - xToTime(dragStartX_);
+        const float dt = xToTime(e.x) - xToTime(dragStartX_);
+        const float len = dragOrigEnd_ - dragOrigTime_;
+        float start = dragOrigTime_ + dt;
+        const float snappedStart = snap(start, dragTrack_, dragIndex_);
+        if (snappedStart != start) start = snappedStart;
+        else start = snap(start + len, dragTrack_, dragIndex_) - len;
+        start = std::max(0.0f, start);
+        // Dragging onto another track of the same kind moves the clip there.
+        const int under = trackAtY(e.y);
+        if (under >= 0 && under != dragTrack_ && tracks_[under].kind == tracks_[dragTrack_].kind && !tracks_[under].locked) {
+            TimelineClip moved = tracks_[dragTrack_].clips[dragIndex_];
+            tracks_[dragTrack_].clips.erase(tracks_[dragTrack_].clips.begin() + dragIndex_);
+            tracks_[under].clips.push_back(moved);
+            dragTrack_ = under;
+            dragIndex_ = static_cast<int>(tracks_[under].clips.size()) - 1;
+        }
         auto& clip = tracks_[dragTrack_].clips[dragIndex_];
-        clip.start = dragOrigTime_ + dt;
-        clip.end   = dragOrigEnd_  + dt;
+        clip.start = start;
+        clip.end   = start + len;
+        dragMoved_ = true;
+        onClipChanged.emit(dragTrack_, dragIndex_);
         markDirty();
         e.consumed = true;
         break;
     }
     case DragMode::ResizeClipL: {
-        float dt = xToTime(e.x) - xToTime(dragStartX_);
+        const float dt = xToTime(e.x) - xToTime(dragStartX_);
         auto& clip = tracks_[dragTrack_].clips[dragIndex_];
-        clip.start = std::min(dragOrigTime_ + dt, clip.end - 0.01f);
+        float start = snap(dragOrigTime_ + dt, dragTrack_, dragIndex_);
+        // Trimming the head cannot reveal media before its first frame.
+        if (clip.sourceLength > 0) start = std::max(start, dragOrigTime_ - dragOrigOffset_ / clip.speed);
+        start = std::max(0.0f, std::min(start, clip.end - 0.04f));
+        if (clip.sourceLength > 0) clip.offset = dragOrigOffset_ + (start - dragOrigTime_) * clip.speed;
+        clip.start = start;
+        dragMoved_ = true;
+        onClipChanged.emit(dragTrack_, dragIndex_);
         markDirty();
         e.consumed = true;
         break;
     }
     case DragMode::ResizeClipR: {
-        float dt = xToTime(e.x) - xToTime(dragStartX_);
+        const float dt = xToTime(e.x) - xToTime(dragStartX_);
         auto& clip = tracks_[dragTrack_].clips[dragIndex_];
-        clip.end = std::max(dragOrigEnd_ + dt, clip.start + 0.01f);
+        float end = snap(dragOrigEnd_ + dt, dragTrack_, dragIndex_);
+        end = std::max(end, clip.start + 0.04f);
+        if (clip.sourceLength > 0) end = std::min(end, clip.start + (clip.sourceLength - clip.offset) / clip.speed);
+        clip.end = end;
+        dragMoved_ = true;
+        onClipChanged.emit(dragTrack_, dragIndex_);
+        markDirty();
+        e.consumed = true;
+        break;
+    }
+    case DragMode::StretchClipR: {
+        // The clip keeps the same piece of media but takes more or less time: that is the speed.
+        const float dt = xToTime(e.x) - xToTime(dragStartX_);
+        auto& clip = tracks_[dragTrack_].clips[dragIndex_];
+        const float used = (dragOrigEnd_ - dragOrigTime_) * dragOrigSpeed_; // seconds of media
+        float end = snap(dragOrigEnd_ + dt, dragTrack_, dragIndex_);
+        end = std::max(end, clip.start + 0.04f);
+        float speed = used / (end - clip.start);
+        speed = std::max(0.1f, std::min(8.0f, speed));
+        clip.speed = speed;
+        clip.end = clip.start + used / speed;
+        dragMoved_ = true;
+        onClipChanged.emit(dragTrack_, dragIndex_);
         markDirty();
         e.consumed = true;
         break;
@@ -383,6 +545,23 @@ void Timeline::onMouseMove(MouseEvent& e)
     case DragMode::None:
         break;
     }
+}
+
+void Timeline::onKeyPress(KeyEvent& e)
+{
+    onKeyPressed.emit(e.key, (e.shift ? 1 : 0) | (e.ctrl ? 2 : 0));
+    e.consumed = true;
+}
+
+bool Timeline::acceptsDrop(const DragPayload& p)
+{
+    (void)p;
+    return true;
+}
+
+void Timeline::onDropReceive(const DragPayload& p)
+{
+    onDrop.emit(p, trackAtY(p.dropY), xToTime(p.dropX));
 }
 
 void Timeline::onMouseScroll(MouseEvent& e)
@@ -473,8 +652,10 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
         char buf[16];
         if (fps_ > 0 && step < 1.0f)
             snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::round(t * fps_)));
+        else if (t >= 60.0f)
+            snprintf(buf, sizeof(buf), "%d:%02d", static_cast<int>(t) / 60, static_cast<int>(t) % 60);
         else
-            snprintf(buf, sizeof(buf), "%.2gs", t);
+            snprintf(buf, sizeof(buf), "%gs", std::round(t * 100.0f) / 100.0f);
 
         ctx.font.SetColor(Color(150, 152, 160, 200));
         ctx.font.Print(buf, x + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
@@ -515,7 +696,8 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         ctx.fillRect(b.x, ty, b.w, kTrackH);
 
         // Header area
-        ctx.fill.SetColor(36, 38, 44, 255);
+        if (ti == selectedTrack_) ctx.fill.SetColor(52, 60, 80, 255);
+        else                      ctx.fill.SetColor(36, 38, 44, 255);
         ctx.fillRect(b.x, ty, kHeaderW, kTrackH);
 
         // Track name — vertically centred in track header
@@ -571,6 +753,31 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             ctx.fillRect(cx0,         clipY + clipH - 1, cx1 - cx0, 1);
             ctx.fillRect(cx0,         clipY,             1,         clipH);
             ctx.fillRect(cx1 - 1,     clipY,             1,         clipH);
+
+            // Envelope: the curve of the clip (volume), over the media's time
+            if (!clip.envelope.empty() && clip.envelopeMax > clip.envelopeMin) {
+                ctx.fill.SetColor(255, 255, 255, 230);
+                const float x0 = std::max(cx0, b.x + kHeaderW);
+                const float x1 = std::min(cx1, b.x + b.w);
+                float px = 0, py = 0;
+                for (float x = x0; x <= x1 + 2.0f; x += 2.0f) {
+                    const float xs = std::min(x, x1);
+                    const float t = xToTime(xs);
+                    const float v = CurveEditor::evaluateKeys(clip.envelope, clip.offset + (t - clip.start) * clip.speed);
+                    const float f = std::max(0.0f, std::min(1.0f, (v - clip.envelopeMin) / (clip.envelopeMax - clip.envelopeMin)));
+                    const float y = clipY + clipH - 2.0f - f * (clipH - 4.0f);
+                    if (x > x0) {
+                        const float dx = xs - px, dy = y - py;
+                        const float len = std::sqrt(dx * dx + dy * dy);
+                        if (len > 0.1f) {
+                            const float nx = -dy / len * 0.6f, ny = dx / len * 0.6f;
+                            ctx.fillTriangle(px + nx, py + ny, px - nx, py - ny, xs - nx, y - ny);
+                            ctx.fillTriangle(px + nx, py + ny, xs - nx, y - ny, xs + nx, y + ny);
+                        }
+                    }
+                    px = xs; py = y;
+                }
+            }
 
             // Clip label
             if (!clip.label.empty() && cx1 - cx0 > 30) {

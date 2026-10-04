@@ -2,6 +2,7 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
+#include "ChartWidgets.hpp"
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
@@ -38,6 +39,20 @@ struct TimelineClip {
     String label;
     Color       color    = Color(80, 120, 180, 200);
     bool        selected = false;
+
+    // The timeline only carries these; the application gives them meaning.
+    int   id           = -1;   // unique in the timeline, set by addClip
+    int   media        = -1;   // what the clip plays
+    float offset       = 0;    // where in the media the clip starts (seconds)
+    float speed        = 1;    // how fast the media plays: it takes (length / speed) seconds on the timeline per second of media
+    float sourceLength = 0;    // length of the media, 0 = unlimited (limits trimming)
+    int   link         = -1;   // clips sharing a link are moved and trimmed together
+    int   user         = -1;
+    // A curve over the media's own time (seconds), drawn on the clip between envelopeMin and envelopeMax.
+    ct::Vector<CurveKey> envelope;
+    float envelopeMin  = -40;
+    float envelopeMax  = 12;
+    float params[4]    = {0, 0, 0, 0}; // free for the application (effects, volume); copied when a clip is split
 };
 
 /// What a track carries; the timeline draws the same, the application decides.
@@ -80,8 +95,13 @@ public:
     int  addTrack(const String& name, TrackKind kind);
     /// @brief Mute or unmute a track (emits onTrackMuteChanged).
     void setTrackMuted(int trackId, bool muted);
+    /// @brief Insert a track of a kind at a row (0 = top). Later track ids move down by one.
+    int  insertTrack(int index, const String& name, TrackKind kind);
     /// @brief Remove a track by ID.
     void removeTrack(int trackId);
+    /// @brief The track whose header was clicked, -1 if none.
+    int  selectedTrack() const { return selectedTrack_; }
+    void setSelectedTrack(int trackId);
     /// @brief Remove all tracks.
     void clearTracks();
 
@@ -103,6 +123,16 @@ public:
                  const Color& color = Color(80, 120, 180, 200));
     /// @brief Remove a clip by index.
     void removeClip(int trackId, int clipIdx);
+    /// @brief Cut a clip in two at time t. Returns the index of the second part (-1 if t is not inside).
+    int  splitClip(int trackId, int clipIdx, float t);
+    /// @brief The first selected clip. False when none is selected.
+    bool selectedClip(int& trackId, int& clipIdx) const;
+    void clearSelection();
+    /// @brief First clip on the track covering time t, or -1. Later clips win.
+    int  clipAt(int trackId, float t) const;
+    /// @brief Snap clip edges to other clips, the playhead and zero while dragging.
+    void setSnapping(bool on) { snapping_ = on; }
+    bool snapping() const { return snapping_; }
 
     /// @brief Set the playhead position in seconds.
     void  setPlayhead(float t) { playhead_ = t; markDirty(); }
@@ -130,6 +160,16 @@ public:
     Signal<int, int> onKeyframeSelected;
     /// @brief Emitted when a clip is selected.
     Signal<int, int> onClipSelected;
+    /// @brief A clip moved or was trimmed. Emitted on every step of the drag.
+    Signal<int, int> onClipChanged;
+    /// @brief The drag that moved or trimmed a clip ended. Track and clip index.
+    Signal<int, int> onClipEdited;
+    /// @brief A track header was clicked (-1: selection cleared).
+    Signal<int> onTrackSelected;
+    /// @brief A key pressed while the timeline has focus (key, modifiers: 1 shift, 2 ctrl); the application decides what it does.
+    Signal<int, int> onKeyPressed;
+    /// @brief Something dragged from another widget was dropped: payload, track under it (-1 if none) and time.
+    Signal<const DragPayload&, int, float> onDrop;
 
     // ── Overrides ────────────────────────────────────────────────────────
     void paint(PaintContext& ctx) override;
@@ -137,6 +177,9 @@ public:
     void onMouseRelease(MouseEvent& e) override;
     void onMouseMove(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
+    bool acceptsDrop(const DragPayload& p) override;
+    void onDropReceive(const DragPayload& p) override;
 
 private:
     ct::Vector<TimelineTrack> tracks_;
@@ -154,7 +197,7 @@ private:
     static constexpr float kRulerH  = 24;
 
     // Interaction state
-    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR };
+    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR, StretchClipR };
     DragMode dragMode_      = DragMode::None;
     float    dragStartX_    = 0;
     float    panStartView_  = 0;
@@ -163,6 +206,14 @@ private:
     int      dragIndex_     = -1;
     float    dragOrigTime_  = 0;
     float    dragOrigEnd_   = 0;
+    float    dragOrigOffset_ = 0;
+    float    dragOrigSpeed_ = 1;
+    bool     dragMoved_     = false;
+    bool     snapping_      = true;
+    int      nextClipId_    = 0;
+    int      selectedTrack_ = -1;
+
+    float snap(float t, int track, int clip) const;
 
     // ── Helpers ──────────────────────────────────────────────────────────
     float timeToX(float t) const;
