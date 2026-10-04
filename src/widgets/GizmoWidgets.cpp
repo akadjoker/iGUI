@@ -535,15 +535,33 @@ GizmoAxis3D Gizmo3D::hitTest(float mx, float my) const
                 u = normal.cross(Vec3f(0,1,0)).normalized();
             v = normal.cross(u);
 
-            int segs = 36;
+            // The distance is to the ring itself, not to the nearest of a
+            // handful of points on it: sampling the circle left the gaps between
+            // two samples dead, so a ring was only grabbable in 36 places.
+            const int segs = 48;
             float bestRingDist = 9999.0f;
-            for (int s = 0; s < segs; ++s) {
+            Pt2 previous = project(targetPos_ + (u * std::cos(0.0f) + v * std::sin(0.0f)) * scale);
+            for (int s = 1; s <= segs; ++s) {
                 float a0 = (float(s) / segs) * 2.0f * kPi;
                 Vec3f rp = targetPos_ + (u * std::cos(a0) + v * std::sin(a0)) * scale;
                 Pt2 sp = project(rp);
-                float dx = mx - sp.x, dy = my - sp.y;
-                float d = std::sqrt(dx*dx + dy*dy);
-                if (d < bestRingDist) bestRingDist = d;
+                if (std::fabs(sp.x) < 9000.0f && std::fabs(previous.x) < 9000.0f) {
+                    const float segX = sp.x - previous.x, segY = sp.y - previous.y;
+                    const float segLen2 = segX*segX + segY*segY;
+                    float d = 0.0f;
+                    if (segLen2 > 1e-6f) {
+                        float t = ((mx - previous.x)*segX + (my - previous.y)*segY) / segLen2;
+                        t = clamp(t, 0.0f, 1.0f);
+                        const float offX = previous.x + segX*t - mx;
+                        const float offY = previous.y + segY*t - my;
+                        d = std::sqrt(offX*offX + offY*offY);
+                    } else {
+                        const float offX = sp.x - mx, offY = sp.y - my;
+                        d = std::sqrt(offX*offX + offY*offY);
+                    }
+                    if (d < bestRingDist) bestRingDist = d;
+                }
+                previous = sp;
             }
             if (bestRingDist < hitR) return axisIds[i];
         }

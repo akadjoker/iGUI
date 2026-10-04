@@ -2,6 +2,7 @@
 #include <igui/widgets/CodeEditor.hpp>
 #include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/Theme.hpp>
+#include <igui/widgets/GizmoWidgets.hpp>
 
 #include <cassert>
 #include <cmath>
@@ -221,6 +222,105 @@ static void test_fader_takes_a_press_anywhere()
     across.onMouseRelease(press);
 }
 
+// A 3D gizmo is grabbed by the handle under the pointer, and the drag has to
+// move the target on that axis alone. The camera looks down the Z axis, so the
+// X handle runs right from the centre and the Z ring is the ellipse the test
+// clicks.
+static void test_gizmo3d_grabs_the_handle_under_the_pointer()
+{
+    const float view[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1};
+    const float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    const float position[3] = {0.0f, 0.0f, 0.0f};
+    const float rotation[3] = {0.0f, 0.0f, 0.0f};
+    const float scale[3] = {1.0f, 1.0f, 1.0f};
+
+    ig::retained::Gizmo3D gizmo;
+    gizmo.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    gizmo.setViewProjection(view, projection, 400, 300);
+    gizmo.setTarget(position, rotation, scale);
+    // The camera sits four units away, so the handles measure 50 * 4 / 300 world
+    // units and the X one ends 133 pixels right of the centre at (200, 150).
+    gizmo.setScreenScale(50.0f);
+    gizmo.setMode(ig::retained::GizmoMode3D::Translate);
+
+    ig::MouseEvent press;
+    press.button = 0;
+    press.x = 280.0f;
+    press.y = 150.0f;
+    gizmo.onMousePress(press);
+    assert(gizmo.isDragging());
+    assert(gizmo.activeAxis() == ig::retained::GizmoAxis3D::X);
+
+    ig::MouseEvent move;
+    move.button = 0;
+    move.x = 300.0f;
+    move.y = 150.0f;
+    gizmo.onMouseMove(move);
+    assert(gizmo.targetPosition().x > 0.25f && gizmo.targetPosition().x < 0.28f);
+    assert(gizmo.targetPosition().y == 0.0f && gizmo.targetPosition().z == 0.0f);
+    gizmo.onMouseRelease(move);
+    assert(!gizmo.isDragging());
+
+    // A press away from every handle grabs nothing.
+    ig::MouseEvent away;
+    away.button = 0;
+    away.x = 380.0f;
+    away.y = 280.0f;
+    gizmo.onMousePress(away);
+    assert(!gizmo.isDragging());
+
+    // Scale takes the axis it was grabbed on too.
+    gizmo.setMode(ig::retained::GizmoMode3D::Scale);
+    gizmo.onMousePress(press);
+    assert(gizmo.isDragging());
+    gizmo.onMouseMove(move);
+    assert(gizmo.targetScale().x > 1.05f);
+    assert(gizmo.targetScale().y == 1.0f && gizmo.targetScale().z == 1.0f);
+    gizmo.onMouseRelease(move);
+
+    // The rotation rings are curves, not a ring of sample points: a press
+    // between two samples of the same ring has to take hold as well. The target
+    // goes back to the origin first, so the ring is where the test expects it.
+    gizmo.setTarget(position, rotation, scale);
+    gizmo.setMode(ig::retained::GizmoMode3D::Rotate);
+    // The Z ring projects to the ellipse 133 by 100 pixels around the centre.
+    // These are points on it at 30 and 55 degrees round the centre, so the drag
+    // turns the target by the 25 degrees between them - and 45 degrees, which is
+    // between two of the samples the ring used to be tested at, has to be on the
+    // ring as well.
+    const auto ringPoint = [](float degrees, float &x, float &y) {
+        const float radians = degrees * 3.14159265f / 180.0f;
+        const float cosine = std::cos(radians);
+        const float sine = std::sin(radians);
+        const float radius = 1.0f / std::sqrt(cosine * cosine / (133.0f * 133.0f) +
+                                              sine * sine / (100.0f * 100.0f));
+        x = 200.0f + radius * cosine;
+        y = 150.0f + radius * sine;
+    };
+
+    ig::MouseEvent between;
+    between.button = 0;
+    ringPoint(45.0f, between.x, between.y);
+    gizmo.onMousePress(between);
+    assert(gizmo.isDragging());
+    assert(gizmo.activeAxis() == ig::retained::GizmoAxis3D::Z);
+    gizmo.onMouseRelease(between);
+
+    ig::MouseEvent ring;
+    ring.button = 0;
+    ringPoint(30.0f, ring.x, ring.y);
+    gizmo.onMousePress(ring);
+    assert(gizmo.activeAxis() == ig::retained::GizmoAxis3D::Z);
+
+    ig::MouseEvent along;
+    along.button = 0;
+    ringPoint(55.0f, along.x, along.y);
+    gizmo.onMouseMove(along);
+    assert(gizmo.targetRotation().z > 24.5f && gizmo.targetRotation().z < 25.5f);
+    assert(gizmo.targetRotation().x == 0.0f && gizmo.targetRotation().y == 0.0f);
+    gizmo.onMouseRelease(along);
+}
+
 // The fader takes its accent from the caller like the knob does: with none set
 // it follows the theme rather than fixing a colour of its own.
 static void test_fader_accent_comes_from_the_caller()
@@ -278,6 +378,7 @@ int main()
     test_knob_accent_comes_from_the_caller();
     test_fader_takes_a_press_anywhere();
     test_fader_accent_comes_from_the_caller();
+    test_gizmo3d_grabs_the_handle_under_the_pointer();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

@@ -22,7 +22,8 @@ namespace
 const ig::StringView kSections[] = {
     ig::StringView("Basic"), ig::StringView("Inputs"), ig::StringView("Lists"),
     ig::StringView("Layout"), ig::StringView("Windows"), ig::StringView("Menus"),
-    ig::StringView("Icons"), ig::StringView("Synth"), ig::StringView("Code")
+    ig::StringView("Icons"), ig::StringView("Synth"), ig::StringView("Gizmos"),
+    ig::StringView("Code")
 };
 const ig::StringView kVoicePages[] = {
     ig::StringView("Oscillator"), ig::StringView("Filter"),
@@ -71,6 +72,30 @@ const char *kSample =
     "    }\n"
     "    return 0;\n"
     "}\n";
+
+/* A camera at `eye` looking at the origin, in the column-major order the 3D
+   gizmo's matrices use. The axis handles are measured from the camera distance,
+   so the eye has to be away from the target or they collapse to nothing. */
+void lookAtOrigin(float *out, float ex, float ey, float ez)
+{
+    const float length = std::sqrt(ex * ex + ey * ey + ez * ez);
+    const float forward[3] = {ex / length, ey / length, ez / length};
+    float right[3] = {forward[2], 0.0f, -forward[0]};
+    const float rightLength = std::sqrt(right[0] * right[0] + right[2] * right[2]);
+    right[0] /= rightLength;
+    right[2] /= rightLength;
+    const float up[3] = {forward[1] * right[2] - forward[2] * right[1],
+                         forward[2] * right[0] - forward[0] * right[2],
+                         forward[0] * right[1] - forward[1] * right[0]};
+    out[0] = right[0];  out[4] = right[1];  out[8]  = right[2];
+    out[12] = -(right[0] * ex + right[1] * ey + right[2] * ez);
+    out[1] = up[0];     out[5] = up[1];     out[9]  = up[2];
+    out[13] = -(up[0] * ex + up[1] * ey + up[2] * ez);
+    out[2] = forward[0]; out[6] = forward[1]; out[10] = forward[2];
+    out[14] = -(forward[0] * ex + forward[1] * ey + forward[2] * ez);
+    out[3] = 0.0f;      out[7] = 0.0f;      out[11] = 0.0f;
+    out[15] = 1.0f;
+}
 
 ig::String numbered(const char *prefix, int value, const char *suffix = "")
 {
@@ -163,6 +188,11 @@ struct Gallery
     bool sortAscending = true;
     int firstRow = 0;
     int lastRow = 0;
+    int virtualItem = -1;
+    ig::Transform3D gizmoTransform;
+    ig::Gizmo3DMode gizmoMode = ig::Gizmo3DMode::Translate;
+    int gizmoDrags = 0;
+    ig::String gizmoLastChange = "none";
     ig::CodeEditorState code;
 };
 
@@ -317,14 +347,23 @@ void listsSection(ig::Context &ui)
     }
 
     ui.separatorText("Virtual list, 10000 items");
+    // Only the rows on screen are submitted, each one placed with the rect the
+    // list hands out. Letting the layout stack them instead pins them to the top
+    // of the child, so the list looks frozen while the scrollbar moves.
     if (ui.beginVirtualList("virtual", 10000, 20.0f, 160.0f, g.firstRow, g.lastRow, true, 300.0f))
     {
         for (int i = g.firstRow; i < g.lastRow; ++i)
         {
-            ui.selectable(numbered("item ", i), false, 0.0f);
+            ui.pushId(static_cast<uint64_t>(i));
+            if (ui.selectable(numbered("item ", i), g.virtualItem == i, ui.virtualListItemRect(i)))
+                g.virtualItem = i;
+            ui.popId();
         }
         ui.endVirtualList();
     }
+    ui.label(numbered("rows drawn: ", g.lastRow - g.firstRow));
+    ui.sameLine();
+    ui.label(numbered("selected: ", g.virtualItem));
 }
 
 void layoutSection(ig::Context &ui)
@@ -618,6 +657,71 @@ void synthSection(ig::Context &ui)
                               : "Every page reuses the same knob.");
 }
 
+void gizmoSection(ig::Context &ui)
+{
+    ui.separatorText("3D transform gizmo");
+    ui.label("Drag a handle: a ring turns, an arrow slides, a square scales.");
+
+    for (int i = 0; i < 3; ++i)
+    {
+        if (i)
+            ui.sameLine();
+        const ig::Gizmo3DMode mode = static_cast<ig::Gizmo3DMode>(i);
+        ig::String label = i == 0 ? "translate" : (i == 1 ? "rotate" : "scale");
+        if (g.gizmoMode == mode)
+            label += " *";
+        if (ui.smallButton(label))
+            g.gizmoMode = mode;
+    }
+    ui.spacing(6.0f);
+
+    const float width = 440.0f;
+    const float height = 300.0f;
+    const ig::Vec2 canvas = ui.cursor();
+    const float identity[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    float view[16];
+    lookAtOrigin(view, 3.0f, 2.2f, 3.0f);
+
+    // The canvas the gizmo draws on, so the handles are visible against it.
+    ui.drawRectFilled(ig::Rect(canvas.x, canvas.y, width, height), ig::Color(24u, 27u, 34u, 255u));
+    ui.drawRect(ig::Rect(canvas.x, canvas.y, width, height), ui.theme().borderColor);
+
+    ig::Gizmo3DOptions options;
+    options.axisLength = 0.45f;
+    options.translateSnap = 0.1f;
+    options.rotateSnap = 15.0f;
+    options.scaleSnap = 0.1f;
+    if (ui.gizmo3D("transform", g.gizmoTransform, g.gizmoMode,
+                   ig::Rect(canvas.x, canvas.y, width, height), view, identity, options))
+    {
+        ++g.gizmoDrags;
+        char buffer[96];
+        std::snprintf(buffer, sizeof buffer, "pos %.2f %.2f %.2f  rot %.0f %.0f %.0f  scale %.2f %.2f %.2f",
+                      static_cast<double>(g.gizmoTransform.position.x),
+                      static_cast<double>(g.gizmoTransform.position.y),
+                      static_cast<double>(g.gizmoTransform.position.z),
+                      static_cast<double>(g.gizmoTransform.rotation.x),
+                      static_cast<double>(g.gizmoTransform.rotation.y),
+                      static_cast<double>(g.gizmoTransform.rotation.z),
+                      static_cast<double>(g.gizmoTransform.scale.x),
+                      static_cast<double>(g.gizmoTransform.scale.y),
+                      static_cast<double>(g.gizmoTransform.scale.z));
+        g.gizmoLastChange = buffer;
+    }
+    ui.spacing(height + 8.0f);
+
+    ui.label(g.gizmoLastChange);
+    ig::String drags = numbered("changes: ", g.gizmoDrags);
+    ui.sameLine();
+    ui.label(drags);
+    if (ui.smallButton("reset"))
+    {
+        g.gizmoTransform = ig::Transform3D();
+        g.gizmoLastChange = "reset";
+        g.gizmoDrags = 0;
+    }
+}
+
 void codeSection(ig::Context &ui, const ig::Rect &bounds)
 {
     ui.codeEditor("code", g.code, bounds);
@@ -670,6 +774,7 @@ void frame(void *)
             case 5: menusSection(ui); break;
             case 6: iconsSection(ui); break;
             case 7: synthSection(ui); break;
+            case 8: gizmoSection(ui); break;
             default:
             {
                 int width = 0;

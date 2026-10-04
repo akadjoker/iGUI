@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 
 #include <igui/Gui.hpp>
@@ -1874,7 +1875,8 @@ static void test_gizmo2d_transform_handles()
     assert(transform.scale.y == 1.0f);
 }
 
-static bool drawGizmo3D(ig::Context &context, ig::Transform3D &transform)
+static bool drawGizmo3D(ig::Context &context, ig::Transform3D &transform,
+                        ig::Gizmo3DMode mode = ig::Gizmo3DMode::Translate)
 {
     const float identity[16] = {
         1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1
@@ -1882,30 +1884,92 @@ static bool drawGizmo3D(ig::Context &context, ig::Transform3D &transform)
     ig::Gizmo3DOptions options;
     options.axisLength = 0.4f;
     assert(context.beginWindow("gizmo 3d canvas", ig::Rect(10.0f, 10.0f, 300.0f, 220.0f)));
-    const bool changed = context.gizmo3D("cube", transform, ig::Gizmo3DMode::Translate,
+    const bool changed = context.gizmo3D("cube", transform, mode,
                                          ig::Rect(8.0f, 8.0f, 240.0f, 160.0f),
                                          identity, identity, options);
     context.endWindow();
     return changed;
 }
 
+// One frame with the queued pointer events applied first, the way the gallery
+// runs: the transform moves on the drag, not on the press that takes hold.
+static bool gizmo3DFrame(ig::Context &context, ig::Transform3D &transform,
+                         ig::Gizmo3DMode mode = ig::Gizmo3DMode::Translate)
+{
+    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
+    const bool changed = drawGizmo3D(context, transform, mode);
+    context.endFrame();
+    return changed;
+}
+
+// Press a handle, drag it and let go, each in its own frame.
+static bool gizmo3DDrag(ig::Context &context, ig::Transform3D &transform,
+                        float fromX, float fromY, float toX, float toY,
+                        ig::Gizmo3DMode mode = ig::Gizmo3DMode::Translate)
+{
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fromX, fromY));
+    assert(!gizmo3DFrame(context, transform, mode));
+    context.pushEvent(ig::Event::pointerMove(toX, toY));
+    const bool changed = gizmo3DFrame(context, transform, mode);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, toX, toY));
+    gizmo3DFrame(context, transform, mode);
+    return changed;
+}
+
+// The gizmo projects its handles through the caller's matrices, so the handles
+// of the identity camera sit where the projection puts them: the X one 48
+// pixels right of the centre at (146, 130), the Y one 32 pixels above it, and
+// the Z ring an ellipse 48 by 32 around it. A press grabs one handle - or none -
+// and the drag moves the target along that one axis.
 static void test_gizmo3d_transform_handles()
 {
     WidgetBackend backend;
     ig::Context context(backend);
     ig::Transform3D transform;
 
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 175.0f, 130.0f));
-    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
-    assert(!drawGizmo3D(context, transform));
-    context.endFrame();
+    // The whole canvas is deselected first: nothing moves until a handle is hit.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    assert(!gizmo3DFrame(context, transform));
+    context.pushEvent(ig::Event::pointerMove(40.0f, 60.0f));
+    assert(!gizmo3DFrame(context, transform));
+    assert(transform.position.x == 0.0f && transform.position.y == 0.0f);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 60.0f));
+    gizmo3DFrame(context, transform);
 
-    context.pushEvent(ig::Event::pointerMove(185.0f, 130.0f));
-    context.beginFrame(ig::FrameInfo(360.0f, 260.0f));
-    assert(drawGizmo3D(context, transform));
-    context.endFrame();
+    // The X handle: ten pixels right is ten pixels worth of its projected
+    // length, and y and z stay where they were.
+    assert(gizmo3DDrag(context, transform, 175.0f, 130.0f, 185.0f, 130.0f));
     assert(transform.position.x > 0.07f && transform.position.x < 0.10f);
+    assert(transform.position.y == 0.0f && transform.position.z == 0.0f);
+
+    // The Y handle runs upwards, so an upward drag raises y and leaves x alone.
+    ig::Transform3D upward;
+    assert(gizmo3DDrag(context, upward, 146.0f, 100.0f, 146.0f, 90.0f));
+    assert(upward.position.y > 0.12f && upward.position.y < 0.13f);
+    assert(upward.position.x == 0.0f && upward.position.z == 0.0f);
+
+    // Scale takes the axis it was grabbed on: the X handle, so x alone grows.
+    ig::Transform3D scaled;
+    assert(gizmo3DDrag(context, scaled, 175.0f, 130.0f, 185.0f, 130.0f, ig::Gizmo3DMode::Scale));
+    assert(scaled.scale.x > 1.04f && scaled.scale.x < 1.06f);
+    assert(scaled.scale.y == 1.0f && scaled.scale.z == 1.0f);
+
+    // Rotation turns the target by the angle the pointer sweeps around the
+    // centre, on the axis whose ring was grabbed: the Z ring, with the press
+    // between two of the segments it is built from.
+    ig::Transform3D turned;
+    const float ringX = 146.0f + 48.0f * cosf(0.7f);
+    const float ringY = 130.0f - 32.0f * sinf(0.7f);
+    const float sweptX = 146.0f + 48.0f * cosf(1.1f);
+    const float sweptY = 130.0f - 32.0f * sinf(1.1f);
+    const float expected = (atan2f(sweptY - 130.0f, sweptX - 146.0f) -
+                            atan2f(ringY - 130.0f, ringX - 146.0f)) * 180.0f / 3.14159265f;
+    assert(gizmo3DDrag(context, turned, ringX, ringY, sweptX, sweptY, ig::Gizmo3DMode::Rotate));
+    assert(turned.rotation.z > expected - 0.5f && turned.rotation.z < expected + 0.5f);
+    assert(turned.rotation.x == 0.0f && turned.rotation.y == 0.0f);
+    assert(turned.position.x == 0.0f && turned.position.y == 0.0f && turned.position.z == 0.0f);
 }
+
 
 class DialogProvider : public ig::FileDialogProvider
 {
