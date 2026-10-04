@@ -293,6 +293,8 @@ const char* iconGlyph(IconId id)
     case IconId::Scissors:    return "\u2702"; // ✂
     case IconId::Import:      return "\u21e9"; // ⇩
     case IconId::Magnet:      return "\u2229"; // ∩
+    case IconId::MarkIn:      return "[";
+    case IconId::MarkOut:     return "]";
     case IconId::None:
     case IconId::COUNT:       return nullptr;
     }
