@@ -292,6 +292,58 @@ static ig::Color colorAtTopVertex(const ig::DrawData &data, float x, float y)
     return ig::Color(0u, 0u, 0u, 0u);
 }
 
+static void test_checkbox_tick_is_filled_inside_the_box()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    const ig::Color mark = context.theme().checkMark;
+
+    bool checked = false;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.endWindow();
+    const ig::DrawData &uncheckedData = context.endFrame();
+    for (size_t i = 0u; i < uncheckedData.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = uncheckedData.vertices[i];
+        assert(!(vertex.color.r == mark.r && vertex.color.g == mark.g &&
+                 vertex.color.b == mark.b && vertex.color.a == mark.a));
+    }
+
+    // Checked: the box keeps the input colour and the tick is filled inside it,
+    // the way the retained-mode CheckBox draws it.
+    checked = true;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.endWindow();
+    const ig::DrawData &checkedData = context.endFrame();
+
+    bool foundMark = false;
+    float minX = 1e9f;
+    float minY = 1e9f;
+    float maxX = -1e9f;
+    float maxY = -1e9f;
+    for (size_t i = 0u; i < checkedData.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = checkedData.vertices[i];
+        if (vertex.color.r == mark.r && vertex.color.g == mark.g &&
+            vertex.color.b == mark.b && vertex.color.a == mark.a)
+        {
+            foundMark = true;
+            minX = vertex.position.x < minX ? vertex.position.x : minX;
+            minY = vertex.position.y < minY ? vertex.position.y : minY;
+            maxX = vertex.position.x > maxX ? vertex.position.x : maxX;
+            maxY = vertex.position.y > maxY ? vertex.position.y : maxY;
+        }
+    }
+    assert(foundMark);
+    // The tick sits inside the 16x16 box of the 18x18 widget, not over it: the
+    // box keeps the input colour and only the mark is filled with the mark colour.
+    assert(minX >= 30.0f && minY >= 54.0f && maxX <= 40.0f && maxY <= 64.0f);
+}
+
 // Colour of the first vertex found at (x, y), or a sentinel when none is there.
 // Same rationale as hasVertexAt: locate the widget by where it is drawn, not by
 // its index in the buffer.
@@ -880,6 +932,7 @@ int main()
     test_button_click();
     test_button_release_outside_does_not_click();
     test_checkbox();
+    test_checkbox_tick_is_filled_inside_the_box();
     test_focus_lost_cancels_capture();
     test_draw_primitives();
     test_rounded_rect_geometry();

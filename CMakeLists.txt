@@ -113,6 +113,8 @@ if(IGUI_BUILD_TESTS)
 
     if(IGUI_BUILD_IMMEDIATE)
         add_executable(igui_widget_gallery_tests tests/test_widgets.cpp)
+        # The gallery test drives the same synth knob the web gallery shows.
+        target_include_directories(igui_widget_gallery_tests PRIVATE examples/synth_demo)
         target_link_libraries(igui_widget_gallery_tests PRIVATE igui)
         add_test(NAME igui_widget_gallery COMMAND igui_widget_gallery_tests)
 
@@ -447,6 +449,9 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
 
         if(IGUI_BUILD_IMMEDIATE)
             add_executable(igui_web_immediate examples/web/immediate_gallery.cpp)
+            # The synth gallery section uses the same knob the synth demo draws,
+            # so the two stay the same widget instead of drifting apart.
+            target_include_directories(igui_web_immediate PRIVATE examples/synth_demo)
             target_link_libraries(igui_web_immediate PRIVATE igui_sdl2 igui)
             target_link_options(igui_web_immediate PRIVATE ${IGUI_WEB_LINK_OPTIONS})
             set_target_properties(igui_web_immediate PROPERTIES

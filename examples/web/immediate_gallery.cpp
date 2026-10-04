@@ -4,20 +4,45 @@
 #include <igui/CodeEditor.hpp>
 #include <igui_sdl2/SdlBackend.hpp>
 
+#include "SynthWidgets.hpp"
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <emscripten/html5.h>
 #endif
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <vector>
 
 namespace
 {
 const ig::StringView kSections[] = {
     ig::StringView("Basic"), ig::StringView("Inputs"), ig::StringView("Lists"),
-    ig::StringView("Layout"), ig::StringView("Windows"), ig::StringView("Code")
+    ig::StringView("Layout"), ig::StringView("Windows"), ig::StringView("Menus"),
+    ig::StringView("Icons"), ig::StringView("Synth"), ig::StringView("Code")
+};
+const ig::StringView kVoicePages[] = {
+    ig::StringView("Oscillator"), ig::StringView("Filter"),
+    ig::StringView("Envelope"), ig::StringView("FX")
+};
+
+const int kIconCount = 6;
+const char *const kIconNames[kIconCount] = {
+    "icon play", "icon pause", "icon stop", "icon plus", "icon minus", "icon record"
+};
+
+// The accent presets the synth section offers, so a voice can pick its colour.
+const int kAccentCount = 6;
+const char *const kAccentNames[kAccentCount] = {
+    "cyan", "teal", "amber", "orange", "violet", "green"
+};
+const ig::Color kAccents[kAccentCount] = {
+    ig::Color(96u, 212u, 255u, 255u), ig::Color(80u, 210u, 180u, 255u),
+    ig::Color(240u, 200u, 90u, 255u), ig::Color(245u, 150u, 60u, 255u),
+    ig::Color(170u, 130u, 240u, 255u), ig::Color(120u, 230u, 130u, 255u)
 };
 const ig::StringView kQuality[] = {
     ig::StringView("low"), ig::StringView("medium"), ig::StringView("high")
@@ -50,6 +75,34 @@ ig::String numbered(const char *prefix, int value, const char *suffix = "")
     return ig::String(buffer);
 }
 
+/* A white shape on transparent pixels, tinted by the image button. */
+bool iconShape(int kind, int x, int y, int size)
+{
+    const float fx = (static_cast<float>(x) + 0.5f) / static_cast<float>(size);
+    const float fy = (static_cast<float>(y) + 0.5f) / static_cast<float>(size);
+    switch (kind)
+    {
+        case 0: /* play */
+            return fx >= 0.30f && fx <= 0.74f && std::fabs(fy - 0.5f) <= (0.74f - fx) * 0.72f;
+        case 1: /* pause */
+            return ((fx >= 0.30f && fx <= 0.43f) || (fx >= 0.57f && fx <= 0.70f)) &&
+                   fy >= 0.24f && fy <= 0.76f;
+        case 2: /* stop */
+            return fx >= 0.28f && fx <= 0.72f && fy >= 0.28f && fy <= 0.72f;
+        case 3: /* plus */
+            return (std::fabs(fx - 0.5f) <= 0.32f && std::fabs(fy - 0.5f) <= 0.08f) ||
+                   (std::fabs(fy - 0.5f) <= 0.32f && std::fabs(fx - 0.5f) <= 0.08f);
+        case 4: /* minus */
+            return std::fabs(fx - 0.5f) <= 0.32f && std::fabs(fy - 0.5f) <= 0.08f;
+        default: /* record */
+        {
+            const float dx = fx - 0.5f;
+            const float dy = fy - 0.5f;
+            return dx * dx + dy * dy <= 0.13f;
+        }
+    }
+}
+
 struct Gallery
 {
     SDL_Window *window = nullptr;
@@ -80,6 +133,26 @@ struct Gallery
     bool treeOpen = true;
     bool dialogOpen = false;
     bool floatingOpen = false;
+    int menuActions = 0;
+    int contextActions = 0;
+    int behindClicks = 0;
+    int dialogClicks = 0;
+    float behindSlider = 0.5f;
+    bool behindCheck = false;
+    bool dialogCheck = false;
+    bool gridChecked = true;
+    ig::String lastAction = "none";
+    SDL_Texture *icons[kIconCount] = {};
+    ig::TextureId iconIds[kIconCount] = {};
+    int iconClicks = 0;
+    bool playing = false;
+    ig::String lastIcon = "none";
+    float voiceVolume = 0.9f;
+    float voicePan = 0.0f;
+    float voiceTune = 0.0f;
+    int voicePage = 0;
+    ig::Color voiceAccent = ig::Color(96, 212, 255, 255);
+    bool accentFromTheme = false;
     int sortColumn = -1;
     bool sortAscending = true;
     int firstRow = 0;
@@ -88,6 +161,41 @@ struct Gallery
 };
 
 Gallery g;
+
+bool buildIcons(SDL_Renderer *renderer)
+{
+    const int size = 24;
+    std::vector<unsigned char> pixels(static_cast<size_t>(size) * static_cast<size_t>(size) * 4u);
+    for (int kind = 0; kind < kIconCount; ++kind)
+    {
+        for (int y = 0; y < size; ++y)
+        {
+            for (int x = 0; x < size; ++x)
+            {
+                unsigned char *pixel = &pixels[static_cast<size_t>((y * size + x) * 4)];
+                const unsigned char value = iconShape(kind, x, y, size) ? 255u : 0u;
+                pixel[0] = value;
+                pixel[1] = value;
+                pixel[2] = value;
+                pixel[3] = value;
+            }
+        }
+        SDL_Texture *texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                                                 SDL_TEXTUREACCESS_STATIC, size, size);
+        if (!texture)
+            return false;
+        if (SDL_UpdateTexture(texture, nullptr, pixels.data(), size * 4) != 0 ||
+            SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND) != 0)
+        {
+            SDL_DestroyTexture(texture);
+            return false;
+        }
+        SDL_SetTextureScaleMode(texture, SDL_ScaleModeLinear);
+        g.icons[kind] = texture;
+        g.iconIds[kind] = ig::sdl2::textureId(texture);
+    }
+    return true;
+}
 
 void basicSection(ig::Context &ui)
 {
@@ -255,6 +363,211 @@ void windowsSection(ig::Context &ui)
     ui.sameLine();
     if (ui.button("floating window"))
         g.floatingOpen = true;
+
+    ui.separatorText("Event leak check");
+    ui.label("With the dialog open, click these: the counters must not move.");
+    if (ui.button("behind counter"))
+        ++g.behindClicks;
+    ui.sameLine();
+    ui.label(numbered("behind clicks: ", g.behindClicks));
+    ui.sliderFloat("behind slider", g.behindSlider, 0.0f, 1.0f, 260.0f);
+    ui.checkbox("behind checkbox", g.behindCheck);
+    ui.sameLine();
+    ui.label(numbered("clicks inside the dialog: ", g.dialogClicks));
+}
+
+void menusSection(ig::Context &ui)
+{
+    ui.label("Menu bar: open a menu and click the widgets it covers.");
+    const ig::Vec2 bar = ui.cursor();
+    if (ui.beginMenuBar(ig::Rect(0.0f, bar.y, 360.0f, 26.0f)))
+    {
+        if (ui.beginMenu("File"))
+        {
+            if (ui.beginSubMenu("Export"))
+            {
+                if (ui.menuItem("PNG sequence"))
+                    g.lastAction = "File > Export > PNG sequence";
+                if (ui.menuItem("MP4 video"))
+                    g.lastAction = "File > Export > MP4 video";
+                ui.endSubMenu();
+            }
+            if (ui.menuItem("New scene"))
+            {
+                ++g.menuActions;
+                g.lastAction = "File > New scene";
+            }
+            ui.menuSeparator();
+            ui.menuItem("Save (disabled)", false);
+            ui.endMenu();
+        }
+        if (ui.beginMenu("Edit"))
+        {
+            if (ui.menuCheckbox("Grid", g.gridChecked))
+                g.lastAction = g.gridChecked ? "Edit > Grid on" : "Edit > Grid off";
+            if (ui.menuCheckbox("Inspector", g.behindCheck))
+                g.lastAction = "Edit > Inspector toggled";
+            ui.endMenu();
+        }
+        if (ui.beginMenu("Help"))
+        {
+            if (ui.menuItem("About"))
+                g.lastAction = "Help > About";
+            ui.endMenu();
+        }
+        ui.endMenuBar();
+    }
+    ui.spacing(28.0f);
+
+    ui.separatorText("Event leak check");
+    ui.label("The dropdown covers these: nothing here may react while it is open.");
+    if (ui.button("behind counter"))
+        ++g.behindClicks;
+    ui.sameLine();
+    ui.label(numbered("behind clicks: ", g.behindClicks));
+    ui.sliderFloat("behind slider", g.behindSlider, 0.0f, 1.0f, 260.0f);
+    ui.checkbox("behind checkbox", g.behindCheck);
+    ui.sameLine();
+    if (ui.button("behind button two"))
+        ++g.behindClicks;
+
+    ui.separatorText("Context menu");
+    ui.label("Right click inside the box below.");
+    // Same split as the accent swatches: drawn in content coordinates, hit-tested
+    // with the local rect the bounds-based API expects.
+    const ig::Vec2 boxOrigin = ui.cursor();
+    const ig::Rect box(boxOrigin.x, boxOrigin.y, 320.0f, 80.0f);
+    ui.drawRectFilled(box, ig::Color(48, 52, 60, 255));
+    ui.drawRect(box, ig::Color(96, 104, 116, 255));
+    ui.drawText("right click here", ig::Vec2(box.x + 10.0f, box.y + 32.0f),
+                ig::Color(200, 205, 214, 255));
+    ui.drawRectFilled(ig::Rect(box.x + 10.0f, box.y + 46.0f, 120.0f, 20.0f),
+                      ig::Color(70, 76, 88, 255));
+    if (ui.beginContextMenu("box context", ig::Rect(0.0f, boxOrigin.y, 320.0f, 80.0f)))
+    {
+        if (ui.menuItem("Duplicate"))
+        {
+            ++g.contextActions;
+            g.lastAction = "context > Duplicate";
+        }
+        ui.menuItem("Delete (disabled)", false);
+        ui.endContextMenu();
+    }
+    ui.spacing(88.0f);
+
+    ui.separatorText("Result");
+    ui.label(numbered("menu actions: ", g.menuActions));
+    ui.label(numbered("context actions: ", g.contextActions));
+    ig::String action = "last action: ";
+    action += g.lastAction;
+    ui.label(action);
+}
+
+void iconsSection(ig::Context &ui)
+{
+    ui.separatorText("Icon buttons");
+    for (int i = 0; i < kIconCount; ++i)
+    {
+        if (i)
+            ui.sameLine();
+        if (ui.imageButton(kIconNames[i], g.iconIds[i], 40.0f, 40.0f))
+        {
+            ++g.iconClicks;
+            g.lastIcon = kIconNames[i];
+        }
+    }
+
+    ui.separatorText("Small icon buttons");
+    for (int i = 0; i < kIconCount; ++i)
+    {
+        if (i)
+            ui.sameLine();
+        if (ui.smallImageButton(kIconNames[i], g.iconIds[i], 26.0f))
+        {
+            ++g.iconClicks;
+            g.lastIcon = kIconNames[i];
+        }
+    }
+
+    ui.separatorText("Icon button with two states");
+    if (ui.imageButton("play toggle", g.iconIds[g.playing ? 1 : 0], 44.0f, 44.0f))
+        g.playing = !g.playing;
+    ui.sameLine();
+    ui.label(g.playing ? "playing" : "stopped");
+    ui.sameLine();
+    ui.label(numbered("icon clicks: ", g.iconClicks));
+
+    ig::String line = "last icon: ";
+    line += g.lastIcon;
+    ui.label(line);
+}
+
+void synthSection(ig::Context &ui)
+{
+    const float diameter = 64.0f;
+    const float gap = 18.0f;
+
+    // The accent is the application's choice, not a colour the widget fixes:
+    // the picker below drives the voice dot and every value arc.
+    const ig::Color accent = g.accentFromTheme ? ui.theme().focusColor : g.voiceAccent;
+
+    // Voice header: the accent dot, the name of the voice and what makes it.
+    const ig::Vec2 header = ui.cursor();
+    ui.drawCircleFilled(ig::Vec2(header.x + 6.0f, header.y + 9.0f), 6.0f, accent);
+    ui.drawText("Kick", ig::Vec2(header.x + 20.0f, header.y), ig::Color(238, 242, 250, 255));
+    ui.drawText("synthesized", ig::Vec2(header.x + 66.0f, header.y + 2.0f),
+                ig::Color(138, 148, 166, 255));
+    ui.spacing(26.0f);
+
+    // The knobs reuse the synth demo's: same body, same needle, same arcs, so
+    // the immediate-mode voice and the retained one read as the same control.
+    char volumeText[16];
+    std::snprintf(volumeText, sizeof volumeText, "%d%%",
+                  static_cast<int>(g.voiceVolume * 100.0f + 0.5f));
+    char panText[16];
+    const int panAmount = static_cast<int>(std::fabs(g.voicePan) * 100.0f + 0.5f);
+    if (panAmount == 0)
+        std::snprintf(panText, sizeof panText, "C");
+    else
+        std::snprintf(panText, sizeof panText, "%s %d", g.voicePan < 0.0f ? "L" : "R", panAmount);
+    char tuneText[16];
+    std::snprintf(tuneText, sizeof tuneText, "%d st", static_cast<int>(g.voiceTune));
+
+    const synth::KnobStyle style = g.accentFromTheme ? synth::KnobStyle()
+                                                     : synth::KnobStyle::accent(accent);
+    const ig::Vec2 row = ui.cursor();
+    synth::knob(ui, "voice volume", "Volume", volumeText, g.voiceVolume, 0.0f, 1.0f,
+                row, diameter, style);
+    synth::knob(ui, "voice pan", "Pan", panText, g.voicePan, -1.0f, 1.0f,
+                ig::Vec2(row.x + diameter + gap, row.y), diameter, style);
+    synth::knob(ui, "voice tune", "Tune", tuneText, g.voiceTune, -24.0f, 24.0f,
+                ig::Vec2(row.x + (diameter + gap) * 2.0f, row.y), diameter, style);
+    ui.spacing(diameter + 30.0f);
+
+    ui.separatorText("Accent colour of the voice");
+    for (int i = 0; i < kAccentCount; ++i)
+    {
+        if (i)
+            ui.sameLine();
+        ig::String label = kAccentNames[i];
+        if (!g.accentFromTheme && g.voiceAccent == kAccents[i])
+            label += " *";
+        if (ui.smallButton(label))
+        {
+            g.voiceAccent = kAccents[i];
+            g.accentFromTheme = false;
+        }
+    }
+    ui.spacing(4.0f);
+    ui.checkbox("follow the theme accent", g.accentFromTheme);
+    ui.spacing(6.0f);
+    ui.colorEdit("accent", g.voiceAccent, 220.0f, 56.0f);
+
+    ui.separatorText("Pages of the voice");
+    ui.tabBar("voice pages", g.voicePage, ig::Span<const ig::StringView>(kVoicePages), 420.0f);
+    ui.spacing(6.0f);
+    ui.label(g.voicePage == 0 ? "Volume, pan and tune of the synthesized kick."
+                              : "Every page reuses the same knob.");
 }
 
 void codeSection(ig::Context &ui, const ig::Rect &bounds)
@@ -306,6 +619,9 @@ void frame(void *)
             case 2: listsSection(ui); break;
             case 3: layoutSection(ui); break;
             case 4: windowsSection(ui); break;
+            case 5: menusSection(ui); break;
+            case 6: iconsSection(ui); break;
+            case 7: synthSection(ui); break;
             default:
             {
                 int width = 0;
@@ -323,10 +639,16 @@ void frame(void *)
     if (g.floatingOpen)
         ui.raiseWindow("Floating window");
 
-    if (g.dialogOpen && ui.beginDialog("Dialog", g.dialogOpen, ig::Vec2(320.0f, 150.0f)))
+    if (g.dialogOpen && ui.beginDialog("Modal dialog", g.dialogOpen, ig::Vec2(380.0f, 250.0f)))
     {
-        ui.label("A modal dialog.");
-        ui.spacing(8.0f);
+        ui.label("Application-modal: nothing behind it may react.");
+        ui.inputText("name", g.name, 300.0f);
+        ui.sliderFloat("dialog value", g.volume, 0.0f, 1.0f, 300.0f);
+        ui.checkbox("dialog only", g.dialogCheck);
+        ui.spacing(6.0f);
+        if (ui.button("inside the dialog"))
+            ++g.dialogClicks;
+        ui.sameLine();
         if (ui.button("close"))
             g.dialogOpen = false;
         ui.endDialog();
@@ -372,6 +694,8 @@ int main(int, char **)
     if (!g.backend->prepareFontAtlas())
         return 4;
     g.ui = new ig::Context(*g.backend, &g.backend->fontAtlas());
+    if (!buildIcons(g.renderer))
+        return 5;
     g.code.setHighlighterForFile("sample.cpp");
     g.code.setText(kSample);
     g.frequency = SDL_GetPerformanceFrequency();
@@ -386,6 +710,8 @@ int main(int, char **)
 
     delete g.ui;
     delete g.backend;
+    for (int i = 0; i < kIconCount; ++i)
+        SDL_DestroyTexture(g.icons[i]);
     SDL_DestroyRenderer(g.renderer);
     SDL_DestroyWindow(g.window);
     SDL_Quit();
