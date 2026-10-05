@@ -317,6 +317,8 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
         Widget* fwHit = hitTest(fw, x, y);
         if (fwHit) {
             bringToFront(fw);
+            if (fwHit->acceptsFocus() && fwHit != focused_)
+                setFocused(fwHit);
             MouseEvent me = makeMouseEvent(x, y, btn);
             bubble(fwHit, me, &Widget::onMousePress);
             // fw may have been removed (and queued for deletion) during the event —
