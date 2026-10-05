@@ -171,10 +171,27 @@ void Button::paint(PaintContext& ctx)
     // an icon-only button gives the icon the button's height
     float iconSz = text_.empty() ? std::max(t.fontSize, std::min(abs.w, abs.h) - 6.f) : t.fontSize;
     float iconW  = (iconId_ != IconId::None) ? (iconSz + (text_.empty() ? 0.f : 2.f)) : 0.f;
+
+    // a label wider than the button is cut with "..." instead of spilling over its neighbours
+    std::string shown = text_.c_str();
+    float room = abs.w - iconW - t.padding * 4;
+    bool cut = !shown.empty() && textW > room && abs.w > 0;
+    if (cut)
+    {
+        while (!shown.empty())
+        {
+            size_t last = shown.size() - 1;
+            while (last > 0 && (static_cast<unsigned char>(shown[last]) & 0xC0) == 0x80) --last;
+            shown.erase(last);
+            if (ctx.font.GetTextWidth((shown + "...").c_str()) <= room) break;
+        }
+        shown += "...";
+        textW = ctx.font.GetTextWidth(shown.c_str());
+    }
     float totalW = iconW + textW;
 
     float tx;
-    switch (align_)
+    switch (cut ? TextAlign::LEFT : align_)
     {
     case TextAlign::LEFT:   tx = abs.x + t.padding * 2; break;
     case TextAlign::RIGHT:  tx = abs.x + abs.w - totalW - t.padding * 2; break;
@@ -193,7 +210,7 @@ void Button::paint(PaintContext& ctx)
 
     Rect textRect = {tx, ty - asc, textW, asc};
     if (!ctx.isClipped(textRect))
-        ctx.font.Print(text_.c_str(), tx, ty);
+        ctx.font.Print(shown.c_str(), tx, ty);
 
     if (overrideFont_) ctx.popFont();
     // paint children (no clip needed — button children are rare)
