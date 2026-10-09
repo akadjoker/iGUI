@@ -52,8 +52,10 @@ if(NOT EXISTS "${IGUI_CONTAINERS_DIR}/include/ct/vector.hpp")
         "${IGUI_CONTAINERS_DIR} is empty. Run: git submodule update --init --recursive")
 endif()
 
-add_library(ct INTERFACE)
-target_include_directories(ct INTERFACE "${IGUI_CONTAINERS_DIR}/include")
+if(NOT TARGET ct)
+    add_library(ct INTERFACE)
+    target_include_directories(ct INTERFACE "${IGUI_CONTAINERS_DIR}/include")
+endif()
 
 # Shared drawing engine: DrawList/DrawData/Backend, plus the lexical syntax
 # highlighting layer (ig::syntax). Both are things the immediate-mode Context
