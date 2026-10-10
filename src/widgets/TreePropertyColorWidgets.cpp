@@ -195,6 +195,8 @@ private:
 //  TreeNode
 // ═════════════════════════════════════════════════════════════════════════════
 
+unsigned int TreeNode::sRevision_ = 0;
+
 TreeNode::TreeNode(const String& text) : text_(text) {}
 
 TreeNode::~TreeNode()
@@ -207,6 +209,7 @@ TreeNode* TreeNode::addChild(const String& text)
     auto* n = new TreeNode(text);
     n->parent_ = this;
     children_.push_back(n);
+    bumpRevision();
     return n;
 }
 
@@ -215,12 +218,14 @@ void TreeNode::removeChild(int index)
     if (index < 0 || index >= static_cast<int>(children_.size())) return;
     delete children_[index];
     children_.erase(children_.begin() + index);
+    bumpRevision();
 }
 
 void TreeNode::clear()
 {
     for (auto* c : children_) delete c;
     children_.clear();
+    bumpRevision();
 }
 
 void TreeNode::setIcon(const String& name)
@@ -334,9 +339,15 @@ Widget::Vec2f TreeView::sizeHint() const { return {200.f, 200.f}; }
 
 void TreeView::rebuildFlat()
 {
-    if (!flatDirty_) return;
+    // A node added or removed behind the view's back leaves the cached rows
+    // pointing at nodes that are gone (or missing ones that exist): the shared
+    // revision counter says when the tree changed at all.
+    if (!flatDirty_ && revisionSeen_ == TreeNode::revision())
+        return;
     flatRows_.clear();
-    for (auto* r : roots_) flattenNode(r, 0);
+    for (auto* r : roots_)
+        flattenNode(r, 0);
+    revisionSeen_ = TreeNode::revision();
     flatDirty_ = false;
 }
 

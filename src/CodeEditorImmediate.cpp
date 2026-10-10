@@ -561,6 +561,25 @@ void textEndPosition(int line, int column, const String& text, int& endLine, int
 
 String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, int endLine, int endColumn)
 {
+    // A range can name text that is already gone: with several cursors one of
+    // them can cover what another one selected. ct::String::substr aborts when
+    // asked for a position past the end, so every index is clamped to the lines
+    // as they are now, and a range with nothing left in it is not an edit.
+    if (lines.empty())
+        return String();
+    if (startLine < 0) startLine = 0;
+    if (startLine >= static_cast<int>(lines.size())) startLine = static_cast<int>(lines.size()) - 1;
+    if (endLine < startLine) endLine = startLine;
+    if (endLine >= static_cast<int>(lines.size())) endLine = static_cast<int>(lines.size()) - 1;
+    if (startColumn < 0) startColumn = 0;
+    if (endColumn < 0) endColumn = 0;
+    const int startLength = static_cast<int>(lines[static_cast<size_t>(startLine)].size());
+    const int endLength   = static_cast<int>(lines[static_cast<size_t>(endLine)].size());
+    if (startColumn > startLength) startColumn = startLength;
+    if (endColumn > endLength) endColumn = endLength;
+    if (startLine == endLine && endColumn <= startColumn)
+        return String();
+
     if (startLine == endLine)
     {
         String& ln = lines[static_cast<size_t>(startLine)];

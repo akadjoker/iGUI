@@ -30,15 +30,27 @@ static void collectFocusable(Widget* w, ct::Vector<Widget*>& out)
 //  Singleton
 // ═════════════════════════════════════════════════════════════════════════════
 
+namespace { WidgetApp* gWidgetApp = nullptr; }
+
 WidgetApp& WidgetApp::instance()
 {
     static WidgetApp app;
+    if (!gWidgetApp)
+        gWidgetApp = &app;
     return app;
+}
+
+WidgetApp* WidgetApp::existing()
+{
+    return gWidgetApp;
 }
 
 WidgetApp::~WidgetApp()
 {
     shutdown();
+    // Widgets destroyed after this (static destruction order) must not try to
+    // tell the manager about it any more.
+    gWidgetApp = nullptr;
 }
 
 void WidgetApp::shutdown()
@@ -374,7 +386,8 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
 
         MouseEvent me = makeMouseEvent(x, y, btn);
         bubble(hit, me, &Widget::onMousePress);
-        pressed_ = hit;
+        // The handler may have removed the widget, or the window that holds it.
+        pressed_ = isWidgetInTrees(hit) ? hit : nullptr;
     } else {
         setFocused(nullptr);
     }
@@ -624,6 +637,7 @@ bool WidgetApp::removeStage(const String& name)
     Widget* const* stageRoot = stages_.find(name);
     if (!stageRoot) return false;
 
+    notifyWidgetRemoved(*stageRoot);
     delete *stageRoot;
     stages_.erase(name);
     return true;
@@ -694,9 +708,51 @@ static bool isDescendantOf(Widget* candidate, Widget* root)
     return false;
 }
 
+// Walks the tree the frame draws. @p target is only compared, never read: it may
+// already have been deleted by an event handler.
+static bool treeContains(const Widget* node, const Widget* target)
+{
+    if (!node) return false;
+    if (node == target) return true;
+    for (auto* child : node->children())
+        if (treeContains(child, target))
+            return true;
+    return false;
+}
+
+bool WidgetApp::isWidgetInTrees(const Widget* w) const
+{
+    if (!w) return false;
+    if (treeContains(root_, w)) return true;
+    for (auto* fw : floats_)
+        if (treeContains(fw, w))
+            return true;
+    if (treeContains(popup_, w) || treeContains(popupClosing_, w)) return true;
+    return false;
+}
+
 void WidgetApp::notifyWidgetRemoved(Widget* w)
 {
     if (!w) return;
+    ++deletions_;
+    if (tooltipWidget_ && isDescendantOf(tooltipWidget_, w))
+    {
+        tooltipWidget_  = nullptr;
+        tooltipVisible_ = false;
+        tooltipTimer_   = 0.0f;
+    }
+    // A popup (or the window a popup was opened from) can go away while it is
+    // still the one being painted: painting it after that reads freed memory.
+    if (popup_ && isDescendantOf(popup_, w))
+    {
+        popup_      = nullptr;
+        popupOwner_ = nullptr;
+    }
+    if (popupClosing_ && isDescendantOf(popupClosing_, w))
+    {
+        popupClosing_        = nullptr;
+        popupClosingOwner_   = nullptr;
+    }
     if (pressed_ && isDescendantOf(pressed_, w))
         pressed_ = nullptr;
     if (focused_ && isDescendantOf(focused_, w))
@@ -993,12 +1049,26 @@ void WidgetApp::fillLocal(Widget* target, MouseEvent& e)
 template <typename Func>
 void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
 {
-    Widget* w = target;
-    while (w && !e.consumed)
+    // The parents are read before any handler runs: a handler may delete the
+    // widget it was called with, and `w->parent()` would then read freed memory.
+    ct::Vector<Widget*> chain;
+    for (Widget* w = target; w; w = w->parent())
+        chain.push_back(w);
+
+    uint32_t seen = deletions_;
+    for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
     {
+        Widget* w = chain[i];
+        if (seen != deletions_)
+        {
+            // Something went away during a handler: the rest of the chain may
+            // have gone with it, so it is looked up in the tree that is drawn.
+            if (!isWidgetInTrees(w))
+                return;
+            seen = deletions_;
+        }
         fillLocal(w, e);
         (w->*handler)(e);
-        w = w->parent();
     }
 }
 

@@ -351,6 +351,13 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 
 Widget::~Widget()
 {
+    // Anything still holding a pointer into this widget - the hover/focus/press
+    // pointers, the tooltip, a popup being painted - has to hear about it before
+    // the memory goes away. A widget the manager is never told about leaves
+    // those dangling.
+    if (WidgetApp* app = WidgetApp::existing())
+        app->notifyWidgetRemoved(this);
+
     // Delete owned context menu (not in children_)
     delete contextMenu_;
     contextMenu_ = nullptr;
@@ -446,8 +453,14 @@ void Widget::onMousePress(MouseEvent& e)
 {
     if (!enabled_) return;
     pressed_ = true;
+    const uint32_t deletions = WidgetApp::instance().deletions();
     pressed.emit(e.button);
-    WidgetApp::instance().fireEvent("press", this);
+    // A handler may have removed (and deleted) this widget: the global event is
+    // only fired while nothing went away during the signal.
+    if (WidgetApp::instance().deletions() == deletions)
+        WidgetApp::instance().fireEvent("press", this);
+    else
+        return;
     if (acceptsFocus_) e.consumed = true;
     markDirty();
 }
@@ -457,8 +470,12 @@ void Widget::onMouseRelease(MouseEvent& e)
     if (!enabled_) return;
     bool wasPressed = pressed_;
     pressed_ = false;
+    const uint32_t deletions = WidgetApp::instance().deletions();
     released.emit(e.button);
-    WidgetApp::instance().fireEvent("release", this);
+    if (WidgetApp::instance().deletions() == deletions)
+        WidgetApp::instance().fireEvent("release", this);
+    else
+        return;
     if (acceptsFocus_) e.consumed = true;
     markDirty();
 
@@ -468,8 +485,12 @@ void Widget::onMouseRelease(MouseEvent& e)
         Rect abs = absoluteRect();
         if (abs.contains(e.x, e.y))
         {
+            const uint32_t deletions = WidgetApp::instance().deletions();
             clicked.emit();
-            WidgetApp::instance().fireEvent("click", this);
+            // The handler may have deleted this widget (a button that closes its
+            // own panel): `this` cannot be used again after it ran.
+            if (WidgetApp::instance().deletions() == deletions)
+                WidgetApp::instance().fireEvent("click", this);
         }
     }
 }

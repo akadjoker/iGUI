@@ -190,6 +190,11 @@ private:
                              float sx, float sy) const;
 
     DockNode** findRef  (DockNode* searchFrom, DockNode* target);
+    // True when @p target is still in the tree that starts at @p node. Only
+    // pointers are compared: @p target may already have been freed.
+    static bool nodeInTree(const DockNode* node, const DockNode* target);
+    // Forget a drag whose node (or drop target) is no longer in the tree.
+    void dropStaleDrag();
     void       performDrop();
     void       pruneNode (DockNode*& slot);
 };

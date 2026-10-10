@@ -98,6 +98,7 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
         case SDLK_d: key = KeyCode::D; break;
         case SDLK_f: key = KeyCode::F; break;
         case SDLK_h: key = KeyCode::H; break;
+        case SDLK_s: key = KeyCode::S; break;
         case SDLK_v: key = KeyCode::V; break;
         case SDLK_x: key = KeyCode::X; break;
         case SDLK_y: key = KeyCode::Y; break;

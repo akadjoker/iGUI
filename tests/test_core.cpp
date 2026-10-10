@@ -923,6 +923,36 @@ static void test_window_chrome_drag_minimize_and_close()
     assert(!open);
 }
 
+// The legacy window order used to hold pointers into the window map. That map is
+// one block of slots, reallocated when it grows, so from the window that
+// triggers the rehash on every pointer in the order dangles - and both the
+// z-order sort and the top-window scan walk that order every frame.
+static void test_legacy_many_windows_survive_the_map_growing()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        assert(gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f, 1.0f, 1.0f / 60.0f)));
+        for (int i = 0; i < 24; ++i)
+        {
+            char title[32];
+            snprintf(title, sizeof(title), "window %d", i);
+            const float x = static_cast<float>((i % 6) * 20);
+            const float y = static_cast<float>((i / 6) * 20);
+            if (gui.BeginWindow(title, x, y, 200.0f, 120.0f))
+            {
+                gui.Label("body", 8.0f, 8.0f);
+                gui.EndWindow();
+            }
+        }
+        gui.EndFrame();
+    }
+    assert(backend.rendered);
+}
+
 int main()
 {
     test_draw_data_and_label();
@@ -950,6 +980,7 @@ int main()
     test_content_clip_applies_to_checkbox_label();
     test_clipped_button_cannot_be_clicked();
     test_clicked_window_is_composed_on_top();
+    test_legacy_many_windows_survive_the_map_growing();
     test_window_chrome_drag_minimize_and_close();
     return 0;
 }

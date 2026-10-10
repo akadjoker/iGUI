@@ -584,6 +584,9 @@ public:
 
     void addPageWidget(Widget* page);
     void removePage(int index);
+    /// @brief Show the page on screen and hide the others, so that only it
+    ///        accepts the pointer.
+    void showOnlyCurrentPage();
     int  pageCount() const { return static_cast<int>(pages_.size()); }
 
     // Navigation
