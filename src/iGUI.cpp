@@ -2212,7 +2212,7 @@ void GUI::Spinner(float x, float y, float radius)
     float arcDeg        = 270.0f;
     float endAngleDeg   = startAngleDeg + arcDeg;
 
-    const int segments = 32;
+    constexpr int segments = 32;
     Vec2 points[segments + 1];
 
     float startRad = startAngleDeg * 3.14159265f / 180.0f;
