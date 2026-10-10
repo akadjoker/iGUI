@@ -104,6 +104,14 @@ public:
     /// @brief Get the settings key (empty when the panel is not remembered).
     const String& settingsKey() const      { return settingsKey_; }
 
+    /// @brief True once the state file has given this panel its layout (or was
+    ///        asked for one and had none). The file is applied to a panel once,
+    ///        so a stage built later cannot reset an arrangement the user has
+    ///        changed since.
+    bool settingsApplied() const           { return settingsApplied_; }
+    /// @brief Mark the panel as having taken its layout from the state file.
+    void setSettingsApplied(bool applied)  { settingsApplied_ = applied; }
+
     /// @brief Set the tab bar height.
     void  setTabBarHeight(float h) { tabBarH_ = h; markDirty(); }
     /// @brief Get the tab bar height.
@@ -133,6 +141,7 @@ private:
     float     tabBarH_ = 26.0f;
     float     handleW_ =  5.0f;
     String    settingsKey_;   // name the layout is remembered under ("" = never)
+    bool      settingsApplied_ = false;   // took its layout from the state file
 
     // ── Tab drag state ─────────────────────────────────────────────────────
     struct DragState {

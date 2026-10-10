@@ -230,6 +230,57 @@ void test_window_state_round_trips_through_ini()
     remove(path);
 }
 
+// The dock arrangement is remembered as well: a panel dragged to another region
+// comes back there, and the region size the user dragged comes back with it.
+void test_dock_arrangement_round_trips_through_ini()
+{
+    const char *path = "igui_dock_state_test.ini";
+    remove(path);
+
+    // What an earlier run left behind: Hierarchy was dragged to the left region
+    // and that region was widened.
+    ct::Ini previous;
+    previous.set("dock:editor", "tabs_left", "Hierarchy");
+    previous.set("dock:editor", "selected_left", "Hierarchy");
+    previous.set("dock:editor", "left_width", 260.0);
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+
+    // The application asks for the center region every frame: the file wins.
+    harness.frame([](ig::Context &c) {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
+            return;
+        if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
+        {
+            if (c.beginDockPanel("Hierarchy", ig::DockSlot::Center))
+            {
+                c.label("scene");
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    });
+    check(context.saveWindowState(), "the state file was not written after the dock frame");
+
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    check(saved.get("dock:editor", "tabs_left") == "Hierarchy",
+          "a panel left in the left region did not come back there");
+    check(saved.get("dock:editor", "tabs_center").empty(),
+          "the panel was stored in the region the application asked for");
+    check(saved.get_double("dock:editor", "left_width") == 260.0,
+          "the region size the user dragged was not kept");
+
+    // Persistence off, so the destructor of the context writes nothing.
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 } // namespace
 
 int main()
@@ -239,6 +290,7 @@ int main()
     test_drag_inside_screen_is_unchanged();
     test_maximized_window_follows_viewport();
     test_window_state_round_trips_through_ini();
+    test_dock_arrangement_round_trips_through_ini();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
