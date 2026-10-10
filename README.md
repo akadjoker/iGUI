@@ -193,7 +193,7 @@ int main(int, char **)
 }
 ```
 
-A complete version that exercises most immediate-mode widgets is in [examples/sdl2_demo/main.cpp](examples/sdl2_demo/main.cpp).
+A complete version that exercises almost every immediate-mode widget is in [examples/web/immediate_gallery.cpp](examples/web/immediate_gallery.cpp) - built for the browser by `IGUI_BUILD_WEB` as `igui_web_immediate`, and mirrored for a native window by [examples/raylib_demo/main.cpp](examples/raylib_demo/main.cpp) (`igui_raylib_demo`, needs Raylib). For the retained toolkit, widget by widget, see the staged showcase in [examples/sdl2_original_widgets](examples/sdl2_original_widgets) (`igui_sdl2_original_widgets_demo`, `IGUI_BUILD_SDL2_DEMO=ON`).
 
 ## Writing a backend
 
