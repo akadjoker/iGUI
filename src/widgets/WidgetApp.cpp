@@ -2,6 +2,7 @@
 #include "ViewWidgets.hpp"   // FloatWindow (real implementation)
 #include "LayoutWidgets.hpp" // StatusBar
 #include "Animation.hpp"     // Animator
+#include "DockPanel.hpp"     // DockPanel layout persistence
 #include "MenuWidgets.hpp"   // Menu::exec (for context menu)
 #include "DialogWidgets.hpp" // Toast
 
@@ -44,6 +45,10 @@ void WidgetApp::shutdown()
 {
     inited_ = false;
 
+    // Write the float window geometry and dock layouts out before the windows
+    // and stages they belong to go away. A no-op when persistence is off.
+    saveWindowState();
+
     // Clean up popups BEFORE root
     if (popupOwned_)
         delete popup_;
@@ -64,6 +69,9 @@ void WidgetApp::shutdown()
     delete root_;    root_  = nullptr;
     for (auto* fw : floats_) delete fw;
     floats_.clear();
+    // Windows closed since the last frame were only queued for deletion.
+    for (auto* fw : pendingFloatDeletes_) delete fw;
+    pendingFloatDeletes_.clear();
     delete iconAtlas_; iconAtlas_ = nullptr;  // stub
 }
 
@@ -167,6 +175,11 @@ void WidgetApp::update(const ig::retained::IO& io)
     for (auto* fw : pendingFloatDeletes_) delete fw;
     pendingFloatDeletes_.clear();
     delete pendingPopupDelete_; pendingPopupDelete_ = nullptr;
+
+    // A window state file read before the stages existed: hand the dock
+    // layouts over now that the panels they name are there.
+    if (dockLayoutPending_)
+        restoreDockLayouts();
 
     // Tick animations
     Animator::instance().tick(dt_);
@@ -708,6 +721,7 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
 void WidgetApp::addFloatImpl(FloatWindow* fw)
 {
     if (!fw) return;
+    applyWindowState(fw);
     floats_.push_back(fw);
     fw->layout();
 }
@@ -715,6 +729,9 @@ void WidgetApp::addFloatImpl(FloatWindow* fw)
 void WidgetApp::removeFloat(FloatWindow* fw)
 {
     if (!fw) return;
+    // Keep the geometry of a window that goes away, so reopening it next run
+    // (or in the same run) lands where it was left.
+    captureWindowState(fw);
     notifyWidgetRemoved(fw);
     floats_.erase(std::remove(floats_.begin(), floats_.end(), fw), floats_.end());
     // Defer delete - may be called during signal/bubble handling
@@ -729,6 +746,117 @@ void WidgetApp::bringToFront(FloatWindow* fw)
         floats_.erase(it);
         floats_.push_back(fw);
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Window state (.ini)
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+// Dock panels are found by walking the stage trees: an application builds its
+// stages after setWindowStatePath(), so a layout in the file cannot be applied
+// when the file is read - only once the panels it names exist.
+void collectDockPanels(Widget* widget, ct::Vector<DockPanel*>& out)
+{
+    if (!widget) return;
+    if (auto* dock = dynamic_cast<DockPanel*>(widget))
+        out.push_back(dock);
+    for (auto* child : widget->children())
+        collectDockPanels(child, out);
+}
+
+} // namespace
+
+void WidgetApp::setWindowStatePath(const String& path)
+{
+    windowState_.setPath(path);
+    if (!windowState_.path().empty())
+        loadWindowState();
+}
+
+bool WidgetApp::loadWindowState()
+{
+    const bool loaded = windowState_.load();
+    for (auto* fw : floats_)
+        applyWindowState(fw);
+    restoreDockLayouts();
+    return loaded;
+}
+
+bool WidgetApp::saveWindowState()
+{
+    for (auto* fw : floats_)
+        captureWindowState(fw);
+    captureDockLayouts();
+    return windowState_.save();
+}
+
+void WidgetApp::captureWindowState(FloatWindow* fw)
+{
+    if (!fw) return;
+    WindowGeometry geometry;
+    geometry.x = fw->floatX();
+    geometry.y = fw->floatY();
+    geometry.w = fw->floatW();
+    geometry.h = fw->floatH();
+    geometry.minimized = fw->isMinimized();
+    windowState_.putWindow(fw->title(), geometry);
+}
+
+void WidgetApp::applyWindowState(FloatWindow* fw)
+{
+    if (!fw) return;
+    // Anything the file does not mention stays as the caller set it up.
+    WindowGeometry geometry;
+    geometry.x = fw->floatX();
+    geometry.y = fw->floatY();
+    geometry.w = fw->floatW();
+    geometry.h = fw->floatH();
+    geometry.minimized = fw->isMinimized();
+    if (!windowState_.getWindow(fw->title(), geometry))
+        return;
+    fw->setFloatPos(geometry.x, geometry.y);
+    fw->setFloatSize(geometry.w, geometry.h);
+    fw->setMinimized(geometry.minimized);
+}
+
+void WidgetApp::captureDockLayouts()
+{
+    ct::Vector<DockPanel*> panels;
+    for (auto& entry : stages_)
+        collectDockPanels(entry.value, panels);
+    for (auto* dock : panels)
+    {
+        const String key = dock->settingsKey();
+        if (key.empty())
+            continue;
+        windowState_.put(dockStateSection(key), "layout", dock->saveLayout());
+    }
+}
+
+void WidgetApp::restoreDockLayouts()
+{
+    ct::Vector<DockPanel*> panels;
+    for (auto& entry : stages_)
+        collectDockPanels(entry.value, panels);
+
+    for (auto* dock : panels)
+    {
+        const String key = dock->settingsKey();
+        if (key.empty())
+            continue;
+        const String section = dockStateSection(key);
+        if (!windowState_.has(section, "layout"))
+            continue;
+        dock->restoreLayout(windowState_.get(section, "layout"));
+    }
+
+    // No stage at all means the application had not built its UI when the file
+    // was read, so update() tries again next frame. Once a stage exists there is
+    // nothing left to wait for: either its panels took their layout above, or
+    // the application does not key its panels.
+    dockLayoutPending_ = stages_.empty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

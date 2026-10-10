@@ -2,6 +2,8 @@
 
 #include "InteractionHarness.hpp"
 
+#include <ct/ini.hpp>
+
 #include <stdio.h>
 
 namespace
@@ -148,6 +150,86 @@ void test_maximized_window_follows_viewport()
           "maximized window larger than the viewport after a resize");
 }
 
+void test_window_state_round_trips_through_ini()
+{
+    const char *path = "igui_window_state_test.ini";
+    remove(path);
+
+    // What an earlier run of the application left behind: the window was moved
+    // and sized by the user.
+    ct::Ini previous;
+    previous.set("A", "pos_x", 240.0);
+    previous.set("A", "pos_y", 120.0);
+    previous.set("A", "size_w", 420.0);
+    previous.set("A", "size_h", 260.0);
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+    check(context.windowStatePath() == path, "the state file path was not kept");
+
+    // The window is asked for at (10, 10, 100, 100): the file wins.
+    bool submitted = false;
+    harness.frame([&](ig::Context &c) {
+        submitted = c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f));
+        if (submitted) c.endWindow();
+    });
+    check(submitted, "the window was not submitted");
+    const ig::Rect stored = context.windowBounds("A");
+    check(stored.x == 240.0f && stored.y == 120.0f,
+          "a window the state file knows did not open where it was left");
+    check(stored.width == 420.0f && stored.height == 260.0f,
+          "a window the state file knows did not open at its stored size");
+
+    // A title the file does not know keeps the bounds the application asks for.
+    harness.frame([&](ig::Context &c) {
+        if (c.beginWindow("Fresh", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+    });
+    const ig::Rect fresh = context.windowBounds("Fresh");
+    check(fresh.x == 10.0f && fresh.width == 100.0f,
+          "a window the file does not know did not open where the application asked");
+
+    // A maximized window fills the viewport every frame, so what is worth
+    // storing is the geometry it would come back to.
+    context.maximizeWindow("A");
+    harness.frame([&](ig::Context &c) {
+        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+    });
+    check(context.saveWindowState(), "the state file was not written");
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    check(saved.get_double("A", "pos_x") == 240.0 && saved.get_double("A", "size_w") == 420.0,
+          "a maximized window was stored at the viewport instead of its restore bounds");
+    check(saved.get_bool("A", "maximized"), "the maximized state was not stored");
+
+    // Next run: a new context, the same file. The window opens maximized and
+    // comes back to the geometry the file remembered.
+    ig::TestBackend nextBackend;
+    ig::Context next(nextBackend);
+    ig::Harness nextHarness(next);
+    next.setWindowStatePath(path);
+    nextHarness.frame([&](ig::Context &c) {
+        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+    });
+    check(next.windowBounds("A").width == 1280.0f, "a maximized window did not reopen maximized");
+    next.restoreWindow("A");
+    nextHarness.frame([&](ig::Context &c) {
+        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+    });
+    const ig::Rect restored = next.windowBounds("A");
+    check(restored.x == 240.0f && restored.y == 120.0f && restored.width == 420.0f,
+          "restoring did not come back to the geometry the file remembered");
+
+    // Persistence off writes nothing, destructor included - which is why both
+    // contexts are switched off before they go out of scope.
+    context.setWindowStatePath(ig::String());
+    next.setWindowStatePath(ig::String());
+    check(!next.saveWindowState(), "a context without a path wrote the state file");
+    remove(path);
+}
+
 } // namespace
 
 int main()
@@ -156,6 +238,7 @@ int main()
     test_drag_keeps_title_bar_reachable();
     test_drag_inside_screen_is_unchanged();
     test_maximized_window_follows_viewport();
+    test_window_state_round_trips_through_ini();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
