@@ -357,6 +357,108 @@ void test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it()
     check(firstVisible > 0, "the wheel did not reach the list inside a child that cannot scroll");
 }
 
+// The wheel goes to the innermost scroll area under the pointer: a virtual list
+// inside a panel that also scrolls used to lose it to the panel.
+void test_the_wheel_goes_to_the_innermost_scroll_area()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int firstVisible = -1;
+    int lastVisible = -1;
+    auto frame = [&]() {
+        harness.frame([&](ig::Context &c) {
+            if (!c.beginWindow("Nested", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f)))
+                return;
+            if (c.beginChild("panel", 200.0f))   // the filler overflows it: it can scroll
+            {
+                c.beginVirtualList("rows", 200, 20.0f, 150.0f, firstVisible, lastVisible);
+                c.endVirtualList();
+                c.dummy(20.0f, 120.0f);
+                c.endChild();
+            }
+            c.endWindow();
+        });
+    };
+    frame();
+    frame();
+    check(firstVisible == 0, "the list started scrolled");
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.position = ig::Vec2(100.0f, 130.0f);
+    wheel.wheelY = -4.0f;
+    harness.queue(ig::Event::pointerMove(100.0f, 130.0f));
+    harness.queue(wheel);
+    frame();
+    check(firstVisible > 0, "the panel took the wheel from the list inside it");
+
+    context.clearWidgetState();
+    frame();
+    check(firstVisible == 0, "clearWidgetState left the list scrolled");
+}
+
+// Windows live as long as the Context, which an application opening one per
+// document would grow forever: removeWindow gets rid of one for good.
+void test_remove_window_forgets_it_everywhere()
+{
+    const char *path = "igui_remove_window_test.ini";
+    remove(path);
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+
+    auto frame = [&](ig::Rect initial) {
+        harness.frame([&](ig::Context &c) {
+            if (c.beginWindow("Doc", initial))
+                c.endWindow();
+        });
+    };
+    frame(ig::Rect(50.0f, 60.0f, 300.0f, 200.0f));
+    context.saveWindowState();
+    check(context.windowBounds("Doc").x == 50.0f, "the window was not created where asked");
+    check(!context.removeWindow("Nothing"), "removeWindow claimed to remove a window that never existed");
+
+    check(context.removeWindow("Doc"), "removeWindow did not find the window it was given");
+    check(context.windowBounds("Doc").width == 0.0f, "the removed window is still known");
+
+    // Reopening starts from what the application asks for, not from the .ini
+    // section the window left behind.
+    frame(ig::Rect(10.0f, 20.0f, 120.0f, 90.0f));
+    const ig::Rect reopened = context.windowBounds("Doc");
+    check(reopened.x == 10.0f && reopened.y == 20.0f && reopened.width == 120.0f,
+          "a reopened window came back where the removed one was");
+
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
+// An undo callback is allowed to record an action of its own; that action is
+// what redo means then, not the entry the callback superseded.
+void test_an_undo_callback_that_records_an_action_takes_over_redo()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    int undone = 0;
+    int redone = 0;
+    auto counter = [](int &value) { return [&value]() { ++value; }; };
+
+    context.pushUndo("first", counter(undone), counter(redone));
+    context.pushUndo("second", [&]() {
+        ++undone;
+        context.pushUndo("third", counter(undone), counter(redone));
+    }, counter(redone));
+
+    check(context.canUndo(), "the history stopped offering the undo");
+    check(context.undo(), "undo() refused the entry it had");
+    check(undone == 1, "the callback of the undone entry did not run");
+    check(!context.canRedo(), "redo offers the action the callback superseded");
+    check(context.canUndo(), "the action the callback recorded was not kept");
+}
+
 } // namespace
 
 int main()
@@ -369,6 +471,9 @@ int main()
     test_dock_arrangement_round_trips_through_ini();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
+    test_the_wheel_goes_to_the_innermost_scroll_area();
+    test_remove_window_forgets_it_everywhere();
+    test_an_undo_callback_that_records_an_action_takes_over_redo();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
