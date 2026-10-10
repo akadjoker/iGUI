@@ -3,6 +3,7 @@
 #include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/Theme.hpp>
 #include <igui/widgets/GizmoWidgets.hpp>
+#include <igui/widgets/ToolBar.hpp>
 
 #include <cassert>
 #include <cmath>
@@ -820,6 +821,51 @@ static void test_tree_nodes_report_structural_changes()
     assert(ig::retained::TreeNode::revision() != afterSecondAdd);
 }
 
+// The widget that opened a popup going away must take the popup with it: the
+// popup holds a pointer back to its owner and keeps calling it.
+static void test_a_popup_goes_away_with_its_owner()
+{
+    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    ig::retained::Widget *stage = app.addStage("popupowner");
+    auto *panel = stage->createChild<ig::retained::Panel>();
+    panel->setRect({0.0f, 0.0f, 200.0f, 100.0f});
+    auto *owner = panel->createChild<ig::retained::Button>("Menu");
+
+    auto *popup = new ig::retained::Panel();     // owned by the test: `owned` is false
+    app.showPopup(popup, owner, false);
+    assert(app.popup() == popup);
+    assert(app.popupOwner() == owner);
+
+    panel->removeChild(owner);                   // the owner goes away
+    assert(app.popup() == nullptr);              // and its popup with it
+
+    delete popup;
+}
+
+// A toolbar handler may add or remove items while the release walk is running:
+// the walk must not keep reading the list it is changing.
+static void test_a_toolbar_item_can_remove_itself_when_clicked()
+{
+    ig::retained::ToolBar bar;
+    bar.setRect({0.0f, 0.0f, 400.0f, 40.0f});
+    const int first  = bar.addButton(0, "New");
+    bar.addButton(1, "Open");
+    bar.layout();
+
+    bool handled = false;
+    bar.buttonClicked.connect([&bar, &handled](int id) { handled = true; bar.removeItem(id); });
+
+    ig::MouseEvent press;
+    press.button = 0;
+    press.x = 10.0f;                 // the first item sits at (2, 2, 28, 28)
+    press.y = 10.0f;
+    bar.onMousePress(press);
+    ig::MouseEvent release = press;
+    bar.onMouseRelease(release);
+
+    assert(handled);
+}
+
 int main()
 {
     using namespace ig;
@@ -843,6 +889,8 @@ int main()
     test_a_carousel_shows_one_page_at_a_time();
     test_setting_the_same_float_content_again_keeps_it();
     test_tree_nodes_report_structural_changes();
+    test_a_popup_goes_away_with_its_owner();
+    test_a_toolbar_item_can_remove_itself_when_clicked();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

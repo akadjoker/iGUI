@@ -531,23 +531,35 @@ void ToolBar::onMouseRelease(MouseEvent& e)
 {
     if (e.button != 0) return;
 
-    // Check if any item was pressed and released inside
-    for (auto& it : items_) {
-        if (!it.pressed) continue;
-        it.pressed = false;
+    // Check if any item was pressed and released inside. The walk is by index
+    // and re-checks the size: a handler may add or remove items (a toolbar built
+    // at runtime), which moves the vector, and nothing is read from it after the
+    // handler ran.
+    for (ct::Vector<Item>::size_type i = 0; i < items_.size(); ++i) {
+        if (!items_[i].pressed) continue;
+        items_[i].pressed = false;
 
         // Only fire click if not dragging
-        if (!drag_.active && it.enabled) {
-            Rect abs = absoluteRect();
-            Rect ir = {abs.x + it.rect.x, abs.y + it.rect.y, it.rect.w, it.rect.h};
-            if (ir.contains(e.x, e.y)) {
-                if (it.type == ItemType::Button) {
-                    buttonClicked.emit(it.id);
-                } else if (it.type == ItemType::Toggle) {
-                    it.checked = !it.checked;
-                    toggleChanged.emit(it.id, it.checked);
+        if (drag_.active || !items_[i].enabled) continue;
+        Rect abs = absoluteRect();
+        Rect ir = {abs.x + items_[i].rect.x, abs.y + items_[i].rect.y, items_[i].rect.w, items_[i].rect.h};
+        if (!ir.contains(e.x, e.y)) continue;
+
+        const int id = items_[i].id;
+        if (items_[i].type == ItemType::Button)
+        {
+            buttonClicked.emit(id);
+        }
+        else if (items_[i].type == ItemType::Toggle)
+        {
+            const bool checked = !items_[i].checked;
+            for (ct::Vector<Item>::size_type k = 0; k < items_.size(); ++k)
+                if (items_[k].id == id)
+                {
+                    items_[k].checked = checked;
+                    break;
                 }
-            }
+            toggleChanged.emit(id, checked);
         }
     }
 

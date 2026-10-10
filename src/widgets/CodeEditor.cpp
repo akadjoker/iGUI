@@ -100,12 +100,15 @@ void CodeEditor::installSyntaxCallback()
             lineStates_.resize(lineIndex + 1, 0);
         lineStates_[lineIndex] = result.state;
 
-        // Convert Span → ColorSpan
+        // Convert Span → ColorSpan. The highlighter counts bytes (see
+        // syntax::Span) while TextEdit slices lines by code point, so a line with
+        // any multi-byte character would otherwise have its spans shifted.
         ct::Vector<TextEdit::ColorSpan> out;
         out.reserve(result.spans.size());
         for (auto& sp : result.spans) {
-            out.push_back({sp.startCol, sp.endCol,
-                           highlighter_->colorFor(sp.type)});
+            const int start = static_cast<int>(utf8Length(lineText.substr(0, static_cast<size_t>(sp.startCol))));
+            const int end   = static_cast<int>(utf8Length(lineText.substr(0, static_cast<size_t>(sp.endCol))));
+            out.push_back({start, end, highlighter_->colorFor(sp.type)});
         }
         return out;
     });
