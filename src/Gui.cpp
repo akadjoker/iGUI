@@ -1803,6 +1803,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
             *scroll = 0;
         if (*scroll > maximumScroll)
             *scroll = maximumScroll;
+        pointer_.wheelY = 0.0f;   // the list took it: an enclosing area must not scroll too
     }
 
     bool changed = false;
@@ -3022,7 +3023,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                                              state->ringStart.z * state->ringStart.z);
             const Vec3 source(state->ringStart.x / sourceLength, state->ringStart.y / sourceLength,
                               state->ringStart.z / sourceLength);
-            const int steps = 24;
+            constexpr int steps = 24;
             Vec2 arc[steps + 1];
             bool arcValid = true;
             for (int step = 0; step <= steps; ++step)
@@ -3421,6 +3422,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
             *scroll = 0;
         if (*scroll > maximumScroll)
             *scroll = maximumScroll;
+        pointer_.wheelY = 0.0f;   // the field took it: an enclosing area must not scroll too
     }
 
     Rect thumb;
@@ -4164,6 +4166,8 @@ bool Context::sequencer(StringView idText, ct::Vector<SequencerTrack>& tracks, i
     const Rect clip = intersect(area, contentClip());
     const float names = area.width < 180 ? area.width * .35f : 140.f, rulerHeight = 24.f, rowHeight = 24.f;
     const Rect ruler(area.x + names, area.y, area.width - names, rulerHeight);
+    if (ruler.width <= 0.0f)
+        return false;   // nothing to lay out: the time maths divides by it
     const int count = lastFrame - firstFrame + 1;
     const WidgetId viewId = makeWidgetId(idText);
     if (!timeViews_.find(viewId)) timeViews_.put(viewId, TimeView());
@@ -4226,6 +4230,8 @@ bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int
     area.height -= 14;
     const Rect clip = intersect(area, contentClip());
     const Rect ruler(area.x+120, area.y, area.width-126, 24);
+    if (ruler.width <= 0.0f)
+        return false;   // nothing to lay out: the time maths divides by it
     const WidgetId viewId = makeWidgetId(idText);
     if (!timeViews_.find(viewId)) timeViews_.put(viewId, TimeView());
     TimeView& view = *timeViews_.find(viewId);
@@ -5330,7 +5336,10 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
                 activeWidget_ = InvalidWidgetId;
         }
     }
-    if (pointer_.wheelY != 0.0f && pointerOver(intersect(outer, parentClip)))
+    // Only an area that can actually move takes the wheel: swallowing it here
+    // (a child whose content fits) left an inner list - a listBox, a virtual
+    // list - with no way to be scrolled by anything but its own scrollbar.
+    if (maximumScroll > 0.0f && pointer_.wheelY != 0.0f && pointerOver(intersect(outer, parentClip)))
     {
         scroll->offset -= pointer_.wheelY * theme_.widgetHeight;
         if (scroll->offset < 0.0f)

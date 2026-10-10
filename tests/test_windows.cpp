@@ -318,6 +318,45 @@ void test_a_window_restored_off_screen_is_fitted_to_the_viewport()
     remove(path);
 }
 
+// A child whose content fits has nothing to scroll: it used to take the wheel
+// anyway, which left a list drawn inside it reachable only by its own
+// scrollbar. The inner scroll area must get the event instead.
+void test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int firstVisible = -1;
+    int lastVisible = -1;
+    auto frame = [&]() {
+        harness.frame([&](ig::Context &c) {
+            if (!c.beginWindow("Wheel", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f)))
+                return;
+            if (c.beginChild("panel", 300.0f))   // 300 tall, holds 200: no scrollbar
+            {
+                c.beginVirtualList("rows", 200, 20.0f, 200.0f, firstVisible, lastVisible);
+                c.endVirtualList();
+                c.endChild();
+            }
+            c.endWindow();
+        });
+    };
+    frame();
+    frame();                                    // the child knows its content by now
+    check(firstVisible == 0, "the list started scrolled");
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.position = ig::Vec2(120.0f, 150.0f);
+    wheel.wheelY = -4.0f;                       // wheel down
+    harness.queue(ig::Event::pointerMove(120.0f, 150.0f));
+    harness.queue(wheel);
+    frame();
+
+    check(firstVisible > 0, "the wheel did not reach the list inside a child that cannot scroll");
+}
+
 } // namespace
 
 int main()
@@ -329,6 +368,7 @@ int main()
     test_window_state_round_trips_through_ini();
     test_dock_arrangement_round_trips_through_ini();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
+    test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
