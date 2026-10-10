@@ -558,6 +558,10 @@ Widget* WidgetApp::addStage(const String& name)
 
     auto* stageRoot = new Widget();
     stages_[name] = stageRoot;
+    // Stage built after the state file was read: its dock panels have not taken
+    // their layout yet, so ask for another pass on the next frame.
+    if (!windowState_.empty())
+        dockLayoutPending_ = true;
     return stageRoot;
 }
 
@@ -778,6 +782,13 @@ void WidgetApp::setWindowStatePath(const String& path)
 bool WidgetApp::loadWindowState()
 {
     const bool loaded = windowState_.load();
+    // A fresh read applies to every panel again, including one that already took
+    // a layout from the file read before.
+    ct::Vector<DockPanel*> panels;
+    for (auto& entry : stages_)
+        collectDockPanels(entry.value, panels);
+    for (auto* dock : panels)
+        dock->setSettingsApplied(false);
     for (auto* fw : floats_)
         applyWindowState(fw);
     restoreDockLayouts();
@@ -843,20 +854,23 @@ void WidgetApp::restoreDockLayouts()
 
     for (auto* dock : panels)
     {
+        // A panel that already took its layout is left alone: a stage built
+        // later must not throw away an arrangement the user has changed since.
+        if (dock->settingsApplied())
+            continue;
         const String key = dock->settingsKey();
         if (key.empty())
-            continue;
+            continue;   // the application may still set a key for it
+        dock->setSettingsApplied(true);
         const String section = dockStateSection(key);
         if (!windowState_.has(section, "layout"))
             continue;
         dock->restoreLayout(windowState_.get(section, "layout"));
     }
 
-    // No stage at all means the application had not built its UI when the file
-    // was read, so update() tries again next frame. Once a stage exists there is
-    // nothing left to wait for: either its panels took their layout above, or
-    // the application does not key its panels.
-    dockLayoutPending_ = stages_.empty();
+    // addStage() and loadWindowState() ask for another pass when they bring
+    // panels that have not taken their layout yet.
+    dockLayoutPending_ = false;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

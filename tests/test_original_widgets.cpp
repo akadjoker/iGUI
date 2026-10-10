@@ -570,6 +570,16 @@ static void test_dock_layout_is_remembered_in_the_state_file()
     assert(app.loadWindowState());
     assert(fresh->saveLayout() == arranged);
 
+    // A stage built later must not throw away an arrangement the user has just
+    // changed: the file is applied to a panel once.
+    fresh->splitOff("Console", ig::retained::DockSide::Bottom, 0.4f);
+    const ig::retained::String changed = fresh->saveLayout();
+    assert(changed != arranged);
+    app.addStage("later");
+    ig::retained::IO io;
+    app.update(io);
+    assert(fresh->saveLayout() == changed);
+
     app.setWindowStatePath(ig::retained::String());
     std::remove(path);
 }
