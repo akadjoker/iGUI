@@ -657,8 +657,8 @@ Context::PointerState::PointerState()
 
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
-      windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(),
-      windowOrder_(), idStack_(), focusOrder_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(), wheelAreas_(), wheelOrderCounter_(0u),
+      windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
@@ -692,9 +692,11 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     gizmo2DStates_.reserve(4);
     gizmo3DStates_.reserve(4);
     dockSpaces_.reserve(2);
+    wheelAreas_.reserve(8);
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     focusOrder_.reserve(32);
+    focusSeen_.reserve(32);
     childStack_.reserve(4);
     virtualListStack_.reserve(2);
     virtualTableStack_.reserve(2);
@@ -777,6 +779,7 @@ void Context::beginFrame(const FrameInfo &frame)
     tableActive_ = false;
     propertyRowActive_ = false;
     focusOrder_.clear();
+    focusSeen_.clear();
     // Whether a text field had the keyboard last frame - read before the
     // reset below, for the undo shortcuts further down.
     const bool textFieldHadKeyboard = wantsTextInput_;
@@ -1212,6 +1215,7 @@ void Context::pushUndo(StringView label, ct::Function<void()> undoCallback,
     entry.redo = redoCallback;
     undoStack_.push_back(entry);
     redoStack_.clear();
+    historyTouched_ = true;
 }
 
 bool Context::undo()
@@ -1220,8 +1224,13 @@ bool Context::undo()
         return false;
     UndoState entry = undoStack_.back();
     undoStack_.pop_back();
+    historyTouched_ = false;
     entry.undo();
-    redoStack_.push_back(entry);
+    // A callback that recorded an action of its own (pushUndo clears redo) has
+    // already said what redo means now; pushing this entry on top of that would
+    // offer to re-apply what it just undid.
+    if (!historyTouched_)
+        redoStack_.push_back(entry);
     return true;
 }
 
@@ -1231,8 +1240,10 @@ bool Context::redo()
         return false;
     UndoState entry = redoStack_.back();
     redoStack_.pop_back();
+    historyTouched_ = false;
     entry.redo();
-    undoStack_.push_back(entry);
+    if (!historyTouched_)
+        undoStack_.push_back(entry);
     return true;
 }
 
@@ -1250,6 +1261,7 @@ void Context::clearUndoHistory()
 {
     undoStack_.clear();
     redoStack_.clear();
+    historyTouched_ = true;
 }
 
 bool Context::isKeyPressed(KeyCode key) const
@@ -1795,7 +1807,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         *scroll = maximumScroll > 0 ? maximumScroll : 0;
 
     const bool hovered = pointerOver(visible);
-    if (hovered && pointer_.wheelY != 0.0f && maximumScroll > 0)
+    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u);
+    if (hovered && wheelMine && pointer_.wheelY != 0.0f && maximumScroll > 0)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
         *scroll += delta;
@@ -3414,7 +3427,9 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
 
     const bool hovered = itemHovered(textArea, clip, id);
     itemClicked(textArea, clip, id);
-    if (hasScrollbar && pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
+    const bool wheelMine = ownWheelArea(id, intersect(rect, clip),
+                                        static_cast<uint32_t>(childStack_.size()) + 1u);
+    if (hasScrollbar && wheelMine && pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
         *scroll += delta;
@@ -4103,7 +4118,8 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
             pointer_.pressed[left] = false;
         }
     }
-    if (pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
+    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u);
+    if (wheelMine && pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
         const float anchor = clamp((pointer_.position.x-ruler.x)/ruler.width, 0, 1);
         const float at = view.offset + anchor/view.zoom;
         view.zoom = clamp(view.zoom * powf(1.2f, pointer_.wheelY), 1, 64);
@@ -5336,10 +5352,13 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
                 activeWidget_ = InvalidWidgetId;
         }
     }
-    // Only an area that can actually move takes the wheel: swallowing it here
-    // (a child whose content fits) left an inner list - a listBox, a virtual
-    // list - with no way to be scrolled by anything but its own scrollbar.
-    if (maximumScroll > 0.0f && pointer_.wheelY != 0.0f && pointerOver(intersect(outer, parentClip)))
+    // Only an area that can actually move takes the wheel, and only when it is
+    // the innermost one under the pointer: swallowing it here (a child whose
+    // content fits, or a panel wrapping a list) left an inner list no way to be
+    // scrolled by anything but its own scrollbar.
+    const bool wheelMine = ownWheelArea(id, outer, static_cast<uint32_t>(childStack_.size()));
+    if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
+        pointerOver(intersect(outer, parentClip)))
     {
         scroll->offset -= pointer_.wheelY * theme_.widgetHeight;
         if (scroll->offset < 0.0f)
@@ -7039,6 +7058,58 @@ bool Context::saveWindowState()
     return windowState_.save();
 }
 
+bool Context::removeWindow(StringView title)
+{
+    const WidgetId id = hashText(title);
+    const WindowHandle *found = windowsById_.find(id);
+    if (!found)
+        return false;
+    const WindowHandle removed = *found;
+    windowsById_.erase(id);
+    windowButtons_.erase(id);
+    windowState_.removeWindow(title);
+    for (ct::Vector<WindowHandle>::size_type i = 0u; i < windowOrder_.size(); ++i)
+    {
+        if (windowOrder_[i] == removed)
+        {
+            windowOrder_.erase(windowOrder_.begin() + i);
+            break;
+        }
+    }
+    windows_.erase(removed);
+    if (currentWindow_ == removed)
+        currentWindow_ = WindowHandle();
+    if (focusedWindow_ == removed)
+        focusedWindow_ = WindowHandle();
+    if (draggingWindow_ == removed)
+        draggingWindow_ = WindowHandle();
+    if (resizingWindow_ == removed)
+        resizingWindow_ = WindowHandle();
+    // modalWindowId_ and activeModal_ end by themselves on the next frame: the
+    // window is not there to be submitted any more (releaseUnsubmittedBlockers).
+    return true;
+}
+
+void Context::clearWidgetState()
+{
+    listScrolls_.clear();
+    textScrolls_.clear();
+    textTailLines_.clear();
+    sequenceDrags_.clear();
+    timeViews_.clear();
+    numericEdits_.clear();
+    colorPickers_.clear();
+    childScrolls_.clear();
+    gizmo2DStates_.clear();
+    gizmo3DStates_.clear();
+    wheelAreas_.clear();
+    dockSpaces_.clear();
+    tableResize_ = TableResizeState();
+    numericEditId_ = InvalidWidgetId;
+    numericEditText_.clear();
+    numericEditValue_ = 0.0;
+}
+
 DockSlot Context::storedDockSlot(StringView spaceName, StringView title, DockSlot fallback) const
 {
     const String section = dockStateSection(spaceName);
@@ -7214,13 +7285,9 @@ void Context::registerFocusable(WidgetId id)
 {
     // Behind a modal a widget is out of the Tab order, so Tab cannot walk
     // focus (and then typing) into the blocked background.
-    if (id == InvalidWidgetId || inputBlockedByModal())
+    if (id == InvalidWidgetId || inputBlockedByModal() || focusSeen_.contains(id))
         return;
-    for (ct::Vector<WidgetId>::size_type i = 0u; i < focusOrder_.size(); ++i)
-    {
-        if (focusOrder_[i] == id)
-            return;
-    }
+    focusSeen_.insert(id);
     focusOrder_.push_back(id);
 }
 
@@ -7735,6 +7802,50 @@ bool Context::pointerPressedIn(const Rect &visible, uint32_t button) const
         ? currentWindow_ == focusedWindow_
         : currentWindow_ && currentWindow_ == topWindowAt(position);
     return ownWindow && contains(visible, position) && !pointerBlockedByOpenPopup(position);
+}
+
+bool Context::ownWheelArea(WidgetId id, const Rect &area, uint32_t depth)
+{
+    const WindowState *window = currentWindow();
+    const WidgetId windowId = window ? window->id : InvalidWidgetId;
+    // The deepest area under the pointer wins; at the same depth the one
+    // submitted last (the one drawn on top of the other). Areas are what each
+    // scroll area was the previous frame, so this is decided before anything is
+    // drawn and the wheel still moves something the frame it arrives.
+    bool owned = true;
+    if (contains(area, pointer_.position))
+    {
+        WidgetId bestId = InvalidWidgetId;
+        uint32_t bestDepth = 0u;
+        uint32_t bestOrder = 0u;
+        bool haveBest = false;
+        for (auto &entry : wheelAreas_)
+        {
+            const WheelArea &candidate = entry.value;
+            if (candidate.frame + 1u != frameNumber_ || candidate.window != windowId ||
+                !contains(candidate.rect, pointer_.position))
+                continue;
+            if (!haveBest || candidate.depth > bestDepth ||
+                (candidate.depth == bestDepth && candidate.order > bestOrder))
+            {
+                haveBest = true;
+                bestId = entry.key;
+                bestDepth = candidate.depth;
+                bestOrder = candidate.order;
+            }
+        }
+        // No area the previous frame knew: the pointer just moved here, so this
+        // one takes it rather than dropping the event on the floor.
+        owned = !haveBest || bestId == id;
+    }
+    WheelArea record;
+    record.rect = area;
+    record.window = windowId;
+    record.depth = depth;
+    record.order = wheelOrderCounter_++;
+    record.frame = frameNumber_;
+    wheelAreas_.put(id, record);
+    return owned;
 }
 
 bool Context::pointerOver(const Rect &visible) const

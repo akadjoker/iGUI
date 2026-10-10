@@ -169,6 +169,15 @@ public:
         ini_.set(section.c_str(), "maximized", geometry.maximized);
     }
 
+    /// @brief Forget what putWindow() stored for @p title: the section is
+    ///        dropped, so a later save() does not write it back.
+    void removeWindow(StringView title)
+    {
+        const String section = windowStateSection(title);
+        if (!section.empty())
+            ini_.erase_section(section.c_str());
+    }
+
     /// @brief Read what putWindow() stored for a window @p title.
     /// @return false when the window is unknown (the first-run case); fields
     ///         the file omits keep the values already in @p out.

@@ -333,6 +333,21 @@ public:
     /// @brief Store the current windows and write the file.
     /// @return true when the file was written.
     bool saveWindowState();
+    // Windows live as long as the Context: one the application stops submitting
+    // keeps where it was left (that is what makes a closed panel come back where
+    // it belongs), so an application that opens windows with generated titles -
+    // a document each, a preview each - would keep one per title forever. This
+    // gets rid of one for good: after it, beginWindow() with the same title
+    // starts from initialBounds again, and the .ini section that remembered it
+    // goes away with it. Called between frames.
+    bool removeWindow(StringView title);
+    // The per-widget state kept by id - scroll positions, the text a numeric
+    // field is being edited with, an open colour picker, a sequencer's zoom, a
+    // dock arrangement - also lives as long as the Context, and ids are hashes:
+    // a screen whose labels change with the data (a row per record) leaves one
+    // entry per label. Call this when such a screen is gone. Anything being
+    // edited is lost and scroll positions start over; call it between frames.
+    void clearWidgetState();
     // Operate on existing floating windows identified by their title.
     void maximizeWindow(StringView title);
     void restoreWindow(StringView title);
@@ -1029,9 +1044,25 @@ private:
     ct::HashMap<WidgetId, Gizmo2DState> gizmo2DStates_;
     ct::HashMap<WidgetId, Gizmo3DState> gizmo3DStates_;
     ct::HashMap<WidgetId, DockSpaceState> dockSpaces_;
+    // Where a scroll area was (and how deeply nested) the last time it was
+    // drawn: the wheel goes to the innermost one under the pointer, and that has
+    // to be known before any of them is drawn this frame.
+    struct WheelArea
+    {
+        Rect rect;
+        WidgetId window;
+        uint32_t depth;
+        uint32_t order;
+        uint32_t frame;
+    };
+    ct::HashMap<WidgetId, WheelArea> wheelAreas_;
+    uint32_t wheelOrderCounter_ = 0u;
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     ct::Vector<WidgetId> focusOrder_;
+    // Same ids as focusOrder_, for an O(1) "is this one already in the Tab
+    // order?" - the scan it replaces was quadratic in the number of widgets.
+    ct::HashSet<WidgetId> focusSeen_;
     ct::Vector<ChildState> childStack_;
     ct::Vector<VirtualListState> virtualListStack_;
     ct::Vector<VirtualTableState> virtualTableStack_;
@@ -1163,6 +1194,9 @@ private:
     // (indent, accept an autocomplete suggestion) rather than leaving it for
     // advanceFocus() to move focus with. Reset every frame in consumeEvents.
     bool tabConsumedByWidget_;
+    // True while an undo callback is pushing history of its own: undo()/redo()
+    // then must not also push the entry the callback just superseded.
+    bool historyTouched_ = false;
     bool keyPressed_[32];
     bool keyControl_[32];
     bool keyShift_[32];
@@ -1191,6 +1225,9 @@ private:
     // so a file written on a bigger screen cannot open a window nothing of which
     // is reachable.
     void clampWindowToViewport(WindowState &window);
+    // Whether the wheel over a scroll area belongs to this area (the innermost
+    // one under the pointer last frame), remembering the area for the next one.
+    bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth);
     // Geometry a window is remembered by: a maximized one fills the viewport
     // every frame, so what is worth keeping is the bounds it was maximized from.
     static void windowGeometryOf(const WindowState &window, WindowGeometry &out);
