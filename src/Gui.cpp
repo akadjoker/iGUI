@@ -880,14 +880,23 @@ const DrawData &Context::endFrame()
     });
 
     frameDrawList_.clear();
+    // Two passes, not one per window: every window's content first, then what
+    // each window deferred to its overlay (menus, combo lists, tooltips). The
+    // overlay is a layer - it has to sit above the windows' content, including
+    // that of the windows submitted after it - and interleaving it with its own
+    // window put a menu or a tooltip of a background panel underneath the next
+    // window, which painted over it.
     for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
         if (window && window->open)
-        {
             frameDrawList_.append(window->drawList);
+    }
+    for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
+    {
+        const WindowState *window = windows_.get(windowOrder_[i]);
+        if (window && window->open)
             frameDrawList_.append(window->overlayDrawList);
-        }
     }
     drawDragDropPreview();
     frameDrawList_.append(dragDropDrawList_);
