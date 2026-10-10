@@ -59,9 +59,8 @@ endif()
 
 # Shared drawing engine: DrawList/DrawData/Backend, plus the lexical syntax
 # highlighting layer (ig::syntax). Both are things the immediate-mode Context
-# and the retained widget toolkit actually have in common (see
-# BUILD_SPLIT_PLAN.md) - everything else below depends on this, never on
-# each other.
+# and the retained widget toolkit actually have in common - everything else
+# below depends on this, never on each other.
 add_library(igui_core src/DrawList.cpp src/Syntax.cpp)
 add_library(igui::core ALIAS igui_core)
 target_include_directories(igui_core PUBLIC include)
