@@ -15,7 +15,7 @@ The library never talks to a window system or a GPU directly. It produces a list
 - **Built-in code editor** with lexical syntax highlighting (`ig::syntax`), available in both modes.
 - **Immediate-mode core without the STL.** `igui_core` and the immediate-mode library use the bundled `ct` containers; a build-time check (`cmake/CheckNoStd.cmake`) fails the build if `std::` or STL container headers appear in that code.
 - **UTF-8 text**, DPI scaling, and clipboard hooks.
-- **Window state saved to an `.ini`** (`Context::setWindowStatePath` / `WidgetApp::setWindowStatePath`), the way ImGui does it: position, size and minimized/maximized state per window - plus the dock panel arrangement and dock space split sizes - restored on the next run. Desktop targets only: the web and Android builds neither read nor write the file.
+- **Window state saved to an `.ini`** (`Context::setWindowStatePath` / `WidgetApp::setWindowStatePath`), the way ImGui does it: position, size and minimized/maximized state per window, plus the dock layout - which panel sits in which dock region, the region sizes and the tab on top, and the retained dock panels' arrangement - restored on the next run. Desktop targets only: the web and Android builds neither read nor write the file.
 - **Embedded default font** (Roboto, or any TTF/OTF you provide).
 
 ## Requirements

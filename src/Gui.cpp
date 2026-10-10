@@ -5420,6 +5420,97 @@ bool Context::beginDockSpace(StringView idText, float topInset)
     return beginDockSpaceInternal(idText, client, intersect(client, viewport));
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  Dock arrangement in the state file
+//
+//  One list of titles per slot, plus which of them is the tab on top:
+//
+//    [dock:editor]
+//    left_width=180
+//    tabs_left=Hierarchy|Assets
+//    selected_left=Assets
+//
+//  A title the file remembers for a slot but which the application did not draw
+//  this run (a panel the user closed) keeps its place; a title drawn in another
+//  slot has been dragged, and moves.
+// ─────────────────────────────────────────────────────────────────────────────
+
+struct DockSlotName
+{
+    DockSlot    slot;
+    const char *key;   // name the slot is stored under
+};
+
+// One entry per DockSlot: the state file never holds a slot number.
+const DockSlotName kDockSlotNames[] = {
+    {DockSlot::Left,   "left"},
+    {DockSlot::Center, "center"},
+    {DockSlot::Right,  "right"},
+    {DockSlot::Bottom, "bottom"},
+};
+
+String dockKey(const char *prefix, const char *slotName)
+{
+    String key = prefix;
+    key.append(slotName);
+    return key;
+}
+
+// A title that would break the "a|b" list or the ini line itself is not stored.
+bool dockTitleStorable(StringView title)
+{
+    if (title.empty())
+        return false;
+    for (StringView::size_type i = 0; i < title.size(); ++i)
+        if (title[i] == '|' || title[i] == '\n' || title[i] == '\r')
+            return false;
+    return true;
+}
+
+void dockAppendTitle(String &list, StringView title)
+{
+    if (!list.empty())
+        list.push_back('|');
+    list.append(title.data(), title.size());
+}
+
+// Next title of an "a|b" list, advancing @p start past it; an empty view once
+// the list is exhausted.
+StringView dockListNext(const String &list, String::size_type &start)
+{
+    while (start < list.size())
+    {
+        String::size_type end = start;
+        while (end < list.size() && list[end] != '|')
+            ++end;
+        const StringView entry(list.data() + start, end - start);
+        start = end + 1;
+        if (!entry.empty())
+            return entry;
+    }
+    return StringView();
+}
+
+bool dockListHas(const String &list, StringView title)
+{
+    if (list.empty() || title.empty())
+        return false;
+    String::size_type start = 0;
+    for (StringView entry = dockListNext(list, start); !entry.empty();
+         entry = dockListNext(list, start))
+        if (entry == title)
+            return true;
+    return false;
+}
+
+bool dockDrawnHas(const ct::Vector<String> &drawn, StringView title)
+{
+    for (const String &candidate : drawn)
+        if (StringView(candidate.data(), candidate.size()) == title)
+            return true;
+    return false;
+}
+
 bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const Rect &clip)
 {
     WindowState *window = currentWindow();
@@ -5609,9 +5700,14 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         DockTabState tab;
         tab.id = id;
         tab.title = String(title.data(), title.size());
-        tab.slot = slot;
+        // Where the panel was left wins over the slot the application asks for,
+        // so a panel dragged to another region comes back there; so does the tab
+        // that was on top of its group.
+        tab.slot = storedDockSlot(dockSpace->name, tab.title, slot);
         dockSpace->tabs.push_back(tab);
         tabState = &dockSpace->tabs.back();
+        if (storedDockTabOnTop(dockSpace->name, tabState->slot, tabState->title))
+            dockSpace->selected[dockSlotIndex(tabState->slot)] = id;
     }
     tabState->lastSeenFrame = frameNumber_;
     tabState->open = open;
@@ -6878,9 +6974,8 @@ bool Context::saveWindowState()
         windowGeometryOf(window, geometry);
         windowState_.putWindow(window.title, geometry);
     }
-    // A dock space keeps the sizes its regions were dragged to. Where a panel
-    // was dragged (its region and which tab of the group is on top) is not
-    // stored - only the split sizes are.
+    // A dock space keeps the sizes its regions were dragged to and which panel
+    // sits in which of them.
     for (auto& entry : dockSpaces_)
     {
         const DockSpaceState &space = entry.value;
@@ -6888,8 +6983,90 @@ bool Context::saveWindowState()
         windowState_.putNumber(section, "left_width", space.leftWidth);
         windowState_.putNumber(section, "right_width", space.rightWidth);
         windowState_.putNumber(section, "bottom_height", space.bottomHeight);
+        captureDockArrangement(space);
     }
     return windowState_.save();
+}
+
+DockSlot Context::storedDockSlot(StringView spaceName, StringView title, DockSlot fallback) const
+{
+    const String section = dockStateSection(spaceName);
+    if (section.empty())
+        return fallback;
+    for (const DockSlotName &slotName : kDockSlotNames)
+    {
+        const String key = dockKey("tabs_", slotName.key);
+        if (dockListHas(windowState_.get(section, key.c_str()), title))
+            return slotName.slot;
+    }
+    return fallback;
+}
+
+bool Context::storedDockTabOnTop(StringView spaceName, DockSlot slot, StringView title) const
+{
+    const String section = dockStateSection(spaceName);
+    if (section.empty())
+        return false;
+    for (const DockSlotName &slotName : kDockSlotNames)
+    {
+        if (slotName.slot != slot)
+            continue;
+        const String key = dockKey("selected_", slotName.key);
+        return windowState_.get(section, key.c_str()) == String(title.data(), title.size());
+    }
+    return false;
+}
+
+void Context::captureDockArrangement(const DockSpaceState &space)
+{
+    const String section = dockStateSection(space.name);
+    if (section.empty())
+        return;
+
+    // Titles drawn this run: one the file remembers but that is not here now is
+    // a panel the application stopped drawing, while one drawn in another slot
+    // has been dragged.
+    ct::Vector<String> drawn;
+    for (const DockTabState &tab : space.tabs)
+        if (dockTitleStorable(tab.title))
+            drawn.push_back(tab.title);
+
+    for (const DockSlotName &slotName : kDockSlotNames)
+    {
+        const uint32_t slotIndex = dockSlotIndex(slotName.slot);
+        const String tabsKey = dockKey("tabs_", slotName.key);
+        const String selectedKey = dockKey("selected_", slotName.key);
+
+        String tabs;
+        String selected;
+        for (const DockTabState &tab : space.tabs)
+        {
+            if (dockSlotIndex(tab.slot) != slotIndex || !dockTitleStorable(tab.title))
+                continue;
+            dockAppendTitle(tabs, tab.title);
+            if (tab.id == space.selected[slotIndex])
+                selected = tab.title;
+        }
+
+        const String remembered = windowState_.get(section, tabsKey.c_str());
+        String::size_type start = 0;
+        for (StringView title = dockListNext(remembered, start); !title.empty();
+             title = dockListNext(remembered, start))
+            if (!dockDrawnHas(drawn, title) && !dockListHas(tabs, title))
+                dockAppendTitle(tabs, title);
+
+        if (selected.empty())
+        {
+            // Nothing is docked there right now: whichever of the remembered
+            // tabs is still in the list stays on top.
+            const String rememberedSelected = windowState_.get(section, selectedKey.c_str());
+            if (dockListHas(tabs, rememberedSelected))
+                selected = rememberedSelected;
+        }
+
+        windowState_.put(section, tabsKey.c_str(), tabs);
+        windowState_.put(section, selectedKey.c_str(), selected);
+    }
 }
 
 Rect Context::windowBounds(StringView title) const

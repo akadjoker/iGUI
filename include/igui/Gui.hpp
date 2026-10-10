@@ -308,11 +308,12 @@ public:
     // ── Window state (.ini, like ImGui's imgui.ini) ───────────────────────
     // Each window keeps a section named after its title with where it was left
     // and its size, plus whether it was minimized/maximized; a dock space keeps
-    // the sizes its regions were dragged to. A window the file knows is created
-    // where the file says instead of at initialBounds; a window it does not know
-    // is created as asked and stored on the way out. Nothing happens until a
-    // path is set, and the destructor rewrites the file (an explicit
-    // saveWindowState() does the same earlier).
+    // its region sizes and which panel sits in which of them (and which tab of a
+    // group is on top). A window the file knows is created where the file says
+    // instead of at initialBounds; a window it does not know is created as asked
+    // and stored on the way out. Nothing happens until a path is set, and the
+    // destructor rewrites the file (an explicit saveWindowState() does the same
+    // earlier).
     //
     //   ig::Context context(backend);
     //   context.setWindowStatePath("app.ini");
@@ -1228,6 +1229,11 @@ private:
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);
+    // Dock arrangement in the state file: the slot a panel was left in, the tab
+    // on top of a slot's group, and how the arrangement is written back.
+    DockSlot storedDockSlot(StringView spaceName, StringView title, DockSlot fallback) const;
+    bool     storedDockTabOnTop(StringView spaceName, DockSlot slot, StringView title) const;
+    void     captureDockArrangement(const DockSpaceState &space);
     float tableColumnX(int column) const;
     float tableColumnWidth(int column) const;
     bool menuItemInternal(StringView label, bool enabled, bool *checked);
