@@ -659,7 +659,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(), wheelAreas_(), wheelOrderCounter_(0u),
       windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
-      currentWindow_(), focusedWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
+      currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
@@ -857,9 +857,13 @@ void Context::releaseUnsubmittedBlockers()
         openMenu_ = InvalidWidgetId;
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
+        popupWindow_ = WindowHandle();
     }
     if (openCombo_ != InvalidWidgetId && openComboFrame_ + 1u < frameNumber_)
+    {
         openCombo_ = InvalidWidgetId;
+        popupWindow_ = WindowHandle();
+    }
 }
 
 bool Context::windowSubmittedRecently(const WindowState &window) const
@@ -1996,7 +2000,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         return changed;
 
     const Rect popup(rect.x, rect.y + rect.height, rect.width, rect.height * static_cast<float>(items.size()));
-    const Rect popupClip = intersect(popup, clip);
+    const Rect popupClip = intersect(popup, popupClipRect());
     const uint32_t left = buttonIndex(PointerButton::Left);
     // Any press outside the header and the list closes it, in whatever
     // window it lands; pointerBlockedByOpenPopup keeps that press from also
@@ -2009,6 +2013,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         return false;
     }
     openComboFrame_ = frameNumber_;
+    popupWindow_ = currentWindow_;
     comboBounds_ = intersect(rect, clip);
     comboPopupBounds_ = popupClip;
 
@@ -2120,6 +2125,7 @@ bool Context::beginMenu(StringView labelText)
     if (openMenu_ != id)
         return false;
     openMenuFrame_ = frameNumber_;
+    popupWindow_ = currentWindow_;
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.x = button.x;
@@ -2136,7 +2142,7 @@ void Context::endMenu()
     WindowState *window = currentWindow();
     if (window && activeMenuBounds_.height > 0.0f)
     {
-        const Rect clip = contentClip();
+        const Rect clip = popupClipRect();
         window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, clip);
         menuPopupBounds_ = activeMenuBounds_;
         // Latch the width measured while this menu's items were submitted:
@@ -2157,7 +2163,7 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     WindowState *window = currentWindow();
     if (!window || activeMenu_ == InvalidWidgetId)
         return false;
-    const Rect clip = contentClip();
+    const Rect clip = popupClipRect();
     DrawList &popup = window->overlayDrawList;
     const Rect item(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
                     activeMenuBounds_.width, theme_.menuItemHeight);
@@ -2225,7 +2231,7 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     WindowState *window = currentWindow();
     if (!window || activeMenu_ == InvalidWidgetId || subMenuParent_ != InvalidWidgetId)
         return false;
-    const Rect clip = contentClip();
+    const Rect clip = popupClipRect();
     DrawList &popup = window->overlayDrawList;
     const Rect item(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
                     activeMenuBounds_.width, theme_.menuItemHeight);
@@ -2280,7 +2286,7 @@ void Context::endSubMenu()
     WindowState *window = currentWindow();
     if (window && activeMenuBounds_.height > 0.0f)
     {
-        window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, contentClip());
+        window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, popupClipRect());
         subMenuPopupBounds_ = activeMenuBounds_;
         if (subMenuMeasuredWidth_ > 0.0f)
         {
@@ -2302,11 +2308,11 @@ void Context::menuSeparator()
     const Rect separator(activeMenuBounds_.x, activeMenuBounds_.y + activeMenuBounds_.height,
                          activeMenuBounds_.width, theme_.itemSpacing);
     activeMenuBounds_.height += separator.height;
-    window->overlayDrawList.addRectFilled(separator, theme_.menuBg, contentClip());
+    window->overlayDrawList.addRectFilled(separator, theme_.menuBg, popupClipRect());
     window->overlayDrawList.addRectFilled(Rect(separator.x + theme_.menuItemPadX,
                                                separator.y + separator.height * 0.5f,
                                                separator.width - theme_.menuItemPadX * 2.0f, 1.0f),
-                                         theme_.menuSeparator, contentClip());
+                                         theme_.menuSeparator, popupClipRect());
 }
 
 bool Context::beginContextMenu(StringView idText, const Rect &bounds)
@@ -2340,6 +2346,7 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
         return false;
     }
     openMenuFrame_ = frameNumber_;
+    popupWindow_ = currentWindow_;
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.width = popupWidth;
@@ -7730,7 +7737,11 @@ bool Context::currentWindowReceivesPointer() const
 {
     if (activeModal_ != InvalidWidgetId || windowBlockedByModal())
         return false;
-    return currentWindow_ && currentWindow_ == topWindowAt(pointer_.position);
+    if (!currentWindow_)
+        return false;
+    if (currentWindow_ == topWindowAt(pointer_.position))
+        return true;
+    return pointerInsideOwnPopup(pointer_.position);
 }
 
 bool Context::windowBlockedByModal() const
@@ -7807,10 +7818,28 @@ bool Context::pointerPressedIn(const Rect &visible, uint32_t button) const
     // beginFrame focuses the window under a left press, so for the left
     // button "focused" means "on top at the press". Right/middle presses do
     // not change focus, so ask for the top window at the press directly.
-    const bool ownWindow = button == buttonIndex(PointerButton::Left)
+    const bool ownWindow = (button == buttonIndex(PointerButton::Left)
         ? currentWindow_ == focusedWindow_
-        : currentWindow_ && currentWindow_ == topWindowAt(position);
+        : currentWindow_ != WindowHandle() && currentWindow_ == topWindowAt(position)) ||
+        pointerInsideOwnPopup(position);
     return ownWindow && contains(visible, position) && !pointerBlockedByOpenPopup(position);
+}
+
+Rect Context::popupClipRect() const
+{
+    return Rect(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+}
+
+bool Context::pointerInsideOwnPopup(const Vec2 &point) const
+{
+    if (!windows_.get(popupWindow_) || popupWindow_ != currentWindow_)
+        return false;
+    if (comboWasOpenAtFrameStart_ && contains(comboPopupBoundsAtFrameStart_, point))
+        return true;
+    if (!menuWasOpenAtFrameStart_)
+        return false;
+    return contains(menuPopupBoundsAtFrameStart_, point) ||
+           contains(subMenuPopupBoundsAtFrameStart_, point);
 }
 
 bool Context::ownWheelArea(WidgetId id, const Rect &area, uint32_t depth)
