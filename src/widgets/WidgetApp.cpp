@@ -733,6 +733,12 @@ void WidgetApp::addFloatImpl(FloatWindow* fw)
 void WidgetApp::removeFloat(FloatWindow* fw)
 {
     if (!fw) return;
+    // Already closed and waiting for the flush: a second call - the application
+    // removing a dialog that closed itself, say - must not queue the same
+    // pointer again, or the flush would delete it twice.
+    if (std::find(pendingFloatDeletes_.begin(), pendingFloatDeletes_.end(), fw) !=
+        pendingFloatDeletes_.end())
+        return;
     // Keep the geometry of a window that goes away, so reopening it next run
     // (or in the same run) lands where it was left.
     captureWindowState(fw);
