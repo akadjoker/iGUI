@@ -360,50 +360,74 @@ void CodeEditor::redo()
 
 void CodeEditor::applyAction(const EditAction& action, bool isUndo)
 {
+    // A position an edit recorded can point past what the buffer holds now: the
+    // line it was on may have been removed, or the whole buffer replaced. What
+    // the action replays is clamped to the current text first, so the edit paths
+    // below (deleteSelection, insertTextAtCursor) always index lines_ within it.
+    TextPos pos       = action.pos;
+    TextPos oldCursor = action.oldCursor;
+    TextPos newCursor = action.newCursor;
+    clampPos(pos);
+    clampPos(oldCursor);
+    clampPos(newCursor);
+
     if (isUndo) {
         if (action.type == EditAction::Insert) {
             // Undo insert = delete the text that was inserted
-            cursor_ = action.pos;
-            selAnchor_ = action.newCursor;
+            cursor_ = pos;
+            selAnchor_ = newCursor;
             // Select the inserted text, then delete
             if (cursor_ != selAnchor_) deleteSelection();
-            cursor_ = action.oldCursor;
+            cursor_ = oldCursor;
             selAnchor_ = cursor_;
         } else if (action.type == EditAction::Delete) {
             // Undo delete = re-insert the deleted text
-            cursor_ = action.pos;
+            cursor_ = pos;
             selAnchor_ = cursor_;
             insertTextAtCursor(action.oldText);
-            cursor_ = action.oldCursor;
+            cursor_ = oldCursor;
             selAnchor_ = cursor_;
         }
     } else {
         if (action.type == EditAction::Insert) {
-            cursor_ = action.pos;
+            cursor_ = pos;
             selAnchor_ = cursor_;
             insertTextAtCursor(action.newText);
-            cursor_ = action.newCursor;
+            cursor_ = newCursor;
             selAnchor_ = cursor_;
         } else if (action.type == EditAction::Delete) {
-            cursor_ = action.pos;
-            selAnchor_ = action.pos;
+            cursor_ = pos;
+            selAnchor_ = pos;
             // Set selection to the text range and delete
-            TextPos end = action.pos;
+            TextPos end = pos;
             // Calculate end position from old text
             for (char c : action.oldText) {
                 if (c == '\n') { end.line++; end.col = 0; }
                 else end.col++;
             }
-            selAnchor_ = action.pos;
+            clampPos(end);
+            selAnchor_ = pos;
             cursor_ = end;
             deleteSelection();
-            cursor_ = action.newCursor;
+            cursor_ = newCursor;
             selAnchor_ = cursor_;
         }
     }
     ensureCursorVisible();
     textChanged.emit();
     cursorMoved.emit(cursor_);
+}
+
+void CodeEditor::dropStaleExtraCursors()
+{
+    // Extra cursors whose line the buffer no longer has would be indexed straight
+    // into lines_ by the next multi-cursor edit.
+    for (ct::Vector<CursorState>::size_type i = extraCursors_.size(); i > 0u; --i)
+    {
+        const CursorState& state = extraCursors_[i - 1u];
+        if (state.pos.line >= lineCount() || state.anchor.line >= lineCount())
+            extraCursors_.erase(extraCursors_.begin() + static_cast<int>(i - 1u));
+    }
 }
 
 // ── Auto-indent ──────────────────────────────────────────────────────────────
@@ -1573,6 +1597,9 @@ void CodeEditor::onKeyPress(KeyEvent& e)
     if (!extraCursors_.empty() && !readOnly_ && !e.ctrl &&
         (e.key == ig::retained::Key::Backspace || e.key == ig::retained::Key::Delete))
     {
+        dropStaleExtraCursors();
+        if (extraCursors_.empty()) return;
+
         struct CursorInfo { TextPos pos; TextPos anchor; int idx; };
         ct::Vector<CursorInfo> all;
         all.push_back({cursor_, selAnchor_, -1});
@@ -1677,6 +1704,9 @@ void CodeEditor::onTextInput(KeyEvent& e)
 
     if (!extraCursors_.empty() && !inputText.empty()) {
         // Collect all cursor info as VALUES (not pointers)
+        dropStaleExtraCursors();
+        if (extraCursors_.empty()) return;
+
         struct CursorInfo { TextPos pos; TextPos anchor; int idx; }; // idx: -1 = primary
         ct::Vector<CursorInfo> all;
         all.push_back({cursor_, selAnchor_, -1});
@@ -2067,8 +2097,38 @@ void CodeEditor::moveLineDown()
 void CodeEditor::removeLine()
 {
     if (readOnly_) return;
-    int ln = cursor_.line;
-    int lc = lineCount();
+    const int ln = cursor_.line;
+    const int lc = lineCount();
+    const TextPos oldCursor = cursor_;
+
+    // What the removal takes away, described so that undo can put it back by
+    // inserting text at a position the buffer has after the erase: the line plus
+    // the break that followed it, or - for the last line, which has no break to
+    // take with it - a break plus the line, appended to the line before it. No
+    // action is ever recorded with a line index the buffer no longer holds.
+    TextPos removedAt = {ln, 0};
+    String  removed;
+    const bool recorded = ln >= 0 && ln < lc;
+    if (recorded)
+    {
+        removed = lines_[ln];
+        if (lc <= 1)
+        {
+            removedAt = {0, 0};            // the only line: it is only cleared
+        }
+        else if (ln + 1 < lc)
+        {
+            removed.push_back('\n');
+        }
+        else
+        {
+            removedAt = {ln - 1, lineColCount(ln - 1)};
+            String withBreak = "\n";
+            withBreak.append(removed);
+            removed = withBreak;
+        }
+    }
+
     if (lc <= 1) { lines_[0].clear(); cursor_ = {0, 0}; }
     else {
         lines_.erase(lines_.begin() + ln);
@@ -2076,6 +2136,9 @@ void CodeEditor::removeLine()
         cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
     }
     selAnchor_ = cursor_;
+    if (recorded)
+        recordDelete(removedAt, removed, oldCursor, cursor_);
+
     hlDirty_ = true;
     invalidateWrap();
     markDirty(); textChanged.emit();

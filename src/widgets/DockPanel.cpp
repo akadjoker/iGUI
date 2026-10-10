@@ -153,9 +153,7 @@ void DockPanel::closePanel(const String& name)
     if (leaf->currentTab >= 0 && !leaf->tabs.empty())
         leaf->tabs[leaf->currentTab].content->setVisible(true);
 
-    removeChild(w);
-    delete w;
-
+    removeChild(w);   // deletes it, and clears the app's pointers into it
     pruneNode(root_);
     panelClosed.emit(name);
     markDirty();

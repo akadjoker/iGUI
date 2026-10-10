@@ -29,6 +29,11 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
     c.width = width;
     c.sortable = sortable;
     columns_.push_back(std::move(c));
+    // Rows added before this column have no cell for it, and the accessors
+    // index cells up to columns_.size(): pad them the way addRow does.
+    for (auto& row : rows_)
+        while (row.cells.size() < columns_.size())
+            row.cells.push_back("");
     rebuildSortOrder();
     markDirty();
     return static_cast<int>(columns_.size()) - 1;

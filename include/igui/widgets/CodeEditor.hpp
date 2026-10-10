@@ -333,6 +333,8 @@ private:
     void recordDelete(TextPos pos, const String& text,
                       TextPos oldCursor, TextPos newCursor);
     void applyAction(const EditAction& action, bool isUndo);
+    // Drop extra cursors whose line the buffer no longer has.
+    void dropStaleExtraCursors();
     void clearRedoStack();
 
     // ── Auto-indent ──────────────────────────────────────────────────────
