@@ -43,6 +43,9 @@ struct WindowState
     bool useClientArea;
     bool allowMove;
     bool allowResize;
+    // Geometry came from the state file before the viewport was known: it is
+    // fitted to it on the first frame the window is submitted.
+    bool clampToViewport = false;
     uint64_t zOrder;
     // frameNumber_ of the last beginWindow() for this window. A window the
     // application stopped submitting is not on screen, so it must not keep
@@ -1184,6 +1187,10 @@ private:
     // Move a window onto a stored geometry, and remember it the way
     // restoreWindow would put it back.
     void applyWindowGeometry(WindowState &window, const WindowGeometry &geometry);
+    // Keep the title bar where it can be grabbed: the same rule a drag applies,
+    // so a file written on a bigger screen cannot open a window nothing of which
+    // is reachable.
+    void clampWindowToViewport(WindowState &window);
     // Geometry a window is remembered by: a maximized one fills the viewport
     // every frame, so what is worth keeping is the bounds it was maximized from.
     static void windowGeometryOf(const WindowState &window, WindowGeometry &out);

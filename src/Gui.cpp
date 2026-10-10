@@ -922,6 +922,11 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
         window->allowMove = false;
         window->allowResize = false;
     }
+    else if (window->clampToViewport && frame_.displaySize.x > 0.0f && frame_.displaySize.y > 0.0f)
+    {
+        clampWindowToViewport(*window);
+        window->clampToViewport = false;
+    }
 
     if (open)
         window->open = *open;
@@ -5646,8 +5651,12 @@ void Context::endDockSpace()
     {
         for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size();)
         {
-            if ((dockSpace->tabs[i].open && !*dockSpace->tabs[i].open) ||
-                dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_)
+            // A panel the application stopped submitting loses its tab without
+            // its open flag being read: that pointer belongs to the frame the
+            // panel was last drawn in and may be gone by now.
+            const bool dropped = dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_;
+            const bool closed  = !dropped && dockSpace->tabs[i].open && !*dockSpace->tabs[i].open;
+            if (dropped || closed)
                 dockSpace->tabs.erase(dockSpace->tabs.begin() + i);
             else
                 ++i;
@@ -6960,6 +6969,31 @@ void Context::applyWindowGeometry(WindowState &window, const WindowGeometry &geo
     window.hasRestoreBounds = geometry.maximized;
     window.minimized = geometry.minimized;
     window.maximized = geometry.maximized;
+
+    // The file was written on whatever screen the application had then: a window
+    // it puts outside the one used now could never be grabbed again (there is no
+    // public way to move it), so it is fitted as soon as the viewport is known.
+    if (frame_.displaySize.x > 0.0f && frame_.displaySize.y > 0.0f)
+        clampWindowToViewport(window);
+    else
+        window.clampToViewport = true;
+}
+
+void Context::clampWindowToViewport(WindowState &window)
+{
+    const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
+    const float controlWidth = theme_.titleBarHeight;
+    const float controlsCount = 1.0f + (window.showMinimizeButton ? 1.0f : 0.0f) +
+                                (window.showMaximizeButton ? 1.0f : 0.0f);
+    const float controls = window.showWindowControls ? controlWidth * controlsCount : 0.0f;
+    const float grip = 40.0f;
+    const float minimumX = grip + controls - window.bounds.width;
+    const float maximumX = frame_.displaySize.x - grip;
+    const float maximumY = frame_.displaySize.y - titleHeight;
+    if (window.bounds.x > maximumX) window.bounds.x = maximumX;
+    if (window.bounds.x < minimumX) window.bounds.x = minimumX;
+    if (window.bounds.y > maximumY) window.bounds.y = maximumY;
+    if (window.bounds.y < 0.0f) window.bounds.y = 0.0f;
 }
 
 bool Context::loadWindowState()
@@ -7505,21 +7539,8 @@ void Context::drawWindow(WindowState &window)
             window.bounds.y = pointer_.position.y - windowDragOffset_.y;
             // Backends keep reporting the pointer outside the viewport while
             // a button is held, so a fling could park the title bar off
-            // screen, leaving nothing to grab the window by. Keep a grabbable
-            // strip of it on screen: 40px of draggable title past the
-            // controls when it leaves on the left, 40px on the right.
-            const float grip = 40.0f;
-            const float minimumX = grip + controlsWidth - window.bounds.width;
-            const float maximumX = viewport.width - grip;
-            const float maximumY = viewport.height - titleHeight;
-            if (window.bounds.x > maximumX)
-                window.bounds.x = maximumX;
-            if (window.bounds.x < minimumX)
-                window.bounds.x = minimumX;
-            if (window.bounds.y > maximumY)
-                window.bounds.y = maximumY;
-            if (window.bounds.y < 0.0f)
-                window.bounds.y = 0.0f;
+            // screen, leaving nothing to grab the window by.
+            clampWindowToViewport(window);
         }
         if (pointer_.released[left])
         {

@@ -23,7 +23,9 @@ ig::retained::BuImage* IconAtlas::buildImage(int cellSize)
 FloatRect IconAtlas::srcRect(IconId id) const
 {
     int idx = static_cast<int>(id) - 1;
-    if (idx < 0 || !tex_) return {};
+    // cols_ is only set by buildImage(): an atlas that came in with setTexture()
+    // alone would divide by zero here.
+    if (idx < 0 || !tex_ || cols_ <= 0) return {};
     int col = idx % cols_;
     int row = idx / cols_;
     return FloatRect(
