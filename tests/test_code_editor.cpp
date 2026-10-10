@@ -179,12 +179,41 @@ void test_random_editing_keeps_utf8_valid()
     }
 }
 
+
+// Several cursors can cover the same text: Ctrl+A leaves the extra ones where
+// they were, so by the time the second one is erased its span is already gone.
+// Asking the line for it used to call ct::String::substr past the end, and ct
+// aborts the whole process for that - not just a failed edit.
+static void test_overlapping_multi_cursor_erase_does_not_abort()
+{
+    ig::CodeEditorState state;
+    state.setText("foo foo");
+    state.cursorLine = 0;
+    state.cursorColumn = 1;
+    state.clearSelection();
+    state.addNextOccurrenceCursor();          // no selection yet: selects the word
+    state.addNextOccurrenceCursor();          // now adds a cursor on the next one
+    assert(state.extraCursorCount() == 1);
+
+    // Select the whole line with the primary cursor, leaving the extra one on a
+    // span this selection already covers.
+    state.selectionAnchorLine = 0;
+    state.selectionAnchorColumn = 0;
+    state.cursorLine = 0;
+    state.cursorColumn = 7;
+    assert(state.eraseSelectionsAtAllCursors());
+
+    assert(state.lineCount() == 1);
+    assert(state.text().empty());
+}
+
 } // namespace
 
 int main()
 {
     test_caret_and_erase_by_code_point();
     test_random_editing_keeps_utf8_valid();
+    test_overlapping_multi_cursor_erase_does_not_abort();
     if (gFailures != 0)
     {
         printf("test_code_editor: %d failure(s)\n", gFailures);

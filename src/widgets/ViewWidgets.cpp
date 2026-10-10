@@ -18,8 +18,14 @@ FloatWindow::~FloatWindow()
 
 void FloatWindow::setContentWidget(Widget* w)
 {
-    if (content_)
-        removeChild(content_);
+    // Setting the widget that is already the content must not delete it first:
+    // removeChild() deletes what it takes out.
+    if (w == content_)
+        return;
+    Widget* previous = content_;
+    content_ = nullptr;
+    if (previous)
+        removeChild(previous);
     content_ = w;
     if (content_) addChild(content_);
     markDirty();

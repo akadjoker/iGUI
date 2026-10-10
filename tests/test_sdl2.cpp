@@ -65,6 +65,14 @@ static void test_window_and_wheel_translation()
 
     SDL_zero(nativeEvent);
     nativeEvent.type = SDL_KEYDOWN;
+    nativeEvent.key.keysym.sym = SDLK_s;
+    nativeEvent.key.keysym.mod = KMOD_CTRL;
+    assert(ig::sdl2::translateEvent(nativeEvent, event));
+    assert(event.key == ig::KeyCode::S);
+    assert(event.control);
+
+    SDL_zero(nativeEvent);
+    nativeEvent.type = SDL_KEYDOWN;
     nativeEvent.key.keysym.sym = SDLK_PAGEUP;
     nativeEvent.key.keysym.mod = KMOD_SHIFT;
     assert(ig::sdl2::translateEvent(nativeEvent, event));

@@ -730,6 +730,96 @@ static void test_odd_window_titles_do_not_abort_the_state_file()
     std::remove(path);
 }
 
+// A handler is allowed to remove the widget it was called on - that is what
+// Widget::removeChild documents. The manager must not touch that widget again:
+// not the pressed pointer, not the parent walk, not the global event it fires
+// after the signal.
+static void test_a_widget_can_be_removed_by_its_own_handler()
+{
+    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    ig::retained::Widget *stage = app.addStage("selfremove");
+    auto *panel = stage->createChild<ig::retained::Panel>();
+    panel->setRect({0.0f, 0.0f, 200.0f, 100.0f});
+    auto *button = panel->createChild<ig::retained::Button>("Close");
+    button->setRect({10.0f, 10.0f, 80.0f, 30.0f});
+    button->clicked.connect([panel, button]() { panel->removeChild(button); });
+
+    ig::MouseEvent press;
+    press.button = 0;
+    press.x = 20.0f;
+    press.y = 20.0f;
+    button->onMousePress(press);
+
+    ig::MouseEvent release = press;
+    // The click removes the button; firing the global click event afterwards
+    // used to read the freed widget.
+    button->onMouseRelease(release);
+
+    assert(panel->children().empty());
+}
+
+// Every carousel page keeps the content rect, so the ones under the page on
+// screen have to stay hidden: a visible one would take its clicks.
+static void test_a_carousel_shows_one_page_at_a_time()
+{
+    ig::retained::Carousel carousel;
+    carousel.setRect({0.0f, 0.0f, 400.0f, 200.0f});
+    auto *first  = new ig::retained::Panel();
+    auto *second = new ig::retained::Panel();
+    carousel.addPageWidget(first);
+    carousel.addPageWidget(second);
+    carousel.layout();
+
+    assert(first->isVisible());
+    assert(!second->isVisible());
+
+    carousel.removePage(0);              // the page on screen goes away
+    carousel.layout();
+    assert(second->isVisible());         // the one left takes over
+}
+
+// Setting the content the window already has must not delete it: removeChild()
+// deletes what it takes out, so re-adding the same pointer reads freed memory.
+static void test_setting_the_same_float_content_again_keeps_it()
+{
+    ig::retained::FloatWindow window("Content");
+    auto *content = new ig::retained::Panel();
+    window.setContentWidget(content);
+    assert(window.content() == content);
+
+    window.setContentWidget(content);
+    assert(window.content() == content);
+    assert(content->parent() == &window);
+
+    window.setContentWidget(nullptr);    // clearing still deletes it
+    assert(window.content() == nullptr);
+}
+
+// A view that caches a flattened tree compares this counter to know the cache
+// no longer describes the tree: a node added or removed behind its back does
+// not tell the view about it any other way.
+static void test_tree_nodes_report_structural_changes()
+{
+    const unsigned int before = ig::retained::TreeNode::revision();
+    ig::retained::TreeNode root("A");
+    ig::retained::TreeNode *child = root.addChild("B");
+
+    const unsigned int afterAdd = ig::retained::TreeNode::revision();
+    assert(afterAdd != before);
+
+    child->setExpanded(false);
+    const unsigned int afterExpand = ig::retained::TreeNode::revision();
+    assert(afterExpand != afterAdd);
+
+    root.removeChild(0);
+    assert(ig::retained::TreeNode::revision() != afterExpand);
+
+    root.addChild("C");
+    const unsigned int afterSecondAdd = ig::retained::TreeNode::revision();
+    root.clear();
+    assert(ig::retained::TreeNode::revision() != afterSecondAdd);
+}
+
 int main()
 {
     using namespace ig;
@@ -749,6 +839,10 @@ int main()
     test_removing_a_float_twice_is_harmless();
     test_a_column_added_after_rows_has_cells();
     test_removing_a_line_can_be_undone();
+    test_a_widget_can_be_removed_by_its_own_handler();
+    test_a_carousel_shows_one_page_at_a_time();
+    test_setting_the_same_float_content_again_keeps_it();
+    test_tree_nodes_report_structural_changes();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

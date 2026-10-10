@@ -190,8 +190,8 @@ bool GUI::BeginFrame(const ig::FrameInfo &frame)
     WindowData *topWindow = nullptr;
     for (int i = static_cast<int>(m_windowOrder.size()) - 1; i >= 0; --i)
     {
-        WindowData *w = m_windowOrder[i];
-        if (!w->isOpen)
+        WindowData *w = m_windows.find(m_windowOrder[i]);
+        if (!w || !w->isOpen)
             continue;
         const FloatRect r = w->isMinimized
                                 ? FloatRect(w->bounds.x, w->bounds.y, w->bounds.width, m_theme.titleBarHeight)
@@ -758,7 +758,9 @@ WindowData *GUI::GetOrCreateWindow(const ct::String &id)
         w.id = id;
         w.zOrder = static_cast<int>(m_windows.size());
         m_windows[id] = w;
-        m_windowOrder.push_back(&m_windows[id]);
+        // The order holds ids: a WindowData* into the map does not survive the
+        // rehash that a growing map does (it is the same block of slots).
+        m_windowOrder.push_back(id);
         return &m_windows[id];
     }
     return existing;
@@ -925,8 +927,12 @@ void GUI::RenderWindow(WindowData *window, const char *title)
 void GUI::SortWindowsByZOrder()
 {
     ct::sort(m_windowOrder.begin(), m_windowOrder.end(),
-             [](WindowData *a, WindowData *b)
-             { return a->zOrder < b->zOrder; });
+             [this](const ct::String &a, const ct::String &b)
+             {
+                 WindowData *wa = m_windows.find(a);
+                 WindowData *wb = m_windows.find(b);
+                 return (wa ? wa->zOrder : 0) < (wb ? wb->zOrder : 0);
+             });
 }
 
 void GUI::BringCurrentWindowToFront()
@@ -1421,10 +1427,13 @@ bool GUI::TextInput(const char *label, char *buffer, size_t bufferSize,
     if (control->active)
     {
         // Caracteres "imprimíveis"
-        int ch = GetCharPressed();
-        
-        if (ch >= 32 && ch < 127)
+        // BeginFrame() clears the queue of typed characters, so everything the
+        // events produced has to be taken here: asking once keeps only the
+        // first one (a paste would insert a single letter).
+        for (int ch = GetCharPressed(); ch != 0; ch = GetCharPressed())
         {
+            if (ch < 32 || ch >= 127)
+                continue;
             if (len < bufferSize - 1)
             {
                

@@ -316,7 +316,7 @@ private:
 
     // Windows
     ct::HashMap<ct::String, WindowData> m_windows;
-    ct::Vector<WindowData *> m_windowOrder;
+    ct::Vector<ct::String> m_windowOrder;   // ids, see GetOrCreateWindow
     WindowData *m_currentWindow = nullptr;
     WindowData *m_focusedWindow = nullptr;
     WindowData *m_draggingWindow = nullptr;

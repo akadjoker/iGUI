@@ -43,7 +43,15 @@ public:
     /// @brief Check if the node is expanded.
     bool                           isExpanded()  const { return expanded_; }
     /// @brief Set expanded state.
-    void                           setExpanded(bool e) { expanded_ = e; }
+    void                           setExpanded(bool e) { expanded_ = e; bumpRevision(); }
+
+    /// @brief Counter of every structural change to any tree node. A view that
+    ///        caches a flattened list compares it to know when the cache it
+    ///        holds no longer describes the tree (a node added or removed
+    ///        directly does not tell the view about it).
+    static unsigned int revision() { return sRevision_; }
+    /// @brief Note a structural change.
+    static void bumpRevision() { ++sRevision_; }
     /// @brief Get the icon identifier.
     IconId                         iconId()      const { return iconId_; }
     /// @brief Get the parent node.
@@ -56,6 +64,7 @@ private:
     TreeNode*             parent_   = nullptr;
     ct::Vector<TreeNode*> children_;
     bool                  expanded_ = true;
+    static unsigned int   sRevision_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -110,6 +119,7 @@ private:
     float                  scrollOffset_  = 0.0f;
     float                  rowHeight_     = 24.0f;
     float                  indent_        = 16.0f;
+    unsigned int          revisionSeen_  = 0;   // revision the rows were built from
     bool                   flatDirty_     = true;
 };
 
