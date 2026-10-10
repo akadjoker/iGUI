@@ -1079,6 +1079,10 @@ private:
     DrawData drawData_;
     WindowHandle currentWindow_;
     WindowHandle focusedWindow_;
+    // The window whose menu/combo list is open: a popup is allowed to hang
+    // outside it (that is the point of a popup), so that window must keep
+    // receiving the pointer over its own popup.
+    WindowHandle popupWindow_;
     WindowHandle draggingWindow_;
     WindowHandle resizingWindow_;
     WidgetId activeWidget_;
@@ -1228,6 +1232,14 @@ private:
     // Whether the wheel over a scroll area belongs to this area (the innermost
     // one under the pointer last frame), remembering the area for the next one.
     bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth);
+    // True when @p point is inside an open popup (menu, combo list) that belongs
+    // to the window being drawn: the window receives the pointer there even when
+    // the popup reaches outside its bounds.
+    bool pointerInsideOwnPopup(const Vec2 &point) const;
+    // What a popup is clipped to: the screen, not the content of the window it
+    // hangs from - a combo list at the bottom of a panel used to be cut off at
+    // the window's edge, and its rows were then unclickable.
+    Rect popupClipRect() const;
     // Geometry a window is remembered by: a maximized one fills the viewport
     // every frame, so what is worth keeping is the bounds it was maximized from.
     static void windowGeometryOf(const WindowState &window, WindowGeometry &out);

@@ -528,6 +528,61 @@ void test_an_open_menu_is_painted_above_the_windows_drawn_after_it()
           "a window painted over the open menu of another one");
 }
 
+// A popup hangs from its window, it does not live inside it: the list of a combo
+// near the bottom of a panel has to be drawn whole (past the window's edge) and
+// its rows have to stay clickable there. Clipping it to the window's content cut
+// the list off - and with nothing of a row inside the window, no row at all was
+// clickable, so the entries past the first were unreachable.
+void test_a_combo_popup_escapes_the_window_it_hangs_from()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[4] = {"one", "two", "three", "four"};
+    int selected = 0;
+    const ig::Rect comboBounds(10.0f, 150.0f, 140.0f, 24.0f);
+    auto frame = [&]() {
+        return harness.frame([&](ig::Context &c) {
+            if (c.beginWindow("Combo", ig::Rect(40.0f, 40.0f, 320.0f, 220.0f)))
+            {
+                c.comboBox("pick", selected, ig::Span<const ig::StringView>(items, 4), comboBounds);
+                c.endWindow();
+            }
+        });
+    };
+    frame();
+    const ig::Rect window = context.windowBounds("Combo");
+    const ig::Rect header(window.x + context.theme().windowPadding + comboBounds.x,
+                          window.y + context.theme().titleBarHeight + context.theme().windowPadding +
+                              comboBounds.y,
+                          comboBounds.width, comboBounds.height);
+    const ig::Rect popup(header.x, header.y + header.height, header.width,
+                         header.height * 4.0f);
+    check(header.bottom() <= window.bottom(), "setup: the combo header itself must be inside the window");
+    check(popup.bottom() > window.bottom(), "setup: the list must reach past the window's bottom");
+
+    const ig::Vec2 headerPoint(header.x + 8.0f, header.y + 8.0f);
+    harness.queue(ig::Event::pointerMove(headerPoint.x, headerPoint.y));
+    harness.queue(ig::Event::pointerDown(ig::PointerButton::Left, headerPoint.x, headerPoint.y));
+    harness.queue(ig::Event::pointerUp(ig::PointerButton::Left, headerPoint.x, headerPoint.y));
+    frame();
+
+    // The last row: below the window's bottom edge.
+    const ig::Vec2 lastRow(popup.x + 8.0f, popup.y + comboBounds.height * 3.0f + comboBounds.height * 0.5f);
+    check(lastRow.y > window.bottom(), "setup: the row must be outside the window");
+    harness.queue(ig::Event::pointerMove(lastRow.x, lastRow.y));
+    harness.queue(ig::Event::pointerDown(ig::PointerButton::Left, lastRow.x, lastRow.y));
+    harness.queue(ig::Event::pointerUp(ig::PointerButton::Left, lastRow.x, lastRow.y));
+    const ig::DrawData &draw = frame();
+    check(selected == 3, "a row of a combo list outside its window could not be clicked");
+
+    bool drawnOutside = false;
+    for (size_t i = 0; i < draw.vertices.size(); ++i)
+        if (draw.vertices[i].position.y > window.bottom() + 1.0f) { drawnOutside = true; break; }
+    check(drawnOutside, "the list was cut off at the window's edge");
+}
+
 } // namespace
 
 int main()
@@ -544,6 +599,7 @@ int main()
     test_remove_window_forgets_it_everywhere();
     test_an_undo_callback_that_records_an_action_takes_over_redo();
     test_an_open_menu_is_painted_above_the_windows_drawn_after_it();
+    test_a_combo_popup_escapes_the_window_it_hangs_from();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
