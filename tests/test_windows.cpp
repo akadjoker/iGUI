@@ -459,6 +459,75 @@ void test_an_undo_callback_that_records_an_action_takes_over_redo()
     check(context.canUndo(), "the action the callback recorded was not kept");
 }
 
+// What a window defers to its overlay - an open menu, a combo list, a tooltip -
+// is a layer: it has to be painted above the content of every window, not only
+// above the window it belongs to. Interleaving the overlay with its own window
+// left the menu of a background panel underneath the next window, which painted
+// over it.
+void test_an_open_menu_is_painted_above_the_windows_drawn_after_it()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    const ig::Color menuColor = context.theme().menuBg;
+    const ig::Color marker(1u, 2u, 3u, 255u);      // nothing else uses this colour
+
+    auto frame = [&]() {
+        return harness.frame([&](ig::Context &c) {
+            if (c.beginWindow("A", ig::Rect(40.0f, 40.0f, 420.0f, 320.0f)))
+            {
+                if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, 200.0f, 24.0f)))
+                {
+                    if (c.beginMenu("File"))
+                    {
+                        c.menuItem("Open");
+                        c.menuItem("Save");
+                    }
+                    c.endMenu();
+                    c.endMenuBar();
+                }
+                c.endWindow();
+            }
+            // Drawn after A, so above it, and covering where the menu opens.
+            if (c.beginWindow("B", ig::Rect(100.0f, 100.0f, 320.0f, 260.0f)))
+            {
+                c.drawRectFilled(ig::Rect(0.0f, 0.0f, 260.0f, 180.0f), marker);
+                c.endWindow();
+            }
+        });
+    };
+    frame();
+    const ig::Rect window = context.windowBounds("A");
+    // The first menu bar entry: the menu bar starts at the content origin.
+    const ig::Vec2 entry(window.x + context.theme().windowPadding + 10.0f,
+                         window.y + context.theme().titleBarHeight + context.theme().windowPadding + 12.0f);
+
+    harness.queue(ig::Event::pointerMove(entry.x, entry.y));
+    harness.queue(ig::Event::pointerDown(ig::PointerButton::Left, entry.x, entry.y));
+    harness.queue(ig::Event::pointerUp(ig::PointerButton::Left, entry.x, entry.y));
+    frame();                       // the click opens the menu and raises A
+    // A must not stay on top: the click raised it, and with A above B the order
+    // the overlay is appended in makes no difference at all.
+    context.raiseWindow("B", false);
+    const ig::DrawData &draw = frame();
+
+    size_t lastMenuVertex = 0;
+    size_t lastMarkerVertex = 0;
+    bool sawMenu = false;
+    bool sawMarker = false;
+    // The last menu-coloured vertex belongs to the open popup (the items), not
+    // to the menu bar strip the window draws as part of its own content.
+    for (size_t i = 0; i < draw.vertices.size(); ++i)
+    {
+        if (draw.vertices[i].color == menuColor) { lastMenuVertex = i; sawMenu = true; }
+        if (draw.vertices[i].color == marker) { lastMarkerVertex = i; sawMarker = true; }
+    }
+    check(sawMenu, "the open menu was never drawn");
+    check(sawMarker, "the window drawn last was never drawn");
+    check(lastMenuVertex > lastMarkerVertex,
+          "a window painted over the open menu of another one");
+}
+
 } // namespace
 
 int main()
@@ -474,6 +543,7 @@ int main()
     test_the_wheel_goes_to_the_innermost_scroll_area();
     test_remove_window_forgets_it_everywhere();
     test_an_undo_callback_that_records_an_action_takes_over_redo();
+    test_an_open_menu_is_painted_above_the_windows_drawn_after_it();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);
