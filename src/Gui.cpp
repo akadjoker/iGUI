@@ -5433,7 +5433,18 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     DockSpaceState *dockSpace = dockSpaces_.find(id);
     if (!dockSpace)
     {
-        dockSpaces_.put(id, DockSpaceState());
+        DockSpaceState state;
+        state.name = String(idText.data(), idText.size());
+        // Split sizes the user dragged last run; the clamping below still makes
+        // sure they fit the window they are opened in now.
+        const String section = dockStateSection(state.name);
+        state.leftWidth =
+            static_cast<float>(windowState_.getNumber(section, "left_width", state.leftWidth));
+        state.rightWidth =
+            static_cast<float>(windowState_.getNumber(section, "right_width", state.rightWidth));
+        state.bottomHeight =
+            static_cast<float>(windowState_.getNumber(section, "bottom_height", state.bottomHeight));
+        dockSpaces_.put(id, state);
         dockSpace = dockSpaces_.find(id);
     }
     if (!dockSpace)
@@ -6794,7 +6805,100 @@ WindowState *Context::getOrCreateWindow(WidgetId id, StringView title,
     const WindowHandle handle = windows_.emplace(state);
     windowsById_.put(id, handle);
     windowOrder_.push_back(handle);
-    return windows_.get(handle);
+    WindowState *created = windows_.get(handle);
+
+    // A window the state file knows is created where it was left rather than
+    // at the bounds the application asked for.
+    WindowGeometry saved;
+    saved.x = bounds.x;
+    saved.y = bounds.y;
+    saved.w = bounds.width;
+    saved.h = bounds.height;
+    if (created && windowState_.getWindow(created->title, saved))
+        applyWindowGeometry(*created, saved);
+    return created;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Window state (.ini)
+// ─────────────────────────────────────────────────────────────────────────────
+
+Context::~Context()
+{
+    saveWindowState();
+}
+
+void Context::setWindowStatePath(const String &path)
+{
+    windowState_.setPath(path);
+    if (!windowState_.path().empty())
+        loadWindowState();
+}
+
+void Context::windowGeometryOf(const WindowState &window, WindowGeometry &out)
+{
+    const Rect &source = window.maximized && window.hasRestoreBounds ? window.restoreBounds
+                                                                    : window.bounds;
+    out.x = source.x;
+    out.y = source.y;
+    out.w = source.width;
+    out.h = source.height;
+    out.minimized = window.minimized;
+    out.maximized = window.maximized;
+}
+
+void Context::applyWindowGeometry(WindowState &window, const WindowGeometry &geometry)
+{
+    window.bounds = Rect(geometry.x, geometry.y, geometry.w, geometry.h);
+    window.restoreBounds = window.bounds;
+    // Only a maximized window needs the bounds it should return to; a normal
+    // one has no restore state at all.
+    window.hasRestoreBounds = geometry.maximized;
+    window.minimized = geometry.minimized;
+    window.maximized = geometry.maximized;
+}
+
+bool Context::loadWindowState()
+{
+    const bool loaded = windowState_.load();
+    for (WindowState &window : windows_.items())
+    {
+        WindowGeometry geometry;
+        if (windowState_.getWindow(window.title, geometry))
+            applyWindowGeometry(window, geometry);
+    }
+    return loaded;
+}
+
+bool Context::saveWindowState()
+{
+    for (const WindowState &window : windows_.items())
+    {
+        WindowGeometry geometry;
+        windowGeometryOf(window, geometry);
+        windowState_.putWindow(window.title, geometry);
+    }
+    // A dock space keeps the sizes its regions were dragged to. Where a panel
+    // was dragged (its region and which tab of the group is on top) is not
+    // stored - only the split sizes are.
+    for (auto& entry : dockSpaces_)
+    {
+        const DockSpaceState &space = entry.value;
+        const String section = dockStateSection(space.name);
+        windowState_.putNumber(section, "left_width", space.leftWidth);
+        windowState_.putNumber(section, "right_width", space.rightWidth);
+        windowState_.putNumber(section, "bottom_height", space.bottomHeight);
+    }
+    return windowState_.save();
+}
+
+Rect Context::windowBounds(StringView title) const
+{
+    const WindowHandle *handle = windowsById_.find(hashText(title));
+    if (!handle)
+        return Rect();
+    const WindowState *window = windows_.get(*handle);
+    return window ? window->bounds : Rect();
 }
 
 Rect Context::contentRect(const Rect &local) const
