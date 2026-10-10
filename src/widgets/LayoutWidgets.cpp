@@ -1553,8 +1553,17 @@ void Carousel::addPageWidget(Widget* page)
 {
     pages_.push_back(page);
     addChild(page);
+    // Every page keeps the content rect, so a page under the current one would
+    // take its clicks: only the page on screen stays visible.
+    page->setVisible(pages_.size() == 1);
     markDirty();
     WidgetApp::instance().requestLayout();
+}
+
+void Carousel::showOnlyCurrentPage()
+{
+    for (int i = 0; i < static_cast<int>(pages_.size()); ++i)
+        pages_[i]->setVisible(i == currentPage_);
 }
 
 void Carousel::removePage(int index)
@@ -1562,12 +1571,13 @@ void Carousel::removePage(int index)
     if (index < 0 || index >= static_cast<int>(pages_.size())) return;
     Widget* p = pages_[index];
     pages_.erase(pages_.begin() + index);
-    auto it = std::find(children_.begin(), children_.end(), p);
-    if (it != children_.end()) children_.erase(it);
-    delete p;
+    // removeChild() erases it, tells the widget manager (the hover/focus/press
+    // pointers into a page would otherwise dangle) and deletes it.
+    removeChild(p);
     if (currentPage_ >= static_cast<int>(pages_.size()))
         currentPage_ = static_cast<int>(pages_.size()) - 1;
     if (currentPage_ < 0) currentPage_ = 0;
+    showOnlyCurrentPage();
     markDirty();
 }
 
@@ -1596,6 +1606,10 @@ void Carousel::startAnim(int from, int to, int dir)
     animProgress_ = 0.0f;
     animating_    = true;
     currentPage_  = to;
+    // The page sliding in has to be visible to be painted; the one it replaces
+    // is hidden when the animation ends (both are painted while it runs).
+    if (to >= 0 && to < static_cast<int>(pages_.size()))
+        pages_[to]->setVisible(true);
     markDirty();
 }
 
@@ -1673,6 +1687,7 @@ void Carousel::paint(PaintContext& ctx)
             animProgress_ = 1.0f;
             animating_    = false;
             animFrom_     = -1;
+            showOnlyCurrentPage();
         }
         markDirty();
     }

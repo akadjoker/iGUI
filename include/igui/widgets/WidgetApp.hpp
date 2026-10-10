@@ -78,6 +78,12 @@ public:
     /// @brief Get the singleton instance.
     static WidgetApp& instance();
 
+    /// @brief The instance when it exists, nullptr otherwise. Used by widgets
+    ///        that are destroyed on their own (a `delete` by the application,
+    ///        a stage going away) to tell the manager about it without creating
+    ///        it again during static destruction.
+    static WidgetApp* existing();
+
     /// @brief Initialize the widget system (call after GL context ready).
     bool init();
 
@@ -259,6 +265,12 @@ public:
     /// @brief Clear internal refs to a widget being destroyed.
     void notifyWidgetRemoved(Widget* w);
 
+    /// @brief How many widgets the manager has been told about going away.
+    ///        A caller that runs application code (an event handler, a signal)
+    ///        compares it before and after: when it changed, the widgets it was
+    ///        holding may be gone, so it can drop them instead of touching them.
+    uint32_t deletions() const { return deletions_; }
+
     // ── Float windows ───────────────────────────────────────────────────
     // Floating windows always render on top of the stage (below popups).
     template <typename T = FloatWindow, typename... Args>
@@ -381,6 +393,11 @@ private:
     void bubble(Widget* target, MouseEvent& e, Func handler);
 
     static ct::Vector<Widget*> buildChain(Widget* w);
+
+    /// @brief True when @p w is still part of what the frame draws. Only
+    ///        pointers are compared - @p w may have been deleted, so it is
+    ///        never dereferenced.
+    bool isWidgetInTrees(const Widget* w) const;
     void updateHover(Widget* newLeaf);
     void applyCursor(CursorType type);
 
@@ -427,6 +444,7 @@ private:
     ig::retained::DrawList*    drawList_  = nullptr;  // cached from last paint()
 
     // Widget tree
+    uint32_t deletions_ = 0;   // bumped whenever a widget is reported gone
     Widget* root_    = nullptr;
     Widget* focused_ = nullptr;
     Widget* hovered_ = nullptr;

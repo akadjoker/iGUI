@@ -3331,7 +3331,15 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
     const float leftPadding = theme_.windowPadding * 0.5f;
     const float availableWidth = rect.width - theme_.windowPadding;
     float horizontalOffset = metrics.width > availableWidth ? availableWidth - metrics.width : 0.0f;
-    const StringView prefix(value.data(), textCursor_);
+    // textCursor_ belongs to the field that has focus: for any other field the
+    // view would run past the end of its string (and the caret math below only
+    // uses it while focused).
+    StringView::size_type caretBytes = 0u;
+    if (focused && textCursor_ > 0)
+        caretBytes = static_cast<StringView::size_type>(textCursor_) < value.size()
+                         ? static_cast<StringView::size_type>(textCursor_)
+                         : value.size();
+    const StringView prefix(value.data(), caretBytes);
     const TextMetrics prefixMetrics = measureText(theme_.font, prefix, theme_.fontSize);
     if (focused && prefixMetrics.width + horizontalOffset < 0.0f)
         horizontalOffset = -prefixMetrics.width;

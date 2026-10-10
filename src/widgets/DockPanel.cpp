@@ -473,6 +473,7 @@ void DockPanel::paint(PaintContext& ctx)
     paintNode(root_, ctx);
 
     // Visual drag feedback
+    dropStaleDrag();
     if (drag_.active) paintDraggedTab(ctx);
     if (dropValid_)   paintDropOverlay(ctx);
 
@@ -835,9 +836,39 @@ void DockPanel::onMouseLeave()
 //  performDrop
 // ─────────────────────────────────────────────────────────────────────────────
 
+bool DockPanel::nodeInTree(const DockNode* node, const DockNode* target)
+{
+    if (!node) return false;
+    if (node == target) return true;
+    if (!node->isSplit) return false;
+    return nodeInTree(node->first, target) || nodeInTree(node->second, target);
+}
+
+void DockPanel::dropStaleDrag()
+{
+    if (!drag_.active && !dropNode_) return;
+    // srcNode is only read while it is still part of the tree: closePanel() and
+    // restoreLayout() free nodes, and a drag that outlived its node would read
+    // and write freed memory when it is painted or dropped.
+    const bool sourceOk =
+        drag_.active && drag_.srcIdx >= 0 && nodeInTree(root_, drag_.srcNode) &&
+        drag_.srcIdx < static_cast<int>(drag_.srcNode->tabs.size());
+    if (sourceOk && (!dropNode_ || nodeInTree(root_, dropNode_)))
+        return;
+    drag_      = DragState();
+    dropNode_  = nullptr;
+    dropValid_ = false;
+}
+
 void DockPanel::performDrop()
 {
     if (!dropNode_ || !drag_.srcNode) return;
+    if (drag_.srcIdx < 0 || drag_.srcIdx >= static_cast<int>(drag_.srcNode->tabs.size()) ||
+        !nodeInTree(root_, drag_.srcNode) || !nodeInTree(root_, dropNode_))
+    {
+        dropStaleDrag();
+        return;
+    }
 
     DockNode::Tab movedTab = drag_.srcNode->tabs[drag_.srcIdx];
 
