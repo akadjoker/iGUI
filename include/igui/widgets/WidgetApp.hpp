@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
+#include <igui/WindowStateIni.hpp>
 #include <igui/widgets/String.hpp>
 #include <ct/hashmap.hpp>
 
@@ -274,6 +275,29 @@ public:
     /// @brief Get the list of float windows.
     const ct::Vector<FloatWindow*>& floats() const { return floats_; }
 
+    // ── Window state (.ini, like ImGui's imgui.ini) ───────────────────────
+    // Float windows keep a section named after their title holding their
+    // position, size and minimized flag; dock panels keep their layout under a
+    // "dock:" section named after DockPanel::settingsKey(). The file is read as
+    // soon as a path is set, applied to every float as it is added (and to the
+    // dock panels once the stages are built), and rewritten on shutdown() - or
+    // on demand with saveWindowState().
+    //
+    // Desktop only: neither a browser tab nor an Android app can keep the file,
+    // so there the state stays in memory and the disk is never touched.
+
+    /// @brief Point the state file at @p path (already-loaded windows move).
+    ///        An empty path turns persistence off.
+    void setWindowStatePath(const String& path);
+    /// @brief Get the state file path (empty when persistence is off).
+    const String& windowStatePath() const { return windowState_.path(); }
+    /// @brief (Re)read the state file; existing floats and docks snap to it.
+    /// @return true when the file was read.
+    bool loadWindowState();
+    /// @brief Capture the current floats and dock layouts, then write the file.
+    /// @return true when the file was written.
+    bool saveWindowState();
+
     // ── Focus ─────────────────────────────────────────────────────────────
     /// @brief Set the focused widget.
     void setFocused(Widget* w);
@@ -431,6 +455,15 @@ private:
     // Float windows (painted above stage, below popup)
     ct::Vector<FloatWindow*> floats_;
     ct::Vector<FloatWindow*> pendingFloatDeletes_;  // deferred delete (safe after event loop)
+
+    // Float window state, kept in memory between loads and saves
+    WindowStateIni windowState_;
+    // Dock layouts are applied once the stages they live in have been built.
+    bool dockLayoutPending_ = false;
+    void captureWindowState(FloatWindow* fw);
+    void applyWindowState(FloatWindow* fw);
+    void captureDockLayouts();
+    void restoreDockLayouts();
 
     // Tooltip
     float   tooltipTimer_   = 0.0f;

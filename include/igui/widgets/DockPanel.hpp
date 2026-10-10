@@ -96,6 +96,14 @@ public:
     ///        false, keeping the current layout, when the text does not parse.
     bool restoreLayout(const String& text);
 
+    /// @brief Name this panel's layout is remembered under, so that
+    ///        WidgetApp::setWindowStatePath and its state file can restore it
+    ///        on the next run. Empty - the default - means the panel is never
+    ///        remembered.
+    void setSettingsKey(const String& key) { settingsKey_ = key; }
+    /// @brief Get the settings key (empty when the panel is not remembered).
+    const String& settingsKey() const      { return settingsKey_; }
+
     /// @brief Set the tab bar height.
     void  setTabBarHeight(float h) { tabBarH_ = h; markDirty(); }
     /// @brief Get the tab bar height.
@@ -124,6 +132,7 @@ private:
     DockNode* root_    = nullptr;
     float     tabBarH_ = 26.0f;
     float     handleW_ =  5.0f;
+    String    settingsKey_;   // name the layout is remembered under ("" = never)
 
     // ── Tab drag state ─────────────────────────────────────────────────────
     struct DragState {

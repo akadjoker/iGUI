@@ -6,6 +6,8 @@
 
 #include <cassert>
 #include <cmath>
+#include <cstdio>
+#include <ct/ini.hpp>
 #include <type_traits>
 
 static_assert(std::is_same<ig::Color, ig::retained::Color>::value,
@@ -458,6 +460,120 @@ static void test_fader_accent_comes_from_the_caller()
     assert(!foundTheme);
 }
 
+// Float windows keep their geometry in an .ini, the way ImGui does: one
+// section per window title, applied when the window is created again.
+static void test_float_window_state_round_trips_through_ini()
+{
+    const char *path = "igui_window_state_test.ini";
+    std::remove(path);
+
+    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    app.setWindowStatePath(path);
+    assert(app.windowStatePath() == path);
+
+    auto *inspector = app.addFloat<ig::retained::FloatWindow>("Inspector");
+    inspector->setFloatPos(120.0f, 80.0f);
+    inspector->setFloatSize(360.0f, 240.0f);
+    inspector->setMinimized(true);
+
+    // ']' cannot appear in a section name, so a title carrying one is folded.
+    auto *console = app.addFloat<ig::retained::FloatWindow>("Console]");
+    console->setFloatPos(12.0f, 34.0f);
+    console->setFloatSize(100.0f, 50.0f);
+
+    // A blank title has no section to live in, so it is left out.
+    auto *untitled = app.addFloat<ig::retained::FloatWindow>("   ");
+    untitled->setFloatPos(7.0f, 7.0f);
+
+    assert(app.saveWindowState());
+
+    ct::Ini written;
+    assert(written.load(path));
+    assert(written.size() == 2);
+    assert(written.get_double("Inspector", "pos_x") == 120.0);
+    assert(written.get_double("Inspector", "pos_y") == 80.0);
+    assert(written.get_double("Inspector", "size_w") == 360.0);
+    assert(written.get_double("Inspector", "size_h") == 240.0);
+    assert(written.get_bool("Inspector", "minimized"));
+    assert(written.get_double("Console_", "pos_x") == 12.0);
+
+    // Closing every window must not drop what was written for them.
+    app.removeFloat(untitled);
+    app.removeFloat(console);
+    app.removeFloat(inspector);
+    assert(app.floats().empty());
+    assert(app.saveWindowState());
+    written.load(path);
+    assert(written.size() == 2);
+
+    // A window created after the file has been read comes back where it was.
+    assert(app.loadWindowState());
+    auto *reopened = app.addFloat<ig::retained::FloatWindow>("Inspector");
+    assert(reopened->floatX() == 120.0f && reopened->floatY() == 80.0f);
+    assert(reopened->floatW() == 360.0f && reopened->floatH() == 240.0f);
+    assert(reopened->isMinimized());
+
+    // A title the file knows nothing about keeps its own geometry.
+    auto *fresh = app.addFloat<ig::retained::FloatWindow>("Never saved");
+    assert(fresh->floatX() == 50.0f && fresh->floatY() == 50.0f);
+    assert(fresh->floatW() == 300.0f && fresh->floatH() == 200.0f);
+
+    app.removeFloat(fresh);
+    app.removeFloat(reopened);
+
+    // Persistence off means no file is touched.
+    app.setWindowStatePath(ig::retained::String());
+    assert(app.windowStatePath().empty());
+    assert(!app.saveWindowState());
+
+    std::remove(path);
+}
+
+// Dock layouts ride along in the same file: a panel with a settings key is
+// remembered, and a panel built fresh comes back to that arrangement.
+static void test_dock_layout_is_remembered_in_the_state_file()
+{
+    const char *path = "igui_dock_state_test.ini";
+    std::remove(path);
+
+    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    app.setWindowStatePath(path);
+
+    ig::retained::Widget *stage = app.addStage("dockstate");
+    auto *dock = stage->createChild<ig::retained::DockPanel>();
+    dock->setSettingsKey("main");
+    dock->addPanel("Scene", new ig::retained::Panel());
+    dock->addPanel("Properties", new ig::retained::Panel());
+    dock->addPanel("Console", new ig::retained::Panel());
+    dock->splitOff("Properties", ig::retained::DockSide::Right, 0.3f);
+    // A panel without a key is never remembered.
+    auto *loose = stage->createChild<ig::retained::DockPanel>();
+    loose->addPanel("Loose", new ig::retained::Panel());
+    const ig::retained::String arranged = dock->saveLayout();
+
+    assert(app.saveWindowState());
+
+    ct::Ini written;
+    assert(written.load(path));
+    const ig::retained::String section = ig::dockStateSection("main");
+    assert(section == "dock:main");
+    assert(written.get(section, "layout") == arranged);
+    assert(written.size() == 1u);   // the keyless panel is not in the file
+
+    // The panel the next run builds starts flat and takes the layout back.
+    auto *fresh = stage->createChild<ig::retained::DockPanel>();
+    fresh->setSettingsKey("main");
+    fresh->addPanel("Scene", new ig::retained::Panel());
+    fresh->addPanel("Properties", new ig::retained::Panel());
+    fresh->addPanel("Console", new ig::retained::Panel());
+    assert(fresh->saveLayout() != arranged);
+    assert(app.loadWindowState());
+    assert(fresh->saveLayout() == arranged);
+
+    app.setWindowStatePath(ig::retained::String());
+    std::remove(path);
+}
+
 int main()
 {
     using namespace ig;
@@ -470,6 +586,8 @@ int main()
     test_fader_accent_comes_from_the_caller();
     test_gizmo3d_draws_the_box_it_moves();
     test_gizmo3d_grabs_the_handle_under_the_pointer();
+    test_float_window_state_round_trips_through_ini();
+    test_dock_layout_is_remembered_in_the_state_file();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

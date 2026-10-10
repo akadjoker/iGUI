@@ -20,6 +20,7 @@
 #include "FileDialog.hpp"
 #include "Math.hpp"
 #include "Theme.hpp"
+#include "WindowStateIni.hpp"
 
 namespace ig
 {
@@ -288,6 +289,10 @@ class Context
 public:
     explicit Context(Backend &backend, TextProvider *textProvider = nullptr);
 
+    /// @brief Destroy the context, writing the window state file first (see
+    ///        setWindowStatePath).
+    ~Context();
+
     void pushEvent(const Event &event);
     void beginFrame(const FrameInfo &frame);
     const DrawData &endFrame();
@@ -296,6 +301,34 @@ public:
     // A root window that follows the current viewport every frame.
     bool beginMainWindow(StringView title, bool *open = nullptr);
     void endWindow();
+    /// @brief Bounds the window with @p title has right now (an empty rect when
+    ///        no such window exists yet).
+    Rect windowBounds(StringView title) const;
+
+    // ── Window state (.ini, like ImGui's imgui.ini) ───────────────────────
+    // Each window keeps a section named after its title with where it was left
+    // and its size, plus whether it was minimized/maximized; a dock space keeps
+    // the sizes its regions were dragged to. A window the file knows is created
+    // where the file says instead of at initialBounds; a window it does not know
+    // is created as asked and stored on the way out. Nothing happens until a
+    // path is set, and the destructor rewrites the file (an explicit
+    // saveWindowState() does the same earlier).
+    //
+    //   ig::Context context(backend);
+    //   context.setWindowStatePath("app.ini");
+    //
+    // Desktop only: neither a browser tab nor an Android app can keep the file,
+    // so there the state stays in memory and the disk is never touched.
+    void setWindowStatePath(const String &path);
+    /// @brief Get the state file path ("" when persistence is off).
+    const String &windowStatePath() const { return windowState_.path(); }
+    /// @brief (Re)read the state file and move the windows that exist to what it
+    ///        says.
+    /// @return true when the file was read.
+    bool loadWindowState();
+    /// @brief Store the current windows and write the file.
+    /// @return true when the file was written.
+    bool saveWindowState();
     // Operate on existing floating windows identified by their title.
     void maximizeWindow(StringView title);
     void restoreWindow(StringView title);
@@ -814,6 +847,7 @@ private:
 
     struct DockSpaceState
     {
+        String name;   // id the dock space was opened with, for the state file
         Rect bounds;
         Rect clip;
         float leftWidth;
@@ -949,6 +983,8 @@ private:
     ct::Vector<Event> textEvents_;
     ct::SlotMap<WindowState> windows_;
     ct::HashMap<WidgetId, WindowHandle> windowsById_;
+    // Geometry the windows are remembered in ("" path = persistence off).
+    WindowStateIni windowState_;
     // Per-title button visibility (bit0 minimize, bit1 maximize), kept even
     // for windows not created yet - see setWindowButtons.
     ct::HashMap<WidgetId, uint8_t> windowButtons_;
@@ -1144,6 +1180,12 @@ private:
     void advanceLayout(const Rect &item);
     float autoButtonWidth(StringView label) const;
     WindowState *getOrCreateWindow(WidgetId id, StringView title, const Rect &bounds);
+    // Move a window onto a stored geometry, and remember it the way
+    // restoreWindow would put it back.
+    void applyWindowGeometry(WindowState &window, const WindowGeometry &geometry);
+    // Geometry a window is remembered by: a maximized one fills the viewport
+    // every frame, so what is worth keeping is the bounds it was maximized from.
+    static void windowGeometryOf(const WindowState &window, WindowGeometry &out);
     Rect contentRect(const Rect &local) const;
     Vec2 toContentSpace(const Vec2 &absolute) const;
     Rect contentClip() const;
