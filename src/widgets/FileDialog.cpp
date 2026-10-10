@@ -59,6 +59,21 @@ FileDialog::FileDialog(const String& title)
 FileDialog::~FileDialog()
 {
     clearPreview();
+    // The prompt is a float of its own whose accepted handler comes back into
+    // this dialog: it cannot outlive it. It is looked up in the float list
+    // first, because accepting or cancelling the prompt removes (and deletes)
+    // it, and a stale pointer must not be handed to removeFloat.
+    if (newFolderBox_)
+    {
+        if (WidgetApp* app = WidgetApp::existing())
+            for (auto* fw : app->floats())
+                if (fw == newFolderBox_)
+                {
+                    app->removeFloat(newFolderBox_);
+                    break;
+                }
+        newFolderBox_ = nullptr;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -116,6 +131,7 @@ void FileDialog::newFolderPrompt()
         if (FileSystem::exists(FileSystem::joinPath(parent, name))) return "That name is already taken";
         return "";
     });
+    newFolderBox_ = box;
     box->accepted.connect([this, parent](const String& name) {
         String path = FileSystem::joinPath(parent, name);
         if (FileSystem::createDir(path)) {

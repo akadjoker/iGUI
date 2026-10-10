@@ -107,7 +107,15 @@ bool GlRaster::init(void *(*procAddress)(const char *name))
     const unsigned vs = compile(GL_VERTEX_SHADER, kVertexShader);
     const unsigned fs = compile(GL_FRAGMENT_SHADER, kFragmentShader);
     if (!vs || !fs)
+    {
+        // One can compile while the other fails, and the context keeps it alive
+        // until it is deleted: shutdown() has no program to clean up here.
+        if (vs)
+            glDeleteShader(vs);
+        if (fs)
+            glDeleteShader(fs);
         return false;
+    }
     program_ = glCreateProgram();
     glAttachShader(program_, vs);
     glAttachShader(program_, fs);

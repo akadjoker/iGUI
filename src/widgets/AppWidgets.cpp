@@ -546,8 +546,34 @@ bool Outliner::isNodeLocked(TreeNode* node) const {
 
 TreeNode* Outliner::selectedNode() const { return selected_; }
 
+namespace
+{
+// Carries the flags of the nodes that are still there, and drops the entries of
+// the ones that are gone: a new node allocated at a recycled address would
+// otherwise inherit the visibility and lock of the one it replaced.
+void carryNodeFlags(TreeNode* node, const ct::HashMap<TreeNode*, bool>& visible,
+                    const ct::HashMap<TreeNode*, bool>& locked,
+                    ct::HashMap<TreeNode*, bool>& outVisible,
+                    ct::HashMap<TreeNode*, bool>& outLocked)
+{
+    if (const bool* v = visible.find(node))
+        outVisible[node] = *v;
+    if (const bool* l = locked.find(node))
+        outLocked[node] = *l;
+    for (auto* child : node->children())
+        carryNodeFlags(child, visible, locked, outVisible, outLocked);
+}
+}
+
 void Outliner::rebuildFlat()
 {
+    ct::HashMap<TreeNode*, bool> visible;
+    ct::HashMap<TreeNode*, bool> locked;
+    for (auto* r : roots_)
+        carryNodeFlags(r, visMap_, lockMap_, visible, locked);
+    visMap_  = visible;
+    lockMap_ = locked;
+
     flatRows_.clear();
     for (auto* r : roots_) flattenNode(r, 0);
     flatDirty_ = false;

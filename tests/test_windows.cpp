@@ -281,6 +281,43 @@ void test_dock_arrangement_round_trips_through_ini()
     remove(path);
 }
 
+// A state file written on a bigger screen can put a window where none of it is
+// reachable, and there is no public way to move a window from outside: it has to
+// be fitted to the viewport it is opened in.
+void test_a_window_restored_off_screen_is_fitted_to_the_viewport()
+{
+    const char *path = "igui_offscreen_test.ini";
+    remove(path);
+
+    ct::Ini previous;
+    previous.set("A", "pos_x", 4000.0);
+    previous.set("A", "pos_y", 3000.0);
+    previous.set("A", "size_w", 420.0);
+    previous.set("A", "size_h", 260.0);
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);      // before any frame: the viewport is unknown
+
+    harness.frame([](ig::Context &c) {
+        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f)))
+            c.endWindow();
+    });
+
+    const ig::Rect bounds = context.windowBounds("A");
+    check(bounds.x < 1280.0f && bounds.y < 800.0f,
+          "a window restored outside the screen was left outside it");
+    check(bounds.x + bounds.width > 0.0f && bounds.y + bounds.height > 0.0f,
+          "no part of the restored window is on screen");
+    check(bounds.width == 420.0f && bounds.height == 260.0f,
+          "the restored window did not take the size from the state file");
+
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 } // namespace
 
 int main()
@@ -291,6 +328,7 @@ int main()
     test_maximized_window_follows_viewport();
     test_window_state_round_trips_through_ini();
     test_dock_arrangement_round_trips_through_ini();
+    test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     if (gFailures != 0)
     {
         printf("test_windows: %d failure(s)\n", gFailures);

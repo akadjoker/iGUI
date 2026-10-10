@@ -11,6 +11,7 @@ class BoxLayout;
 class Label;
 class TextInput;
 class Button;
+class InputBox;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  FileDialog — cross-platform file/folder picker as a FloatWindow popup
@@ -160,6 +161,9 @@ private:
     BoxLayout* bottomBar_       = nullptr;
     TextInput* fileNameInput_   = nullptr;
     Label*     statusLabel_     = nullptr;
+    // The "new folder" prompt, when one is open: it holds an accepted handler
+    // that comes back into this dialog, so it is closed with it.
+    InputBox*  newFolderBox_    = nullptr;
     Button*    okButton_        = nullptr;
     Button*    cancelButton_    = nullptr;
 

@@ -684,8 +684,11 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
         }
         else
             hitEntry = static_cast<int>((released.y - entriesArea.y + state.scrollOffset) / rowHeight);
+        // -3 is "nothing was hit": -1 and -2 are the pseudo rows for the parent
+        // and the current folder, so a click in the empty area under the last
+        // entry must not be read as one of them.
         if (hitEntry < 0 || hitEntry >= static_cast<int>(visibleEntries.size()))
-            hitEntry = -1;
+            hitEntry = -3;
         else
             hitEntry = visibleEntries[static_cast<ct::Vector<int>::size_type>(hitEntry)];
     }

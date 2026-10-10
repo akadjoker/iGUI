@@ -183,9 +183,15 @@ void WidgetApp::update(const ig::retained::IO& io)
         tooltipWidget_  = nullptr;
     }
 
-    // Flush deferred deletes
-    for (auto* fw : pendingFloatDeletes_) delete fw;
-    pendingFloatDeletes_.clear();
+    // Flush deferred deletes. A destructor running here can queue another window
+    // (a dialog closing the prompt it opened), so the queue is drained until it
+    // is empty instead of iterating a vector that may grow under it.
+    while (!pendingFloatDeletes_.empty())
+    {
+        FloatWindow* queued = pendingFloatDeletes_.front();
+        pendingFloatDeletes_.erase(pendingFloatDeletes_.begin());
+        delete queued;
+    }
     delete pendingPopupDelete_; pendingPopupDelete_ = nullptr;
 
     // A window state file read before the stages existed: hand the dock
@@ -678,20 +684,27 @@ void WidgetApp::fireEvent(const String& event, Widget* w)
 {
     if (!w) return;
 
+    // The handlers are walked from a copy: a handler is allowed to register
+    // another one (on()/onAny()), and inserting into the map can move its
+    // storage out from under a pointer taken before the call.
+    ct::Vector<EventCallback> callbacks;
+
     // Targeted: by widget ID
     if (!w->id().empty())
     {
-        ct::Vector<EventCallback>* callbacks = globalHandlers_.find(event + ":" + w->id());
-        if (callbacks)
-            for (auto& cb : *callbacks)
-                cb(w);
+        ct::Vector<EventCallback>* found = globalHandlers_.find(event + ":" + w->id());
+        if (found)
+            callbacks = *found;
     }
 
     // Catch-all
-    ct::Vector<EventCallback>* callbacks = globalHandlers_.find(event + ":*");
-    if (callbacks)
-        for (auto& cb : *callbacks)
-            cb(w);
+    ct::Vector<EventCallback>* any = globalHandlers_.find(event + ":*");
+    if (any)
+        for (auto& cb : *any)
+            callbacks.push_back(cb);
+
+    for (auto& cb : callbacks)
+        cb(w);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -740,6 +753,15 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         tooltipWidget_  = nullptr;
         tooltipVisible_ = false;
         tooltipTimer_   = 0.0f;
+    }
+    // The widget that opened a popup going away closes it: the popup holds a
+    // pointer back to its owner, which would be the memory just freed.
+    if (popupOwner_ && isDescendantOf(popupOwner_, w))
+    {
+        popup_             = nullptr;
+        popupOwner_        = nullptr;
+        popupClosing_      = nullptr;
+        popupClosingOwner_ = nullptr;
     }
     // A popup (or the window a popup was opened from) can go away while it is
     // still the one being painted: painting it after that reads freed memory.
