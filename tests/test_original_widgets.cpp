@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ct/ini.hpp>
 #include <type_traits>
 
@@ -584,6 +585,151 @@ static void test_dock_layout_is_remembered_in_the_state_file()
     std::remove(path);
 }
 
+// closePanel() hands the content widget to removeChild(), which already deletes
+// it: a second delete corrupts the heap (AddressSanitizer aborts right here).
+// The final version of the old code wrote a comment saying "deletes it" - a
+// regression here is a crash, not a wrong pixel.
+static void test_closing_a_dock_panel_deletes_its_content_once()
+{
+    ig::retained::DockPanel dock;
+    dock.setRect({0.0f, 0.0f, 600.0f, 400.0f});
+    dock.addPanel("Inspector", new ig::retained::Panel());
+    dock.addPanel("Console", new ig::retained::Panel());
+    dock.splitOff("Console", ig::retained::DockSide::Bottom, 0.3f);
+    dock.layout();
+
+    const ig::retained::String before = dock.saveLayout();
+    assert(strstr(before.c_str(), "Console") != nullptr);
+
+    dock.closePanel("Console");
+    dock.layout();
+    const ig::retained::String after = dock.saveLayout();
+    assert(strstr(after.c_str(), "Console") == nullptr);
+    assert(strstr(after.c_str(), "Inspector") != nullptr);
+
+    // Closing what is not there any more is a no-op, not a second delete.
+    dock.closePanel("Console");
+    dock.closePanel("Never added");
+    dock.layout();
+
+    dock.closePanel("Inspector");
+    dock.layout();
+    assert(strstr(dock.saveLayout().c_str(), "Inspector") == nullptr);
+}
+
+// A dialog that closes itself already removed the float, and the application's
+// own result handler removes it again: the second call must not queue the same
+// pointer, or the deferred delete frees it twice.
+static void test_removing_a_float_twice_is_harmless()
+{
+    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    const size_t floatsBefore = app.floats().size();
+
+    auto *dialog = app.addFloat<ig::retained::FloatWindow>("Dialog");
+    assert(app.floats().size() == floatsBefore + 1u);
+    app.removeFloat(dialog);
+    app.removeFloat(dialog);
+    assert(app.floats().size() == floatsBefore);
+
+    ig::retained::IO io;
+    app.update(io);   // the deferred deletes are flushed here
+    assert(app.floats().size() == floatsBefore);
+}
+
+// A column added to a grid that already has rows must leave every row with a
+// cell for it: the accessors index cells up to columns_.size().
+static void test_a_column_added_after_rows_has_cells()
+{
+    ig::retained::DataGrid grid;
+    grid.setRect({0.0f, 0.0f, 400.0f, 200.0f});
+    grid.addColumn("Name", 120.0f);
+    grid.addRow({"first"});
+    grid.addColumn("Note", 120.0f);      // the row predates this column
+
+    grid.setCell(0, 1, "hello");         // used to write past the row's cells
+    assert(grid.cell(0, 1) == "hello");
+    assert(grid.cell(0, 0) == "first");
+    assert(grid.cell(1, 1) == "");
+
+    // A click on the second header sorts by it, which used to read past the
+    // row's cells. (Nothing to assert if the click misses the header; the write
+    // above is the memory-unsafe half and AddressSanitizer owns it.)
+    grid.layout();
+    ig::MouseEvent headerClick;
+    headerClick.button = 0;
+    headerClick.x = 150.0f;
+    headerClick.y = 10.0f;
+    grid.onMousePress(headerClick);
+    grid.onMouseRelease(headerClick);
+    assert(grid.cell(0, 0) == "first");
+    assert(grid.cell(0, 1) == "hello");
+    grid.layout();
+}
+
+// Remove lines, then undo: the replayed action must land inside the buffer the
+// editor has now, and it must put the removed line back.
+static void test_removing_a_line_can_be_undone()
+{
+    ig::retained::CodeEditor editor;
+    editor.setText("l0\nl1\nl2\nl3");
+    editor.setCursorPos(3, 0);
+
+    ig::retained::KeyEvent typed;
+    typed.text[0] = 'x';
+    editor.onTextInput(typed);           // an undoable edit on the last line
+    const ig::retained::String edited = editor.text();
+    assert(edited == "l0\nl1\nl2\nxl3");
+
+    editor.removeLine();                 // the last line: no break to take with it
+    editor.removeLine();                 // and now the one that followed it
+    assert(editor.lineCount() == 2);
+
+    editor.undo();                       // used to replay the insert at line 3 of a 2-line buffer
+    assert(editor.lineCount() == 3);
+    editor.undo();
+    assert(editor.lineCount() == 4);
+    assert(editor.text() == edited);
+
+    editor.undo();
+    assert(editor.text() == "l0\nl1\nl2\nl3");
+    assert(!editor.canUndo());
+}
+
+// A window title ct::Ini would refuse - one with a trailing space, say - must not
+// abort the application: it folds into a name the file can hold and read back.
+static void test_odd_window_titles_do_not_abort_the_state_file()
+{
+    const char *path = "igui_odd_title_test.ini";
+    std::remove(path);
+
+    ig::WindowStateIni store;
+    store.setPath(path);
+    ig::WindowGeometry geometry;
+    geometry.x = 5.0f;
+    geometry.y = 6.0f;
+    geometry.w = 70.0f;
+    geometry.h = 80.0f;
+    store.putWindow("Console ", geometry);   // trailing space
+    store.putWindow(" Frame", geometry);     // leading space
+    store.putWindow("   ", geometry);        // nothing but blanks: left out
+    assert(store.save());
+
+    ct::Ini written;
+    assert(written.load(path));
+    assert(written.size() == 2u);
+    assert(written.get_double("Console_", "pos_x") == 5.0);
+    assert(written.get_double("_Frame", "size_h") == 80.0);
+
+    ig::WindowGeometry read;
+    assert(store.load());
+    assert(store.getWindow("Console ", read));
+    assert(read.x == 5.0f && read.h == 80.0f);
+    assert(store.getWindow(" Frame", read));
+
+    store.setPath(ig::retained::String());
+    std::remove(path);
+}
+
 int main()
 {
     using namespace ig;
@@ -598,6 +744,11 @@ int main()
     test_gizmo3d_grabs_the_handle_under_the_pointer();
     test_float_window_state_round_trips_through_ini();
     test_dock_layout_is_remembered_in_the_state_file();
+    test_odd_window_titles_do_not_abort_the_state_file();
+    test_closing_a_dock_panel_deletes_its_content_once();
+    test_removing_a_float_twice_is_harmless();
+    test_a_column_added_after_rows_has_cells();
+    test_removing_a_line_can_be_undone();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

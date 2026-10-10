@@ -40,8 +40,10 @@ namespace ig
 //  Names
 // ─────────────────────────────────────────────────────────────────────────────
 /// @brief Section name a window is stored under, "" when it cannot be stored.
-///        ']' and newlines cannot appear in a section name (ct::Ini refuses
-///        them) and a blank name would not read back, so both are rejected.
+///        ']' and newlines cannot appear in a section name, and ct::Ini refuses
+///        - aborts on - one with a leading or trailing space or tab (which the
+///        parser would trim anyway, so it would not read back): all of them fold
+///        to '_'. A title with nothing but blanks has no section at all.
 inline String windowStateSection(StringView title)
 {
     String section;
@@ -53,7 +55,29 @@ inline String windowStateSection(StringView title)
     }
     if (section.empty() || section.find_first_not_of(" \t") == String::npos)
         return String();
+    if (section.front() == ' ' || section.front() == '\t')
+        section[0] = '_';
+    if (section.back() == ' ' || section.back() == '\t')
+        section[section.size() - 1] = '_';
     return section;
+}
+
+/// @brief True when ct::Ini accepts @p name as a section: it aborts on a name
+///        with a ']', a newline or a blank at either end, and one the parser
+///        would trim cannot be read back. Everything reaching ct::Ini goes
+///        through here, so a stray name can never abort the application.
+inline bool windowStateSectionUsable(StringView name)
+{
+    if (name.empty() || name.front() == ' ' || name.front() == '\t' ||
+        name.back() == ' ' || name.back() == '\t')
+        return false;
+    for (StringView::size_type i = 0; i < name.size(); ++i)
+    {
+        const char c = name[i];
+        if (c == ']' || c == '\n' || c == '\r' || c == '\0')
+            return false;
+    }
+    return true;
 }
 
 /// @brief Section name a dock layout is stored under, "" when it has no key.
@@ -166,7 +190,7 @@ public:
     /// @brief Store a value. An empty section is ignored (ct::Ini aborts on it).
     void put(const String& section, const char* key, const String& value)
     {
-        if (section.empty() || !key || !*key)
+        if (!windowStateSectionUsable(section) || !key || !*key)
             return;
         ini_.set(section.c_str(), key, value);
     }
@@ -174,7 +198,7 @@ public:
     /// @brief Read a value, or @p fallback when the section or key is absent.
     String get(const String& section, const char* key, const char* fallback = "") const
     {
-        if (section.empty() || !key || !*key)
+        if (!windowStateSectionUsable(section) || !key || !*key)
             return String(fallback);
         return ini_.get(section, key, fallback);
     }
@@ -182,7 +206,7 @@ public:
     /// @brief Read a number, or @p fallback when the section or key is absent.
     double getNumber(const String& section, const char* key, double fallback) const
     {
-        if (section.empty() || !key || !*key)
+        if (!windowStateSectionUsable(section) || !key || !*key)
             return fallback;
         return ini_.get_double(section, key, fallback);
     }
@@ -190,7 +214,7 @@ public:
     /// @brief Store a number. An empty section is ignored (ct::Ini aborts on it).
     void putNumber(const String& section, const char* key, double value)
     {
-        if (section.empty() || !key || !*key)
+        if (!windowStateSectionUsable(section) || !key || !*key)
             return;
         ini_.set(section.c_str(), key, value);
     }
@@ -198,7 +222,7 @@ public:
     /// @brief True when @p section holds @p key.
     bool has(const String& section, const char* key) const
     {
-        if (section.empty() || !key || !*key)
+        if (!windowStateSectionUsable(section) || !key || !*key)
             return false;
         return ini_.has(section, key);
     }
