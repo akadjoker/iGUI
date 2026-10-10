@@ -2351,7 +2351,8 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f,
                      trackWidth,
                      rect.height * 0.2f);
-    const bool sliderChanged = sliderValue(track, clip, combineIds(id, 0x534c49444552ull),
+    const Rect grab(track.x, rect.y, track.width, rect.height);
+    const bool sliderChanged = sliderValue(grab, clip, combineIds(id, 0x534c49444552ull),
                                            value, minimum, maximum);
     const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
     const float handleX = track.x + track.width * normalized;
