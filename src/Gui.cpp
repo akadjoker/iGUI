@@ -8871,27 +8871,28 @@ void Context::setNextItemWidth(float width)
 
 void Context::pushItemWidth(float width)
 {
-    // Uma só profundidade de guarda: um push dentro de outro bloco herda a
-    // largura de fora quando o de dentro não define nenhuma, que é o que o
-    // ImGui faz com a pilha dele.
-    layout_.pushedItemWidth = width > 0.0f ? width : layout_.pushedItemWidth;
-    ++layout_.pushedItemWidthDepth;
+    // A largura do bloco de dentro herda a de fora quando ele não define nenhuma
+    // (width 0 é "a que sobra" em everything menos aqui, onde é "a de fora"), e o
+    // pop devolve exactamente a de fora: é uma pilha, e não uma guarda só.
+    if (layout_.itemWidthDepth >= 8)
+        return;
+    const float inherited =
+        layout_.itemWidthDepth > 0 ? layout_.itemWidthStack[layout_.itemWidthDepth - 1] : 0.0f;
+    layout_.itemWidthStack[layout_.itemWidthDepth++] = width > 0.0f ? width : inherited;
 }
 
 void Context::popItemWidth()
 {
-    if (layout_.pushedItemWidthDepth > 0)
-        --layout_.pushedItemWidthDepth;
-    if (layout_.pushedItemWidthDepth == 0)
-        layout_.pushedItemWidth = 0.0f;
+    if (layout_.itemWidthDepth > 0)
+        --layout_.itemWidthDepth;
 }
 
 float Context::calcItemWidth() const
 {
     if (layout_.nextItemWidth > 0.0f)
         return layout_.nextItemWidth;
-    if (layout_.pushedItemWidthDepth > 0 && layout_.pushedItemWidth > 0.0f)
-        return layout_.pushedItemWidth;
+    if (layout_.itemWidthDepth > 0 && layout_.itemWidthStack[layout_.itemWidthDepth - 1] > 0.0f)
+        return layout_.itemWidthStack[layout_.itemWidthDepth - 1];
     return availableWidth();
 }
 

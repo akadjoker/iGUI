@@ -604,6 +604,50 @@ void test_item_width_controls()
     assert(afterPop.width > 200.0f);
 }
 
+// A pilha do pushItemWidth: o pop de dentro volta à largura de fora, e um push de
+// 0 herda a que estava (não é "a que sobra").
+void test_item_width_stack()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float value = 0.5f;
+    ig::Rect outer;
+    ig::Rect inner;
+    ig::Rect backToOuter;
+    ig::Rect inherited;
+    ig::Rect afterAll;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("pilha", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
+        c.pushItemWidth(100.0f);
+        c.dragFloat("a", value, 0.0f, 1.0f, 0.01f);
+        outer = c.itemRect();
+        c.pushItemWidth(50.0f);
+        c.dragFloat("b", value, 0.0f, 1.0f, 0.01f);
+        inner = c.itemRect();
+        c.popItemWidth();
+        c.dragFloat("c", value, 0.0f, 1.0f, 0.01f);
+        backToOuter = c.itemRect();
+        c.pushItemWidth(0.0f);
+        c.dragFloat("d", value, 0.0f, 1.0f, 0.01f);
+        inherited = c.itemRect();
+        c.popItemWidth();
+        c.popItemWidth();
+        c.dragFloat("e", value, 0.0f, 1.0f, 0.01f);
+        afterAll = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(outer.width == 100.0f);
+    assert(inner.width == 50.0f);
+    assert(backToOuter.width == 100.0f);
+    assert(inherited.width == 100.0f);
+    assert(afterAll.width > 200.0f);
+}
+
 // newLine fecha a linha: o item seguinte começa na margem, por baixo.
 void test_new_line_wraps_to_the_margin()
 {
@@ -1669,6 +1713,7 @@ int main()
     test_disabled_vslider_does_not_change();
     test_label_hides_text_after_double_hash();
     test_item_width_controls();
+    test_item_width_stack();
     test_new_line_wraps_to_the_margin();
     test_group_is_one_item_outside();
     test_group_nesting_and_imbalance();
