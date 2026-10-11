@@ -135,8 +135,10 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `BeginTable`/`TableNextColumn`/`TableHeadersRow` | `beginTable`/`tableNextColumn`/`tableHeader` | existe (o `tableHeader` faz o sort) |
-| `TableSetupColumn` com pesos e resize | `beginTable(id, weights)` | parcial: os pesos existem, falta o resto |
-| `ImGuiTableFlags_*`: Resizable, Reorderable, Hideable, Sortable, Borders, RowBg, ScrollX/Y, SizingFixedFit, FreezeRows/Cols, ContextMenuInBody, NoPad | — | **não existe** |
+| `TableSetupColumn` com pesos e resize | `beginTable(id, weights)` | existe: os pesos são por coluna, e com pesos mutáveis (`Span<float>`) o grip do cabeçalho redimensiona (e escreve os pesos de volta) |
+| `ImGuiTableFlags_Resizable` / `Sortable` / `Borders` / `RowBg` | pesos mutáveis / `tableHeader(label, sortColumn, sortAscending)` / `TableStyle::borders` / `TableStyle::alternateRows` | existe, com outra cara (não são flags, e sim a API) |
+| `ImGuiTableFlags_Hideable` + o menu de contexto do cabeçalho | `beginTable(id, weights, columnVisible)` + `tableHoveredColumn()` + `openPopup` | existe: a coluna escondida não ocupa largura, as seguintes fecham o espaço dela e o `tableNextColumn()` devolve false para a célula dela ser saltada. O menu é do chamador (a galeria faz o do demo, com um checkbox por coluna) |
+| `ImGuiTableFlags_Reorderable`, `ScrollX/Y`, `SizingFixedFit`, `FreezeRows/Cols`, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
 | Tabelas aninhadas, tabelas com header agrupado | — | **não existe** |
 | — | `beginVirtualTable` | (extra do iGUI) |
 
@@ -536,11 +538,20 @@ Continua em falta neste nível:
       auto-select na navegação por teclado, o `SetNextItemSelectionUserData`, o
       `listBox` de seleção múltipla e o `beginVirtualList` como clipper.
       *Onde:* `src/Gui.cpp` (`applyMultiSelectClick`), `src/Gui.cpp` (`listBox`).
-- [ ] **Flags de tabela**: `resizable`, `reorderable`, `hideable`, `sortable`,
-      `borders`/`rowBg`, `scrollX/Y`, `sizingFixedFit`, `freezeRows/Cols` e o
-      menu de contexto de coluna. A infraestrutura de colunas por peso já existe.
-      *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`),
-      `include/igui/Gui.hpp:729-743`.
+- [x] **Colunas escondidas** (`beginTable(id, weights, columnVisible)` +
+      `tableVisibleColumnCount()` + `tableHoveredColumn()`): a coluna escondida não
+      ocupa largura (as seguintes fecham o espaço dela, e o peso total já não conta
+      com ela), o `tableNextColumn()` devolve false para a célula ser saltada, e o
+      menu de contexto do cabeçalho faz-se com o `openPopup` + o
+      `tableHoveredColumn()`. Com isto, o `Resizable`/`Sortable`/`Borders`/`RowBg`
+      que já existiam (pesos mutáveis, `tableHeader` com sort, `TableStyle`), a
+      tabela do demo está coberta menos o que está na linha de baixo.
+      *Onde:* `src/Gui.cpp` (`beginTable`, `tableColumnWidth`, `tableNextColumn`,
+      `tableHeaderCell`), `tests/test_item_status.cpp`.
+- [ ] **O resto das tabelas**: `reorderable` (arrastar o cabeçalho para trocar a
+      ordem), `scrollX/Y` e `freezeRows/Cols` (uma região fixa), `sizingFixedFit`,
+      `NoPad`/`ContextMenuInBody` e as tabelas aninhadas.
+      *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`).
 - [x] **Um menu que é contentor de layout**: o corpo de um menu aberto tem o seu
       `layout_` (cursor, largura e clip do popup), o `currentDrawList` devolve a
       sobreposição da janela (é onde os itens do menu estão) e o `contentClip` passa

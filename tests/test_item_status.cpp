@@ -2524,6 +2524,95 @@ void test_unsubmitted_popup_is_dropped()
     assert(afterYWithout == afterYWithPopup);
 }
 
+// Colunas escondidas (o "Hideable" do demo): a coluna escondida não ocupa largura,
+// as seguintes fecham o espaço dela e o tableNextColumn devolve false para a
+// saltar. Com ele, o tableHoveredColumn (o que um menu de contexto do cabeçalho
+// precisa).
+void test_hidden_table_columns()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = {1.0f, 1.0f, 1.0f};
+    bool visible[3] = {true, false, true};
+    ig::Rect headerRects[3];
+    ig::Rect cellRects[3];
+    bool columnSubmitted[3] = {false, false, false};
+    int rows = 0;
+    int hoveredColumn = -1;
+    int columnsSeen = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3),
+                         ig::Span<const bool>(visible, 3), 300.0f))
+        {
+            columnsSeen = c.tableVisibleColumnCount();
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                {
+                    columnSubmitted[i] = false;
+                    continue;
+                }
+                columnSubmitted[i] = true;
+                c.tableHeader(i == 0 ? "A" : (i == 1 ? "B" : "C"));
+                headerRects[i] = c.itemRect();
+            }
+            hoveredColumn = c.tableHoveredColumn();
+            ++rows;
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                c.label("celula");
+                cellRects[i] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(columnsSeen == 2);
+    assert(columnSubmitted[0] && !columnSubmitted[1] && columnSubmitted[2]);
+    // A coluna escondida não ocupa nada: as duas visíveis dividem a largura toda e a
+    // terceira começa onde a primeira acaba.
+    assert(headerRects[0].width > 140.0f && headerRects[0].width < 160.0f);
+    assert(headerRects[2].x == headerRects[0].x + headerRects[0].width);
+    assert(headerRects[2].width == headerRects[0].width);
+    // As células caem debaixo do cabeçalho respetivo.
+    assert(cellRects[0].x == headerRects[0].x);
+    assert(cellRects[2].x == headerRects[2].x);
+
+    // O ponteiro sobre o cabeçalho da segunda coluna visível: o tableHoveredColumn
+    // diz qual é (2, que é o índice real da coluna).
+    context.pushEvent(ig::Event::pointerMove(headerRects[2].x + 10.0f,
+                                            headerRects[2].y + headerRects[2].height * 0.5f));
+    harness.frame(build);
+    assert(hoveredColumn == 2);
+
+    // Longe do cabeçalho: nenhuma.
+    context.pushEvent(ig::Event::pointerMove(headerRects[0].x + 10.0f, 280.0f));
+    harness.frame(build);
+    assert(hoveredColumn == -1);
+
+    // Mostrar a do meio: as três dividem a largura.
+    visible[1] = true;
+    harness.frame(build);
+    assert(columnSubmitted[1]);
+    assert(headerRects[0].width > 90.0f && headerRects[0].width < 110.0f);
+    assert(headerRects[1].x == headerRects[0].x + headerRects[0].width);
+
+    // Esconder todas: a tabela não se abre (não há nada para mostrar), por isso o
+    // corpo não corre e o que ficou é do frame anterior.
+    visible[0] = visible[1] = visible[2] = false;
+    columnsSeen = -1;
+    harness.frame(build);
+    assert(columnsSeen == -1);
+}
+
 } // namespace
 
 int main()
@@ -2565,6 +2654,7 @@ int main()
     test_widgets_inside_a_context_menu();
     test_own_popups();
     test_unsubmitted_popup_is_dropped();
+    test_hidden_table_columns();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
