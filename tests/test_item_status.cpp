@@ -1698,6 +1698,206 @@ void test_item_toggled_open()
     assert(!toggled);
 }
 
+// O popup de um combo com mais itens do que os que cabem: o que não cabe é
+// cortado, a roda do rato rola a lista, e a lista volta ao topo quando se fecha.
+void test_combo_popup_scrolls()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    // 14 itens, que é o "combo 1" do demo: cabem 8 (o HeightRegular do ImGui).
+    const ig::StringView items[] = {
+        ig::StringView("01"), ig::StringView("02"), ig::StringView("03"), ig::StringView("04"),
+        ig::StringView("05"), ig::StringView("06"), ig::StringView("07"), ig::StringView("08"),
+        ig::StringView("09"), ig::StringView("10"), ig::StringView("11"), ig::StringView("12"),
+        ig::StringView("13"), ig::StringView("14")
+    };
+    const int count = 14;
+    const int visibleItems = 8;
+    int current = 0;
+    ig::Rect headerRect;
+    ig::Rect itemRects[14];
+    bool visible[14] = {false};
+    bool open = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
+        open = c.beginCombo("escolha", items[0], 0.0f, visibleItems);
+        if (open)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                if (c.selectable(items[i], current == i))
+                    current = i;
+                itemRects[i] = c.itemRect();
+                visible[i] = c.isItemVisible();
+            }
+            c.endCombo();
+        }
+        else if (headerRect.width <= 0.0f)
+        {
+            headerRect = c.itemRect();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+
+    // Alguns frames para o popup medir o conteúdo (a medida é a do frame anterior).
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+
+    // Só os primeiros oito itens cabem; os últimos estão fora do clip (ou o clip
+    // corta-os a zero, ou nem chegam a ser desenhados).
+    for (int i = 0; i < visibleItems; ++i)
+        assert(visible[i]);
+    for (int i = visibleItems; i < count; ++i)
+        assert(!visible[i]);
+    const float firstY = itemRects[0].y;
+    const float popupBottom = itemRects[visibleItems - 1].y + itemRects[visibleItems - 1].height;
+
+    // A roda por cima do popup rola a lista: o primeiro item sobe e os de baixo
+    // entram.
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    const float insideX = itemRects[0].x + itemRects[0].width * 0.5f;
+    const float insideY = itemRects[2].y + itemRects[2].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(insideX, insideY));
+    context.pushEvent(wheel);
+    harness.frame(build);
+    assert(itemRects[0].y < firstY);
+    assert(visible[visibleItems]);
+    // O que sai por cima deixa de ser visível (o clip é o do popup).
+    assert(!visible[0]);
+    // A lista não sai da caixa: o último item que se vê acaba dentro do popup.
+    assert(itemRects[visibleItems].y + itemRects[visibleItems].height <= popupBottom + 0.5f);
+
+    // Rolar até ao fim para e fica lá: o último item fica dentro do popup e o
+    // primeiro de todos já saiu.
+    for (int i = 0; i < 40; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(insideX, insideY));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(visible[count - 1]);
+    assert(itemRects[count - 1].y + itemRects[count - 1].height <= popupBottom + 0.5f);
+    assert(!visible[0]);
+    const float lastY = itemRects[count - 1].y;
+    harness.frame(build);
+    assert(itemRects[count - 1].y == lastY);
+
+    // Fechar e reabrir volta ao topo.
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(!open);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+    assert(itemRects[0].y == firstY);
+}
+
+// O setItemDefaultFocus: a lista abre com o item escolhido à vista, mesmo que ele
+// esteja lá para baixo - e só na abertura (depois disso a lista rola à vontade).
+void test_combo_default_focus_opens_on_the_selection()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("01"), ig::StringView("02"), ig::StringView("03"), ig::StringView("04"),
+        ig::StringView("05"), ig::StringView("06"), ig::StringView("07"), ig::StringView("08"),
+        ig::StringView("09"), ig::StringView("10"), ig::StringView("11"), ig::StringView("12")
+    };
+    const int count = 12;
+    // A escolha está no fim: sem o default focus a lista abria no topo e ela ficava
+    // fora de vista.
+    int current = 10;
+    ig::Rect headerRect;
+    ig::Rect itemRects[12];
+    bool visible[12] = {false};
+    bool open = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
+        open = c.beginCombo("escolha", items[current], 0.0f, 8);
+        if (open)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                if (c.selectable(items[i], current == i))
+                    current = i;
+                itemRects[i] = c.itemRect();
+                visible[i] = c.isItemVisible();
+                if (current == i)
+                    c.setItemDefaultFocus();
+            }
+            c.endCombo();
+        }
+        else if (headerRect.width <= 0.0f)
+        {
+            headerRect = c.itemRect();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+
+    // A rolagem precisa de um frame com a medida do conteúdo.
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+    assert(visible[10]);
+    assert(!visible[0]);
+
+    // Depois de aberta, rolar à mão não é desfeito pelo pedido do item escolhido:
+    // ele é pedido a cada frame (é o que o demo faz) e a lista fica onde o mão a
+    // deixou.
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = 1.0f;   // para cima, até ao topo
+    const float insideX = itemRects[10].x + itemRects[10].width * 0.5f;
+    const float insideY = itemRects[10].y + itemRects[10].height * 0.5f;
+    for (int i = 0; i < 20; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(insideX, insideY));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(visible[0]);
+    assert(!visible[10]);
+    // E aí fica, mesmo com o setItemDefaultFocus a ser pedido outra vez.
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+    assert(visible[0]);
+    assert(!visible[10]);
+}
+
 } // namespace
 
 int main()
@@ -1730,6 +1930,8 @@ int main()
     test_item_activation_queries();
     test_item_deactivated_after_edit();
     test_item_toggled_open();
+    test_combo_popup_scrolls();
+    test_combo_default_focus_opens_on_the_selection();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

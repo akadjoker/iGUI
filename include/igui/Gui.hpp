@@ -561,6 +561,12 @@ public:
     bool beginCombo(StringView label, StringView preview, const Rect &bounds,
                     int visibleItems = 8);
     void endCombo();
+    // O SetItemDefaultFocus do ImGui: o último item submetido é o que deve ficar à
+    // vista quando a lista de um combo abre. É o que um combo faz com o item
+    // escolhido (o demo: `if (is_selected) ImGui::SetItemDefaultFocus();`), senão
+    // abria sempre no topo e a escolha podia estar fora de vista. Só se aplica
+    // quando a lista está aberta e tem o que rolar; rolar à mão desiste dele.
+    void setItemDefaultFocus();
     // A horizontal menu strip. Call beginMenu()/endMenu() between these calls.
     bool beginMenuBar(const Rect &bounds);
     void endMenuBar();
@@ -1455,6 +1461,9 @@ private:
     // for windows not created yet - see setWindowButtons.
     ct::HashMap<WidgetId, uint8_t> windowButtons_;
     ct::HashMap<WidgetId, int> listScrolls_;
+    // Onde está a lista de cada combo de conteúdo livre, em pixels do conteúdo. É
+    // por id, como as listas: um combo fechado esquece onde estava (ver beginCombo).
+    ct::HashMap<WidgetId, float> comboScrolls_;
     ct::HashMap<WidgetId, int> textScrolls_;
     // Line count drawn last frame, kept only for followTail widgets so the
     // next frame can tell growth from a scroll-away (see inputTextMultiline).
@@ -1632,6 +1641,21 @@ private:
     // medida de um não aparecer como tamanho de outro.
     WidgetId comboMeasuredId_;
     Vec2 comboMeasured_;
+    // A barra de scroll do popup aberto, se ela lá está: o endCombo desenha-a (o
+    // begin só sabe onde ela fica).
+    // O setItemDefaultFocus() só conta quando a lista ABRE (é o "IsWindowAppearing"
+    // do ImGui): a aplicação pede-o a cada frame, e aceitá-lo sempre prendia a lista
+    // ao item escolhido e não deixava rolar. `armed` é o pedido ainda aceite (até o
+    // primeiro frame com medida), `pending` é o que foi pedido neste.
+    bool comboFocusArmed_;
+    bool comboFocusPending_;
+    Rect comboFocusBounds_;
+    bool comboJustOpened_;
+    bool comboScrollbarVisible_;
+    Rect comboScrollbar_;
+    Rect comboScrollThumb_;
+    float comboScroll_;
+    float comboMaxScroll_;
     // Um beginCombo do layout avança o cabeçalho no endCombo, não em si: o layout
     // de dentro do popup é reposto lá (ver endCombo).
     bool comboAdvanceHeader_;

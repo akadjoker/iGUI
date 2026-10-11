@@ -442,22 +442,25 @@ void sectionWidgetsCombo(ig::Context &ui, gallery::State &s)
     const int comboCount = static_cast<int>(sizeof(kComboItems) / sizeof(kComboItems[0]));
     if (s.comboItem < 0 || s.comboItem >= comboCount)
         s.comboItem = 0;
-    // O HeightRegular do ImGui seriam 8 linhas com scroll; aqui mostra-se a lista
-    // toda (o popup não tem scroll - é uma das lacunas do GAPS).
-    if (ui.beginCombo("combo 1", kComboItems[s.comboItem], 240.0f, comboCount))
+    // O HeightRegular do ImGui, que é o que vem por omissão: 8 linhas, e a lista
+    // rola por dentro.
+    if (ui.beginCombo("combo 1", kComboItems[s.comboItem], 240.0f))
     {
         for (int n = 0; n < comboCount; ++n)
         {
             if (ui.selectable(kComboItems[n], s.comboItem == n))
                 s.comboItem = n;
             item();
+            // Como no demo: o item escolhido é o que a lista mostra ao abrir.
+            if (s.comboItem == n)
+                ui.setItemDefaultFocus();
         }
         ui.endCombo();
     }
     item();
     // O "combo 2 (w/ filter)" do demo: um campo de texto lá dentro a filtrar os
     // itens. É conteúdo livre - nada disto é do combo, é da aplicação.
-    if (ui.beginCombo("combo 2 (w/ filter)", kComboItems[s.comboItem], 240.0f, comboCount))
+    if (ui.beginCombo("combo 2 (w/ filter)", kComboItems[s.comboItem], 240.0f))
     {
         ui.inputText("##Filter", g_panel.comboFilter, 240.0f - 12.0f);
         item();

@@ -156,10 +156,11 @@ void usage()
 {
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
            "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
-           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--help]\n"
+           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--wheel=N] [--help]\n"
            "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
            "  --click=X,Y carrega no painel do iGUI nesse ponto (para os popups, que\n"
-           "  nao abrem sem rato, aparecerem numa captura).\n");
+           "  nao abrem sem rato, aparecerem numa captura), e --wheel=N manda N\n"
+           "  entalhes de roda no mesmo ponto (para se ver a lista de um popup rolar).\n");
 }
 
 // O --click=X,Y: onde carregar uma vez, no painel do iGUI.
@@ -204,6 +205,7 @@ int main(int argc, char **argv)
     bool click = false;
     float clickX = 0.0f;
     float clickY = 0.0f;
+    int wheel = 0;
     bool dump = false;
 
     for (int i = 1; i < argc; ++i)
@@ -229,6 +231,8 @@ int main(int argc, char **argv)
             openSection = arg + 7;
         else if (parseClick(arg, clickX, clickY))
             click = true;
+        else if (strncmp(arg, "--wheel=", 8) == 0)
+            wheel = atoi(arg + 8);
         else if (strncmp(arg, "--font=", 7) == 0)
             fontPath = arg + 7;
         else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
@@ -462,6 +466,18 @@ int main(int argc, char **argv)
                 ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
             else if (frame == 3)
                 ui.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+        }
+        // --wheel=N: N entalhes de roda, um por frame. O ponto é o do --click 70 px
+        // abaixo, que é onde a lista de um popup começa (o clique fica no
+        // cabeçalho e a lista abre por baixo dele): é o que faz a lista rolar numa
+        // captura.
+        if (wheel != 0 && frame >= 6 && frame < 6 + (wheel < 0 ? -wheel : wheel))
+        {
+            ig::Event wheelEvent;
+            wheelEvent.type = ig::EventType::PointerWheel;
+            wheelEvent.wheelY = wheel > 0 ? 1.0f : -1.0f;
+            ui.pushEvent(ig::Event::pointerMove(clickX, clickY + 70.0f));
+            ui.pushEvent(wheelEvent);
         }
 
         // Os NewFrame dos dois backends do ImGui são obrigatórios (é onde o
