@@ -43,6 +43,42 @@ struct Probe
     }
 };
 
+// Duas faces de mentira, para o pushFont ter o que escolher: o que o Context
+// lhe pede é o tamanho de fabrico da face e as medidas do texto nela.
+class TwoFaceProvider : public ig::TextProvider
+{
+public:
+    float bakedSize(ig::FontId font) const override
+    {
+        if (font.value == 1u)
+            return 13.0f;
+        if (font.value == 2u)
+            return 26.0f;
+        return 0.0f;
+    }
+
+    ig::TextMetrics measureText(ig::FontId font, ig::StringView text,
+                                float logicalSize) const override
+    {
+        ig::TextMetrics metrics;
+        // Sem face não há glifos, como no FontAtlas: o texto mede zero.
+        if (font.value != 1u && font.value != 2u)
+            return metrics;
+        const float factor = font.value == 2u ? 2.0f : 1.0f;
+        metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f * factor;
+        metrics.height = logicalSize;
+        metrics.ascent = logicalSize * 0.75f;
+        metrics.descent = logicalSize * 0.25f;
+        return metrics;
+    }
+
+    bool appendText(ig::DrawList &, ig::FontId, ig::StringView, const ig::Vec2 &, float,
+                    const ig::Color &, const ig::Rect &) const override
+    {
+        return true;
+    }
+};
+
 // The pointer does everything to a slider: hover, hold, release, edit. The
 // first frame finds out where the widget actually landed (no hard-coded
 // padding/title-bar arithmetic), and the following frames poke that point.
@@ -3710,6 +3746,79 @@ void test_table_without_sideways_scroll_keeps_the_width()
 
 } // namespace
 
+// A face em vigor dentro de um bloco, e o que volta depois dele: a face escolhida
+// leva o tamanho de fabrico dela, um id sem face não desenha, e a pilha fica como
+// estava no fim do frame mesmo que falte um pop.
+void test_push_font()
+{
+    ig::TestBackend backend;
+    TwoFaceProvider provider;
+    ig::Context context(backend, &provider);
+    ig::Harness harness(context);
+
+    const ig::FontId panel = ig::FontId(1u);
+    const ig::FontId other = ig::FontId(2u);
+    assert(context.theme().font == panel);
+
+    float normalWidth = 0.0f;
+    float bigWidth = 0.0f;
+    float restoredWidth = 0.0f;
+    float afterUnknownWidth = 0.0f;
+    const ig::StringView text("The quick brown fox");
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("fonts", ig::Rect(0.0f, 0.0f, 480.0f, 240.0f)));
+        c.label(text);
+        normalWidth = c.itemRect().width;
+        assert(c.theme().font == panel && c.theme().fontSize == 16.0f);
+
+        c.pushFont(other);
+        // A face nova vale logo ali, com o tamanho dela.
+        assert(c.theme().font == other && c.theme().fontSize == 26.0f);
+        c.label(text);
+        bigWidth = c.itemRect().width;
+        c.popFont();
+        assert(c.theme().font == panel && c.theme().fontSize == 16.0f);
+
+        c.label(text);
+        restoredWidth = c.itemRect().width;
+
+        // Um id sem face: o push não muda o tamanho em vigor nem desenha texto,
+        // mas o pop tira o mesmo o que lá está (a face de antes).
+        c.pushFont(ig::FontId(9u));
+        assert(c.theme().font == ig::FontId(9u) && c.theme().fontSize == 16.0f);
+        c.label(text);
+        afterUnknownWidth = c.itemRect().width;
+        c.popFont();
+        assert(c.theme().font == panel);
+
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // O provider conta meio tamanho por glifo (e o dobro na segunda face), e o
+    // texto é medido ao tamanho em vigor - que o pushFont levou ao da face.
+    const float glyphs = static_cast<float>(text.size());
+    assert(normalWidth == glyphs * 16.0f * 0.5f);
+    assert(bigWidth == glyphs * 26.0f * 0.5f * 2.0f);
+    assert(restoredWidth == normalWidth);
+    // Sem face não há medidas: o texto fica com zero de largura (mas o item é
+    // submetido e a linha avança na mesma).
+    assert(afterUnknownWidth == 0.0f);
+
+    // Um push sem pop não se cola ao frame seguinte: o fim do frame repõe a face
+    // (e o tamanho) que estava em vigor.
+    auto leaking = [&](ig::Context &c) {
+        assert(c.beginWindow("leak", ig::Rect(0.0f, 0.0f, 320.0f, 120.0f)));
+        c.pushFont(other);
+        c.label(text);
+        assert(c.theme().font == other);
+        c.endWindow();
+    };
+    harness.frame(leaking);
+    assert(context.theme().font == panel && context.theme().fontSize == 16.0f);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -3761,6 +3870,7 @@ int main()
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
+    test_push_font();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

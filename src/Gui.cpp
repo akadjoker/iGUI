@@ -717,7 +717,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(),
       activeWidget_(InvalidWidgetId), activeWidgetAtFrameStart_(InvalidWidgetId),
-      styleColorDepth_(0), styleVarDepth_(0), activeWidgetEdited_(false),
+      styleColorDepth_(0), styleVarDepth_(0), fontDepth_(0), activeWidgetEdited_(false),
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
@@ -1167,10 +1167,48 @@ void Context::popStyleVar(int count)
     }
 }
 
+void Context::pushFont(FontId font)
+{
+    // O push é sempre feito, mesmo de um id que não é de face nenhuma: um pop a
+    // mais tirava da pilha uma face que ainda estava em uso (o texto de um id sem
+    // face não se desenha, como antes disto existir).
+    if (fontDepth_ >= kFontStackSize)
+        return;
+    FontPush &entry = fonts_[fontDepth_++];
+    entry.font = theme_.font;
+    entry.size = theme_.fontSize;
+    theme_.font = font;
+    // Cada face tem o seu tamanho de fabrico: sem isto a face nova sairia
+    // esticada (ou encolhida) até ao tamanho que a face anterior pedia. Um
+    // provider que não saiba dizê-lo deixa o tamanho como estava.
+    const float baked = textProvider_ ? textProvider_->bakedSize(font) : 0.0f;
+    if (baked > 0.0f)
+        theme_.fontSize = baked;
+}
+
+void Context::popFont(int count)
+{
+    while (count > 0 && fontDepth_ > 0)
+    {
+        --fontDepth_;
+        const FontPush &entry = fonts_[fontDepth_];
+        theme_.font = entry.font;
+        theme_.fontSize = entry.size;
+        --count;
+    }
+}
+
 void Context::clearStyleStacks()
 {
     // O pop repõe sempre o valor de antes; um push sem pop (ou um pop a mais) deixa
     // a pilha como estava, por isso não há aqui nada a corrigir além de a esvaziar.
+    while (fontDepth_ > 0)
+    {
+        --fontDepth_;
+        const FontPush &entry = fonts_[fontDepth_];
+        theme_.font = entry.font;
+        theme_.fontSize = entry.size;
+    }
     while (styleColorDepth_ > 0)
     {
         --styleColorDepth_;
@@ -1507,9 +1545,11 @@ void Context::popId()
 void Context::setTheme(const Theme &theme)
 {
     theme_ = theme;
-    // Um tema novo invalida a pilha: o valor que ela guarda já não é o do tema.
+    // Um tema novo invalida a pilha: o valor que ela guarda já não é o do tema (e
+    // o do fontDepth_ também não: o tamanho a repor era o do tema antigo).
     styleColorDepth_ = 0;
     styleVarDepth_ = 0;
+    fontDepth_ = 0;
 }
 
 const Theme &Context::theme() const

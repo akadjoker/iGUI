@@ -6,6 +6,8 @@
 
 #include "Backend.hpp"
 
+struct stbtt_pack_context;
+
 namespace ig
 {
 
@@ -65,6 +67,24 @@ public:
     float ascent() const;
     Span<const uint8_t> pixels() const;
 
+    // ── Mais do que uma face no mesmo atlas ──────────────────────────────────
+    // Uma face é um tipo de letra (ou o mesmo noutro tamanho) empacotado no mesmo
+    // atlas: os glifos ficam ao lado uns dos outros e o Context só carrega no
+    // FontId (ver pushFont). As bytes e os ranges são copiados, por isso podem ser
+    // largados depois da chamada. O tamanho de fabrico e os ranges são os desta
+    // face (os ranges vazios são os do atlas).
+    //
+    // O atlas é reconstruído (todas as faces, do zero) para caber a nova: quem já
+    // tem a textura tem de a voltar a subir com pixels() depois disto - é o que a
+    // aplicação faz uma vez, ao carregar as fontes, antes de criar a textura.
+    FontId loadFont(Span<const uint8_t> fontData, float bakedSize = 0.0f,
+                    Span<const FontRange> ranges = Span<const FontRange>());
+    uint32_t faceCount() const;
+    // As métricas de uma face (as sem argumento são as da primeira).
+    float bakedSize(FontId font) const override;
+    float lineHeight(FontId font) const;
+    float ascent(FontId font) const;
+
     void setTexture(TextureId texture);
     TextureId texture() const;
 
@@ -82,33 +102,56 @@ public:
                     const Color &color, const Rect &clip) const override;
 
 private:
-    ct::Vector<uint8_t> pixels_;
-    ct::Vector<FontGlyph> glyphs_;
-    float ascent_;
-    float descent_;
-    float lineHeight_;
-    float bakedSize_;
-    uint32_t width_;
-    uint32_t height_;
-    TextureId texture_;
-    bool valid_;
-    // codepoint -> index into glyphs_ for every codepoint below lookupLimit_
-    // (one past the highest baked codepoint, at most U+FFFF): a text run does
-    // one load per glyph instead of a search. A missing codepoint maps to the
-    // replacement glyph. Codepoints at or above the limit use the cache below.
-    ct::Vector<uint16_t> lookup_;
-    uint32_t lookupLimit_;
-    const FontGlyph *lookupGlyph(uint32_t codepoint) const;
-    // Common body of the constructors: packs fontData into the atlas the members
-    // already describe.
-    void build(Span<const uint8_t> fontData, Span<const FontRange> requestedRanges);
-    // Fixed-size, per-atlas lookup cache. Indices remain valid when copied.
+    // Fixed-size, per-face lookup cache. Indices remain valid when copied.
     struct GlyphCacheEntry {
         uint32_t codepoint = 0;
         int index = -1;
         bool occupied = false;
     };
-    mutable GlyphCacheEntry glyphCache_[256];
+    // Uma face empacotada: as bytes ficam guardadas porque o atlas é reconstruído
+    // inteiro sempre que uma face nova entra (o empacotador do stb não tem estado
+    // que se guarde entre chamadas).
+    struct Face
+    {
+        ct::Vector<uint8_t> data;
+        // Os ranges com que esta face foi pedida (uma cópia: os do chamador podem
+        // ser temporários), e os glifos que deles saíram.
+        ct::Vector<FontRange> ranges;
+        ct::Vector<FontGlyph> glyphs;
+        float ascent;
+        float descent;
+        float lineHeight;
+        float bakedSize;
+        // codepoint -> index into glyphs for every codepoint below lookupLimit
+        // (one past the highest baked codepoint, at most U+FFFF): a text run does
+        // one load per glyph instead of a search. A missing codepoint maps to the
+        // replacement glyph. Codepoints at or above the limit use the cache.
+        ct::Vector<uint16_t> lookup;
+        uint32_t lookupLimit;
+        mutable GlyphCacheEntry glyphCache[256];
+
+        Face()
+            : data(), ranges(), glyphs(), ascent(0.0f), descent(0.0f), lineHeight(0.0f),
+              bakedSize(0.0f), lookup(), lookupLimit(0u), glyphCache() {}
+    };
+
+    ct::Vector<uint8_t> pixels_;
+    ct::Vector<Face> faces_;
+    Span<const FontRange> ranges_;
+    uint32_t width_;
+    uint32_t height_;
+    TextureId texture_;
+    bool valid_;
+    // O índice da face de um FontId (0 se o id não for de nenhuma).
+    uint32_t faceIndex(FontId font) const;
+    const FontGlyph *lookupGlyph(const Face &face, uint32_t codepoint) const;
+    // Common body of the constructors and of loadFont: packs every face into the
+    // atlas the members describe (the pixels are cleared first).
+    void rebuild();
+    // Empacota uma face no contexto que o rebuild abriu (é o mesmo contexto para
+    // todas: os glifos de uma ficam ao lado dos da outra). Devolve false se a face
+    // não deu glifos nenhuns.
+    bool packFace(Face &face, stbtt_pack_context &pack);
 };
 
 // Lê um codepoint UTF-8. Para uma sequência inválida devolve U+FFFD e avança um byte.

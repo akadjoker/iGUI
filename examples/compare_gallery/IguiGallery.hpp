@@ -1,5 +1,7 @@
 #pragma once
 
+#include <igui/FontAtlas.hpp>
+
 #include "Gallery.hpp"
 
 namespace ig
@@ -36,5 +38,36 @@ bool openSection(const char *name);
 // Desenha só essa secção, no topo e sem o header dela (é o que o --only faz): a
 // comparação de uma secção de cada vez sem andar à roda dentro do painel.
 bool setOnlySection(const char *name);
+
+// ── As faces do atlas (secção "Fonts") ───────────────────────────────────────
+// O atlas do painel leva mais do que uma face (FontAtlas::loadFont) e o demo
+// mostra-as: o combo "Font" escolhe a que o painel inteiro desenha - o
+// io.FontDefault do ImGui - e a lista de fontes desenha uma amostra de cada uma
+// no tamanho em que foi cozida. Quem carrega as faces é o main.cpp, que é quem
+// tem o atlas e os ficheiros.
+struct DemoFont
+{
+    ig::FontId id;
+    // "Cousine 13px", escrito no loadDemoFonts.
+    char name[48];
+    float size;
+
+    DemoFont() : id(), name(), size(0.0f) {}
+};
+
+const int kMaxDemoFonts = 8;
+extern DemoFont gDemoFonts[kMaxDemoFonts];
+extern int gDemoFontCount;
+
+// A face que o painel desenha. Zero é "a do atlas" (a primeira, a do painel).
+// Como no ImGui, a escolha do combo só vale a partir do frame seguinte.
+extern ig::FontId gFontDefault;
+
+// Carrega no atlas as faces extra do demo (as mesmas que o ImGui carrega, ver
+// gallery::demoFontFiles) a partir de directory, e enche o gDemoFonts. A face 0
+// é a do painel (a que o atlas já tinha). O que faltar - o diretório, um
+// ficheiro, uma face que não coza - é ignorado, e o painel fica com o que
+// houver.
+void loadDemoFonts(ig::FontAtlas &atlas, const char *directory);
 
 } // namespace igui_gallery

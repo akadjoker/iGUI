@@ -511,6 +511,22 @@ public:
     void popStyleColor(int count = 1);
     void pushStyleVar(float Theme::*field, float value);
     void popStyleVar(int count = 1);
+    // ── Fontes ───────────────────────────────────────────────────────────────
+    // Escolhe a face dos textos seguintes, dentro de um bloco. A face traz o seu
+    // próprio tamanho de fabrico, por isso o fontSize em vigor passa a ser o dela
+    // (um texto desenhado a esse tamanho sai a 1:1, sem reescalonamento):
+    //
+    //     ui.pushFont(boldFont);
+    //     ui.label("Título");
+    //     ui.popFont();
+    //
+    // Ao contrário das style vars, a face é uma escolha e não uma medida: um
+    // pushStyleVar(&Theme::fontSize, x) por dentro continua a mandar no tamanho.
+    // A pilha é de 8 níveis (a partir daí o push é ignorado); um push sem pop vale
+    // só para o frame dele. Um id que não é de face nenhuma não desenha texto até
+    // ao pop, mas o push é feito na mesma, para o pop tirar o que lá está.
+    void pushFont(FontId font);
+    void popFont(int count = 1);
     const Theme &theme() const;
     // Turns the whole interface off: beginWindow() and messageBox() show
     // nothing, pushEvent() drops its events, and the widget state that was
@@ -2038,6 +2054,17 @@ private:
     int styleColorDepth_;
     StyleVarPush styleVars_[kStyleStackSize];
     int styleVarDepth_;
+    // Faces em vigor (ver pushFont): a face e o tamanho que estava em uso antes.
+    struct FontPush
+    {
+        FontId font;
+        float size;
+
+        FontPush() : font(), size(0.0f) {}
+    };
+    static const int kFontStackSize = 8;
+    FontPush fonts_[kFontStackSize];
+    int fontDepth_;
     void clearStyleStacks();
     bool activeWidgetEdited_;
     WidgetId hotWidget_;

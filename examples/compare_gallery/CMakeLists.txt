@@ -53,6 +53,13 @@ endif()
 set(IGUI_GALLERY_FONT "${IGUI_BENCH_IMGUI_DIR}/misc/fonts/ProggyClean.ttf" CACHE FILEPATH
     "Font both panels of the comparison gallery are drawn with (empty: iGUI's default)")
 
+# As faces extra que a secção "Fonts" do demo mostra (ver gallery::demoFontFiles):
+# são as TTF/OTF que o ImGui traz em misc/fonts, carregadas pelos dois lados - o
+# iGUI todas no mesmo atlas, o ImGui uma por AddFontFromFileTTF. Sem o diretório
+# (ou sem os ficheiros) a secção fica só com a face do painel.
+set(IGUI_GALLERY_FONT_DIR "${IGUI_BENCH_IMGUI_DIR}/misc/fonts" CACHE PATH
+    "Directory with the extra font faces the gallery's Fonts section shows (empty: none)")
+
 add_executable(igui_compare_gallery
     main.cpp
     Gallery.cpp
@@ -61,7 +68,8 @@ add_executable(igui_compare_gallery
     Screenshot.cpp)
 target_compile_features(igui_compare_gallery PRIVATE cxx_std_14)
 target_compile_definitions(igui_compare_gallery PRIVATE
-    IGUI_GALLERY_FONT="${IGUI_GALLERY_FONT}")
+    IGUI_GALLERY_FONT="${IGUI_GALLERY_FONT}"
+    IGUI_GALLERY_FONT_DIR="${IGUI_GALLERY_FONT_DIR}")
 target_include_directories(igui_compare_gallery PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_SOURCE_DIR}/third_party/stb")

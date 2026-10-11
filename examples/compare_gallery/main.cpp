@@ -162,8 +162,10 @@ void usage()
 {
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
            "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
-           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--hover=X,Y]\n"
-           "                       [--wheel=N] [--help]\n"
+           "                       [--fonts-dir=DIR] [--open-all | --open=SECCAO]\n"
+           "                       [--click=X,Y] [--hover=X,Y] [--wheel=N] [--help]\n"
+           "  --font=FILE e o tipo de letra dos dois paineis; --fonts-dir=DIR (misc/fonts\n"
+           "  do ImGui) tem as faces extra que a seccao 'Fonts' mostra, em ambos os lados.\n"
            "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
            "  --click=X,Y carrega no painel do iGUI nesse ponto (para os popups, que\n"
            "  nao abrem sem rato, aparecerem numa captura), o --hover=X,Y poe o\n"
@@ -215,6 +217,7 @@ int main(int argc, char **argv)
     bool openAll = false;
     std::string screenshot;
     std::string fontPath = IGUI_GALLERY_FONT;
+    std::string fontsDir = IGUI_GALLERY_FONT_DIR;
     std::string openSection;
     std::string onlySection;
     bool click = false;
@@ -257,6 +260,8 @@ int main(int argc, char **argv)
             hover = true;
         else if (strncmp(arg, "--font=", 7) == 0)
             fontPath = arg + 7;
+        else if (strncmp(arg, "--fonts-dir=", 12) == 0)
+            fontsDir = arg + 12;
         else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
         {
             usage();
@@ -355,6 +360,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "o atlas de fontes do iGUI nao foi construido\n");
         return 1;
     }
+    // As faces extra do demo (a mesma lista para os dois lados, ver
+    // gallery::demoFontFiles): o atlas leva-as antes de a textura existir, por isso
+    // a primeira subida já as traz todas.
+    igui_gallery::loadDemoFonts(atlas, fontsDir.c_str());
     backend.setFontAtlas(&atlas);
     ig::Context ui(backend, &atlas);
     igui_gallery::applyDemoStyle(ui);
@@ -373,9 +382,11 @@ int main(int argc, char **argv)
         fprintf(stderr, "seccao desconhecida: %s\n", openSection.c_str());
         return 2;
     }
-    std::printf("iGUI   GL %d.%d em %s, atlas %ux%u, fonte %s\n", backend.versionMajor(),
-                backend.versionMinor(), backend.renderer(), atlas.width(), atlas.height(),
-                fontBytes.empty() ? "de omissao (Roboto)" : fontPath.c_str());
+    std::printf("iGUI   GL %d.%d em %s, atlas %ux%u, fonte %s, %d face(s)\n",
+                backend.versionMajor(), backend.versionMinor(), backend.renderer(),
+                atlas.width(), atlas.height(),
+                fontBytes.empty() ? "de omissao (Roboto)" : fontPath.c_str(),
+                static_cast<int>(atlas.faceCount()));
 
     // ── ImGui ────────────────────────────────────────────────────────────────
     IMGUI_CHECKVERSION();
@@ -385,9 +396,24 @@ int main(int argc, char **argv)
     io.LogFilename = nullptr;
     ImGui_ImplSDL2_InitForOpenGL(window, context);
     ImGui_ImplOpenGL3_Init("#version 330 core");
+    // As mesmas faces extra, para o combo "Font" do demo do ImGui mostrar a mesma
+    // lista que o do iGUI. O AddFontDefault tem de vir primeiro: o ImGui só carrega
+    // a fonte embutida se não lhe pedirem nenhuma.
+    io.Fonts->AddFontDefault();
+    {
+        int fontCount = 0;
+        const gallery::DemoFontFile *demoFonts = gallery::demoFontFiles(fontCount);
+        for (int i = 0; i < fontCount; ++i)
+        {
+            char path[512];
+            snprintf(path, sizeof(path), "%s/%s", fontsDir.c_str(), demoFonts[i].file);
+            if (!io.Fonts->AddFontFromFileTTF(path, demoFonts[i].size))
+                fprintf(stderr, "fonte do demo em falta para o ImGui: %s\n", path);
+        }
+    }
     imgui_gallery::reset();
-    std::printf("ImGui  %s (demo window a serio, via os backends de SDL2 e OpenGL3)\n",
-                IMGUI_VERSION);
+    std::printf("ImGui  %s (demo window a serio, via os backends de SDL2 e OpenGL3), %d face(s)\n",
+                IMGUI_VERSION, io.Fonts->Fonts.Size);
 
     PanelTiming iguiTiming;
     PanelTiming imguiTiming;
