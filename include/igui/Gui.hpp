@@ -864,9 +864,16 @@ public:
         };
     };
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     const Rect &bounds, unsigned flags = SliderFlags::None);
+                     const Rect &bounds, unsigned flags = SliderFlags::None,
+                     const char *format = nullptr);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   const Rect &bounds, unsigned flags = SliderFlags::None);
+                   const Rect &bounds, unsigned flags = SliderFlags::None,
+                   const char *format = nullptr);
+    // O SliderAngle do ImGui: o valor é em radianos, o intervalo e o texto em
+    // graus ("%.0f deg" por omissão).
+    bool sliderAngle(StringView label, float &radians, float degreesMinimum,
+                     float degreesMaximum, const Rect &bounds,
+                     unsigned flags = SliderFlags::None, const char *format = nullptr);
     // A mixer fader: a recessed groove with a cap that travels along it. The
     // whole bounds take the press and the cap follows the pointer from there,
     // so it is pushed with a finger rather than grabbed by its handle; a press
@@ -878,9 +885,11 @@ public:
     // Horizontal relative drag. The value changes by speed for each moved pixel;
     // click its value field to enter a precise number.
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
-                   float speed, const Rect &bounds, unsigned flags = SliderFlags::None);
-    bool dragInt(StringView label, int &value, int minimum, int maximum,
-                 int speed, const Rect &bounds, unsigned flags = SliderFlags::None);
+                   float speed, const Rect &bounds, unsigned flags = SliderFlags::None,
+                   const char *format = nullptr);
+    bool dragInt(StringView label, int &value, int minimum, int maximum, int speed,
+                 const Rect &bounds, unsigned flags = SliderFlags::None,
+                 const char *format = nullptr);
     // Slider vertical, o VSliderFloat/VSliderInt do ImGui: o valor cresce para
     // cima numa faixa estreita, ao contrário do fader, que é um controle de
     // mistura.
@@ -924,9 +933,16 @@ public:
     bool codeEditorCopy(CodeEditorState &state);
     bool codeEditorCut(CodeEditorState &state);
     bool codeEditorPaste(CodeEditorState &state);
-    bool inputInt(StringView label, int &value, const Rect &bounds);
-    bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
-    bool inputDouble(StringView label, double &value, const Rect &bounds, int precision = 6);
+    // O `format` é o do printf e vale para o valor desenhado E para o que se
+    // escreve no campo: "%.10f grams" mostra e lê o número com a legenda, "%04X"
+    // mostra e lê em hexadecimal. Sem ele, o inteiro sai como sempre saiu e o
+    // real com a precisão pedida.
+    bool inputInt(StringView label, int &value, const Rect &bounds,
+                  const char *format = nullptr);
+    bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6,
+                    const char *format = nullptr);
+    bool inputDouble(StringView label, double &value, const Rect &bounds, int precision = 6,
+                     const char *format = nullptr);
     // Inline RGBA editor with a preview swatch and four draggable channels.
     bool colorEdit(StringView label, Color &value, const Rect &bounds);
     // A colour swatch with the label next to it, for a widget that opens the
@@ -1251,18 +1267,26 @@ public:
     bool beginCombo(StringView label, StringView preview, float width = 0.0f,
                     int visibleItems = 8);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     float width = 0.0f, unsigned flags = SliderFlags::None);
+                     float width = 0.0f, unsigned flags = SliderFlags::None,
+                     const char *format = nullptr);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   float width = 0.0f, unsigned flags = SliderFlags::None);
+                   float width = 0.0f, unsigned flags = SliderFlags::None,
+                   const char *format = nullptr);
+    bool sliderAngle(StringView label, float &radians, float degreesMinimum = -360.0f,
+                     float degreesMaximum = 360.0f, float width = 0.0f,
+                     unsigned flags = SliderFlags::None, const char *format = nullptr);
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
                    float speed = 0.01f, float width = 0.0f,
-                   unsigned flags = SliderFlags::None);
-    bool dragInt(StringView label, int &value, int minimum, int maximum,
-                 int speed = 1, float width = 0.0f, unsigned flags = SliderFlags::None);
-    bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3);
-    bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f, int precision = 3);
+                   unsigned flags = SliderFlags::None, const char *format = nullptr);
+    bool dragInt(StringView label, int &value, int minimum, int maximum, int speed = 1,
+                 float width = 0.0f, unsigned flags = SliderFlags::None,
+                 const char *format = nullptr);
+    bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3,
+                     const char *format = nullptr);
+    bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f,
+                     int precision = 3, const char *format = nullptr);
     bool inputFloat4(StringView label, float &x, float &y, float &z, float &w,
-                     float width = 0.0f, int precision = 3);
+                     float width = 0.0f, int precision = 3, const char *format = nullptr);
     // As variantes de N componentes são N widgets lado a lado, com uma largura
     // igual para todos: é o mesmo que o ImGui faz, e assim cada componente
     // mantém tudo o que o de um componente já faz (arrasto, edição por teclado,
@@ -1285,12 +1309,16 @@ public:
                   int speed = 1, float width = 0.0f);
     bool dragInt4(StringView label, int &x, int &y, int &z, int &w, int minimum, int maximum,
                   int speed = 1, float width = 0.0f);
-    bool inputInt2(StringView label, int &x, int &y, float width = 0.0f);
-    bool inputInt3(StringView label, int &x, int &y, int &z, float width = 0.0f);
-    bool inputInt4(StringView label, int &x, int &y, int &z, int &w, float width = 0.0f);
+    bool inputInt2(StringView label, int &x, int &y, float width = 0.0f,
+                   const char *format = nullptr);
+    bool inputInt3(StringView label, int &x, int &y, int &z, float width = 0.0f,
+                   const char *format = nullptr);
+    bool inputInt4(StringView label, int &x, int &y, int &z, int &w, float width = 0.0f,
+                   const char *format = nullptr);
     // Dupla precisão, para um campo que não se pode dar ao luxo de arredondar a
     // um float (o do ImGui é um campo de texto que faz o parse a double).
-    bool inputDouble(StringView label, double &value, float width = 0.0f, int precision = 6);
+    bool inputDouble(StringView label, double &value, float width = 0.0f, int precision = 6,
+                     const char *format = nullptr);
     bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
                     float speed = 0.01f, float width = 0.0f);
     bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
@@ -1303,8 +1331,10 @@ public:
     bool inputTextWithHint(StringView label, StringView hint, String &value, float width = 0.0f);
     bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
                             float height = 120.0f, bool followTail = false);
-    bool inputInt(StringView label, int &value, float width = 0.0f);
-    bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6);
+    bool inputInt(StringView label, int &value, float width = 0.0f,
+                  const char *format = nullptr);
+    bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6,
+                    const char *format = nullptr);
     bool colorEdit(StringView label, Color &value, float width = 0.0f, float height = 128.0f);
     bool colorButton(StringView label, const Color &value, float width = 0.0f,
                      float height = 0.0f);
@@ -2375,11 +2405,13 @@ private:
     bool tableActive_;
     bool enabled_;
     bool propertyRowActive_;
-    float dragStartValue_;
-    float dragStartX_;
+    // O valor do início do arrasto é um double: o drag de um tipo de 64 bits (ou
+    // de um double) não cabe num float, e é este o valor de que o arrasto parte.
+    double dragStartValue_;
+    double dragStartX_;
     // O valor no início do arrasto na escala da pista (0..1): é o que faz um drag
     // logarítmico andar depressa em cima e devagar em baixo.
-    float dragStartNorm_;
+    double dragStartNorm_;
     float tooltipDelay_;
     // Duplo clique: o instante e o sítio da última carregada de cada botão, e o
     // botão cujo clique deste frame foi um duplo (ver isPointerDoubleClicked).
@@ -2542,8 +2574,19 @@ private:
     // dele, mas clique/edição/foco não - isso é sempre de um widget lá dentro.
     void setItemHoverRect(const Rect &bounds);
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                     float &value, float minimum, float maximum,
+                     double &value, double minimum, double maximum,
                      bool vertical = false, unsigned flags = SliderFlags::None);
+    // O slider e o drag com o tipo por dentro (ver o comentário em Gui.cpp).
+    bool sliderCore(StringView label, double &value, double minimum, double maximum, bool integer,
+                    bool doublePrecision, const Rect &bounds, unsigned flags,
+                    const char *format);
+    bool dragCore(StringView label, double &value, double minimum, double maximum, double speed,
+                  bool integer, bool doublePrecision, const Rect &bounds, unsigned flags,
+                  const char *format);
+    // Põe o valor que veio do ponteiro ou do campo de texto: arredonda quando o
+    // tipo é inteiro e limita ao intervalo quando lhe dizem para limitar.
+    bool setScalarValue(double &value, double next, double minimum, double maximum, bool integer,
+                        bool clampToRange = true);
     // O trabalho dos dois vSlider: precision < 0 escreve o valor como inteiro.
     bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds, int precision);
@@ -2577,6 +2620,11 @@ private:
     // the field is focused (see numericEditId_). Returns whether the text was
     // edited this frame; text holds what to parse.
     bool editNumericText(StringView label, String &text, double value, const Rect &bounds);
+    // O campo de texto de um número: o texto sai do formato (formatNumericValue) e
+    // volta a número por ele (parseNumericValue). É o que faz um campo "%.10f
+    // grams" ter a legenda à frente e um "%04X" aceitar hexadecimal à entrada.
+    bool numericField(StringView label, double &value, bool integer, bool doublePrecision,
+                      const Rect &bounds, const char *format);
     // This frame's editing keys and typed text applied to the focused text
     // field's buffer at cursor (a byte offset kept on a UTF-8 code point
     // boundary). Every text field (inputText, inputTextMultiline, the
