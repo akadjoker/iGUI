@@ -195,6 +195,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `BeginMenuBar` (dentro da janela) | `beginMenuBar(rect)` | existe: a barra é um item do layout (o cursor fica abaixo dela, como no grupo que o ImGui abre lá dentro), com rect e hover do item e sem id |
 | `BeginMainMenuBar` (barra da aplicação) | `beginMainMenuBar`/`endMainMenuBar` | existe: uma janela sem nada à volta no topo do ecrã, com a ordem de cima (é o que a desenha por cima das outras e lhe dá o ponteiro antes delas), e com os `beginMenu`/`menuItem` de sempre lá dentro. A altura que ocupa é o `mainMenuBarHeight()` (a aplicação tem de deixá-la livre, como o work area do ImGui) |
 | `BeginMenu`/`EndMenu`/`BeginSubMenu` | `beginMenu`/`endMenu`/`beginSubMenu` | existe |
+| Um menu com widgets lá dentro (o "Options" do menu de ficheiros do demo: um child a rolar, um slider, um input e um combo dentro do menu) | — | **não existe**: o popup de um menu é uma faixa desenhada, não um contentor de layout — um `sliderFloat` dentro de um `beginMenu` aterra no cursor da janela, não no popup (medido: o item fica em `0,0,1280x28` em vez de dentro do menu) |
 | `MenuItem` com atalho (`"Open", "Ctrl+O"`) e checkbox/selected | `menuItem(label, shortcut, enabled, selected)` / `menuCheckbox` | existe: o atalho é desenhado à direita, em baixo-relevo, e conta para a largura do popup; quem o trata é a aplicação (é texto) |
 | `MenuItem` com enabled/disabled | `menuItem(label, enabled)` | existe |
 | `BeginPopupMenu`/`ImGuiPopupFlags`, `BeginMenu` com `enabled` | parcial | |
@@ -539,6 +540,14 @@ Continua em falta neste nível:
       menu de contexto de coluna. A infraestrutura de colunas por peso já existe.
       *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`),
       `include/igui/Gui.hpp:729-743`.
+- [ ] **Um menu que é contentor de layout**: hoje o `beginMenu` desenha os itens pela
+      `activeMenuBounds_` e não mexe no `layout_`, por isso um widget de layout lá
+      dentro (slider, child, input, combo) sai fora do popup. É o que falta para o
+      "Options" do menu de ficheiros do demo. O caminho é o mesmo que o
+      `beginCombo` já faz: um `layout_` próprio dentro do popup, o `currentDrawList`
+      a devolver a sobreposição, o `contentClip` a ser o popup e a largura medida no
+      frame anterior.
+      *Onde:* `src/Gui.cpp` (`beginMenu`/`menuItemInternal`/`endMenu`).
 - [ ] **Popups com pilha e ids**: `openPopup`, `beginPopup`, `beginPopupModal`,
       `closeCurrentPopup`, `isPopupOpen`, fecho por clique fora com flags,
       popups aninhados. Hoje o `beginDialog`/`messageBox` cobrem o caso simples.
@@ -567,8 +576,13 @@ Continua em falta neste nível:
       `setTheme`, sem recompilar.
 - [ ] **Log de debug** das ações do contexto (cliques, ids que reagem) para
       resolver sobreposições de ids.
-- [ ] **Style vars** (`pushStyleColor`/`pushStyleVar`) para mudar uma cor ou
-      medida num bloco, sem tocar no tema global.
+- [x] **Style vars** (`pushStyleColor`/`pushStyleVar`): o campo do tema é um
+      ponteiro para membro (`&Theme::buttonBackground`, `&Theme::widgetHeight`), por
+      isso qualquer campo vale sem uma lista a manter. Pilha de 16 níveis, o pop
+      repõe o valor de antes, um push sem pop vale só para o frame dele e o
+      `setTheme` esvazia a pilha.
+      *Onde:* `src/Gui.cpp` (`pushStyleColor`/`popStyleColor`/`pushStyleVar`/
+      `popStyleVar`/`clearStyleStacks`), `tests/test_widgets.cpp`.
 - [ ] **Protocolo de texturas dinâmicas** no backend (como o
       `ImGuiBackendFlags_RendererHasTextures` do ImGui 1.92): atualizações
       incrementais do atlas e texturas de ícones, em vez do upload inteiro.

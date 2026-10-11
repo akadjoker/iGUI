@@ -601,6 +601,109 @@ static void test_align_text_to_frame_padding_moves_only_the_text()
     assert(alignedButton.x > alignedLabel.x && alignedButton.x < alignedLabel.x + 200.0f);
 }
 
+// As style vars: uma cor ou uma medida muda dentro de um bloco e volta ao valor
+// de antes no pop; um push sem pop não se cola ao frame seguinte.
+static bool frameHasColor(const ig::DrawData &data, const ig::Color &color)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = data.vertices[i];
+        if (vertex.color.r == color.r && vertex.color.g == color.g && vertex.color.b == color.b &&
+            vertex.color.a == color.a)
+            return true;
+    }
+    return false;
+}
+
+static void test_style_vars()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Color red(200u, 30u, 30u, 255u);
+    const ig::Color blue(30u, 30u, 200u, 255u);
+    const ig::Color themeBackground = context.theme().buttonBackground;
+    ig::Rect buttonRect;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("style", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+        c.pushStyleColor(&ig::Theme::buttonBackground, red);
+        c.pushStyleColor(&ig::Theme::buttonBackground, blue);
+        // O de dentro ganha; o de fora volta no pop.
+        if (c.button("azul"))
+            ;
+        c.popStyleColor();
+        if (c.button("vermelho"))
+            ;
+        c.popStyleColor();
+        if (c.button("normal"))
+            ;
+        buttonRect = c.itemRect();
+        c.endWindow();
+    };
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    build(context);
+    const ig::DrawData &data = context.endFrame();
+    assert(frameHasColor(data, red));
+    assert(frameHasColor(data, blue));
+    assert(frameHasColor(data, themeBackground));
+    // O tema global não ficou tocado.
+    assert(context.theme().buttonBackground.r == themeBackground.r);
+    assert(context.theme().buttonBackground.g == themeBackground.g);
+
+    // Uma medida: a altura do widget dentro do bloco é a nova.
+    float pushedHeight = 0.0f;
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("medida", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    context.pushStyleVar(&ig::Theme::widgetHeight, 44.0f);
+    context.button("alto");
+    pushedHeight = context.itemRect().height;
+    context.popStyleVar();
+    context.button("normal");
+    const float normalHeight = context.itemRect().height;
+    context.endWindow();
+    context.endFrame();
+    assert(pushedHeight == 44.0f);
+    assert(normalHeight == context.theme().widgetHeight);
+    assert(context.theme().widgetHeight != 44.0f);
+
+    // Um push sem pop vale só para o frame dele: o seguinte volta ao tema.
+    auto buildNoPop = [&](ig::Context &c) {
+        assert(c.beginWindow("esquecido", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+        c.pushStyleColor(&ig::Theme::buttonBackground, red);
+        c.button("fica vermelho neste frame");
+        c.endWindow();
+    };
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    buildNoPop(context);
+    const ig::DrawData &leaked = context.endFrame();
+    assert(frameHasColor(leaked, red));
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("esquecido", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    context.button("ja nao");
+    context.endWindow();
+    const ig::DrawData &clean = context.endFrame();
+    assert(!frameHasColor(clean, red));
+    assert(frameHasColor(clean, context.theme().buttonBackground));
+
+    // O pop com contagem tira vários de uma vez, e um pop a mais não rebenta.
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("contagem", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    context.pushStyleColor(&ig::Theme::buttonBackground, red);
+    context.pushStyleVar(&ig::Theme::widgetHeight, 40.0f);
+    context.pushStyleColor(&ig::Theme::buttonText, blue);
+    context.popStyleColor(2);
+    context.popStyleVar(3);
+    context.popStyleColor();
+    context.button("depois de tudo");
+    context.endWindow();
+    context.endFrame();
+    assert(context.theme().buttonBackground.r == themeBackground.r);
+    assert(context.theme().widgetHeight != 40.0f);
+    (void)buttonRect;
+}
+
 static void test_navigation_widgets()
 {
     WidgetBackend backend;
@@ -4328,6 +4431,7 @@ int main()
     test_small_buttons();
     test_arrow_button_and_checkbox_flags();
     test_align_text_to_frame_padding_moves_only_the_text();
+    test_style_vars();
     test_navigation_widgets();
     test_multicomponent_numeric_variants();
     test_rich_tooltip();
