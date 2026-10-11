@@ -1143,6 +1143,32 @@ public:
     // adjusted weights are written back to the caller and should be kept for
     // the next frame to preserve the chosen column widths.
     bool beginTable(StringView id, Span<float> columnWeights, float width = 0.0f);
+    // Weighted columns where the application decides which ones are visible (the
+    // demo's "Hideable" table): a hidden column takes no width, the ones after it
+    // close the gap, and tableNextColumn() returns false for its cells so the
+    // application skips them.
+    //
+    //     bool visible[3] = {true, false, true};
+    //     ui.beginTable("t", ig::Span<const float>(weights, 3),
+    //                   ig::Span<const bool>(visible, 3));
+    //     for (int c = 0; c < 3; ++c)
+    //         if (ui.tableNextColumn()) { ... }   // a coluna 1 é saltada
+    //
+    // The usual way to drive those flags is a context menu on the header (see
+    // tableHoveredColumn()).
+    bool beginTable(StringView id, Span<const float> columnWeights, Span<const bool> columnVisible,
+                    float width = 0.0f);
+    bool beginTable(StringView id, Span<const float> columnWeights, Span<const bool> columnVisible,
+                    const TableStyle &style, float width = 0.0f);
+    /// @brief How many columns of the table being built are visible.
+    int tableVisibleColumnCount() const;
+    /// @brief The column of the header row the pointer is over (-1 while it is over
+    ///        none, or before the header row has been submitted this frame). It is
+    ///        what a header context menu needs to know which column to act on:
+    ///
+    ///            ui.tableNextColumn(); ui.tableHeader(name);
+    ///            if (ui.tableHoveredColumn() >= 0 && rightClicked) ui.openPopup("cols");
+    int tableHoveredColumn() const;
     // Styled tables. The stripes and lines of a row use the minimum row height,
     // so a row taller than that keeps the stripe of one row.
     bool beginTable(StringView id, int columns, const TableStyle &style, float width = 0.0f);
@@ -1513,13 +1539,18 @@ private:
         ct::Vector<float> columnWeights;
         float *resizableColumnWeights;
         float totalColumnWeight;
+        // Uma entrada por coluna (vazio = todas visíveis). Uma coluna escondida não
+        // ocupa largura e o tableNextColumn dela devolve false.
+        ct::Vector<uint8_t> columnVisible;
+        // A coluna do cabeçalho sob o ponteiro (ver tableHoveredColumn).
+        int headerHoveredColumn;
         TableStyle style;
         int row;
 
         TableState()
             : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
-              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr), totalColumnWeight(0.0f),
-              style(), row(0) {}
+              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr),
+              totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), style(), row(0) {}
     };
 
     struct TableResizeState

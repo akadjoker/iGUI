@@ -67,6 +67,9 @@ struct Panel
     ig::String queryText;
     // O filtro do "combo 2 (w/ filter)" do demo.
     ig::String comboFilter;
+    // Que colunas da tabela "Hideable" estao visiveis (o menu de contexto do
+    // cabecalho troca-as, como no demo).
+    bool tableColumns[3];
     bool dialogOpen;
     bool modalOpen;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
@@ -1172,30 +1175,71 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
 void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
-        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Resizable/Reorderable/"
-        "Hideable/Borders/RowBg/ScrollX/Y/SizingFixedFit e as tabelas aninhadas - o iGUI tem "
-        "beginTable/tableHeader/tableNextColumn, sem flags nem redimensionamento");
-    if (ui.beginTable("table", 3))
+        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Reorderable/Borders/"
+        "RowBg/ScrollX/Y/SizingFixedFit/freeze e as tabelas aninhadas - o iGUI tem "
+        "beginTable/tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo "
+        "grip do cabecalho), ordenacao pelo cabecalho e colunas escondidas");
+    // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
+    // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
+    // fecham o espaço dela). O menu é do chamador, com o openPopup.
+    static const ig::StringView kColumnNames[] = {
+        ig::StringView("Name"), ig::StringView("Value"), ig::StringView("Notes")
+    };
+    const float weights[3] = {2.0f, 1.0f, 2.0f};
+    const ig::Rect tableBounds(0.0f, 0.0f, ui.availableWidth(), 0.0f);
+    ig::TableStyle style;
+    style.alternateRows = true;
+    style.borders = true;
+    if (ui.beginTable("table", ig::Span<const float>(weights, 3),
+                      ig::Span<const bool>(g_panel.tableColumns, 3), style, tableBounds.width))
     {
         item();
-        ui.tableHeader("Name", g_panel.sortColumn, g_panel.sortAscending);
-        ui.tableHeader("Value", g_panel.sortColumn, g_panel.sortAscending);
-        ui.tableHeader("Notes", g_panel.sortColumn, g_panel.sortAscending);
+        for (int column = 0; column < 3; ++column)
+        {
+            // A coluna escondida devolve false: a célula dela não é submetida.
+            if (!ui.tableNextColumn())
+                continue;
+            ui.tableHeader(kColumnNames[column], g_panel.sortColumn, g_panel.sortAscending);
+        }
+        // Um clique com o botão direito num cabeçalho abre o menu das colunas (é o
+        // que o tableHoveredColumn diz: qual delas está debaixo do ponteiro).
+        // Um clique com o botão direito no cabeçalho abre o menu: o iGUI não tem um
+        // "foi este botão que desceu?", mas o isPointerButtonDown diz que está
+        // premido e o isKeyPressed-like test do press vem do próprio menu - por isso
+        // abre com o botão direito premido sobre o cabeçalho.
+        if (ui.tableHoveredColumn() >= 0 && ui.isPointerButtonDown(ig::PointerButton::Right))
+            ui.openPopup("table columns");
         item();
         for (int row = 0; row < 4; ++row)
         {
             char label[24];
-            ui.tableNextColumn();
-            snprintf(label, sizeof(label), "row %d", row);
-            ui.label(label);
-            ui.tableNextColumn();
-            snprintf(label, sizeof(label), "%d", row * 7);
-            ui.label(label);
-            ui.tableNextColumn();
-            ui.label("nota");
+            for (int column = 0; column < 3; ++column)
+            {
+                if (!ui.tableNextColumn())
+                    continue;
+                if (column == 1)
+                    snprintf(label, sizeof(label), "%d", row * 7);
+                else if (column == 0)
+                    snprintf(label, sizeof(label), "row %d", row);
+                else
+                    snprintf(label, sizeof(label), "nota");
+                ui.label(ig::StringView(label, strlen(label)));
+            }
             item();
         }
         ui.endTable();
+    }
+    if (ui.beginPopup("table columns"))
+    {
+        ui.separatorText("Colunas");
+        for (int column = 0; column < 3; ++column)
+        {
+            bool shown = g_panel.tableColumns[column];
+            if (ui.menuCheckbox(kColumnNames[column], shown))
+                g_panel.tableColumns[column] = shown;
+            item();
+        }
+        ui.endPopup();
     }
     (void)s;
 }
