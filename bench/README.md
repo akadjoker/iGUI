@@ -96,11 +96,11 @@ the library built `-O3`. Ratios below 5% are noise.
 
 | Scene | Widgets | iGUI | ImGui | Ratio (min) | iGUI geometry | ImGui geometry |
 | --- | --- | --- | --- | --- | --- | --- |
-| `basic` (1 window) | 13 | 6.2 µs | 6.2 µs | 0.99x | 626 vtx, 1 cmd | 530 vtx, 2 cmds |
-| `gallery`, clipped to 800px | 130 | 26.5 µs | 18.7 µs | 1.42x | 1160 vtx, 1 cmd | 1476 vtx, 2 cmds |
-| `gallery`, all visible | 130 | 42.6 µs | 33.6 µs | 1.27x | 4560 vtx, 3 cmds | 4796 vtx, 2 cmds |
+| `basic` (1 window) | 13 | 6.2 µs | 6.2 µs | 0.99x | 576 vtx, 1 cmd | 530 vtx, 2 cmds |
+| `gallery`, clipped to 800px | 130 | 26.5 µs | 18.7 µs | 1.42x | 1060 vtx, 1 cmd | 1476 vtx, 2 cmds |
+| `gallery`, all visible | 130 | 42.6 µs | 33.6 µs | 1.27x | 4160 vtx, 3 cmds | 4796 vtx, 2 cmds |
 | `text` (100 labels) | 100 | 32.5 µs | 26.9 µs | 1.21x | 2928 vtx, 1 cmd | 3836 vtx, 2 cmds |
-| `windows` (8 windows) | 32 | 26.7 µs | 19.8 µs | 1.35x | 2728 vtx, 1 cmd | 1568 vtx, 16 cmds |
+| `windows` (8 windows) | 32 | 26.7 µs | 19.8 µs | 1.35x | 2328 vtx, 1 cmd | 1568 vtx, 16 cmds |
 | `plots` (10 lines + 10 histograms) | 20 | 31.6 µs | 25.1 µs | 1.26x | 2932 vtx, 3 cmds | 2928 vtx, 2 cmds |
 
 The ratio column uses the **min** of 600 frames (best of 3 runs), not the mean:
@@ -191,6 +191,16 @@ All in the core, found with the numbers above and `--dump`:
   codepoint to its glyph in one load; glyph texture coordinates are precomputed;
   ASCII bytes skip the UTF-8 decoder. `measureText` went from ~30 ns to 2.7 ns
   per glyph.
+* **Arcs are tessellated by the error, not by the radius.** A rounded corner and a
+  circle take the number of segments that keeps the chord's sagitta under 0.3 px -
+  the same criterion as ImGui's `CircleTessellationMaxError`. The old rule (a
+  fixed 8 segments per corner, and `radius * 0.8 + 12` for a circle) gave a 4 px
+  corner 73 vertices' worth of outline and a 7 px slider knob 21 segments: a
+  framed widget cost 114 vertices where ImGui's costs ~50, and a slider 133. It is
+  now 50 and 79 (and 21 vertices for that knob). With the bench's radius-0 theme
+  the same change is the pill-shaped slider track and the round knob: `basic` went
+  from 626 to 576 vertices, the clipped gallery from 1160 to 1060, the 8-window
+  scene from 2728 to 2328.
 * **No `sinf`/`cosf` per vertex.** Circles and rounded corners read a 64-sample
   unit circle (`unitCircle()`); a rounded rectangle wholly inside its clip emits
   its triangles in bulk instead of culling each one. With the default theme's
@@ -269,8 +279,8 @@ What ImGui's core has that iGUI's immediate mode does not:
 
 On frame submission iGUI costs between 0.99x and 1.42x the CPU of ImGui for the
 same widgets, and hands the backend fewer draw calls (1-3 against 2-16). The
-output geometry is comparable (0.79x the vertices of ImGui on the gallery scene,
-0.76x on the text scene), the text hot loops are on par, and the remainder is
+output geometry is comparable (0.72x the vertices of ImGui on the clipped gallery,
+0.87x with everything visible, 0.76x on the text scene), the text hot loops are on par, and the remainder is
 per-widget machinery and the slider's circles rather than one hot spot - the
 `plots` scene, once the worst at 1.78x, is now inside that range at 1.26x.
 

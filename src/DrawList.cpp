@@ -582,11 +582,15 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     uint32_t stride = 0u;
     if (segments < 3u)
     {
-        // UI controls are often small, where a low polygon count is especially
-        // noticeable.  Keep their silhouette round before adding the soft edge
-        // below.
-        segments = static_cast<uint32_t>(radius * 0.8f) + 12u;
-        segments = segments < 12u ? 12u : (segments > 64u ? 64u : segments);
+        // O mesmo critério do ImGui para o número de segmentos de um círculo: o
+        // que mantém a flecha da corda abaixo de 0.3 px. Um botão de slider tem
+        // ~7 px de raio, e isso dá 10 segmentos - a fórmula antiga (`radius * 0.8
+        // + 12`) dava 17, que depois de encaixados na tabela eram 21 segmentos e
+        // 43 vértices por círculo, num sítio onde o ImGui gasta ~26.
+        const float maxError = radius < 0.3f ? radius : 0.3f;
+        const float angle = acosf(1.0f - maxError / radius);
+        segments = static_cast<uint32_t>(3.14159265358979323846f / angle + 0.5f);
+        segments = segments < 8u ? 8u : (segments > UnitCircle::Samples ? UnitCircle::Samples : segments);
         stride = UnitCircle::Samples / segments;
         segments = UnitCircle::Samples / stride;
     }
@@ -712,16 +716,29 @@ uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegm
     return count;
 }
 
+// Quantos segmentos um canto de raio `radius` leva: o critério é o mesmo do
+// ImGui (o CircleTessellationMaxError, 0.3 px por omissão): o número de
+// segmentos do círculo inteiro para o qual a flecha da corda - a distância entre
+// o arco e a corda - fica abaixo desse erro, e um canto é um quarto disso. O
+// que estava aqui antes (`radius * 0.5 + 3`, arredondado para 4/8/16) dava 8
+// segmentos a um canto de 4 px, o que custava 73 vértices por moldura redonda -
+// mais do que os ~30 do ImGui para a mesma moldura, e é isso que se nota num
+// slider (duas faixas em forma de pílula) ou num botão.
 uint32_t roundedCornerSegments(float radius, uint32_t requested)
 {
     if (requested > 0u)
-        return requested > 32u ? 32u : requested;
-    // Enough segments that a corner reads as a curve rather than a bevel, but
-    // no more than the radius can show.
-    const uint32_t segments = static_cast<uint32_t>(radius * 0.5f) + 3u;
-    // Rounded up to a divisor of the unit-circle table's quarter, so the arc
-    // is read from the table (see buildRoundedOutline).
-    return segments <= 4u ? 4u : (segments <= 8u ? 8u : 16u);
+        return requested > 16u ? 16u : requested;
+    if (radius <= 0.0f)
+        return 1u;
+    const float maxError = radius < 0.3f ? radius : 0.3f;
+    const float angle = acosf(1.0f - maxError / radius);
+    uint32_t segments = static_cast<uint32_t>(3.14159265358979323846f / angle * 0.25f + 0.5f);
+    if (segments < 2u)
+        segments = 2u;
+    // Arredondado para um divisor do quarto da tabela do círculo unitário, para
+    // o arco ser lido dela em vez de calculado com sinf/cosf (ver
+    // buildRoundedOutline); para cima, para o arredondamento nunca piorar o erro.
+    return segments <= 2u ? 2u : (segments <= 4u ? 4u : (segments <= 8u ? 8u : 16u));
 }
 
 } // namespace

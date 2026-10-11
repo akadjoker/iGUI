@@ -61,7 +61,11 @@ struct Panel
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
           subOpen()
     {
-        topOpen[static_cast<int>(gallery::Section::Help)] = true;
+        // Tudo fechado, como o demo do ImGui abre por omissão: enquanto o
+        // espelho abria o "Help" e o demo não, os dois painéis desenhavam textos
+        // diferentes e a contagem de vértices comparava o "Help" (onze bullets)
+        // com nada. Quem quiser as duas versões com tudo aberto usa o --open-all
+        // (que só abre o lado do iGUI, e por isso deixa de ser comparável).
     }
 };
 
@@ -82,16 +86,44 @@ void gap(ig::Context &ui, gallery::Section section, const char *missing)
 }
 
 // ── Help ─────────────────────────────────────────────────────────────────────
+// O texto é o do demo, palavra por palavra: é a secção que fica aberta por
+// omissão, é a que se lê nos dois painéis ao mesmo tempo, e enquanto tinha prosa
+// em português a contagem de vértices deste lado comparava dois textos
+// diferentes em vez de duas bibliotecas.
 void sectionHelp(ig::Context &ui, gallery::State &s)
 {
     (void)s;
-    ui.label("Este e o demo do ImGui, reescrito com o iGUI.");
+    ui.separatorText("ABOUT THIS DEMO:");
     item();
-    ui.label("O painel da esquerda e este; o da direita e o ShowDemoWindow() do ImGui.");
+    ui.bulletText("Sections below are demonstrating many aspects of the library.");
     item();
-    ui.label("ABOUT THIS DEMO / PROGRAMMER GUIDE / USER GUIDE:");
+    ui.bulletText("The \"Examples\" menu above leads to more demo contents.");
     item();
-    gap(ui, gallery::Section::Help, "ShowUserGuide() (as tabelas de ajuda do demo)");
+    ui.bulletText("The \"Tools\" menu above gives access to: About Box, Style Editor,\n"
+                  "and Metrics/Debugger (general purpose Dear ImGui debugging tool).");
+    item();
+    ui.separatorText("PROGRAMMER GUIDE:");
+    item();
+    ui.bulletText("See the ShowDemoWindow() code in imgui_demo.cpp. <- you are here!");
+    item();
+    ui.bulletText("See comments in imgui.cpp.");
+    item();
+    ui.bulletText("See example applications in the examples/ folder.");
+    item();
+    ui.bulletText("Read the FAQ at ");
+    ui.sameLine(0.0f);
+    // O TextLinkOpenURL do ImGui abre o browser; o iGUI não tem links, por isso
+    // fica o texto na cor de link.
+    ui.textColored("https://www.dearimgui.com/faq/", ig::Color(102u, 153u, 255u, 255u));
+    item();
+    ui.bulletText("Set 'io.ConfigFlags |= NavEnableKeyboard' for keyboard controls.");
+    item();
+    ui.bulletText("Set 'io.ConfigFlags |= NavEnableGamepad' for gamepad controls.");
+    item();
+    ui.separatorText("USER GUIDE:");
+    item();
+    gap(ui, gallery::Section::Help, "ShowUserGuide() (as tabelas de ajuda do demo, "
+                                    "e o TextLinkOpenURL)");
 }
 
 // ── Configuration ────────────────────────────────────────────────────────────
