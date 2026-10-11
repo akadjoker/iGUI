@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 261 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 275 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
@@ -254,12 +254,16 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | --- | --- | --- |
 | `PushFont`/`PopFont` com vários tamanhos | `pushStyleVar(&Theme::fontSize, x)` (ou `setNextFontSize`) | existe: o `FontAtlas` coze uma face e desenha-a **escalada** pelo tamanho lógico (ver `FontAtlas::appendText`), por isso um tamanho diferente sai sem atlas novo - nítido até ~±50%, esbatido muito além disso |
 | `SetWindowFontScale` | o mesmo `pushStyleVar` (vale para o bloco todo, widgets incluídos) | existe |
-| Fonte por widget (`ImFont*` no `PushFont`) e o font picker | — | **não existe**: uma face por atlas (o `FontId` já atravessa a medição e o desenho, falta o atlas com mais de uma face) |
+| Fonte por bloco (`PushFont(ImFont*)`) | `pushFont(FontId)` / `popFont()` | existe: a face leva o tamanho de fabrico dela (a face nova não sai esticada), a pilha é de 8 níveis, um push sem pop vale só para o frame dele, e um `pushStyleVar(&Theme::fontSize, x)` por dentro continua a mandar no tamanho |
+| `AddFontDefault`/`AddFontFromMemoryTTF`, uma face por tamanho, tudo no mesmo atlas | `FontAtlas::loadFont(bytes, bakedSize, ranges)` | existe: o atlas reconstrói-se por inteiro com a face nova (o stb não guarda estado entre chamadas), por isso quem já tem a textura volta a subi-la com `pixels()` - é o que a aplicação faz uma vez, ao carregar as fontes |
+| `io.FontDefault` (o `ShowFontSelector` muda a fonte do interface todo) | `pushFont` para o frame todo, lido da escolha do frame anterior | existe (é o que a galeria faz: o combo da secção "Fonts" só vale a partir do frame seguinte, como no ImGui) |
 | `AddFontFromMemoryTTF` (uma fonte a partir de bytes) | `FontAtlas(bytes, ranges, w, h, bakedSize)` | existe (os bytes são validados antes de chegarem ao stb, que não se defende sozinho de um ficheiro que não seja fonte) |
 | `AddFontFromFileTTF` | o ficheiro é lido pela aplicação e passado como bytes | existe (não há leitura de disco dentro da biblioteca, que não tem sistema de ficheiros) |
-| Merge de ícones numa fonte, `GlyphRanges` por fonte | — | **não existe**: uma fonte por atlas, com os ranges do construtor |
+| Merge de ícones numa fonte, `GlyphRanges` por face | `FontAtlas::loadFont(bytes, size, ranges)` | os ranges são por face; o merge (uma face a acrescentar glifos a outra) **não existe** |
+| Métricas por face (`ImFont::Ascent`/`Descent`/`GetFontSize`) | `bakedSize(FontId)`, `lineHeight(FontId)`, `ascent(FontId)`, `measureText(FontId, ...)` | existe |
 | `ImFontAtlas` dinâmico (backend fornece as texturas: `ImTextureData`) | — | **não existe**: o atlas é construído uma vez e o backend carrega-o |
-| `ShowFontSelector`, `GetFontSize`, `RasterizerDensity`, escala de fonte | — | **não existe** |
+| `ShowFontSelector`, `RasterizerDensity`, escala de fonte global | o combo é da aplicação (a galeria tem o seu, com `pushFont`), o tamanho é do tema | parcial: não há escala global de fonte nem densidade de rasterização - o tamanho é por bloco (`pushStyleVar`) ou por face (`pushFont`) |
+| Inspector do atlas (`ShowFontAtlas`: loader, compactar/esticar, rects empacotadas, glifos com zoom, realce de cada rect) | — | **não existe**: a aplicação lê `pixels()`, `width()`, `height()`, `faceCount()` e as métricas das faces, mas não há inspetor |
 
 ## Imagens
 
@@ -671,10 +675,17 @@ Continua em falta neste nível:
       cozer nada: é o que dá o "Font size" e o "SetWindowFontScale" do demo.
       *Onde:* `src/FontAtlas.cpp` (`appendText`, o `scale = logicalSize / bakedSize_`),
       `tests/test_widgets.cpp`.
-- [ ] **Fontes, mais de uma face** (`pushFont(ficheiro)`/font picker): o `FontId` já
-      atravessa a medição e o desenho; falta o `FontAtlas` com mais do que uma face
-      (e o atlas a crescer/empacotar as faces).
-      *Onde:* `src/FontAtlas.cpp`, `include/igui/FontAtlas.hpp`.
+- [x] **Fontes, mais de uma face** (`pushFont(FontId)`/font picker): o `FontAtlas`
+      empacota as faces todas no mesmo atlas (`loadFont`, cada uma com os seus
+      ranges, o tamanho de fabrico e as métricas dela) e o `Context` escolhe a face
+      com o `pushFont`/`popFont` - a face leva o tamanho dela, e o tamanho lógico
+      continua a ser do tema. A galeria carrega as mesmas faces que o demo
+      (`misc/fonts`) nos dois lados, e o combo da secção "Fonts" é o
+      `ShowFontSelector` do ImGui, o `io.FontDefault` do painel todo.
+      *Onde:* `src/FontAtlas.cpp` (`loadFont`, `rebuild`, `packFace`),
+      `src/Gui.cpp` (`pushFont`/`popFont`), `tests/test_font.cpp`
+      (`test_multiple_faces`), `tests/test_item_status.cpp` (`test_push_font`),
+      `examples/compare_gallery/GalleryIgui.cpp`.
 - [ ] **Navegação por teclado e foco programático**: expor o `advanceFocus` que
       já existe (`setKeyboardFocusHere`, `isItemFocused`, `focusNextWindow`,
       `activateItem`), e uma tab order explícita.
