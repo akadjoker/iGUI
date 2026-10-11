@@ -1000,6 +1000,65 @@ void test_open_combo_owns_the_pointer_over_its_list()
     assert(current == 1);
 }
 
+// Quem recebe o hover numa sobreposição é a janela de cima, e trazer para a frente
+// a de baixo tem de mudar isso no mesmo frame: a resposta a "que janela está
+// debaixo do ponteiro" é respondida uma vez por frame (windowAtPointer) e quem
+// mexe na ordem tem de a deitar fora.
+void test_hover_follows_the_window_that_is_raised()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect lowerButton;
+    ig::Rect upperButton;
+    bool lowerHovered = false;
+    bool upperHovered = false;
+
+    auto build = [&](ig::Context &c) {
+        // A janela de baixo, primeiro.
+        assert(c.beginWindow("baixo", ig::Rect(0.0f, 0.0f, 260.0f, 200.0f)));
+        c.button("em baixo", ig::Rect(0.0f, 0.0f, 120.0f, 40.0f));
+        lowerButton = c.itemRect();
+        lowerHovered = c.isItemHovered();
+        c.endWindow();
+        // E a de cima, sobreposta: é criada depois, por isso fica à frente.
+        assert(c.beginWindow("cima", ig::Rect(60.0f, 0.0f, 260.0f, 200.0f)));
+        c.button("em cima", ig::Rect(0.0f, 0.0f, 120.0f, 40.0f));
+        upperButton = c.itemRect();
+        upperHovered = c.isItemHovered();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // A de cima tapa a parte direita do botão de baixo.
+    assert(upperButton.x < lowerButton.x + lowerButton.width);
+    assert(lowerButton.x < upperButton.x);
+
+    // Um ponto na sobreposição: é da janela de cima.
+    const float overlapX = upperButton.x + 10.0f;
+    context.pushEvent(ig::Event::pointerMove(overlapX, lowerButton.y + 10.0f));
+    harness.frame(build);
+    assert(upperHovered);
+    assert(!lowerHovered);
+
+    // Premir na parte do botão de baixo que está à vista traz a janela de baixo
+    // para a frente...
+    context.pushEvent(ig::Event::pointerMove(lowerButton.x + 5.0f, lowerButton.y + 10.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, lowerButton.x + 5.0f,
+                                             lowerButton.y + 10.0f));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, lowerButton.x + 5.0f,
+                                           lowerButton.y + 10.0f));
+    harness.frame(build);
+
+    // ...e no mesmo frame seguinte a sobreposição já é dela.
+    context.pushEvent(ig::Event::pointerMove(overlapX, lowerButton.y + 10.0f));
+    harness.frame(build);
+    assert(lowerHovered);
+    assert(!upperHovered);
+}
+
 } // namespace
 
 int main()
@@ -1021,6 +1080,7 @@ int main()
     test_group_columns_line_up();
     test_open_menu_owns_the_pointer_over_it();
     test_menu_bar_reserves_its_strip();
+    test_hover_follows_the_window_that_is_raised();
     test_open_combo_owns_the_pointer_over_its_list();
     printf("test_item_status: all tests passed\n");
     return 0;

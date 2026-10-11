@@ -1410,6 +1410,11 @@ private:
     float faderGrabOffset_;
     WidgetId lastItemId_;
     ItemStatus item_;
+    // Cache do topWindowAt(pointer_.position) para o frame corrente. mutável
+    // porque as consultas de hover são const e isto é só memória.
+    mutable WindowHandle pointerWindow_;
+    mutable uint64_t pointerWindowFrame_;
+    mutable bool pointerWindowValid_;
     // Verdadeiro enquanto os itens da lista de um combo aberto estão a ser
     // submetidos: é o que distingue esses itens do que está por baixo deles (ver
     // pointerBlockedByOpenPopup).
@@ -1626,6 +1631,12 @@ private:
     bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds, int precision);
     WindowHandle topWindowAt(const Vec2 &position) const;
+    // O topWindowAt() do ponteiro, respondido uma vez por frame: por widget era
+    // uma passagem por todas as janelas (o currentWindowReceivesPointer pergunta
+    // isto a cada widget), e a resposta só muda quando uma janela nasce, muda de
+    // sítio ou de ordem - quem faz isso invalida (ver invalidatePointerWindow).
+    WindowHandle windowAtPointer() const;
+    void invalidatePointerWindow() { pointerWindowValid_ = false; }
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
     bool windowBlockedByModal() const;

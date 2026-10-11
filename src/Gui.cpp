@@ -678,6 +678,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId),
+      pointerWindowFrame_(0u), pointerWindowValid_(false),
       comboItemsSubmitted_(false), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
@@ -1046,6 +1047,11 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
         window->clampToViewport = false;
     }
 
+    // Os bounds desta janela são os deste frame (do ficheiro de estado, do
+    // forceWindowBounds_ ou dos options): quem está debaixo do ponteiro pode ter
+    // mudado.
+    invalidatePointerWindow();
+
     if (open)
         window->open = *open;
 
@@ -1196,6 +1202,7 @@ void Context::maximizeWindow(StringView title)
     if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
     w->maximized=true; w->minimized=false;
     w->bounds=Rect(0,0,frame_.displaySize.x,frame_.displaySize.y);
+    invalidatePointerWindow();
 }
 
 void Context::restoreWindow(StringView title)
@@ -1205,6 +1212,7 @@ void Context::restoreWindow(StringView title)
     if (!w || !w->showWindowControls) return;
     if (w->hasRestoreBounds) w->bounds=w->restoreBounds;
     w->hasRestoreBounds=false; w->maximized=false; w->minimized=false;
+    invalidatePointerWindow();
 }
 
 void Context::setWindowButtons(StringView title, bool minimize, bool maximize)
@@ -8666,6 +8674,8 @@ WindowState *Context::getOrCreateWindow(WidgetId id, StringView title,
     state.title = String(title.data(), title.size());
     state.bounds = bounds;
     state.zOrder = nextZOrder_++;
+    // Uma janela nova está por cima de tudo: quem está debaixo do ponteiro mudou.
+    invalidatePointerWindow();
     // A choice recorded by setWindowButtons before this window existed.
     uint8_t *mask = windowButtons_.find(id);
     if (mask)
@@ -9431,6 +9441,7 @@ void Context::drawWindow(WindowState &window)
             const float height = pointer_.position.y - window.bounds.y;
             window.bounds.width = width > minimumWidth ? width : minimumWidth;
             window.bounds.height = height > minimumHeight ? height : minimumHeight;
+            invalidatePointerWindow();
         }
         if (pointer_.released[left])
         {
@@ -9453,6 +9464,7 @@ void Context::drawWindow(WindowState &window)
         {
             window.bounds.x = pointer_.position.x - windowDragOffset_.x;
             window.bounds.y = pointer_.position.y - windowDragOffset_.y;
+            invalidatePointerWindow();
             // Backends keep reporting the pointer outside the viewport while
             // a button is held, so a fling could park the title bar off
             // screen, leaving nothing to grab the window by.
@@ -9543,6 +9555,16 @@ WindowHandle Context::topWindowAt(const Vec2 &position) const
     return result;
 }
 
+WindowHandle Context::windowAtPointer() const
+{
+    if (pointerWindowValid_ && pointerWindowFrame_ == frameNumber_)
+        return pointerWindow_;
+    pointerWindow_ = topWindowAt(pointer_.position);
+    pointerWindowFrame_ = frameNumber_;
+    pointerWindowValid_ = true;
+    return pointerWindow_;
+}
+
 void Context::focusWindow(WindowHandle handle)
 {
     if (!handle)
@@ -9555,6 +9577,7 @@ void Context::focusWindow(WindowHandle handle)
     window->focused = true;
     window->zOrder = nextZOrder_++;
     focusedWindow_ = handle;
+    invalidatePointerWindow();
 }
 
 bool Context::currentWindowReceivesPointer() const
@@ -9563,7 +9586,7 @@ bool Context::currentWindowReceivesPointer() const
         return false;
     if (!currentWindow_)
         return false;
-    if (currentWindow_ == topWindowAt(pointer_.position))
+    if (currentWindow_ == windowAtPointer())
         return true;
     return pointerInsideOwnPopup(pointer_.position);
 }
