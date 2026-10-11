@@ -744,7 +744,61 @@ public:
     // isItemEdited é posto pelos widgets que mudam um valor (sliders, drags,
     // campos, checkbox, radio, combo, listas, colorEdit, stepper); um widget que
     // não o ponha continua a dizê-lo pelo seu próprio valor de retorno.
+    // Flags do isItemHovered (o IsItemHovered do ImGui). O item decide a resposta
+    // quando é submetido, como no ImGui: um flag que ninguém pediu na altura do
+    // widget não pode ser respondido depois.
+    struct ItemHoverFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Só passado o hoverDelay_ (0.45 s por omissão) em cima do item.
+            Delay = 1u << 0,
+            /// Só se o ponteiro não se mexeu desde que chegou ao item.
+            Stationary = 1u << 1,
+            /// Responde mesmo com outro widget ativo (um arrasto a passar por cima).
+            AllowWhenBlockedByActiveItem = 1u << 2,
+            /// Responde mesmo com um menu/combo aberto por cima.
+            AllowWhenBlockedByPopup = 1u << 3,
+            /// Basta o rect: ignora o clip (um item a sair de um child conta como
+            /// "debaixo do ponteiro" mesmo na parte que o child corta).
+            RectOnly = 1u << 4
+        };
+    };
     bool isItemHovered() const { return item_.hovered; }
+    bool isItemHovered(unsigned flags) const
+    {
+        // Sem flags não há nada a responder além do que o item já disse.
+        if (flags == 0u)
+            return item_.hovered;
+        // Cada flag tem o seu bit no que o item mediu (ver ItemStatus).
+        const bool wantsDelay = (flags & ItemHoverFlags::Delay) != 0u;
+        const bool wantsStationary = (flags & ItemHoverFlags::Stationary) != 0u;
+        const bool wantsActive = (flags & ItemHoverFlags::AllowWhenBlockedByActiveItem) != 0u;
+        const bool wantsPopup = (flags & ItemHoverFlags::AllowWhenBlockedByPopup) != 0u;
+        const bool wantsRectOnly = (flags & ItemHoverFlags::RectOnly) != 0u;
+        if (wantsDelay && !item_.hoveredDelayed)
+            return false;
+        if (wantsStationary && !item_.hoveredStationary)
+            return false;
+        if (!item_.hovered)
+        {
+            // Uma condição bloqueada pode ser dispensada por um flag: é para isso
+            // que existem.
+            const bool okActive = !item_.hoveredBlockedByActive || wantsActive;
+            const bool okPopup = !item_.hoveredBlockedByPopup || wantsPopup;
+            const bool okRect = item_.hoveredInRect && (wantsRectOnly || item_.hoveredInClip);
+            if (!(okActive && okPopup && okRect))
+                return false;
+            // Sem clip e sem bloqueio, o que sobra é o rect: Delay/Stationary já
+            // foram testados acima.
+        }
+        return true;
+    }
+    // Segundos que o ponteiro tem de estar parado sobre o item para o flag Delay
+    // (o style.HoverDelay do ImGui; o tooltip tem o seu, este é para consultas).
+    void setHoverDelay(float seconds);
+    float hoverDelay() const { return hoverDelay_; }
     bool isItemActive() const { return item_.active; }
     bool isItemClicked() const { return item_.clicked; }
     bool isItemEdited() const { return item_.edited; }
@@ -1204,11 +1258,22 @@ private:
         bool deactivatedAfterEdit;
         // O item abriu ou fechou neste frame (isItemToggledOpen).
         bool toggledOpen;
+        // As condições do hover, separadas: é com elas que o isItemHovered(flags)
+        // decide se pode dispensar o que está a bloquear (ver ItemHoverFlags).
+        bool hoveredInRect;
+        bool hoveredInClip;
+        bool hoveredDelayed;
+        bool hoveredStationary;
+        bool hoveredBlockedByActive;
+        bool hoveredBlockedByPopup;
 
         ItemStatus()
             : id(InvalidWidgetId), bounds(), hovered(false), active(false), clicked(false),
               edited(false), focused(false), disabled(false), activated(false),
-              deactivated(false), deactivatedAfterEdit(false), toggledOpen(false)
+              deactivated(false), deactivatedAfterEdit(false), toggledOpen(false),
+              hoveredInRect(false), hoveredInClip(false), hoveredDelayed(false),
+              hoveredStationary(false), hoveredBlockedByActive(false),
+              hoveredBlockedByPopup(false)
         {
         }
     };
@@ -1723,6 +1788,16 @@ private:
     // logarítmico andar depressa em cima e devagar em baixo.
     float dragStartNorm_;
     float tooltipDelay_;
+    // O atraso do flag Delay do isItemHovered, e o item/tempo/posição do hover em
+    // curso (é o que o Stationary compara).
+    float hoverDelay_;
+    WidgetId hoverDelayWidget_;
+    float hoverSeconds_;
+    // Quanto tempo o ponteiro está sem se mexer (o Stationary do ImGui): mexe-se
+    // dentro do item e volta a zero, mas o Delay (que conta desde que entrou nele)
+    // não.
+    float hoverStationarySeconds_;
+    Vec2 hoverStartPosition_;
     float tooltipHoverSeconds_;
     Vec2 tooltipPointerPosition_;
     WidgetId tooltipWidget_;

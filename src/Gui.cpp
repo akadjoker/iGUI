@@ -747,7 +747,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
-      tooltipHoverSeconds_(0.0f),
+      hoverDelay_(0.45f), hoverDelayWidget_(InvalidWidgetId), hoverSeconds_(0.0f),
+      hoverStationarySeconds_(0.0f), hoverStartPosition_(), tooltipHoverSeconds_(0.0f),
       tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId), plotPoints_(), plotBars_(),
       tooltipOpen_(false), tooltipLayout_(), tooltipOrigin_(), tooltipSize_(), tooltipDrawList_(),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -9915,6 +9916,10 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     item_.clicked = false;
     item_.edited = false;
     item_.toggledOpen = false;
+    item_.hoveredInRect = false;
+    item_.hoveredInClip = false;
+    item_.hoveredBlockedByActive = false;
+    item_.hoveredBlockedByPopup = false;
     item_.focused = focusedWidget_ == id;
     item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
     item_.active = activeWidget_ == id;
@@ -9926,6 +9931,12 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     if (tooltipOpen_)
     {
         item_.hovered = false;
+        item_.hoveredInRect = false;
+        item_.hoveredInClip = false;
+        item_.hoveredDelayed = false;
+        item_.hoveredStationary = false;
+        item_.hoveredBlockedByActive = false;
+        item_.hoveredBlockedByPopup = false;
         return false;
     }
     // Num bloco desativado nada reage: sem hover não há hot, e é o hover que
@@ -9933,18 +9944,71 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     if (disabledDepth_ > 0u)
     {
         item_.hovered = false;
+        item_.hoveredInRect = false;
+        item_.hoveredInClip = false;
+        item_.hoveredDelayed = false;
+        item_.hoveredStationary = false;
+        item_.hoveredBlockedByActive = false;
+        item_.hoveredBlockedByPopup = false;
         return false;
     }
-    if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
+    // As condições do hover, uma a uma: o isItemHovered(flags) pode dispensar as
+    // que um flag mandar dispensar (ver ItemHoverFlags).
+    const bool blockedByActive = activeWidget_ != InvalidWidgetId && activeWidget_ != id;
+    item_.hoveredBlockedByActive = blockedByActive;
+    item_.hoveredBlockedByPopup = pointerBlockedByOpenPopup(pointer_.position);
+    item_.hoveredInRect = contains(rect, pointer_.position);
+    item_.hoveredInClip = contains(intersect(rect, clip), pointer_.position);
+    if (blockedByActive || item_.hoveredBlockedByPopup)
     {
         item_.hovered = false;
+        item_.hoveredDelayed = false;
+        item_.hoveredStationary = false;
         return false;
     }
     const bool hovered = pointerOver(intersect(rect, clip));
     if (hovered)
         hotWidget_ = id;
     item_.hovered = hovered;
+    // Dois relógios, como no ImGui: o Delay conta desde que o ponteiro entrou neste
+    // item (mexer-se lá dentro não o reinicia), e o Stationary conta desde a última
+    // vez que o ponteiro se mexeu (seja onde for).
+    if (hovered && hoverDelayWidget_ != id)
+    {
+        hoverDelayWidget_ = id;
+        hoverSeconds_ = 0.0f;
+        hoverStationarySeconds_ = 0.0f;
+        hoverStartPosition_ = pointer_.position;
+    }
+    else if (hovered)
+    {
+        hoverSeconds_ += frame_.deltaSeconds;
+        const float deltaX = pointer_.position.x - hoverStartPosition_.x;
+        const float deltaY = pointer_.position.y - hoverStartPosition_.y;
+        if (deltaX * deltaX + deltaY * deltaY > 1.0f)
+        {
+            hoverStartPosition_ = pointer_.position;
+            hoverStationarySeconds_ = 0.0f;
+        }
+        else
+            hoverStationarySeconds_ += frame_.deltaSeconds;
+    }
+    if (hovered)
+    {
+        item_.hoveredDelayed = hoverSeconds_ >= hoverDelay_;
+        item_.hoveredStationary = hoverStationarySeconds_ >= hoverDelay_;
+    }
+    else
+    {
+        item_.hoveredDelayed = false;
+        item_.hoveredStationary = false;
+    }
     return hovered;
+}
+
+void Context::setHoverDelay(float seconds)
+{
+    hoverDelay_ = seconds > 0.0f ? seconds : 0.0f;
 }
 
 bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable)

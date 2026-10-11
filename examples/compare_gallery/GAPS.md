@@ -266,7 +266,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `IsItemActivated/Deactivated/DeactivatedAfterEdit`, `IsItemToggledOpen`, `IsItemVisible`, `IsItemEnabled` | — | **não existe** |
 | `GetItemRectMin/Max/Size`, `GetItemID` | `itemRect()`, `itemId()` | existe |
 | `GetItemFlags` | — | **não existe** |
-| `IsItemHovered` com flags (`Delay`, `Stationary`, `AllowWhenBlockedBy*`, `AllowWhenDisabled`, `RectOnly`) | `isItemHovered()` sem flags | parcial |
+| `IsItemHovered` com flags (`Delay`, `Stationary`, `AllowWhenBlockedBy*`, `AllowWhenDisabled`, `RectOnly`) | `isItemHovered(ItemHoverFlags)` | existe: `Delay`, `Stationary`, `AllowWhenBlockedByActiveItem`, `AllowWhenBlockedByPopup` e `RectOnly` (falta o `AllowWhenDisabled`, que aqui é o `beginDisabled` a cortar tudo) |
 | `IsItemHoverable`, `SetItemAllowOverlap`, `SetNextItemAllowOverlap` | — | **não existe** |
 | `IsWindowFocused/Hovered/Appearing/Collapsed`, `IsAnyItemHovered/Active` | `wantsPointer`/`wantsKeyboard`/`isMenuOpen` | parcial |
 | `IsRectVisible`, `GetWindowDrawList`, `ImDrawList` público | `draw*` do `Context` | parcial: o `DrawList` existe, mas a aplicação só desenha pelo Context |
@@ -436,9 +436,15 @@ Continua em falta neste nível:
       composto (o campo de valor de um slider) apagava-as.
       *Onde:* `include/igui/Gui.hpp` (`ItemStatus`), `src/Gui.cpp` (`itemClicked`,
       `sliderValue`, `keepItemStatus`), `tests/test_item_status.cpp`.
-- [ ] **Os flags do `IsItemHovered`**: `Delay`/`Stationary`/`AllowWhenBlockedBy*`/
-      `RectOnly`, e o `isItemVisible` por item em vez de por rect.
-      *Onde:* o `itemHovered` em `src/Gui.cpp`.
+- [x] **Os flags do `IsItemHovered`**: `Delay` (tempo parado em cima do item, com o
+      `setHoverDelay`/`hoverDelay`), `Stationary` (o ponteiro não se mexeu),
+      `AllowWhenBlockedByActiveItem` (outro widget ativo a passar por cima) e
+      `AllowWhenBlockedByPopup` (um menu/combo aberto por cima), o `RectOnly` (basta
+      o rect, o clip não conta). O `itemHovered` passou a medir as condições uma a
+      uma em vez de responder só que não - é o que deixa um flag dispensar a que
+      bloqueia.
+      *Onde:* `include/igui/Gui.hpp` (`ItemHoverFlags`, `ItemStatus`), `src/Gui.cpp`
+      (`itemHovered`), `tests/test_item_status.cpp`.
 - [x] **Layout**: `newLine`, `pushItemWidth`/`popItemWidth`/
       `setNextItemWidth`/`calcItemWidth`. Um `##id` também já não gasta largura de
       rótulo, que era o que faltava para os campos do demo ficarem iguais.
