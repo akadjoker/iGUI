@@ -746,6 +746,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
+      subMenuRestoreMenu_(InvalidWidgetId),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), tableOrder_(nullptr), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
@@ -920,7 +921,11 @@ void Context::beginFrame(const FrameInfo &frame)
     // mid-frame, but the popup was still on screen when the pointer went
     // down, so widgets drawn later this same frame (a symbol tree, ...)
     // must still treat that click as having landed on the menu, not on them.
-    menuWasOpenAtFrameStart_ = openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId;
+    // O submenu conta como menu aberto: um submenu aberto de dentro de um popup tem
+    // a caixa fora do popup (é um menu), e o clique nos itens dele é do menu, não do
+    // que está por baixo.
+    menuWasOpenAtFrameStart_ = openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId ||
+                              openSubMenu_ != InvalidWidgetId;
     menuPopupBoundsAtFrameStart_ = menuPopupBounds_;
     subMenuPopupBoundsAtFrameStart_ = subMenuPopupBounds_;
     comboWasOpenAtFrameStart_ = openCombo_ != InvalidWidgetId;
@@ -4403,24 +4408,36 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
                     theme_.menuItemHeight);
         advanceLayout(item);
     }
-    const WidgetId parentId =
-        insideMenu ? activeMenu_ : (idStack_.empty() ? InvalidWidgetId : idStack_.back());
-    const WidgetId id = combineIds(parentId, combineIds(makeWidgetId(labelText), 0x5355424d454e55ull));
+    const WidgetId id = insideMenu
+        ? combineIds(activeMenu_, combineIds(makeWidgetId(labelText), 0x5355424d454e55ull))
+        : combineIds(idStack_.empty() ? InvalidWidgetId : idStack_.back(),
+                     combineIds(makeWidgetId(labelText), 0x5355424d454e55ull));
+    // O "pai" do submenu é o que diz ao endSubMenu que há um submenu aberto: num
+    // menu é o id do menu, num popup é o id do próprio item. Um popup não tem id de
+    // menu nenhum, e o idStack_ de dentro dele tem o id inválido - usá-lo como pai
+    // fazia o endSubMenu sair sem repor nada, e o popup desenhava os itens seguintes
+    // (e media a caixa) como se ainda estivesse dentro do submenu.
+    const WidgetId parentId = insideMenu ? activeMenu_ : id;
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
     if (enabled && (hovered || clicked))
     {
         openSubMenu_ = id;
         const float popupWidth = subMenuWidthId_ == id ? subMenuPopupWidth_ : theme_.menuMinWidth;
+        // O lugar da caixa procura-se no écran, não dentro do popup: um menu dentro
+        // de um popup (o "With a menu.." do demo) abre ao lado dele, como no ImGui -
+        // com o clip do popup o submenu não tinha para onde ir à direita e caía-lhe
+        // em cima.
+        const Rect place = popupClipRect();
         float popupX = item.x + item.width;
-        const float clipRight = clip.x + clip.width;
+        const float clipRight = place.x + place.width;
         if (popupX + popupWidth > clipRight)
         {
             const float leftPopupX = item.x - popupWidth;
-            popupX = leftPopupX >= clip.x ? leftPopupX : clipRight - popupWidth;
+            popupX = leftPopupX >= place.x ? leftPopupX : clipRight - popupWidth;
         }
-        if (popupX < clip.x)
-            popupX = clip.x;
+        if (popupX < place.x)
+            popupX = place.x;
         subMenuPopupBounds_ = Rect(popupX, item.y, popupWidth, 0.0f);
     }
     popup.addRectFilled(item, openSubMenu_ == id || hovered ? theme_.menuItemHover : theme_.menuBg, clip);
@@ -4441,6 +4458,7 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
         return false;
 
     subMenuParent_ = parentId;
+    subMenuRestoreMenu_ = activeMenu_;
     subMenuParentBounds_ = activeMenuBounds_;
     activeMenu_ = id;
     activeMenuBounds_ = subMenuPopupBounds_;
@@ -4481,8 +4499,9 @@ void Context::endSubMenu()
     // Fecha o contentor do submenu: o do menu de fora volta com o cursor onde estava
     // (os itens do pai continuam a seguir ao submenu).
     endPopupContent();
-    activeMenu_ = subMenuParent_;
+    activeMenu_ = subMenuRestoreMenu_;
     activeMenuBounds_ = subMenuParentBounds_;
+    subMenuRestoreMenu_ = InvalidWidgetId;
     subMenuParent_ = InvalidWidgetId;
 }
 
