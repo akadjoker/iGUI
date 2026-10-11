@@ -1384,6 +1384,46 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
             ui.menuItem("New");
             // Os mesmos atalhos do demo, agora desenhados pelo menuItem.
             ui.menuItem("Open", ig::StringView("Ctrl+O"));
+            // O "Open Recent" do demo, com os nomes dos ficheiros.
+            if (ui.beginSubMenu("Open Recent"))
+            {
+                ui.menuItem("fish_hat.c");
+                ui.menuItem("fish_hat.inl");
+                ui.menuItem("fish_hat.h");
+                ui.endSubMenu();
+            }
+            ui.menuItem("Save", ig::StringView("Ctrl+S"));
+            ui.menuItem("Save As..");
+            ui.menuSeparator();
+            // O "Options" do demo: um menu com widgets lá dentro (um child a rolar,
+            // um checkbox, um slider, um input, um combo). Antes isto não cabia no
+            // iGUI - o popup de um menu não era um contentor de layout.
+            if (ui.beginSubMenu("Options"))
+            {
+                gallery::State &shared = g_panel.shared;
+                bool enabled = shared.flag[0];
+                if (ui.menuCheckbox("Enabled", enabled))
+                    shared.flag[0] = enabled;
+                if (ui.beginChild("child", 60.0f))
+                {
+                    char scrolling[32];
+                    for (int i = 0; i < 10; ++i)
+                    {
+                        snprintf(scrolling, sizeof(scrolling), "Scrolling Text %d", i);
+                        ui.label(ig::StringView(scrolling, strlen(scrolling)));
+                        item();
+                    }
+                    ui.endChild();
+                }
+                item();
+                ui.sliderFloat("Value", shared.f1, 0.0f, 1.0f);
+                item();
+                ui.inputFloat("Input", shared.f1);
+                item();
+                ui.comboBox("Combo", shared.combo, ig::Span<const ig::StringView>(kItems5, 5));
+                item();
+                ui.endSubMenu();
+            }
             ui.menuItem("Quit", ig::StringView("Alt+F4"));
             ui.endMenu();
         }

@@ -2131,6 +2131,159 @@ void test_item_hovered_flags()
     assert(allowed == true);
 }
 
+// O corpo de um menu aberto é um contentor de layout: um slider (ou um child, um
+// input, um combo) submetido lá dentro fica dentro do popup, e o item que vier
+// depois cai por baixo dele. É o "Options" do menu de ficheiros do demo.
+void test_widgets_inside_an_open_menu()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float value = 0.5f;
+    int separators = 0;
+    ig::Rect headerRect;
+    ig::Rect firstItemRect;
+    ig::Rect sliderRect;
+    ig::Rect afterItemRect;
+    bool sliderChanged = false;
+    bool open = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("menu", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
+        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+        {
+            open = c.beginMenu("F");
+            if (headerRect.width <= 0.0f)
+                headerRect = c.itemRect();
+            if (open)
+            {
+                c.menuItem("New");
+                firstItemRect = c.itemRect();
+                sliderChanged = c.sliderFloat("Value", value, 0.0f, 1.0f);
+                sliderRect = c.itemRect();
+                c.menuSeparator();
+                ++separators;
+                c.menuItem("Depois");
+                afterItemRect = c.itemRect();
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+    harness.frame(build);
+
+    // O slider está dentro do popup: o x é o do menu e o y é por baixo do primeiro
+    // item (que começa no topo do popup).
+    assert(firstItemRect.height == context.theme().menuItemHeight);
+    assert(sliderRect.x == firstItemRect.x);
+    assert(sliderRect.width == firstItemRect.width);
+    assert(sliderRect.y >= firstItemRect.y + firstItemRect.height - 0.5f);
+    // E o item seguinte ao slider cai por baixo dele (o separador e o menuItem
+    // seguem o layout).
+    assert(afterItemRect.y >= sliderRect.y + sliderRect.height);
+
+    // Carregar na pista do slider (o meio da largura do widget: os extremos são o
+    // rótulo e o campo do valor) mexe no valor - é o que prova que o widget recebe o
+    // ponteiro dentro do menu.
+    const float sliderX = sliderRect.x + sliderRect.width * 0.5f;
+    const float sliderY = sliderRect.y + sliderRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(sliderX, sliderY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    assert(sliderChanged);
+    assert(value != 0.5f);
+    assert(value > 0.0f && value < 1.0f);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+
+    // O menu continua aberto (o clique foi no slider, não fora dele).
+    assert(open);
+    // E o clique não passou para o que está fora do menu: a janela não reagiu.
+    assert(separators > 0);
+}
+
+// Dois menus com o mesmo rótulo de widget são widgets diferentes (o id do menu
+// entra na pilha de ids).
+void test_menu_content_scopes_widget_ids()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float fileValue = 0.2f;
+    float editValue = 0.8f;
+    ig::Rect fileHeader;
+    ig::Rect editHeader;
+    ig::Rect fileSlider;
+    ig::Rect editSlider;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("menu", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
+        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+        {
+            const bool fileOpen = c.beginMenu("File");
+            if (fileHeader.width <= 0.0f)
+                fileHeader = c.itemRect();
+            if (fileOpen)
+            {
+                c.sliderFloat("Value", fileValue, 0.0f, 1.0f);
+                fileSlider = c.itemRect();
+                c.endMenu();
+            }
+            const bool editOpen = c.beginMenu("Edit");
+            if (editHeader.width <= 0.0f)
+                editHeader = c.itemRect();
+            if (editOpen)
+            {
+                c.sliderFloat("Value", editValue, 0.0f, 1.0f);
+                editSlider = c.itemRect();
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+
+    // Abrir o File: arrastar o slider dele tem de mexer no valor do File, não no do
+    // Edit (se os ids colidissem, o slider do Edit ficava com o mesmo id e o clique
+    // chegava aos dois).
+    const float fileX = fileHeader.x + fileHeader.width * 0.5f;
+    const float fileY = fileHeader.y + fileHeader.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(fileX, fileY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fileX, fileY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, fileX, fileY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(fileSlider.width > 0.0f);
+    assert(editSlider.width == 0.0f);
+
+    // O meio do widget é a pista (os extremos são o rótulo e o campo do valor).
+    const float sliderX = fileSlider.x + fileSlider.width * 0.5f;
+    const float sliderY = fileSlider.y + fileSlider.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(sliderX, sliderY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    assert(fileValue != 0.2f);
+    assert(editValue == 0.8f);
+}
+
 } // namespace
 
 int main()
@@ -2167,6 +2320,8 @@ int main()
     test_combo_default_focus_opens_on_the_selection();
     test_child_inside_a_combo_popup();
     test_item_hovered_flags();
+    test_widgets_inside_an_open_menu();
+    test_menu_content_scopes_widget_ids();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

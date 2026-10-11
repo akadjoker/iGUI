@@ -156,24 +156,32 @@ void usage()
 {
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
            "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
-           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--wheel=N] [--help]\n"
+           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--hover=X,Y]\n"
+           "                       [--wheel=N] [--help]\n"
            "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
            "  --click=X,Y carrega no painel do iGUI nesse ponto (para os popups, que\n"
-           "  nao abrem sem rato, aparecerem numa captura), e --wheel=N manda N\n"
-           "  entalhes de roda no mesmo ponto (para se ver a lista de um popup rolar).\n");
+           "  nao abrem sem rato, aparecerem numa captura), o --hover=X,Y poe o\n"
+           "  ponteiro nesse ponto sem clicar (e o que abre um submenu, que abre por\n"
+           "  hover) e o --wheel=N manda N entalhes de roda nesse mesmo ponto.\n");
 }
 
 // O --click=X,Y: onde carregar uma vez, no painel do iGUI.
-bool parseClick(const char *arg, float &x, float &y)
+bool parsePoint(const char *arg, const char *prefix, float &x, float &y)
 {
-    if (strncmp(arg, "--click=", 8) != 0)
+    const size_t length = strlen(prefix);
+    if (strncmp(arg, prefix, length) != 0)
         return false;
-    const char *comma = strchr(arg + 8, ',');
+    const char *comma = strchr(arg + length, ',');
     if (!comma)
         return false;
-    x = static_cast<float>(atof(arg + 8));
+    x = static_cast<float>(atof(arg + length));
     y = static_cast<float>(atof(comma + 1));
     return true;
+}
+
+bool parseClick(const char *arg, float &x, float &y)
+{
+    return parsePoint(arg, "--click=", x, y);
 }
 
 bool isMouseEvent(Uint32 type)
@@ -206,6 +214,9 @@ int main(int argc, char **argv)
     float clickX = 0.0f;
     float clickY = 0.0f;
     int wheel = 0;
+    bool hover = false;
+    float hoverX = 0.0f;
+    float hoverY = 0.0f;
     bool dump = false;
 
     for (int i = 1; i < argc; ++i)
@@ -233,6 +244,8 @@ int main(int argc, char **argv)
             click = true;
         else if (strncmp(arg, "--wheel=", 8) == 0)
             wheel = atoi(arg + 8);
+        else if (parsePoint(arg, "--hover=", hoverX, hoverY))
+            hover = true;
         else if (strncmp(arg, "--font=", 7) == 0)
             fontPath = arg + 7;
         else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
@@ -467,6 +480,11 @@ int main(int argc, char **argv)
             else if (frame == 3)
                 ui.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
         }
+        // --hover=X,Y: põe o ponteiro nesse ponto a partir do frame 5 (sem clicar).
+        // É o que abre um submenu, que abre por hover e não por clique.
+        if (hover && frame >= 5)
+            ui.pushEvent(ig::Event::pointerMove(hoverX, hoverY));
+
         // --wheel=N: N entalhes de roda, um por frame. O ponto é o do --click 70 px
         // abaixo, que é onde a lista de um popup começa (o clique fica no
         // cabeçalho e a lista abre por baixo dele): é o que faz a lista rolar numa
