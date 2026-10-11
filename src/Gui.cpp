@@ -3317,9 +3317,17 @@ bool Context::beginPopup(StringView idText)
     const Rect outside(entry.frame == frameNumber_ && entry.wasOpenAtFrameStart
                            ? entry.boundsAtFrameStart
                            : entry.bounds);
+    // Um menu aberto por cima do popup (uma barra de menus dentro dele, o "With a
+    // menu.." do demo) é dele: os itens desse menu saem fora da caixa do popup, e
+    // sem isto um clique num deles fechava o popup e deixava o menu pendurado à
+    // espera de ser submetido outra vez (o clique era comido duas vezes).
+    const bool insideOpenMenu =
+        menuWasOpenAtFrameStart_ &&
+        (contains(menuPopupBoundsAtFrameStart_, pointer_.pressedPosition[left]) ||
+         contains(subMenuPopupBoundsAtFrameStart_, pointer_.pressedPosition[left]));
     if ((escapePressed_ && index == popupDepth_ - 1) ||
         (pointer_.pressed[left] && !contains(outside, pointer_.pressedPosition[left]) &&
-         !insideChild))
+         !insideChild && !insideOpenMenu))
     {
         closePopupAt(index);
         return false;
