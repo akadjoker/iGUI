@@ -73,6 +73,7 @@ struct Panel
     bool dialogOpen;
     bool modalOpen;
     bool modalWithMessageBox;
+    bool selectAppearance;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
     // ImGui guarda a expansao dentro da widget e so o "open" e que vem de fora.
     bool headerCloseExpanded;
@@ -92,7 +93,7 @@ struct Panel
     Panel()
         : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
           queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
-          modalWithMessageBox(false),
+          modalWithMessageBox(false), selectAppearance(false),
           headerCloseExpanded(true), headerBulletOpen(false),
           selection(0),
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
@@ -994,9 +995,73 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     else
         ui.label("tab C: conteudo");
     item();
+    // As tabs a sério do demo: a barra é um contentor e cada tab abre o conteúdo
+    // dela (só a escolhida). A barra diz o que está escolhido por ela (o id), o x
+    // fecha a tab (o p_open do chamador) e o ponto assinala o documento por gravar.
+    static bool documentOpen = true;
+    if (ui.beginTabBar("##Tabs", ig::Context::TabBarFlags::Reorderable |
+                                  ig::Context::TabBarFlags::AutoSelectNewTabs))
+    {
+        if (ui.beginTabItem("Skeleton"))
+        {
+            ui.label("This is the Skeleton tab.");
+            item();
+            ui.endTabItem();
+        }
+        if (ui.beginTabItem("Appearance"))
+        {
+            ui.label("This is the Appearance tab.");
+            item();
+            ui.endTabItem();
+        }
+        if (ui.beginTabItem("Tab com um x", &documentOpen))
+        {
+            ui.label("Esta tab fecha-se pelo x (abre outra vez com o botao abaixo).");
+            item();
+            ui.endTabItem();
+        }
+        if (ui.beginTabItem("Unsaved", nullptr, ig::Context::TabItemFlags::UnsavedDocument))
+        {
+            ui.label("O ponto diz que o documento nao esta gravado.");
+            item();
+            ui.endTabItem();
+        }
+        ui.endTabBar();
+    }
+    item();
+    if (!documentOpen)
+    {
+        if (ui.button("Abrir outra vez a tab fechada"))
+            documentOpen = true;
+        item();
+    }
+    // O "SetSelected" do demo: um botao que escolhe uma tab da barra.
+    if (ui.button("Escolher a tab 'Appearance'"))
+        g_panel.selectAppearance = true;
+    item();
+    if (ui.beginTabBar("##tabs_forced", ig::Context::TabBarFlags::Fitting))
+    {
+        const unsigned forced = g_panel.selectAppearance ? ig::Context::TabItemFlags::SetSelected
+                                                         : ig::Context::TabItemFlags::None;
+        if (ui.beginTabItem("Skeleton", nullptr, forced))
+        {
+            ui.label("escolhida pelo botao, nao pelo clique");
+            item();
+            ui.endTabItem();
+        }
+        if (ui.beginTabItem("Appearance", nullptr, forced))
+        {
+            ui.label("tab da aparencia");
+            item();
+            ui.endTabItem();
+        }
+        ui.endTabBar();
+        g_panel.selectAppearance = false;
+    }
+    item();
     gap(ui, gallery::Section::WidgetsTabs,
-        "BeginTabItem com flags (Fitting, AutoSelectNewTabs, TabListPopup, "
-        "TabListButton, NoCloseWithMiddleMouseButton) e o botao de fechar no tab");
+        "os flags que faltam (TabListPopup, TabListButton, TabBarFlags_None com o "
+        "TabBarAutoSelectNewTabs por tab) e as tabs de um dock space");
 }
 
 // ── Widgets: Text Input ──────────────────────────────────────────────────────
