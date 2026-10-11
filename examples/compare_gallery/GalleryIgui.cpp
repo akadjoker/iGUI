@@ -864,8 +864,17 @@ void sectionWidgetsQueryingStatuses(ig::Context &ui, gallery::State &s)
         "IsItemActivated/Deactivated/DeactivatedAfterEdit/Visible/ToggledOpen, "
         "IsItemHovered com flags (Delay/Stationary/AllowWhenBlocked...) e "
         "SetItemAllowOverlap/ItemHoverable");
+    // O estado da janela (o demo mostra-os na linha de baixo): as consultas são as
+    // do iGUI, e respondem pela janela que está a ser submetida - esta.
+    snprintf(report, sizeof(report),
+             "Window focused = %d\nWindow hovered = %d\nWindow appearing = %d",
+             ui.isWindowFocused() ? 1 : 0, ui.isWindowHovered() ? 1 : 0,
+             ui.isWindowAppearing() ? 1 : 0);
+    ui.bulletText(ig::StringView(report));
+    item();
     gap(ui, gallery::Section::WidgetsQueryingStatuses,
-        "Querying Window Status (IsWindowFocused/Hovered/Appearing/Collapsed)");
+        "o estado de janela 'collapsed' (o iGUI nao tem janelas recolhidas - tem "
+        "minimizadas, que sao outra coisa) e o resto das consultas de item");
 }
 
 // ── Widgets: Selectables ─────────────────────────────────────────────────────
@@ -877,9 +886,29 @@ void sectionWidgetsSelectables(ig::Context &ui, gallery::State &s)
             s.combo = i;
         item();
     }
+    // O duplo clique num item (é o AllowDoubleClick do demo): a linha cai num
+    // editor de texto, que é o que um duplo clique numa lista faz.
+    ui.separatorText("Duplo clique para mudar o nome");
+    static ig::String renameText("item");
+    static bool renaming = false;
+    if (renaming)
+    {
+        if (ui.inputText("##rename", renameText))
+            item();
+        if (ui.isItemDeactivatedAfterEdit() || ui.isKeyPressed(ig::KeyCode::Enter))
+            renaming = false;
+        item();
+    }
+    else
+    {
+        if (ui.selectable(renameText, false, 180.0f))
+            item();
+        if (ui.isItemDoubleClicked())
+            renaming = true;
+    }
     gap(ui, gallery::Section::WidgetsSelectables,
-        "Selectable com flags (SpanAllColumns, AllowDoubleClick, Disabled, AllowOverlap) e "
-        "alinhamento a direita");
+        "Selectable com os flags que faltam (SpanAllColumns, Disabled, AllowOverlap) e o "
+        "alinhamento a direita - o AllowDoubleClick e o isItemDoubleClicked existem");
     ui.label("Selection state:");
     ui.sameLine();
     if (s.combo == 0)

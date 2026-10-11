@@ -4420,6 +4420,190 @@ static void test_fader_accent_comes_from_the_caller()
     assert(!themeAccentFound);
 }
 
+// Duplo clique: duas carregadas do mesmo botão, próximas no tempo e no espaço, são
+// um duplo clique - a segunda é o clique do item e o isItemDoubleClicked diz que foi
+// essa. Uma terceira carregada recomeça a contagem, e passado o intervalo já não é
+// duplo. O item é um selectable de uma lista, que é onde isto se usa (mudar o nome de
+// uma linha com um duplo clique).
+static void test_double_click()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    context.setDoubleClickInterval(0.30f);
+    context.setDoubleClickDistance(6.0f);
+    assert(context.doubleClickInterval() == 0.30f);
+
+    bool selected = false;
+    int clicks = 0;
+    int doubleClicks = 0;
+    int pointerDoubleClicks = 0;
+    const ig::Rect row(20.0f, 40.0f, 200.0f, 20.0f);
+
+    auto draw = [&](float deltaSeconds) {
+        // O que é "deste frame" é zerado a cada frame: os dois contadores abaixo
+        // dizem se ESTE frame foi um duplo clique.
+        doubleClicks = 0;
+        pointerDoubleClicks = 0;
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f, 1.0f, deltaSeconds));
+        if (context.beginWindow("dup", ig::Rect(10.0f, 10.0f, 260.0f, 120.0f)))
+        {
+            if (context.selectable("linha", selected, row))
+                ++clicks;
+            if (context.isItemDoubleClicked())
+                ++doubleClicks;
+            if (context.isPointerDoubleClicked())
+                ++pointerDoubleClicks;
+            context.endWindow();
+        }
+        context.endFrame();
+    };
+    auto press = [&](float x, float y) {
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+    };
+
+    draw(0.016f);
+    // O rect do selectable é no espaço do conteúdo da janela; o do último item, que
+    // o itemRect devolve, já é absoluto - e é nesse que o rato anda.
+    const ig::Rect rowOnScreen = context.itemRect();
+    const float cx = rowOnScreen.x + rowOnScreen.width * 0.5f;
+    const float cy = rowOnScreen.y + rowOnScreen.height * 0.5f;
+
+    press(cx, cy);
+    draw(0.016f);
+    assert(clicks == 1);
+    assert(doubleClicks == 0);
+    assert(pointerDoubleClicks == 0);
+
+    // A segunda carregada, 100 ms depois e no mesmo sítio: é o duplo clique.
+    press(cx, cy);
+    draw(0.1f);
+    assert(clicks == 2);
+    assert(doubleClicks == 1);
+    assert(pointerDoubleClicks == 1);
+
+    // E não fica a contar: o frame seguinte já não é duplo.
+    draw(0.016f);
+    assert(doubleClicks == 0);
+    assert(pointerDoubleClicks == 0);
+
+    // Duas carregadas com o intervalo pelo meio (meio segundo sem carregar) são
+    // dois cliques simples.
+    press(cx, cy);
+    draw(0.016f);
+    draw(0.5f);
+    press(cx, cy);
+    draw(0.016f);
+    assert(clicks == 4);
+    assert(doubleClicks == 0);
+
+    // E duas carregadas seguidas mas longe uma da outra também não são um duplo
+    // clique (a distância conta).
+    draw(0.5f);
+    press(cx, cy);
+    draw(0.016f);
+    assert(doubleClicks == 0);
+    assert(clicks == 5);
+    press(cx, cy + 40.0f);
+    draw(0.016f);
+    assert(doubleClicks == 0);
+    assert(clicks == 5);
+
+    // Um triplo clique vale como um duplo, e mais nada: a carregada que faz o duplo
+    // recomeça a contagem, por isso a terceira (no mesmo sítio e no frame seguinte)
+    // já não é outro duplo.
+    assert(clicks == 5);
+    press(cx, cy);
+    draw(0.016f);
+    press(cx, cy);
+    draw(0.016f);
+    assert(doubleClicks == 1);
+    assert(clicks == 7);
+    press(cx, cy);
+    draw(0.016f);
+    assert(doubleClicks == 0);
+    assert(clicks == 8);
+}
+
+// As consultas de estado da janela: qual está focada, qual tem o ponteiro em cima e
+// qual apareceu agora (não estava no frame anterior).
+static void test_window_status_queries()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+
+    bool firstWindowSeen[4] = {false, false, false, false};
+    bool focused[2] = {false, false};
+    bool hovered[2] = {false, false};
+    bool appearing[2] = {true, true};
+    bool secondOpen = false;
+
+    auto draw = [&]() {
+        context.beginFrame(ig::FrameInfo(400.0f, 300.0f));
+        const ig::Rect first(0.0f, 0.0f, 180.0f, 120.0f);
+        if (context.beginWindow("primeira", first))
+        {
+            focused[0] = context.isWindowFocused();
+            hovered[0] = context.isWindowHovered();
+            appearing[0] = appearing[0] && context.isWindowAppearing();
+            context.label("a");
+            context.endWindow();
+        }
+        if (secondOpen)
+        {
+            const ig::Rect second(200.0f, 0.0f, 180.0f, 120.0f);
+            if (context.beginWindow("segunda", second))
+            {
+                focused[1] = context.isWindowFocused();
+                hovered[1] = context.isWindowHovered();
+                appearing[1] = appearing[1] && context.isWindowAppearing();
+                context.label("b");
+                context.endWindow();
+            }
+        }
+        context.endFrame();
+        firstWindowSeen[0] = true;
+    };
+
+    draw();
+    // A primeira janela é a única, e o ponteiro (em 0,0) cai dentro dela.
+    assert(focused[0]);
+    assert(hovered[0]);
+    assert(appearing[0]);
+
+    // Longe das duas, nenhuma está sob o ponteiro - mas o foco não se perde por
+    // tirar o rato de cima.
+    context.pushEvent(ig::Event::pointerMove(390.0f, 280.0f));
+    draw();
+    assert(!hovered[0]);
+    assert(focused[0]);
+
+    // Uma janela nova aparece: ela sabe que apareceu agora, e a primeira já não
+    // aparece. O foco dela não muda sozinho (só um clique o dá).
+    secondOpen = true;
+    draw();
+    assert(appearing[1]);
+    assert(!appearing[0]);
+    assert(!focused[1]);
+
+    // Um clique sobre a segunda dá-lhe o foco, e o ponteiro em cima dela diz que
+    // está sob o ponteiro (a primeira, não).
+    context.pushEvent(ig::Event::pointerMove(260.0f, 40.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 260.0f, 40.0f));
+    draw();
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 260.0f, 40.0f));
+    draw();
+    assert(focused[1]);
+    assert(!focused[0]);
+    assert(hovered[1]);
+    assert(!hovered[0]);
+
+    // E a segunda já não aparece (estava lá no frame anterior).
+    assert(!appearing[1]);
+    (void)firstWindowSeen;
+}
+
 int main()
 {
     test_knob_accent_comes_from_the_caller();
@@ -4456,6 +4640,8 @@ int main()
     test_arrow_button_and_checkbox_flags();
     test_align_text_to_frame_padding_moves_only_the_text();
     test_style_vars();
+    test_double_click();
+    test_window_status_queries();
     test_navigation_widgets();
     test_multicomponent_numeric_variants();
     test_rich_tooltip();
