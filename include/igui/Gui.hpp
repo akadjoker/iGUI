@@ -143,11 +143,17 @@ struct TableStyle
     // Quantas colunas (as primeiras, na ordem do écra) ficam presas à esquerda
     // enquanto o resto rola. Ignorado sem scrollX.
     int freezeCols;
+    // As colunas ficam com a largura do maior conteúdo delas em vez de dividirem a
+    // largura da tabela pelos pesos (é o SizingFixedFit do ImGui). A largura é a que
+    // as células pediram no frame anterior (o conteúdo de uma célula só se sabe
+    // depois de ela ser submetida, como tudo o que se mede aqui); na primeira vez
+    // vale a divisão pelos pesos, que é onde as colunas já estavam.
+    bool sizingFixedFit;
 
     TableStyle()
         : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f),
           reorderable(false), scrollY(false), freezeRows(0), height(0.0f), scrollX(false),
-          innerWidth(0.0f), freezeCols(0) {}
+          innerWidth(0.0f), freezeCols(0), sizingFixedFit(false) {}
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -1892,6 +1898,9 @@ private:
         // Largura do espaço à direita que a barra de rolagem ocupa (0 sem barra): a
         // caixa das colunas é mais estreita do que a faixa que rola.
         float barStrip;
+        // SizingFixedFit: a largura que cada coluna (do modelo) pediu neste frame, para
+        // o frame seguinte a usar. O cabeçalho também conta.
+        ct::Vector<float> contentWidths;
         int freezeRows;
         float viewHeight;
         bool scrollY;
@@ -1910,7 +1919,8 @@ private:
             : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
               rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr),
               totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), contentY(0.0f),
-              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), freezeRows(0), viewHeight(0.0f),
+              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), contentWidths(), freezeRows(0),
+              viewHeight(0.0f),
               scrollY(false), contentWidth(0.0f), offsetX(0.0f), pinWidth(0.0f), barStripH(0.0f),
               freezeCols(0), scrollX(false), style(), row(0) {}
     };
@@ -2019,6 +2029,12 @@ private:
     // O botão da lista de tabs (ver TabBarFlags::TabListPopupButton): o combo sem
     // pré-visualização que abre a lista das tabs da barra.
     void tabListPopupButton(float width, TabBarState &state);
+    // As larguras que cada coluna pediu, por tabela (ver TableStyle::sizingFixedFit):
+    // o que o conteúdo de uma coluna mede vale para o frame seguinte.
+    ct::HashMap<WidgetId, ct::Vector<float>> tableFitWidths_;
+    // Mede a largura do conteúdo da célula em curso (o chamador já a submeteu) e
+    // guarda-a na coluna dela do modelo.
+    void measureTableCellWidth();
     // Põe a tab em x e devolve onde a próxima da mesma banda começa.
     float tabPlacePosition(TabBarState &state, WidgetId tab, float x);
     static const int kTabBarStackSize = 4;

@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 294 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 299 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
@@ -144,7 +144,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `ImGuiTableFlags_Reorderable` (arrastar o cabeçalho troca a ordem das colunas) | `TableStyle::reorderable` + `tableColumnIndex()` | existe: o que anda é a coluna do modelo (o peso e a visibilidade continuam a ser dela, a largura segue-a), a ordem é guardada pelo id da tabela e sobrevive ao frame (uma tabela deixa de ser reordenável quando o número de colunas muda), e o cabeçalho de destino fica realçado enquanto se arrasta |
 | `ImGuiTableFlags_ScrollY` + `TableSetupScrollFreeze` (linhas presas) | `TableStyle::scrollY` + `height` + `freezeRows` | existe: a tabela tem uma altura fixa, as linhas rolam dentro dela (roda + barra arrastável) e as primeiras `freezeRows` ficam presas no topo (`freezeRows = 1` é o cabeçalho; a linha 0 é o cabeçalho). O que rola é cortado no fundo da tabela e por baixo das linhas presas |
 | `ImGuiTableFlags_ScrollX` + `FreezeColumns` | `TableStyle::scrollX` + `innerWidth` + `freezeCols` | existe: as colunas passam a ter a largura pedida (`innerWidth` dividida pelos pesos - o que não couber na tabela rola dentro dela, com a roda horizontal e com uma barra arrastável em baixo) e as primeiras `freezeCols` ficam presas à esquerda, que é o que corta o que rola. É a diferença de fundo para o ImGui: lá a largura é de cada coluna, aqui o peso é uma fatia da largura disponível, por isso rolar na horizontal precisa de uma largura própria |
-| `SizingFixedFit`, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
+| `ImGuiTableFlags_SizingFixedFit` (as colunas do tamanho do conteúdo) | `TableStyle::sizingFixedFit` | existe: cada coluna fica com a largura do maior conteúdo dela (o cabeçalho incluído) mais a margem da célula, medida no frame anterior - o mesmo contrato do resto, porque o conteúdo de uma célula só se sabe depois de a submeter. A largura é guardada por tabela (pelo id). O que falta é o redimensionamento pelo grip com o FixedFit (o grip mexe nos pesos) |
+| `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` (política por coluna) | — | **não existe** |
 | Tabelas aninhadas, tabelas com header agrupado | — | **não existe** |
 | — | `beginVirtualTable` | (extra do iGUI) |
 
