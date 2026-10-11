@@ -6100,9 +6100,51 @@ bool insertText(String &value, String::size_type &cursor, const char *text, Stri
 
 } // namespace
 
-bool Context::editTextBuffer(String &value, String::size_type &cursor, bool multiline)
+// ── Os flags do inputText ────────────────────────────────────────────────────
+// O que se escreve (e o que se cola) passa por aqui antes de entrar no campo: os
+// Chars* do ImGui, na mesma ordem e com a mesma prioridade - o primeiro que
+// reconhece o carácter decide. O texto que a aplicação já tinha não passa por
+// isto: estes flags são do que o utilizador escreve, não uma limpeza do valor.
+bool inputTextCharAllowed(char c, unsigned flags)
+{
+    if ((flags & Context::InputTextFlags::CharsDecimal) != 0u)
+        return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+';
+    if ((flags & Context::InputTextFlags::CharsHexadecimal) != 0u)
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') ||
+               c == 'x' || c == 'X';
+    if ((flags & Context::InputTextFlags::CharsScientific) != 0u)
+        return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'e' ||
+               c == 'E';
+    if ((flags & Context::InputTextFlags::CharsNoBlank) != 0u)
+        return c != ' ' && c != '\t';
+    return true;
+}
+
+// O texto que entra, filtrado: o que não passa é deitado fora (e o que era para
+// ser maiúsculo sai em maiúsculas).
+void filterInputText(const char *text, size_t size, unsigned flags, String &out)
+{
+    for (size_t i = 0u; i < size; ++i)
+    {
+        char c = text[i];
+        if (!inputTextCharAllowed(c, flags))
+            continue;
+        if ((flags & Context::InputTextFlags::CharsUppercase) != 0u && c >= 'a' && c <= 'z')
+            c = static_cast<char>(c - 'a' + 'A');
+        out.push_back(c);
+    }
+}
+
+bool Context::editTextBuffer(String &value, String::size_type &cursor, bool multiline,
+                             unsigned flags)
 {
     bool changed = false;
+    const bool readOnly = (flags & InputTextFlags::ReadOnly) != 0u;
+    const bool filters = (flags & (InputTextFlags::CharsDecimal |
+                                   InputTextFlags::CharsHexadecimal |
+                                   InputTextFlags::CharsScientific |
+                                   InputTextFlags::CharsNoBlank |
+                                   InputTextFlags::CharsUppercase)) != 0u;
     if (cursor > value.size())
         cursor = value.size();
     if (homePressed_)
@@ -6127,12 +6169,40 @@ bool Context::editTextBuffer(String &value, String::size_type &cursor, bool mult
     }
     if (copyRequested_)
         backend_.setClipboardText(value);
-    if (pasteRequested_)
+    // O Tab de um campo que o aceita é um tab escrito; sem isso, o Tab passa o
+    // foco ao item seguinte (o advanceFocus do fim do frame) e o campo não o vê.
+    if (!readOnly && (flags & InputTextFlags::AllowTabInput) != 0u && tabPressed_)
+    {
+        if (filters)
+        {
+            String filtered;
+            filterInputText("\t", 1u, flags, filtered);
+            changed = insertText(value, cursor, filtered.data(), filtered.size(), multiline) ||
+                      changed;
+        }
+        else
+        {
+            changed = insertText(value, cursor, "\t", 1u, multiline) || changed;
+        }
+        // Consumido: o foco fica onde está.
+        tabPressed_ = false;
+        tabShiftPressed_ = false;
+    }
+    if (!readOnly && pasteRequested_)
     {
         const String clipboard = backend_.clipboardText();
-        changed = insertText(value, cursor, clipboard.data(), clipboard.size(), multiline) || changed;
+        if (filters)
+        {
+            String filtered;
+            filterInputText(clipboard.data(), clipboard.size(), flags, filtered);
+            changed = insertText(value, cursor, filtered.data(), filtered.size(), multiline) ||
+                      changed;
+        }
+        else
+            changed = insertText(value, cursor, clipboard.data(), clipboard.size(), multiline) ||
+                      changed;
     }
-    if (multiline && enterPressed_)
+    if (multiline && !readOnly && enterPressed_)
     {
         value.insert(cursor, "\n", 1u);
         ++cursor;
@@ -6141,16 +6211,26 @@ bool Context::editTextBuffer(String &value, String::size_type &cursor, bool mult
     for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
     {
         const Event &event = textEvents_[i];
-        changed = insertText(value, cursor, event.text, event.textLength, multiline) || changed;
+        if (readOnly)
+            continue;
+        if (filters)
+        {
+            String filtered;
+            filterInputText(event.text, event.textLength, flags, filtered);
+            changed = insertText(value, cursor, filtered.data(), filtered.size(), multiline) ||
+                      changed;
+        }
+        else
+            changed = insertText(value, cursor, event.text, event.textLength, multiline) || changed;
     }
-    if (backspacePressed_ && cursor != 0u)
+    if (!readOnly && backspacePressed_ && cursor != 0u)
     {
         const String::size_type eraseBegin = previousCodePoint(value, cursor);
         value.erase(eraseBegin, cursor - eraseBegin);
         cursor = eraseBegin;
         changed = true;
     }
-    if (keyPressed_[static_cast<uint32_t>(KeyCode::Delete)] && cursor < value.size())
+    if (!readOnly && keyPressed_[static_cast<uint32_t>(KeyCode::Delete)] && cursor < value.size())
     {
         value.erase(cursor, nextCodePoint(value, cursor) - cursor);
         changed = true;
@@ -6160,13 +6240,13 @@ bool Context::editTextBuffer(String &value, String::size_type &cursor, bool mult
     return changed;
 }
 
-bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
+bool Context::inputText(StringView labelText, String &value, const Rect &bounds, unsigned flags)
 {
-    return inputTextWithHint(labelText, StringView(), value, bounds);
+    return inputTextWithHint(labelText, StringView(), value, bounds, flags);
 }
 
 bool Context::inputTextWithHint(StringView labelText, StringView hint, String &value,
-                                const Rect &bounds)
+                                const Rect &bounds, unsigned flags)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -6190,7 +6270,16 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
         textInputWidget_ = id;
         wantsKeyboard_ = true;
         wantsTextInput_ = true;
-        changed = editTextBuffer(value, textCursor_, false);
+        changed = editTextBuffer(value, textCursor_, false, flags);
+    }
+    // O Enter de um campo que o devolve é consumido aqui: quem escreveu espera pelo
+    // Enter, e não pelo item seguinte a ser ativado por ele.
+    const bool enterReturns =
+        (flags & InputTextFlags::EnterReturnsTrue) != 0u && focused && enterPressed_;
+    if (enterReturns)
+    {
+        enterPressed_ = false;
+        changed = true;
     }
 
     const Color background = focused ? theme_.buttonHovered
@@ -6198,7 +6287,21 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
     drawFrame(*drawList, rect, background,
               focused ? theme_.focusColor : (hovered ? theme_.inputBorderHover : theme_.inputBorder),
               theme_.borderRadius, clip);
-    const TextMetrics metrics = measureText(theme_.font, value, theme_.fontSize);
+    // Uma palavra-passe vê-se como pontos: o que se desenha (e o que dá as medidas
+    // do cursor) é uma cópia disfarçada, e o valor fica como está.
+    String masked;
+    if ((flags & InputTextFlags::Password) != 0u)
+    {
+        // Um ponto por carácter (não por byte): um acento não vira dois pontos.
+        String::size_type at = 0u;
+        while (at < value.size())
+        {
+            at = nextCodePoint(value, at);
+            masked.push_back('*');
+        }
+    }
+    const StringView shown = masked.size() > 0u ? StringView(masked) : StringView(value);
+    const TextMetrics metrics = measureText(theme_.font, shown, theme_.fontSize);
     const float leftPadding = theme_.windowPadding * 0.5f;
     const float availableWidth = rect.width - theme_.windowPadding;
     float horizontalOffset = metrics.width > availableWidth ? availableWidth - metrics.width : 0.0f;
@@ -6210,7 +6313,21 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
         caretBytes = static_cast<StringView::size_type>(textCursor_) < value.size()
                          ? static_cast<StringView::size_type>(textCursor_)
                          : value.size();
-    const StringView prefix(value.data(), caretBytes);
+    StringView::size_type drawnCaret = caretBytes;
+    if (masked.size() > 0u)
+    {
+        // O cursor também muda de escala com a máscara (é o mesmo por carácter).
+        drawnCaret = 0u;
+        String::size_type at = 0u;
+        while (at < caretBytes)
+        {
+            at = nextCodePoint(value, at);
+            ++drawnCaret;
+        }
+        if (drawnCaret > masked.size())
+            drawnCaret = masked.size();
+    }
+    const StringView prefix(shown.data(), drawnCaret);
     const TextMetrics prefixMetrics = measureText(theme_.font, prefix, theme_.fontSize);
     if (focused && prefixMetrics.width + horizontalOffset < 0.0f)
         horizontalOffset = -prefixMetrics.width;
@@ -6222,7 +6339,7 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
         drawText(*drawList, theme_.font, hint, textPosition, theme_.fontSize,
                  theme_.textDisabled, textClip);
     else
-        drawText(*drawList, theme_.font, value, textPosition, theme_.fontSize,
+        drawText(*drawList, theme_.font, shown, textPosition, theme_.fontSize,
                  theme_.buttonText, textClip);
     if (focused)
     {
@@ -8975,19 +9092,21 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
     return changed;
 }
 
-bool Context::inputText(StringView labelText, String &value, float width)
+bool Context::inputText(StringView labelText, String &value, float width, unsigned flags)
 {
-    return inputTextWithHint(labelText, StringView(), value, width);
+    return inputTextWithHint(labelText, StringView(), value, width, flags);
 }
 
-bool Context::inputTextWithHint(StringView labelText, StringView hint, String &value, float width)
+bool Context::inputTextWithHint(StringView labelText, StringView hint, String &value, float width,
+                                unsigned flags)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed =
         inputTextWithHint(labelText, hint, value,
                           Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                               bounds.width, bounds.height));
+                               bounds.width, bounds.height),
+                          flags);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
