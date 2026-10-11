@@ -30,6 +30,34 @@ const char *const kItems5Text[] = {"AAAA", "BBBB", "CCCC", "DDDD", "EEEE"};
 
 const ig::StringView kPlotFunctions[] = {ig::StringView("Sin"), ig::StringView("Saw")};
 
+// O mesmo que o ImGuiTextFilter do demo: uma linha de texto, e um item passa se
+// a linha for um pedaço dele, sem olhar a maiúsculas.
+bool passesFilter(ig::StringView item, const ig::String &filter)
+{
+    if (filter.empty())
+        return true;
+    const char lower = 'a' - 'A';
+    for (ig::StringView::size_type i = 0u; i + filter.size() <= item.size(); ++i)
+    {
+        ig::StringView::size_type j = 0u;
+        while (j < filter.size())
+        {
+            char a = item[i + j];
+            char b = filter[j];
+            if (a >= 'A' && a <= 'Z')
+                a = static_cast<char>(a + lower);
+            if (b >= 'A' && b <= 'Z')
+                b = static_cast<char>(b + lower);
+            if (a != b)
+                break;
+            ++j;
+        }
+        if (j == filter.size())
+            return true;
+    }
+    return false;
+}
+
 struct Panel
 {
     gallery::State shared;
@@ -37,6 +65,8 @@ struct Panel
     ig::String multiline;
     ig::String hint;
     ig::String queryText;
+    // O filtro do "combo 2 (w/ filter)" do demo.
+    ig::String comboFilter;
     bool dialogOpen;
     bool modalOpen;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
@@ -56,7 +86,8 @@ struct Panel
 
     Panel()
         : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
-          queryText("texto"), dialogOpen(false), modalOpen(false), headerCloseExpanded(true),
+          queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
+          headerCloseExpanded(true),
           selection(0),
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
           subOpen()
@@ -378,17 +409,58 @@ void sectionWidgetsColorAndPickers(ig::Context &ui, gallery::State &s)
 // ── Widgets: Combo ───────────────────────────────────────────────────────────
 void sectionWidgetsCombo(ig::Context &ui, gallery::State &s)
 {
-    ui.comboBox("Combo one-liner", s.combo, ig::Span<const ig::StringView>(kItems5, 5));
-    item();
-    ui.separatorText("One-liner variants");
-    gap(ui, gallery::Section::WidgetsCombo,
-        "BeginCombo/EndCombo com conteudo proprio (arvore, imagens, multi-selecao)");
-    if (ui.beginChild("combo custom", 76.0f))
+    gap(ui, gallery::Section::WidgetsCombo, "ImGuiComboFlags_* (PopupAlignLeft, "
+                                            "NoArrowButton, NoPreview, WidthFitPreview, Height*)");
+    // Os 14 itens do demo, e o mesmo desenho: o cabeçalho é o beginCombo, o popup é
+    // do chamador, que submete um selectable por item.
+    static const ig::StringView kComboItems[] = {
+        ig::StringView("AAAA"), ig::StringView("BBBB"), ig::StringView("CCCC"),
+        ig::StringView("DDDD"), ig::StringView("EEEE"), ig::StringView("FFFF"),
+        ig::StringView("GGGG"), ig::StringView("HHHH"), ig::StringView("IIII"),
+        ig::StringView("JJJJ"), ig::StringView("KKKK"), ig::StringView("LLLLLLL"),
+        ig::StringView("MMMM"), ig::StringView("OOOOOOO")
+    };
+    const int comboCount = static_cast<int>(sizeof(kComboItems) / sizeof(kComboItems[0]));
+    if (s.comboItem < 0 || s.comboItem >= comboCount)
+        s.comboItem = 0;
+    // O HeightRegular do ImGui seriam 8 linhas com scroll; aqui mostra-se a lista
+    // toda (o popup não tem scroll - é uma das lacunas do GAPS).
+    if (ui.beginCombo("combo 1", kComboItems[s.comboItem], 240.0f, comboCount))
     {
-        for (int i = 0; i < 3; ++i)
-            ui.selectable(kItems5[i], s.combo == i, 160.0f);
-        ui.endChild();
+        for (int n = 0; n < comboCount; ++n)
+        {
+            if (ui.selectable(kComboItems[n], s.comboItem == n))
+                s.comboItem = n;
+            item();
+        }
+        ui.endCombo();
     }
+    item();
+    // O "combo 2 (w/ filter)" do demo: um campo de texto lá dentro a filtrar os
+    // itens. É conteúdo livre - nada disto é do combo, é da aplicação.
+    if (ui.beginCombo("combo 2 (w/ filter)", kComboItems[s.comboItem], 240.0f, comboCount))
+    {
+        ui.inputText("##Filter", g_panel.comboFilter, 240.0f - 12.0f);
+        item();
+        for (int n = 0; n < comboCount; ++n)
+        {
+            if (!passesFilter(kComboItems[n], g_panel.comboFilter))
+                continue;
+            if (ui.selectable(kComboItems[n], s.comboItem == n))
+                s.comboItem = n;
+            item();
+        }
+        ui.endCombo();
+    }
+    item();
+    ui.spacing(6.0f);
+    ui.separatorText("One-liner variants");
+    item();
+    ui.comboBox("combo 3 (one-liner)", s.combo, ig::Span<const ig::StringView>(kItems5, 5));
+    item();
+    ui.comboBox("combo 4 (array)", s.combo, ig::Span<const ig::StringView>(kItems5, 5));
+    item();
+    ui.comboBox("combo 5 (function)", s.combo, ig::Span<const ig::StringView>(kItems5, 5));
     item();
 }
 
@@ -1195,6 +1267,31 @@ void openAllSections()
         g_panel.topOpen[i] = true;
         g_panel.subOpen[i] = true;
     }
+}
+
+// Abre uma secção e só ela, pelo nome (o mesmo de gallery::sectionName): é o que
+// deixa pôr lado a lado uma secção do demo de cada vez. Nas sub-secções de
+// "Widgets" o header de cima segue a mesma entrada de topOpen (ver draw), por
+// isso o "Widgets" abre com ela.
+bool openSection(const char *name)
+{
+    for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
+    {
+        const gallery::Section section = static_cast<gallery::Section>(i);
+        if (strcmp(gallery::sectionName(section), name) != 0)
+            continue;
+        g_panel.topOpen[i] = true;
+        g_panel.subOpen[i] = true;
+        // O CollapsingHeader("Widgets") é o de WidgetsBasic que diz se está aberto
+        // (ver draw), por isso uma sub-secção dele tem de o abrir também.
+        if (gallery::insideWidgets(section))
+        {
+            const int widgets = static_cast<int>(gallery::Section::WidgetsBasic);
+            g_panel.topOpen[widgets] = true;
+        }
+        return true;
+    }
+    return false;
 }
 
 gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)

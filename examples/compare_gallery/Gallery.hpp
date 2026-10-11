@@ -146,6 +146,9 @@ struct State
     bool flag[8];
     int radio;
     int combo;
+    // A escolha dos dois combos de conteudo livre (o "combo 1" e o "combo 2
+    // (w/ filter)" do demo).
+    int comboItem;
     int listBox;
     int tab;
     int i1;
@@ -195,7 +198,7 @@ struct State
     float queryFloat;
 
     State()
-        : flag(), radio(0), combo(1), listBox(0), tab(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
+        : flag(), radio(0), combo(1), comboItem(0), listBox(0), tab(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
           rangeMin(0.2f), rangeMax(0.8f), vSlider(0.4f), vSliders(), progress(0.5f),
           progressDirection(1.0f), plotOffset(0), plotFunc(0), plotCount(70), plotPhase(0.0f),
           plotAnimate(true), treeOpen(true),

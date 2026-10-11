@@ -1129,6 +1129,185 @@ void test_menu_item_draws_its_shortcut()
 
 }
 
+// O popup de um combo de conteúdo livre: os itens submetem-se lá dentro como em
+// qualquer sítio, o clique escolhe, o popup fecha ao escolher, o que é submetido
+// manda no tamanho da caixa, e o layout de fora avança só o cabeçalho.
+void test_begin_combo_takes_free_content()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres")
+    };
+    int current = 0;
+    ig::Rect headerRect;
+    ig::Rect itemRects[3];
+    ig::Rect afterRect;
+    float afterYClosed = 0.0f;
+    float afterYOpen = 0.0f;
+    bool open = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        open = c.beginCombo("escolha",
+                            items[static_cast<ig::Span<const ig::StringView>::size_type>(current)]);
+        if (open)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (c.selectable(items[i], current == i))
+                    current = i;
+                itemRects[i] = c.itemRect();
+            }
+            c.endCombo();
+        }
+        else if (headerRect.width <= 0.0f)
+        {
+            // Fechado, o último item é o cabeçalho: é o primeiro frame que dá o rect.
+            headerRect = c.itemRect();
+        }
+        // Um widget de layout depois do combo: o popup não é do layout de fora, por
+        // isso ele tem de cair no mesmo sítio com o popup aberto e fechado.
+        c.smallButton("depois");
+        afterRect = c.itemRect();
+        if (open)
+            afterYOpen = afterRect.y;
+        else
+            afterYClosed = afterRect.y;
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(headerRect.height > 0.0f);
+    assert(afterYClosed > headerRect.y + headerRect.height);
+
+    // Abrir: o clique no cabeçalho abre, como no comboBox.
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+
+    // O primeiro item começa por baixo do cabeçalho e estica até à largura de
+    // dentro do popup: como no ImGui, o popup tem a largura do cabeçalho e o
+    // conteúdo fica com a margem da janela de fora do popup.
+    assert(itemRects[0].width ==
+           headerRect.width - context.theme().windowPadding * 2.0f);
+    assert(itemRects[0].height == headerRect.height);
+    assert(itemRects[1].y > itemRects[0].y + itemRects[0].height - 0.5f);
+    // O layout de fora fica no mesmo sítio: o popup não empurra o que vem depois.
+    assert(afterYOpen == afterYClosed);
+    assert(afterYOpen < itemRects[2].y);
+
+    // Escolher um item com o ponteiro: o selectable devolve o clique e fecha a lista.
+    const float itemX = itemRects[1].x + itemRects[1].width * 0.5f;
+    const float itemY = itemRects[1].y + itemRects[1].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    assert(current == 1);
+    // O frame do clique ainda tem o popup aberto (o beginCombo já respondeu); é o
+    // seguinte que o vê fechado.
+    harness.frame(build);
+    assert(!open);
+}
+
+// O popup de um combo de conteúdo livre é dele: o que está por baixo não recebe
+// o ponteiro, e um item mais largo que o cabeçalho faz o popup crescer no frame
+// seguinte (é a medida que o ImGui tira do AutoFitFrames).
+void test_begin_combo_popup_owns_the_pointer_and_grows()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("um"), ig::StringView("dois")
+    };
+    const ig::StringView wide("um rotulo bem mais comprido do que o cabecalho do combo");
+    int current = 0;
+    ig::Rect headerRect;
+    ig::Rect underRect;
+    ig::Rect itemRects[2];
+    bool underHovered = true;
+    bool underClicked = false;
+    bool wideItem = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        const bool open = c.beginCombo("escolha", items[0]);
+        if (open)
+        {
+            for (int i = 0; i < 2; ++i)
+            {
+                if (c.selectable(items[i], current == i))
+                    current = i;
+                itemRects[i] = c.itemRect();
+            }
+            if (wideItem)
+                c.label(wide);
+            c.endCombo();
+        }
+        else if (headerRect.width <= 0.0f)
+        {
+            headerRect = c.itemRect();
+        }
+        // Um botão do tamanho do popup, submetido depois dele: é o que está por
+        // baixo da lista e o que não pode receber nada enquanto ela está aberta.
+        underClicked = c.button("por baixo", ig::Rect(0.0f, 24.0f, 160.0f, 72.0f));
+        underRect = c.itemRect();
+        underHovered = c.isItemHovered();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+
+    // Abrir.
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+
+    // Um ponto que cai ao mesmo tempo no segundo item e no botão de baixo.
+    const float itemY = itemRects[1].y + itemRects[1].height * 0.5f;
+    assert(itemY > underRect.y && itemY < underRect.y + underRect.height);
+    context.pushEvent(ig::Event::pointerMove(headerX, itemY));
+    harness.frame(build);
+    assert(!underHovered);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, itemY));
+    harness.frame(build);
+    assert(!underClicked);
+    assert(current == 1);
+
+    // O popup fechou ao escolher: reabri-lo para medir a largura com um item largo.
+    wideItem = true;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(itemRects[0].width == headerRect.width - context.theme().windowPadding * 2.0f);
+    // Um item mais largo que o cabeçalho faz o popup crescer no frame seguinte, e os
+    // itens esticam com ele.
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+    assert(itemRects[0].width > headerRect.width);
+}
+
 } // namespace
 
 int main()
@@ -1153,6 +1332,8 @@ int main()
     test_hover_follows_the_window_that_is_raised();
     test_menu_item_draws_its_shortcut();
     test_open_combo_owns_the_pointer_over_its_list();
+    test_begin_combo_takes_free_content();
+    test_begin_combo_popup_owns_the_pointer_and_grows();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

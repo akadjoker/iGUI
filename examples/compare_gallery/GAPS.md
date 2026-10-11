@@ -18,8 +18,14 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **40 lacunas** contra 181 itens submetidos pelo
+dois lados: na revisão atual são **40 lacunas** contra 213 itens submetidos pelo
 espelho.
+
+Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
+secção aberta à mão do lado do ImGui - o `--open=NOME` abre só essa
+(`--open=Combo`, `--open="Tables & Columns"`), e o `--click=X,Y` carrega uma vez no
+painel do iGUI nesse ponto, para os popups (que só abrem com rato) aparecerem numa
+captura: `--open=Combo --click=150,405 --frames=14 --screenshot=combo.png`.
 
 A lista impressa cobre **as secções que foram desenhadas** naquele frame: a
 lacuna é registada no sítio do código onde ela aparece, e uma secção fechada não
@@ -96,8 +102,10 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `Combo` (lista de strings) | `comboBox` | existe |
-| `BeginCombo`/`EndCombo` (conteúdo próprio: árvore, imagens, multi-seleção) | — | **não existe**: o `comboBox` só aceita uma lista de `StringView` |
-| `Combo` com filtro de pesquisa | — | **não existe** |
+| `BeginCombo`/`EndCombo` (conteúdo próprio: árvore, imagens, multi-seleção) | `beginCombo`/`endCombo` | existe: o popup leva o que o chamador submeter entre os dois (o cursor do layout fica dentro dele e `availableWidth()` passa a ser a largura do popup). A largura é a do cabeçalho e cresce com o conteúdo; a altura é a do conteúdo até `visibleItems` linhas (8 por omissão, como o `HeightRegular` do ImGui) |
+| `Combo` com filtro de pesquisa | `beginCombo` + `inputText` | existe: o filtro é conteúdo do popup, submetido pelo chamador (a galeria faz isso) |
+| `ImGuiComboFlags_*` (NoArrowButton, NoPreview, WidthFitPreview, HeightSmall/Regular/Largest) | — | **não existe**: sem flags |
+| Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | — | **não existe**: o que passa de `visibleItems` linhas é cortado, e um `beginChild` lá dentro também não funciona (o `beginLayout` fecha o popup) |
 | `ListBox` (uma entrada) | `listBox` | existe |
 | `ListBox` com seleção múltipla | — | **não existe** |
 | `BeginMultiSelect`/`EndMultiSelect` e os ~12 exemplos (single, multi, clipper, deleção, dual list box, tabela, checkboxes, múltiplos escopos, tiled assets browser, árvores, avançado) | — | **não existe**: não há modelo de seleção |
@@ -444,9 +452,13 @@ Continua em falta neste nível:
       já existe); falta ainda uma largura por omissão de *container* (`pushItemWidth`
       tem uma só profundidade de guarda).
       *Onde:* `src/Gui.cpp` (`beginLayout`, `advanceLayout`, `sameLine`).
-- [ ] **`beginCombo`/`endCombo`**: um popup de conteúdo livre em vez da lista de
-      strings do `comboBox`, reusando a mesma máquina de popup dos menus.
-      *Onde:* `src/Gui.cpp:1946` (o `comboBox` já tem o popup), `src/Gui.cpp:2064`.
+- [x] **`beginCombo`/`endCombo`**: popup de conteúdo livre, com o `drawComboHeader`
+      a servir os dois (o `comboBox` e o `beginCombo`), o cursor do layout dentro do
+      popup e a medida do conteúdo a dar-lhe o tamanho no frame seguinte.
+      *Onde:* `src/Gui.cpp` (`beginComboImpl`/`endCombo`), `tests/test_item_status.cpp`.
+- [ ] **Scroll dentro do popup de um combo** (o ImGui mostra 8 linhas e rola) e
+      aceitar um `beginChild` lá dentro para o fazer à mão.
+      *Onde:* `src/Gui.cpp` (`beginComboImpl`), a máquina de scroll do `listBox`.
 - [x] **`menuItem` com atalho desenhado**: `menuItem(label, shortcut, enabled,
       selected)` desenha o atalho à direita e soma-o à largura medida do menu.
       *Onde:* `src/Gui.cpp` (`menuItemInternal`), `tests/test_item_status.cpp`.

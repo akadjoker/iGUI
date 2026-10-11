@@ -677,14 +677,19 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
+      pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId),
-      pointerWindowFrame_(0u), pointerWindowValid_(false),
-      comboItemsSubmitted_(false), openCombo_(InvalidWidgetId),
+      openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
-      comboBounds_(), comboPopupBounds_(), activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
+      comboBounds_(), comboPopupBounds_(), comboContentOpen_(false), comboLayout_(),
+      comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
+      comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
+      comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
+      comboAdvanceHeader_(false),
+      activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
       activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
@@ -737,6 +742,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     dragDropDrawList_.shareGeometry(frameDrawList_);
     toastDrawList_.shareGeometry(frameDrawList_);
     modalDrawList_.shareGeometry(frameDrawList_);
+    comboDrawList_.shareGeometry(frameDrawList_);
 }
 
 void Context::pushEvent(const Event &event)
@@ -785,6 +791,11 @@ void Context::beginFrame(const FrameInfo &frame)
     toastDrawList_.clear();
     modalDrawList_.clear();
     tooltipDrawList_.clear();
+    // O mesmo para o conteúdo de um combo de conteúdo livre: quem o quiser tem de
+    // voltar a chamar beginCombo (ver beginCombo/endCombo).
+    comboDrawList_.clear();
+    comboContentOpen_ = false;
+    comboContentWindow_ = WindowHandle();
     // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
     // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
     // no modo imediato).
@@ -798,6 +809,7 @@ void Context::beginFrame(const FrameInfo &frame)
     applySolidStyle(toastDrawList_);
     applySolidStyle(modalDrawList_);
     applySolidStyle(tooltipDrawList_);
+    applySolidStyle(comboDrawList_);
     for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
     {
         if (toasts_[i].remaining > 0.0f)
@@ -970,7 +982,14 @@ const DrawData &Context::endFrame()
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
         if (window && window->open)
+        {
             frameDrawList_.append(window->overlayDrawList);
+            // O conteúdo de um combo de conteúdo livre vem logo depois da
+            // sobreposição da sua janela: a caixa do popup está lá (o endCombo
+            // desenhou-a com a medida do conteúdo) e fica por baixo dele.
+            if (windowOrder_[i] == comboContentWindow_)
+                frameDrawList_.append(comboDrawList_);
+        }
     }
     drawDragDropPreview();
     frameDrawList_.append(dragDropDrawList_);
@@ -1678,7 +1697,13 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
     drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
              theme_.labelText, clip);
     if (clicked)
+    {
+        // Como o Selectable do ImGui dentro de um popup: escolher o item fecha a
+        // lista (o ImGuiItemFlags_AutoClosePopups).
+        if (comboContentOpen_)
+            openCombo_ = InvalidWidgetId;
         item_.edited = true;
+    }
     return clicked;
 }
 
@@ -2194,22 +2219,9 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
 
-    drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
-              hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
-    const TextMetrics selectedMetrics = measureText(theme_.font, items[static_cast<Span<const StringView>::size_type>(currentItem)],
-                                                    theme_.fontSize);
-    drawText(*drawList, theme_.font, items[static_cast<Span<const StringView>::size_type>(currentItem)],
-             Vec2(rect.x + theme_.windowPadding * 0.5f,
-                  rect.y + (rect.height - selectedMetrics.height) * 0.5f),
-             theme_.fontSize, theme_.buttonText, clip);
-
-    const float arrowSize = rect.height * 0.2f;
-    const Vec2 arrow[] = {
-        Vec2(rect.x + rect.width - theme_.windowPadding - arrowSize, rect.y + rect.height * 0.42f),
-        Vec2(rect.x + rect.width - theme_.windowPadding, rect.y + rect.height * 0.42f),
-        Vec2(rect.x + rect.width - theme_.windowPadding - arrowSize * 0.5f, rect.y + rect.height * 0.62f)
-    };
-    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+    drawComboHeader(*drawList, rect,
+                    items[static_cast<Span<const StringView>::size_type>(currentItem)],
+                    hovered, clip);
 
     if (openCombo_ != id)
         return changed;
@@ -2268,6 +2280,203 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (changed)
         item_.edited = true;
     return changed;
+}
+
+void Context::drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
+                              bool highlighted, const Rect &clip)
+{
+    // O mesmo cabeçalho para a lista de strings (comboBox) e para o popup de
+    // conteúdo livre (beginCombo): caixa, pré-visualização e seta.
+    drawFrame(drawList, rect, highlighted ? theme_.buttonHovered : theme_.buttonBackground,
+              highlighted ? theme_.inputBorderHover : theme_.buttonBorder,
+              theme_.borderRadius, clip);
+    const TextMetrics metrics = measureText(theme_.font, preview, theme_.fontSize);
+    drawText(drawList, theme_.font, preview,
+             Vec2(rect.x + theme_.windowPadding * 0.5f,
+                  rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.buttonText, clip);
+    const float arrowSize = rect.height * 0.2f;
+    const Vec2 arrow[] = {
+        Vec2(rect.x + rect.width - theme_.windowPadding - arrowSize, rect.y + rect.height * 0.42f),
+        Vec2(rect.x + rect.width - theme_.windowPadding, rect.y + rect.height * 0.42f),
+        Vec2(rect.x + rect.width - theme_.windowPadding - arrowSize * 0.5f, rect.y + rect.height * 0.62f)
+    };
+    drawList.addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+}
+
+float Context::comboPopupMaxHeight(int visibleItems) const
+{
+    // Como o CalcMaxPopupHeightFromItemCount do ImGui: no máximo a altura de
+    // visibleItems linhas, e sem máximo nenhum com zero ou menos.
+    if (visibleItems <= 0)
+        return frame_.displaySize.y;
+    const float rows = static_cast<float>(visibleItems);
+    const float height = (theme_.widgetHeight + theme_.itemSpacing) * rows - theme_.itemSpacing;
+    return height > 0.0f ? height : 0.0f;
+}
+
+bool Context::beginCombo(StringView labelText, StringView preview, const Rect &bounds,
+                         int visibleItems)
+{
+    return beginComboImpl(labelText, preview, bounds, visibleItems, false);
+}
+
+bool Context::beginCombo(StringView labelText, StringView preview, float width, int visibleItems)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    // O avanço do cabeçalho fica para o endCombo: é lá que o layout de fora volta,
+    // e avançar aqui era avançar por cima do layout de dentro do popup.
+    return beginComboImpl(labelText, preview,
+                          Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                               bounds.width, bounds.height),
+                          visibleItems, true);
+}
+
+bool Context::beginComboImpl(StringView labelText, StringView preview, const Rect &bounds,
+                             int visibleItems, bool advanceHeader)
+{
+    WindowState *window = currentWindow();
+    // Sem combos dentro de combos, como no ImGui: um popup tem o seu cursor e a
+    // sua lista, e não há segundo.
+    if (!window || comboContentOpen_)
+        return false;
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+
+    comboAdvanceHeader_ = advanceHeader;
+    const bool hovered = itemHovered(rect, clip, id);
+    if (itemClicked(rect, clip, id))
+        openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
+    const bool open = openCombo_ == id;
+    // Com o popup aberto o cabeçalho fica em destaque, como no ImGui.
+    drawComboHeader(*drawList, rect, preview, hovered || open, clip);
+    // Fechado, o cabeçalho avança o layout aqui mesmo: é o endCombo que o faz
+    // quando o popup está aberto, porque até lá o layout é o de dentro dele.
+    const auto closeHeader = [&]() {
+        comboAdvanceHeader_ = false;
+        if (advanceHeader)
+            advanceLayout(rect);
+        return false;
+    };
+    if (!open)
+        return closeHeader();
+
+    const float padding = theme_.windowPadding;
+    const float maxHeight = comboPopupMaxHeight(visibleItems);
+    // A caixa deste frame é a medida do frame anterior: o tamanho do que o
+    // chamador vai submeter só se sabe depois de o submeter, e o sítio e o clip
+    // têm de estar decididos antes disso (o ImGui resolve-o com o AutoFitFrames,
+    // que também só acerta no segundo frame). Sem medida ainda, uma linha.
+    const bool measured = comboMeasuredId_ == id;
+    const float measuredWidth = measured ? comboMeasured_.x : 0.0f;
+    const float measuredHeight = measured ? comboMeasured_.y : theme_.widgetHeight;
+    const float popupWidth =
+        measuredWidth > rect.width ? measuredWidth + padding * 2.0f : rect.width;
+    float popupHeight = measuredHeight + padding * 2.0f;
+    if (popupHeight > maxHeight + padding * 2.0f)
+        popupHeight = maxHeight + padding * 2.0f;
+    if (popupHeight < theme_.widgetHeight + padding * 2.0f)
+        popupHeight = theme_.widgetHeight + padding * 2.0f;
+    const Rect popup(rect.x, rect.y + rect.height, popupWidth, popupHeight);
+    const Rect popupClip = intersect(popup, popupClipRect());
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    // Um clique fora do cabeçalho e da caixa fecha, em qualquer janela onde caia;
+    // pointerBlockedByOpenPopup impede que essa mesma pressão chegue ao que está
+    // por baixo. A caixa é a do frame anterior (é a única medida que existe antes
+    // de o conteúdo ser submetido).
+    const Rect outside(comboWasOpenAtFrameStart_ ? comboPopupBoundsAtFrameStart_ : popupClip);
+    if (pointer_.pressed[left] && !contains(rect, pointer_.pressedPosition[left]) &&
+        !contains(outside, pointer_.pressedPosition[left]))
+    {
+        openCombo_ = InvalidWidgetId;
+        return closeHeader();
+    }
+    openComboFrame_ = frameNumber_;
+    popupWindow_ = currentWindow_;
+    comboBounds_ = intersect(rect, clip);
+    comboPopupBounds_ = popupClip;
+
+    // Daqui até ao endCombo somos nós que estamos a submeter o popup: o cursor do
+    // layout fica lá dentro (availableWidth passa a ser a largura dele) e o que for
+    // submetido vai para a lista do popup, que sai à frente da caixa. É o mesmo
+    // comboItemsSubmitted_ que deixa estes itens receberem o ponteiro sem o
+    // deixarem passar para o que está por baixo (ver pointerBlockedByOpenPopup).
+    comboLayout_ = layout_;
+    comboContentOpen_ = true;
+    comboContentId_ = id;
+    comboVisibleItems_ = visibleItems;
+    comboContentWindow_ = currentWindow_;
+    comboHeaderRect_ = rect;
+    comboContentClip_ = popupClip;
+    comboContentWidth_ = popupWidth - padding * 2.0f;
+    comboItemsSubmitted_ = true;
+    layout_.origin = Vec2(popup.x + padding, popup.y + padding);
+    layout_.cursor = layout_.origin;
+    layout_.baseOriginX = layout_.origin.x;
+    layout_.hasLastItem = false;
+    layout_.contentExtent = Vec2(0.0f, 0.0f);
+    layout_.nextItemWidth = 0.0f;
+    layout_.lineTop = layout_.origin.y;
+    layout_.lineHeight = 0.0f;
+    return true;
+}
+
+void Context::endCombo()
+{
+    if (!comboContentOpen_)
+        return;
+    comboContentOpen_ = false;
+    comboItemsSubmitted_ = false;
+
+    // A medida do conteúdo submetido, como no endTooltip: é ela que dá a altura da
+    // caixa agora e a largura que o frame seguinte usa, para o popup ter o tamanho
+    // do que lá está em vez de o cortar.
+    const float padding = theme_.windowPadding;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (layout_.hasLastItem)
+    {
+        // A extensão é a do maior item, não a do último: um rótulo curto depois de
+        // uma lista larga não pode encolher a caixa.
+        width = layout_.contentExtent.x - layout_.origin.x;
+        height = layout_.contentExtent.y - layout_.origin.y;
+    }
+    if (width < 0.0f)
+        width = 0.0f;
+    if (height < theme_.widgetHeight)
+        height = theme_.widgetHeight;
+    const float maxHeight = comboPopupMaxHeight(comboVisibleItems_);
+    if (height > maxHeight)
+        height = maxHeight;
+    comboMeasuredId_ = comboContentId_;
+    comboMeasured_ = Vec2(width, height);
+
+    WindowState *window = windows_.get(comboContentWindow_);
+    if (window && window->open)
+    {
+        const float popupWidth =
+            width + padding * 2.0f > comboHeaderRect_.width ? width + padding * 2.0f
+                                                           : comboHeaderRect_.width;
+        const Rect popup(comboHeaderRect_.x, comboHeaderRect_.y + comboHeaderRect_.height,
+                         popupWidth, height + padding * 2.0f);
+        window->overlayDrawList.addRectFilled(popup, theme_.selectableBackground,
+                                              comboContentClip_);
+        comboPopupBounds_ = popup;
+        comboBounds_ = comboHeaderRect_;
+    }
+
+    // O layout de fora volta por inteiro, e só agora o cabeçalho avança: o popup
+    // não é do layout de fora (ver beginCombo do layout).
+    const bool advanceHeader = comboAdvanceHeader_;
+    layout_ = comboLayout_;
+    comboAdvanceHeader_ = false;
+    if (advanceHeader)
+        advanceLayout(comboHeaderRect_);
 }
 
 bool Context::beginMenuBar(const Rect &bounds)
@@ -8354,6 +8563,14 @@ float Context::availableWidth() const
     const WindowState *window = currentWindow();
     if (!window)
         return 0.0f;
+    // Dentro do popup de um combo de conteúdo livre a largura que sobra é a dele,
+    // não a da janela: os itens lá dentro esticam até à borda do popup, como no
+    // ImGui.
+    if (comboContentOpen_)
+    {
+        const float right = layout_.origin.x + comboContentWidth_;
+        return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
+    }
     const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
     float right = window->bounds.x + window->bounds.width - padding;
     if (!childStack_.empty())
@@ -8521,6 +8738,10 @@ DrawList *Context::currentDrawList()
     // tudo sem tocar na janela onde o bloco foi submetido.
     if (tooltipOpen_)
         return &tooltipDrawList_;
+    // O corpo de um combo de conteúdo livre vai para a lista do popup: é ela que
+    // sai à frente da caixa (que o endCombo desenhou na sobreposição da janela).
+    if (comboContentOpen_)
+        return &comboDrawList_;
     WindowState *window = currentWindow();
     return window ? &window->drawList : nullptr;
 }
@@ -8558,6 +8779,7 @@ void Context::applyDisabledFade()
     toastDrawList_.setDisabledFade(enabled, background);
     modalDrawList_.setDisabledFade(enabled, background);
     tooltipDrawList_.setDisabledFade(enabled, background);
+    comboDrawList_.setDisabledFade(enabled, background);
     for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
     {
         it->drawList.setDisabledFade(enabled, background);
@@ -8657,6 +8879,11 @@ void Context::beginLayout(const WindowState &window)
     // Um beginGroup sem endGroup não sobrevive à janela/child onde foi aberto.
     groups_.clear();
     layout_.groupDepth = 0;
+    // O mesmo para um beginCombo sem endCombo: o container seguinte não pode
+    // herdar um cursor que está dentro de um popup (ver beginCombo/endCombo).
+    comboContentOpen_ = false;
+    comboItemsSubmitted_ = false;
+    comboAdvanceHeader_ = false;
     layout_.lineTop = origin.y;
     layout_.lineHeight = 0.0f;
 }
@@ -9038,6 +9265,10 @@ Rect Context::contentClip() const
     // dela: o limite é o ecrã, não a janela.
     if (tooltipOpen_)
         return viewport;
+    // O mesmo para o conteúdo de um combo de conteúdo livre: é desenhado por cima
+    // da janela, fora dela, e o limite é o popup.
+    if (comboContentOpen_)
+        return comboContentClip_;
     const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
     const float contentWidth = window->bounds.width - padding * 2.0f;
