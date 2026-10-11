@@ -183,6 +183,7 @@ int main(int argc, char **argv)
     bool openAll = false;
     std::string screenshot;
     std::string fontPath = IGUI_GALLERY_FONT;
+    bool dump = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -201,6 +202,8 @@ int main(int argc, char **argv)
             vsync = false;
         else if (strcmp(arg, "--open-all") == 0)
             openAll = true;
+        else if (strcmp(arg, "--dump") == 0)
+            dump = true;
         else if (strncmp(arg, "--font=", 7) == 0)
             fontPath = arg + 7;
         else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
@@ -527,6 +530,145 @@ int main(int argc, char **argv)
             std::printf("iGUI: %d itens, %d vtx, %d draw calls\n", iguiStats.items,
                         backend.uploadedVertices(), backend.drawCalls());
             std::printf("ImGui demo: %d vtx, %d draw lists\n", imguiVtxLast, imguiDrawsLast);
+            if (dump)
+            {
+                // O mesmo diagnóstico que o bench tem (--dump): os comandos do
+                // último frame dos dois lados, com o número de índices e a caixa
+                // do que desenham - é assim que se vê de onde vêm os vértices.
+                std::printf("comandos do iGUI:\n");
+                for (size_t i = 0; i < iguiData.commands.size(); ++i)
+                {
+                    const ig::DrawCommand &command = iguiData.commands[i];
+                    if (command.type != ig::DrawCommandType::Geometry)
+                    {
+                        std::printf("  %zu text\n", i);
+                        continue;
+                    }
+                    const ig::GeometryCommand &g = command.payload.geometry;
+                    float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
+                    for (uint32_t k = 0; k < g.indexCount; ++k)
+                    {
+                        const ig::Vec2 &p = iguiData.vertices[iguiData.indices[g.firstIndex + k]].position;
+                        minX = p.x < minX ? p.x : minX;
+                        minY = p.y < minY ? p.y : minY;
+                        maxX = p.x > maxX ? p.x : maxX;
+                        maxY = p.y > maxY ? p.y : maxY;
+                    }
+                    std::printf("  %zu geom clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%-5u "
+                                "bbox=(%7.1f,%7.1f)-(%7.1f,%7.1f)\n",
+                                i, static_cast<double>(g.clip.x), static_cast<double>(g.clip.y),
+                                static_cast<double>(g.clip.width), static_cast<double>(g.clip.height),
+                                g.indexCount, static_cast<double>(minX), static_cast<double>(minY),
+                                static_cast<double>(maxX), static_cast<double>(maxY));
+                }
+                // De que cor são os vértices: com o texto todo da mesma cor, é
+                // isto que separa "muitos glifos" de "geometria a mais".
+                {
+                    struct Bucket
+                    {
+                        ig::Color color;
+                        int count;
+                    };
+                    Bucket buckets[24];
+                    int used = 0;
+                    for (size_t i = 0; i < iguiData.vertices.size(); ++i)
+                    {
+                        const ig::Color color = iguiData.vertices[i].color;
+                        int found = -1;
+                        for (int b = 0; b < used; ++b)
+                            if (buckets[b].color == color)
+                            {
+                                found = b;
+                                break;
+                            }
+                        if (found < 0 && used < 24)
+                        {
+                            found = used++;
+                            buckets[found].color = color;
+                            buckets[found].count = 0;
+                        }
+                        if (found >= 0)
+                            ++buckets[found].count;
+                    }
+                    for (int a = 0; a < used; ++a)
+                        for (int b = a + 1; b < used; ++b)
+                            if (buckets[b].count > buckets[a].count)
+                            {
+                                const Bucket swap = buckets[a];
+                                buckets[a] = buckets[b];
+                                buckets[b] = swap;
+                            }
+                    std::printf("vertices do iGUI por cor (total %zu, %d cores):\n",
+                                iguiData.vertices.size(), used);
+                    for (int a = 0; a < used; ++a)
+                        std::printf("  #%02x%02x%02x%02x  %6d vtx\n", buckets[a].color.r,
+                                    buckets[a].color.g, buckets[a].color.b, buckets[a].color.a,
+                                    buckets[a].count);
+                }
+                if (imguiData)
+                {
+                    // O mesmo por cor do lado do ImGui: as cores são as do
+                    // ImGuiCol_*, por isso o branco é o texto nos dois lados.
+                    struct Bucket
+                    {
+                        ImU32 color;
+                        int count;
+                    };
+                    Bucket buckets[24];
+                    int used = 0;
+                    for (int l = 0; l < imguiData->CmdListsCount; ++l)
+                    {
+                        const ImDrawList *list = imguiData->CmdLists[l];
+                        for (int v = 0; v < list->VtxBuffer.Size; ++v)
+                        {
+                            const ImU32 color = list->VtxBuffer[v].col;
+                            int found = -1;
+                            for (int b = 0; b < used; ++b)
+                                if (buckets[b].color == color)
+                                {
+                                    found = b;
+                                    break;
+                                }
+                            if (found < 0 && used < 24)
+                            {
+                                found = used++;
+                                buckets[found].color = color;
+                                buckets[found].count = 0;
+                            }
+                            if (found >= 0)
+                                ++buckets[found].count;
+                        }
+                    }
+                    for (int a = 0; a < used; ++a)
+                        for (int b = a + 1; b < used; ++b)
+                            if (buckets[b].count > buckets[a].count)
+                            {
+                                const Bucket swap = buckets[a];
+                                buckets[a] = buckets[b];
+                                buckets[b] = swap;
+                            }
+                    std::printf("vertices do ImGui por cor (total %d, %d cores):\n",
+                                imguiData->TotalVtxCount, used);
+                    for (int a = 0; a < used; ++a)
+                        std::printf("  #%08x  %6d vtx\n", buckets[a].color, buckets[a].count);
+                    std::printf("comandos do ImGui:\n");
+                    for (int l = 0; l < imguiData->CmdListsCount; ++l)
+                    {
+                        const ImDrawList *list = imguiData->CmdLists[l];
+                        for (int c = 0; c < list->CmdBuffer.Size; ++c)
+                        {
+                            const ImDrawCmd &cmd = list->CmdBuffer[c];
+                            std::printf("  lista %d cmd %2d clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%u "
+                                        "vtx=%d\n",
+                                        l, c, static_cast<double>(cmd.ClipRect.x),
+                                        static_cast<double>(cmd.ClipRect.y),
+                                        static_cast<double>(cmd.ClipRect.z - cmd.ClipRect.x),
+                                        static_cast<double>(cmd.ClipRect.w - cmd.ClipRect.y),
+                                        cmd.ElemCount, list->VtxBuffer.Size);
+                        }
+                    }
+                }
+            }
             std::printf("lacunas do iGUI face ao demo: %d\n", gallery::gapCount());
         }
 
