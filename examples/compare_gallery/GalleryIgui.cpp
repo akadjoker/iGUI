@@ -611,13 +611,24 @@ void sectionWidgetsDragAndSliderFlags(ig::Context &ui, gallery::State &s)
 // ── Widgets: Fonts ───────────────────────────────────────────────────────────
 void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
 {
-    (void)s;
     gap(ui, gallery::Section::WidgetsFonts,
-        "PushFont/PopFont com varios tamanhos e o font picker do demo - o iGUI tem "
-        "uma fonte por contexto (a do tema)");
+        "PushFont/PopFont com OUTRA FONTE (ficheiro/familia) e o font picker do demo - "
+        "o iGUI tem uma face por atlas (a escala dos tamanhos, essa, sai do "
+        "pushStyleVar do fontSize, que o atlas desenha escalado)");
     ui.label("tipografia normal");
     item();
-    ui.label("tipografia grande");
+    // O mesmo texto com o fontSize do tema mudado num bloco: o atlas coze uma face e
+    // desenha-a escalada (ver FontAtlas::appendText), por isso um tamanho diferente
+    // sai daqui sem atlas novo.
+    ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize * 1.6f);
+    ui.label("tipografia grande (fontSize * 1.6)");
+    item();
+    ui.popStyleVar();
+    ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize * 0.8f);
+    ui.label("tipografia pequena (fontSize * 0.8)");
+    item();
+    ui.popStyleVar();
+    ui.label("e de volta ao normal");
     item();
 }
 

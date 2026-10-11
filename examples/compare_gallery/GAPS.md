@@ -245,8 +245,9 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
-| `PushFont`/`PopFont` com vários tamanhos | — | **não existe**: uma fonte e um tamanho por contexto (o `theme_.fontSize`) |
-| Fonte por widget (`ImFont*` no `PushFont`) | — | **não existe** |
+| `PushFont`/`PopFont` com vários tamanhos | `pushStyleVar(&Theme::fontSize, x)` (ou `setNextFontSize`) | existe: o `FontAtlas` coze uma face e desenha-a **escalada** pelo tamanho lógico (ver `FontAtlas::appendText`), por isso um tamanho diferente sai sem atlas novo - nítido até ~±50%, esbatido muito além disso |
+| `SetWindowFontScale` | o mesmo `pushStyleVar` (vale para o bloco todo, widgets incluídos) | existe |
+| Fonte por widget (`ImFont*` no `PushFont`) e o font picker | — | **não existe**: uma face por atlas (o `FontId` já atravessa a medição e o desenho, falta o atlas com mais de uma face) |
 | `AddFontFromMemoryTTF` (uma fonte a partir de bytes) | `FontAtlas(bytes, ranges, w, h, bakedSize)` | existe (os bytes são validados antes de chegarem ao stb, que não se defende sozinho de um ficheiro que não seja fonte) |
 | `AddFontFromFileTTF` | o ficheiro é lido pela aplicação e passado como bytes | existe (não há leitura de disco dentro da biblioteca, que não tem sistema de ficheiros) |
 | Merge de ícones numa fonte, `GlyphRanges` por fonte | — | **não existe**: uma fonte por atlas, com os ranges do construtor |
@@ -580,11 +581,16 @@ Continua em falta neste nível:
       popups aninhados de ids diferentes.
       *Onde:* `src/Gui.cpp` (a máquina de `openMenu_`/`activeModal_` é o
       precedente), `include/igui/Gui.hpp:604`.
-- [ ] **Fontes**: `pushFont`/`popFont` com vários tamanhos (e, mais tarde,
-      ficheiros diferentes). Exige o `FontAtlas` com mais do que uma face;
-      a medição e o desenho já são por `FontId`.
-      *Onde:* `src/FontAtlas.cpp`, `include/igui/FontAtlas.hpp`, e o
-      `theme_.font`/`theme_.fontSize` em `src/Gui.cpp` (`measureText`, `drawText`).
+- [x] **Fontes, vários tamanhos**: com o `pushStyleVar(&Theme::fontSize, x)` o texto
+      de dentro do bloco (widgets incluídos) sai maior ou menor. O `FontAtlas` coze
+      uma face e desenha-a escalada pelo tamanho lógico, por isso não é preciso
+      cozer nada: é o que dá o "Font size" e o "SetWindowFontScale" do demo.
+      *Onde:* `src/FontAtlas.cpp` (`appendText`, o `scale = logicalSize / bakedSize_`),
+      `tests/test_widgets.cpp`.
+- [ ] **Fontes, mais de uma face** (`pushFont(ficheiro)`/font picker): o `FontId` já
+      atravessa a medição e o desenho; falta o `FontAtlas` com mais do que uma face
+      (e o atlas a crescer/empacotar as faces).
+      *Onde:* `src/FontAtlas.cpp`, `include/igui/FontAtlas.hpp`.
 - [ ] **Navegação por teclado e foco programático**: expor o `advanceFocus` que
       já existe (`setKeyboardFocusHere`, `isItemFocused`, `focusNextWindow`,
       `activateItem`), e uma tab order explícita.

@@ -667,6 +667,30 @@ static void test_style_vars()
     assert(normalHeight == context.theme().widgetHeight);
     assert(context.theme().widgetHeight != 44.0f);
 
+    // O mesmo com o tamanho da fonte, que é o "vários tamanhos" do demo: o atlas
+    // desenha a face escalada, por isso o texto maior mede mais alto e mais largo.
+    float bigLabelHeight = 0.0f;
+    float normalLabelHeight = 0.0f;
+    float bigLabelWidth = 0.0f;
+    float normalLabelWidth = 0.0f;
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("fontes", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
+    context.label("texto");
+    normalLabelHeight = context.itemRect().height;
+    normalLabelWidth = context.itemRect().width;
+    context.pushStyleVar(&ig::Theme::fontSize, context.theme().fontSize * 2.0f);
+    context.label("texto");
+    bigLabelHeight = context.itemRect().height;
+    bigLabelWidth = context.itemRect().width;
+    context.popStyleVar();
+    context.label("texto");
+    const float afterPopHeight = context.itemRect().height;
+    context.endWindow();
+    context.endFrame();
+    assert(bigLabelHeight == normalLabelHeight * 2.0f);
+    assert(bigLabelWidth == normalLabelWidth * 2.0f);
+    assert(afterPopHeight == normalLabelHeight);
+
     // Um push sem pop vale só para o frame dele: o seguinte volta ao tema.
     auto buildNoPop = [&](ig::Context &c) {
         assert(c.beginWindow("esquecido", ig::Rect(10.0f, 10.0f, 240.0f, 160.0f)));
