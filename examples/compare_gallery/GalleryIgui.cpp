@@ -72,6 +72,7 @@ struct Panel
     bool tableColumns[3];
     bool dialogOpen;
     bool modalOpen;
+    bool modalWithMessageBox;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
     // ImGui guarda a expansao dentro da widget e so o "open" e que vem de fora.
     bool headerCloseExpanded;
@@ -91,6 +92,7 @@ struct Panel
     Panel()
         : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
           queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
+          modalWithMessageBox(false),
           headerCloseExpanded(true), headerBulletOpen(false),
           selection(0),
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
@@ -1173,13 +1175,43 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
             ui.endDialog();
         }
     }
+    // O modal do demo, agora com o beginPopupModal: título próprio, centrado, por
+    // cima de tudo e com um X (o p_open) e o Escape a fecharem-no - o clique fora
+    // não fecha, que é o que o distingue de um popup. A messageBox continua a ser a
+    // caixa de OK/Cancelar.
     if (ui.button("Open modal"))
+    {
+        g_panel.modalOpen = true;
+        // O id do popup é o do título com que o beginPopupModal o submete (é a
+        // mesma regra do ImGui).
+        ui.openPopup("Modal Window");
+    }
+    item();
+    ui.sameLine();
+    if (ui.button("Open message box"))
         g_panel.modalOpen = true;
     item();
     if (g_panel.modalOpen)
     {
-        if (ui.messageBox("Modal", "Continuar?", g_panel.modalOpen) != ig::MessageBoxResult::None)
-            g_panel.modalOpen = false;
+        if (g_panel.modalWithMessageBox)
+        {
+            if (ui.messageBox("Modal", "Continuar?", g_panel.modalOpen) !=
+                ig::MessageBoxResult::None)
+                g_panel.modalOpen = false;
+        }
+        else if (ui.beginPopupModal("Modal Window", &g_panel.modalOpen))
+        {
+            ui.label("Show a modal window with its own title bar, and the ability to close it");
+            item();
+            ui.label("with the X and by pressing Esc.");
+            item();
+            ui.separator();
+            if (ui.button("Button"))
+                ui.closeCurrentPopup();
+            if (!g_panel.modalOpen)
+                ui.closeCurrentPopup();
+            ui.endPopup();
+        }
     }
     // O "Select.." do demo, com o popup de escolha dele: abre no ponteiro, o corpo é
     // conteúdo livre (um separador e os itens) e escolher fecha-o.
@@ -1213,11 +1245,36 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         }
         ui.endPopup();
     }
+    // O "Popup Stack" do demo: cada botão abre o seu popup e o popup aberto sabe
+    // quem é (o isPopupOpen com o AnyPopupId é o que uma aplicação usa para saber
+    // que há um popup pendente).
+    if (ui.button("Open Popup 1"))
+        ui.openPopup("popup 1", ig::Context::PopupFlags::NoOpenOverExistingPopup);
+    item();
+    ui.sameLine();
+    if (ui.button("Open Popup 2"))
+        ui.openPopup("popup 2", ig::Context::PopupFlags::NoOpenOverExistingPopup);
+    item();
+    if (ui.beginPopup("popup 1"))
+    {
+        ui.label("Current stack: 'Window/1'");
+        item();
+        if (ui.button("Close"))
+            ui.closeCurrentPopup();
+        ui.endPopup();
+    }
+    if (ui.beginPopup("popup 2"))
+    {
+        ui.label("Current stack: 'Window/2'");
+        item();
+        if (ui.button("Close"))
+            ui.closeCurrentPopup();
+        ui.endPopup();
+    }
     gap(ui, gallery::Section::PopupsAndModalWindows,
-        "BeginPopupModal (o modal com o seu proprio titulo e botoes - o iGUI tem o "
-        "beginDialog/messageBox), o popup com pilha de ids interno do demo "
-        "(ShowExampleAppDocuments) e os flags do OpenPopup (MousePos, "
-        "AnyPopupId, NoOpenOverExistingPopup)");
+        "o popup com pilha de ids interno do demo (ShowExampleAppDocuments) e o "
+        "popup com varias camadas (o iGUI tem um popup de cada vez - o "
+        "NoOpenOverExistingPopup e o que evita abrir por cima do que la esta)");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.label("Right-click this line for a context menu");

@@ -187,9 +187,9 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `OpenPopup`/`BeginPopup`/`EndPopup` (pilha de popups, ids, posição, tamanho) | `beginDialog(titulo, open, size)` | parcial: o estado é da aplicação, não há pilha nem `OpenPopup` |
-| `BeginPopupModal`/`CloseCurrentPopup` | `messageBox` | parcial: é uma message box, não um modal com conteúdo livre (a `beginDialog` cobre o caso simples) |
+| `BeginPopupModal`/`EndPopup`/`CloseCurrentPopup` | `beginPopupModal(titulo, p_open)`/`endPopup`/`closeCurrentPopup` | existe: abre-se com o `openPopup` do título, sai centrado, com barra de título própria (e um X quando o chamador dá o `bool *open`), desenhado por cima de todas as janelas e com o resto da interface atrás de um véu; fecha com o Escape, o X ou o `closeCurrentPopup` - e **não** fecha com um clique fora (é o que o distingue de um popup, e o que trava os atalhos enquanto está aberto). A `messageBox` e a `beginDialog` continuam a ser as caixas de OK/Cancelar |
 | `BeginPopupContextItem`/`Window`/`Void` | `beginContextMenu(id, rect)` | parcial: precisa do rect à mão |
-| Popups aninhados, `IsPopupOpen`, fecho por clique fora com flags | — | **não existe** |
+| Popups aninhados (uma pilha de popups) | — | **não existe**: o popup é de cada vez um, e o `NoOpenOverExistingPopup` é o flag que evita abrir por cima |
 | `BeginTooltip` como popup | — | **não existe** |
 
 ## Menus
@@ -607,12 +607,30 @@ Continua em falta neste nível:
       e medi-la fazia a caixa crescer a cada frame.
       *Onde:* `src/Gui.cpp` (`openPopup`/`beginPopup`/`endPopup`/`closeCurrentPopup`/
       `isPopupOpen`), `tests/test_item_status.cpp`.
-- [ ] **O resto dos popups**: `beginPopupModal` com título e botões próprios (o
-      `beginDialog`/`messageBox` cobrem o caso simples), os flags do `openPopup`
-      (posição do rato, `AnyPopupId`, não abrir sobre outro popup) e a pilha de
-      popups aninhados de ids diferentes.
-      *Onde:* `src/Gui.cpp` (a máquina de `openMenu_`/`activeModal_` é o
-      precedente), `include/igui/Gui.hpp:604`.
+- [x] **O modal com título próprio** (`beginPopupModal`): o chamador abre-o com o
+      `openPopup` do *título* (é a mesma regra do ImGui: o id do popup é o nome com
+      que o `beginPopupModal` o submete) e ele sai centrado no écran, com a barra de
+      título (o título e, quando o chamador dá um `bool *open`, o X que o fecha),
+      medido pelo conteúdo (ao contrário de um popup comum, cuja largura é pedida),
+      e desenhado numa lista própria por cima de todas as janelas - só as message
+      boxes ficam acima. Um clique fora não o fecha (trava a interface atrás de um
+      véu, e os atalhos do `shortcut()` também ficam presos): fecha com o Escape, o
+      X ou o `closeCurrentPopup`. Com ele, os flags do `openPopup` (`AtCursor`,
+      `NoOpenOverExistingPopup`, e o `AnyPopupId` do `isPopupOpen`), a secção dos
+      popups do demo fica coberta menos a pilha de popups.
+      *Onde:* `src/Gui.cpp` (`beginPopupModal`, `endPopup`, `beginPopupContent`,
+      `openPopup`), `include/igui/Gui.hpp` (`PopupFlags`), `tests/test_item_status.cpp`.
+- [ ] **A pilha de popups**: um popup aberto de dentro de outro (o `ShowExampleAppDocuments`
+      e o "Popup Stack" do demo). O iGUI tem um popup de cada vez.
+- [x] **Flags do `openPopup` e a pilha de ids por popup**: `openPopup(id, AtCursor)`
+      abre encostado ao cursor do layout (um menu de contexto), o
+      `NoOpenOverExistingPopup` não abre por cima do que já lá está e o
+      `isPopupOpen(id, AnyPopupId)` diz que há um popup aberto seja ele qual for -
+      que é como uma aplicação sabe que tem um popup pendente. A lista de popups
+      por id faz-se com um `openPopup`/`beginPopup` por id (é o `ShowExampleAppDocuments`),
+      o que falta mesmo é a pilha (um popup aberto de dentro de outro).
+      *Onde:* `src/Gui.cpp` (`openPopup`, `isPopupOpen`), `include/igui/Gui.hpp`
+      (`PopupFlags`), `tests/test_item_status.cpp`.
 - [x] **Fontes, vários tamanhos**: com o `pushStyleVar(&Theme::fontSize, x)` o texto
       de dentro do bloco (widgets incluídos) sai maior ou menor. O `FontAtlas` coze
       uma face e desenha-a escalada pelo tamanho lógico, por isso não é preciso

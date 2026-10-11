@@ -7,6 +7,7 @@
 #include "InteractionHarness.hpp"
 
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 
 namespace
@@ -3133,6 +3134,239 @@ void test_tree_style()
     assert(arrowToggled);
 }
 
+// O modal de popup (o BeginPopupModal do demo): abre-se como qualquer popup, mas
+// sai centrado, com barra de título própria e por cima de tudo - e um clique fora
+// não o fecha (só o Escape, o X ou o closeCurrentPopup). É isso que o distingue de
+// um popup comum.
+void test_popup_modal()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool openModal = false;
+    bool showModal = false;
+    bool backgroundClicked = false;
+    ig::Rect backgroundButton;
+    ig::Rect modalLabel;
+    ig::Rect modalOk;
+    int okClicks = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("modal", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("fundo", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
+        {
+            backgroundClicked = true;
+            openModal = true;
+            showModal = true;
+            c.openPopup("Definicoes");
+        }
+        backgroundButton = c.itemRect();
+        if (showModal && c.beginPopupModal("Definicoes", &openModal))
+        {
+            c.label("Modal com titulo");
+            modalLabel = c.itemRect();
+            if (c.button("OK"))
+            {
+                ++okClicks;
+                openModal = false;
+                c.closeCurrentPopup();
+            }
+            modalOk = c.itemRect();
+            c.endPopup();
+        }
+        if (!openModal)
+            showModal = false;
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(!context.isPopupOpen("Definicoes"));
+    // Um popup que não está aberto some com a chamada (e o conteúdo não é medido).
+    assert(modalLabel.width == 0.0f);
+
+    // Abrir pelo botão do fundo.
+    const float bx = backgroundButton.x + backgroundButton.width * 0.5f;
+    const float by = backgroundButton.y + backgroundButton.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(bx, by));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    assert(backgroundClicked);
+    assert(context.isPopupOpen("Definicoes"));
+    // O modal aparece no frame seguinte (a caixa é a medida do frame anterior).
+    const ig::DrawData &modalFrame = harness.frame(build);
+    assert(modalLabel.width > 0.0f);
+    assert(modalOk.width > 0.0f);
+    // A caixa é o que está pintado com a cor do fundo do menu (é a única coisa no
+    // ecrã com ela): dai saem os limites para provar que está centrada.
+    ig::Rect box(0.0f, 0.0f, 0.0f, 0.0f);
+    bool boxFound = false;
+    const ig::Color boxColor = context.theme().menuBg;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < modalFrame.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = modalFrame.vertices[i];
+        if (vertex.color != boxColor)
+            continue;
+        if (!boxFound)
+        {
+            box = ig::Rect(vertex.position.x, vertex.position.y, 0.0f, 0.0f);
+            boxFound = true;
+        }
+        if (vertex.position.x < box.x)
+            box.x = vertex.position.x;
+        if (vertex.position.y < box.y)
+            box.y = vertex.position.y;
+        if (vertex.position.x > box.x + box.width)
+            box.width = vertex.position.x - box.x;
+        if (vertex.position.y > box.y + box.height)
+            box.height = vertex.position.y - box.y;
+    }
+    assert(boxFound);
+    const ig::Vec2 display = context.displaySize();
+    const float boxCentreX = box.x + box.width * 0.5f;
+    const float boxCentreY = box.y + box.height * 0.5f;
+    assert(fabsf(boxCentreX - display.x * 0.5f) <= 1.0f);
+    assert(fabsf(boxCentreY - display.y * 0.5f) <= 1.0f);
+    // O conteúdo está dentro da caixa e por baixo da barra do título.
+    assert(modalLabel.x >= box.x);
+    assert(modalLabel.y >= box.y + context.theme().titleBarHeight);
+    assert(modalOk.y + modalOk.height <= box.y + box.height + 1.0f);
+
+    // Um clique fora não fecha o modal (é a diferença para um popup comum): o
+    // clique é engolido, o botão de trás não conta e o modal continua aberto.
+    const int clicksBefore = okClicks;
+    backgroundClicked = false;
+    context.pushEvent(ig::Event::pointerMove(380.0f, 290.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 380.0f, 290.0f));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 380.0f, 290.0f));
+    harness.frame(build);
+    assert(context.isPopupOpen("Definicoes"));
+    assert(!backgroundClicked);
+    assert(okClicks == clicksBefore);
+    assert(openModal);
+
+    // O Escape fecha-o (e o conteúdo deixa de ser submetido).
+    modalLabel = ig::Rect();
+    ig::Event escape;
+    escape.type = ig::EventType::KeyDown;
+    escape.key = ig::KeyCode::Escape;
+    context.pushEvent(escape);
+    harness.frame(build);
+    assert(!context.isPopupOpen("Definicoes"));
+    assert(modalLabel.width == 0.0f);
+
+    // Reabrir e fechar pelo X (o p_open) e pelo botão do modal.
+    openModal = true;
+    showModal = true;
+    context.pushEvent(ig::Event::pointerMove(bx, by));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("Definicoes"));
+    const ig::Rect okRect = modalOk;
+    context.pushEvent(ig::Event::pointerMove(okRect.x + okRect.width * 0.5f,
+                                             okRect.y + okRect.height * 0.5f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, okRect.x + okRect.width * 0.5f,
+                                             okRect.y + okRect.height * 0.5f));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, okRect.x + okRect.width * 0.5f,
+                                           okRect.y + okRect.height * 0.5f));
+    harness.frame(build);
+    assert(okClicks == clicksBefore + 1);
+    assert(!context.isPopupOpen("Definicoes"));
+    assert(!openModal);
+}
+
+// Os flags do openPopup: o NoOpenOverExistingPopup não abre por cima do que já lá
+// está, o AtCursor abre encostado ao item que lá está e o isPopupOpen com o
+// AnyPopupId pergunta se há algum aberto.
+void test_popup_open_flags()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect anchor;
+    ig::Rect firstLabel;
+    bool tryFirst = false;
+    bool trySecond = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("flags", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.button("ancora");
+        anchor = c.itemRect();
+        if (tryFirst)
+            c.openPopup("um", ig::Context::PopupFlags::AtCursor);
+        if (trySecond)
+            c.openPopup("dois", ig::Context::PopupFlags::NoOpenOverExistingPopup);
+        if (c.beginPopup("um"))
+        {
+            c.label("um");
+            firstLabel = c.itemRect();
+            c.endPopup();
+        }
+        if (c.beginPopup("dois"))
+        {
+            c.label("dois");
+            c.endPopup();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(!context.isPopupOpen("um"));
+    assert(!context.isPopupOpen("qualquer", ig::Context::PopupFlags::AnyPopupId));
+
+    // O AtCursor encosta a caixa ao cursor do layout (na margem de dentro da janela,
+    // por baixo do botão), não ao ponteiro - que está longe, no (2,2).
+    context.pushEvent(ig::Event::pointerMove(2.0f, 2.0f));
+    tryFirst = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("um"));
+    assert(context.isPopupOpen("qualquer", ig::Context::PopupFlags::AnyPopupId));
+    assert(firstLabel.width > 0.0f);
+    // A caixa fica na margem de dentro da janela e por baixo do botão (o cursor do
+    // layout é onde ele acabou), não no ponteiro.
+    assert(firstLabel.x < anchor.x + 30.0f);
+    assert(firstLabel.y > anchor.y + anchor.height);
+
+    // Com um popup aberto, o NoOpenOverExistingPopup não abre o segundo.
+    trySecond = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("um"));
+    assert(!context.isPopupOpen("dois"));
+
+    // Fechado o primeiro (um clique fora), a mesma chamada abre o segundo.
+    tryFirst = false;
+    context.pushEvent(ig::Event::pointerMove(300.0f, 250.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 300.0f, 250.0f));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 300.0f, 250.0f));
+    harness.frame(build);
+    assert(!context.isPopupOpen("um"));
+    assert(context.isPopupOpen("dois"));
+    assert(context.isPopupOpen("qualquer", ig::Context::PopupFlags::AnyPopupId));
+
+    // E com nada aberto o AnyPopupId é falso. O popup abriu no ponteiro (o
+    // NoOpenOverExistingPopup não muda onde ele abre), por isso o clique que o
+    // fecha tem de ser longe dele.
+    trySecond = false;
+    context.pushEvent(ig::Event::pointerMove(600.0f, 600.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 600.0f, 600.0f));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 600.0f, 600.0f));
+    harness.frame(build);
+    assert(!context.isPopupOpen("dois"));
+    assert(!context.isPopupOpen("qualquer", ig::Context::PopupFlags::AnyPopupId));
+}
+
 } // namespace
 
 int main()
@@ -3180,6 +3414,8 @@ int main()
     test_table_scrolls_its_own_rows();
     test_table_frozen_rows_stay_put();
     test_tree_style();
+    test_popup_modal();
+    test_popup_open_flags();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
