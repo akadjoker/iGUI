@@ -341,6 +341,15 @@ public:
     // A root window that follows the current viewport every frame.
     bool beginMainWindow(StringView title, bool *open = nullptr);
     void endWindow();
+    // A barra de menu da aplicação: uma faixa no topo do ecrã que não pertence a
+    // nenhuma janela, como o BeginMainMenuBar do ImGui. Devolve false quando não
+    // há altura ou largura para ela. Lá dentro usam-se o beginMenu/endMenu (e não
+    // o beginMenuBar) e fecha-se com endMainMenuBar. A altura que ela ocupa - que
+    // a aplicação tem de deixar livre no topo das suas janelas - é o
+    // mainMenuBarHeight().
+    bool beginMainMenuBar();
+    void endMainMenuBar();
+    float mainMenuBarHeight() const;
     /// @brief Bounds the window with @p title has right now (an empty rect when
     ///        no such window exists yet).
     Rect windowBounds(StringView title) const;
@@ -1465,6 +1474,10 @@ private:
     Rect comboPopupBoundsAtFrameStart_;
     Rect comboBounds_;
     Rect comboPopupBounds_;
+    // A barra de menu da aplicação (ver beginMainMenuBar): a janela dela, que é a
+    // última a ser desenhada, e se ela foi submetida neste frame.
+    WindowHandle mainMenuBarWindow_;
+    bool mainMenuBarOpen_;
     // Combo de conteúdo livre (ver beginCombo/endCombo). Enquanto o popup está
     // aberto o cursor do layout está dentro dele e o que o chamador submete vai
     // para comboDrawList_, que sai logo depois da sobreposição da janela: a caixa
@@ -1744,6 +1757,7 @@ private:
                           StringView shortcut = StringView());
     bool beginComboImpl(StringView label, StringView preview, const Rect &bounds,
                         int visibleItems, bool advanceHeader);
+    static StringView mainMenuBarTitle();
     void drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
                          bool highlighted, const Rect &clip);
     float comboPopupMaxHeight(int visibleItems) const;
