@@ -215,6 +215,7 @@ void sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool i
                 return; // não é um formato com que se possa imprimir: quem chama decide
             if (written + 1u < outSize)
                 out[written++] = '%';
+            const bool length = integer && numericSpecIsInteger(type);
             for (const char *spec = at + 1; *spec != 0 && written + 1u < outSize; ++spec)
             {
                 const char s = *spec;
@@ -222,7 +223,10 @@ void sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool i
                     continue;
                 if (s == type)
                 {
-                    if (integer && written + 2u < outSize)
+                    // O comprimento só entra numa conversão de inteiro: um "%llg"
+                    // não existe, e era o que saía daqui quando o valor de um drag
+                    // de int se escrevia com um "%g".
+                    if (length && written + 2u < outSize)
                     {
                         out[written++] = 'l';
                         out[written++] = 'l';
@@ -6100,6 +6104,113 @@ bool insertText(String &value, String::size_type &cursor, const char *text, Stri
 
 } // namespace
 
+// ── Os tipos do *Scalar ──────────────────────────────────────────────────────
+// O que está por trás do ponteiro e o double em que as widgets trabalham por
+// dentro. Um tipo de 64 bits acima de 2^53 perde os bits de baixo nesta viagem,
+// como no ImGui (o FLOATTYPE dele é double nestes dois tipos); um inteiro menor
+// não perde nada.
+bool scalarTypeIsInteger(Context::ScalarType type)
+{
+    return type != Context::ScalarType::Float && type != Context::ScalarType::Double;
+}
+
+bool scalarTypeIsUnsigned(Context::ScalarType type)
+{
+    return type == Context::ScalarType::U8 || type == Context::ScalarType::U16 ||
+           type == Context::ScalarType::U32 || type == Context::ScalarType::U64;
+}
+
+double scalarToDouble(Context::ScalarType type, const void *data)
+{
+    switch (type)
+    {
+    case Context::ScalarType::S8:
+        return static_cast<double>(*static_cast<const int8_t *>(data));
+    case Context::ScalarType::U8:
+        return static_cast<double>(*static_cast<const uint8_t *>(data));
+    case Context::ScalarType::S16:
+        return static_cast<double>(*static_cast<const int16_t *>(data));
+    case Context::ScalarType::U16:
+        return static_cast<double>(*static_cast<const uint16_t *>(data));
+    case Context::ScalarType::S32:
+        return static_cast<double>(*static_cast<const int32_t *>(data));
+    case Context::ScalarType::U32:
+        return static_cast<double>(*static_cast<const uint32_t *>(data));
+    case Context::ScalarType::S64:
+        return static_cast<double>(*static_cast<const int64_t *>(data));
+    case Context::ScalarType::U64:
+        return static_cast<double>(*static_cast<const uint64_t *>(data));
+    case Context::ScalarType::Float:
+        return static_cast<double>(*static_cast<const float *>(data));
+    case Context::ScalarType::Double:
+        return *static_cast<const double *>(data);
+    }
+    return 0.0;
+}
+
+void scalarFromDouble(Context::ScalarType type, void *data, double value)
+{
+    switch (type)
+    {
+    case Context::ScalarType::S8:
+        *static_cast<int8_t *>(data) = static_cast<int8_t>(value);
+        return;
+    case Context::ScalarType::U8:
+        *static_cast<uint8_t *>(data) = static_cast<uint8_t>(value < 0.0 ? 0.0 : value);
+        return;
+    case Context::ScalarType::S16:
+        *static_cast<int16_t *>(data) = static_cast<int16_t>(value);
+        return;
+    case Context::ScalarType::U16:
+        *static_cast<uint16_t *>(data) = static_cast<uint16_t>(value < 0.0 ? 0.0 : value);
+        return;
+    case Context::ScalarType::S32:
+        *static_cast<int32_t *>(data) = static_cast<int32_t>(value);
+        return;
+    case Context::ScalarType::U32:
+        *static_cast<uint32_t *>(data) = static_cast<uint32_t>(value < 0.0 ? 0.0 : value);
+        return;
+    case Context::ScalarType::S64:
+        *static_cast<int64_t *>(data) = static_cast<int64_t>(value);
+        return;
+    case Context::ScalarType::U64:
+        *static_cast<uint64_t *>(data) = static_cast<uint64_t>(value < 0.0 ? 0.0 : value);
+        return;
+    case Context::ScalarType::Float:
+        *static_cast<float *>(data) = static_cast<float>(value);
+        return;
+    case Context::ScalarType::Double:
+        *static_cast<double *>(data) = value;
+        return;
+    }
+}
+
+// O formato por omissão de cada tipo: é o do ImGui (o "%d" do s8 e o "%.6f" do
+// double), e é o que dá o texto de um valor que não tem formato escrito à mão.
+const char *scalarDefaultFormat(Context::ScalarType type)
+{
+    switch (type)
+    {
+    case Context::ScalarType::S8:
+    case Context::ScalarType::S16:
+    case Context::ScalarType::S32:
+        return "%d";
+    case Context::ScalarType::U8:
+    case Context::ScalarType::U16:
+    case Context::ScalarType::U32:
+        return "%u";
+    case Context::ScalarType::S64:
+        return "%lld";
+    case Context::ScalarType::U64:
+        return "%llu";
+    case Context::ScalarType::Float:
+        return "%.3f";
+    case Context::ScalarType::Double:
+        return "%.6f";
+    }
+    return "%d";
+}
+
 // ── Os flags do inputText ────────────────────────────────────────────────────
 // O que se escreve (e o que se cola) passa por aqui antes de entrar no campo: os
 // Chars* do ImGui, na mesma ordem e com a mesma prioridade - o primeiro que
@@ -8585,6 +8696,22 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
     return changed;
 }
 
+bool Context::sliderAngle(StringView labelText, float &radians, float degreesMinimum,
+                          float degreesMaximum, float width, unsigned flags, const char *format)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed =
+        sliderAngle(labelText, radians, degreesMinimum, degreesMaximum,
+                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
+                         bounds.height),
+                    flags, format);
+    advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
                         float speed, float width, unsigned flags, const char *format)
 {
@@ -9086,6 +9213,77 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
                                     Rect(bounds.x - layout_.origin.x,
                                          bounds.y - layout_.origin.y,
                                          bounds.width, bounds.height));
+    advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+// ── O *Scalar (os tipos que não são float nem int) ───────────────────────────
+bool Context::sliderScalar(StringView labelText, ScalarType type, void *data, const void *minimum,
+                           const void *maximum, const char *format, float width, unsigned flags)
+{
+    if (!data || !minimum || !maximum)
+        return false;
+    const double low = scalarToDouble(type, minimum);
+    const double high = scalarToDouble(type, maximum);
+    double working = scalarToDouble(type, data);
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed =
+        sliderCore(labelText, working, low, high, scalarTypeIsInteger(type),
+                   type == ScalarType::Double, Rect(bounds.x - layout_.origin.x,
+                                                    bounds.y - layout_.origin.y, bounds.width,
+                                                    bounds.height),
+                   flags, format ? format : scalarDefaultFormat(type));
+    if (working != scalarToDouble(type, data))
+        scalarFromDouble(type, data, working);
+    advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::dragScalar(StringView labelText, ScalarType type, void *data, float speed,
+                         const void *minimum, const void *maximum, const char *format,
+                         float width, unsigned flags)
+{
+    if (!data)
+        return false;
+    const double low = minimum ? scalarToDouble(type, minimum) : -DBL_MAX;
+    const double high = maximum ? scalarToDouble(type, maximum) : DBL_MAX;
+    double working = scalarToDouble(type, data);
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed =
+        dragCore(labelText, working, low, high, static_cast<double>(speed),
+                 scalarTypeIsInteger(type), type == ScalarType::Double,
+                 Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
+                      bounds.height),
+                 flags, format ? format : scalarDefaultFormat(type));
+    if (working != scalarToDouble(type, data))
+        scalarFromDouble(type, data, working);
+    advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputScalar(StringView labelText, ScalarType type, void *data, const char *format,
+                          float width, unsigned flags)
+{
+    if (!data)
+        return false;
+    double working = scalarToDouble(type, data);
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed =
+        numericField(labelText, working, scalarTypeIsInteger(type), type == ScalarType::Float,
+                     Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
+                          bounds.height),
+                     format ? format : scalarDefaultFormat(type));
+    if (working != scalarToDouble(type, data))
+        scalarFromDouble(type, data, working);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;

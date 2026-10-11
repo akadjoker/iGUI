@@ -611,10 +611,89 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     // sliderInt2/3/4): e o DragScalar/SliderScalar/InputScalar do demo, que e um
     // caminho so para os tipos todos (s8..u64, float, double) com o formato escrito
     // a mao, mais os sliders ao contrario e o SliderAngle.
+    // Os *Scalar do demo: o mesmo caminho para os tipos que nao sao float nem int,
+    // com o valor por ponteiro e o formato escrito a mao (o "%04X", o
+    // "%.10f grams"). Os s8..u64 todos, como no demo.
+    ui.separatorText("Scalar (os tipos do ImGuiDataType)");
+    const int8_t s8Min = -128;
+    const int8_t s8Max = 127;
+    const uint8_t u8Min = 0u;
+    const uint8_t u8Max = 255u;
+    const int16_t s16Min = -32768;
+    const int16_t s16Max = 32767;
+    const uint16_t u16Min = 0u;
+    const uint16_t u16Max = 65535u;
+    const int32_t s32Min = -2147483648;
+    const int32_t s32Max = 2147483647;
+    const int32_t s32Zero = 0;
+    const int32_t s32Fifty = 50;
+    const uint32_t u32Min = 0u;
+    const uint32_t u32Max = 4294967295u;
+    const int64_t s64Min = -9223372036854775807ll;
+    const int64_t s64Max = 9223372036854775807ll;
+    const uint64_t u64Min = 0ull;
+    const uint64_t u64Max = 18446744073709551615ull;
+    const double f64Zero = 0.0;
+    const double f64One = 1.0;
+    const float fZero = 0.0f;
+    const float fOne = 1.0f;
+    // O "Clamp integers to 0..50" do demo: o mesmo valor com dois intervalos.
+    ui.dragScalar("drag s8", ig::Context::ScalarType::S8, &s.scalarS8, 1.0f, &s8Min, &s8Max);
+    item();
+    ui.dragScalar("drag u8", ig::Context::ScalarType::U8, &s.scalarU8, 1.0f, &u8Min, &u8Max);
+    item();
+    ui.dragScalar("drag s16", ig::Context::ScalarType::S16, &s.scalarS16, 1.0f, &s16Min, &s16Max);
+    item();
+    ui.dragScalar("drag u16", ig::Context::ScalarType::U16, &s.scalarU16, 1.0f, &u16Min, &u16Max);
+    item();
+    ui.dragScalar("drag s32", ig::Context::ScalarType::S32, &s.scalarS32, 1.0f, &s32Min, &s32Max);
+    item();
+    ui.dragScalar("drag s32 hex", ig::Context::ScalarType::S32, &s.scalarS32, 1.0f, &s32Zero,
+                  &s32Fifty, "%04X");
+    item();
+    ui.dragScalar("drag u32", ig::Context::ScalarType::U32, &s.scalarU32, 1.0f, &u32Min, &u32Max);
+    item();
+    ui.dragScalar("drag s64", ig::Context::ScalarType::S64, &s.scalarS64, 1.0f, &s64Min, &s64Max);
+    item();
+    ui.dragScalar("drag u64", ig::Context::ScalarType::U64, &s.scalarU64, 1.0f, &u64Min, &u64Max);
+    item();
+    ui.dragScalar("drag double", ig::Context::ScalarType::Double, &s.scalarF64, 0.0005f, &f64Zero,
+                  nullptr, "%.10f grams");
+    item();
+    ui.separatorText("Sliders (scalar)");
+    ui.sliderScalar("slider s32 low", ig::Context::ScalarType::S32, &s.scalarS32, &s32Zero,
+                    &s32Fifty, "%d");
+    item();
+    ui.sliderScalar("slider s32 hex", ig::Context::ScalarType::S32, &s.scalarS32, &s32Zero,
+                    &s32Fifty, "0x%04X");
+    item();
+    ui.sliderScalar("slider u8 full", ig::Context::ScalarType::U8, &s.scalarU8, &u8Min, &u8Max,
+                    "%u");
+    item();
+    ui.sliderScalar("slider u64 full", ig::Context::ScalarType::U64, &s.scalarU64, &u64Min,
+                    &u64Max, "%llu ms");
+    item();
+    ui.sliderScalar("slider double low", ig::Context::ScalarType::Double, &s.scalarF64, &f64Zero,
+                    &f64One, "%.10f");
+    item();
+    // O slider invertido (min>max) do demo: a pista anda ao contrario.
+    ui.sliderScalar("slider s32 reverse", ig::Context::ScalarType::S32, &s.scalarS32, &s32Fifty,
+                    &s32Zero, "%d");
+    item();
+    // E o angulo, que e o unico widget que o iGUI tem a mais nesta seccao (o
+    // SliderAngle do demo).
+    ui.sliderAngle("slider angle", s.f1, -360.0f, 360.0f);
+    item();
+    ui.separatorText("Inputs (scalar)");
+    ui.inputScalar("input s32 hex", ig::Context::ScalarType::S32, &s.scalarS32, "%04X");
+    item();
+    ui.inputScalar("input u64", ig::Context::ScalarType::U64, &s.scalarU64, "%llu");
+    item();
+    ui.inputScalar("input double", ig::Context::ScalarType::Double, &s.scalarF64, "%.10f grams");
+    item();
     gap(ui, gallery::Section::WidgetsDataTypes,
-        "o SliderScalar/DragScalar/InputScalar sobre qualquer tipo (s8..u64, float, "
-        "double) com o formato do valor a mao, os sliders invertidos "
-        "(min>max) e o SliderAngle");
+        "os botoes de passo (+/-) ao lado do campo de um InputScalar (o 'Show step "
+        "buttons' do demo) e o ParseEmptyRefVal/DisplayEmptyRefVal");
 }
 
 // ── Widgets: Disable Blocks ──────────────────────────────────────────────────

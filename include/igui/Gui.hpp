@@ -941,6 +941,39 @@ public:
             ReadOnly = 1u << 8
         };
     };
+    // O tipo do valor de um *Scalar (o ImGuiDataType do ImGui): é o que permite ter
+    // uma widget numérica só para os tipos que não são float nem int - um s8, um
+    // u64, um double - com o valor passado por ponteiro e o formato escrito à mão.
+    // O valor por dentro é tratado em double: um s64/u64 acima de 2^53 perde os
+    // bits de baixo, como no ImGui (que usa o mesmo double como FLOATTYPE nestes
+    // dois tipos).
+    enum class ScalarType : uint8_t
+    {
+        S8,
+        U8,
+        S16,
+        U16,
+        S32,
+        U32,
+        S64,
+        U64,
+        Float,
+        Double
+    };
+    // O SliderScalar/DragScalar/InputScalar do ImGui: o slider e o drag com o
+    // intervalo por ponteiros do tipo do valor (no drag podem ser nulos, que é
+    // "sem limites") e um formato do valor por tipo quando não se dá nenhum.
+    bool sliderScalar(StringView label, ScalarType type, void *data, const void *minimum,
+                      const void *maximum, const char *format = nullptr, float width = 0.0f,
+                      unsigned flags = SliderFlags::None);
+    bool dragScalar(StringView label, ScalarType type, void *data, float speed,
+                    const void *minimum = nullptr, const void *maximum = nullptr,
+                    const char *format = nullptr, float width = 0.0f,
+                    unsigned flags = SliderFlags::None);
+    // O campo de texto de um tipo qualquer. O passo (+/- ao lado do campo) ainda
+    // não existe: ver o GAPS.
+    bool inputScalar(StringView label, ScalarType type, void *data, const char *format = nullptr,
+                     float width = 0.0f, unsigned flags = InputTextFlags::None);
     bool inputText(StringView label, String &value, const Rect &bounds,
                    unsigned flags = InputTextFlags::None);
     // Igual ao inputText, mas desenha `hint` enquanto o campo está vazio.

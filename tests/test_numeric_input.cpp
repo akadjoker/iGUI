@@ -258,6 +258,109 @@ void test_format_drives_display_and_parse()
 // arrasta e o que se escreve é em graus, e o que fica guardado é em radianos.
 // O DragFloatRange2: duas caixas (mínimo e máximo) com o rótulo no fim, e cada uma
 // limitada pela outra - arrastar o mínimo para lá do máximo não o passa.
+// O texto de um widget de inteiros é o número inteiro (o "5"), e não um real com
+// zeros nem o que sai de um formato mal montado - foi por aqui que passou um
+// "%.3g" com o comprimento de um inteiro ("%llg"), que escrevia lixo.
+void test_int_widgets_write_the_integer()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    int dragValue = 5;
+    int sliderValue = 7;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.dragInt("i", dragValue, 0, 10, 1, ig::Rect(10.0f, 10.0f, 260.0f, 28.0f));
+        c.sliderInt("s", sliderValue, 0, 10, ig::Rect(10.0f, 42.0f, 260.0f, 28.0f));
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "5"), "dragInt: o valor escreve-se como um inteiro");
+    check(drewText(data, "7"), "sliderInt: o campo mostra o inteiro");
+    check(!drewText(data, "5.000"), "dragInt: e não com três decimais");
+}
+
+// A família escalar: o mesmo slider/drag/campo para os tipos que não são float
+// nem int, com o valor por ponteiro e o formato do tipo (o ImGuiDataType do
+// ImGui).
+void test_scalar_types()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    uint8_t u8 = 0u;
+    int16_t s16 = 0;
+    uint32_t u32 = 0u;
+    uint64_t u64 = 0ull;
+    double f64 = 0.0;
+    float f32 = 0.5f;
+    const uint8_t u8Min = 0u;
+    const uint8_t u8Max = 200u;
+    const int16_t s16Min = -1000;
+    const int16_t s16Max = 1000;
+    const float f32Min = 0.0f;
+    const float f32Max = 1.0f;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderScalar("u8", ig::Context::ScalarType::U8, &u8, &u8Min, &u8Max, nullptr, 300.0f);
+        c.dragScalar("s16", ig::Context::ScalarType::S16, &s16, 1.0f, &s16Min, &s16Max, nullptr,
+                     300.0f);
+        c.inputScalar("u32", ig::Context::ScalarType::U32, &u32, "%04X", 300.0f);
+        c.inputScalar("u64", ig::Context::ScalarType::U64, &u64, nullptr, 300.0f);
+        c.inputScalar("f64", ig::Context::ScalarType::Double, &f64, "%.10f", 300.0f);
+        c.sliderScalar("f32", ig::Context::ScalarType::Float, &f32, &f32Min, &f32Max, "%.2f",
+                       300.0f);
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    // O formato de cada tipo aparece no ecrã: o "%04X" do u32 e os dez decimais do
+    // double.
+    check(drewText(data, "0000"), "inputScalar u32: o valor sai no formato do chamador");
+    check(drewText(data, "0.0000000000"), "inputScalar f64: o formato do double");
+    check(drewText(data, "0.50"), "sliderScalar f32: o formato do float");
+
+    // O slider de um u8 tem o intervalo dele: arrastado para o fim, o valor é 200
+    // (o valor mais alto que um u8 deste intervalo pode ter) e nunca passa disso.
+    harness.drag(30.0f, 20.0f, 4000.0f, 20.0f, build);
+    check(u8 == 200u, "sliderScalar u8: a ponta da pista é o máximo do intervalo");
+
+    // O drag de um s16 arrastado para o fim fica no tecto dele.
+    harness.drag(30.0f, 52.0f, 4000.0f, 52.0f, build);
+    check(s16 == 1000, "dragScalar s16: o arrasto pára no tecto");
+
+    // O campo do u32 é hexadecimal dos dois lados.
+    harness.click(150.0f, 84.0f, build);
+    for (int i = 0; i < 20; ++i)
+    {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+        harness.frame(build);
+    }
+    context.pushEvent(ig::Event::textInput("ff"));
+    harness.frame(build);
+    check(u32 == 255u, "inputScalar u32: o hex escrito à mão vale 255");
+
+    // O campo de um double guarda os dez dígitos (é o que um float não faz). Cada
+    // widget daqui está 32 px abaixo da anterior (26 de altura e 6 de espaço).
+    harness.click(150.0f, 148.0f, build);
+    for (int i = 0; i < 20; ++i)
+    {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+        harness.frame(build);
+    }
+    context.pushEvent(ig::Event::textInput("0.1"));
+    harness.frame(build);
+    check(f64 == 0.1, "inputScalar f64: o valor do double fica exato");
+
+    // O campo de um u64 com um valor acima de 2^32 (2^32 cabe em double, é o que
+    // estes tipos usam por dentro).
+    u64 = 4294967296ull;
+    harness.frame(build);
+    check(drewText(harness.frame(build), "4294967296"),
+          "inputScalar u64: um valor acima de 2^32 escreve-se inteiro");
+}
+
 void test_drag_range2()
 {
     ig::TestBackend backend;
@@ -569,6 +672,8 @@ int main()
     test_display_follows_value_when_not_editing();
     test_format_drives_display_and_parse();
     test_drag_range2();
+    test_scalar_types();
+    test_int_widgets_write_the_integer();
     test_slider_angle();
     test_change_reported_only_for_new_values();
     test_non_finite_values_draw_finite_geometry();
