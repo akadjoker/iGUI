@@ -1984,6 +1984,153 @@ void test_child_inside_a_combo_popup()
     assert(!open);
 }
 
+// Os flags do isItemHovered: o RectOnly (basta o rect, o clip não conta), o
+// AllowWhenBlockedByActiveItem (outro widget ativo), o AllowWhenBlockedByPopup (um
+// menu aberto por cima) e o Delay (tempo parado em cima).
+void test_item_hovered_flags()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const unsigned rectOnly = ig::Context::ItemHoverFlags::RectOnly;
+    const unsigned allowActive = ig::Context::ItemHoverFlags::AllowWhenBlockedByActiveItem;
+    const unsigned delay = ig::Context::ItemHoverFlags::Delay;
+
+    // Um botão dentro de um child baixo: uma parte dele fica fora do clip do child.
+    float dragged = 0.5f;
+    ig::Rect buttonRect;
+    bool plainHovered = true;
+    bool rectHovered = false;
+    bool delayedInFirstFrame = true;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.beginChild("child", 40.0f);
+        // Alto e no fim do child: metade de fora.
+        c.button("dentro", ig::Rect(0.0f, 20.0f, 100.0f, 40.0f));
+        if (buttonRect.width <= 0.0f)
+            buttonRect = c.itemRect();
+        plainHovered = c.isItemHovered();
+        rectHovered = c.isItemHovered(rectOnly);
+        if (c.isItemHovered(delay))
+            delayedInFirstFrame = false;
+        c.endChild();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(buttonRect.width > 0.0f);
+
+    // O ponteiro é posto na parte do botão que o child corta.
+    const float x = buttonRect.x + buttonRect.width * 0.5f;
+    const float y = buttonRect.y + buttonRect.height - 2.0f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    harness.frame(build);
+    assert(!plainHovered);
+    assert(rectHovered);
+
+    // O Delay: nos primeiros frames não responde por esta consulta, e passado o
+    // tempo responde.
+    bool delayed = false;
+    bool plain = false;
+    auto probeBuild = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+        if (buttonRect.width <= 0.0f)
+            buttonRect = c.itemRect();
+        plain = c.isItemHovered();
+        delayed = c.isItemHovered(delay);
+        c.endWindow();
+    };
+    ig::Rect targetRect;
+    auto findTarget = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+        targetRect = c.itemRect();
+        c.endWindow();
+    };
+    // Os frames do harness não trazem delta: o relógio do hover é o que se lhe der
+    // (é o deltaSeconds que o backend traz a sério).
+    auto frameWithDelta = [&](float delta) {
+        context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, delta));
+        probeBuild(context);
+        context.endFrame();
+    };
+    harness.frame(findTarget);
+    const float tx = targetRect.x + targetRect.width * 0.5f;
+    const float ty = targetRect.y + targetRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(tx, ty));
+    frameWithDelta(0.1f);
+    assert(plain);
+    assert(!delayed);
+    // Passado o atraso (0.45 s por omissão), o mesmo hover responde ao Delay.
+    for (int i = 0; i < 5; ++i)
+        frameWithDelta(0.1f);
+    assert(plain);
+    assert(delayed);
+    // Mexer o ponteiro dentro do item não reinicia o Delay (conta desde que entrou
+    // nele), mas reinicia o Stationary (conta desde a última vez que se mexeu).
+    bool stationary = false;
+    auto probeStationary = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+        stationary = c.isItemHovered(ig::Context::ItemHoverFlags::Stationary);
+        delayed = c.isItemHovered(delay);
+        c.endWindow();
+    };
+    context.pushEvent(ig::Event::pointerMove(tx + 6.0f, ty));
+    context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, 0.1f));
+    probeStationary(context);
+    context.endFrame();
+    assert(delayed);
+    assert(!stationary);
+    for (int i = 0; i < 5; ++i)
+    {
+        context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, 0.1f));
+        probeStationary(context);
+        context.endFrame();
+    }
+    assert(stationary);
+
+    // O AllowWhenBlockedByActiveItem: com outro widget ativo (um arrasto a passar
+    // por cima), o hover normal não responde mas o flag sim.
+    bool blocked = true;
+    bool allowed = false;
+    auto dragBuild = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.sliderFloat("arrasto", dragged, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
+        c.button("alvo", ig::Rect(0.0f, 60.0f, 120.0f, 28.0f));
+        blocked = c.isItemHovered();
+        allowed = c.isItemHovered(allowActive);
+        c.endWindow();
+    };
+    ig::Rect dragRect;
+    ig::Rect hoverRect;
+    auto findBoth = [&](ig::Context &c) {
+        assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        c.sliderFloat("arrasto", dragged, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
+        dragRect = c.itemRect();
+        c.button("alvo", ig::Rect(0.0f, 60.0f, 120.0f, 28.0f));
+        hoverRect = c.itemRect();
+        c.endWindow();
+    };
+    harness.frame(findBoth);
+    // Carregar na pista do slider e arrastar até cima do botão. O itemRect do slider
+    // é o widget todo: a pista está no meio, entre o rótulo e o campo do valor (é o
+    // meio da largura que cai lá, os extremos são os dois).
+    const float dragX = dragRect.x + dragRect.width * 0.5f;
+    const float dragY = dragRect.y + dragRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(dragX, dragY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, dragX, dragY));
+    harness.frame(dragBuild);
+    context.pushEvent(ig::Event::pointerMove(hoverRect.x + hoverRect.width * 0.5f,
+                                            hoverRect.y + hoverRect.height * 0.5f));
+    harness.frame(dragBuild);
+    assert(blocked == false);
+    assert(allowed == true);
+}
+
 } // namespace
 
 int main()
@@ -2019,6 +2166,7 @@ int main()
     test_combo_popup_scrolls();
     test_combo_default_focus_opens_on_the_selection();
     test_child_inside_a_combo_popup();
+    test_item_hovered_flags();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
