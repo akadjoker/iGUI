@@ -732,6 +732,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       openPopupFrame_(0),
       popupContentId_(InvalidWidgetId), popupMeasuredId_(InvalidWidgetId), popupMeasured_(),
       popupWasOpenAtFrameStart_(false), popupBoundsAtFrameStart_(), popupBounds_(),
+      openPopupModal_(false), modalPopupWasOpenAtFrameStart_(false), modalPopupOpen_(false),
+      popupMeasuredWidth_(0.0f),
       mainMenuBarWindow_(), mainMenuBarOpen_(false),
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
@@ -851,6 +853,10 @@ void Context::beginFrame(const FrameInfo &frame)
     toastDrawList_.clear();
     modalDrawList_.clear();
     tooltipDrawList_.clear();
+    modalPopupDrawList_.clear();
+    // O conteúdo de um modal é submetido dentro do beginPopupModal de cada frame,
+    // como tudo no modo imediato: quem não o submeter deixa de o ter.
+    modalPopupOpen_ = false;
     // O mesmo para o conteúdo de um combo de conteúdo livre: quem o quiser tem de
     // voltar a chamar beginCombo (ver beginCombo/endCombo).
     comboDrawList_.clear();
@@ -884,6 +890,7 @@ void Context::beginFrame(const FrameInfo &frame)
     applySolidStyle(toastDrawList_);
     applySolidStyle(modalDrawList_);
     applySolidStyle(tooltipDrawList_);
+    applySolidStyle(modalPopupDrawList_);
     applySolidStyle(comboDrawList_);
     for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
     {
@@ -1025,7 +1032,11 @@ void Context::releaseUnsubmittedBlockers()
     // Um popup de conteúdo livre que deixou de ser submetido fecha-se: não há nada
     // no écra para o utilizador clicar.
     if (openPopupId_ != InvalidWidgetId && openPopupFrame_ + 1u < frameNumber_)
+    {
         openPopupId_ = InvalidWidgetId;
+        openPopupModal_ = false;
+    }
+    modalPopupWasOpenAtFrameStart_ = openPopupModal_;
 }
 
 bool Context::windowSubmittedRecently(const WindowState &window) const
@@ -1088,6 +1099,7 @@ const DrawData &Context::endFrame()
     // que o põe por cima dos menus e dos combos abertos) mas antes dos modais,
     // que tapam tudo.
     frameDrawList_.append(tooltipDrawList_);
+    frameDrawList_.append(modalPopupDrawList_);
     frameDrawList_.append(modalDrawList_);
 
     const uint32_t left = buttonIndex(PointerButton::Left);
@@ -1579,7 +1591,8 @@ void Context::clearUndoHistory()
 
 bool Context::isKeyPressed(KeyCode key) const
 {
-    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal())
+    if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal() ||
+        modalPopupWasOpenAtFrameStart_)
         return false; // a modal/open menu owns the keyboard this frame - see shortcut()
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index];
@@ -2660,11 +2673,22 @@ void Context::openPopup(StringView idText, const Vec2 &position, const Vec2 &siz
     openPopupSized(idText, position, size);
 }
 
+void Context::openPopup(StringView idText, unsigned flags)
+{
+    if ((flags & PopupFlags::NoOpenOverExistingPopup) != 0u && openPopupId_ != InvalidWidgetId)
+        return;
+    if ((flags & PopupFlags::AtCursor) != 0u)
+        openPopup(idText, layout_.cursor);
+    else
+        openPopup(idText);
+}
+
 void Context::openPopupSized(StringView idText, const Vec2 &position, const Vec2 &size)
 {
     if (idText.empty())
         return;
     openPopupId_ = hashText(idText);
+    openPopupModal_ = false;
     openPopupPosition_ = position;
     // A largura é pedida, não medida: os itens de um popup esticam-se à largura que
     // têm (é o que o ImGui faz com um Selectable), por isso medir a largura do
@@ -2752,13 +2776,24 @@ void Context::endPopup()
     if (height < 0.0f)
         height = 0.0f;
     popupMeasuredId_ = popupContentId_;
-    // Só a altura: a largura da caixa é a que foi pedida no openPopup (ver lá).
+    // A altura é sempre medida; a largura só vale para um modal (a de um popup
+    // comum é a que foi pedida no openPopup - ver lá).
     popupMeasured_ = Vec2(0.0f, height);
+    popupMeasuredWidth_ = width;
     // A caixa deste frame é a do anterior: o que o chamador submeteu agora só vale
     // para o próximo (é o mesmo contrato do combo). A borda, essa, sai já no sítio
     // certo para o conteúdo que lá está.
     const Rect screen = popupClipRect();
-    if (WindowState *window = currentWindow())
+    if (modalPopupOpen_)
+    {
+        const Rect box(popupBounds_.x, popupBounds_.y, popupBounds_.width,
+                       height + theme_.windowPadding * 2.0f + theme_.titleBarHeight > popupBounds_.height
+                           ? height + theme_.windowPadding * 2.0f + theme_.titleBarHeight
+                           : popupBounds_.height);
+        modalPopupDrawList_.addRect(box, theme_.menuBorder, screen);
+        modalPopupOpen_ = false;
+    }
+    else if (WindowState *window = currentWindow())
     {
         const Rect box(popupBounds_.x, popupBounds_.y, popupBounds_.width,
                        height + padding * 2.0f > popupBounds_.height
@@ -2781,7 +2816,98 @@ bool Context::isPopupOpen(StringView idText) const
     return !idText.empty() && openPopupId_ == hashText(idText);
 }
 
-void Context::beginPopupContent(const Rect &popupBounds)
+bool Context::isPopupOpen(StringView idText, unsigned flags) const
+{
+    if ((flags & PopupFlags::AnyPopupId) != 0u)
+        return openPopupId_ != InvalidWidgetId;
+    return isPopupOpen(idText);
+}
+
+bool Context::beginPopupModal(StringView titleText, bool *open)
+{
+    WindowState *window = currentWindow();
+    if (!window || titleText.empty())
+        return false;
+    const WidgetId id = hashText(titleText);
+    if (openPopupId_ != id)
+        return false;
+    const Rect viewport = popupClipRect();
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const float padding = theme_.windowPadding;
+    const float titleHeight = theme_.titleBarHeight;
+    const bool measured = popupMeasuredId_ == id;
+    // Um modal mede-se (ao contrário de um popup comum): a caixa é a do conteúdo
+    // do frame anterior, com um mínimo para o que ainda não tem medida nenhuma.
+    float width = measured ? popupMeasuredWidth_ + padding * 2.0f : theme_.menuMinWidth;
+    float height = measured ? popupMeasured_.y + padding * 2.0f : theme_.widgetHeight * 2.0f;
+    width += 0.0f;
+    height += titleHeight;
+    if (width < theme_.menuMinWidth)
+        width = theme_.menuMinWidth;
+    if (height < titleHeight + theme_.widgetHeight + padding * 2.0f)
+        height = titleHeight + theme_.widgetHeight + padding * 2.0f;
+    const float x = (viewport.width - width) * 0.5f;
+    const float y = (viewport.height - height) * 0.5f;
+    popupBounds_ = Rect(x > viewport.x ? x : viewport.x, y > viewport.y ? y : viewport.y,
+                        width, height);
+    // O resto da interface fica atrás de um véu: sai na lista do frame (por baixo
+    // das janelas, como o scrim do beginDialog).
+    frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
+    modalPopupOpen_ = true;
+    openPopupModal_ = true;
+    openPopupFrame_ = frameNumber_;
+    popupContentId_ = id;
+    modalPopupDrawList_.addRectFilled(popupBounds_, theme_.menuBg, viewport);
+    modalPopupDrawList_.addRect(popupBounds_, theme_.menuBorder, viewport);
+    // A barra do título é a da janela (com a letra e o X do p_open).
+    const Rect titleBar(popupBounds_.x, popupBounds_.y, popupBounds_.width, titleHeight);
+    modalPopupDrawList_.addRectFilled(titleBar, theme_.titleBarBackground, viewport);
+    const float closeSize = titleHeight - theme_.padding * 0.5f;
+    const Rect closeRect(titleBar.x + titleBar.width - closeSize - theme_.padding * 0.25f,
+                         titleBar.y + (titleHeight - closeSize) * 0.5f, closeSize, closeSize);
+    if (open)
+    {
+        const WidgetId closeId = combineIds(id, 0x4d4f44414c434c58ull);
+        const bool closeHovered = itemHovered(closeRect, viewport, closeId);
+        if (itemClicked(closeRect, viewport, closeId, false))
+        {
+            *open = false;
+            openPopupId_ = InvalidWidgetId;
+            modalPopupOpen_ = false;
+            openPopupModal_ = false;
+            popupContentId_ = InvalidWidgetId;
+            return false;
+        }
+        if (closeHovered)
+            modalPopupDrawList_.addRectFilled(closeRect, theme_.buttonHovered, viewport);
+        const float cx = closeRect.x + closeRect.width * 0.5f;
+        const float cy = closeRect.y + closeRect.height * 0.5f;
+        const float radius = closeRect.height * 0.2f;
+        const Color color = closeHovered ? theme_.buttonText : theme_.labelText;
+        modalPopupDrawList_.addLine(Vec2(cx - radius, cy - radius), Vec2(cx + radius, cy + radius),
+                                    color, viewport);
+        modalPopupDrawList_.addLine(Vec2(cx + radius, cy - radius), Vec2(cx - radius, cy + radius),
+                                    color, viewport);
+    }
+    const TextMetrics metrics = measureText(theme_.font, titleText, theme_.fontSize);
+    drawText(modalPopupDrawList_, theme_.font, titleText,
+             Vec2(titleBar.x + padding, titleBar.y + (titleHeight - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, viewport);
+    // Um modal fecha com o Escape (o clique fora não o fecha: é isso que o
+    // distingue de um popup).
+    if (escapePressed_)
+    {
+        openPopupId_ = InvalidWidgetId;
+        modalPopupOpen_ = false;
+        openPopupModal_ = false;
+        popupContentId_ = InvalidWidgetId;
+        return false;
+    }
+    beginPopupContent(popupBounds_, titleHeight, padding);
+    return true;
+}
+
+void Context::beginPopupContent(const Rect &popupBounds, float insetTop, float padding)
 {
     if (popupContentDepth_ >= kPopupContentStackSize)
         return;
@@ -2796,16 +2922,19 @@ void Context::beginPopupContent(const Rect &popupBounds)
     // no fim (cresce com os itens), por isso o clip é a largura do popup e o resto
     // do ecrã para baixo - o rect que o endMenu desenha é que fica no tamanho certo.
     const Rect screen = popupClipRect();
+    const float contentTop = popupBounds.y + insetTop;
     const float screenBottom = screen.y + screen.height;
-    const float clipHeight = screenBottom > popupBounds.y ? screenBottom - popupBounds.y : 0.0f;
-    setPopupContentBounds(intersect(Rect(popupBounds.x, popupBounds.y, popupBounds.width,
+    const float clipHeight = screenBottom > contentTop ? screenBottom - contentTop : 0.0f;
+    const float contentWidth = popupBounds.width - padding * 2.0f;
+    setPopupContentBounds(intersect(Rect(popupBounds.x, contentTop, popupBounds.width,
                                         clipHeight),
                                    screen),
-                         popupBounds.width > 1.0f ? popupBounds.width : 1.0f);
+                         contentWidth > 1.0f ? contentWidth : 1.0f);
     // Sem margem: os itens de um menu são faixas encostadas às bordas do popup (o
     // texto já leva o menuItemPadX), e um widget de layout lá dentro segue a mesma
-    // regra - com margem, todos os menus existentes mudavam de sítio.
-    layout_.origin = Vec2(popupBounds.x, popupBounds.y);
+    // regra - com margem, todos os menus existentes mudavam de sítio. Um modal é o
+    // contrário: tem a margem da janela e começa por baixo da barra do título.
+    layout_.origin = Vec2(popupBounds.x + padding, contentTop);
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
@@ -10204,6 +10333,10 @@ DrawList *Context::currentDrawList()
     // sai à frente da caixa (que o endCombo desenhou na sobreposição da janela).
     if (comboContentOpen_)
         return &comboDrawList_;
+    // O corpo de um modal tem lista própria: é o que o põe por cima de todas as
+    // janelas e não só da que o abriu (ver beginPopupModal).
+    if (modalPopupOpen_)
+        return &modalPopupDrawList_;
     WindowState *window = currentWindow();
     if (!window)
         return nullptr;
