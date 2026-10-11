@@ -1898,6 +1898,92 @@ void test_combo_default_focus_opens_on_the_selection()
     assert(!visible[10]);
 }
 
+// Um beginChild dentro do popup de um combo: o child tem o seu cursor, a sua
+// barra e o seu corte, mas quem manda no ponteiro e na lista continua a ser o
+// popup (o child não é uma janela, é um bloco de layout).
+void test_child_inside_a_combo_popup()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres"), ig::StringView("quatro"),
+        ig::StringView("cinco"), ig::StringView("seis"), ig::StringView("sete"), ig::StringView("oito")
+    };
+    const int count = 8;
+    int current = 0;
+    int clicks = 0;
+    ig::Rect headerRect;
+    ig::Rect itemRects[8];
+    ig::Rect childRect;
+    bool open = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
+        open = c.beginCombo("escolha", items[0]);
+        if (open)
+        {
+            // Uma lista com a sua própria caixa dentro do popup, como o demo faz
+            // com o "Options" do menu de ficheiros (um child com texto a rolar).
+            c.beginChild("child", 70.0f);
+            childRect = ig::Rect(0.0f, 0.0f, c.availableWidth(), 70.0f);
+            for (int i = 0; i < count; ++i)
+            {
+                if (c.selectable(items[i], current == i))
+                {
+                    current = i;
+                    ++clicks;
+                }
+                itemRects[i] = c.itemRect();
+            }
+            c.endChild();
+            c.endCombo();
+        }
+        else if (headerRect.width <= 0.0f)
+        {
+            headerRect = c.itemRect();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float headerX = headerRect.x + headerRect.width * 0.5f;
+    const float headerY = headerRect.y + headerRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(headerX, headerY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
+    harness.frame(build);
+    assert(open);
+    for (int i = 0; i < 3; ++i)
+        harness.frame(build);
+
+    // Os itens do child começam dentro do popup e descem como sempre: o child tem o
+    // próprio cursor, mas é o popup que corta.
+    assert(itemRects[0].height > 0.0f);
+    assert(itemRects[0].y > headerRect.y + headerRect.height);
+    assert(itemRects[1].y > itemRects[0].y + itemRects[0].height - 0.5f);
+
+    // Um item do child responde ao clique como qualquer outro do popup. O clique é
+    // no primeiro item: o child é que corta os que não lhe cabem (é para isso que
+    // ele tem barra própria), e um item fora do clip do child não é clicável.
+    const float itemX = itemRects[1].x + itemRects[1].width * 0.5f;
+    const float itemY = itemRects[1].y + itemRects[1].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    assert(current == 1);
+    assert(clicks == 1);
+    // O frame do clique ainda tem o popup aberto (o beginCombo já respondeu); é o
+    // seguinte que o vê fechado.
+    harness.frame(build);
+    assert(!open);
+}
+
 } // namespace
 
 int main()
@@ -1932,6 +2018,7 @@ int main()
     test_item_toggled_open();
     test_combo_popup_scrolls();
     test_combo_default_focus_opens_on_the_selection();
+    test_child_inside_a_combo_popup();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
