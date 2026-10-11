@@ -4015,6 +4015,59 @@ void test_submenu_inside_a_popup()
     assert(!popupOpen);
 }
 
+// SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
+// anterior), em vez de dividirem a largura da tabela pelos pesos.
+void test_table_sizing_fixed_fit()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[] = {1.0f, 1.0f, 1.0f};
+    // Larguras diferentes por coluna: com os pesos iguais a divisão dava o mesmo
+    // para as três, e com o FixedFit cada uma fica com a sua.
+    const float content[3] = {60.0f, 140.0f, 30.0f};
+    ig::Rect cellRects[3];
+    bool useFixedFit = true;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela fixed fit", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
+        ig::TableStyle style;
+        style.sizingFixedFit = useFixedFit;
+        if (c.beginTable("fit", ig::Span<const float>(weights, 3), style, 0.0f))
+        {
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.dummy(content[column], 16.0f);
+                cellRects[column] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.frame(build);
+    // Cada coluna começa onde a anterior acabou: a segunda a 60 da primeira (a
+    // largura do conteúdo dela, com a margem dos dois lados) e a terceira a 140 da
+    // segunda - com os três pesos iguais a divisão daria o mesmo passo para as três.
+    const float padding = context.theme().windowPadding * 2.0f;
+    assert(cellRects[1].x - cellRects[0].x == content[0] + padding);
+    assert(cellRects[2].x - cellRects[1].x == content[1] + padding);
+    // A coluna do meio (a mais larga) fica mais larga do que a divisão igual daria.
+    const float equalShare = context.availableWidth() / 3.0f;
+    assert(content[1] > equalShare - 100.0f);
+
+    // Sem o FixedFit as colunas voltam a dividir a largura da tabela: os passos
+    // ficam iguais (nada fica preso às medidas do FixedFit).
+    useFixedFit = false;
+    harness.frame(build);
+    harness.frame(build);
+    assert(cellRects[1].x - cellRects[0].x == cellRects[2].x - cellRects[1].x);
+}
+
 // Os botões da barra (o TabItemButton) e as bandas (Leading/Trailing): as tabs de
 // uma ponta encostam-se ao lado dos botões dessa ponta, as do meio ficam no meio, e
 // carregar num botão não escolhe tab nenhuma.
@@ -4307,6 +4360,7 @@ int main()
     test_stacked_popups();
     test_menu_inside_a_popup();
     test_submenu_inside_a_popup();
+    test_table_sizing_fixed_fit();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

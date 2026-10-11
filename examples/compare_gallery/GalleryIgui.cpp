@@ -1677,11 +1677,12 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
 void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
-        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Borders/RowBg/"
-        "SizingFixedFit e as tabelas aninhadas - o iGUI tem beginTable/tableHeader/"
-        "tableNextColumn com pesos mutaveis (redimensionamento pelo grip do cabecalho), "
-        "ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, rolagem "
-        "propria nos dois eixos (ScrollX/ScrollY) com linhas e colunas presas");
+        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/ContextMenuInBody e "
+        "as tabelas aninhadas (uma tabela dentro de uma celula) - o iGUI tem beginTable/"
+        "tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo grip do "
+        "cabecalho), ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, "
+        "rolagem propria nos dois eixos (ScrollX/ScrollY) com linhas e colunas presas, e "
+        "as colunas do tamanho do conteudo (SizingFixedFit)");
     // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
     // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
     // fecham o espaço dela). O menu é do chamador, com o openPopup.
@@ -1829,6 +1830,33 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             item();
         }
         ui.endTable();
+    }
+    // O no "Resizable, fixed" do demo: as colunas ficam com a largura do conteudo
+    // delas (o SizingFixedFit) em vez de dividirem a largura da tabela. O que falta
+    // deste no e o redimensionamento pelo grip (o grip mexe nos pesos, e com o
+    // FixedFit nao ha pesos a mexer) - esta no relatorio.
+    {
+        const float fitWeights[3] = {1.0f, 1.0f, 1.0f};
+        ig::TableStyle fitStyle;
+        fitStyle.sizingFixedFit = true;
+        fitStyle.borders = true;
+        if (ui.beginTable("fixed fit", ig::Span<const float>(fitWeights, 3), fitStyle, 0.0f))
+        {
+            item();
+            for (int row = 0; row < 4; ++row)
+            {
+                char label[32];
+                for (int column = 0; column < 3; ++column)
+                {
+                    if (!ui.tableNextColumn())
+                        continue;
+                    snprintf(label, sizeof(label), "Hello %d,%d", column, row);
+                    ui.label(ig::StringView(label, strlen(label)));
+                }
+                item();
+            }
+            ui.endTable();
+        }
     }
     (void)s;
 }

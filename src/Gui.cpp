@@ -9634,6 +9634,20 @@ bool Context::beginTable(StringView idText, Span<float> columnWeights, const Tab
 void Context::configureTable(const TableStyle &style)
 {
     table_.style = style;
+    // SizingFixedFit: as larguras deste frame são as que as células pediram no frame
+    // anterior, guardadas por tabela (ver tableColumnWidth/endTable).
+    if (style.sizingFixedFit)
+    {
+        const ct::Vector<float> *stored = tableFitWidths_.find(table_.id);
+        table_.contentWidths.assign(static_cast<ct::Vector<float>::size_type>(table_.columns),
+                                    0.0f);
+        if (stored)
+        {
+            for (ct::Vector<float>::size_type i = 0u;
+                 i < stored->size() && i < table_.contentWidths.size(); ++i)
+                table_.contentWidths[i] = (*stored)[i];
+        }
+    }
     loadTableOrder(style);
     beginTableScroll(style);
 }
@@ -9944,6 +9958,13 @@ float Context::tableColumnWidth(int display) const
         static_cast<ct::Vector<uint8_t>::size_type>(column) < table_.columnVisible.size() &&
         table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(column)] == 0u)
         return 0.0f;
+    // SizingFixedFit: a largura é a que a coluna pediu (o maior conteúdo dela no
+    // frame anterior). Uma coluna ainda sem medida cai na divisão pelos pesos, que é
+    // onde ela já estava na primeira vez que a tabela se desenhou.
+    if (table_.style.sizingFixedFit &&
+        static_cast<ct::Vector<float>::size_type>(column) < table_.contentWidths.size() &&
+        table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)] > 0.0f)
+        return table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)];
     // A largura das colunas é a da faixa que rola (contentWidth): sem scrollX é a da
     // tabela, com ele é a que o chamador pediu.
     if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
@@ -9964,6 +9985,7 @@ bool Context::tableNextColumn()
         const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - table_.rowY;
         if (itemHeight > table_.rowHeight)
             table_.rowHeight = itemHeight;
+        measureTableCellWidth();
     }
     if (table_.column + 1 >= table_.columns)
     {
@@ -10003,6 +10025,27 @@ bool Context::tableNextColumn()
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
     return true;
+}
+
+// A largura que o conteúdo da célula em curso pediu (ver TableStyle::sizingFixedFit):
+// o conteúdo de uma célula é o que o chamador submeteu desde o tableNextColumn, e o
+// layout já o mediu no contentExtent.
+void Context::measureTableCellWidth()
+{
+    if (!table_.style.sizingFixedFit || table_.column < 0 || table_.column >= table_.columns)
+        return;
+    if (!layout_.hasLastItem)
+        return;
+    // A largura da célula leva a margem dos dois lados: sem ela o texto de uma coluna
+    // encostava ao da seguinte (a divisão pelos pesos dava essa folga de graça).
+    const float width = layout_.contentExtent.x - layout_.origin.x + theme_.windowPadding * 2.0f;
+    if (width <= 0.0f)
+        return;
+    const int model = tableModelColumn(table_.column);
+    if (model < 0 || static_cast<ct::Vector<float>::size_type>(model) >= table_.contentWidths.size())
+        return;
+    if (width > table_.contentWidths[static_cast<ct::Vector<float>::size_type>(model)])
+        table_.contentWidths[static_cast<ct::Vector<float>::size_type>(model)] = width;
 }
 
 float Context::tableMinimumRowHeight() const
@@ -10060,6 +10103,19 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         return false;
 
     const StringView text = visibleLabel(labelText);
+    // SizingFixedFit: o cabeçalho conta para a largura da coluna (senão uma coluna
+    // ficava mais estreita do que o nome dela).
+    if (table_.style.sizingFixedFit)
+    {
+        const TextMetrics headerMetrics = measureText(theme_.font, text, theme_.fontSize);
+        const int model = tableModelColumn(table_.column);
+        if (model >= 0 &&
+            static_cast<ct::Vector<float>::size_type>(model) < table_.contentWidths.size() &&
+            headerMetrics.width + theme_.windowPadding * 2.0f >
+                table_.contentWidths[static_cast<ct::Vector<float>::size_type>(model)])
+            table_.contentWidths[static_cast<ct::Vector<float>::size_type>(model)] =
+                headerMetrics.width + theme_.windowPadding * 2.0f;
+    }
     const float width = calcItemWidth();
     if (width <= 0.0f)
         return false;
@@ -10334,6 +10390,24 @@ void Context::endTable()
         const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - table_.rowY;
         if (itemHeight > table_.rowHeight)
             table_.rowHeight = itemHeight;
+        measureTableCellWidth();
+    }
+    // SizingFixedFit: o que as células pediram neste frame é a largura que as colunas
+    // vão ter no próximo (é o mesmo contrato de tudo o que se mede aqui).
+    if (table_.style.sizingFixedFit && table_.id != InvalidWidgetId)
+    {
+        // Uma coluna que não chegou a medir nada (uma tabela sem linhas, um frame em
+        // que a coluna não foi submetida) fica com a largura que já tinha, em vez de
+        // cair para zero.
+        const ct::Vector<float> *stored = tableFitWidths_.find(table_.id);
+        for (ct::Vector<float>::size_type i = 0u; i < table_.contentWidths.size(); ++i)
+        {
+            if (table_.contentWidths[i] > 0.0f)
+                continue;
+            if (stored && i < stored->size())
+                table_.contentWidths[i] = (*stored)[i];
+        }
+        tableFitWidths_.put(table_.id, table_.contentWidths);
     }
     float height = 0.0f;
     if (table_.column >= 0)
