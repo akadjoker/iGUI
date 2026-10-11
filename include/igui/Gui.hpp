@@ -1154,8 +1154,11 @@ private:
         // dentro dos pushItemWidth (ver calcItemWidth). Zero quer dizer "a
         // largura que sobra", como no ImGui.
         float nextItemWidth;
-        float pushedItemWidth;
-        int pushedItemWidthDepth;
+        // Pilha do pushItemWidth (8 níveis): o de dentro volta ao de fora no pop, e
+        // um push de 0 herda a largura que estava. Uma só guarda não bastava - dois
+        // pushes aninhados e o pop de dentro deixava a largura de dentro em vigor.
+        float itemWidthStack[8];
+        int itemWidthDepth;
         // Nível de aninhamento de beginGroup/endGroup, só para o par
         // desequilibrado não mexer no layout (ver groups_).
         int groupDepth;
@@ -1168,8 +1171,8 @@ private:
 
         LayoutState()
             : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false),
-              contentExtent(), nextItemWidth(0.0f), pushedItemWidth(0.0f),
-              pushedItemWidthDepth(0), groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
+              contentExtent(), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
+              groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
         {
         }
     };
