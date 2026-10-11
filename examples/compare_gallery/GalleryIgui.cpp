@@ -75,6 +75,7 @@ struct Panel
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
     // ImGui guarda a expansao dentro da widget e so o "open" e que vem de fora.
     bool headerCloseExpanded;
+    bool headerBulletOpen;
     int selection;
     int sortColumn;
     bool sortAscending;
@@ -90,7 +91,7 @@ struct Panel
     Panel()
         : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
           queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
-          headerCloseExpanded(true),
+          headerCloseExpanded(true), headerBulletOpen(false),
           selection(0),
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
           subOpen()
@@ -377,7 +378,24 @@ void sectionWidgetsBullets(ig::Context &ui, gallery::State &s)
     ui.bulletText(ig::StringView("Bullet point 3 (two lines) with a bullet that wraps around "
                                  "the content area so the second line lines up under the first"));
     item();
-    gap(ui, gallery::Section::WidgetsBullets, "TreeNode() como item de bullet");
+    // O TreeNode de bullet do demo: a marca é o ponto, e a linha abre e fecha na
+    // mesma (o TreeStyle::bullet).
+    ig::TreeStyle bulletStyle;
+    bulletStyle.bullet = true;
+    static bool bullet1Open = false;
+    static bool bullet2Open = false;
+    if (ui.collapsingHeader("Bullet 2", bullet1Open, bulletStyle, 200.0f))
+    {
+        ui.bulletText(ig::StringView("conteudo do bullet 2"));
+        item();
+    }
+    if (ui.treeNode("Bullet 2.1", bullet2Open, bulletStyle, 200.0f))
+    {
+        ui.bulletText(ig::StringView("conteudo do bullet 2.1"));
+        item();
+    }
+    gap(ui, gallery::Section::WidgetsBullets,
+        "o BulletText sem bullet (o TextColored a imitar a marca do demo)");
 }
 
 // ── Widgets: Collapsing Headers ──────────────────────────────────────────────
@@ -393,11 +411,17 @@ void sectionWidgetsCollapsingHeaders(ig::Context &ui, gallery::State &s)
         item();
     }
     item();
-    gap(ui, gallery::Section::WidgetsCollapsingHeaders, "CollapsingHeader com bullet");
-    ui.bulletText(ig::StringView("Header with a bullet"));
-    item();
+    // O "Header with a bullet" do demo, com o TreeStyle.
+    ig::TreeStyle bulletHeader;
+    bulletHeader.bullet = true;
+    if (ui.collapsingHeader("Header with a bullet", g_panel.headerBulletOpen, bulletHeader, 200.0f))
+    {
+        ui.label("conteudo do header com bullet");
+        item();
+    }
     gap(ui, gallery::Section::WidgetsCollapsingHeaders,
-        "CollapsingHeader com o estado do botao de fecho devolvido por ImGuiTreeNodeFlags");
+        "CollapsingHeader com o estado do botao de fecho devolvido por ImGuiTreeNodeFlags e "
+        "os flags que faltam (ImGuiTreeNodeFlags_DefaultOpen/FramePadding/NoTreePushOnOpen)");
 }
 
 // ── Widgets: Color/Picker ────────────────────────────────────────────────────

@@ -86,6 +86,26 @@ struct TreeItemStyle
           acceptsChildren(false) {}
 };
 
+// Looks of an expandable row (treeNode and collapsingHeader). Every option is off by
+// default, which is the plain arrow + label row.
+struct TreeStyle
+{
+    // A dot instead of the disclosure arrow - the Bullet of the ImGui tree node
+    // flags, for the bullet lists the demo draws with TreeNode.
+    bool bullet;
+    // The row is drawn as chosen, like a selectable (the Selected flag).
+    bool selected;
+    // Only the arrow opens and closes the row: a click anywhere else just reports
+    // it (the OpenOnArrow flag).
+    bool openOnArrow;
+    // The row's hover and click cover the whole width it is given, not just the
+    // label (the SpanAvailWidth flag): what a tree row in a list wants.
+    bool spanAvailWidth;
+
+    TreeStyle()
+        : bullet(false), selected(false), openOnArrow(false), spanAvailWidth(false) {}
+};
+
 // Looks of an immediate table. Every option is off by default, which draws no
 // background and no lines.
 struct TableStyle
@@ -538,8 +558,14 @@ public:
     // O mesmo, com um botão de fecho no canto: clicar nele põe `open` a false, e a
     // partir daí o header não é desenhado (como o p_open do ImGui).
     bool collapsingHeader(StringView label, bool &expanded, bool &open, const Rect &bounds);
+    // The same with a bullet instead of the arrow, or drawn as chosen: see TreeStyle.
+    bool collapsingHeader(StringView label, bool &expanded, const TreeStyle &style,
+                          const Rect &bounds);
     // A compact expandable row for hierarchies. Use indent()/unindent() for its children.
     bool treeNode(StringView label, bool &expanded, const Rect &bounds);
+    // The TreeStyle version: a bullet (the demo's bullet nodes), a row drawn as
+    // chosen, only the arrow opening it, or a row that fills the width.
+    bool treeNode(StringView label, bool &expanded, const TreeStyle &style, const Rect &bounds);
     // Scene-oriented tree row. Returns true when the row is selected; expansion
     // is changed only by pressing its disclosure arrow.
     bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
@@ -1053,8 +1079,11 @@ public:
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
     bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
+    bool collapsingHeader(StringView label, bool &expanded, const TreeStyle &style,
+                          float width = 0.0f);
     bool collapsingHeader(StringView label, bool &expanded, bool &open, float width = 0.0f);
     bool treeNode(StringView label, bool &expanded, float width = 0.0f);
+    bool treeNode(StringView label, bool &expanded, const TreeStyle &style, float width = 0.0f);
     bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
                   float width = 0.0f);
     bool treeItem(WidgetId nodeId, StringView label, bool &expanded, const TreeItemStyle &style,
@@ -2168,7 +2197,8 @@ private:
     Vec2 toContentSpace(const Vec2 &absolute) const;
     Rect contentClip() const;
     // Corpo do collapsingHeader: `open` é nulo quando não há botão de fecho.
-    bool collapsingHeaderImpl(StringView label, bool &expanded, bool *open, const Rect &bounds);
+    bool collapsingHeaderImpl(StringView label, bool &expanded, bool *open, const Rect &bounds,
+                              const TreeStyle &style);
     // Texto como item de layout, na cor pedida, na posição local dada.
     void textItem(StringView text, const Color &color, const Vec2 &localPosition);
     // Parte `text` nas linhas que cabem em wrapWidth; `lines` fica com as vistas
