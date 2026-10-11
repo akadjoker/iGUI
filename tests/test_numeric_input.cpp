@@ -22,6 +22,25 @@ void check(bool condition, const char *what)
     }
 }
 
+// O que a widget desenhou como texto neste frame (o valor do campo, com o formato
+// dele): é por aqui que se verifica o que o formato faz ao que se lê no ecrã.
+bool drewText(const ig::DrawData &data, const char *expected)
+{
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
+            continue;
+        const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+        if (drawn == ig::StringView(expected))
+            return true;
+    }
+    return false;
+}
+
 struct Field
 {
     ig::TestBackend backend;
@@ -32,10 +51,13 @@ struct Field
     float floatValue;
     bool otherShown;
     int changes;
+    // O formato do valor (o "%04X" do demo): nulo é o de sempre.
+    const char *format;
 
-    Field(bool floating, float initial)
+    Field(bool floating, float initial, const char *valueFormat = nullptr)
         : backend(), context(backend), harness(context), isFloat(floating),
-          intValue(static_cast<int>(initial)), floatValue(initial), otherShown(true), changes(0)
+          intValue(static_cast<int>(initial)), floatValue(initial), otherShown(true), changes(0),
+          format(valueFormat)
     {
         frame();
         // Focus the field.
@@ -45,8 +67,10 @@ struct Field
     void build(ig::Context &c)
     {
         c.beginMainWindow("main");
-        const bool changed = isFloat ? c.inputFloat("value", floatValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f))
-                                     : c.inputInt("value", intValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
+        const bool changed =
+            isFloat ? c.inputFloat("value", floatValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), 3,
+                                   format)
+                    : c.inputInt("value", intValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), format);
         if (changed)
             ++changes;
         if (otherShown)
@@ -55,6 +79,9 @@ struct Field
     }
 
     void frame() { harness.frame([this](ig::Context &c) { build(c); }); }
+
+    // O frame desenhado, para os testes que olham para o que a widget escreveu.
+    const ig::DrawData &draw() { return harness.frame([this](ig::Context &c) { build(c); }); }
 
     void key(ig::KeyCode code)
     {
@@ -188,6 +215,86 @@ void test_display_follows_value_when_not_editing()
         f.type("1");
         check(f.intValue == 801, "inputInt: external change while focused resyncs the text");
     }
+}
+
+// O formato do valor (o "%04X", o "%.1f grams" do demo): vale para o que o campo
+// mostra e para o que ele lê, e é o que faz um campo hexadecimal ser hexadecimal
+// dos dois lados.
+void test_format_drives_display_and_parse()
+{
+    {
+        // Um inteiro em hexadecimal: escreve-se e lê-se em hexadecimal.
+        Field f(false, 0.0f, "%04X");
+        f.clear();
+        f.type("ff");
+        check(f.intValue == 255, "inputInt with %04X: ff is 255");
+        // Com o campo focado vê-se o que foi escrito; é quando o foco sai que se vê
+        // o valor escrito pelo formato.
+        f.key(ig::KeyCode::Escape);
+        f.frame();
+        check(drewText(f.draw(), "00FF"), "inputInt with %04X: shows the value in hex");
+    }
+    {
+        // A legenda do formato é aceite à entrada (é o que lá está escrito).
+        Field f(true, 0.0f, "%.1f grams");
+        f.clear();
+        f.type("1.5");
+        check(f.floatValue > 1.49f && f.floatValue < 1.51f, "inputFloat with a decoration: 1.5");
+        f.key(ig::KeyCode::Escape);
+        f.frame();
+        check(drewText(f.draw(), "1.5 grams"),
+              "inputFloat with %.1f grams: the value keeps its legend");
+    }
+    {
+        // Sem formato, o texto é o de sempre e o "1x" continua a não valer 1.
+        Field f(false, 4.0f);
+        f.clear();
+        f.type("1x");
+        check(f.intValue == 1, "inputInt: trailing garbage still leaves the number");
+    }
+}
+
+// O SliderAngle: o valor é em radianos, o intervalo e o texto em graus - o que se
+// arrasta e o que se escreve é em graus, e o que fica guardado é em radianos.
+void test_slider_angle()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    float radians = 0.0f;
+    const float half = 1.5707964f; // pi/2, o que vale um ângulo de 90 graus
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderAngle("angle", radians, -180.0f, 180.0f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "0 deg"), "sliderAngle: o valor é escrito em graus");
+
+    // O valor em radianos que a aplicação põe é o que o texto mostra em graus.
+    radians = half;
+    check(drewText(harness.frame(build), "90 deg"), "sliderAngle: 90 graus são pi/2");
+
+    // Escrever no campo é escrever graus: o que fica guardado é em radianos.
+    // O campo do valor fica depois da track (o rótulo "angle" leva 48 px, a track
+    // outros 175, e o campo vem a seguir), por isso o clique a 260 cai nele.
+    harness.click(260.0f, 24.0f, build);
+    for (int i = 0; i < 20; ++i)
+    {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+        harness.frame(build);
+    }
+    context.pushEvent(ig::Event::textInput("90"));
+    harness.frame(build);
+    check(radians > 1.57f && radians < 1.58f, "sliderAngle: 90 escrito à mão é pi/2");
+
+    // Um arrasto na pista é em graus: a ponta direita dela é o máximo (180 graus,
+    // que são 3.1416 radianos) e a ponta esquerda é o mínimo.
+    harness.click(233.0f, 24.0f, build);
+    check(radians > 3.12f && radians < 3.15f, "sliderAngle: a ponta da pista são 180 graus");
+    harness.click(58.0f, 24.0f, build);
+    check(radians < -3.12f && radians > -3.15f, "sliderAngle: a outra ponta são -180 graus");
 }
 
 void test_change_reported_only_for_new_values()
@@ -403,6 +510,8 @@ int main()
     test_int_typing();
     test_float_typing();
     test_display_follows_value_when_not_editing();
+    test_format_drives_display_and_parse();
+    test_slider_angle();
     test_change_reported_only_for_new_values();
     test_non_finite_values_draw_finite_geometry();
     test_slider_flags();
