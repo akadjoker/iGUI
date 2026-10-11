@@ -3931,6 +3931,90 @@ void test_menu_inside_a_popup()
     assert(!popupOpen);
 }
 
+// Um submenu dentro de um popup (o "Sub-menu" do "Toggle.." do demo): a caixa do
+// submenu abre ao lado do item, FORA da caixa do popup, e um clique nos itens dele
+// é do submenu - o popup fica aberto e o item reage. Era aqui que o popup ficava a
+// medir a caixa com o layout do submenu e a fechar-se com o clique.
+void test_submenu_inside_a_popup()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool wantPopup = false;
+    bool popupOpen = false;
+    bool submenuOpen = false;
+    ig::Rect openButton;
+    ig::Rect submenuRow;
+    ig::Rect submenuItem;
+    bool submenuItemHovered = false;
+    int clicked = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("submenu num popup", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("abrir"))
+            wantPopup = true;
+        openButton = c.itemRect();
+        if (wantPopup)
+        {
+            c.openPopup("com submenu", ig::Vec2(40.0f, 40.0f));
+            wantPopup = false;
+        }
+        if (c.beginPopup("com submenu"))
+        {
+            bool first = true;
+            c.menuCheckbox("Bream", first);
+            c.menuCheckbox("Haddock", first);
+            // O submenu: abre por hover (é um menu) e a caixa dele cai fora do popup.
+            submenuOpen = c.beginSubMenu("Sub-menu");
+            if (submenuOpen)
+            {
+                if (c.menuItem("Click me"))
+                    ++clicked;
+                submenuItem = c.itemRect();
+                submenuItemHovered = c.isItemHovered();
+                c.endSubMenu();
+            }
+            c.endPopup();
+        }
+        popupOpen = c.isPopupOpen("com submenu");
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(openButton.x + openButton.width * 0.5f,
+                  openButton.y + openButton.height * 0.5f, build);
+    harness.frame(build);
+    assert(popupOpen && !submenuOpen);
+
+    // O "Sub-menu" é a terceira linha do popup (as duas primeiras são os checkboxes),
+    // com a altura de um item de menu.
+    const float itemHeight = context.theme().menuItemHeight;
+    const float columnX = 40.0f + context.theme().windowPadding + 20.0f;
+    const float rowY = 40.0f + context.theme().windowPadding + itemHeight * 2.0f + 8.0f +
+                       itemHeight * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(columnX, rowY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(popupOpen && submenuOpen);
+
+    // A caixa do submenu é um menu: fica ao lado do item (bem à direita) e passa a
+    // borda direita do popup (o popup tem a largura mínima de um menu).
+    assert(submenuItem.x > 150.0f);
+    assert(submenuItem.x + submenuItem.width > 40.0f + context.theme().menuMinWidth);
+    // E o clique no item dele é do submenu: o item reage e o popup fica aberto.
+    harness.click(submenuItem.x + 20.0f, submenuItem.y + submenuItem.height * 0.5f, build);
+    harness.frame(build);
+    assert(clicked == 1);
+    assert(popupOpen);
+    assert(submenuItemHovered);
+    // Sem o submenu aberto, um clique fora dos dois fecha o popup.
+    harness.click(360.0f, 260.0f, build);
+    harness.frame(build);
+    assert(!popupOpen);
+}
+
 // Os botões da barra (o TabItemButton) e as bandas (Leading/Trailing): as tabs de
 // uma ponta encostam-se ao lado dos botões dessa ponta, as do meio ficam no meio, e
 // carregar num botão não escolhe tab nenhuma.
@@ -4222,6 +4306,7 @@ int main()
     test_tab_list_popup_button();
     test_stacked_popups();
     test_menu_inside_a_popup();
+    test_submenu_inside_a_popup();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

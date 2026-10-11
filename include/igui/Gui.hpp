@@ -2337,6 +2337,11 @@ private:
     Rect activeMenuBounds_;
     Rect subMenuPopupBounds_;
     Rect subMenuParentBounds_;
+    // O menu que estava aberto quando o submenu abriu, para o endSubMenu repor. Num
+    // menu é o do pai; num popup é nenhum (o submenu foi aberto por um popup, e não
+    // por um menu) - sem isto o menu do popup ficava "aberto" depois do submenu
+    // fechar, e os itens seguintes passavam a ser desenhados como itens de menu.
+    WidgetId subMenuRestoreMenu_;
     float menuBarCursorX_;
     bool menuBarActive_;
     bool forceWindowBounds_;
