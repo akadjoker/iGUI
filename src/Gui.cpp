@@ -3293,7 +3293,10 @@ bool Context::beginPopup(StringView idText)
     window->overlayDrawList.addRect(popupBounds_, theme_.menuBorder, screen);
     openPopupFrame_ = frameNumber_;
     popupContentId_ = id;
-    beginPopupContent(popupBounds_);
+    // O corpo de um popup leva a margem da janela (é o WindowPadding do popup no
+    // ImGui): os itens não ficam encostados às bordas da caixa. Os menus, esses,
+    // continuam com as faixas encostadas (ver beginPopupContent).
+    beginPopupContent(popupBounds_, padding, padding);
     return true;
 }
 
