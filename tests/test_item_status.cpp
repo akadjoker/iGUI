@@ -3846,6 +3846,91 @@ void test_stacked_popups()
     assert(!parentOpen && !childOpen);
 }
 
+// Uma barra de menus dentro de um popup (o "With a menu.." do demo): o menu abre
+// por cima do popup e os itens dele saem fora da caixa do popup. Um clique num
+// desses itens é do menu - era o popup a fechar-se com ele e a deixar o menu
+// pendurado (e o clique comido duas vezes).
+void test_menu_inside_a_popup()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool wantPopup = false;
+    bool popupOpen = false;
+    ig::Rect openButton;
+    ig::Rect fileItem;
+    ig::Rect lastItem;
+    int clicked = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("popup com menu", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("abrir"))
+            wantPopup = true;
+        openButton = c.itemRect();
+        if (wantPopup)
+        {
+            // O popup nasce no canto de cima: o menu dele cai para fora da caixa.
+            c.openPopup("com menu", ig::Vec2(40.0f, 40.0f));
+            wantPopup = false;
+        }
+        if (c.beginPopup("com menu"))
+        {
+            if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+            {
+                if (c.beginMenu("File"))
+                {
+                    // Quatro itens: a caixa do menu é mais alta que a do popup (que
+                    // só tem a barra e um rótulo), por isso os últimos itens ficam
+                    // fora da caixa do popup.
+                    if (c.menuItem("New"))
+                        ++clicked;
+                    if (c.menuItem("Open"))
+                        ++clicked;
+                    if (c.menuItem("Save"))
+                        ++clicked;
+                    if (c.menuItem("Quit"))
+                        ++clicked;
+                    lastItem = c.itemRect();
+                    fileItem = c.itemRect();
+                    c.endMenu();
+                }
+                c.endMenuBar();
+            }
+            c.label("Hello from popup!");
+            c.endPopup();
+        }
+        popupOpen = c.isPopupOpen("com menu");
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(openButton.x + openButton.width * 0.5f,
+                  openButton.y + openButton.height * 0.5f, build);
+    harness.frame(build);
+    assert(popupOpen);
+    // Abre o menu "File" (o primeiro item da barra, dentro do popup).
+    const float menuX = 40.0f + context.theme().windowPadding +
+                        context.theme().menuItemPadX + 4.0f;
+    const float menuY = 40.0f + context.theme().windowPadding + 13.0f;
+    harness.click(menuX, menuY, build);
+    harness.frame(build);
+    // O último item do menu já está fora da caixa do popup.
+    assert(lastItem.width >= 0.0f);
+    const float itemX = lastItem.x + lastItem.width * 0.5f;
+    const float itemY = lastItem.y + lastItem.height * 0.5f;
+    assert(itemX > 40.0f);
+    harness.click(itemX, itemY, build);
+    harness.frame(build);
+    // O item do menu reagiu e o popup ficou aberto (o menu é dele).
+    assert(clicked == 1);
+    assert(popupOpen);
+    // E o popup continua a responder: clicar "fora" (no canto do écran) fecha-o.
+    harness.click(380.0f, 280.0f, build);
+    harness.frame(build);
+    assert(!popupOpen);
+}
+
 // Os botões da barra (o TabItemButton) e as bandas (Leading/Trailing): as tabs de
 // uma ponta encostam-se ao lado dos botões dessa ponta, as do meio ficam no meio, e
 // carregar num botão não escolhe tab nenhuma.
@@ -4136,6 +4221,7 @@ int main()
     test_tab_item_button_and_bands();
     test_tab_list_popup_button();
     test_stacked_popups();
+    test_menu_inside_a_popup();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
