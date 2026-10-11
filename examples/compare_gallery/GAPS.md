@@ -19,7 +19,8 @@ O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
 dois lados: na revisão atual são **37 lacunas** contra 299 itens submetidos pelo
-espelho.
+espelho (as três janelas do menu Tools - Style Editor, Metrics/Debugger e About -
+existem desde a revisão anterior e não contam para as lacunas).
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
 `--only=NOME` desenha **só** essa secção, no topo e sem o header dela
@@ -304,9 +305,9 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
-| `ShowMetricsWindow` (Debugger) | — | **não existe** |
-| `ShowStyleEditor` | — | **não existe** |
-| `ShowAboutWindow` | — | **não existe** |
+| `ShowMetricsWindow` (Debugger) | a janela `metricsWindow` do espelho (menu Tools) | existe: tempos, itens, vértices e draw calls do frame e a lista das lacunas - não tem a lista por janela | 
+| `ShowStyleEditor` | a janela `styleEditorWindow` do espelho (menu Tools) | existe: os 15 tamanhos e as 20 cores do `Theme` por slider/botão de cor, com picker, mais o "Revert" |
+| `ShowAboutWindow` | a janela `aboutWindow` do espelho (menu Tools) | existe |
 | `ShowUserGuide` (tabelas de atalhos) | — | **não existe** |
 | `ShowDebugLogWindow` | — | **não existe** |
 | `ShowIDStackToolWindow` | — | **não existe** |
@@ -727,10 +728,14 @@ Continua em falta neste nível:
 
 ## P3 — ferramentas e infraestrutura
 
-- [ ] **Painel de métricas** (janelas, draw lists, vértices, tempo por janela) —
-      útil para diagnosticar, e o iGUI já tem os contadores no `Context`.
-- [ ] **Editor de tema** em runtime (cores, paddings, raio) por cima de
-      `setTheme`, sem recompilar.
+- [x] **Painel de métricas** (tempos, itens, vértices, draw calls e as lacunas) —
+      é a janela `metricsWindow` do espelho, no menu Tools do demo. *O que falta:*
+      os contadores por janela (o `Context` conta o frame todo) e as draw lists.
+- [x] **Editor de tema** em runtime (cores, paddings, raio) por cima de
+      `setTheme`, sem recompilar: a janela `styleEditorWindow` edita o `Theme` em
+      vigor pelo novo `Context::theme()` (o `GetStyle()` do ImGui), com um "Revert"
+      para o estado em que o editor o encontrou. *Onde:* `examples/compare_gallery/
+      GalleryIgui.cpp` (`kThemeSizes`/`kThemeColors`), `src/Gui.cpp` (`theme()`).
 - [ ] **Log de debug** das ações do contexto (cliques, ids que reagem) para
       resolver sobreposições de ids.
 - [x] **Style vars** (`pushStyleColor`/`pushStyleVar`): o campo do tema é um
