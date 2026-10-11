@@ -607,9 +607,14 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     item();
     ui.inputFloat4("input vec4", s.vec4[0], s.vec4[1], s.vec4[2], s.vec4[3], 0.0f, 3);
     item();
+    // O que falta aqui nao sao os vetores (ha dragInt2/3/4, inputInt2/3/4,
+    // sliderInt2/3/4): e o DragScalar/SliderScalar/InputScalar do demo, que e um
+    // caminho so para os tipos todos (s8..u64, float, double) com o formato escrito
+    // a mao, mais os sliders ao contrario e o SliderAngle.
     gap(ui, gallery::Section::WidgetsDataTypes,
-        "int/unsigned/como vetores de N (DragInt2/3/4, InputInt2/3/4) e os drags "
-        "logaritmicos/em wrap");
+        "o SliderScalar/DragScalar/InputScalar sobre qualquer tipo (s8..u64, float, "
+        "double) com o formato do valor a mao, os sliders invertidos "
+        "(min>max) e o SliderAngle");
 }
 
 // ── Widgets: Disable Blocks ──────────────────────────────────────────────────

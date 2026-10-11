@@ -74,19 +74,20 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | --- | --- | --- |
 | `SliderFloat` / `SliderInt` | `sliderFloat` / `sliderInt` | existe |
 | `VSliderFloat` / `VSliderInt` | `vSliderFloat` / `vSliderInt` | existe (o `fader` é outra coisa: um controle de mistura com cap rígido) |
-| `SliderAngle`, `SliderScalar(N)` | — | **não existe** |
-| `SliderFloat2/3/4`, `SliderInt2/3/4` | 1 slider por componente | **não existe** |
+| `SliderAngle` | — | **não existe** (o slider em graus, que dá a volta aos 360) |
+| `SliderFloat2/3/4`, `SliderInt2/3/4` | `sliderFloat2/3/4`, `sliderInt2/3/4` | existe |
 | `DragFloat` / `DragInt` | `dragFloat` / `dragInt` | existe |
 | `DragFloat2/3/4` | `dragFloat2/3/4` | existe |
-| `DragInt2/3/4`, `DragScalar(N)` | — | **não existe** |
+| `DragInt2/3/4` | `dragInt2/3/4` | existe |
+| `DragScalar`/`SliderScalar`/`InputScalar` (qualquer tipo: S8..U64, com `format`) | `sliderFloat`/`sliderInt`/`inputDouble` por tipo | **não existe**: sem `format` escrito à mão nem um caminho só para os tipos que não são float/int (o resto dos `ImGuiDataType_*`) |
 | `DragFloatRange2` / `DragIntRange2` | 2 drags | **não existe** (min+max numa só widget) |
 | Flags de drag/slider | `SliderFlags::Logarithmic`, `WrapAround`, `NoInput`, `AllowOutOfRange` | parcial: existem estes quatro (o `AllowOutOfRange` é o contrário do `ClampOnInput`/`AlwaysClamp` do ImGui: aqui o valor escrito é limitado ao intervalo por omissão). Faltam o `ClampZeroRange` e o `NoRoundToFormat`/`NoSpeedTweak` (não há arredondamento ao formato nem escalas de teclado) |
 | `ImGuiSliderFlags_ClampOnInput` / `AlwaysClamp` (o Ctrl+clique pode sair do intervalo) | `AllowOutOfRange` | existe, com outro nome: no ImGui é o comportamento por omissão e o flag é o que limita |
 | `InputFloat` / `InputFloat2/3/4` | `inputFloat` / `inputFloat2/3/4` | existe |
 | `InputInt` | `inputInt` | existe |
-| `InputInt2/3/4` | — | **não existe** |
-| `InputDouble` | — | **não existe** |
-| `InputScalar(N)` | — | **não existe** |
+| `InputInt2/3/4` | `inputInt2/3/4` | existe |
+| `InputDouble` | `inputDouble` | existe |
+| `InputScalar(N)` | — | **não existe** (a versão vetorial para os tipos que não são float/int) |
 | `SliderFloat` com formato próprio (`%.3f`) | `precision` | parcial |
 | — | `stepperInt` | (extra do iGUI) |
 
