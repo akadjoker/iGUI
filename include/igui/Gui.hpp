@@ -54,6 +54,9 @@ struct WindowState
     // application stopped submitting is not on screen, so it must not keep
     // catching the pointer (topWindowAt) or holding the modal lock.
     uint64_t lastFrame = 0;
+    // Submetida agora pela primeira vez, ou depois de ter estado fora (ver
+    // isWindowAppearing).
+    bool appeared = false;
     DrawList drawList;
     DrawList overlayDrawList;
 
@@ -867,6 +870,33 @@ public:
         }
         return true;
     }
+    /// @brief The window being submitted is the focused one (the one the keyboard
+    ///        and the pointer go to, see focusWindow). What a window-scoped
+    ///        shortcut wants: a Ctrl+S inside the focused panel, not in the
+    ///        background one.
+    bool isWindowFocused() const;
+    /// @brief The pointer is over the window being submitted and nothing is above
+    ///        it there (another window, a modal, a popup). A panel that follows the
+    ///        pointer only while the pointer is over it asks this.
+    bool isWindowHovered() const;
+    /// @brief The window being submitted was not on screen in the previous frame:
+    ///        it was created or reopened now.
+    bool isWindowAppearing() const;
+    /// @brief The given button went down for the second time inside the double
+    ///        click interval and distance (see setDoubleClickInterval): true for
+    ///        the one frame the second press is in. A custom widget that renames on
+    ///        a double click asks this, and an item uses isItemDoubleClicked below.
+    bool isPointerDoubleClicked(PointerButton button = PointerButton::Left) const;
+    /// @brief The last item was double clicked (the same second press, seen from
+    ///        the item): the PressedOnDoubleClick of a selectable that a file list
+    ///        renames with.
+    bool isItemDoubleClicked() const { return item_.doubleClicked; }
+    // Segundos e pixels entre duas carregadas para serem um duplo clique (por
+    // omissão 0.30s e 6px, como as definições de IO do ImGui).
+    void setDoubleClickInterval(float seconds);
+    float doubleClickInterval() const { return doubleClickInterval_; }
+    void setDoubleClickDistance(float pixels);
+    float doubleClickDistance() const { return doubleClickDistance_; }
     // Segundos que o ponteiro tem de estar parado sobre o item para o flag Delay
     // (o style.HoverDelay do ImGui; o tooltip tem o seu, este é para consultas).
     void setHoverDelay(float seconds);
@@ -1355,6 +1385,7 @@ private:
         bool hovered;
         bool active;
         bool clicked;
+        bool doubleClicked;
         bool edited;
         bool focused;
         bool disabled;
@@ -1377,7 +1408,7 @@ private:
 
         ItemStatus()
             : id(InvalidWidgetId), bounds(), hovered(false), active(false), clicked(false),
-              edited(false), focused(false), disabled(false), activated(false),
+              doubleClicked(false), edited(false), focused(false), disabled(false), activated(false),
               deactivated(false), deactivatedAfterEdit(false), toggledOpen(false),
               hoveredInRect(false), hoveredInClip(false), hoveredDelayed(false),
               hoveredStationary(false), hoveredBlockedByActive(false),
@@ -2008,6 +2039,15 @@ private:
     // logarítmico andar depressa em cima e devagar em baixo.
     float dragStartNorm_;
     float tooltipDelay_;
+    // Duplo clique: o instante e o sítio da última carregada de cada botão, e o
+    // botão cujo clique deste frame foi um duplo (ver isPointerDoubleClicked).
+    float lastPressSeconds_[3];
+    Vec2 lastPressPosition_[3];
+    bool doubleClicked_[3];
+    // O intervalo e a distância dentro dos quais duas carregadas são um duplo
+    // clique (é o MouseDoubleClickTime/MaxDist do ImGui).
+    float doubleClickInterval_;
+    float doubleClickDistance_;
     // O atraso do flag Delay do isItemHovered, e o item/tempo/posição do hover em
     // curso (é o que o Stationary compara).
     float hoverDelay_;
