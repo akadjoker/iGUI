@@ -32,6 +32,11 @@ void applyDemoStyle(ig::Context &ui);
 // completo sem ter de clicar em todas (é o que o --open-all faz).
 void openAllSections();
 
+// Abre as janelas do menu Tools (Style Editor / Metrics / About), que o demo abre
+// por fora da janela do demo. É o que o --tools faz, para as poder capturar sem
+// ter de clicar no menu.
+void setTools(bool styleEditor, bool metrics, bool about);
+
 // Abre uma secção pelo nome, para pôr uma só lado a lado (é o que o --open faz).
 bool openSection(const char *name);
 

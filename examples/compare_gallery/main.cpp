@@ -162,12 +162,14 @@ void usage()
 {
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
            "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
-           "                       [--fonts-dir=DIR] [--open-all | --open=SECCAO]\n"
+           "                       [--fonts-dir=DIR] [--tools=LISTA] [--open-all | --open=SECCAO]\n"
            "                       [--click=X,Y] [--click2=X,Y] [--hover=X,Y] [--wheel=N]\n"
            "                       [--help]\n"
            "  --font=FILE e o tipo de letra dos dois paineis; --fonts-dir=DIR (misc/fonts\n"
            "  do ImGui) tem as faces extra que a seccao 'Fonts' mostra, em ambos os lados.\n"
            "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
+           "  LISTA (do --tools) tem 'style', 'metrics' e 'about' (ou 'all'): sao as\n"
+           "  janelas do menu Tools, que sem isto so abrem a clicar no menu.\n"
            "  --click=X,Y carrega no painel do iGUI nesse ponto (para os popups, que\n"
            "  nao abrem sem rato, aparecerem numa captura), o --hover=X,Y poe o\n"
            "  ponteiro nesse ponto sem clicar (e o que abre um submenu, que abre por\n"
@@ -220,6 +222,8 @@ int main(int argc, char **argv)
     std::string fontPath = IGUI_GALLERY_FONT;
     std::string fontsDir = IGUI_GALLERY_FONT_DIR;
     std::string openSection;
+    // A lista do --tools (janelas do menu Tools a abrir em vez de clicar no menu).
+    std::string tools;
     std::string onlySection;
     bool click = false;
     float clickX = 0.0f;
@@ -252,6 +256,8 @@ int main(int argc, char **argv)
             vsync = false;
         else if (strcmp(arg, "--open-all") == 0)
             openAll = true;
+        else if (strncmp(arg, "--tools=", 8) == 0)
+            tools = arg + 8;
         else if (strcmp(arg, "--dump") == 0)
             dump = true;
         else if (strncmp(arg, "--open=", 7) == 0)
@@ -380,6 +386,13 @@ int main(int argc, char **argv)
     igui_gallery::reset();
     if (openAll)
         igui_gallery::openAllSections();
+    if (!tools.empty())
+    {
+        const bool all = tools == "all";
+        igui_gallery::setTools(all || tools.find("style") != std::string::npos,
+                               all || tools.find("metrics") != std::string::npos,
+                               all || tools.find("about") != std::string::npos);
+    }
     if (!onlySection.empty() && !igui_gallery::setOnlySection(onlySection.c_str()))
     {
         fprintf(stderr, "seccao desconhecida: %s\n", onlySection.c_str());
