@@ -3749,6 +3749,103 @@ void test_table_without_sideways_scroll_keeps_the_width()
 // A face em vigor dentro de um bloco, e o que volta depois dele: a face escolhida
 // leva o tamanho de fabrico dela, um id sem face não desenha, e a pilha fica como
 // estava no fim do frame mesmo que falte um pop.
+// Um popup aberto de dentro de outro (o "Stacked Popup" do demo): os dois ficam
+// abertos - é uma pilha -, o filho é quem recebe o ponteiro, o Escape fecha só o de
+// cima, e um clique dentro do pai mas fora do filho fecha só o filho.
+void test_stacked_popups()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::Vec2 parentPosition(40.0f, 60.0f);
+    const ig::Vec2 childPosition(70.0f, 100.0f);
+    bool wantParent = false;
+    bool wantChild = false;
+    bool parentOpen = false;
+    bool childOpen = false;
+    ig::Rect openButton;
+    ig::Rect childButton;
+    int hits = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("abrir o pai"))
+            wantParent = true;
+        openButton = c.itemRect();
+        if (wantParent)
+        {
+            c.openPopup("pai", parentPosition);
+            wantParent = false;
+        }
+        if (c.beginPopup("pai"))
+        {
+            c.label("conteudo do pai");
+            if (c.button("abrir o filho"))
+                wantChild = true;
+            childButton = c.itemRect();
+            if (wantChild)
+            {
+                c.openPopup("filho", childPosition);
+                wantChild = false;
+            }
+            if (c.beginPopup("filho"))
+            {
+                if (c.selectable("escolher", false))
+                    ++hits;
+                c.endPopup();
+            }
+            c.endPopup();
+        }
+        parentOpen = c.isPopupOpen("pai");
+        childOpen = c.isPopupOpen("filho");
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // Abre o pai pelo botão.
+    harness.click(openButton.x + openButton.width * 0.5f,
+                  openButton.y + openButton.height * 0.5f, build);
+    harness.frame(build);
+    assert(parentOpen && !childOpen);
+
+    // Abre o filho pelo botão de dentro do pai: os dois ficam abertos (antes disto o
+    // filho substituía o pai).
+    harness.click(childButton.x + childButton.width * 0.5f,
+                  childButton.y + childButton.height * 0.5f, build);
+    harness.frame(build);
+    assert(parentOpen && childOpen);
+    // O pai e o filho desenham-se os dois: as duas caixas estão no ecrã.
+    assert(harness.hasVertexNear(parentPosition.x + 1.0f, parentPosition.y + 1.0f, 4.0f));
+    assert(harness.hasVertexNear(childPosition.x + 1.0f, childPosition.y + 1.0f, 4.0f));
+
+    // O filho é quem recebe o ponteiro: o selectable dele conta o clique, mesmo com o
+    // pai aberto por baixo.
+    harness.click(childPosition.x + 20.0f, childPosition.y + 30.0f, build);
+    harness.frame(build);
+    assert(hits == 1);
+
+    // Escape fecha só o de cima: o pai fica.
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    assert(parentOpen && !childOpen);
+
+    // Abre outra vez o filho e clica dentro do pai mas na margem dele (por cima do
+    // conteúdo vazio): fecha só o filho.
+    harness.click(childButton.x + childButton.width * 0.5f,
+                  childButton.y + childButton.height * 0.5f, build);
+    harness.frame(build);
+    assert(parentOpen && childOpen);
+    harness.click(parentPosition.x + 2.0f, parentPosition.y + 2.0f, build);
+    harness.frame(build);
+    assert(parentOpen && !childOpen);
+
+    // E um clique fora dos dois fecha a pilha toda.
+    harness.click(300.0f, 250.0f, build);
+    harness.frame(build);
+    assert(!parentOpen && !childOpen);
+}
+
 // Os botões da barra (o TabItemButton) e as bandas (Leading/Trailing): as tabs de
 // uma ponta encostam-se ao lado dos botões dessa ponta, as do meio ficam no meio, e
 // carregar num botão não escolhe tab nenhuma.
@@ -4038,6 +4135,7 @@ int main()
     test_push_font();
     test_tab_item_button_and_bands();
     test_tab_list_popup_button();
+    test_stacked_popups();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

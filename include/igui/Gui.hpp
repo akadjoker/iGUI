@@ -2180,33 +2180,59 @@ private:
         }
     };
     MultiSelectState multiSelect_;
-    // O popup de conteúdo livre aberto (ver openPopup/beginPopup): o id, onde
-    // está, o frame em que foi submetido e a medida do conteúdo do último frame.
-    WidgetId openPopupId_;
-    Vec2 openPopupPosition_;
-    float openPopupWidth_;
-    // O popup aberto é um modal (ver beginPopupModal): a caixa sai numa lista
-    // própria - por cima de todas as janelas e por baixo das message boxes -, o
-    // clique fora não o fecha e a barra de título é dele.
-    bool openPopupModal_;
+    // ── Os popups de conteúdo livre abertos (ver openPopup/beginPopup) ────────
+    // É uma pilha: um popup aberto de dentro de outro fica por cima dele (é o
+    // "Stacked Popup" do demo), e só o de cima recebe o ponteiro, o Escape e o
+    // clique fora - os de baixo continuam abertos à espera de serem submetidos outra
+    // vez, que é o que faz o pai voltar quando o filho fecha.
+    struct PopupEntry
+    {
+        WidgetId id;
+        Vec2 position;
+        // A largura pedida no openPopup (0 = a do menu do tema).
+        float width;
+        // O frame em que este popup foi submetido pela última vez (quem não o
+        // submeter num frame perde-o, como tudo no modo imediato).
+        uint64_t frame;
+        Rect bounds;
+        // A caixa do início do frame: é a que decide se um clique caiu dentro (a de
+        // agora ainda pode mudar, porque o corpo é medido no fim do frame).
+        Rect boundsAtFrameStart;
+        Vec2 measured;
+        float measuredWidth;
+        // A medida só vale quando o corpo foi submetido pelo menos uma vez (ver
+        // endPopup); um modal mede-se, um popup comum tem a largura que foi pedida.
+        bool measuredThisFrame;
+        bool wasOpenAtFrameStart;
+        bool modal;
+        // Fechado pelo closeCurrentPopup (o corpo ainda vai até ao endPopup).
+        bool open;
+
+        PopupEntry()
+            : id(InvalidWidgetId), position(), width(0.0f), frame(0u), bounds(),
+              boundsAtFrameStart(), measured(), measuredWidth(0.0f), measuredThisFrame(false),
+              wasOpenAtFrameStart(false), modal(false), open(true)
+        {
+        }
+    };
+    static const int kPopupStackSize = 8;
+    PopupEntry popups_[kPopupStackSize];
+    int popupDepth_;
+    // Se o popup de cima era um modal no início do frame: é o que trava os atalhos
+    // (ver shortcut/isKeyPressed) enquanto ele está aberto.
     bool modalPopupWasOpenAtFrameStart_;
-    bool modalPopupOpen_;
-    // A largura medida do corpo do último frame: um modal mede-se (ao contrário de
-    // um popup comum, cuja largura é pedida - ver openPopupSized).
-    float popupMeasuredWidth_;
+    // O popup cujo corpo está a ser submetido agora (índice na pilha, -1 se nenhum):
+    // é o que o ponteiro tem de respeitar (ver pointerBlockedByOpenPopup) e o que o
+    // endPopup fecha.
+    int popupContentIndex_;
     void openPopupSized(StringView id, const Vec2 &position, const Vec2 &size);
-    uint64_t openPopupFrame_;
-    // O popup cujo conteúdo está a ser submetido agora (para o ponteiro: é ele que
-    // está a receber os itens, ver pointerBlockedByOpenPopup).
-    WidgetId popupContentId_;
-    // A medida do corpo do último frame, por popup: é ela que dá o tamanho da caixa
-    // neste (o tamanho do que o chamador vai submeter só se sabe depois de o
-    // submeter, como no combo e no AutoFitFrames do ImGui).
-    WidgetId popupMeasuredId_;
-    Vec2 popupMeasured_;
-    bool popupWasOpenAtFrameStart_;
-    Rect popupBoundsAtFrameStart_;
-    Rect popupBounds_;
+    // O índice do popup na pilha (-1 quando não está lá, ou já está fechado).
+    int findPopup(WidgetId id) const;
+    // Tira da pilha o popup e os que estão por cima dele (um filho sem pai não é
+    // popup de nada).
+    void closePopupAt(int index);
+    // Quantos popups estão abertos (e não fechados).
+    bool anyPopupOpen() const;
     // Menu aberto como contentor de layout (ver beginPopupContent). É uma pilha
     // porque um submenu abre um contentor dentro do do pai, e ao fechar tem de
     // voltar ao cursor do pai (os itens do pai continuam depois dele).

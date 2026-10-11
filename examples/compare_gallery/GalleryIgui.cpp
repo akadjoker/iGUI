@@ -86,6 +86,8 @@ struct Panel
     bool tabFlagFitting;
     // As tabs "Opened:" do demo, que se abrem e fecham pelos checkboxes.
     bool openedTabs[4];
+    // Os toggles do popup "Toggle.." do demo (são os do popup, à parte dos do menu).
+    bool popupToggles[5];
     // As tabs numeradas do "TabItemButton & Leading/Trailing": quem as cria é o "+".
     int activeTabs[8];
     int activeTabCount;
@@ -115,7 +117,7 @@ struct Panel
           messageBoxOpen(false),
           tabFlagReorderable(true), tabFlagAutoSelect(false), tabFlagListPopup(false),
           tabFlagNoCloseMiddle(false), tabFlagOverline(false), tabFlagFitting(false),
-          openedTabs(), activeTabs(), activeTabCount(0), nextTabId(0),
+          openedTabs(), popupToggles(), activeTabs(), activeTabCount(0), nextTabId(0),
           showLeadingTabButton(true), showTrailingTabButton(true),
           selectAppearance(false),
           headerCloseExpanded(true), headerBulletOpen(false),
@@ -127,6 +129,9 @@ struct Panel
         // com três (é o que o demo faz na primeira vez).
         for (int i = 0; i < 4; ++i)
             openedTabs[i] = true;
+        // O primeiro toggle do "Toggle.." nasce ligado, como no demo.
+        for (int i = 0; i < 5; ++i)
+            popupToggles[i] = i == 0;
         for (int i = 0; i < 3; ++i)
             activeTabs[i] = nextTabId++;
         activeTabCount = 3;
@@ -1545,6 +1550,81 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         }
         ui.endPopup();
     }
+    // O "Toggle.." do demo: itens que ligam e desligam, um submenu, um separador e um
+    // botão que abre OUTRO popup de dentro deste - é a pilha de popups, e é o que faz
+    // o popup do filho ficar por cima do pai sem o fechar.
+    if (ui.button("Toggle.."))
+        ui.openPopup("my_toggle_popup");
+    item();
+    if (ui.beginPopup("my_toggle_popup"))
+    {
+        static const ig::StringView kFishNames[] = {
+            ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
+            ig::StringView("Pollock"), ig::StringView("Tilefish")
+        };
+        for (int i = 0; i < 5; ++i)
+            ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
+        if (ui.beginSubMenu("Sub-menu"))
+        {
+            ui.menuItem("Click me");
+            ui.endSubMenu();
+        }
+        ui.separator();
+        ui.label("Tooltip here");
+        if (ui.button("Stacked Popup"))
+            ui.openPopup("another popup");
+        if (ui.beginPopup("another popup"))
+        {
+            for (int i = 0; i < 5; ++i)
+                ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
+            if (ui.beginSubMenu("Sub-menu"))
+            {
+                ui.menuItem("Click me");
+                if (ui.button("Stacked Popup"))
+                    ui.openPopup("another popup");
+                if (ui.beginPopup("another popup"))
+                {
+                    ui.label("I am the last one here.");
+                    ui.endPopup();
+                }
+                ui.endSubMenu();
+            }
+            ui.endPopup();
+        }
+        ui.endPopup();
+    }
+    item();
+    // O "With a menu.." do demo: um popup com uma barra de menus dentro.
+    if (ui.button("With a menu.."))
+        ui.openPopup("my_file_popup");
+    item();
+    if (ui.beginPopup("my_file_popup"))
+    {
+        // A barra de menus do demo dentro do popup (a altura é a mesma da barra de
+        // cima do painel, para os dois lados ficarem iguais).
+        const ig::Rect bar(0.0f, 0.0f, ui.availableWidth(), 26.0f);
+        if (ui.beginMenuBar(bar))
+        {
+            if (ui.beginMenu("File"))
+            {
+                ui.menuItem("New");
+                ui.menuItem("Open", ig::StringView("Ctrl+O"));
+                ui.menuItem("Save", ig::StringView("Ctrl+S"));
+                ui.endMenu();
+            }
+            if (ui.beginMenu("Edit"))
+            {
+                ui.menuItem("Dummy");
+                ui.endMenu();
+            }
+            ui.endMenuBar();
+        }
+        ui.label("Hello from popup!");
+        ui.button("This is a dummy button..");
+        ui.endPopup();
+    }
+    item();
+
     // O "Popup Stack" do demo: cada botão abre o seu popup e o popup aberto sabe
     // quem é (o isPopupOpen com o AnyPopupId é o que uma aplicação usa para saber
     // que há um popup pendente).
@@ -1572,12 +1652,10 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         ui.endPopup();
     }
     // Um popup por documento (o ShowExampleAppDocuments) faz-se com um id por
-    // documento - o "##" é o que deixa dois popups partilharem o rótulo. O que falta
-    // mesmo é a pilha: um popup aberto de dentro de outro.
+    // documento - o "##" é o que deixa dois popups partilharem o rótulo.
     gap(ui, gallery::Section::PopupsAndModalWindows,
-        "a pilha de popups (um popup aberto de dentro de outro, como o 'Popup "
-        "Stack' do demo): o iGUI tem um popup de cada vez, e o "
-        "NoOpenOverExistingPopup e o que evita abrir por cima do que la esta");
+        "o SetNextWindowPos do demo para o popup de um modal, o menu de contexto com o "
+        "clique do meio e a janelinha do TabListButton");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.label("Right-click this line for a context menu");
