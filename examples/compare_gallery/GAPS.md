@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **40 lacunas** contra 222 itens submetidos pelo
+dois lados: na revisão atual são **40 lacunas** contra 228 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -77,7 +77,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `DragFloat2/3/4` | `dragFloat2/3/4` | existe |
 | `DragInt2/3/4`, `DragScalar(N)` | — | **não existe** |
 | `DragFloatRange2` / `DragIntRange2` | 2 drags | **não existe** (min+max numa só widget) |
-| Flags de drag/slider (`Clamp`, `Wrap`, `Logarithmic`, `AlwaysClamp`, `NoInput`, `NoRoundToFormat`, `NoSpeedTweak`) | — | **não existe**: os ranges são sempre fixos |
+| Flags de drag/slider | `SliderFlags::Logarithmic`, `WrapAround`, `NoInput`, `AllowOutOfRange` | parcial: existem estes quatro (o `AllowOutOfRange` é o contrário do `ClampOnInput`/`AlwaysClamp` do ImGui: aqui o valor escrito é limitado ao intervalo por omissão). Faltam o `ClampZeroRange` e o `NoRoundToFormat`/`NoSpeedTweak` (não há arredondamento ao formato nem escalas de teclado) |
+| `ImGuiSliderFlags_ClampOnInput` / `AlwaysClamp` (o Ctrl+clique pode sair do intervalo) | `AllowOutOfRange` | existe, com outro nome: no ImGui é o comportamento por omissão e o flag é o que limita |
 | `InputFloat` / `InputFloat2/3/4` | `inputFloat` / `inputFloat2/3/4` | existe |
 | `InputInt` | `inputInt` | existe |
 | `InputInt2/3/4` | — | **não existe** |
@@ -404,8 +405,13 @@ Continua em falta neste nível:
 
 ## P1 — dimensão média
 
-- [ ] **Flags de drag/slider e as variantes numéricas que faltam**:
-      `Clamp`, `Wrap`, `Logarithmic`, `AlwaysClamp`, `NoInput`; e depois
+- [x] **Flags de drag/slider**: `SliderFlags::Logarithmic` (a escala do logaritmo,
+      na pista e no arrasto), `WrapAround` (chegar a um fim passa para o outro),
+      `NoInput` (sem o editor de valor ao lado) e `AllowOutOfRange` (o valor escrito
+      à mão pode sair do intervalo).
+      *Onde:* `src/Gui.cpp` (`sliderValue`, `sliderFloat`, `dragFloat`,
+      `sliderNormFromValue`), `tests/test_numeric_input.cpp`.
+- [ ] **As variantes numéricas que faltam**:
       `dragInt2/3/4`, `sliderFloat2/3/4`, `sliderInt2/3/4`,
       `inputInt2/3/4`, `inputDouble` (feito) e o `vSliderFloat`/`vSliderInt`
       (feito, com o `sliderValue` a aceitar os dois eixos).

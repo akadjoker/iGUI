@@ -238,6 +238,164 @@ void test_non_finite_values_draw_finite_geometry()
           "widgets rewrote non-finite values without user input");
 }
 
+// Os flags do slider/drag: a escala logarítmica, o WrapAround, o NoInput e o
+// AllowOutOfRange (o valor escrito pode sair do intervalo).
+void test_slider_flags()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const unsigned log = ig::Context::SliderFlags::Logarithmic;
+    const unsigned wrap = ig::Context::SliderFlags::WrapAround;
+    const unsigned noInput = ig::Context::SliderFlags::NoInput;
+    const unsigned outOfRange = ig::Context::SliderFlags::AllowOutOfRange;
+
+    // Uma fila de sliders, para o rect de cada um sair do itemRect do respetivo
+    // track: o item é a pista, não o slider todo.
+    float linear = 1.0f;
+    float logarithmic = 1.0f;
+    float wrapped = 1.0f;
+    float plain = 1.0f;
+    ig::Rect linearRect;
+    ig::Rect logRect;
+    ig::Rect wrapRect;
+    ig::Rect noInputRect;
+    ig::Rect plainRect;
+
+    auto build = [&](ig::Context &c) {
+        c.beginMainWindow("main");
+        c.sliderFloat("linear", linear, 1.0f, 100.0f, 0.0f, 0u);
+        linearRect = c.itemRect();
+        c.sliderFloat("log", logarithmic, 1.0f, 100.0f, 0.0f, log);
+        logRect = c.itemRect();
+        c.sliderFloat("wrap", wrapped, 1.0f, 100.0f, 0.0f, wrap);
+        wrapRect = c.itemRect();
+        c.sliderFloat("noinput", plain, 1.0f, 100.0f, 0.0f, noInput);
+        noInputRect = c.itemRect();
+        c.sliderFloat("plain", plain, 1.0f, 100.0f, 0.0f, 0u);
+        plainRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    check(linearRect.width > 0.0f && logRect.width > 0.0f, "the sliders have a track");
+
+    // O item de um slider é o widget todo (o rótulo, a pista e o campo do valor,
+    // como no itemRect do iGUI), por isso o fim da pista só se apanha a arrastar:
+    // um clique no canto direito cai no campo do valor.
+    auto dragPast = [&](const ig::Rect &rect) {
+        const float y = rect.y + rect.height * 0.5f;
+        const float x0 = rect.x + rect.width * 0.5f;
+        const float x1 = rect.x + rect.width + 40.0f;
+        context.pushEvent(ig::Event::pointerMove(x0, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x0, y));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerMove(x1, y));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x1, y));
+        harness.frame(build);
+    };
+
+    // O mesmo clique nos dois sliders: na escala logarítmica o valor fica muito
+    // abaixo do linear (é a média geométrica em vez da aritmética), e os dois
+    // chegam ao máximo no fim da pista.
+    const float quarterY = linearRect.y + linearRect.height * 0.5f;
+    harness.click(linearRect.x + linearRect.width * 0.25f, quarterY,
+                  [&](ig::Context &c) { build(c); });
+    const float linearQuarter = linear;
+    harness.click(logRect.x + logRect.width * 0.25f, quarterY,
+                  [&](ig::Context &c) { build(c); });
+    check(linearQuarter > 20.0f, "a linear slider follows the position");
+    check(logarithmic < linearQuarter * 0.5f,
+          "a logarithmic slider stays well below the linear one at the same position");
+    dragPast(logRect);
+    check(logarithmic > 99.0f, "the end of the track is the maximum, logarithmic or not");
+
+    // WrapAround: com o valor a chegar ao máximo (e a estar abaixo dele) salta para
+    // o mínimo.
+    wrapped = 50.0f;
+    harness.frame(build);
+    dragPast(wrapRect);
+    check(wrapped < 2.0f, "WrapAround sends a value that reached the top to the bottom");
+    // E fica lá: o frame seguinte não volta a saltar.
+    harness.frame(build);
+    check(wrapped < 2.0f, "WrapAround does not flip back and forth");
+
+    // NoInput: sem o editor de texto ao lado, a pista chega ao fim do widget: um
+    // clique no canto direito mexe no valor em vez de abrir o campo.
+    plain = 50.0f;
+    harness.frame(build);
+    const float rightY = noInputRect.y + noInputRect.height * 0.5f;
+    harness.click(noInputRect.x + noInputRect.width - 4.0f, rightY,
+                  [&](ig::Context &c) { build(c); });
+    check(plain > 95.0f, "a NoInput slider has the track all the way to the right");
+    for (const char *p = "7"; *p; ++p)
+    {
+        const char one[2] = {*p, 0};
+        context.pushEvent(ig::Event::textInput(one));
+        harness.frame(build);
+    }
+    check(plain > 95.0f, "NoInput: there is no value field to type into");
+}
+
+// AllowOutOfRange: o número escrito à mão no drag não é limitado ao intervalo.
+void test_drag_allow_out_of_range()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float clamped = 50.0f;
+    float free = 50.0f;
+    ig::Rect clampedRect;
+    ig::Rect freeRect;
+
+    auto build = [&](ig::Context &c) {
+        c.beginMainWindow("main");
+        c.dragFloat("clamped", clamped, 0.0f, 100.0f, 0.1f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
+        clampedRect = c.itemRect();
+        c.dragFloat("free", free, 0.0f, 100.0f, 0.1f,
+                    ig::Rect(10.0f, 50.0f, 300.0f, 28.0f),
+                    ig::Context::SliderFlags::AllowOutOfRange);
+        freeRect = c.itemRect();
+        c.endWindow();
+    };
+    harness.frame(build);
+
+    auto typeInto = [&](const ig::Rect &rect, const char *text) {
+        const float x = rect.x + rect.width * 0.5f;
+        const float y = rect.y + rect.height * 0.5f;
+        // Um clique sem arrasto abre o campo de texto (ver dragFloat).
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+        harness.frame(build);
+        harness.frame(build);
+        for (int i = 0; i < 24; ++i)
+        {
+            context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+            harness.frame(build);
+        }
+        for (const char *p = text; *p; ++p)
+        {
+            const char one[2] = {*p, 0};
+            context.pushEvent(ig::Event::textInput(one));
+            harness.frame(build);
+        }
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+        harness.frame(build);
+    };
+
+    typeInto(clampedRect, "150");
+    check(clamped == 100.0f, "without the flag the typed value stays inside the range");
+    typeInto(freeRect, "150");
+    check(free == 150.0f, "AllowOutOfRange keeps the typed value outside the range");
+    typeInto(freeRect, "-20");
+    check(free == -20.0f, "AllowOutOfRange keeps a typed value below the range");
+}
+
 } // namespace
 
 int main()
@@ -247,6 +405,8 @@ int main()
     test_display_follows_value_when_not_editing();
     test_change_reported_only_for_new_values();
     test_non_finite_values_draw_finite_geometry();
+    test_slider_flags();
+    test_drag_allow_out_of_range();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

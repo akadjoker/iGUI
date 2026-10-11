@@ -30,6 +30,44 @@ StringView visibleLabel(StringView label)
     return label;
 }
 
+// Onde é que um valor cai na pista (0 no mínimo, 1 no máximo): com o flag
+// Logarithmic a escala é a do logaritmo do intervalo, como o Logarithmic do ImGui
+// - a metade da pista passa a ser a média geométrica dos extremos.
+static bool sliderLogarithmic(float minimum, float maximum, unsigned flags)
+{
+    return (flags & Context::SliderFlags::Logarithmic) != 0u && minimum > 0.0f &&
+           maximum > minimum;
+}
+
+static float sliderNormFromValue(float value, float minimum, float maximum, bool logarithmic)
+{
+    if (logarithmic)
+    {
+        const float ratio = value > minimum ? value : minimum;
+        return logf(ratio / minimum) / logf(maximum / minimum);
+    }
+    return (value - minimum) / (maximum - minimum);
+}
+
+static float sliderValueFromNorm(float norm, float minimum, float maximum, bool logarithmic)
+{
+    if (logarithmic)
+        return minimum * powf(maximum / minimum, norm);
+    return minimum + (maximum - minimum) * norm;
+}
+
+// Chegar a um fim com o valor ainda do lado de dentro passa para o outro
+// (WrapAround). É a regra do ImGui, e é no valor, não na posição: vale para o
+// slider (a posição está limitada à pista) e para o arrasto.
+static float wrapSliderValue(float next, float value, float minimum, float maximum)
+{
+    if (next == maximum && value < maximum)
+        return minimum;
+    if (next == minimum && value > minimum)
+        return maximum;
+    return next;
+}
+
 // A one pixel border drawn as two nested rounded fills: cheaper than stroking
 // the outline segment by segment, and both silhouettes are anti-aliased.
 void drawFrame(DrawList &list, const Rect &rect, const Color &fill, const Color &border,
@@ -687,11 +725,12 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
-      comboBounds_(), comboPopupBounds_(), mainMenuBarWindow_(), mainMenuBarOpen_(false),
+      comboBounds_(), comboPopupBounds_(), multiSelect_(), mainMenuBarWindow_(),
+      mainMenuBarOpen_(false),
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
       comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
-      comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(), multiSelect_(),
+      comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
       comboAdvanceHeader_(false),
       activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
       activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
@@ -700,7 +739,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
-      dragStartValue_(0.0f), dragStartX_(0.0f), tooltipDelay_(0.45f), tooltipHoverSeconds_(0.0f),
+      dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
+      tooltipHoverSeconds_(0.0f),
       tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId), plotPoints_(), plotBars_(),
       tooltipOpen_(false), tooltipLayout_(), tooltipOrigin_(), tooltipSize_(), tooltipDrawList_(),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -3023,7 +3063,7 @@ void Context::endContextMenu()
 }
 
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
-                          const Rect &bounds)
+                          const Rect &bounds, unsigned flags)
 {
     WindowState *window = currentWindow();
     if (!window || maximum <= minimum)
@@ -3044,9 +3084,12 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
         valueWidth = 56.0f;
     if (valueWidth > 84.0f)
         valueWidth = 84.0f;
-    const float requestedTrackWidth = usableWidth - valueWidth - theme_.itemSpacing;
+    // Sem editor de texto (NoInput) a pista fica com o espaço todo.
+    const bool wantsValueEditor = (flags & SliderFlags::NoInput) == 0u;
+    const float requestedTrackWidth = usableWidth - (wantsValueEditor ? valueWidth : 0.0f) -
+                                       (wantsValueEditor ? theme_.itemSpacing : 0.0f);
     const float trackWidth = requestedTrackWidth > 28.0f ? requestedTrackWidth : usableWidth;
-    const bool hasValueEditor = requestedTrackWidth > 28.0f;
+    const bool hasValueEditor = wantsValueEditor && requestedTrackWidth > 28.0f;
     const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f,
                      trackWidth,
                      rect.height * 0.2f);
@@ -3055,11 +3098,14 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     // sliderValue só faz o teste do ponteiro) e é ele que dá o realce.
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
     const bool trackHovered = itemHovered(grab, clip, trackId);
-    const bool sliderChanged = sliderValue(grab, clip, trackId, value, minimum, maximum);
+    const bool sliderChanged = sliderValue(grab, clip, trackId, value, minimum, maximum, false, flags);
     // O editor de valor que o slider desenha à parte não pode ser o item que
     // isItemHovered devolve (ver keepItemStatus).
     const ItemStatus trackStatus = item_;
-    const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
+    const float normalized =
+        clamp(sliderNormFromValue(value, minimum, maximum,
+                                  sliderLogarithmic(minimum, maximum, flags)),
+              0.0f, 1.0f);
     const float handleX = track.x + track.width * normalized;
     drawText(*drawList, theme_.font, text,
              Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f),
@@ -3089,7 +3135,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
                                       valueRect.y - layout_.origin.y,
                                       valueRect.width, valueRect.height), 3);
         popId();
-        if (textChanged)
+        if (textChanged && (flags & SliderFlags::AllowOutOfRange) == 0u)
             value = clamp(value, minimum, maximum);
     }
     keepItemStatus(trackStatus, rect);
@@ -3097,14 +3143,14 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
 }
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum,
-                        const Rect &bounds)
+                        const Rect &bounds, unsigned flags)
 {
     if (maximum <= minimum)
         return false;
 
     float temporary = static_cast<float>(value);
     const bool changed = sliderFloat(labelText, temporary, static_cast<float>(minimum),
-                                     static_cast<float>(maximum), bounds);
+                                     static_cast<float>(maximum), bounds, flags);
     if (!changed)
         return false;
 
@@ -3208,7 +3254,7 @@ bool Context::vSliderInt(StringView labelText, int &value, int minimum, int maxi
 }
 
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
-                        float speed, const Rect &bounds)
+                        float speed, const Rect &bounds, unsigned flags)
 {
     WindowState *window = currentWindow();
     if (!window || maximum <= minimum || speed <= 0.0f)
@@ -3234,6 +3280,7 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     registerFocusable(id);
     if (edit->editing && (escapePressed_ || focusedWidget_ != id))
         edit->editing = false;
+    const bool logarithmic = sliderLogarithmic(minimum, maximum, flags);
     if (!edit->editing && pointerPressedIn(visible, left) && activeWidget_ == InvalidWidgetId)
     {
         activeWidget_ = id;
@@ -3241,6 +3288,7 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
         dragWidget_ = id;
         dragStartValue_ = value;
         dragStartX_ = pointer_.pressedPosition[left].x;
+        dragStartNorm_ = clamp(sliderNormFromValue(value, minimum, maximum, logarithmic), 0.0f, 1.0f);
         edit->moved = false;
     }
     bool changed = false;
@@ -3251,7 +3299,23 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
         if (fabsf(delta) >= 3.0f) edit->moved = true;
         if (edit->moved)
         {
-            const float next = clamp(dragStartValue_ + delta * speed, minimum, maximum);
+            float next = dragStartValue_ + delta * speed;
+            // Numa escala logarítmica o arrasto também é: os mesmos pixels valem
+            // mais em cima do que em baixo, que é o que o slider logarítmico
+            // promete (o ImGui faz o mesmo no DragBehaviorT).
+            if (logarithmic)
+            {
+                const float norm = clamp(dragStartNorm_ + delta * speed / (maximum - minimum),
+                                         0.0f, 1.0f);
+                next = sliderValueFromNorm(norm, minimum, maximum, true);
+            }
+            if ((flags & SliderFlags::WrapAround) != 0u)
+            {
+                const float limited = clamp(next, minimum, maximum);
+                next = wrapSliderValue(limited, value, minimum, maximum);
+            }
+            else
+                next = clamp(next, minimum, maximum);
             changed = next != value;
             value = next;
         }
@@ -3275,7 +3339,9 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
             const float next = edit->text.to_float();
             if (isfinite(next))
             {
-                const float limited = clamp(next, minimum, maximum);
+                const float limited = (flags & SliderFlags::AllowOutOfRange) != 0u
+                                          ? next
+                                          : clamp(next, minimum, maximum);
                 changed = changed || limited != value;
                 value = limited;
             }
@@ -3301,18 +3367,22 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
-                      int speed, const Rect &bounds)
+                      int speed, const Rect &bounds, unsigned flags)
 {
     if (maximum <= minimum || speed <= 0)
         return false;
     float temporary = static_cast<float>(value);
     const bool dragged = dragFloat(labelText, temporary, static_cast<float>(minimum),
-                                   static_cast<float>(maximum), static_cast<float>(speed), bounds);
+                                   static_cast<float>(maximum), static_cast<float>(speed), bounds,
+                                   flags);
     if (!dragged)
         return false;
     const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
                                           : static_cast<int>(temporary - 0.5f);
-    const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
+    const int clamped =
+        (flags & SliderFlags::AllowOutOfRange) != 0u
+            ? rounded
+            : (rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded));
     const bool changed = value != clamped;
     value = clamped;
     if (changed)
@@ -6265,27 +6335,30 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
 }
 
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
-                          float width)
+                          float width, unsigned flags)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderFloat(labelText, value, minimum, maximum,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                                          bounds.width, bounds.height));
+                                          bounds.width, bounds.height),
+                                     flags);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
     return changed;
 }
 
-bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width)
+bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width,
+                        unsigned flags)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderInt(labelText, value, minimum, maximum,
                                    Rect(bounds.x - layout_.origin.x,
                                         bounds.y - layout_.origin.y,
-                                        bounds.width, bounds.height));
+                                        bounds.width, bounds.height),
+                                   flags);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -6293,13 +6366,14 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
 }
 
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
-                        float speed, float width)
+                        float speed, float width, unsigned flags)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = dragFloat(labelText, value, minimum, maximum, speed,
                                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                                        bounds.width, bounds.height));
+                                        bounds.width, bounds.height),
+                                   flags);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -6307,13 +6381,14 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
-                      int speed, float width)
+                      int speed, float width, unsigned flags)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = dragInt(labelText, value, minimum, maximum, speed,
                                  Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                                      bounds.width, bounds.height));
+                                      bounds.width, bounds.height),
+                                 flags);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -9653,7 +9728,8 @@ void Context::advanceFocus()
 }
 
 bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                          float &value, float minimum, float maximum, bool vertical)
+                          float &value, float minimum, float maximum, bool vertical,
+                          unsigned flags)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || maximum <= minimum)
         return false;
@@ -9690,7 +9766,10 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
         const float normalized =
             vertical ? clamp((rect.y + rect.height - pointer_.position.y) / rect.height, 0.0f, 1.0f)
                      : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f);
-        const float nextValue = minimum + (maximum - minimum) * normalized;
+        const bool logarithmic = sliderLogarithmic(minimum, maximum, flags);
+        float nextValue = sliderValueFromNorm(normalized, minimum, maximum, logarithmic);
+        if ((flags & SliderFlags::WrapAround) != 0u)
+            nextValue = wrapSliderValue(nextValue, value, minimum, maximum);
         changed = nextValue != value;
         value = nextValue;
     }

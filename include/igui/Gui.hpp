@@ -567,10 +567,31 @@ public:
     // and menuSeparator(), then close it with endContextMenu().
     bool beginContextMenu(StringView id, const Rect &bounds);
     void endContextMenu();
+    // Flags de slider/drag. Vão depois do width (o width é 0 para "a largura que
+    // sobra", como em tudo neste ficheiro): um slider logarítmico é
+    // sliderFloat("Log", v, 0.001f, 100.0f, 0.0f, SliderFlags::Logarithmic).
+    struct SliderFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// O valor anda na escala do logaritmo do intervalo (o "Logarithmic"
+            /// do demo): a metade da pista é a média geométrica dos extremos, por
+            /// isso os primeiros passos valem muito mais. Precisa de minimum > 0.
+            Logarithmic = 1u << 0,
+            /// Ao chegar a um fim, o valor passa para o outro. Só no arrasto.
+            WrapAround = 1u << 1,
+            /// Sem o editor de texto ao lado: o slider é só da pista.
+            NoInput = 1u << 2,
+            /// O número escrito à mão pode sair do intervalo (por omissão é
+            /// limitado a ele).
+            AllowOutOfRange = 1u << 3
+        };
+    };
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     const Rect &bounds);
+                     const Rect &bounds, unsigned flags = SliderFlags::None);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   const Rect &bounds);
+                   const Rect &bounds, unsigned flags = SliderFlags::None);
     // A mixer fader: a recessed groove with a cap that travels along it. The
     // whole bounds take the press and the cap follows the pointer from there,
     // so it is pushed with a finger rather than grabbed by its handle; a press
@@ -582,9 +603,9 @@ public:
     // Horizontal relative drag. The value changes by speed for each moved pixel;
     // click its value field to enter a precise number.
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
-                   float speed, const Rect &bounds);
+                   float speed, const Rect &bounds, unsigned flags = SliderFlags::None);
     bool dragInt(StringView label, int &value, int minimum, int maximum,
-                 int speed, const Rect &bounds);
+                 int speed, const Rect &bounds, unsigned flags = SliderFlags::None);
     // Slider vertical, o VSliderFloat/VSliderInt do ImGui: o valor cresce para
     // cima numa faixa estreita, ao contrário do fader, que é um controle de
     // mistura.
@@ -854,13 +875,14 @@ public:
     bool beginCombo(StringView label, StringView preview, float width = 0.0f,
                     int visibleItems = 8);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     float width = 0.0f);
+                     float width = 0.0f, unsigned flags = SliderFlags::None);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   float width = 0.0f);
+                   float width = 0.0f, unsigned flags = SliderFlags::None);
     bool dragFloat(StringView label, float &value, float minimum, float maximum,
-                   float speed = 0.01f, float width = 0.0f);
+                   float speed = 0.01f, float width = 0.0f,
+                   unsigned flags = SliderFlags::None);
     bool dragInt(StringView label, int &value, int minimum, int maximum,
-                 int speed = 1, float width = 0.0f);
+                 int speed = 1, float width = 0.0f, unsigned flags = SliderFlags::None);
     bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3);
     bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f, int precision = 3);
     bool inputFloat4(StringView label, float &x, float &y, float &z, float &w,
@@ -1618,6 +1640,9 @@ private:
     bool propertyRowActive_;
     float dragStartValue_;
     float dragStartX_;
+    // O valor no início do arrasto na escala da pista (0..1): é o que faz um drag
+    // logarítmico andar depressa em cima e devagar em baixo.
+    float dragStartNorm_;
     float tooltipDelay_;
     float tooltipHoverSeconds_;
     Vec2 tooltipPointerPosition_;
@@ -1752,7 +1777,7 @@ private:
     void setItemHoverRect(const Rect &bounds);
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                      float &value, float minimum, float maximum,
-                     bool vertical = false);
+                     bool vertical = false, unsigned flags = SliderFlags::None);
     // O trabalho dos dois vSlider: precision < 0 escreve o valor como inteiro.
     bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds, int precision);

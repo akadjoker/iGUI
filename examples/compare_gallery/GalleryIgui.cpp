@@ -554,13 +554,32 @@ void sectionWidgetsDragAndDrop(ig::Context &ui, gallery::State &s)
 // ── Widgets: Drag/Slider Flags ───────────────────────────────────────────────
 void sectionWidgetsDragAndSliderFlags(ig::Context &ui, gallery::State &s)
 {
-    (void)s;
     gap(ui, gallery::Section::WidgetsDragAndSliderFlags,
-        "ImGuiSliderFlags_* / ImGuiDragFlags_* (Clamp, Wrap, Logarithmic, AlwaysClamp, "
-        "NoInput, NoRoundToFormat) - os drags/sliders do iGUI nao aceitam flags");
-    ui.dragFloat("drag com clamps fixos", s.f1, 0.0f, 1.0f, 0.01f);
+        "CheckboxFlags (o bitfield do demo: os flags do ImGuiSliderFlags_* sao um "
+        "checkbox cada) e os flags ClampOnInput/ClampZeroRange/NoRoundToFormat/"
+        "NoSpeedTweaks - o iGUI tem Logarithmic, WrapAround, NoInput e "
+        "AllowOutOfRange");
+    // Os drags/sliders do demo, com os flags que o iGUI tem. No demo os flags sao
+    // os mesmos para todos (estao nos checkboxes de cima); aqui cada linha mostra
+    // um deles, que é o que se vê de qualquer maneira.
+    ui.label("Underlying float value: 0.500");
     item();
-    ui.sliderFloat("slider com clamps fixos", s.f1, 0.0f, 1.0f);
+    ui.dragFloat("DragFloat (0 -> 1)", s.f1, 0.0f, 1.0f, 0.005f);
+    item();
+    ui.dragFloat("DragFloat (0 -> 1) WrapAround", s.f1, 0.0f, 1.0f, 0.005f, 0.0f,
+                 ig::Context::SliderFlags::WrapAround);
+    item();
+    ui.dragInt("DragInt (0 -> 100)", s.i2, 0, 100, 1);
+    item();
+    ui.sliderFloat("SliderFloat (0 -> 1)", s.f1, 0.0f, 1.0f);
+    item();
+    ui.sliderFloat("SliderFloat (0.001 -> 100) Logarithmic", s.f1, 0.001f, 100.0f, 0.0f,
+                   ig::Context::SliderFlags::Logarithmic);
+    item();
+    ui.sliderFloat("SliderFloat (0 -> 1) NoInput", s.f1, 0.0f, 1.0f, 0.0f,
+                   ig::Context::SliderFlags::NoInput);
+    item();
+    ui.sliderInt("SliderInt (0 -> 100)", s.i2, 0, 100);
     item();
 }
 
