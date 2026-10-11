@@ -9870,29 +9870,32 @@ Rect Context::contentClip() const
     if (!window)
         return Rect();
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
-    // O corpo de um tooltip é desenhado por cima da janela, muitas vezes fora
-    // dela: o limite é o ecrã, não a janela.
-    if (tooltipOpen_)
-        return viewport;
-    // O mesmo para o conteúdo de um combo de conteúdo livre: é desenhado por cima
-    // da janela, fora dela, e o limite é o popup.
+    // O limite de partida: a janela, ou o ecrã para o corpo de um tooltip (é
+    // desenhado por cima da janela, muitas vezes fora dela), ou o popup para o
+    // conteúdo de um combo de conteúdo livre (o mesmo, com a caixa dele).
+    Rect clip;
     if (comboContentOpen_)
-        return comboContentClip_;
-    const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
-    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
-    const float contentWidth = window->bounds.width - padding * 2.0f;
-    const float contentHeight = window->bounds.height - titleHeight - padding * 2.0f;
-    const Rect content(window->bounds.x + padding, window->bounds.y + titleHeight + padding,
-                       contentWidth > 0.0f ? contentWidth : 0.0f,
-                       contentHeight > 0.0f ? contentHeight : 0.0f);
-    const Rect windowClip = intersect(content, viewport);
-    Rect clip = windowClip;
-    if (activeDockSpace_ != InvalidWidgetId)
+        clip = comboContentClip_;
+    else if (tooltipOpen_)
+        clip = viewport;
+    else
     {
-        const DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
-        if (dockSpace)
-            clip = dockSpace->clip;
+        const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
+        const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+        const float contentWidth = window->bounds.width - padding * 2.0f;
+        const float contentHeight = window->bounds.height - titleHeight - padding * 2.0f;
+        const Rect content(window->bounds.x + padding, window->bounds.y + titleHeight + padding,
+                           contentWidth > 0.0f ? contentWidth : 0.0f,
+                           contentHeight > 0.0f ? contentHeight : 0.0f);
+        clip = intersect(content, viewport);
+        if (activeDockSpace_ != InvalidWidgetId)
+        {
+            const DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
+            if (dockSpace)
+                clip = dockSpace->clip;
+        }
     }
+    // Um child dentro de um popup é cortado pelo popup E pela caixa do child.
     if (!childStack_.empty())
         clip = intersect(clip, childStack_.back().content);
     if (!dockPanelStack_.empty())
