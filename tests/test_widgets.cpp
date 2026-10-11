@@ -497,6 +497,110 @@ static void drawNavigationWidgets(ig::Context &context, NavigationState &state)
     context.endWindow();
 }
 
+// O arrowButton (com o clique dele), o checkboxFlags (um bit em vez de um bool) e
+// o alignTextToFramePadding (que desloca o texto, não o cursor).
+static void test_arrow_button_and_checkbox_flags()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+
+    unsigned flags = 0u;
+    int leftClicks = 0;
+    int rightClicks = 0;
+    ig::Rect left;
+    ig::Rect right;
+    ig::Rect checkbox;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("extras", ig::Rect(10.0f, 10.0f, 260.0f, 160.0f)));
+        if (c.arrowButton("##left", ig::ArrowDirection::Left, 28.0f))
+            --leftClicks;
+        if (left.width <= 0.0f)
+            left = c.itemRect();
+        c.sameLine();
+        if (c.arrowButton("##right", ig::ArrowDirection::Right, 28.0f))
+            ++rightClicks;
+        if (right.width <= 0.0f)
+            right = c.itemRect();
+        c.sameLine();
+        c.alignTextToFramePadding();
+        c.label("Hold to repeat:");
+        c.checkboxFlags("Logarithmic", flags, 1u);
+        if (checkbox.width <= 0.0f)
+            checkbox = c.itemRect();
+        c.checkboxFlags("NoInput", flags, 2u);
+        c.endWindow();
+    };
+
+    // Carregar, um frame, largar, outro frame: é a ordem que o itemClicked espera
+    // (o clique fecha-se no frame em que o botão é largado).
+    auto clickCentre = [&](const ig::Rect &rect) {
+        const float x = rect.x + rect.width * 0.5f;
+        const float y = rect.y + rect.height * 0.5f;
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        build(context);
+        context.endFrame();
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        build(context);
+        context.endFrame();
+    };
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    build(context);
+    context.endFrame();
+    assert(left.width == 28.0f && left.height == 28.0f);
+    assert(right.x == left.x + left.width + context.theme().itemSpacing);
+
+    clickCentre(right);
+    assert(rightClicks == 1 && leftClicks == 0);
+
+    // O checkboxFlags troca só o bit dele: o primeiro toca no bit 1.
+    clickCentre(checkbox);
+    assert(flags == 1u);
+    clickCentre(checkbox);
+    assert(flags == 0u);
+}
+
+// O texto alinhado com uma moldura é desenhado mais abaixo, mas o item e o cursor
+// ficam onde estavam: o botão ao lado não desce com ele.
+static void test_align_text_to_frame_padding_moves_only_the_text()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+
+    ig::Rect plainLabel;
+    ig::Rect alignedLabel;
+    ig::Rect alignedButton;
+    ig::Rect plainButton;
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("align", ig::Rect(10.0f, 10.0f, 260.0f, 160.0f)));
+    context.label("sem alinhamento");
+    plainLabel = context.itemRect();
+    context.sameLine();
+    context.smallButton("b1");
+    plainButton = context.itemRect();
+    context.alignTextToFramePadding();
+    context.label("com alinhamento");
+    alignedLabel = context.itemRect();
+    context.sameLine();
+    context.smallButton("b2");
+    alignedButton = context.itemRect();
+    context.endWindow();
+    context.endFrame();
+
+    // O desenho do texto mudou (não há como o ler daqui), mas o que interessa é o
+    // que NÃO mudou: o botão da mesma linha fica à altura do texto e a linha
+    // seguinte começa normalmente.
+    assert(plainButton.y == plainLabel.y);
+    assert(alignedButton.y == alignedLabel.y);
+    assert(alignedLabel.y > plainLabel.y);
+    assert(alignedButton.x > alignedLabel.x && alignedButton.x < alignedLabel.x + 200.0f);
+}
+
 static void test_navigation_widgets()
 {
     WidgetBackend backend;
@@ -4222,6 +4326,8 @@ int main()
     test_menu_and_context_menu();
     test_image_widgets();
     test_small_buttons();
+    test_arrow_button_and_checkbox_flags();
+    test_align_text_to_frame_padding_moves_only_the_text();
     test_navigation_widgets();
     test_multicomponent_numeric_variants();
     test_rich_tooltip();
