@@ -106,7 +106,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `BeginCombo`/`EndCombo` (conteúdo próprio: árvore, imagens, multi-seleção) | `beginCombo`/`endCombo` | existe: o popup leva o que o chamador submeter entre os dois (o cursor do layout fica dentro dele e `availableWidth()` passa a ser a largura do popup). A largura é a do cabeçalho e cresce com o conteúdo; a altura é a do conteúdo até `visibleItems` linhas (8 por omissão, como o `HeightRegular` do ImGui) |
 | `Combo` com filtro de pesquisa | `beginCombo` + `inputText` | existe: o filtro é conteúdo do popup, submetido pelo chamador (a galeria faz isso) |
 | `ImGuiComboFlags_*` (NoArrowButton, NoPreview, WidthFitPreview, HeightSmall/Regular/Largest) | — | **não existe**: sem flags |
-| Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | — | **não existe**: o que passa de `visibleItems` linhas é cortado, e um `beginChild` lá dentro também não funciona (o `beginLayout` fecha o popup) |
+| Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | `beginCombo(...)` | existe: o popup mostra `visibleItems` linhas (8 por omissão, o `HeightRegular`), a roda do rato e a barra à direita rolam a lista, e o que não cabe é cortado. Um `beginChild` lá dentro continua a não funcionar (fecha o popup) |
+| `SetItemDefaultFocus` (a lista abre no item escolhido) | `setItemDefaultFocus` | existe, para o popup de um combo: só vale na abertura, e rolar à mão desiste dele |
 | `ListBox` (uma entrada) | `listBox` | existe |
 | `ListBox` com seleção múltipla | — | **não existe** |
 | `BeginMultiSelect`/`EndMultiSelect` (clique, Ctrl, Shift, Ctrl+A, Escape) | `beginMultiSelect`/`endMultiSelect` | existe: a seleção é da aplicação (um `Span<bool>`, um por item) e o bloco só lhe aplica o que o rato e as teclas pediram. Dentro do bloco cada `selectable` é um item, pela ordem em que é submetido (o `MultiSelectFlags` tem `SingleSelect`, `NoSelectAll`, `NoRangeSelect` e `ClearOnEscape`) |
@@ -480,9 +481,17 @@ Continua em falta neste nível:
       a servir os dois (o `comboBox` e o `beginCombo`), o cursor do layout dentro do
       popup e a medida do conteúdo a dar-lhe o tamanho no frame seguinte.
       *Onde:* `src/Gui.cpp` (`beginComboImpl`/`endCombo`), `tests/test_item_status.cpp`.
-- [ ] **Scroll dentro do popup de um combo** (o ImGui mostra 8 linhas e rola) e
-      aceitar um `beginChild` lá dentro para o fazer à mão.
-      *Onde:* `src/Gui.cpp` (`beginComboImpl`), a máquina de scroll do `listBox`.
+- [x] **Scroll dentro do popup de um combo**: o popup mede o conteúdo todo e mostra
+      `visibleItems` linhas (8 por omissão); a roda e uma barra à direita (arrastável)
+      rolam, o conteúdo é cortado pela área de dentro do popup, e a lista volta ao
+      topo quando se fecha. Com ele, o `setItemDefaultFocus` (que é o que faz a lista
+      abrir no item escolhido, como no demo).
+      *Onde:* `src/Gui.cpp` (`beginComboImpl`/`endCombo`/`setItemDefaultFocus`),
+      `tests/test_item_status.cpp`.
+- [ ] **`beginChild` dentro do popup de um combo**: o `beginLayout` do child fecha o
+      popup, por isso um child lá dentro não funciona (para uma lista com categorias
+      ou um filtro com a sua própria barra).
+      *Onde:* `src/Gui.cpp` (`beginChild`/`beginLayout`, `comboContentOpen_`).
 - [x] **`menuItem` com atalho desenhado**: `menuItem(label, shortcut, enabled,
       selected)` desenha o atalho à direita e soma-o à largura medida do menu.
       *Onde:* `src/Gui.cpp` (`menuItemInternal`), `tests/test_item_status.cpp`.

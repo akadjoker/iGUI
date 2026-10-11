@@ -733,6 +733,10 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
       comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
       comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
+      comboFocusArmed_(false), comboFocusPending_(false), comboFocusBounds_(),
+      comboJustOpened_(false),
+      comboScrollbarVisible_(false), comboScrollbar_(), comboScrollThumb_(),
+      comboScroll_(0.0f), comboMaxScroll_(0.0f),
       comboAdvanceHeader_(false),
       activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
       activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
@@ -757,6 +761,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     windows_.reserve(8);
     windowsById_.reserve(8);
     listScrolls_.reserve(8);
+    comboScrolls_.reserve(8);
     textScrolls_.reserve(8);
     colorPickers_.reserve(8);
     childScrolls_.reserve(8);
@@ -2653,6 +2658,10 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
     const bool open = openCombo_ == id;
+    // O primeiro frame de um popup: é o único em que o item escolhido o pode trazer
+    // à vista sem lutar com quem rola (ver setItemDefaultFocus).
+    comboJustOpened_ = open && openComboFrame_ + 1u != frameNumber_;
+    comboFocusArmed_ = comboJustOpened_;
     // Com o popup aberto o cabeçalho fica em destaque, como no ImGui.
     drawComboHeader(*drawList, rect, preview, hovered || open, clip);
     // Fechado, o cabeçalho avança o layout aqui mesmo: é o endCombo que o faz
@@ -2661,6 +2670,12 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
         comboAdvanceHeader_ = false;
         if (advanceHeader)
             advanceLayout(rect);
+        // Um combo fechado esquece onde a lista estava: reabri-la começa no topo,
+        // como no ImGui (o popup é criado de novo).
+        if (float *entry = comboScrolls_.find(id))
+            *entry = 0.0f;
+        comboFocusArmed_ = false;
+        comboFocusPending_ = false;
         return false;
     };
     if (!open)
@@ -2674,17 +2689,114 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     // que também só acerta no segundo frame). Sem medida ainda, uma linha.
     const bool measured = comboMeasuredId_ == id;
     const float measuredWidth = measured ? comboMeasured_.x : 0.0f;
-    const float measuredHeight = measured ? comboMeasured_.y : theme_.widgetHeight;
+    // A altura toda do conteúdo (sem o corte): é ela que diz quanto há para rolar.
+    const float contentHeight = measured ? comboMeasured_.y : theme_.widgetHeight;
     const float popupWidth =
         measuredWidth > rect.width ? measuredWidth + padding * 2.0f : rect.width;
-    float popupHeight = measuredHeight + padding * 2.0f;
-    if (popupHeight > maxHeight + padding * 2.0f)
-        popupHeight = maxHeight + padding * 2.0f;
-    if (popupHeight < theme_.widgetHeight + padding * 2.0f)
-        popupHeight = theme_.widgetHeight + padding * 2.0f;
+    // O que cabe no popup: no máximo visibleItems linhas (o HeightRegular do
+    // ImGui), no mínimo uma.
+    float visibleHeight = contentHeight > maxHeight ? maxHeight : contentHeight;
+    if (visibleHeight < theme_.widgetHeight)
+        visibleHeight = theme_.widgetHeight;
+    const float maxScroll = contentHeight > visibleHeight ? contentHeight - visibleHeight : 0.0f;
+    const float popupHeight = visibleHeight + padding * 2.0f;
     const Rect popup(rect.x, rect.y + rect.height, popupWidth, popupHeight);
     const Rect popupClip = intersect(popup, popupClipRect());
     const uint32_t left = buttonIndex(PointerButton::Left);
+
+    // A lista rola: a roda do rato e a barra à direita, como no listBox. O que não
+    // cabe é cortado pelo clip (ver comboContentClip_), não submetido fora.
+    float *scrollEntry = comboScrolls_.find(id);
+    if (!scrollEntry)
+    {
+        comboScrolls_.put(id, 0.0f);
+        scrollEntry = comboScrolls_.find(id);
+    }
+    if (!scrollEntry)
+        return closeHeader();
+    if (*scrollEntry < 0.0f)
+        *scrollEntry = 0.0f;
+    if (*scrollEntry > maxScroll)
+        *scrollEntry = maxScroll;
+
+    // Enquanto o ponteiro está sobre a lista é ela que leva com a roda (a lista de
+    // fora não rola por baixo).
+    const Rect popupVisible = intersect(popup, popupClipRect());
+    // O teste do ponteiro é o rect do popup, não o pointerOver(): enquanto a lista
+    // está a ser submetida ela é dona do ponteiro (ver pointerBlockedByOpenPopup),
+    // e é isso que faz o pointerOver dizer que não a ela própria.
+    if (maxScroll > 0.0f && !inputBlockedByModal() && contains(popupVisible, pointer_.position) &&
+        ownWheelArea(id, popupVisible, static_cast<uint32_t>(childStack_.size()) + 1u) &&
+        pointer_.wheelY != 0.0f)
+    {
+        const float rowStep = theme_.widgetHeight + theme_.itemSpacing;
+        // Rolar à mão desiste do item que o popup queria mostrar.
+        comboFocusArmed_ = false;
+        comboFocusPending_ = false;
+        *scrollEntry -= pointer_.wheelY * rowStep;
+        if (*scrollEntry < 0.0f)
+            *scrollEntry = 0.0f;
+        if (*scrollEntry > maxScroll)
+            *scrollEntry = maxScroll;
+        pointer_.wheelY = 0.0f;   // a lista levou com ele: quem a contém não rola também
+    }
+    const float scroll = *scrollEntry;
+    // A barra fica na borda direita e o conteúdo acaba antes dela, senão o texto
+    // passava por baixo.
+    const float barWidth = maxScroll > 0.0f
+                               ? (theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f
+                                                               : 4.0f)
+                               : 0.0f;
+    comboScrollbarVisible_ = maxScroll > 0.0f && barWidth > 0.0f;
+    comboScroll_ = scroll;
+    comboMaxScroll_ = maxScroll;
+    comboScrollbar_ = Rect(popup.x + popupWidth - padding - barWidth, popup.y + padding, barWidth,
+                           visibleHeight);
+    comboScrollThumb_ = Rect();
+    if (comboScrollbarVisible_)
+    {
+        const float fraction = visibleHeight / (visibleHeight + maxScroll);
+        const float minimumThumb = theme_.scrollbarMinThumb < visibleHeight ? theme_.scrollbarMinThumb
+                                                                           : visibleHeight;
+        const float thumbHeight = visibleHeight * fraction > minimumThumb
+                                      ? visibleHeight * fraction
+                                      : minimumThumb;
+        const float travel = visibleHeight - thumbHeight;
+        const float offset = maxScroll > 0.0f ? travel * scroll / maxScroll : 0.0f;
+        comboScrollThumb_ = Rect(comboScrollbar_.x, comboScrollbar_.y + offset, barWidth,
+                                 thumbHeight);
+        // A barra é um item da lista como outro qualquer: carregar nela e arrastar.
+        const WidgetId scrollbarId = combineIds(id, 0x5343524f4c4cull);
+        if (pointerPressedIn(intersect(comboScrollThumb_, popupVisible), left) &&
+            activeWidget_ == InvalidWidgetId)
+        {
+            activeWidget_ = scrollbarId;
+            focusedWidget_ = id;
+        }
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+            {
+                // Arrastar a barra à mão desiste do item que o popup queria mostrar.
+                comboFocusArmed_ = false;
+                comboFocusPending_ = false;
+                const float normalized =
+                    travel > 0.0f ? clamp((pointer_.position.y - comboScrollbar_.y -
+                                           comboScrollThumb_.height * 0.5f) / travel, 0.0f, 1.0f)
+                                  : 0.0f;
+                const float next = normalized * maxScroll;
+                *scrollEntry = next < 0.0f ? 0.0f : (next > maxScroll ? maxScroll : next);
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        const float finalFraction = visibleHeight / (visibleHeight + maxScroll);
+        const float finalThumb = visibleHeight * finalFraction > minimumThumb
+                                     ? visibleHeight * finalFraction
+                                     : minimumThumb;
+        comboScrollThumb_.y = comboScrollbar_.y +
+                              (visibleHeight - finalThumb) * (*scrollEntry / maxScroll);
+    }
     // Um clique fora do cabeçalho e da caixa fecha, em qualquer janela onde caia;
     // pointerBlockedByOpenPopup impede que essa mesma pressão chegue ao que está
     // por baixo. A caixa é a do frame anterior (é a única medida que existe antes
@@ -2712,10 +2824,20 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     comboVisibleItems_ = visibleItems;
     comboContentWindow_ = currentWindow_;
     comboHeaderRect_ = rect;
-    comboContentClip_ = popupClip;
-    comboContentWidth_ = popupWidth - padding * 2.0f;
+    // O conteúdo é cortado pela área de DENTRO do popup (sem a margem): é o que o
+    // ImGui faz com a região de conteúdo da janela do popup, e é o que impede a
+    // última linha de escorregar para a margem e ficar meio desenhada.
+    float innerWidth = popupWidth - padding * 2.0f - barWidth;
+    if (innerWidth < 1.0f)
+        innerWidth = 1.0f;
+    comboContentClip_ = intersect(Rect(popup.x + padding, popup.y + padding, innerWidth,
+                                       visibleHeight),
+                                  popupClipRect());
+    comboContentWidth_ = innerWidth;
     comboItemsSubmitted_ = true;
-    layout_.origin = Vec2(popup.x + padding, popup.y + padding);
+    // O cursor começa dentro da caixa e sobe o que a lista já rolou: o que sai por
+    // cima do popup fica fora do clip e não se vê (é o corte que a rolagem faz).
+    layout_.origin = Vec2(popup.x + padding, popup.y + padding - *scrollEntry);
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
@@ -2724,6 +2846,16 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     layout_.lineTop = layout_.origin.y;
     layout_.lineHeight = 0.0f;
     return true;
+}
+
+void Context::setItemDefaultFocus()
+{
+    // Só na abertura: a aplicação pede-o no item escolhido a cada frame, e aceitá-lo
+    // sempre prendia a lista a esse item (ver comboFocusArmed_).
+    if (!comboContentOpen_ || !comboFocusArmed_)
+        return;
+    comboFocusPending_ = true;
+    comboFocusBounds_ = item_.bounds;
 }
 
 void Context::endCombo()
@@ -2750,26 +2882,65 @@ void Context::endCombo()
         width = 0.0f;
     if (height < theme_.widgetHeight)
         height = theme_.widgetHeight;
-    const float maxHeight = comboPopupMaxHeight(comboVisibleItems_);
-    if (height > maxHeight)
-        height = maxHeight;
+    // A medida guardada é a do conteúdo TODO, sem o corte: é ela que diz no frame
+    // seguinte quanto há para rolar (o beginCombo é que decide o que cabe).
     comboMeasuredId_ = comboContentId_;
     comboMeasured_ = Vec2(width, height);
 
     WindowState *window = windows_.get(comboContentWindow_);
     if (window && window->open)
     {
+        const float maxHeight = comboPopupMaxHeight(comboVisibleItems_);
+        const float visibleHeight = height > maxHeight ? maxHeight : height;
         const float popupWidth =
-            width + padding * 2.0f > comboHeaderRect_.width ? width + padding * 2.0f
-                                                           : comboHeaderRect_.width;
+            width + padding * 2.0f + comboScrollbar_.width > comboHeaderRect_.width
+                ? width + padding * 2.0f + comboScrollbar_.width
+                : comboHeaderRect_.width;
         const Rect popup(comboHeaderRect_.x, comboHeaderRect_.y + comboHeaderRect_.height,
-                         popupWidth, height + padding * 2.0f);
-        window->overlayDrawList.addRectFilled(popup, theme_.selectableBackground,
-                                              comboContentClip_);
+                         popupWidth, visibleHeight + padding * 2.0f);
+        DrawList &overlay = window->overlayDrawList;
+        overlay.addRectFilled(popup, theme_.selectableBackground, popupClipRect());
+        // A barra agora, antes do conteúdo (que o frame já submeteu na lista dele e
+        // sai à frente desta): o conteúdo acaba antes dela, por isso não se tapam.
+        if (comboScrollbarVisible_)
+        {
+            const Rect bar(comboHeaderRect_.x + popupWidth - padding - comboScrollbar_.width,
+                           popup.y + padding, comboScrollbar_.width,
+                           popup.height - padding * 2.0f);
+            overlay.addRectFilled(bar, theme_.inputBg, popupClipRect());
+            overlay.addRectFilled(Rect(bar.x, comboScrollThumb_.y, bar.width,
+                                       comboScrollThumb_.height),
+                                  theme_.scrollbarThumb, popupClipRect());
+        }
         comboPopupBounds_ = popup;
         comboBounds_ = comboHeaderRect_;
     }
 
+    // O item que o setItemDefaultFocus() marcou: se ele está fora da vista, a lista
+    // rola o mínimo para ele aparecer (a rolagem aplica-se no frame seguinte, como a
+    // medida do conteúdo). Só com a medida feita: no primeiro frame de um popup
+    // ainda não se sabe o que há para rolar.
+    if (comboFocusPending_ && comboMaxScroll_ > 0.0f && comboFocusBounds_.height > 0.0f)
+    {
+        float *entry = comboScrolls_.find(comboContentId_);
+        if (entry)
+        {
+            const float top = comboContentClip_.y;
+            const float bottom = top + comboContentClip_.height;
+            if (comboFocusBounds_.y < top)
+                *entry -= top - comboFocusBounds_.y;
+            else if (comboFocusBounds_.y + comboFocusBounds_.height > bottom)
+                *entry += comboFocusBounds_.y + comboFocusBounds_.height - bottom;
+            if (*entry < 0.0f)
+                *entry = 0.0f;
+            if (*entry > comboMaxScroll_)
+                *entry = comboMaxScroll_;
+            // O realce desenhado neste frame ainda usou a rolagem antiga: quem manda
+            // no próximo frame é a nova, que é o que o setItemDefaultFocus anuncia.
+            comboFocusPending_ = false;
+            comboFocusArmed_ = false;
+        }
+    }
     // O layout de fora volta por inteiro, e só agora o cabeçalho avança: o popup
     // não é do layout de fora (ver beginCombo do layout).
     const bool advanceHeader = comboAdvanceHeader_;
