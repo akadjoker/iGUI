@@ -774,6 +774,9 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     textScrolls_.reserve(8);
     colorPickers_.reserve(8);
     childScrolls_.reserve(8);
+    tabBars_.reserve(4);
+    tabBarDepth_ = 0;
+    tabContentDepth_ = 0;
     gizmo2DStates_.reserve(4);
     gizmo3DStates_.reserve(4);
     dockSpaces_.reserve(2);
@@ -2213,6 +2216,332 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     }
     (void)arrowHovered;
     return selected;
+}
+
+// ── Tabs a sério (beginTabBar/beginTabItem) ──────────────────────────────────
+static bool tabListContains(const ct::Vector<ig::WidgetId> &list, ig::WidgetId id)
+{
+    for (ct::Vector<ig::WidgetId>::size_type i = 0u; i < list.size(); ++i)
+    {
+        if (list[i] == id)
+            return true;
+    }
+    return false;
+}
+
+static int tabListIndex(const ct::Vector<ig::WidgetId> &list, ig::WidgetId id)
+{
+    for (ct::Vector<ig::WidgetId>::size_type i = 0u; i < list.size(); ++i)
+    {
+        if (list[i] == id)
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
+static void tabListMoveTo(ct::Vector<ig::WidgetId> &list, ig::WidgetId id, int index)
+{
+    const int from = tabListIndex(list, id);
+    if (from < 0 || index < 0 || from == index)
+        return;
+    list.erase(list.begin() + from);
+    if (index > static_cast<int>(list.size()))
+        index = static_cast<int>(list.size());
+    list.insert(list.begin() + index, id);
+}
+
+bool Context::beginTabBar(StringView idText, unsigned flags)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList || idText.empty() || tabBarDepth_ >= kTabBarStackSize)
+        return false;
+    const float width = calcItemWidth();
+    if (width <= 0.0f)
+        return false;
+    const Rect row(layout_.cursor.x, layout_.cursor.y, width, theme_.widgetHeight);
+    const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
+    const WidgetId id = combineIds(parentId, combineIds(makeWidgetId(idText), 0x544142424152ull));
+    TabBarState *state = tabBars_.find(id);
+    if (!state)
+    {
+        tabBars_.put(id, TabBarState());
+        state = tabBars_.find(id);
+        if (!state)
+            return false;
+    }
+    state->frame = frameNumber_;
+    state->seenThisFrame.clear();
+    // Quem abre o conteúdo neste frame é quem estava escolhido no início dele: uma
+    // tab escolhida agora mesmo realça já, mas o conteúdo dela é do frame seguinte.
+    state->frameSelected = state->selected;
+    TabBarSubmitState &submit = tabBarStack_[tabBarDepth_++];
+    submit.id = id;
+    submit.parentLayout = layout_;
+    submit.row = row;
+    submit.flags = flags;
+    submit.cursorX = row.x;
+    submit.contentHeight = 0.0f;
+    // A faixa da barra: uma linha por trás das tabs.
+    drawList->addRectFilled(row, theme_.panelColor, contentClip());
+    idStack_.push_back(id);
+    return true;
+}
+
+void Context::endTabBar()
+{
+    if (tabBarDepth_ <= 0)
+        return;
+    const TabBarSubmitState submit = tabBarStack_[--tabBarDepth_];
+    if (!idStack_.empty())
+        idStack_.pop_back();
+    if (TabBarState *state = tabBars_.find(submit.id))
+    {
+        // A ordem e as posições para o frame seguinte: as tabs que já não são
+        // submetidas saem, as novas entram no fim, e cada uma fica onde a soma das
+        // larguras a põe (uma largura que ainda não se conhece vale 0).
+        for (ct::Vector<WidgetId>::size_type i = 0u; i < state->order.size();)
+        {
+            if (tabListContains(state->seenThisFrame, state->order[i]))
+                ++i;
+            else
+                state->order.erase(state->order.begin() + static_cast<long>(i));
+        }
+        for (ct::Vector<WidgetId>::size_type i = 0u; i < state->seenThisFrame.size(); ++i)
+        {
+            if (!tabListContains(state->order, state->seenThisFrame[i]))
+                state->order.push_back(state->seenThisFrame[i]);
+        }
+        // A tab escolhida que deixou de ser submetida (o documento fechou-se) dá o
+        // lugar à primeira: um clique no x dela não pode deixar a barra vazia.
+        if (!tabListContains(state->seenThisFrame, state->selected))
+            state->selected = state->seenThisFrame.empty() ? InvalidWidgetId
+                                                           : state->seenThisFrame[0];
+        state->lastCount = static_cast<int>(state->seenThisFrame.size());
+        // O arrasto acaba no fim da barra: todas as tabs já foram submetidas, por isso
+        // a troca de ordem já teve a sua chance.
+        if (pointer_.released[buttonIndex(PointerButton::Left)])
+        {
+            if (activeWidget_ == combineIds(state->dragTab, 0x54414244524147ull))
+                activeWidget_ = InvalidWidgetId;
+            state->dragTab = InvalidWidgetId;
+        }
+        float x = submit.row.x;
+        for (ct::Vector<WidgetId>::size_type i = 0u; i < state->order.size(); ++i)
+        {
+            const float *width = state->widths.find(state->order[i]);
+            state->positions.put(state->order[i], x);
+            x += width ? *width : 0.0f;
+        }
+    }
+    // A barra fecha por baixo, com o conteúdo da tab escolhida dentro dela.
+    const Rect bounds(submit.row.x, submit.row.y, submit.row.width,
+                      submit.row.height + submit.contentHeight);
+    DrawList *drawList = currentDrawList();
+    if (drawList && submit.contentHeight > 0.0f)
+    {
+        drawList->addLine(Vec2(bounds.x, bounds.y + bounds.height),
+                          Vec2(bounds.x + bounds.width, bounds.y + bounds.height),
+                          theme_.borderColor, contentClip(), 1.0f);
+    }
+    layout_ = submit.parentLayout;
+    advanceLayout(bounds);
+}
+
+bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
+{
+    if (tabBarDepth_ <= 0 || tabContentDepth_ > 0)
+        return false;
+    TabBarSubmitState &submit = tabBarStack_[tabBarDepth_ - 1];
+    TabBarState *state = tabBars_.find(submit.id);
+    DrawList *drawList = currentDrawList();
+    if (!state || !drawList)
+        return false;
+    const Rect clip = contentClip();
+    const WidgetId tabId = combineIds(submit.id, makeWidgetId(labelText));
+    const bool isNew = !tabListContains(state->order, tabId);
+    if (!tabListContains(state->seenThisFrame, tabId))
+        state->seenThisFrame.push_back(tabId);
+    // A primeira tab de uma barra nova fica escolhida, e com o AutoSelectNewTabs
+    // qualquer tab que apareça pela primeira vez também (é o que faz um documento
+    // novo abrir à frente).
+    if (state->selected == InvalidWidgetId ||
+        (isNew && (submit.flags & TabBarFlags::AutoSelectNewTabs) != 0u))
+        state->selected = tabId;
+    if ((flags & TabItemFlags::SetSelected) != 0u)
+        state->selected = tabId;
+    // Uma barra nova (sem nada escolhido no início do frame) abre já a primeira tab:
+    // sem isto o primeiro frame de uma barra saía vazio.
+    if (state->frameSelected == InvalidWidgetId && state->selected == tabId)
+        state->frameSelected = tabId;
+
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float padding = theme_.windowPadding;
+    float tabWidth = metrics.width + padding * 2.0f + (open ? metrics.height : 0.0f);
+    if ((submit.flags & TabBarFlags::Fitting) != 0u)
+    {
+        // As tabs dividem a barra: é o que faz caberem todas na largura. Quantas são
+        // só se sabe no fim do frame, por isso a divisão é pela conta do frame
+        // anterior (na primeira é pela que já se viu).
+        const int count = state->lastCount > static_cast<int>(state->seenThisFrame.size())
+            ? state->lastCount : static_cast<int>(state->seenThisFrame.size());
+        if (count > 0)
+        {
+            const float share = submit.row.width / static_cast<float>(count);
+            if (share < tabWidth)
+                tabWidth = share;
+        }
+    }
+    // A tab nasce onde a ordem a pôs no frame anterior; uma tab nova nasce a seguir
+    // à última submetida.
+    float tabX = submit.cursorX;
+    const float *position = state->positions.find(tabId);
+    if (position)
+        tabX = *position;
+    else
+        submit.cursorX += tabWidth;
+    state->widths.put(tabId, tabWidth);
+    const Rect tabRect(tabX, submit.row.y, tabWidth, submit.row.height);
+    const Rect tabClip = intersect(tabRect, clip);
+
+    const uint32_t left = buttonIndex(PointerButton::Left);
+    const uint32_t middle = buttonIndex(PointerButton::Middle);
+    const Rect closeRect(tabRect.x + tabRect.width - padding - metrics.height * 0.5f,
+                         tabRect.y + (tabRect.height - metrics.height) * 0.5f,
+                         metrics.height, metrics.height);
+    const WidgetId closeId = combineIds(tabId, 0x544142434c4f5345ull);
+    bool closed = false;
+    bool closeHovered = false;
+    if (open)
+    {
+        closeHovered = itemHovered(closeRect, tabClip, closeId);
+        if (itemClicked(closeRect, tabClip, closeId, false))
+        {
+            *open = false;
+            closed = true;
+        }
+    }
+    // O botão do meio fecha a tab (é o que o NoCloseWithMiddleMouseButton desliga).
+    if (open && !closed && (submit.flags & TabBarFlags::NoCloseWithMiddleMouseButton) == 0u &&
+        pointerPressedIn(tabClip, middle) && activeWidget_ == InvalidWidgetId)
+    {
+        *open = false;
+        closed = true;
+    }
+    bool hovered = false;
+    bool clicked = false;
+    if (!closed)
+    {
+        hovered = itemHovered(tabRect, tabClip, tabId);
+        clicked = itemClicked(tabRect, tabClip, tabId);
+    }
+    if (closed)
+        hovered = itemHovered(tabRect, tabClip, tabId);
+    if (clicked)
+        state->selected = tabId;
+
+    // Arrastar uma tab para cima de outra troca-lhes a ordem (Reorderable). A
+    // troca vale para o frame seguinte, que é quando as posições são recalculadas.
+    if ((submit.flags & TabBarFlags::Reorderable) != 0u)
+    {
+        const WidgetId dragId = combineIds(tabId, 0x54414244524147ull);
+        // O arrasto começa pendente (o clique já pôs esta tab ativa) e só agarra a tab
+        // quando o ponteiro anda: assim um clique simples continua a escolhê-la.
+        // A carregada no x não agarra a tab (o x é o item que fecha): só conta quando
+        // a tab tem mesmo o botão de fechar.
+        const bool pressedOnClose = open && contains(closeRect, pointer_.pressedPosition[left]);
+        if (!closed && pointerPressedIn(tabClip, left) && activeWidget_ == tabId && !pressedOnClose)
+        {
+            state->dragTab = tabId;
+            state->dragStartX = pointer_.position.x;
+        }
+        if (state->dragTab == tabId && activeWidget_ == tabId && pointer_.down[left] &&
+            fabsf(pointer_.position.x - state->dragStartX) > 6.0f)
+        {
+            activeWidget_ = dragId;
+            focusedWidget_ = dragId;
+        }
+        // Largar em cima de outra tab: a que estava a ser arrastada passa para o lugar
+        // dela (a ordem nova vale a partir do frame seguinte, quando as posições são
+        // recalculadas).
+        if (state->dragTab != InvalidWidgetId && state->dragTab != tabId && pointer_.released[left] &&
+            contains(tabClip, pointer_.releasedPosition[left]))
+            tabListMoveTo(state->order, state->dragTab, tabListIndex(state->order, tabId));
+    }
+
+    // O realce segue a escolha viva (um clique nesta tab realça-a já); o conteúdo
+    // que se segue é o da tab escolhida no início do frame.
+    const bool highlighted = state->selected == tabId;
+    const bool selected = state->frameSelected == tabId;
+    // A tab em si: a escolhida sai com o fundo do conteúdo e sem a linha de baixo.
+    const Color background = highlighted ? theme_.windowBackground
+                                         : (hovered ? theme_.buttonHovered : theme_.panelColor);
+    drawList->addRectFilled(tabRect, background, clip);
+    drawList->addLine(Vec2(tabRect.x, tabRect.y), Vec2(tabRect.x + tabRect.width, tabRect.y),
+                      theme_.borderColor, clip, 1.0f);
+    if (!highlighted)
+        drawList->addLine(Vec2(tabRect.x, tabRect.y + tabRect.height - 1.0f),
+                          Vec2(tabRect.x + tabRect.width, tabRect.y + tabRect.height - 1.0f),
+                          theme_.borderColor, clip, 1.0f);
+    drawText(*drawList, theme_.font, text,
+             Vec2(tabRect.x + padding, tabRect.y + (tabRect.height - metrics.height) * 0.5f),
+             theme_.fontSize, highlighted ? theme_.textColor : theme_.labelText, clip);
+    if ((flags & TabItemFlags::UnsavedDocument) != 0u)
+    {
+        drawList->addCircleFilled(Vec2(tabRect.x + padding + metrics.width + metrics.height * 0.4f,
+                                       tabRect.y + tabRect.height * 0.5f),
+                                  metrics.height * 0.14f, theme_.textColor, clip);
+    }
+    if (open)
+    {
+        if (closeHovered)
+            drawList->addRectFilledRounded(closeRect, theme_.borderRadius, theme_.buttonHovered, clip);
+        const Color color = closed ? theme_.textDisabled : theme_.menuSubmenuArrow;
+        const float radius = closeRect.height * 0.2f;
+        const float cx = closeRect.x + closeRect.width * 0.5f;
+        const float cy = closeRect.y + closeRect.height * 0.5f;
+        drawList->addLine(Vec2(cx - radius, cy - radius), Vec2(cx + radius, cy + radius), color, clip);
+        drawList->addLine(Vec2(cx + radius, cy - radius), Vec2(cx - radius, cy + radius), color, clip);
+    }
+
+    if (!selected)
+        return false;
+    // A tab escolhida abre o conteúdo: os itens vão para a área por baixo da barra,
+    // com a largura dela, e é o endTabItem que a fecha e mede.
+    if (tabContentDepth_ >= kTabBarStackSize)
+        return false;
+    TabContentState &content = tabContent_[tabContentDepth_++];
+    content.parentLayout = layout_;
+    const Rect contentRect(submit.row.x, submit.row.y + submit.row.height, submit.row.width,
+                           clip.y + clip.height - (submit.row.y + submit.row.height));
+    content.rect = intersect(contentRect, clip);
+    content.active = true;
+    layout_.origin = Vec2(contentRect.x, contentRect.y);
+    layout_.cursor = layout_.origin;
+    layout_.baseOriginX = contentRect.x;
+    layout_.hasLastItem = false;
+    layout_.contentExtent = Vec2(0.0f, 0.0f);
+    layout_.nextItemWidth = 0.0f;
+    layout_.lineTop = contentRect.y;
+    layout_.lineHeight = 0.0f;
+    return true;
+}
+
+void Context::endTabItem()
+{
+    if (tabContentDepth_ <= 0)
+        return;
+    TabContentState &content = tabContent_[--tabContentDepth_];
+    float height = 0.0f;
+    if (layout_.hasLastItem)
+        height = layout_.contentExtent.y - content.rect.y;
+    if (height < 0.0f)
+        height = 0.0f;
+    content.active = false;
+    layout_ = content.parentLayout;
+    if (tabBarDepth_ > 0)
+        tabBarStack_[tabBarDepth_ - 1].contentHeight = height + theme_.itemSpacing;
 }
 
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
@@ -10149,6 +10478,10 @@ float Context::availableWidth() const
         right = dockPanelStack_.back().content.x + dockPanelStack_.back().content.width;
     if (tableActive_ && table_.columns > 0 && table_.column >= 0)
         right = tableColumnX(table_.column) + tableColumnWidth(table_.column);
+    // O conteúdo de uma tab vai até à largura da barra (o rect que o beginTabItem
+    // deixou).
+    if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
+        right = tabContent_[tabContentDepth_ - 1].rect.x + tabContent_[tabContentDepth_ - 1].rect.width;
     if (propertyRowActive_)
         right = propertyRow_.bounds.x + propertyRow_.bounds.width;
     return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
@@ -10744,6 +11077,9 @@ void Context::clearWidgetState()
     numericEdits_.clear();
     colorPickers_.clear();
     childScrolls_.clear();
+    tabBars_.clear();
+    tabBarDepth_ = 0;
+    tabContentDepth_ = 0;
     gizmo2DStates_.clear();
     gizmo3DStates_.clear();
     wheelAreas_.clear();
@@ -10902,6 +11238,10 @@ Rect Context::contentClip() const
     // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
     if (tableActive_ && table_.scrollY)
         clip = intersect(clip, tableRowClip());
+    // O conteúdo de uma tab é cortado pela barra (a largura dela e o que sobra para
+    // baixo).
+    if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
+        clip = intersect(clip, tabContent_[tabContentDepth_ - 1].rect);
     return clip;
 }
 

@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 250 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 255 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -126,7 +126,9 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `CollapsingHeader` | `collapsingHeader` | existe |
 | `CollapsingHeader` com botão de fecho (`bool* p_open`) | `collapsingHeader(label, expanded, open)` | existe (o x fecha-o e o header deixa de ser desenhado) |
 | `CollapsingHeader` com bullet | `collapsingHeader(label, expanded, TreeStyle)` | existe (e o grupo que se fecha sozinho faz-se com o `bool &open` de sempre) |
-| `BeginTabBar`/`BeginTabItem` | `tabBar` | parcial: o `tabBar` é uma faixa com índice, não abre e fecha conteúdo com id próprio |
+| `BeginTabBar`/`BeginTabItem`/`EndTabItem`/`EndTabBar` | `beginTabBar`/`beginTabItem`/`endTabItem`/`endTabBar` (o `tabBar(label, indice, itens)` antigo continua a ser a faixa com índice) | existe: a barra é um contentor, cada tab desenha-se e **só a escolhida** abre o conteúdo (que vai até ao `endTabItem`), o que está escolhido é da barra (pelo id) e sobrevive ao frame, a tab de um documento que deixe de ser submetida desaparece com ele (e a barra escolhe a primeira), e o `TabItemFlags::SetSelected`/`UnsavedDocument` existem. Um clique realça a tab já neste frame e o conteúdo dela é o do frame seguinte (a regra do ImGui: quem abre o conteúdo neste frame é quem estava escolhido no início dele) |
+| Flags de tab (`Fitting`, `AutoSelectNewTabs`, `TabListPopup`, `TabListButton`, `NoCloseWithMiddleMouseButton`, `NoReorder`) | `TabBarFlags` (`Reorderable`, `AutoSelectNewTabs`, `Fitting`, `NoCloseWithMiddleMouseButton`) | parcial: os quatro existem (o `Fitting` divide a largura da barra pelas tabs, o `Reorderable` troca a ordem com um arrasto, que vale a partir do frame seguinte porque é lá que as posições são recalculadas); faltam o `TabListPopup`/`TabListButton` (a lista de todas as tabs) |
+| Tab com botão de fechar / `ImGuiTabItemFlags_SetSelected`, `UnsavedDocument` | `beginTabItem(label, bool *open, flags)` | existe (o `x` fecha e o ponto do `UnsavedDocument`; o botão do meio também fecha, e é o `NoCloseWithMiddleMouseButton` que o desliga) |
 | Flags de tab (`Fitting`, `AutoSelectNewTabs`, `TabListPopup`, `TabListButton`, `NoCloseWithMiddleMouseButton`, `NoReorder`) | — | **não existe** |
 | Tab com botão de fechar / `ImGuiTabItemFlags_SetSelected`, `UnsavedDocument` | — | **não existe** |
 
@@ -581,6 +583,25 @@ Continua em falta neste nível:
       linha 0 deixou de contar duas vezes).
       *Onde:* `src/Gui.cpp` (`beginTableScroll`, `tableRowClip`, `tableNextColumn`,
       `endTable`, `contentClip`), `tests/test_item_status.cpp`.
+- [x] **As tabs a sério** (`beginTabBar`/`beginTabItem`/`endTabItem`/`endTabBar`): a
+      barra é um contentor e **só a tab escolhida** abre o conteúdo dela (os itens
+      vão para a área por baixo da linha das tabs, com a largura da barra e o clip
+      dela), e é o `endTabItem` que fecha e mede - a barra fica com a altura da linha
+      mais a do conteúdo. O que está escolhido é da barra (pelo id) e sobrevive ao
+      frame; uma tab que deixe de ser submetida desaparece com ela e a barra escolhe
+      a primeira. A escolha do clique vale já para o realce e para o conteúdo do
+      frame seguinte (é a regra do ImGui: quem abre o conteúdo é quem estava
+      escolhido no início do frame). Com os `TabBarFlags` (`Reorderable` troca a
+      ordem com um arrasto, `AutoSelectNewTabs`, `Fitting` que divide a largura da
+      barra, `NoCloseWithMiddleMouseButton`) e os `TabItemFlags` (`SetSelected`,
+      `UnsavedDocument`), a secção das tabs do demo fica coberta menos a lista de
+      todas as tabs (`TabListPopup`).
+      *Onde:* `src/Gui.cpp` (`beginTabBar`/`beginTabItem`/`endTabItem`/`endTabBar`,
+      `contentClip`, `availableWidth`), `include/igui/Gui.hpp` (`TabBarFlags`,
+      `TabItemFlags`, `TabBarState`), `tests/test_item_status.cpp`.
+- [ ] **A lista de todas as tabs** (`TabListPopup`/`TabListButton`) e as tabs de um
+      dock space (que já tem as dele).
+      *Onde:* `src/Gui.cpp` (`beginTabBar`), o `DockSpaceState` é o precedente.
 - [ ] **O resto das tabelas**: `scrollX` (rolagem horizontal, com a largura própria
       das colunas), `freezeCols`, `sizingFixedFit`, `NoPad`/`ContextMenuInBody` e as
       tabelas aninhadas.
