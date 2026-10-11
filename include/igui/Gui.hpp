@@ -635,7 +635,13 @@ public:
             /// As tabs encolhem para caber todas na largura da barra (o Fitting).
             Fitting = 1u << 2,
             /// Sem o fecho com o botão do meio (o NoCloseWithMiddleMouseButton).
-            NoCloseWithMiddleMouseButton = 1u << 3
+            NoCloseWithMiddleMouseButton = 1u << 3,
+            /// Um botão em flecha encostado à esquerda da barra que abre a lista
+            /// das tabs (o TabListPopupButton): a lista escolhe a tab, como um
+            /// clique nela faria.
+            TabListPopupButton = 1u << 4,
+            /// A tab escolhida sai com um traço por cima (o DrawSelectedOverline).
+            DrawSelectedOverline = 1u << 5
         };
     };
     struct TabItemFlags
@@ -647,7 +653,12 @@ public:
             /// documento" pede.
             SetSelected = 1u << 0,
             /// Sai com um ponto a seguir ao nome (o UnsavedDocument do demo).
-            UnsavedDocument = 1u << 1
+            UnsavedDocument = 1u << 1,
+            /// A tab fica na ponta esquerda da barra, à frente das outras (o
+            /// Leading): é onde o "+" e os menus das barras do demo ficam.
+            Leading = 1u << 2,
+            /// A tab fica na ponta direita (o Trailing).
+            Trailing = 1u << 3
         };
     };
     /// @brief Starts a tab bar at the layout cursor, as wide as the available width.
@@ -661,6 +672,12 @@ public:
     bool beginTabItem(StringView label, bool *open = nullptr,
                       unsigned flags = TabItemFlags::None);
     void endTabItem();
+    /// @brief A tab que é um botão (o TabItemButton do ImGui): ocupa o lugar de uma
+    ///        tab na barra, com o aspecto de um botão, e devolve true quando é
+    ///        carregada. Não escolhe nada nem abre conteúdo - é o "+" que acrescenta
+    ///        uma tab, o "?" que abre um menu, ou o que se quiser, e quem trata do
+    ///        clique é o chamador. Leva as bandas (Leading/Trailing) como uma tab.
+    bool tabItemButton(StringView label, unsigned flags = TabItemFlags::None);
     // A scrollable list. The label is an identifier; render a separate label when needed.
     bool listBox(StringView label, int &currentItem, Span<const StringView> items,
                  const Rect &bounds);
@@ -1636,6 +1653,12 @@ private:
         // só se sabe depois de ela ser submetida, como tudo o que se mede aqui).
         ct::Vector<WidgetId> order;
         ct::Vector<WidgetId> seenThisFrame;
+        // A banda de cada tab (Leading/Trailing): é o que põe as das pontas nas
+        // pontas, sejam tabs ou botões.
+        ct::HashMap<WidgetId, unsigned> bands;
+        // O nome de cada tab, para o botão da lista as poder listar (a lista é a do
+        // frame anterior, como no ImGui).
+        ct::HashMap<WidgetId, String> names;
         ct::HashMap<WidgetId, float> widths;
         ct::HashMap<WidgetId, float> positions;
         // Quantas tabs a barra tinha no frame anterior: é o que o Fitting usa para
@@ -1648,7 +1671,7 @@ private:
 
         TabBarState()
             : selected(InvalidWidgetId), frameSelected(InvalidWidgetId), order(), seenThisFrame(),
-              widths(), positions(),
+              bands(), names(), widths(), positions(),
               lastCount(0), dragTab(InvalidWidgetId), dragStartX(0.0f), frame(0u) {}
     };
     // A barra que está a ser submetida agora (uma pilha: um tab bar dentro do
@@ -1661,10 +1684,23 @@ private:
         unsigned flags;
         float cursorX;
         float contentHeight;
+        // A faixa onde as tabs cabem: o row todo menos o botão da lista e as
+        // bandas das pontas (é o que o Fitting divide e onde o Trailing encosta).
+        float tabsX;
+        float tabsWidth;
+        // A largura que cada ponta ocupa neste frame, separada em tabs e botões: as
+        // tabs de uma ponta encostam-se ao lado dos botões dessa ponta (é o que põe
+        // o "+" à direita das tabs, e as tabs Leading depois do "?"), e o que sobra
+        // é que é dividido pelo Fitting.
+        float leadingTabWidth;
+        float leadingButtonWidth;
+        float trailingTabWidth;
+        float trailingButtonWidth;
 
         TabBarSubmitState()
             : id(InvalidWidgetId), parentLayout(), row(), flags(0u), cursorX(0.0f),
-              contentHeight(0.0f) {}
+              contentHeight(0.0f), tabsX(0.0f), tabsWidth(0.0f), leadingTabWidth(0.0f),
+              leadingButtonWidth(0.0f), trailingTabWidth(0.0f), trailingButtonWidth(0.0f) {}
     };
     // O conteúdo da tab escolhida: o layout de fora e o clip que os itens de dentro
     // apanham (ver contentClip/availableWidth).
@@ -1980,6 +2016,11 @@ private:
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
     // As barras de tabs por id (a escolhida, a ordem e as vistas neste frame).
     ct::HashMap<WidgetId, TabBarState> tabBars_;
+    // O botão da lista de tabs (ver TabBarFlags::TabListPopupButton): o combo sem
+    // pré-visualização que abre a lista das tabs da barra.
+    void tabListPopupButton(float width, TabBarState &state);
+    // Põe a tab em x e devolve onde a próxima da mesma banda começa.
+    float tabPlacePosition(TabBarState &state, WidgetId tab, float x);
     static const int kTabBarStackSize = 4;
     TabBarSubmitState tabBarStack_[kTabBarStackSize];
     int tabBarDepth_;
