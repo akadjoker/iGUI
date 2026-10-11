@@ -1059,6 +1059,76 @@ void test_hover_follows_the_window_that_is_raised()
     assert(!upperHovered);
 }
 
+// O atalho de um item de menu é desenhado à direita e entra na largura do popup:
+// sem isso um menu com atalhos cortava-os, ou alargava o menu a cada frame.
+void test_menu_item_draws_its_shortcut()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect barButton;
+    ig::Rect plainItem;
+    ig::Rect shortcutItem;
+    bool clickedShortcut = true;
+    float withShortcut = 0.0f;
+    float withoutShortcut = 0.0f;
+
+    auto build = [&](ig::Context &c, bool withShortcutItem) {
+        assert(c.beginWindow("menus", ig::Rect(0.0f, 0.0f, 320.0f, 260.0f)));
+        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+        {
+            const bool menuOpen = c.beginMenu("F");
+            barButton = c.itemRect();
+            if (menuOpen)
+            {
+                // O atalho é o texto mais comprido do popup, por isso é ele que
+                // manda na largura (com rótulos curtos o menu fica na largura
+                // mínima e não se vê diferença nenhuma).
+                c.menuItem("Undo");
+                plainItem = c.itemRect();
+                if (withShortcutItem)
+                {
+                    clickedShortcut = c.menuItem(
+                        "Redo", ig::StringView("Ctrl+Shift+Alt+Super+Q e mais teclas"));
+                    shortcutItem = c.itemRect();
+                    // O rect do item é o da linha do menu, não o do atalho: os dois
+                    // itens têm a mesma altura e o mesmo x.
+                    assert(shortcutItem.x == plainItem.x);
+                    assert(shortcutItem.height == plainItem.height);
+                }
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        c.endWindow();
+    };
+
+    // Um frame fechado primeiro: é dele que sai o rect do botão da barra.
+    harness.frame([&](ig::Context &c) { build(c, false); });
+    assert(barButton.width > 0.0f);
+
+    // Abrir o menu.
+    const float barX = barButton.x + barButton.width * 0.5f;
+    const float barY = barButton.y + barButton.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(barX, barY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, barX, barY));
+    harness.frame([&](ig::Context &c) { build(c, false); });
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, barX, barY));
+    harness.frame([&](ig::Context &c) { build(c, false); });
+
+    // O atalho tem de caber: o popup mede a largura dos itens (com o atalho) e
+    // usa-a no frame seguinte, por isso a largura do item cresce quando ele lá está.
+    for (int i = 0; i < 4; ++i)
+        harness.frame([&](ig::Context &c) { build(c, true); });
+    withShortcut = shortcutItem.width;
+    for (int i = 0; i < 4; ++i)
+        harness.frame([&](ig::Context &c) { build(c, false); });
+    withoutShortcut = plainItem.width;
+    assert(withShortcut > withoutShortcut);
+
+}
+
 } // namespace
 
 int main()
@@ -1081,6 +1151,7 @@ int main()
     test_open_menu_owns_the_pointer_over_it();
     test_menu_bar_reserves_its_strip();
     test_hover_follows_the_window_that_is_raised();
+    test_menu_item_draws_its_shortcut();
     test_open_combo_owns_the_pointer_over_its_list();
     printf("test_item_status: all tests passed\n");
     return 0;

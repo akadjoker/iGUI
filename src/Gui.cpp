@@ -2390,7 +2390,8 @@ void Context::endMenu()
     activeMenu_ = InvalidWidgetId;
 }
 
-bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked)
+bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked,
+                               StringView shortcut)
 {
     WindowState *window = currentWindow();
     if (!window || activeMenu_ == InvalidWidgetId)
@@ -2405,12 +2406,18 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     const bool clicked = enabled && itemClicked(item, clip, id);
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    // O atalho entra na largura do popup: um menu com atalhos tem de caber.
+    const TextMetrics shortcutMetrics =
+        shortcut.size() > 0u ? measureText(theme_.font, shortcut, theme_.fontSize) : TextMetrics();
     const float checkWidth = checked ? theme_.menuItemHeight : 0.0f;
     // Remember the widest label drawn this frame so endMenu can size the
     // popup for it. Only this menu's own items count: while a submenu's
     // items are being submitted subMenuParent_ is set, and the parent's
     // width must not grow to fit the submenu's labels.
-    const float itemWidth = metrics.width + theme_.menuItemPadX * 2.0f + checkWidth;
+    const float shortcutWidth =
+        shortcut.size() > 0u ? shortcutMetrics.width + theme_.menuItemPadX * 2.0f : 0.0f;
+    const float itemWidth =
+        metrics.width + theme_.menuItemPadX * 2.0f + checkWidth + shortcutWidth;
     if (subMenuParent_ == InvalidWidgetId)
     {
         if (itemWidth > menuMeasuredWidth_)
@@ -2437,6 +2444,14 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
              theme_.fontSize, enabled ? (hovered ? theme_.menuItemTextHover : theme_.menuItemText)
                                 : theme_.menuItemDisabled,
              clip);
+    if (shortcut.size() > 0u)
+    {
+        // O atalho à direita, na cor mais baixa: é texto, não é clicável por si.
+        drawText(popup, theme_.font, shortcut,
+                 Vec2(item.x + item.width - theme_.menuItemPadX - shortcutMetrics.width,
+                      item.y + (item.height - shortcutMetrics.height) * 0.5f),
+                 theme_.fontSize, theme_.menuItemDisabled, clip);
+    }
     if (clicked)
     {
         if (checked)
@@ -2451,6 +2466,14 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
 bool Context::menuItem(StringView labelText, bool enabled)
 {
     return menuItemInternal(labelText, enabled, nullptr);
+}
+
+bool Context::menuItem(StringView labelText, StringView shortcut, bool enabled, bool selected)
+{
+    bool marked = selected;
+    // O `selected` é do item (desenha a marca), o retorno é o clique: um item que
+    // faz de caixa de escolha passa o valor por referência a esta variável.
+    return menuItemInternal(labelText, enabled, selected ? &marked : nullptr, shortcut);
 }
 
 bool Context::menuCheckbox(StringView labelText, bool &checked, bool enabled)
