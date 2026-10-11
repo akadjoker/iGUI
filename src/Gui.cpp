@@ -725,7 +725,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
-      comboBounds_(), comboPopupBounds_(), multiSelect_(), mainMenuBarWindow_(),
+      alignTextNext_(false), comboBounds_(), comboPopupBounds_(), multiSelect_(), mainMenuBarWindow_(),
       mainMenuBarOpen_(false),
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
@@ -848,6 +848,8 @@ void Context::beginFrame(const FrameInfo &frame)
     // quem o quiser tem de o voltar a abrir.
     multiSelect_.active = false;
     multiSelect_.selected = Span<bool>();
+    // Um alignTextToFramePadding() sem texto à frente não vale para o frame seguinte.
+    alignTextNext_ = false;
     // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
     // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
     // no modo imediato).
@@ -1598,7 +1600,7 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
 }
 
 bool Context::checkboxImpl(StringView labelText, bool &value, const Rect &bounds,
-                           const TextMetrics &metrics)
+                           const TextMetrics &metrics, const Rect &hitBounds)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1611,8 +1613,11 @@ bool Context::checkboxImpl(StringView labelText, bool &value, const Rect &bounds
     if (!drawList || widget.width <= 0.0f || widget.height <= 0.0f)
         return false;
     const StringView text = visibleLabel(labelText);
-    const bool hovered = itemHovered(widget, clip, id);
-    const bool clicked = itemClicked(widget, clip, id);
+    // A caixa e o rótulo são um item só para o ponteiro, como no Checkbox do
+    // ImGui: o rótulo à frente da caixa também carrega nela.
+    const Rect hit = hitBounds.width > 0.0f ? contentRect(hitBounds) : widget;
+    const bool hovered = itemHovered(hit, clip, id);
+    const bool clicked = itemClicked(hit, clip, id);
     if (clicked)
         value = !value;
 
@@ -1649,7 +1654,7 @@ bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds
 }
 
 bool Context::toggleSwitchImpl(StringView labelText, bool &value, const Rect &bounds,
-                               const TextMetrics &metrics)
+                               const TextMetrics &metrics, const Rect &hitBounds)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1663,8 +1668,10 @@ bool Context::toggleSwitchImpl(StringView labelText, bool &value, const Rect &bo
         return false;
 
     const StringView text = visibleLabel(labelText);
-    const bool hovered = itemHovered(rect, clip, id);
-    const bool clicked = itemClicked(rect, clip, id);
+    // Como no checkbox: o rótulo à frente do interruptor também responde.
+    const Rect hit = hitBounds.width > 0.0f ? contentRect(hitBounds) : rect;
+    const bool hovered = itemHovered(hit, clip, id);
+    const bool clicked = itemClicked(hit, clip, id);
     if (clicked)
         value = !value;
 
@@ -1701,7 +1708,7 @@ bool Context::radioButton(StringView labelText, bool selected, const Rect &bound
 }
 
 bool Context::radioButtonImpl(StringView labelText, bool selected, const Rect &bounds,
-                              const TextMetrics &metrics)
+                              const TextMetrics &metrics, const Rect &hitBounds)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1714,8 +1721,10 @@ bool Context::radioButtonImpl(StringView labelText, bool selected, const Rect &b
     if (!drawList)
         return false;
     const StringView text = visibleLabel(labelText);
-    const bool hovered = itemHovered(box, clip, id);
-    const bool clicked = itemClicked(box, clip, id);
+    // Como no checkbox: o rótulo à frente do círculo também responde.
+    const Rect hit = hitBounds.width > 0.0f ? contentRect(hitBounds) : box;
+    const bool hovered = itemHovered(hit, clip, id);
+    const bool clicked = itemClicked(hit, clip, id);
     const float radius = (box.width < box.height ? box.width : box.height) * 0.5f;
     const Vec2 center(box.x + box.width * 0.5f, box.y + box.height * 0.5f);
     const Color background = hovered ? theme_.buttonHovered : theme_.radioBackground;
@@ -2489,6 +2498,97 @@ void Context::drawComboHeader(DrawList &drawList, const Rect &rect, StringView p
         Vec2(rect.x + rect.width - theme_.windowPadding - arrowSize * 0.5f, rect.y + rect.height * 0.62f)
     };
     drawList.addPolygonFilled(Span<const Vec2>(arrow), theme_.buttonText, clip);
+}
+
+void Context::drawArrowGlyph(DrawList &drawList, const Rect &area, ArrowDirection direction,
+                             const Color &color, const Rect &clip)
+{
+    const float half = (area.width < area.height ? area.width : area.height) * 0.25f;
+    const Vec2 centre(area.x + area.width * 0.5f, area.y + area.height * 0.5f);
+    Vec2 points[3];
+    switch (direction)
+    {
+    case ArrowDirection::Up:
+        points[0] = Vec2(centre.x, centre.y - half);
+        points[1] = Vec2(centre.x - half, centre.y + half);
+        points[2] = Vec2(centre.x + half, centre.y + half);
+        break;
+    case ArrowDirection::Down:
+        points[0] = Vec2(centre.x, centre.y + half);
+        points[1] = Vec2(centre.x + half, centre.y - half);
+        points[2] = Vec2(centre.x - half, centre.y - half);
+        break;
+    case ArrowDirection::Right:
+        points[0] = Vec2(centre.x + half, centre.y);
+        points[1] = Vec2(centre.x - half, centre.y - half);
+        points[2] = Vec2(centre.x - half, centre.y + half);
+        break;
+    case ArrowDirection::Left:
+    default:
+        points[0] = Vec2(centre.x - half, centre.y);
+        points[1] = Vec2(centre.x + half, centre.y + half);
+        points[2] = Vec2(centre.x + half, centre.y - half);
+        break;
+    }
+    drawList.addPolygonFilled(Span<const Vec2>(points, 3u), color, clip);
+}
+
+bool Context::arrowButton(StringView labelText, ArrowDirection direction, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+    const bool pressed = activeWidget_ == id;
+    drawFrame(*drawList, rect,
+              pressed ? theme_.buttonPressed : (hovered ? theme_.buttonHovered
+                                                        : theme_.buttonBackground),
+              hovered || pressed ? theme_.inputBorderHover : theme_.buttonBorder,
+              theme_.borderRadius, clip);
+    drawArrowGlyph(*drawList, rect, direction, theme_.buttonText, clip);
+    if (clicked)
+        item_.edited = true;
+    return clicked;
+}
+
+bool Context::checkboxFlags(StringView labelText, unsigned &flags, unsigned flagValue,
+                            const Rect &bounds)
+{
+    if (flagValue == 0u)
+        return false;
+    bool checked = (flags & flagValue) != 0u;
+    // O desenho e a interação são os do checkbox: o que muda é onde o resultado
+    // fica, que aqui é um bit em vez de um bool sozinho.
+    const bool changed = checkbox(labelText, checked, bounds);
+    if (!changed)
+        return false;
+    if (checked)
+        flags |= flagValue;
+    else
+        flags &= ~flagValue;
+    return true;
+}
+
+void Context::alignTextToFramePadding()
+{
+    alignTextNext_ = true;
+}
+
+float Context::textFrameOffset(const TextMetrics &metrics)
+{
+    if (!alignTextNext_)
+        return 0.0f;
+    alignTextNext_ = false;
+    const float offset = (theme_.widgetHeight - metrics.height) * 0.5f;
+    return offset > 0.0f ? offset : 0.0f;
 }
 
 float Context::comboPopupMaxHeight(int visibleItems) const
@@ -6133,6 +6233,35 @@ float Context::tooltipDelay() const
     return tooltipDelay_;
 }
 
+bool Context::arrowButton(StringView labelText, ArrowDirection direction, float size)
+{
+    const float side = size > 0.0f ? size : theme_.widgetHeight;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, side, side);
+    const bool clicked =
+        arrowButton(labelText, direction,
+                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                         bounds.width, bounds.height));
+    advanceLayout(bounds);
+    if (clicked)
+        item_.edited = true;
+    return clicked;
+}
+
+bool Context::checkboxFlags(StringView labelText, unsigned &flags, unsigned flagValue)
+{
+    if (flagValue == 0u)
+        return false;
+    bool checked = (flags & flagValue) != 0u;
+    const bool changed = checkbox(labelText, checked);
+    if (!changed)
+        return false;
+    if (checked)
+        flags |= flagValue;
+    else
+        flags &= ~flagValue;
+    return true;
+}
+
 bool Context::button(StringView labelText)
 {
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
@@ -6167,14 +6296,16 @@ bool Context::checkbox(StringView labelText, bool &value)
     const TextMetrics metrics =
         measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
+    const float rowWidth = bounds.width + theme_.windowPadding * 0.5f + metrics.width;
     const bool clicked = checkboxImpl(labelText, value,
                                       Rect(bounds.x - layout_.origin.x,
                                            bounds.y - layout_.origin.y,
                                            bounds.width, bounds.height),
-                                      metrics);
-    advanceLayout(Rect(bounds.x, bounds.y,
-                       bounds.width + theme_.windowPadding * 0.5f + metrics.width,
-                       bounds.height));
+                                      metrics,
+                                      Rect(bounds.x - layout_.origin.x,
+                                           bounds.y - layout_.origin.y,
+                                           rowWidth, bounds.height));
+    advanceLayout(Rect(bounds.x, bounds.y, rowWidth, bounds.height));
     if (clicked)
         item_.edited = true;
     return clicked;
@@ -6185,14 +6316,16 @@ bool Context::toggleSwitch(StringView labelText, bool &value)
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const float switchWidth = theme_.widgetHeight * 1.8f;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, switchWidth, theme_.widgetHeight);
+    const float rowWidth = bounds.width + theme_.windowPadding * 0.5f + metrics.width;
     const bool clicked = toggleSwitchImpl(labelText, value,
                                           Rect(bounds.x - layout_.origin.x,
                                                bounds.y - layout_.origin.y,
                                                bounds.width, bounds.height),
-                                          metrics);
-    advanceLayout(Rect(bounds.x, bounds.y,
-                       bounds.width + theme_.windowPadding * 0.5f + metrics.width,
-                       bounds.height));
+                                          metrics,
+                                          Rect(bounds.x - layout_.origin.x,
+                                               bounds.y - layout_.origin.y,
+                                               rowWidth, bounds.height));
+    advanceLayout(Rect(bounds.x, bounds.y, rowWidth, bounds.height));
     if (clicked)
         item_.edited = true;
     return clicked;
@@ -6202,14 +6335,16 @@ bool Context::radioButton(StringView labelText, bool selected)
 {
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
+    const float rowWidth = bounds.width + theme_.windowPadding * 0.5f + metrics.width;
     const bool clicked = radioButtonImpl(labelText, selected,
                                          Rect(bounds.x - layout_.origin.x,
                                               bounds.y - layout_.origin.y,
                                               bounds.width, bounds.height),
-                                         metrics);
-    advanceLayout(Rect(bounds.x, bounds.y,
-                       bounds.width + theme_.windowPadding * 0.5f + metrics.width,
-                       bounds.height));
+                                         metrics,
+                                         Rect(bounds.x - layout_.origin.x,
+                                              bounds.y - layout_.origin.y,
+                                              rowWidth, bounds.height));
+    advanceLayout(Rect(bounds.x, bounds.y, rowWidth, bounds.height));
     if (clicked)
         item_.edited = true;
     return clicked;
@@ -8384,7 +8519,11 @@ int Context::plotHistogram(StringView label, const float *values, int count, flo
 void Context::label(StringView text)
 {
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
-    label(text, Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y));
+    // O alinhamento com uma moldura desloca o texto, não o cursor: o item seguinte
+    // da mesma linha (um botão, por exemplo) tem de ficar onde ficaria.
+    const float frameOffset = textFrameOffset(metrics);
+    label(text, Vec2(layout_.cursor.x - layout_.origin.x,
+                     layout_.cursor.y + frameOffset - layout_.origin.y));
     advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
 }
 
@@ -8556,16 +8695,20 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
 void Context::textDisabled(StringView text)
 {
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float frameOffset = textFrameOffset(metrics);
     textItem(text, theme_.textDisabled,
-             Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y));
+             Vec2(layout_.cursor.x - layout_.origin.x,
+                  layout_.cursor.y + frameOffset - layout_.origin.y));
     advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
 }
 
 void Context::textColored(StringView text, const Color &color)
 {
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float frameOffset = textFrameOffset(metrics);
     textItem(text, color,
-             Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y));
+             Vec2(layout_.cursor.x - layout_.origin.x,
+                  layout_.cursor.y + frameOffset - layout_.origin.y));
     advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
 }
 

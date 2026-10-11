@@ -278,6 +278,15 @@ enum class FaderOrientation : uint8_t
     Horizontal
 };
 
+// The four ways an arrow can point (see arrowButton).
+enum class ArrowDirection : uint8_t
+{
+    Up,
+    Down,
+    Left,
+    Right
+};
+
 // A fader's colours. With none set it follows the theme - the groove and the
 // cap from the slider colours, the fill and the line across the cap from the
 // accent - so an application picks the accent instead of receiving a fixed one.
@@ -474,7 +483,14 @@ public:
     bool button(StringView label, const Rect &bounds);
     // Compact text action for inspectors and toolbars.
     bool smallButton(StringView label, const Rect &bounds);
+    // A square button with an arrow in it (the ArrowButton of ImGui). The label is
+    // an id: use "##left" when there is no text to show.
+    bool arrowButton(StringView label, ArrowDirection direction, const Rect &bounds);
     bool checkbox(StringView label, bool &value, const Rect &bounds);
+    // The CheckboxFlags of ImGui: a checkbox that toggles the bits in flagValue
+    // instead of a bool of its own. Returns true when they changed.
+    bool checkboxFlags(StringView label, unsigned &flags, unsigned flagValue,
+                       const Rect &bounds);
     bool toggleSwitch(StringView label, bool &value, const Rect &bounds);
     bool radioButton(StringView label, bool selected, const Rect &bounds);
     bool selectable(StringView label, bool selected, const Rect &bounds);
@@ -853,7 +869,9 @@ public:
 
     bool button(StringView label);
     bool smallButton(StringView label);
+    bool arrowButton(StringView label, ArrowDirection direction, float size = 0.0f);
     bool checkbox(StringView label, bool &value);
+    bool checkboxFlags(StringView label, unsigned &flags, unsigned flagValue);
     bool toggleSwitch(StringView label, bool &value);
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
@@ -1036,6 +1054,10 @@ public:
     // Text items: each draws at the layout cursor and advances it, so the widget
     // after it lands below. textDisabled() uses the theme's disabled colour, and
     // textWrapped()/bulletText() measure and wrap their own lines.
+    // Põe a linha de base do próximo texto ao nível do texto de um widget com
+    // moldura que venha à frente na mesma linha (o AlignTextToFramePadding do
+    // ImGui). Mexe só no texto: o cursor e os itens não se deslocam.
+    void alignTextToFramePadding();
     void textDisabled(StringView text);
     void textColored(StringView text, const Color &color);
     // Wraps at wrapWidth (0 is the remaining width of the enclosing region), at
@@ -1532,6 +1554,8 @@ private:
     Rect comboPopupBoundsAtFrameStart_;
     Rect comboBounds_;
     Rect comboPopupBounds_;
+    // alignTextToFramePadding() pedido e ainda não consumido (ver label).
+    bool alignTextNext_;
     // Escolha múltipla (ver beginMultiSelect): a seleção da aplicação, o índice do
     // próximo item do bloco e o item de onde o Shift conta o alcance.
     struct MultiSelectState
@@ -1717,9 +1741,15 @@ private:
     // mede outra vez para centrar o texto).
     bool buttonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics);
     bool smallButtonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics, float fontSize);
-    bool checkboxImpl(StringView label, bool &value, const Rect &bounds, const TextMetrics &metrics);
-    bool toggleSwitchImpl(StringView label, bool &value, const Rect &bounds, const TextMetrics &metrics);
-    bool radioButtonImpl(StringView label, bool selected, const Rect &bounds, const TextMetrics &metrics);
+    // hitBounds é a área que responde ao ponteiro: a do desenho por omissão (as
+    // versões por bounds), ou a linha toda - a caixa e o rótulo à frente, como o
+    // ImGui - nas versões de layout, onde o rótulo é do widget.
+    bool checkboxImpl(StringView label, bool &value, const Rect &bounds,
+                      const TextMetrics &metrics, const Rect &hitBounds = Rect());
+    bool toggleSwitchImpl(StringView label, bool &value, const Rect &bounds,
+                          const TextMetrics &metrics, const Rect &hitBounds = Rect());
+    bool radioButtonImpl(StringView label, bool selected, const Rect &bounds,
+                         const TextMetrics &metrics, const Rect &hitBounds = Rect());
     bool colorButtonImpl(StringView label, const Color &value, const Rect &bounds,
                          const TextMetrics &metrics);
     WindowState *getOrCreateWindow(WidgetId id, StringView title, const Rect &bounds);
@@ -1846,6 +1876,14 @@ private:
     bool applyMultiSelectClick(bool clicked);
     void drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
                          bool highlighted, const Rect &clip);
+    // Um triângulo virado para onde o direction pede, centrado em `area` e com o
+    // lado menor de um quarto dela (é o que o arrowButton e as setas desenhadas
+    // à mão partilham).
+    static void drawArrowGlyph(DrawList &drawList, const Rect &area, ArrowDirection direction,
+                               const Color &color, const Rect &clip);
+    // O deslocamento vertical que o alignTextToFramePadding() pediu para o próximo
+    // texto (0 quando ninguém o pediu). Consome o pedido.
+    float textFrameOffset(const TextMetrics &metrics);
     float comboPopupMaxHeight(int visibleItems) const;
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);

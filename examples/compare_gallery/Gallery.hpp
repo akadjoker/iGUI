@@ -154,6 +154,8 @@ struct State
     bool multiSelected[5];
     int listBox;
     int tab;
+    // O contador do "Hold to repeat:" (os dois arrowButton do demo).
+    int steps;
     int i1;
     int i2;
     float f1;
@@ -201,7 +203,8 @@ struct State
     float queryFloat;
 
     State()
-        : flag(), radio(0), combo(1), comboItem(0), multiSelected(), listBox(0), tab(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
+        : flag(), radio(0), combo(1), comboItem(0), multiSelected(), listBox(0), tab(0),
+          steps(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
           rangeMin(0.2f), rangeMax(0.8f), vSlider(0.4f), vSliders(), progress(0.5f),
           progressDirection(1.0f), plotOffset(0), plotFunc(0), plotCount(70), plotPhase(0.0f),
           plotAnimate(true), treeOpen(true),
