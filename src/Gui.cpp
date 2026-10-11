@@ -715,7 +715,9 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(), wheelAreas_(), wheelOrderCounter_(0u),
       windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
-      currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
+      currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(),
+      activeWidget_(InvalidWidgetId), activeWidgetAtFrameStart_(InvalidWidgetId),
+      activeWidgetEdited_(false),
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
@@ -725,15 +727,16 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
-      alignTextNext_(false), comboBounds_(), comboPopupBounds_(), multiSelect_(), mainMenuBarWindow_(),
-      mainMenuBarOpen_(false),
+      comboBounds_(), comboPopupBounds_(), alignTextNext_(false), multiSelect_(),
+      mainMenuBarWindow_(), mainMenuBarOpen_(false),
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
       comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
       comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
       comboAdvanceHeader_(false),
       activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
-      activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
+      activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId),
+      activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
@@ -848,6 +851,11 @@ void Context::beginFrame(const FrameInfo &frame)
     // quem o quiser tem de o voltar a abrir.
     multiSelect_.active = false;
     multiSelect_.selected = Span<bool>();
+    // O que estava ativo no início do frame: é com isto que o item sabe se ficou
+    // ativo agora ou se já estava (ver isItemActivated/isItemDeactivated).
+    activeWidgetAtFrameStart_ = activeWidget_;
+    if (activeWidget_ == InvalidWidgetId)
+        activeWidgetEdited_ = false;
     // Um alignTextToFramePadding() sem texto à frente não vale para o frame seguinte.
     alignTextNext_ = false;
     // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
@@ -1828,6 +1836,7 @@ bool Context::collapsingHeaderImpl(StringView labelText, bool &expanded, bool *o
     {
         expanded = !expanded;
         item_.edited = true;
+        item_.toggledOpen = true;
     }
 
     drawList->addRectFilledRounded(rect, theme_.borderRadius,
@@ -1889,6 +1898,7 @@ bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
     {
         expanded = !expanded;
         item_.edited = true;
+        item_.toggledOpen = true;
     }
 
     if (hovered)
@@ -1969,7 +1979,10 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     const bool expansionClicked = !style.disabled && !style.leaf &&
                                   itemClicked(arrowRect, clip, arrowId);
     if (expansionClicked)
+    {
         expanded = !expanded;
+        item_.toggledOpen = true;
+    }
     const bool selected = !style.disabled && !expansionClicked && itemClicked(rect, clip, id);
     if (expansionClicked || selected)
         item_.edited = true;
@@ -8346,6 +8359,7 @@ bool Context::tableTreeCell(StringView labelText, int depth, bool hasChildren, b
         {
             expanded = !expanded;
             toggled = true;
+            item_.toggledOpen = true;
         }
         const float size = height * 0.28f;
         const float cx = nodeX + step * 0.5f;
@@ -9725,9 +9739,13 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     item_.bounds = rect;
     item_.clicked = false;
     item_.edited = false;
+    item_.toggledOpen = false;
     item_.focused = focusedWidget_ == id;
     item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
     item_.active = activeWidget_ == id;
+    item_.activated = item_.active && activeWidgetAtFrameStart_ != id;
+    item_.deactivated = !item_.active && activeWidgetAtFrameStart_ == id;
+    item_.deactivatedAfterEdit = item_.deactivated && activeWidgetEdited_;
     // Um tooltip fica debaixo do ponteiro: se as widgets lá dentro reagissem, o
     // hover saía à widget que o pediu e as duas piscavam.
     if (tooltipOpen_)
@@ -9762,6 +9780,7 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     item_.bounds = rect;
     item_.clicked = false;
     item_.edited = false;
+    item_.toggledOpen = false;
     item_.focused = focusedWidget_ == id;
     item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
     // Antes do registerFocusable: uma widget desativada também não entra na ordem
@@ -9781,6 +9800,9 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     const bool pressedHere = pointerPressedIn(visible, left);
     if (pressedHere)
     {
+        // Um widget novo a ficar ativo começa sem edições: o de antes já acabou.
+        if (activeWidget_ != id)
+            activeWidgetEdited_ = false;
         activeWidget_ = id;
         focusedWidget_ = id;
     }
@@ -9794,6 +9816,9 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     const bool activated = clicked || (focusedWidget_ == id && enterPressed_);
     item_.clicked = activated;
     item_.active = activeWidget_ == id;
+    item_.activated = item_.active && activeWidgetAtFrameStart_ != id;
+    item_.deactivated = !item_.active && activeWidgetAtFrameStart_ == id;
+    item_.deactivatedAfterEdit = item_.deactivated && activeWidgetEdited_;
     item_.focused = focusedWidget_ == id;
     return activated;
 }
@@ -9807,6 +9832,12 @@ void Context::keepItemStatus(const ItemStatus &primary, const Rect &bounds)
     item_.clicked = primary.clicked || item_.clicked;
     item_.edited = primary.edited || item_.edited;
     item_.focused = primary.focused || item_.focused;
+    // As transições são do item principal: o sub-item que correu no meio (o campo
+    // de texto de um slider, por exemplo) nunca esteve ativo, e sem isto apagava o
+    // "ficou/ deixou de estar ativo" que a pista tinha acabado de dizer.
+    item_.activated = primary.activated || item_.activated;
+    item_.deactivated = primary.deactivated || item_.deactivated;
+    item_.deactivatedAfterEdit = primary.deactivatedAfterEdit || item_.deactivatedAfterEdit;
     item_.disabled = primary.disabled;
 }
 
@@ -9886,6 +9917,9 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     item_.focused = focusedWidget_ == id;
     item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
     item_.active = activeWidget_ == id;
+    item_.activated = item_.active && activeWidgetAtFrameStart_ != id;
+    item_.deactivated = !item_.active && activeWidgetAtFrameStart_ == id;
+    item_.deactivatedAfterEdit = item_.deactivated && activeWidgetEdited_;
     registerFocusable(id);
     if (disabledDepth_ > 0u || tooltipOpen_)
         return false;
@@ -9896,9 +9930,12 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     const bool pressedHere = pointerPressedIn(intersect(rect, clip), left);
     if (pressedHere)
     {
+        if (activeWidget_ != id)
+            activeWidgetEdited_ = false;
         activeWidget_ = id;
         focusedWidget_ = id;
         item_.active = true;
+        item_.activated = activeWidgetAtFrameStart_ != id;
         item_.focused = true;
     }
 
@@ -9923,8 +9960,16 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
         activeWidget_ = InvalidWidgetId;
     }
     item_.active = activeWidget_ == id;
+    item_.deactivated = !item_.active && activeWidgetAtFrameStart_ == id;
+    item_.deactivatedAfterEdit = item_.deactivated && activeWidgetEdited_;
     if (changed)
+    {
         item_.edited = true;
+        // Fica marcado para o isItemDeactivatedAfterEdit: o que foi editado enquanto
+        // esteve ativo conta, mesmo que a edição seja de um frame anterior.
+        if (activeWidget_ == id || item_.deactivated)
+            activeWidgetEdited_ = true;
+    }
     return changed;
 }
 
