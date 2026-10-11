@@ -6296,6 +6296,32 @@ bool Context::beginTable(StringView idText, Span<float> columnWeights, float wid
     return true;
 }
 
+bool Context::beginTable(StringView idText, int columns, const TableStyle &style, float width)
+{
+    if (!beginTable(idText, columns, width))
+        return false;
+    table_.style = style;
+    return true;
+}
+
+bool Context::beginTable(StringView idText, Span<const float> columnWeights, const TableStyle &style,
+                         float width)
+{
+    if (!beginTable(idText, columnWeights, width))
+        return false;
+    table_.style = style;
+    return true;
+}
+
+bool Context::beginTable(StringView idText, Span<float> columnWeights, const TableStyle &style,
+                         float width)
+{
+    if (!beginTable(idText, columnWeights, width))
+        return false;
+    table_.style = style;
+    return true;
+}
+
 float Context::tableColumnX(int column) const
 {
     float x = table_.bounds.x;
@@ -6337,6 +6363,11 @@ bool Context::tableNextColumn()
     {
         ++table_.column;
     }
+    if (table_.column == 0)
+    {
+        drawTableRowStyle();
+        ++table_.row;
+    }
     const float cellX = tableColumnX(table_.column);
     layout_.origin.x = cellX;
     layout_.baseOriginX = cellX;
@@ -6346,7 +6377,43 @@ bool Context::tableNextColumn()
     return true;
 }
 
+void Context::drawTableRowStyle()
+{
+    if (!table_.style.alternateRows && !table_.style.borders)
+        return;
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+    const Rect clip = contentClip();
+    const float top = table_.rowY - theme_.itemSpacing * 0.5f;
+    const float height = theme_.widgetHeight + theme_.itemSpacing;
+    if (table_.style.alternateRows && (table_.row & 1) != 0)
+        drawList->addRectFilled(Rect(table_.bounds.x, top, table_.bounds.width, height),
+                                Color(theme_.textColor.r, theme_.textColor.g, theme_.textColor.b, 14u),
+                                clip);
+    if (!table_.style.borders)
+        return;
+    const float left = table_.bounds.x;
+    const float right = table_.bounds.x + table_.bounds.width;
+    drawList->addLine(Vec2(left, top), Vec2(right, top), theme_.borderColor, clip, 1.0f);
+    for (int column = 0; column <= table_.columns; ++column)
+    {
+        const float x = column == table_.columns ? right : tableColumnX(column);
+        drawList->addLine(Vec2(x, top), Vec2(x, top + height), theme_.borderColor, clip, 1.0f);
+    }
+}
+
 bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscending)
+{
+    return tableHeaderCell(labelText, &sortColumn, &sortAscending);
+}
+
+void Context::tableHeader(StringView labelText)
+{
+    tableHeaderCell(labelText, nullptr, nullptr);
+}
+
+bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortAscending)
 {
     if (!tableActive_ || table_.column < 0 || table_.column >= table_.columns)
         return false;
@@ -6406,22 +6473,23 @@ bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscen
         tableResize_ = TableResizeState();
     }
 
-    const bool hovered = !resizing && itemHovered(bounds, clip, id);
-    const bool clicked = !resizing && itemClicked(bounds, clip, id);
+    const bool sortable = sortColumn != nullptr && sortAscending != nullptr;
+    const bool hovered = sortable && !resizing && itemHovered(bounds, clip, id);
+    const bool clicked = sortable && !resizing && itemClicked(bounds, clip, id);
     bool changed = false;
     if (clicked)
     {
-        if (sortColumn == table_.column)
-            sortAscending = !sortAscending;
+        if (*sortColumn == table_.column)
+            *sortAscending = !*sortAscending;
         else
         {
-            sortColumn = table_.column;
-            sortAscending = true;
+            *sortColumn = table_.column;
+            *sortAscending = true;
         }
         changed = true;
     }
 
-    const bool sorted = sortColumn == table_.column;
+    const bool sorted = sortable && *sortColumn == table_.column;
     const Color background = sorted ? theme_.selectableSelected
                            : (hovered ? theme_.buttonHovered : theme_.panelColor);
     drawList->addRectFilled(bounds, background, clip);
@@ -6447,13 +6515,14 @@ bool Context::tableHeader(StringView labelText, int &sortColumn, bool &sortAscen
     {
         const float centerX = bounds.x + bounds.width - padding - arrowSize * 0.5f;
         const float centerY = bounds.y + bounds.height * 0.5f;
+        const bool ascending = *sortAscending;
         const Vec2 arrow[] = {
-            sortAscending ? Vec2(centerX - arrowSize * 0.5f, centerY + arrowSize * 0.35f)
-                          : Vec2(centerX - arrowSize * 0.5f, centerY - arrowSize * 0.35f),
-            sortAscending ? Vec2(centerX + arrowSize * 0.5f, centerY + arrowSize * 0.35f)
-                          : Vec2(centerX + arrowSize * 0.5f, centerY - arrowSize * 0.35f),
-            sortAscending ? Vec2(centerX, centerY - arrowSize * 0.5f)
-                          : Vec2(centerX, centerY + arrowSize * 0.5f)
+            ascending ? Vec2(centerX - arrowSize * 0.5f, centerY + arrowSize * 0.35f)
+                      : Vec2(centerX - arrowSize * 0.5f, centerY - arrowSize * 0.35f),
+            ascending ? Vec2(centerX + arrowSize * 0.5f, centerY + arrowSize * 0.35f)
+                      : Vec2(centerX + arrowSize * 0.5f, centerY - arrowSize * 0.35f),
+            ascending ? Vec2(centerX, centerY - arrowSize * 0.5f)
+                      : Vec2(centerX, centerY + arrowSize * 0.5f)
         };
         drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.labelText, clip);
     }
@@ -6476,6 +6545,14 @@ void Context::endTable()
     {
         const float rowHeight = table_.rowHeight > theme_.widgetHeight ? table_.rowHeight : theme_.widgetHeight;
         height = table_.rowY + rowHeight - table_.bounds.y;
+        DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
+        if (drawList)
+        {
+            const float bottom = table_.rowY + rowHeight + theme_.itemSpacing * 0.5f;
+            drawList->addLine(Vec2(table_.bounds.x, bottom),
+                              Vec2(table_.bounds.x + table_.bounds.width, bottom),
+                              theme_.borderColor, contentClip(), 1.0f);
+        }
     }
     const LayoutState parent = table_.parentLayout;
     const Rect bounds(parent.cursor.x, parent.cursor.y, table_.bounds.width, height);
