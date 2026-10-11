@@ -6541,6 +6541,74 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     return changed;
 }
 
+bool Context::tableTreeCell(StringView labelText, int depth, bool hasChildren, bool &expanded)
+{
+    if (!tableActive_ || table_.column < 0 || table_.column >= table_.columns)
+        return false;
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+    const float width = availableWidth();
+    if (width <= 0.0f)
+        return false;
+
+    const float height = tableMinimumRowHeight();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, height);
+    const Rect clip = intersect(contentClip(), bounds);
+    const float step = height * 0.7f > 10.0f ? height * 0.7f : 10.0f;
+    const int level = depth > 0 ? depth : 0;
+    const float centerY = bounds.y + height * 0.5f;
+    const float bandTop = bounds.y - tableRowSpacing() * 0.5f;
+    const float bandBottom = bounds.y + height + tableRowSpacing() * 0.5f;
+    const Color guide(theme_.textColor.r, theme_.textColor.g, theme_.textColor.b, 60u);
+
+    for (int l = 0; l < level; ++l)
+    {
+        const float x = bounds.x + (static_cast<float>(l) + 0.5f) * step;
+        drawList->addLine(Vec2(x, bandTop), Vec2(x, bandBottom), guide, clip, 1.0f);
+    }
+
+    const float nodeX = bounds.x + static_cast<float>(level) * step;
+    bool toggled = false;
+    if (hasChildren)
+    {
+        const Rect arrowRect(nodeX, bounds.y, step, height);
+        const WidgetId id = combineIds(table_.id,
+                                       0x5452454543454c4cull + static_cast<uint64_t>(table_.row));
+        const bool hovered = itemHovered(arrowRect, contentClip(), id);
+        if (itemClicked(arrowRect, contentClip(), id))
+        {
+            expanded = !expanded;
+            toggled = true;
+        }
+        const float size = height * 0.28f;
+        const float cx = nodeX + step * 0.5f;
+        const Vec2 arrow[] = {
+            expanded ? Vec2(cx - size, centerY - size * 0.5f)
+                     : Vec2(cx - size * 0.5f, centerY - size),
+            expanded ? Vec2(cx + size, centerY - size * 0.5f)
+                     : Vec2(cx - size * 0.5f, centerY + size),
+            expanded ? Vec2(cx, centerY + size * 0.6f)
+                     : Vec2(cx + size * 0.7f, centerY)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow),
+                                   hovered ? theme_.textColor : theme_.menuSubmenuArrow, clip);
+    }
+    else if (level > 0)
+    {
+        drawList->addLine(Vec2(bounds.x + (static_cast<float>(level) - 0.5f) * step, centerY),
+                          Vec2(nodeX + step * 0.5f, centerY), guide, clip, 1.0f);
+    }
+
+    const float padding = theme_.windowPadding * 0.25f;
+    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    drawText(*drawList, theme_.font, labelText,
+             Vec2(nodeX + step + padding, bounds.y + (height - metrics.height) * 0.5f),
+             theme_.fontSize, theme_.labelText, clip);
+    advanceLayout(bounds);
+    return toggled;
+}
+
 void Context::endTable()
 {
     if (!tableActive_)

@@ -1341,6 +1341,65 @@ static void test_styled_table_draws_stripes_and_lines_without_moving_cells()
     assert(styledY < spaced - 10.0f);
 }
 
+static float drawTreeTable(ig::Context &context, int depth, bool hasChildren, bool &expanded,
+        bool &toggled)
+{
+    ig::TableStyle style;
+    style.borders = true;
+    style.rowHeight = 18.0f;
+    style.rowSpacing = 0.0f;
+    assert(context.beginWindow("tree table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(context.beginTable("scopes", 2, style));
+    assert(context.tableNextColumn());
+    toggled = context.tableTreeCell("Frame", depth, hasChildren, expanded);
+    assert(context.tableNextColumn());
+    context.label("1.000");
+    assert(context.tableNextColumn());
+    context.tableTreeCell("Child", depth + 1, false, expanded);
+    assert(context.tableNextColumn());
+    context.label("0.500");
+    context.endTable();
+    const float endY = context.cursor().y;
+    context.endWindow();
+    return endY;
+}
+
+static void test_table_tree_cell_toggles_with_its_arrow()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool expanded = true;
+    bool toggled = false;
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    const float height = drawTreeTable(context, 0, true, expanded, toggled);
+    context.endFrame();
+    assert(!toggled && expanded);
+    assert(height > 30.0f && height < 60.0f);
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawTreeTable(context, 0, true, expanded, toggled);
+    context.endFrame();
+    assert(!toggled && expanded);
+
+    // The arrow of a node with children sits at the left of the first cell.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 24.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 24.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawTreeTable(context, 0, true, expanded, toggled);
+    context.endFrame();
+    assert(toggled && !expanded);
+
+    // Without children there is no arrow to press.
+    expanded = true;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 24.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 24.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawTreeTable(context, 0, false, expanded, toggled);
+    context.endFrame();
+    assert(!toggled && expanded);
+}
+
 static void drawPlainHeaderTable(ig::Context &context, float *weights)
 {
     assert(context.beginWindow("plain header table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
@@ -3019,6 +3078,7 @@ int main()
     test_resizable_table_columns();
     test_styled_table_draws_stripes_and_lines_without_moving_cells();
     test_plain_table_header_resizes_columns();
+    test_table_tree_cell_toggles_with_its_arrow();
     test_weighted_virtual_table_layout();
     test_virtual_list();
     test_virtual_table();
