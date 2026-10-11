@@ -291,4 +291,28 @@ struct Readout
 void setReadout(const Readout &readout);
 const Readout &readout();
 
+// ── As faces extra do demo (secção "Fonts") ──────────────────────────────────
+// Ficheiros de misc/fonts do ImGui, com o tamanho com que cada um é cozido. Os
+// dois lados carregam esta lista - o iGUI com o FontAtlas::loadFont (todas no
+// mesmo atlas, ver IguiGallery.hpp) e o ImGui com o AddFontFromFileTTF - para o
+// combo "Font" do demo mostrar o mesmo de um lado e do outro.
+struct DemoFontFile
+{
+    const char *file;
+    float size;
+};
+
+inline const DemoFontFile *demoFontFiles(int &count)
+{
+    static const DemoFontFile list[] = {
+        {"ProggyClean.ttf", 20.0f},     // a familia com que o ImGui desenha, cozida maior
+        {"Cousine-Regular.ttf", 13.0f},
+        {"Roboto-Medium.ttf", 13.0f},
+        {"DroidSans.ttf", 16.0f},
+        {"Karla-Regular.ttf", 13.0f}
+    };
+    count = static_cast<int>(sizeof(list) / sizeof(list[0]));
+    return list;
+}
+
 } // namespace gallery

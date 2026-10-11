@@ -20,7 +20,9 @@ The library never talks to a window system or a GPU directly. It produces a list
 - **UTF-8 text**, DPI scaling, and clipboard hooks.
 - **Windows and widget state are released on request**: a window the application stops submitting keeps where it was left (so a closed panel comes back where it belongs), which is why `Context::removeWindow` exists for windows opened with generated titles, and `Context::clearWidgetState` for screens whose labels change with the data - per-widget state is kept by id, and those ids are hashes of the labels.
 - **Window state saved to an `.ini`** (`Context::setWindowStatePath` / `WidgetApp::setWindowStatePath`), the way ImGui does it: position, size and minimized/maximized state per window, plus the dock layout - which panel sits in which dock region, the region sizes and the tab on top, and the retained dock panels' arrangement - restored on the next run. Desktop targets only: the web and Android builds neither read nor write the file.
-- **Embedded default font** (Roboto, or any TTF/OTF you provide).
+- **Embedded default font** (Roboto, or any TTF/OTF you provide), several faces
+  in one atlas (different typefaces or the same one at other baked sizes) picked
+  with `pushFont`/`popFont`.
 
 ## Requirements
 
@@ -320,7 +322,11 @@ gallery loads `misc/fonts/ProggyClean.ttf` from the ImGui tree with
 `ig::FontAtlas(fontData, ...)` (change it with `-DIGUI_GALLERY_FONT=...`, or pass
 `--font=FILE`), because a vector font asked for the same size comes out smaller
 and lighter than the pixel font the demo uses, and the comparison would then be
-of glyphs instead of libraries.
+of glyphs instead of libraries. The demo's "Fonts" section also shows more faces
+than the panel's: `-DIGUI_GALLERY_FONT_DIR=...` (or `--fonts-dir=DIR`) points at
+`misc/fonts` in the ImGui tree, and both sides load the same list - the iGUI all
+in one atlas (`ig::FontAtlas::loadFont`, switched with `pushFont`), the ImGui one
+per `AddFontFromFileTTF`.
 
 [iGUI vs the ImGui demo](examples/compare_gallery/GAPS.md) surveys what the demo
 has and the immediate-mode API does not (with a TODO for each gap), and the same

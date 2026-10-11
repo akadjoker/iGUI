@@ -109,6 +109,13 @@ struct Panel
 
 Panel g_panel;
 
+// O FontSizeBase do demo (ver a secção "Fonts"): o tamanho pedido para o texto,
+// à parte do tema.
+float g_fontSize = gallery::kFontSize;
+// O tamanho do atlas, só para a secção "Fonts" o dizer.
+unsigned g_atlasWidth = 0u;
+unsigned g_atlasHeight = 0u;
+
 void item()
 {
     ++g_panel.widgets;
@@ -638,25 +645,86 @@ void sectionWidgetsDragAndSliderFlags(ig::Context &ui, gallery::State &s)
 // ── Widgets: Fonts ───────────────────────────────────────────────────────────
 void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
 {
+    (void)s;
     gap(ui, gallery::Section::WidgetsFonts,
-        "PushFont/PopFont com OUTRA FONTE (ficheiro/familia) e o font picker do demo - "
-        "o iGUI tem uma face por atlas (a escala dos tamanhos, essa, sai do "
-        "pushStyleVar do fontSize, que o atlas desenha escalado)");
-    ui.label("tipografia normal");
+        "o inspector do atlas do demo (o loader, compactar/esticar o atlas, as rects "
+        "empacotadas, os glifos com zoom e o realce de cada rect) - o iGUI mostra as "
+        "faces, as metricas e o combo, mas nao tem o inspetor");
+
+    // O ShowFontSelector: escolhe a face de que o painel inteiro é desenhado (o
+    // io.FontDefault do ImGui), a partir do frame seguinte.
+    int selected = 0;
+    for (int i = 0; i < gDemoFontCount; ++i)
+        if (gDemoFonts[i].id == gFontDefault)
+            selected = i;
+    ig::StringView names[kMaxDemoFonts];
+    for (int i = 0; i < gDemoFontCount; ++i)
+        names[i] = ig::StringView(gDemoFonts[i].name);
+    if (gDemoFontCount > 0 &&
+        ui.comboBox("Font", selected, ig::Span<const ig::StringView>(names, gDemoFontCount)))
+    {
+        gFontDefault = gDemoFonts[selected].id;
+    }
     item();
-    // O mesmo texto com o fontSize do tema mudado num bloco: o atlas coze uma face e
-    // desenha-a escalada (ver FontAtlas::appendText), por isso um tamanho diferente
-    // sai daqui sem atlas novo.
-    ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize * 1.6f);
-    ui.label("tipografia grande (fontSize * 1.6)");
+
+    // O FontSizeBase do demo: um tamanho para o texto todo, sem tocar no tema.
+    // Aqui é o pushStyleVar do fontSize, que o atlas desenha escalado.
+    float size = g_fontSize;
+    if (ui.dragFloat("Font size", size, 5.0f, 100.0f, 0.2f))
+        g_fontSize = size;
+    ui.sameLine();
+    {
+        char out[32];
+        snprintf(out, sizeof(out), " (out %.0f px)", size);
+        ui.label(out);
+    }
+    item();
+    ui.bulletText("a escala e da face, nao do atlas: um tamanho grande sai maior e mais "
+                  "desfocado do que a mesma face cozida nesse tamanho");
+    item();
+
+    // A Face do painel num tamanho pedido (é o que a escala do fontSize faz).
+    ui.pushStyleVar(&ig::Theme::fontSize, size);
+    ui.label("Typography sample at the requested size");
     item();
     ui.popStyleVar();
-    ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize * 0.8f);
-    ui.label("tipografia pequena (fontSize * 0.8)");
+    ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize);
+    ui.label("Typography sample at the panel size");
     item();
     ui.popStyleVar();
-    ui.label("e de volta ao normal");
-    item();
+
+    ui.separatorText("Font List");
+    for (int i = 0; i < gDemoFontCount; ++i)
+    {
+        const DemoFont &face = gDemoFonts[i];
+        char line[96];
+        snprintf(line, sizeof(line), "%s - size %.0f px", face.name, face.size);
+        ui.label(line);
+        item();
+        // A amostra sai na face e no tamanho em que ela foi cozida (o pushFont leva
+        // o tamanho de fabrico da face): a 1:1, sem reescalonamento.
+        ui.pushFont(face.id);
+        ui.label("The quick brown fox jumps over the lazy dog 0123456789");
+        item();
+        const float lineHeight = face.size > 0.0f ? face.size : gallery::kFontSize;
+        const float extra = lineHeight - ui.theme().widgetHeight;
+        if (extra > 0.0f)
+        {
+            // O item do layout é da altura do tema, não da fonte em vigor: o que a
+            // face tiver a mais tem de ser pedido, senão a linha seguinte passa-lhe
+            // por cima.
+            ui.dummy(0.0f, extra);
+        }
+        ui.popFont();
+    }
+    if (gDemoFontCount > 0)
+    {
+        char line[64];
+        snprintf(line, sizeof(line), "atlas %ux%u, %d face(s)",
+                 g_atlasWidth, g_atlasHeight, gDemoFontCount);
+        ui.label(line);
+        item();
+    }
 }
 
 // ── Widgets: Images ──────────────────────────────────────────────────────────
@@ -1580,6 +1648,10 @@ void section(ig::Context &ui, gallery::Section section, gallery::State &s)
 
 } // namespace
 
+DemoFont gDemoFonts[kMaxDemoFonts];
+int gDemoFontCount = 0;
+ig::FontId gFontDefault;
+
 void reset()
 {
     g_panel = Panel();
@@ -1707,6 +1779,98 @@ bool setOnlySection(const char *name)
     return false;
 }
 
+namespace
+{
+
+// Lê um ficheiro inteiro para um buffer, ou devolve falso. Não abrir não é uma
+// face em falta: quem chama segue sem ela.
+bool readFile(const char *path, ct::Vector<uint8_t> &out)
+{
+    std::FILE *file = std::fopen(path, "rb");
+    if (!file)
+        return false;
+    std::fseek(file, 0L, SEEK_END);
+    const long size = std::ftell(file);
+    std::fseek(file, 0L, SEEK_SET);
+    bool ok = size > 0;
+    if (ok)
+    {
+        out.resize(static_cast<ct::Vector<uint8_t>::size_type>(size));
+        ok = std::fread(out.data(), 1u, static_cast<size_t>(size), file) ==
+             static_cast<size_t>(size);
+    }
+    std::fclose(file);
+    return ok;
+}
+
+// O nome da face é o do ficheiro sem o caminho nem a extensão, mais o tamanho
+// (".../misc/fonts/Cousine-Regular.ttf" a 13 -> "Cousine-Regular 13px"), que é
+// como se lê o combo do demo.
+void faceName(const char *file, float size, char *out, int outSize)
+{
+    const char *base = file;
+    for (const char *p = file; *p; ++p)
+        if (*p == '/' || *p == '\\')
+            base = p + 1;
+    int length = 0;
+    while (base[length] && base[length] != '.' && length < outSize - 12)
+        ++length;
+    int written = 0;
+    for (int i = 0; i < length; ++i)
+        out[written++] = base[i];
+    snprintf(out + written, static_cast<size_t>(outSize - written), " %.0fpx",
+             static_cast<double>(size));
+}
+
+} // namespace
+
+void loadDemoFonts(ig::FontAtlas &atlas, const char *directory)
+{
+    g_atlasWidth = atlas.width();
+    g_atlasHeight = atlas.height();
+    gDemoFontCount = 0;
+    // A face 0 é a do painel: a que o atlas já tem, e a que o combo mostra como
+    // "default".
+    gFontDefault = atlas.defaultFont();
+    DemoFont &base = gDemoFonts[gDemoFontCount++];
+    base.id = atlas.defaultFont();
+    base.size = gallery::kFontSize;
+    snprintf(base.name, sizeof(base.name), "default %.0fpx",
+             static_cast<double>(gallery::kFontSize));
+    if (!directory || !*directory)
+        return;
+
+    int fileCount = 0;
+    const gallery::DemoFontFile *files = gallery::demoFontFiles(fileCount);
+    ct::Vector<uint8_t> bytes;
+    char path[512];
+    for (int i = 0; i < fileCount && gDemoFontCount < kMaxDemoFonts; ++i)
+    {
+        snprintf(path, sizeof(path), "%s/%s", directory, files[i].file);
+        if (!readFile(path, bytes))
+        {
+            fprintf(stderr, "fonte do demo em falta: %s\n", path);
+            continue;
+        }
+        const ig::FontId id = atlas.loadFont(
+            ig::Span<const uint8_t>(bytes.data(), bytes.size()), files[i].size);
+        if (id.value == 0u)
+        {
+            fprintf(stderr, "nao consegui cozer a fonte do demo: %s\n", path);
+            continue;
+        }
+        DemoFont &face = gDemoFonts[gDemoFontCount++];
+        face.id = id;
+        face.size = files[i].size;
+        faceName(files[i].file, files[i].size, face.name,
+                 static_cast<int>(sizeof(face.name)));
+    }
+    // Cozer faces reconstrói o atlas inteiro, por isso o tamanho que a secção
+    // "Fonts" mostra é o que ficou no fim.
+    g_atlasWidth = atlas.width();
+    g_atlasHeight = atlas.height();
+}
+
 bool openSection(const char *name)
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
@@ -1744,6 +1908,18 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
                         display.y - gallery::kReadoutHeight);
     if (!ui.beginWindow("Dear iGUI Demo", demo))
         return stats;
+
+    // A face escolhida no combo da secção "Fonts" (o io.FontDefault do ImGui) vale
+    // para o painel todo. O combo escreve a escolha e este push lê-a no início do
+    // frame com o valor que ela tinha quando o frame começou - como no ImGui, a
+    // escolha entra no frame seguinte. O tamanho fica o do painel: a face muda, a
+    // escala continua a ser a do tema (é o FontSizeBase que manda).
+    const bool pushedFace = gFontDefault.value != 0u && gFontDefault != ui.theme().font;
+    if (pushedFace)
+    {
+        ui.pushFont(gFontDefault);
+        ui.pushStyleVar(&ig::Theme::fontSize, gallery::kFontSize);
+    }
 
     // O menu do demo (File/Edit/View/Tools/Help: os menus sao "Menu", "Examples",
     // "Tools", "Help" e abrem apps de exemplo que o iGUI nao tem).
@@ -1884,6 +2060,11 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
         if (widgetsOpen)
             ui.unindent();
         ui.endChild();
+    }
+    if (pushedFace)
+    {
+        ui.popStyleVar();
+        ui.popFont();
     }
     ui.endWindow();
 

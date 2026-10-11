@@ -101,6 +101,138 @@ static void test_glyph_cache()
     assert(copied.glyph(font,'A') != atlas.glyph(font,'A'));
 }
 
+// A fonte embutida, para uma segunda face sair dos mesmos bytes (a API pública
+// só a leva pelas mãos do construtor do atlas; o teste lê-a daqui).
+namespace ig
+{
+namespace detail
+{
+extern const uint8_t DefaultFontData[];
+extern const uint32_t DefaultFontDataSize;
+} // namespace detail
+} // namespace ig
+
+// Mais do que uma face no mesmo atlas: o que o loadFont acrescenta (os glifos de
+// cada uma ficam no mesmo atlas, com as métricas e os tamanhos delas) e o que um
+// id sem face faz.
+static void test_multiple_faces()
+{
+    ig::FontAtlas atlas(ig::defaultFontRanges(), 1024u, 512u, 13.0f);
+    assert(atlas.valid() && atlas.faceCount() == 1u);
+    assert(atlas.defaultFont() == ig::FontId(1u));
+    const ig::FontId small = atlas.defaultFont();
+    const float smallAscent = atlas.ascent(small);
+    const float smallLine = atlas.lineHeight(small);
+
+    const ig::Span<const uint8_t> bytes(ig::detail::DefaultFontData,
+                                        ig::detail::DefaultFontDataSize);
+    const ig::FontId big = atlas.loadFont(bytes, 32.0f);
+    assert(big == ig::FontId(2u));
+    assert(atlas.faceCount() == 2u);
+    assert(atlas.valid());
+
+    // Cada face tem as métricas dela no tamanho em que foi cozida.
+    assert(atlas.bakedSize(small) == 13.0f && atlas.bakedSize(big) == 32.0f);
+    assert(atlas.ascent(big) > smallAscent);
+    assert(atlas.lineHeight(big) > smallLine);
+    assert(atlas.lineHeight(big) > atlas.ascent(big));
+    // As sem argumento são as da primeira face.
+    assert(atlas.bakedSize() == 13.0f && atlas.ascent() == smallAscent);
+    assert(atlas.lineHeight() == smallLine);
+
+    // Os glifos das duas estão no mesmo atlas (a mesma textura) e são maiores na
+    // face cozida maior.
+    const ig::FontGlyph *smallA = atlas.glyph(small, static_cast<uint32_t>('A'));
+    const ig::FontGlyph *bigA = atlas.glyph(big, static_cast<uint32_t>('A'));
+    assert(smallA && bigA);
+    assert(bigA->width > smallA->width && bigA->height > smallA->height);
+    assert(bigA->advance > smallA->advance);
+    assert(smallA->u1 <= 1.0f && bigA->v1 <= 1.0f);
+
+    // E mede-se pelo tamanho de cada uma.
+    const ig::TextMetrics smallText = atlas.measureText(small, "Hello", 13.0f);
+    const ig::TextMetrics bigText = atlas.measureText(big, "Hello", 32.0f);
+    assert(smallText.width > 0.0f && bigText.width > smallText.width);
+    assert(bigText.height > smallText.height);
+
+    // Um id que não é de face nenhuma não dá glifos nem medidas - e não se
+    // confunde com a primeira face.
+    const ig::FontId unknown(9u);
+    assert(atlas.glyph(unknown, static_cast<uint32_t>('A')) == nullptr);
+    assert(atlas.measureText(unknown, "Hello", 13.0f).width == 0.0f);
+    assert(atlas.bakedSize(unknown) == 0.0f && atlas.lineHeight(unknown) == 0.0f);
+    assert(atlas.bakedSize(ig::FontId(0u)) == 0.0f);
+
+    // Bytes que não são uma fonte não entram no atlas.
+    const uint8_t notAFont[64] = {0u};
+    assert(atlas.loadFont(ig::Span<const uint8_t>(notAFont, sizeof(notAFont)), 20.0f) ==
+           ig::FontId(0u));
+    assert(atlas.faceCount() == 2u);
+    assert(atlas.valid());
+
+    // Uma fonte a sério pedida com um intervalo que ela não tem não entra como uma
+    // face sem glifos: o id que ela teria não pode apontar para nada, e o que já
+    // lá estava fica como estava (as uvs das outras foram calculadas sobre a
+    // imagem que esta podia ter mexido).
+    const ig::FontRange missingRanges[] = {ig::FontRange(0x1F300u, 0x1F5FFu)};
+    assert(atlas.loadFont(bytes, 20.0f,
+                          ig::Span<const ig::FontRange>(missingRanges, 1u)) ==
+           ig::FontId(0u));
+    assert(atlas.faceCount() == 2u);
+    assert(atlas.valid());
+    assert(atlas.glyph(big, static_cast<uint32_t>('A')));
+    assert(atlas.measureText(small, "Hello", 13.0f).width == smallText.width);
+
+    // Um ficheiro que só tem a assinatura e uma tabela 'glyf' (sem cmap, head nem
+    // hhea) não chega ao stb, que lê essas tabelas sem as validar: era o que dava
+    // o segfault, e é isto que o loadFont peneira antes de lhe tocar.
+    uint8_t fakeFont[32] = {0u};
+    fakeFont[1] = 0x01u; // sfnt: TrueType
+    fakeFont[5] = 0x01u; // uma tabela
+    fakeFont[12] = 'g';
+    fakeFont[13] = 'l';
+    fakeFont[14] = 'y';
+    fakeFont[15] = 'f';
+    fakeFont[23] = 28u; // offset da tabela (20-23, big endian) e
+    fakeFont[27] = 4u;  // comprimento (24-27): 28+4 = 32, cabe nos bytes
+    assert(atlas.loadFont(ig::Span<const uint8_t>(fakeFont, sizeof(fakeFont)), 20.0f) ==
+           ig::FontId(0u));
+    assert(atlas.faceCount() == 2u);
+    assert(atlas.valid());
+
+    // As duas faces desenham pelo mesmo atlas.
+    atlas.setTexture(ig::TextureId(3u));
+    ig::DrawList drawList;
+    assert(atlas.appendText(drawList, small, "A", ig::Vec2(0.0f, 0.0f), 13.0f, ig::Color(),
+                            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+    const ig::DrawData smallData = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
+    ig::DrawList bigDrawList;
+    assert(atlas.appendText(bigDrawList, big, "A", ig::Vec2(0.0f, 0.0f), 32.0f, ig::Color(),
+                            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+    const ig::DrawData bigData = bigDrawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
+    assert(smallData.vertices.size() == bigData.vertices.size());
+    assert(bigData.vertices.size() > 0u);
+    float smallTop = 0.0f;
+    float smallBottom = 0.0f;
+    float bigTop = 0.0f;
+    float bigBottom = 0.0f;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < smallData.vertices.size(); ++i)
+    {
+        const float smallY = smallData.vertices[i].position.y;
+        const float bigY = bigData.vertices[i].position.y;
+        if (i == 0u || smallY < smallTop)
+            smallTop = smallY;
+        if (i == 0u || smallY > smallBottom)
+            smallBottom = smallY;
+        if (i == 0u || bigY < bigTop)
+            bigTop = bigY;
+        if (i == 0u || bigY > bigBottom)
+            bigBottom = bigY;
+    }
+    // O mesmo glifo desenhado ao tamanho de cada face: a face grande sai mais alta.
+    assert(bigBottom - bigTop > smallBottom - smallTop);
+}
+
 // appendText skips lines outside the clip without decoding them. Every glyph
 // quad the unclipped call produces that can reach the clip (rounded outward
 // like a backend scissor) must still come out, byte for byte.
@@ -183,6 +315,7 @@ int main()
     test_atlas_from_font_bytes();
     test_custom_ranges_and_atlas_size();
     test_high_resolution_atlas();
+    test_multiple_faces();
     test_append_text_skips_only_invisible_lines();
     return 0;
 }

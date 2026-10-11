@@ -116,11 +116,30 @@ uint32_t bigEndian32(const uint8_t *bytes)
            (static_cast<uint32_t>(bytes[2]) << 8) | static_cast<uint32_t>(bytes[3]);
 }
 
+// A tabela está no directório? Quem chama já confirmou que o directório e todos
+// os pedaços que ele aponta cabem nos bytes entregues.
+bool hasTable(const uint8_t *bytes, uint32_t tableCount, const char *tag)
+{
+    for (uint32_t i = 0u; i < tableCount; ++i)
+    {
+        const uint8_t *record = bytes + 12u + static_cast<uint32_t>(i) * 16u;
+        if (record[0] == static_cast<uint8_t>(tag[0]) &&
+            record[1] == static_cast<uint8_t>(tag[1]) &&
+            record[2] == static_cast<uint8_t>(tag[2]) &&
+            record[3] == static_cast<uint8_t>(tag[3]))
+            return true;
+    }
+    return false;
+}
+
 // stb_truetype não valida o que lhe dão: um ficheiro que não seja uma fonte, ou
 // uma fonte truncada, fá-lo ler fora do buffer (segfault garantido num ficheiro
-// escolhido pelo utilizador). O construtor aceita bytes da aplicação, por isso
-// confirma-se primeiro que cabe uma tabela de offsets, que o tipo é conhecido e
-// que todas as tabelas cabem no que foi entregue. Só depois é que o stb lhe toca.
+// escolhido pelo utilizador). O construtor e o loadFont levam bytes da aplicação,
+// por isso confirma-se primeiro que cabe uma tabela de offsets, que o tipo é
+// conhecido, que todas as tabelas cabem no que foi entregue e que estão lá as que
+// o stb vai usar sem as procurar outra vez (o cmap sobretudo: sem ele o
+// FindGlyphIndex segue o lixo que encontrar como se fosse uma tabela de
+// segmentos). Só depois é que o stb lhe toca.
 bool looksLikeFont(Span<const uint8_t> data)
 {
     if (data.size() < 12u)
@@ -148,7 +167,14 @@ bool looksLikeFont(Span<const uint8_t> data)
         if (offset + length > data.size())
             return false;
     }
-    return true;
+    // As tabelas que o stb lê sem as validar: o cmap é o índice dos codepoints,
+    // o head/hhea dão-lhe as métricas e o contorno vem do glyf (TrueType) ou do
+    // CFF (OpenType). Sem qualquer uma delas o stb não sabe que não sabe: segfault
+    // ou métricas a dividir por zero.
+    const bool cff = tag == 0x4F54544Fu;
+    return hasTable(bytes, tableCount, "cmap") && hasTable(bytes, tableCount, "head") &&
+           hasTable(bytes, tableCount, "hhea") &&
+           hasTable(bytes, tableCount, cff ? "CFF " : "glyf");
 }
 
 Span<const uint8_t> embeddedFontData()
@@ -167,17 +193,81 @@ FontAtlas::FontAtlas(Span<const FontRange> ranges, uint32_t atlasWidth, uint32_t
 
 FontAtlas::FontAtlas(Span<const uint8_t> fontData, Span<const FontRange> requestedRanges,
                      uint32_t atlasWidth, uint32_t atlasHeight, float requestedBakedSize)
-    : pixels_(), glyphs_(), ascent_(0.0f), descent_(0.0f), lineHeight_(0.0f),
-      bakedSize_(requestedBakedSize), width_(atlasWidth), height_(atlasHeight),
-      texture_(), valid_(false), lookup_(), lookupLimit_(0u)
+    : pixels_(), faces_(), ranges_(requestedRanges), width_(atlasWidth), height_(atlasHeight),
+      texture_(), valid_(false)
 {
-    build(fontData, requestedRanges);
+    loadFont(fontData, requestedBakedSize, requestedRanges);
 }
 
-void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> requestedRanges)
+FontId FontAtlas::loadFont(Span<const uint8_t> fontData, float bakedSize,
+                           Span<const FontRange> requestedRanges)
 {
-    if (width_ == 0u || height_ == 0u || bakedSize_ <= 0.0f || requestedRanges.empty() ||
-        !looksLikeFont(fontData))
+    const float resolvedSize = bakedSize > 0.0f
+        ? bakedSize : (faces_.empty() ? 16.0f : faces_[0].bakedSize);
+    if (requestedRanges.empty())
+        requestedRanges = ranges_;
+    if (requestedRanges.empty() || !looksLikeFont(fontData) || width_ == 0u || height_ == 0u ||
+        resolvedSize <= 0.0f)
+        return FontId(0u);
+    Face face;
+    face.data.assign(fontData.begin(), fontData.end());
+    face.ranges.assign(requestedRanges.begin(), requestedRanges.end());
+    face.bakedSize = resolvedSize;
+    faces_.push_back(face);
+    // O empacotador do stb não guarda estado entre chamadas, por isso uma face nova
+    // reconstrói o atlas inteiro a partir das bytes que cada face guardou.
+    rebuild();
+    if (faces_.back().glyphs.empty())
+    {
+        // Uma face que não deu glifos nenhuns não fica no atlas nem ocupa um id: o
+        // que já lá estava tem de ficar como estava (as uvs das outras foram
+        // calculadas sobre uma imagem que esta podia ter mexido).
+        faces_.pop_back();
+        if (faces_.empty())
+            valid_ = false;
+        else
+            rebuild();
+        return FontId(0u);
+    }
+    return FontId(static_cast<uint32_t>(faces_.size()));
+}
+
+uint32_t FontAtlas::faceCount() const
+{
+    return static_cast<uint32_t>(faces_.size());
+}
+
+uint32_t FontAtlas::faceIndex(FontId font) const
+{
+    // O id 0 não é de face nenhuma (o loadFont só devolve ids a partir de 1): um
+    // texto com esse id não se desenha, em vez de sair na primeira face.
+    if (font.value == 0u)
+        return 0xFFFFFFFFu;
+    const uint32_t index = static_cast<uint32_t>(font.value - 1u);
+    return index < faces_.size() ? index : 0xFFFFFFFFu;
+}
+
+float FontAtlas::bakedSize(FontId font) const
+{
+    const uint32_t index = faceIndex(font);
+    return index == 0xFFFFFFFFu ? 0.0f : faces_[index].bakedSize;
+}
+
+float FontAtlas::lineHeight(FontId font) const
+{
+    const uint32_t index = faceIndex(font);
+    return index == 0xFFFFFFFFu ? 0.0f : faces_[index].lineHeight;
+}
+
+float FontAtlas::ascent(FontId font) const
+{
+    const uint32_t index = faceIndex(font);
+    return index == 0xFFFFFFFFu ? 0.0f : faces_[index].ascent;
+}
+
+void FontAtlas::rebuild()
+{
+    if (width_ == 0u || height_ == 0u || faces_.empty())
         return;
     // Two rows minimum: the first is reserved as opaque white (see below).
     if (width_ < 2u || height_ < 2u)
@@ -191,6 +281,30 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
     for (uint32_t x = 0u; x < width_; ++x)
         pixels_[x] = 255u;
 
+    stbtt_pack_context pack;
+    if (!stbtt_PackBegin(&pack, pixels_.data() + width_, static_cast<int>(width_),
+                         static_cast<int>(height_ - 1u), 0, 1, nullptr))
+        return;
+    stbtt_PackSetOversampling(&pack, 1u, 1u);
+    stbtt_PackSetSkipMissingCodepoints(&pack, 1);
+    bool any = false;
+    for (ct::Vector<Face>::size_type faceIndex = 0u; faceIndex < faces_.size(); ++faceIndex)
+        any = packFace(faces_[faceIndex], pack) || any;
+    stbtt_PackEnd(&pack);
+    valid_ = any;
+}
+
+bool FontAtlas::packFace(Face &face, stbtt_pack_context &pack)
+{
+    face.glyphs.clear();
+    face.lookup.clear();
+    face.lookupLimit = 0u;
+    // Os ranges desta face (os do atlas se ela não tiver nenhuns).
+    const Span<const FontRange> requestedRanges =
+        face.ranges.empty() ? ranges_
+                            : Span<const FontRange>(face.ranges.data(), face.ranges.size());
+    if (face.data.empty() || requestedRanges.empty() || face.bakedSize <= 0.0f)
+        return false;
     uint32_t glyphCount = 0u;
     uint32_t rangeCount = 0u;
     for (Span<const FontRange>::size_type i = 0u; i < requestedRanges.size(); ++i)
@@ -199,12 +313,12 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
             continue;
         const uint32_t count = requestedRanges[i].last - requestedRanges[i].first + 1u;
         if (count > 0x7FFFFFFFu - glyphCount)
-            return;
+            return false;
         glyphCount += count;
         ++rangeCount;
     }
     if (glyphCount == 0u || rangeCount == 0u)
-        return;
+        return false;
     ct::Vector<stbtt_packedchar> packed(glyphCount);
     ct::Vector<stbtt_pack_range> ranges(rangeCount);
     ct::Vector<FontRange> acceptedRanges;
@@ -216,7 +330,7 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
         if (requestedRanges[i].last < requestedRanges[i].first)
             continue;
         const uint32_t count = requestedRanges[i].last - requestedRanges[i].first + 1u;
-        ranges[rangeIndex].font_size = bakedSize_;
+        ranges[rangeIndex].font_size = face.bakedSize;
         ranges[rangeIndex].first_unicode_codepoint_in_range =
             static_cast<int>(requestedRanges[i].first);
         ranges[rangeIndex].array_of_unicode_codepoints = nullptr;
@@ -226,31 +340,23 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
         packedOffset += count;
         ++rangeIndex;
     }
-
-    stbtt_pack_context pack;
-    if (!stbtt_PackBegin(&pack, pixels_.data() + width_, static_cast<int>(width_),
-                         static_cast<int>(height_ - 1u), 0, 1, nullptr))
-        return;
-    stbtt_PackSetOversampling(&pack, 1u, 1u);
-    stbtt_PackSetSkipMissingCodepoints(&pack, 1);
     // O retorno também é zero quando um range contém um codepoint ausente.
     // Os restantes glifos continuam corretamente empacotados.
-    stbtt_PackFontRanges(&pack, fontData.data(), 0, ranges.data(), static_cast<int>(rangeCount));
-    stbtt_PackEnd(&pack);
-
+    stbtt_PackFontRanges(&pack, face.data.data(), 0, ranges.data(),
+                         static_cast<int>(rangeCount));
     stbtt_fontinfo info;
-    if (!stbtt_InitFont(&info, fontData.data(), 0))
-        return;
+    if (!stbtt_InitFont(&info, face.data.data(), 0))
+        return false;
     int ascent = 0;
     int descent = 0;
     int lineGap = 0;
     stbtt_GetFontVMetrics(&info, &ascent, &descent, &lineGap);
-    const float scale = stbtt_ScaleForPixelHeight(&info, bakedSize_);
-    ascent_ = static_cast<float>(ascent) * scale;
-    descent_ = static_cast<float>(descent) * scale;
-    lineHeight_ = static_cast<float>(ascent - descent + lineGap) * scale;
+    const float scale = stbtt_ScaleForPixelHeight(&info, face.bakedSize);
+    face.ascent = static_cast<float>(ascent) * scale;
+    face.descent = static_cast<float>(descent) * scale;
+    face.lineHeight = static_cast<float>(ascent - descent + lineGap) * scale;
 
-    glyphs_.reserve(glyphCount);
+    face.glyphs.reserve(glyphCount);
     packedOffset = 0u;
     for (uint32_t acceptedIndex = 0u; acceptedIndex < rangeCount; ++acceptedIndex)
     {
@@ -271,7 +377,7 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
             glyphInfo.offsetY = source.yoff;
             glyphInfo.advance = source.xadvance;
             glyphInfo.u0 = glyphInfo.v0 = glyphInfo.u1 = glyphInfo.v1 = 0.0f; // set below
-            glyphs_.push_back(glyphInfo);
+            face.glyphs.push_back(glyphInfo);
         }
         packedOffset += count;
     }
@@ -283,23 +389,23 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
     {
         if (!rangeContains(requestedRanges, arrow)) continue;
         bool present = false;
-        for (ct::Vector<FontGlyph>::size_type i = 0u; i < glyphs_.size(); ++i)
-            if (glyphs_[i].codepoint == arrow) { present = true; break; }
+        for (ct::Vector<FontGlyph>::size_type i = 0u; i < face.glyphs.size(); ++i)
+            if (face.glyphs[i].codepoint == arrow) { present = true; break; }
         if (present) continue;
         FontGlyph glyphInfo;
         glyphInfo.codepoint = arrow;
         glyphInfo.x = glyphInfo.y = glyphInfo.width = glyphInfo.height = 0u;
         glyphInfo.offsetX = glyphInfo.offsetY = 0.0f;
-        glyphInfo.advance = bakedSize_ * 0.85f;
+        glyphInfo.advance = face.bakedSize * 0.85f;
         glyphInfo.u0 = glyphInfo.v0 = glyphInfo.u1 = glyphInfo.v1 = 0.0f;
-        glyphs_.push_back(glyphInfo);
+        face.glyphs.push_back(glyphInfo);
     }
 
     uint32_t highest = 0u;
     uint16_t replacement = NoGlyph;
-    for (ct::Vector<FontGlyph>::size_type i = 0u; i < glyphs_.size(); ++i)
+    for (ct::Vector<FontGlyph>::size_type i = 0u; i < face.glyphs.size(); ++i)
     {
-        FontGlyph &g = glyphs_[i];
+        FontGlyph &g = face.glyphs[i];
         g.u0 = static_cast<float>(g.x) / static_cast<float>(width_);
         g.v0 = static_cast<float>(g.y) / static_cast<float>(height_);
         g.u1 = static_cast<float>(g.x + g.width) / static_cast<float>(width_);
@@ -309,24 +415,25 @@ void FontAtlas::build(Span<const uint8_t> fontData, Span<const FontRange> reques
         if (g.codepoint == ReplacementCodepoint && replacement == NoGlyph)
             replacement = static_cast<uint16_t>(i);
     }
-    if (!glyphs_.empty() && glyphs_.size() < static_cast<ct::Vector<FontGlyph>::size_type>(NoGlyph))
+    if (!face.glyphs.empty() &&
+        face.glyphs.size() < static_cast<ct::Vector<FontGlyph>::size_type>(NoGlyph))
     {
-        lookupLimit_ = highest >= 0xFFFFu ? 0x10000u : highest + 1u;
-        lookup_.assign(lookupLimit_, replacement);
-        for (ct::Vector<FontGlyph>::size_type i = 0u; i < glyphs_.size(); ++i)
-            if (glyphs_[i].codepoint < lookupLimit_)
-                lookup_[glyphs_[i].codepoint] = static_cast<uint16_t>(i);
+        face.lookupLimit = highest >= 0xFFFFu ? 0x10000u : highest + 1u;
+        face.lookup.assign(face.lookupLimit, replacement);
+        for (ct::Vector<FontGlyph>::size_type i = 0u; i < face.glyphs.size(); ++i)
+            if (face.glyphs[i].codepoint < face.lookupLimit)
+                face.lookup[face.glyphs[i].codepoint] = static_cast<uint16_t>(i);
     }
-    valid_ = !glyphs_.empty();
+    return !face.glyphs.empty();
 }
 
 bool FontAtlas::valid() const { return valid_; }
 FontId FontAtlas::defaultFont() const { return FontId(1u); }
 uint32_t FontAtlas::width() const { return width_; }
 uint32_t FontAtlas::height() const { return height_; }
-float FontAtlas::bakedSize() const { return bakedSize_; }
-float FontAtlas::lineHeight() const { return lineHeight_; }
-float FontAtlas::ascent() const { return ascent_; }
+float FontAtlas::bakedSize() const { return bakedSize(FontId(1u)); }
+float FontAtlas::lineHeight() const { return lineHeight(FontId(1u)); }
+float FontAtlas::ascent() const { return ascent(FontId(1u)); }
 Span<const uint8_t> FontAtlas::pixels() const { return Span<const uint8_t>(pixels_); }
 void FontAtlas::setTexture(TextureId texture) { texture_ = texture; }
 TextureId FontAtlas::texture() const { return texture_; }
@@ -352,40 +459,43 @@ TextProvider::SolidStyle FontAtlas::solidStyle() const
 
 const FontGlyph *FontAtlas::glyph(FontId font, uint32_t codepoint) const
 {
-    if (!valid_ || font != defaultFont())
+    const uint32_t index = faceIndex(font);
+    if (!valid_ || index == 0xFFFFFFFFu)
         return nullptr;
-    return lookupGlyph(codepoint);
+    return lookupGlyph(faces_[index], codepoint);
 }
 
-const FontGlyph *FontAtlas::lookupGlyph(uint32_t codepoint) const
+const FontGlyph *FontAtlas::lookupGlyph(const Face &face, uint32_t codepoint) const
 {
-    if (codepoint < lookupLimit_)
+    if (codepoint < face.lookupLimit)
     {
-        const uint16_t index = lookup_[codepoint];
-        return index != NoGlyph ? &glyphs_[index] : nullptr;
+        const uint16_t index = face.lookup[codepoint];
+        return index != NoGlyph ? &face.glyphs[index] : nullptr;
     }
-    GlyphCacheEntry& cached = glyphCache_[codepoint % 256u];
+    GlyphCacheEntry& cached = face.glyphCache[codepoint % 256u];
     if (cached.occupied && cached.codepoint == codepoint)
-        return cached.index >= 0 ? &glyphs_[static_cast<size_t>(cached.index)] : nullptr;
+        return cached.index >= 0 ? &face.glyphs[static_cast<size_t>(cached.index)] : nullptr;
     int found = -1;
     int replacement = -1;
-    for (size_t i = 0u; i < glyphs_.size(); ++i) {
-        if (glyphs_[i].codepoint == codepoint) { found = static_cast<int>(i); break; }
-        if (glyphs_[i].codepoint == ReplacementCodepoint) replacement = static_cast<int>(i);
+    for (size_t i = 0u; i < face.glyphs.size(); ++i) {
+        if (face.glyphs[i].codepoint == codepoint) { found = static_cast<int>(i); break; }
+        if (face.glyphs[i].codepoint == ReplacementCodepoint) replacement = static_cast<int>(i);
     }
     cached.occupied = true;
     cached.codepoint = codepoint;
     cached.index = found >= 0 ? found : replacement;
-    return cached.index >= 0 ? &glyphs_[static_cast<size_t>(cached.index)] : nullptr;
+    return cached.index >= 0 ? &face.glyphs[static_cast<size_t>(cached.index)] : nullptr;
 }
 
 TextMetrics FontAtlas::measureText(FontId font, StringView text, float logicalSize) const
 {
     TextMetrics result;
-    if (!valid_ || logicalSize <= 0.0f)
+    const uint32_t faceIndexValue = faceIndex(font);
+    if (!valid_ || logicalSize <= 0.0f || faceIndexValue == 0xFFFFFFFFu)
         return result;
-    const float scale = logicalSize / bakedSize_;
-    const bool known = font == defaultFont();
+    const Face &face = faces_[faceIndexValue];
+    const float scale = logicalSize / face.bakedSize;
+    const bool known = true;
     float lineWidth = 0.0f;
     uint32_t lines = 1u;
     const char *const data = text.data();
@@ -408,14 +518,14 @@ TextMetrics FontAtlas::measureText(FontId font, StringView text, float logicalSi
         }
         if (!known)
             continue;
-        const FontGlyph *glyphInfo = lookupGlyph(codepoint);
+        const FontGlyph *glyphInfo = lookupGlyph(face, codepoint);
         if (glyphInfo)
             lineWidth += glyphInfo->advance * scale;
     }
     result.width = lineWidth > result.width ? lineWidth : result.width;
-    result.height = lineHeight_ * scale * static_cast<float>(lines);
-    result.ascent = ascent_ * scale;
-    result.descent = -descent_ * scale;
+    result.height = face.lineHeight * scale * static_cast<float>(lines);
+    result.ascent = face.ascent * scale;
+    result.descent = -face.descent * scale;
     return result;
 }
 
@@ -423,15 +533,17 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
                            const Vec2 &position, float logicalSize,
                            const Color &color, const Rect &clip) const
 {
+    const uint32_t faceIndexValue = faceIndex(font);
     if (!valid_ || texture_.value == 0u || logicalSize <= 0.0f)
         return false;
     // An unknown font has no glyphs here; the text is consumed, not drawn.
-    if (font != defaultFont())
+    if (faceIndexValue == 0xFFFFFFFFu)
         return true;
+    const Face &face = faces_[faceIndexValue];
 
-    const float scale = logicalSize / bakedSize_;
+    const float scale = logicalSize / face.bakedSize;
     float penX = position.x;
-    float penY = position.y + ascent_ * scale;
+    float penY = position.y + face.ascent * scale;
     // Glyph quads share one clip rect and one texture, so they are written as a
     // single run: the whole text becomes one geometry command, and the vertices
     // go straight into the list instead of through one call per glyph.
@@ -445,7 +557,7 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
     // thousands of glyph lookups per frame for nothing). A line's box is
     // padded by half a line above and below: accents and descenders reach
     // past ascent/lineHeight, and a false "visible" only costs the lookups.
-    const float line = lineHeight_ * scale;
+    const float line = face.lineHeight * scale;
     const float clipRight = clip.x + clip.width + 2.0f;
     const float clipBottom = clip.y + clip.height + 2.0f;
     const float clipTop = clip.y - 2.0f;
@@ -455,7 +567,7 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
     while (offset < size)
     {
         // Per line, not per glyph: where this line sits against the clip.
-        const float lineTop = penY - ascent_ * scale - line * 0.5f;
+        const float lineTop = penY - face.ascent * scale - line * 0.5f;
         if (lineTop > clipBottom)
             break; // text only moves down from here
         const bool lineVisible = lineTop + line * 2.0f >= clipTop;
@@ -483,7 +595,7 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
                 newline = true;
                 break;
             }
-            const FontGlyph *glyphInfo = lookupGlyph(codepoint);
+            const FontGlyph *glyphInfo = lookupGlyph(face, codepoint);
             if (!glyphInfo)
                 continue;
             if (glyphInfo->width != 0u && glyphInfo->height != 0u)
@@ -506,7 +618,7 @@ bool FontAtlas::appendText(DrawList &drawList, FontId font, StringView text,
             {
                 const float left = penX + logicalSize * 0.08f;
                 const float right = penX + glyphInfo->advance * scale - logicalSize * 0.08f;
-                const float top = penY - ascent_ * scale + logicalSize * 0.20f;
+                const float top = penY - face.ascent * scale + logicalSize * 0.20f;
                 const float bottom = top + logicalSize * 0.60f;
                 const float centerX = (left + right) * 0.5f;
                 const float centerY = (top + bottom) * 0.5f;
