@@ -551,9 +551,9 @@ Continua em falta neste nível:
       ainda não entra nesta pilha.
       *Onde:* `src/Gui.cpp` (`beginMenuContent`/`endMenuContent`/`syncMenuLayoutItem`,
       `beginMenu`/`endMenu`/`beginSubMenu`/`endSubMenu`), `tests/test_item_status.cpp`.
-- [ ] **`beginContextMenu` como contentor de layout** (o mesmo, para o menu de
-      contexto).
-      *Onde:* `src/Gui.cpp` (`beginContextMenu`/`endContextMenu`).
+- [x] **`beginContextMenu` como contentor de layout**: o mesmo caminho do
+      `beginMenu` (e o `endContextMenu` fecha-o pelo `endMenu`, que é o mesmo).
+      *Onde:* `src/Gui.cpp` (`beginContextMenu`), `tests/test_item_status.cpp`.
 - [ ] **Popups com pilha e ids**: `openPopup`, `beginPopup`, `beginPopupModal`,
       `closeCurrentPopup`, `isPopupOpen`, fecho por clique fora com flags,
       popups aninhados. Hoje o `beginDialog`/`messageBox` cobrem o caso simples.

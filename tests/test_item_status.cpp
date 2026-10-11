@@ -2214,6 +2214,64 @@ void test_widgets_inside_an_open_menu()
     assert(separators > 0);
 }
 
+// O menu de contexto é o mesmo contentor de layout: um widget lá dentro também
+// fica no popup (é o caminho do endMenu, que o endContextMenu usa).
+void test_widgets_inside_a_context_menu()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float value = 0.5f;
+    ig::Rect area(0.0f, 0.0f, 0.0f, 0.0f);
+    ig::Rect itemRect;
+    ig::Rect sliderRect;
+    bool changed = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("ctx", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        if (area.width <= 0.0f)
+            area = ig::Rect(0.0f, 0.0f, 200.0f, 120.0f);
+        if (c.beginContextMenu("alvo", area))
+        {
+            c.menuItem("Duplicate");
+            itemRect = c.itemRect();
+            changed = c.sliderFloat("Nivel", value, 0.0f, 1.0f);
+            sliderRect = c.itemRect();
+            c.endContextMenu();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(area.width > 0.0f);
+
+    // Abrir com o botão direito sobre a área.
+    const float x = 20.0f;
+    const float y = 40.0f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Right, x, y));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Right, x, y));
+    harness.frame(build);
+    harness.frame(build);
+
+    assert(itemRect.width > 0.0f);
+    assert(sliderRect.width > 0.0f);
+    // O slider está por baixo do item e dentro da largura do menu.
+    assert(sliderRect.x == itemRect.x);
+    assert(sliderRect.y >= itemRect.y + itemRect.height - 0.5f);
+
+    // E responde: carregar na pista mexe no valor.
+    const float sliderX = sliderRect.x + sliderRect.width * 0.5f;
+    const float sliderY = sliderRect.y + sliderRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(sliderX, sliderY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    assert(changed);
+    assert(value != 0.5f);
+}
+
 // Dois menus com o mesmo rótulo de widget são widgets diferentes (o id do menu
 // entra na pilha de ids).
 void test_menu_content_scopes_widget_ids()
@@ -2322,6 +2380,7 @@ int main()
     test_item_hovered_flags();
     test_widgets_inside_an_open_menu();
     test_menu_content_scopes_widget_ids();
+    test_widgets_inside_a_context_menu();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
