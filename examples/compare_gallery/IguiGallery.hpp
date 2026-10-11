@@ -30,4 +30,7 @@ void applyDemoStyle(ig::Context &ui);
 // completo sem ter de clicar em todas (é o que o --open-all faz).
 void openAllSections();
 
+// Abre uma secção pelo nome, para pôr uma só lado a lado (é o que o --open faz).
+bool openSection(const char *name);
+
 } // namespace igui_gallery

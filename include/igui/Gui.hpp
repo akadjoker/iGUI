@@ -493,6 +493,17 @@ public:
                  const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   const Rect &bounds);
+    // Cabeçalho de uma combo cujo popup leva o conteúdo que o chamador submeter
+    // entre beginCombo e endCombo: o BeginCombo/EndCombo do ImGui. `preview` é o
+    // texto do cabeçalho. Devolve true enquanto o popup está aberto e o conteúdo
+    // vai dentro do if: o cursor do layout fica dentro do popup e availableWidth()
+    // passa a ser a largura dele, por isso os itens submetem-se como em qualquer
+    // sítio (selectable, button, slider). O popup tem a largura do cabeçalho e no
+    // máximo visibleItems linhas, como o HeightRegular do ImGui (8); o que não
+    // couber é cortado (não há scroll).
+    bool beginCombo(StringView label, StringView preview, const Rect &bounds,
+                    int visibleItems = 8);
+    void endCombo();
     // A horizontal menu strip. Call beginMenu()/endMenu() between these calls.
     bool beginMenuBar(const Rect &bounds);
     void endMenuBar();
@@ -797,6 +808,10 @@ public:
                  float width = 0.0f, int visibleItems = 4);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   float width = 0.0f);
+    // O beginCombo do layout: o cabeçalho é o item, o popup é do popup. O cursor
+    // de fora só avança quando o endCombo repõe o layout.
+    bool beginCombo(StringView label, StringView preview, float width = 0.0f,
+                    int visibleItems = 8);
     bool sliderFloat(StringView label, float &value, float minimum, float maximum,
                      float width = 0.0f);
     bool sliderInt(StringView label, int &value, int minimum, int maximum,
@@ -1450,6 +1465,28 @@ private:
     Rect comboPopupBoundsAtFrameStart_;
     Rect comboBounds_;
     Rect comboPopupBounds_;
+    // Combo de conteúdo livre (ver beginCombo/endCombo). Enquanto o popup está
+    // aberto o cursor do layout está dentro dele e o que o chamador submete vai
+    // para comboDrawList_, que sai logo depois da sobreposição da janela: a caixa
+    // é desenhada no endCombo (aí já se sabe a medida do conteúdo) e fica por
+    // baixo do conteúdo.
+    bool comboContentOpen_;
+    LayoutState comboLayout_;
+    Rect comboHeaderRect_;
+    Rect comboContentClip_;
+    float comboContentWidth_;
+    WidgetId comboContentId_;
+    int comboVisibleItems_;
+    WindowHandle comboContentWindow_;
+    DrawList comboDrawList_;
+    // Medida do conteúdo do combo aberto no último frame: é ela que dá o tamanho
+    // da caixa e do clip neste (ver beginCombo). A id diz de que combo é, para a
+    // medida de um não aparecer como tamanho de outro.
+    WidgetId comboMeasuredId_;
+    Vec2 comboMeasured_;
+    // Um beginCombo do layout avança o cabeçalho no endCombo, não em si: o layout
+    // de dentro do popup é reposto lá (ver endCombo).
+    bool comboAdvanceHeader_;
     // frameNumber_ of the last frame each blocker was submitted. beginFrame
     // drops a blocker the application stopped submitting (the usual
     // `if (show) messageBox(...)`): it is off screen, so nothing is left for
@@ -1705,6 +1742,11 @@ private:
     bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
     bool menuItemInternal(StringView label, bool enabled, bool *checked,
                           StringView shortcut = StringView());
+    bool beginComboImpl(StringView label, StringView preview, const Rect &bounds,
+                        int visibleItems, bool advanceHeader);
+    void drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
+                         bool highlighted, const Rect &clip);
+    float comboPopupMaxHeight(int visibleItems) const;
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);
     // fontSize is the editor's effective size (theme_.fontSize * the

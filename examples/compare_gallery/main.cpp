@@ -155,7 +155,24 @@ struct PanelTiming
 void usage()
 {
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
-           "                       [--screenshot=FILE] [--no-vsync] [--open-all] [--font=FILE] [--help]\n");
+           "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
+           "                       [--open-all | --open=SECCAO] [--click=X,Y] [--help]\n"
+           "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
+           "  --click=X,Y carrega no painel do iGUI nesse ponto (para os popups, que\n"
+           "  nao abrem sem rato, aparecerem numa captura).\n");
+}
+
+// O --click=X,Y: onde carregar uma vez, no painel do iGUI.
+bool parseClick(const char *arg, float &x, float &y)
+{
+    if (strncmp(arg, "--click=", 8) != 0)
+        return false;
+    const char *comma = strchr(arg + 8, ',');
+    if (!comma)
+        return false;
+    x = static_cast<float>(atof(arg + 8));
+    y = static_cast<float>(atof(comma + 1));
+    return true;
 }
 
 bool isMouseEvent(Uint32 type)
@@ -183,6 +200,10 @@ int main(int argc, char **argv)
     bool openAll = false;
     std::string screenshot;
     std::string fontPath = IGUI_GALLERY_FONT;
+    std::string openSection;
+    bool click = false;
+    float clickX = 0.0f;
+    float clickY = 0.0f;
     bool dump = false;
 
     for (int i = 1; i < argc; ++i)
@@ -204,6 +225,10 @@ int main(int argc, char **argv)
             openAll = true;
         else if (strcmp(arg, "--dump") == 0)
             dump = true;
+        else if (strncmp(arg, "--open=", 7) == 0)
+            openSection = arg + 7;
+        else if (parseClick(arg, clickX, clickY))
+            click = true;
         else if (strncmp(arg, "--font=", 7) == 0)
             fontPath = arg + 7;
         else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0)
@@ -312,6 +337,11 @@ int main(int argc, char **argv)
     igui_gallery::reset();
     if (openAll)
         igui_gallery::openAllSections();
+    if (!openSection.empty() && !igui_gallery::openSection(openSection.c_str()))
+    {
+        fprintf(stderr, "seccao desconhecida: %s\n", openSection.c_str());
+        return 2;
+    }
     std::printf("iGUI   GL %d.%d em %s, atlas %ux%u, fonte %s\n", backend.versionMajor(),
                 backend.versionMinor(), backend.renderer(), atlas.width(), atlas.height(),
                 fontBytes.empty() ? "de omissao (Roboto)" : fontPath.c_str());
@@ -419,6 +449,19 @@ int main(int argc, char **argv)
                 else if (pointerInImgui)
                     activePanel = 1;
             }
+        }
+
+        // --click=X,Y: um clique do iGUI a fingir, para os popups (que só abrem com
+        // rato) aparecerem numa captura. Os três eventos vão por frames diferentes e
+        // no mesmo ponto, como um clique a sério: o popup só abre na largada.
+        if (click)
+        {
+            if (frame == 1)
+                ui.pushEvent(ig::Event::pointerMove(clickX, clickY));
+            else if (frame == 2)
+                ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+            else if (frame == 3)
+                ui.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
         }
 
         // Os NewFrame dos dois backends do ImGui são obrigatórios (é onde o
