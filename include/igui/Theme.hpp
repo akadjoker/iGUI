@@ -65,6 +65,14 @@ struct Theme
     Color menuSubmenuArrow;
     Color progressBackground;
     Color progressFilled;
+    // Texto por cima da barra (ver progressBar): o preenchimento é claro em todos
+    // os presets, por isso o valor por omissão é escuro.
+    Color progressText;
+    // Plots (ver plotLines/plotHistogram): o fundo é a area recuada onde a serie
+    // e as barras sao desenhadas.
+    Color plotBackground;
+    Color plotLines;
+    Color plotHistogram;
     Color labelText;
 
     Color bgColor;
@@ -171,7 +179,9 @@ struct Theme
           menuCheckMark(185, 185, 190, 255),
           menuSubmenuArrow(180, 180, 185, 255),
           progressBackground(55, 55, 65, 255),
-          progressFilled(165, 165, 170, 255),
+          progressFilled(165, 165, 170, 255), progressText(30, 30, 30, 255),
+          plotBackground(40, 40, 46, 255), plotLines(170, 175, 185, 255),
+          plotHistogram(200, 170, 80, 255),
           labelText(230, 230, 230, 255),
           bgColor(30, 30, 30, 255), textDisabled(120, 120, 120, 255),
           buttonNormal(60, 60, 65, 255), buttonHover(75, 75, 80, 255),
@@ -231,6 +241,10 @@ inline Theme makeTheme(ThemePreset preset)
         theme.textColor = Color(35, 38, 44, 255);
         theme.labelText = theme.textColor;
         theme.buttonText = theme.textColor;
+        theme.progressText = theme.textColor;
+        theme.plotBackground = Color(238, 240, 244, 255);
+        theme.plotLines = Color(54, 124, 196, 255);
+        theme.plotHistogram = Color(196, 143, 38, 255);
         theme.buttonBackground = Color(224, 227, 232, 255);
         theme.buttonHovered = Color(207, 219, 235, 255);
         theme.buttonBorder = Color(170, 176, 188, 255);

@@ -21,6 +21,11 @@ option(IGUI_BUILD_DIALOGS_DEMO "Build the file/folder/settings dialogs demo (req
 option(IGUI_BUILD_IMMEDIATE "Build the immediate-mode Context API (igui)" ON)
 option(IGUI_BUILD_RETAINED "Build the retained widget toolkit (igui_widgets)" ON)
 option(IGUI_BUILD_LEGACY "Build the old retained GUI compatibility layer (igui_legacy)" ON)
+option(IGUI_BUILD_BENCH "Build the headless iGUI-vs-ImGui comparison benchmark" OFF)
+set(IGUI_BENCH_IMGUI_DIR "" CACHE PATH
+    "ImGui source tree (imgui.h/imgui.cpp) the benchmark compares iGUI against")
+option(IGUI_BUILD_OPENGL_BACKEND "Build the OpenGL 3.3 core backend (igui_opengl)" OFF)
+option(IGUI_BUILD_COMPARE_GALLERY "Build the SDL2+OpenGL side-by-side widget gallery (iGUI vs ImGui)" OFF)
 
 set(IGUI_RAYLIB_AVAILABLE OFF)
 if(IGUI_BUILD_RAYLIB_BACKEND)
@@ -116,12 +121,48 @@ if(IGUI_BUILD_TESTS)
         add_test(NAME igui_core COMMAND igui_tests)
     endif()
 
+    # Os testes são feitos de assert(): num build com NDEBUG o assert desaparece,
+    # o corpo de cada teste deixa de correr e um ficheiro inteiro passa a não
+    # testar nada (ou rebenta onde faz .back() numa lista que ficou vazia). Tira-se
+    # o NDEBUG a estes alvos, seja qual for o tipo de build - um teste que não
+    # corre é pior do que um que falha.
+    set(IGUI_TEST_TARGETS
+        igui_tests
+        igui_widget_gallery_tests
+        igui_interaction_harness_tests
+        igui_modal_input_tests
+        igui_culling_tests
+        igui_fuzz_tests
+        igui_numeric_input_tests
+        igui_text_editing_tests
+        igui_windows_tests
+        igui_code_editor_tests
+        igui_both_modes_tests
+        igui_original_widgets_tests
+        igui_font_tests
+        igui_item_status_tests
+        igui_sdl2_tests)
+    function(igui_test_keep_asserts target)
+        if(NOT TARGET ${target})
+            return()
+        endif()
+        if(MSVC)
+            target_compile_options(${target} PRIVATE /UNDEBUG)
+        else()
+            target_compile_options(${target} PRIVATE -UNDEBUG)
+        endif()
+    endfunction()
+
     if(IGUI_BUILD_IMMEDIATE)
         add_executable(igui_widget_gallery_tests tests/test_widgets.cpp)
         # The gallery test drives the same synth knob the web gallery shows.
         target_include_directories(igui_widget_gallery_tests PRIVATE examples/synth_demo)
         target_link_libraries(igui_widget_gallery_tests PRIVATE igui)
         add_test(NAME igui_widget_gallery COMMAND igui_widget_gallery_tests)
+
+        add_executable(igui_item_status_tests tests/test_item_status.cpp)
+        target_link_libraries(igui_item_status_tests PRIVATE igui)
+        add_test(NAME igui_item_status COMMAND igui_item_status_tests)
 
         add_executable(igui_interaction_harness_tests tests/test_interaction_harness.cpp)
         target_link_libraries(igui_interaction_harness_tests PRIVATE igui)
@@ -289,6 +330,31 @@ if(IGUI_BUILD_FONT)
         add_executable(igui_font_tests tests/test_font.cpp)
         target_link_libraries(igui_font_tests PRIVATE igui_font)
         add_test(NAME igui_font COMMAND igui_font_tests)
+    endif()
+endif()
+
+# Headless benchmark: same widget scenes submitted through ig::Context and
+# through ImGui, timed side by side. See bench/README.md.
+if(IGUI_BUILD_BENCH)
+    if(NOT IGUI_BUILD_IMMEDIATE)
+        message(FATAL_ERROR "IGUI_BUILD_BENCH=ON needs IGUI_BUILD_IMMEDIATE=ON")
+    endif()
+    add_subdirectory(bench)
+endif()
+
+# OpenGL 3.3 core backend: renders the immediate-mode DrawData with no GL loader
+# dependency (the application supplies the proc-address callback). Needs the font
+# module, which is what provides the atlas texture.
+if(IGUI_BUILD_OPENGL_BACKEND)
+    if(NOT IGUI_BUILD_FONT)
+        message(FATAL_ERROR "IGUI_BUILD_OPENGL_BACKEND=ON needs IGUI_BUILD_FONT=ON")
+    endif()
+    add_library(igui_opengl adapters/opengl/OpenglBackend.cpp)
+    add_library(igui::opengl ALIAS igui_opengl)
+    target_include_directories(igui_opengl PUBLIC adapters/opengl/include)
+    target_link_libraries(igui_opengl PUBLIC igui_font)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(igui_opengl PRIVATE -Wall -Wextra -Wpedantic)
     endif()
 endif()
 
@@ -534,3 +600,18 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
         add_test(NAME igui_sdl2 COMMAND igui_sdl2_tests)
     endif()
 endif()
+
+# A galeria comparada lado a lado precisa do backend OpenGL e de SDL2.
+if(IGUI_BUILD_COMPARE_GALLERY)
+    if(NOT IGUI_BUILD_SDL2_DEMO)
+        message(FATAL_ERROR
+            "IGUI_BUILD_COMPARE_GALLERY=ON needs IGUI_BUILD_SDL2_DEMO=ON (it links igui::sdl2)")
+    endif()
+    add_subdirectory(examples/compare_gallery)
+endif()
+
+# Os alvos de teste são feitos de assert(); o ajuste que os mantém vivos em builds
+# com NDEBUG (ver igui_test_keep_asserts) tem de correr depois de todos existirem.
+foreach(igui_test_target IN LISTS IGUI_TEST_TARGETS)
+    igui_test_keep_asserts(${igui_test_target})
+endforeach()

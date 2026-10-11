@@ -43,6 +43,9 @@ struct WindowState
     bool useClientArea;
     bool allowMove;
     bool allowResize;
+    // false keeps this window's geometry out of the state file (see
+    // setWindowStatePath).
+    bool saveSettings;
     // Geometry came from the state file before the viewport was known: it is
     // fitted to it on the first frame the window is submitted.
     bool clampToViewport = false;
@@ -58,7 +61,7 @@ struct WindowState
         : id(InvalidWidgetId), title(), bounds(), open(true), minimized(false), focused(false),
           showWindowControls(true), showMinimizeButton(true), showMaximizeButton(true),
           showTitleBar(true), useClientArea(false), allowMove(true), allowResize(true),
-          zOrder(0), drawList(), overlayDrawList()
+          saveSettings(true), zOrder(0), drawList(), overlayDrawList()
     {
     }
 };
@@ -316,7 +319,25 @@ public:
     void beginFrame(const FrameInfo &frame);
     const DrawData &endFrame();
 
+    // Chrome and interaction for beginWindow(): the switches the demo's "Window
+    // options" section is about. The default is a normal window - a title bar
+    // with the window controls, movable, resizable, and its geometry kept in the
+    // state file.
+    struct WindowOptions
+    {
+        bool titleBar = true;
+        bool move = true;
+        bool resize = true;
+        bool saveSettings = true;
+        // The bounds passed to beginWindow are applied every frame instead of
+        // only when the window is created, so a drag or a state file cannot move
+        // it. What an overlay strip or a splash window wants.
+        bool fixedBounds = false;
+    };
+
     bool beginWindow(StringView title, const Rect &initialBounds, bool *open = nullptr);
+    bool beginWindow(StringView title, const Rect &initialBounds, const WindowOptions &options,
+                     bool *open = nullptr);
     // A root window that follows the current viewport every frame.
     bool beginMainWindow(StringView title, bool *open = nullptr);
     void endWindow();
@@ -422,6 +443,15 @@ public:
     // handling outright instead of relying only on the guard already built
     // into itemHovered/itemClicked.
     bool isMenuOpen() const;
+    // Widgets submitted between beginDisabled() and endDisabled() do not react to
+    // the pointer or the keyboard, and are drawn faded: colours are blended toward
+    // the window background, text and geometry alike. Blocks nest, and one left
+    // open ends with the frame (see beginFrame). The fade does not deepen with
+    // nesting - two levels are as faded as one, so a caption already dimmed by
+    // textDisabled() does not disappear inside a block.
+    void beginDisabled();
+    void endDisabled();
+    bool isDisabled() const { return disabledDepth_ > 0; }
 
     // Application-owned history entries. The callbacks must remain valid for
     // as long as the entry stays in this Context's history.
@@ -441,6 +471,9 @@ public:
     bool selectable(StringView label, bool selected, const Rect &bounds);
     // Returns whether the section is expanded. The bool stores its persistent state.
     bool collapsingHeader(StringView label, bool &expanded, const Rect &bounds);
+    // O mesmo, com um botão de fecho no canto: clicar nele põe `open` a false, e a
+    // partir daí o header não é desenhado (como o p_open do ImGui).
+    bool collapsingHeader(StringView label, bool &expanded, bool &open, const Rect &bounds);
     // A compact expandable row for hierarchies. Use indent()/unindent() for its children.
     bool treeNode(StringView label, bool &expanded, const Rect &bounds);
     // Scene-oriented tree row. Returns true when the row is selected; expansion
@@ -495,6 +528,12 @@ public:
                    float speed, const Rect &bounds);
     bool dragInt(StringView label, int &value, int minimum, int maximum,
                  int speed, const Rect &bounds);
+    // Slider vertical, o VSliderFloat/VSliderInt do ImGui: o valor cresce para
+    // cima numa faixa estreita, ao contrário do fader, que é um controle de
+    // mistura.
+    bool vSliderFloat(StringView label, float &value, float minimum, float maximum,
+                      const Rect &bounds);
+    bool vSliderInt(StringView label, int &value, int minimum, int maximum, const Rect &bounds);
     // Draggable divider. value is the local x/y coordinate inside bounds.
     bool splitter(StringView id, float &value, float minimum, float maximum,
                   SplitterAxis axis, const Rect &bounds, float thickness = 5.0f);
@@ -510,6 +549,8 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
     bool inputText(StringView label, String &value, const Rect &bounds);
+    // Igual ao inputText, mas desenha `hint` enquanto o campo está vazio.
+    bool inputTextWithHint(StringView label, StringView hint, String &value, const Rect &bounds);
     // followTail keeps the view pinned to the last line as value grows (a
     // console/log), unless the user scrolled up to read back.
     bool inputTextMultiline(StringView label, String &value, const Rect &bounds,
@@ -532,8 +573,12 @@ public:
     bool codeEditorPaste(CodeEditorState &state);
     bool inputInt(StringView label, int &value, const Rect &bounds);
     bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6);
+    bool inputDouble(StringView label, double &value, const Rect &bounds, int precision = 6);
     // Inline RGBA editor with a preview swatch and four draggable channels.
     bool colorEdit(StringView label, Color &value, const Rect &bounds);
+    // A colour swatch with the label next to it, for a widget that opens the
+    // picker (colorEdit) somewhere else. Returns true when the swatch is clicked.
+    bool colorButton(StringView label, const Color &value, const Rect &bounds);
     // Editable multi-stop gradient. Left-click an empty part of the bar to
     // add an interpolated stop, drag a handle to move it, and right-click a
     // non-endpoint handle to remove it. selectedStop is -1 when none is set.
@@ -561,11 +606,56 @@ public:
     bool smallImageButton(StringView label, TextureId texture, const Rect &bounds,
                           const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                           const Color &tint = Color());
+    // ── Rótulos ─────────────────────────────────────────────────────────────
+    // A convenção do ImGui vale em todos os widgets que levam rótulo: o que vem
+    // depois de "##" não se desenha mas faz parte do id, e "##so-id" não desenha
+    // nada. Serve para dois widgets partilharem o texto visível sem partilharem o
+    // estado, e para um campo não gastar largura com um rótulo:
+    //
+    //     ui.button("Gravar##notas");      // desenha "Gravar"
+    //     ui.dragFloat("##x", x, 0.0f, 1.0f);  // só a caixa, sem rótulo
+    //
+    // Sem "##" o rótulo sai inteiro. O `label()`/`text()` não trata disto, como
+    // o `Text()` do ImGui também não: ali a string é texto, não identificação.
+    // ── Largura dos itens ───────────────────────────────────────────────────
+    // Como no ImGui: uma barra fixa por item. setNextItemWidth vale para o item
+    // seguinte (os widgets de layout das secções seguintes, que são os que tomam
+    // uma largura), pushItemWidth/popItemWidth para um bloco deles, e
+    // calcItemWidth diz qual vai ser a largura do próximo item sem o submeter.
+    // Zero devolve o valor por omissão: a largura que sobra na linha.
+    void setNextItemWidth(float width);
+    void pushItemWidth(float width);
+    void popItemWidth();
+    float calcItemWidth() const;
     // Minimal building blocks for application-defined immediate widgets.
     bool invisibleButton(StringView id, const Rect &bounds);
     bool isHovered(StringView id, const Rect &bounds);
     // Equivalent to invisibleButton, named for custom widget interaction code.
     bool isClicked(StringView id, const Rect &bounds);
+    // ── O que se passou com o último item (o LastItemData do ImGui) ──────────
+    // Logo a seguir a submeter um widget, estas dizem o que o ponteiro e o
+    // teclado fizeram com ele. Valem para o último item que passou por um teste
+    // de ponteiro - todos os widgets, incluindo os de bounds -, por isso têm de
+    // ser lidas no mesmo frame e antes do item seguinte:
+    //
+    //     ui.button("Grava");
+    //     if (ui.isItemHovered()) ui.tooltip("grava o ficheiro");
+    //
+    // isItemEdited é posto pelos widgets que mudam um valor (sliders, drags,
+    // campos, checkbox, radio, combo, listas, colorEdit, stepper); um widget que
+    // não o ponha continua a dizê-lo pelo seu próprio valor de retorno.
+    bool isItemHovered() const { return item_.hovered; }
+    bool isItemActive() const { return item_.active; }
+    bool isItemClicked() const { return item_.clicked; }
+    bool isItemEdited() const { return item_.edited; }
+    bool isItemFocused() const { return item_.focused; }
+    bool isItemDisabled() const { return item_.disabled; }
+    // Onde o último item ficou, em coordenadas absolutas (o mesmo espaço dos
+    // draw* e do windowBounds), e o id com que foi submetido. Como no ImGui, um
+    // label ou um dummy não identifica item nenhum: ficam com o id do último
+    // widget que se identificou.
+    Rect itemRect() const { return item_.bounds; }
+    WidgetId itemId() const { return item_.id; }
     void drawRectFilled(const Rect &bounds, const Color &color);
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
     void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
@@ -611,7 +701,24 @@ public:
     // use these to stay aligned.
     Vec2 pointerContentPosition() const;
     Vec2 pointerPressedContentPosition(PointerButton button) const;
-    void progressBar(float value, float maximum, const Rect &bounds);
+    // A barra preenche-se até value/maximum. Com value negativo é indeterminada:
+    // uma faixa atravessa-a com o tempo do contexto. O overlay, quando dado, sai
+    // centrado por cima da barra.
+    void progressBar(float value, float maximum, const Rect &bounds,
+                     StringView overlay = StringView());
+    // Grafico de uma serie. values aponta para count amostras lidas em anel a
+    // partir de offset, por isso um buffer circular entrega sempre a mais antiga
+    // e o desenho sai na ordem certa. Com scaleMax <= scaleMin a escala vertical
+    // vem dos dados (amostras NaN sao ignoradas). A serie e reduzida a uma
+    // coluna por pixel quando tem mais amostras do que isso. Devolve o indice
+    // logico da amostra sob o ponteiro (0 = a primeira desenhada), ou -1.
+    int plotLines(StringView label, const float *values, int count, const Rect &bounds,
+                  int offset = 0, StringView overlay = StringView(),
+                  float scaleMin = 0.0f, float scaleMax = 0.0f);
+    // As barras nascem na linha do zero (no fundo quando a escala nao e negativa).
+    int plotHistogram(StringView label, const float *values, int count, const Rect &bounds,
+                      int offset = 0, StringView overlay = StringView(),
+                      float scaleMin = 0.0f, float scaleMax = 0.0f);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
     MessageBoxResult messageBox(StringView title, StringView message, bool &open,
                                 bool showCancel = false);
@@ -644,6 +751,24 @@ public:
     void label(StringView text, const Vec2 &position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
+    // A tooltip the application fills with widgets, for anything the single line
+    // above cannot say: a colour swatch, a table, a key/value list. Call it right
+    // after the owning widget and close it with endTooltip():
+    //
+    //     ui.sliderFloat("Ganho", gain, 0.0f, 2.0f);
+    //     if (ui.beginTooltip()) {
+    //         ui.label("Ganho em dB");
+    //         ui.sliderFloat("dB", db, -60.0f, 6.0f);
+    //         ui.endTooltip();
+    //     }
+    //
+    // It appears after the same stationary hover delay as tooltip(), next to the
+    // pointer and flipping away from the window edges. Nothing inside reacts to
+    // the pointer - a tooltip that took the hover would take it from the widget
+    // it belongs to, and the two would flicker on and off - so a tooltip is for
+    // reading, not for clicking.
+    bool beginTooltip();
+    void endTooltip();
     // Tooltips appear after this much stationary hover time. The default is 0.45 seconds.
     void setTooltipDelay(float seconds);
     float tooltipDelay() const;
@@ -655,6 +780,7 @@ public:
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
     bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
+    bool collapsingHeader(StringView label, bool &expanded, bool &open, float width = 0.0f);
     bool treeNode(StringView label, bool &expanded, float width = 0.0f);
     bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
                   float width = 0.0f);
@@ -678,6 +804,34 @@ public:
     bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f, int precision = 3);
     bool inputFloat4(StringView label, float &x, float &y, float &z, float &w,
                      float width = 0.0f, int precision = 3);
+    // As variantes de N componentes são N widgets lado a lado, com uma largura
+    // igual para todos: é o mesmo que o ImGui faz, e assim cada componente
+    // mantém tudo o que o de um componente já faz (arrasto, edição por teclado,
+    // clamps, foco).
+    bool sliderFloat2(StringView label, float &x, float &y, float minimum, float maximum,
+                      float width = 0.0f);
+    bool sliderFloat3(StringView label, float &x, float &y, float &z, float minimum,
+                      float maximum, float width = 0.0f);
+    bool sliderFloat4(StringView label, float &x, float &y, float &z, float &w, float minimum,
+                      float maximum, float width = 0.0f);
+    bool sliderInt2(StringView label, int &x, int &y, int minimum, int maximum,
+                    float width = 0.0f);
+    bool sliderInt3(StringView label, int &x, int &y, int &z, int minimum, int maximum,
+                    float width = 0.0f);
+    bool sliderInt4(StringView label, int &x, int &y, int &z, int &w, int minimum, int maximum,
+                    float width = 0.0f);
+    bool dragInt2(StringView label, int &x, int &y, int minimum, int maximum, int speed = 1,
+                  float width = 0.0f);
+    bool dragInt3(StringView label, int &x, int &y, int &z, int minimum, int maximum,
+                  int speed = 1, float width = 0.0f);
+    bool dragInt4(StringView label, int &x, int &y, int &z, int &w, int minimum, int maximum,
+                  int speed = 1, float width = 0.0f);
+    bool inputInt2(StringView label, int &x, int &y, float width = 0.0f);
+    bool inputInt3(StringView label, int &x, int &y, int &z, float width = 0.0f);
+    bool inputInt4(StringView label, int &x, int &y, int &z, int &w, float width = 0.0f);
+    // Dupla precisão, para um campo que não se pode dar ao luxo de arredondar a
+    // um float (o do ImGui é um campo de texto que faz o parse a double).
+    bool inputDouble(StringView label, double &value, float width = 0.0f, int precision = 6);
     bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
                     float speed = 0.01f, float width = 0.0f);
     bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
@@ -687,11 +841,14 @@ public:
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 0.0f);
     bool inputText(StringView label, String &value, float width = 0.0f);
+    bool inputTextWithHint(StringView label, StringView hint, String &value, float width = 0.0f);
     bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
                             float height = 120.0f, bool followTail = false);
     bool inputInt(StringView label, int &value, float width = 0.0f);
     bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6);
     bool colorEdit(StringView label, Color &value, float width = 0.0f, float height = 128.0f);
+    bool colorButton(StringView label, const Color &value, float width = 0.0f,
+                     float height = 0.0f);
     void image(TextureId texture, float width, float height,
                const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
                const Color &tint = Color());
@@ -784,9 +941,44 @@ public:
     // beginPropertyRow() and endPropertyRow().
     bool beginPropertyRow(StringView label, float labelWidth = 0.0f);
     void endPropertyRow();
-    void progressBar(float value, float maximum, float width = 0.0f);
+    void progressBar(float value, float maximum, float width = 0.0f,
+                     StringView overlay = StringView());
+    int plotLines(StringView label, const float *values, int count, float width = 0.0f,
+                  float height = 0.0f, int offset = 0, StringView overlay = StringView(),
+                  float scaleMin = 0.0f, float scaleMax = 0.0f);
+    int plotHistogram(StringView label, const float *values, int count, float width = 0.0f,
+                      float height = 0.0f, int offset = 0, StringView overlay = StringView(),
+                      float scaleMin = 0.0f, float scaleMax = 0.0f);
     void label(StringView text);
+    // Text items: each draws at the layout cursor and advances it, so the widget
+    // after it lands below. textDisabled() uses the theme's disabled colour, and
+    // textWrapped()/bulletText() measure and wrap their own lines.
+    void textDisabled(StringView text);
+    void textColored(StringView text, const Color &color);
+    // Wraps at wrapWidth (0 is the remaining width of the enclosing region), at
+    // spaces, and inside a word when a single word is wider than the line.
+    void textWrapped(StringView text, float wrapWidth = 0.0f);
+    // A bullet and its text, the text indented next to it.
+    void bulletText(StringView text, float wrapWidth = 0.0f);
     void sameLine(float spacing = -1.0f);
+    // Fecha a linha: o item seguinte começa na margem, uma linha abaixo. Se a
+    // linha já estiver vazia (nada foi submetido nela) não faz nada, como o
+    // NewLine do ImGui.
+    void newLine();
+    // ── beginGroup/endGroup: um bloco que é UM item ──────────────────────────
+    // O que estiver entre os dois fica alinhado pela margem do grupo (não a da
+    // janela), e o layout de fora avança pelo bloco inteiro: um sameLine() a
+    // seguir põe o item seguinte à direita do grupo todo, não da última linha.
+    // É assim que se põem dois blocos de três widgets lado a lado.
+    //
+    // Do lado de fora o grupo não tem id - não recebe clique, foco nem edição -,
+    // mas tem rect: itemRect() é a caixa do grupo e isItemHovered() responde com
+    // o ponteiro em qualquer ponto dela, inclusive num espaço entre widgets.
+    //
+    // Um beginGroup() sem endGroup() (ou ao contrário) não rebenta: o par
+    // desequilibrado não faz nada, e o layout de um container novo começa limpo.
+    void beginGroup();
+    void endGroup();
     void spacing(float pixels);
     void indent(float pixels = 16.0f);
     void unindent(float pixels = 16.0f);
@@ -802,6 +994,10 @@ public:
     float availableWidth() const;
     // Remaining vertical space in the current window or panel.
     float availableHeight() const;
+    // Size of the display this frame was started with (FrameInfo::displaySize),
+    // in logical units: what a window or an overlay needs to place itself against
+    // the screen instead of against whatever encloses it.
+    Vec2 displaySize() const { return frame_.displaySize; }
 
 private:
     struct PointerState
@@ -826,8 +1022,53 @@ private:
         float baseOriginX;
         Rect lastItem;
         bool hasLastItem;
+        // Canto inferior direito do maior item submetido desde o início deste
+        // container: é o que dá a medida de uma caixa que tem de se dimensionar
+        // sozinha, como o tooltip rico (ver beginTooltip).
+        Vec2 contentExtent;
+        // Largura do próximo item (setNextItemWidth) e o valor por omissão de
+        // dentro dos pushItemWidth (ver calcItemWidth). Zero quer dizer "a
+        // largura que sobra", como no ImGui.
+        float nextItemWidth;
+        float pushedItemWidth;
+        int pushedItemWidthDepth;
+        // Nível de aninhamento de beginGroup/endGroup, só para o par
+        // desequilibrado não mexer no layout (ver groups_).
+        int groupDepth;
+        // O y do primeiro item da linha corrente e a altura do mais alto dela. O
+        // item seguinte começa por baixo do mais alto, não por baixo do último:
+        // é a regra do ImGui (a altura da linha é o máximo dos itens dela), e sem
+        // ela um sameLine() para um item baixo puxava a linha seguinte para cima.
+        float lineTop;
+        float lineHeight;
 
-        LayoutState() : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false) {}
+        LayoutState()
+            : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false),
+              contentExtent(), nextItemWidth(0.0f), pushedItemWidth(0.0f),
+              pushedItemWidthDepth(0), groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
+        {
+        }
+    };
+
+    // Estado do último item submetido (ver isItemHovered e companhia). Um item
+    // novo começa em itemHovered/itemClicked, que limpam o que é de um item só
+    // (hover, clique, edição); advanceLayout só lhe dá os bounds.
+    struct ItemStatus
+    {
+        WidgetId id;
+        Rect bounds;
+        bool hovered;
+        bool active;
+        bool clicked;
+        bool edited;
+        bool focused;
+        bool disabled;
+
+        ItemStatus()
+            : id(InvalidWidgetId), bounds(), hovered(false), active(false), clicked(false),
+              edited(false), focused(false), disabled(false)
+        {
+        }
     };
 
     struct ColorPickerState
@@ -939,6 +1180,34 @@ private:
         WidgetId id;
 
         DockPanelState() : parentLayout(), content(), id(InvalidWidgetId) {}
+    };
+
+    // Um bloco de beginGroup (ver a declaração pública): guarda o layout de fora
+    // para o repor no fim, e a caixa do que ficou lá dentro.
+    struct GroupState
+    {
+        // Layout de fora, tal como estava em beginGroup.
+        float originX;
+        float baseOriginX;
+        float nextItemWidth;
+        bool hasLastItem;
+        // A linha de fora: dentro do grupo as linhas são as do grupo, e no fim
+        // volta-se a esta (o grupo em si é um item da linha de fora).
+        float lineTop;
+        float lineHeight;
+        // Canto superior esquerdo do grupo e canto inferior direito do maior item
+        // que lhe passou por dentro (advanceLayout trata disso).
+        Vec2 start;
+        Vec2 extent;
+        // Falso quando o nível máximo já estava atingido: o par begin/end não
+        // mexe em nada, mas fica equilibrado.
+        bool active;
+
+        GroupState()
+            : originX(0.0f), baseOriginX(0.0f), nextItemWidth(0.0f), hasLastItem(false),
+              lineTop(0.0f), lineHeight(0.0f), start(), extent(), active(false)
+        {
+        }
     };
 
     struct VirtualListState
@@ -1129,11 +1398,22 @@ private:
     WindowHandle resizingWindow_;
     WidgetId activeWidget_;
     WidgetId hotWidget_;
+    // Tempo acumulado desde o primeiro frame, para o que anima sozinho (a barra
+    // indeterminada). Soma os deltaSeconds de cada frame.
+    float elapsedSeconds_;
+    // beginDisabled()/endDisabled() depth: above zero, nothing reacts and the
+    // draw lists fade what they draw (see applyDisabledFade).
+    uint32_t disabledDepth_;
     // Gap between the pointer and the centre of the cap of the fader being
     // dragged: only one widget is active at a time, so one float is enough to
     // let a press on the cap carry on from where it landed.
     float faderGrabOffset_;
     WidgetId lastItemId_;
+    ItemStatus item_;
+    // Grupos abertos neste frame (ver beginGroup/endGroup). Só os pares
+    // equilibrados chegam ao fim; um beginGroup sem endGroup é descartado no
+    // início do container seguinte (ver beginLayout).
+    ct::Vector<GroupState> groups_;
     WidgetId focusedWidget_;
     WidgetId textInputWidget_;
     WidgetId openCombo_;
@@ -1220,6 +1500,18 @@ private:
     float tooltipHoverSeconds_;
     Vec2 tooltipPointerPosition_;
     WidgetId tooltipWidget_;
+    // Rascunho dos plots: os pontos de uma série e os rectângulos de um
+    // histograma, reutilizados de frame para frame para não alocar por gráfico.
+    ct::Vector<Vec2> plotPoints_;
+    ct::Vector<Rect> plotBars_;
+    // Tooltip rico em curso (ver beginTooltip): enquanto está aberto, o conteúdo
+    // que a aplicação submete vai para uma lista própria (por cima de tudo) e o
+    // layout arranca do canto calculado.
+    bool tooltipOpen_;
+    LayoutState tooltipLayout_;
+    Vec2 tooltipOrigin_;
+    Vec2 tooltipSize_;
+    DrawList tooltipDrawList_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
@@ -1256,6 +1548,12 @@ private:
     WindowState *currentWindow();
     const WindowState *currentWindow() const;
     DrawList *currentDrawList();
+    // Points a list at the text provider's white texel, so shapes and glyphs
+    // share one texture (see DrawList::setSolidStyle).
+    void applySolidStyle(DrawList &drawList);
+    // Turns the disabled fade on or off on every list this frame can draw into,
+    // per the current disabled depth (see beginDisabled).
+    void applyDisabledFade();
     TextMetrics measureText(FontId font, StringView text, float logicalSize) const;
     void drawText(DrawList &drawList, FontId font, StringView text, const Vec2 &position,
                   float logicalSize, const Color &color, const Rect &clip);
@@ -1289,12 +1587,37 @@ private:
     Rect contentRect(const Rect &local) const;
     Vec2 toContentSpace(const Vec2 &absolute) const;
     Rect contentClip() const;
+    // Corpo do collapsingHeader: `open` é nulo quando não há botão de fecho.
+    bool collapsingHeaderImpl(StringView label, bool &expanded, bool *open, const Rect &bounds);
+    // Texto como item de layout, na cor pedida, na posição local dada.
+    void textItem(StringView text, const Color &color, const Vec2 &localPosition);
+    // Parte `text` nas linhas que cabem em wrapWidth; `lines` fica com as vistas
+    // para o texto original, que tem de continuar vivo.
+    void wrapText(StringView text, float wrapWidth, ct::Vector<StringView> &lines) const;
+    // Palavra mais larga que a linha: enche o que couber a partir de `from` (um
+    // início de linha), deixa a linha em `lines` e devolve onde ela acabou.
+    StringView::size_type wrapLongWord(StringView text, StringView::size_type wordEnd,
+                                       StringView::size_type from, float wrapWidth,
+                                       ct::Vector<StringView> &lines) const;
     bool itemHovered(const Rect &rect, const Rect &clip, WidgetId id);
     bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable = true);
+    // Um widget composto (o slider com o editor de valor ao lado, o drag com o
+    // campo que abre no clique) submete mais do que um sub-item: sem isto, as
+    // consultas do item (isItemHovered e companhia) devolviam o último deles - o
+    // editor - em vez do widget que quem chama submeteu. `primary` é o estado
+    // guardado logo a seguir ao sub-item principal; `bounds` é o rect do widget
+    // inteiro.
+    void keepItemStatus(const ItemStatus &primary, const Rect &bounds);
     void registerFocusable(WidgetId id);
     void advanceFocus();
+    // O teste do ponteiro de um slider, numa vertical ou numa horizontal: é o
+    // que o vSlider e o slider (e o fader, por dentro) têm em comum.
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                     float &value, float minimum, float maximum);
+                     float &value, float minimum, float maximum,
+                     bool vertical = false);
+    // O trabalho dos dois vSlider: precision < 0 escreve o valor como inteiro.
+    bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
+                     const Rect &bounds, int precision);
     WindowHandle topWindowAt(const Vec2 &position) const;
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
@@ -1325,6 +1648,11 @@ private:
     // messageBox input, the fileDialog fields) edits through this, so they
     // all get the same keys. Returns whether value changed.
     bool editTextBuffer(String &value, String::size_type &cursor, bool multiline);
+    // Corpo comum de plotLines/plotHistogram: histogram escolhe barras em vez de
+    // segmentos de linha. Recebe um rect local, como os outros widgets de bounds.
+    int plotImpl(bool histogram, StringView label, const float *values, int count,
+                 const Rect &bounds, int offset, StringView overlay, float scaleMin,
+                 float scaleMax);
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);

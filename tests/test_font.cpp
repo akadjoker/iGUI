@@ -44,6 +44,22 @@ static void test_default_font()
     }
 }
 
+// Um atlas a partir dos bytes da aplicação: os mesmos glifos do embutido quando
+// lhe damos os mesmos bytes, e um atlas inválido (não a fingir que está bom)
+// quando os bytes não são uma fonte.
+static void test_atlas_from_font_bytes()
+{
+    // Sem bytes não há atlas, e não se lê nada fora do buffer.
+    const ig::FontRange ranges[] = {ig::FontRange(0x20u, 0x7Eu)};
+    const uint8_t notAFont[64] = {0u};
+    ig::FontAtlas garbage(ig::Span<const uint8_t>(notAFont, sizeof(notAFont)),
+                          ig::Span<const ig::FontRange>(ranges, 1u), 512u, 256u, 16.0f);
+    assert(!garbage.valid());
+    ig::FontAtlas empty(ig::Span<const uint8_t>(), ig::Span<const ig::FontRange>(ranges, 1u),
+                        512u, 256u, 16.0f);
+    assert(!empty.valid());
+}
+
 static void test_custom_ranges_and_atlas_size()
 {
     const ig::FontRange ranges[] = {
@@ -125,23 +141,31 @@ static void test_append_text_skips_only_invisible_lines()
         assert(atlas.appendText(list, atlas.defaultFont(), text, ig::Vec2(10.0f, 5.0f), 16.0f,
                                 ig::Color(), clip));
         const ig::DrawData kept = list.data(ig::Vec2(1.0f, 1.0f), 1.0f);
-        const float left = floorf(clip.x);
-        const float top = floorf(clip.y);
-        const float right = ceilf(clip.x + clip.width);
-        const float bottom = ceilf(clip.y + clip.height);
+        const float clipRight = clip.x + clip.width;
+        const float clipBottom = clip.y + clip.height;
         size_t visible = 0u;
-        // Glyph quads are 4 vertices each, emitted in order.
+        // Glyph quads are 4 vertices each, emitted in order. What a clipped run
+        // keeps for a glyph is the glyph itself or, when the clip cuts it, the
+        // part of it inside the clip: the geometry is trimmed to the clip on the
+        // CPU (see DrawList::QuadBatch::add), so the quad that comes out is the
+        // intersection with the clip and not the whole glyph.
         for (size_t v = 0; v + 3u < full.vertices.size(); v += 4u)
         {
             const ig::Vec2 &a = full.vertices[v].position;
             const ig::Vec2 &b = full.vertices[v + 2u].position;
-            if (b.x <= left || a.x >= right || b.y <= top || a.y >= bottom)
-                continue;
+            const float expectedLeft = a.x > clip.x ? a.x : clip.x;
+            const float expectedTop = a.y > clip.y ? a.y : clip.y;
+            const float expectedRight = b.x < clipRight ? b.x : clipRight;
+            const float expectedBottom = b.y < clipBottom ? b.y : clipBottom;
+            if (expectedRight <= expectedLeft || expectedBottom <= expectedTop)
+                continue; // o clip não deixa nada deste glifo
             ++visible;
             bool found = false;
             for (size_t k = 0; k + 3u < kept.vertices.size() && !found; k += 4u)
-                found = kept.vertices[k].position.x == a.x && kept.vertices[k].position.y == a.y &&
-                        kept.vertices[k + 2u].position.x == b.x && kept.vertices[k + 2u].position.y == b.y;
+                found = kept.vertices[k].position.x == expectedLeft &&
+                        kept.vertices[k].position.y == expectedTop &&
+                        kept.vertices[k + 2u].position.x == expectedRight &&
+                        kept.vertices[k + 2u].position.y == expectedBottom;
             assert(found);
         }
         // Nothing far outside is emitted: at most a margin of extra glyphs.
@@ -156,6 +180,7 @@ int main()
     test_glyph_cache();
     test_utf8_decoder();
     test_default_font();
+    test_atlas_from_font_bytes();
     test_custom_ranges_and_atlas_size();
     test_high_resolution_atlas();
     test_append_text_skips_only_invisible_lines();

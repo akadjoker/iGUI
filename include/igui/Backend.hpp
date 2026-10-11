@@ -45,6 +45,22 @@ public:
     virtual bool appendText(DrawList &drawList, FontId font, StringView text,
                             const Vec2 &position, float logicalSize,
                             const Color &color, const Rect &clip) const = 0;
+
+    // Which texture, and which texel of it, solid-colour geometry should use.
+    // A provider whose atlas holds a white texel returns the atlas and that
+    // texel: shapes and glyphs then come from one texture, so a backend that
+    // merges consecutive geometry with the same texture gets one draw command
+    // per run instead of one per switch between them. The default leaves
+    // geometry untextured, which is what a provider without such a texel wants.
+    struct SolidStyle
+    {
+        TextureId texture;
+        Vec2 uv;
+
+        SolidStyle() : texture(), uv(0.0f, 0.0f) {}
+    };
+
+    virtual SolidStyle solidStyle() const { return SolidStyle(); }
 };
 
 } // namespace ig

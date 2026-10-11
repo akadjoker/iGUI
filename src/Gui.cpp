@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include <ct/sort.hpp>
 
@@ -14,6 +15,20 @@ namespace
 {
 
 const float GizmoPi = 3.14159265358979323846f;
+
+// A convenção do ImGui nos rótulos: "Gravar##ficheiro" desenha "Gravar" mas o id
+// é a string toda, que é o que permite ter dois widgets com o mesmo texto visível
+// e estados separados; "##só-id" não desenha nada. Sem "##" a string sai inteira,
+// por isso um rótulo antigo não muda de comportamento.
+StringView visibleLabel(StringView label)
+{
+    for (StringView::size_type i = 0u; i + 1u < label.size(); ++i)
+    {
+        if (label[i] == '#' && label[i + 1u] == '#')
+            return StringView(label.data(), i);
+    }
+    return label;
+}
 
 // A one pixel border drawn as two nested rounded fills: cheaper than stroking
 // the outline segment by segment, and both silhouettes are anti-aliased.
@@ -660,7 +675,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(), wheelAreas_(), wheelOrderCounter_(0u),
       windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
-      hotWidget_(InvalidWidgetId), faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId),
+      hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
+      faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
@@ -674,7 +690,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), tooltipDelay_(0.45f), tooltipHoverSeconds_(0.0f),
-      tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId),
+      tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId), plotPoints_(), plotBars_(),
+      tooltipOpen_(false), tooltipLayout_(), tooltipOrigin_(), tooltipSize_(), tooltipDrawList_(),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
       homePressed_(false), endPressed_(false), upPressed_(false), downPressed_(false),
       leftPressed_(false), rightPressed_(false), pageUpPressed_(false), pageDownPressed_(false),
@@ -712,6 +729,12 @@ Context::Context(Backend &backend, TextProvider *textProvider)
         keyShift_[i] = false;
     }
     textEvents_.reserve(4);
+    // Every list of the frame writes its geometry into frameDrawList_'s arrays
+    // and keeps only its commands; endFrame then gathers commands, not vertices.
+    // Windows get the same at creation (getOrCreateWindow).
+    dragDropDrawList_.shareGeometry(frameDrawList_);
+    toastDrawList_.shareGeometry(frameDrawList_);
+    modalDrawList_.shareGeometry(frameDrawList_);
 }
 
 void Context::pushEvent(const Event &event)
@@ -745,6 +768,7 @@ void Context::beginFrame(const FrameInfo &frame)
 {
     frame_ = frame;
     ++frameNumber_;
+    elapsedSeconds_ += frame.deltaSeconds > 0.0f ? frame.deltaSeconds : 0.0f;
     pointer_.wheelX = 0.0f;
     pointer_.wheelY = 0.0f;
     pointer_.wheelControl = false;
@@ -758,6 +782,20 @@ void Context::beginFrame(const FrameInfo &frame)
     dragDropDrawList_.clear();
     toastDrawList_.clear();
     modalDrawList_.clear();
+    tooltipDrawList_.clear();
+    // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
+    // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
+    // no modo imediato).
+    tooltipOpen_ = false;
+    // One texture for the whole frame when the text provider offers a white
+    // texel: solid geometry then samples the atlas the glyphs come from, so
+    // consecutive shapes and text merge into a single draw command instead of
+    // breaking at every text run. See DrawList::setSolidStyle.
+    applySolidStyle(frameDrawList_);
+    applySolidStyle(dragDropDrawList_);
+    applySolidStyle(toastDrawList_);
+    applySolidStyle(modalDrawList_);
+    applySolidStyle(tooltipDrawList_);
     for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
     {
         if (toasts_[i].remaining > 0.0f)
@@ -774,9 +812,15 @@ void Context::beginFrame(const FrameInfo &frame)
     {
         it->drawList.clear();
         it->overlayDrawList.clear();
+        applySolidStyle(it->drawList);
+        applySolidStyle(it->overlayDrawList);
     }
     hotWidget_ = InvalidWidgetId;
     lastItemId_ = InvalidWidgetId;
+    item_ = ItemStatus();
+    // Um beginDisabled() sem endDisabled() acaba com o frame, em vez de deixar a
+    // aplicação presa num estado que já não consegue desligar.
+    disabledDepth_ = 0u;
     releaseUnsubmittedBlockers();
     // Snapshot taken before anything this frame can touch openMenu_/
     // openContextMenu_ - see pointerBlockedByOpenPopup. A click that closes
@@ -905,7 +949,9 @@ const DrawData &Context::endFrame()
         return left->zOrder < right->zOrder;
     });
 
-    frameDrawList_.clear();
+    // The geometry of every list already sits in frameDrawList_'s arrays; what
+    // is gathered here is the order of the commands.
+    frameDrawList_.clearCommands();
     // Two passes, not one per window: every window's content first, then what
     // each window deferred to its overlay (menus, combo lists, tooltips). The
     // overlay is a layer - it has to sit above the windows' content, including
@@ -928,6 +974,10 @@ const DrawData &Context::endFrame()
     frameDrawList_.append(dragDropDrawList_);
     drawToasts();
     frameDrawList_.append(toastDrawList_);
+    // O conteúdo de um tooltip rico vem depois de todas as sobreposições (é o
+    // que o põe por cima dos menus e dos combos abertos) mas antes dos modais,
+    // que tapam tudo.
+    frameDrawList_.append(tooltipDrawList_);
     frameDrawList_.append(modalDrawList_);
 
     const uint32_t left = buttonIndex(PointerButton::Left);
@@ -946,12 +996,39 @@ const DrawData &Context::endFrame()
 
 bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *open)
 {
+    const WindowOptions options;
+    return beginWindow(title, initialBounds, options, open);
+}
+
+bool Context::beginWindow(StringView title, const Rect &initialBounds, const WindowOptions &options,
+                          bool *open)
+{
+    // O interruptor do interface (setEnabled) desliga tudo: sem janela também não
+    // há widget nenhum submetido, com opções ou sem elas.
     if (!enabled_)
         return false;
     const WidgetId id = hashText(title);
     WindowState *window = getOrCreateWindow(id, title, initialBounds);
     if (!window)
         return false;
+
+    // A submissão por frame, não uma definição: uma janela pedida com barra de
+    // título num frame e sem ela no seguinte volta a ter barra.
+    window->showTitleBar = options.titleBar;
+    window->showWindowControls = options.titleBar;
+    window->allowMove = options.move;
+    window->allowResize = options.resize;
+    window->saveSettings = options.saveSettings;
+    if (options.fixedBounds)
+        window->bounds = initialBounds;
+    if (!options.saveSettings && window->lastFrame == 0u)
+    {
+        // A geometria só pode ter vindo do ficheiro de estado: quem não a quer
+        // guardada também não a quer de lá.
+        window->bounds = initialBounds;
+        window->maximized = false;
+        window->minimized = false;
+    }
 
     if (forceWindowBounds_)
     {
@@ -981,6 +1058,10 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
     }
 
     currentWindow_ = windowsById_[id];
+    // A window created after beginFrame cleared the lists still has to draw with
+    // the frame's solid style (see beginFrame).
+    applySolidStyle(window->drawList);
+    applySolidStyle(window->overlayDrawList);
     window->lastFrame = frameNumber_;
     const WindowState *focused = windows_.get(focusedWindow_);
     if (!focused || !focused->open || !windowSubmittedRecently(*focused))
@@ -1369,16 +1450,17 @@ bool Context::button(StringView labelText, const Rect &bounds)
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
     const Color background = hovered ? theme_.buttonHovered : theme_.buttonBackground;
     drawFrame(*drawList, rect, background, hovered ? theme_.inputBorderHover : theme_.buttonBorder,
               theme_.borderRadius, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(rect.x + (rect.width - metrics.width) * 0.5f,
                             rect.y + (rect.height - metrics.height) * 0.5f);
-    drawText(*drawList, theme_.font, labelText, textPosition, theme_.fontSize,
+    drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
              theme_.buttonText, clip);
     return clicked;
 }
@@ -1393,14 +1475,15 @@ bool Context::smallButton(StringView labelText, const Rect &bounds)
     DrawList *drawList = currentDrawList();
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
+    const StringView text = visibleLabel(labelText);
     const WidgetId id = combineIds(makeWidgetId(labelText), 0x534d414c4c42544eull);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
     drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
               hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
     const float fontSize = theme_.fontSize * 0.82f;
-    const TextMetrics metrics = measureText(theme_.font, labelText, fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics metrics = measureText(theme_.font, text, fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(rect.x + (rect.width - metrics.width) * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              fontSize, theme_.buttonText, clip);
@@ -1419,6 +1502,7 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
     DrawList *drawList = currentDrawList();
     if (!drawList || widget.width <= 0.0f || widget.height <= 0.0f)
         return false;
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(widget, clip, id);
     const bool clicked = itemClicked(widget, clip, id);
     if (clicked)
@@ -1441,11 +1525,13 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
                                     theme_.checkMark, clip);
     }
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(box.x + boxSize + theme_.windowPadding * 0.5f,
                             widget.y + (widget.height - metrics.height) * 0.5f);
-    drawText(*drawList, theme_.font, labelText, textPosition, theme_.fontSize,
+    drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
              theme_.labelText, clip);
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
@@ -1462,6 +1548,7 @@ bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
     if (clicked)
@@ -1484,11 +1571,13 @@ bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds
     drawList->addCircleFilled(Vec2(handleX, track.y + radius), radius * 0.72f,
                               theme_.switchThumb, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(rect.x + rect.width + theme_.windowPadding * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
@@ -1504,6 +1593,7 @@ bool Context::radioButton(StringView labelText, bool selected, const Rect &bound
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(box, clip, id);
     const bool clicked = itemClicked(box, clip, id);
     const float radius = (box.width < box.height ? box.width : box.height) * 0.5f;
@@ -1513,11 +1603,13 @@ bool Context::radioButton(StringView labelText, bool selected, const Rect &bound
     if (selected)
         drawList->addCircleFilled(center, radius * 0.52f, theme_.radioChecked, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(box.x + box.width + theme_.windowPadding * 0.5f,
                             box.y + (box.height - metrics.height) * 0.5f);
-    drawText(*drawList, theme_.font, labelText, textPosition, theme_.fontSize,
+    drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
              theme_.labelText, clip);
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
@@ -1534,6 +1626,7 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
     if (!drawList)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
     const Color background = selected ? theme_.selectableSelected
@@ -1541,15 +1634,31 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
                                                  : theme_.selectableBackground);
     drawList->addRectFilledRounded(rect, theme_.borderRadius, background, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(rect.x + theme_.windowPadding * 0.5f,
                             rect.y + (rect.height - metrics.height) * 0.5f);
-    drawText(*drawList, theme_.font, labelText, textPosition, theme_.fontSize,
+    drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
              theme_.labelText, clip);
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
 bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect &bounds)
+{
+    return collapsingHeaderImpl(labelText, expanded, nullptr, bounds);
+}
+
+bool Context::collapsingHeader(StringView labelText, bool &expanded, bool &open, const Rect &bounds)
+{
+    // Como o p_open do ImGui: com o header fechado não há nada para desenhar.
+    if (!open)
+        return false;
+    return collapsingHeaderImpl(labelText, expanded, &open, bounds);
+}
+
+bool Context::collapsingHeaderImpl(StringView labelText, bool &expanded, bool *open,
+                                   const Rect &bounds)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1562,9 +1671,27 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect 
     if (!drawList)
         return false;
 
+    const StringView text = visibleLabel(labelText);
+    // O botão de fecho tem id próprio: fechar não pode ser o mesmo clique que
+    // abre e fecha a secção.
+    const float buttonSize = rect.height - theme_.padding;
+    const Rect closeRect(rect.x + rect.width - buttonSize - theme_.padding * 0.5f,
+                         rect.y + (rect.height - buttonSize) * 0.5f, buttonSize, buttonSize);
+    const WidgetId closeId = combineIds(id, 0x434c4f5345484452ull);
+    const bool closeHovered = open && itemHovered(closeRect, clip, closeId);
+    const bool closeClicked = open && itemClicked(closeRect, clip, closeId, false);
+    if (closeClicked)
+    {
+        *open = false;
+        return false;
+    }
+
     const bool hovered = itemHovered(rect, clip, id);
     if (itemClicked(rect, clip, id))
+    {
         expanded = !expanded;
+        item_.edited = true;
+    }
 
     drawList->addRectFilledRounded(rect, theme_.borderRadius,
                                    hovered ? theme_.buttonHovered : theme_.collapsibleHeaderBg, clip);
@@ -1581,11 +1708,28 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect 
     };
     drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    // Com botão de fecho, o título tem de parar antes dele.
+    const Rect titleClip = open ? intersect(clip, Rect(rect.x, rect.y,
+                                                       closeRect.x > rect.x ? closeRect.x - rect.x : 0.0f,
+                                                       rect.height))
+                                : clip;
+    drawText(*drawList, theme_.font, text,
              Vec2(arrowX + arrowSize + theme_.windowPadding,
                   rect.y + (rect.height - metrics.height) * 0.5f),
-             theme_.fontSize, theme_.labelText, clip);
+             theme_.fontSize, theme_.labelText, titleClip);
+
+    if (open)
+    {
+        if (closeHovered)
+            drawList->addRectFilledRounded(closeRect, theme_.borderRadius, theme_.buttonHovered, clip);
+        const float cx = closeRect.x + closeRect.width * 0.5f;
+        const float cy = closeRect.y + closeRect.height * 0.5f;
+        const float radius = closeRect.height * 0.2f;
+        const Color color = closeHovered ? theme_.buttonText : theme_.textDisabled;
+        drawList->addLine(Vec2(cx - radius, cy - radius), Vec2(cx + radius, cy + radius), color, clip);
+        drawList->addLine(Vec2(cx + radius, cy - radius), Vec2(cx - radius, cy + radius), color, clip);
+    }
     return expanded;
 }
 
@@ -1602,9 +1746,13 @@ bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
     if (!drawList)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
     if (itemClicked(rect, clip, id))
+    {
         expanded = !expanded;
+        item_.edited = true;
+    }
 
     if (hovered)
         drawList->addRectFilled(rect, theme_.buttonHovered, clip);
@@ -1621,8 +1769,8 @@ bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
     };
     drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(arrowX + arrowSize + theme_.windowPadding * 0.75f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
@@ -1649,6 +1797,7 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     const float arrowWidth = rect.height * 0.65f;
     const Rect arrowRect(rect.x, rect.y, arrowWidth, rect.height);
     const WidgetId arrowId = combineIds(id, 0x4152524f57ull);
@@ -1685,6 +1834,8 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
     if (expansionClicked)
         expanded = !expanded;
     const bool selected = !style.disabled && !expansionClicked && itemClicked(rect, clip, id);
+    if (expansionClicked || selected)
+        item_.edited = true;
 
     const Color rowColor = style.selected ? theme_.selectableSelected
                          : (rowHovered ? theme_.selectableHovered : theme_.inputBg);
@@ -1712,10 +1863,10 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
         ? Color(style.typeColor.r, style.typeColor.g, style.typeColor.b, 90u) : style.typeColor;
     drawList->addRectFilled(Rect(iconX, centerY - iconSize * 0.5f, iconSize, iconSize), iconColor, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Color textColor = style.disabled
         ? Color(theme_.labelText.r, theme_.labelText.g, theme_.labelText.b, 110u) : theme_.labelText;
-    drawText(*drawList, theme_.font, labelText,
+    drawText(*drawList, theme_.font, text,
              Vec2(iconX + iconSize + theme_.windowPadding * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, textColor, clip);
@@ -1964,6 +2115,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         drawList->addRectFilled(scrollbar, theme_.inputBg, visible);
         drawList->addRectFilled(thumb, theme_.scrollbarThumb, visible);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -2068,6 +2221,8 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                       item.y + (item.height - itemMetrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, popupClip);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -2096,10 +2251,11 @@ bool Context::beginMenu(StringView labelText)
 {
     WindowState *window = currentWindow();
     DrawList *drawList = currentDrawList();
+    const StringView text = visibleLabel(labelText);
     if (!window || !drawList || !menuBarActive_)
         return false;
 
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float width = metrics.width + theme_.menuItemPadX * 2.0f;
     const Rect button(menuBarCursorX_, menuBarBounds_.y, width, menuBarBounds_.height);
     menuBarCursorX_ += width;
@@ -2141,7 +2297,7 @@ bool Context::beginMenu(StringView labelText)
     }
     drawList->addRectFilled(button, openMenu_ == id || hovered ? theme_.menuBarItemHover : theme_.menuBarBg,
                             contentClip());
-    drawText(*drawList, theme_.font, labelText,
+    drawText(*drawList, theme_.font, text,
              Vec2(button.x + theme_.menuItemPadX,
                   button.y + (button.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.menuItemText, contentClip());
@@ -2196,7 +2352,7 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const float checkWidth = checked ? theme_.menuItemHeight : 0.0f;
     // Remember the widest label drawn this frame so endMenu can size the
     // popup for it. Only this menu's own items count: while a submenu's
@@ -2223,7 +2379,7 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
         popup.addLine(Vec2(checkX + checkSize * 0.35f, checkY + checkSize),
                       Vec2(checkX + checkSize, checkY), theme_.menuCheckMark, clip, 2.0f);
     }
-    drawText(popup, theme_.font, labelText,
+    drawText(popup, theme_.font, visibleLabel(labelText),
              Vec2(item.x + theme_.menuItemPadX + checkWidth,
                   item.y + (item.height - metrics.height) * 0.5f),
              theme_.fontSize, enabled ? (hovered ? theme_.menuItemTextHover : theme_.menuItemText)
@@ -2280,8 +2436,9 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
         subMenuPopupBounds_ = Rect(popupX, item.y, popupWidth, 0.0f);
     }
     popup.addRectFilled(item, openSubMenu_ == id || hovered ? theme_.menuItemHover : theme_.menuBg, clip);
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(popup, theme_.font, labelText,
+    const TextMetrics metrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    drawText(popup, theme_.font, visibleLabel(labelText),
              Vec2(item.x + theme_.menuItemPadX, item.y + (item.height - metrics.height) * 0.5f),
              theme_.fontSize, enabled ? theme_.menuItemText : theme_.menuItemDisabled, clip);
     const float arrowSize = item.height * 0.18f;
@@ -2396,7 +2553,8 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float labelWidth = metrics.width + theme_.windowPadding;
     const float usableWidth = rect.width > labelWidth ? rect.width - labelWidth : 0.0f;
     float valueWidth = usableWidth * 0.28f;
@@ -2411,19 +2569,32 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
                      trackWidth,
                      rect.height * 0.2f);
     const Rect grab(track.x, rect.y, track.width, rect.height);
-    const bool sliderChanged = sliderValue(grab, clip, combineIds(id, 0x534c49444552ull),
-                                           value, minimum, maximum);
+    // O item é a track: é este itemHovered que identifica o slider (o
+    // sliderValue só faz o teste do ponteiro) e é ele que dá o realce.
+    const WidgetId trackId = combineIds(id, 0x534c49444552ull);
+    const bool trackHovered = itemHovered(grab, clip, trackId);
+    const bool sliderChanged = sliderValue(grab, clip, trackId, value, minimum, maximum);
+    // O editor de valor que o slider desenha à parte não pode ser o item que
+    // isItemHovered devolve (ver keepItemStatus).
+    const ItemStatus trackStatus = item_;
     const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
     const float handleX = track.x + track.width * normalized;
-    drawText(*drawList, theme_.font, labelText,
+    drawText(*drawList, theme_.font, text,
              Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
     const float trackRadius = track.height * 0.5f;
-    drawList->addRectFilledRounded(track, trackRadius, theme_.sliderBackground, clip);
+    drawList->addRectFilledRounded(track, trackRadius,
+                                   trackHovered ? theme_.sliderTrackHover : theme_.sliderBackground,
+                                   clip);
     drawList->addRectFilledRounded(Rect(track.x, track.y, track.width * normalized, track.height),
-                                   trackRadius, theme_.sliderFilled, clip);
+                                   trackRadius,
+                                   trackHovered ? theme_.sliderFillHover : theme_.sliderFilled, clip);
     drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f),
-                              rect.height * 0.28f, theme_.sliderHandle, clip);
+                              rect.height * 0.28f,
+                              activeWidget_ == trackId ? theme_.sliderThumbPressed
+                                                       : (trackHovered ? theme_.sliderThumbHover
+                                                                       : theme_.sliderHandle),
+                              clip);
 
     bool textChanged = false;
     if (hasValueEditor)
@@ -2439,6 +2610,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
         if (textChanged)
             value = clamp(value, minimum, maximum);
     }
+    keepItemStatus(trackStatus, rect);
     return sliderChanged || textChanged;
 }
 
@@ -2459,7 +2631,98 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
     const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
     const bool valueChanged = value != clamped;
     value = clamped;
+    if (valueChanged)
+        item_.edited = true;
     return valueChanged;
+}
+
+// O VSlider do ImGui: uma faixa vertical onde o valor cresce para cima, com uma
+// barra cheia a partir de baixo, o valor escrito no topo e o rótulo ao lado. O
+// fader é outra coisa (um controle de mistura com cap rígido); este é o slider
+// de sempre, só que de pé.
+bool Context::vSliderImpl(StringView labelText, float &value, float minimum, float maximum,
+                          const Rect &bounds, int precision)
+{
+    WindowState *window = currentWindow();
+    if (!window || maximum <= minimum)
+        return false;
+
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    DrawList *drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
+        return false;
+
+    const StringView text = visibleLabel(labelText);
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool changed = sliderValue(rect, clip, id, value, minimum, maximum, true);
+    // O item é a faixa: o texto do valor e o rótulo são desenho, não sub-itens.
+    const ItemStatus trackStatus = item_;
+    const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
+
+    char number[48];
+    if (precision < 0)
+        snprintf(number, sizeof(number), "%.0f", static_cast<double>(value));
+    else
+        snprintf(number, sizeof(number), "%.*f", precision, static_cast<double>(value));
+    const StringView numberText(number);
+
+    drawList->addRectFilledRounded(rect, theme_.borderRadius,
+                                   hovered ? theme_.inputBgHover : theme_.inputBg, clip);
+    const float grabHeight = rect.height * normalized;
+    if (grabHeight > 0.0f)
+    {
+        drawList->addRectFilledRounded(
+            Rect(rect.x, rect.y + rect.height - grabHeight, rect.width, grabHeight),
+            theme_.borderRadius,
+            activeWidget_ == id ? theme_.sliderThumbPressed : theme_.sliderFilled, clip);
+    }
+    // O valor fica no topo da faixa, centrado e escrito por cima do grab que lá
+    // chegue - como o VSliderScalar do ImGui. Numa faixa mais estreita do que o
+    // número (as de 18 px do demo) não cabe: aí não se escreve nada, em vez de
+    // sair por cima da faixa do lado.
+    const TextMetrics valueMetrics = measureText(theme_.font, numberText, theme_.fontSize);
+    if (valueMetrics.width <= rect.width)
+        drawText(*drawList, theme_.font, numberText,
+                 Vec2(rect.x + (rect.width - valueMetrics.width) * 0.5f, rect.y + theme_.padding),
+                 theme_.fontSize, theme_.labelText, clip);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    if (metrics.width > 0.0f)
+        drawText(*drawList, theme_.font, text,
+                 Vec2(rect.x + rect.width + theme_.itemSpacing, rect.y + theme_.padding),
+                 theme_.fontSize, theme_.labelText, clip);
+
+    if (changed)
+        item_.edited = true;
+    keepItemStatus(trackStatus, rect);
+    return changed;
+}
+
+bool Context::vSliderFloat(StringView labelText, float &value, float minimum, float maximum,
+                           const Rect &bounds)
+{
+    return vSliderImpl(labelText, value, minimum, maximum, bounds, 3);
+}
+
+bool Context::vSliderInt(StringView labelText, int &value, int minimum, int maximum,
+                         const Rect &bounds)
+{
+    if (maximum <= minimum)
+        return false;
+    float temporary = static_cast<float>(value);
+    const bool dragged = vSliderImpl(labelText, temporary, static_cast<float>(minimum),
+                                     static_cast<float>(maximum), bounds, -1);
+    if (!dragged)
+        return false;
+    const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
+                                          : static_cast<int>(temporary - 0.5f);
+    const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
+    const bool changed = value != clamped;
+    value = clamped;
+    if (changed)
+        item_.edited = true;
+    return changed;
 }
 
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
@@ -2476,12 +2739,16 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     NumericEditState *edit = numericEdits_.find(id);
     if (!edit) { numericEdits_.put(id, NumericEditState()); edit = numericEdits_.find(id); }
     if (!edit) return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
     const bool hovered = itemHovered(rect, clip, id);
+    // No modo de edição o drag abre um campo de texto por cima: o item continua
+    // a ser o drag (ver keepItemStatus).
+    const ItemStatus fieldStatus = item_;
     registerFocusable(id);
     if (edit->editing && (escapePressed_ || focusedWidget_ != id))
         edit->editing = false;
@@ -2539,12 +2806,15 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
         snprintf(number, sizeof(number), "%.3f", static_cast<double>(value));
         drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
                   hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
-        drawText(*drawList, theme_.font, labelText, Vec2(rect.x + 6, rect.y + 5),
+        drawText(*drawList, theme_.font, text, Vec2(rect.x + 6, rect.y + 5),
                  theme_.fontSize, theme_.buttonText, visible);
         const TextMetrics metrics = measureText(theme_.font, number, theme_.fontSize);
         drawText(*drawList, theme_.font, number, Vec2(rect.right() - metrics.width - 6, rect.y + 5),
                  theme_.fontSize, theme_.buttonText, visible);
     }
+    if (changed)
+        item_.edited = true;
+    keepItemStatus(fieldStatus, rect);
     return changed;
 }
 
@@ -2563,6 +2833,8 @@ bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum
     const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
     const bool changed = value != clamped;
     value = clamped;
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -2796,6 +3068,8 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
         }
         drawList->addCircleFilled(center, 7.0f, centerColor, clip);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3145,6 +3419,8 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     drawList->addCircleFilled(center, 6.0f,
                               hoveredAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXYZ
                                   ? theme_.gizmoHighlight : Color(245u, 200u, 75u, 255u), clip);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3161,6 +3437,7 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    const StringView text = visibleLabel(labelText);
     const float buttonWidth = rect.height;
     const float valueWidth = rect.height * 1.7f;
     const float controlsWidth = buttonWidth * 2.0f + valueWidth;
@@ -3188,8 +3465,8 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
         changed = true;
     }
 
-    const TextMetrics labelMetrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics labelMetrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(rect.x, rect.y + (rect.height - labelMetrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
     drawFrame(*drawList, decrement, decrementHovered ? theme_.buttonHovered : theme_.buttonBackground,
@@ -3214,6 +3491,8 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
              Vec2(increment.x + (increment.width - plusMetrics.width) * 0.5f,
                   increment.y + (increment.height - plusMetrics.height) * 0.5f),
              theme_.fontSize, theme_.buttonText, clip);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3351,10 +3630,18 @@ bool Context::editTextBuffer(String &value, String::size_type &cursor, bool mult
         value.erase(cursor, nextCodePoint(value, cursor) - cursor);
         changed = true;
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
+{
+    return inputTextWithHint(labelText, StringView(), value, bounds);
+}
+
+bool Context::inputTextWithHint(StringView labelText, StringView hint, String &value,
+                                const Rect &bounds)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -3406,7 +3693,12 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
         horizontalOffset = availableWidth - prefixMetrics.width;
     const Vec2 textPosition(rect.x + leftPadding + horizontalOffset,
                             rect.y + (rect.height - metrics.height) * 0.5f);
-    drawText(*drawList, theme_.font, value, textPosition, theme_.fontSize, theme_.buttonText, textClip);
+    if (value.size() == 0u && hint.size() > 0u)
+        drawText(*drawList, theme_.font, hint, textPosition, theme_.fontSize,
+                 theme_.textDisabled, textClip);
+    else
+        drawText(*drawList, theme_.font, value, textPosition, theme_.fontSize,
+                 theme_.buttonText, textClip);
     if (focused)
     {
         const float caretX = textPosition.x + prefixMetrics.width + 1.0f;
@@ -3414,6 +3706,8 @@ bool Context::inputText(StringView labelText, String &value, const Rect &bounds)
                                      rect.height > 10.0f ? rect.height - 10.0f : 0.0f),
                                 theme_.buttonText, textClip);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3599,6 +3893,8 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
             drawList->addRectFilled(Rect(caretX, caretY, 1.0f, theme_.fontSize),
                                     theme_.buttonText, textClip);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3630,8 +3926,8 @@ bool parseIntText(const String &text, int &result)
 
 // A plain decimal literal: [+-]digits[.digits][(e|E)[+-]digits], at least one
 // mantissa digit. strtof alone would also take "nan", "inf" and hex, and
-// stop silently at trailing garbage. Non-finite results are rejected.
-bool parseFloatText(const String &text, float &result)
+// stop silently at trailing garbage.
+bool isDecimalLiteral(const String &text)
 {
     String::size_type i = 0u;
     if (i < text.size() && (text[i] == '-' || text[i] == '+'))
@@ -3667,10 +3963,29 @@ bool parseFloatText(const String &text, float &result)
         if (!exponentDigits)
             return false;
     }
-    if (i != text.size())
+    return i == text.size();
+}
+
+// Non-finite results are rejected, as are the out-of-range ones.
+bool parseFloatText(const String &text, float &result)
+{
+    if (!isDecimalLiteral(text))
         return false;
     const float parsed = text.to_float();
     if (!(parsed == parsed) || parsed > FLT_MAX || parsed < -FLT_MAX)
+        return false;
+    result = parsed;
+    return true;
+}
+
+// O mesmo para um double: passar por float no meio é o que estraga um número com
+// mais dígitos do que o float tem.
+bool parseDoubleText(const String &text, double &result)
+{
+    if (!isDecimalLiteral(text))
+        return false;
+    const double parsed = strtod(text.c_str(), nullptr);
+    if (!(parsed == parsed) || parsed > DBL_MAX || parsed < -DBL_MAX)
         return false;
     result = parsed;
     return true;
@@ -3697,6 +4012,8 @@ bool Context::editNumericText(StringView labelText, String &text, double value, 
     {
         numericEditId_ = InvalidWidgetId;
     }
+    if (edited)
+        item_.edited = true;
     return edited;
 }
 
@@ -3710,6 +4027,8 @@ bool Context::inputInt(StringView labelText, int &value, const Rect &bounds)
         value = parsed;
     if (numericEditId_ == makeWidgetId(labelText))
         numericEditValue_ = static_cast<double>(value);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -3723,7 +4042,42 @@ bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds,
         value = parsed;
     if (numericEditId_ == makeWidgetId(labelText))
         numericEditValue_ = static_cast<double>(value);
+    if (changed)
+        item_.edited = true;
     return changed;
+}
+
+bool Context::colorButton(StringView labelText, const Color &value, const Rect &bounds)
+{
+    WindowState *window = currentWindow();
+    if (!window)
+        return false;
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+
+    const StringView text = visibleLabel(labelText);
+    const WidgetId id = makeWidgetId(labelText);
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    const bool hovered = itemHovered(rect, clip, id);
+    const bool clicked = itemClicked(rect, clip, id);
+
+    drawFrame(*drawList, rect, value,
+              hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
+    if (hovered)
+        drawList->addRectRounded(rect, theme_.borderRadius, theme_.focusColor, clip);
+
+    if (labelText.size() > 0u)
+    {
+        const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+        drawText(*drawList, theme_.font, text,
+                 Vec2(rect.x + rect.width + theme_.padding, rect.y + (rect.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, clip);
+    }
+    if (clicked)
+        item_.edited = true;
+    return clicked;
 }
 
 bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
@@ -3739,7 +4093,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
-    const TextMetrics titleMetrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics titleMetrics = measureText(theme_.font, text, theme_.fontSize);
     const float contentY = rect.y + titleMetrics.height + theme_.itemSpacing;
     const float availableHeight = rect.y + rect.height - contentY - theme_.windowPadding * 0.5f;
     const float maximumPickerWidth = (rect.width - 48.0f) * 0.55f;
@@ -3864,7 +4219,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
         picker->lastColor = value;
     }
 
-    drawText(*drawList, theme_.font, labelText, Vec2(rect.x, rect.y), theme_.fontSize,
+    drawText(*drawList, theme_.font, text, Vec2(rect.x, rect.y), theme_.fontSize,
              theme_.labelText, clip);
     // A single quad has a visible diagonal because the GPU splits it into two
     // triangles. Thin horizontal bands preserve the SV curve without a seam.
@@ -3928,6 +4283,8 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     const float alphaCursorY = alphaBar.y + alpha * alphaBar.height;
     drawList->addRectFilled(Rect(alphaBar.x - 2.0f, alphaCursorY - 1.0f, alphaBar.width + 4.0f, 2.0f),
                             Color(255u, 255u, 255u, 255u), clip);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -4039,6 +4396,8 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
         drawList->addRectFilled(handle, stops[i].color, clip);
         drawList->addRect(handle, border, clip, static_cast<int>(i) == selectedStop ? 2.0f : 1.0f);
     }
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -4123,6 +4482,8 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
                                   static_cast<int>(i) == selectedPoint ? theme_.focusColor : theme_.dialogBtnPrimary, clip);
     }
     drawList->addRect(canvas, theme_.inputBorderHover, clip);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -4274,6 +4635,8 @@ bool Context::sequencer(StringView idText, ct::Vector<SequencerTrack>& tracks, i
     for (ct::Vector<SequencerTrack>::size_type i=0;i<tracks.size();++i) { const float y=ruler.bottom()+i*rowHeight; if(y>=area.bottom()) break; const SequencerTrack& t=tracks[i]; drawText(*list,theme_.font,t.label,Vec2(area.x+6,y+4),theme_.fontSize*.85f,theme_.dialogText,clip); Rect bar(frameX(t.startFrame),y+3,frameX(t.endFrame+1)-frameX(t.startFrame),rowHeight-6); list->addRectFilled(bar,t.color,timeClip); if (bar.width >= 10) { list->addRectFilled(Rect(bar.x+2,bar.y+3,2,bar.height-6),theme_.buttonText,timeClip); list->addRectFilled(Rect(bar.right()-4,bar.y+3,2,bar.height-6),theme_.buttonText,timeClip); } list->addRect(bar,static_cast<int>(i)==selectedTrack?theme_.focusColor:theme_.dialogBorder,timeClip); list->addLine(Vec2(area.x,y+rowHeight),Vec2(area.right(),y+rowHeight),theme_.borderColor,clip); }
     const float playhead=frameX(currentFrame); list->addLine(Vec2(playhead,ruler.y),Vec2(playhead,area.bottom()),theme_.focusColor,timeClip,2); list->addRect(area,theme_.inputBorderHover,clip);
     drawTimeView(area,ruler,view);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -4342,6 +4705,8 @@ bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int
     draw->addLine(Vec2(xAt(frame),area.y),Vec2(xAt(frame),area.bottom()),theme_.focusColor,timeClip,2);
     draw->addRect(area,theme_.inputBorderHover,clip);
     drawTimeView(area,ruler,view);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -4508,7 +4873,7 @@ void Context::drawCircleFilled(const Vec2 &center, float radius, const Color &co
     drawList->addCircleFilled(Vec2(origin.x + center.x, origin.y + center.y), radius, color, contentClip());
 }
 
-void Context::progressBar(float value, float maximum, const Rect &bounds)
+void Context::progressBar(float value, float maximum, const Rect &bounds, StringView overlay)
 {
     if (!currentWindow())
         return;
@@ -4519,10 +4884,226 @@ void Context::progressBar(float value, float maximum, const Rect &bounds)
 
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
-    const float normalized = maximum > 0.0f ? clamp(value / maximum, 0.0f, 1.0f) : 0.0f;
     drawList->addRectFilledRounded(rect, theme_.borderRadius, theme_.progressBackground, clip);
-    drawList->addRectFilledRounded(Rect(rect.x, rect.y, rect.width * normalized, rect.height),
-                                   theme_.borderRadius, theme_.progressFilled, clip);
+
+    if (value < 0.0f)
+    {
+        // Indeterminada: uma faixa de 20% da largura entra pela esquerda e sai
+        // pela direita com o tempo do contexto, metade da volta por segundo.
+        const float band = 0.2f;
+        float start = fmodf(elapsedSeconds_ * 0.5f, 1.0f) * (1.0f + band) - band;
+        float end = start + band;
+        start = clamp(start, 0.0f, 1.0f);
+        end = clamp(end, 0.0f, 1.0f);
+        if (end > start)
+            drawList->addRectFilledRounded(Rect(rect.x + rect.width * start, rect.y,
+                                                rect.width * (end - start), rect.height),
+                                           theme_.borderRadius, theme_.progressFilled, clip);
+    }
+    else
+    {
+        const float normalized = maximum > 0.0f ? clamp(value / maximum, 0.0f, 1.0f) : 0.0f;
+        if (normalized > 0.0f)
+            drawList->addRectFilledRounded(Rect(rect.x, rect.y, rect.width * normalized,
+                                                rect.height),
+                                           theme_.borderRadius, theme_.progressFilled, clip);
+    }
+
+    if (overlay.size() > 0u)
+    {
+        const TextMetrics metrics = measureText(theme_.font, overlay, theme_.fontSize);
+        drawText(*drawList, theme_.font, overlay,
+                 Vec2(rect.x + (rect.width - metrics.width) * 0.5f,
+                      rect.y + (rect.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.progressText, clip);
+    }
+}
+
+int Context::plotImpl(bool histogram, StringView labelText, const float *values, int count,
+                      const Rect &bounds, int offset, StringView overlay, float scaleMin,
+                      float scaleMax)
+{
+    DrawList *drawList = currentDrawList();
+    const StringView text = visibleLabel(labelText);
+    if (!currentWindow() || !drawList || values == nullptr || count <= 0 ||
+        bounds.width <= 0.0f || bounds.height <= 0.0f)
+        return -1;
+
+    // O offset e o indice da amostra mais antiga: aceita-se fora do intervalo
+    // (negativo, ou maior que a serie) e normaliza-se aqui, para o resto da conta
+    // ser uma soma com resto sempre valido.
+    offset %= count;
+    if (offset < 0)
+        offset += count;
+
+    const Rect rect = contentRect(bounds);
+    const Rect clip = contentClip();
+    drawList->addRectFilledRounded(rect, theme_.borderRadius, theme_.plotBackground, clip);
+
+    const Rect inner(rect.x + theme_.padding, rect.y + theme_.padding,
+                     rect.width - theme_.padding * 2.0f, rect.height - theme_.padding * 2.0f);
+    const WidgetId id = makeWidgetId(labelText);
+    const bool hovered = itemHovered(rect, clip, id);
+
+    // Uma serie de linhas precisa de duas amostras para ter um segmento; com
+    // menos do que isso fica so o fundo (e a legenda).
+    const int sampleCount = histogram ? count : count - 1;
+    int hoveredIndex = -1;
+    if (sampleCount >= 1 && inner.width > 0.0f && inner.height > 0.0f)
+    {
+        if (scaleMax <= scaleMin)
+        {
+            bool seen = false;
+            for (int i = 0; i < count; ++i)
+            {
+                const float value = values[i];
+                if (!(value == value))
+                    continue;
+                if (!seen)
+                {
+                    scaleMin = value;
+                    scaleMax = value;
+                    seen = true;
+                }
+                else
+                {
+                    scaleMin = value < scaleMin ? value : scaleMin;
+                    scaleMax = value > scaleMax ? value : scaleMax;
+                }
+            }
+            if (!seen)
+            {
+                scaleMin = 0.0f;
+                scaleMax = 0.0f;
+            }
+        }
+        const float inverseScale = scaleMax > scaleMin ? 1.0f / (scaleMax - scaleMin) : 0.0f;
+        // Onde cai o valor zero: as barras nascem ai. Com a escala toda do lado
+        // negativo a linha do zero e o topo, senao a base.
+        float zeroY = inner.bottom();
+        if (scaleMin < 0.0f)
+            zeroY = scaleMax > 0.0f ? inner.bottom() - (0.0f - scaleMin) * inverseScale * inner.height
+                                    : inner.y;
+
+        // Uma coluna por pixel chega: com mais amostras do que isso, a geometria
+        // extra nao muda nada no ecra.
+        int columns = static_cast<int>(inner.width);
+        if (columns > sampleCount)
+            columns = sampleCount;
+        if (columns < 1)
+            columns = 1;
+
+        int hoveredColumn = -1;
+        if (hovered)
+        {
+            // pointer_.position e absoluto, como o rect e o clip acima.
+            if (contains(inner, pointer_.position))
+            {
+                const float t = clamp((pointer_.position.x - inner.x) / inner.width, 0.0f, 0.9999f);
+                hoveredColumn = static_cast<int>(t * static_cast<float>(columns));
+                if (hoveredColumn >= columns)
+                    hoveredColumn = columns - 1;
+            }
+        }
+
+        const Color base = histogram ? theme_.plotHistogram : theme_.plotLines;
+        // Uma primitiva para a série inteira: pontos para a linha (uma fita por
+        // cima de tudo, sem nós sobrepostos), rectângulos para o histograma. A
+        // amostra sob o ponteiro é desenhada por cima, em vez de partir a série
+        // em três pedaços.
+        if (histogram)
+        {
+            plotBars_.clear();
+            for (int column = 0; column < columns; ++column)
+            {
+                const int first = column * sampleCount / columns;
+                const float value = values[(offset + first) % count];
+                const float y = inner.bottom() -
+                                clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
+                const float left = inner.x + inner.width * static_cast<float>(column) /
+                                                static_cast<float>(columns);
+                float right = inner.x + inner.width * static_cast<float>(column + 1) /
+                                           static_cast<float>(columns);
+                // Abaixo de dois pixeis o rect vira uma linha com alpha somado;
+                // recua-se o lado direito como faz o ImGui.
+                if (right >= left + 2.0f)
+                    right -= 1.0f;
+                const float top = y < zeroY ? y : zeroY;
+                const float bottom = y < zeroY ? zeroY : y;
+                plotBars_.push_back(Rect(left, top, right - left, bottom - top));
+            }
+            drawList->addRectFilledBatch(
+                Span<const Rect>(plotBars_.data(), plotBars_.size()), base, clip);
+            if (hoveredColumn >= 0 && hoveredColumn < static_cast<int>(plotBars_.size()))
+                drawList->addRectFilled(plotBars_[static_cast<size_t>(hoveredColumn)],
+                                        theme_.focusColor, clip);
+        }
+        else
+        {
+            plotPoints_.clear();
+            plotPoints_.reserve(static_cast<size_t>(columns) + 1u);
+            for (int column = 0; column <= columns; ++column)
+            {
+                const int index = column * sampleCount / columns;
+                const float value = values[(offset + index) % count];
+                const float y = inner.bottom() -
+                                clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
+                const float x = inner.x + inner.width * static_cast<float>(column) /
+                                            static_cast<float>(columns);
+                plotPoints_.push_back(Vec2(x, y));
+            }
+            drawList->addPolyline(Span<const Vec2>(plotPoints_.data(), plotPoints_.size()), base,
+                                  clip);
+            if (hoveredColumn >= 0 && hoveredColumn + 1 < static_cast<int>(plotPoints_.size()))
+            {
+                drawList->addPolyline(
+                    Span<const Vec2>(plotPoints_.data() + hoveredColumn, 2u), theme_.focusColor,
+                    clip);
+            }
+        }
+
+        if (hoveredColumn >= 0)
+            hoveredIndex = hoveredColumn * sampleCount / columns;
+
+        if (hoveredIndex >= 0)
+        {
+            char text[64];
+            const int written = snprintf(text, sizeof(text), "%d: %.4g", hoveredIndex,
+                                         static_cast<double>(values[(offset + hoveredIndex) % count]));
+            if (written > 0)
+                tooltip(StringView(text, static_cast<StringView::size_type>(written)));
+        }
+    }
+
+    if (overlay.size() > 0u)
+    {
+        const TextMetrics metrics = measureText(theme_.font, overlay, theme_.fontSize);
+        drawText(*drawList, theme_.font, overlay,
+                 Vec2(rect.x + (rect.width - metrics.width) * 0.5f, rect.y + theme_.padding),
+                 theme_.fontSize, theme_.textColor, clip);
+    }
+
+    if (labelText.size() > 0u)
+    {
+        const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+        drawText(*drawList, theme_.font, text,
+                 Vec2(rect.x + rect.width + theme_.padding,
+                      rect.y + (rect.height - metrics.height) * 0.5f),
+                 theme_.fontSize, theme_.labelText, clip);
+    }
+    return hoveredIndex;
+}
+
+int Context::plotLines(StringView label, const float *values, int count, const Rect &bounds,
+                       int offset, StringView overlay, float scaleMin, float scaleMax)
+{
+    return plotImpl(false, label, values, count, bounds, offset, overlay, scaleMin, scaleMax);
+}
+
+int Context::plotHistogram(StringView label, const float *values, int count, const Rect &bounds,
+                           int offset, StringView overlay, float scaleMin, float scaleMax)
+{
+    return plotImpl(true, label, values, count, bounds, offset, overlay, scaleMin, scaleMax);
 }
 
 MessageBoxResult Context::messageBox(StringView title, StringView message, bool &open,
@@ -4843,6 +5424,104 @@ void Context::label(StringView text, const Vec2 &position)
              theme_.fontSize, theme_.labelText, contentClip());
 }
 
+bool Context::beginTooltip()
+{
+    WindowState *window = currentWindow();
+    if (!window || tooltipOpen_)
+        return false;
+    // Só depois de o item que a pediu estar parado sob o ponteiro o tempo do
+    // atraso - o mesmo relógio que o tooltip de uma linha usa.
+    if (hotWidget_ != lastItemId_)
+    {
+        tooltipWidget_ = InvalidWidgetId;
+        tooltipHoverSeconds_ = 0.0f;
+        return false;
+    }
+    const float pointerDeltaX = pointer_.position.x - tooltipPointerPosition_.x;
+    const float pointerDeltaY = pointer_.position.y - tooltipPointerPosition_.y;
+    const bool moved = pointerDeltaX * pointerDeltaX + pointerDeltaY * pointerDeltaY > 1.0f;
+    if (tooltipWidget_ != lastItemId_ || moved)
+    {
+        tooltipWidget_ = lastItemId_;
+        tooltipHoverSeconds_ = 0.0f;
+        tooltipPointerPosition_ = pointer_.position;
+        return false;
+    }
+    tooltipHoverSeconds_ += frame_.deltaSeconds;
+    if (tooltipHoverSeconds_ < tooltipDelay_)
+        return false;
+
+    const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    const float paddingX = theme_.tooltipPadX;
+    const float paddingY = theme_.tooltipPadY;
+    // A caixa é a medida do frame anterior: o tamanho do que a aplicação vai
+    // submeter só se sabe depois de submeter, e o sítio tem de estar decidido
+    // antes disso (é ele que fixa a posição das widgets lá dentro). No primeiro
+    // frame fica um tamanho de recurso, e a partir daí a medida é a certa.
+    const float width = tooltipSize_.x > 0.0f ? tooltipSize_.x + paddingX * 2.0f : 180.0f;
+    const float height = tooltipSize_.y > 0.0f ? tooltipSize_.y + paddingY * 2.0f : 40.0f;
+    float x = pointer_.position.x + 14.0f;
+    float y = pointer_.position.y + 18.0f;
+    if (x + width > viewport.width)
+        x = pointer_.position.x - width - 14.0f;
+    if (y + height > viewport.height)
+        y = pointer_.position.y - height - 12.0f;
+    if (x < 0.0f)
+        x = 0.0f;
+    if (y < 0.0f)
+        y = 0.0f;
+
+    tooltipOrigin_ = Vec2(x, y);
+    tooltipLayout_ = layout_;
+    layout_.origin = Vec2(x + paddingX, y + paddingY);
+    layout_.cursor = layout_.origin;
+    layout_.baseOriginX = layout_.origin.x;
+    layout_.hasLastItem = false;
+    layout_.contentExtent = Vec2(0.0f, 0.0f);
+    tooltipOpen_ = true;
+    return true;
+}
+
+void Context::endTooltip()
+{
+    if (!tooltipOpen_)
+        return;
+    WindowState *window = currentWindow();
+    // A medida do conteúdo: o que foi submetido entre os dois, a partir do canto
+    // calculado em beginTooltip. Sem itens fica um rect nulo e a caixa sai com o
+    // tamanho mínimo de uma linha.
+    const TextMetrics metrics = measureText(theme_.font, StringView("X"), theme_.fontSize);
+    const float lineHeight = metrics.height > 0.0f ? metrics.height : theme_.fontSize;
+    float width = 0.0f;
+    float height = 0.0f;
+    if (layout_.hasLastItem)
+    {
+        // O maior item, não o último: um rótulo curto depois de uma tabela larga
+        // não pode encolher a caixa.
+        width = layout_.contentExtent.x - layout_.origin.x;
+        height = layout_.contentExtent.y - layout_.origin.y;
+    }
+    if (width < 0.0f)
+        width = 0.0f;
+    if (height < lineHeight)
+        height = lineHeight;
+
+    const float paddingX = theme_.tooltipPadX;
+    const float paddingY = theme_.tooltipPadY;
+    const Rect box(tooltipOrigin_.x, tooltipOrigin_.y, width + paddingX * 2.0f,
+                   height + paddingY * 2.0f);
+    tooltipSize_ = Vec2(width, height);
+    if (window)
+    {
+        const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+        window->overlayDrawList.addRectFilled(box, theme_.tooltipBg, viewport);
+        window->overlayDrawList.addRect(box, theme_.tooltipBorder, viewport);
+    }
+
+    layout_ = tooltipLayout_;
+    tooltipOpen_ = false;
+}
+
 void Context::tooltip(StringView text)
 {
     WindowState *window = currentWindow();
@@ -4909,7 +5588,7 @@ bool Context::button(StringView labelText)
 bool Context::smallButton(StringView labelText)
 {
     const float fontSize = theme_.fontSize * 0.82f;
-    const TextMetrics metrics = measureText(theme_.font, labelText, fontSize);
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), fontSize);
     const float paddingX = theme_.padding * 1.25f;
     const float paddingY = theme_.padding * 0.55f;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, metrics.width + paddingX * 2.0f,
@@ -4927,10 +5606,15 @@ bool Context::checkbox(StringView labelText, bool &value)
     const bool clicked = checkbox(labelText, value, Rect(bounds.x - layout_.origin.x,
                                                          bounds.y - layout_.origin.y,
                                                          bounds.width, bounds.height));
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    // A largura do item vem do rótulo visível: com "##id" não há texto, e o item
+    // é só a caixa, como no ImGui.
+    const TextMetrics metrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
@@ -4942,10 +5626,13 @@ bool Context::toggleSwitch(StringView labelText, bool &value)
                                       Rect(bounds.x - layout_.origin.x,
                                            bounds.y - layout_.origin.y,
                                            bounds.width, bounds.height));
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
@@ -4955,27 +5642,32 @@ bool Context::radioButton(StringView labelText, bool selected)
     const bool clicked = radioButton(labelText, selected,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                           bounds.width, bounds.height));
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
 bool Context::selectable(StringView labelText, bool selected, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool clicked = selectable(labelText, selected,
                                     Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                          bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (clicked)
+        item_.edited = true;
     return clicked;
 }
 
 bool Context::collapsingHeader(StringView labelText, bool &expanded, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool open = collapsingHeader(labelText, expanded,
                                        Rect(bounds.x - layout_.origin.x,
@@ -4985,9 +5677,21 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, float width
     return open;
 }
 
+bool Context::collapsingHeader(StringView labelText, bool &expanded, bool &openState, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool open = collapsingHeader(labelText, expanded, openState,
+                                       Rect(bounds.x - layout_.origin.x,
+                                            bounds.y - layout_.origin.y,
+                                            bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return open;
+}
+
 bool Context::treeNode(StringView labelText, bool &expanded, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool open = treeNode(labelText, expanded,
                                Rect(bounds.x - layout_.origin.x,
@@ -5000,7 +5704,7 @@ bool Context::treeNode(StringView labelText, bool &expanded, float width)
 bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle &style,
                        float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool selected = treeItem(labelText, expanded, style,
                                    Rect(bounds.x - layout_.origin.x,
@@ -5013,7 +5717,7 @@ bool Context::treeItem(StringView labelText, bool &expanded, const TreeItemStyle
 bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
                        const TreeItemStyle &style, TreeDrop *drop, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool selected = treeItem(nodeId, labelText, expanded, style,
                                    Rect(bounds.x - layout_.origin.x,
@@ -5026,7 +5730,7 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
                      float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = tabBar(labelText, currentItem, items,
                                 Rect(bounds.x - layout_.origin.x,
@@ -5039,7 +5743,7 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
 bool Context::listBox(StringView labelText, int &currentItem, Span<const StringView> items,
                       float width, int visibleItems)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const int resolvedRows = visibleItems > 0 ? visibleItems : 1;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth,
                       theme_.widgetHeight * static_cast<float>(resolvedRows));
@@ -5048,72 +5752,355 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
                                       bounds.y - layout_.origin.y,
                                       bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::comboBox(StringView labelText, int &currentItem, Span<const StringView> items,
                        float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = comboBox(labelText, currentItem, items,
                                   Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                        bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
                           float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderFloat(labelText, value, minimum, maximum,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                           bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = sliderInt(labelText, value, minimum, maximum,
                                    Rect(bounds.x - layout_.origin.x,
                                         bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
                         float speed, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = dragFloat(labelText, value, minimum, maximum, speed,
                                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
                       int speed, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = dragInt(labelText, value, minimum, maximum, speed,
                                  Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                       bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+namespace
+{
+// A largura de cada componente de um widget de N: o que sobra da largura total
+// depois dos espaçamentos, dividido por N.
+float componentWidth(float total, float spacing, int components)
+{
+    if (components <= 1)
+        return total;
+    const float cell = (total - spacing * static_cast<float>(components - 1)) /
+                       static_cast<float>(components);
+    return cell > 0.0f ? cell : 0.0f;
+}
+} // namespace
+
+bool Context::sliderFloat2(StringView labelText, float &x, float &y, float minimum,
+                           float maximum, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderFloat("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderFloat("y", y, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::sliderFloat3(StringView labelText, float &x, float &y, float &z, float minimum,
+                           float maximum, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 3);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderFloat("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderFloat("y", y, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderFloat("z", z, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::sliderFloat4(StringView labelText, float &x, float &y, float &z, float &w,
+                           float minimum, float maximum, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 4);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderFloat("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderFloat("y", y, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderFloat("z", z, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderFloat("w", w, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::sliderInt2(StringView labelText, int &x, int &y, int minimum, int maximum,
+                         float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderInt("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderInt("y", y, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::sliderInt3(StringView labelText, int &x, int &y, int &z, int minimum, int maximum,
+                         float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 3);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderInt("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderInt("y", y, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderInt("z", z, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::sliderInt4(StringView labelText, int &x, int &y, int &z, int &w, int minimum,
+                         int maximum, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 4);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = sliderInt("x", x, minimum, maximum, cell);
+    sameLine();
+    changed = sliderInt("y", y, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderInt("z", z, minimum, maximum, cell) || changed;
+    sameLine();
+    changed = sliderInt("w", w, minimum, maximum, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::dragInt2(StringView labelText, int &x, int &y, int minimum, int maximum, int speed,
+                       float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragInt("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragInt("y", y, minimum, maximum, speed, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::dragInt3(StringView labelText, int &x, int &y, int &z, int minimum, int maximum,
+                       int speed, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 3);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragInt("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragInt("y", y, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragInt("z", z, minimum, maximum, speed, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::dragInt4(StringView labelText, int &x, int &y, int &z, int &w, int minimum,
+                       int maximum, int speed, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 4);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = dragInt("x", x, minimum, maximum, speed, cell);
+    sameLine();
+    changed = dragInt("y", y, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragInt("z", z, minimum, maximum, speed, cell) || changed;
+    sameLine();
+    changed = dragInt("w", w, minimum, maximum, speed, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputInt2(StringView labelText, int &x, int &y, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputInt("x", x, cell);
+    sameLine();
+    changed = inputInt("y", y, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputInt3(StringView labelText, int &x, int &y, int &z, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 3);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputInt("x", x, cell);
+    sameLine();
+    changed = inputInt("y", y, cell) || changed;
+    sameLine();
+    changed = inputInt("z", z, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputInt4(StringView labelText, int &x, int &y, int &z, int &w, float width)
+{
+    const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
+                                      theme_.itemSpacing, 4);
+    if (cell <= 0.0f)
+        return false;
+    pushId(labelText);
+    bool changed = inputInt("x", x, cell);
+    sameLine();
+    changed = inputInt("y", y, cell) || changed;
+    sameLine();
+    changed = inputInt("z", z, cell) || changed;
+    sameLine();
+    changed = inputInt("w", w, cell) || changed;
+    popId();
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputDouble(StringView labelText, double &value, float width, int precision)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool changed = inputDouble(labelText, value,
+                                     Rect(bounds.x - layout_.origin.x,
+                                          bounds.y - layout_.origin.y, bounds.width,
+                                          bounds.height),
+                                     precision);
+    advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::inputDouble(StringView labelText, double &value, const Rect &bounds, int precision)
+{
+    String text = String::number(value, precision);
+    const bool edited = editNumericText(labelText, text, value, bounds);
+    double parsed = value;
+    // O parse é o do inputFloat; a diferença é não passar por um float no meio,
+    // que é o que estraga um número com mais dígitos do que o float tem.
+    const bool changed = edited && parseDoubleText(text, parsed) && parsed != value;
+    if (changed)
+        value = parsed;
+    if (numericEditId_ == makeWidgetId(labelText))
+        numericEditValue_ = value;
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputFloat2(StringView labelText, float &x, float &y, float width, int precision)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing) * 0.5f;
     if (cell <= 0.0f)
         return false;
@@ -5122,12 +6109,14 @@ bool Context::inputFloat2(StringView labelText, float &x, float &y, float width,
     sameLine();
     changed = inputFloat("y", y, cell, precision) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, float width, int precision)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 2.0f) / 3.0f;
     if (cell <= 0.0f)
         return false;
@@ -5138,13 +6127,15 @@ bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, fl
     sameLine();
     changed = inputFloat("z", z, cell, precision) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputFloat4(StringView labelText, float &x, float &y, float &z, float &w,
                           float width, int precision)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 3.0f) * 0.25f;
     if (cell <= 0.0f)
         return false;
@@ -5157,13 +6148,15 @@ bool Context::inputFloat4(StringView labelText, float &x, float &y, float &z, fl
     sameLine();
     changed = inputFloat("w", w, cell, precision) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::dragFloat2(StringView labelText, float &x, float &y, float minimum, float maximum,
                          float speed, float width)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing) * 0.5f;
     if (cell <= 0.0f)
         return false;
@@ -5172,13 +6165,15 @@ bool Context::dragFloat2(StringView labelText, float &x, float &y, float minimum
     sameLine();
     changed = dragFloat("y", y, minimum, maximum, speed, cell) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::dragFloat3(StringView labelText, float &x, float &y, float &z, float minimum, float maximum,
                          float speed, float width)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 2.0f) / 3.0f;
     if (cell <= 0.0f)
         return false;
@@ -5189,13 +6184,15 @@ bool Context::dragFloat3(StringView labelText, float &x, float &y, float &z, flo
     sameLine();
     changed = dragFloat("z", z, minimum, maximum, speed, cell) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::dragFloat4(StringView labelText, float &x, float &y, float &z, float &w,
                          float minimum, float maximum, float speed, float width)
 {
-    const float total = width > 0.0f ? width : availableWidth();
+    const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 3.0f) * 0.25f;
     if (cell <= 0.0f)
         return false;
@@ -5208,36 +6205,48 @@ bool Context::dragFloat4(StringView labelText, float &x, float &y, float &z, flo
     sameLine();
     changed = dragFloat("w", w, minimum, maximum, speed, cell) || changed;
     popId();
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::stepperInt(StringView labelText, int &value, int minimum, int maximum, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = stepperInt(labelText, value, minimum, maximum,
                                     Rect(bounds.x - layout_.origin.x,
                                          bounds.y - layout_.origin.y,
                                          bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputText(StringView labelText, String &value, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    return inputTextWithHint(labelText, StringView(), value, width);
+}
+
+bool Context::inputTextWithHint(StringView labelText, StringView hint, String &value, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
-    const bool changed = inputText(labelText, value,
-                                   Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                                        bounds.width, bounds.height));
+    const bool changed =
+        inputTextWithHint(labelText, hint, value,
+                          Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                               bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputTextMultiline(StringView labelText, String &value, float width, float height,
                                  bool followTail)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const float resolvedHeight = height > theme_.widgetHeight ? height : theme_.widgetHeight;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
     const bool changed = inputTextMultiline(labelText, value,
@@ -5246,36 +6255,59 @@ bool Context::inputTextMultiline(StringView labelText, String &value, float widt
                                                  bounds.width, bounds.height),
                                             followTail);
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputInt(StringView labelText, int &value, float width)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = inputInt(labelText, value,
                                   Rect(bounds.x - layout_.origin.x,
                                        bounds.y - layout_.origin.y,
                                        bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
 bool Context::inputFloat(StringView labelText, float &value, float width, int precision)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed = inputFloat(labelText, value,
                                     Rect(bounds.x - layout_.origin.x,
                                          bounds.y - layout_.origin.y,
                                          bounds.width, bounds.height), precision);
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
+}
+
+bool Context::colorButton(StringView labelText, const Color &value, float width, float height)
+{
+    const TextMetrics metrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const float resolvedWidth = width > 0.0f ? width : (theme_.padding * 2.0f + 32.0f);
+    const float resolvedHeight = height > 0.0f ? height : theme_.widgetHeight;
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
+    const bool clicked = colorButton(labelText, value,
+                                     Rect(bounds.x - layout_.origin.x,
+                                          bounds.y - layout_.origin.y, bounds.width, bounds.height));
+    advanceLayout(Rect(bounds.x, bounds.y, bounds.width + theme_.padding + metrics.width,
+                       bounds.height));
+    if (clicked)
+        item_.edited = true;
+    return clicked;
 }
 
 bool Context::colorEdit(StringView labelText, Color &value, float width, float height)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const float minimumHeight = theme_.widgetHeight * 3.0f;
     const float resolvedHeight = height > minimumHeight ? height : minimumHeight;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
@@ -5284,6 +6316,8 @@ bool Context::colorEdit(StringView labelText, Color &value, float width, float h
                                         bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height));
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -5333,7 +6367,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     DrawList *drawList = currentDrawList();
     if (!window || !drawList || height <= 0.0f || tableActive_ || propertyRowActive_)
         return false;
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     if (resolvedWidth <= 0.0f)
         return false;
     const Rect outer(layout_.cursor.x, layout_.cursor.y, resolvedWidth, height);
@@ -6271,7 +7305,7 @@ bool Context::beginTable(StringView idText, int columns, float width)
 {
     if (!currentWindow() || columns <= 0 || tableActive_ || propertyRowActive_)
         return false;
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     if (resolvedWidth <= 0.0f)
         return false;
     table_.parentLayout = layout_;
@@ -6456,7 +7490,8 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     if (!drawList)
         return false;
 
-    const float width = availableWidth();
+    const StringView text = visibleLabel(labelText);
+    const float width = calcItemWidth();
     if (width <= 0.0f)
         return false;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, tableMinimumRowHeight());
@@ -6541,8 +7576,8 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     const float padding = theme_.windowPadding * 0.5f;
     const float arrowSize = bounds.height * 0.28f;
     const float arrowReserve = sorted ? arrowSize + padding : 0.0f;
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(bounds.x + padding,
                   bounds.y + (bounds.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
@@ -6562,6 +7597,8 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.labelText, clip);
     }
     advanceLayout(bounds);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -6625,8 +7662,9 @@ bool Context::tableTreeCell(StringView labelText, int depth, bool hasChildren, b
     }
 
     const float padding = theme_.windowPadding * 0.25f;
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(nodeX + step + padding, bounds.y + (height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, clip);
     advanceLayout(bounds);
@@ -6685,8 +7723,9 @@ bool Context::beginPropertyRow(StringView labelText, float labelWidth)
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
-    drawText(*drawList, theme_.font, labelText,
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    drawText(*drawList, theme_.font, text,
              Vec2(propertyRow_.bounds.x, propertyRow_.bounds.y +
                   (propertyRow_.bounds.height - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, contentClip());
@@ -6722,14 +7761,54 @@ void Context::endPropertyRow()
     advanceLayout(bounds);
 }
 
-void Context::progressBar(float value, float maximum, float width)
+void Context::progressBar(float value, float maximum, float width, StringView overlay)
 {
-    const float resolvedWidth = width > 0.0f ? width : availableWidth();
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     progressBar(value, maximum,
                 Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                     bounds.width, bounds.height));
+                     bounds.width, bounds.height),
+                overlay);
     advanceLayout(bounds);
+}
+
+namespace
+{
+// Altura de um plot sem altura explicita: oito linhas de texto, como o ImGui.
+inline float defaultPlotHeight(const Theme &theme)
+{
+    return theme.fontSize * 8.0f;
+}
+}
+
+int Context::plotLines(StringView label, const float *values, int count, float width,
+                       float height, int offset, StringView overlay, float scaleMin,
+                       float scaleMax)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const float resolvedHeight = height > 0.0f ? height : defaultPlotHeight(theme_);
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
+    const int hovered = plotLines(label, values, count,
+                                  Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                                       bounds.width, bounds.height),
+                                  offset, overlay, scaleMin, scaleMax);
+    advanceLayout(bounds);
+    return hovered;
+}
+
+int Context::plotHistogram(StringView label, const float *values, int count, float width,
+                           float height, int offset, StringView overlay, float scaleMin,
+                           float scaleMax)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const float resolvedHeight = height > 0.0f ? height : defaultPlotHeight(theme_);
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
+    const int hovered = plotHistogram(label, values, count,
+                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                                           bounds.width, bounds.height),
+                                      offset, overlay, scaleMin, scaleMax);
+    advanceLayout(bounds);
+    return hovered;
 }
 
 void Context::label(StringView text)
@@ -6739,6 +7818,248 @@ void Context::label(StringView text)
     advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
 }
 
+void Context::textItem(StringView text, const Color &color, const Vec2 &localPosition)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return;
+    const Rect resolved = contentRect(Rect(localPosition.x, localPosition.y, 0.0f, 0.0f));
+    drawText(*drawList, theme_.font, text, Vec2(resolved.x, resolved.y), theme_.fontSize, color,
+             contentClip());
+}
+
+StringView::size_type Context::wrapLongWord(StringView text, StringView::size_type wordEnd,
+                                            StringView::size_type from, float wrapWidth,
+                                            ct::Vector<StringView> &lines) const
+{
+    // Cada pedaço acaba num limite de codepoint: os bytes de continuação de uma
+    // sequência UTF-8 têm os dois bits de cima a 10, por isso saltam-se.
+    StringView::size_type cut = from;
+    float width = 0.0f;
+    while (cut < wordEnd)
+    {
+        StringView::size_type next = cut + 1u;
+        while (next < wordEnd && (static_cast<unsigned char>(text[next]) & 0xC0u) == 0x80u)
+            ++next;
+        const float piece = measureText(theme_.font, StringView(text.data() + cut, next - cut),
+                                        theme_.fontSize).width;
+        if (cut > from && width + piece > wrapWidth)
+            break;
+        width += piece;
+        cut = next;
+    }
+    lines.push_back(StringView(text.data() + from, cut - from));
+    return cut;
+}
+
+// Quebra em linhas que caibam em wrapWidth. Unidade a unidade (palavras e runs de
+// espaços), medindo cada uma com o measureText do contexto: as linhas são só isto
+// porque o texto do iGUI não tem kerning, e as fronteiras são sempre bytes de
+// início de codepoint (0x20 e 0x0A nunca aparecem como byte de continuação), por
+// isso os limites UTF-8 ficam intactos. Uma palavra maior que a linha inteira é
+// partida, e aí cada pedaço acaba num limite de codepoint.
+void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> &lines) const
+{
+    lines.clear();
+    const StringView::size_type size = text.size();
+    if (size == 0u)
+        return;
+
+    if (!(wrapWidth > 0.0f))
+    {
+        // Sem largura: as linhas são as que o texto já traz.
+        StringView::size_type start = 0u;
+        for (StringView::size_type i = 0u; i <= size; ++i)
+        {
+            if (i == size || text[i] == '\n')
+            {
+                lines.push_back(StringView(text.data() + start, i - start));
+                start = i + 1u;
+            }
+        }
+        return;
+    }
+
+    StringView::size_type lineStart = 0u;
+    StringView::size_type lastSpace = StringView::npos;
+    float width = 0.0f;
+    StringView::size_type i = 0u;
+    while (i < size)
+    {
+        if (text[i] == '\n')
+        {
+            lines.push_back(StringView(text.data() + lineStart, i - lineStart));
+            lineStart = i + 1u;
+            width = 0.0f;
+            lastSpace = StringView::npos;
+            ++i;
+            continue;
+        }
+
+        StringView::size_type unitEnd = i;
+        const bool space = text[i] == ' ';
+        if (space)
+        {
+            while (unitEnd < size && text[unitEnd] == ' ')
+                ++unitEnd;
+        }
+        else
+        {
+            while (unitEnd < size && text[unitEnd] != ' ' && text[unitEnd] != '\n')
+                ++unitEnd;
+        }
+        const float unitWidth = measureText(theme_.font,
+                                           StringView(text.data() + i, unitEnd - i),
+                                           theme_.fontSize).width;
+
+        if (i == lineStart)
+        {
+            // Primeira unidade da linha: os espaços ficam (não vale a pena
+            // começar a linha por causa deles), e uma palavra que não caiba é
+            // partida aqui mesmo.
+            if (space)
+            {
+                lastSpace = i;
+                width += unitWidth;
+                i = unitEnd;
+                continue;
+            }
+            if (width + unitWidth <= wrapWidth)
+            {
+                width += unitWidth;
+                i = unitEnd;
+                continue;
+            }
+            i = wrapLongWord(text, unitEnd, i, wrapWidth, lines);
+            lineStart = i;
+            width = 0.0f;
+            lastSpace = StringView::npos;
+            continue;
+        }
+
+        if (width + unitWidth <= wrapWidth)
+        {
+            if (space)
+                lastSpace = i;
+            width += unitWidth;
+            i = unitEnd;
+            continue;
+        }
+
+        if (space)
+        {
+            // A linha acaba antes destes espaços.
+            lines.push_back(StringView(text.data() + lineStart, i - lineStart));
+            lineStart = unitEnd;
+            width = 0.0f;
+            lastSpace = StringView::npos;
+            i = unitEnd;
+            continue;
+        }
+
+        if (lastSpace != StringView::npos && lastSpace > lineStart)
+        {
+            // Há um espaço onde cortar; os espaços do corte não vão para a linha.
+            lines.push_back(StringView(text.data() + lineStart, lastSpace - lineStart));
+            lineStart = lastSpace;
+            while (lineStart < size && text[lineStart] == ' ')
+                ++lineStart;
+            width = 0.0f;
+            lastSpace = StringView::npos;
+            i = lineStart;
+            continue;
+        }
+
+        // A palavra não cabe nesta linha e não há espaço onde cortar: a linha
+        // acaba aqui e a palavra (que se parte, se for preciso) começa a seguir.
+        lines.push_back(StringView(text.data() + lineStart, i - lineStart));
+        lineStart = i;
+        width = 0.0f;
+        lastSpace = StringView::npos;
+    }
+
+    if (lineStart < size || (size > 0u && text[size - 1u] == '\n'))
+        lines.push_back(StringView(text.data() + lineStart, size - lineStart));
+}
+
+void Context::textDisabled(StringView text)
+{
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    textItem(text, theme_.textDisabled,
+             Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y));
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
+}
+
+void Context::textColored(StringView text, const Color &color)
+{
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    textItem(text, color,
+             Vec2(layout_.cursor.x - layout_.origin.x, layout_.cursor.y - layout_.origin.y));
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, metrics.width, metrics.height));
+}
+
+void Context::textWrapped(StringView text, float wrapWidth)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return;
+    const float resolvedWrap = wrapWidth > 0.0f ? wrapWidth : availableWidth();
+    ct::Vector<StringView> lines;
+    wrapText(text, resolvedWrap, lines);
+
+    const TextMetrics lineMetrics = measureText(theme_.font, StringView("X"), theme_.fontSize);
+    const float lineHeight = lineMetrics.height > 0.0f ? lineMetrics.height : theme_.fontSize;
+    float y = layout_.cursor.y;
+    float widest = 0.0f;
+    for (ct::Vector<StringView>::size_type i = 0u; i < lines.size(); ++i)
+    {
+        textItem(lines[i], theme_.labelText,
+                 Vec2(layout_.cursor.x - layout_.origin.x, y - layout_.origin.y));
+        const float lineWidth = measureText(theme_.font, lines[i], theme_.fontSize).width;
+        if (lineWidth > widest)
+            widest = lineWidth;
+        y += lineHeight;
+    }
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, widest,
+                       lineHeight * static_cast<float>(lines.size())));
+}
+
+void Context::bulletText(StringView text, float wrapWidth)
+{
+    WindowState *window = currentWindow();
+    DrawList *drawList = currentDrawList();
+    if (!window || !drawList)
+        return;
+
+    const float indent = theme_.fontSize * 1.15f;
+    const float resolvedWrap = wrapWidth > 0.0f ? wrapWidth : availableWidth() - indent;
+    ct::Vector<StringView> lines;
+    wrapText(text, resolvedWrap, lines);
+
+    const TextMetrics lineMetrics = measureText(theme_.font, StringView("X"), theme_.fontSize);
+    const float lineHeight = lineMetrics.height > 0.0f ? lineMetrics.height : theme_.fontSize;
+    const float radius = theme_.fontSize * 0.18f > 1.0f ? theme_.fontSize * 0.18f : 1.0f;
+    drawCircleFilled(Vec2(layout_.cursor.x - layout_.origin.x + radius,
+                          layout_.cursor.y - layout_.origin.y + lineHeight * 0.5f),
+                     radius, theme_.labelText);
+
+    float y = layout_.cursor.y;
+    float widest = 0.0f;
+    for (ct::Vector<StringView>::size_type i = 0u; i < lines.size(); ++i)
+    {
+        textItem(lines[i], theme_.labelText,
+                 Vec2(layout_.cursor.x + indent - layout_.origin.x, y - layout_.origin.y));
+        const float lineWidth = measureText(theme_.font, lines[i], theme_.fontSize).width;
+        if (lineWidth > widest)
+            widest = lineWidth;
+        y += lineHeight;
+    }
+    advanceLayout(Rect(layout_.cursor.x, layout_.cursor.y, indent + widest,
+                       lineHeight * static_cast<float>(lines.size())));
+}
+
 void Context::sameLine(float spacingValue)
 {
     if (!layout_.hasLastItem)
@@ -6746,6 +8067,115 @@ void Context::sameLine(float spacingValue)
     const float itemSpacing = spacingValue >= 0.0f ? spacingValue : theme_.itemSpacing;
     layout_.cursor.x = layout_.lastItem.x + layout_.lastItem.width + itemSpacing;
     layout_.cursor.y = layout_.lastItem.y;
+}
+
+void Context::newLine()
+{
+    // Já na margem: a linha está vazia e não há nada para fechar.
+    if (layout_.cursor.x <= layout_.baseOriginX + 0.5f)
+        return;
+    layout_.cursor.x = layout_.baseOriginX;
+    if (layout_.hasLastItem)
+        layout_.cursor.y = layout_.lastItem.y + layout_.lastItem.height + theme_.itemSpacing;
+}
+
+void Context::beginGroup()
+{
+    if (!currentWindow())
+        return;
+    // O grupo mais fundo que faz sentido é o que cabe numa linha legível; a partir
+    // daí o par fica inerte em vez de rebentar (ver GroupState::active).
+    const bool active = layout_.groupDepth < 16;
+    GroupState group;
+    group.originX = layout_.origin.x;
+    group.baseOriginX = layout_.baseOriginX;
+    group.nextItemWidth = layout_.nextItemWidth;
+    group.hasLastItem = layout_.hasLastItem;
+    group.lineTop = layout_.lineTop;
+    group.lineHeight = layout_.lineHeight;
+    group.start = layout_.cursor;
+    group.extent = layout_.cursor;
+    group.active = active;
+    groups_.push_back(group);
+    ++layout_.groupDepth;
+    if (!active)
+        return;
+    // Dentro do grupo a margem é o canto dele, e a linha começa vazia: um
+    // sameLine() lá dentro não pode saltar para um item de fora.
+    layout_.origin.x = group.start.x;
+    layout_.baseOriginX = group.start.x;
+    layout_.hasLastItem = false;
+    layout_.nextItemWidth = 0.0f;
+    // As linhas do grupo são as dele: sem isto a altura do grupo anterior (ou de
+    // um item alto da mesma linha) empurrava a segunda linha do grupo para baixo.
+    layout_.lineTop = group.start.y;
+    layout_.lineHeight = 0.0f;
+}
+
+void Context::endGroup()
+{
+    if (!currentWindow() || groups_.empty())
+        return;
+    const GroupState group = groups_.back();
+    groups_.pop_back();
+    if (layout_.groupDepth > 0)
+        --layout_.groupDepth;
+    if (!group.active)
+        return;
+    // O layout de fora volta antes de o grupo entrar nele: o grupo é UM item.
+    layout_.origin.x = group.originX;
+    layout_.baseOriginX = group.baseOriginX;
+    layout_.nextItemWidth = group.nextItemWidth;
+    layout_.hasLastItem = group.hasLastItem;
+    layout_.lineTop = group.lineTop;
+    layout_.lineHeight = group.lineHeight;
+    layout_.cursor = group.start;
+
+    const Rect bounds(group.start.x, group.start.y,
+                      group.extent.x - group.start.x, group.extent.y - group.start.y);
+    advanceLayout(bounds);
+    // Saber se o grupo está debaixo do ponteiro é o que ele tem de útil lá fora,
+    // e é o que o ImGui responde - mas não tem id: não há clique, edição nem
+    // foco para reportar (um clique é sempre de um widget lá dentro).
+    item_.id = InvalidWidgetId;
+    item_.hovered = disabledDepth_ == 0u && !tooltipOpen_ &&
+                    pointerOver(intersect(bounds, contentClip()));
+    item_.clicked = false;
+    item_.edited = false;
+    item_.active = false;
+    item_.focused = false;
+    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+}
+
+void Context::setNextItemWidth(float width)
+{
+    layout_.nextItemWidth = width > 0.0f ? width : 0.0f;
+}
+
+void Context::pushItemWidth(float width)
+{
+    // Uma só profundidade de guarda: um push dentro de outro bloco herda a
+    // largura de fora quando o de dentro não define nenhuma, que é o que o
+    // ImGui faz com a pilha dele.
+    layout_.pushedItemWidth = width > 0.0f ? width : layout_.pushedItemWidth;
+    ++layout_.pushedItemWidthDepth;
+}
+
+void Context::popItemWidth()
+{
+    if (layout_.pushedItemWidthDepth > 0)
+        --layout_.pushedItemWidthDepth;
+    if (layout_.pushedItemWidthDepth == 0)
+        layout_.pushedItemWidth = 0.0f;
+}
+
+float Context::calcItemWidth() const
+{
+    if (layout_.nextItemWidth > 0.0f)
+        return layout_.nextItemWidth;
+    if (layout_.pushedItemWidthDepth > 0 && layout_.pushedItemWidth > 0.0f)
+        return layout_.pushedItemWidth;
+    return availableWidth();
 }
 
 void Context::spacing(float pixels)
@@ -6802,11 +8232,14 @@ void Context::separatorText(StringView text, float width)
         return;
 
     const Rect clip = contentClip();
-    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    // O título de uma secção segue a mesma convenção dos rótulos (o que vem depois
+    // de "##" não se escreve).
+    const StringView visible = visibleLabel(text);
+    const TextMetrics metrics = measureText(theme_.font, visible, theme_.fontSize);
     const float available = window->bounds.x + window->bounds.width - theme_.windowPadding - layout_.cursor.x;
     const float resolvedWidth = width > 0.0f && width < available ? width : available;
     const float lineY = layout_.cursor.y + metrics.height * 0.5f;
-    drawText(*drawList, theme_.font, text, layout_.cursor, theme_.fontSize, theme_.labelText, clip);
+    drawText(*drawList, theme_.font, visible, layout_.cursor, theme_.fontSize, theme_.labelText, clip);
     const float lineX = layout_.cursor.x + metrics.width + theme_.windowPadding;
     if (resolvedWidth > lineX - layout_.cursor.x)
         drawList->addRectFilled(Rect(lineX, lineY, resolvedWidth - (lineX - layout_.cursor.x), 1.0f),
@@ -7006,8 +8439,52 @@ WindowState *Context::currentWindow()
 
 DrawList *Context::currentDrawList()
 {
+    // O corpo de um tooltip vai para a lista dele: é o que o põe por cima de
+    // tudo sem tocar na janela onde o bloco foi submetido.
+    if (tooltipOpen_)
+        return &tooltipDrawList_;
     WindowState *window = currentWindow();
     return window ? &window->drawList : nullptr;
+}
+
+void Context::applySolidStyle(DrawList &drawList)
+{
+    const TextProvider::SolidStyle solid =
+        textProvider_ ? textProvider_->solidStyle() : TextProvider::SolidStyle();
+    drawList.setSolidStyle(solid.texture, solid.uv);
+}
+
+void Context::beginDisabled()
+{
+    ++disabledDepth_;
+    applyDisabledFade();
+}
+
+void Context::endDisabled()
+{
+    if (disabledDepth_ > 0u)
+        --disabledDepth_;
+    applyDisabledFade();
+}
+
+void Context::applyDisabledFade()
+{
+    // O fade é uma propriedade das listas deste frame, não do contexto: quem
+    // desenha é a lista, e é a ela que o DrawList pergunta a cor (ver
+    // DrawList::setDisabledFade). O fundo é o da janela, que é aquilo sobre o que
+    // as widgets estão desenhadas.
+    const bool enabled = disabledDepth_ > 0u;
+    const Color background = theme_.windowBackground;
+    frameDrawList_.setDisabledFade(enabled, background);
+    dragDropDrawList_.setDisabledFade(enabled, background);
+    toastDrawList_.setDisabledFade(enabled, background);
+    modalDrawList_.setDisabledFade(enabled, background);
+    tooltipDrawList_.setDisabledFade(enabled, background);
+    for (ct::SlotMap<WindowState>::iterator it = windows_.begin(); it != windows_.end(); ++it)
+    {
+        it->drawList.setDisabledFade(enabled, background);
+        it->overlayDrawList.setDisabledFade(enabled, background);
+    }
 }
 
 TextMetrics Context::measureText(FontId font, StringView text, float logicalSize) const
@@ -7099,19 +8576,70 @@ void Context::beginLayout(const WindowState &window)
     layout_.baseOriginX = origin.x;
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    // Um beginGroup sem endGroup não sobrevive à janela/child onde foi aberto.
+    groups_.clear();
+    layout_.groupDepth = 0;
+    layout_.lineTop = origin.y;
+    layout_.lineHeight = 0.0f;
 }
 
 void Context::advanceLayout(const Rect &item)
 {
     layout_.lastItem = item;
+    // A largura do próximo item valeu para este, que é o que acabou de passar por
+    // aqui (ver setNextItemWidth).
+    layout_.nextItemWidth = 0.0f;
+    // Os bounds do último item (ver isItemHovered). O id e o resto não se mexem
+    // aqui: um label ou um dummy não identifica item nenhum, e como no ImGui o
+    // que as consultas devolvem continua a ser o último widget que o fez (o id
+    // limpa-se no início do frame seguinte).
+    item_.bounds = item;
+    // O primeiro item de um container abre a extensão do conteúdo; os seguintes
+    // só a podem aumentar (ver LayoutState::contentExtent).
+    if (!layout_.hasLastItem)
+        layout_.contentExtent = Vec2(item.x + item.width, item.y + item.height);
+    else
+    {
+        const float right = item.x + item.width;
+        const float bottom = item.y + item.height;
+        if (right > layout_.contentExtent.x)
+            layout_.contentExtent.x = right;
+        if (bottom > layout_.contentExtent.y)
+            layout_.contentExtent.y = bottom;
+    }
+    // Um grupo aberto cresce com tudo o que lhe passa por dentro - labels e dummies
+    // incluídos, que também passam por aqui (ver endGroup).
+    if (!groups_.empty() && groups_.back().active)
+    {
+        GroupState &group = groups_.back();
+        const float right = item.x + item.width;
+        const float bottom = item.y + item.height;
+        if (right > group.extent.x)
+            group.extent.x = right;
+        if (bottom > group.extent.y)
+            group.extent.y = bottom;
+    }
     layout_.hasLastItem = true;
+    // A linha é a do primeiro item dela; um mesmoLine() copia o y do último item,
+    // por isso todos os itens de uma linha têm o mesmo y. O mais alto é que manda
+    // na altura da linha (ver LayoutState::lineTop).
+    if (fabsf(item.y - layout_.lineTop) < 0.5f)
+    {
+        if (item.height > layout_.lineHeight)
+            layout_.lineHeight = item.height;
+    }
+    else
+    {
+        layout_.lineTop = item.y;
+        layout_.lineHeight = item.height;
+    }
     layout_.cursor.x = layout_.origin.x;
-    layout_.cursor.y = item.y + item.height + theme_.itemSpacing;
+    layout_.cursor.y = layout_.lineTop + layout_.lineHeight + theme_.itemSpacing;
 }
 
 float Context::autoButtonWidth(StringView labelText) const
 {
-    const TextMetrics metrics = measureText(theme_.font, labelText, theme_.fontSize);
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const float width = metrics.width + theme_.windowPadding * 2.0f;
     return width > 64.0f ? width : 64.0f;
 }
@@ -7144,6 +8672,11 @@ WindowState *Context::getOrCreateWindow(WidgetId id, StringView title,
     windowsById_.put(id, handle);
     windowOrder_.push_back(handle);
     WindowState *created = windows_.get(handle);
+    if (created)
+    {
+        created->drawList.shareGeometry(frameDrawList_);
+        created->overlayDrawList.shareGeometry(frameDrawList_);
+    }
 
     // A window the state file knows is created where it was left rather than
     // at the bounds the application asked for.
@@ -7226,6 +8759,8 @@ bool Context::loadWindowState()
     const bool loaded = windowState_.load();
     for (WindowState &window : windows_.items())
     {
+        if (!window.saveSettings)
+            continue;
         WindowGeometry geometry;
         if (windowState_.getWindow(window.title, geometry))
             applyWindowGeometry(window, geometry);
@@ -7237,6 +8772,8 @@ bool Context::saveWindowState()
 {
     for (const WindowState &window : windows_.items())
     {
+        if (!window.saveSettings)
+            continue;
         WindowGeometry geometry;
         windowGeometryOf(window, geometry);
         windowState_.putWindow(window.title, geometry);
@@ -7418,6 +8955,10 @@ Rect Context::contentClip() const
     if (!window)
         return Rect();
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    // O corpo de um tooltip é desenhado por cima da janela, muitas vezes fora
+    // dela: o limite é o ecrã, não a janela.
+    if (tooltipOpen_)
+        return viewport;
     const float titleHeight = window->showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
     const float contentWidth = window->bounds.width - padding * 2.0f;
@@ -7443,16 +8984,57 @@ Rect Context::contentClip() const
 bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
 {
     lastItemId_ = id;
-    if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
+    // Um item novo limpa o estado do anterior: o que é do item (hover, clique,
+    // edição) é dele, e as consultas do item (isItemHovered e companhia) só
+    // fazem sentido enquanto ele for o último. Os bounds e o id ficam já postos,
+    // mesmo quando não há hover.
+    item_.id = id;
+    item_.bounds = rect;
+    item_.clicked = false;
+    item_.edited = false;
+    item_.focused = focusedWidget_ == id;
+    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+    item_.active = activeWidget_ == id;
+    // Um tooltip fica debaixo do ponteiro: se as widgets lá dentro reagissem, o
+    // hover saía à widget que o pediu e as duas piscavam.
+    if (tooltipOpen_)
+    {
+        item_.hovered = false;
         return false;
+    }
+    // Num bloco desativado nada reage: sem hover não há hot, e é o hover que
+    // quase todos os widgets usam para as cores de destaque.
+    if (disabledDepth_ > 0u)
+    {
+        item_.hovered = false;
+        return false;
+    }
+    if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
+    {
+        item_.hovered = false;
+        return false;
+    }
     const bool hovered = pointerOver(intersect(rect, clip));
     if (hovered)
         hotWidget_ = id;
+    item_.hovered = hovered;
     return hovered;
 }
 
 bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable)
 {
+    // Pode ser o único teste do item (o invisibleButton): o estado dele é
+    // limpo aqui também, não só no itemHovered.
+    item_.id = id;
+    item_.bounds = rect;
+    item_.clicked = false;
+    item_.edited = false;
+    item_.focused = focusedWidget_ == id;
+    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+    // Antes do registerFocusable: uma widget desativada também não entra na ordem
+    // do foco.
+    if (disabledDepth_ > 0u || tooltipOpen_)
+        return false;
     if (focusable)
         registerFocusable(id);
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
@@ -7475,7 +9057,24 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     const bool clicked = releasedHere && activeWidget_ == id;
     if (pointer_.released[left] && activeWidget_ == id)
         activeWidget_ = InvalidWidgetId;
-    return clicked || (focusedWidget_ == id && enterPressed_);
+    // O Enter sobre o item com foco também é um clique, para quem o perguntar.
+    const bool activated = clicked || (focusedWidget_ == id && enterPressed_);
+    item_.clicked = activated;
+    item_.active = activeWidget_ == id;
+    item_.focused = focusedWidget_ == id;
+    return activated;
+}
+
+void Context::keepItemStatus(const ItemStatus &primary, const Rect &bounds)
+{
+    item_.id = primary.id;
+    item_.bounds = bounds;
+    item_.hovered = primary.hovered || item_.hovered;
+    item_.active = primary.active || item_.active;
+    item_.clicked = primary.clicked || item_.clicked;
+    item_.edited = primary.edited || item_.edited;
+    item_.focused = primary.focused || item_.focused;
+    item_.disabled = primary.disabled;
 }
 
 void Context::registerFocusable(WidgetId id)
@@ -7526,11 +9125,23 @@ void Context::advanceFocus()
 }
 
 bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                          float &value, float minimum, float maximum)
+                          float &value, float minimum, float maximum, bool vertical)
 {
-    if (rect.width <= 0.0f || maximum <= minimum)
+    if (rect.width <= 0.0f || rect.height <= 0.0f || maximum <= minimum)
         return false;
+    // O item atualiza-se à mão: este caminho não passa pelo itemClicked (faz o
+    // teste do ponteiro ele mesmo), e sem isto isItemActive/isItemClicked
+    // ficavam com o que o item anterior tinha deixado.
+    item_.id = id;
+    item_.bounds = rect;
+    item_.clicked = false;
+    item_.edited = false;
+    item_.focused = focusedWidget_ == id;
+    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+    item_.active = activeWidget_ == id;
     registerFocusable(id);
+    if (disabledDepth_ > 0u || tooltipOpen_)
+        return false;
     if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
         return false;
 
@@ -7540,18 +9151,30 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     {
         activeWidget_ = id;
         focusedWidget_ = id;
+        item_.active = true;
+        item_.focused = true;
     }
 
     bool changed = false;
     if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left]))
     {
-        const float normalized = clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f);
+        // Vertical: o valor cresce para cima, por isso o topo do rect é o máximo.
+        const float normalized =
+            vertical ? clamp((rect.y + rect.height - pointer_.position.y) / rect.height, 0.0f, 1.0f)
+                     : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f);
         const float nextValue = minimum + (maximum - minimum) * normalized;
         changed = nextValue != value;
         value = nextValue;
     }
     if (pointer_.released[left] && activeWidget_ == id)
+    {
+        // Como no itemClicked: largar dentro do widget é um clique.
+        item_.clicked = contains(intersect(rect, clip), pointer_.releasedPosition[left]);
         activeWidget_ = InvalidWidgetId;
+    }
+    item_.active = activeWidget_ == id;
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
@@ -7710,6 +9333,8 @@ bool Context::fader(StringView idText, float &value, float minimum, float maximu
     drawList->addRectFilled(vertical ? Rect(cap.x + 3.0f, capCentre - 1.0f, cap.width - 6.0f, 2.0f)
                                      : Rect(capCentre - 1.0f, cap.y + 3.0f, 2.0f, cap.height - 6.0f),
                             capLine, clip);
+    if (changed)
+        item_.edited = true;
     return changed;
 }
 
