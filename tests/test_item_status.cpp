@@ -3020,6 +3020,119 @@ void test_table_frozen_rows_stay_put()
     assert(rowY[1] < rowY[0] + step);
 }
 
+// O TreeStyle do treeNode e do collapsingHeader: o bullet (um ponto em vez da
+// seta, que é o ImGuiTreeNodeFlags_Bullet do demo), a linha desenhada como
+// escolhida, só a seta a abrir e a linha a apanhar o rato em toda a largura que tem.
+void test_tree_style()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool expanded = false;
+    bool toggled = false;
+    ig::Rect bulletRect;
+    ig::Rect plainRect;
+    ig::Rect wideRect;
+    ig::Rect arrowOnlyRect;
+    ig::Rect selectedRect;
+    ig::Rect bulletHeaderRect;
+    bool arrowToggled = false;
+
+    ig::TreeStyle bullet;
+    bullet.bullet = true;
+    ig::TreeStyle selected;
+    selected.selected = true;
+    ig::TreeStyle wide;
+    wide.spanAvailWidth = true;
+    ig::TreeStyle arrowOnly;
+    arrowOnly.openOnArrow = true;
+
+    // Estes rects são no espaço do conteúdo da janela (o mesmo do layoutCursor);
+    // aqui são submetidos pelas coordenadas, um por linha, para o itemRect de cada
+    // um ser o que a widget desenhou.
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("arvore", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)));
+        c.treeNode("bullet", expanded, bullet, ig::Rect(0.0f, 0.0f, 120.0f, 20.0f));
+        bulletRect = c.itemRect();
+        toggled = toggled || c.isItemToggledOpen();
+        c.treeNode("simples", expanded, ig::Rect(0.0f, 30.0f, 120.0f, 20.0f));
+        plainRect = c.itemRect();
+        c.treeNode("larga", expanded, wide, ig::Rect(0.0f, 60.0f, 120.0f, 20.0f));
+        wideRect = c.itemRect();
+        c.collapsingHeader("seta", expanded, arrowOnly, ig::Rect(0.0f, 90.0f, 120.0f, 20.0f));
+        arrowOnlyRect = c.itemRect();
+        arrowToggled = c.isItemToggledOpen();
+        c.collapsingHeader("escolhida", expanded, selected, ig::Rect(0.0f, 120.0f, 120.0f, 20.0f));
+        selectedRect = c.itemRect();
+        c.collapsingHeader("cabecalho com bullet", expanded, bullet, ig::Rect(0.0f, 150.0f, 120.0f, 20.0f));
+        bulletHeaderRect = c.itemRect();
+        c.endWindow();
+    };
+
+    const ig::DrawData &frame = harness.frame(build);
+    assert(bulletRect.width == 120.0f);
+    assert(bulletHeaderRect.width == 120.0f);
+    // O spanAvailWidth faz o item apanhar toda a largura que sobra, não só a que lhe
+    // foi dada (é o que faz uma linha de árvore responder ao rato em todo o lado).
+    assert(wideRect.width > 120.0f);
+    // A janela vai de 0 a 300 e a linha começa na margem de dentro dela.
+    assert(wideRect.width == 300.0f - context.theme().windowPadding - wideRect.x);
+
+    // A linha escolhida é desenhada com a cor do escolhido e as outras não.
+    int selectedVertices = 0;
+    int plainVertices = 0;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < frame.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = frame.vertices[i];
+        if (vertex.color != context.theme().selectableSelected)
+            continue;
+        if (vertex.position.x >= selectedRect.x && vertex.position.x <= selectedRect.x + selectedRect.width &&
+            vertex.position.y >= selectedRect.y && vertex.position.y <= selectedRect.y + selectedRect.height)
+            ++selectedVertices;
+        if (vertex.position.x >= plainRect.x && vertex.position.x <= plainRect.x + plainRect.width &&
+            vertex.position.y >= plainRect.y && vertex.position.y <= plainRect.y + plainRect.height)
+            ++plainVertices;
+    }
+    assert(selectedVertices > 0);
+    assert(plainVertices == 0);
+
+    // O bullet abre e fecha a linha com o clique (a marca é outra, o comportamento
+    // é o do treeNode).
+    const float cx = bulletRect.x + bulletRect.width * 0.5f;
+    const float cy = bulletRect.y + bulletRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(cx, cy));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, cx, cy));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, cx, cy));
+    harness.frame(build);
+    assert(toggled);
+    assert(expanded);
+
+    // Com o openOnArrow, carregar no rótulo não abre a linha: só a seta abre.
+    expanded = false;
+    toggled = false;
+    const float labelX = arrowOnlyRect.x + arrowOnlyRect.width * 0.7f;
+    const float labelY = arrowOnlyRect.y + arrowOnlyRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(labelX, labelY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, labelX, labelY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, labelX, labelY));
+    harness.frame(build);
+    assert(!expanded);
+    assert(!arrowToggled);
+
+    // E na seta abre.
+    const float arrowX = arrowOnlyRect.x + 6.0f;
+    context.pushEvent(ig::Event::pointerMove(arrowX, labelY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, arrowX, labelY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, arrowX, labelY));
+    harness.frame(build);
+    assert(expanded);
+    assert(arrowToggled);
+}
+
 } // namespace
 
 int main()
@@ -3066,6 +3179,7 @@ int main()
     test_reordered_table_columns_are_model_columns();
     test_table_scrolls_its_own_rows();
     test_table_frozen_rows_stay_put();
+    test_tree_style();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

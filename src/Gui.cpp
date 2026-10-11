@@ -1886,7 +1886,7 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
 
 bool Context::collapsingHeader(StringView labelText, bool &expanded, const Rect &bounds)
 {
-    return collapsingHeaderImpl(labelText, expanded, nullptr, bounds);
+    return collapsingHeaderImpl(labelText, expanded, nullptr, bounds, TreeStyle());
 }
 
 bool Context::collapsingHeader(StringView labelText, bool &expanded, bool &open, const Rect &bounds)
@@ -1894,22 +1894,31 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, bool &open,
     // Como o p_open do ImGui: com o header fechado não há nada para desenhar.
     if (!open)
         return false;
-    return collapsingHeaderImpl(labelText, expanded, &open, bounds);
+    return collapsingHeaderImpl(labelText, expanded, &open, bounds, TreeStyle());
+}
+
+bool Context::collapsingHeader(StringView labelText, bool &expanded, const TreeStyle &style,
+                               const Rect &bounds)
+{
+    return collapsingHeaderImpl(labelText, expanded, nullptr, bounds, style);
 }
 
 bool Context::collapsingHeaderImpl(StringView labelText, bool &expanded, bool *open,
-                                   const Rect &bounds)
+                                   const Rect &bounds, const TreeStyle &style)
 {
     WindowState *window = currentWindow();
     if (!window)
         return false;
 
     const WidgetId id = makeWidgetId(labelText);
-    const Rect rect = contentRect(bounds);
+    Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
+    // Uma linha que enche a largura (SpanAvailWidth) leva o rato em toda ela.
+    if (style.spanAvailWidth)
+        rect.width = availableWidth();
 
     const StringView text = visibleLabel(labelText);
     // O botão de fecho tem id próprio: fechar não pode ser o mesmo clique que
@@ -1926,28 +1935,50 @@ bool Context::collapsingHeaderImpl(StringView labelText, bool &expanded, bool *o
         return false;
     }
 
+    const float arrowSize = rect.height * 0.22f;
+    const float arrowX = rect.x + theme_.windowPadding;
+    const float arrowY = rect.y + rect.height * 0.5f;
+    // Só a seta abre e fecha quando o estilo o pede: a carregada na seta é um item
+    // próprio, e o resto da linha é outro.
+    const Rect arrowRect(arrowX - arrowSize * 0.5f, rect.y,
+                         arrowSize * 2.0f, rect.height);
+    const WidgetId arrowId = combineIds(id, 0x545245454152524full);
+    // Com o openOnArrow a seta é um item próprio: só ela abre e fecha, e o clique
+    // no rótulo fica a ser o clique da linha (é o que um treeItem já faz).
+    const bool arrowClicked = style.openOnArrow && itemClicked(arrowRect, clip, arrowId, false);
     const bool hovered = itemHovered(rect, clip, id);
-    if (itemClicked(rect, clip, id))
+    const bool rowClicked = itemClicked(rect, clip, id);
+    if (arrowClicked)
+        item_.clicked = true;
+    const bool toggled = arrowClicked || (rowClicked && !style.openOnArrow);
+    if (toggled)
     {
         expanded = !expanded;
         item_.edited = true;
         item_.toggledOpen = true;
     }
 
-    drawList->addRectFilledRounded(rect, theme_.borderRadius,
-                                   hovered ? theme_.buttonHovered : theme_.collapsibleHeaderBg, clip);
-    const float arrowSize = rect.height * 0.22f;
-    const float arrowX = rect.x + theme_.windowPadding;
-    const float arrowY = rect.y + rect.height * 0.5f;
-    const Vec2 arrow[] = {
-        expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
-                 : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
-        expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
-                 : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
-        expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
-                 : Vec2(arrowX + arrowSize * 0.75f, arrowY)
-    };
-    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+    const Color background = style.selected ? theme_.selectableSelected
+                                            : (hovered ? theme_.buttonHovered
+                                                       : theme_.collapsibleHeaderBg);
+    drawList->addRectFilledRounded(rect, theme_.borderRadius, background, clip);
+    if (style.bullet)
+    {
+        drawList->addCircleFilled(Vec2(arrowX + arrowSize * 0.5f, arrowY), arrowSize * 0.4f,
+                                  theme_.menuSubmenuArrow, clip);
+    }
+    else
+    {
+        const Vec2 arrow[] = {
+            expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
+            expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
+            expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
+                     : Vec2(arrowX + arrowSize * 0.75f, arrowY)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+    }
 
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     // Com botão de fecho, o título tem de parar antes dele.
@@ -1976,40 +2007,68 @@ bool Context::collapsingHeaderImpl(StringView labelText, bool &expanded, bool *o
 
 bool Context::treeNode(StringView labelText, bool &expanded, const Rect &bounds)
 {
+    return treeNode(labelText, expanded, TreeStyle(), bounds);
+}
+
+bool Context::treeNode(StringView labelText, bool &expanded, const TreeStyle &style,
+                       const Rect &bounds)
+{
     WindowState *window = currentWindow();
     if (!window)
         return false;
 
     const WidgetId id = makeWidgetId(labelText);
-    const Rect rect = contentRect(bounds);
+    Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
+    if (style.spanAvailWidth)
+        rect.width = availableWidth();
 
-    const StringView text = visibleLabel(labelText);
+    const float arrowSize = rect.height * 0.20f;
+    const float arrowX = rect.x + theme_.windowPadding * 0.75f;
+    const float arrowY = rect.y + rect.height * 0.5f;
+    const Rect arrowRect(arrowX - arrowSize * 0.5f, rect.y, arrowSize * 2.0f, rect.height);
+    const WidgetId arrowId = combineIds(id, 0x545245454152524full);
+    const bool arrowClicked = style.openOnArrow && itemClicked(arrowRect, clip, arrowId, false);
     const bool hovered = itemHovered(rect, clip, id);
-    if (itemClicked(rect, clip, id))
+    const bool rowClicked = itemClicked(rect, clip, id);
+    if (arrowClicked)
+        item_.clicked = true;
+    const bool toggled = arrowClicked || (rowClicked && !style.openOnArrow);
+    if (toggled)
     {
         expanded = !expanded;
         item_.edited = true;
         item_.toggledOpen = true;
     }
 
-    if (hovered)
+    if (style.selected)
+        drawList->addRectFilledRounded(rect, theme_.borderRadius, theme_.selectableSelected, clip);
+    else if (hovered)
         drawList->addRectFilled(rect, theme_.buttonHovered, clip);
-    const float arrowSize = rect.height * 0.20f;
-    const float arrowX = rect.x + theme_.windowPadding * 0.75f;
-    const float arrowY = rect.y + rect.height * 0.5f;
-    const Vec2 arrow[] = {
-        expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
-                 : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
-        expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
-                 : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
-        expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
-                 : Vec2(arrowX + arrowSize * 0.75f, arrowY)
-    };
-    drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+
+    const StringView text = visibleLabel(labelText);
+    if (style.bullet)
+    {
+        // Um nó de bullet não tem seta: a marca é o ponto, aberto ou fechado (é o
+        // ImGuiTreeNodeFlags_Bullet do demo), e a linha abre e fecha na mesma.
+        drawList->addCircleFilled(Vec2(arrowX + arrowSize * 0.5f, arrowY), arrowSize * 0.4f,
+                                  theme_.menuSubmenuArrow, clip);
+    }
+    else
+    {
+        const Vec2 arrow[] = {
+            expanded ? Vec2(arrowX, arrowY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, arrowY - arrowSize),
+            expanded ? Vec2(arrowX + arrowSize, arrowY - arrowSize * 0.5f)
+                     : Vec2(arrowX - arrowSize * 0.25f, arrowY + arrowSize),
+            expanded ? Vec2(arrowX + arrowSize * 0.5f, arrowY + arrowSize * 0.5f)
+                     : Vec2(arrowX + arrowSize * 0.75f, arrowY)
+        };
+        drawList->addPolygonFilled(Span<const Vec2>(arrow), theme_.menuSubmenuArrow, clip);
+    }
 
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     drawText(*drawList, theme_.font, text,
@@ -6968,6 +7027,30 @@ bool Context::collapsingHeader(StringView labelText, bool &expanded, bool &openS
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool open = collapsingHeader(labelText, expanded, openState,
+                                       Rect(bounds.x - layout_.origin.x,
+                                            bounds.y - layout_.origin.y,
+                                            bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return open;
+}
+
+bool Context::treeNode(StringView labelText, bool &expanded, const TreeStyle &style, float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool open = treeNode(labelText, expanded, style,
+                               Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
+                                    bounds.width, bounds.height));
+    advanceLayout(bounds);
+    return open;
+}
+
+bool Context::collapsingHeader(StringView labelText, bool &expanded, const TreeStyle &style,
+                               float width)
+{
+    const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
+    const bool open = collapsingHeader(labelText, expanded, style,
                                        Rect(bounds.x - layout_.origin.x,
                                             bounds.y - layout_.origin.y,
                                             bounds.width, bounds.height));

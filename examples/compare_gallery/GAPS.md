@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **38 lacunas** contra 248 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 247 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -49,7 +49,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `LabelText` | `label` + `sameLine` + `label` | parcial: não é um item próprio |
 | `TextDisabled` | `textDisabled` (usa `theme.textDisabled`) | existe |
 | `TextWrapped` / `PushTextWrapPos` | `textWrapped` (largura opcional) | parcial: sem stack de wrap positions |
-| `Bullet` / `BulletText` | `bulletText` (com wrap, o segundo alinha sob o primeiro) | existe |
+| `Bullet` / `BulletText` | `bulletText` (com wrap, o segundo alinha sob o primeiro) e `TreeStyle::bullet` no `treeNode`/`collapsingHeader` | existe (o bullet de um nó de árvore é o ponto em vez da seta, e a linha abre e fecha na mesma) |
 | `SeparatorText` | `separatorText` | existe |
 | `SetTooltip` | `tooltip` | existe |
 
@@ -121,11 +121,11 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `TreeNode` | `treeNode` | existe |
-| `TreeNodeEx` com flags (`Selected`, `DefaultOpen`, `OpenOnArrow`, `SpanAvailWidth`, `SpanFullWidth`, `Framed`, `Leaf`, `Bullet`, `NavLeftJumpsToParent`) | `treeItem` com `TreeItemStyle` (selected, leaf, typeColor) | parcial: sem framed, bullet nem span |
+| `TreeNodeEx` com flags (`Selected`, `DefaultOpen`, `OpenOnArrow`, `SpanAvailWidth`, `SpanFullWidth`, `Framed`, `Leaf`, `Bullet`, `NavLeftJumpsToParent`) | `TreeStyle` (bullet, selected, openOnArrow, spanAvailWidth) no `treeNode`/`collapsingHeader`, `TreeItemStyle` no `treeItem` | parcial: o `bullet`, o `selected`, o `openOnArrow` e o `spanAvailWidth` existem; não há `framed`, `spanFullWidth` nem `navLeftJumpsToParent`, e o `defaultOpen` não se aplica (o estado de aberto/fechado é da aplicação) |
 | `TreePush`/`TreePop`, `Indent`/`Unindent` | `indent`/`unindent` | existe |
 | `CollapsingHeader` | `collapsingHeader` | existe |
 | `CollapsingHeader` com botão de fecho (`bool* p_open`) | `collapsingHeader(label, expanded, open)` | existe (o x fecha-o e o header deixa de ser desenhado) |
-| `CollapsingHeader` com bullet / closable group | — | **não existe** |
+| `CollapsingHeader` com bullet | `collapsingHeader(label, expanded, TreeStyle)` | existe (e o grupo que se fecha sozinho faz-se com o `bool &open` de sempre) |
 | `BeginTabBar`/`BeginTabItem` | `tabBar` | parcial: o `tabBar` é uma faixa com índice, não abre e fecha conteúdo com id próprio |
 | Flags de tab (`Fitting`, `AutoSelectNewTabs`, `TabListPopup`, `TabListButton`, `NoCloseWithMiddleMouseButton`, `NoReorder`) | — | **não existe** |
 | Tab com botão de fechar / `ImGuiTabItemFlags_SetSelected`, `UnsavedDocument` | — | **não existe** |
@@ -397,9 +397,16 @@ Feito nesta ronda (já no `main`, com testes em `tests/test_widgets.cpp`):
 
 Continua em falta neste nível:
 
-- [ ] **Bullet nos headers.** `treeNode` com um modo bullet
-      (`ImGuiTreeNodeFlags_Bullet`/`SpanAvailWidth`), que partilha o indent com o
-      `bulletText`.
+- [x] **Bullet nos headers e os flags do TreeNodeEx** (`TreeStyle` no `treeNode` e
+      no `collapsingHeader`): `bullet` (um ponto em vez da seta, aberto ou fechado, e
+      a linha abre e fecha na mesma), `selected` (a linha sai com a cor do
+      escolhido), `openOnArrow` (só a seta abre - o clique no rótulo fica a ser o
+      clique da linha, como no `treeItem`) e `spanAvailWidth` (o item apanha toda a
+      largura que sobra, em vez de só a que lhe foi dada). O `defaultOpen` não se
+      aplica: como no resto de modo imediato do iGUI, o estado de aberto/fechado é o
+      `bool` da aplicação.
+      *Onde:* `src/Gui.cpp` (`treeNode`, `collapsingHeaderImpl`), `include/igui/Gui.hpp`
+      (`TreeStyle`), `tests/test_item_status.cpp` (`test_tree_style`).
       *Onde:* `src/Gui.cpp` (`treeNode`/`treeItem`), `include/igui/Gui.hpp`.
 - [x] **Convenção `##` nos rótulos.** "Gravar##ficheiro" desenha "Gravar" mas o
       id é a string toda, e "##só-id" não desenha nada: é o que deixa dois widgets
