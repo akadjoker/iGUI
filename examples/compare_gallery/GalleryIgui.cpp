@@ -1636,6 +1636,10 @@ void applyDemoStyle(ig::Context &ui)
     ui.setTheme(theme);
 }
 
+// Só uma secção, no topo: é o que deixa pôr uma secção do demo lado a lado sem
+// andar à roda do rato (ver o --only do runner).
+static int g_onlySection = -1;
+
 void openAllSections()
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
@@ -1649,6 +1653,21 @@ void openAllSections()
 // deixa pôr lado a lado uma secção do demo de cada vez. Nas sub-secções de
 // "Widgets" o header de cima segue a mesma entrada de topOpen (ver draw), por
 // isso o "Widgets" abre com ela.
+bool setOnlySection(const char *name)
+{
+    for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
+    {
+        const gallery::Section section = static_cast<gallery::Section>(i);
+        if (strcmp(gallery::sectionName(section), name) != 0)
+            continue;
+        g_onlySection = i;
+        g_panel.topOpen[i] = true;
+        g_panel.subOpen[i] = true;
+        return true;
+    }
+    return false;
+}
+
 bool openSection(const char *name)
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
@@ -1769,12 +1788,30 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
 
     if (ui.beginChild("demo", ui.availableHeight(), false))
     {
+        gallery::State &s = g_panel.shared;
+        const gallery::Section *list = gallery::sections();
+        // Com o --only desenha-se só a secção pedida, e sem o header dela: é uma
+        // secção sozinha no topo, para comparar com o lado do ImGui.
+        if (g_onlySection >= 0)
+        {
+            for (int i = 0; i < gallery::sectionCount(); ++i)
+            {
+                if (static_cast<int>(list[i]) == g_onlySection)
+                {
+                    section(ui, list[i], s);
+                    break;
+                }
+            }
+            ui.endChild();
+            ui.endWindow();
+            stats.items = g_panel.widgets;
+            stats.gaps = gallery::gapCount();
+            return stats;
+        }
         // A primeira linha do ShowDemoWindow, fora das secções (é o Text com a
         // versão do ImGui que está a ser espelhada).
         ui.label(ig::StringView(gallery::gHelloLine));
         item();
-        gallery::State &s = g_panel.shared;
-        const gallery::Section *list = gallery::sections();
         bool widgetsOpen = false;
         for (int i = 0; i < gallery::sectionCount(); ++i)
         {

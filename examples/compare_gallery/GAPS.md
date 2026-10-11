@@ -21,8 +21,10 @@ fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria
 dois lados: na revisão atual são **37 lacunas** contra 255 itens submetidos pelo
 espelho.
 
-Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
-secção aberta à mão do lado do ImGui - o `--open=NOME` abre só essa
+Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
+`--only=NOME` desenha **só** essa secção, no topo e sem o header dela
+(`--only=Combo`, `--only="Tables & Columns"`, `--only=Tabs`), que é o que dispensa
+andar à roda à procura dela; o `--open=NOME` abre só essa com as outras por cima
 (`--open=Combo`, `--open="Tables & Columns"`), e o `--click=X,Y` carrega uma vez no
 painel do iGUI nesse ponto, para os popups (que só abrem com rato) aparecerem numa
 captura: `--open=Combo --click=150,405 --frames=14 --screenshot=combo.png`.

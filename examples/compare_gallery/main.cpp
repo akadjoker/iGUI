@@ -27,7 +27,13 @@
 //                   [--screenshot=ficheiro.png] [--no-vsync]
 //
 // Com --frames=N corre N frames, escreve o resumo e sai; --hidden corre sem
-// janela visível. Sem --frames fica aberto até se fechar a janela.
+// janela visível. Sem --frames fica aberto até se fechar a janela - que é como se
+// testa à mão.
+//
+// Para pôr uma só secção do demo de cada vez lado a lado (sem andar à roda dentro
+// do painel) o --only=SECCAO desenha só essa, no topo e sem o header dela; o
+// --open=SECCAO (e o --open-all, para o levantamento completo) só a abre, com as
+// outras todas por cima.
 //
 // O levantamento do que o demo tem e o iGUI não exprime (e o TODO da paridade)
 // está em GAPS.md, ao lado deste ficheiro.
@@ -210,6 +216,7 @@ int main(int argc, char **argv)
     std::string screenshot;
     std::string fontPath = IGUI_GALLERY_FONT;
     std::string openSection;
+    std::string onlySection;
     bool click = false;
     float clickX = 0.0f;
     float clickY = 0.0f;
@@ -240,6 +247,8 @@ int main(int argc, char **argv)
             dump = true;
         else if (strncmp(arg, "--open=", 7) == 0)
             openSection = arg + 7;
+        else if (strncmp(arg, "--only=", 7) == 0)
+            onlySection = arg + 7;
         else if (parseClick(arg, clickX, clickY))
             click = true;
         else if (strncmp(arg, "--wheel=", 8) == 0)
@@ -354,6 +363,11 @@ int main(int argc, char **argv)
     igui_gallery::reset();
     if (openAll)
         igui_gallery::openAllSections();
+    if (!onlySection.empty() && !igui_gallery::setOnlySection(onlySection.c_str()))
+    {
+        fprintf(stderr, "seccao desconhecida: %s\n", onlySection.c_str());
+        return 1;
+    }
     if (!openSection.empty() && !igui_gallery::openSection(openSection.c_str()))
     {
         fprintf(stderr, "seccao desconhecida: %s\n", openSection.c_str());

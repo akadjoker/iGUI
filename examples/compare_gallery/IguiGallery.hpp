@@ -33,4 +33,8 @@ void openAllSections();
 // Abre uma secção pelo nome, para pôr uma só lado a lado (é o que o --open faz).
 bool openSection(const char *name);
 
+// Desenha só essa secção, no topo e sem o header dela (é o que o --only faz): a
+// comparação de uma secção de cada vez sem andar à roda dentro do painel.
+bool setOnlySection(const char *name);
+
 } // namespace igui_gallery
