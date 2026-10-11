@@ -1460,7 +1460,10 @@ void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
 void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
 {
     (void)s;
-    if (ui.button("Open popup"))
+    // Uma caixa com conteudo livre: o beginDialog do iGUI. É um modal (tem um véu
+    // por trás), por isso tem o nome do que é - um popup é o "Select.." e os "Popup
+    // 1/2" aqui em baixo, que não escurecem nada.
+    if (ui.button("Open dialog"))
         g_panel.dialogOpen = true;
     item();
     if (g_panel.dialogOpen)
