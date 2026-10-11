@@ -1224,8 +1224,9 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
             ui.menuItem("(demo)");
             ui.menuSeparator();
             ui.menuItem("New");
-            ui.menuItem("Open (Ctrl+O)");
-            ui.menuItem("Quit");
+            // Os mesmos atalhos do demo, agora desenhados pelo menuItem.
+            ui.menuItem("Open", ig::StringView("Ctrl+O"));
+            ui.menuItem("Quit", ig::StringView("Alt+F4"));
             ui.endMenu();
         }
         if (ui.beginMenu("Examples"))

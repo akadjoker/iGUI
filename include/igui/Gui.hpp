@@ -500,6 +500,11 @@ public:
     bool beginMenu(StringView label);
     void endMenu();
     bool menuItem(StringView label, bool enabled = true);
+    // Um item com o atalho desenhado à direita, como o MenuItem(label, shortcut)
+    // do ImGui ("Undo", "Ctrl+Z"). O atalho é texto: quem o trata é a aplicação.
+    // selected desenha a marca de escolhido, para os itens que fazem de caixa.
+    bool menuItem(StringView label, StringView shortcut, bool enabled = true,
+                  bool selected = false);
     // Checkable menu entry. Returns true when its value changed.
     bool menuCheckbox(StringView label, bool &checked, bool enabled = true);
     // One-level submenu, opened by hover or click. End it before ending its parent menu.
@@ -1698,7 +1703,8 @@ private:
     float tableRowSpacing() const;
     void drawTableRowStyle();
     bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
-    bool menuItemInternal(StringView label, bool enabled, bool *checked);
+    bool menuItemInternal(StringView label, bool enabled, bool *checked,
+                          StringView shortcut = StringView());
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);
     // fontSize is the editor's effective size (theme_.fontSize * the
