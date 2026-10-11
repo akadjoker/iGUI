@@ -9144,6 +9144,9 @@ bool Context::beginTable(StringView idText, int columns, float width)
         return false;
     table_.parentLayout = layout_;
     table_.bounds = Rect(layout_.cursor.x, layout_.cursor.y, resolvedWidth, 0.0f);
+    // A largura das colunas é a da faixa que rola: sem rolagem horizontal é a da
+    // tabela (o beginTableScroll sobe-a para a innerWidth quando o style a pede).
+    table_.contentWidth = resolvedWidth;
     const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     table_.id = combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull));
     table_.columns = columns;
@@ -9284,7 +9287,17 @@ void Context::beginTableScroll(const TableStyle &style)
     table_.offsetY = 0.0f;
     table_.contentY = 0.0f;
     table_.frozenHeight = 0.0f;
-    if (!style.scrollY || style.height <= 0.0f)
+    table_.scrollX = false;
+    table_.offsetX = 0.0f;
+    table_.pinWidth = 0.0f;
+    table_.barStripH = 0.0f;
+    table_.freezeCols = 0;
+    // Sem rolagem horizontal as colunas vivem da largura da tabela (é o que o
+    // beginTable deixou); com ela, da largura que o chamador pediu.
+    table_.contentWidth = table_.bounds.width;
+    const bool wantsY = style.scrollY && style.height > 0.0f;
+    const bool wantsX = style.scrollX && style.innerWidth > table_.bounds.width;
+    if (!wantsY && !wantsX)
         return;
     TableScrollState *scroll = tableScrolls_.find(table_.id);
     if (!scroll)
@@ -9294,39 +9307,123 @@ void Context::beginTableScroll(const TableStyle &style)
         if (!scroll)
             return;
     }
-    table_.scrollY = true;
-    table_.freezeRows = style.freezeRows >= 0 ? style.freezeRows : 1;
-    table_.viewHeight = style.height;
-    // A altura do que rola é a da tabela menos as linhas presas, e o que sobra do
-    // conteúdo (medido no frame anterior) diz se há barra - e a barra tira largura às
-    // colunas, como num child.
-    const float scrolledHeight = style.height - scroll->frozenHeight;
-    const float maximumScroll = scroll->contentHeight > scrolledHeight
-        ? scroll->contentHeight - scrolledHeight : 0.0f;
-    const float barWidth = theme_.scrollbarWidth * 0.65f;
-    const bool hasBar = maximumScroll > 0.0f;
-    // A barra tira largura às colunas, mas a faixa que rola continua a ser a caixa
-    // toda: a barra é desenhada no espaço que sobra do lado direito.
-    if (hasBar)
+
+    // ── O eixo X: as colunas são a largura pedida (innerWidth) e o que não couber
+    // rola dentro da tabela, com as primeiras freezeCols presas à esquerda.
+    if (wantsX)
     {
-        table_.barStrip = barWidth + theme_.padding * 0.5f;
-        table_.bounds.width -= table_.barStrip;
+        table_.scrollX = true;
+        table_.contentWidth = style.innerWidth;
+        table_.freezeCols = style.freezeCols > 0 ? style.freezeCols : 0;
+        if (table_.freezeCols > table_.columns)
+            table_.freezeCols = table_.columns;
+        for (int i = 0; i < table_.freezeCols; ++i)
+            table_.pinWidth += tableColumnWidth(i);
     }
-    // A roda e o arrasto da barra são tratados antes das linhas, com a medida do
-    // frame anterior (é o mesmo que um child faz: ver beginChild).
-    if (hasBar)
+
+    // ── O eixo Y: a tabela tem uma altura fixa e as linhas rolam dentro dela, com as
+    // primeiras freezeRows presas no topo (a linha 0 é o cabeçalho).
+    float maximumScroll = 0.0f;
+    if (wantsY)
     {
-        const float barX = table_.bounds.x + table_.bounds.width + theme_.padding * 0.5f;
-        const Rect bar(barX, table_.bounds.y + scroll->frozenHeight, barWidth,
-                       scrolledHeight > theme_.scrollbarMinThumb ? scrolledHeight
-                                                                 : theme_.scrollbarMinThumb);
-        const float requestedThumb = bar.height * scrolledHeight / scroll->contentHeight;
-        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+        table_.scrollY = true;
+        table_.freezeRows = style.freezeRows >= 0 ? style.freezeRows : 1;
+        table_.viewHeight = style.height;
+        table_.bounds.height = style.height;
+        // A altura do que rola é a da tabela menos as linhas presas, e o que sobra do
+        // conteúdo (medido no frame anterior) diz se há barra - e a barra tira largura
+        // às colunas, como num child.
+        const float scrolledHeight = style.height - scroll->frozenHeight;
+        maximumScroll = scroll->contentHeight > scrolledHeight
+            ? scroll->contentHeight - scrolledHeight : 0.0f;
+        const float barWidth = theme_.scrollbarWidth * 0.65f;
+        const bool hasBar = maximumScroll > 0.0f;
+        if (hasBar)
+        {
+            table_.barStrip = barWidth + theme_.padding * 0.5f;
+            table_.bounds.width -= table_.barStrip;
+            // Sem rolagem horizontal as colunas vivem da largura que sobra da barra.
+            if (!table_.scrollX)
+                table_.contentWidth = table_.bounds.width;
+        }
+        // A roda e o arrasto da barra são tratados antes das linhas, com a medida do
+        // frame anterior (é o mesmo que um child faz: ver beginChild).
+        if (hasBar)
+        {
+            const float barX = table_.bounds.x + table_.bounds.width + theme_.padding * 0.5f;
+            const Rect bar(barX, table_.bounds.y + scroll->frozenHeight, barWidth,
+                           scrolledHeight > theme_.scrollbarMinThumb ? scrolledHeight
+                                                                     : theme_.scrollbarMinThumb);
+            const float requestedThumb = bar.height * scrolledHeight / scroll->contentHeight;
+            const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+                ? requestedThumb : theme_.scrollbarMinThumb;
+            const float travel = bar.height - thumbHeight;
+            const float thumbY = travel > 0.0f ? bar.y + travel * scroll->offsetY / maximumScroll
+                                               : bar.y;
+            const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
+            const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4cull);
+            const uint32_t left = buttonIndex(PointerButton::Left);
+            const Rect barClip = intersect(bar, contentClip());
+            if (pointerPressedIn(barClip, left) && activeWidget_ == InvalidWidgetId)
+                activeWidget_ = scrollbarId;
+            if (activeWidget_ == scrollbarId)
+            {
+                if (pointer_.down[left] && travel > 0.0f)
+                {
+                    const float normalized =
+                        clamp((pointer_.position.y - bar.y - thumb.height * 0.5f) / travel, 0.0f,
+                              1.0f);
+                    scroll->offsetY = normalized * maximumScroll;
+                }
+                if (pointer_.released[left])
+                    activeWidget_ = InvalidWidgetId;
+            }
+            DrawList *drawList = currentDrawList();
+            if (drawList)
+            {
+                drawList->addRectFilled(bar, theme_.inputBg, barClip);
+                drawList->addRectFilled(thumb, theme_.scrollbarThumb, barClip);
+            }
+        }
+        const Rect region(table_.bounds.x, table_.bounds.y,
+                          table_.bounds.width + (hasBar ? barWidth + theme_.padding * 0.5f : 0.0f),
+                          style.height);
+        const bool wheelMine = ownWheelArea(combineIds(table_.id, 0x54574845454cull), region,
+                                            static_cast<uint32_t>(childStack_.size()));
+        if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
+            pointerOver(intersect(region, contentClip())))
+        {
+            scroll->offsetY -= pointer_.wheelY * theme_.widgetHeight;
+            if (scroll->offsetY < 0.0f)
+                scroll->offsetY = 0.0f;
+            if (scroll->offsetY > maximumScroll)
+                scroll->offsetY = maximumScroll;
+            pointer_.wheelY = 0.0f;
+        }
+        table_.offsetY = scroll->offsetY;
+    }
+
+    // ── A barra de baixo (a do eixo X) e a roda horizontal. A barra encosta ao fundo
+    // da tabela quando ela tem altura própria; sem ela, cai por baixo das linhas do
+    // frame anterior (uma tabela com rolagem horizontal e sem altura própria cresce
+    // com o conteúdo).
+    if (table_.scrollX && tableMaximumOffsetX() > 0.0f)
+    {
+        const float barHeight = theme_.scrollbarWidth * 0.65f;
+        const float barY = table_.viewHeight > 0.0f ? table_.bounds.y + table_.viewHeight - barHeight
+                                                    : table_.bounds.y + scroll->rowsHeight;
+        table_.barStripH = barHeight;
+        const Rect bar(table_.bounds.x, barY, table_.bounds.width, barHeight);
+        const float maximum = tableMaximumOffsetX();
+        const float visibleWidth = table_.bounds.width - table_.pinWidth;
+        const float requestedThumb = visibleWidth * (visibleWidth / table_.contentWidth);
+        const float thumbWidth = requestedThumb > theme_.scrollbarMinThumb
             ? requestedThumb : theme_.scrollbarMinThumb;
-        const float travel = bar.height - thumbHeight;
-        const float thumbY = travel > 0.0f ? bar.y + travel * scroll->offsetY / maximumScroll : bar.y;
-        const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
-        const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4cull);
+        const float travel = bar.width - table_.pinWidth - thumbWidth;
+        const float thumbX = bar.x + table_.pinWidth +
+                             (travel > 0.0f ? travel * (scroll->offsetX / maximum) : 0.0f);
+        const Rect thumb(thumbX, bar.y, thumbWidth, bar.height);
+        const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4c58ull);
         const uint32_t left = buttonIndex(PointerButton::Left);
         const Rect barClip = intersect(bar, contentClip());
         if (pointerPressedIn(barClip, left) && activeWidget_ == InvalidWidgetId)
@@ -9335,9 +9432,9 @@ void Context::beginTableScroll(const TableStyle &style)
         {
             if (pointer_.down[left] && travel > 0.0f)
             {
-                const float normalized = clamp((pointer_.position.y - bar.y - thumb.height * 0.5f) / travel,
-                                               0.0f, 1.0f);
-                scroll->offsetY = normalized * maximumScroll;
+                const float normalized = clamp((pointer_.position.x - bar.x - table_.pinWidth -
+                                                thumb.width * 0.5f) / travel, 0.0f, 1.0f);
+                scroll->offsetX = normalized * maximum;
             }
             if (pointer_.released[left])
                 activeWidget_ = InvalidWidgetId;
@@ -9348,33 +9445,48 @@ void Context::beginTableScroll(const TableStyle &style)
             drawList->addRectFilled(bar, theme_.inputBg, barClip);
             drawList->addRectFilled(thumb, theme_.scrollbarThumb, barClip);
         }
+        // A roda horizontal (o wheelX de um trackpad) rola a tabela com o ponteiro em
+        // cima dela.
+        // A região é a da tabela; o pointerOver (e não o clip do momento) é que diz
+        // se a roda é dela - o clip da célula que está a ser submetida não vale aqui.
+        const Rect xRegion(table_.bounds.x, table_.bounds.y, table_.bounds.width,
+                           table_.viewHeight > 0.0f ? table_.viewHeight : scroll->rowsHeight);
+        if (pointer_.wheelX != 0.0f && xRegion.height > 0.0f && pointerOver(xRegion))
+        {
+            scroll->offsetX -= pointer_.wheelX * theme_.widgetHeight;
+            if (scroll->offsetX < 0.0f)
+                scroll->offsetX = 0.0f;
+            if (scroll->offsetX > maximum)
+                scroll->offsetX = maximum;
+            pointer_.wheelX = 0.0f;
+        }
     }
-    const Rect region(table_.bounds.x, table_.bounds.y,
-                      table_.bounds.width + (hasBar ? barWidth + theme_.padding * 0.5f : 0.0f),
-                      style.height);
-    const bool wheelMine = ownWheelArea(combineIds(table_.id, 0x54574845454cull), region,
-                                        static_cast<uint32_t>(childStack_.size()));
-    if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
-        pointerOver(intersect(region, contentClip())))
-    {
-        scroll->offsetY -= pointer_.wheelY * theme_.widgetHeight;
-        if (scroll->offsetY < 0.0f)
-            scroll->offsetY = 0.0f;
-        if (scroll->offsetY > maximumScroll)
-            scroll->offsetY = maximumScroll;
-        pointer_.wheelY = 0.0f;
-    }
-    table_.offsetY = scroll->offsetY;
+    table_.offsetX = scroll->offsetX;
 }
 
 Rect Context::tableRowClip() const
 {
     // O que rola é cortado por baixo das linhas presas; as presas só são cortadas
-    // pelo fundo da tabela (elas ficam por cima do que rola, que já vem depois).
+    // pelo fundo da tabela (elas ficam por cima do que rola, que já vem depois). Sem
+    // altura própria não há limite por baixo: quem manda é o clip de fora.
+    const Rect screen = popupClipRect();
     const float top = table_.row < table_.freezeRows ? table_.bounds.y
                                                      : table_.bounds.y + table_.frozenHeight;
-    const float bottom = table_.bounds.y + table_.viewHeight;
-    return Rect(table_.bounds.x, top, table_.bounds.width + table_.barStrip,
+    const float bottom = table_.scrollY
+        ? table_.bounds.y + table_.viewHeight - table_.barStripH
+        : screen.y + screen.height;
+    // Na horizontal o que rola é cortado à esquerda pelas colunas presas, e as presas
+    // são cortadas à direita por ele.
+    float left = table_.bounds.x;
+    float right = table_.bounds.x + table_.bounds.width + table_.barStrip;
+    if (table_.scrollX && table_.freezeCols > 0 && table_.column >= 0)
+    {
+        if (table_.column < table_.freezeCols)
+            right = table_.bounds.x + table_.pinWidth;
+        else
+            left = table_.bounds.x + table_.pinWidth;
+    }
+    return Rect(left, top, right > left ? right - left : 0.0f,
                 bottom > top ? bottom - top : 0.0f);
 }
 
@@ -9435,12 +9547,29 @@ int Context::tableColumnAtX(float x) const
     return -1;
 }
 
-float Context::tableColumnX(int column) const
+float Context::tableMaximumOffsetX() const
+{
+    if (!table_.scrollX)
+        return 0.0f;
+    const float visible = table_.bounds.width;
+    return table_.contentWidth > visible ? table_.contentWidth - visible : 0.0f;
+}
+
+float Context::tableNaturalColumnX(int column) const
 {
     float x = table_.bounds.x;
     for (int index = 0; index < column; ++index)
         x += tableColumnWidth(index);
     return x;
+}
+
+float Context::tableColumnX(int column) const
+{
+    const float natural = tableNaturalColumnX(column);
+    // As presas ficam onde estão; o resto anda com a rolagem.
+    if (!table_.scrollX || column < table_.freezeCols)
+        return natural;
+    return natural - table_.offsetX;
 }
 
 float Context::tableColumnWidth(int display) const
@@ -9456,11 +9585,14 @@ float Context::tableColumnWidth(int display) const
         static_cast<ct::Vector<uint8_t>::size_type>(column) < table_.columnVisible.size() &&
         table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(column)] == 0u)
         return 0.0f;
+    // A largura das colunas é a da faixa que rola (contentWidth): sem scrollX é a da
+    // tabela, com ele é a que o chamador pediu.
     if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
-        return table_.bounds.width / static_cast<float>(table_.columns);
+        return table_.contentWidth / static_cast<float>(table_.columns);
     if (display + 1 == table_.columns)
-        return table_.bounds.x + table_.bounds.width - tableColumnX(display);
-    return table_.bounds.width * table_.columnWeights[static_cast<ct::Vector<float>::size_type>(column)] /
+        return table_.bounds.x + table_.contentWidth - tableNaturalColumnX(display);
+    return table_.contentWidth *
+           table_.columnWeights[static_cast<ct::Vector<float>::size_type>(column)] /
            table_.totalColumnWeight;
 }
 
@@ -9851,6 +9983,12 @@ void Context::endTable()
         const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
         if (table_.row < table_.freezeRows)
             table_.frozenHeight += rowHeight + tableRowSpacing();
+        // A altura natural das linhas (sem rolagem) é o que a barra de baixo de uma
+        // tabela que só rola na horizontal usa para saber onde cai. O contentY já é
+        // relativo ao topo da tabela (ao contrário do rowY, que é absoluto).
+        const float rowsHeight = table_.contentY + rowHeight;
+        if (TableScrollState *scroll = tableScrolls_.find(table_.id))
+            scroll->rowsHeight = rowsHeight > 0.0f ? rowsHeight : 0.0f;
         if (table_.scrollY)
         {
             // A medida destes dois vai dizer ao próximo frame quanto é que rola e
@@ -9866,6 +10004,8 @@ void Context::endTable()
         }
         else
             height = table_.rowY + rowHeight - table_.bounds.y;
+        // A barra de baixo vive dentro da caixa da tabela (é uma faixa a mais).
+        height += table_.barStripH;
         DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
         if (drawList)
         {
@@ -11236,7 +11376,7 @@ Rect Context::contentClip() const
         clip = intersect(clip, dockPanelStack_.back().content);
     // Uma tabela que rola corta o que rola no fundo dela: os itens das linhas que
     // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
-    if (tableActive_ && table_.scrollY)
+    if (tableActive_ && (table_.scrollY || table_.scrollX))
         clip = intersect(clip, tableRowClip());
     // O conteúdo de uma tab é cortado pela barra (a largura dela e o que sobra para
     // baixo).
