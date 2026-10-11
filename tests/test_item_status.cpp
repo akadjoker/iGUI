@@ -1404,6 +1404,111 @@ void test_main_menu_bar()
     assert(opened == 1);
 }
 
+// A escolha múltipla: o clique escolhe um e desmarca os outros, o Ctrl liga/desliga
+// um sem mexer nos outros, o Shift escolhe o alcance desde o último clique, o Ctrl+A
+// escolhe tudo e o Escape limpa.
+void test_multi_select()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres"), ig::StringView("quatro")
+    };
+    bool selected[4] = {false, false, false, false};
+    ig::Rect rects[4];
+    bool itemSelected[4] = {false, false, false, false};
+    bool itemToggled[4] = {false, false, false, false};
+    unsigned flags = ig::Context::MultiSelectFlags::ClearOnEscape;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("lista", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)));
+        assert(c.beginMultiSelect(ig::Span<bool>(selected, 4), flags));
+        for (int i = 0; i < 4; ++i)
+        {
+            c.selectable(items[i], selected[i], 120.0f);
+            if (rects[i].width <= 0.0f)
+                rects[i] = c.itemRect();
+            // As consultas são do item que acabou de passar.
+            itemSelected[i] = c.isItemSelected();
+            itemToggled[i] = c.isItemToggledSelection();
+        }
+        c.endMultiSelect();
+        c.endWindow();
+    };
+
+    auto clickItem = [&](int index, bool control, bool shift) {
+        const float x = rects[index].x + rects[index].width * 0.5f;
+        const float y = rects[index].y + rects[index].height * 0.5f;
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y, control, shift));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y, control, shift));
+        harness.frame(build);
+    };
+
+    harness.frame(build);
+    for (int i = 0; i < 4; ++i)
+        assert(rects[i].width > 0.0f);
+    assert(!selected[0] && !selected[1] && !selected[2] && !selected[3]);
+
+    // Um clique sem teclas: este e mais nenhum.
+    clickItem(1, false, false);
+    assert(!selected[0] && selected[1] && !selected[2] && !selected[3]);
+    assert(itemSelected[1]);
+    assert(itemToggled[1]);
+    assert(!itemToggled[0]);
+
+    // Ctrl: liga outro sem mexer no que estava.
+    clickItem(3, true, false);
+    assert(selected[1] && selected[3] && !selected[0] && !selected[2]);
+    assert(itemSelected[3]);
+    // E outra vez no mesmo desliga-o.
+    clickItem(3, true, false);
+    assert(!selected[3] && selected[1]);
+
+    // Shift: limpa e escolhe o alcance desde o item do último clique (o 3, e só ele).
+    clickItem(3, false, true);
+    assert(!selected[0] && !selected[1] && !selected[2] && selected[3]);
+
+    // Com o item do último clique escolhido, o alcance é o que fica entre ele e este.
+    clickItem(0, false, false);
+    clickItem(2, false, true);
+    assert(selected[0] && selected[1] && selected[2] && !selected[3]);
+
+    // Com Ctrl o alcance copia o estado desse item: um item do alcance desligado
+    // desliga o alcance todo, em vez de o escolher.
+    clickItem(2, true, false);
+    assert(!selected[2] && selected[1]);
+    clickItem(0, true, true);
+    assert(!selected[0] && !selected[1] && !selected[2] && !selected[3]);
+
+    // Ctrl+A escolhe tudo e o Escape limpa.
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::A, true));
+    harness.frame(build);
+    assert(selected[0] && selected[1] && selected[2] && selected[3]);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    assert(!selected[0] && !selected[1] && !selected[2] && !selected[3]);
+
+    // Um item de cada vez: o Ctrl e o Shift deixam de acrescentar.
+    flags = ig::Context::MultiSelectFlags::SingleSelect |
+            ig::Context::MultiSelectFlags::ClearOnEscape;
+    clickItem(0, false, false);
+    assert(selected[0] && !selected[1]);
+    clickItem(2, true, false);
+    assert(!selected[0] && selected[2] && !selected[1] && !selected[3]);
+    clickItem(0, false, true);
+    assert(selected[0] && !selected[2]);
+
+    // Sem alcance: o Shift é um clique como os outros.
+    flags = ig::Context::MultiSelectFlags::NoRangeSelect;
+    clickItem(1, false, false);
+    clickItem(3, false, true);
+    assert(!selected[1] && selected[3]);
+}
+
 } // namespace
 
 int main()
@@ -1431,6 +1536,7 @@ int main()
     test_begin_combo_takes_free_content();
     test_begin_combo_popup_owns_the_pointer_and_grows();
     test_main_menu_bar();
+    test_multi_select();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

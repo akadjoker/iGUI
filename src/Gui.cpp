@@ -658,7 +658,8 @@ void colorToHsv(const Color &color, float &hue, float &saturation, float &value)
 } // namespace
 
 Context::PointerState::PointerState()
-    : position(), wheelX(0.0f), wheelY(0.0f), wheelControl(false)
+    : position(), wheelX(0.0f), wheelY(0.0f), wheelControl(false), pressedControl(),
+      pressedShift()
 {
     for (uint32_t i = 0; i < 3u; ++i)
     {
@@ -667,6 +668,8 @@ Context::PointerState::PointerState()
         down[i] = false;
         pressed[i] = false;
         released[i] = false;
+        pressedControl[i] = false;
+        pressedShift[i] = false;
     }
 }
 
@@ -688,7 +691,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
       comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
-      comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
+      comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(), multiSelect_(),
       comboAdvanceHeader_(false),
       activeModalFrame_(0), openMenuFrame_(0), openComboFrame_(0),
       activeModal_(InvalidWidgetId), modalWindowId_(InvalidWidgetId), dragWidget_(InvalidWidgetId), activeDockSpace_(InvalidWidgetId),
@@ -801,6 +804,10 @@ void Context::beginFrame(const FrameInfo &frame)
     // imediato: quem não a submeter deixou de a ter.
     mainMenuBarWindow_ = WindowHandle();
     mainMenuBarOpen_ = false;
+    // Um bloco de escolha múltipla não sobrevive ao frame, como tudo no modo imediato:
+    // quem o quiser tem de o voltar a abrir.
+    multiSelect_.active = false;
+    multiSelect_.selected = Span<bool>();
     // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
     // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
     // no modo imediato).
@@ -1701,9 +1708,12 @@ bool Context::selectable(StringView labelText, bool selected, const Rect &bounds
     const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
     const bool clicked = itemClicked(rect, clip, id);
-    const Color background = selected ? theme_.selectableSelected
-                                      : (hovered ? theme_.selectableHovered
-                                                 : theme_.selectableBackground);
+    // Dentro de um bloco de escolha múltipla quem manda no realce é a seleção (que
+    // o clique acabou de mudar): o destaque sai já com o valor novo.
+    const bool highlighted = multiSelect_.active ? applyMultiSelectClick(clicked) : selected;
+    const Color background = highlighted ? theme_.selectableSelected
+                                         : (hovered ? theme_.selectableHovered
+                                                    : theme_.selectableBackground);
     drawList->addRectFilledRounded(rect, theme_.borderRadius, background, clip);
 
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
@@ -2295,6 +2305,128 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (changed)
         item_.edited = true;
     return changed;
+}
+
+bool Context::beginMultiSelect(Span<bool> selected, unsigned flags)
+{
+    WindowState *window = currentWindow();
+    // Sem blocos dentro de blocos, como no ImGui: um bloco é uma lista só.
+    if (!window || multiSelect_.active)
+        return false;
+    multiSelect_.active = true;
+    multiSelect_.flags = flags;
+    multiSelect_.selected = selected;
+    multiSelect_.nextIndex = 0;
+    multiSelect_.lastSelected = false;
+    multiSelect_.lastToggled = false;
+    // O alcance do Shift é de uma lista: quando a seleção que está a ser submetida
+    // não é a mesma do último clique, o item de origem esquece-se.
+    if (multiSelect_.anchorOwner != selected.data())
+    {
+        multiSelect_.anchor = -1;
+        multiSelect_.anchorOwner = selected.data();
+    }
+    if (selected.size() == 0u)
+        return true;
+
+    const bool single = (flags & MultiSelectFlags::SingleSelect) != 0u;
+    // As teclas só valem com o foco na janela: quem está a escrever noutra janela não
+    // pode estar a mexer nesta seleção sem querer.
+    const bool focused = currentWindow_ == focusedWindow_;
+    if (!single && focused && (flags & MultiSelectFlags::NoSelectAll) == 0u &&
+        shortcut(KeyCode::A, true, false))
+    {
+        for (Span<bool>::size_type i = 0u; i < selected.size(); ++i)
+            selected[i] = true;
+    }
+    else if (focused && (flags & MultiSelectFlags::ClearOnEscape) != 0u && escapePressed_)
+    {
+        for (Span<bool>::size_type i = 0u; i < selected.size(); ++i)
+            selected[i] = false;
+        multiSelect_.anchor = -1;
+    }
+    return true;
+}
+
+void Context::endMultiSelect()
+{
+    multiSelect_.active = false;
+    multiSelect_.selected = Span<bool>();
+}
+
+bool Context::isItemSelected() const
+{
+    return multiSelect_.lastSelected;
+}
+
+bool Context::isItemToggledSelection() const
+{
+    return multiSelect_.lastToggled;
+}
+
+// O item de um bloco: o índice dele é a ordem em que foi submetido, e o clique
+// escolhe-o conforme as teclas que o acompanharam.
+bool Context::applyMultiSelectClick(bool clicked)
+{
+    const Span<bool> &selected = multiSelect_.selected;
+    const int index = multiSelect_.nextIndex;
+    if (index < 0 || static_cast<Span<bool>::size_type>(index) >= selected.size())
+    {
+        multiSelect_.lastSelected = false;
+        multiSelect_.lastToggled = false;
+        return false;
+    }
+    ++multiSelect_.nextIndex;
+    const bool before = selected[index];
+    bool value = before;
+    multiSelect_.lastToggled = false;
+    if (clicked)
+    {
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        const bool control = pointer_.pressedControl[left];
+        const bool shift = pointer_.pressedShift[left];
+        const bool single = (multiSelect_.flags & MultiSelectFlags::SingleSelect) != 0u;
+        // As três acções do rato, as do ImGui (MultiSelectItemFooter): um clique
+        // limpa e escolhe este, o Ctrl troca só este, e o Shift escolhe o alcance
+        // desde o item do último clique - com Ctrl o alcance copia o estado desse
+        // item em vez de escolher, que é o que deixa desfazer um alcance.
+        const bool range = !single && shift &&
+                           (multiSelect_.flags & MultiSelectFlags::NoRangeSelect) == 0u &&
+                           multiSelect_.anchor >= 0 &&
+                           static_cast<Span<bool>::size_type>(multiSelect_.anchor) < selected.size();
+        if (range)
+        {
+            const bool rangeValue = control ? selected[static_cast<Span<bool>::size_type>(multiSelect_.anchor)]
+                                            : true;
+            if (!control)
+            {
+                for (Span<bool>::size_type i = 0u; i < selected.size(); ++i)
+                    selected[i] = false;
+            }
+            const int first = multiSelect_.anchor < index ? multiSelect_.anchor : index;
+            const int last = multiSelect_.anchor < index ? index : multiSelect_.anchor;
+            for (int i = first; i <= last; ++i)
+                selected[static_cast<Span<bool>::size_type>(i)] = rangeValue;
+            value = rangeValue;
+        }
+        else if (control && !single)
+        {
+            value = !before;
+            selected[static_cast<Span<bool>::size_type>(index)] = value;
+            multiSelect_.anchor = index;
+        }
+        else
+        {
+            for (Span<bool>::size_type i = 0u; i < selected.size(); ++i)
+                selected[i] = false;
+            selected[static_cast<Span<bool>::size_type>(index)] = true;
+            value = true;
+            multiSelect_.anchor = index;
+        }
+        multiSelect_.lastToggled = value != before;
+    }
+    multiSelect_.lastSelected = value;
+    return value;
 }
 
 void Context::drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
@@ -8692,6 +8824,10 @@ void Context::consumeEvents()
             pointer_.pressedPosition[index] = event.position;
             pointer_.down[index] = true;
             pointer_.pressed[index] = true;
+            // Os modificadores do clique ficam presos ao clique: é o que a escolha
+            // múltipla lê quando o item é carregado (ver beginMultiSelect).
+            pointer_.pressedControl[index] = event.control;
+            pointer_.pressedShift[index] = event.shift;
             break;
         }
         case EventType::PointerUp:
@@ -8950,6 +9086,9 @@ void Context::beginLayout(const WindowState &window)
     comboContentOpen_ = false;
     comboItemsSubmitted_ = false;
     comboAdvanceHeader_ = false;
+    // O mesmo para o beginMultiSelect sem endMultiSelect.
+    multiSelect_.active = false;
+    multiSelect_.selected = Span<bool>();
     layout_.lineTop = origin.y;
     layout_.lineHeight = 0.0f;
 }

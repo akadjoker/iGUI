@@ -840,14 +840,34 @@ void sectionWidgetsSelectables(ig::Context &ui, gallery::State &s)
 void sectionWidgetsSelectionAndMultiSelect(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::WidgetsSelectionAndMultiSelect,
-        "BeginMultiSelect/EndMultiSelect e os seus ~12 exemplos (single, multi, clipper, "
-        "delecao, dual list box, tabela, checkboxes, multiplos escopos, tiled assets "
-        "browser, arvores, avancado) - o iGUI nao tem um modelo de selecao");
-    for (int i = 0; i < 3; ++i)
+        "os ~12 exemplos do demo (clipper, delecao, dual list box, tabela, "
+        "checkboxes, multiplos escopos, tiled assets browser, arvores, avancado) e "
+        "os flags do BeginMultiSelect (box select, NoAutoSelect, ...)");
+    ui.label("Uma lista com escolha multipla (Ctrl liga/desliga, Shift alcance):");
+    item();
+    // A seleção é do espelho (um bool por item) e o bloco do iGUI só lhe aplica o
+    // que o rato e as teclas pediram, como o BeginMultiSelect do demo.
+    const unsigned multiFlags = ig::Context::MultiSelectFlags::ClearOnEscape;
+    if (ui.beginMultiSelect(ig::Span<bool>(s.multiSelected, 5), multiFlags))
     {
-        if (ui.selectable(kItems5[i], s.flag[i], 180.0f))
-            s.flag[i] = !s.flag[i];
-        item();
+        for (int i = 0; i < 5; ++i)
+        {
+            ui.selectable(kItems5[i], s.multiSelected[i], 200.0f);
+            item();
+        }
+        ui.endMultiSelect();
+    }
+    ui.label("Uma lista de um item de cada vez:");
+    item();
+    if (ui.beginMultiSelect(ig::Span<bool>(s.multiSelected, 5),
+                            ig::Context::MultiSelectFlags::SingleSelect))
+    {
+        for (int i = 0; i < 5; ++i)
+        {
+            ui.selectable(kItems5[i], s.multiSelected[i], 200.0f);
+            item();
+        }
+        ui.endMultiSelect();
     }
     (void)s;
 }
