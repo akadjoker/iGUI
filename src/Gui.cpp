@@ -717,7 +717,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(),
       activeWidget_(InvalidWidgetId), activeWidgetAtFrameStart_(InvalidWidgetId),
-      activeWidgetEdited_(false),
+      styleColorDepth_(0), styleVarDepth_(0), activeWidgetEdited_(false),
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
@@ -1085,9 +1085,77 @@ const DrawData &Context::endFrame()
     }
     advanceFocus();
 
+    // Um pushStyleColor/pushStyleVar sem pop vale só para o frame dele: quem se
+    // esqueceu não cola a cor ao frame seguinte.
+    clearStyleStacks();
+
     currentWindow_ = WindowHandle();
     drawData_ = frameDrawList_.data(frame_.displaySize, frame_.dpiScale);
     return drawData_;
+}
+
+void Context::pushStyleColor(Color Theme::*field, const Color &color)
+{
+    if (!field || styleColorDepth_ >= kStyleStackSize)
+        return;
+    StyleColorPush &entry = styleColors_[styleColorDepth_++];
+    entry.field = field;
+    entry.previous = theme_.*field;
+    theme_.*field = color;
+}
+
+void Context::popStyleColor(int count)
+{
+    while (count > 0 && styleColorDepth_ > 0)
+    {
+        --styleColorDepth_;
+        const StyleColorPush &entry = styleColors_[styleColorDepth_];
+        if (entry.field)
+            theme_.*entry.field = entry.previous;
+        --count;
+    }
+}
+
+void Context::pushStyleVar(float Theme::*field, float value)
+{
+    if (!field || styleVarDepth_ >= kStyleStackSize)
+        return;
+    StyleVarPush &entry = styleVars_[styleVarDepth_++];
+    entry.field = field;
+    entry.previous = theme_.*field;
+    theme_.*field = value;
+}
+
+void Context::popStyleVar(int count)
+{
+    while (count > 0 && styleVarDepth_ > 0)
+    {
+        --styleVarDepth_;
+        const StyleVarPush &entry = styleVars_[styleVarDepth_];
+        if (entry.field)
+            theme_.*entry.field = entry.previous;
+        --count;
+    }
+}
+
+void Context::clearStyleStacks()
+{
+    // O pop repõe sempre o valor de antes; um push sem pop (ou um pop a mais) deixa
+    // a pilha como estava, por isso não há aqui nada a corrigir além de a esvaziar.
+    while (styleColorDepth_ > 0)
+    {
+        --styleColorDepth_;
+        const StyleColorPush &entry = styleColors_[styleColorDepth_];
+        if (entry.field)
+            theme_.*entry.field = entry.previous;
+    }
+    while (styleVarDepth_ > 0)
+    {
+        --styleVarDepth_;
+        const StyleVarPush &entry = styleVars_[styleVarDepth_];
+        if (entry.field)
+            theme_.*entry.field = entry.previous;
+    }
 }
 
 bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *open)
@@ -1406,6 +1474,9 @@ void Context::popId()
 void Context::setTheme(const Theme &theme)
 {
     theme_ = theme;
+    // Um tema novo invalida a pilha: o valor que ela guarda já não é o do tema.
+    styleColorDepth_ = 0;
+    styleVarDepth_ = 0;
 }
 
 const Theme &Context::theme() const

@@ -442,6 +442,24 @@ public:
     void popId();
 
     void setTheme(const Theme &theme);
+    // ── Style vars ───────────────────────────────────────────────────────────
+    // Muda um campo do tema dentro de um bloco, sem tocar no tema global. O campo é
+    // um ponteiro para membro, por isso vale para qualquer um deles (cor ou medida)
+    // sem uma lista a manter:
+    //
+    //     ui.pushStyleColor(&Theme::buttonBackground, ig::Color(200, 60, 60));
+    //     ui.pushStyleVar(&Theme::borderRadius, 0.0f);
+    //     ui.button("Perigo");
+    //     ui.popStyleVar();
+    //     ui.popStyleColor();
+    //
+    // Um push sem pop vale só para o frame dele: no fim do frame o que ficou na
+    // pilha é reposto (não se cola ao frame seguinte). A pilha é de 16 níveis; a
+    // partir daí o push é ignorado. O setTheme() esvazia-a.
+    void pushStyleColor(Color Theme::*field, const Color &color);
+    void popStyleColor(int count = 1);
+    void pushStyleVar(float Theme::*field, float value);
+    void popStyleVar(int count = 1);
     const Theme &theme() const;
     // Turns the whole interface off: beginWindow() and messageBox() show
     // nothing, pushEvent() drops its events, and the widget state that was
@@ -1610,6 +1628,28 @@ private:
     // O widget ativo no início do frame e se ele já foi editado: é o que distingue
     // "ficou ativo agora" de "já estava" (ver isItemActivated/isItemDeactivated).
     WidgetId activeWidgetAtFrameStart_;
+    // Style vars em vigor (ver pushStyleColor/pushStyleVar): o campo e o valor que
+    // ele tinha antes, para o pop repor.
+    struct StyleColorPush
+    {
+        Color Theme::*field;
+        Color previous;
+
+        StyleColorPush() : field(nullptr), previous() {}
+    };
+    struct StyleVarPush
+    {
+        float Theme::*field;
+        float previous;
+
+        StyleVarPush() : field(nullptr), previous(0.0f) {}
+    };
+    static const int kStyleStackSize = 16;
+    StyleColorPush styleColors_[kStyleStackSize];
+    int styleColorDepth_;
+    StyleVarPush styleVars_[kStyleStackSize];
+    int styleVarDepth_;
+    void clearStyleStacks();
     bool activeWidgetEdited_;
     WidgetId hotWidget_;
     // Tempo acumulado desde o primeiro frame, para o que anima sozinho (a barra
