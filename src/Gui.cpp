@@ -6354,8 +6354,9 @@ bool Context::tableNextColumn()
     }
     if (table_.column + 1 >= table_.columns)
     {
-        const float rowHeight = table_.rowHeight > theme_.widgetHeight ? table_.rowHeight : theme_.widgetHeight;
-        table_.rowY += rowHeight + theme_.itemSpacing;
+        const float minimum = tableMinimumRowHeight();
+        const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
+        table_.rowY += rowHeight + tableRowSpacing();
         table_.column = 0;
         table_.rowHeight = 0.0f;
     }
@@ -6377,6 +6378,16 @@ bool Context::tableNextColumn()
     return true;
 }
 
+float Context::tableMinimumRowHeight() const
+{
+    return table_.style.rowHeight > 0.0f ? table_.style.rowHeight : theme_.widgetHeight;
+}
+
+float Context::tableRowSpacing() const
+{
+    return table_.style.rowSpacing >= 0.0f ? table_.style.rowSpacing : theme_.itemSpacing;
+}
+
 void Context::drawTableRowStyle()
 {
     if (!table_.style.alternateRows && !table_.style.borders)
@@ -6385,8 +6396,8 @@ void Context::drawTableRowStyle()
     if (!drawList)
         return;
     const Rect clip = contentClip();
-    const float top = table_.rowY - theme_.itemSpacing * 0.5f;
-    const float height = theme_.widgetHeight + theme_.itemSpacing;
+    const float top = table_.rowY - tableRowSpacing() * 0.5f;
+    const float height = tableMinimumRowHeight() + tableRowSpacing();
     if (table_.style.alternateRows && (table_.row & 1) != 0)
         drawList->addRectFilled(Rect(table_.bounds.x, top, table_.bounds.width, height),
                                 Color(theme_.textColor.r, theme_.textColor.g, theme_.textColor.b, 14u),
@@ -6424,7 +6435,7 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     const float width = availableWidth();
     if (width <= 0.0f)
         return false;
-    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, theme_.widgetHeight);
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, width, tableMinimumRowHeight());
     const Rect clip = contentClip();
     const WidgetId columnId = combineIds(makeWidgetId(labelText),
                                          static_cast<uint64_t>(table_.column + 1));
@@ -6543,12 +6554,13 @@ void Context::endTable()
     float height = 0.0f;
     if (table_.column >= 0)
     {
-        const float rowHeight = table_.rowHeight > theme_.widgetHeight ? table_.rowHeight : theme_.widgetHeight;
+        const float minimum = tableMinimumRowHeight();
+        const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
         height = table_.rowY + rowHeight - table_.bounds.y;
         DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
         if (drawList)
         {
-            const float bottom = table_.rowY + rowHeight + theme_.itemSpacing * 0.5f;
+            const float bottom = table_.rowY + rowHeight + tableRowSpacing() * 0.5f;
             drawList->addLine(Vec2(table_.bounds.x, bottom),
                               Vec2(table_.bounds.x + table_.bounds.width, bottom),
                               theme_.borderColor, contentClip(), 1.0f);

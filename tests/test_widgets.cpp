@@ -1330,6 +1330,15 @@ static void test_styled_table_draws_stripes_and_lines_without_moving_cells()
     const size_t withBoth = drawStyledTable(context, both, styledY);
     assert(withBoth > drawStyledTable(context, stripes, styledY));
     assert(styledY == plainY);
+
+    ig::TableStyle compact;
+    compact.rowHeight = 18.0f;
+    drawStyledTable(context, compact, styledY);
+    assert(styledY < plainY - 20.0f);
+    const float spaced = styledY;
+    compact.rowSpacing = 0.0f;
+    drawStyledTable(context, compact, styledY);
+    assert(styledY < spaced - 10.0f);
 }
 
 static void drawPlainHeaderTable(ig::Context &context, float *weights)
