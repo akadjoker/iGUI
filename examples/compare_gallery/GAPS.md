@@ -295,7 +295,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `ShowDebugLogWindow` | — | **não existe** |
 | `ShowIDStackToolWindow` | — | **não existe** |
 | `ShowStyleSelector` / `ShowFontSelector` | — | **não existe** |
-| Style vars (`PushStyleColor/Var`, `PopStyleColor/Var`), `ImGuiStyle` mutável em runtime | `setTheme` (global) + cores por widget | parcial |
+| Style vars (`PushStyleColor/Var`, `PopStyleColor/Var`) | `pushStyleColor(&Theme::campo)`, `pushStyleVar(&Theme::campo)` | existe (ponteiro para membro: qualquer campo do tema) |
+| `ImGuiStyle` mutável em runtime | `setTheme` + `theme()` | existe (global, com as style vars para o caso pontual) |
 | Config flags (`io.ConfigFlags`) | — | **não existe** |
 | Log/clipboard (`LogToTTY`, `LogToClipboard`) | clipboard pelo backend, sem log | parcial |
 
