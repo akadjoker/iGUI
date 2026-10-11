@@ -8568,7 +8568,11 @@ bool Context::beginTable(StringView idText, int columns, float width)
     table_.columns = columns;
     table_.column = -1;
     table_.rowY = layout_.cursor.y;
+    table_.contentY = 0.0f;
     table_.rowHeight = 0.0f;
+    // A contagem das linhas é a partir de -1 porque a primeira linha só se sabe que
+    // começou quando a primeira célula é submetida: o ++ que a abre deixa-a em 0.
+    table_.row = -1;
     table_.columnVisible.clear();
     table_.headerHoveredColumn = -1;
     tableActive_ = true;
@@ -8628,8 +8632,7 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights,
 {
     if (!beginTable(idText, columnWeights, columnVisible, width))
         return false;
-    table_.style = style;
-    loadTableOrder(style);
+    configureTable(style);
     return true;
 }
 
@@ -8672,8 +8675,7 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights, con
 {
     if (!beginTable(idText, columnWeights, width))
         return false;
-    table_.style = style;
-    loadTableOrder(style);
+    configureTable(style);
     return true;
 }
 
@@ -8682,9 +8684,117 @@ bool Context::beginTable(StringView idText, Span<float> columnWeights, const Tab
 {
     if (!beginTable(idText, columnWeights, width))
         return false;
+    configureTable(style);
+    return true;
+}
+
+void Context::configureTable(const TableStyle &style)
+{
     table_.style = style;
     loadTableOrder(style);
-    return true;
+    beginTableScroll(style);
+}
+
+void Context::beginTableScroll(const TableStyle &style)
+{
+    table_.scrollY = false;
+    table_.freezeRows = 0;
+    table_.viewHeight = 0.0f;
+    table_.offsetY = 0.0f;
+    table_.contentY = 0.0f;
+    table_.frozenHeight = 0.0f;
+    if (!style.scrollY || style.height <= 0.0f)
+        return;
+    TableScrollState *scroll = tableScrolls_.find(table_.id);
+    if (!scroll)
+    {
+        tableScrolls_.put(table_.id, TableScrollState());
+        scroll = tableScrolls_.find(table_.id);
+        if (!scroll)
+            return;
+    }
+    table_.scrollY = true;
+    table_.freezeRows = style.freezeRows >= 0 ? style.freezeRows : 1;
+    table_.viewHeight = style.height;
+    // A altura do que rola é a da tabela menos as linhas presas, e o que sobra do
+    // conteúdo (medido no frame anterior) diz se há barra - e a barra tira largura às
+    // colunas, como num child.
+    const float scrolledHeight = style.height - scroll->frozenHeight;
+    const float maximumScroll = scroll->contentHeight > scrolledHeight
+        ? scroll->contentHeight - scrolledHeight : 0.0f;
+    const float barWidth = theme_.scrollbarWidth * 0.65f;
+    const bool hasBar = maximumScroll > 0.0f;
+    // A barra tira largura às colunas, mas a faixa que rola continua a ser a caixa
+    // toda: a barra é desenhada no espaço que sobra do lado direito.
+    if (hasBar)
+    {
+        table_.barStrip = barWidth + theme_.padding * 0.5f;
+        table_.bounds.width -= table_.barStrip;
+    }
+    // A roda e o arrasto da barra são tratados antes das linhas, com a medida do
+    // frame anterior (é o mesmo que um child faz: ver beginChild).
+    if (hasBar)
+    {
+        const float barX = table_.bounds.x + table_.bounds.width + theme_.padding * 0.5f;
+        const Rect bar(barX, table_.bounds.y + scroll->frozenHeight, barWidth,
+                       scrolledHeight > theme_.scrollbarMinThumb ? scrolledHeight
+                                                                 : theme_.scrollbarMinThumb);
+        const float requestedThumb = bar.height * scrolledHeight / scroll->contentHeight;
+        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+            ? requestedThumb : theme_.scrollbarMinThumb;
+        const float travel = bar.height - thumbHeight;
+        const float thumbY = travel > 0.0f ? bar.y + travel * scroll->offsetY / maximumScroll : bar.y;
+        const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
+        const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4cull);
+        const uint32_t left = buttonIndex(PointerButton::Left);
+        const Rect barClip = intersect(bar, contentClip());
+        if (pointerPressedIn(barClip, left) && activeWidget_ == InvalidWidgetId)
+            activeWidget_ = scrollbarId;
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] && travel > 0.0f)
+            {
+                const float normalized = clamp((pointer_.position.y - bar.y - thumb.height * 0.5f) / travel,
+                                               0.0f, 1.0f);
+                scroll->offsetY = normalized * maximumScroll;
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        DrawList *drawList = currentDrawList();
+        if (drawList)
+        {
+            drawList->addRectFilled(bar, theme_.inputBg, barClip);
+            drawList->addRectFilled(thumb, theme_.scrollbarThumb, barClip);
+        }
+    }
+    const Rect region(table_.bounds.x, table_.bounds.y,
+                      table_.bounds.width + (hasBar ? barWidth + theme_.padding * 0.5f : 0.0f),
+                      style.height);
+    const bool wheelMine = ownWheelArea(combineIds(table_.id, 0x54574845454cull), region,
+                                        static_cast<uint32_t>(childStack_.size()));
+    if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
+        pointerOver(intersect(region, contentClip())))
+    {
+        scroll->offsetY -= pointer_.wheelY * theme_.widgetHeight;
+        if (scroll->offsetY < 0.0f)
+            scroll->offsetY = 0.0f;
+        if (scroll->offsetY > maximumScroll)
+            scroll->offsetY = maximumScroll;
+        pointer_.wheelY = 0.0f;
+    }
+    table_.offsetY = scroll->offsetY;
+}
+
+Rect Context::tableRowClip() const
+{
+    // O que rola é cortado por baixo das linhas presas; as presas só são cortadas
+    // pelo fundo da tabela (elas ficam por cima do que rola, que já vem depois).
+    const float top = table_.row < table_.freezeRows ? table_.bounds.y
+                                                     : table_.bounds.y + table_.frozenHeight;
+    const float bottom = table_.bounds.y + table_.viewHeight;
+    return Rect(table_.bounds.x, top, table_.bounds.width + table_.barStrip,
+                bottom > top ? bottom - top : 0.0f);
 }
 
 void Context::loadTableOrder(const TableStyle &style)
@@ -8787,7 +8897,14 @@ bool Context::tableNextColumn()
     {
         const float minimum = tableMinimumRowHeight();
         const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
-        table_.rowY += rowHeight + tableRowSpacing();
+        const float step = rowHeight + tableRowSpacing();
+        // A linha que acabou conta para a altura das presas; a que vem a seguir fica
+        // onde a rolagem a põe (o que está preso não anda).
+        if (table_.row < table_.freezeRows)
+            table_.frozenHeight += step;
+        table_.contentY += step;
+        const bool nextFrozen = table_.row + 1 < table_.freezeRows;
+        table_.rowY = table_.bounds.y + table_.contentY - (nextFrozen ? 0.0f : table_.offsetY);
         table_.column = 0;
         table_.rowHeight = 0.0f;
     }
@@ -8797,8 +8914,8 @@ bool Context::tableNextColumn()
     }
     if (table_.column == 0)
     {
-        drawTableRowStyle();
         ++table_.row;
+        drawTableRowStyle();
     }
     // Uma coluna escondida: o chamador salta-lhe a célula (é o contrato das tabelas
     // com colunas visíveis - ver o beginTable das visíveis).
@@ -9151,11 +9268,28 @@ void Context::endTable()
     {
         const float minimum = tableMinimumRowHeight();
         const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
-        height = table_.rowY + rowHeight - table_.bounds.y;
+        if (table_.row < table_.freezeRows)
+            table_.frozenHeight += rowHeight + tableRowSpacing();
+        if (table_.scrollY)
+        {
+            // A medida destes dois vai dizer ao próximo frame quanto é que rola e
+            // quantas linhas ficam presas (ver beginTableScroll).
+            TableScrollState *scroll = tableScrolls_.find(table_.id);
+            if (scroll)
+            {
+                const float contentHeight = table_.contentY + rowHeight - table_.frozenHeight;
+                scroll->contentHeight = contentHeight > 0.0f ? contentHeight : 0.0f;
+                scroll->frozenHeight = table_.frozenHeight;
+            }
+            height = table_.viewHeight;
+        }
+        else
+            height = table_.rowY + rowHeight - table_.bounds.y;
         DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
         if (drawList)
         {
-            const float bottom = table_.rowY + rowHeight + tableRowSpacing() * 0.5f;
+            const float bottom = table_.scrollY ? table_.bounds.y + table_.viewHeight
+                                                : table_.rowY + rowHeight + tableRowSpacing() * 0.5f;
             drawList->addLine(Vec2(table_.bounds.x, bottom),
                               Vec2(table_.bounds.x + table_.bounds.width, bottom),
                               theme_.borderColor, contentClip(), 1.0f);
@@ -10342,6 +10476,7 @@ void Context::clearWidgetState()
     wheelAreas_.clear();
     dockSpaces_.clear();
     tableResize_ = TableResizeState();
+    tableScrolls_.clear();
     numericEditId_ = InvalidWidgetId;
     numericEditText_.clear();
     numericEditValue_ = 0.0;
@@ -10490,6 +10625,10 @@ Rect Context::contentClip() const
         clip = intersect(clip, childStack_.back().content);
     if (!dockPanelStack_.empty())
         clip = intersect(clip, dockPanelStack_.back().content);
+    // Uma tabela que rola corta o que rola no fundo dela: os itens das linhas que
+    // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
+    if (tableActive_ && table_.scrollY)
+        clip = intersect(clip, tableRowClip());
     return clip;
 }
 

@@ -2815,6 +2815,211 @@ void test_reordered_table_columns_are_model_columns()
     assert(seenOrder[0] == 1 && seenOrder[1] == 0 && seenOrder[2] == 2);
 }
 
+// Uma tabela que rola sozinha (TableStyle::scrollY): tem uma altura fixa, as
+// linhas rolam dentro dela com a roda e com a barra, o que sai da área deixa de
+// ser desenhado (e de responder) e as primeiras freezeRows linhas ficam presas
+// no topo - a linha 0, o cabeçalho, é uma delas.
+void test_table_scrolls_its_own_rows()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[2] = {1.0f, 1.0f};
+    ig::TableStyle style;
+    style.borders = true;
+    style.scrollY = true;
+    style.height = 160.0f;
+    style.freezeRows = 1;
+    const int kRows = 6;
+    ig::Rect headerRects[2];
+    ig::Rect labelRects[kRows];
+    bool labelVisible[kRows];
+    float labelX[2] = {0.0f, 0.0f};
+    float labelY[kRows];
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 200.0f))
+        {
+            if (c.tableNextColumn())
+            {
+                c.tableHeader("Nome");
+                headerRects[0] = c.itemRect();
+            }
+            if (c.tableNextColumn())
+            {
+                c.tableHeader("Valor");
+                headerRects[1] = c.itemRect();
+            }
+            for (int row = 0; row < kRows; ++row)
+            {
+                for (int column = 0; column < 2; ++column)
+                {
+                    if (!c.tableNextColumn())
+                        continue;
+                    c.label("celula");
+                    labelRects[row] = c.itemRect();
+                    if (column == 0)
+                        labelY[row] = labelRects[row].y;
+                    labelX[column] = labelRects[row].x;
+                    labelVisible[row] = c.isItemVisible();
+                }
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // Sem rolagem, as linhas ficam umas debaixo das outras, a começar no
+    // cabeçalho.
+    const float rowStep = labelY[1] - labelY[0];
+    assert(rowStep > 0.0f);
+    assert(labelY[0] == headerRects[0].y + headerRects[0].height + 6.0f);
+    assert(labelY[2] == labelY[0] + rowStep * 2.0f);
+    // As colunas são as duas metades da tabela (menos a barra, que ainda não se
+    // sabe se existe no primeiro frame).
+    assert(labelX[1] > labelX[0]);
+
+    // A roda por cima da tabela rola as linhas: o cabeçalho não anda, o resto
+    // sobe, e o que sai por cima deixa de ser visível.
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    const float wheelX = 100.0f;
+    const float wheelY = labelY[2] + labelRects[2].height * 0.5f;
+    const float headerBefore = headerRects[0].y;
+    const float firstRowBefore = labelY[0];
+    context.pushEvent(ig::Event::pointerMove(wheelX, wheelY));
+    context.pushEvent(wheel);
+    harness.frame(build);
+    // O cabeçalho não anda e as linhas sobem (a roda anda o que mede uma widget).
+    assert(headerRects[0].y == headerBefore);
+    assert(firstRowBefore - labelY[0] == 28.0f);
+
+    // Rolar até ao fim para: a última linha fica dentro da área que rola e o fundo
+    // da tabela é o limite (a altura é a que o style pediu, não a das linhas).
+    for (int i = 0; i < 30; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(wheelX, wheelY));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(labelVisible[kRows - 1]);
+    assert(labelRects[kRows - 1].y + labelRects[kRows - 1].height <
+           headerRects[0].y + style.height + 1.0f);
+    assert(!labelVisible[0]);
+    // A linha 1 ainda se vê em parte: está cortada por cima pela faixa presa.
+    assert(labelY[1] < headerRects[0].y + headerRects[0].height + 6.0f);
+    // O cabeçalho continua no sítio, e a última linha fica-lhe abaixo.
+    assert(headerRects[0].y == headerBefore);
+    assert(labelRects[kRows - 1].y > headerRects[0].y + headerRects[0].height);
+
+    // Rolar para cima volta ao princípio, e o cabeçalho nunca se mexe.
+    for (int i = 0; i < 30; ++i)
+    {
+        wheel.wheelY = 1.0f;
+        context.pushEvent(ig::Event::pointerMove(wheelX, wheelY));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(labelVisible[0]);
+    assert(labelY[0] == headerRects[0].y + headerRects[0].height + 6.0f);
+    assert(labelY[kRows - 1] > headerRects[0].y + style.height);
+    assert(headerRects[0].y == headerBefore);
+
+    // A barra de rolagem está no lado direito da tabela, com a altura da área que
+    // rola (os vértices com a cor do punho dizem onde ela foi desenhada).
+    const ig::DrawData &scrolled = harness.frame(build);
+    const ig::Color thumbColor = context.theme().scrollbarThumb;
+    bool foundThumb = false;
+    float thumbLeft = 0.0f;
+    float thumbRight = 0.0f;
+    float thumbBottom = 0.0f;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < scrolled.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = scrolled.vertices[i];
+        if (vertex.color != thumbColor)
+            continue;
+        if (!foundThumb)
+        {
+            thumbLeft = thumbRight = vertex.position.x;
+            thumbBottom = vertex.position.y;
+            foundThumb = true;
+        }
+        if (vertex.position.x < thumbLeft)
+            thumbLeft = vertex.position.x;
+        if (vertex.position.x > thumbRight)
+            thumbRight = vertex.position.x;
+        if (vertex.position.y > thumbBottom)
+            thumbBottom = vertex.position.y;
+    }
+    assert(foundThumb);
+    assert(thumbLeft >= headerRects[1].x + headerRects[1].width);
+    assert(thumbBottom <= headerRects[0].y + style.height + 1.0f);
+    assert(thumbBottom > headerRects[0].y);
+}
+
+// Uma tabela com duas linhas presas: a segunda linha também não anda com a
+// rolagem (as presas são as primeiras freezeRows, e a 0 é o cabeçalho).
+void test_table_frozen_rows_stay_put()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[2] = {1.0f, 1.0f};
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 160.0f;
+    style.freezeRows = 2;
+    const int kRows = 5;
+    float rowY[kRows];
+    float headerY = 0.0f;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 200.0f))
+        {
+            for (int row = -1; row < kRows; ++row)
+            {
+                for (int column = 0; column < 2; ++column)
+                {
+                    if (!c.tableNextColumn())
+                        continue;
+                    c.label(row < 0 ? "cabecalho" : "linha");
+                    if (row < 0)
+                    {
+                        if (column == 0)
+                            headerY = c.itemRect().y;
+                    }
+                    else if (column == 0)
+                        rowY[row] = c.itemRect().y;
+                }
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float step = rowY[1] - rowY[0];
+    assert(step > 0.0f);
+    assert(rowY[0] == headerY + step);
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(100.0f, rowY[3]));
+    context.pushEvent(wheel);
+    harness.frame(build);
+    // O cabeçalho e a linha 0 ficam onde estavam; a linha 1 já subiu.
+    assert(headerY == rowY[0] - step);
+    assert(rowY[0] == headerY + step);
+    assert(rowY[1] < rowY[0] + step);
+}
+
 } // namespace
 
 int main()
@@ -2859,6 +3064,8 @@ int main()
     test_hidden_table_columns();
     test_reorderable_table_columns();
     test_reordered_table_columns_are_model_columns();
+    test_table_scrolls_its_own_rows();
+    test_table_frozen_rows_stay_put();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

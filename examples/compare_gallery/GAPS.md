@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **38 lacunas** contra 233 itens submetidos pelo
+dois lados: na revisão atual são **38 lacunas** contra 248 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -139,7 +139,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `ImGuiTableFlags_Resizable` / `Sortable` / `Borders` / `RowBg` | pesos mutáveis / `tableHeader(label, sortColumn, sortAscending)` / `TableStyle::borders` / `TableStyle::alternateRows` | existe, com outra cara (não são flags, e sim a API) |
 | `ImGuiTableFlags_Hideable` + o menu de contexto do cabeçalho | `beginTable(id, weights, columnVisible)` + `tableHoveredColumn()` + `openPopup` | existe: a coluna escondida não ocupa largura, as seguintes fecham o espaço dela e o `tableNextColumn()` devolve false para a célula dela ser saltada. O menu é do chamador (a galeria faz o do demo, com um checkbox por coluna) |
 | `ImGuiTableFlags_Reorderable` (arrastar o cabeçalho troca a ordem das colunas) | `TableStyle::reorderable` + `tableColumnIndex()` | existe: o que anda é a coluna do modelo (o peso e a visibilidade continuam a ser dela, a largura segue-a), a ordem é guardada pelo id da tabela e sobrevive ao frame (uma tabela deixa de ser reordenável quando o número de colunas muda), e o cabeçalho de destino fica realçado enquanto se arrasta |
-| `ScrollX/Y`, `SizingFixedFit`, `FreezeRows/Cols`, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
+| `ImGuiTableFlags_ScrollY` + `TableSetupScrollFreeze` (linhas presas) | `TableStyle::scrollY` + `height` + `freezeRows` | existe: a tabela tem uma altura fixa, as linhas rolam dentro dela (roda + barra arrastável) e as primeiras `freezeRows` ficam presas no topo (`freezeRows = 1` é o cabeçalho; a linha 0 é o cabeçalho). O que rola é cortado no fundo da tabela e por baixo das linhas presas |
+| `ScrollX`, `SizingFixedFit`, `FreezeRows/Cols` na horizontal, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
 | Tabelas aninhadas, tabelas com header agrupado | — | **não existe** |
 | — | `beginVirtualTable` | (extra do iGUI) |
 
@@ -561,8 +562,21 @@ Continua em falta neste nível:
       se arrasta.
       *Onde:* `src/Gui.cpp` (`beginTable`, `tableModelColumn`, `tableColumnAtX`,
       `tableHeaderCell`), `tests/test_item_status.cpp` (`test_reorderable_table_columns`).
-- [ ] **O resto das tabelas**: `scrollX/Y` e `freezeRows/Cols` (uma região fixa),
-      `sizingFixedFit`, `NoPad`/`ContextMenuInBody` e as tabelas aninhadas.
+- [x] **Uma tabela que rola sozinha** (`TableStyle::scrollY` + `height` +
+      `freezeRows`): a tabela passa a ter uma altura fixa e as linhas rolam dentro
+      dela, com a roda e uma barra arrastável no lado direito (a barra tira largura
+      às colunas, como num child), e as primeiras `freezeRows` linhas ficam presas no
+      topo - a linha 0 é o cabeçalho, por isso `freezeRows = 1` prende só ele. Tudo o
+      que rola é cortado por baixo das linhas presas e pelo fundo da tabela, e o clip
+      vai no item, por isso uma linha fora de vista não responde ao rato. A altura do
+      conteúdo e das linhas presas é a do frame anterior (é o mesmo caminho de um
+      child), e a contagem das linhas passou a ser a partir de 0 (o `++` que abre a
+      linha 0 deixou de contar duas vezes).
+      *Onde:* `src/Gui.cpp` (`beginTableScroll`, `tableRowClip`, `tableNextColumn`,
+      `endTable`, `contentClip`), `tests/test_item_status.cpp`.
+- [ ] **O resto das tabelas**: `scrollX` (rolagem horizontal, com a largura própria
+      das colunas), `freezeCols`, `sizingFixedFit`, `NoPad`/`ContextMenuInBody` e as
+      tabelas aninhadas.
       *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`).
 - [x] **Um menu que é contentor de layout**: o corpo de um menu aberto tem o seu
       `layout_` (cursor, largura e clip do popup), o `currentDrawList` devolve a
