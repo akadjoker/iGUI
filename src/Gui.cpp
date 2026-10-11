@@ -8683,6 +8683,84 @@ bool Context::dragInt4(StringView labelText, int &x, int &y, int &z, int &w, int
     return changed;
 }
 
+// O DragFloatRange2/DragIntRange2 do ImGui: o mínimo e o máximo numa só widget,
+// duas caixas lado a lado a dividir a largura (é a mesma ideia dos drags de N
+// componentes), com o rótulo no fim. Os limites de um são o que o outro tem, e o
+// que se arrasta nunca passa para o lado do outro - é o que faz isto ser uma
+// gama e não dois drags soltos.
+bool Context::dragFloatRange2(StringView labelText, float &minimumValue, float &maximumValue,
+                              float minimumRange, float maximumRange, float speed, float width,
+                              const char *format, const char *formatMaximum, unsigned flags)
+{
+    const float total = width > 0.0f ? width : calcItemWidth();
+    // O rótulo leva a largura dele (e é desenhado no fim, como no ImGui): o que
+    // sobra é das duas caixas.
+    const TextMetrics labelMetrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const float boxes = total - labelMetrics.width - theme_.windowPadding;
+    const float cell = componentWidth(boxes > 0.0f ? boxes : total, theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    // Um intervalo dado ao contrário (minRange >= maxRange) é o sinal de que não há
+    // limites de gama: as caixas deixam de ser limitadas por eles, mas continuam a
+    // ser limitadas uma pela outra (é o que o ImGui faz com o FLT_MAX nos dois
+    // sentidos).
+    const bool bounded = minimumRange < maximumRange;
+    const float lowLimit = bounded ? minimumRange : -FLT_MAX;
+    const float lowCeiling = bounded
+                                 ? (maximumValue < maximumRange ? maximumValue : maximumRange)
+                                 : maximumValue;
+    const float highFloor = bounded
+                                ? (minimumValue > minimumRange ? minimumValue : minimumRange)
+                                : minimumValue;
+    const float highLimit = bounded ? maximumRange : FLT_MAX;
+    pushId(labelText);
+    bool changed = dragFloat("min", minimumValue, lowLimit, lowCeiling, speed, cell, flags, format);
+    sameLine();
+    changed = dragFloat("max", maximumValue, highFloor, highLimit, speed, cell, flags,
+                        formatMaximum ? formatMaximum : format) ||
+              changed;
+    popId();
+    // O rótulo fecha a linha (é o TextEx do ImGui).
+    sameLine();
+    label(labelText);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
+bool Context::dragIntRange2(StringView labelText, int &minimumValue, int &maximumValue,
+                            int minimumRange, int maximumRange, int speed, float width,
+                            const char *format, const char *formatMaximum, unsigned flags)
+{
+    const float total = width > 0.0f ? width : calcItemWidth();
+    const TextMetrics labelMetrics =
+        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const float boxes = total - labelMetrics.width - theme_.windowPadding;
+    const float cell = componentWidth(boxes > 0.0f ? boxes : total, theme_.itemSpacing, 2);
+    if (cell <= 0.0f)
+        return false;
+    const bool bounded = minimumRange < maximumRange;
+    const int lowLimit = bounded ? minimumRange : INT_MIN;
+    const int lowCeiling =
+        bounded ? (maximumValue < maximumRange ? maximumValue : maximumRange) : maximumValue;
+    const int highFloor =
+        bounded ? (minimumValue > minimumRange ? minimumValue : minimumRange) : minimumValue;
+    const int highLimit = bounded ? maximumRange : INT_MAX;
+    pushId(labelText);
+    bool changed = dragInt("min", minimumValue, lowLimit, lowCeiling, speed, cell, flags, format);
+    sameLine();
+    changed = dragInt("max", maximumValue, highFloor, highLimit, speed, cell, flags,
+                      formatMaximum ? formatMaximum : format) ||
+              changed;
+    popId();
+    sameLine();
+    label(labelText);
+    if (changed)
+        item_.edited = true;
+    return changed;
+}
+
 bool Context::inputInt2(StringView labelText, int &x, int &y, float width, const char *format)
 {
     const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
