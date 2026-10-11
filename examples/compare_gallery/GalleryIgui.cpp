@@ -1187,9 +1187,10 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
         "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Borders/RowBg/"
-        "ScrollX/Y/SizingFixedFit/freeze e as tabelas aninhadas - o iGUI tem beginTable/"
-        "tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo grip do "
-        "cabecalho), ordenacao pelo cabecalho, colunas escondidas e colunas reordenaveis");
+        "ScrollX/SizingFixedFit e as tabelas aninhadas - o iGUI tem beginTable/tableHeader/"
+        "tableNextColumn com pesos mutaveis (redimensionamento pelo grip do cabecalho), "
+        "ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, rolagem "
+        "propria (ScrollY) com linhas presas");
     // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
     // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
     // fecham o espaço dela). O menu é do chamador, com o openPopup.
@@ -1258,6 +1259,46 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             item();
         }
         ui.endPopup();
+    }
+    // A tabela que rola sozinha do demo ("Scrolling" com TableSetupScrollFreeze):
+    // altura fixa, as linhas rolam dentro dela (roda e barra) e a linha presa fica
+    // no topo. Sem scrollY o que rola é a janela, e o cabeçalho vai com ela.
+    ui.label("Tabela com rolagem propria (3 linhas presas):");
+    item();
+    const float scrollWeights[2] = {1.0f, 1.0f};
+    ig::TableStyle scrollStyle;
+    scrollStyle.alternateRows = true;
+    scrollStyle.borders = true;
+    scrollStyle.scrollY = true;
+    scrollStyle.height = 150.0f;
+    scrollStyle.freezeRows = 4;   // a linha 0 é o cabecalho, 1 a 3 ficam presas
+    if (ui.beginTable("scroll table", ig::Span<const float>(scrollWeights, 2), scrollStyle,
+                      ui.availableWidth()))
+    {
+        item();
+        for (int column = 0; column < 2; ++column)
+        {
+            if (!ui.tableNextColumn())
+                continue;
+            ui.tableHeader(column == 0 ? "Nome" : "Valor");
+        }
+        item();
+        for (int row = 0; row < 12; ++row)
+        {
+            char label[32];
+            for (int column = 0; column < 2; ++column)
+            {
+                if (!ui.tableNextColumn())
+                    continue;
+                if (column == 0)
+                    snprintf(label, sizeof(label), "linha %d", row);
+                else
+                    snprintf(label, sizeof(label), "%d", row * 3);
+                ui.label(ig::StringView(label, strlen(label)));
+            }
+            item();
+        }
+        ui.endTable();
     }
     (void)s;
 }
