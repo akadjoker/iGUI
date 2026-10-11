@@ -468,9 +468,13 @@ Continua em falta neste nível:
       `toggleSwitch` passou a fazer parte da área que responde ao ponteiro (era só a
       caixa), como no ImGui.
       *Onde:* `src/Gui.cpp` (`textFrameOffset`, `checkboxImpl`), `tests/test_widgets.cpp`.
+- [x] **`pushItemWidth` com pilha a sério** (8 níveis): antes era uma só guarda, e
+      o `popItemWidth` de dentro deixava em vigor a largura de dentro em vez de
+      voltar à de fora. Um `pushItemWidth(0)` herda a que estava.
+      *Onde:* `src/Gui.cpp` (`pushItemWidth`/`popItemWidth`/`calcItemWidth`),
+      `include/igui/Gui.hpp` (`LayoutState`), `tests/test_item_status.cpp`.
 - [ ] **Layout, o resto**: uma altura de linha "por omissão" configurável (o
-      `style.ItemSpacing` já existe); falta ainda uma largura por omissão de
-      *container* (`pushItemWidth` tem uma só profundidade de guarda).
+      `style.ItemSpacing` já existe).
       *Onde:* `src/Gui.cpp` (`beginLayout`, `advanceLayout`, `sameLine`).
 - [x] **`beginCombo`/`endCombo`**: popup de conteúdo livre, com o `drawComboHeader`
       a servir os dois (o `comboBox` e o `beginCombo`), o cursor do layout dentro do
