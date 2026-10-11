@@ -578,6 +578,63 @@ public:
     // Renders a tab strip and returns true when the selected tab changes.
     bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
                 const Rect &bounds);
+    // ── Tabs a sério (o BeginTabBar/BeginTabItem do ImGui) ───────────────────
+    // A barra é um contentor: cada beginTabItem desenha a tab e, só a escolhida,
+    // abre o conteúdo dela (que vai até ao endTabItem). O que está escolhido é do
+    // id da barra e sobrevive ao frame; a tab de um documento que deixe de ser
+    // submetida desaparece com ele.
+    //
+    //     if (ui.beginTabBar("bar")) {
+    //         if (ui.beginTabItem("Skeleton")) {
+    //             ui.label("conteudo do esqueleto");
+    //             ui.endTabItem();
+    //         }
+    //         if (ui.beginTabItem("Aparencia", &aberta)) {
+    //             ui.label("conteudo da aparencia");
+    //             ui.endTabItem();
+    //         }
+    //         ui.endTabBar();
+    //     }
+    struct TabBarFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Arrastar uma tab para cima de outra troca-lhes a ordem (o
+            /// Reorderable): a ordem fica na barra, pelo id dela.
+            Reorderable = 1u << 0,
+            /// Uma tab submetida pela primeira vez fica escolhida (o
+            /// AutoSelectNewTabs) - é o que faz um documento novo abrir à frente.
+            AutoSelectNewTabs = 1u << 1,
+            /// As tabs encolhem para caber todas na largura da barra (o Fitting).
+            Fitting = 1u << 2,
+            /// Sem o fecho com o botão do meio (o NoCloseWithMiddleMouseButton).
+            NoCloseWithMiddleMouseButton = 1u << 3
+        };
+    };
+    struct TabItemFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Fica escolhida neste frame (o SetSelected), que é o que um "abrir
+            /// documento" pede.
+            SetSelected = 1u << 0,
+            /// Sai com um ponto a seguir ao nome (o UnsavedDocument do demo).
+            UnsavedDocument = 1u << 1
+        };
+    };
+    /// @brief Starts a tab bar at the layout cursor, as wide as the available width.
+    ///        Returns false when there is nothing to submit it into.
+    bool beginTabBar(StringView id, unsigned flags = TabBarFlags::None);
+    void endTabBar();
+    /// @brief Draws the tab and, when it is the selected one, opens its content: the
+    ///        caller submits the content between this and endTabItem(). With @p open
+    ///        the tab carries an X that closes it (setting *open to false), and the
+    ///        middle mouse button closes it too unless the bar says otherwise.
+    bool beginTabItem(StringView label, bool *open = nullptr,
+                      unsigned flags = TabItemFlags::None);
+    void endTabItem();
     // A scrollable list. The label is an identifier; render a separate label when needed.
     bool listBox(StringView label, int &currentItem, Span<const StringView> items,
                  const Rect &bounds);
@@ -1539,6 +1596,60 @@ private:
         ChildState() : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true) {}
     };
 
+    // A barra de tabs (ver beginTabBar): o que está escolhido, a ordem das tabs (que
+    // o arrasto troca) e as que já se viram, para saber qual é nova.
+    struct TabBarState
+    {
+        // A escolhida (o realce, que um clique muda já) e a que abre o conteúdo
+        // neste frame (é a do início do frame: o conteúdo de uma tab escolhida agora
+        // aparece no frame seguinte, como no ImGui).
+        WidgetId selected;
+        WidgetId frameSelected;
+        // A ordem das tabs (é o que o arrasto troca): as posições de cada uma saem
+        // dela, por isso uma troca vale para o frame seguinte (a largura de uma tab
+        // só se sabe depois de ela ser submetida, como tudo o que se mede aqui).
+        ct::Vector<WidgetId> order;
+        ct::Vector<WidgetId> seenThisFrame;
+        ct::HashMap<WidgetId, float> widths;
+        ct::HashMap<WidgetId, float> positions;
+        // Quantas tabs a barra tinha no frame anterior: é o que o Fitting usa para
+        // dividir a largura (o número de tabs deste frame só se sabe no fim dele).
+        int lastCount;
+        // Arrasto em curso: a tab agarrada e onde o ponteiro estava.
+        WidgetId dragTab;
+        float dragStartX;
+        uint64_t frame;
+
+        TabBarState()
+            : selected(InvalidWidgetId), frameSelected(InvalidWidgetId), order(), seenThisFrame(),
+              widths(), positions(),
+              lastCount(0), dragTab(InvalidWidgetId), dragStartX(0.0f), frame(0u) {}
+    };
+    // A barra que está a ser submetida agora (uma pilha: um tab bar dentro do
+    // conteúdo de outro).
+    struct TabBarSubmitState
+    {
+        WidgetId id;
+        LayoutState parentLayout;
+        Rect row;
+        unsigned flags;
+        float cursorX;
+        float contentHeight;
+
+        TabBarSubmitState()
+            : id(InvalidWidgetId), parentLayout(), row(), flags(0u), cursorX(0.0f),
+              contentHeight(0.0f) {}
+    };
+    // O conteúdo da tab escolhida: o layout de fora e o clip que os itens de dentro
+    // apanham (ver contentClip/availableWidth).
+    struct TabContentState
+    {
+        LayoutState parentLayout;
+        Rect rect;
+        bool active;
+
+        TabContentState() : parentLayout(), rect(), active(false) {}
+    };
     struct UndoState
     {
         String label;
@@ -1826,6 +1937,13 @@ private:
     ct::HashMap<WidgetId, NumericEditState> numericEdits_;
     ct::HashMap<WidgetId, ColorPickerState> colorPickers_;
     ct::HashMap<WidgetId, ChildScrollState> childScrolls_;
+    // As barras de tabs por id (a escolhida, a ordem e as vistas neste frame).
+    ct::HashMap<WidgetId, TabBarState> tabBars_;
+    static const int kTabBarStackSize = 4;
+    TabBarSubmitState tabBarStack_[kTabBarStackSize];
+    int tabBarDepth_;
+    TabContentState tabContent_[kTabBarStackSize];
+    int tabContentDepth_;
     ct::HashMap<WidgetId, Gizmo2DState> gizmo2DStates_;
     ct::HashMap<WidgetId, Gizmo3DState> gizmo3DStates_;
     ct::HashMap<WidgetId, DockSpaceState> dockSpaces_;

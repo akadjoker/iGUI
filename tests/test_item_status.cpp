@@ -3367,6 +3367,190 @@ void test_popup_open_flags()
     assert(!context.isPopupOpen("qualquer", ig::Context::PopupFlags::AnyPopupId));
 }
 
+// As tabs a sério (beginTabBar/beginTabItem): a barra é um contentor e só a tab
+// escolhida abre o conteúdo, que vai da linha das tabs até ao endTabItem. A escolha
+// é da barra (pelo id) e sobrevive ao frame; a ordem das tabs é da barra e o
+// arrasto troca-a.
+void test_tabs_with_content()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool closeSecond = true;
+    ig::Rect tabRects[3] = {ig::Rect(), ig::Rect(), ig::Rect()};
+    ig::Rect contentRects[3] = {ig::Rect(), ig::Rect(), ig::Rect()};
+    int submitted = 0;
+    ig::Rect afterRect;
+    bool afterSeen = false;
+    unsigned barFlags = ig::Context::TabBarFlags::None;
+    unsigned itemFlags = ig::Context::TabItemFlags::None;
+    unsigned thirdFlags = ig::Context::TabItemFlags::None;
+    bool thirdOpen = true;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        submitted = 0;
+        if (c.beginTabBar("bar", barFlags))
+        {
+            // O rect da tab lê-se logo a seguir ao beginTabItem (o conteúdo, se ele
+            // abrir, passa a ser o último item).
+            const bool one = c.beginTabItem("um");
+            tabRects[0] = c.itemRect();
+            if (one)
+            {
+                ++submitted;
+                c.dummy(40.0f, 20.0f);
+                contentRects[0] = c.itemRect();
+                c.endTabItem();
+            }
+            const bool two = c.beginTabItem("dois", closeSecond ? &closeSecond : nullptr, itemFlags);
+            tabRects[1] = c.itemRect();
+            if (two)
+            {
+                ++submitted;
+                c.dummy(40.0f, 60.0f);
+                contentRects[1] = c.itemRect();
+                c.endTabItem();
+            }
+            const bool three = thirdOpen && c.beginTabItem("tres", &thirdOpen, thirdFlags);
+            tabRects[2] = c.itemRect();
+            if (three)
+            {
+                ++submitted;
+                c.dummy(40.0f, 10.0f);
+                contentRects[2] = c.itemRect();
+                c.endTabItem();
+            }
+            c.endTabBar();
+        }
+        c.label("depois");
+        afterRect = c.itemRect();
+        afterSeen = true;
+        c.endWindow();
+    };
+
+    // O primeiro frame: a primeira tab fica escolhida sozinha (é a regra das tabs:
+    // a primeira de uma barra nova), e o conteúdo dela é o único submetido.
+    harness.frame(build);
+    assert(submitted == 1);
+    assert(contentRects[0].width > 0.0f);
+    assert(contentRects[1].width == 0.0f);
+    // A tab escolhida fica no topo da barra e o conteúdo dela por baixo.
+    assert(tabRects[0].x == tabRects[1].x - tabRects[0].width);
+    assert(contentRects[0].y >= tabRects[0].y + tabRects[0].height - 1.0f);
+    // O que vem depois da barra começa por baixo do conteúdo dela.
+    assert(afterRect.y > contentRects[0].y + 20.0f);
+
+    // Um clique na segunda tab escolhe-a neste mesmo frame, e o conteúdo passa a ser
+    // o dela (mais alto, por isso o que vem depois desce).
+    const float beforeY = afterRect.y;
+    const float secondX = tabRects[1].x + tabRects[1].width * 0.5f;
+    const float tabY = tabRects[1].y + tabRects[1].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(secondX, tabY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, secondX, tabY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, secondX, tabY));
+    harness.frame(build);
+    // O conteúdo da tab escolhida agora é do frame seguinte (o realce é já deste):
+    // é a mesma regra do ImGui.
+    harness.frame(build);
+    assert(submitted == 1);
+    assert(contentRects[1].width > 0.0f);
+    assert(afterRect.y > beforeY + 20.0f);
+
+    // O X da tab fecha-a: o open do chamador fica a false e a tab desaparece (o
+    // chamador deixa de a submeter).
+    const float closeX = tabRects[1].x + tabRects[1].width - 10.0f;
+    context.pushEvent(ig::Event::pointerMove(closeX, tabY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, closeX, tabY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, closeX, tabY));
+    harness.frame(build);
+    assert(!closeSecond);
+    // A tab "dois" já não é submetida (o chamador deixa de a submeter com o open a
+    // false) e a barra escolhe a primeira outra vez.
+    harness.frame(build);
+    harness.frame(build);
+    assert(submitted == 1);
+    assert(contentRects[0].width > 0.0f);
+
+    // O SetSelected escolhe a terceira tab (o conteúdo dela é do frame seguinte).
+    thirdFlags = ig::Context::TabItemFlags::SetSelected;
+    harness.frame(build);
+    harness.frame(build);
+    assert(submitted == 1);
+    assert(contentRects[2].width > 0.0f);
+    thirdFlags = ig::Context::TabItemFlags::None;
+
+    // Uma barra nova com o AutoSelectNewTabs: uma tab que apareça fica escolhida.
+    barFlags = ig::Context::TabBarFlags::AutoSelectNewTabs;
+    harness.frame(build);
+    harness.frame(build);
+    assert(submitted == 1);
+
+    // (O Fitting, que só encolhe quando as tabs não cabem, tem o teste dele.)
+    barFlags = ig::Context::TabBarFlags::Reorderable;
+    // Arrastar a primeira tab para cima da terceira troca-lhes a ordem: no frame
+    // seguinte a primeira fica onde estava a terceira e vice-versa.
+    harness.frame(build);
+    const float firstX = tabRects[0].x;
+    const float thirdX = tabRects[2].x;
+    const float firstCentre = tabRects[0].x + tabRects[0].width * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(firstCentre, tabY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, firstCentre, tabY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerMove(thirdX + 4.0f, tabY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, thirdX + 4.0f, tabY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(tabRects[0].x != firstX);
+    assert(tabRects[0].x > firstX);
+}
+
+// O Fitting de uma barra de tabs: as tabs que não cabem encolhem para dividirem a
+// largura da barra (é o que faz uma barra com muitos documentos continuar a caber).
+void test_tab_bar_fitting()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    unsigned barFlags = ig::Context::TabBarFlags::None;
+    ig::Rect rects[2];
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("fitting", ig::Rect(0.0f, 0.0f, 400.0f, 200.0f)));
+        if (c.beginTabBar("largo", barFlags))
+        {
+            if (c.beginTabItem("um nome de tab bastante comprido"))
+                c.endTabItem();
+            rects[0] = c.itemRect();
+            if (c.beginTabItem("outro nome de tab igualmente comprido"))
+                c.endTabItem();
+            rects[1] = c.itemRect();
+            c.endTabBar();
+        }
+        c.endWindow();
+    };
+
+    // Sem o Fitting as tabs têm a largura do rótulo (e juntas não cabem nos 384).
+    harness.frame(build);
+    const float natural = rects[0].width;
+    assert(natural > 192.0f);
+    assert(rects[0].width + rects[1].width > 384.0f);
+    assert(rects[1].x == rects[0].x + rects[0].width);
+
+    // Com ele, cada uma fica com metade da barra.
+    barFlags = ig::Context::TabBarFlags::Fitting;
+    harness.frame(build);
+    harness.frame(build);
+    assert(fabsf(rects[0].width - 192.0f) < 1.0f);
+    assert(fabsf(rects[1].width - 192.0f) < 1.0f);
+    assert(rects[1].x == rects[0].x + rects[0].width);
+}
+
 } // namespace
 
 int main()
@@ -3416,6 +3600,8 @@ int main()
     test_tree_style();
     test_popup_modal();
     test_popup_open_flags();
+    test_tabs_with_content();
+    test_tab_bar_fitting();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
