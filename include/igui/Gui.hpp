@@ -762,6 +762,12 @@ public:
     // It resizes with the grip like the sortable one when the table owns
     // mutable weights. Call tableNextColumn() before each header.
     void tableHeader(StringView label);
+    // Cell of a tree-structured table: a guide line for every ancestor level,
+    // a disclosure arrow when hasChildren, and the label. depth is the nesting
+    // level (0 for roots). Returns true on the frame the arrow was pressed;
+    // expanded is toggled then and the caller skips the rows of a collapsed
+    // node. Call tableNextColumn() before it.
+    bool tableTreeCell(StringView label, int depth, bool hasChildren, bool &expanded);
     // Draw a clickable header in the current table cell. sortColumn starts at
     // -1; clicking a new column selects ascending order and clicking the
     // selected column toggles sortAscending. Returns true when the sort state
