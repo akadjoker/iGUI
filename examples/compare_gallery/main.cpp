@@ -163,7 +163,8 @@ void usage()
     printf("usage: compare_gallery [--width=N] [--height=N] [--frames=N] [--hidden]\n"
            "                       [--screenshot=FILE] [--no-vsync] [--font=FILE] [--dump]\n"
            "                       [--fonts-dir=DIR] [--open-all | --open=SECCAO]\n"
-           "                       [--click=X,Y] [--hover=X,Y] [--wheel=N] [--help]\n"
+           "                       [--click=X,Y] [--click2=X,Y] [--hover=X,Y] [--wheel=N]\n"
+           "                       [--help]\n"
            "  --font=FILE e o tipo de letra dos dois paineis; --fonts-dir=DIR (misc/fonts\n"
            "  do ImGui) tem as faces extra que a seccao 'Fonts' mostra, em ambos os lados.\n"
            "  SECCAO e o nome de uma seccao do demo: 'Combo', 'Basic', 'Tables & Columns'.\n"
@@ -223,6 +224,11 @@ int main(int argc, char **argv)
     bool click = false;
     float clickX = 0.0f;
     float clickY = 0.0f;
+    // Um segundo clique, mais tarde: é o que um popup de dentro de outro (ou a
+    // escolha de um item de uma lista) precisa para se ver numa captura.
+    bool click2 = false;
+    float click2X = 0.0f;
+    float click2Y = 0.0f;
     int wheel = 0;
     bool hover = false;
     float hoverX = 0.0f;
@@ -254,6 +260,8 @@ int main(int argc, char **argv)
             onlySection = arg + 7;
         else if (parseClick(arg, clickX, clickY))
             click = true;
+        else if (parsePoint(arg, "--click2=", click2X, click2Y))
+            click2 = true;
         else if (strncmp(arg, "--wheel=", 8) == 0)
             wheel = atoi(arg + 8);
         else if (parsePoint(arg, "--hover=", hoverX, hoverY))
@@ -519,6 +527,17 @@ int main(int argc, char **argv)
                 ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
             else if (frame == 3)
                 ui.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+        }
+        // --click2=X,Y: o mesmo, mais tarde (frames 6 a 8), para um segundo clique
+        // (escolher um item de uma lista, abrir um popup de dentro de outro).
+        if (click2)
+        {
+            if (frame == 6)
+                ui.pushEvent(ig::Event::pointerMove(click2X, click2Y));
+            else if (frame == 7)
+                ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, click2X, click2Y));
+            else if (frame == 8)
+                ui.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, click2X, click2Y));
         }
         // --hover=X,Y: põe o ponteiro nesse ponto a partir do frame 5 (sem clicar).
         // É o que abre um submenu, que abre por hover e não por clique.
