@@ -1723,6 +1723,20 @@ private:
         }
     };
     MultiSelectState multiSelect_;
+    // Menu aberto como contentor de layout (ver beginMenuContent). É uma pilha
+    // porque um submenu abre um contentor dentro do do pai, e ao fechar tem de
+    // voltar ao cursor do pai (os itens do pai continuam depois dele).
+    struct MenuContentState
+    {
+        LayoutState layout;
+        Rect clip;
+        float width;
+
+        MenuContentState() : layout(), clip(), width(0.0f) {}
+    };
+    static const int kMenuContentStackSize = 4;
+    MenuContentState menuContents_[kMenuContentStackSize];
+    int menuContentDepth_;
     // A barra de menu da aplicação (ver beginMainMenuBar): a janela dela, que é a
     // última a ser desenhada, e se ela foi submetida neste frame.
     WindowHandle mainMenuBarWindow_;
@@ -2041,6 +2055,22 @@ private:
     bool beginComboImpl(StringView label, StringView preview, const Rect &bounds,
                         int visibleItems, bool advanceHeader);
     static StringView mainMenuBarTitle();
+    // O conteúdo de um menu aberto é um contentor de layout, como a janela de um
+    // popup do ImGui: um widget de layout submetido lá dentro (slider, child,
+    // input, combo) fica dentro do popup em vez de aterrar na janela. Guarda o
+    // layout de fora, põe o cursor no popup e empurra o id do menu para o idStack
+    // (dois menus não podem partilhar os ids dos widgets).
+    void beginMenuContent(const Rect &popupBounds);
+    void endMenuContent();
+    // O clip/o largo do contentor do menu em vigor (o do topo da pilha).
+    Rect &menuContentClip();
+    const Rect &menuContentClip() const;
+    float &menuContentWidth();
+    float menuContentWidth() const;
+    void setMenuContentBounds(const Rect &clip, float width);
+    // Um item de menu é um item do layout também: é o que faz o que vem a seguir
+    // cair por baixo dele, dentro do popup.
+    void syncMenuLayoutItem(const Rect &item);
     // O item de um bloco de escolha múltipla: aplica o que o clique pediu à seleção
     // da aplicação e devolve se o item fica escolhido (ver selectable).
     bool applyMultiSelectClick(bool clicked);
