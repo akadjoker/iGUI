@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 290 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 294 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
@@ -190,10 +190,12 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
-| `OpenPopup`/`BeginPopup`/`EndPopup` (pilha de popups, ids, posição, tamanho) | `beginDialog(titulo, open, size)` | parcial: o estado é da aplicação, não há pilha nem `OpenPopup` |
+| `OpenPopup`/`BeginPopup`/`EndPopup` (ids, posição, tamanho) | `openPopup(id, posicao, tamanho)`/`beginPopup(id)`/`endPopup` | existe: o popup abre onde foi pedido (encostado ao ecrã quando não cabe, como o `FindBestWindowPosForPopup`), a largura é pedida e a altura medida pelo corpo do frame anterior, o clique fora e o Escape fecham-no, e o corpo leva a margem da janela (o `WindowPadding`) - mais o `closeCurrentPopup` e o `isPopupOpen` |
+| Popups aninhados (uma pilha de popups) | a pilha de `openPopup`/`beginPopup` | existe: um popup aberto de dentro de outro fica **por cima** dele sem o fechar (é o "Stacked Popup" do demo), só o de cima recebe o ponteiro e o Escape, um clique dentro do pai mas fora do filho fecha só o filho, e um clique fora de todos fecha a pilha toda. Quem não for submetido num frame sai da pilha (como tudo no modo imediato), e a `beginDialog` continua a ser a caixa modal de conteúdo livre |
+| `MenuItem`/`BeginMenu` dentro de um popup ou de uma janela | `menuItem`/`menuCheckbox`/`menuSeparator`/`beginSubMenu` | existe: num popup os itens são linhas do layout dele (uma faixa da altura do item, com o mesmo realce e o atalho à direita), e num menu continuam a ser as faixas encostadas às bordas; o submenu abre ao lado do item, com a caixa por cima do popup |
+| `BeginPopup(..., ImGuiWindowFlags_MenuBar)` (um popup com barra de menus) | `beginMenuBar(rect)` dentro do `beginPopup` | existe (a barra leva o rect do chamador, como em todo o iGUI) |
 | `BeginPopupModal`/`EndPopup`/`CloseCurrentPopup` | `beginPopupModal(titulo, p_open)`/`endPopup`/`closeCurrentPopup` | existe: abre-se com o `openPopup` do título, sai centrado, com barra de título própria (e um X quando o chamador dá o `bool *open`), desenhado por cima de todas as janelas e com o resto da interface atrás de um véu; fecha com o Escape, o X ou o `closeCurrentPopup` - e **não** fecha com um clique fora (é o que o distingue de um popup, e o que trava os atalhos enquanto está aberto). A `messageBox` e a `beginDialog` continuam a ser as caixas de OK/Cancelar |
 | `BeginPopupContextItem`/`Window`/`Void` | `beginContextMenu(id, rect)` | parcial: precisa do rect à mão |
-| Popups aninhados (uma pilha de popups) | — | **não existe**: o popup é de cada vez um, e o `NoOpenOverExistingPopup` é o flag que evita abrir por cima. Um popup por documento (o `ShowExampleAppDocuments`) faz-se com um `openPopup`/`beginPopup` por id, e a galeria mostra-o com dois |
 | `BeginTooltip` como popup | — | **não existe** |
 
 ## Menus
@@ -666,18 +668,33 @@ Continua em falta neste nível:
       véu, e os atalhos do `shortcut()` também ficam presos): fecha com o Escape, o
       X ou o `closeCurrentPopup`. Com ele, os flags do `openPopup` (`AtCursor`,
       `NoOpenOverExistingPopup`, e o `AnyPopupId` do `isPopupOpen`), a secção dos
-      popups do demo fica coberta menos a pilha de popups.
+      popups do demo fica coberta: "Select..", "Toggle.." (com o "Stacked Popup"
+      aberto de dentro dele) e "With a menu.." estão na galeria.
       *Onde:* `src/Gui.cpp` (`beginPopupModal`, `endPopup`, `beginPopupContent`,
       `openPopup`), `include/igui/Gui.hpp` (`PopupFlags`), `tests/test_item_status.cpp`.
-- [ ] **A pilha de popups**: um popup aberto de dentro de outro (o `ShowExampleAppDocuments`
-      e o "Popup Stack" do demo). O iGUI tem um popup de cada vez.
+- [x] **A pilha de popups**: um popup aberto de dentro de outro fica por cima sem
+      fechar o pai (é o "Stacked Popup" do demo, e o `ShowExampleAppDocuments` faz-se
+      com um popup por documento). O estado passou de "um popup" para uma pilha de
+      entradas (id, posição, largura pedida, medida do corpo, caixa do início do
+      frame, modal), e com ela o `pointerBlockedByOpenPopup` passou a olhar para a
+      pilha toda: só o popup de cima (e o corpo que ele está a submeter) recebe o
+      ponteiro, o Escape fecha só o de cima, e um clique dentro do pai mas fora do
+      filho fecha só o filho. Os itens de menu (`menuItem`, `menuCheckbox`,
+      `menuSeparator`, `beginSubMenu`) passaram a valer também dentro de um popup -
+      é o que o "Toggle.." do demo usa - e um popup pode levar uma barra de menus
+      (o "With a menu..").
+      *Onde:* `src/Gui.cpp` (`popups_`, `findPopup`, `closePopupAt`, `openPopupSized`,
+      `beginPopup`, `endPopup`, `beginPopupModal`, `menuItemInternal`, `menuSeparator`,
+      `beginSubMenu`, `pointerBlockedByOpenPopup`), `include/igui/Gui.hpp`
+      (`PopupEntry`), `tests/test_item_status.cpp` (`test_stacked_popups`),
+      `examples/compare_gallery/GalleryIgui.cpp`.
 - [x] **Flags do `openPopup` e a pilha de ids por popup**: `openPopup(id, AtCursor)`
       abre encostado ao cursor do layout (um menu de contexto), o
       `NoOpenOverExistingPopup` não abre por cima do que já lá está e o
       `isPopupOpen(id, AnyPopupId)` diz que há um popup aberto seja ele qual for -
       que é como uma aplicação sabe que tem um popup pendente. A lista de popups
       por id faz-se com um `openPopup`/`beginPopup` por id (é o `ShowExampleAppDocuments`),
-      o que falta mesmo é a pilha (um popup aberto de dentro de outro).
+      e a pilha ficou no item seguinte.
       *Onde:* `src/Gui.cpp` (`openPopup`, `isPopupOpen`), `include/igui/Gui.hpp`
       (`PopupFlags`), `tests/test_item_status.cpp`.
 - [x] **Fontes, vários tamanhos**: com o `pushStyleVar(&Theme::fontSize, x)` o texto
