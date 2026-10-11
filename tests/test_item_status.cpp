@@ -3551,6 +3551,163 @@ void test_tab_bar_fitting()
     assert(rects[1].x == rects[0].x + rects[0].width);
 }
 
+// A rolagem horizontal de uma tabela (TableStyle::scrollX): as colunas são a
+// largura pedida (innerWidth), o que não cabe rola dentro da tabela com a roda
+// horizontal e com a barra de baixo, e as primeiras freezeCols ficam presas à
+// esquerda - o que rola é cortado por elas.
+void test_table_scrolls_sideways()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = {1.0f, 1.0f, 1.0f};
+    ig::TableStyle style;
+    style.borders = true;
+    style.scrollX = true;
+    style.innerWidth = 600.0f;
+    style.freezeCols = 1;
+    ig::Rect headerRects[3];
+    ig::Rect cellRects[3];
+    bool cellVisible[3] = {false, false, false};
+    const float tableWidth = 300.0f;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("lado", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, tableWidth))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                c.tableHeader(i == 0 ? "A" : (i == 1 ? "B" : "C"));
+                headerRects[i] = c.itemRect();
+            }
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                // Um dummy da largura da coluna: o itemRect é o da célula (um
+                // label é só o texto) e o isItemVisible é o da coluna.
+                c.dummy(200.0f, 16.0f);
+                cellRects[i] = c.itemRect();
+                cellVisible[i] = c.isItemVisible();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    const ig::DrawData &firstFrame = harness.frame(build);
+    // As colunas são a largura pedida dividida pelos pesos (600/3 = 200), não a
+    // largura da tabela: a terceira já sai para fora dela.
+    const float columnWidth = 200.0f;
+    const float firstHeaderX = headerRects[0].x;
+    const float scrolled = 28.0f;   // um entalhe anda o que mede uma widget
+    // A largura da coluna lê-se do cabeçalho (a célula é o texto, que é mais
+    // estreito): é a coluna que segue a innerWidth, não a tabela.
+    assert(fabs(headerRects[0].width - columnWidth) < 1.0f);
+    assert(cellRects[0].x == headerRects[0].x);
+    assert(cellRects[1].x == headerRects[1].x);
+    assert(fabs(cellRects[1].width - columnWidth) < 1.0f);
+    assert(headerRects[1].x == firstHeaderX + columnWidth);
+    assert(headerRects[2].x == firstHeaderX + columnWidth * 2.0f);
+    assert(headerRects[2].x > firstHeaderX + tableWidth);
+    // A terceira coluna está fora da tabela, por isso a célula dela não se vê (o clip
+    // é a banda que rola); a segunda, que começa onde as presas acabam, vê-se.
+    assert(cellVisible[1]);
+    assert(!cellVisible[2]);
+
+    // A roda horizontal rola a tabela: a segunda coluna (que rola) anda para a
+    // esquerda e a primeira (presa) não se mexe.
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelX = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(100.0f, cellRects[0].y + 4.0f));
+    context.pushEvent(wheel);
+    harness.frame(build);
+    assert(headerRects[0].x == firstHeaderX);
+    assert(fabsf(headerRects[1].x - (firstHeaderX + columnWidth - scrolled)) < 1.0f);
+    assert(headerRects[2].x == headerRects[1].x + columnWidth);
+
+    // Rolar até ao fim para: a segunda coluna sai de vista (tapada pelas presas) e a
+    // terceira entra no lugar dela.
+    for (int i = 0; i < 40; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(100.0f, cellRects[0].y + 4.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(headerRects[0].x == firstHeaderX);
+    assert(!cellVisible[1]);
+    assert(cellVisible[2]);
+    // A terceira coluna (natural em x + 2*largura) fica a rolagem máxima à frente.
+    assert(fabsf(headerRects[2].x -
+                 (firstHeaderX + columnWidth * 2.0f - (600.0f - tableWidth))) < 1.0f);
+
+    // A barra de baixo está no fundo da tabela, com o punho à cor do tema.
+    const ig::Color thumbColor = context.theme().scrollbarThumb;
+    bool foundThumb = false;
+    float thumbY = 0.0f;
+    float thumbRight = 0.0f;
+    const ig::DrawData &lastFrame = harness.frame(build);
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < lastFrame.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = lastFrame.vertices[i];
+        if (vertex.color != thumbColor)
+            continue;
+        if (!foundThumb)
+        {
+            foundThumb = true;
+            thumbY = vertex.position.y;
+            thumbRight = vertex.position.x;
+        }
+        if (vertex.position.y > thumbY)
+            thumbY = vertex.position.y;
+        if (vertex.position.x > thumbRight)
+            thumbRight = vertex.position.x;
+    }
+    assert(foundThumb);
+    assert(thumbY > firstHeaderX + 40.0f);
+    // O punho chega ao fim da barra quando a rolagem está no máximo.
+    assert(thumbRight >= firstHeaderX + tableWidth - 2.0f);
+}
+
+// Uma tabela com scrollX mas sem largura própria (innerWidth 0 ou menor do que a
+// tabela) não rola: as colunas continuam a dividir a largura dela.
+void test_table_without_sideways_scroll_keeps_the_width()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[2] = {1.0f, 1.0f};
+    ig::TableStyle style;
+    style.scrollX = true;
+    style.innerWidth = 200.0f;   // menos do que a tabela (300)
+    ig::Rect rects[2];
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("lado2", ig::Rect(0.0f, 0.0f, 400.0f, 200.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f))
+        {
+            for (int i = 0; i < 2; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                c.dummy(150.0f, 16.0f);
+                rects[i] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(fabs(rects[0].width - 150.0f) < 1.0f);
+    assert(rects[1].x == rects[0].x + rects[0].width);
+}
+
 } // namespace
 
 int main()
@@ -3602,6 +3759,8 @@ int main()
     test_popup_open_flags();
     test_tabs_with_content();
     test_tab_bar_fitting();
+    test_table_scrolls_sideways();
+    test_table_without_sideways_scroll_keeps_the_width();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
