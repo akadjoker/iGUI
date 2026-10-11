@@ -751,6 +751,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), tableOrder_(nullptr), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
+      lastPressSeconds_{0.0f, 0.0f, 0.0f}, lastPressPosition_{Vec2(), Vec2(), Vec2()},
+      doubleClicked_{false, false, false}, doubleClickInterval_(0.30f), doubleClickDistance_(6.0f),
       hoverDelay_(0.45f), hoverDelayWidget_(InvalidWidgetId), hoverSeconds_(0.0f),
       hoverStationarySeconds_(0.0f), hoverStartPosition_(), tooltipHoverSeconds_(0.0f),
       tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId), plotPoints_(), plotBars_(),
@@ -841,6 +843,7 @@ void Context::beginFrame(const FrameInfo &frame)
     {
         pointer_.pressed[i] = false;
         pointer_.released[i] = false;
+        doubleClicked_[i] = false;
     }
 
     frameDrawList_.clear();
@@ -1242,6 +1245,10 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
     // the frame's solid style (see beginFrame).
     applySolidStyle(window->drawList);
     applySolidStyle(window->overlayDrawList);
+    // O que apareceu agora: um lastFrame de 0 é uma janela que nunca foi submetida
+    // (o frame 0 nunca é de submissão) e um lastFrame que não é o frame anterior é
+    // uma janela que esteve fora (ver isWindowAppearing).
+    window->appeared = window->lastFrame == 0u || window->lastFrame + 1u < frameNumber_;
     window->lastFrame = frameNumber_;
     const WindowState *focused = windows_.get(focusedWindow_);
     if (!focused || !focused->open || !windowSubmittedRecently(*focused))
@@ -6771,6 +6778,39 @@ void Context::tooltip(StringView text)
              theme_.tooltipText, viewport);
 }
 
+bool Context::isWindowFocused() const
+{
+    return currentWindow_ != WindowHandle() && currentWindow_ == focusedWindow_;
+}
+
+bool Context::isWindowHovered() const
+{
+    if (currentWindow_ == WindowHandle())
+        return false;
+    return currentWindow_ == windowAtPointer();
+}
+
+bool Context::isWindowAppearing() const
+{
+    const WindowState *window = currentWindow();
+    return window != nullptr && window->appeared;
+}
+
+bool Context::isPointerDoubleClicked(PointerButton button) const
+{
+    return doubleClicked_[buttonIndex(button)];
+}
+
+void Context::setDoubleClickInterval(float seconds)
+{
+    doubleClickInterval_ = seconds > 0.0f ? seconds : 0.0f;
+}
+
+void Context::setDoubleClickDistance(float pixels)
+{
+    doubleClickDistance_ = pixels > 0.0f ? pixels : 0.0f;
+}
+
 void Context::setTooltipDelay(float seconds)
 {
     tooltipDelay_ = seconds > 0.0f ? seconds : 0.0f;
@@ -9948,6 +9988,23 @@ void Context::consumeEvents()
             // múltipla lê quando o item é carregado (ver beginMultiSelect).
             pointer_.pressedControl[index] = event.control;
             pointer_.pressedShift[index] = event.shift;
+            // Duplo clique: outra carregada do mesmo botão, perto no tempo e no
+            // espaço desta. Depois de um duplo a contagem recomeça, para um triplo
+            // não valer como dois.
+            const float sinceLast = elapsedSeconds_ - lastPressSeconds_[index];
+            const float dx = event.position.x - lastPressPosition_[index].x;
+            const float dy = event.position.y - lastPressPosition_[index].y;
+            const bool near = dx * dx + dy * dy <= doubleClickDistance_ * doubleClickDistance_;
+            if (lastPressSeconds_[index] > 0.0f && sinceLast <= doubleClickInterval_ && near)
+            {
+                doubleClicked_[index] = true;
+                lastPressSeconds_[index] = 0.0f;
+            }
+            else
+            {
+                lastPressSeconds_[index] = elapsedSeconds_ > 0.0f ? elapsedSeconds_ : 0.0001f;
+                lastPressPosition_[index] = event.position;
+            }
             break;
         }
         case EventType::PointerUp:
@@ -10642,6 +10699,7 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
     item_.id = id;
     item_.bounds = rect;
     item_.clicked = false;
+    item_.doubleClicked = false;
     item_.edited = false;
     item_.toggledOpen = false;
     item_.hoveredInRect = false;
@@ -10767,6 +10825,7 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
         return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
+    const bool doubleClicked = doubleClicked_[left];
     const bool pressedHere = pointerPressedIn(visible, left);
     if (pressedHere)
     {
@@ -10785,6 +10844,7 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     // O Enter sobre o item com foco também é um clique, para quem o perguntar.
     const bool activated = clicked || (focusedWidget_ == id && enterPressed_);
     item_.clicked = activated;
+    item_.doubleClicked = activated && doubleClicked;
     item_.active = activeWidget_ == id;
     item_.activated = item_.active && activeWidgetAtFrameStart_ != id;
     item_.deactivated = !item_.active && activeWidgetAtFrameStart_ == id;
@@ -10800,6 +10860,7 @@ void Context::keepItemStatus(const ItemStatus &primary, const Rect &bounds)
     item_.hovered = primary.hovered || item_.hovered;
     item_.active = primary.active || item_.active;
     item_.clicked = primary.clicked || item_.clicked;
+    item_.doubleClicked = primary.doubleClicked || item_.doubleClicked;
     item_.edited = primary.edited || item_.edited;
     item_.focused = primary.focused || item_.focused;
     // As transições são do item principal: o sub-item que correu no meio (o campo

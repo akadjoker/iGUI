@@ -63,7 +63,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `CheckboxFlags` (bitfield int/unsigned) | `checkboxFlags` | existe (`unsigned`; o desenho e o clique são os do `checkbox`) |
 | `RadioButton` | `radioButton` | existe |
 | `ImageButton` / `SmallImageButton` | `imageButton` / `smallImageButton` | existe |
-| `Selectable` com flags | `selectable(label, selected, width)` | parcial: sem `SpanAllColumns`, `AllowDoubleClick`, `Disabled`, `AllowOverlap`, alinhamento à direita |
+| `Selectable` com flags | `selectable(label, selected, width)` + `isItemDoubleClicked()` | parcial: o duplo clique existe (é o `AllowDoubleClick` + `IsMouseDoubleClicked`) e o desativado vem do `beginDisabled`; faltam o `SpanAllColumns`, o `AllowOverlap` e o alinhamento à direita |
 
 ## Sliders, drags e inputs numéricos
 
@@ -269,12 +269,12 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `IsItemHovered/Active/Clicked/Focused/Edited/Disabled` | `isItemHovered/isItemActive/isItemClicked/isItemFocused/isItemEdited/isItemDisabled` | existe (o `LastItemData` do iGUI); há também `isHovered(id)`/`isClicked(id)` para widgets próprios |
-| `IsItemActivated/Deactivated/DeactivatedAfterEdit`, `IsItemToggledOpen`, `IsItemVisible`, `IsItemEnabled` | — | **não existe** |
+| `IsItemActivated/Deactivated/DeactivatedAfterEdit`, `IsItemToggledOpen`, `IsItemVisible`, `IsItemEnabled` | `isItemActivated/isItemDeactivated/isItemDeactivatedAfterEdit/isItemToggledOpen/isItemVisible` | existe, menos o `IsItemEnabled` (aqui o `beginDisabled` corta tudo o que está dentro e o `isItemDisabled` diz que o último item o está) |
 | `GetItemRectMin/Max/Size`, `GetItemID` | `itemRect()`, `itemId()` | existe |
 | `GetItemFlags` | — | **não existe** |
 | `IsItemHovered` com flags (`Delay`, `Stationary`, `AllowWhenBlockedBy*`, `AllowWhenDisabled`, `RectOnly`) | `isItemHovered(ItemHoverFlags)` | existe: `Delay`, `Stationary`, `AllowWhenBlockedByActiveItem`, `AllowWhenBlockedByPopup` e `RectOnly` (falta o `AllowWhenDisabled`, que aqui é o `beginDisabled` a cortar tudo) |
 | `IsItemHoverable`, `SetItemAllowOverlap`, `SetNextItemAllowOverlap` | — | **não existe** |
-| `IsWindowFocused/Hovered/Appearing/Collapsed`, `IsAnyItemHovered/Active` | `wantsPointer`/`wantsKeyboard`/`isMenuOpen` | parcial |
+| `IsWindowFocused/Hovered/Appearing/Collapsed`, `IsAnyItemHovered/Active` | `isWindowFocused`/`isWindowHovered`/`isWindowAppearing`, `wantsPointer`/`wantsKeyboard`/`isMenuOpen` | parcial: as três consultas de janela existem (`appearing` é "não estava no frame anterior"); falta o `Collapsed` (o iGUI não tem janelas recolhidas, tem minimizadas) e o `IsAnyItemHovered/Active` |
 | `IsRectVisible`, `GetWindowDrawList`, `ImDrawList` público | `draw*` do `Context` | parcial: o `DrawList` existe, mas a aplicação só desenha pelo Context |
 | `SetItemTooltip` | `tooltip` | parcial |
 
