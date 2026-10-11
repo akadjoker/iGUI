@@ -11,6 +11,9 @@ The library never talks to a window system or a GPU directly. It produces a list
 
 - **Backend-agnostic rendering.** Widgets emit clipped, textured triangle lists; a backend only has to measure text and render `DrawData`.
 - **Two widget APIs, one engine.** Pick immediate mode, retained mode, or link both in the same program.
+- **Layout that behaves like ImGui's.** `beginGroup`/`endGroup` make a block of widgets one item (the next `sameLine` jumps the whole column, the margin inside is the group's), a line is as tall as its tallest item, and `setNextItemWidth`/`pushItemWidth` size the next item or a block of them.
+- **ImGui's label convention.** `"Gravar##ficheiro"` draws `Gravar` but keeps the whole string as the widget id, and `"##so-id"` draws nothing - so two widgets can share their visible text and still own their state, and a numeric field can take no room for a label (which is how the demo writes most of its inputs).
+- **Item status after any widget.** `isItemHovered()`, `isItemActive()`, `isItemClicked()`, `isItemEdited()`, `isItemFocused()`, `isItemDisabled()`, `itemRect()` and `itemId()` describe the widget just submitted - the immediate-mode equivalent of `IsItemHovered`/`GetItemRectSize`, so `ui.button("Save"); if (ui.isItemHovered()) ui.tooltip("writes the file");` works.
 - **Large retained widget set:** layouts, scroll areas, text inputs, combo boxes, menus, dialogs, tree/property/color widgets, data views, charts, node editor, timeline, audio widgets (e.g. piano roll), thumbnail grid, file dialog, console, dock panels, asset browser, gizmos, automotive-style gauges, and a widget serializer.
 - **Built-in code editor** with lexical syntax highlighting (`ig::syntax`), available in both modes.
 - **Immediate-mode core without the STL.** `igui_core` and the immediate-mode library use the bundled `ct` containers; a build-time check (`cmake/CheckNoStd.cmake`) fails the build if `std::` or STL container headers appear in that code.
@@ -87,6 +90,10 @@ cmake --build build --parallel
 | `IGUI_BUILD_RAYLIB_BACKEND` | `ON` | Build the Raylib backend (`igui::raylib`) if Raylib is found |
 | `IGUI_BUILD_RAYLIB_DEMO` | `OFF` | Build the Raylib demos |
 | `IGUI_BUILD_CODE_EDITOR_DEMO` | `OFF` | Build the immediate-mode code editor demo (requires Raylib) |
+| `IGUI_BUILD_BENCH` | `OFF` | Build the headless iGUI-vs-ImGui benchmark (`igui_bench`; needs `IGUI_BUILD_IMMEDIATE`) |
+| `IGUI_BUILD_OPENGL_BACKEND` | `OFF` | Build the OpenGL 3.3 core backend (`igui::opengl`; needs `IGUI_BUILD_FONT`) |
+| `IGUI_BUILD_COMPARE_GALLERY` | `OFF` | Build the SDL2+OpenGL side-by-side gallery, iGUI against the ImGui demo window |
+| `IGUI_BENCH_IMGUI_DIR` | empty | ImGui source tree the benchmark compares against; without it `igui_bench` measures iGUI alone |
 
 ## Using iGUI in your project
 
@@ -259,6 +266,7 @@ adapters/sdl2/           SDL2 backend
 adapters/raylib/         Raylib backend
 examples/                Demo applications
 tests/                   Test executables (run through CTest)
+bench/                   Headless iGUI-vs-ImGui benchmark (opt-in)
 third_party/             containers (submodule) and stb headers
 cmake/                   Build helper scripts
 ```
@@ -270,6 +278,53 @@ ctest --test-dir build --output-on-failure
 ```
 
 Registered tests: `igui_core`, `igui_widget_gallery`, `igui_both_modes`, `igui_original_widgets`, plus `igui_font` and `igui_sdl2` when those modules are built. Continuous integration builds and tests both the immediate-mode and retained configurations on every push and pull request.
+
+## Benchmark
+
+`bench/` measures the same widget scenes through the immediate-mode `Context` and
+through ImGui, headless, and reports microseconds per frame, emitted geometry and
+draw calls for both. It is opt-in:
+
+```sh
+cmake -S . -B build -G Ninja -DIGUI_BUILD_BENCH=ON -DIGUI_BENCH_IMGUI_DIR=/path/to/imgui
+cmake --build build --target igui_bench
+./build/igui_bench --scene=gallery --blocks=10 --frames=800
+```
+
+See [bench/README.md](bench/README.md) for the scenes, the measured results,
+where iGUI's time goes, and the widget-by-widget parity notes.
+
+## Side-by-side gallery (iGUI vs the ImGui demo window)
+
+`examples/compare_gallery/` puts the real ImGui demo (`ShowDemoWindow()`) in one
+panel and the same demo rewritten with iGUI in the other, in one SDL2 + OpenGL 3.3
+window, and shows each side's submit/render/GPU time as it runs:
+
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DIGUI_BUILD_COMPARE_GALLERY=ON -DIGUI_BUILD_SDL2_DEMO=ON \
+  -DIGUI_BUILD_OPENGL_BACKEND=ON -DIGUI_BUILD_FONT=ON \
+  -DIGUI_BENCH_IMGUI_DIR=/path/to/imgui
+cmake --build build --target igui_compare_gallery
+./build/examples/compare_gallery/igui_compare_gallery            # window
+./build/examples/compare_gallery/igui_compare_gallery --hidden --frames=200
+./build/examples/compare_gallery/igui_compare_gallery --open-all  # everything expanded
+```
+
+Both panels draw the same UI: the iGUI side builds its theme from the ImGui
+default style (13px font, 19px items, 4px spacing, the same header colour, and
+the same window layout - a numbers strip on top, a titled, scrollable demo window
+below), so a row on the left lines up with the same row on the right and the two
+timings measure the same work. Both sides also draw with the same font: the
+gallery loads `misc/fonts/ProggyClean.ttf` from the ImGui tree with
+`ig::FontAtlas(fontData, ...)` (change it with `-DIGUI_GALLERY_FONT=...`, or pass
+`--font=FILE`), because a vector font asked for the same size comes out smaller
+and lighter than the pixel font the demo uses, and the comparison would then be
+of glyphs instead of libraries.
+
+[iGUI vs the ImGui demo](examples/compare_gallery/GAPS.md) surveys what the demo
+has and the immediate-mode API does not (with a TODO for each gap), and the same
+file documents what iGUI has that ImGui's core does not.
 
 ## Third-party components
 

@@ -581,6 +581,1119 @@ static void test_navigation_widgets()
     assert(tooltip.payload.text.textSize == 15u);
 }
 
+// Só o texto do conteúdo: a janela desenha o título e os símbolos dos botões da
+// barra de título, que também são comandos de texto.
+static bool isContentText(const ig::TextCommand &text, const ig::Theme &theme)
+{
+    return text.position.y >= theme.titleBarHeight;
+}
+
+// Os itens de texto: cor do tema (desativado), cor própria, quebra de linha e
+// bullet. O backend de teste mede 0.5 * fontSize por byte e a fonte do tema tem
+// 16 px, por isso um byte são 8 px de largura e uma linha são 16 px de altura.
+static void test_text_items()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+
+    context.beginFrame(ig::FrameInfo(400.0f, 300.0f));
+    assert(context.beginWindow("text items", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+    const ig::Vec2 start = context.cursor();
+    context.textDisabled("off");
+    const ig::Vec2 afterDisabled = context.cursor();
+    context.textColored("warn", ig::Color(10u, 20u, 30u));
+    const ig::Vec2 afterColored = context.cursor();
+    context.textWrapped("aaa bbb ccc", 40.0f);
+    const ig::Vec2 afterWrapped = context.cursor();
+    context.bulletText("point");
+    const ig::Vec2 afterBullet = context.cursor();
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    ig::StringView seen[8];
+    ig::Vec2 positions[8];
+    ig::Color colors[8];
+    size_t count = 0u;
+    for (size_t i = 0u; i < data.commands.size() && count < 8u; ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (!isContentText(text, theme))
+            continue;
+        seen[count] = ig::StringView(data.textBytes.data() + text.textOffset, text.textSize);
+        positions[count] = text.position;
+        colors[count] = text.color;
+        ++count;
+    }
+
+    // "off", "warn", as três linhas da quebra e o "point" do bullet.
+    assert(count == 6u);
+    assert(seen[0] == ig::StringView("off"));
+    assert(colors[0] == theme.textDisabled);
+    assert(seen[1] == ig::StringView("warn"));
+    assert(colors[1] == ig::Color(10u, 20u, 30u));
+    // 40 px de largura são cinco bytes a 8 px: "aaa", "bbb" e "ccc" um por linha,
+    // cada linha 16 px abaixo da anterior.
+    assert(seen[2] == ig::StringView("aaa"));
+    assert(seen[3] == ig::StringView("bbb"));
+    assert(seen[4] == ig::StringView("ccc"));
+    assert(positions[3].y - positions[2].y == 16.0f);
+    assert(positions[4].y - positions[3].y == 16.0f);
+    // O bullet desenha o ponto e indenta o texto.
+    assert(seen[5] == ig::StringView("point"));
+    assert(positions[5].x > positions[2].x);
+    // Cada item avança o cursor pela altura do que desenhou mais o espaçamento
+    // entre itens: uma linha (16 px) para os itens de uma linha, três para a
+    // quebra.
+    const float oneLine = theme.fontSize + theme.itemSpacing;
+    const float threeLines = 3.0f * theme.fontSize + theme.itemSpacing;
+    assert(afterDisabled.y - start.y == oneLine);
+    assert(afterColored.y - afterDisabled.y == oneLine);
+    assert(afterWrapped.y - afterColored.y == threeLines);
+    assert(afterBullet.y - afterWrapped.y == oneLine);
+}
+
+// Uma palavra maior que a linha é partida, e cada pedaço acaba num limite de
+// codepoint: um 'á' são dois bytes e não pode ficar meio desenhado.
+static void test_text_wrapped_breaks_long_words_at_codepoints()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+
+    context.beginFrame(ig::FrameInfo(400.0f, 300.0f));
+    assert(context.beginWindow("wrap", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+    // 20 px são dois bytes e meio: cabe um 'á' (16 px) por linha, não dois.
+    context.textWrapped(u8"áááá", 20.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    size_t lines = 0u;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (!isContentText(text, theme))
+            continue;
+        assert(text.textSize == 2u); // um codepoint por linha, nunca meio
+        const unsigned char *bytes =
+            reinterpret_cast<const unsigned char *>(data.textBytes.data() + text.textOffset);
+        assert(bytes[0] == 0xC3u && bytes[1] == 0xA1u); // á em UTF-8
+        ++lines;
+    }
+    assert(lines == 4u);
+}
+
+// Um bloco desativado: nada lá dentro reage ao ponteiro nem ao teclado, e o que é
+// desenhado sai com as cores fundidas com o fundo.
+static void test_disabled_block()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const float windowHeight = theme.titleBarHeight + theme.windowPadding * 2.0f;
+
+    // A cor que o botão tem dentro do bloco: fundida com o fundo e menos opaca.
+    const ig::Color background = theme.windowBackground;
+    const ig::Color enabledColor = theme.buttonBackground;
+    const float keep = 0.45f;
+    const ig::Color expected(
+        static_cast<uint8_t>(static_cast<float>(background.r) +
+                             (static_cast<float>(enabledColor.r) - static_cast<float>(background.r)) * keep + 0.5f),
+        static_cast<uint8_t>(static_cast<float>(background.g) +
+                             (static_cast<float>(enabledColor.g) - static_cast<float>(background.g)) * keep + 0.5f),
+        static_cast<uint8_t>(static_cast<float>(background.b) +
+                             (static_cast<float>(enabledColor.b) - static_cast<float>(background.b)) * keep + 0.5f),
+        static_cast<uint8_t>(static_cast<float>(enabledColor.a) * keep + 0.5f));
+
+    // O botão fica sempre no mesmo sítio, para o clique ser comparável.
+    const ig::Rect bounds(10.0f, 10.0f, 120.0f, theme.widgetHeight);
+    const float clickX = 10.0f + bounds.x + bounds.width * 0.5f;
+    const float clickY = windowHeight + bounds.y + bounds.height * 0.5f;
+
+    bool clicked = false;
+    bool sawFaded = false;
+    bool sawEnabled = false;
+
+    // 1. Sem bloco: o clique chega e a cor é a normal.
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.beginDisabled();
+        context.endDisabled();
+        clicked = context.button("press me", bounds);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        for (size_t i = 0u; i < data.vertices.size(); ++i)
+        {
+            if (data.vertices[i].color == enabledColor)
+                sawEnabled = true;
+            if (data.vertices[i].color == expected)
+                sawFaded = true;
+        }
+    }
+    assert(sawEnabled);
+    assert(!sawFaded);
+
+    // 2. Dois blocos encaixados: um endDisabled não chega para libertar.
+    clicked = true;
+    sawFaded = false;
+    sawEnabled = false;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.beginDisabled();
+        context.beginDisabled();
+        assert(context.isDisabled());
+        context.endDisabled();
+        assert(context.isDisabled());
+        clicked = context.button("press me", bounds);
+        context.endDisabled();
+        assert(!context.isDisabled());
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        for (size_t i = 0u; i < data.vertices.size(); ++i)
+        {
+            if (data.vertices[i].color == enabledColor)
+                sawEnabled = true;
+            if (data.vertices[i].color == expected)
+                sawFaded = true;
+        }
+        if (frame == 0)
+            context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+    }
+    assert(!clicked);
+    assert(!sawEnabled);
+    assert(sawFaded);
+
+    // 3. O mesmo clique, sem bloco, volta a funcionar: a posição estava certa.
+    clicked = false;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.button("press me", bounds);
+    context.endWindow();
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    clicked = context.button("press me", bounds);
+    context.endWindow();
+    context.endFrame();
+    assert(clicked);
+
+    // 4. Um beginDisabled sem endDisabled acaba no frame seguinte: o Context
+    //    limpa a profundidade ao começar um frame.
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.beginDisabled();
+    assert(context.isDisabled());
+    context.endWindow();
+    context.endFrame();
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(!context.isDisabled());
+    context.endFrame();
+}
+
+// A barra de progresso: preenchimento proporcional, overlay centrado e barra
+// indeterminada (value negativo) que anda com o tempo.
+static void test_progress_bar()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const float contentX = theme.windowPadding;
+    const float contentY = theme.titleBarHeight + theme.windowPadding;
+    const ig::Rect local(10.0f, 10.0f, 200.0f, theme.widgetHeight);
+
+    // Metade preenchida, com o rótulo por cima.
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f, 1.0f, 0.1f));
+    assert(context.beginWindow("progress", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.progressBar(0.5f, 1.0f, local, ig::StringView("50%"));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    bool sawOverlay = false;
+    float fillRight = 0.0f;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text)
+        {
+            const ig::TextCommand &text = command.payload.text;
+            if (ig::StringView(data.textBytes.data() + text.textOffset, text.textSize) ==
+                ig::StringView("50%"))
+            {
+                assert(text.color == theme.progressText);
+                sawOverlay = true;
+            }
+            continue;
+        }
+        const ig::GeometryCommand &geometry = command.payload.geometry;
+        for (uint32_t k = 0u; k < geometry.indexCount; ++k)
+        {
+            const ig::DrawVertex &vertex =
+                data.vertices[data.indices[geometry.firstIndex + k]];
+            if (vertex.color == theme.progressFilled && vertex.position.x > fillRight)
+                fillRight = vertex.position.x;
+        }
+    }
+    // O preenchimento acaba a meio da barra (uma tolerância de um pixel para as
+    // arestas suavizadas do canto).
+    const float expectedRight = contentX + local.x + local.width * 0.5f;
+    assert(fabsf(fillRight - expectedRight) <= 1.0f);
+    assert(sawOverlay);
+
+    // Indeterminada: a faixa anda com o tempo, por isso dois frames com delta
+    // diferente desenham-na em sítios diferentes.
+    float firstBandX = -1.0f;
+    float secondBandX = -1.0f;
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f, 1.0f, frame == 0 ? 0.0f : 0.4f));
+        assert(context.beginWindow("progress", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.progressBar(-1.0f, 1.0f, local);
+        context.endWindow();
+        const ig::DrawData &band = context.endFrame();
+        float leftmost = 1e9f;
+        for (size_t i = 0u; i < band.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = band.commands[i];
+            if (command.type != ig::DrawCommandType::Geometry)
+                continue;
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k < geometry.indexCount; ++k)
+            {
+                const ig::DrawVertex &vertex =
+                    band.vertices[band.indices[geometry.firstIndex + k]];
+                if (vertex.color == theme.progressFilled && vertex.position.x < leftmost)
+                    leftmost = vertex.position.x;
+            }
+        }
+        if (frame == 0)
+            firstBandX = leftmost;
+        else
+            secondBandX = leftmost;
+    }
+    assert(firstBandX < 1e8f && secondBandX < 1e8f);
+    assert(firstBandX != secondBandX);
+}
+
+// O colorButton desenha a amostra da cor e responde ao clique.
+static void test_color_button()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect bounds(10.0f, 10.0f, 40.0f, theme.widgetHeight);
+    const float clickX = theme.windowPadding + bounds.x + bounds.width * 0.5f;
+    const float clickY = theme.titleBarHeight + theme.windowPadding + bounds.y + bounds.height * 0.5f;
+    const ig::Color swatch(10u, 200u, 30u, 255u);
+
+    bool clicked = false;
+    bool sawSwatch = false;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("colour", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        clicked = context.colorButton("swatch", swatch, bounds);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        for (size_t i = 0u; i < data.vertices.size(); ++i)
+            if (data.vertices[i].color == swatch)
+                sawSwatch = true;
+        if (frame == 0)
+            context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+    }
+    assert(sawSwatch);
+    assert(clicked);
+}
+
+// A dica do input apare-se enquanto o campo está vazio, e sai na cor do texto
+// desativado.
+static void test_input_text_with_hint()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    ig::String empty;
+    ig::String filled("typed");
+
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("hint", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.inputTextWithHint("empty field", "escreva aqui", empty, 0.0f);
+        context.inputTextWithHint("filled field", "escreva aqui", filled, 0.0f);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+
+        int hints = 0;
+        int values = 0;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text)
+                continue;
+            const ig::TextCommand &text = command.payload.text;
+            const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+            if (drawn == ig::StringView("escreva aqui"))
+            {
+                assert(text.color == theme.textDisabled);
+                ++hints;
+            }
+            if (drawn == ig::StringView("typed"))
+            {
+                ++values;
+            }
+        }
+        // Só o campo vazio mostra a dica; o preenchido mostra o valor.
+        assert(hints == 1);
+        assert(values == 1);
+    }
+}
+
+// O header com botão de fecho: o x fecha-o, e a partir daí não desenha nada.
+static void test_collapsing_header_with_close_button()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, theme.widgetHeight);
+    const float rectX = theme.windowPadding + local.x;
+    const float rectY = theme.titleBarHeight + theme.windowPadding + local.y;
+    const float buttonSize = local.height - theme.padding;
+    const float closeX = rectX + local.width - buttonSize - theme.padding * 0.5f + buttonSize * 0.5f;
+    const float closeY = rectY + local.height * 0.5f;
+
+    bool expanded = true;
+    bool open = true;
+    bool returned = false;
+    bool drewHeader = false;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, closeX, closeY));
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("header", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        returned = context.collapsingHeader("com fecho", expanded, open, local);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        drewHeader = false;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text)
+                continue;
+            const ig::TextCommand &text = command.payload.text;
+            if (ig::StringView(data.textBytes.data() + text.textOffset, text.textSize) ==
+                ig::StringView("com fecho"))
+                drewHeader = true;
+        }
+        if (frame == 0)
+            context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, closeX, closeY));
+    }
+    assert(!open);         // o clique no x fechou-o
+    assert(!returned);     // e o header não conta como aberto
+    assert(!drewHeader);   // e deixa de ser desenhado
+
+    // Sem fecho, o mesmo clique não fecha nada (o botão nem existe).
+    bool openAgain = true;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, closeX, closeY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("header", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.collapsingHeader("sem fecho", expanded, local);
+    context.endWindow();
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, closeX, closeY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("header", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    // A secção "com fecho" continua fechada; as outras não têm como fechar.
+    context.collapsingHeader("com fecho", expanded, open, local);
+    assert(!open);
+    context.collapsingHeader("sem fecho", expanded, local);
+    assert(openAgain);
+    context.endWindow();
+    context.endFrame();
+}
+
+// Extremos e numero de index-slots que referem uma cor: o DrawList junta varias
+// primitivas no mesmo comando, por isso a cor do primeiro vertice de um comando
+// nao diz nada - conta-se o que la esta.
+struct ColorGeometry
+{
+    float minX;
+    float maxX;
+    float minY;
+    float maxY;
+    int slots;
+
+    ColorGeometry() : minX(1e9f), maxX(-1e9f), minY(1e9f), maxY(-1e9f), slots(0) {}
+};
+
+static ColorGeometry measureColor(const ig::DrawData &data, const ig::Color &color)
+{
+    ColorGeometry geometry;
+    for (size_t i = 0u; i < data.indices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = data.vertices[data.indices[i]];
+        if (!(vertex.color == color))
+            continue;
+        ++geometry.slots;
+        geometry.minX = vertex.position.x < geometry.minX ? vertex.position.x : geometry.minX;
+        geometry.maxX = vertex.position.x > geometry.maxX ? vertex.position.x : geometry.maxX;
+        geometry.minY = vertex.position.y < geometry.minY ? vertex.position.y : geometry.minY;
+        geometry.maxY = vertex.position.y > geometry.maxY ? vertex.position.y : geometry.maxY;
+    }
+    return geometry;
+}
+
+// 0.5 px de folga para os vertices das arestas suavizadas de addLine.
+static bool nearly(float a, float b)
+{
+    return fabsf(a - b) <= 1.0f;
+}
+
+// Com a escala vinda dos dados, a amostra maxima fica no topo e a minima na base.
+static void test_plot_lines_auto_scale()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    const float innerLeft = theme.windowPadding + local.x + theme.padding;
+    const float innerRight = innerLeft + local.width - theme.padding * 2.0f;
+    const float innerTop = theme.titleBarHeight + theme.windowPadding + local.y + theme.padding;
+    const float innerBottom = innerTop + local.height - theme.padding * 2.0f;
+    const float values[4] = {0.0f, 1.0f, 2.0f, 3.0f};
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    const int hovered = context.plotLines("line", values, 4, local);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(hovered == -1); // sem ponteiro nao ha amostra apontada
+    const ColorGeometry geometry = measureColor(data, theme.plotLines);
+    assert(geometry.slots > 0);
+    assert(nearly(geometry.minX, innerLeft));
+    assert(nearly(geometry.maxX, innerRight));
+    assert(nearly(geometry.minY, innerTop));    // a amostra 3, a maxima
+    assert(nearly(geometry.maxY, innerBottom)); // a amostra 0, a minima
+
+    // A serie negra ocupa todo o fundo e a linha sai por cima, dentro da area.
+    const ColorGeometry background = measureColor(data, theme.plotBackground);
+    assert(background.slots > 0);
+    assert(nearly(background.minX, theme.windowPadding + local.x));
+    assert(nearly(background.maxY, theme.titleBarHeight + theme.windowPadding + local.y + local.height));
+}
+
+// Com escala explicita os valores mapeiam-se nela, nao nos dados.
+static void test_plot_lines_explicit_scale()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    const float innerTop = theme.titleBarHeight + theme.windowPadding + local.y + theme.padding;
+    const float innerBottom = innerTop + local.height - theme.padding * 2.0f;
+    const float values[2] = {5.0f, 5.0f};
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotLines("flat", values, 2, local, 0, ig::StringView(), 0.0f, 10.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // 5 numa escala de 0 a 10 e exactamente o meio: linha horizontal.
+    const float middle = (innerTop + innerBottom) * 0.5f;
+    const ColorGeometry geometry = measureColor(data, theme.plotLines);
+    assert(geometry.slots > 0);
+    assert(nearly(geometry.minY, middle));
+    assert(nearly(geometry.maxY, middle));
+
+    // Valores fora da escala ficam nos limites (o clamp) em vez de sairem do rect.
+    const float high[2] = {50.0f, 50.0f};
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotLines("high", high, 2, local, 0, ig::StringView(), 0.0f, 10.0f);
+    context.endWindow();
+    const ig::DrawData &clamped = context.endFrame();
+    const ColorGeometry top = measureColor(clamped, theme.plotLines);
+    assert(nearly(top.minY, innerTop));
+    assert(nearly(top.maxY, innerTop));
+}
+
+// O offset le as amostras em anel: a primeira desenhada e values[offset], e um
+// offset fora do intervalo e normalizado em vez de ler fora do buffer.
+static void test_plot_lines_ring_offset()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    const float innerLeft = theme.windowPadding + local.x + theme.padding;
+    const float innerRight = innerLeft + local.width - theme.padding * 2.0f;
+    const float innerTop = theme.titleBarHeight + theme.windowPadding + local.y + theme.padding;
+    // A amostra alta esta na posicao 0 do buffer.
+    const float values[4] = {5.0f, 0.0f, 0.0f, 0.0f};
+
+    // offset 0 deixa o pico a esquerda; 1, 5 (1 volta + 1) e -3 poem-no a direita.
+    const int offsets[4] = {0, 1, 5, -3};
+    for (int frame = 0; frame < 4; ++frame)
+    {
+        const int offset = offsets[frame];
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.plotLines("ring", values, 4, local, offset);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        const ColorGeometry geometry = measureColor(data, theme.plotLines);
+        assert(geometry.slots > 0);
+        assert(nearly(geometry.minY, innerTop));
+        if (offset == 0)
+            assert(nearly(geometry.minX, innerLeft));
+        else
+            assert(nearly(geometry.maxX, innerRight));
+    }
+}
+
+// Mais amostras do que pixeis: desenha-se uma coluna por pixel, nao uma por amostra,
+// por isso a geometria para de crescer quando a serie passa a largura do grafico.
+static void test_plot_lines_decimates_to_the_pixel_grid()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    ct::Vector<float> values;
+    values.reserve(8000);
+    for (int i = 0; i < 8000; ++i)
+        values.push_back(static_cast<float>(i));
+
+    size_t verticesWith4000 = 0u;
+    size_t verticesWith8000 = 0u;
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        const int count = frame == 0 ? 4000 : 8000;
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        context.plotLines("dense", values.data(), count, local);
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+        const ColorGeometry geometry = measureColor(data, theme.plotLines);
+        // A coluna desenhada comeca na amostra 0 e acaba na ultima: 4000 amostras
+        // dao o mesmo numero de colunas que 8000.
+        assert(geometry.slots > 0);
+        if (frame == 0)
+            verticesWith4000 = data.vertices.size();
+        else
+            verticesWith8000 = data.vertices.size();
+    }
+    assert(verticesWith4000 == verticesWith8000);
+}
+
+// O indice devolvido e o da amostra sob o ponteiro, e o ponteiro realca-a.
+static void test_plot_lines_reports_the_hovered_sample()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    const float centerX = theme.windowPadding + local.x + local.width * 0.5f;
+    const float centerY = theme.titleBarHeight + theme.windowPadding + local.y + local.height * 0.5f;
+    const float values[10] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f};
+
+    context.pushEvent(ig::Event::pointerMove(centerX, centerY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    const int hovered = context.plotLines("hover", values, 10, local);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // 9 colunas no meio do grafico: metade delas da a amostra 4.
+    assert(hovered == 4);
+    // A coluna apontada sai na cor de destaque, e o resto na cor da serie.
+    const float columnWidth = (local.width - theme.padding * 2.0f) / 9.0f;
+    const float columnLeft = theme.windowPadding + local.x + theme.padding + columnWidth * 4.0f;
+    const float columnRight = columnLeft + columnWidth;
+    const ColorGeometry highlighted = measureColor(data, theme.focusColor);
+    assert(highlighted.slots > 0);
+    assert(highlighted.minX >= columnLeft - 1.0f);
+    assert(highlighted.maxX <= columnRight + 1.0f);
+    const ColorGeometry geometry = measureColor(data, theme.plotLines);
+    assert(geometry.slots > 0);
+    assert(geometry.minX < columnLeft);  // a serie continua desenhada de ambos os lados
+    assert(geometry.maxX > columnRight);
+}
+
+// As barras nascem na linha do zero e a legenda sai centrada no topo.
+static void test_plot_histogram()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect local(10.0f, 10.0f, 200.0f, 60.0f);
+    const float innerLeft = theme.windowPadding + local.x + theme.padding;
+    const float innerTop = theme.titleBarHeight + theme.windowPadding + local.y + theme.padding;
+    const float innerBottom = innerTop + local.height - theme.padding * 2.0f;
+    const float values[4] = {1.0f, 2.0f, 3.0f, 4.0f};
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotHistogram("hist", values, 4, local, 0, ig::StringView("900.0"), 0.0f, 4.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    const ColorGeometry geometry = measureColor(data, theme.plotHistogram);
+    assert(geometry.slots > 0);
+    assert(nearly(geometry.minX, innerLeft));
+    assert(nearly(geometry.maxY, innerBottom)); // todas nascem na base
+    assert(nearly(geometry.minY, innerTop));    // a maior chega ao topo
+    bool sawOverlay = false;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (ig::StringView(data.textBytes.data() + text.textOffset, text.textSize) !=
+            ig::StringView("900.0"))
+            continue;
+        sawOverlay = true;
+        assert(text.color == theme.textColor);
+        // Centrada na horizontal e encostada ao topo, dentro do padding.
+        assert(nearly(text.position.y, theme.titleBarHeight + theme.windowPadding + local.y +
+                                         theme.padding));
+        assert(text.position.x > theme.windowPadding + local.x);
+    }
+    assert(sawOverlay);
+
+    // Metade das amostras da metade das barras: uma barra por amostra.
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotHistogram("hist", values, 2, local, 0, ig::StringView(), 0.0f, 4.0f);
+    context.endWindow();
+    const ig::DrawData &half = context.endFrame();
+    const ColorGeometry halfGeometry = measureColor(half, theme.plotHistogram);
+    assert(halfGeometry.slots * 2 == geometry.slots);
+
+    // Escala toda negativa: a linha do zero passa para o topo e as barras descem.
+    const float negative[2] = {-1.0f, -2.0f};
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotHistogram("negative", negative, 2, local, 0, ig::StringView(), -2.0f, 0.0f);
+    context.endWindow();
+    const ig::DrawData &below = context.endFrame();
+    const ColorGeometry bars = measureColor(below, theme.plotHistogram);
+    assert(bars.slots > 0);
+    assert(nearly(bars.minY, innerTop));
+    assert(nearly(bars.maxY, innerBottom)); // a amostra -2 ocupa toda a altura
+}
+
+// A versao de layout ocupa a largura disponivel e avanca o cursor.
+static void test_plot_layout_advance()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const float plotY = theme.titleBarHeight + theme.windowPadding;
+    const float plotHeight = 40.0f;
+    const float values[3] = {0.0f, 1.0f, 2.0f};
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.plotHistogram("laid out", values, 3, 0.0f, plotHeight);
+    context.label("depois");
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // O grafico comeca na margem do conteudo e acaba na altura pedida.
+    const ColorGeometry background = measureColor(data, theme.plotBackground);
+    assert(nearly(background.minY, plotY));
+    assert(nearly(background.maxY, plotY + plotHeight));
+    assert(nearly(background.minX, theme.windowPadding));
+    assert(nearly(background.maxX, theme.windowPadding + 320.0f - theme.windowPadding * 2.0f));
+    // E o item seguinte comeca depois dele, com o espacamento entre itens.
+    bool sawNext = false;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (ig::StringView(data.textBytes.data() + text.textOffset, text.textSize) !=
+            ig::StringView("depois"))
+            continue;
+        sawNext = true;
+        assert(fabsf(text.position.y - (plotY + plotHeight + theme.itemSpacing)) <= 0.01f);
+    }
+    assert(sawNext);
+}
+
+// Sem barra de título o conteúdo começa no topo da janela e o título não é
+// desenhado; com ela, começa por baixo da barra.
+static void test_window_options_title_bar()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect bounds(0.0f, 0.0f, 320.0f, 240.0f);
+
+    for (int frame = 0; frame < 2; ++frame)
+    {
+        const bool titleBar = frame == 0;
+        ig::Context::WindowOptions options;
+        options.titleBar = titleBar;
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("plain", bounds, options));
+        context.label("conteudo");
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+
+        bool sawTitle = false;
+        bool sawContent = false;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text)
+                continue;
+            const ig::TextCommand &text = command.payload.text;
+            const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+            if (drawn == ig::StringView("plain"))
+                sawTitle = true;
+            if (drawn == ig::StringView("conteudo"))
+            {
+                sawContent = true;
+                // A linha de texto arranca na margem, com ou sem os 24 px da barra.
+                const float expected = titleBar ? theme.titleBarHeight + theme.windowPadding
+                                                : theme.windowPadding;
+                assert(fabsf(text.position.y - expected) <= 0.01f);
+            }
+        }
+        assert(sawContent);
+        assert(sawTitle == titleBar);
+    }
+}
+
+// Mover e redimensionar desligam-se por janela: o mesmo arrasto move (ou
+// redimensiona) uma janela normal e nao mexe numa travada.
+static void test_window_options_move_and_resize()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Rect start(40.0f, 40.0f, 200.0f, 160.0f);
+    const float dx = 24.0f;
+    const float dy = 18.0f;
+    ig::Context::WindowOptions normal;
+    ig::Context::WindowOptions locked;
+    locked.move = false;
+    locked.resize = false;
+
+    // Um arrasto feito por inteiro: prime, move (em dois frames, como o rato
+    // faz) e solta. Cada passo tem de desenhar a janela - e assim que ela ve os
+    // eventos - e a janela aparece onde o arrasto anterior a deixou, por isso a
+    // posicao de partida e sempre a que o gesto anterior devolveu.
+    auto drag = [&](ig::Context::WindowOptions options, ig::Rect from, bool grip) {
+        const ig::Vec2 origin = grip
+                                    ? ig::Vec2(from.x + from.width - 2.0f, from.y + from.height - 2.0f)
+                                    : ig::Vec2(from.x + 60.0f, from.y + 6.0f);
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("drag", from, options));
+        context.endWindow();
+        context.endFrame();
+
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, origin.x, origin.y));
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("drag", from, options));
+        context.endWindow();
+        context.endFrame();
+
+        for (int step = 1; step <= 2; ++step)
+        {
+            const float half = static_cast<float>(step) * 0.5f;
+            context.pushEvent(ig::Event::pointerMove(origin.x + dx * half, origin.y + dy * half));
+            context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+            assert(context.beginWindow("drag", from, options));
+            context.endWindow();
+            context.endFrame();
+        }
+
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, origin.x + dx,
+                                               origin.y + dy));
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+        assert(context.beginWindow("drag", from, options));
+        context.endWindow();
+        context.endFrame();
+        return context.windowBounds("drag");
+    };
+
+    // Janela normal: a barra move-a e a pega redimensiona-a.
+    const ig::Rect moved = drag(normal, start, false);
+    assert(nearly(moved.x, start.x + dx));
+    assert(nearly(moved.y, start.y + dy));
+    assert(nearly(moved.width, start.width));
+    assert(nearly(moved.height, start.height));
+
+    const ig::Rect resized = drag(normal, moved, true);
+    // A pega comeca 2 px para dentro do canto e o arrasto poe a aresta debaixo do
+    // ponteiro: o crescimento e o deslocamento menos esses 2 px.
+    const float gripInset = 2.0f;
+    assert(nearly(resized.width, moved.width - gripInset + dx));
+    assert(nearly(resized.height, moved.height - gripInset + dy));
+
+    // Janela travada: os mesmos dois arrastos nao mudam nada.
+    const ig::Rect stayed = drag(locked, resized, false);
+    assert(nearly(stayed.x, resized.x) && nearly(stayed.y, resized.y));
+    const ig::Rect kept = drag(locked, stayed, true);
+    assert(nearly(kept.width, stayed.width) && nearly(kept.height, stayed.height));
+}
+
+// fixedBounds: a geometria pedida vale todos os frames, mesmo depois de um arrasto.
+static void test_window_options_fixed_bounds()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    ig::Context::WindowOptions pinned;
+    pinned.fixedBounds = true;
+    pinned.move = false;
+    pinned.resize = false;
+
+    const ig::Rect first(10.0f, 20.0f, 120.0f, 90.0f);
+    const ig::Rect second(30.0f, 40.0f, 180.0f, 140.0f);
+    const ig::Vec2 titlePoint(first.x + 40.0f, first.y + 6.0f);
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("strip", first, pinned));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, titlePoint.x, titlePoint.y));
+    context.pushEvent(ig::Event::pointerMove(titlePoint.x + 50.0f, titlePoint.y + 40.0f));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("strip", second, pinned));
+    context.endWindow();
+    context.endFrame();
+
+    const ig::Rect bounds = context.windowBounds("strip");
+    assert(fabsf(bounds.x - second.x) <= 0.01f);
+    assert(fabsf(bounds.y - second.y) <= 0.01f);
+    assert(fabsf(bounds.width - second.width) <= 0.01f);
+    assert(fabsf(bounds.height - second.height) <= 0.01f);
+    // O tamanho do ecrã que o frame trouxe é o que o desenho usa.
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.displaySize().x == 640.0f);
+    assert(context.displaySize().y == 480.0f);
+    context.endFrame();
+}
+
+// O tooltip rico: aparece depois do atraso de hover, sai numa caixa medida pelo
+// conteúdo, por cima de tudo, e nada lá dentro reage ao ponteiro.
+static void test_rich_tooltip()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const ig::Rect windowBounds(0.0f, 0.0f, 320.0f, 240.0f);
+    // Um botão no canto superior esquerdo do conteúdo, com o ponteiro parado a
+    // meio dele: é ele que manda abrir a ajuda.
+    const float pointerX = theme.windowPadding + 20.0f;
+    const float pointerY = theme.titleBarHeight + theme.windowPadding + theme.widgetHeight * 0.5f;
+    context.setTooltipDelay(0.0f);
+
+    bool opened = false;
+    bool innerButtonClicked = false;
+    bool probeHovered = false;
+    bool sawBox = false;
+    bool sawContentText = false;
+    float contentClipLeft = -1.0f;
+    float contentClipWidth = -1.0f;
+    float cursorAfterOwner = -1.0f;
+
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        context.pushEvent(ig::Event::pointerMove(pointerX, pointerY));
+        context.beginFrame(ig::FrameInfo(320.0f, 240.0f, 1.0f, 1.0f));
+        assert(context.beginWindow("tooltip host", windowBounds));
+        context.button("ajuda");
+        // Logo a seguir ao dono, sem mais nada pelo meio: é o último item que
+        // conta, como no tooltip de uma linha.
+        opened = context.beginTooltip();
+        if (opened)
+        {
+            context.label("isto e uma ajuda");
+            innerButtonClicked = context.button("clica-me");
+            // Uma sonda por cima do ponteiro: dentro de um tooltip nada responde
+            // ao rato, senão o hover saía ao dono e os dois piscavam.
+            probeHovered = context.isHovered("sonda", ig::Rect(-24.0f, -24.0f, 80.0f, 80.0f));
+            context.endTooltip();
+        }
+        cursorAfterOwner = context.cursor().y;
+        context.label("depois");
+        context.endWindow();
+        const ig::DrawData &data = context.endFrame();
+
+        // Primeiro frame com o ponteiro parado: o atraso ainda não passou, e o
+        // bloco do tooltip nem sequer corre.
+        assert(opened == (frame >= 1));
+        if (!opened)
+            continue;
+        for (size_t i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand &command = data.commands[i];
+            if (command.type == ig::DrawCommandType::Text)
+            {
+                const ig::TextCommand &text = command.payload.text;
+                const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+                if (drawn == ig::StringView("isto e uma ajuda"))
+                {
+                    sawContentText = true;
+                    contentClipLeft = text.clip.x;
+                    contentClipWidth = text.clip.width;
+                }
+                continue;
+            }
+            const ig::GeometryCommand &geometry = command.payload.geometry;
+            for (uint32_t k = 0u; k < geometry.indexCount; ++k)
+            {
+                const ig::DrawVertex &vertex =
+                    data.vertices[data.indices[geometry.firstIndex + k]];
+                if (vertex.color == theme.tooltipBg)
+                    sawBox = true;
+            }
+        }
+    }
+
+    assert(sawBox);            // a caixa, desenhada por baixo do conteúdo
+    assert(sawContentText);    // o texto lá dentro
+    // O clip do corpo é o do ecrã (o tooltip sai fora da janela), não o da janela.
+    assert(contentClipLeft <= 0.01f);
+    assert(nearly(contentClipWidth, windowBounds.width));
+    assert(!probeHovered);     // nada dentro do tooltip apanha o ponteiro
+    assert(!innerButtonClicked);
+    // O layout da janela não ficou onde o tooltip o deixou: o item seguinte
+    // continua logo a seguir ao dono.
+    assert(nearly(cursorAfterOwner, theme.widgetHeight + theme.itemSpacing));
+}
+
+// As variantes de N componentes: cada uma é N widgets, com a largura dividida
+// por eles e o rótulo de cada componente. O que se testa é a disposição (uma
+// linha, N colunas iguais) e que a edição de qualquer componente chega.
+static void test_multicomponent_numeric_variants()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const ig::Theme &theme = context.theme();
+    const float lineHeight = theme.widgetHeight + theme.itemSpacing;
+
+    float v2[2] = {0.1f, 0.2f};
+    float v3[3] = {0.1f, 0.2f, 0.3f};
+    int i2[2] = {1, 2};
+    int i3[3] = {1, 2, 3};
+    double big = 1.5;
+
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("variantes", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    const float firstY = context.cursor().y;
+    context.sliderFloat2("f2", v2[0], v2[1], 0.0f, 1.0f);
+    const float afterFloat2 = context.cursor().y;
+    context.sliderInt3("i3", i3[0], i3[1], i3[2], 0, 10);
+    const float afterInt3 = context.cursor().y;
+    context.dragInt2("d2", i2[0], i2[1], 0, 10);
+    const float afterDrag2 = context.cursor().y;
+    context.inputInt4("i4", i3[0], i3[1], i3[2], i2[0]);
+    const float afterInt4 = context.cursor().y;
+    context.inputDouble("double", big);
+    const float afterDouble = context.cursor().y;
+    context.sliderFloat4("f4", v2[0], v2[1], v3[0], v3[1], 0.0f, 1.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // Uma linha por widget: o layout avança uma altura de item e um espaçamento.
+    assert(nearly(afterFloat2 - firstY, lineHeight));
+    assert(nearly(afterInt3 - afterFloat2, lineHeight));
+    assert(nearly(afterDrag2 - afterInt3, lineHeight));
+    assert(nearly(afterInt4 - afterDrag2, lineHeight));
+    assert(nearly(afterDouble - afterInt4, lineHeight));
+
+    // Um rótulo por componente, nos widgets que o desenham (sliders e drags; os
+    // campos numéricos usam o rótulo só como identificador e mostram o valor).
+    // A contagem ignora o 'x' do botão de fechar da janela, que também é texto.
+    int xLabels = 0;
+    int yLabels = 0;
+    int zLabels = 0;
+    int wLabels = 0;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (text.position.y < theme.titleBarHeight)
+            continue;
+        const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+        if (drawn.size() != 1u)
+            continue;
+        if (drawn[0] == 'x') ++xLabels;
+        if (drawn[0] == 'y') ++yLabels;
+        if (drawn[0] == 'z') ++zLabels;
+        if (drawn[0] == 'w') ++wLabels;
+    }
+    // sliderFloat2, sliderInt3, dragInt2 e sliderFloat4.
+    assert(xLabels == 4);
+    assert(yLabels == 4);
+    assert(zLabels == 2);
+    assert(wLabels == 1);
+
+    // Um arrasto no primeiro componente do dragInt2 muda-o e não o vizinho. A
+    // linha do dragInt2 é a terceira: o layout avança uma altura de item e um
+    // espaçamento por widget.
+    const float dragRowY = theme.titleBarHeight + theme.windowPadding +
+                           2.0f * (theme.widgetHeight + theme.itemSpacing) +
+                           theme.widgetHeight * 0.5f;
+    const int beforeX = i2[0];
+    const int beforeY = i2[1];
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 20.0f, dragRowY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("variantes", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.sliderFloat2("f2", v2[0], v2[1], 0.0f, 1.0f);
+    context.sliderInt3("i3", i3[0], i3[1], i3[2], 0, 10);
+    context.dragInt2("d2", i2[0], i2[1], 0, 10);
+    context.inputInt4("i4", i3[0], i3[1], i3[2], i2[0]);
+    context.inputDouble("double", big);
+    context.sliderFloat4("f4", v2[0], v2[1], v3[0], v3[1], 0.0f, 1.0f);
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(60.0f, dragRowY));
+    context.beginFrame(ig::FrameInfo(320.0f, 240.0f));
+    assert(context.beginWindow("variantes", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+    context.sliderFloat2("f2", v2[0], v2[1], 0.0f, 1.0f);
+    context.sliderInt3("i3", i3[0], i3[1], i3[2], 0, 10);
+    context.dragInt2("d2", i2[0], i2[1], 0, 10);
+    context.inputInt4("i4", i3[0], i3[1], i3[2], i2[0]);
+    context.inputDouble("double", big);
+    context.sliderFloat4("f4", v2[0], v2[1], v3[0], v3[1], 0.0f, 1.0f);
+    context.endWindow();
+    context.endFrame();
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 60.0f, dragRowY));
+    assert(i2[0] != beforeX);
+    assert(i2[1] == beforeY);
+
+    // O double guarda dígitos que um float não guarda.
+    const double precise = 1.0000000001;
+    assert(static_cast<double>(static_cast<float>(precise)) != precise);
+    assert(precise == 1.0000000001);
+}
+
 static void test_history_and_keyboard_navigation()
 {
     WidgetBackend backend;
@@ -3092,10 +4205,29 @@ int main()
     test_small_dock_space();
     test_widget_gallery();
     test_combo_popup_overlay();
+    test_text_items();
+    test_text_wrapped_breaks_long_words_at_codepoints();
+    test_disabled_block();
+    test_progress_bar();
+    test_plot_lines_auto_scale();
+    test_plot_lines_explicit_scale();
+    test_plot_lines_ring_offset();
+    test_plot_lines_decimates_to_the_pixel_grid();
+    test_plot_lines_reports_the_hovered_sample();
+    test_plot_histogram();
+    test_plot_layout_advance();
+    test_color_button();
+    test_input_text_with_hint();
+    test_collapsing_header_with_close_button();
     test_menu_and_context_menu();
     test_image_widgets();
     test_small_buttons();
     test_navigation_widgets();
+    test_multicomponent_numeric_variants();
+    test_rich_tooltip();
+    test_window_options_title_bar();
+    test_window_options_move_and_resize();
+    test_window_options_fixed_bounds();
     test_history_and_keyboard_navigation();
     test_dock_space();
     test_dock_tabs_of_one_slot_do_not_cover_each_other();

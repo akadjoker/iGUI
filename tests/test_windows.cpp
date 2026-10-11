@@ -515,12 +515,24 @@ void test_an_open_menu_is_painted_above_the_windows_drawn_after_it()
     size_t lastMarkerVertex = 0;
     bool sawMenu = false;
     bool sawMarker = false;
-    // The last menu-coloured vertex belongs to the open popup (the items), not
-    // to the menu bar strip the window draws as part of its own content.
-    for (size_t i = 0; i < draw.vertices.size(); ++i)
+    // Paint order is the order of the commands, not of the vertex array (the
+    // lists of a frame share one geometry store), so walk the commands and the
+    // vertices each one references. The last menu-coloured vertex drawn belongs
+    // to the open popup (the items), not to the menu bar strip the window draws
+    // as part of its own content.
+    size_t drawn = 0;
+    for (size_t c = 0; c < draw.commands.size(); ++c)
     {
-        if (draw.vertices[i].color == menuColor) { lastMenuVertex = i; sawMenu = true; }
-        if (draw.vertices[i].color == marker) { lastMarkerVertex = i; sawMarker = true; }
+        const ig::DrawCommand &command = draw.commands[c];
+        if (command.type != ig::DrawCommandType::Geometry)
+            continue;
+        const ig::GeometryCommand &geometry = command.payload.geometry;
+        for (uint32_t k = 0; k < geometry.indexCount; ++k, ++drawn)
+        {
+            const ig::DrawVertex &vertex = draw.vertices[draw.indices[geometry.firstIndex + k]];
+            if (vertex.color == menuColor) { lastMenuVertex = drawn; sawMenu = true; }
+            if (vertex.color == marker) { lastMarkerVertex = drawn; sawMarker = true; }
+        }
     }
     check(sawMenu, "the open menu was never drawn");
     check(sawMarker, "the window drawn last was never drawn");
