@@ -18,9 +18,10 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 299 itens submetidos pelo
-espelho (as três janelas do menu Tools - Style Editor, Metrics/Debugger e About -
-existem desde a revisão anterior e não contam para as lacunas).
+dois lados: na revisão atual são **37 lacunas** contra 319 itens submetidos pelo
+espelho. O número só conta as seccoes desenhadas no frame (com o `--open-all`),
+por isso uma lacuna que se fecha e uma lacuna nova que aparece no mesmo sítio
+trocam entre si; o que interessa é a tabela e a linha impressa no fim.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã - o
 `--only=NOME` desenha **só** essa secção, no topo e sem o header dela
@@ -74,21 +75,21 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | --- | --- | --- |
 | `SliderFloat` / `SliderInt` | `sliderFloat` / `sliderInt` | existe |
 | `VSliderFloat` / `VSliderInt` | `vSliderFloat` / `vSliderInt` | existe (o `fader` é outra coisa: um controle de mistura com cap rígido) |
-| `SliderAngle` | — | **não existe** (o slider em graus, que dá a volta aos 360) |
+| `SliderAngle` | `sliderAngle` | existe (o valor em radianos, o intervalo e o texto em graus, `"%.0f deg"` por omissão) |
 | `SliderFloat2/3/4`, `SliderInt2/3/4` | `sliderFloat2/3/4`, `sliderInt2/3/4` | existe |
 | `DragFloat` / `DragInt` | `dragFloat` / `dragInt` | existe |
 | `DragFloat2/3/4` | `dragFloat2/3/4` | existe |
 | `DragInt2/3/4` | `dragInt2/3/4` | existe |
-| `DragScalar`/`SliderScalar`/`InputScalar` (qualquer tipo: S8..U64, com `format`) | `sliderFloat`/`sliderInt`/`inputDouble` por tipo | **não existe**: sem `format` escrito à mão nem um caminho só para os tipos que não são float/int (o resto dos `ImGuiDataType_*`) |
-| `DragFloatRange2` / `DragIntRange2` | 2 drags | **não existe** (min+max numa só widget) |
+| `DragScalar`/`SliderScalar`/`InputScalar` (qualquer tipo: S8..U64, com `format`) | `sliderScalar`/`dragScalar`/`inputScalar` com `ScalarType` | existe: o valor por ponteiro e o tipo do `ImGuiDataType` (s8..u64, float, double), com o formato de cada tipo por omissão e o formato escrito à mão a valer (`"%04X"`, `"%.10f grams"`). O valor por dentro é um double, por isso um s64/u64 acima de 2^53 perde os bits de baixo - o ImGui perde-os também (o `FLOATTYPE` dele é double nestes dois tipos). O que falta: os botões de passo do `InputScalar` |
+| `DragFloatRange2` / `DragIntRange2` | `dragFloatRange2` / `dragIntRange2` | existe: duas caixas (mínimo e máximo) com o rótulo no fim, cada uma limitada pela outra e pelo tecto/fundo da gama |
 | Flags de drag/slider | `SliderFlags::Logarithmic`, `WrapAround`, `NoInput`, `AllowOutOfRange` | parcial: existem estes quatro (o `AllowOutOfRange` é o contrário do `ClampOnInput`/`AlwaysClamp` do ImGui: aqui o valor escrito é limitado ao intervalo por omissão). Faltam o `ClampZeroRange` e o `NoRoundToFormat`/`NoSpeedTweak` (não há arredondamento ao formato nem escalas de teclado) |
 | `ImGuiSliderFlags_ClampOnInput` / `AlwaysClamp` (o Ctrl+clique pode sair do intervalo) | `AllowOutOfRange` | existe, com outro nome: no ImGui é o comportamento por omissão e o flag é o que limita |
 | `InputFloat` / `InputFloat2/3/4` | `inputFloat` / `inputFloat2/3/4` | existe |
 | `InputInt` | `inputInt` | existe |
 | `InputInt2/3/4` | `inputInt2/3/4` | existe |
 | `InputDouble` | `inputDouble` | existe |
-| `InputScalar(N)` | — | **não existe** (a versão vetorial para os tipos que não são float/int) |
-| `SliderFloat` com formato próprio (`%.3f`) | `precision` | parcial |
+| `InputScalar(N)` | — | **não existe** (a versão vetorial para os tipos que não são float/int: o `inputScalar` é de um valor) |
+| `SliderFloat`/`DragFloat`/`InputFloat` com formato próprio (`%.3f`, `"%.10f grams"`, `"%04X"`) | `format` (o do printf) em todas as numéricas | existe: vale para o valor desenhado e para o que se escreve no campo (o `%04X` mostra e lê em hexadecimal), com o parse a recusar o que não é um número (`nan`, `inf`) e a aceitar a legenda do formato (o `1.5 grams`) |
 | — | `stepperInt` | (extra do iGUI) |
 
 ## Texto editável
@@ -99,7 +100,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `InputTextMultiline` | `inputTextMultiline` | existe |
 | `InputTextWithHint` | `inputTextWithHint` (a dica sai na cor do texto desativado enquanto o campo está vazio) | existe |
 | `CallbackCharFilter`, `CallbackCompletion`, `CallbackHistory`, `CallbackResize` | — | **não existe** |
-| `ImGuiInputTextFlags_*` (CharsDecimal, CharsHexadecimal, ReadOnly, Password, AllowTabInput, EnterReturnsTrue, NoUndoRedo, ...) | — | **não existe**: sem flags |
+| `ImGuiInputTextFlags_*` | `InputTextFlags` (`CharsDecimal`, `CharsHexadecimal`, `CharsScientific`, `CharsUppercase`, `CharsNoBlank`, `ReadOnly`, `Password`, `AllowTabInput`, `EnterReturnsTrue`) | parcial: existem estes nove - os Chars* filtram o que se escreve e o que se cola (o valor que já lá estava não é mexido), o `Password` esconde o que lá está e o `EnterReturnsTrue` devolve o Enter. Faltam o `NoUndoRedo`/`AutoSelectAll` (não há seleção dentro do campo, só o cursor) e o `ParseEmptyRefVal`/`DisplayEmptyRefVal` |
 | `InputText` com `Hint` e seleção por teclado | parcial | o caret/seleção existem; a navegação por teclado completa não |
 
 ## Combos, listas e seleção
@@ -439,12 +440,20 @@ Continua em falta neste nível:
       à mão pode sair do intervalo).
       *Onde:* `src/Gui.cpp` (`sliderValue`, `sliderFloat`, `dragFloat`,
       `sliderNormFromValue`), `tests/test_numeric_input.cpp`.
-- [ ] **As variantes numéricas que faltam**:
-      `dragInt2/3/4`, `sliderFloat2/3/4`, `sliderInt2/3/4`,
-      `inputInt2/3/4`, `inputDouble` (feito) e o `vSliderFloat`/`vSliderInt`
-      (feito, com o `sliderValue` a aceitar os dois eixos).
-      *Onde:* `sliderValue`/`editNumericText` em `src/Gui.cpp:1256`, e as
-      declarações em `include/igui/Gui.hpp:458-471`.
+- [x] **As variantes numéricas**: `dragInt2/3/4`, `sliderFloat2/3/4`,
+      `sliderInt2/3/4`, `inputInt2/3/4`, `inputDouble`, o `vSliderFloat`/
+      `vSliderInt` e - na ronda do formato - o `format` (o do printf) em todas
+      elas, o `sliderAngle`, o `dragFloatRange2`/`dragIntRange2` e a família
+      escalar (`sliderScalar`/`dragScalar`/`inputScalar` sobre o `ScalarType`,
+      para os tipos que não são float nem int).
+      *Onde:* `src/Gui.cpp` (`sliderCore`/`dragCore`/`numericField`/
+      `setScalarValue`, `formatNumericValue`/`parseNumericValue`,
+      `sliderScalar`/`dragScalar`/`inputScalar`), `tests/test_numeric_input.cpp`
+      (`test_format_drives_display_and_parse`, `test_slider_angle`,
+      `test_drag_range2`, `test_scalar_types`,
+      `test_int_widgets_write_the_integer`).
+      *O que falta:* os botões de passo do `InputScalar`, o `InputScalar(N)`
+      vetorial e o `ClampZeroRange`/`NoRoundToFormat` dos flags.
 - [x] **Consultas do item anterior**: `isItemHovered`, `isItemActive`,
       `isItemClicked`, `isItemFocused`, `isItemEdited`, `isItemDisabled`,
       `itemRect` e `itemId` — o `LastItemData` do iGUI (`Context::ItemStatus`,

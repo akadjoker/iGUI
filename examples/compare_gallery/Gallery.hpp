@@ -160,6 +160,17 @@ struct State
     int i2;
     float f1;
     float f2;
+    // Os valores da seccao "Data Types" do demo, um por tipo do ImGuiDataType:
+    // sao os *Scalar do iGUI que os desenham (o valor por ponteiro).
+    int8_t scalarS8;
+    uint8_t scalarU8;
+    int16_t scalarS16;
+    uint16_t scalarU16;
+    int32_t scalarS32;
+    uint32_t scalarU32;
+    int64_t scalarS64;
+    uint64_t scalarU64;
+    double scalarF64;
     float vec2[2];
     float vec3[3];
     float vec4[4];
@@ -205,6 +216,8 @@ struct State
     State()
         : flag(), radio(0), combo(1), comboItem(0), multiSelected(), listBox(0), tab(0),
           steps(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
+          scalarS8(0), scalarU8(0u), scalarS16(0), scalarU16(0u), scalarS32(0), scalarU32(0u),
+          scalarS64(0), scalarU64(0ull), scalarF64(0.0),
           rangeMin(0.2f), rangeMax(0.8f), vSlider(0.4f), vSliders(), progress(0.5f),
           progressDirection(1.0f), plotOffset(0), plotFunc(0), plotCount(70), plotPhase(0.0f),
           plotAnimate(true), treeOpen(true),
@@ -221,6 +234,17 @@ struct State
         col4[0] = 0.30f; col4[1] = 0.60f; col4[2] = 0.90f; col4[3] = 1.0f;
         colHdr[0] = 0.20f; colHdr[1] = 0.40f; colHdr[2] = 0.60f;
         vSliders[0] = 0.60f; vSliders[1] = 0.35f; vSliders[2] = 0.90f;
+        // Os valores com que o demo abre a seccao "Data Types" (o s32 a 123, o u64
+        // ao dobro do u32, o double a 1.2345).
+        scalarS32 = 123;
+        scalarU32 = 123u;
+        scalarS8 = 66;
+        scalarU8 = 66u;
+        scalarS16 = 1234;
+        scalarU16 = 1234u;
+        scalarS64 = 1234567890123ll;
+        scalarU64 = 2469135780246ull;
+        scalarF64 = 1.2345;
         const float frames[7] = {0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f};
         for (int i = 0; i < 7; ++i)
             plotFrames[i] = frames[i];
