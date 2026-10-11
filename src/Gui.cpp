@@ -8568,6 +8568,8 @@ bool Context::beginTable(StringView idText, int columns, float width)
     table_.column = -1;
     table_.rowY = layout_.cursor.y;
     table_.rowHeight = 0.0f;
+    table_.columnVisible.clear();
+    table_.headerHoveredColumn = -1;
     tableActive_ = true;
     idStack_.push_back(table_.id);
     return true;
@@ -8594,6 +8596,55 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights, flo
         table_.columnWeights.push_back(columnWeights[i]);
     table_.totalColumnWeight = totalWeight;
     return true;
+}
+
+bool Context::beginTable(StringView idText, Span<const float> columnWeights,
+                         Span<const bool> columnVisible, float width)
+{
+    if (columnVisible.size() != columnWeights.size())
+        return false;
+    if (!beginTable(idText, columnWeights, width))
+        return false;
+    table_.columnVisible.clear();
+    table_.columnVisible.reserve(columnVisible.size());
+    for (Span<const bool>::size_type i = 0u; i < columnVisible.size(); ++i)
+        table_.columnVisible.push_back(columnVisible[i] ? 1u : 0u);
+    table_.totalColumnWeight = 0.0f;
+    for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
+        if (columnVisible[i])
+            table_.totalColumnWeight += columnWeights[i];
+    // Uma tabela sem colunas visíveis não tem nada para mostrar.
+    if (table_.totalColumnWeight <= 0.0f)
+    {
+        endTable();
+        return false;
+    }
+    return true;
+}
+
+bool Context::beginTable(StringView idText, Span<const float> columnWeights,
+                         Span<const bool> columnVisible, const TableStyle &style, float width)
+{
+    if (!beginTable(idText, columnWeights, columnVisible, width))
+        return false;
+    table_.style = style;
+    return true;
+}
+
+int Context::tableVisibleColumnCount() const
+{
+    if (table_.columnVisible.empty())
+        return table_.columns;
+    int count = 0;
+    for (ct::Vector<uint8_t>::size_type i = 0u; i < table_.columnVisible.size(); ++i)
+        if (table_.columnVisible[i] != 0u)
+            ++count;
+    return count;
+}
+
+int Context::tableHoveredColumn() const
+{
+    return table_.headerHoveredColumn;
 }
 
 bool Context::beginTable(StringView idText, Span<float> columnWeights, float width)
@@ -8644,6 +8695,12 @@ float Context::tableColumnWidth(int column) const
 {
     if (column < 0 || column >= table_.columns || table_.columns <= 0)
         return 0.0f;
+    // Uma coluna escondida não ocupa largura: as seguintes fecham o espaço dela (o
+    // totalColumnWeight já não conta com ela, ver o beginTable das visíveis).
+    if (!table_.columnVisible.empty() &&
+        static_cast<ct::Vector<uint8_t>::size_type>(column) < table_.columnVisible.size() &&
+        table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(column)] == 0u)
+        return 0.0f;
     if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
         return table_.bounds.width / static_cast<float>(table_.columns);
     if (column + 1 == table_.columns)
@@ -8679,6 +8736,12 @@ bool Context::tableNextColumn()
         drawTableRowStyle();
         ++table_.row;
     }
+    // Uma coluna escondida: o chamador salta-lhe a célula (é o contrato das tabelas
+    // com colunas visíveis - ver o beginTable das visíveis).
+    if (!table_.columnVisible.empty() &&
+        static_cast<ct::Vector<uint8_t>::size_type>(table_.column) < table_.columnVisible.size() &&
+        table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(table_.column)] == 0u)
+        return false;
     const float cellX = tableColumnX(table_.column);
     layout_.origin.x = cellX;
     layout_.baseOriginX = cellX;
@@ -8798,6 +8861,18 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     const bool sortable = sortColumn != nullptr && sortAscending != nullptr;
     const bool hovered = sortable && !resizing && itemHovered(bounds, clip, id);
     const bool clicked = sortable && !resizing && itemClicked(bounds, clip, id);
+    // A coluna do cabeçalho sob o ponteiro: é o que um menu de contexto do
+    // cabeçalho precisa de saber (ver tableHoveredColumn). O itemHovered do ramo
+    // não-sortable fica no else, para a resposta não depender de a coluna ser
+    // ordenável.
+    if (!sortable)
+    {
+        const bool headerHovered = !resizing && itemHovered(bounds, clip, id);
+        if (headerHovered)
+            table_.headerHoveredColumn = table_.column;
+    }
+    else if (hovered)
+        table_.headerHoveredColumn = table_.column;
     bool changed = false;
     if (clicked)
     {
