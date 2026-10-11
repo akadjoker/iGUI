@@ -195,7 +195,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `BeginMenuBar` (dentro da janela) | `beginMenuBar(rect)` | existe: a barra é um item do layout (o cursor fica abaixo dela, como no grupo que o ImGui abre lá dentro), com rect e hover do item e sem id |
 | `BeginMainMenuBar` (barra da aplicação) | `beginMainMenuBar`/`endMainMenuBar` | existe: uma janela sem nada à volta no topo do ecrã, com a ordem de cima (é o que a desenha por cima das outras e lhe dá o ponteiro antes delas), e com os `beginMenu`/`menuItem` de sempre lá dentro. A altura que ocupa é o `mainMenuBarHeight()` (a aplicação tem de deixá-la livre, como o work area do ImGui) |
 | `BeginMenu`/`EndMenu`/`BeginSubMenu` | `beginMenu`/`endMenu`/`beginSubMenu` | existe |
-| Um menu com widgets lá dentro (o "Options" do menu de ficheiros do demo: um child a rolar, um slider, um input e um combo dentro do menu) | — | **não existe**: o popup de um menu é uma faixa desenhada, não um contentor de layout — um `sliderFloat` dentro de um `beginMenu` aterra no cursor da janela, não no popup (medido: o item fica em `0,0,1280x28` em vez de dentro do menu) |
+| Um menu com widgets lá dentro (o "Options" do menu de ficheiros do demo: um child a rolar, um slider, um input e um combo dentro do menu) | `beginMenu`/`beginSubMenu` | existe: o corpo de um menu aberto é um contentor de layout (o cursor, a largura e o clip são os do popup), por isso um slider, um child ou um combo lá dentro ficam no menu e o item seguinte cai por baixo deles. Como no ImGui, o id do menu entra na pilha de ids (o mesmo rótulo em dois menus são widgets diferentes) |
 | `MenuItem` com atalho (`"Open", "Ctrl+O"`) e checkbox/selected | `menuItem(label, shortcut, enabled, selected)` / `menuCheckbox` | existe: o atalho é desenhado à direita, em baixo-relevo, e conta para a largura do popup; quem o trata é a aplicação (é texto) |
 | `MenuItem` com enabled/disabled | `menuItem(label, enabled)` | existe |
 | `BeginPopupMenu`/`ImGuiPopupFlags`, `BeginMenu` com `enabled` | parcial | |
@@ -541,14 +541,19 @@ Continua em falta neste nível:
       menu de contexto de coluna. A infraestrutura de colunas por peso já existe.
       *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`),
       `include/igui/Gui.hpp:729-743`.
-- [ ] **Um menu que é contentor de layout**: hoje o `beginMenu` desenha os itens pela
-      `activeMenuBounds_` e não mexe no `layout_`, por isso um widget de layout lá
-      dentro (slider, child, input, combo) sai fora do popup. É o que falta para o
-      "Options" do menu de ficheiros do demo. O caminho é o mesmo que o
-      `beginCombo` já faz: um `layout_` próprio dentro do popup, o `currentDrawList`
-      a devolver a sobreposição, o `contentClip` a ser o popup e a largura medida no
-      frame anterior.
-      *Onde:* `src/Gui.cpp` (`beginMenu`/`menuItemInternal`/`endMenu`).
+- [x] **Um menu que é contentor de layout**: o corpo de um menu aberto tem o seu
+      `layout_` (cursor, largura e clip do popup), o `currentDrawList` devolve a
+      sobreposição da janela (é onde os itens do menu estão) e o `contentClip` passa
+      a ser o popup. É uma pilha de 4 (um submenu abre um contentor dentro do do pai,
+      e ao fechar os itens do pai continuam com o cursor onde estava). Os itens de
+      menu passam a andar no layout (é o que faz o que vem a seguir a um slider cair
+      por baixo dele) e o popup cresce com o que o chamador submeter. O `beginContextMenu`
+      ainda não entra nesta pilha.
+      *Onde:* `src/Gui.cpp` (`beginMenuContent`/`endMenuContent`/`syncMenuLayoutItem`,
+      `beginMenu`/`endMenu`/`beginSubMenu`/`endSubMenu`), `tests/test_item_status.cpp`.
+- [ ] **`beginContextMenu` como contentor de layout** (o mesmo, para o menu de
+      contexto).
+      *Onde:* `src/Gui.cpp` (`beginContextMenu`/`endContextMenu`).
 - [ ] **Popups com pilha e ids**: `openPopup`, `beginPopup`, `beginPopupModal`,
       `closeCurrentPopup`, `isPopupOpen`, fecho por clique fora com flags,
       popups aninhados. Hoje o `beginDialog`/`messageBox` cobrem o caso simples.
