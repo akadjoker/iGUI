@@ -686,10 +686,48 @@ public:
     ///        esticam-se à largura da caixa (é o que o ImGui faz com um Selectable),
     ///        por isso medi-la faria a caixa crescer a cada frame.
     void openPopup(StringView id, const Vec2 &position, const Vec2 &size);
+    // Flags do openPopup/isPopupOpen.
+    struct PopupFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Abre no cursor do layout (encostado ao item que lá está, que é o que
+            /// um menu de contexto quer) em vez de no ponteiro.
+            AtCursor = 1u << 0,
+            /// Não abre se já houver um popup aberto (o NoOpenOverExistingPopup do
+            /// ImGui): é o que impede um menu de contexto de se abrir por cima do
+            /// que já lá está.
+            NoOpenOverExistingPopup = 1u << 1,
+            /// Só no isPopupOpen: pergunta "há algum popup aberto?" em vez de "é
+            /// este que está aberto?".
+            AnyPopupId = 1u << 2
+        };
+    };
+    void openPopup(StringView id, unsigned flags);
     bool beginPopup(StringView id);
     void endPopup();
     void closeCurrentPopup();
     bool isPopupOpen(StringView id) const;
+    bool isPopupOpen(StringView id, unsigned flags) const;
+    /// @brief Opens the modal with its own title bar, the BeginPopupModal of ImGui:
+    ///        the caller opens it with openPopup(title) like any other popup and
+    ///        then calls this where the box goes. The difference from beginPopup is
+    ///        that the box is centred on the screen, is drawn above every window
+    ///        (the rest of the interface is behind a dim, and neither a click
+    ///        outside nor a shortcut reaches it), carries a title bar with the
+    ///        title in it, and does not close on a click outside: it closes with
+    ///        Escape, with closeCurrentPopup, or through @p open when the caller
+    ///        wants an X in the title bar.
+    ///
+    ///            ui.openPopup("Settings");
+    ///            if (ui.beginPopupModal("Settings", &open)) {
+    ///                ui.label("Volume");
+    ///                ui.sliderFloat("vol", volume, 0.0f, 1.0f);
+    ///                if (ui.button("OK")) ui.closeCurrentPopup();
+    ///                ui.endPopup();
+    ///            }
+    bool beginPopupModal(StringView title, bool *open = nullptr);
     // Flags de slider/drag. Vão depois do width (o width é 0 para "a largura que
     // sobra", como em tudo neste ficheiro): um slider logarítmico é
     // sliderFloat("Log", v, 0.001f, 100.0f, 0.0f, SliderFlags::Logarithmic).
@@ -1936,6 +1974,15 @@ private:
     WidgetId openPopupId_;
     Vec2 openPopupPosition_;
     float openPopupWidth_;
+    // O popup aberto é um modal (ver beginPopupModal): a caixa sai numa lista
+    // própria - por cima de todas as janelas e por baixo das message boxes -, o
+    // clique fora não o fecha e a barra de título é dele.
+    bool openPopupModal_;
+    bool modalPopupWasOpenAtFrameStart_;
+    bool modalPopupOpen_;
+    // A largura medida do corpo do último frame: um modal mede-se (ao contrário de
+    // um popup comum, cuja largura é pedida - ver openPopupSized).
+    float popupMeasuredWidth_;
     void openPopupSized(StringView id, const Vec2 &position, const Vec2 &size);
     uint64_t openPopupFrame_;
     // O popup cujo conteúdo está a ser submetido agora (para o ponteiro: é ele que
@@ -2102,6 +2149,9 @@ private:
     Vec2 tooltipOrigin_;
     Vec2 tooltipSize_;
     DrawList tooltipDrawList_;
+    // O corpo (e a caixa) de um modal de popup: sai depois das sobreposições de
+    // todas as janelas e antes das message boxes (ver beginPopupModal).
+    DrawList modalPopupDrawList_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
@@ -2315,7 +2365,7 @@ private:
     // input, combo) fica dentro do popup em vez de aterrar na janela. Guarda o
     // layout de fora, põe o cursor no popup e empurra o id do menu para o idStack
     // (dois menus não podem partilhar os ids dos widgets).
-    void beginPopupContent(const Rect &popupBounds);
+    void beginPopupContent(const Rect &popupBounds, float insetTop = 0.0f, float padding = 0.0f);
     void endPopupContent();
     // O clip/o largo do contentor do menu em vigor (o do topo da pilha).
     Rect &popupContentClip();
