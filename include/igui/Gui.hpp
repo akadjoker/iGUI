@@ -744,6 +744,21 @@ public:
     bool isItemEdited() const { return item_.edited; }
     bool isItemFocused() const { return item_.focused; }
     bool isItemDisabled() const { return item_.disabled; }
+    // O item ficou ativo neste frame (a carregada que o começou) e deixou de o
+    // estar neste frame (a largada que o acabou). O deactivatedAfterEdit diz que
+    // ele foi editado enquanto esteve ativo - é o que um editor usa para gravar.
+    bool isItemActivated() const { return item_.activated; }
+    bool isItemDeactivated() const { return item_.deactivated; }
+    bool isItemDeactivatedAfterEdit() const { return item_.deactivatedAfterEdit; }
+    // Um treeNode/collapsingHeader abriu ou fechou neste frame.
+    bool isItemToggledOpen() const { return item_.toggledOpen; }
+    // O item ainda cai dentro do que se vê: um item rolado para fora de um child
+    // não é visível.
+    bool isItemVisible() const
+    {
+        const Rect visible = intersect(item_.bounds, contentClip());
+        return visible.width > 0.0f && visible.height > 0.0f;
+    }
     // Onde o último item ficou, em coordenadas absolutas (o mesmo espaço dos
     // draw* e do windowBounds), e o id com que foi submetido. Como no ImGui, um
     // label ou um dummy não identifica item nenhum: ficam com o id do último
@@ -1172,10 +1187,19 @@ private:
         bool edited;
         bool focused;
         bool disabled;
+        // O item passou a ser o ativo neste frame (isItemActivated) e deixou de o
+        // ser neste frame (isItemDeactivated/isItemDeactivatedAfterEdit, quando foi
+        // editado enquanto esteve ativo).
+        bool activated;
+        bool deactivated;
+        bool deactivatedAfterEdit;
+        // O item abriu ou fechou neste frame (isItemToggledOpen).
+        bool toggledOpen;
 
         ItemStatus()
             : id(InvalidWidgetId), bounds(), hovered(false), active(false), clicked(false),
-              edited(false), focused(false), disabled(false)
+              edited(false), focused(false), disabled(false), activated(false),
+              deactivated(false), deactivatedAfterEdit(false), toggledOpen(false)
         {
         }
     };
@@ -1506,6 +1530,10 @@ private:
     WindowHandle draggingWindow_;
     WindowHandle resizingWindow_;
     WidgetId activeWidget_;
+    // O widget ativo no início do frame e se ele já foi editado: é o que distingue
+    // "ficou ativo agora" de "já estava" (ver isItemActivated/isItemDeactivated).
+    WidgetId activeWidgetAtFrameStart_;
+    bool activeWidgetEdited_;
     WidgetId hotWidget_;
     // Tempo acumulado desde o primeiro frame, para o que anima sozinho (a barra
     // indeterminada). Soma os deltaSeconds de cada frame.
