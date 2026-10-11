@@ -677,7 +677,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(), activeWidget_(InvalidWidgetId),
       hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
-      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId), openCombo_(InvalidWidgetId),
+      focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId),
+      comboItemsSubmitted_(false), openCombo_(InvalidWidgetId),
       openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
@@ -2198,6 +2199,10 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     // combo box cannot paint over its open list.
     DrawList &popupDrawList = window->overlayDrawList;
     popupDrawList.addRectFilled(popup, theme_.selectableBackground, popupClip);
+    // Daqui até ao fim da lista somos nós que estamos a submeter itens de popup:
+    // é o que deixa a lista receber o ponteiro sem o deixar passar para o que
+    // está por baixo dela (ver pointerBlockedByOpenPopup).
+    comboItemsSubmitted_ = true;
     for (Span<const StringView>::size_type i = 0; i < items.size(); ++i)
     {
         const Rect item(rect.x, rect.y + rect.height * static_cast<float>(i + 1u),
@@ -2208,6 +2213,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         {
             currentItem = static_cast<int>(i);
             openCombo_ = InvalidWidgetId;
+            comboItemsSubmitted_ = false;
             return true;
         }
         if (itemHoveredValue || static_cast<int>(i) == currentItem)
@@ -2221,6 +2227,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                       item.y + (item.height - itemMetrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, popupClip);
     }
+    comboItemsSubmitted_ = false;
     if (changed)
         item_.edited = true;
     return changed;
@@ -2244,7 +2251,15 @@ bool Context::beginMenuBar(const Rect &bounds)
 
 void Context::endMenuBar()
 {
+    if (!menuBarActive_)
+        return;
     menuBarActive_ = false;
+    // A barra é um item do layout, como no ImGui - lá o BeginMenuBar abre um
+    // grupo e o EndMenuBar fecha-o, e é isso que deixa o cursor abaixo da barra.
+    // Sem isto o primeiro widget do conteúdo nascia debaixo da barra, e o rato em
+    // cima da barra caía-lhe em cima (e vice-versa).
+    advanceLayout(menuBarBounds_);
+    setItemHoverRect(menuBarBounds_);
 }
 
 bool Context::beginMenu(StringView labelText)
@@ -8134,17 +8149,7 @@ void Context::endGroup()
     const Rect bounds(group.start.x, group.start.y,
                       group.extent.x - group.start.x, group.extent.y - group.start.y);
     advanceLayout(bounds);
-    // Saber se o grupo está debaixo do ponteiro é o que ele tem de útil lá fora,
-    // e é o que o ImGui responde - mas não tem id: não há clique, edição nem
-    // foco para reportar (um clique é sempre de um widget lá dentro).
-    item_.id = InvalidWidgetId;
-    item_.hovered = disabledDepth_ == 0u && !tooltipOpen_ &&
-                    pointerOver(intersect(bounds, contentClip()));
-    item_.clicked = false;
-    item_.edited = false;
-    item_.active = false;
-    item_.focused = false;
-    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+    setItemHoverRect(bounds);
 }
 
 void Context::setNextItemWidth(float width)
@@ -9077,6 +9082,19 @@ void Context::keepItemStatus(const ItemStatus &primary, const Rect &bounds)
     item_.disabled = primary.disabled;
 }
 
+void Context::setItemHoverRect(const Rect &bounds)
+{
+    item_.id = InvalidWidgetId;
+    item_.bounds = bounds;
+    item_.hovered = disabledDepth_ == 0u && !tooltipOpen_ &&
+                    pointerOver(intersect(bounds, contentClip()));
+    item_.clicked = false;
+    item_.edited = false;
+    item_.active = false;
+    item_.focused = false;
+    item_.disabled = disabledDepth_ > 0u || tooltipOpen_;
+}
+
 void Context::registerFocusable(WidgetId id)
 {
     // Behind a modal a widget is out of the Tab order, so Tab cannot walk
@@ -9592,15 +9610,23 @@ bool Context::windowBlockedByModal() const
 // (comboBox) and is consumed by that.
 bool Context::pointerBlockedByOpenPopup(const Vec2 &point) const
 {
-    if (comboWasOpenAtFrameStart_ &&
-        !contains(comboBoundsAtFrameStart_, point) &&
-        !contains(comboPopupBoundsAtFrameStart_, point))
+    // Dentro de um popup aberto só passam os itens que o popup está a submeter
+    // neste momento. Perguntar apenas "o ponto está na área do popup?" deixava o
+    // que está por baixo receber o ponteiro, porque o rect de um widget de
+    // conteúdo também cai dentro dessa área: com um dropdown aberto sobre um
+    // botão da janela, era o botão a ficar hot debaixo do menu. Quem submete
+    // itens de popup é o beginMenu/beginSubMenu/beginContextMenu (activeMenu_) e
+    // a lista de um combo aberto (comboItemsSubmitted_).
+    const bool insideComboPopup =
+        comboWasOpenAtFrameStart_ && contains(comboPopupBoundsAtFrameStart_, point);
+    const bool insideMenuPopup =
+        menuWasOpenAtFrameStart_ && (contains(menuPopupBoundsAtFrameStart_, point) ||
+                                     contains(subMenuPopupBoundsAtFrameStart_, point));
+    if (insideComboPopup || insideMenuPopup)
+        return activeMenu_ == InvalidWidgetId && !comboItemsSubmitted_;
+    if (comboWasOpenAtFrameStart_ && !contains(comboBoundsAtFrameStart_, point))
         return true;
     if (!menuWasOpenAtFrameStart_)
-        return false;
-    if (contains(menuPopupBoundsAtFrameStart_, point))
-        return false;
-    if (contains(subMenuPopupBoundsAtFrameStart_, point))
         return false;
     // The menu bar strip itself stays live while a dropdown is open - that's
     // what lets hovering "Edit" switch the open menu away from "File"

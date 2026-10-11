@@ -507,7 +507,6 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         }
         ui.endMenuBar();
     }
-    ui.spacing(ui.theme().menuBarHeight + ui.theme().itemSpacing);
     ui.tabBar("workspace tabs", state.workspaceTab, ig::Span<const ig::StringView>(tabs));
     ui.spacing(6.0f);
     if (state.workspaceTab == 0)

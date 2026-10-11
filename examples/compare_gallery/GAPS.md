@@ -179,7 +179,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
-| `BeginMenuBar` (dentro da janela) | `beginMenuBar(rect)` | existe |
+| `BeginMenuBar` (dentro da janela) | `beginMenuBar(rect)` | existe: a barra é um item do layout (o cursor fica abaixo dela, como no grupo que o ImGui abre lá dentro), com rect e hover do item e sem id |
 | `BeginMainMenuBar` (barra da aplicação) | — | **não existe** |
 | `BeginMenu`/`EndMenu`/`BeginSubMenu` | `beginMenu`/`endMenu`/`beginSubMenu` | existe |
 | `MenuItem` com atalho (`"Open", "Ctrl+O"`) e checkbox/selected | `menuItem(label)`/`menuCheckbox` | parcial: o atalho não é desenhado |
@@ -420,6 +420,16 @@ Continua em falta neste nível:
       rótulo, que era o que faltava para os campos do demo ficarem iguais.
       *Onde:* `src/Gui.cpp` (`newLine`, `setNextItemWidth`, `calcItemWidth`,
       `advanceLayout`), `tests/test_item_status.cpp`.
+- [x] **Um popup aberto é dono do ponteiro na sua área.** Antes perguntava-se "este
+      ponto está na área do popup?" e isso deixava passar o que está por baixo (o
+      rect de um widget de conteúdo também cai lá dentro): com um dropdown aberto
+      em cima de um botão, o botão ficava hot sob o menu. A pergunta passou a ser
+      "estamos a submeter os itens do popup?" (`activeMenu_`, `comboItemsSubmitted_`).
+      Com isto, a barra de menus passou a avançar o layout como uma barra do ImGui
+      (era o mesmo sintoma para quem não deixasse os 26 px à mão; os `spacing` de
+      compensação saíram dos exemplos).
+      *Onde:* `src/Gui.cpp` (`pointerBlockedByOpenPopup`, `endMenuBar`,
+      `setItemHoverRect`), `tests/test_item_status.cpp`.
 - [x] **`beginGroup`/`endGroup`**: um bloco que é um item para o layout de fora.
       Dentro, a margem é a do grupo e as linhas são as do grupo; fora, o rect é a
       caixa do que ficou lá dentro, o hover responde na caixa toda e não há id
