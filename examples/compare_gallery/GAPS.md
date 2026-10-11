@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **40 lacunas** contra 213 itens submetidos pelo
+dois lados: na revisão atual são **40 lacunas** contra 222 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -108,8 +108,11 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | — | **não existe**: o que passa de `visibleItems` linhas é cortado, e um `beginChild` lá dentro também não funciona (o `beginLayout` fecha o popup) |
 | `ListBox` (uma entrada) | `listBox` | existe |
 | `ListBox` com seleção múltipla | — | **não existe** |
-| `BeginMultiSelect`/`EndMultiSelect` e os ~12 exemplos (single, multi, clipper, deleção, dual list box, tabela, checkboxes, múltiplos escopos, tiled assets browser, árvores, avançado) | — | **não existe**: não há modelo de seleção |
-| `ImGuiSelectionBasicStorage` / `IsItemToggledSelection` / `SetNextItemSelectionUserData` | — | **não existe** |
+| `BeginMultiSelect`/`EndMultiSelect` (clique, Ctrl, Shift, Ctrl+A, Escape) | `beginMultiSelect`/`endMultiSelect` | existe: a seleção é da aplicação (um `Span<bool>`, um por item) e o bloco só lhe aplica o que o rato e as teclas pediram. Dentro do bloco cada `selectable` é um item, pela ordem em que é submetido (o `MultiSelectFlags` tem `SingleSelect`, `NoSelectAll`, `NoRangeSelect` e `ClearOnEscape`) |
+| `ImGuiMultiSelectIO` (os pedidos `SetAll`/`SetRange`/`BeginClear`/...) e `SetNextItemSelectionUserData` (ids que não são índices) | — | **não existe**: sem IO de pedidos e sem ids de item |
+| `ImGuiSelectionBasicStorage` / `ImGuiSelectionExternalStorage` | — | **não existe**: quem guarda a seleção é a aplicação |
+| `IsItemToggledSelection` / `IsItemSelected` | `isItemSelected`/`isItemToggledSelection` | existe (do último item submetido no bloco) |
+| Os ~12 exemplos do demo (clipper, déleção, dual list box, tabela, checkboxes, múltiplos escopos, tiled assets browser, árvores, avançado) e o box-select (arrastar) | — | **não existe**: sem clipper, sem auto-select na navegação, sem box select |
 
 ## Árvores, headers, tabs
 
@@ -476,13 +479,20 @@ Continua em falta neste nível:
 
 ## P2 — estruturas novas
 
-- [ ] **Modelo de seleção múltipla** (`beginMultiSelect`/`endMultiSelect` com
-      escopo, clipper, `selectAll`/`clear`/`invert`, `isItemSelected`/
-      `setItemSelected`) e o `listBox` de seleção múltipla por cima dele.
-      É o item que mais falta no dia a dia de um editor.
-      *Onde:* estado novo no `Context` (`include/igui/Gui.hpp`, secção privada) e
-      implementação em `src/Gui.cpp`, com o `beginVirtualList`/`clipper` a servir
-      de base.
+- [x] **Seleção múltipla** (`beginMultiSelect`/`endMultiSelect` com `SingleSelect`/
+      `NoSelectAll`/`NoRangeSelect`/`ClearOnEscape`, `isItemSelected`/
+      `isItemToggledSelection`): a seleção é um `Span<bool>` da aplicação e cada
+      `selectable` do bloco é um item, pela ordem em que é submetido. As mesmas
+      acções do ImGui (`MultiSelectItemFooter`): o clique limpa e escolhe, o Ctrl
+      troca um, o Shift escolhe o alcance, o Ctrl+Shift copia o estado do item de
+      origem, o Ctrl+A escolhe tudo e o Escape limpa.
+      *Onde:* `src/Gui.cpp` (`beginMultiSelect`/`applyMultiSelectClick`),
+      `tests/test_item_status.cpp`.
+- [ ] **O resto do modelo de seleção**: o `ImGuiMultiSelectIO` (pedidos) para quem
+      tem a seleção em ids e não em índices, o box select (arrastar uma caixa), o
+      auto-select na navegação por teclado, o `SetNextItemSelectionUserData`, o
+      `listBox` de seleção múltipla e o `beginVirtualList` como clipper.
+      *Onde:* `src/Gui.cpp` (`applyMultiSelectClick`), `src/Gui.cpp` (`listBox`).
 - [ ] **Flags de tabela**: `resizable`, `reorderable`, `hideable`, `sortable`,
       `borders`/`rowBg`, `scrollX/Y`, `sizingFixedFit`, `freezeRows/Cols` e o
       menu de contexto de coluna. A infraestrutura de colunas por peso já existe.

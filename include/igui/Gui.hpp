@@ -502,6 +502,38 @@ public:
                  const Rect &bounds);
     bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
                   const Rect &bounds);
+    // ── Escolha múltipla ─────────────────────────────────────────────────────
+    // O BeginMultiSelect do ImGui sem o modelo de seleção dele: quem sabe o que
+    // está escolhido é a aplicação (um bool por item, o span), e o bloco só lhe
+    // aplica o que o rato e as teclas pediram. Dentro do bloco cada selectable é um
+    // item da escolha, pela ordem em que é submetido: um clique escolhe o item e
+    // desmarca os outros, o Ctrl liga/desliga o item sem mexer nos outros, o Shift
+    // escolhe o alcance desde o último clique, o Ctrl+A escolhe tudo e o Escape
+    // limpa (com os flags a permitirem). O realce de cada item passa a ser o da
+    // seleção, por isso o clique vê-se no mesmo frame.
+    struct MultiSelectFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Um item de cada vez: o Ctrl e o Shift não acrescentam nada.
+            SingleSelect = 1u << 0,
+            /// O Ctrl+A não mexe na seleção.
+            NoSelectAll = 1u << 1,
+            /// O Shift não escolhe o alcance: o clique é sempre um item só.
+            NoRangeSelect = 1u << 2,
+            /// O Escape limpa a seleção.
+            ClearOnEscape = 1u << 3
+        };
+    };
+    // Devolve true enquanto o bloco está aberto (para um bloco dentro do outro
+    // fechar o de fora, como no ImGui). O span tem de viver até ao endMultiSelect.
+    bool beginMultiSelect(Span<bool> selected, unsigned flags = MultiSelectFlags::None);
+    void endMultiSelect();
+    /// @brief O último item submetido no bloco está escolhido?
+    bool isItemSelected() const;
+    /// @brief A escolha do último item submetido no bloco mudou neste frame?
+    bool isItemToggledSelection() const;
     // Cabeçalho de uma combo cujo popup leva o conteúdo que o chamador submeter
     // entre beginCombo e endCombo: o BeginCombo/EndCombo do ImGui. `preview` é o
     // texto do cabeçalho. Devolve true enquanto o popup está aberto e o conteúdo
@@ -1040,6 +1072,10 @@ private:
         float wheelX;
         float wheelY;
         bool wheelControl;
+        // Ctrl/Shift tal como estavam na altura em que cada botão foi premido (ver
+        // Events.hpp e a escolha múltipla do selectable).
+        bool pressedControl[3];
+        bool pressedShift[3];
 
         PointerState();
     };
@@ -1474,6 +1510,28 @@ private:
     Rect comboPopupBoundsAtFrameStart_;
     Rect comboBounds_;
     Rect comboPopupBounds_;
+    // Escolha múltipla (ver beginMultiSelect): a seleção da aplicação, o índice do
+    // próximo item do bloco e o item de onde o Shift conta o alcance.
+    struct MultiSelectState
+    {
+        bool active;
+        unsigned flags;
+        Span<bool> selected;
+        int nextIndex;
+        // O item do último clique sem Shift, e de que lista ele é: o alcance do
+        // Shift não pode atravessar duas listas.
+        int anchor;
+        const bool *anchorOwner;
+        bool lastSelected;
+        bool lastToggled;
+
+        MultiSelectState()
+            : active(false), flags(0u), selected(), nextIndex(0), anchor(-1),
+              anchorOwner(nullptr), lastSelected(false), lastToggled(false)
+        {
+        }
+    };
+    MultiSelectState multiSelect_;
     // A barra de menu da aplicação (ver beginMainMenuBar): a janela dela, que é a
     // última a ser desenhada, e se ela foi submetida neste frame.
     WindowHandle mainMenuBarWindow_;
@@ -1758,6 +1816,9 @@ private:
     bool beginComboImpl(StringView label, StringView preview, const Rect &bounds,
                         int visibleItems, bool advanceHeader);
     static StringView mainMenuBarTitle();
+    // O item de um bloco de escolha múltipla: aplica o que o clique pediu à seleção
+    // da aplicação e devolve se o item fica escolhido (ver selectable).
+    bool applyMultiSelectClick(bool clicked);
     void drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
                          bool highlighted, const Rect &clip);
     float comboPopupMaxHeight(int visibleItems) const;

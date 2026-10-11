@@ -47,11 +47,18 @@ bool translateEvent(const SDL_Event &nativeEvent, Event &event, float dpiScale)
         if (!pointerButton(nativeEvent.button.button, button))
             return false;
         SDL_CaptureMouse(nativeEvent.type == SDL_MOUSEBUTTONDOWN ? SDL_TRUE : SDL_FALSE);
+        // Os modificadores do clique (o SDL só os dá pelo estado do teclado): quem
+        // trata de uma escolha múltipla lê-os do clique, não do teclado.
+        const SDL_Keymod clickModifiers = SDL_GetModState();
+        const bool controlDown = (clickModifiers & KMOD_CTRL) != 0;
+        const bool shiftDown = (clickModifiers & KMOD_SHIFT) != 0;
         event = nativeEvent.type == SDL_MOUSEBUTTONDOWN
                     ? Event::pointerDown(button, static_cast<float>(nativeEvent.button.x),
-                                         static_cast<float>(nativeEvent.button.y))
+                                         static_cast<float>(nativeEvent.button.y), controlDown,
+                                         shiftDown)
                     : Event::pointerUp(button, static_cast<float>(nativeEvent.button.x),
-                                       static_cast<float>(nativeEvent.button.y));
+                                       static_cast<float>(nativeEvent.button.y), controlDown,
+                                       shiftDown);
         return true;
     }
     case SDL_MOUSEWHEEL:

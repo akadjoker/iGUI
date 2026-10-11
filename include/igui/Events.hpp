@@ -106,21 +106,30 @@ struct Event
         return event;
     }
 
-    static Event pointerDown(PointerButton pointerButton, float x, float y)
+    // Os modificadores são os que estavam premidos neste evento: quem trata de uma
+    // escolha múltipla (Ctrl para ligar um item, Shift para o alcance) lê-os do
+    // clique, não do estado do teclado no frame em que o clique termina.
+    static Event pointerDown(PointerButton pointerButton, float x, float y,
+                             bool controlDown = false, bool shiftDown = false)
     {
         Event event;
         event.type = EventType::PointerDown;
         event.button = pointerButton;
         event.position = Vec2(x, y);
+        event.control = controlDown;
+        event.shift = shiftDown;
         return event;
     }
 
-    static Event pointerUp(PointerButton pointerButton, float x, float y)
+    static Event pointerUp(PointerButton pointerButton, float x, float y,
+                           bool controlDown = false, bool shiftDown = false)
     {
         Event event;
         event.type = EventType::PointerUp;
         event.button = pointerButton;
         event.position = Vec2(x, y);
+        event.control = controlDown;
+        event.shift = shiftDown;
         return event;
     }
 

@@ -110,19 +110,23 @@ void processInput(Context &context)
     const ::Vector2 pointer = ::GetMousePosition();
     context.pushEvent(Event::pointerMove(pointer.x, pointer.y));
 
+    const bool control = ::IsKeyDown(KEY_LEFT_CONTROL) || ::IsKeyDown(KEY_RIGHT_CONTROL);
+    const bool shift = ::IsKeyDown(KEY_LEFT_SHIFT) || ::IsKeyDown(KEY_RIGHT_SHIFT);
+
     const int buttons[] = {MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MIDDLE, MOUSE_BUTTON_RIGHT};
     const PointerButton pointerButtons[] = {
         PointerButton::Left, PointerButton::Middle, PointerButton::Right};
     for (uint32_t i = 0u; i < 3u; ++i)
     {
+        // Os modificadores vão no clique (ver Event::pointerDown): é o que uma
+        // escolha múltipla lê para o Ctrl/Shift do rato.
         if (::IsMouseButtonPressed(buttons[i]))
-            context.pushEvent(Event::pointerDown(pointerButtons[i], pointer.x, pointer.y));
+            context.pushEvent(
+                Event::pointerDown(pointerButtons[i], pointer.x, pointer.y, control, shift));
         if (::IsMouseButtonReleased(buttons[i]))
-            context.pushEvent(Event::pointerUp(pointerButtons[i], pointer.x, pointer.y));
+            context.pushEvent(
+                Event::pointerUp(pointerButtons[i], pointer.x, pointer.y, control, shift));
     }
-
-    const bool control = ::IsKeyDown(KEY_LEFT_CONTROL) || ::IsKeyDown(KEY_RIGHT_CONTROL);
-    const bool shift = ::IsKeyDown(KEY_LEFT_SHIFT) || ::IsKeyDown(KEY_RIGHT_SHIFT);
 
     const ::Vector2 wheel = ::GetMouseWheelMoveV();
     if (wheel.x != 0.0f || wheel.y != 0.0f)
