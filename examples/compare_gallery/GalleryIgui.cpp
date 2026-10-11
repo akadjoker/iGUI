@@ -1271,10 +1271,13 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
             ui.closeCurrentPopup();
         ui.endPopup();
     }
+    // Um popup por documento (o ShowExampleAppDocuments) faz-se com um id por
+    // documento - o "##" é o que deixa dois popups partilharem o rótulo. O que falta
+    // mesmo é a pilha: um popup aberto de dentro de outro.
     gap(ui, gallery::Section::PopupsAndModalWindows,
-        "o popup com pilha de ids interno do demo (ShowExampleAppDocuments) e o "
-        "popup com varias camadas (o iGUI tem um popup de cada vez - o "
-        "NoOpenOverExistingPopup e o que evita abrir por cima do que la esta)");
+        "a pilha de popups (um popup aberto de dentro de outro, como o 'Popup "
+        "Stack' do demo): o iGUI tem um popup de cada vez, e o "
+        "NoOpenOverExistingPopup e o que evita abrir por cima do que la esta");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.label("Right-click this line for a context menu");

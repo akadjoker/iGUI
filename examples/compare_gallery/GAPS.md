@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **37 lacunas** contra 247 itens submetidos pelo
+dois lados: na revisão atual são **37 lacunas** contra 250 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -189,7 +189,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `OpenPopup`/`BeginPopup`/`EndPopup` (pilha de popups, ids, posição, tamanho) | `beginDialog(titulo, open, size)` | parcial: o estado é da aplicação, não há pilha nem `OpenPopup` |
 | `BeginPopupModal`/`EndPopup`/`CloseCurrentPopup` | `beginPopupModal(titulo, p_open)`/`endPopup`/`closeCurrentPopup` | existe: abre-se com o `openPopup` do título, sai centrado, com barra de título própria (e um X quando o chamador dá o `bool *open`), desenhado por cima de todas as janelas e com o resto da interface atrás de um véu; fecha com o Escape, o X ou o `closeCurrentPopup` - e **não** fecha com um clique fora (é o que o distingue de um popup, e o que trava os atalhos enquanto está aberto). A `messageBox` e a `beginDialog` continuam a ser as caixas de OK/Cancelar |
 | `BeginPopupContextItem`/`Window`/`Void` | `beginContextMenu(id, rect)` | parcial: precisa do rect à mão |
-| Popups aninhados (uma pilha de popups) | — | **não existe**: o popup é de cada vez um, e o `NoOpenOverExistingPopup` é o flag que evita abrir por cima |
+| Popups aninhados (uma pilha de popups) | — | **não existe**: o popup é de cada vez um, e o `NoOpenOverExistingPopup` é o flag que evita abrir por cima. Um popup por documento (o `ShowExampleAppDocuments`) faz-se com um `openPopup`/`beginPopup` por id, e a galeria mostra-o com dois |
 | `BeginTooltip` como popup | — | **não existe** |
 
 ## Menus
