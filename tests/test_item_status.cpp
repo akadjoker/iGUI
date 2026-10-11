@@ -1509,6 +1509,151 @@ void test_multi_select()
     assert(!selected[1] && selected[3]);
 }
 
+// As transições do item: isItemActivated (ficou ativo agora), isItemDeactivated
+// (deixou de estar), isItemDeactivatedAfterEdit (e foi editado enquanto esteve) e
+// isItemVisible (ainda cai dentro do que se vê).
+void test_item_activation_queries()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect buttonRect;
+    bool activated = false;
+    bool deactivated = false;
+    bool afterEdit = false;
+    bool visible = true;
+    int clicks = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("ativacao", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        if (c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f)))
+            ++clicks;
+        if (buttonRect.width <= 0.0f)
+            buttonRect = c.itemRect();
+        activated = c.isItemActivated();
+        deactivated = c.isItemDeactivated();
+        afterEdit = c.isItemDeactivatedAfterEdit();
+        visible = c.isItemVisible();
+        // Um item bem para fora da janela: o rect dele não cai no clip.
+        c.button("fora", ig::Rect(0.0f, 400.0f, 120.0f, 28.0f));
+        if (visible)
+            visible = c.isItemVisible();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(!activated && !deactivated && !visible);
+    assert(buttonRect.width > 0.0f);
+
+    // Carregar: o item fica ativo neste frame.
+    const float x = buttonRect.x + buttonRect.width * 0.5f;
+    const float y = buttonRect.y + buttonRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    harness.frame(build);
+    assert(!activated);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    assert(activated);
+    assert(!deactivated);
+
+    // Um frame a segurar: já não está a ficar ativo, e continua ativo.
+    harness.frame(build);
+    assert(!activated && !deactivated);
+
+    // Largar: deixa de estar ativo neste frame, e o clique conta.
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    assert(deactivated);
+    assert(clicks == 1);
+    // Nada foi editado enquanto esteve ativo: não é um "depois de editar".
+    assert(!afterEdit);
+
+    harness.frame(build);
+    assert(!deactivated);
+    assert(!afterEdit);
+}
+
+// O mesmo para um slider: largar depois de mexer é o isItemDeactivatedAfterEdit,
+// que é o que um editor usa para gravar o valor.
+void test_item_deactivated_after_edit()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float value = 0.5f;
+    ig::Rect sliderRect;
+    bool afterEdit = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("edicao", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        c.sliderFloat("v", value, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
+        if (sliderRect.width <= 0.0f)
+            sliderRect = c.itemRect();
+        afterEdit = c.isItemDeactivatedAfterEdit();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+
+    // Carregar na pista e arrastar (é a pista que mexe no valor).
+    const float trackX = sliderRect.x + sliderRect.width * 0.6f;
+    const float y = sliderRect.y + sliderRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(trackX, y));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, trackX, y));
+    harness.frame(build);
+    assert(!afterEdit);
+    context.pushEvent(ig::Event::pointerMove(trackX + 40.0f, y));
+    harness.frame(build);
+    assert(value > 0.5f);
+    assert(!afterEdit);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, trackX + 40.0f, y));
+    harness.frame(build);
+    assert(afterEdit);
+    harness.frame(build);
+    assert(!afterEdit);
+}
+
+// O isItemToggledOpen diz que o tree node abriu ou fechou naquele frame.
+void test_item_toggled_open()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool expanded = false;
+    ig::Rect arrowRect;
+    bool toggled = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("arvore", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
+        c.treeNode("nodo", expanded, ig::Rect(0.0f, 0.0f, 140.0f, 24.0f));
+        toggled = c.isItemToggledOpen();
+        if (arrowRect.width <= 0.0f)
+            arrowRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(!toggled);
+    assert(arrowRect.width > 0.0f);
+
+    // O clique no nodo abre-o, e é este frame que o diz.
+    const float x = arrowRect.x + arrowRect.width * 0.5f;
+    const float y = arrowRect.y + arrowRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    assert(!toggled);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    assert(expanded);
+    assert(toggled);
+    harness.frame(build);
+    assert(!toggled);
+}
+
 } // namespace
 
 int main()
@@ -1537,6 +1682,9 @@ int main()
     test_begin_combo_popup_owns_the_pointer_and_grows();
     test_main_menu_bar();
     test_multi_select();
+    test_item_activation_queries();
+    test_item_deactivated_after_edit();
+    test_item_toggled_open();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

@@ -427,11 +427,17 @@ Continua em falta neste nível:
       *Onde:* `src/Gui.cpp` (`itemHovered`, `itemClicked`, `keepItemStatus`,
       `sliderValue`, `advanceLayout`), `include/igui/Gui.hpp` (`ItemStatus`),
       `tests/test_item_status.cpp`.
-- [ ] **O resto das consultas do item**: `isItemActivated`/`isItemDeactivated`/
-      `isItemDeactivatedAfterEdit`, `isItemToggledOpen`, `isItemVisible` e os
-      flags do `IsItemHovered` (`Delay`/`Stationary`/`AllowWhenBlockedBy*`/
-      `RectOnly`).
-      *Onde:* o `ItemStatus` em `include/igui/Gui.hpp` já tem o sítio.
+- [x] **O resto das consultas do item**: `isItemActivated`/`isItemDeactivated`/
+      `isItemDeactivatedAfterEdit` (o "carregou, mexeu e largou" que um editor usa
+      para gravar), `isItemToggledOpen` (o nó abriu/fechou neste frame) e
+      `isItemVisible` (o rect ainda cai no clip). O `keepItemStatus` passou a
+      preservar as transições do item principal, senão o sub-item de um widget
+      composto (o campo de valor de um slider) apagava-as.
+      *Onde:* `include/igui/Gui.hpp` (`ItemStatus`), `src/Gui.cpp` (`itemClicked`,
+      `sliderValue`, `keepItemStatus`), `tests/test_item_status.cpp`.
+- [ ] **Os flags do `IsItemHovered`**: `Delay`/`Stationary`/`AllowWhenBlockedBy*`/
+      `RectOnly`, e o `isItemVisible` por item em vez de por rect.
+      *Onde:* o `itemHovered` em `src/Gui.cpp`.
 - [x] **Layout**: `newLine`, `pushItemWidth`/`popItemWidth`/
       `setNextItemWidth`/`calcItemWidth`. Um `##id` também já não gasta largura de
       rótulo, que era o que faltava para os campos do demo ficarem iguais.
