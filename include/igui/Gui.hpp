@@ -1570,7 +1570,20 @@ private:
     void drawToasts();
     void beginLayout(const WindowState &window);
     void advanceLayout(const Rect &item);
-    float autoButtonWidth(StringView label) const;
+    // A largura mínima de um botão de layout a partir do rótulo já medido (o
+    // autoButtonWidth mede-o por dentro; quem já tem as medidas passa-as, para
+    // não medir o mesmo texto duas vezes no mesmo frame - ver buttonImpl).
+    float autoButtonWidth(const TextMetrics &metrics) const;
+    // O corpo do botão, com as medidas do rótulo já feitas: é o que evita a
+    // segunda medida no caminho do layout (que mede para se dimensionar e depois
+    // mede outra vez para centrar o texto).
+    bool buttonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics);
+    bool smallButtonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics, float fontSize);
+    bool checkboxImpl(StringView label, bool &value, const Rect &bounds, const TextMetrics &metrics);
+    bool toggleSwitchImpl(StringView label, bool &value, const Rect &bounds, const TextMetrics &metrics);
+    bool radioButtonImpl(StringView label, bool selected, const Rect &bounds, const TextMetrics &metrics);
+    bool colorButtonImpl(StringView label, const Color &value, const Rect &bounds,
+                         const TextMetrics &metrics);
     WindowState *getOrCreateWindow(WidgetId id, StringView title, const Rect &bounds);
     // Move a window onto a stored geometry, and remember it the way
     // restoreWindow would put it back.

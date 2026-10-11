@@ -1449,6 +1449,12 @@ bool Context::shortcut(KeyCode key, bool control, bool shift) const
 
 bool Context::button(StringView labelText, const Rect &bounds)
 {
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    return buttonImpl(labelText, bounds, metrics);
+}
+
+bool Context::buttonImpl(StringView labelText, const Rect &bounds, const TextMetrics &metrics)
+{
     WindowState *window = currentWindow();
     if (!window)
         return false;
@@ -1466,7 +1472,6 @@ bool Context::button(StringView labelText, const Rect &bounds)
     drawFrame(*drawList, rect, background, hovered ? theme_.inputBorderHover : theme_.buttonBorder,
               theme_.borderRadius, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(rect.x + (rect.width - metrics.width) * 0.5f,
                             rect.y + (rect.height - metrics.height) * 0.5f);
     drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
@@ -1475,6 +1480,14 @@ bool Context::button(StringView labelText, const Rect &bounds)
 }
 
 bool Context::smallButton(StringView labelText, const Rect &bounds)
+{
+    const float fontSize = theme_.fontSize * 0.82f;
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), fontSize);
+    return smallButtonImpl(labelText, bounds, metrics, fontSize);
+}
+
+bool Context::smallButtonImpl(StringView labelText, const Rect &bounds,
+                              const TextMetrics &metrics, float fontSize)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1490,8 +1503,6 @@ bool Context::smallButton(StringView labelText, const Rect &bounds)
     const bool clicked = itemClicked(rect, clip, id);
     drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
               hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
-    const float fontSize = theme_.fontSize * 0.82f;
-    const TextMetrics metrics = measureText(theme_.font, text, fontSize);
     drawText(*drawList, theme_.font, text,
              Vec2(rect.x + (rect.width - metrics.width) * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
@@ -1500,6 +1511,13 @@ bool Context::smallButton(StringView labelText, const Rect &bounds)
 }
 
 bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
+{
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    return checkboxImpl(labelText, value, bounds, metrics);
+}
+
+bool Context::checkboxImpl(StringView labelText, bool &value, const Rect &bounds,
+                           const TextMetrics &metrics)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1534,7 +1552,6 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
                                     theme_.checkMark, clip);
     }
 
-    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(box.x + boxSize + theme_.windowPadding * 0.5f,
                             widget.y + (widget.height - metrics.height) * 0.5f);
     drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
@@ -1545,6 +1562,13 @@ bool Context::checkbox(StringView labelText, bool &value, const Rect &bounds)
 }
 
 bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds)
+{
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    return toggleSwitchImpl(labelText, value, bounds, metrics);
+}
+
+bool Context::toggleSwitchImpl(StringView labelText, bool &value, const Rect &bounds,
+                               const TextMetrics &metrics)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1580,7 +1604,6 @@ bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds
     drawList->addCircleFilled(Vec2(handleX, track.y + radius), radius * 0.72f,
                               theme_.switchThumb, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     drawText(*drawList, theme_.font, text,
              Vec2(rect.x + rect.width + theme_.windowPadding * 0.5f,
                   rect.y + (rect.height - metrics.height) * 0.5f),
@@ -1591,6 +1614,13 @@ bool Context::toggleSwitch(StringView labelText, bool &value, const Rect &bounds
 }
 
 bool Context::radioButton(StringView labelText, bool selected, const Rect &bounds)
+{
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    return radioButtonImpl(labelText, selected, bounds, metrics);
+}
+
+bool Context::radioButtonImpl(StringView labelText, bool selected, const Rect &bounds,
+                              const TextMetrics &metrics)
 {
     WindowState *window = currentWindow();
     if (!window)
@@ -1612,7 +1642,6 @@ bool Context::radioButton(StringView labelText, bool selected, const Rect &bound
     if (selected)
         drawList->addCircleFilled(center, radius * 0.52f, theme_.radioChecked, clip);
 
-    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const Vec2 textPosition(box.x + box.width + theme_.windowPadding * 0.5f,
                             box.y + (box.height - metrics.height) * 0.5f);
     drawText(*drawList, theme_.font, text, textPosition, theme_.fontSize,
@@ -4072,6 +4101,13 @@ bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds,
 
 bool Context::colorButton(StringView labelText, const Color &value, const Rect &bounds)
 {
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    return colorButtonImpl(labelText, value, bounds, metrics);
+}
+
+bool Context::colorButtonImpl(StringView labelText, const Color &value, const Rect &bounds,
+                              const TextMetrics &metrics)
+{
     WindowState *window = currentWindow();
     if (!window)
         return false;
@@ -4093,7 +4129,6 @@ bool Context::colorButton(StringView labelText, const Color &value, const Rect &
 
     if (labelText.size() > 0u)
     {
-        const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
         drawText(*drawList, theme_.font, text,
                  Vec2(rect.x + rect.width + theme_.padding, rect.y + (rect.height - metrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, clip);
@@ -5600,10 +5635,11 @@ float Context::tooltipDelay() const
 
 bool Context::button(StringView labelText)
 {
-    const Rect bounds(layout_.cursor.x, layout_.cursor.y, autoButtonWidth(labelText), theme_.widgetHeight);
-    const bool clicked = button(labelText, Rect(bounds.x - layout_.origin.x,
-                                                bounds.y - layout_.origin.y,
-                                                bounds.width, bounds.height));
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, autoButtonWidth(metrics), theme_.widgetHeight);
+    const bool clicked = buttonImpl(labelText, Rect(bounds.x - layout_.origin.x,
+                                                   bounds.y - layout_.origin.y,
+                                                   bounds.width, bounds.height), metrics);
     advanceLayout(bounds);
     return clicked;
 }
@@ -5616,23 +5652,26 @@ bool Context::smallButton(StringView labelText)
     const float paddingY = theme_.padding * 0.55f;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, metrics.width + paddingX * 2.0f,
                       metrics.height + paddingY * 2.0f);
-    const bool clicked = smallButton(labelText, Rect(bounds.x - layout_.origin.x,
-                                                     bounds.y - layout_.origin.y,
-                                                     bounds.width, bounds.height));
+    const bool clicked = smallButtonImpl(labelText, Rect(bounds.x - layout_.origin.x,
+                                                        bounds.y - layout_.origin.y,
+                                                        bounds.width, bounds.height),
+                                         metrics, fontSize);
     advanceLayout(bounds);
     return clicked;
 }
 
 bool Context::checkbox(StringView labelText, bool &value)
 {
-    const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
-    const bool clicked = checkbox(labelText, value, Rect(bounds.x - layout_.origin.x,
-                                                         bounds.y - layout_.origin.y,
-                                                         bounds.width, bounds.height));
     // A largura do item vem do rótulo visível: com "##id" não há texto, e o item
     // é só a caixa, como no ImGui.
     const TextMetrics metrics =
         measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
+    const bool clicked = checkboxImpl(labelText, value,
+                                      Rect(bounds.x - layout_.origin.x,
+                                           bounds.y - layout_.origin.y,
+                                           bounds.width, bounds.height),
+                                      metrics);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
@@ -5643,14 +5682,14 @@ bool Context::checkbox(StringView labelText, bool &value)
 
 bool Context::toggleSwitch(StringView labelText, bool &value)
 {
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const float switchWidth = theme_.widgetHeight * 1.8f;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, switchWidth, theme_.widgetHeight);
-    const bool clicked = toggleSwitch(labelText, value,
-                                      Rect(bounds.x - layout_.origin.x,
-                                           bounds.y - layout_.origin.y,
-                                           bounds.width, bounds.height));
-    const TextMetrics metrics =
-        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const bool clicked = toggleSwitchImpl(labelText, value,
+                                          Rect(bounds.x - layout_.origin.x,
+                                               bounds.y - layout_.origin.y,
+                                               bounds.width, bounds.height),
+                                          metrics);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
@@ -5661,12 +5700,13 @@ bool Context::toggleSwitch(StringView labelText, bool &value)
 
 bool Context::radioButton(StringView labelText, bool selected)
 {
+    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, theme_.widgetHeight, theme_.widgetHeight);
-    const bool clicked = radioButton(labelText, selected,
-                                     Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
-                                          bounds.width, bounds.height));
-    const TextMetrics metrics =
-        measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
+    const bool clicked = radioButtonImpl(labelText, selected,
+                                         Rect(bounds.x - layout_.origin.x,
+                                              bounds.y - layout_.origin.y,
+                                              bounds.width, bounds.height),
+                                         metrics);
     advanceLayout(Rect(bounds.x, bounds.y,
                        bounds.width + theme_.windowPadding * 0.5f + metrics.width,
                        bounds.height));
@@ -6318,9 +6358,11 @@ bool Context::colorButton(StringView labelText, const Color &value, float width,
     const float resolvedWidth = width > 0.0f ? width : (theme_.padding * 2.0f + 32.0f);
     const float resolvedHeight = height > 0.0f ? height : theme_.widgetHeight;
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, resolvedHeight);
-    const bool clicked = colorButton(labelText, value,
-                                     Rect(bounds.x - layout_.origin.x,
-                                          bounds.y - layout_.origin.y, bounds.width, bounds.height));
+    const bool clicked = colorButtonImpl(labelText, value,
+                                         Rect(bounds.x - layout_.origin.x,
+                                              bounds.y - layout_.origin.y,
+                                              bounds.width, bounds.height),
+                                         metrics);
     advanceLayout(Rect(bounds.x, bounds.y, bounds.width + theme_.padding + metrics.width,
                        bounds.height));
     if (clicked)
@@ -8650,9 +8692,8 @@ void Context::advanceLayout(const Rect &item)
     layout_.cursor.y = layout_.lineTop + layout_.lineHeight + theme_.itemSpacing;
 }
 
-float Context::autoButtonWidth(StringView labelText) const
+float Context::autoButtonWidth(const TextMetrics &metrics) const
 {
-    const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const float width = metrics.width + theme_.windowPadding * 2.0f;
     return width > 64.0f ? width : 64.0f;
 }
