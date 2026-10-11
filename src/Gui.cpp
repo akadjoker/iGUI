@@ -684,7 +684,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
-      comboBounds_(), comboPopupBounds_(), comboContentOpen_(false), comboLayout_(),
+      comboBounds_(), comboPopupBounds_(), mainMenuBarWindow_(), mainMenuBarOpen_(false),
+      comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
       comboContentId_(InvalidWidgetId), comboVisibleItems_(0), comboContentWindow_(),
       comboDrawList_(), comboMeasuredId_(InvalidWidgetId), comboMeasured_(),
@@ -796,6 +797,10 @@ void Context::beginFrame(const FrameInfo &frame)
     comboDrawList_.clear();
     comboContentOpen_ = false;
     comboContentWindow_ = WindowHandle();
+    // A barra da aplicação tem de ser submetida a cada frame, como tudo no modo
+    // imediato: quem não a submeter deixou de a ter.
+    mainMenuBarWindow_ = WindowHandle();
+    mainMenuBarOpen_ = false;
     // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
     // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
     // no modo imediato).
@@ -954,6 +959,13 @@ bool Context::windowSubmittedRecently(const WindowState &window) const
 
 const DrawData &Context::endFrame()
 {
+    // A barra de menu da aplicação fica com a ordem mais alta no fim do frame. É o
+    // que a desenha por cima de todas as janelas (o sort abaixo é por zOrder) e é o
+    // que faz dela a janela de cima para o ponteiro no frame seguinte: ela é
+    // submetida antes das janelas da aplicação, e uma criada depois dela ficava-lhe
+    // por cima e comia-lhe o clique do menu. A ordem, não o foco: o foco é do teclado.
+    if (WindowState *bar = windows_.get(mainMenuBarWindow_))
+        bar->zOrder = nextZOrder_++;
     ct::sort(windowOrder_.begin(), windowOrder_.end(), [this](WindowHandle a, WindowHandle b)
     {
         const WindowState *left = windows_.get(a);
@@ -1255,6 +1267,9 @@ void Context::raiseWindow(StringView title, bool focus)
     if (!window || !window->open)
         return;
     window->zOrder = nextZOrder_++;
+    // Quem está debaixo do ponteiro mudou: a resposta do windowAtPointer() deste
+    // frame já não vale (ver pointerWindow_).
+    invalidatePointerWindow();
     if (focus)
     {
         window->focused = true;
@@ -2477,6 +2492,57 @@ void Context::endCombo()
     comboAdvanceHeader_ = false;
     if (advanceHeader)
         advanceLayout(comboHeaderRect_);
+}
+
+StringView Context::mainMenuBarTitle()
+{
+    static const char kTitle[] = "##MainMenuBar";
+    return StringView(kTitle, sizeof(kTitle) - 1u);
+}
+
+float Context::mainMenuBarHeight() const
+{
+    // A altura que o tema dá a uma barra de menu e que as barras dentro das janelas
+    // já pedem (é o GetFrameHeight() do ImGui, que é a altura da barra de lá).
+    return theme_.menuBarHeight;
+}
+
+bool Context::beginMainMenuBar()
+{
+    const float height = mainMenuBarHeight();
+    if (height <= 0.0f || frame_.displaySize.x <= 0.0f)
+        return false;
+    // A barra da aplicação é uma janela sem nada à volta: sem barra de título, sem
+    // mover nem redimensionar, com os limites fixos (é o topo do ecrã) e sem estado
+    // guardado. É o que o BeginMainMenuBar do ImGui faz (uma janela no topo do
+    // viewport) e é o que faz o beginMenu/endMenu servirem aqui como servem dentro
+    // de uma janela - incluindo os popups, que são desenhados na sobreposição dela.
+    WindowOptions options;
+    options.titleBar = false;
+    options.move = false;
+    options.resize = false;
+    options.saveSettings = false;
+    options.fixedBounds = true;
+    if (!beginWindow(mainMenuBarTitle(),
+                     Rect(0.0f, 0.0f, frame_.displaySize.x, height), options))
+        return false;
+    mainMenuBarWindow_ = currentWindow_;
+    mainMenuBarOpen_ = true;
+    // A barra é a janela toda: o beginMenuBar mede a partir do cursor de dentro da
+    // janela, e o cursor tem a margem dela.
+    const WindowState *window = currentWindow();
+    const Rect bar(window->bounds.x, window->bounds.y, window->bounds.width, height);
+    return beginMenuBar(Rect(bar.x - layout_.origin.x, bar.y - layout_.origin.y,
+                             bar.width, bar.height));
+}
+
+void Context::endMainMenuBar()
+{
+    if (!mainMenuBarOpen_)
+        return;
+    mainMenuBarOpen_ = false;
+    endMenuBar();
+    endWindow();
 }
 
 bool Context::beginMenuBar(const Rect &bounds)

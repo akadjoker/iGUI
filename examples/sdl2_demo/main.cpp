@@ -65,7 +65,40 @@ int main(int, char **)
         }
 
         ui.beginFrame(ig::sdl2::frameInfo(window, deltaSeconds));
-        if (ui.beginWindow("iGUI Widget Gallery", ig::Rect(80.0f, 60.0f, 520.0f, 520.0f)))
+        // A barra da aplicação, no topo do ecrã e fora da janela: o clique dela é do
+        // menu, não do que estiver por baixo (a janela do demo começa em y=60).
+        if (ui.beginMainMenuBar())
+        {
+            if (ui.beginMenu("File"))
+            {
+                if (ui.menuItem("New"))
+                    name = ig::String("novo");
+                if (ui.menuItem("Open", ig::StringView("Ctrl+O")))
+                    name = ig::String("aberto");
+                ui.menuSeparator();
+                if (ui.menuItem("Quit", ig::StringView("Alt+F4")))
+                    running = false;
+                ui.endMenu();
+            }
+            if (ui.beginMenu("Edit"))
+            {
+                ui.menuItem("Undo", ig::StringView("Ctrl+Z"), false);
+                ui.menuItem("Redo", ig::StringView("Ctrl+Y"), false);
+                ui.menuSeparator();
+                if (ui.menuItem("Enabled", ig::StringView(""), true, enabled))
+                    enabled = !enabled;
+                ui.endMenu();
+            }
+            if (ui.beginMenu("View"))
+            {
+                if (ui.menuItem("Toggle window"))
+                    enabled = !enabled;
+                ui.endMenu();
+            }
+            ui.endMainMenuBar();
+        }
+        if (ui.beginWindow("iGUI Widget Gallery",
+                           ig::Rect(80.0f, 60.0f + ui.mainMenuBarHeight(), 520.0f, 520.0f)))
         {
             ui.label(u8"Olá, fonte UTF-8");
             if (ui.button("click me"))

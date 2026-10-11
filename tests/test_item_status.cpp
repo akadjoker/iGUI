@@ -1308,6 +1308,102 @@ void test_begin_combo_popup_owns_the_pointer_and_grows()
     assert(itemRects[0].width > headerRect.width);
 }
 
+// A barra de menu da aplicação: uma janela no topo do ecrã, fora das janelas do
+// utilizador, com o menu aberto por baixo dela e a troca de menu por hover (é o
+// que o foco na barra dá).
+void test_main_menu_bar()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect fileRect;
+    ig::Rect viewRect;
+    ig::Rect itemRect;
+    ig::Rect viewItemRect;
+    ig::Rect windowButtonRect;
+    int opened = 0;
+    bool fileOpen = false;
+    bool viewOpen = false;
+
+    auto build = [&](ig::Context &c) {
+        if (c.beginMainMenuBar())
+        {
+            fileOpen = c.beginMenu("File");
+            if (fileOpen)
+            {
+                if (c.menuItem("Open"))
+                    ++opened;
+                itemRect = c.itemRect();
+                c.endMenu();
+            }
+            // Com o menu fechado o último item é o botão da barra.
+            if (fileRect.width <= 0.0f)
+                fileRect = c.itemRect();
+            viewOpen = c.beginMenu("View");
+            if (viewOpen)
+            {
+                if (c.menuItem("Zoom"))
+                    ++opened;
+                viewItemRect = c.itemRect();
+                c.endMenu();
+            }
+            if (viewRect.width <= 0.0f)
+                viewRect = c.itemRect();
+            c.endMainMenuBar();
+        }
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f)));
+        c.button("na janela", ig::Rect(0.0f, 0.0f, 80.0f, 24.0f));
+        if (windowButtonRect.width <= 0.0f)
+            windowButtonRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // A barra é a faixa do topo, e o que está na janela não é ela.
+    assert(fileRect.y == 0.0f);
+    assert(fileRect.height == context.mainMenuBarHeight());
+    assert(viewRect.x > fileRect.x + fileRect.width - 0.5f);
+    assert(windowButtonRect.y >= context.mainMenuBarHeight());
+
+    // Abrir o menu, com o mesmo clique de sempre: carregar e largar.
+    const float fileX = fileRect.x + fileRect.width * 0.5f;
+    const float fileY = fileRect.y + fileRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(fileX, fileY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fileX, fileY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, fileX, fileY));
+    harness.frame(build);
+    assert(fileOpen);
+    // O popup sai por baixo da barra, não por cima dela.
+    assert(itemRect.y >= fileRect.y + fileRect.height);
+
+    // Passar o rato para o menu ao lado troca de menu aberto: é o foco que a barra
+    // ganhou com o clique que o permite. A troca acontece no beginMenu do "View",
+    // que é submetido depois do "File" - por isso é no frame seguinte que o "File"
+    // já se vê fechado.
+    const float viewX = viewRect.x + viewRect.width * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(viewX, fileY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(viewOpen);
+    assert(!fileOpen);
+
+    // E um item do menu responde ao clique (o popup do View, que é o que está
+    // aberto agora).
+    const float itemX = viewItemRect.x + viewItemRect.width * 0.5f;
+    const float itemY = viewItemRect.y + viewItemRect.height * 0.5f;
+    assert(itemY >= viewRect.y + viewRect.height);
+    context.pushEvent(ig::Event::pointerMove(itemX, itemY));
+    harness.frame(build);
+    assert(opened == 0);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    assert(opened == 1);
+}
+
 } // namespace
 
 int main()
@@ -1334,6 +1430,7 @@ int main()
     test_open_combo_owns_the_pointer_over_its_list();
     test_begin_combo_takes_free_content();
     test_begin_combo_popup_owns_the_pointer_and_grows();
+    test_main_menu_bar();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

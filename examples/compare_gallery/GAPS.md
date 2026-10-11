@@ -188,7 +188,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `BeginMenuBar` (dentro da janela) | `beginMenuBar(rect)` | existe: a barra é um item do layout (o cursor fica abaixo dela, como no grupo que o ImGui abre lá dentro), com rect e hover do item e sem id |
-| `BeginMainMenuBar` (barra da aplicação) | — | **não existe** |
+| `BeginMainMenuBar` (barra da aplicação) | `beginMainMenuBar`/`endMainMenuBar` | existe: uma janela sem nada à volta no topo do ecrã, com a ordem de cima (é o que a desenha por cima das outras e lhe dá o ponteiro antes delas), e com os `beginMenu`/`menuItem` de sempre lá dentro. A altura que ocupa é o `mainMenuBarHeight()` (a aplicação tem de deixá-la livre, como o work area do ImGui) |
 | `BeginMenu`/`EndMenu`/`BeginSubMenu` | `beginMenu`/`endMenu`/`beginSubMenu` | existe |
 | `MenuItem` com atalho (`"Open", "Ctrl+O"`) e checkbox/selected | `menuItem(label, shortcut, enabled, selected)` / `menuCheckbox` | existe: o atalho é desenhado à direita, em baixo-relevo, e conta para a largura do popup; quem o trata é a aplicação (é texto) |
 | `MenuItem` com enabled/disabled | `menuItem(label, enabled)` | existe |
@@ -462,9 +462,15 @@ Continua em falta neste nível:
 - [x] **`menuItem` com atalho desenhado**: `menuItem(label, shortcut, enabled,
       selected)` desenha o atalho à direita e soma-o à largura medida do menu.
       *Onde:* `src/Gui.cpp` (`menuItemInternal`), `tests/test_item_status.cpp`.
-- [ ] **`beginMainMenuBar`** (a barra da aplicação, que não pertence a nenhuma
-      janela).
-      *Onde:* `src/Gui.cpp` (`beginMenuBar`), `include/igui/Gui.hpp`.
+- [x] **`beginMainMenuBar`** (a barra da aplicação, que não pertence a nenhuma
+      janela): uma janela sem barra de título, sem mover nem redimensionar, com os
+      limites fixos no topo do ecrã, e com a ordem mais alta no fim de cada frame
+      (é o que a põe por cima das janelas e com o ponteiro antes delas).
+      *Onde:* `src/Gui.cpp` (`beginMainMenuBar`/`endMainMenuBar`), `tests/test_item_status.cpp`.
+- [ ] **Work area**: no ImGui as janelas são limitadas ao espaço que sobra da barra
+      (o `viewport->WorkOffsetMin.y`); aqui a aplicação tem de deixar a faixa livre
+      pelo `mainMenuBarHeight()`.
+      *Onde:* `src/Gui.cpp` (`beginWindow`, `mainMenuBarHeight`).
 - [ ] **`arrowButton` e `checkboxFlags`** (bitfield).
       *Onde:* `src/Gui.cpp:1336`/`1386`.
 
