@@ -72,7 +72,26 @@ struct Panel
     bool tableColumns[3];
     bool dialogOpen;
     bool modalOpen;
-    bool modalWithMessageBox;
+    // A messageBox do iGUI em separado do popup modal: são duas widgets diferentes
+    // (o demo do ImGui já não tem a caixa de OK/Cancelar, esta é do iGUI) e um clique
+    // num botão não pode deixar o outro por abrir.
+    bool messageBoxOpen;
+    // Os flags da barra de tabs que o demo expõe em checkboxes (o iGUI não tem o
+    // CheckboxFlags, por isso é um bool por flag).
+    bool tabFlagReorderable;
+    bool tabFlagAutoSelect;
+    bool tabFlagListPopup;
+    bool tabFlagNoCloseMiddle;
+    bool tabFlagOverline;
+    bool tabFlagFitting;
+    // As tabs "Opened:" do demo, que se abrem e fecham pelos checkboxes.
+    bool openedTabs[4];
+    // As tabs numeradas do "TabItemButton & Leading/Trailing": quem as cria é o "+".
+    int activeTabs[8];
+    int activeTabCount;
+    int nextTabId;
+    bool showLeadingTabButton;
+    bool showTrailingTabButton;
     bool selectAppearance;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
     // ImGui guarda a expansao dentro da widget e so o "open" e que vem de fora.
@@ -93,12 +112,24 @@ struct Panel
     Panel()
         : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
           queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
-          modalWithMessageBox(false), selectAppearance(false),
+          messageBoxOpen(false),
+          tabFlagReorderable(true), tabFlagAutoSelect(false), tabFlagListPopup(false),
+          tabFlagNoCloseMiddle(false), tabFlagOverline(false), tabFlagFitting(false),
+          openedTabs(), activeTabs(), activeTabCount(0), nextTabId(0),
+          showLeadingTabButton(true), showTrailingTabButton(true),
+          selectAppearance(false),
           headerCloseExpanded(true), headerBulletOpen(false),
           selection(0),
           sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
           subOpen()
     {
+        // As quatro tabs do "Opened:" do demo nascem abertas, e as numeradas começam
+        // com três (é o que o demo faz na primeira vez).
+        for (int i = 0; i < 4; ++i)
+            openedTabs[i] = true;
+        for (int i = 0; i < 3; ++i)
+            activeTabs[i] = nextTabId++;
+        activeTabCount = 3;
         // Tudo fechado, como o demo do ImGui abre por omissão: enquanto o
         // espelho abria o "Help" e o demo não, os dois painéis desenhavam textos
         // diferentes e a contagem de vértices comparava o "Help" (onze bullets)
@@ -1103,6 +1134,140 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
             documentOpen = true;
         item();
     }
+    // O segundo nó do "Tabs" do demo ("Advanced & Close Button"): os flags da barra
+    // em checkboxes - é a barra que os leva, por isso mudam logo -, as quatro tabs do
+    // "Opened:" e a barra delas, em que o x de uma tab a fecha pelo p_open.
+    {
+        bool reorderable = g_panel.tabFlagReorderable;
+        bool autoSelect = g_panel.tabFlagAutoSelect;
+        bool listPopup = g_panel.tabFlagListPopup;
+        bool noCloseMiddle = g_panel.tabFlagNoCloseMiddle;
+        bool overline = g_panel.tabFlagOverline;
+        bool fitting = g_panel.tabFlagFitting;
+        ui.checkbox("TabBarFlags_Reorderable", reorderable);
+        item();
+        ui.checkbox("TabBarFlags_AutoSelectNewTabs", autoSelect);
+        item();
+        ui.checkbox("TabBarFlags_TabListPopupButton", listPopup);
+        item();
+        ui.checkbox("TabBarFlags_NoCloseWithMiddleMouseButton", noCloseMiddle);
+        item();
+        ui.checkbox("TabBarFlags_DrawSelectedOverline", overline);
+        item();
+        ui.checkbox("TabBarFlags_FittingPolicyResizeDown (o Fitting)", fitting);
+        item();
+        g_panel.tabFlagReorderable = reorderable;
+        g_panel.tabFlagAutoSelect = autoSelect;
+        g_panel.tabFlagListPopup = listPopup;
+        g_panel.tabFlagNoCloseMiddle = noCloseMiddle;
+        g_panel.tabFlagOverline = overline;
+        g_panel.tabFlagFitting = fitting;
+
+        unsigned barFlags = ig::Context::TabBarFlags::None;
+        if (reorderable)
+            barFlags |= ig::Context::TabBarFlags::Reorderable;
+        if (autoSelect)
+            barFlags |= ig::Context::TabBarFlags::AutoSelectNewTabs;
+        if (listPopup)
+            barFlags |= ig::Context::TabBarFlags::TabListPopupButton;
+        if (noCloseMiddle)
+            barFlags |= ig::Context::TabBarFlags::NoCloseWithMiddleMouseButton;
+        if (overline)
+            barFlags |= ig::Context::TabBarFlags::DrawSelectedOverline;
+        if (fitting)
+            barFlags |= ig::Context::TabBarFlags::Fitting;
+
+        static const char *const kOpenedNames[4] = {"Artichoke", "Beetroot", "Celery", "Daikon"};
+        ui.label("Opened:");
+        for (int i = 0; i < 4; ++i)
+        {
+            ui.sameLine();
+            ui.checkbox(kOpenedNames[i], g_panel.openedTabs[i]);
+        }
+        item();
+        if (ui.beginTabBar("MyTabBar", barFlags))
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                if (!g_panel.openedTabs[i])
+                    continue;
+                bool open = true;
+                if (ui.beginTabItem(kOpenedNames[i], &open))
+                {
+                    char line[64];
+                    snprintf(line, sizeof(line), "This is the %s tab!", kOpenedNames[i]);
+                    ui.label(line);
+                    item();
+                    if ((i & 1) != 0)
+                    {
+                        ui.label("I am an odd tab.");
+                        item();
+                    }
+                    ui.endTabItem();
+                }
+                if (!open)
+                    g_panel.openedTabs[i] = false;
+            }
+            ui.endTabBar();
+        }
+        item();
+    }
+
+    // O terceiro nó do demo ("TabItemButton & Leading/Trailing flags"): o "?" é um
+    // botão Leading que abre um menu, o "+" um botão Trailing que cria uma tab, e as
+    // tabs numeradas fecham-se pelo x (é a lista que o chamador tem de manter).
+    {
+        ui.checkbox("Show Leading TabItemButton()", g_panel.showLeadingTabButton);
+        item();
+        ui.checkbox("Show Trailing TabItemButton()", g_panel.showTrailingTabButton);
+        item();
+        if (ui.beginTabBar("MyTabBar2", ig::Context::TabBarFlags::AutoSelectNewTabs |
+                                           ig::Context::TabBarFlags::Reorderable |
+                                           ig::Context::TabBarFlags::Fitting))
+        {
+            if (g_panel.showLeadingTabButton &&
+                ui.tabItemButton("?", ig::Context::TabItemFlags::Leading))
+                ui.openPopup("MyHelpMenu");
+            item();
+            if (ui.beginPopup("MyHelpMenu"))
+            {
+                ui.selectable("Hello!", false);
+                item();
+                ui.endPopup();
+            }
+            // O "+" acrescenta uma tab: o estado é do chamador, como no demo.
+            if (g_panel.showTrailingTabButton &&
+                ui.tabItemButton("+", ig::Context::TabItemFlags::Trailing) &&
+                g_panel.activeTabCount < 8)
+                g_panel.activeTabs[g_panel.activeTabCount++] = g_panel.nextTabId++;
+            item();
+            for (int i = 0; i < g_panel.activeTabCount;)
+            {
+                bool open = true;
+                char name[16];
+                snprintf(name, sizeof(name), "%04d", g_panel.activeTabs[i]);
+                if (ui.beginTabItem(name, &open))
+                {
+                    char line[64];
+                    snprintf(line, sizeof(line), "This is the %s tab!", name);
+                    ui.label(line);
+                    item();
+                    ui.endTabItem();
+                }
+                if (!open)
+                {
+                    for (int move = i; move + 1 < g_panel.activeTabCount; ++move)
+                        g_panel.activeTabs[move] = g_panel.activeTabs[move + 1];
+                    --g_panel.activeTabCount;
+                }
+                else
+                    ++i;
+            }
+            ui.endTabBar();
+        }
+        item();
+    }
+
     // O "SetSelected" do demo: um botao que escolhe uma tab da barra.
     if (ui.button("Escolher a tab 'Appearance'"))
         g_panel.selectAppearance = true;
@@ -1128,8 +1293,8 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::WidgetsTabs,
-        "os flags que faltam (TabListPopup, TabListButton, TabBarFlags_None com o "
-        "TabBarAutoSelectNewTabs por tab) e as tabs de um dock space");
+        "os CheckboxFlags do demo (os flags da barra são um checkbox cada), o "
+        "TabItemFlags_NoTooltip e as tabs de um dock space");
 }
 
 // ── Widgets: Text Input ──────────────────────────────────────────────────────
@@ -1321,30 +1486,29 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
     }
     item();
     ui.sameLine();
+    // A caixa de OK/Cancelar do iGUI (o demo do ImGui já não tem uma): um clique e
+    // ela aparece enquanto o open for verdadeiro.
     if (ui.button("Open message box"))
-        g_panel.modalOpen = true;
+        g_panel.messageBoxOpen = true;
     item();
-    if (g_panel.modalOpen)
+    if (g_panel.modalOpen && ui.beginPopupModal("Modal Window", &g_panel.modalOpen))
     {
-        if (g_panel.modalWithMessageBox)
-        {
-            if (ui.messageBox("Modal", "Continuar?", g_panel.modalOpen) !=
-                ig::MessageBoxResult::None)
-                g_panel.modalOpen = false;
-        }
-        else if (ui.beginPopupModal("Modal Window", &g_panel.modalOpen))
-        {
-            ui.label("Show a modal window with its own title bar, and the ability to close it");
-            item();
-            ui.label("with the X and by pressing Esc.");
-            item();
-            ui.separator();
-            if (ui.button("Button"))
-                ui.closeCurrentPopup();
-            if (!g_panel.modalOpen)
-                ui.closeCurrentPopup();
-            ui.endPopup();
-        }
+        ui.label("Show a modal window with its own title bar, and the ability to close it");
+        item();
+        ui.label("with the X and by pressing Esc.");
+        item();
+        ui.separator();
+        if (ui.button("Button"))
+            ui.closeCurrentPopup();
+        if (!g_panel.modalOpen)
+            ui.closeCurrentPopup();
+        ui.endPopup();
+    }
+    if (g_panel.messageBoxOpen)
+    {
+        if (ui.messageBox("Modal", "Continuar?", g_panel.messageBoxOpen) !=
+            ig::MessageBoxResult::None)
+            g_panel.messageBoxOpen = false;
     }
     // O "Select.." do demo, com o popup de escolha dele: abre no ponteiro, o corpo é
     // conteúdo livre (um separador e os itens) e escolher fecha-o.

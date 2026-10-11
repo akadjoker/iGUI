@@ -2300,6 +2300,10 @@ bool Context::beginTabBar(StringView idText, unsigned flags)
     if (width <= 0.0f)
         return false;
     const Rect row(layout_.cursor.x, layout_.cursor.y, width, theme_.widgetHeight);
+    // A faixa das tabs é a barra toda menos o botão da lista (ver o
+    // TabListPopupButton), que fica encostado à esquerda.
+    const float listButtonWidth =
+        (flags & TabBarFlags::TabListPopupButton) != 0u ? theme_.fontSize + theme_.itemSpacing : 0.0f;
     const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     const WidgetId id = combineIds(parentId, combineIds(makeWidgetId(idText), 0x544142424152ull));
     TabBarState *state = tabBars_.find(id);
@@ -2320,12 +2324,52 @@ bool Context::beginTabBar(StringView idText, unsigned flags)
     submit.parentLayout = layout_;
     submit.row = row;
     submit.flags = flags;
-    submit.cursorX = row.x;
+    submit.cursorX = row.x + listButtonWidth;
     submit.contentHeight = 0.0f;
+    submit.tabsX = row.x + listButtonWidth;
+    submit.tabsWidth = row.width - listButtonWidth;
+    submit.leadingTabWidth = 0.0f;
+    submit.leadingButtonWidth = 0.0f;
+    submit.trailingTabWidth = 0.0f;
+    submit.trailingButtonWidth = 0.0f;
     // A faixa da barra: uma linha por trás das tabs.
     drawList->addRectFilled(row, theme_.panelColor, contentClip());
     idStack_.push_back(id);
+    if (listButtonWidth > 0.0f)
+        tabListPopupButton(listButtonWidth, *state);
     return true;
+}
+
+// O botão da lista de tabs (o TabListPopupButton): o combo sem pré-visualização
+// que o ImGui encosta à esquerda da barra. A lista é a do frame anterior (as tabs
+// deste frame ainda não foram submetidas, e no ImGui é igual); escolher uma vale
+// já para o realce, como um clique nela.
+void Context::tabListPopupButton(float width, TabBarState &state)
+{
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return;
+    const bool open = beginCombo("##list", StringView(), width, 12);
+    if (!open)
+        return;
+    for (ct::Vector<WidgetId>::size_type i = 0u; i < state.order.size(); ++i)
+    {
+        const String *name = state.names.find(state.order[i]);
+        if (!name)
+            continue;
+        if (selectable(*name, state.selected == state.order[i], 0.0f))
+            state.selected = state.order[i];
+    }
+    endCombo();
+}
+
+// A posição de uma tab na faixa (a do frame seguinte): onde o cursor da banda está,
+// mais a largura dela.
+float Context::tabPlacePosition(TabBarState &state, WidgetId tab, float x)
+{
+    const float *width = state.widths.find(tab);
+    state.positions.put(tab, x);
+    return x + (width ? *width : 0.0f);
 }
 
 void Context::endTabBar()
@@ -2343,9 +2387,15 @@ void Context::endTabBar()
         for (ct::Vector<WidgetId>::size_type i = 0u; i < state->order.size();)
         {
             if (tabListContains(state->seenThisFrame, state->order[i]))
+            {
                 ++i;
-            else
-                state->order.erase(state->order.begin() + static_cast<long>(i));
+                continue;
+            }
+            // A tab que já não é submetida sai da ordem e leva a banda e o nome
+            // com ela.
+            state->bands.erase(state->order[i]);
+            state->names.erase(state->order[i]);
+            state->order.erase(state->order.begin() + static_cast<long>(i));
         }
         for (ct::Vector<WidgetId>::size_type i = 0u; i < state->seenThisFrame.size(); ++i)
         {
@@ -2366,12 +2416,33 @@ void Context::endTabBar()
                 activeWidget_ = InvalidWidgetId;
             state->dragTab = InvalidWidgetId;
         }
-        float x = submit.row.x;
+        // As posições do frame seguinte saem da ordem: as Leading encostadas à
+        // esquerda, as do meio a seguir a elas, e as Trailing encostadas à direita
+        // (ao contrário, para a primeira delas ficar mais à esquerda).
+        float x = submit.tabsX + submit.leadingButtonWidth;
         for (ct::Vector<WidgetId>::size_type i = 0u; i < state->order.size(); ++i)
         {
-            const float *width = state->widths.find(state->order[i]);
-            state->positions.put(state->order[i], x);
-            x += width ? *width : 0.0f;
+            const unsigned *band = state->bands.find(state->order[i]);
+            if (band && *band == TabItemFlags::Leading)
+                x = tabPlacePosition(*state, state->order[i], x);
+        }
+        for (ct::Vector<WidgetId>::size_type i = 0u; i < state->order.size(); ++i)
+        {
+            const unsigned *band = state->bands.find(state->order[i]);
+            if (band && *band != TabItemFlags::None)
+                continue;
+            x = tabPlacePosition(*state, state->order[i], x);
+        }
+        float right = submit.tabsX + submit.tabsWidth - submit.trailingButtonWidth;
+        for (ct::Vector<WidgetId>::size_type i = state->order.size(); i > 0u; --i)
+        {
+            const WidgetId tab = state->order[i - 1u];
+            const unsigned *band = state->bands.find(tab);
+            if (!band || *band != TabItemFlags::Trailing)
+                continue;
+            const float *width = state->widths.find(tab);
+            right -= width ? *width : 0.0f;
+            state->positions.put(tab, right);
         }
     }
     // A barra fecha por baixo, com o conteúdo da tab escolhida dentro dela.
@@ -2418,29 +2489,63 @@ bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
     const StringView text = visibleLabel(labelText);
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float padding = theme_.windowPadding;
+    // A banda da tab (Leading/Trailing): as das pontas não se misturam com as do
+    // meio, nem na largura que o Fitting divide.
+    const unsigned band = flags & (TabItemFlags::Leading | TabItemFlags::Trailing);
+    state->bands.put(tabId, band);
+    state->names.put(tabId, String(labelText.data(), labelText.size()));
     float tabWidth = metrics.width + padding * 2.0f + (open ? metrics.height : 0.0f);
     if ((submit.flags & TabBarFlags::Fitting) != 0u)
     {
-        // As tabs dividem a barra: é o que faz caberem todas na largura. Quantas são
-        // só se sabe no fim do frame, por isso a divisão é pela conta do frame
-        // anterior (na primeira é pela que já se viu).
+        // As tabs dividem a faixa que sobra: é o que faz caberem todas na largura.
+        // Quantas são só se sabe no fim do frame, por isso a divisão é pela conta do
+        // frame anterior (na primeira é pela que já se viu).
         const int count = state->lastCount > static_cast<int>(state->seenThisFrame.size())
             ? state->lastCount : static_cast<int>(state->seenThisFrame.size());
-        if (count > 0)
+        const float available = submit.tabsWidth - submit.leadingTabWidth -
+                                submit.leadingButtonWidth - submit.trailingTabWidth -
+                                submit.trailingButtonWidth;
+        if (count > 0 && available > 0.0f)
         {
-            const float share = submit.row.width / static_cast<float>(count);
+            const float share = available / static_cast<float>(count);
             if (share < tabWidth)
                 tabWidth = share;
         }
     }
     // A tab nasce onde a ordem a pôs no frame anterior; uma tab nova nasce a seguir
-    // à última submetida.
+    // à última submetida - ou na ponta que a banda dela pedir.
     float tabX = submit.cursorX;
     const float *position = state->positions.find(tabId);
     if (position)
         tabX = *position;
-    else
+    if (band == TabItemFlags::Leading)
+    {
+        // As tabs Leading encostam-se à direita dos botões Leading (o "?" fica antes
+        // delas).
+        if (!position)
+            tabX = submit.tabsX + submit.leadingButtonWidth + submit.leadingTabWidth;
+        submit.leadingTabWidth += tabWidth;
+    }
+    else if (band == TabItemFlags::Trailing)
+    {
+        // As do lado direito encostam-se à esquerda dos botões Trailing (o "+" fica
+        // depois delas, na ponta).
+        submit.trailingTabWidth += tabWidth;
+        if (!position)
+            tabX = submit.tabsX + submit.tabsWidth - submit.trailingButtonWidth -
+                   submit.trailingTabWidth;
+    }
+    else if (!position)
+    {
+        // Uma tab do meio nunca entra na banda das pontas: o que as pontas ocuparem
+        // neste frame (um botão Leading submetido antes desta, por exemplo) empurra-a.
+        const float afterLeading = submit.tabsX + submit.leadingButtonWidth +
+                                   submit.leadingTabWidth;
+        if (submit.cursorX < afterLeading)
+            submit.cursorX = afterLeading;
+        tabX = submit.cursorX;
         submit.cursorX += tabWidth;
+    }
     state->widths.put(tabId, tabWidth);
     const Rect tabRect(tabX, submit.row.y, tabWidth, submit.row.height);
     const Rect tabClip = intersect(tabRect, clip);
@@ -2524,6 +2629,13 @@ bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
         drawList->addLine(Vec2(tabRect.x, tabRect.y + tabRect.height - 1.0f),
                           Vec2(tabRect.x + tabRect.width, tabRect.y + tabRect.height - 1.0f),
                           theme_.borderColor, clip, 1.0f);
+    else if ((submit.flags & TabBarFlags::DrawSelectedOverline) != 0u)
+    {
+        // O traço por cima da tab escolhida (é o que o DrawSelectedOverline pede).
+        drawList->addLine(Vec2(tabRect.x, tabRect.y + 1.0f),
+                          Vec2(tabRect.x + tabRect.width, tabRect.y + 1.0f),
+                          theme_.textColor, clip, 2.0f);
+    }
     drawText(*drawList, theme_.font, text,
              Vec2(tabRect.x + padding, tabRect.y + (tabRect.height - metrics.height) * 0.5f),
              theme_.fontSize, highlighted ? theme_.textColor : theme_.labelText, clip);
@@ -2582,6 +2694,63 @@ void Context::endTabItem()
     layout_ = content.parentLayout;
     if (tabBarDepth_ > 0)
         tabBarStack_[tabBarDepth_ - 1].contentHeight = height + theme_.itemSpacing;
+}
+
+bool Context::tabItemButton(StringView labelText, unsigned flags)
+{
+    if (tabBarDepth_ <= 0 || tabContentDepth_ > 0)
+        return false;
+    TabBarSubmitState &submit = tabBarStack_[tabBarDepth_ - 1];
+    DrawList *drawList = currentDrawList();
+    if (!drawList)
+        return false;
+    const StringView text = visibleLabel(labelText);
+    const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
+    const float padding = theme_.windowPadding;
+    const float width = metrics.width + padding * 2.0f;
+    // O botão ocupa o lugar de uma tab na faixa (na banda que os flags pedirem), mas
+    // não escolhe nada nem abre conteúdo: devolve o clique e quem trata dele é o
+    // chamador.
+    const unsigned band = flags & (TabItemFlags::Leading | TabItemFlags::Trailing);
+    float x = submit.cursorX;
+    if (band == TabItemFlags::Leading)
+    {
+        x = submit.tabsX + submit.leadingButtonWidth;
+        submit.leadingButtonWidth += width;
+    }
+    else if (band == TabItemFlags::Trailing)
+    {
+        submit.trailingButtonWidth += width;
+        x = submit.tabsX + submit.tabsWidth - submit.trailingButtonWidth;
+    }
+    else
+    {
+        const float afterLeading = submit.tabsX + submit.leadingButtonWidth +
+                                   submit.leadingTabWidth;
+        if (submit.cursorX < afterLeading)
+            submit.cursorX = afterLeading;
+        x = submit.cursorX;
+        submit.cursorX += width;
+    }
+    const Rect rect(x, submit.row.y, width, submit.row.height);
+    const Rect tabClip = intersect(rect, contentClip());
+    const WidgetId id =
+        combineIds(submit.id, combineIds(makeWidgetId(labelText), 0x54414242544eull));
+    const bool hovered = itemHovered(rect, tabClip, id);
+    const bool clicked = itemClicked(rect, tabClip, id);
+    // Com o aspecto de um botão: o fundo da barra quando o ponteiro não está por
+    // cima, e a linha de cima e de baixo como uma tab.
+    drawList->addRectFilled(rect, hovered ? theme_.buttonHovered : theme_.panelColor,
+                            contentClip());
+    drawList->addLine(Vec2(rect.x, rect.y), Vec2(rect.x + rect.width, rect.y),
+                      theme_.borderColor, contentClip(), 1.0f);
+    drawList->addLine(Vec2(rect.x, rect.y + rect.height - 1.0f),
+                      Vec2(rect.x + rect.width, rect.y + rect.height - 1.0f), theme_.borderColor,
+                      contentClip(), 1.0f);
+    drawText(*drawList, theme_.font, text,
+             Vec2(rect.x + padding, rect.y + (rect.height - metrics.height) * 0.5f),
+             theme_.fontSize, hovered ? theme_.textColor : theme_.labelText, contentClip());
+    return clicked;
 }
 
 bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringView> items,
