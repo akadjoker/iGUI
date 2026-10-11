@@ -910,9 +910,42 @@ public:
                  const Gizmo3DOptions &options = Gizmo3DOptions());
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     const Rect &bounds);
-    bool inputText(StringView label, String &value, const Rect &bounds);
+    // O que a caixa de texto aceita e o que ela mostra (o ImGuiInputTextFlags do
+    // ImGui, por outro nome). Os Chars* filtram o que se escreve e o que se cola -
+    // o texto que a aplicação já lá tinha não se mexe -, o ReadOnly tranca a
+    // edição e o Password esconde o que lá está.
+    struct InputTextFlags
+    {
+        enum Values
+        {
+            None = 0u,
+            /// Só os dígitos, o sinal e o ponto (um "-1.5").
+            CharsDecimal = 1u << 0,
+            /// Só os dígitos hexadecimais, mais o "x" do "0x".
+            CharsHexadecimal = 1u << 1,
+            /// Tudo o que entra sai em maiúsculas (o hexadecimal de sempre).
+            CharsUppercase = 1u << 2,
+            /// Sem espaços nem tabs.
+            CharsNoBlank = 1u << 3,
+            /// Os dígitos, o sinal, o ponto e o expoente (um "1.5e-3").
+            CharsScientific = 1u << 4,
+            /// O Tab escreve um tab dentro do campo em vez de passar o foco ao item
+            /// seguinte.
+            AllowTabInput = 1u << 5,
+            /// O Enter devolve true (é o EnterReturnsTrue do ImGui): quem espera
+            /// pelo que se escreveu responde ao Enter, e o campo fica com o foco.
+            EnterReturnsTrue = 1u << 6,
+            /// O que está escrito vê-se como pontos.
+            Password = 1u << 7,
+            /// Só se lê: o clique e o foco continuam a valer, o texto não se mexe.
+            ReadOnly = 1u << 8
+        };
+    };
+    bool inputText(StringView label, String &value, const Rect &bounds,
+                   unsigned flags = InputTextFlags::None);
     // Igual ao inputText, mas desenha `hint` enquanto o campo está vazio.
-    bool inputTextWithHint(StringView label, StringView hint, String &value, const Rect &bounds);
+    bool inputTextWithHint(StringView label, StringView hint, String &value, const Rect &bounds,
+                           unsigned flags = InputTextFlags::None);
     // followTail keeps the view pinned to the last line as value grows (a
     // console/log), unless the user scrolled up to read back.
     bool inputTextMultiline(StringView label, String &value, const Rect &bounds,
@@ -1341,8 +1374,10 @@ public:
                     float minimum, float maximum, float speed = 0.01f, float width = 0.0f);
     bool stepperInt(StringView label, int &value, int minimum, int maximum,
                     float width = 0.0f);
-    bool inputText(StringView label, String &value, float width = 0.0f);
-    bool inputTextWithHint(StringView label, StringView hint, String &value, float width = 0.0f);
+    bool inputText(StringView label, String &value, float width = 0.0f,
+                   unsigned flags = InputTextFlags::None);
+    bool inputTextWithHint(StringView label, StringView hint, String &value, float width = 0.0f,
+                           unsigned flags = InputTextFlags::None);
     bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
                             float height = 120.0f, bool followTail = false);
     bool inputInt(StringView label, int &value, float width = 0.0f,
@@ -2644,7 +2679,10 @@ private:
     // boundary). Every text field (inputText, inputTextMultiline, the
     // messageBox input, the fileDialog fields) edits through this, so they
     // all get the same keys. Returns whether value changed.
-    bool editTextBuffer(String &value, String::size_type &cursor, bool multiline);
+    // Os flags são os do inputText (o filtro do que se escreve e o ReadOnly); o
+    // inputTextMultiline e o campo do combo não os usam.
+    bool editTextBuffer(String &value, String::size_type &cursor, bool multiline,
+                        unsigned flags = 0u);
     // Corpo comum de plotLines/plotHistogram: histogram escolhe barras em vez de
     // segmentos de linha. Recebe um rect local, como os outros widgets de bounds.
     int plotImpl(bool histogram, StringView label, const float *values, int count,

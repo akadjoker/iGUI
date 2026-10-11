@@ -28,20 +28,23 @@ public:
 // Keys: "<L>" "<R>" "<U>" "<D>" "<HOME>" "<END>" "<BS>" "<DEL>" "<ENTER>"
 // "<PASTE>"; anything else is typed as text.
 ig::String edit(const char *initial, const char *const *keys, int count, bool multiline,
-                const char *clipboard = "")
+                const char *clipboard = "", unsigned flags = ig::Context::InputTextFlags::None,
+                bool *returnedTrue = nullptr)
 {
     ClipboardBackend backend;
     backend.clipboard = clipboard;
     ig::Context context(backend);
     ig::Harness harness(context);
     ig::String value(initial);
+    bool returned = false;
     auto build = [&](ig::Context &c)
     {
         c.beginMainWindow("main");
         if (multiline)
             c.inputTextMultiline("text", value, ig::Rect(10.0f, 10.0f, 300.0f, 120.0f));
         else
-            c.inputText("text", value, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
+            returned = c.inputText("text", value, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), flags) ||
+                       returned;
         c.endWindow();
     };
     harness.frame(build);
@@ -58,6 +61,7 @@ ig::String edit(const char *initial, const char *const *keys, int count, bool mu
         {"<HOME>", ig::KeyCode::Home, false}, {"<END>", ig::KeyCode::End, false},
         {"<BS>", ig::KeyCode::Backspace, false}, {"<DEL>", ig::KeyCode::Delete, false},
         {"<ENTER>", ig::KeyCode::Enter, false}, {"<PASTE>", ig::KeyCode::V, true},
+        {"<TAB>", ig::KeyCode::Tab, false},
     };
     for (int k = 0; k < count; ++k)
     {
@@ -74,6 +78,8 @@ ig::String edit(const char *initial, const char *const *keys, int count, bool mu
             context.pushEvent(ig::Event::textInput(keys[k]));
         harness.frame(build);
     }
+    if (returnedTrue)
+        *returnedTrue = returned;
     return value;
 }
 
@@ -113,6 +119,59 @@ void test_single_line()
     expect("Single line drops newlines from typed text", edit("a", newline, 1, false), "alinebreak");
     const char *paste[] = {"<HOME>", "<PASTE>"};
     expect("Single line drops newlines from pasted text", edit("a", paste, 2, false, "x\r\ny"), "xya");
+}
+
+// Os flags do inputText: o que se escreve é filtrado (os Chars*), o campo é só de
+// leitura, o Enter volta como resposta e o Tab pode ser um tab escrito.
+void test_input_text_flags()
+{
+    const unsigned decimal = ig::Context::InputTextFlags::CharsDecimal;
+    const unsigned hexUpper =
+        ig::Context::InputTextFlags::CharsHexadecimal | ig::Context::InputTextFlags::CharsUppercase;
+    const unsigned noBlank = ig::Context::InputTextFlags::CharsNoBlank;
+    const unsigned scientific = ig::Context::InputTextFlags::CharsScientific;
+    const unsigned readOnly = ig::Context::InputTextFlags::ReadOnly;
+
+    // Só o que é um número entra, e o que não é é deitado fora.
+    const char *typed[] = {"-1.5e3 abc!"};
+    expect("CharsDecimal: out of the filter nothing enters", edit("", typed, 1, false, "",
+                                                                  decimal),
+           "-1.53");
+    const char *hex[] = {"0x3fZz"};
+    expect("CharsHexadecimal|CharsUppercase: 0x3fZz", edit("", hex, 1, false, "", hexUpper),
+           "0X3F");
+    const char *blank[] = {"a b\tc"};
+    expect("CharsNoBlank: no blanks", edit("", blank, 1, false, "", noBlank), "abc");
+    const char *sci[] = {"1.5e-3x"};
+    expect("CharsScientific: 1.5e-3", edit("", sci, 1, false, "", scientific), "1.5e-3");
+
+    // O que a aplicação já tinha não é filtrado (os flags são do que se escreve).
+    expect("os flags não mexem no valor que já lá está",
+           edit("já escrito!", typed, 1, false, "", decimal), "já escrito!-1.53");
+
+    // Só de leitura: nem escrever, nem Backspace, nem apagar; o cursor anda.
+    const char *tryEdit[] = {"<HOME>", "X", "<BS>", "<DEL>"};
+    expect("ReadOnly: o texto não se mexe", edit("abc", tryEdit, 4, false, "", readOnly), "abc");
+
+    // O Enter volta como resposta (e o valor não é mexido por ele).
+    bool returned = false;
+    const char *enter[] = {"<ENTER>"};
+    const ig::String kept = edit("abc", enter, 1, false, "", ig::Context::InputTextFlags::EnterReturnsTrue,
+                                 &returned);
+    expect("EnterReturnsTrue: o texto fica como estava", kept, "abc");
+    if (!returned)
+    {
+        ++gFailures;
+        printf("FAIL EnterReturnsTrue: o Enter não voltou como resposta\n");
+    }
+
+    // O Tab escreve um tab dentro do campo em vez de passar o foco ao seguinte.
+    const char *tabKeys[] = {"<TAB>", "X"};
+    expect("AllowTabInput: o Tab entra no campo",
+           edit("", tabKeys, 2, false, "", ig::Context::InputTextFlags::AllowTabInput), "\tX");
+    // Sem o flag o Tab não escreve nada (é do foco, não do campo).
+    const char *tabNoFlag[] = {"<TAB>", "X"};
+    expect("sem AllowTabInput o Tab não escreve", edit("", tabNoFlag, 2, false, ""), "X");
 }
 
 void test_multiline()
@@ -257,6 +316,7 @@ int main()
 {
     test_single_line();
     test_multiline();
+    test_input_text_flags();
     test_undo_shortcut_belongs_to_focused_text_field();
     test_message_box_enter_accepts();
     if (gFailures != 0)
