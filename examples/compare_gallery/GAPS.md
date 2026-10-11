@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **40 lacunas** contra 228 itens submetidos pelo
+dois lados: na revisão atual são **38 lacunas** contra 229 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -58,9 +58,9 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | Demo do ImGui | iGUI | Estado |
 | --- | --- | --- |
 | `Button` / `SmallButton` / `InvisibleButton` | `button` / `smallButton` / `invisibleButton` | existe |
-| `ArrowButton` | — | **não existe** |
-| `Checkbox` | `checkbox` | existe |
-| `CheckboxFlags` (bitfield int/unsigned) | — | **não existe** (faz-se com N checkboxes) |
+| `ArrowButton` | `arrowButton` | existe: quadrado com a seta para um dos quatro lados, e o rótulo é um id ("##left") |
+| `Checkbox` | `checkbox` | existe: a caixa e o rótulo à frente são o mesmo item para o ponteiro, como no ImGui |
+| `CheckboxFlags` (bitfield int/unsigned) | `checkboxFlags` | existe (`unsigned`; o desenho e o clique são os do `checkbox`) |
 | `RadioButton` | `radioButton` | existe |
 | `ImageButton` / `SmallImageButton` | `imageButton` / `smallImageButton` | existe |
 | `Selectable` com flags | `selectable(label, selected, width)` | parcial: sem `SpanAllColumns`, `AllowDoubleClick`, `Disabled`, `AllowOverlap`, alinhamento à direita |
@@ -227,7 +227,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `Columns`/`BeginColumns` (API antiga) | — | **não existe** |
 | `ImGuiListClipper` | `beginVirtualList` (+Table/Tree) | parcial: exige `first/last` explícitos |
 | `PushItemWidth`/`PopItemWidth`/`SetNextItemWidth`/`CalcItemWidth` | `pushItemWidth`/`popItemWidth`/`setNextItemWidth`/`calcItemWidth` | existe (uma guarda de profundidade: um `pushItemWidth` dentro de outro bloco herda a largura de fora em vez de a repor) |
-| `AlignTextToFramePadding` | — | **não existe** |
+| `AlignTextToFramePadding` | `alignTextToFramePadding` | existe: desloca o próximo texto (o `label`, o `textDisabled` e o `textColored`), não o cursor - o widget da mesma linha fica onde estava |
 | `SetCursorPos`/`GetCursorPos`/`GetContentRegionAvail` | `setCursor`/`cursor`/`availableWidth`/`availableHeight` | existe |
 | Scroll horizontal, scrollbar customizada | parcial | |
 | `GetWindowPos/Size/Width/Height`, `SetNextWindowSizeConstraints` | `windowBounds` | parcial |
@@ -456,10 +456,15 @@ Continua em falta neste nível:
       `include/igui/Gui.hpp` (`GroupState`), `tests/test_item_status.cpp`.
       Com isto veio a regra da altura da linha (a do item mais alto), que é o que
       o ImGui usa e o que faz a linha seguinte cair abaixo do bloco todo.
-- [ ] **Layout, o resto**: `alignTextToFramePadding`. A altura de uma linha
-      também podia ter uma versão "por omissão" configurável (o `style.ItemSpacing`
-      já existe); falta ainda uma largura por omissão de *container* (`pushItemWidth`
-      tem uma só profundidade de guarda).
+- [x] **`alignTextToFramePadding`**: o próximo texto do bloco fica ao nível do
+      texto de um widget com moldura da mesma linha; o deslocamento é só do texto.
+      Junto com ele, o rótulo à frente da caixa do `checkbox`/`radioButton`/
+      `toggleSwitch` passou a fazer parte da área que responde ao ponteiro (era só a
+      caixa), como no ImGui.
+      *Onde:* `src/Gui.cpp` (`textFrameOffset`, `checkboxImpl`), `tests/test_widgets.cpp`.
+- [ ] **Layout, o resto**: uma altura de linha "por omissão" configurável (o
+      `style.ItemSpacing` já existe); falta ainda uma largura por omissão de
+      *container* (`pushItemWidth` tem uma só profundidade de guarda).
       *Onde:* `src/Gui.cpp` (`beginLayout`, `advanceLayout`, `sameLine`).
 - [x] **`beginCombo`/`endCombo`**: popup de conteúdo livre, com o `drawComboHeader`
       a servir os dois (o `comboBox` e o `beginCombo`), o cursor do layout dentro do
@@ -480,8 +485,11 @@ Continua em falta neste nível:
       (o `viewport->WorkOffsetMin.y`); aqui a aplicação tem de deixar a faixa livre
       pelo `mainMenuBarHeight()`.
       *Onde:* `src/Gui.cpp` (`beginWindow`, `mainMenuBarHeight`).
-- [ ] **`arrowButton` e `checkboxFlags`** (bitfield).
-      *Onde:* `src/Gui.cpp:1336`/`1386`.
+- [x] **`arrowButton` e `checkboxFlags`** (bitfield): o `drawArrowGlyph` desenha a
+      seta para os quatro lados e o `checkboxFlags` troca um bit do `unsigned` que
+      lhe dão, com o desenho e o clique do `checkbox`.
+      *Onde:* `src/Gui.cpp` (`arrowButton`, `drawArrowGlyph`, `checkboxFlags`),
+      `tests/test_widgets.cpp`.
 
 ## P2 — estruturas novas
 

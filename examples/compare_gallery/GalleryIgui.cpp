@@ -221,8 +221,27 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
         ui.dummy(80.0f, 22.0f);
     }
     item();
-    gap(ui, gallery::Section::WidgetsBasic, "ArrowButton");
-    gap(ui, gallery::Section::WidgetsBasic, "CheckboxFlags");
+    // O "Hold to repeat:" do demo: o texto alinhado com a moldura dos botões, os
+    // dois arrowButton e o contador. Os CheckboxFlags do demo estão nas secções
+    // dos flags que eles trocam (io.ConfigFlags, ColorEdit, Combo, Slider), que
+    // continuam com a lacuna delas.
+    ui.alignTextToFramePadding();
+    ui.label("Hold to repeat:");
+    ui.sameLine();
+    if (ui.arrowButton("##left", ig::ArrowDirection::Left))
+        --s.steps;
+    item();
+    ui.sameLine();
+    if (ui.arrowButton("##right", ig::ArrowDirection::Right))
+        ++s.steps;
+    item();
+    ui.sameLine();
+    {
+        char counter[16];
+        snprintf(counter, sizeof(counter), "%d", s.steps);
+        ui.label(ig::StringView(counter, strlen(counter)));
+    }
+    item();
     ui.checkbox("Checkbox", s.flag[0]);
     item();
     if (ui.radioButton("RadioButton a", s.radio == 0))
