@@ -58,6 +58,16 @@ inline float clamp(float value, float minimum, float maximum)
     return value < minimum ? minimum : (value > maximum ? maximum : value);
 }
 
+// O mesmo em double: o slider, o drag e o campo numérico por dentro deles são em
+// double (um valor de 64 bits ou um que se escreve com dez decimais não cabe num
+// float), e o NaN tem de ter o mesmo destino que ali.
+inline double clampDouble(double value, double minimum, double maximum)
+{
+    if (!(value == value))
+        return minimum;
+    return value < minimum ? minimum : (value > maximum ? maximum : value);
+}
+
 inline bool contains(const Rect &rect, const Vec2 &point)
 {
     return point.x >= rect.x && point.y >= rect.y &&

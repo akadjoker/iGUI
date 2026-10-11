@@ -82,6 +82,339 @@ static float wrapSliderValue(float next, float value, float minimum, float maxim
     return next;
 }
 
+// As mesmas contas em double: um valor de 64 bits (ou um que se escreve com dez
+// decimais) não cabe num float, e é por isso que o slider e o drag por dentro
+// deles são em double. As versões em float ficam para quem já as usava.
+static double sliderNormDouble(double value, double minimum, double maximum, bool logarithmic)
+{
+    if (logarithmic)
+    {
+        const double ratio = value > minimum ? value : minimum;
+        return log(ratio / minimum) / log(maximum / minimum);
+    }
+    return (value - minimum) / (maximum - minimum);
+}
+
+static double sliderValueFromNormDouble(double norm, double minimum, double maximum,
+                                        bool logarithmic)
+{
+    if (logarithmic)
+        return minimum * pow(maximum / minimum, norm);
+    return minimum + (maximum - minimum) * norm;
+}
+
+static double wrapSliderValueDouble(double next, double value, double minimum, double maximum)
+{
+    if (next == maximum && value < maximum)
+        return minimum;
+    if (next == minimum && value > minimum)
+        return maximum;
+    return next;
+}
+
+// O parse estrito de um double (o corpo está mais abaixo, junto dos outros
+// parsers, e é o mesmo que o campo de texto usava): o formatNumericValue e o
+// parseNumericValue precisam dele aqui em cima.
+bool parseDoubleText(const String &text, double &result);
+
+// ── O formato do valor (o "%04X", o "%.10f grams" do demo) ───────────────────
+// O valor de uma widget numérica sai com um formato fixo (o número do inteiro,
+// três decimais), e o demo escreve-o à mão em quase todas: hexadecimal, o
+// " grams" agarrado ao número, o "0 < %.10f < 1". Estas funções são o que faz o
+// formato do chamador valer para o valor desenhado E para o que ele escreve no
+// campo de texto.
+
+// Onde começa a especificação do valor ("%.3f" em "%.3f grams" ou em
+// "0 < %.3f < 1"), ou nullptr quando o formato não mostra o valor nenhum. O
+// "%%" não conta: é um por-cento, não um valor.
+const char *numericSpec(const char *format)
+{
+    if (!format)
+        return nullptr;
+    for (const char *at = format; *at != 0; ++at)
+    {
+        if (*at != '%')
+            continue;
+        if (at[1] == '%')
+        {
+            ++at;
+            continue;
+        }
+        return at;
+    }
+    return nullptr;
+}
+
+// O tipo da especificação ('d', 'x', 'f', ...), ou 0 quando não há especificação
+// ou quando ela não é de um número (um "%s" não é para aqui).
+char numericSpecType(const char *spec)
+{
+    if (!spec || *spec != '%')
+        return 0;
+    for (const char *at = spec + 1; *at != 0; ++at)
+    {
+        const char c = *at;
+        if (c == 'd' || c == 'i' || c == 'u' || c == 'o' || c == 'x' || c == 'X' ||
+            c == 'f' || c == 'F' || c == 'e' || c == 'E' || c == 'g' || c == 'G' ||
+            c == 'a' || c == 'A')
+            return c;
+        // Uma letra que não seja um comprimento conhecido fecha a especificação:
+        // se não está na lista de cima, não é um número.
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+        {
+            if (c == 'l' || c == 'h' || c == 'j' || c == 'z' || c == 't')
+                continue;
+            return 0;
+        }
+    }
+    return 0;
+}
+
+bool numericSpecIsInteger(char type)
+{
+    return type == 'd' || type == 'i' || type == 'u' || type == 'o' || type == 'x' ||
+           type == 'X';
+}
+
+bool numericSpecIsUnsigned(char type)
+{
+    return type == 'u' || type == 'o' || type == 'x' || type == 'X';
+}
+
+// O formato do chamador com o comprimento da especificação forçado ao valor que
+// lhe vamos passar: um inteiro vai como long long (é o que cobre o s8..u64 todo)
+// e um real como double, que é o que a linguagem promove de qualquer forma -
+// por isso o "l" do "%lf" sai e o "ll" entra no lugar do comprimento que o
+// chamador tiver escrito. O desencontro entre o "%04X" que ele escreveu e o
+// valor que passa a ser é o que se evita aqui (é o mesmo que o ImGui faz antes
+// do sprintf dele).
+void sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool integer)
+{
+    if (outSize == 0u)
+        return;
+    size_t written = 0u;
+    for (const char *at = format; *at != 0; ++at)
+    {
+        const char c = *at;
+        if (c == '%' && at[1] == '%')
+        {
+            if (written + 2u < outSize)
+            {
+                out[written++] = '%';
+                out[written++] = '%';
+            }
+            else
+                break;
+            ++at;
+            continue;
+        }
+        if (c == '%')
+        {
+            const char type = numericSpecType(at);
+            if (type == 0)
+                return; // não é um formato com que se possa imprimir: quem chama decide
+            if (written + 1u < outSize)
+                out[written++] = '%';
+            for (const char *spec = at + 1; *spec != 0 && written + 1u < outSize; ++spec)
+            {
+                const char s = *spec;
+                if (s == 'l' || s == 'h' || s == 'j' || s == 'z' || s == 't')
+                    continue;
+                if (s == type)
+                {
+                    if (integer && written + 2u < outSize)
+                    {
+                        out[written++] = 'l';
+                        out[written++] = 'l';
+                    }
+                    out[written++] = s;
+                    break;
+                }
+                out[written++] = s;
+            }
+            // Salta o resto da especificação: já foi copiada (sem o comprimento).
+            while (*at != 0 && *at != type)
+                ++at;
+            continue;
+        }
+        if (written + 1u < outSize)
+            out[written++] = c;
+    }
+    out[written] = 0;
+}
+
+// O valor escrito com o formato do chamador (as decorações incluídas: o
+// "%.10f grams" sai com o " grams"). Sem formato - ou com um que não mostre o
+// valor - sai no formato de sempre.
+int formatNumericValue(char *out, int outSize, double value, bool integer, const char *format)
+{
+    const char type = numericSpecType(numericSpec(format));
+    if (type == 0)
+    {
+        if (integer)
+        {
+            const double rounded = value < 0.0 ? -floor(-value + 0.5) : floor(value + 0.5);
+            return snprintf(out, static_cast<size_t>(outSize), "%.0f", rounded);
+        }
+        return snprintf(out, static_cast<size_t>(outSize), "%.3f", value);
+    }
+    char sanitized[64];
+    sanitizeNumericFormat(sanitized, sizeof(sanitized), format, integer);
+    if (numericSpecIsInteger(type))
+    {
+        // O valor de um tipo inteiro chega aqui arredondado (ver setScalarValue):
+        // passa-se como long long, que é o que o sanitizeNumericFormat pôs na
+        // especificação. Um valor maior do que cabe fica no limite.
+        const double limited = clampDouble(value, -9223372036854775807.0, 9223372036854775807.0);
+        if (numericSpecIsUnsigned(type))
+        {
+            const double positive = limited < 0.0 ? 0.0 : limited;
+            return snprintf(out, static_cast<size_t>(outSize), sanitized,
+                            static_cast<unsigned long long>(positive));
+        }
+        return snprintf(out, static_cast<size_t>(outSize), sanitized,
+                        static_cast<long long>(limited));
+    }
+    return snprintf(out, static_cast<size_t>(outSize), sanitized, value);
+}
+
+// O que sobra no texto depois do número: nada (um espaço ainda vai), ou a
+// legenda do formato - que é o que faz o "1.5 grams" valer 1.5 num campo com o
+// formato "%.1f grams" e o "1x" não valer nada num campo sem legenda nenhuma.
+bool trailingTextAllowed(const String &text, String::size_type from, const char *format)
+{
+    String::size_type i = from;
+    while (i < text.size() && (text[i] == ' ' || text[i] == '\t'))
+        ++i;
+    if (i == text.size())
+        return true;
+    const char *spec = numericSpec(format);
+    if (!spec)
+        return false;
+    // A legenda do formato é o que vem depois da especificação do valor.
+    const char *suffix = nullptr;
+    for (const char *at = spec + 1; *at != 0; ++at)
+    {
+        const char c = *at;
+        if (c == numericSpecType(spec))
+        {
+            suffix = at + 1;
+            break;
+        }
+    }
+    return suffix && *suffix != 0;
+}
+
+// O valor escrito à mão no campo de texto de volta a número. O número tem de
+// estar no início do texto e ser só um número - um "1x" não vale 1, vale o que lá
+// estava, como sempre valeu -, com uma excepção: quando o formato tem legenda
+// depois do valor (o "%.10f grams"), o que vier agarrado ao número é do formato e
+// não se estranha. A base é a do formato (um "%04X" lê-se em hexadecimal) e o
+// número é dos que o C escreve por extenso: nada de "nan", "inf" nem do
+// hexadecimal com vírgula flutuante, que o sscanf aceitaria.
+bool parseNumericValue(const String &text, double &out, bool integer, bool singlePrecision,
+                       const char *format)
+{
+    String::size_type i = 0u;
+    while (i < text.size() && (text[i] == ' ' || text[i] == '\t'))
+        ++i;
+    const bool negative = i < text.size() && text[i] == '-';
+    if (i < text.size() && (text[i] == '-' || text[i] == '+'))
+        ++i;
+
+    const char type = numericSpecType(numericSpec(format));
+    const bool integerField = integer && numericSpecIsInteger(type);
+    int base = 10;
+    if (integerField && (type == 'x' || type == 'X'))
+        base = 16;
+    else if (integerField && type == 'o')
+        base = 8;
+
+    if (!integerField)
+    {
+        bool digits = false;
+        while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+        {
+            ++i;
+            digits = true;
+        }
+        if (i < text.size() && text[i] == '.')
+        {
+            ++i;
+            while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+            {
+                ++i;
+                digits = true;
+            }
+        }
+        if (!digits)
+            return false;
+        if (i < text.size() && (text[i] == 'e' || text[i] == 'E'))
+        {
+            ++i;
+            if (i < text.size() && (text[i] == '-' || text[i] == '+'))
+                ++i;
+            bool exponent = false;
+            while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+            {
+                ++i;
+                exponent = true;
+            }
+            if (!exponent)
+                return false;
+        }
+        const String literal(text.c_str(), i);
+        if (!trailingTextAllowed(text, i, format))
+            return false;
+        double parsed = 0.0;
+        // O parse é o de sempre (rejeita o que não é finito e o que não cabe num
+        // double), só que agora sobre o número e não sobre o texto todo.
+        if (!parseDoubleText(literal, parsed))
+            return false;
+        // Num campo de um float, um número que só cabe num double não entra: era o
+        // que o parseFloatText fazia, e sem isto um "1e99" escrito à mão virava
+        // infinito ao passar a float.
+        if (singlePrecision && (parsed > FLT_MAX || parsed < -FLT_MAX))
+            return false;
+        out = parsed;
+        return true;
+    }
+
+    // Inteiro: os dígitos da base (com o "0x" à frente a valer para o
+    // hexadecimal, como no printf) e mais nada.
+    if (base == 16 && i + 1u < text.size() && text[i] == '0' &&
+        (text[i + 1u] == 'x' || text[i + 1u] == 'X'))
+        i += 2u;
+    bool digits = false;
+    unsigned long long magnitude = 0ull;
+    for (; i < text.size(); ++i)
+    {
+        const char c = text[i];
+        int digit = -1;
+        if (c >= '0' && c <= '9')
+            digit = c - '0';
+        else if (base == 16 && c >= 'a' && c <= 'f')
+            digit = c - 'a' + 10;
+        else if (base == 16 && c >= 'A' && c <= 'F')
+            digit = c - 'A' + 10;
+        if (digit < 0 || digit >= base)
+            break;
+        digits = true;
+        // Cresce até saturar (não há um valor maior que este para onde ir).
+        if (magnitude <= 1844674407370955161ull)
+            magnitude = magnitude * static_cast<unsigned long long>(base) +
+                        static_cast<unsigned long long>(digit);
+    }
+    if (!digits)
+        return false;
+    if (!trailingTextAllowed(text, i, format))
+        return false;
+    const double signedValue = static_cast<double>(magnitude);
+    out = negative ? -signedValue : signedValue;
+    return true;
+}
+
+
 // A one pixel border drawn as two nested rounded fills: cheaper than stroking
 // the outline segment by segment, and both silhouettes are anti-aliased.
 void drawFrame(DrawList &list, const Rect &rect, const Color &fill, const Color &border,
@@ -4612,8 +4945,16 @@ void Context::endContextMenu()
     endMenu();
 }
 
-bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
-                          const Rect &bounds, unsigned flags)
+// ── O slider e o drag, um só caminho para todos os tipos ─────────────────────
+// O slider (a pista) e o drag (a caixa) são um só caminho em double, com o tipo
+// a decidir três coisas: se o valor é inteiro (arredonda a cada mexida), como se
+// escreve e como se lê (o formato do chamador) e o que fica no fim (o float, o
+// int, o que a família escalar apontar). O ImGui faz o mesmo com os templates
+// dele - com o FLOATTYPE a ser double nos tipos de 64 bits -, e é o que faz o
+// "%04X", o "%.10f grams" e os s8..u64 valerem em todas as widgets numéricas.
+bool Context::sliderCore(StringView labelText, double &value, double minimum, double maximum,
+                         bool integer, bool doublePrecision, const Rect &bounds, unsigned flags,
+                         const char *format)
 {
     WindowState *window = currentWindow();
     if (!window || maximum <= minimum)
@@ -4625,6 +4966,9 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
+    // Sem formato do chamador, o valor escreve-se como sempre se escreveu (%g de
+    // três dígitos: o "0.762" do slider e do drag).
+    const char *valueFormat = format ? format : "%.3g";
     const StringView text = visibleLabel(labelText);
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float labelWidth = metrics.width + theme_.windowPadding;
@@ -4634,41 +4978,44 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
         valueWidth = 56.0f;
     if (valueWidth > 84.0f)
         valueWidth = 84.0f;
-    // Sem editor de texto (NoInput) a pista fica com o espaço todo.
     const bool wantsValueEditor = (flags & SliderFlags::NoInput) == 0u;
     const float requestedTrackWidth = usableWidth - (wantsValueEditor ? valueWidth : 0.0f) -
-                                       (wantsValueEditor ? theme_.itemSpacing : 0.0f);
+                                      (wantsValueEditor ? theme_.itemSpacing : 0.0f);
     const float trackWidth = requestedTrackWidth > 28.0f ? requestedTrackWidth : usableWidth;
     const bool hasValueEditor = wantsValueEditor && requestedTrackWidth > 28.0f;
-    const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f,
-                     trackWidth,
+    const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f, trackWidth,
                      rect.height * 0.2f);
     const Rect grab(track.x, rect.y, track.width, rect.height);
     // O item é a track: é este itemHovered que identifica o slider (o
     // sliderValue só faz o teste do ponteiro) e é ele que dá o realce.
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
     const bool trackHovered = itemHovered(grab, clip, trackId);
-    const bool sliderChanged = sliderValue(grab, clip, trackId, value, minimum, maximum, false, flags);
+    double dragged = clampDouble(value, minimum, maximum);
+    const bool sliderChanged = sliderValue(grab, clip, trackId, dragged, minimum, maximum, false,
+                                           flags);
     // O editor de valor que o slider desenha à parte não pode ser o item que
     // isItemHovered devolve (ver keepItemStatus).
     const ItemStatus trackStatus = item_;
-    const float normalized =
-        clamp(sliderNormFromValue(value, minimum, maximum,
-                                  sliderLogarithmic(minimum, maximum, flags)),
-              0.0f, 1.0f);
-    const float handleX = track.x + track.width * normalized;
+    bool changed = false;
+    if (sliderChanged)
+        changed = setScalarValue(value, dragged, minimum, maximum, integer);
+    const double normalized =
+        clampDouble(sliderNormDouble(clampDouble(value, minimum, maximum), minimum, maximum,
+                                     sliderLogarithmic(static_cast<float>(minimum),
+                                                       static_cast<float>(maximum), flags)),
+                    0.0, 1.0);
+    const float handleX = track.x + track.width * static_cast<float>(normalized);
     drawText(*drawList, theme_.font, text,
-             Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f),
-             theme_.fontSize, theme_.labelText, clip);
+             Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f), theme_.fontSize,
+             theme_.labelText, clip);
     const float trackRadius = track.height * 0.5f;
     drawList->addRectFilledRounded(track, trackRadius,
                                    trackHovered ? theme_.sliderTrackHover : theme_.sliderBackground,
                                    clip);
-    drawList->addRectFilledRounded(Rect(track.x, track.y, track.width * normalized, track.height),
-                                   trackRadius,
-                                   trackHovered ? theme_.sliderFillHover : theme_.sliderFilled, clip);
-    drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f),
-                              rect.height * 0.28f,
+    drawList->addRectFilledRounded(
+        Rect(track.x, track.y, track.width * static_cast<float>(normalized), track.height),
+        trackRadius, trackHovered ? theme_.sliderFillHover : theme_.sliderFilled, clip);
+    drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f), rect.height * 0.28f,
                               activeWidget_ == trackId ? theme_.sliderThumbPressed
                                                        : (trackHovered ? theme_.sliderThumbHover
                                                                        : theme_.sliderHandle),
@@ -4677,41 +5024,88 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     bool textChanged = false;
     if (hasValueEditor)
     {
-        const Rect valueRect(track.x + track.width + theme_.itemSpacing, rect.y,
-                             valueWidth, rect.height);
+        const Rect valueRect(track.x + track.width + theme_.itemSpacing, rect.y, valueWidth,
+                             rect.height);
         pushId(id);
-        textChanged = inputFloat("value", value,
-                                 Rect(valueRect.x - layout_.origin.x,
-                                      valueRect.y - layout_.origin.y,
-                                      valueRect.width, valueRect.height), 3);
+        double field = value;
+        textChanged = numericField("value", field, integer, !integer && !doublePrecision,
+                                   Rect(valueRect.x - layout_.origin.x,
+                                        valueRect.y - layout_.origin.y, valueRect.width,
+                                        valueRect.height),
+                                   valueFormat);
         popId();
-        if (textChanged && (flags & SliderFlags::AllowOutOfRange) == 0u)
-            value = clamp(value, minimum, maximum);
+        if (textChanged)
+            changed = setScalarValue(value, field, minimum, maximum, integer,
+                                     (flags & SliderFlags::AllowOutOfRange) == 0u) ||
+                      changed;
     }
     keepItemStatus(trackStatus, rect);
-    return sliderChanged || textChanged;
+    return changed;
+}
+
+// Põe um valor que veio do ponteiro ou do campo de texto: arredonda quando o tipo
+// é inteiro e limita ao intervalo quando lhe dizem para limitar (o slider limita
+// sempre; o campo de texto só quando o AllowOutOfRange não está posto).
+bool Context::setScalarValue(double &value, double next, double minimum, double maximum,
+                             bool integer, bool clampToRange)
+{
+    if (integer)
+    {
+        // Um tipo inteiro arredonda a cada mexida - no double, com o floor, para
+        // não estourar num valor grande (um u64 não cabe num long long, mas cabe
+        // neste double).
+        const double rounded = next < 0.0 ? -floor(-next + 0.5) : floor(next + 0.5);
+        const double limited = clampToRange ? clampDouble(rounded, minimum, maximum) : rounded;
+        const bool changed = limited != value;
+        value = limited;
+        return changed;
+    }
+    const double limited = clampToRange ? clampDouble(next, minimum, maximum) : next;
+    const bool changed = limited != value;
+    value = limited;
+    return changed;
+}
+
+bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
+                          const Rect &bounds, unsigned flags, const char *format)
+{
+    double working = static_cast<double>(value);
+    const bool changed =
+        sliderCore(labelText, working, static_cast<double>(minimum),
+                   static_cast<double>(maximum), false, false, bounds, flags, format);
+    value = static_cast<float>(working);
+    return changed;
 }
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum,
-                        const Rect &bounds, unsigned flags)
+                        const Rect &bounds, unsigned flags, const char *format)
 {
-    if (maximum <= minimum)
+    double working = static_cast<double>(value);
+    sliderCore(labelText, working, static_cast<double>(minimum), static_cast<double>(maximum),
+               true, false, bounds, flags, format);
+    const double limited = clampDouble(working, static_cast<double>(INT_MIN),
+                                       static_cast<double>(INT_MAX));
+    const int result = static_cast<int>(limited);
+    if (result == value)
         return false;
+    value = result;
+    item_.edited = true;
+    return true;
+}
 
-    float temporary = static_cast<float>(value);
-    const bool changed = sliderFloat(labelText, temporary, static_cast<float>(minimum),
-                                     static_cast<float>(maximum), bounds, flags);
-    if (!changed)
-        return false;
-
-    const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
-                                          : static_cast<int>(temporary - 0.5f);
-    const int clamped = rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded);
-    const bool valueChanged = value != clamped;
-    value = clamped;
-    if (valueChanged)
-        item_.edited = true;
-    return valueChanged;
+// O SliderAngle do ImGui: o valor é em radianos, o intervalo e o texto são em
+// graus (é o que faz um ângulo ser legível), e a conversão é o que a widget é.
+bool Context::sliderAngle(StringView labelText, float &radians, float degreesMinimum,
+                          float degreesMaximum, const Rect &bounds, unsigned flags,
+                          const char *format)
+{
+    const float degrees = radians * 180.0f / GizmoPi;
+    float edited = degrees;
+    const bool changed = sliderFloat(labelText, edited, degreesMinimum, degreesMaximum, bounds,
+                                     flags, format ? format : "%.0f deg");
+    if (changed)
+        radians = edited * GizmoPi / 180.0f;
+    return changed;
 }
 
 // O VSlider do ImGui: uma faixa vertical onde o valor cresce para cima, com uma
@@ -4734,7 +5128,10 @@ bool Context::vSliderImpl(StringView labelText, float &value, float minimum, flo
 
     const StringView text = visibleLabel(labelText);
     const bool hovered = itemHovered(rect, clip, id);
-    const bool changed = sliderValue(rect, clip, id, value, minimum, maximum, true);
+    double dragged = static_cast<double>(value);
+    const bool changed = sliderValue(rect, clip, id, dragged, static_cast<double>(minimum),
+                                     static_cast<double>(maximum), true);
+    value = static_cast<float>(dragged);
     // O item é a faixa: o texto do valor e o rótulo são desenho, não sub-itens.
     const ItemStatus trackStatus = item_;
     const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
@@ -4803,11 +5200,16 @@ bool Context::vSliderInt(StringView labelText, int &value, int minimum, int maxi
     return changed;
 }
 
-bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
-                        float speed, const Rect &bounds, unsigned flags)
+// O drag: a caixa com o rótulo à esquerda e o valor à direita, que se arrasta
+// para mudar o valor e que abre um campo de texto quando se carrega sem mexer.
+// Como o slider, é um só caminho em double com o tipo a decidir o arredondamento
+// e o formato do valor (ver o comentário do sliderCore).
+bool Context::dragCore(StringView labelText, double &value, double minimum, double maximum,
+                       double speed, bool integer, bool doublePrecision, const Rect &bounds,
+                       unsigned flags, const char *format)
 {
     WindowState *window = currentWindow();
-    if (!window || maximum <= minimum || speed <= 0.0f)
+    if (!window || maximum <= minimum || speed <= 0.0)
         return false;
 
     const WidgetId id = makeWidgetId(labelText);
@@ -4817,10 +5219,18 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
+    // Sem formato do chamador, o valor escreve-se como sempre se escreveu (%g de
+    // três dígitos).
+    const char *valueFormat = format ? format : "%.3g";
     const StringView text = visibleLabel(labelText);
     NumericEditState *edit = numericEdits_.find(id);
-    if (!edit) { numericEdits_.put(id, NumericEditState()); edit = numericEdits_.find(id); }
-    if (!edit) return false;
+    if (!edit)
+    {
+        numericEdits_.put(id, NumericEditState());
+        edit = numericEdits_.find(id);
+    }
+    if (!edit)
+        return false;
     const uint32_t left = buttonIndex(PointerButton::Left);
     const Rect visible = intersect(rect, clip);
     const bool hovered = itemHovered(rect, clip, id);
@@ -4830,44 +5240,49 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     registerFocusable(id);
     if (edit->editing && (escapePressed_ || focusedWidget_ != id))
         edit->editing = false;
-    const bool logarithmic = sliderLogarithmic(minimum, maximum, flags);
+    const bool logarithmic =
+        sliderLogarithmic(static_cast<float>(minimum), static_cast<float>(maximum), flags);
+    bool changed = false;
     if (!edit->editing && pointerPressedIn(visible, left) && activeWidget_ == InvalidWidgetId)
     {
         activeWidget_ = id;
         focusedWidget_ = id;
         dragWidget_ = id;
         dragStartValue_ = value;
-        dragStartX_ = pointer_.pressedPosition[left].x;
-        dragStartNorm_ = clamp(sliderNormFromValue(value, minimum, maximum, logarithmic), 0.0f, 1.0f);
+        dragStartX_ = static_cast<double>(pointer_.pressedPosition[left].x);
+        dragStartNorm_ = clampDouble(sliderNormDouble(clampDouble(value, minimum, maximum),
+                                                      minimum, maximum, logarithmic),
+                                     0.0, 1.0);
         edit->moved = false;
     }
-    bool changed = false;
     if (activeWidget_ == id && dragWidget_ == id)
     {
-        const float x = pointer_.released[left] ? pointer_.releasedPosition[left].x : pointer_.position.x;
-        const float delta = x - dragStartX_;
-        if (fabsf(delta) >= 3.0f) edit->moved = true;
+        const double x = static_cast<double>(pointer_.released[left]
+                                                 ? pointer_.releasedPosition[left].x
+                                                 : pointer_.position.x);
+        const double delta = x - dragStartX_;
+        if (fabs(delta) >= 3.0)
+            edit->moved = true;
         if (edit->moved)
         {
-            float next = dragStartValue_ + delta * speed;
+            double next = dragStartValue_ + delta * speed;
             // Numa escala logarítmica o arrasto também é: os mesmos pixels valem
             // mais em cima do que em baixo, que é o que o slider logarítmico
             // promete (o ImGui faz o mesmo no DragBehaviorT).
             if (logarithmic)
             {
-                const float norm = clamp(dragStartNorm_ + delta * speed / (maximum - minimum),
-                                         0.0f, 1.0f);
-                next = sliderValueFromNorm(norm, minimum, maximum, true);
+                const double norm =
+                    clampDouble(dragStartNorm_ + delta * speed / (maximum - minimum), 0.0, 1.0);
+                next = sliderValueFromNormDouble(norm, minimum, maximum, true);
             }
             if ((flags & SliderFlags::WrapAround) != 0u)
             {
-                const float limited = clamp(next, minimum, maximum);
-                next = wrapSliderValue(limited, value, minimum, maximum);
+                const double limited = clampDouble(next, minimum, maximum);
+                next = wrapSliderValueDouble(limited, value, minimum, maximum);
+                changed = setScalarValue(value, next, minimum, maximum, integer, false) || changed;
             }
             else
-                next = clamp(next, minimum, maximum);
-            changed = next != value;
-            value = next;
+                changed = setScalarValue(value, next, minimum, maximum, integer) || changed;
         }
         if (pointer_.released[left])
         {
@@ -4876,7 +5291,10 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
             if (!edit->moved && contains(visible, pointer_.releasedPosition[left]))
             {
                 edit->editing = true;
-                edit->text = String::number(static_cast<double>(value), 3);
+                char buffer[64];
+                formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer,
+                                   valueFormat);
+                edit->text = String(buffer);
                 textCursor_ = edit->text.size();
                 textInputWidget_ = id;
             }
@@ -4886,26 +5304,28 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     {
         if (inputText(labelText, edit->text, bounds))
         {
-            const float next = edit->text.to_float();
-            if (isfinite(next))
-            {
-                const float limited = (flags & SliderFlags::AllowOutOfRange) != 0u
-                                          ? next
-                                          : clamp(next, minimum, maximum);
-                changed = changed || limited != value;
-                value = limited;
-            }
+            double parsed = value;
+            if (parseNumericValue(edit->text, parsed, integer, !integer && !doublePrecision,
+                                  valueFormat))
+                changed = setScalarValue(value, parsed, minimum, maximum, integer,
+                                         (flags & SliderFlags::AllowOutOfRange) == 0u) ||
+                          changed;
         }
-        if (enterPressed_) { edit->editing = false; focusedWidget_ = InvalidWidgetId; }
+        if (enterPressed_)
+        {
+            edit->editing = false;
+            focusedWidget_ = InvalidWidgetId;
+        }
     }
     else
     {
-        char number[48];
-        snprintf(number, sizeof(number), "%.3f", static_cast<double>(value));
+        char number[64];
+        formatNumericValue(number, static_cast<int>(sizeof(number)), value, integer, valueFormat);
         drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
-                  hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius, clip);
-        drawText(*drawList, theme_.font, text, Vec2(rect.x + 6, rect.y + 5),
-                 theme_.fontSize, theme_.buttonText, visible);
+                  hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius,
+                  clip);
+        drawText(*drawList, theme_.font, text, Vec2(rect.x + 6, rect.y + 5), theme_.fontSize,
+                 theme_.buttonText, visible);
         const TextMetrics metrics = measureText(theme_.font, number, theme_.fontSize);
         drawText(*drawList, theme_.font, number, Vec2(rect.right() - metrics.width - 6, rect.y + 5),
                  theme_.fontSize, theme_.buttonText, visible);
@@ -4916,28 +5336,31 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     return changed;
 }
 
-bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
-                      int speed, const Rect &bounds, unsigned flags)
+bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
+                        float speed, const Rect &bounds, unsigned flags, const char *format)
 {
-    if (maximum <= minimum || speed <= 0)
-        return false;
-    float temporary = static_cast<float>(value);
-    const bool dragged = dragFloat(labelText, temporary, static_cast<float>(minimum),
-                                   static_cast<float>(maximum), static_cast<float>(speed), bounds,
-                                   flags);
-    if (!dragged)
-        return false;
-    const int rounded = temporary >= 0.0f ? static_cast<int>(temporary + 0.5f)
-                                          : static_cast<int>(temporary - 0.5f);
-    const int clamped =
-        (flags & SliderFlags::AllowOutOfRange) != 0u
-            ? rounded
-            : (rounded < minimum ? minimum : (rounded > maximum ? maximum : rounded));
-    const bool changed = value != clamped;
-    value = clamped;
-    if (changed)
-        item_.edited = true;
+    double working = static_cast<double>(value);
+    const bool changed = dragCore(labelText, working, static_cast<double>(minimum),
+                                  static_cast<double>(maximum), static_cast<double>(speed), false,
+                                  false, bounds, flags, format);
+    value = static_cast<float>(working);
     return changed;
+}
+
+bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum, int speed,
+                      const Rect &bounds, unsigned flags, const char *format)
+{
+    double working = static_cast<double>(value);
+    dragCore(labelText, working, static_cast<double>(minimum), static_cast<double>(maximum),
+             static_cast<double>(speed), true, false, bounds, flags, format);
+    const double limited = clampDouble(working, static_cast<double>(INT_MIN),
+                                       static_cast<double>(INT_MAX));
+    const int result = static_cast<int>(limited);
+    if (result == value)
+        return false;
+    value = result;
+    item_.edited = true;
+    return true;
 }
 
 bool Context::splitter(StringView idText, float &value, float minimum, float maximum,
@@ -6119,34 +6542,72 @@ bool Context::editNumericText(StringView labelText, String &text, double value, 
     return edited;
 }
 
-bool Context::inputInt(StringView labelText, int &value, const Rect &bounds)
+bool Context::numericField(StringView labelText, double &value, bool integer,
+                           bool singlePrecision, const Rect &bounds, const char *format)
 {
-    String text = String::number(value);
-    const bool edited = editNumericText(labelText, text, static_cast<double>(value), bounds);
-    int parsed = value;
-    const bool changed = edited && parseIntText(text, parsed) && parsed != value;
+    char buffer[64];
+    formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer, format);
+    String text(buffer);
+    // O valor é o que o campo tinha quando o texto foi escrito: é o que faz o
+    // campo mostrar o que o utilizador escreveu enquanto o escreve, e o valor novo
+    // quando a aplicação o muda por fora (ver editNumericText).
+    const bool edited = editNumericText(labelText, text, value, bounds);
+    double parsed = value;
+    const bool changed =
+        edited && parseNumericValue(text, parsed, integer, singlePrecision, format) &&
+        parsed != value;
     if (changed)
         value = parsed;
     if (numericEditId_ == makeWidgetId(labelText))
-        numericEditValue_ = static_cast<double>(value);
+        numericEditValue_ = value;
     if (changed)
         item_.edited = true;
     return changed;
 }
 
-bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds, int precision)
+bool Context::inputInt(StringView labelText, int &value, const Rect &bounds, const char *format)
 {
-    String text = String::number(static_cast<double>(value), precision);
-    const bool edited = editNumericText(labelText, text, static_cast<double>(value), bounds);
-    float parsed = value;
-    const bool changed = edited && parseFloatText(text, parsed) && parsed != value;
-    if (changed)
-        value = parsed;
+    double field = static_cast<double>(value);
+    if (!numericField(labelText, field, true, false, bounds, format ? format : "%lld"))
+        return false;
+    // O que se escreveu pode sair do intervalo de um int: fica no limite, como
+    // antes (era o parseIntText que o fazia).
+    const double limited = clampDouble(field, static_cast<double>(INT_MIN),
+                                       static_cast<double>(INT_MAX));
+    const int result = static_cast<int>(limited);
+    if (result == value)
+        return false;
+    value = result;
+    item_.edited = true;
+    return true;
+}
+
+bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds, int precision,
+                         const char *format)
+{
+    char spec[16];
+    if (!format)
+    {
+        // O texto do campo é o de sempre (o String::number fazia %.*g): um zero
+        // escreve-se "0" e não "0.000", que é o que faz o que se escreve à mão
+        // continuar a fazer sentido.
+        snprintf(spec, sizeof(spec), "%%.%dg", precision);
+        format = spec;
+    }
+    double field = static_cast<double>(value);
+    if (!numericField(labelText, field, false, true, bounds, format))
+        return false;
+    // O valor guardado é o do float, e é ele que o campo volta a mostrar no frame
+    // seguinte: o valor de referência do campo (numericEditValue_) é o que ficou
+    // guardado, senão o texto escrito à mão era perdido por uma diferença de
+    // arredondamento de um float.
+    if (static_cast<float>(field) == value)
+        return false;
+    value = static_cast<float>(field);
     if (numericEditId_ == makeWidgetId(labelText))
         numericEditValue_ = static_cast<double>(value);
-    if (changed)
-        item_.edited = true;
-    return changed;
+    item_.edited = true;
+    return true;
 }
 
 bool Context::colorButton(StringView labelText, const Color &value, const Rect &bounds)
@@ -7977,7 +8438,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
 }
 
 bool Context::sliderFloat(StringView labelText, float &value, float minimum, float maximum,
-                          float width, unsigned flags)
+                          float width, unsigned flags, const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -7992,7 +8453,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
 }
 
 bool Context::sliderInt(StringView labelText, int &value, int minimum, int maximum, float width,
-                        unsigned flags)
+                        unsigned flags, const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -8008,7 +8469,7 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
 }
 
 bool Context::dragFloat(StringView labelText, float &value, float minimum, float maximum,
-                        float speed, float width, unsigned flags)
+                        float speed, float width, unsigned flags, const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -8023,7 +8484,7 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
 }
 
 bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum,
-                      int speed, float width, unsigned flags)
+                      int speed, float width, unsigned flags, const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -8222,7 +8683,7 @@ bool Context::dragInt4(StringView labelText, int &x, int &y, int &z, int &w, int
     return changed;
 }
 
-bool Context::inputInt2(StringView labelText, int &x, int &y, float width)
+bool Context::inputInt2(StringView labelText, int &x, int &y, float width, const char *format)
 {
     const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
                                       theme_.itemSpacing, 2);
@@ -8238,7 +8699,7 @@ bool Context::inputInt2(StringView labelText, int &x, int &y, float width)
     return changed;
 }
 
-bool Context::inputInt3(StringView labelText, int &x, int &y, int &z, float width)
+bool Context::inputInt3(StringView labelText, int &x, int &y, int &z, float width, const char *format)
 {
     const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
                                       theme_.itemSpacing, 3);
@@ -8256,7 +8717,8 @@ bool Context::inputInt3(StringView labelText, int &x, int &y, int &z, float widt
     return changed;
 }
 
-bool Context::inputInt4(StringView labelText, int &x, int &y, int &z, int &w, float width)
+bool Context::inputInt4(StringView labelText, int &x, int &y, int &z, int &w, float width,
+                        const char *format)
 {
     const float cell = componentWidth(width > 0.0f ? width : calcItemWidth(),
                                       theme_.itemSpacing, 4);
@@ -8276,7 +8738,8 @@ bool Context::inputInt4(StringView labelText, int &x, int &y, int &z, int &w, fl
     return changed;
 }
 
-bool Context::inputDouble(StringView labelText, double &value, float width, int precision)
+bool Context::inputDouble(StringView labelText, double &value, float width, int precision,
+                          const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -8291,24 +8754,23 @@ bool Context::inputDouble(StringView labelText, double &value, float width, int 
     return changed;
 }
 
-bool Context::inputDouble(StringView labelText, double &value, const Rect &bounds, int precision)
+bool Context::inputDouble(StringView labelText, double &value, const Rect &bounds, int precision,
+                          const char *format)
 {
-    String text = String::number(value, precision);
-    const bool edited = editNumericText(labelText, text, value, bounds);
-    double parsed = value;
-    // O parse é o do inputFloat; a diferença é não passar por um float no meio,
-    // que é o que estraga um número com mais dígitos do que o float tem.
-    const bool changed = edited && parseDoubleText(text, parsed) && parsed != value;
-    if (changed)
-        value = parsed;
-    if (numericEditId_ == makeWidgetId(labelText))
-        numericEditValue_ = value;
-    if (changed)
-        item_.edited = true;
-    return changed;
+    char spec[16];
+    if (!format)
+    {
+        snprintf(spec, sizeof(spec), "%%.%dg", precision);
+        format = spec;
+    }
+    // O parse é o do campo de texto dos números; a diferença é não passar por um
+    // float no meio, que é o que estraga um número com mais dígitos do que o float
+    // tem.
+    return numericField(labelText, value, false, false, bounds, format);
 }
 
-bool Context::inputFloat2(StringView labelText, float &x, float &y, float width, int precision)
+bool Context::inputFloat2(StringView labelText, float &x, float &y, float width, int precision,
+                          const char *format)
 {
     const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing) * 0.5f;
@@ -8324,7 +8786,8 @@ bool Context::inputFloat2(StringView labelText, float &x, float &y, float width,
     return changed;
 }
 
-bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, float width, int precision)
+bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, float width,
+                          int precision, const char *format)
 {
     const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 2.0f) / 3.0f;
@@ -8343,7 +8806,7 @@ bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, fl
 }
 
 bool Context::inputFloat4(StringView labelText, float &x, float &y, float &z, float &w,
-                          float width, int precision)
+                          float width, int precision, const char *format)
 {
     const float total = width > 0.0f ? width : calcItemWidth();
     const float cell = (total - theme_.itemSpacing * 3.0f) * 0.25f;
@@ -8470,7 +8933,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, float widt
     return changed;
 }
 
-bool Context::inputInt(StringView labelText, int &value, float width)
+bool Context::inputInt(StringView labelText, int &value, float width, const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -8484,7 +8947,8 @@ bool Context::inputInt(StringView labelText, int &value, float width)
     return changed;
 }
 
-bool Context::inputFloat(StringView labelText, float &value, float width, int precision)
+bool Context::inputFloat(StringView labelText, float &value, float width, int precision,
+                         const char *format)
 {
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
@@ -12082,7 +12546,7 @@ void Context::advanceFocus()
 }
 
 bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                          float &value, float minimum, float maximum, bool vertical,
+                          double &value, double minimum, double maximum, bool vertical,
                           unsigned flags)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || maximum <= minimum)
@@ -12123,13 +12587,16 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left]))
     {
         // Vertical: o valor cresce para cima, por isso o topo do rect é o máximo.
-        const float normalized =
-            vertical ? clamp((rect.y + rect.height - pointer_.position.y) / rect.height, 0.0f, 1.0f)
-                     : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f);
-        const bool logarithmic = sliderLogarithmic(minimum, maximum, flags);
-        float nextValue = sliderValueFromNorm(normalized, minimum, maximum, logarithmic);
+        const double normalized =
+            static_cast<double>(vertical
+                                    ? clamp((rect.y + rect.height - pointer_.position.y) / rect.height,
+                                            0.0f, 1.0f)
+                                    : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f));
+        const bool logarithmic = sliderLogarithmic(static_cast<float>(minimum),
+                                                   static_cast<float>(maximum), flags);
+        double nextValue = sliderValueFromNormDouble(normalized, minimum, maximum, logarithmic);
         if ((flags & SliderFlags::WrapAround) != 0u)
-            nextValue = wrapSliderValue(nextValue, value, minimum, maximum);
+            nextValue = wrapSliderValueDouble(nextValue, value, minimum, maximum);
         changed = nextValue != value;
         value = nextValue;
     }
