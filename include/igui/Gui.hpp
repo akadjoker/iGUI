@@ -134,10 +134,20 @@ struct TableStyle
     // Altura da tabela (com o cabeçalho e as linhas presas lá dentro) quando ela
     // rola. Sem scrollY, ou com 0, a altura é a das linhas.
     float height;
+    // Rolagem horizontal: as colunas são a largura de innerWidth (0 = a da tabela) e
+    // o que não couber na tabela rola dentro dela, com a barra em baixo. Sem isto as
+    // colunas dividem a largura da tabela e nunca sobra nada para rolar - é a
+    // diferença de fundo para o ImGui, onde a largura é de cada coluna.
+    bool scrollX;
+    float innerWidth;
+    // Quantas colunas (as primeiras, na ordem do écra) ficam presas à esquerda
+    // enquanto o resto rola. Ignorado sem scrollX.
+    int freezeCols;
 
     TableStyle()
         : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f),
-          reorderable(false), scrollY(false), freezeRows(0), height(0.0f) {}
+          reorderable(false), scrollY(false), freezeRows(0), height(0.0f), scrollX(false),
+          innerWidth(0.0f), freezeCols(0) {}
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -1795,8 +1805,14 @@ private:
         float offsetY;
         float contentHeight;
         float frozenHeight;
+        // Rolagem horizontal e a altura das linhas do frame anterior (é ela que diz
+        // onde a barra de baixo cai quando a tabela não tem altura própria).
+        float offsetX;
+        float rowsHeight;
 
-        TableScrollState() : offsetY(0.0f), contentHeight(0.0f), frozenHeight(0.0f) {}
+        TableScrollState()
+            : offsetY(0.0f), contentHeight(0.0f), frozenHeight(0.0f), offsetX(0.0f),
+              rowsHeight(0.0f) {}
     };
     struct TableState
     {
@@ -1827,6 +1843,14 @@ private:
         int freezeRows;
         float viewHeight;
         bool scrollY;
+        // Rolagem horizontal: a largura das colunas, a rolagem deste frame, a largura
+        // das colunas presas e a faixa que a barra de baixo ocupa.
+        float contentWidth;
+        float offsetX;
+        float pinWidth;
+        float barStripH;
+        int freezeCols;
+        bool scrollX;
         TableStyle style;
         int row;
 
@@ -1834,8 +1858,9 @@ private:
             : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
               rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr),
               totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), contentY(0.0f),
-              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), freezeRows(0), viewHeight(0.0f), scrollY(false),
-              style(), row(0) {}
+              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), freezeRows(0), viewHeight(0.0f),
+              scrollY(false), contentWidth(0.0f), offsetX(0.0f), pinWidth(0.0f), barStripH(0.0f),
+              freezeCols(0), scrollX(false), style(), row(0) {}
     };
 
     struct TableResizeState
@@ -2449,6 +2474,11 @@ private:
     bool     storedDockTabOnTop(StringView spaceName, DockSlot slot, StringView title) const;
     void     captureDockArrangement(const DockSpaceState &space);
     float tableColumnX(int column) const;
+    // Onde a coluna ficaria sem a rolagem horizontal (é o que dá as larguras e o
+    // sítio das colunas presas).
+    float tableNaturalColumnX(int column) const;
+    // Quanto é possível rolar na horizontal (contentWidth - a largura da tabela).
+    float tableMaximumOffsetX() const;
     float tableColumnWidth(int column) const;
     float tableMinimumRowHeight() const;
     float tableRowSpacing() const;

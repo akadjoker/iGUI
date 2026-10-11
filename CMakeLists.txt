@@ -74,13 +74,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(igui_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-add_custom_target(igui_no_std ALL
+# O core imediato não usa a STL (usa os contentores `ct`, ver o README): este
+# target não constrói nada, corre o CheckNoStd.cmake, que lê os ficheiros do core e
+# falha a build se lá aparecer `std::` ou um contentor/algoritmo da STL. O toolkit
+# retido e a camada antiga iGUI.hpp estão fora do contrato (ver o script).
+add_custom_target(igui_check_no_std ALL
     COMMAND ${CMAKE_COMMAND}
             -DIGUI_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckNoStd.cmake
     VERBATIM
 )
-add_dependencies(igui_core igui_no_std)
+add_dependencies(igui_core igui_check_no_std)
 
 if(IGUI_BUILD_IMMEDIATE)
     add_library(igui src/FileDialog.cpp src/Gui.cpp src/CodeEditorImmediate.cpp)

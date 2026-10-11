@@ -1,3 +1,6 @@
+# Contrato: o core imediato (o Context e o motor de desenho) não usa a STL - usa os
+# contentores `ct`. Isto não é um target de build, é a verificação que o garante (o
+# igui_core depende dele, por isso o core não compila antes de isto passar).
 file(GLOB_RECURSE IG_CORE_FILES
      "${IGUI_SOURCE_DIR}/include/igui/*.hpp"
      "${IGUI_SOURCE_DIR}/src/*.cpp"
@@ -28,4 +31,4 @@ foreach(IG_FILE IN LISTS IG_CORE_FILES)
     endif()
 endforeach()
 
-message(STATUS "igui_no_std: core contains no std::")
+message(STATUS "igui_check_no_std: core contains no std::")

@@ -1365,10 +1365,10 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
         "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Borders/RowBg/"
-        "ScrollX/SizingFixedFit e as tabelas aninhadas - o iGUI tem beginTable/tableHeader/"
+        "SizingFixedFit e as tabelas aninhadas - o iGUI tem beginTable/tableHeader/"
         "tableNextColumn com pesos mutaveis (redimensionamento pelo grip do cabecalho), "
         "ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, rolagem "
-        "propria (ScrollY) com linhas presas");
+        "propria nos dois eixos (ScrollX/ScrollY) com linhas e colunas presas");
     // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
     // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
     // fecham o espaço dela). O menu é do chamador, com o openPopup.
@@ -1437,6 +1437,45 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             item();
         }
         ui.endPopup();
+    }
+    // A tabela de muitas colunas do demo, com as duas primeiras presas (é o
+    // TableSetupScrollFreeze(2, 1) dele): as colunas têm a largura que o chamador
+    // pede (innerWidth) e o que não couber rola dentro da tabela.
+    ui.label("Tabela larga com as duas primeiras colunas presas (rola com a roda horizontal):");
+    item();
+    const float wideWeights[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    ig::TableStyle wideStyle;
+    wideStyle.alternateRows = true;
+    wideStyle.borders = true;
+    wideStyle.scrollX = true;
+    wideStyle.innerWidth = 920.0f;   // 8 colunas de 115 px numa tabela de ~530
+    wideStyle.freezeCols = 2;
+    if (ui.beginTable("wide table", ig::Span<const float>(wideWeights, 8), wideStyle,
+                      ui.availableWidth()))
+    {
+        item();
+        for (int column = 0; column < 8; ++column)
+        {
+            if (!ui.tableNextColumn())
+                continue;
+            char label[16];
+            snprintf(label, sizeof(label), "Col %d", ui.tableColumnIndex());
+            ui.tableHeader(ig::StringView(label, strlen(label)));
+        }
+        item();
+        for (int row = 0; row < 3; ++row)
+        {
+            char label[16];
+            for (int column = 0; column < 8; ++column)
+            {
+                if (!ui.tableNextColumn())
+                    continue;
+                snprintf(label, sizeof(label), "%d,%d", row, ui.tableColumnIndex());
+                ui.label(ig::StringView(label, strlen(label)));
+            }
+            item();
+        }
+        ui.endTable();
     }
     // A tabela que rola sozinha do demo ("Scrolling" com TableSetupScrollFreeze):
     // altura fixa, as linhas rolam dentro dela (roda e barra) e a linha presa fica
