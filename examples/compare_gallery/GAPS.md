@@ -18,7 +18,7 @@ cmake --build build --target igui_compare_gallery
 O `--hidden` corre sem janela visível; o `--open-all` abre todas as secções e
 sub-secções (sem ele só se vê o que estiver aberto, e as lacunas das secções
 fechadas não são registadas). O resumo no fim imprime as lacunas e a geometria dos
-dois lados: na revisão atual são **38 lacunas** contra 229 itens submetidos pelo
+dois lados: na revisão atual são **38 lacunas** contra 233 itens submetidos pelo
 espelho.
 
 Para uma secção de cada vez - é assim que se põe lado a lado o mesmo ecrã, com a
@@ -138,7 +138,8 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `TableSetupColumn` com pesos e resize | `beginTable(id, weights)` | existe: os pesos são por coluna, e com pesos mutáveis (`Span<float>`) o grip do cabeçalho redimensiona (e escreve os pesos de volta) |
 | `ImGuiTableFlags_Resizable` / `Sortable` / `Borders` / `RowBg` | pesos mutáveis / `tableHeader(label, sortColumn, sortAscending)` / `TableStyle::borders` / `TableStyle::alternateRows` | existe, com outra cara (não são flags, e sim a API) |
 | `ImGuiTableFlags_Hideable` + o menu de contexto do cabeçalho | `beginTable(id, weights, columnVisible)` + `tableHoveredColumn()` + `openPopup` | existe: a coluna escondida não ocupa largura, as seguintes fecham o espaço dela e o `tableNextColumn()` devolve false para a célula dela ser saltada. O menu é do chamador (a galeria faz o do demo, com um checkbox por coluna) |
-| `ImGuiTableFlags_Reorderable`, `ScrollX/Y`, `SizingFixedFit`, `FreezeRows/Cols`, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
+| `ImGuiTableFlags_Reorderable` (arrastar o cabeçalho troca a ordem das colunas) | `TableStyle::reorderable` + `tableColumnIndex()` | existe: o que anda é a coluna do modelo (o peso e a visibilidade continuam a ser dela, a largura segue-a), a ordem é guardada pelo id da tabela e sobrevive ao frame (uma tabela deixa de ser reordenável quando o número de colunas muda), e o cabeçalho de destino fica realçado enquanto se arrasta |
+| `ScrollX/Y`, `SizingFixedFit`, `FreezeRows/Cols`, `ContextMenuInBody`, `NoPad`, `ImGuiTableColumnFlags_*` | — | **não existe** |
 | Tabelas aninhadas, tabelas com header agrupado | — | **não existe** |
 | — | `beginVirtualTable` | (extra do iGUI) |
 
@@ -549,9 +550,19 @@ Continua em falta neste nível:
       tabela do demo está coberta menos o que está na linha de baixo.
       *Onde:* `src/Gui.cpp` (`beginTable`, `tableColumnWidth`, `tableNextColumn`,
       `tableHeaderCell`), `tests/test_item_status.cpp`.
-- [ ] **O resto das tabelas**: `reorderable` (arrastar o cabeçalho para trocar a
-      ordem), `scrollX/Y` e `freezeRows/Cols` (uma região fixa), `sizingFixedFit`,
-      `NoPad`/`ContextMenuInBody` e as tabelas aninhadas.
+- [x] **Colunas reordenáveis** (`TableStyle::reorderable` +
+      `tableColumnIndex()`): arrastar um cabeçalho para cima de outro muda a coluna do
+      modelo de sítio na ordem. Tudo o que é da coluna continua a ser do modelo (o
+      peso, a visibilidade e o que o chamador desenha, que pergunta qual é a coluna
+      em cada posição com o `tableColumnIndex()`); só a posição é que anda. A ordem
+      fica guardada pelo id da tabela, por isso sobrevive ao frame (e é o que faz o
+      arrasto, que ocupa vários frames, funcionar), e uma tabela cujo número de
+      colunas mude volta à identidade. O cabeçalho de destino fica realçado enquanto
+      se arrasta.
+      *Onde:* `src/Gui.cpp` (`beginTable`, `tableModelColumn`, `tableColumnAtX`,
+      `tableHeaderCell`), `tests/test_item_status.cpp` (`test_reorderable_table_columns`).
+- [ ] **O resto das tabelas**: `scrollX/Y` e `freezeRows/Cols` (uma região fixa),
+      `sizingFixedFit`, `NoPad`/`ContextMenuInBody` e as tabelas aninhadas.
       *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`).
 - [x] **Um menu que é contentor de layout**: o corpo de um menu aberto tem o seu
       `layout_` (cursor, largura e clip do popup), o `currentDrawList` devolve a

@@ -95,8 +95,14 @@ struct TableStyle
     float rowHeight;
     // Gap between rows; a negative value uses the theme's item spacing.
     float rowSpacing;
+    // Colunas reordenáveis: arrastar um cabeçalho para outro sítio troca a ordem,
+    // que fica guardada por tabela (pelo id) entre frames. Quem desenha a coluna lê
+    // a sua coluna do modelo com tableColumnIndex(), que é a posição na ordem.
+    bool reorderable;
 
-    TableStyle() : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f) {}
+    TableStyle()
+        : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f),
+          reorderable(false) {}
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -1162,9 +1168,19 @@ public:
                     const TableStyle &style, float width = 0.0f);
     /// @brief How many columns of the table being built are visible.
     int tableVisibleColumnCount() const;
+    /// @brief The application's column behind the cell being submitted, when the
+    ///        table is reorderable (a display position never moves, the model column
+    ///        behind it does). Equal to the display position when the table is not
+    ///        reorderable. It is what the caller indexes its own data with:
+    ///
+    ///            ui.tableNextColumn();
+    ///            ui.tableHeader(names[ui.tableColumnIndex()]);
+    int tableColumnIndex() const;
     /// @brief The column of the header row the pointer is over (-1 while it is over
     ///        none, or before the header row has been submitted this frame). It is
-    ///        what a header context menu needs to know which column to act on:
+    ///        the model column (see tableColumnIndex), so it is the same column the
+    ///        caller's own data is indexed with, and the one a header context menu
+    ///        toggles:
     ///
     ///            ui.tableNextColumn(); ui.tableHeader(name);
     ///            if (ui.tableHoveredColumn() >= 0 && rightClicked) ui.openPopup("cols");
@@ -1527,6 +1543,28 @@ private:
         VirtualTreeState() : childId(InvalidWidgetId) {}
     };
 
+    // A ordem das colunas de uma tabela reordenável, por id (ver TableStyle).
+    struct TableOrderState
+    {
+        static const int kMaxColumns = 32;
+        int order[kMaxColumns];
+        int count;
+        // Arrasto em curso, de uma posição para outra (sobrevive ao frame, porque o
+        // arrasto ocupa vários).
+        bool reordering;
+        int reorderFrom;
+        int reorderTo;
+        // Onde o ponteiro estava quando se carregou, e o último frame em que o
+        // arrasto foi visto (para um arrasto que deixe de ser submetido não ficar
+        // com o rato agarrado).
+        float reorderStartX;
+        WidgetId reorderWidget;
+        uint64_t reorderFrame;
+
+        TableOrderState()
+            : order(), count(0), reordering(false), reorderFrom(-1), reorderTo(-1),
+              reorderStartX(0.0f), reorderWidget(InvalidWidgetId), reorderFrame(0) {}
+    };
     struct TableState
     {
         LayoutState parentLayout;
@@ -1611,6 +1649,9 @@ private:
     // for windows not created yet - see setWindowButtons.
     ct::HashMap<WidgetId, uint8_t> windowButtons_;
     ct::HashMap<WidgetId, int> listScrolls_;
+    // A ordem das colunas de cada tabela reordenável, guardada entre frames pelo id
+    // da tabela (a tabela em si não tem estado próprio, como as listas).
+    ct::HashMap<WidgetId, TableOrderState> tableOrders_;
     // Onde está a lista de cada combo de conteúdo livre, em pixels do conteúdo. É
     // por id, como as listas: um combo fechado esquece onde estava (ver beginCombo).
     ct::HashMap<WidgetId, float> comboScrolls_;
@@ -2133,6 +2174,18 @@ private:
     float tableColumnWidth(int column) const;
     float tableMinimumRowHeight() const;
     float tableRowSpacing() const;
+    // A coluna do modelo (a que o chamador tem nos dados) por trás de uma posição no
+    // écra: a ordem quando a tabela é reordenável, a própria posição quando não é.
+    int tableModelColumn(int display) const;
+    // Carrega a ordem guardada das colunas da tabela que acabou de abrir (e larga o
+    // arrasto que já não é submetido): ver TableStyle::reorderable.
+    void loadTableOrder(const TableStyle &style);
+    // A ordem das colunas da tabela aberta (colunas reordenáveis), ou nullptr quando
+    // ela não é reordenável. Aponta para a entrada guardada por id, por isso o
+    // arrasto que ocupa vários frames vive lá.
+    TableOrderState *tableOrder_;
+    // A posição no écra cuja faixa contém o @p x (-1 fora da tabela).
+    int tableColumnAtX(float x) const;
     void drawTableRowStyle();
     bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
     bool menuItemInternal(StringView label, bool enabled, bool *checked,
