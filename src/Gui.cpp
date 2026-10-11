@@ -10037,7 +10037,10 @@ bool Context::itemHovered(const Rect &rect, const Rect &clip, WidgetId id)
         item_.hoveredStationary = false;
         return false;
     }
-    const bool hovered = pointerOver(intersect(rect, clip));
+    // O pointerOver() outra vez custava um segundo pointerBlockedByOpenPopup e um
+    // segundo contains por item: as duas condições já estão medidas acima.
+    const bool hovered =
+        currentWindowReceivesPointer() && item_.hoveredInClip && !item_.hoveredBlockedByPopup;
     if (hovered)
         hotWidget_ = id;
     item_.hovered = hovered;
