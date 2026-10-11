@@ -635,8 +635,17 @@ Continua em falta neste nível:
       *Onde:* `src/Gui.cpp` (`beginTableScroll`, `tableColumnX`,
       `tableNaturalColumnX`, `tableColumnWidth`, `tableRowClip`, `endTable`),
       `tests/test_item_status.cpp`.
-- [ ] **O resto das tabelas**: `sizingFixedFit` (as colunas do tamanho do conteúdo),
-      `NoPad`/`ContextMenuInBody` e as tabelas aninhadas.
+- [x] **`sizingFixedFit` (as colunas do tamanho do conteúdo)**: `TableStyle::
+      sizingFixedFit` dá a cada coluna a largura do maior conteúdo dela (cabeçalho
+      incluído) mais a margem da célula, medida no frame anterior - o mesmo contrato
+      do resto, porque o conteúdo de uma célula só se sabe depois de a submeter. A
+      largura fica guardada por tabela (pelo id). *O que falta:* o redimensionamento
+      pelo grip com o FixedFit (o grip mexe nos pesos).
+      *Onde:* `src/Gui.cpp` (`configureTable`, `tableColumnWidth`,
+      `measureTableCellWidth`), `tests/test_item_status.cpp`
+      (`test_table_sizing_fixed_fit`).
+- [ ] **O resto das tabelas**: `NoPad`/`ContextMenuInBody`, os `TableColumnFlags`
+      por coluna e as tabelas aninhadas (uma tabela dentro de uma célula).
       *Onde:* `src/Gui.cpp` (`tableColumnX`, `tableColumnWidth`, `beginTable`).
 - [x] **Um menu que é contentor de layout**: o corpo de um menu aberto tem o seu
       `layout_` (cursor, largura e clip do popup), o `currentDrawList` devolve a
