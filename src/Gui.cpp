@@ -728,12 +728,8 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
       comboBounds_(), comboPopupBounds_(), popupContentDepth_(0), alignTextNext_(false),
-      multiSelect_(), openPopupId_(InvalidWidgetId), openPopupPosition_(), openPopupWidth_(0.0f),
-      openPopupFrame_(0),
-      popupContentId_(InvalidWidgetId), popupMeasuredId_(InvalidWidgetId), popupMeasured_(),
-      popupWasOpenAtFrameStart_(false), popupBoundsAtFrameStart_(), popupBounds_(),
-      openPopupModal_(false), modalPopupWasOpenAtFrameStart_(false), modalPopupOpen_(false),
-      popupMeasuredWidth_(0.0f),
+      multiSelect_(), popups_(), popupDepth_(0), modalPopupWasOpenAtFrameStart_(false),
+      popupContentIndex_(-1),
       mainMenuBarWindow_(), mainMenuBarOpen_(false),
       comboContentOpen_(false), comboLayout_(),
       comboHeaderRect_(), comboContentClip_(), comboContentWidth_(0.0f),
@@ -857,9 +853,6 @@ void Context::beginFrame(const FrameInfo &frame)
     modalDrawList_.clear();
     tooltipDrawList_.clear();
     modalPopupDrawList_.clear();
-    // O conteúdo de um modal é submetido dentro do beginPopupModal de cada frame,
-    // como tudo no modo imediato: quem não o submeter deixa de o ter.
-    modalPopupOpen_ = false;
     // O mesmo para o conteúdo de um combo de conteúdo livre: quem o quiser tem de
     // voltar a chamar beginCombo (ver beginCombo/endCombo).
     comboDrawList_.clear();
@@ -933,8 +926,13 @@ void Context::beginFrame(const FrameInfo &frame)
     comboWasOpenAtFrameStart_ = openCombo_ != InvalidWidgetId;
     comboBoundsAtFrameStart_ = comboBounds_;
     comboPopupBoundsAtFrameStart_ = comboPopupBounds_;
-    popupWasOpenAtFrameStart_ = openPopupId_ != InvalidWidgetId;
-    popupBoundsAtFrameStart_ = popupBounds_;
+    // Os popups que estavam abertos no início do frame: a caixa e o id ficam como
+    // estavam (é com essa que um clique fora conta, mesmo que o popup feche agora).
+    for (int i = 0; i < popupDepth_; ++i)
+    {
+        popups_[i].wasOpenAtFrameStart = popups_[i].open;
+        popups_[i].boundsAtFrameStart = popups_[i].bounds;
+    }
     activeMenu_ = InvalidWidgetId;
     menuBarActive_ = false;
     childStack_.clear();
@@ -1034,12 +1032,19 @@ void Context::releaseUnsubmittedBlockers()
     }
     // Um popup de conteúdo livre que deixou de ser submetido fecha-se: não há nada
     // no écra para o utilizador clicar.
-    if (openPopupId_ != InvalidWidgetId && openPopupFrame_ + 1u < frameNumber_)
+    if (popupDepth_ > 0)
     {
-        openPopupId_ = InvalidWidgetId;
-        openPopupModal_ = false;
+        modalPopupWasOpenAtFrameStart_ = anyPopupOpen() && popups_[popupDepth_ - 1].modal;
+        for (int i = 0; i < popupDepth_;)
+        {
+            if (!popups_[i].open || popups_[i].frame + 1u < frameNumber_)
+                closePopupAt(i);
+            else
+                ++i;
+        }
+        // Quem não foi submetido neste frame saiu (o closePopupAt já tirou os de
+        // cima dele), e a pilha volta a ficar sem buracos.
     }
-    modalPopupWasOpenAtFrameStart_ = openPopupModal_;
 }
 
 bool Context::windowSubmittedRecently(const WindowState &window) const
@@ -3213,7 +3218,7 @@ void Context::openPopup(StringView idText, const Vec2 &position, const Vec2 &siz
 
 void Context::openPopup(StringView idText, unsigned flags)
 {
-    if ((flags & PopupFlags::NoOpenOverExistingPopup) != 0u && openPopupId_ != InvalidWidgetId)
+    if ((flags & PopupFlags::NoOpenOverExistingPopup) != 0u && anyPopupOpen())
         return;
     if ((flags & PopupFlags::AtCursor) != 0u)
         openPopup(idText, layout_.cursor);
@@ -3221,25 +3226,71 @@ void Context::openPopup(StringView idText, unsigned flags)
         openPopup(idText);
 }
 
+int Context::findPopup(WidgetId id) const
+{
+    for (int i = popupDepth_ - 1; i >= 0; --i)
+        if (popups_[i].open && popups_[i].id == id)
+            return i;
+    return -1;
+}
+
+bool Context::anyPopupOpen() const
+{
+    for (int i = 0; i < popupDepth_; ++i)
+        if (popups_[i].open)
+            return true;
+    return false;
+}
+
+void Context::closePopupAt(int index)
+{
+    if (index < 0 || index >= popupDepth_)
+        return;
+    // O popup e os que estão por cima dele saem juntos: um filho sem pai não é popup
+    // de nada.
+    for (int i = index; i < popupDepth_; ++i)
+        popups_[i] = PopupEntry();
+    popupDepth_ = index;
+    if (popupContentIndex_ > index)
+        popupContentIndex_ = -1;
+}
+
 void Context::openPopupSized(StringView idText, const Vec2 &position, const Vec2 &size)
 {
     if (idText.empty())
         return;
-    openPopupId_ = hashText(idText);
-    openPopupModal_ = false;
-    openPopupPosition_ = position;
+    const WidgetId id = hashText(idText);
+    // Um popup já aberto fica onde está na pilha: é a ordem em que foram abertos
+    // que diz qual está por cima.
+    int index = -1;
+    for (int i = 0; i < popupDepth_; ++i)
+        if (popups_[i].id == id)
+            index = i;
+    if (index < 0)
+    {
+        if (popupDepth_ >= kPopupStackSize)
+            return;
+        index = popupDepth_++;
+        popups_[index] = PopupEntry();
+        popups_[index].id = id;
+    }
+    PopupEntry &entry = popups_[index];
+    entry.open = true;
+    entry.modal = false;
+    entry.position = position;
     // A largura é pedida, não medida: os itens de um popup esticam-se à largura que
     // têm (é o que o ImGui faz com um Selectable), por isso medir a largura do
     // conteúdo e alargar a caixa com ela fazia a caixa crescer sem fim - cada frame
     // dava itens mais largos, que davam uma caixa mais larga. A altura é medida (um
-    // label, um separador e um botão têm a altura que têm).
-    const float requested = size.x > 0.0f ? size.x : 0.0f;
-    openPopupWidth_ = requested;
+    // label, um separador e um botão têm a altura que têm), e uma altura pedida vale
+    // já.
+    entry.width = size.x > 0.0f ? size.x : 0.0f;
     if (size.y > 0.0f)
-        popupMeasured_ = Vec2(0.0f, size.y);
-    else
-        popupMeasuredId_ = InvalidWidgetId;
-    openPopupFrame_ = frameNumber_;
+    {
+        entry.measured = Vec2(0.0f, size.y);
+        entry.measuredThisFrame = true;
+    }
+    entry.frame = frameNumber_;
 }
 
 bool Context::beginPopup(StringView idText)
@@ -3248,62 +3299,71 @@ bool Context::beginPopup(StringView idText)
     DrawList *drawList = currentDrawList();
     if (!window || !drawList || idText.empty())
         return false;
-    const WidgetId id = hashText(idText);
-    if (openPopupId_ != id)
+    const int index = findPopup(hashText(idText));
+    if (index < 0)
         return false;
+    PopupEntry &entry = popups_[index];
     const Rect screen = popupClipRect();
     const uint32_t left = buttonIndex(PointerButton::Left);
-    // Um clique fora (em qualquer janela onde caia) e o Escape fecham. A caixa é a
-    // do frame anterior: antes de o corpo ser submetido não há outra medida.
-    const Rect outside(openPopupFrame_ == frameNumber_ && popupWasOpenAtFrameStart_
-                           ? popupBoundsAtFrameStart_
-                           : popupBounds_);
-    if (escapePressed_ ||
-        (pointer_.pressed[left] && !contains(outside, pointer_.pressedPosition[left])))
+    // Um clique fora (em qualquer janela onde caia) e o Escape fecham - mas só o
+    // popup de cima: um clique dentro de um filho não fecha o pai, e um clique fora
+    // de todos fecha a pilha toda (cada um fecha-se a si, e o pai leva os filhos).
+    bool insideChild = false;
+    for (int i = index + 1; i < popupDepth_ && !insideChild; ++i)
+        insideChild = contains(popups_[i].boundsAtFrameStart, pointer_.pressedPosition[left]) ||
+                      contains(popups_[i].bounds, pointer_.pressedPosition[left]);
+    // A caixa é a do frame anterior: antes de o corpo ser submetido não há outra
+    // medida.
+    const Rect outside(entry.frame == frameNumber_ && entry.wasOpenAtFrameStart
+                           ? entry.boundsAtFrameStart
+                           : entry.bounds);
+    if ((escapePressed_ && index == popupDepth_ - 1) ||
+        (pointer_.pressed[left] && !contains(outside, pointer_.pressedPosition[left]) &&
+         !insideChild))
     {
-        openPopupId_ = InvalidWidgetId;
+        closePopupAt(index);
         return false;
     }
 
     const float padding = theme_.windowPadding;
-    const bool measured = popupMeasuredId_ == id;
     // Largura pedida (0 = a do menu do tema); altura medida do frame anterior.
-    float width = openPopupWidth_ > 0.0f ? openPopupWidth_ : theme_.menuMinWidth;
-    float height = measured ? popupMeasured_.y + padding * 2.0f : 0.0f;
+    float width = entry.width > 0.0f ? entry.width : theme_.menuMinWidth;
+    float height = entry.measuredThisFrame ? entry.measured.y + padding * 2.0f : 0.0f;
     if (width < 1.0f)
         width = theme_.menuMinWidth;
     if (height < theme_.widgetHeight + padding * 2.0f)
         height = theme_.widgetHeight + padding * 2.0f;
     // Fica onde foi aberto, encostado ao ecrã quando não cabe (o
     // FindBestWindowPosForPopup do ImGui faz o mesmo, virado para dentro).
-    float x = openPopupPosition_.x;
-    float y = openPopupPosition_.y;
+    float x = entry.position.x;
+    float y = entry.position.y;
     if (x + width > screen.x + screen.width)
         x = screen.x + screen.width - width;
     if (y + height > screen.y + screen.height)
-        y = openPopupPosition_.y - height;
+        y = entry.position.y - height;
     if (x < screen.x)
         x = screen.x;
     if (y < screen.y)
         y = screen.y;
-    popupBounds_ = Rect(x, y, width, height);
+    entry.bounds = Rect(x, y, width, height);
     // A caixa sai na sobreposição da janela, que é o que a põe por cima dela (e do
     // conteúdo vai sair na mesma lista, ver currentDrawList).
-    window->overlayDrawList.addRectFilled(popupBounds_, theme_.menuBg, screen);
-    window->overlayDrawList.addRect(popupBounds_, theme_.menuBorder, screen);
-    openPopupFrame_ = frameNumber_;
-    popupContentId_ = id;
+    window->overlayDrawList.addRectFilled(entry.bounds, theme_.menuBg, screen);
+    window->overlayDrawList.addRect(entry.bounds, theme_.menuBorder, screen);
+    entry.frame = frameNumber_;
+    popupContentIndex_ = index;
     // O corpo de um popup leva a margem da janela (é o WindowPadding do popup no
     // ImGui): os itens não ficam encostados às bordas da caixa. Os menus, esses,
     // continuam com as faixas encostadas (ver beginPopupContent).
-    beginPopupContent(popupBounds_, padding, padding);
+    beginPopupContent(entry.bounds, padding, padding);
     return true;
 }
 
 void Context::endPopup()
 {
-    if (popupContentId_ == InvalidWidgetId)
+    if (popupContentIndex_ < 0)
         return;
+    PopupEntry &entry = popups_[popupContentIndex_];
     const float padding = theme_.windowPadding;
     float width = 0.0f;
     float height = 0.0f;
@@ -3316,51 +3376,55 @@ void Context::endPopup()
         width = 0.0f;
     if (height < 0.0f)
         height = 0.0f;
-    popupMeasuredId_ = popupContentId_;
     // A altura é sempre medida; a largura só vale para um modal (a de um popup
     // comum é a que foi pedida no openPopup - ver lá).
-    popupMeasured_ = Vec2(0.0f, height);
-    popupMeasuredWidth_ = width;
+    entry.measured = Vec2(0.0f, height);
+    entry.measuredWidth = width;
+    entry.measuredThisFrame = true;
     // A caixa deste frame é a do anterior: o que o chamador submeteu agora só vale
     // para o próximo (é o mesmo contrato do combo). A borda, essa, sai já no sítio
     // certo para o conteúdo que lá está.
     const Rect screen = popupClipRect();
-    if (modalPopupOpen_)
+    if (entry.modal)
     {
-        const Rect box(popupBounds_.x, popupBounds_.y, popupBounds_.width,
-                       height + theme_.windowPadding * 2.0f + theme_.titleBarHeight > popupBounds_.height
+        const Rect box(entry.bounds.x, entry.bounds.y, entry.bounds.width,
+                       height + theme_.windowPadding * 2.0f + theme_.titleBarHeight >
+                               entry.bounds.height
                            ? height + theme_.windowPadding * 2.0f + theme_.titleBarHeight
-                           : popupBounds_.height);
+                           : entry.bounds.height);
         modalPopupDrawList_.addRect(box, theme_.menuBorder, screen);
-        modalPopupOpen_ = false;
     }
     else if (WindowState *window = currentWindow())
     {
-        const Rect box(popupBounds_.x, popupBounds_.y, popupBounds_.width,
-                       height + padding * 2.0f > popupBounds_.height
-                           ? height + padding * 2.0f : popupBounds_.height);
+        const Rect box(entry.bounds.x, entry.bounds.y, entry.bounds.width,
+                       height + padding * 2.0f > entry.bounds.height
+                           ? height + padding * 2.0f : entry.bounds.height);
         window->overlayDrawList.addRect(box, theme_.menuBorder, screen);
     }
-    popupContentId_ = InvalidWidgetId;
+    popupContentIndex_ = -1;
     endPopupContent();
 }
 
 void Context::closeCurrentPopup()
 {
-    // O popup fecha-se já (o ponteiro deixa de lhe pertencer neste frame); o
-    // contentor fica aberto até ao endPopup, que é quem o fecha.
-    openPopupId_ = InvalidWidgetId;
+    // O popup fecha-se já (o ponteiro deixa de lhe pertencer neste frame); o corpo
+    // fica aberto até ao endPopup, que é quem o fecha. Quem fecha é o popup de que
+    // se está a submeter o corpo, que é o de cima.
+    if (popupContentIndex_ < 0)
+        return;
+    popups_[popupContentIndex_].open = false;
+    popups_[popupContentIndex_].frame = 0u;
 }
 
 bool Context::isPopupOpen(StringView idText) const
 {
-    return !idText.empty() && openPopupId_ == hashText(idText);
+    return !idText.empty() && findPopup(hashText(idText)) >= 0;
 }
 
 bool Context::isPopupOpen(StringView idText, unsigned flags) const
 {
     if ((flags & PopupFlags::AnyPopupId) != 0u)
-        return openPopupId_ != InvalidWidgetId;
+        return anyPopupOpen();
     return isPopupOpen(idText);
 }
 
@@ -3369,18 +3433,19 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     WindowState *window = currentWindow();
     if (!window || titleText.empty())
         return false;
-    const WidgetId id = hashText(titleText);
-    if (openPopupId_ != id)
+    const int index = findPopup(hashText(titleText));
+    if (index < 0)
         return false;
+    PopupEntry &entry = popups_[index];
     const Rect viewport = popupClipRect();
     const uint32_t left = buttonIndex(PointerButton::Left);
     const float padding = theme_.windowPadding;
     const float titleHeight = theme_.titleBarHeight;
-    const bool measured = popupMeasuredId_ == id;
+    const bool measured = entry.measuredThisFrame;
     // Um modal mede-se (ao contrário de um popup comum): a caixa é a do conteúdo
     // do frame anterior, com um mínimo para o que ainda não tem medida nenhuma.
-    float width = measured ? popupMeasuredWidth_ + padding * 2.0f : theme_.menuMinWidth;
-    float height = measured ? popupMeasured_.y + padding * 2.0f : theme_.widgetHeight * 2.0f;
+    float width = measured ? entry.measuredWidth + padding * 2.0f : theme_.menuMinWidth;
+    float height = measured ? entry.measured.y + padding * 2.0f : theme_.widgetHeight * 2.0f;
     width += 0.0f;
     height += titleHeight;
     if (width < theme_.menuMinWidth)
@@ -3389,34 +3454,31 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
         height = titleHeight + theme_.widgetHeight + padding * 2.0f;
     const float x = (viewport.width - width) * 0.5f;
     const float y = (viewport.height - height) * 0.5f;
-    popupBounds_ = Rect(x > viewport.x ? x : viewport.x, y > viewport.y ? y : viewport.y,
+    entry.bounds = Rect(x > viewport.x ? x : viewport.x, y > viewport.y ? y : viewport.y,
                         width, height);
     // O resto da interface fica atrás de um véu: sai na lista do frame (por baixo
     // das janelas, como o scrim do beginDialog).
     frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
-    modalPopupOpen_ = true;
-    openPopupModal_ = true;
-    openPopupFrame_ = frameNumber_;
-    popupContentId_ = id;
-    modalPopupDrawList_.addRectFilled(popupBounds_, theme_.menuBg, viewport);
-    modalPopupDrawList_.addRect(popupBounds_, theme_.menuBorder, viewport);
+    entry.modal = true;
+    entry.frame = frameNumber_;
+    popupContentIndex_ = index;
+    modalPopupDrawList_.addRectFilled(entry.bounds, theme_.menuBg, viewport);
+    modalPopupDrawList_.addRect(entry.bounds, theme_.menuBorder, viewport);
     // A barra do título é a da janela (com a letra e o X do p_open).
-    const Rect titleBar(popupBounds_.x, popupBounds_.y, popupBounds_.width, titleHeight);
+    const Rect titleBar(entry.bounds.x, entry.bounds.y, entry.bounds.width, titleHeight);
     modalPopupDrawList_.addRectFilled(titleBar, theme_.titleBarBackground, viewport);
     const float closeSize = titleHeight - theme_.padding * 0.5f;
     const Rect closeRect(titleBar.x + titleBar.width - closeSize - theme_.padding * 0.25f,
                          titleBar.y + (titleHeight - closeSize) * 0.5f, closeSize, closeSize);
     if (open)
     {
-        const WidgetId closeId = combineIds(id, 0x4d4f44414c434c58ull);
+        const WidgetId closeId = combineIds(entry.id, 0x4d4f44414c434c58ull);
         const bool closeHovered = itemHovered(closeRect, viewport, closeId);
         if (itemClicked(closeRect, viewport, closeId, false))
         {
             *open = false;
-            openPopupId_ = InvalidWidgetId;
-            modalPopupOpen_ = false;
-            openPopupModal_ = false;
-            popupContentId_ = InvalidWidgetId;
+            closePopupAt(index);
+            popupContentIndex_ = -1;
             return false;
         }
         if (closeHovered)
@@ -3436,15 +3498,13 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
              theme_.fontSize, theme_.labelText, viewport);
     // Um modal fecha com o Escape (o clique fora não o fecha: é isso que o
     // distingue de um popup).
-    if (escapePressed_)
+    if (escapePressed_ && index == popupDepth_ - 1)
     {
-        openPopupId_ = InvalidWidgetId;
-        modalPopupOpen_ = false;
-        openPopupModal_ = false;
-        popupContentId_ = InvalidWidgetId;
+        closePopupAt(index);
+        popupContentIndex_ = -1;
         return false;
     }
-    beginPopupContent(popupBounds_, titleHeight, padding);
+    beginPopupContent(entry.bounds, titleHeight, padding);
     return true;
 }
 
@@ -4185,20 +4245,42 @@ void Context::endMenu()
 bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked,
                                StringView shortcut)
 {
+    // Um item de menu vale dentro de um menu e dentro do corpo de um popup: num
+    // menu as faixas são encostadas às bordas e a largura é a do popup do menu,
+    // num popup é uma linha do layout dele (é o MenuItem do ImGui, que funciona
+    // em qualquer sítio).
+    const bool insideMenu = activeMenu_ != InvalidWidgetId;
     WindowState *window = currentWindow();
-    if (!window || activeMenu_ == InvalidWidgetId)
+    if (!window || (!insideMenu && popupContentDepth_ == 0))
         return false;
-    const Rect clip = popupClipRect();
-    DrawList &popup = window->overlayDrawList;
-    // Com o contentor de layout aberto o cursor dele é que manda: um widget
-    // submetido antes (um slider) já empurrou o item seguinte para baixo.
-    const float itemTop = popupContentDepth_ > 0 ? layout_.cursor.y
-                                                : activeMenuBounds_.y + activeMenuBounds_.height;
-    const Rect item(activeMenuBounds_.x, itemTop, activeMenuBounds_.width,
+    DrawList *active = insideMenu ? &window->overlayDrawList : currentDrawList();
+    if (!active)
+        return false;
+    DrawList &popup = *active;
+    const Rect clip = insideMenu ? popupClipRect() : popupContentClip();
+    Rect item;
+    if (insideMenu)
+    {
+        // Com o contentor de layout aberto o cursor dele é que manda: um widget
+        // submetido antes (um slider) já empurrou o item seguinte para baixo.
+        const float itemTop = popupContentDepth_ > 0
+                                  ? layout_.cursor.y
+                                  : activeMenuBounds_.y + activeMenuBounds_.height;
+        item = Rect(activeMenuBounds_.x, itemTop, activeMenuBounds_.width,
                     theme_.menuItemHeight);
-    activeMenuBounds_.height = item.y + item.height - activeMenuBounds_.y;
-    syncMenuLayoutItem(item);
-    const WidgetId id = combineIds(activeMenu_, static_cast<WidgetId>(activeMenuBounds_.height * 100.0f));
+        activeMenuBounds_.height = item.y + item.height - activeMenuBounds_.y;
+        syncMenuLayoutItem(item);
+    }
+    else
+    {
+        item = Rect(layout_.origin.x, layout_.cursor.y, popupContentWidth(),
+                    theme_.menuItemHeight);
+        advanceLayout(item);
+    }
+    const WidgetId id = insideMenu
+        ? combineIds(activeMenu_, static_cast<WidgetId>(activeMenuBounds_.height * 100.0f))
+        : combineIds(idStack_.empty() ? InvalidWidgetId : idStack_.back(),
+                     makeWidgetId(labelText));
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
@@ -4215,14 +4297,19 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
         shortcut.size() > 0u ? shortcutMetrics.width + theme_.menuItemPadX * 2.0f : 0.0f;
     const float itemWidth =
         metrics.width + theme_.menuItemPadX * 2.0f + checkWidth + shortcutWidth;
-    if (subMenuParent_ == InvalidWidgetId)
+    // A largura medida é do popup do menu (o de um popup de conteúdo livre é a que
+    // foi pedida no openPopup, por isso não entra aqui).
+    if (insideMenu)
     {
-        if (itemWidth > menuMeasuredWidth_)
-            menuMeasuredWidth_ = itemWidth;
-    }
-    else if (itemWidth > subMenuMeasuredWidth_)
-    {
-        subMenuMeasuredWidth_ = itemWidth;
+        if (subMenuParent_ == InvalidWidgetId)
+        {
+            if (itemWidth > menuMeasuredWidth_)
+                menuMeasuredWidth_ = itemWidth;
+        }
+        else if (itemWidth > subMenuMeasuredWidth_)
+        {
+            subMenuMeasuredWidth_ = itemWidth;
+        }
     }
     if (checked && *checked)
     {
@@ -4280,18 +4367,36 @@ bool Context::menuCheckbox(StringView labelText, bool &checked, bool enabled)
 
 bool Context::beginSubMenu(StringView labelText, bool enabled)
 {
+    // Como o menuItem: também vale dentro do corpo de um popup (é o BeginMenu do
+    // ImGui, que abre um submenu de qualquer item).
+    const bool insideMenu = activeMenu_ != InvalidWidgetId;
     WindowState *window = currentWindow();
-    if (!window || activeMenu_ == InvalidWidgetId || subMenuParent_ != InvalidWidgetId)
+    if (!window || (!insideMenu && popupContentDepth_ == 0) || subMenuParent_ != InvalidWidgetId)
         return false;
-    const Rect clip = popupClipRect();
-    DrawList &popup = window->overlayDrawList;
-    const float itemTop = popupContentDepth_ > 0 ? layout_.cursor.y
-                                                : activeMenuBounds_.y + activeMenuBounds_.height;
-    const Rect item(activeMenuBounds_.x, itemTop, activeMenuBounds_.width,
+    DrawList *active = insideMenu ? &window->overlayDrawList : currentDrawList();
+    if (!active)
+        return false;
+    DrawList &popup = *active;
+    const Rect clip = insideMenu ? popupClipRect() : popupContentClip();
+    Rect item;
+    if (insideMenu)
+    {
+        const float itemTop = popupContentDepth_ > 0
+                                  ? layout_.cursor.y
+                                  : activeMenuBounds_.y + activeMenuBounds_.height;
+        item = Rect(activeMenuBounds_.x, itemTop, activeMenuBounds_.width,
                     theme_.menuItemHeight);
-    activeMenuBounds_.height = item.y + item.height - activeMenuBounds_.y;
-    syncMenuLayoutItem(item);
-    const WidgetId parentId = activeMenu_;
+        activeMenuBounds_.height = item.y + item.height - activeMenuBounds_.y;
+        syncMenuLayoutItem(item);
+    }
+    else
+    {
+        item = Rect(layout_.origin.x, layout_.cursor.y, popupContentWidth(),
+                    theme_.menuItemHeight);
+        advanceLayout(item);
+    }
+    const WidgetId parentId =
+        insideMenu ? activeMenu_ : (idStack_.empty() ? InvalidWidgetId : idStack_.back());
     const WidgetId id = combineIds(parentId, combineIds(makeWidgetId(labelText), 0x5355424d454e55ull));
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
@@ -4375,28 +4480,43 @@ void Context::endSubMenu()
 
 void Context::menuSeparator()
 {
+    const bool insideMenu = activeMenu_ != InvalidWidgetId;
     WindowState *window = currentWindow();
-    if (!window || activeMenu_ == InvalidWidgetId)
+    if (!window || (!insideMenu && popupContentDepth_ == 0))
         return;
-    const float separatorTop = popupContentDepth_ > 0
-                                   ? layout_.cursor.y
-                                   : activeMenuBounds_.y + activeMenuBounds_.height;
-    const Rect separator(activeMenuBounds_.x, separatorTop, activeMenuBounds_.width,
-                         theme_.itemSpacing);
-    activeMenuBounds_.height = separator.y + separator.height - activeMenuBounds_.y;
-    // O separador também anda no layout: o que vier a seguir cai por baixo dele.
-    if (popupContentDepth_ > 0)
+    DrawList *active = insideMenu ? &window->overlayDrawList : currentDrawList();
+    if (!active)
+        return;
+    const Rect clip = insideMenu ? popupClipRect() : popupContentClip();
+    Rect separator;
+    if (insideMenu)
     {
-        layout_.cursor.y = activeMenuBounds_.y + activeMenuBounds_.height;
-        layout_.cursor.x = layout_.origin.x;
-        layout_.lineTop = layout_.cursor.y;
-        layout_.lineHeight = 0.0f;
+        const float separatorTop = popupContentDepth_ > 0
+                                       ? layout_.cursor.y
+                                       : activeMenuBounds_.y + activeMenuBounds_.height;
+        separator = Rect(activeMenuBounds_.x, separatorTop, activeMenuBounds_.width,
+                         theme_.itemSpacing);
+        activeMenuBounds_.height = separator.y + separator.height - activeMenuBounds_.y;
+        // O separador também anda no layout: o que vier a seguir cai por baixo dele.
+        if (popupContentDepth_ > 0)
+        {
+            layout_.cursor.y = activeMenuBounds_.y + activeMenuBounds_.height;
+            layout_.cursor.x = layout_.origin.x;
+            layout_.lineTop = layout_.cursor.y;
+            layout_.lineHeight = 0.0f;
+        }
     }
-    window->overlayDrawList.addRectFilled(separator, theme_.menuBg, popupClipRect());
-    window->overlayDrawList.addRectFilled(Rect(separator.x + theme_.menuItemPadX,
-                                               separator.y + separator.height * 0.5f,
-                                               separator.width - theme_.menuItemPadX * 2.0f, 1.0f),
-                                         theme_.menuSeparator, popupClipRect());
+    else
+    {
+        separator = Rect(layout_.origin.x, layout_.cursor.y, popupContentWidth(),
+                         theme_.itemSpacing);
+        advanceLayout(separator);
+    }
+    active->addRectFilled(separator, theme_.menuBg, clip);
+    active->addRectFilled(Rect(separator.x + theme_.menuItemPadX,
+                               separator.y + separator.height * 0.5f,
+                               separator.width - theme_.menuItemPadX * 2.0f, 1.0f),
+                          theme_.menuSeparator, clip);
 }
 
 bool Context::beginContextMenu(StringView idText, const Rect &bounds)
@@ -11020,7 +11140,7 @@ DrawList *Context::currentDrawList()
         return &comboDrawList_;
     // O corpo de um modal tem lista própria: é o que o põe por cima de todas as
     // janelas e não só da que o abriu (ver beginPopupModal).
-    if (modalPopupOpen_)
+    if (popupContentIndex_ >= 0 && popups_[popupContentIndex_].modal)
         return &modalPopupDrawList_;
     WindowState *window = currentWindow();
     if (!window)
@@ -12351,12 +12471,21 @@ bool Context::pointerBlockedByOpenPopup(const Vec2 &point) const
     const bool insideMenuPopup =
         menuWasOpenAtFrameStart_ && (contains(menuPopupBoundsAtFrameStart_, point) ||
                                      contains(subMenuPopupBoundsAtFrameStart_, point));
-    const bool insidePopup =
-        popupWasOpenAtFrameStart_ && contains(popupBoundsAtFrameStart_, point);
+    // Os popups abertos (a pilha toda: um clique em qualquer um deles pertence-lhe).
+    bool anyPopup = false;
+    bool insidePopup = false;
+    for (int i = 0; i < popupDepth_; ++i)
+    {
+        if (!popups_[i].wasOpenAtFrameStart)
+            continue;
+        anyPopup = true;
+        if (contains(popups_[i].boundsAtFrameStart, point))
+            insidePopup = true;
+    }
     if (insideComboPopup || insideMenuPopup || insidePopup)
-        return activeMenu_ == InvalidWidgetId && popupContentId_ == InvalidWidgetId &&
+        return activeMenu_ == InvalidWidgetId && popupContentIndex_ < 0 &&
                !comboItemsSubmitted_;
-    if (popupWasOpenAtFrameStart_)
+    if (anyPopup)
         return true;
     if (comboWasOpenAtFrameStart_ && !contains(comboBoundsAtFrameStart_, point))
         return true;
