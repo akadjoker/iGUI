@@ -1400,6 +1400,40 @@ static void test_table_tree_cell_toggles_with_its_arrow()
     assert(!toggled && expanded);
 }
 
+static size_t drawPanelFrame(ig::Context &context, bool &shown)
+{
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    shown = context.beginWindow("panel", ig::Rect(10.0f, 10.0f, 200.0f, 100.0f));
+    if (shown)
+        context.button("go");
+    context.endWindow();
+    return context.endFrame().vertices.size();
+}
+
+static void test_disabled_context_shows_nothing_and_keeps_its_windows()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    bool shown = false;
+    assert(context.enabled());
+
+    const size_t enabledVertices = drawPanelFrame(context, shown);
+    assert(shown && enabledVertices > 0u);
+
+    context.setEnabled(false);
+    assert(!context.enabled());
+    assert(drawPanelFrame(context, shown) == 0u);
+    assert(!shown);
+    context.pushEvent(ig::Event::pointerMove(50.0f, 50.0f));
+    assert(drawPanelFrame(context, shown) == 0u);
+    assert(!shown && !context.wantsPointer());
+
+    context.setEnabled(true);
+    drawPanelFrame(context, shown);
+    assert(shown);
+    assert(drawPanelFrame(context, shown) == enabledVertices);
+}
+
 static void drawPlainHeaderTable(ig::Context &context, float *weights)
 {
     assert(context.beginWindow("plain header table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
@@ -3079,6 +3113,7 @@ int main()
     test_styled_table_draws_stripes_and_lines_without_moving_cells();
     test_plain_table_header_resizes_columns();
     test_table_tree_cell_toggles_with_its_arrow();
+    test_disabled_context_shows_nothing_and_keeps_its_windows();
     test_weighted_virtual_table_layout();
     test_virtual_list();
     test_virtual_table();
