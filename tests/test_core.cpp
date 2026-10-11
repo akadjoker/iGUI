@@ -1,0 +1,986 @@
+#include <assert.h>
+#include <math.h>
+
+#include <igui/iGUI.hpp>
+#include <igui/Gui.hpp>
+
+class TestBackend : public ig::Backend
+{
+public:
+    ig::DrawData lastData;
+    bool rendered;
+
+    TestBackend() : lastData(), rendered(false) {}
+
+    ig::TextMetrics measureText(ig::FontId, ig::StringView text,
+                                float logicalSize, float) override
+    {
+        ig::TextMetrics metrics;
+        metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f;
+        metrics.height = logicalSize;
+        metrics.ascent = logicalSize * 0.75f;
+        metrics.descent = logicalSize * 0.25f;
+        return metrics;
+    }
+
+    bool render(const ig::DrawData &data) override
+    {
+        lastData = data;
+        rendered = true;
+        return true;
+    }
+};
+
+static void test_draw_data_and_label()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.label("hello", ig::Vec2(10.0f, 10.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+    assert(data.displaySize.x == 640.0f);
+    assert(data.commands.size() >= 3u);
+    assert(data.textBytes.size() >= 9u);
+    assert(backend.render(data));
+    assert(backend.rendered);
+}
+
+static void test_legacy_gui_uses_backend()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    assert(gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f, 1.0f, 1.0f / 60.0f)));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 180.0f));
+    gui.Label("backend", 8.0f, 8.0f);
+    gui.Button("button", 8.0f, 32.0f, 100.0f, 24.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+    assert(backend.rendered);
+    assert(backend.lastData.commands.size() > 0u);
+    bool foundDefaultFontText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0;
+         i < backend.lastData.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = backend.lastData.commands[i];
+        if (command.type == ig::DrawCommandType::Text)
+        {
+            assert(command.payload.text.font == ig::FontId(1u));
+            foundDefaultFontText = true;
+        }
+    }
+    assert(foundDefaultFontText);
+}
+
+static void test_legacy_gui_widget_interaction()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    bool checked = false;
+    float value = 0.0f;
+
+    gui.PushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 65.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    assert(!gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f));
+    gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f);
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    gui.PushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 65.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    assert(gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f));
+    gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f);
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    gui.PushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 105.0f));
+    gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(gui.BeginWindow("legacy", 10.0f, 10.0f, 300.0f, 220.0f));
+    gui.Button("Button", 8.0f, 8.0f, 100.0f, 28.0f);
+    assert(gui.Checkbox("Check", &checked, 8.0f, 50.0f, 18.0f));
+    gui.SliderFloat("Value", &value, 0.0f, 1.0f, 8.0f, 85.0f, 220.0f, 20.0f);
+    gui.EndWindow();
+    gui.EndFrame();
+    assert(checked);
+}
+
+static void test_legacy_gui_complete_widget_render()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+    bool checked = true;
+    bool toggle = false;
+    float value = 0.5f;
+    float drag = 1.0f;
+    int integer = 50;
+    int selected = 0;
+    Color color(80, 140, 220, 255);
+    char text[32] = "text";
+    const char *items[] = {"one", "two", "three"};
+
+    gui.BeginFrame(ig::FrameInfo(1000.0f, 700.0f, 1.0f, 1.0f / 60.0f));
+    assert(gui.BeginWindow("all", 10.0f, 10.0f, 960.0f, 650.0f));
+    gui.Button("Button", 10.0f, 10.0f, 100.0f, 24.0f);
+    gui.Checkbox("Checkbox", &checked, 10.0f, 45.0f, 18.0f);
+    gui.ToggleSwitch("Toggle", &toggle, 10.0f, 80.0f, 44.0f, 20.0f);
+    gui.RadioButton("Radio", &selected, 1, 10.0f, 115.0f, 18.0f);
+    gui.SliderFloat("Float", &value, 0.0f, 1.0f, 10.0f, 150.0f, 240.0f, 20.0f);
+    gui.SliderInt("Int", &integer, 0, 100, 10.0f, 185.0f, 240.0f, 20.0f);
+    gui.SliderFloatVertical("VF", &value, 0.0f, 1.0f, 290.0f, 45.0f, 24.0f, 160.0f);
+    gui.SliderIntVertical("VI", &integer, 0, 100, 350.0f, 45.0f, 24.0f, 160.0f);
+    gui.DragFloat("Drag", &drag, 0.1f, -10.0f, 10.0f, 10.0f, 220.0f, 240.0f, 24.0f);
+    gui.TextInput("Text", text, sizeof(text), 55.0f, 260.0f, 195.0f, 24.0f);
+    gui.Dropdown("Drop", &selected, items, 3, 410.0f, 45.0f, 180.0f, 26.0f);
+    gui.ListBox("List", &selected, items, 3, 410.0f, 100.0f, 180.0f, 120.0f, 3);
+    gui.ProgressBar(value, 10.0f, 305.0f, 240.0f, 18.0f,
+                    Orientation::Horizontal, "50%");
+    gui.ColorPicker("Color", &color, 650.0f, 45.0f, 180.0f);
+    gui.SeparatorText("Section", 10.0f, 350.0f, 240.0f);
+    gui.Spinner(130.0f, 395.0f, 18.0f);
+    gui.LabelColored("colored", Color(255, 180, 80, 255), 10.0f, 440.0f);
+    gui.Text(10.0f, 470.0f, "value %.2f", value);
+    gui.EndWindow();
+    gui.EndFrame();
+
+    assert(backend.rendered);
+    assert(backend.lastData.commands.size() > 20u);
+    assert(backend.lastData.vertices.size() > 4000u);
+    assert(backend.lastData.indices.size() > 6000u);
+}
+
+static void test_button_click()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.button("ok", ig::Rect(8.0f, 8.0f, 100.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_button_release_outside_does_not_click()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 500.0f, 400.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.button("ok", ig::Rect(8.0f, 8.0f, 100.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_checkbox()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool checked = false;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
+    assert(checked);
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_focus_lost_cancels_capture()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::focusLost());
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.button("ok", ig::Rect(8.0f, 8.0f, 100.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_draw_primitives()
+{
+    ig::DrawList drawList;
+    const ig::Rect clip(0.0f, 0.0f, 100.0f, 100.0f);
+    const ig::Color color(255u, 255u, 255u, 255u);
+    const ig::Vec2 polygon[] = {
+        ig::Vec2(0.0f, 0.0f), ig::Vec2(20.0f, 0.0f), ig::Vec2(20.0f, 20.0f),
+        ig::Vec2(10.0f, 10.0f), ig::Vec2(0.0f, 20.0f)
+    };
+
+    drawList.addLine(ig::Vec2(0.0f, 0.0f), ig::Vec2(10.0f, 0.0f), color, clip, 2.0f);
+    drawList.addRect(ig::Rect(10.0f, 10.0f, 20.0f, 10.0f), color, clip);
+    drawList.addCircleFilled(ig::Vec2(40.0f, 40.0f), 8.0f, color, clip, 8u);
+    drawList.addPolygonFilled(ig::Span<const ig::Vec2>(polygon), color, clip);
+    drawList.addRectGradient(ig::Rect(60.0f, 60.0f, 20.0f, 20.0f),
+                             ig::Color(255u, 0u, 0u, 255u), ig::Color(0u, 255u, 0u, 255u),
+                             ig::Color(0u, 0u, 255u, 255u), ig::Color(255u, 255u, 255u, 255u), clip);
+    const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
+
+    assert(data.commands.size() == 1u);
+    // Exact counts would pin the tessellation: addLine emits a soft-edged strip
+    // (8 vertices, 18 indices) rather than a bare quad, and the circle's fringe
+    // scales with its radius. What matters is that every primitive contributed
+    // and that the buffers stay consistent with each other.
+    assert(data.vertices.size() > 40u);
+    assert(data.indices.size() % 3u == 0u);
+    assert(data.commands[0].payload.geometry.indexCount == data.indices.size());
+    for (size_t i = 0; i < data.indices.size(); ++i)
+        assert(data.indices[i] < data.vertices.size());
+    // The gradient's two opposite corners keep their exact colours wherever
+    // they land in the buffer.
+    bool sawRed = false;
+    bool sawBlue = false;
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].color == ig::Color(255u, 0u, 0u, 255u))
+            sawRed = true;
+        if (data.vertices[i].color == ig::Color(0u, 0u, 255u, 255u))
+            sawBlue = true;
+    }
+    assert(sawRed && sawBlue);
+}
+
+// True when some vertex sits exactly at (x, y). The immediate-mode layout is
+// deterministic, so these are exact comparisons - the helper only removes the
+// dependency on *where in the buffer* a widget happens to land.
+static bool hasVertexAt(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return true;
+    }
+    return false;
+}
+
+// Buttons have rounded corners, so no vertex sits exactly on the top-left
+// corner; the outline starts within the corner radius of it.
+static bool hasVertexNear(const ig::DrawData &data, float x, float y, float radius)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        const float dx = data.vertices[i].position.x - x;
+        const float dy = data.vertices[i].position.y - y;
+        if (dx * dx + dy * dy <= radius * radius)
+            return true;
+    }
+    return false;
+}
+
+// Colour of the last (topmost) vertex found at (x, y): a rounded frame draws its
+// border first and the fill over it, and both fans are centred on the box.
+static ig::Color colorAtTopVertex(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = data.vertices.size(); i-- > 0;)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return data.vertices[i].color;
+    }
+    return ig::Color(0u, 0u, 0u, 0u);
+}
+
+static void test_checkbox_tick_is_filled_inside_the_box()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    const ig::Color mark = context.theme().checkMark;
+
+    bool checked = false;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.endWindow();
+    const ig::DrawData &uncheckedData = context.endFrame();
+    for (size_t i = 0u; i < uncheckedData.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = uncheckedData.vertices[i];
+        assert(!(vertex.color.r == mark.r && vertex.color.g == mark.g &&
+                 vertex.color.b == mark.b && vertex.color.a == mark.a));
+    }
+
+    // Checked: the box keeps the input colour and the tick is filled inside it,
+    // the way the retained-mode CheckBox draws it.
+    checked = true;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.endWindow();
+    const ig::DrawData &checkedData = context.endFrame();
+
+    bool foundMark = false;
+    float minX = 1e9f;
+    float minY = 1e9f;
+    float maxX = -1e9f;
+    float maxY = -1e9f;
+    for (size_t i = 0u; i < checkedData.vertices.size(); ++i)
+    {
+        const ig::DrawVertex &vertex = checkedData.vertices[i];
+        if (vertex.color.r == mark.r && vertex.color.g == mark.g &&
+            vertex.color.b == mark.b && vertex.color.a == mark.a)
+        {
+            foundMark = true;
+            minX = vertex.position.x < minX ? vertex.position.x : minX;
+            minY = vertex.position.y < minY ? vertex.position.y : minY;
+            maxX = vertex.position.x > maxX ? vertex.position.x : maxX;
+            maxY = vertex.position.y > maxY ? vertex.position.y : maxY;
+        }
+    }
+    assert(foundMark);
+    // The tick sits inside the 16x16 box of the 18x18 widget, not over it: the
+    // box keeps the input colour and only the mark is filled with the mark colour.
+    assert(minX >= 30.0f && minY >= 54.0f && maxX <= 40.0f && maxY <= 64.0f);
+}
+
+// Colour of the first vertex found at (x, y), or a sentinel when none is there.
+// Same rationale as hasVertexAt: locate the widget by where it is drawn, not by
+// its index in the buffer.
+static ig::Color colorAtVertex(const ig::DrawData &data, float x, float y)
+{
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
+            return data.vertices[i].color;
+    }
+    return ig::Color(0u, 0u, 0u, 0u);
+}
+
+static void test_rounded_rect_geometry()
+{
+    const ig::Rect clip(0.0f, 0.0f, 500.0f, 500.0f);
+    const ig::Color white(255u, 255u, 255u, 255u);
+
+    // A rounded rect is a solid outline plus a one-pixel transparent fringe,
+    // exactly like addCircleFilled. The fringe must extend one pixel beyond
+    // the rectangle and no further: building the outline used to offset the
+    // edges *and* grow the corner radius, pushing the straight sides out by
+    // two pixels and leaving a visibly soft edge.
+    ig::DrawList rounded;
+    rounded.addRectFilledRounded(ig::Rect(10.0f, 10.0f, 100.0f, 40.0f), 6.0f, white, clip);
+    const ig::DrawData roundedData = rounded.data(ig::Vec2(500.0f, 500.0f), 1.0f);
+
+    float minX = 1e9f;
+    float maxX = -1e9f;
+    bool sawOpaque = false;
+    bool sawTransparent = false;
+    for (size_t i = 0; i < roundedData.vertices.size(); ++i)
+    {
+        const float x = roundedData.vertices[i].position.x;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (roundedData.vertices[i].color.a == 255u) sawOpaque = true;
+        if (roundedData.vertices[i].color.a == 0u) sawTransparent = true;
+    }
+    assert(sawOpaque && sawTransparent);
+    assert(minX == 9.0f);
+    assert(maxX == 111.0f);
+    for (size_t i = 0; i < roundedData.indices.size(); ++i)
+        assert(roundedData.indices[i] < roundedData.vertices.size());
+
+    // Every outline point must lie ON the border, not inside it. Pairing a
+    // corner's centre with the wrong quadrant produced points in the middle of
+    // an edge - the path cut across the rectangle and back, drawing a spur at
+    // each corner. Total path length does not catch this (the two orderings
+    // happen to walk the same distance), but a point's distance to the border
+    // does: on the border it is zero.
+    const size_t outlineCount = (roundedData.vertices.size() - 1u) / 2u;
+    for (size_t i = 0; i < outlineCount; ++i)
+    {
+        const ig::Vec2 &point = roundedData.vertices[1u + i].position;
+        // Distance to the nearest of the four edges of (10,10)-(110,50).
+        const float toLeft = point.x - 10.0f;
+        const float toRight = 110.0f - point.x;
+        const float toTop = point.y - 10.0f;
+        const float toBottom = 50.0f - point.y;
+        float nearest = toLeft;
+        if (toRight < nearest) nearest = toRight;
+        if (toTop < nearest) nearest = toTop;
+        if (toBottom < nearest) nearest = toBottom;
+        // A rounded corner pulls in by at most the radius; anything deeper is
+        // a point that left the border.
+        assert(nearest <= 6.0f + 0.01f);
+    }
+
+    // A radius past half the shorter side is clamped, so a square becomes a
+    // circle: every point of the solid outline sits at the same distance from
+    // the centre.
+    ig::DrawList circle;
+    circle.addRectFilledRounded(ig::Rect(0.0f, 0.0f, 40.0f, 40.0f), 999.0f, white, clip);
+    const ig::DrawData circleData = circle.data(ig::Vec2(100.0f, 100.0f), 1.0f);
+    const size_t outlinePoints = (circleData.vertices.size() - 1u) / 2u;
+    for (size_t i = 1; i <= outlinePoints; ++i)
+    {
+        const float dx = circleData.vertices[i].position.x - 20.0f;
+        const float dy = circleData.vertices[i].position.y - 20.0f;
+        const float distance = sqrtf(dx * dx + dy * dy);
+        assert(distance > 19.99f && distance < 20.01f);
+    }
+
+    // Zero radius falls through to the plain rectangle, and a degenerate
+    // rectangle emits nothing at all.
+    ig::DrawList square;
+    square.addRectFilledRounded(ig::Rect(10.0f, 10.0f, 100.0f, 40.0f), 0.0f, white, clip);
+    assert(square.data(ig::Vec2(500.0f, 500.0f), 1.0f).vertices.size() == 4u);
+
+    ig::DrawList empty;
+    empty.addRectFilledRounded(ig::Rect(0.0f, 0.0f, 0.0f, 40.0f), 4.0f, white, clip);
+    assert(empty.data(ig::Vec2(500.0f, 500.0f), 1.0f).vertices.size() == 0u);
+}
+
+static void test_automatic_layout()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 20.0f, 50.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 20.0f, 50.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.button("one"));
+    context.sameLine();
+    assert(!context.button("two"));
+    context.separator();
+    context.label("three");
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // The two buttons and the separator are located by their geometry, not by a
+    // fixed vertex index: anything drawn earlier in the frame (the window chrome
+    // grew a maximize glyph in e2d7d42, for example) shifts every later index
+    // without moving a single widget, and this test is about the layout.
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // button "one", top-left
+    assert(hasVertexNear(data, 88.0f, 42.0f, 6.0f));   // button "two", after sameLine()
+    assert(hasVertexAt(data, 18.0f, 76.0f));   // separator, below both buttons
+}
+
+static void test_slider_and_radio()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    float value = 0.0f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 114.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 114.0f, 64.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value > 0.7f && value < 0.8f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.radioButton("choice", false, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_slider_float_value_editing()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    float value = 0.0f;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 205.0f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 205.0f, 64.0f));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Home));
+    context.pushEvent(ig::Event::textInput("0.75"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 220.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value > 0.74f && value < 0.76f);
+}
+
+static void test_selectable()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.selectable("first", false, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.selectable("first", true, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f)));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    bool foundSelectedBackground = false;
+    const ig::Color selectedBackground = context.theme().selectableSelected;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].color == selectedBackground)
+        {
+            foundSelectedBackground = true;
+            break;
+        }
+    }
+    assert(foundSelectedBackground);
+}
+
+static int filledVertexCountFor(bool withZeroMax)
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.progressBar(50.0f, 100.0f, ig::Rect(8.0f, 8.0f, 120.0f, 20.0f));
+    context.progressBar(200.0f, 100.0f, ig::Rect(8.0f, 36.0f, 120.0f, 20.0f));
+    if (withZeroMax)
+        context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    int filledVertexCount = 0;
+    const ig::Color filledColor = context.theme().progressFilled;
+    for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
+    {
+        if (data.vertices[i].color == filledColor)
+            ++filledVertexCount;
+    }
+    return filledVertexCount;
+}
+
+static void test_progress_bar()
+{
+    // The valid 50% and clamped 200% values each produce a filled shape (rounded
+    // by the theme, so no fixed vertex count); a zero maximum must be ignored
+    // rather than producing invalid geometry.
+    const int withTwo = filledVertexCountFor(false);
+    assert(withTwo > 0);
+    assert(filledVertexCountFor(true) == withTwo);
+}
+
+static void test_automatic_selectable_and_progress_bar()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.selectable("entry", false, 120.0f));
+    context.progressBar(1.0f, 2.0f, 100.0f);
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    // Located by geometry rather than by fixed vertex index - see the note in
+    // test_automatic_layout above.
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // selectable, top-left
+    assert(hasVertexNear(data, 18.0f, 76.0f, 6.0f));   // progress bar, below it
+    // The bar is filled to 1.0 of 2.0, so its fill ends halfway across its
+    // 100-unit width: x == 18 + 50.
+    assert(hasVertexNear(data, 68.0f, 76.0f, 6.0f));
+}
+
+static void test_slider_captures_pointer()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool checked = false;
+    float value = 0.0f;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 116.0f, 106.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(!context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
+    context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(!checked);
+    // While the slider holds the pointer capture, the checkbox must stay in its
+    // normal colour even though the pointer moved over it. Its box is laid out
+    // at (26, 50), 18 wide, so its fill fan is centred on (35, 59) - the Rect passed to checkbox() is a size hint the automatic
+    // layout places, not an absolute offset. Located by that position rather
+    // than by a fixed vertex index (see test_automatic_layout).
+    const ig::Color checkboxColor = colorAtTopVertex(data, 35.0f, 59.0f);
+    assert(checkboxColor.r == 55u);
+    assert(checkboxColor.g == 55u);
+    assert(checkboxColor.b == 65u);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 55.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_input_text_focus_and_utf8_backspace()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String value;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::textInput(u8"Olá"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.inputText("name", value, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    assert(context.wantsKeyboard());
+    assert(context.wantsTextInput());
+    context.endWindow();
+    const ig::DrawData &firstData = context.endFrame();
+    assert(value.size() == 4u);
+    bool foundInputText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < firstData.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = firstData.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size() &&
+            command.payload.text.position.x == 30.0f)
+        {
+            assert(command.payload.text.clip.x == 26.0f);
+            assert(command.payload.text.clip.y == 50.0f);
+            assert(command.payload.text.clip.width == 160.0f);
+            assert(command.payload.text.clip.height == 28.0f);
+            foundInputText = true;
+        }
+    }
+    assert(foundInputText);
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    assert(context.inputText("name", value, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
+    context.endWindow();
+    context.endFrame();
+    assert(value.size() == 2u);
+    assert(value[0] == 'O');
+    assert(value[1] == 'l');
+}
+
+static bool draw_keyboard_focus_controls(ig::Context &context, ig::String &first, ig::String &second)
+{
+    assert(context.beginWindow("keyboard focus", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.inputText("first", first, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f));
+    context.inputText("second", second, ig::Rect(8.0f, 42.0f, 160.0f, 28.0f));
+    const bool activated = context.button("apply", ig::Rect(8.0f, 76.0f, 100.0f, 28.0f));
+    context.endWindow();
+    return activated;
+}
+
+static void test_keyboard_focus_navigation()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String first;
+    ig::String second;
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 60.0f));
+    context.pushEvent(ig::Event::textInput("a"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "a");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::textInput("b"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(second == "b");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab, false, true));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::textInput("c"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "ac");
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    context.pushEvent(ig::Event::textInput("d"));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!draw_keyboard_focus_controls(context, first, second));
+    context.endFrame();
+    assert(first == "ac");
+    assert(second == "b");
+}
+
+static void test_input_text_scrolls_to_caret()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    ig::String value("this text is longer than the editor width");
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.inputText("name", value, ig::Rect(8.0f, 8.0f, 80.0f, 28.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    bool foundInputText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size())
+        {
+            assert(command.payload.text.position.x < 30.0f);
+            assert(command.payload.text.clip.x == 26.0f);
+            assert(command.payload.text.clip.width == 80.0f);
+            foundInputText = true;
+        }
+    }
+    assert(foundInputText);
+}
+
+static void test_window_can_reopen()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool open = false;
+
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f), &open));
+    context.endFrame();
+
+    open = true;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f), &open));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_content_clip_applies_to_checkbox_label()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool checked = false;
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+    context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    bool foundContentText = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text &&
+            command.payload.text.clip.x == 18.0f && command.payload.text.clip.y == 42.0f &&
+            command.payload.text.clip.width == 284.0f && command.payload.text.clip.height == 140.0f)
+        {
+            foundContentText = true;
+            break;
+        }
+    }
+    assert(foundContentText);
+}
+
+static void test_clipped_button_cannot_be_clicked()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, 65.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 30.0f, 65.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 100.0f, 50.0f)));
+    assert(!context.button("hidden", ig::Rect(8.0f, 20.0f, 60.0f, 20.0f)));
+    context.endWindow();
+    context.endFrame();
+}
+
+static void test_clicked_window_is_composed_on_top()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("back", ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+    context.endWindow();
+    assert(context.beginWindow("front", ig::Rect(20.0f, 20.0f, 100.0f, 100.0f)));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 10.0f, 10.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("front", ig::Rect(20.0f, 20.0f, 100.0f, 100.0f)));
+    context.endWindow();
+    assert(context.beginWindow("back", ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+    context.endWindow();
+    const ig::DrawData &data = context.endFrame();
+
+    assert(data.vertices[0].position.x == 20.0f);
+    assert(data.vertices[0].position.y == 20.0f);
+}
+
+static void test_window_chrome_drag_minimize_and_close()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    bool open = true;
+    const ig::Rect initialBounds(20.0f, 20.0f, 200.0f, 120.0f);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 50.0f, 30.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(130.0f, 90.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    const ig::DrawData &movedData = context.endFrame();
+    assert(movedData.vertices[0].position.x == 100.0f);
+    assert(movedData.vertices[0].position.y == 80.0f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 130.0f, 90.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 295.0f, 195.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(350.0f, 240.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    const ig::DrawData &resizedData = context.endFrame();
+    assert(resizedData.vertices[2].position.x == 350.0f);
+    assert(resizedData.vertices[2].position.y == 240.0f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 350.0f, 240.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("managed", initialBounds, &open));
+    context.endFrame();
+    assert(open);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 314.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(context.beginWindow("managed", initialBounds, &open));
+    context.endWindow();
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 338.0f, 92.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 338.0f, 92.0f));
+    context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+    assert(!context.beginWindow("managed", initialBounds, &open));
+    context.endFrame();
+    assert(!open);
+}
+
+// The legacy window order used to hold pointers into the window map. That map is
+// one block of slots, reallocated when it grows, so from the window that
+// triggers the rehash on every pointer in the order dangles - and both the
+// z-order sort and the top-window scan walk that order every frame.
+static void test_legacy_many_windows_survive_the_map_growing()
+{
+    TestBackend backend;
+    GUI gui;
+    gui.Init(&backend);
+
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        assert(gui.BeginFrame(ig::FrameInfo(640.0f, 480.0f, 1.0f, 1.0f / 60.0f)));
+        for (int i = 0; i < 24; ++i)
+        {
+            char title[32];
+            snprintf(title, sizeof(title), "window %d", i);
+            const float x = static_cast<float>((i % 6) * 20);
+            const float y = static_cast<float>((i / 6) * 20);
+            if (gui.BeginWindow(title, x, y, 200.0f, 120.0f))
+            {
+                gui.Label("body", 8.0f, 8.0f);
+                gui.EndWindow();
+            }
+        }
+        gui.EndFrame();
+    }
+    assert(backend.rendered);
+}
+
+int main()
+{
+    test_draw_data_and_label();
+    test_legacy_gui_uses_backend();
+    test_legacy_gui_widget_interaction();
+    test_legacy_gui_complete_widget_render();
+    test_button_click();
+    test_button_release_outside_does_not_click();
+    test_checkbox();
+    test_checkbox_tick_is_filled_inside_the_box();
+    test_focus_lost_cancels_capture();
+    test_draw_primitives();
+    test_rounded_rect_geometry();
+    test_automatic_layout();
+    test_slider_and_radio();
+    test_slider_float_value_editing();
+    test_selectable();
+    test_progress_bar();
+    test_automatic_selectable_and_progress_bar();
+    test_slider_captures_pointer();
+    test_input_text_focus_and_utf8_backspace();
+    test_keyboard_focus_navigation();
+    test_input_text_scrolls_to_caret();
+    test_window_can_reopen();
+    test_content_clip_applies_to_checkbox_label();
+    test_clipped_button_cannot_be_clicked();
+    test_clicked_window_is_composed_on_top();
+    test_legacy_many_windows_survive_the_map_growing();
+    test_window_chrome_drag_minimize_and_close();
+    return 0;
+}

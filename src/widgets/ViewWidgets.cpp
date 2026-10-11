@@ -1,0 +1,719 @@
+#include "pch.hpp"
+#include "ViewWidgets.hpp"
+#include "WidgetApp.hpp"
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  FloatWindow
+// ═════════════════════════════════════════════════════════════════════════════
+
+FloatWindow::FloatWindow(const String& title)
+    : title_(title)
+{
+}
+
+FloatWindow::~FloatWindow()
+{
+    // content_ is owned by children_ — Widget::~Widget() handles deletion
+}
+
+void FloatWindow::setContentWidget(Widget* w)
+{
+    // Setting the widget that is already the content must not delete it first:
+    // removeChild() deletes what it takes out.
+    if (w == content_)
+        return;
+    Widget* previous = content_;
+    content_ = nullptr;
+    if (previous)
+        removeChild(previous);
+    content_ = w;
+    if (content_) addChild(content_);
+    markDirty();
+}
+
+void FloatWindow::setMinimized(bool m)
+{
+    if (minimized_ != m)
+    {
+        minimized_ = m;
+        minimizedChanged.emit(m);
+        markDirty();
+        WidgetApp::instance().requestLayout();
+    }
+}
+
+// ── Geometry helpers ─────────────────────────────────────────────────────────
+
+Rect FloatWindow::titleBarRect() const
+{
+    return {floatX_, floatY_, floatW_, titleBarH_};
+}
+
+Rect FloatWindow::contentRect() const
+{
+    return {floatX_, floatY_ + titleBarH_, floatW_, floatH_ - titleBarH_};
+}
+
+Rect FloatWindow::closeButtonRect() const
+{
+    float bw = titleBarH_;
+    return {floatX_ + floatW_ - bw, floatY_, bw, titleBarH_};
+}
+
+Rect FloatWindow::minimizeButtonRect() const
+{
+    float bw = titleBarH_;
+    float off = closable_ ? bw : 0.0f;
+    return {floatX_ + floatW_ - off - bw, floatY_, bw, titleBarH_};
+}
+
+Rect FloatWindow::resizeGripRect() const
+{
+    return {floatX_ + floatW_ - kResizeGrip,
+            floatY_ + floatH_ - kResizeGrip,
+            kResizeGrip, kResizeGrip};
+}
+
+Widget::Vec2f FloatWindow::sizeHint() const
+{
+    return {floatW_, floatH_};
+}
+
+// ── Layout ───────────────────────────────────────────────────────────────────
+
+void FloatWindow::layout()
+{
+    float fh = minimized_ ? titleBarH_ : floatH_;
+    setRect({floatX_, floatY_, floatW_, fh});
+
+    if (content_ && !minimized_)
+    {
+        const float pad = 2.0f;
+        content_->setRect({pad, titleBarH_ + pad,
+                           floatW_ - pad * 2.0f,
+                           floatH_ - titleBarH_ - pad * 2.0f});
+        content_->layout();
+    }
+}
+
+// ── Paint ─────────────────────────────────────────────────────────────────────
+
+void FloatWindow::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+
+    const auto& t = Theme::instance();
+    float fh = minimized_ ? titleBarH_ : floatH_;
+
+    // ── Window background + rounded border ──────────────────────────────
+    ctx.fill.SetColor(t.floatBg.r, t.floatBg.g, t.floatBg.b, t.floatBg.a);
+    ctx.fillRoundedRect(floatX_, floatY_, floatW_, fh, t.borderRadius, 4);
+
+    ctx.line.SetColor(t.floatBorder.r, t.floatBorder.g, t.floatBorder.b, t.floatBorder.a);
+    ctx.lineRoundedRect(floatX_, floatY_, floatW_, fh, t.borderRadius, 4);
+
+    // ── Title bar background ─────────────────────────────────────────────
+    ctx.fill.SetColor(t.floatTitleBg.r, t.floatTitleBg.g, t.floatTitleBg.b, t.floatTitleBg.a);
+    ctx.fillRoundedRect(floatX_, floatY_, floatW_, titleBarH_, t.borderRadius, 4);
+
+    // ── Title text ───────────────────────────────────────────────────────
+    float fsz = t.fontSize * 0.9f;
+    ctx.font.SetFontSize(fsz);
+    ctx.font.SetColor(t.floatTitleText);
+    ctx.font.SetBatch(&ctx.text);
+    float textY = floatY_ + (titleBarH_ - fsz) * 0.5f + ctx.font.GetAscender();
+    ctx.font.Print(title_.c_str(), floatX_ + 8.0f, textY);
+
+    // ── Close button (×) ────────────────────────────────────────────────
+    if (closable_)
+    {
+        Rect cb = closeButtonRect();
+        if (hoveredBtn_ == 1)
+        {
+            ctx.fill.SetColor(t.floatCloseHover.r, t.floatCloseHover.g,
+                              t.floatCloseHover.b, t.floatCloseHover.a);
+            ctx.fillRect(cb.x, cb.y, cb.w, cb.h);
+        }
+        float cx = cb.x + cb.w * 0.5f, cy = cb.y + cb.h * 0.5f;
+        float s = 5.0f;
+        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g,
+                          t.floatTitleText.b, t.floatTitleText.a);
+        ctx.drawLine(cx - s, cy - s, cx + s, cy + s);
+        ctx.drawLine(cx + s, cy - s, cx - s, cy + s);
+    }
+
+    // ── Minimize button (– / □) ──────────────────────────────────────────
+    if (minimizable_)
+    {
+        Rect mb = minimizeButtonRect();
+        if (hoveredBtn_ == 2)
+        {
+            ctx.fill.SetColor(t.floatBtnHover.r, t.floatBtnHover.g,
+                              t.floatBtnHover.b, t.floatBtnHover.a);
+            ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
+        }
+        float mx = mb.x + mb.w * 0.5f, my = mb.y + mb.h * 0.5f;
+        float s = 5.0f;
+        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g,
+                          t.floatTitleText.b, t.floatTitleText.a);
+        if (minimized_)
+        {
+            // □ restore icon
+            ctx.lineRect(mx - s, my - s, s * 2.0f, s * 2.0f);
+        }
+        else
+        {
+            // – minimize icon
+            ctx.drawLine(mx - s, my, mx + s, my);
+        }
+    }
+
+    // ── Content ──────────────────────────────────────────────────────────
+    if (content_ && !minimized_)
+    {
+        Rect cr = contentRect();
+        ctx.pushClip(cr);
+        content_->paint(ctx);
+        ctx.popClip();
+    }
+
+    // ── Resize grip (bottom-right, 3 diagonal lines) ─────────────────────
+    if (resizable_ && !minimized_)
+    {
+        float gx = floatX_ + floatW_ - 2.0f;
+        float gy = floatY_ + floatH_ - 2.0f;
+        ctx.line.SetColor(t.floatBorder.r, t.floatBorder.g,
+                          t.floatBorder.b, static_cast<uint8_t>(t.floatBorder.a * 2 / 3));
+        ctx.drawLine(gx - 10.0f, gy,       gx,       gy - 10.0f);
+        ctx.drawLine(gx -  6.0f, gy,       gx,       gy -  6.0f);
+        ctx.drawLine(gx -  2.0f, gy,       gx,       gy -  2.0f);
+    }
+}
+
+// ── Mouse handling ────────────────────────────────────────────────────────────
+
+void FloatWindow::onMousePress(MouseEvent& e)
+{
+    if (e.button != 0) return;
+
+    // Close button
+    if (closable_ && closeButtonRect().contains(e.x, e.y))
+    {
+        hoveredBtn_ = 0;
+        setVisible(false);
+        closed.emit();
+        e.consumed = true;
+        return;
+    }
+
+    // Minimize button
+    if (minimizable_ && minimizeButtonRect().contains(e.x, e.y))
+    {
+        setMinimized(!minimized_);
+        e.consumed = true;
+        return;
+    }
+
+    // Resize grip (check before title bar)
+    if (resizable_ && !minimized_ && resizeGripRect().contains(e.x, e.y))
+    {
+        resizing_     = true;
+        resizeOffX_   = e.x;
+        resizeOffY_   = e.y;
+        resizeStartW_ = floatW_;
+        resizeStartH_ = floatH_;
+        e.consumed    = true;
+        return;
+    }
+
+    // Title bar drag
+    if (titleBarRect().contains(e.x, e.y))
+    {
+        dragging_ = true;
+        dragOffX_ = e.x - floatX_;
+        dragOffY_ = e.y - floatY_;
+        e.consumed = true;
+        return;
+    }
+
+    // Forward to content
+    if (content_ && !minimized_)
+        content_->onMousePress(e);
+}
+
+void FloatWindow::onMouseRelease(MouseEvent& e)
+{
+    if (dragging_) { dragging_ = false; e.consumed = true; return; }
+    if (resizing_) { resizing_ = false; e.consumed = true; return; }
+    if (content_ && !minimized_)
+        content_->onMouseRelease(e);
+}
+
+void FloatWindow::onMouseMove(MouseEvent& e)
+{
+    if (dragging_)
+    {
+        floatX_ = e.x - dragOffX_;
+        floatY_ = e.y - dragOffY_;
+        layout();
+        markDirty();
+        e.consumed = true;
+        return;
+    }
+
+    if (resizing_)
+    {
+        floatW_ = std::max(120.0f, resizeStartW_ + (e.x - resizeOffX_));
+        floatH_ = std::max(titleBarH_ + 20.0f, resizeStartH_ + (e.y - resizeOffY_));
+        layout();
+        markDirty();
+        e.consumed = true;
+        return;
+    }
+
+    // Button hover tracking
+    int old = hoveredBtn_;
+    hoveredBtn_ = 0;
+    if (closable_    && closeButtonRect().contains(e.x, e.y))   hoveredBtn_ = 1;
+    else if (minimizable_ && minimizeButtonRect().contains(e.x, e.y)) hoveredBtn_ = 2;
+    if (hoveredBtn_ != old) markDirty();
+
+    if (content_ && !minimized_)
+        content_->onMouseMove(e);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Canvas
+// ═════════════════════════════════════════════════════════════════════════════
+
+void Canvas::layout()
+{
+    for (auto* c : children_)
+        c->layout();
+}
+
+void Canvas::paint(PaintContext& ctx)
+{
+    Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    // Background
+    ctx.fill.SetColor(bgColor_);
+    ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
+
+    // Border
+    auto& t = Theme::instance();
+    ctx.line.SetColor(t.borderColor);
+    ctx.lineRect(abs.x, abs.y, abs.w, abs.h);
+
+    ctx.pushClip(abs);
+
+    if (onPaint_)
+        onPaint_(ctx, abs);
+
+    for (auto* c : children_)
+        c->paint(ctx);
+
+    ctx.popClip();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  ImageView
+// ═════════════════════════════════════════════════════════════════════════════
+
+void ImageView::setTexture(ig::retained::TextureHandle tex, int w, int h)
+{
+    texture_ = tex;
+    texW_ = w;
+    texH_ = h;
+    if (tex && rect_.w == 0 && rect_.h == 0)
+        setSize(static_cast<float>(w), static_cast<float>(h));
+    markDirty();
+}
+
+void ImageView::paint(PaintContext& ctx)
+{
+    if (!texture_) return;
+
+    Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    ctx.pushClip(abs);
+
+    Rect dst = { abs.x + offsetX_, abs.y + offsetY_,
+                 static_cast<float>(texW_), static_cast<float>(texH_) };
+    ctx.drawImage(texture_, dst, {0.f, 0.f, 1.f, 1.f}, tint_);
+
+    Widget::paint(ctx);
+    ctx.popClip();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  VideoCanvas
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace
+{
+constexpr float kMinScale = 0.02f;
+constexpr float kMaxScale = 64.0f;
+}
+
+void VideoCanvas::setTexture(ig::retained::TextureHandle tex, int w, int h)
+{
+    texture_ = tex;
+    texW_ = w;
+    texH_ = h;
+    markDirty();
+}
+
+void VideoCanvas::setPixelAspect(float par)
+{
+    if (par > 0.0f)
+        pixelAspect_ = par;
+    markDirty();
+}
+
+float VideoCanvas::baseScale() const
+{
+    if (texW_ <= 0 || texH_ <= 0 || fit_ == Fit::Actual)
+        return 1.0f;
+    const Rect r = absoluteRect();
+    const float sx = r.w / (texW_ * pixelAspect_);
+    const float sy = r.h / texH_;
+    return fit_ == Fit::Contain ? std::min(sx, sy) : std::max(sx, sy);
+}
+
+void VideoCanvas::setView(float zoom, float panX, float panY)
+{
+    const float base = baseScale();
+    const float lo = base > 0.0f ? kMinScale / base : 0.0f;
+    const float hi = base > 0.0f ? kMaxScale / base : 1.0f;
+    zoom_ = std::clamp(zoom, lo, hi);
+    panX_ = panX;
+    panY_ = panY;
+    markDirty();
+    viewChanged.emit();
+}
+
+void VideoCanvas::setFit(Fit fit)
+{
+    fit_ = fit;
+    setView(1.0f, 0.0f, 0.0f);
+}
+
+void VideoCanvas::setZoom(float zoom)
+{
+    setView(zoom, panX_, panY_);
+}
+
+void VideoCanvas::resetView()
+{
+    setFit(Fit::Contain);
+}
+
+void VideoCanvas::actualSize()
+{
+    setFit(Fit::Actual);
+}
+
+Rect VideoCanvas::imageRect() const
+{
+    const Rect r = absoluteRect();
+    const float s = scale();
+    const float w = texW_ * pixelAspect_ * s;
+    const float h = texH_ * s;
+    return { r.x + r.w * 0.5f + panX_ - w * 0.5f, r.y + r.h * 0.5f + panY_ - h * 0.5f, w, h };
+}
+
+Widget::Vec2f VideoCanvas::screenToImage(float x, float y) const
+{
+    const Rect img = imageRect();
+    if (img.w <= 0.0f || img.h <= 0.0f)
+        return {-1.0f, -1.0f};
+    return { (x - img.x) / img.w * texW_, (y - img.y) / img.h * texH_ };
+}
+
+Widget::Vec2f VideoCanvas::imageToScreen(float px, float py) const
+{
+    const Rect img = imageRect();
+    return { img.x + px / std::max(1, texW_) * img.w, img.y + py / std::max(1, texH_) * img.h };
+}
+
+void VideoCanvas::paint(PaintContext& ctx)
+{
+    const Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(background_);
+    ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
+
+    if (texture_ && texW_ > 0 && texH_ > 0)
+    {
+        const Rect img = imageRect();
+        const float x0 = std::max(img.x, abs.x), y0 = std::max(img.y, abs.y);
+        const float x1 = std::min(img.x + img.w, abs.x + abs.w), y1 = std::min(img.y + img.h, abs.y + abs.h);
+        if (x1 > x0 && y1 > y0)
+        {
+            // Only the visible part is drawn, so a deep zoom keeps small coordinates.
+            if (checker_)
+            {
+                const float cell = 12.0f;
+                ctx.fill.SetColor(Color(70, 70, 74, 255));
+                ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+                ctx.fill.SetColor(Color(104, 104, 108, 255));
+                for (float cy = y0, row = 0; cy < y1; cy += cell, row += 1.0f)
+                    for (float cx = x0 + (static_cast<int>(row) % 2 ? cell : 0.0f); cx < x1; cx += cell * 2.0f)
+                        ctx.fillRect(cx, cy, std::min(cell, x1 - cx), std::min(cell, y1 - cy));
+            }
+            const ig::retained::Rect uv = { (x0 - img.x) / img.w, (y0 - img.y) / img.h,
+                                            (x1 - x0) / img.w, (y1 - y0) / img.h };
+            ctx.drawImage(texture_, { x0, y0, x1 - x0, y1 - y0 }, uv);
+        }
+
+        const float s = scale();
+        if (grid_ && s >= 8.0f)
+        {
+            ctx.line.SetColor(Color(255, 255, 255, 46));
+            const float stepX = s * pixelAspect_;
+            for (float x = img.x + std::ceil((x0 - img.x) / stepX) * stepX; x < x1; x += stepX)
+                ctx.drawLine(x, y0, x, y1);
+            for (float y = img.y + std::ceil((y0 - img.y) / s) * s; y < y1; y += s)
+                ctx.drawLine(x0, y, x1, y);
+        }
+
+        if (safe_)
+        {
+            const float cx = img.x + img.w * 0.5f, cy = img.y + img.h * 0.5f;
+            ctx.line.SetColor(Color(255, 214, 64, 170));
+            ctx.lineRect(cx - img.w * 0.45f, cy - img.h * 0.45f, img.w * 0.9f, img.h * 0.9f);
+            ctx.line.SetColor(Color(64, 214, 255, 170));
+            ctx.lineRect(cx - img.w * 0.40f, cy - img.h * 0.40f, img.w * 0.8f, img.h * 0.8f);
+            ctx.line.SetColor(Color(255, 255, 255, 120));
+            ctx.drawLine(cx - 8.0f, cy, cx + 8.0f, cy);
+            ctx.drawLine(cx, cy - 8.0f, cx, cy + 8.0f);
+        }
+
+        ctx.line.SetColor(Color(255, 255, 255, 40));
+        ctx.lineRect(img.x, img.y, img.w, img.h);
+    }
+    else
+    {
+        ctx.font.SetColor(Color(120, 120, 126, 255));
+        ctx.drawTextAligned(abs, "No signal", AlignX::Center, AlignY::Middle);
+    }
+
+    Widget::paint(ctx);
+    ctx.popClip();
+}
+
+void VideoCanvas::onMousePress(MouseEvent& e)
+{
+    if (e.button != 0 && e.button != 2) return;
+    if (e.clickCount >= 2)
+    {
+        resetView();
+        e.consumed = true;
+        return;
+    }
+    dragging_ = true;
+    dragX_ = e.x;
+    dragY_ = e.y;
+    dragPanX_ = panX_;
+    dragPanY_ = panY_;
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseRelease(MouseEvent& e)
+{
+    dragging_ = false;
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseMove(MouseEvent& e)
+{
+    if (dragging_)
+    {
+        setView(zoom_, dragPanX_ + e.x - dragX_, dragPanY_ + e.y - dragY_);
+        e.consumed = true;
+    }
+
+    const Vec2f p = screenToImage(e.x, e.y);
+    int px = static_cast<int>(std::floor(p.x)), py = static_cast<int>(std::floor(p.y));
+    if (px < 0 || py < 0 || px >= texW_ || py >= texH_)
+        px = py = -1;
+    if (px != lastPixelX_ || py != lastPixelY_)
+    {
+        lastPixelX_ = px;
+        lastPixelY_ = py;
+        hoveredPixel.emit(px, py);
+    }
+}
+
+void VideoCanvas::onMouseScroll(MouseEvent& e)
+{
+    if (e.scrollY == 0.0f || texW_ <= 0) return;
+
+    // Keep the frame point under the cursor fixed while the scale changes.
+    const Rect before = imageRect();
+    const float u = before.w > 0.0f ? (e.x - before.x) / before.w : 0.5f;
+    const float v = before.h > 0.0f ? (e.y - before.y) / before.h : 0.5f;
+    const float oldZoom = zoom_;
+    setView(zoom_ * (e.scrollY > 0.0f ? 1.1f : 1.0f / 1.1f), panX_, panY_);
+    if (zoom_ == oldZoom) { e.consumed = true; return; }
+
+    const Rect r = absoluteRect();
+    const float w = texW_ * pixelAspect_ * scale();
+    const float h = texH_ * scale();
+    panX_ = e.x - u * w + w * 0.5f - (r.x + r.w * 0.5f);
+    panY_ = e.y - v * h + h * 0.5f - (r.y + r.h * 0.5f);
+    e.consumed = true;
+}
+
+void VideoCanvas::onMouseLeave()
+{
+    Widget::onMouseLeave();
+    dragging_ = false;
+    if (lastPixelX_ != -1 || lastPixelY_ != -1)
+    {
+        lastPixelX_ = lastPixelY_ = -1;
+        hoveredPixel.emit(-1, -1);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  PageView
+// ═════════════════════════════════════════════════════════════════════════════
+
+void PageView::addPageImpl(Widget* w)
+{
+    addChild(w);
+    w->setVisible(false);
+    pages_.push_back(w);
+
+    if (pages_.size() == 1) {
+        currentIdx_ = 0;
+        w->setVisible(true);
+    }
+}
+
+Widget* PageView::page(int idx) const
+{
+    if (idx < 0 || idx >= static_cast<int>(pages_.size())) return nullptr;
+    return pages_[idx];
+}
+
+void PageView::setPage(int idx, Transition tr)
+{
+    if (idx < 0 || idx >= static_cast<int>(pages_.size())) return;
+    if (idx == currentIdx_ && transProgress_ >= 1.0f) return;
+
+    prevIdx_ = currentIdx_;
+    currentIdx_ = idx;
+
+    if (tr == SlideAuto) {
+        if (prevIdx_ < 0) tr = None;
+        else tr = (idx > prevIdx_) ? SlideLeft : SlideRight;
+    }
+    transType_ = tr;
+    transProgress_ = (tr == None) ? 1.0f : 0.0f;
+
+    if (currentIdx_ >= 0 && currentIdx_ < static_cast<int>(pages_.size()))
+        pages_[currentIdx_]->setVisible(true);
+
+    pageChanged.emit(currentIdx_);
+    markDirty();
+    WidgetApp::instance().requestLayout();
+}
+
+void PageView::setPage(Widget* pg, Transition tr)
+{
+    for (int i = 0; i < static_cast<int>(pages_.size()); i++) {
+        if (pages_[i] == pg) { setPage(i, tr); return; }
+    }
+}
+
+void PageView::layout()
+{
+    for (auto* p : pages_) {
+        p->setRect({0, 0, rect_.w, rect_.h});
+        if (p->isVisible()) p->layout();
+    }
+}
+
+void PageView::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+
+    Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    float dt = WidgetApp::instance().deltaTime();
+
+    if (transProgress_ < 1.0f) {
+        float speed = (transDuration_ > 0.0f) ? (1.0f / transDuration_) : 10.0f;
+        transProgress_ += speed * dt;
+        if (transProgress_ >= 1.0f) {
+            transProgress_ = 1.0f;
+            if (prevIdx_ >= 0 && prevIdx_ < static_cast<int>(pages_.size()) && prevIdx_ != currentIdx_)
+                pages_[prevIdx_]->setVisible(false);
+            prevIdx_ = -1;
+        }
+        markDirty();
+    }
+
+    ctx.pushClip(abs);
+
+    bool animating = (transProgress_ < 1.0f && prevIdx_ >= 0);
+
+    if (!animating) {
+        if (currentIdx_ >= 0 && currentIdx_ < static_cast<int>(pages_.size()))
+            pages_[currentIdx_]->paint(ctx);
+    } else {
+        float t = transProgress_;
+        float eased = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
+
+        Widget* oldPage = pages_[prevIdx_];
+        Widget* newPage = pages_[currentIdx_];
+
+        switch (transType_) {
+        case SlideLeft: {
+            float oldX = -abs.w * eased;
+            float newX = abs.w * (1.0f - eased);
+            Rect oldR = oldPage->rect(), newR = newPage->rect();
+            oldPage->setRect({oldR.x + oldX, oldR.y, oldR.w, oldR.h});
+            newPage->setRect({newR.x + newX, newR.y, newR.w, newR.h});
+            oldPage->paint(ctx);
+            newPage->paint(ctx);
+            oldPage->setRect(oldR);
+            newPage->setRect(newR);
+            break;
+        }
+        case SlideRight: {
+            float oldX = abs.w * eased;
+            float newX = -abs.w * (1.0f - eased);
+            Rect oldR = oldPage->rect(), newR = newPage->rect();
+            oldPage->setRect({oldR.x + oldX, oldR.y, oldR.w, oldR.h});
+            newPage->setRect({newR.x + newX, newR.y, newR.w, newR.h});
+            oldPage->paint(ctx);
+            newPage->paint(ctx);
+            oldPage->setRect(oldR);
+            newPage->setRect(newR);
+            break;
+        }
+        case Fade: {
+            oldPage->paint(ctx);
+            unsigned char alpha = static_cast<unsigned char>(eased * 180);
+            ctx.fill.SetColor(0, 0, 0, alpha);
+            ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
+            newPage->paint(ctx);
+            break;
+        }
+        default:
+            newPage->paint(ctx);
+            break;
+        }
+    }
+
+    ctx.popClip();
+}

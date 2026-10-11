@@ -1,0 +1,244 @@
+#pragma once
+
+#include "Widget.hpp"
+#include "Theme.hpp"
+#include "ViewWidgets.hpp"
+#include <igui/widgets/String.hpp>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
+
+namespace ig { namespace retained
+{
+// ═════════════════════════════════════════════════════════════════════════════
+//  Dialog — modal overlay with scrim, title, message, action buttons
+//
+//  Usage:
+//    auto* dlg = WidgetApp::instance().showDialog("Title", "Message");
+//    dlg->addButton("Cancel", Dialog::Role::Cancel);
+//    dlg->addButton("OK",     Dialog::Role::Accept, [](){ ... });
+//
+//  Or via convenience helpers:
+//    AlertDialog::show("Error", "File not found.");
+//    ConfirmDialog::show("Delete?", "This cannot be undone.",
+//                        []() { /* confirmed */ });
+// ═════════════════════════════════════════════════════════════════════════════
+
+class Dialog : public Widget
+{
+public:
+    enum class Role { Normal, Cancel, Accept, Danger };
+
+    struct ButtonDef {
+        String          label;
+        Role                 role     = Role::Normal;
+        ct::Function<void()> action;
+    };
+
+    Dialog(const String& title, const String& message);
+
+    /// @brief Add an action button to the dialog.
+    Dialog& addButton(const String& label,
+                      Role role = Role::Normal,
+                      ct::Function<void()> action = nullptr);
+
+    /// @brief Set a callback invoked on close.
+    void setOnClose(ct::Function<void()> cb) { onClose_ = std::move(cb); }
+
+    /// @brief Show the dialog as a modal popup.
+    void show();
+    /// @brief Close and dismiss the dialog.
+    void close();
+
+    // ── Widget overrides ──────────────────────────────────────────────────
+    bool popupContains(float x, float y) const override;
+    void resetPopupState() override {}
+
+    Vec2f sizeHint() const override;
+    void  layout()   override;
+    void  paint(PaintContext& ctx) override;
+    void  onMousePress(MouseEvent& e) override;
+    void  onMouseRelease(MouseEvent& e) override;
+    void  onKeyPress(KeyEvent& e)     override;
+
+    static constexpr float kWidth    = 360.0f;
+    static constexpr float kBtnH     = 32.0f;
+    static constexpr float kBtnW     = 90.0f;
+    static constexpr float kPad      = 20.0f;
+    static constexpr float kTitleH   = 44.0f;
+    static constexpr float kMsgPad   = 16.0f;
+
+    String              title_;
+    String              message_;
+    ct::Vector<ButtonDef>   buttons_;
+    ct::Function<void()>    onClose_;
+
+    int hoveredBtn_ = -1;
+    int pressedBtn_ = -1;
+
+    float dialogH_() const;
+    Rect  btnRect_(int idx) const;
+    Rect  dialogRect_() const;
+    int   hitButton_(float x, float y) const;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  AlertDialog — simple informational dialog with a single OK button
+//    AlertDialog::show("Info", "Operation completed successfully.");
+// ═════════════════════════════════════════════════════════════════════════════
+
+class AlertDialog : public Dialog
+{
+public:
+    AlertDialog(const String& title, const String& message);
+
+    /// @brief Show a simple alert with a single OK button.
+    static void show(const String& title, const String& message,
+                     ct::Function<void()> onClose = nullptr);
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  ConfirmDialog — dialog with Cancel + Confirm buttons
+//    ConfirmDialog::show("Delete?", "This cannot be undone.",
+//                        []() { doDelete(); });
+// ═════════════════════════════════════════════════════════════════════════════
+
+class ConfirmDialog : public Dialog
+{
+public:
+    ConfirmDialog(const String& title, const String& message,
+                  ct::Function<void()> onConfirm = nullptr,
+                  ct::Function<void()> onCancel  = nullptr);
+
+    /// @brief Show a confirmation dialog with Cancel and Confirm.
+    static void show(const String& title, const String& message,
+                     ct::Function<void()> onConfirm,
+                     ct::Function<void()> onCancel = nullptr);
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Toast — Android-style brief notification (bottom-center, stacks)
+//
+//    Toast::show("File saved.");
+//    Toast::show("Connection failed.", Toast::Type::Error, 5.0f);
+//
+//  Called automatically by WidgetApp::paint() — no Widget, no popup.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class Toast
+{
+public:
+    enum class Type { Info, Success, Warning, Error };
+
+    static constexpr float kDefaultDuration = 3.0f;
+    static constexpr float kFadeIn          = 0.25f;
+    static constexpr float kFadeOut         = 0.35f;
+
+    /// @brief Show a brief notification message.
+    static void show(const String& message,
+                     Type               type     = Type::Info,
+                     float              duration = kDefaultDuration);
+
+    /// @brief Check if any toast is visible.
+    static bool hasActive();
+    /// @brief Advance toast animations.
+    static void tick(float dt);
+    /// @brief Render all active toasts.
+    static void paint(PaintContext& ctx, float screenW, float screenH);
+
+    struct Entry {
+        String message;
+        Type        type;
+        float       lifetime = kDefaultDuration;
+        float       elapsed  = 0.0f;
+        float       alpha    = 0.0f;
+    };
+
+private:
+    static ct::Vector<Entry>& entries();
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  MessageBox - modal-style alert/confirm dialog (FloatWindow)
+//
+//    auto* mb = app.addFloat<MessageBox>("Confirm", "Delete this file?",
+//                                         MessageBox::YesNo, MessageBox::Question);
+//    mb->result.connect([](MessageBox::Result r) { ... });
+// ═════════════════════════════════════════════════════════════════════════════
+
+class BoxLayout;
+class Label;
+class Button;
+class TextInput;
+
+class MessageBox : public FloatWindow
+{
+public:
+    enum Type     { Info, Warning, Error, Question };
+    enum Buttons  { Ok, OkCancel, YesNo, YesNoCancel };
+    enum Result   { ResultOk, ResultCancel, ResultYes, ResultNo };
+
+    MessageBox(const String& title, const String& message,
+               Buttons buttons = Ok, Type type = Info);
+
+    /// @brief Emitted with the user's chosen result.
+    Signal<Result> result;
+
+private:
+    Type     type_;
+    Buttons  buttons_;
+    String message_;
+
+    BoxLayout* mainLayout_ = nullptr;
+    Label*     msgLabel_   = nullptr;
+
+    void buildUI();
+    void close(Result r);
+    void onKeyPress(KeyEvent& e) override;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  InputBox - simple text input dialog (FloatWindow)
+//
+//    auto* ib = app.addFloat<InputBox>("Rename", "Enter new name:");
+//    ib->setText("old_name.txt");
+//    ib->accepted.connect([](const String& text) { ... });
+// ═════════════════════════════════════════════════════════════════════════════
+
+class InputBox : public FloatWindow
+{
+public:
+    InputBox(const String& title, const String& prompt = "");
+
+    /// @brief Set the input text.
+    void setText(const String& t);
+    /// @brief Get the input text.
+    String text() const;
+    /// @brief Set placeholder text.
+    void setPlaceholder(const String& p);
+    void setAcceptLabel(const String& label);
+    // Return an empty string to accept; otherwise display the validation error.
+    void setValidator(ct::Function<String(const String&)> validator) { validator_ = std::move(validator); }
+
+    /// @brief Emitted with the text when OK is pressed.
+    Signal<String> accepted;
+    /// @brief Emitted when Cancel is pressed.
+    Signal<>            cancelled;
+
+private:
+    String prompt_;
+
+    BoxLayout* mainLayout_  = nullptr;
+    Label*     promptLabel_ = nullptr;
+    TextInput* textInput_   = nullptr;
+    Button* acceptButton_ = nullptr;
+    Label* errorLabel_ = nullptr;
+    ct::Function<String(const String&)> validator_;
+
+    void buildUI();
+    void onOk();
+    void onCancel();
+    void onKeyPress(KeyEvent& e) override;
+};
+
+} // namespace retained
+} // namespace ig

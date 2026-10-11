@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>iGUI widget gallery</title>
+<style>
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #181a1e; color: #d4d8e0; font: 14px system-ui, sans-serif; }
+body { display: flex; flex-direction: column; }
+header { display: flex; align-items: center; gap: 4px; padding: 0 12px; height: 44px; background: #22252b;
+  border-bottom: 1px solid #343842; flex: none; }
+h1 { font-size: 15px; font-weight: 600; margin: 0 20px 0 0; }
+button { appearance: none; border: 0; background: transparent; color: #9aa1ad; font: inherit; height: 44px;
+  padding: 0 16px; cursor: pointer; border-bottom: 2px solid transparent; }
+button:hover { color: #d4d8e0; }
+button[aria-selected="true"] { color: #fff; border-bottom-color: #5a9cf0; }
+nav { margin-left: auto; display: flex; gap: 16px; }
+a { color: #8ab4f0; text-decoration: none; }
+a:hover { text-decoration: underline; }
+main { flex: 1; position: relative; min-height: 0; }
+iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: none; background: #181a1e; }
+iframe.active { display: block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>iGUI</h1>
+  <button role="tab" aria-selected="true" data-frame="immediate">Immediate mode</button>
+  <button role="tab" aria-selected="false" data-frame="retained">Retained widgets</button>
+  <nav><a href="https://github.com/akadjoker/iGUI">Source</a></nav>
+</header>
+<main>
+  <iframe id="immediate" title="Immediate mode gallery" class="active"></iframe>
+  <iframe id="retained" title="Retained widgets gallery"></iframe>
+</main>
+<script>
+(function () {
+  var tabs = document.querySelectorAll('button[data-frame]');
+  var loaded = {};
+  function show(name) {
+    tabs.forEach(function (tab) { tab.setAttribute('aria-selected', String(tab.dataset.frame === name)); });
+    document.querySelectorAll('iframe').forEach(function (frame) {
+      frame.classList.toggle('active', frame.id === name);
+    });
+    if (!loaded[name]) {
+      loaded[name] = true;
+      document.getElementById(name).src = name + '.html';
+    }
+    history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach(function (tab) { tab.addEventListener('click', function () { show(tab.dataset.frame); }); });
+  show(location.hash === '#retained' ? 'retained' : 'immediate');
+})();
+</script>
+</body>
+</html>
