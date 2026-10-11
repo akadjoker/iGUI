@@ -88,8 +88,12 @@ struct TableStyle
     bool alternateRows;
     // Lines between rows and columns and around the table.
     bool borders;
+    // Minimum height of a row; 0 uses the theme's widget height.
+    float rowHeight;
+    // Gap between rows; a negative value uses the theme's item spacing.
+    float rowSpacing;
 
-    TableStyle() : alternateRows(false), borders(false) {}
+    TableStyle() : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f) {}
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -746,8 +750,8 @@ public:
     // adjusted weights are written back to the caller and should be kept for
     // the next frame to preserve the chosen column widths.
     bool beginTable(StringView id, Span<float> columnWeights, float width = 0.0f);
-    // Styled tables. The stripes and lines of a row use the theme's minimum
-    // widget height, so a row taller than that keeps the stripe of one widget.
+    // Styled tables. The stripes and lines of a row use the minimum row height,
+    // so a row taller than that keeps the stripe of one row.
     bool beginTable(StringView id, int columns, const TableStyle &style, float width = 0.0f);
     bool beginTable(StringView id, Span<const float> columnWeights, const TableStyle &style,
                     float width = 0.0f);
@@ -1318,6 +1322,8 @@ private:
     void     captureDockArrangement(const DockSpaceState &space);
     float tableColumnX(int column) const;
     float tableColumnWidth(int column) const;
+    float tableMinimumRowHeight() const;
+    float tableRowSpacing() const;
     void drawTableRowStyle();
     bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
     bool menuItemInternal(StringView label, bool enabled, bool *checked);
