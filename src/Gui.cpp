@@ -3553,6 +3553,9 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     activeMenuBounds_ = menuPopupBounds_;
     activeMenuBounds_.width = popupWidth;
     activeMenuBounds_.height = 0.0f;
+    // Como o beginMenu: o corpo de um menu de contexto também é um contentor de
+    // layout (e o endContextMenu fecha-o pelo endMenu, que é o mesmo caminho).
+    beginMenuContent(activeMenuBounds_);
     return true;
 }
 
