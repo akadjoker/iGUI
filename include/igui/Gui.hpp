@@ -99,10 +99,22 @@ struct TableStyle
     // que fica guardada por tabela (pelo id) entre frames. Quem desenha a coluna lê
     // a sua coluna do modelo com tableColumnIndex(), que é a posição na ordem.
     bool reorderable;
+    // Rolagem própria da tabela: a tabela passa a ter uma altura fixa (a do campo
+    // height) e as linhas rolam dentro dela, com a barra no lado direito. Sem isto a
+    // tabela cresce com as linhas e quem rola é a janela ou o child onde ela está.
+    bool scrollY;
+    // Quantas linhas ficam presas no topo (incluindo a linha 0, que é o cabeçalho):
+    // freezeRows = 1 prende só o cabeçalho, 2 prende o cabeçalho e a primeira linha.
+    // Uma tabela sem cabeçalho usa 0, que não prende nada. Ignorado sem scrollY; com
+    // scrollY e um valor negativo vale 1.
+    int freezeRows;
+    // Altura da tabela (com o cabeçalho e as linhas presas lá dentro) quando ela
+    // rola. Sem scrollY, ou com 0, a altura é a das linhas.
+    float height;
 
     TableStyle()
         : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f),
-          reorderable(false) {}
+          reorderable(false), scrollY(false), freezeRows(0), height(0.0f) {}
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -1565,6 +1577,18 @@ private:
             : order(), count(0), reordering(false), reorderFrom(-1), reorderTo(-1),
               reorderStartX(0.0f), reorderWidget(InvalidWidgetId), reorderFrame(0) {}
     };
+    // Onde está a rolagem de cada tabela (TableStyle::scrollY), em pixels do
+    // conteúdo e pelo id da tabela: a altura do que rola e das linhas presas só se
+    // sabe depois de as linhas serem submetidas, por isso é o frame anterior que a
+    // diz (é o mesmo caminho de um child, ver beginChild).
+    struct TableScrollState
+    {
+        float offsetY;
+        float contentHeight;
+        float frozenHeight;
+
+        TableScrollState() : offsetY(0.0f), contentHeight(0.0f), frozenHeight(0.0f) {}
+    };
     struct TableState
     {
         LayoutState parentLayout;
@@ -1582,13 +1606,27 @@ private:
         ct::Vector<uint8_t> columnVisible;
         // A coluna do cabeçalho sob o ponteiro (ver tableHoveredColumn).
         int headerHoveredColumn;
+        // Rolagem da tabela (TableStyle::scrollY): contentY é onde a linha atual
+        // estaria sem rolagem (é o que dá a altura do conteúdo), frozenHeight a
+        // altura das linhas presas já submetidas e offsetY a rolagem deste frame.
+        float contentY;
+        float frozenHeight;
+        float offsetY;
+        // Largura do espaço à direita que a barra de rolagem ocupa (0 sem barra): a
+        // caixa das colunas é mais estreita do que a faixa que rola.
+        float barStrip;
+        int freezeRows;
+        float viewHeight;
+        bool scrollY;
         TableStyle style;
         int row;
 
         TableState()
             : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
               rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr),
-              totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), style(), row(0) {}
+              totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), contentY(0.0f),
+              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), freezeRows(0), viewHeight(0.0f), scrollY(false),
+              style(), row(0) {}
     };
 
     struct TableResizeState
@@ -1652,6 +1690,8 @@ private:
     // A ordem das colunas de cada tabela reordenável, guardada entre frames pelo id
     // da tabela (a tabela em si não tem estado próprio, como as listas).
     ct::HashMap<WidgetId, TableOrderState> tableOrders_;
+    // A rolagem de cada tabela que rola (ver TableScrollState).
+    ct::HashMap<WidgetId, TableScrollState> tableScrolls_;
     // Onde está a lista de cada combo de conteúdo livre, em pixels do conteúdo. É
     // por id, como as listas: um combo fechado esquece onde estava (ver beginCombo).
     ct::HashMap<WidgetId, float> comboScrolls_;
@@ -2179,7 +2219,14 @@ private:
     int tableModelColumn(int display) const;
     // Carrega a ordem guardada das colunas da tabela que acabou de abrir (e larga o
     // arrasto que já não é submetido): ver TableStyle::reorderable.
+    void configureTable(const TableStyle &style);
     void loadTableOrder(const TableStyle &style);
+    // Monta a rolagem da tabela que acabou de abrir (as barras, a roda e o arrasto
+    // da barra), a partir da medida do frame anterior: ver TableStyle::scrollY.
+    void beginTableScroll(const TableStyle &style);
+    // Onde é que a linha atual pode desenhar: com uma tabela que rola, o que rola
+    // está cortado pelas linhas presas por cima e pelo fundo da tabela.
+    Rect tableRowClip() const;
     // A ordem das colunas da tabela aberta (colunas reordenáveis), ou nullptr quando
     // ela não é reordenável. Aponta para a entrada guardada por id, por isso o
     // arrasto que ocupa vários frames vive lá.
