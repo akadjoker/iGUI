@@ -554,9 +554,19 @@ Continua em falta neste nível:
 - [x] **`beginContextMenu` como contentor de layout**: o mesmo caminho do
       `beginMenu` (e o `endContextMenu` fecha-o pelo `endMenu`, que é o mesmo).
       *Onde:* `src/Gui.cpp` (`beginContextMenu`), `tests/test_item_status.cpp`.
-- [ ] **Popups com pilha e ids**: `openPopup`, `beginPopup`, `beginPopupModal`,
-      `closeCurrentPopup`, `isPopupOpen`, fecho por clique fora com flags,
-      popups aninhados. Hoje o `beginDialog`/`messageBox` cobrem o caso simples.
+- [x] **Popups com ids**: `openPopup(id)` (no ponteiro), `openPopup(id, pos)`,
+      `openPopup(id, pos, size)`, `beginPopup(id)`/`endPopup()`, `closeCurrentPopup()`
+      e `isPopupOpen(id)`. O id é global, o corpo é o mesmo contentor de layout do
+      menu (um slider ou um child lá dentro ficam no popup), fecha com um clique fora
+      (ou o Escape) e um popup que deixe de ser submetido é largado. A largura da
+      caixa é pedida, nunca medida: os itens de um popup esticam-se à largura que têm
+      e medi-la fazia a caixa crescer a cada frame.
+      *Onde:* `src/Gui.cpp` (`openPopup`/`beginPopup`/`endPopup`/`closeCurrentPopup`/
+      `isPopupOpen`), `tests/test_item_status.cpp`.
+- [ ] **O resto dos popups**: `beginPopupModal` com título e botões próprios (o
+      `beginDialog`/`messageBox` cobrem o caso simples), os flags do `openPopup`
+      (posição do rato, `AnyPopupId`, não abrir sobre outro popup) e a pilha de
+      popups aninhados de ids diferentes.
       *Onde:* `src/Gui.cpp` (a máquina de `openMenu_`/`activeModal_` é o
       precedente), `include/igui/Gui.hpp:604`.
 - [ ] **Fontes**: `pushFont`/`popFont` com vários tamanhos (e, mais tarde,

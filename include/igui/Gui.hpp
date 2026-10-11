@@ -607,6 +607,42 @@ public:
     // and menuSeparator(), then close it with endContextMenu().
     bool beginContextMenu(StringView id, const Rect &bounds);
     void endContextMenu();
+    // ── Popups ───────────────────────────────────────────────────────────────
+    // Um popup de conteúdo livre, preso a um id (o OpenPopup/BeginPopup do ImGui):
+    // abre-se num sítio e o corpo é submetido onde o chamador quiser. Devolve true
+    // enquanto estiver aberto e o conteúdo vai dentro do if.
+    //
+    //     if (ui.button("Select.."))
+    //         ui.openPopup("escolha");          // abre no ponteiro
+    //     if (ui.beginPopup("escolha")) {
+    //         ui.separatorText("Aquario");
+    //         for (int i = 0; i < count; ++i)
+    //             if (ui.selectable(names[i], chosen == i)) {
+    //                 chosen = i;
+    //                 ui.closeCurrentPopup();
+    //             }
+    //         ui.endPopup();
+    //     }
+    //
+    // O id é global (não depende do sítio onde é aberto). O corpo é um contentor de
+    // layout como o de um menu: um slider ou um child lá dentro ficam no popup, e o
+    // popup cresce com eles no frame seguinte. Um clique fora (ou o Escape) fecha-o.
+    //
+    // O par tem de ser submetido todos os frames, como tudo no modo imediato: quem
+    // parar de o submeter deixa de o ter (ver releaseUnsubmittedBlockers).
+    void openPopup(StringView id);
+    /// @brief Abre no @p position (absoluto) em vez de no ponteiro.
+    void openPopup(StringView id, const Vec2 &position);
+    /// @brief Abre com um tamanho pedido (@p size.x é a largura da caixa, 0 = a do
+    ///        tema; @p size.y é a altura mínima, 0 = a que o conteúdo pedir).
+    ///        A largura é sempre pedida e nunca medida: os itens de um popup
+    ///        esticam-se à largura da caixa (é o que o ImGui faz com um Selectable),
+    ///        por isso medi-la faria a caixa crescer a cada frame.
+    void openPopup(StringView id, const Vec2 &position, const Vec2 &size);
+    bool beginPopup(StringView id);
+    void endPopup();
+    void closeCurrentPopup();
+    bool isPopupOpen(StringView id) const;
     // Flags de slider/drag. Vão depois do width (o width é 0 para "a largura que
     // sobra", como em tudo neste ficheiro): um slider logarítmico é
     // sliderFloat("Log", v, 0.001f, 100.0f, 0.0f, SliderFlags::Logarithmic).
@@ -1723,20 +1759,38 @@ private:
         }
     };
     MultiSelectState multiSelect_;
-    // Menu aberto como contentor de layout (ver beginMenuContent). É uma pilha
+    // O popup de conteúdo livre aberto (ver openPopup/beginPopup): o id, onde
+    // está, o frame em que foi submetido e a medida do conteúdo do último frame.
+    WidgetId openPopupId_;
+    Vec2 openPopupPosition_;
+    float openPopupWidth_;
+    void openPopupSized(StringView id, const Vec2 &position, const Vec2 &size);
+    uint64_t openPopupFrame_;
+    // O popup cujo conteúdo está a ser submetido agora (para o ponteiro: é ele que
+    // está a receber os itens, ver pointerBlockedByOpenPopup).
+    WidgetId popupContentId_;
+    // A medida do corpo do último frame, por popup: é ela que dá o tamanho da caixa
+    // neste (o tamanho do que o chamador vai submeter só se sabe depois de o
+    // submeter, como no combo e no AutoFitFrames do ImGui).
+    WidgetId popupMeasuredId_;
+    Vec2 popupMeasured_;
+    bool popupWasOpenAtFrameStart_;
+    Rect popupBoundsAtFrameStart_;
+    Rect popupBounds_;
+    // Menu aberto como contentor de layout (ver beginPopupContent). É uma pilha
     // porque um submenu abre um contentor dentro do do pai, e ao fechar tem de
     // voltar ao cursor do pai (os itens do pai continuam depois dele).
-    struct MenuContentState
+    struct PopupContentState
     {
         LayoutState layout;
         Rect clip;
         float width;
 
-        MenuContentState() : layout(), clip(), width(0.0f) {}
+        PopupContentState() : layout(), clip(), width(0.0f) {}
     };
-    static const int kMenuContentStackSize = 4;
-    MenuContentState menuContents_[kMenuContentStackSize];
-    int menuContentDepth_;
+    static const int kPopupContentStackSize = 4;
+    PopupContentState popupContents_[kPopupContentStackSize];
+    int popupContentDepth_;
     // A barra de menu da aplicação (ver beginMainMenuBar): a janela dela, que é a
     // última a ser desenhada, e se ela foi submetida neste frame.
     WindowHandle mainMenuBarWindow_;
@@ -2060,14 +2114,14 @@ private:
     // input, combo) fica dentro do popup em vez de aterrar na janela. Guarda o
     // layout de fora, põe o cursor no popup e empurra o id do menu para o idStack
     // (dois menus não podem partilhar os ids dos widgets).
-    void beginMenuContent(const Rect &popupBounds);
-    void endMenuContent();
+    void beginPopupContent(const Rect &popupBounds);
+    void endPopupContent();
     // O clip/o largo do contentor do menu em vigor (o do topo da pilha).
-    Rect &menuContentClip();
-    const Rect &menuContentClip() const;
-    float &menuContentWidth();
-    float menuContentWidth() const;
-    void setMenuContentBounds(const Rect &clip, float width);
+    Rect &popupContentClip();
+    const Rect &popupContentClip() const;
+    float &popupContentWidth();
+    float popupContentWidth() const;
+    void setPopupContentBounds(const Rect &clip, float width);
     // Um item de menu é um item do layout também: é o que faz o que vem a seguir
     // cair por baixo dele, dentro do popup.
     void syncMenuLayoutItem(const Rect &item);

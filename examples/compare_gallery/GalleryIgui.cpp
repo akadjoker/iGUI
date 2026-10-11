@@ -1114,9 +1114,43 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         if (ui.messageBox("Modal", "Continuar?", g_panel.modalOpen) != ig::MessageBoxResult::None)
             g_panel.modalOpen = false;
     }
+    // O "Select.." do demo, com o popup de escolha dele: abre no ponteiro, o corpo é
+    // conteúdo livre (um separador e os itens) e escolher fecha-o.
+    if (ui.button("Select.."))
+        ui.openPopup("my_select_popup");
+    item();
+    ui.sameLine();
+    {
+        static const ig::StringView kFish[] = {
+            ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
+            ig::StringView("Pollock"), ig::StringView("Tilefish")
+        };
+        ui.label(s.comboItem < 0 ? ig::StringView("<None>") : kFish[s.comboItem]);
+    }
+    item();
+    if (ui.beginPopup("my_select_popup"))
+    {
+        ui.separatorText("Aquarium");
+        for (int i = 0; i < 5; ++i)
+        {
+            static const ig::StringView kFish[] = {
+                ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
+                ig::StringView("Pollock"), ig::StringView("Tilefish")
+            };
+            if (ui.selectable(kFish[i], s.comboItem == i))
+            {
+                s.comboItem = i;
+                ui.closeCurrentPopup();
+            }
+            item();
+        }
+        ui.endPopup();
+    }
     gap(ui, gallery::Section::PopupsAndModalWindows,
-        "BeginPopup/BeginPopupModal/OpenPopup/CloseCurrentPopup com pilha de popups e "
-        "o exemplo de popup com stack de ids proprio");
+        "BeginPopupModal (o modal com o seu proprio titulo e botoes - o iGUI tem o "
+        "beginDialog/messageBox), o popup com pilha de ids interno do demo "
+        "(ShowExampleAppDocuments) e os flags do OpenPopup (MousePos, "
+        "AnyPopupId, NoOpenOverExistingPopup)");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.label("Right-click this line for a context menu");

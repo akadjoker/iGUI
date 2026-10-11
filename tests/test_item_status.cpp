@@ -2342,6 +2342,188 @@ void test_menu_content_scopes_widget_ids()
     assert(editValue == 0.8f);
 }
 
+// Os popups de conteúdo livre: abrem por id, o corpo é um contentor de layout (um
+// slider lá dentro responde), um clique fora fecha e o isPopupOpen diz o estado.
+void test_own_popups()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView names[] = {
+        ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel")
+    };
+    int chosen = -1;
+    int toggles = 0;
+    float level = 0.5f;
+    ig::Rect buttonRect;
+    ig::Rect firstItemRect;
+    ig::Rect sliderRect;
+    bool open = false;
+    bool reportedOpen = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("Select..", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
+        {
+            c.openPopup("escolha");
+            ++toggles;
+        }
+        if (buttonRect.width <= 0.0f)
+            buttonRect = c.itemRect();
+        reportedOpen = c.isPopupOpen("escolha");
+        open = c.beginPopup("escolha");
+        if (open)
+        {
+            c.separatorText("Aquario");
+            for (int i = 0; i < 3; ++i)
+            {
+                if (c.selectable(names[i], chosen == i))
+                {
+                    chosen = i;
+                    // Escolher fecha: é o que o demo faz com o selectable do popup.
+                    c.closeCurrentPopup();
+                }
+                if (i == 0)
+                    firstItemRect = c.itemRect();
+            }
+            c.sliderFloat("Nivel", level, 0.0f, 1.0f);
+            sliderRect = c.itemRect();
+            c.endPopup();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(buttonRect.width > 0.0f);
+    assert(!reportedOpen && !open);
+    assert(!context.isPopupOpen("escolha"));
+
+    // Abrir pelo botão: o popup abre no ponteiro...
+    const float buttonX = buttonRect.x + buttonRect.width * 0.5f;
+    const float buttonY = buttonRect.y + buttonRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(buttonX, buttonY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, buttonX, buttonY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, buttonX, buttonY));
+    harness.frame(build);
+    // ...e no frame seguinte já está aberto e com o corpo submetido.
+    harness.frame(build);
+    assert(open);
+    assert(reportedOpen);
+    assert(context.isPopupOpen("escolha"));
+
+    // O corpo é um contentor de layout: o slider está dentro da caixa do popup e
+    // responde ao clique.
+    assert(firstItemRect.width > 0.0f);
+    assert(sliderRect.width > 0.0f);
+    // A largura da caixa é a pedida (a do tema, sem openPopup com tamanho): os itens
+    // esticam-se a ela e não a fazem crescer.
+    assert(sliderRect.width <= context.theme().menuMinWidth + 0.5f);
+    const float sliderX = sliderRect.x + sliderRect.width * 0.5f;
+    const float sliderY = sliderRect.y + sliderRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(sliderX, sliderY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    assert(level != 0.5f);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, sliderX, sliderY));
+    harness.frame(build);
+    assert(open);
+
+    // Escolher um item fecha-o (o closeCurrentPopup do corpo).
+    const float itemX = firstItemRect.x + firstItemRect.width * 0.5f;
+    const float itemY = firstItemRect.y + firstItemRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(itemX, itemY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    assert(chosen == 0);
+    assert(!context.isPopupOpen("escolha"));
+    harness.frame(build);
+    assert(!open);
+
+    // Abrir outra vez e fechar com um clique fora.
+    const int before = toggles;
+    context.pushEvent(ig::Event::pointerMove(buttonX, buttonY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, buttonX, buttonY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, buttonX, buttonY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(toggles == before + 1);
+    assert(open);
+
+    // Um clique longe do popup fecha-o e não chega ao que está por baixo (o botão
+    // não volta a abrir).
+    const float farX = buttonRect.x + 20.0f;
+    const float farY = buttonRect.y + 200.0f;
+    context.pushEvent(ig::Event::pointerMove(farX, farY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, farX, farY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, farX, farY));
+    harness.frame(build);
+    assert(!context.isPopupOpen("escolha"));
+    assert(toggles == before + 1);
+}
+
+// Um popup que deixa de ser submetido fecha-se (não há nada no écra para clicar) e
+// o contentor de layout volta ao de fora.
+void test_unsubmitted_popup_is_dropped()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool show = true;
+    ig::Rect buttonRect;
+    ig::Rect afterRect;
+    float afterYWithPopup = 0.0f;
+    float afterYWithout = 0.0f;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.button("abrir", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
+            c.openPopup("caixa");
+        if (buttonRect.width <= 0.0f)
+            buttonRect = c.itemRect();
+        if (show && c.beginPopup("caixa"))
+        {
+            c.label("conteudo");
+            c.endPopup();
+        }
+        // Um botão depois do popup: o popup não é do layout da janela, por isso ele
+        // fica sempre no mesmo sítio.
+        c.button("depois", ig::Rect(0.0f, 40.0f, 90.0f, 26.0f));
+        afterRect = c.itemRect();
+        if (show)
+            afterYWithPopup = afterRect.y;
+        else
+            afterYWithout = afterRect.y;
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float x = buttonRect.x + buttonRect.width * 0.5f;
+    const float y = buttonRect.y + buttonRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("caixa"));
+    assert(afterYWithPopup > 0.0f);
+
+    // Deixar de o submeter: um frame de tolerância (é a mesma regra dos menus: quem
+    // submete num frame e não no seguinte ainda conta), e ao segundo já não está.
+    show = false;
+    harness.frame(build);
+    harness.frame(build);
+    assert(!context.isPopupOpen("caixa"));
+    assert(afterYWithout == afterYWithPopup);
+}
+
 } // namespace
 
 int main()
@@ -2381,6 +2563,8 @@ int main()
     test_widgets_inside_an_open_menu();
     test_menu_content_scopes_widget_ids();
     test_widgets_inside_a_context_menu();
+    test_own_popups();
+    test_unsubmitted_popup_is_dropped();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
