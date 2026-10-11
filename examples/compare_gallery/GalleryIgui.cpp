@@ -94,6 +94,18 @@ struct Panel
     int nextTabId;
     bool showLeadingTabButton;
     bool showTrailingTabButton;
+    // As janelas do menu Tools (são janelas como as do demo: o Tools abre-as por
+    // fora da janela do demo).
+    bool showMetrics;
+    bool showStyleEditor;
+    bool showAbout;
+    // O tema do painel quando o Style Editor o começou a editar, para haver um
+    // "Revert" (é o ref do ShowStyleEditor do ImGui).
+    ig::Theme styleBackup;
+    bool styleBackupTaken;
+    // A cor que está a ser escolhida no Style Editor (-1 = nenhuma): o selector
+    // abate-se por baixo da linha dela.
+    int styleColorEdit;
     bool selectAppearance;
     // Um estado de expansao proprio para o header com botao de fecho: o demo do
     // ImGui guarda a expansao dentro da widget e so o "open" e que vem de fora.
@@ -118,7 +130,9 @@ struct Panel
           tabFlagReorderable(true), tabFlagAutoSelect(false), tabFlagListPopup(false),
           tabFlagNoCloseMiddle(false), tabFlagOverline(false), tabFlagFitting(false),
           openedTabs(), popupToggles(), activeTabs(), activeTabCount(0), nextTabId(0),
-          showLeadingTabButton(true), showTrailingTabButton(true),
+          showLeadingTabButton(true), showTrailingTabButton(true), showMetrics(false),
+          showStyleEditor(false), showAbout(false), styleBackup(), styleBackupTaken(false),
+          styleColorEdit(-1),
           selectAppearance(false),
           headerCloseExpanded(true), headerBulletOpen(false),
           selection(0),
@@ -220,7 +234,11 @@ void sectionConfiguration(ig::Context &ui, gallery::State &s)
     item();
     ui.sliderFloat("Um slider", s.f1, 0.0f, 1.0f);
     item();
-    gap(ui, gallery::Section::Configuration, "Style Editor / Metrics / About / Debug log");
+    // O Style Editor, o Metrics/Debugger e o About sao as janelas do menu Tools (o
+    // demo abre-as por fora da janela do demo, e a galeria tambem); o que falta e o
+    // Debug log e o ID stack tool.
+    gap(ui, gallery::Section::Configuration,
+        "o Debug log (ShowDebugLogWindow) e o ID stack tool (ShowIDStackToolWindow)");
 }
 
 // ── Window options ───────────────────────────────────────────────────────────
@@ -1925,6 +1943,13 @@ DemoFont gDemoFonts[kMaxDemoFonts];
 int gDemoFontCount = 0;
 ig::FontId gFontDefault;
 
+void setTools(bool styleEditor, bool metrics, bool about)
+{
+    g_panel.showStyleEditor = styleEditor;
+    g_panel.showMetrics = metrics;
+    g_panel.showAbout = about;
+}
+
 void reset()
 {
     g_panel = Panel();
@@ -2144,6 +2169,223 @@ void loadDemoFonts(ig::FontAtlas &atlas, const char *directory)
     g_atlasHeight = atlas.height();
 }
 
+namespace
+{
+
+// ── As janelas do menu Tools (o Style Editor, o Metrics e o About do demo) ───
+// São janelas do iGUI como quaisquer outras: no demo elas abrem ao lado da janela do
+// demo, por fora dela, e é isso que a galeria faz.
+
+// As duas tabelas são as listas do editor de estilo: cada linha traz o campo do tema
+// que edita, e é por isso que uma cor nova no tema aparece aqui com uma linha a mais.
+struct ThemeSizeRow
+{
+    const char *name;
+    float ig::Theme::*member;
+    float minimum;
+    float maximum;
+};
+
+struct ThemeColorRow
+{
+    const char *name;
+    ig::Color ig::Theme::*member;
+};
+
+const ThemeSizeRow kThemeSizes[] = {
+    {"fontSize", &ig::Theme::fontSize, 5.0f, 40.0f},
+    {"widgetHeight", &ig::Theme::widgetHeight, 8.0f, 60.0f},
+    {"buttonHeight", &ig::Theme::buttonHeight, 8.0f, 60.0f},
+    {"sliderHeight", &ig::Theme::sliderHeight, 8.0f, 60.0f},
+    {"inputHeight", &ig::Theme::inputHeight, 8.0f, 60.0f},
+    {"titleBarHeight", &ig::Theme::titleBarHeight, 8.0f, 60.0f},
+    {"itemSpacing", &ig::Theme::itemSpacing, 0.0f, 30.0f},
+    {"windowPadding", &ig::Theme::windowPadding, 0.0f, 30.0f},
+    {"padding", &ig::Theme::padding, 0.0f, 20.0f},
+    {"borderRadius", &ig::Theme::borderRadius, 0.0f, 20.0f},
+    {"scrollbarWidth", &ig::Theme::scrollbarWidth, 4.0f, 40.0f},
+    {"menuBarHeight", &ig::Theme::menuBarHeight, 8.0f, 60.0f},
+    {"menuItemHeight", &ig::Theme::menuItemHeight, 8.0f, 60.0f},
+    {"menuItemPadX", &ig::Theme::menuItemPadX, 0.0f, 40.0f},
+    {"menuMinWidth", &ig::Theme::menuMinWidth, 40.0f, 400.0f},
+};
+
+const ThemeColorRow kThemeColors[] = {
+    {"windowBackground", &ig::Theme::windowBackground},
+    {"panelColor", &ig::Theme::panelColor},
+    {"borderColor", &ig::Theme::borderColor},
+    {"textColor", &ig::Theme::textColor},
+    {"labelText", &ig::Theme::labelText},
+    {"titleBarBackground", &ig::Theme::titleBarBackground},
+    {"buttonBackground", &ig::Theme::buttonBackground},
+    {"buttonHovered", &ig::Theme::buttonHovered},
+    {"buttonPressed", &ig::Theme::buttonPressed},
+    {"buttonText", &ig::Theme::buttonText},
+    {"checkboxBackground", &ig::Theme::checkboxBackground},
+    {"checkboxChecked", &ig::Theme::checkboxChecked},
+    {"sliderBackground", &ig::Theme::sliderBackground},
+    {"sliderFilled", &ig::Theme::sliderFilled},
+    {"sliderHandle", &ig::Theme::sliderHandle},
+    {"menuBg", &ig::Theme::menuBg},
+    {"menuBorder", &ig::Theme::menuBorder},
+    {"menuItemHover", &ig::Theme::menuItemHover},
+    {"collapsibleHeaderBg", &ig::Theme::collapsibleHeaderBg},
+    {"tooltipBg", &ig::Theme::tooltipBg},
+};
+
+// O estilo por omissão da galeria, o mesmo dos dois painéis: é ele que dá o "Revert"
+// do demo (voltar ao que estava) e voltar ao ponto de partida depois de se brincar.
+void styleEditorWindow(ig::Context &ui)
+{
+    ig::Context::WindowOptions options;
+    options.saveSettings = false;
+    // Só o "x" (o minimize/maximize de uma janela de ferramentas não faz sentido);
+    // com o p_open em baixo, fechá-la desliga o item do menu Tools.
+    ui.setWindowButtons("Style Editor###style-editor", false, false);
+    const ig::Rect bounds(16.0f, 130.0f, 300.0f, 520.0f);
+    if (!ui.beginWindow("Style Editor###style-editor", bounds, options, &g_panel.showStyleEditor))
+        return;
+    ig::Theme &theme = ui.theme();
+    // O "Ref" do ImGui: o tema como estava quando o editor se abriu pela primeira vez.
+    if (!g_panel.styleBackupTaken)
+    {
+        g_panel.styleBackup = theme;
+        g_panel.styleBackupTaken = true;
+    }
+    if (ui.button("Revert"))
+        ui.setTheme(g_panel.styleBackup);
+    item();
+    ui.sameLine();
+    if (ui.button("Estilo do demo"))
+    {
+        // O estilo com que a galeria arranca: é o que faz os dois painéis serem o
+        // mesmo ecrã, e é o que se quer de volta depois de mexer nos sliders.
+        applyDemoStyle(ui);
+        g_panel.styleBackup = ui.theme();
+    }
+    item();
+    ui.separatorText("Tamanhos");
+    const int sizeCount = static_cast<int>(sizeof(kThemeSizes) / sizeof(kThemeSizes[0]));
+    for (int i = 0; i < sizeCount; ++i)
+    {
+        const ThemeSizeRow &row = kThemeSizes[i];
+        ui.sliderFloat(row.name, theme.*(row.member), row.minimum, row.maximum);
+        item();
+    }
+    ui.separatorText("Cores");
+    const int colorCount = static_cast<int>(sizeof(kThemeColors) / sizeof(kThemeColors[0]));
+    for (int i = 0; i < colorCount; ++i)
+    {
+        const ThemeColorRow &row = kThemeColors[i];
+        if (ui.colorButton(row.name, theme.*(row.member), 32.0f, 18.0f))
+            g_panel.styleColorEdit = g_panel.styleColorEdit == i ? -1 : i;
+        item();
+        // O selector abate-se logo por baixo da cor que se clicou: é o sítio onde o
+        // olho está, e não é preciso guardar rect nenhum de um frame para o outro.
+        if (g_panel.styleColorEdit == i)
+        {
+            ui.colorEdit(row.name, theme.*(row.member), 0.0f, 140.0f);
+            item();
+        }
+    }
+    ui.separatorText("Vista previa");
+    ui.label("As widgets usam o tema em vigor neste instante:");
+    item();
+    if (ui.button("Um botao"))
+    {
+    }
+    item();
+    ui.sameLine();
+    bool checked = true;
+    ui.checkbox("Uma caixa", checked);
+    item();
+    float value = 0.5f;
+    ui.sliderFloat("Um slider", value, 0.0f, 1.0f);
+    item();
+    ui.endWindow();
+}
+
+// O Metrics/Debugger do demo. O que se mostra é o que o iGUI já mede (os tempos e os
+// vertices do frame, que estão na faixa de cima) e, em vez de uma lista de janelas que
+// ele não sabe fazer, o relatório das lacunas face ao demo.
+void metricsWindow(ig::Context &ui)
+{
+    ig::Context::WindowOptions options;
+    options.saveSettings = false;
+    // Só o "x" (o minimize/maximize de uma janela de ferramentas não faz sentido);
+    // com o p_open em baixo, fechá-la desliga o item do menu Tools.
+    ui.setWindowButtons("Metrics/Debugger###metrics", false, false);
+    const ig::Rect bounds(326.0f, 130.0f, 306.0f, 430.0f);
+    if (!ui.beginWindow("Metrics/Debugger###metrics", bounds, options, &g_panel.showMetrics))
+        return;
+    const gallery::Readout &info = gallery::readout();
+    char line[256];
+    snprintf(line, sizeof(line), "submit %.2f ms   render %.2f ms   gpu %.2f ms",
+             static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
+             static_cast<double>(info.gpuMs));
+    ui.label(line);
+    item();
+    snprintf(line, sizeof(line), "%d itens   %d vertices   %d draw calls   %d lacunas",
+             info.items, info.vertices, info.drawCalls, info.gaps);
+    ui.label(line);
+    item();
+    ui.separatorText("O QUE O DEMO MOSTRA AQUI E O iGUI NAO EXPOE");
+    ui.bulletText("a lista das janelas com o que cada uma desenhou, as draw lists do frame\n"
+                  "e o item picker: o iGUI conta os vertices e as draw calls do frame todo\n"
+                  "(e o que a faixa de cima mostra), nao por janela");
+    item();
+    ui.bulletText("os caminhos e os numeros do layout (o retangulo de cada widget, o que o\n"
+                  "rato apanhou): existem por dentro, mas nao ha API que os contem");
+    item();
+    ui.separatorText("LACUNAS FACE AO DEMO NESTE FRAME");
+    const int gaps = gallery::gapCount();
+    if (gaps == 0)
+    {
+        ui.label("(nenhuma: so as seccoes desenhadas neste frame contam, e");
+        item();
+        ui.label("estao todas fechadas - abre-as no menu para as ver)");
+        item();
+    }
+    for (int i = 0; i < gaps; ++i)
+    {
+        const gallery::Gap &entry = gallery::gap(i);
+        snprintf(line, sizeof(line), "%s: %s", entry.section, entry.widget);
+        ui.bulletText(line);
+        item();
+    }
+    ui.endWindow();
+}
+
+void aboutWindow(ig::Context &ui)
+{
+    ig::Context::WindowOptions options;
+    options.saveSettings = false;
+    // Só o "x" (o minimize/maximize de uma janela de ferramentas não faz sentido);
+    // com o p_open em baixo, fechá-la desliga o item do menu Tools.
+    ui.setWindowButtons("About Dear iGUI###about", false, false);
+    const ig::Rect bounds(326.0f, 570.0f, 306.0f, 190.0f);
+    if (!ui.beginWindow("About Dear iGUI###about", bounds, options, &g_panel.showAbout))
+        return;
+    ui.label("iGUI, interface em modo imediato");
+    item();
+    ui.separator();
+    ui.label("A janela do lado e o demo do ImGui");
+    item();
+    ui.label("(1.92.5) a serio; esta e a mesma");
+    item();
+    ui.label("coisa reescrita com o iGUI. A");
+    item();
+    ui.label("comparacao e o relatorio das");
+    item();
+    ui.label("lacunas estao em");
+    item();
+    ui.label("examples/compare_gallery, no GAPS.md.");
+    item();
+    ui.endWindow();
+}
+
+} // namespace
+
 bool openSection(const char *name)
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
@@ -2262,11 +2504,18 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
         }
         if (ui.beginMenu("Tools"))
         {
-            ui.menuItem("Metrics/Debugger");
-            ui.menuItem("Style Editor");
-            ui.menuItem("About");
-            gallery::reportGap("Menu", "Metrics/Debugger, Style Editor, About e os debug "
-                                       "options do Tools");
+            // As janelas do demo: abrem-se por fora da janela do demo, como lá (o
+            // menu diz "Metrics/Debugger", "Style Editor" e "About").
+            // Abrir é isto; fechar é o "x" da própria janela (como no demo, em que
+            // o p_open é que manda): por isso um item não é um interruptor.
+            if (ui.menuItem("Metrics/Debugger"))
+                g_panel.showMetrics = true;
+            if (ui.menuItem("Style Editor"))
+                g_panel.showStyleEditor = true;
+            if (ui.menuItem("About Dear iGUI"))
+                g_panel.showAbout = true;
+            item();
+            gallery::reportGap("Menu", "o Item Picker e as debug options do Tools");
             ui.endMenu();
         }
         ui.beginMenu("Help");
@@ -2340,6 +2589,17 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
         ui.popFont();
     }
     ui.endWindow();
+
+    // As janelas do Tools sao submetidas depois da janela do demo (e por isso ficam
+    // por cima dela, como no demo), e so por isso: quem as abriu foi o menu Tools.
+    // Levam um frame a pegar no tema, tal como no demo, porque o que o Style Editor
+    // escreve so vale para o que for submetido a seguir.
+    if (g_panel.showStyleEditor)
+        styleEditorWindow(ui);
+    if (g_panel.showMetrics)
+        metricsWindow(ui);
+    if (g_panel.showAbout)
+        aboutWindow(ui);
 
     stats.items = g_panel.widgets;
     stats.gaps = gallery::gapCount();

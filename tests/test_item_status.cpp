@@ -4303,6 +4303,74 @@ void test_push_font()
     assert(context.theme().font == panel && context.theme().fontSize == 16.0f);
 }
 
+// A convenção "###" do ImGui: "Gravar como###gravar" e "Guardar como###gravar" são o
+// mesmo id (o que muda é só o que se lê), e um título que muda de texto guarda o
+// estado. Sem isto, um painel de documento (o nome do ficheiro no título) perdia o
+// estado a cada gravação.
+void test_hash_marker()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::WidgetId first = ig::InvalidWidgetId;
+    ig::WidgetId renamed = ig::InvalidWidgetId;
+    ig::WidgetId plain = ig::InvalidWidgetId;
+    bool pressed = false;
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("###doc-widgets", ig::Rect(0.0f, 0.0f, 300.0f, 160.0f)));
+        c.button("Gravar como###gravar");
+        first = c.itemId();
+        c.button("Guardar como###gravar");
+        renamed = c.itemId();
+        // Sem marcador o id é o da string toda: é o comportamento antigo, que não
+        // pode mudar (um rótulo que já lá estava continua a ter o mesmo id).
+        c.button("Gravar como");
+        plain = c.itemId();
+        c.endWindow();
+    };
+    harness.frame(build);
+    assert(first != ig::InvalidWidgetId && renamed != ig::InvalidWidgetId);
+    assert(first == renamed);
+    assert(plain != first);
+
+    // O mesmo com os títulos: o mesmo "###" é a mesma janela, e o estado (a posição,
+    // que é do que a janela se lembra) sobrevive à mudança de texto - é o caso do
+    // painel de documento, cujo título leva o nome do ficheiro.
+    ig::Rect bounds;
+    bool firstFrame = true;
+    auto window = [&](ig::Context &c) {
+        const char *title = firstFrame ? "Ficheiro: um###docwin" : "Ficheiro: dois###docwin";
+        const ig::Rect initial(firstFrame ? 40.0f : 600.0f, firstFrame ? 30.0f : 400.0f,
+                               240.0f, 140.0f);
+        assert(c.beginWindow(title, initial));
+        bounds = c.windowBounds("###docwin");
+        firstFrame = false;
+        c.endWindow();
+    };
+    harness.frame(window);
+    assert(bounds.x == 40.0f && bounds.y == 30.0f);
+    // O segundo frame traz um título e um rect diferentes, e é a mesma janela: fica
+    // onde estava, e não onde o rect que ela passou dizia.
+    harness.frame(window);
+    assert(bounds.x == 40.0f && bounds.y == 30.0f);
+
+    // Uma janela sem o marcador continua a ser uma janela por título: duas strings
+    // diferentes são duas janelas (o "###" não pode virar a regra geral).
+    ig::Rect plainA;
+    ig::Rect plainB;
+    auto two = [&](ig::Context &c) {
+        assert(c.beginWindow("uma", ig::Rect(0.0f, 300.0f, 200.0f, 100.0f)));
+        plainA = c.windowBounds("uma");
+        c.endWindow();
+        assert(c.beginWindow("outra", ig::Rect(300.0f, 300.0f, 200.0f, 100.0f)));
+        plainB = c.windowBounds("outra");
+        c.endWindow();
+    };
+    harness.frame(two);
+    assert(plainA.x == 0.0f && plainB.x == 300.0f);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4361,6 +4429,7 @@ int main()
     test_menu_inside_a_popup();
     test_submenu_inside_a_popup();
     test_table_sizing_fixed_fit();
+    test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

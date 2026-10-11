@@ -534,6 +534,14 @@ public:
     void pushFont(FontId font);
     void popFont(int count = 1);
     const Theme &theme() const;
+    // O tema em vigor, para ser editado (é o GetStyle() do ImGui). O que o editor
+    // escrever vale para o que for submetido a seguir neste frame - e como o tema é
+    // também o "valor de antes" dos pushStyleVar/pushStyleColor, um campo que esteja
+    // debaixo de um push volta ao valor do push no pop. Quem edita o tema desenha-se
+    // por isso depois do que ele mostra (a galeria submete a janela do Style Editor
+    // depois da janela do demo, como o demo do ImGui: um campo mexido aparece no
+    // frame seguinte, e o que se vê a ser mexido é o valor antigo).
+    Theme &theme();
     // Turns the whole interface off: beginWindow() and messageBox() show
     // nothing, pushEvent() drops its events, and the widget state that was
     // under the pointer is released. Windows and their positions are kept, so

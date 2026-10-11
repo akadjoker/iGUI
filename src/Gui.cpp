@@ -30,6 +30,20 @@ StringView visibleLabel(StringView label)
     return label;
 }
 
+// A outra metade da convenção do ImGui: "Gravar como###gravar" desenha "Gravar como"
+// (o ## acima) mas o id conta só a partir do "###" - é assim que um título que muda
+// ("Ficheiro: x.txt###doc") guarda o mesmo estado, e é isso que o ImHashStr do ImGui
+// faz quando encontra o marcador: deita fora o que já tinha e recomeça daí.
+StringView idLabel(StringView label)
+{
+    for (StringView::size_type i = 0u; i + 2u < label.size(); ++i)
+    {
+        if (label[i] == '#' && label[i + 1u] == '#' && label[i + 2u] == '#')
+            return StringView(label.data() + i, label.size() - i);
+    }
+    return label;
+}
+
 // Onde é que um valor cai na pista (0 no mínimo, 1 no máximo): com o flag
 // Logarithmic a escala é a do logaritmo do intervalo, como o Logarithmic do ImGui
 // - a metade da pista passa a ser a média geométrica dos extremos.
@@ -1563,6 +1577,11 @@ void Context::setTheme(const Theme &theme)
 }
 
 const Theme &Context::theme() const
+{
+    return theme_;
+}
+
+Theme &Context::theme()
 {
     return theme_;
 }
@@ -11062,6 +11081,7 @@ float Context::availableWidth() const
 
 WidgetId Context::hashText(StringView text)
 {
+    text = idLabel(text);
     uint64_t hash = 1469598103934665603ull;
     for (StringView::size_type i = 0; i < text.size(); ++i)
     {
@@ -12430,10 +12450,13 @@ void Context::drawWindow(WindowState &window)
         window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
     if (window.showTitleBar)
     {
-        const TextMetrics metrics = measureText(theme_.font, window.title, theme_.fontSize);
+        // O que se lê é a parte antes do "##" (é o CalcTextSize/FindRenderedTextEnd do
+        // ImGui na barra de título): o resto do nome só serve para o id.
+        const StringView title = visibleLabel(window.title);
+        const TextMetrics metrics = measureText(theme_.font, title, theme_.fontSize);
         const Vec2 titlePosition(window.bounds.x + theme_.windowPadding,
                                  window.bounds.y + (titleHeight - metrics.height) * 0.5f);
-        drawText(window.drawList, theme_.font, window.title, titlePosition, theme_.fontSize,
+        drawText(window.drawList, theme_.font, title, titlePosition, theme_.fontSize,
                  theme_.labelText, viewport);
     }
     if (window.showWindowControls)
