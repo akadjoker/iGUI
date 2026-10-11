@@ -805,6 +805,201 @@ void test_group_nesting_and_imbalance()
     assert(nextWindowItem.y == 272.0f);
 }
 
+// Um popup aberto é dono do ponteiro na sua área: o que está por baixo dele -
+// o conteúdo da janela cujo rect cai dentro do dropdown - não pode receber o
+// hover nem o clique só porque o ponto está na área do popup. Perguntar "este
+// ponto está na área do popup?" não chega; a pergunta é "estamos a submeter os
+// itens do popup?".
+void test_open_menu_owns_the_pointer_over_it()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect barButton;
+    ig::Rect firstItem;
+    ig::Rect contentRect;
+    bool itemHovered = false;
+    bool contentHovered = true;
+    bool contentClicked = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("menus", ig::Rect(0.0f, 0.0f, 320.0f, 260.0f)));
+        const ig::Rect bar(0.0f, 0.0f, c.availableWidth(), 26.0f);
+        if (c.beginMenuBar(bar))
+        {
+            // O rect do botão lê-se logo a seguir ao beginMenu (fechado ou
+            // aberto); os itens do dropdown só são submetidos quando ele está
+            // aberto e são eles que passam a ser o último item.
+            const bool menuOpen = c.beginMenu("File");
+            barButton = c.itemRect();
+            if (menuOpen)
+            {
+                c.menuItem("Abrir");
+                firstItem = c.itemRect();
+                itemHovered = c.isItemHovered();
+                c.menuItem("Sair");
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        // Conteúdo mesmo por baixo do dropdown: é isto que estava a receber o
+        // hover do popup por cima dele.
+        contentClicked = c.button("conteudo", ig::Rect(0.0f, 30.0f, 200.0f, 24.0f));
+        contentRect = c.itemRect();
+        contentHovered = c.isItemHovered();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(barButton.width > 0.0f);
+    assert(contentRect.width == 200.0f);
+    // O conteúdo está mesmo debaixo de onde o dropdown vai abrir.
+    assert(contentRect.y >= barButton.y);
+    assert(contentRect.y < barButton.y + barButton.height + 40.0f);
+
+    // Abrir o menu: premir e largar no botão da barra.
+    const float barX = barButton.x + barButton.width * 0.5f;
+    const float barY = barButton.y + barButton.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(barX, barY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, barX, barY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, barX, barY));
+    harness.frame(build);
+    assert(firstItem.height > 0.0f);
+
+    // Com o dropdown aberto, o ponteiro em cima de um item dele é do item - e o
+    // botão de conteúdo por baixo não é hovered.
+    const float itemX = firstItem.x + 10.0f;
+    const float itemY = firstItem.y + firstItem.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(itemX, itemY));
+    harness.frame(build);
+    assert(itemHovered);
+    assert(!contentHovered);
+
+    // E um clique lá também não chega ao conteúdo.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, itemX, itemY));
+    harness.frame(build);
+    assert(!contentClicked);
+}
+
+// A barra de menus é um item do layout (como no ImGui, onde o BeginMenuBar abre
+// um grupo): o conteúdo começa por baixo dela, e o rato em cima da barra não cai
+// no primeiro widget do conteúdo. Sem isto quem não se lembrasse de deixar 26 px
+// à mão tinha o primeiro widget debaixo da barra - e o `over` era dele.
+void test_menu_bar_reserves_its_strip()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect bar;
+    ig::Rect first;
+    bool barHovered = false;
+    bool firstHovered = true;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("bar", ig::Rect(0.0f, 0.0f, 320.0f, 220.0f)));
+        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+        {
+            if (c.beginMenu("F"))
+            {
+                c.menuItem("x");
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        bar = c.itemRect();
+        barHovered = c.isItemHovered();
+        c.button("primeiro");
+        first = c.itemRect();
+        firstHovered = c.isItemHovered();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(bar.height == 26.0f);
+    assert(!barHovered);
+    // O botão do conteúdo começa por baixo da barra.
+    assert(first.y >= bar.y + bar.height);
+    assert(first.y > bar.y + bar.height - 0.5f);
+
+    // Rato em cima da barra: a barra é o item, o botão não.
+    context.pushEvent(ig::Event::pointerMove(bar.x + 40.0f, bar.y + bar.height * 0.5f));
+    harness.frame(build);
+    assert(barHovered);
+    assert(!firstHovered);
+
+    // Rato em cima do botão: o contrário.
+    context.pushEvent(ig::Event::pointerMove(first.x + 10.0f, first.y + first.height * 0.5f));
+    harness.frame(build);
+    assert(firstHovered);
+    assert(!barHovered);
+}
+
+// O mesmo para a lista de um combo aberto: os itens da lista cobrem o que está
+// por baixo, e o que está por baixo não recebe o ponteiro.
+void test_open_combo_owns_the_pointer_over_its_list()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = {
+        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres")
+    };
+    int current = 0;
+    ig::Rect comboRect;
+    ig::Rect contentRect;
+    bool contentHovered = true;
+    bool contentClicked = false;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("combos", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
+        const bool comboOpen = c.comboBox("escolha", current, ig::Span<const ig::StringView>(items, 3),
+                                          ig::Rect(0.0f, 0.0f, 160.0f, 24.0f));
+        (void)comboOpen;
+        // Com a lista aberta o último item é um item da lista, por isso o rect do
+        // cabeçalho só se apanha com ela fechada (é o primeiro frame).
+        if (comboRect.width <= 0.0f)
+            comboRect = c.itemRect();
+        // Por baixo da lista aberta.
+        contentClicked = c.button("conteudo", ig::Rect(0.0f, 60.0f, 160.0f, 24.0f));
+        contentRect = c.itemRect();
+        contentHovered = c.isItemHovered();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(comboRect.height > 0.0f);
+
+    const float comboX = comboRect.x + comboRect.width * 0.5f;
+    const float comboY = comboRect.y + comboRect.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(comboX, comboY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, comboX, comboY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, comboX, comboY));
+    harness.frame(build);
+
+    // Um ponto que está ao mesmo tempo dentro do botão de conteúdo e dentro da
+    // lista aberta (é o caso que interessa: o rect de um cai na área do outro).
+    const float itemY = contentRect.y + contentRect.height * 0.25f;
+    assert(itemY >= contentRect.y && itemY <= contentRect.y + contentRect.height);
+    assert(comboRect.y + comboRect.height * 3.0f >= itemY);
+    context.pushEvent(ig::Event::pointerMove(comboX, itemY));
+    harness.frame(build);
+    assert(!contentHovered);
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, comboX, itemY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, comboX, itemY));
+    harness.frame(build);
+    assert(!contentClicked);
+    assert(current == 1);
+}
+
 } // namespace
 
 int main()
@@ -824,6 +1019,9 @@ int main()
     test_group_is_one_item_outside();
     test_group_nesting_and_imbalance();
     test_group_columns_line_up();
+    test_open_menu_owns_the_pointer_over_it();
+    test_menu_bar_reserves_its_strip();
+    test_open_combo_owns_the_pointer_over_its_list();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

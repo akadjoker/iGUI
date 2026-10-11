@@ -1410,6 +1410,10 @@ private:
     float faderGrabOffset_;
     WidgetId lastItemId_;
     ItemStatus item_;
+    // Verdadeiro enquanto os itens da lista de um combo aberto estão a ser
+    // submetidos: é o que distingue esses itens do que está por baixo deles (ver
+    // pointerBlockedByOpenPopup).
+    bool comboItemsSubmitted_;
     // Grupos abertos neste frame (ver beginGroup/endGroup). Só os pares
     // equilibrados chegam ao fim; um beginGroup sem endGroup é descartado no
     // início do container seguinte (ver beginLayout).
@@ -1612,6 +1616,9 @@ private:
     void advanceFocus();
     // O teste do ponteiro de um slider, numa vertical ou numa horizontal: é o
     // que o vSlider e o slider (e o fader, por dentro) têm em comum.
+    // Um rect sem id como item (o grupo, a barra de menus): o rect e o hover são
+    // dele, mas clique/edição/foco não - isso é sempre de um widget lá dentro.
+    void setItemHoverRect(const Rect &bounds);
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                      float &value, float minimum, float maximum,
                      bool vertical = false);

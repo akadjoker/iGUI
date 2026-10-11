@@ -462,7 +462,6 @@ void menusSection(ig::Context &ui)
         }
         ui.endMenuBar();
     }
-    ui.spacing(28.0f);
 
     ui.separatorText("Event leak check");
     ui.label("The dropdown covers these: nothing here may react while it is open.");

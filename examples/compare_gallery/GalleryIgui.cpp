@@ -1220,7 +1220,6 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
         ui.endMenu();
         ui.endMenuBar();
     }
-    ui.dummy(ui.availableWidth(), 26.0f);
 
     if (ui.beginChild("demo", ui.availableHeight(), false))
     {
