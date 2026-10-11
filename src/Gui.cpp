@@ -672,7 +672,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
-      table_(), tableResize_(), propertyRow_(), tableActive_(false), propertyRowActive_(false),
+      table_(), tableResize_(), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), tooltipDelay_(0.45f), tooltipHoverSeconds_(0.0f),
       tooltipPointerPosition_(), tooltipWidget_(InvalidWidgetId),
       wantsKeyboard_(false), wantsTextInput_(false), backspacePressed_(false), enterPressed_(false),
@@ -716,7 +716,29 @@ Context::Context(Backend &backend, TextProvider *textProvider)
 
 void Context::pushEvent(const Event &event)
 {
+    if (!enabled_)
+        return;
     events_.push_back(event);
+}
+
+void Context::setEnabled(bool enabled)
+{
+    if (enabled_ == enabled)
+        return;
+    enabled_ = enabled;
+    if (enabled_)
+        return;
+    events_.clear();
+    pointer_ = PointerState();
+    activeWidget_ = InvalidWidgetId;
+    hotWidget_ = InvalidWidgetId;
+    focusedWidget_ = InvalidWidgetId;
+    activeModal_ = InvalidWidgetId;
+}
+
+bool Context::enabled() const
+{
+    return enabled_;
 }
 
 void Context::beginFrame(const FrameInfo &frame)
@@ -869,7 +891,7 @@ void Context::releaseUnsubmittedBlockers()
 bool Context::windowSubmittedRecently(const WindowState &window) const
 {
     // Submitted this frame, or last frame and not yet this one.
-    return window.lastFrame + 1u >= frameNumber_;
+    return enabled_ && window.lastFrame + 1u >= frameNumber_;
 }
 
 const DrawData &Context::endFrame()
@@ -924,6 +946,8 @@ const DrawData &Context::endFrame()
 
 bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *open)
 {
+    if (!enabled_)
+        return false;
     const WidgetId id = hashText(title);
     WindowState *window = getOrCreateWindow(id, title, initialBounds);
     if (!window)
@@ -4513,7 +4537,7 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
                                      const MessageBoxOptions &options)
 {
     const WidgetId id = combineIds(hashText(title), hashText(message));
-    if (!open)
+    if (!open || !enabled_)
     {
         if (activeModal_ == id)
             activeModal_ = InvalidWidgetId;

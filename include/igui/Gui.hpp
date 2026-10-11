@@ -404,6 +404,12 @@ public:
 
     void setTheme(const Theme &theme);
     const Theme &theme() const;
+    // Turns the whole interface off: beginWindow() and messageBox() show
+    // nothing, pushEvent() drops its events, and the widget state that was
+    // under the pointer is released. Windows and their positions are kept, so
+    // enabling it again brings the interface back as it was. It is on by default.
+    void setEnabled(bool enabled);
+    bool enabled() const;
     bool wantsPointer() const;
     bool wantsKeyboard() const;
     bool wantsTextInput() const;
@@ -1206,6 +1212,7 @@ private:
     TableResizeState tableResize_;
     PropertyRowState propertyRow_;
     bool tableActive_;
+    bool enabled_;
     bool propertyRowActive_;
     float dragStartValue_;
     float dragStartX_;
