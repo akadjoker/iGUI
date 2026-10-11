@@ -106,7 +106,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | `BeginCombo`/`EndCombo` (conteúdo próprio: árvore, imagens, multi-seleção) | `beginCombo`/`endCombo` | existe: o popup leva o que o chamador submeter entre os dois (o cursor do layout fica dentro dele e `availableWidth()` passa a ser a largura do popup). A largura é a do cabeçalho e cresce com o conteúdo; a altura é a do conteúdo até `visibleItems` linhas (8 por omissão, como o `HeightRegular` do ImGui) |
 | `Combo` com filtro de pesquisa | `beginCombo` + `inputText` | existe: o filtro é conteúdo do popup, submetido pelo chamador (a galeria faz isso) |
 | `ImGuiComboFlags_*` (NoArrowButton, NoPreview, WidthFitPreview, HeightSmall/Regular/Largest) | — | **não existe**: sem flags |
-| Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | `beginCombo(...)` | existe: o popup mostra `visibleItems` linhas (8 por omissão, o `HeightRegular`), a roda do rato e a barra à direita rolam a lista, e o que não cabe é cortado. Um `beginChild` lá dentro continua a não funcionar (fecha o popup) |
+| Scroll dentro do popup de um combo (o ImGui mostra 8 linhas e rola) | `beginCombo(...)` | existe: o popup mostra `visibleItems` linhas (8 por omissão, o `HeightRegular`), a roda do rato e a barra à direita rolam a lista, e o que não cabe é cortado. Com um `beginChild` lá dentro quem rola é o child (com a barra dele), como no "Options" do menu de ficheiros do demo |
 | `SetItemDefaultFocus` (a lista abre no item escolhido) | `setItemDefaultFocus` | existe, para o popup de um combo: só vale na abertura, e rolar à mão desiste dele |
 | `ListBox` (uma entrada) | `listBox` | existe |
 | `ListBox` com seleção múltipla | — | **não existe** |
@@ -488,10 +488,12 @@ Continua em falta neste nível:
       abrir no item escolhido, como no demo).
       *Onde:* `src/Gui.cpp` (`beginComboImpl`/`endCombo`/`setItemDefaultFocus`),
       `tests/test_item_status.cpp`.
-- [ ] **`beginChild` dentro do popup de um combo**: o `beginLayout` do child fecha o
-      popup, por isso um child lá dentro não funciona (para uma lista com categorias
-      ou um filtro com a sua própria barra).
-      *Onde:* `src/Gui.cpp` (`beginChild`/`beginLayout`, `comboContentOpen_`).
+- [x] **`beginChild` dentro do popup de um combo**: o `contentClip()` passou a ter o
+      popup como limite de partida e a cruzá-lo com a caixa do child (antes o child
+      *substituía* o clip da janela e o seu conteúdo aparecia fora do popup). O child
+      traz o cursor, o corte e a barra dele; o combo traz o popup, a rolagem e o
+      ponteiro.
+      *Onde:* `src/Gui.cpp` (`contentClip`), `tests/test_item_status.cpp`.
 - [x] **`menuItem` com atalho desenhado**: `menuItem(label, shortcut, enabled,
       selected)` desenha o atalho à direita e soma-o à largura medida do menu.
       *Onde:* `src/Gui.cpp` (`menuItemInternal`), `tests/test_item_status.cpp`.
