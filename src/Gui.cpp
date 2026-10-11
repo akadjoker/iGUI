@@ -749,7 +749,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
       menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
-      table_(), tableResize_(), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
+      table_(), tableResize_(), tableOrder_(nullptr), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
       hoverDelay_(0.45f), hoverDelayWidget_(InvalidWidgetId), hoverSeconds_(0.0f),
       hoverStationarySeconds_(0.0f), hoverStartPosition_(), tooltipHoverSeconds_(0.0f),
@@ -931,6 +931,7 @@ void Context::beginFrame(const FrameInfo &frame)
     dockPanelStack_.clear();
     activeDockSpace_ = InvalidWidgetId;
     tableActive_ = false;
+    tableOrder_ = nullptr;
     propertyRowActive_ = false;
     focusOrder_.clear();
     focusSeen_.clear();
@@ -8628,6 +8629,7 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights,
     if (!beginTable(idText, columnWeights, columnVisible, width))
         return false;
     table_.style = style;
+    loadTableOrder(style);
     return true;
 }
 
@@ -8644,7 +8646,7 @@ int Context::tableVisibleColumnCount() const
 
 int Context::tableHoveredColumn() const
 {
-    return table_.headerHoveredColumn;
+    return tableModelColumn(table_.headerHoveredColumn);
 }
 
 bool Context::beginTable(StringView idText, Span<float> columnWeights, float width)
@@ -8671,6 +8673,7 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights, con
     if (!beginTable(idText, columnWeights, width))
         return false;
     table_.style = style;
+    loadTableOrder(style);
     return true;
 }
 
@@ -8680,7 +8683,65 @@ bool Context::beginTable(StringView idText, Span<float> columnWeights, const Tab
     if (!beginTable(idText, columnWeights, width))
         return false;
     table_.style = style;
+    loadTableOrder(style);
     return true;
+}
+
+void Context::loadTableOrder(const TableStyle &style)
+{
+    // A ordem das colunas desta tabela (colunas reordenáveis): a que ficou guardada
+    // dela, ou a identidade quando é a primeira vez (ou quando o número de colunas
+    // mudou).
+    tableOrder_ = nullptr;
+    if (!style.reorderable || table_.columns > TableOrderState::kMaxColumns)
+        return;
+    tableOrder_ = tableOrders_.find(table_.id);
+    if (!tableOrder_ || tableOrder_->count != table_.columns)
+    {
+        tableOrders_.put(table_.id, TableOrderState());
+        tableOrder_ = tableOrders_.find(table_.id);
+        if (!tableOrder_)
+            return;
+        tableOrder_->count = table_.columns;
+        for (int column = 0; column < table_.columns; ++column)
+            tableOrder_->order[column] = column;
+    }
+    // Um arrasto de coluna que deixe de ser submetido (a tabela desapareceu a meio)
+    // não pode ficar com o rato agarrado: o frame em que o arrasto foi visto diz que
+    // ele já não o foi neste.
+    if (tableOrder_->reordering && tableOrder_->reorderFrame + 1u < frameNumber_)
+    {
+        if (activeWidget_ == tableOrder_->reorderWidget)
+            activeWidget_ = InvalidWidgetId;
+        tableOrder_->reordering = false;
+        tableOrder_->reorderFrom = -1;
+        tableOrder_->reorderTo = -1;
+    }
+}
+
+int Context::tableModelColumn(int display) const
+{
+    if (!tableOrder_ || tableOrder_->count <= 0 || display < 0 || display >= tableOrder_->count)
+        return display;
+    return tableOrder_->order[display];
+}
+
+int Context::tableColumnIndex() const
+{
+    return tableModelColumn(table_.column);
+}
+
+int Context::tableColumnAtX(float x) const
+{
+    if (x < table_.bounds.x)
+        return -1;
+    for (int display = 0; display < table_.columns; ++display)
+    {
+        const float columnX = tableColumnX(display);
+        if (x < columnX + tableColumnWidth(display))
+            return display;
+    }
+    return -1;
 }
 
 float Context::tableColumnX(int column) const
@@ -8691,10 +8752,13 @@ float Context::tableColumnX(int column) const
     return x;
 }
 
-float Context::tableColumnWidth(int column) const
+float Context::tableColumnWidth(int display) const
 {
-    if (column < 0 || column >= table_.columns || table_.columns <= 0)
+    if (display < 0 || display >= table_.columns || table_.columns <= 0)
         return 0.0f;
+    // A largura (e a visibilidade) são da coluna do MODELO: é ela que anda com os
+    // dados quando a ordem muda.
+    const int column = tableModelColumn(display);
     // Uma coluna escondida não ocupa largura: as seguintes fecham o espaço dela (o
     // totalColumnWeight já não conta com ela, ver o beginTable das visíveis).
     if (!table_.columnVisible.empty() &&
@@ -8703,8 +8767,8 @@ float Context::tableColumnWidth(int column) const
         return 0.0f;
     if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
         return table_.bounds.width / static_cast<float>(table_.columns);
-    if (column + 1 == table_.columns)
-        return table_.bounds.x + table_.bounds.width - tableColumnX(column);
+    if (display + 1 == table_.columns)
+        return table_.bounds.x + table_.bounds.width - tableColumnX(display);
     return table_.bounds.width * table_.columnWeights[static_cast<ct::Vector<float>::size_type>(column)] /
            table_.totalColumnWeight;
 }
@@ -8738,9 +8802,10 @@ bool Context::tableNextColumn()
     }
     // Uma coluna escondida: o chamador salta-lhe a célula (é o contrato das tabelas
     // com colunas visíveis - ver o beginTable das visíveis).
+    const int model = tableModelColumn(table_.column);
     if (!table_.columnVisible.empty() &&
-        static_cast<ct::Vector<uint8_t>::size_type>(table_.column) < table_.columnVisible.size() &&
-        table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(table_.column)] == 0u)
+        static_cast<ct::Vector<uint8_t>::size_type>(model) < table_.columnVisible.size() &&
+        table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(model)] == 0u)
         return false;
     const float cellX = tableColumnX(table_.column);
     layout_.origin.x = cellX;
@@ -8835,6 +8900,10 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     if (resizing && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
     {
         const float deltaX = pointer_.position.x - tableResize_.lastPointerX;
+        // Os pesos são da coluna do modelo, por isso o que o grip mexe é o peso das
+        // duas colunas que ali estão - seja qual for a ordem.
+        const int leftModel = tableModelColumn(table_.column);
+        const int rightModel = tableModelColumn(table_.column + 1);
         const float leftWidth = tableColumnWidth(table_.column);
         const float rightWidth = tableColumnWidth(table_.column + 1);
         const float pairWidth = leftWidth + rightWidth;
@@ -8844,11 +8913,10 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
             const float nextLeftWidth = clamp(leftWidth + deltaX, minimumWidth, pairWidth - minimumWidth);
             const float nextRightWidth = pairWidth - nextLeftWidth;
             const float scale = table_.totalColumnWeight / table_.bounds.width;
-            const ct::Vector<float>::size_type column = static_cast<ct::Vector<float>::size_type>(table_.column);
-            table_.columnWeights[column] = nextLeftWidth * scale;
-            table_.columnWeights[column + 1u] = nextRightWidth * scale;
-            table_.resizableColumnWeights[table_.column] = table_.columnWeights[column];
-            table_.resizableColumnWeights[table_.column + 1] = table_.columnWeights[column + 1u];
+            table_.columnWeights[static_cast<ct::Vector<float>::size_type>(leftModel)] = nextLeftWidth * scale;
+            table_.columnWeights[static_cast<ct::Vector<float>::size_type>(rightModel)] = nextRightWidth * scale;
+            table_.resizableColumnWeights[leftModel] = table_.columnWeights[static_cast<ct::Vector<float>::size_type>(leftModel)];
+            table_.resizableColumnWeights[rightModel] = table_.columnWeights[static_cast<ct::Vector<float>::size_type>(rightModel)];
         }
         tableResize_.lastPointerX = pointer_.position.x;
     }
@@ -8856,6 +8924,72 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     {
         activeWidget_ = InvalidWidgetId;
         tableResize_ = TableResizeState();
+    }
+
+    // Reordenar: carregar num cabeçalho (fora do grip de resize) e largar noutro
+    // troca a coluna do modelo de sítio na ordem (é a ordem do ImGui: o que anda é a
+    // coluna, não a posição).
+    if (tableOrder_ && tableOrder_->count > 0 && !resizing)
+    {
+        const WidgetId reorderId = combineIds(id, 0x54424c524f524445ull);
+        tableOrder_->reorderWidget = reorderId;
+        // O que reordena é arrastar (é o que o ImGui faz): por isso o press fica só
+        // pendente, e um clique sem andar continua a ser o clique que ordena.
+        if (tableOrder_->reorderFrom < 0 && pointerPressedIn(intersect(bounds, clip), left) &&
+            activeWidget_ == InvalidWidgetId)
+        {
+            tableOrder_->reorderFrom = table_.column;
+            tableOrder_->reorderTo = table_.column;
+            tableOrder_->reorderStartX = pointer_.position.x;
+            tableOrder_->reorderFrame = frameNumber_;
+        }
+        if (tableOrder_->reorderFrom == table_.column && !tableOrder_->reordering)
+        {
+            const float moved = pointer_.position.x - tableOrder_->reorderStartX;
+            // Se o botão já nem está premido nem foi largado agora, o press perdeu-se
+            // (a tabela não foi submetida no frame do largar): não se fica à espera.
+            const bool stale = !pointer_.down[left] && !pointer_.released[left] &&
+                               tableOrder_->reorderFrame + 1u < frameNumber_;
+            const float threshold = 5.0f;
+            if ((pointer_.down[left] || pointer_.released[left]) &&
+                (moved > threshold || moved < -threshold))
+            {
+                tableOrder_->reordering = true;
+                tableOrder_->reorderFrame = frameNumber_;
+                activeWidget_ = reorderId;
+                focusedWidget_ = reorderId;
+            }
+            else if (pointer_.released[left] || stale)
+                tableOrder_->reorderFrom = -1;
+        }
+        if (tableOrder_->reordering && activeWidget_ == reorderId)
+        {
+            tableOrder_->reorderFrame = frameNumber_;
+            tableOrder_->reorderTo = tableColumnAtX(pointer_.position.x);
+            if (pointer_.released[left])
+            {
+                if (tableOrder_->reorderTo >= 0 && tableOrder_->reorderTo != tableOrder_->reorderFrom)
+                {
+                    // Tira a coluna de onde estava e enfia-a onde foi largada, sem
+                    // mexer no resto da ordem.
+                    const int moved = tableOrder_->order[tableOrder_->reorderFrom];
+                    if (tableOrder_->reorderFrom < tableOrder_->reorderTo)
+                        for (int i = tableOrder_->reorderFrom; i < tableOrder_->reorderTo; ++i)
+                            tableOrder_->order[i] = tableOrder_->order[i + 1];
+                    else
+                        for (int i = tableOrder_->reorderFrom; i > tableOrder_->reorderTo; --i)
+                            tableOrder_->order[i] = tableOrder_->order[i - 1];
+                    tableOrder_->order[tableOrder_->reorderTo] = moved;
+                }
+                tableOrder_->reordering = false;
+                tableOrder_->reorderFrom = -1;
+                tableOrder_->reorderTo = -1;
+                activeWidget_ = InvalidWidgetId;
+            }
+        }
+        // O cabeçalho para onde vai é o que fica realçado enquanto se arrasta.
+        if (tableOrder_->reordering && tableOrder_->reorderTo == table_.column)
+            drawList->addRect(bounds, theme_.dialogBtnPrimary, clip, 2.0f);
     }
 
     const bool sortable = sortColumn != nullptr && sortAscending != nullptr;
@@ -8873,20 +9007,23 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     }
     else if (hovered)
         table_.headerHoveredColumn = table_.column;
+    // A coluna que o chamador ordena é a do modelo: é com essa que ele indexa o
+    // próprio dado, e é ela que a ordem guarda.
+    const int modelColumn = tableModelColumn(table_.column);
     bool changed = false;
     if (clicked)
     {
-        if (*sortColumn == table_.column)
+        if (*sortColumn == modelColumn)
             *sortAscending = !*sortAscending;
         else
         {
-            *sortColumn = table_.column;
+            *sortColumn = modelColumn;
             *sortAscending = true;
         }
         changed = true;
     }
 
-    const bool sorted = sortable && *sortColumn == table_.column;
+    const bool sorted = sortable && *sortColumn == modelColumn;
     const Color background = sorted ? theme_.selectableSelected
                            : (hovered ? theme_.buttonHovered : theme_.panelColor);
     drawList->addRectFilled(bounds, background, clip);
@@ -9027,6 +9164,7 @@ void Context::endTable()
     const LayoutState parent = table_.parentLayout;
     const Rect bounds(parent.cursor.x, parent.cursor.y, table_.bounds.width, height);
     table_ = TableState();
+    tableOrder_ = nullptr;
     tableActive_ = false;
     if (!idStack_.empty())
         idStack_.pop_back();

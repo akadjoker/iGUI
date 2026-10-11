@@ -1186,10 +1186,10 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
 void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
-        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Reorderable/Borders/"
-        "RowBg/ScrollX/Y/SizingFixedFit/freeze e as tabelas aninhadas - o iGUI tem "
-        "beginTable/tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo "
-        "grip do cabecalho), ordenacao pelo cabecalho e colunas escondidas");
+        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/Borders/RowBg/"
+        "ScrollX/Y/SizingFixedFit/freeze e as tabelas aninhadas - o iGUI tem beginTable/"
+        "tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo grip do "
+        "cabecalho), ordenacao pelo cabecalho, colunas escondidas e colunas reordenaveis");
     // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
     // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
     // fecham o espaço dela). O menu é do chamador, com o openPopup.
@@ -1201,6 +1201,10 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
     ig::TableStyle style;
     style.alternateRows = true;
     style.borders = true;
+    // Reorderable: arrastar um cabeçalho muda a coluna do modelo de sítio (o
+    // tableColumnIndex diz qual desenhar em cada posição, e é com ele que as
+    // células têm de escolher o dado).
+    style.reorderable = true;
     if (ui.beginTable("table", ig::Span<const float>(weights, 3),
                       ig::Span<const bool>(g_panel.tableColumns, 3), style, tableBounds.width))
     {
@@ -1210,7 +1214,8 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             // A coluna escondida devolve false: a célula dela não é submetida.
             if (!ui.tableNextColumn())
                 continue;
-            ui.tableHeader(kColumnNames[column], g_panel.sortColumn, g_panel.sortAscending);
+            const int model = ui.tableColumnIndex();
+            ui.tableHeader(kColumnNames[model], g_panel.sortColumn, g_panel.sortAscending);
         }
         // Um clique com o botão direito num cabeçalho abre o menu das colunas (é o
         // que o tableHoveredColumn diz: qual delas está debaixo do ponteiro).
@@ -1228,9 +1233,11 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             {
                 if (!ui.tableNextColumn())
                     continue;
-                if (column == 1)
+                // O dado segue a coluna do modelo, não a posição no écra.
+                const int model = ui.tableColumnIndex();
+                if (model == 1)
                     snprintf(label, sizeof(label), "%d", row * 7);
-                else if (column == 0)
+                else if (model == 0)
                     snprintf(label, sizeof(label), "row %d", row);
                 else
                     snprintf(label, sizeof(label), "nota");

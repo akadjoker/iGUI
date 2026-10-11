@@ -2613,6 +2613,208 @@ void test_hidden_table_columns()
     assert(columnsSeen == -1);
 }
 
+// Colunas reordenáveis (o "Reorderable" do demo): arrastar um cabeçalho para outro
+// sítio troca a coluna do modelo de posição, a ordem fica guardada entre frames e o
+// tableColumnIndex() diz ao chamador que coluna desenhar em cada sítio.
+void test_reorderable_table_columns()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    // Pesos diferentes, para se ver a largura a seguir a coluna do modelo e não a
+    // posição no écra.
+    const float weights[3] = {1.0f, 2.0f, 3.0f};
+    ig::TableStyle style;
+    style.reorderable = true;
+    ig::Rect headerRects[3];
+    int seenOrder[3] = {-1, -1, -1};
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                seenOrder[i] = c.tableColumnIndex();
+                c.tableHeader(seenOrder[i] == 0 ? "A" : (seenOrder[i] == 1 ? "B" : "C"));
+                headerRects[i] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    // Sem reordenar, a posição e a coluna do modelo são a mesma.
+    assert(seenOrder[0] == 0 && seenOrder[1] == 1 && seenOrder[2] == 2);
+
+    // Arrastar o primeiro cabeçalho para cima do terceiro: a coluna A passa para a
+    // terceira posição.
+    const float fromX = headerRects[0].x + headerRects[0].width * 0.5f;
+    const float fromY = headerRects[0].y + headerRects[0].height * 0.5f;
+    const float toX = headerRects[2].x + headerRects[2].width * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(fromX, fromY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fromX, fromY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerMove(toX, fromY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, toX, fromY));
+    harness.frame(build);
+    harness.frame(build);
+
+    assert(seenOrder[0] == 1 && seenOrder[1] == 2 && seenOrder[2] == 0);
+
+    // A largura é a da coluna do modelo (a de peso 2 ficou onde estava a de peso 1),
+    // não a do sítio onde calhou.
+    assert(headerRects[1].width > headerRects[0].width);
+    assert(headerRects[0].width > headerRects[2].width);
+
+    // E a ordem sobrevive ao frame (é guardada pelo id da tabela).
+    harness.frame(build);
+    assert(seenOrder[0] == 1 && seenOrder[1] == 2 && seenOrder[2] == 0);
+
+    // Uma tabela que não é reordenável mantém a identidade mesmo ao arrastar um
+    // cabeçalho, e isso não mexe na ordem da outra.
+    ig::TableStyle plain;
+    int plainOrder[3] = {-1, -1, -1};
+    auto buildPlain = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), plain, 300.0f))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                plainOrder[i] = c.tableColumnIndex();
+                c.tableHeader("x");
+                headerRects[i] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+    harness.frame(buildPlain);
+    const float plainFromX = headerRects[0].x + headerRects[0].width * 0.5f;
+    const float plainY = headerRects[0].y + headerRects[0].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(plainFromX, plainY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, plainFromX, plainY));
+    harness.frame(buildPlain);
+    context.pushEvent(ig::Event::pointerMove(headerRects[2].x + 5.0f, plainY));
+    harness.frame(buildPlain);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerRects[2].x + 5.0f, plainY));
+    harness.frame(buildPlain);
+    assert(plainOrder[0] == 0 && plainOrder[1] == 1 && plainOrder[2] == 2);
+
+    // Arrastar não pode ter disparado um clique de ordenação na tabela reordenável:
+    // a ordem dela continua a ser a que ficou largada.
+    harness.frame(build);
+    assert(seenOrder[0] == 1 && seenOrder[1] == 2 && seenOrder[2] == 0);
+}
+
+// Com a ordem trocada, o que o chamador vê continua a ser a coluna do modelo: o
+// tableColumnIndex (o que desenhar), o tableHoveredColumn (o menu de contexto), o
+// sortColumn do tableHeader e o peso que o grip do cabeçalho mexe.
+void test_reordered_table_columns_are_model_columns()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float weights[3] = {1.0f, 1.0f, 1.0f};
+    ig::TableStyle style;
+    style.reorderable = true;
+    const ig::StringView names[3] = {ig::StringView("A"), ig::StringView("B"), ig::StringView("C")};
+    ig::Rect headerRects[3];
+    int seenOrder[3] = {-1, -1, -1};
+    int hoveredColumn = -1;
+    int sortColumn = -1;
+    bool sortAscending = true;
+
+    auto submit = [&](ig::Context &c) {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<float>(weights, 3), style, 300.0f))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                if (!c.tableNextColumn())
+                    continue;
+                seenOrder[i] = c.tableColumnIndex();
+                c.tableHeader(names[seenOrder[i]], sortColumn, sortAscending);
+                headerRects[i] = c.itemRect();
+            }
+            hoveredColumn = c.tableHoveredColumn();
+            c.endTable();
+        }
+        c.endWindow();
+    };
+    harness.frame(submit);
+    assert(seenOrder[0] == 0 && seenOrder[1] == 1 && seenOrder[2] == 2);
+
+    // Arrastar a coluna B (posição 1) para a frente: a ordem passa a B, A, C.
+    const float fromX = headerRects[1].x + headerRects[1].width * 0.5f;
+    const float y = headerRects[1].y + headerRects[1].height * 0.5f;
+    const float toX = headerRects[0].x + 5.0f;
+    context.pushEvent(ig::Event::pointerMove(fromX, y));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fromX, y));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerMove(toX, y));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, toX, y));
+    harness.frame(submit);
+    harness.frame(submit);
+    assert(seenOrder[0] == 1 && seenOrder[1] == 0 && seenOrder[2] == 2);
+
+    // O ponteiro sobre a posição 2 (a coluna C) diz que é a coluna 2 do modelo.
+    context.pushEvent(ig::Event::pointerMove(headerRects[2].x + headerRects[2].width * 0.5f,
+                                             headerRects[2].y + headerRects[2].height * 0.5f));
+    harness.frame(submit);
+    assert(hoveredColumn == 2);
+    // E sobre a posição 0 (que agora é a coluna B) diz 1.
+    context.pushEvent(ig::Event::pointerMove(headerRects[0].x + headerRects[0].width * 0.5f,
+                                             headerRects[0].y + headerRects[0].height * 0.5f));
+    harness.frame(submit);
+    assert(hoveredColumn == 1);
+
+    // Um clique no cabeçalho da posição 0 ordena a coluna 1 (a B), não a 0: um
+    // clique sem andar é um clique, não um arrasto.
+    const float clickX = headerRects[0].x + headerRects[0].width * 0.5f;
+    const float clickY = headerRects[0].y + headerRects[0].height * 0.5f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+    harness.frame(submit);
+    assert(sortColumn == 1);
+    assert(sortAscending);
+    assert(seenOrder[0] == 1 && seenOrder[1] == 0 && seenOrder[2] == 2);
+    // Um segundo clique na mesma posição inverte a ordenação da mesma coluna.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, clickX, clickY));
+    harness.frame(submit);
+    assert(sortColumn == 1 && !sortAscending);
+
+    // O grip do cabeçalho da posição 0 mexe no peso das duas colunas que ali estão
+    // (a 1 e, à direita, a 0), não no peso das posições 0 e 1.
+    const float before[3] = {weights[0], weights[1], weights[2]};
+    const float gripX = headerRects[0].x + headerRects[0].width - 1.0f;
+    context.pushEvent(ig::Event::pointerMove(gripX, clickY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, gripX, clickY));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerMove(gripX + 30.0f, clickY));
+    harness.frame(submit);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, gripX + 30.0f, clickY));
+    harness.frame(submit);
+    harness.frame(submit);
+    assert(weights[1] > before[1]);
+    assert(weights[0] < before[0]);
+    assert(weights[2] == before[2]);
+    // A ordem não mudou (o arrasto do grip não reordena nada).
+    assert(seenOrder[0] == 1 && seenOrder[1] == 0 && seenOrder[2] == 2);
+}
+
 } // namespace
 
 int main()
@@ -2655,6 +2857,8 @@ int main()
     test_own_popups();
     test_unsubmitted_popup_is_dropped();
     test_hidden_table_columns();
+    test_reorderable_table_columns();
+    test_reordered_table_columns_are_model_columns();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
