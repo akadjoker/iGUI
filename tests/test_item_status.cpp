@@ -3749,6 +3749,171 @@ void test_table_without_sideways_scroll_keeps_the_width()
 // A face em vigor dentro de um bloco, e o que volta depois dele: a face escolhida
 // leva o tamanho de fabrico dela, um id sem face não desenha, e a pilha fica como
 // estava no fim do frame mesmo que falte um pop.
+// Os botões da barra (o TabItemButton) e as bandas (Leading/Trailing): as tabs de
+// uma ponta encostam-se ao lado dos botões dessa ponta, as do meio ficam no meio, e
+// carregar num botão não escolhe tab nenhuma.
+void test_tab_item_button_and_bands()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect leadingButton, trailingButton, firstTab, secondTab, trailingTab;
+    int clicks = 0;
+    float barWidth = 0.0f;
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
+        if (c.beginTabBar("bandas", ig::Context::TabBarFlags::None))
+        {
+            // Os botões do demo: o "?" Leading (um menu) e o "+" Trailing (uma tab
+            // nova), submetidos antes das tabs.
+            if (c.tabItemButton("?", ig::Context::TabItemFlags::Leading))
+                ++clicks;
+            leadingButton = c.itemRect();
+            if (c.tabItemButton("+", ig::Context::TabItemFlags::Trailing))
+                ++clicks;
+            trailingButton = c.itemRect();
+
+            const bool one = c.beginTabItem("um");
+            firstTab = c.itemRect();
+            if (one)
+            {
+                c.dummy(40.0f, 10.0f);
+                c.endTabItem();
+            }
+            const bool two = c.beginTabItem("dois");
+            secondTab = c.itemRect();
+            if (two)
+            {
+                c.dummy(40.0f, 20.0f);
+                c.endTabItem();
+            }
+            // Uma tab com a banda Trailing: fica à direita das outras, à esquerda do
+            // botão "+" (que é a ponta).
+            const bool three = c.beginTabItem("tres", nullptr, ig::Context::TabItemFlags::Trailing);
+            trailingTab = c.itemRect();
+            if (three)
+            {
+                c.dummy(40.0f, 30.0f);
+                c.endTabItem();
+            }
+            barWidth = c.availableWidth();
+            c.endTabBar();
+        }
+        c.endWindow();
+    };
+
+    // Três frames: as posições das tabs são as do frame anterior, e as dos botões
+    // são deste (é o que os põe no sítio já no primeiro frame).
+    harness.frame(build);
+    harness.frame(build);
+    harness.frame(build);
+
+    const float barLeft = leadingButton.x; // a barra começa no primeiro botão Leading
+    // O "?" abre a faixa e as tabs do meio começam depois dele.
+    assert(leadingButton.x == barLeft);
+    assert(firstTab.x >= leadingButton.x + leadingButton.width);
+    assert(secondTab.x >= firstTab.x + firstTab.width);
+    // O "+" fica na ponta direita da barra, depois da tab Trailing.
+    assert(trailingButton.x + trailingButton.width == barLeft + barWidth);
+    assert(trailingTab.x >= secondTab.x + secondTab.width);
+    assert(trailingTab.x + trailingTab.width <= trailingButton.x);
+    // As tabs do meio e a Trailing são as mesmas linhas da barra.
+    assert(firstTab.y == secondTab.y && firstTab.y == trailingTab.y);
+    assert(firstTab.y == leadingButton.y);
+
+    // Carregar num botão devolve o clique e não escolhe tab nenhuma: quem escolhe é
+    // o chamador (é o que o "+" do demo faz, uma tab nova).
+    const float x = trailingButton.x + trailingButton.width * 0.5f;
+    const float y = trailingButton.y + trailingButton.height * 0.5f;
+    harness.click(x, y, build);
+    assert(clicks == 1);
+    // Depois do clique a barra continua com a mesma escolha (a primeira tab) e as
+    // posições não se mexeram.
+    harness.frame(build);
+    assert(clicks == 1);
+    assert(leadingButton.x == barLeft);
+    assert(trailingButton.x + trailingButton.width == barLeft + barWidth);
+}
+
+// O botão da lista de tabs (o TabListPopupButton): abre a lista das tabs da barra e
+// escolher uma é o mesmo que carregar nela.
+void test_tab_list_popup_button()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect firstTab, secondTab;
+    ig::Rect listButton;
+    int open = 0;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
+        if (c.beginTabBar("lista", ig::Context::TabBarFlags::TabListPopupButton))
+        {
+            open = 0;
+            // O botão da lista é o primeiro item da barra: logo a seguir ao
+            // beginTabBar o último item lido é a caixa dele.
+            listButton = c.itemRect();
+            // O rect da tab lê-se logo a seguir ao beginTabItem: o do conteúdo (que
+            // começa no canto da barra) é o último item enquanto ele está aberto.
+            const bool one = c.beginTabItem("um");
+            firstTab = c.itemRect();
+            if (one)
+            {
+                open = 1;
+                c.dummy(40.0f, 10.0f);
+                c.endTabItem();
+            }
+            const bool two = c.beginTabItem("dois");
+            secondTab = c.itemRect();
+            if (two)
+            {
+                open = 2;
+                c.dummy(40.0f, 20.0f);
+                c.endTabItem();
+            }
+            c.endTabBar();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(open == 1);
+    // As tabs começam depois do botão da lista, que é a largura de um item, e o
+    // botão fica no canto da barra (a margem da janela).
+    assert(firstTab.x ==
+           context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
+    assert(listButton.x == context.theme().windowPadding);
+    assert(secondTab.x >= firstTab.x + firstTab.width);
+    const size_t closedVertices = harness.vertexCount();
+
+    // O botão abre a lista: um clique no canto esquerdo da barra.
+    const float buttonX = listButton.x + listButton.width * 0.5f;
+    const float buttonY = listButton.y + listButton.height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(buttonX, buttonY));
+    harness.frame(build);
+    harness.click(buttonX, buttonY, build);
+    harness.frame(build);
+    // A lista abriu (o fundo e as duas linhas são geometria a mais) e a barra
+    // continua a desenhar as tabs onde estavam.
+    assert(harness.vertexCount() > closedVertices);
+    assert(open == 1);
+    assert(firstTab.x ==
+           context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
+
+    // Escolher a segunda tab pela lista: o popup abre por baixo do botão e cada
+    // linha é um item do tema, por isso a última (a "dois") é a segunda.
+    const float itemX = listButton.x + listButton.width * 0.5f;
+    const float itemY = listButton.y + listButton.height +
+                        context.theme().widgetHeight * 1.5f;
+    harness.click(itemX, itemY, build);
+    harness.frame(build);
+    assert(open == 2);
+}
+
 void test_push_font()
 {
     ig::TestBackend backend;
@@ -3871,6 +4036,8 @@ int main()
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
     test_push_font();
+    test_tab_item_button_and_bands();
+    test_tab_list_popup_button();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
