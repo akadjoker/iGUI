@@ -80,6 +80,18 @@ struct TreeItemStyle
           acceptsChildren(false) {}
 };
 
+// Looks of an immediate table. Every option is off by default, which draws no
+// background and no lines.
+struct TableStyle
+{
+    // Every second row gets a faint overlay of the text color.
+    bool alternateRows;
+    // Lines between rows and columns and around the table.
+    bool borders;
+
+    TableStyle() : alternateRows(false), borders(false) {}
+};
+
 // The relation selected when a tree item is dropped over another item.
 enum class TreeDropPosition : uint8_t
 {
@@ -734,7 +746,18 @@ public:
     // adjusted weights are written back to the caller and should be kept for
     // the next frame to preserve the chosen column widths.
     bool beginTable(StringView id, Span<float> columnWeights, float width = 0.0f);
+    // Styled tables. The stripes and lines of a row use the theme's minimum
+    // widget height, so a row taller than that keeps the stripe of one widget.
+    bool beginTable(StringView id, int columns, const TableStyle &style, float width = 0.0f);
+    bool beginTable(StringView id, Span<const float> columnWeights, const TableStyle &style,
+                    float width = 0.0f);
+    bool beginTable(StringView id, Span<float> columnWeights, const TableStyle &style,
+                    float width = 0.0f);
     bool tableNextColumn();
+    // Header cell without sorting: the label on the panel color with a border.
+    // It resizes with the grip like the sortable one when the table owns
+    // mutable weights. Call tableNextColumn() before each header.
+    void tableHeader(StringView label);
     // Draw a clickable header in the current table cell. sortColumn starts at
     // -1; clicking a new column selects ascending order and clicking the
     // selected column toggles sortAscending. Returns true when the sort state
@@ -944,10 +967,13 @@ private:
         ct::Vector<float> columnWeights;
         float *resizableColumnWeights;
         float totalColumnWeight;
+        TableStyle style;
+        int row;
 
         TableState()
             : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
-              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr), totalColumnWeight(0.0f) {}
+              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr), totalColumnWeight(0.0f),
+              style(), row(0) {}
     };
 
     struct TableResizeState
@@ -1292,6 +1318,8 @@ private:
     void     captureDockArrangement(const DockSpaceState &space);
     float tableColumnX(int column) const;
     float tableColumnWidth(int column) const;
+    void drawTableRowStyle();
+    bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
     bool menuItemInternal(StringView label, bool enabled, bool *checked);
     void drawWindow(WindowState &window);
     static uint32_t buttonIndex(PointerButton button);

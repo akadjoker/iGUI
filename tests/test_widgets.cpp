@@ -1287,6 +1287,94 @@ static void test_resizable_table_columns()
     context.endFrame();
 }
 
+static size_t drawStyledTable(ig::Context &context, const ig::TableStyle &style, float &endY)
+{
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    assert(context.beginWindow("styled table", ig::Rect(10.0f, 10.0f, 300.0f, 200.0f)));
+    assert(context.beginTable("rows", 2, style));
+    for (int row = 0; row < 3; ++row)
+    {
+        assert(context.tableNextColumn());
+        context.label("name");
+        assert(context.tableNextColumn());
+        context.label("value");
+    }
+    context.endTable();
+    endY = context.cursor().y;
+    context.endWindow();
+    return context.endFrame().vertices.size();
+}
+
+static void test_styled_table_draws_stripes_and_lines_without_moving_cells()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float plainY = 0.0f;
+    float styledY = 0.0f;
+    ig::TableStyle plain;
+    ig::TableStyle stripes;
+    stripes.alternateRows = true;
+    ig::TableStyle lines;
+    lines.borders = true;
+    ig::TableStyle both;
+    both.alternateRows = true;
+    both.borders = true;
+
+    const size_t base = drawStyledTable(context, plain, plainY);
+    assert(drawStyledTable(context, plain, styledY) == base);
+    assert(styledY == plainY);
+    assert(drawStyledTable(context, stripes, styledY) > base);
+    assert(styledY == plainY);
+    assert(drawStyledTable(context, lines, styledY) > base);
+    assert(styledY == plainY);
+    const size_t withBoth = drawStyledTable(context, both, styledY);
+    assert(withBoth > drawStyledTable(context, stripes, styledY));
+    assert(styledY == plainY);
+}
+
+static void drawPlainHeaderTable(ig::Context &context, float *weights)
+{
+    assert(context.beginWindow("plain header table", ig::Rect(10.0f, 10.0f, 300.0f, 160.0f)));
+    assert(context.beginTable("columns", ig::Span<float>(weights, 2u)));
+    assert(context.tableNextColumn());
+    context.tableHeader("Name");
+    assert(context.tableNextColumn());
+    context.tableHeader("Size");
+    assert(context.tableNextColumn());
+    context.label("albedo.png");
+    assert(context.tableNextColumn());
+    context.label("2 MB");
+    context.endTable();
+    context.endWindow();
+}
+
+static void test_plain_table_header_resizes_columns()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    float weights[] = {1.0f, 1.0f};
+
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawPlainHeaderTable(context, weights);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 160.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawPlainHeaderTable(context, weights);
+    context.endFrame();
+
+    context.pushEvent(ig::Event::pointerMove(190.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawPlainHeaderTable(context, weights);
+    context.endFrame();
+    assert(weights[0] > weights[1] * 1.4f);
+
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 190.0f, 60.0f));
+    context.beginFrame(ig::FrameInfo(360.0f, 240.0f));
+    drawPlainHeaderTable(context, weights);
+    context.endFrame();
+}
+
 static void test_weighted_virtual_table_layout()
 {
     WidgetBackend backend;
@@ -2920,6 +3008,8 @@ int main()
     test_weighted_table_owns_weights();
     test_sortable_table_headers();
     test_resizable_table_columns();
+    test_styled_table_draws_stripes_and_lines_without_moving_cells();
+    test_plain_table_header_resizes_columns();
     test_weighted_virtual_table_layout();
     test_virtual_list();
     test_virtual_table();
