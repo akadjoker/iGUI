@@ -256,6 +256,63 @@ void test_format_drives_display_and_parse()
 
 // O SliderAngle: o valor é em radianos, o intervalo e o texto em graus - o que se
 // arrasta e o que se escreve é em graus, e o que fica guardado é em radianos.
+// O DragFloatRange2: duas caixas (mínimo e máximo) com o rótulo no fim, e cada uma
+// limitada pela outra - arrastar o mínimo para lá do máximo não o passa.
+void test_drag_range2()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    float low = 2.0f;
+    float high = 8.0f;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.01f, 300.0f);
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    // As duas caixas e os valores delas (o formato por omissão é o %g de três
+    // dígitos, o mesmo dos drags).
+    check(drewText(data, "2"), "dragFloatRange2: a caixa do mínimo mostra o mínimo");
+    check(drewText(data, "8"), "dragFloatRange2: a caixa do máximo mostra o máximo");
+
+    // O rato apanha a caixa do mínimo (o layout começa no canto da janela) e
+    // arrasta-o para lá do máximo: fica no máximo, porque isto é uma gama.
+    harness.drag(30.0f, 20.0f, 700.0f, 20.0f, build);
+    check(low == high, "dragFloatRange2: o mínimo pára no máximo");
+    check(high == 8.0f, "dragFloatRange2: o máximo não se mexeu");
+
+    // E ao contrário: o máximo arrastado para a esquerda não passa o mínimo.
+    high = 5.0f;
+    low = 5.0f;
+    harness.drag(150.0f, 20.0f, 0.0f, 20.0f, build);
+    check(high == low, "dragFloatRange2: o máximo pára no mínimo");
+    check(low == 5.0f, "dragFloatRange2: o mínimo não se mexeu");
+
+    // A gama (0..10) também limita: o mínimo arrastado para a esquerda pára em 0.
+    low = 2.0f;
+    high = 8.0f;
+    // O arrasto vale 0.01 por pixel, por isso o rato tem de andar muito para sair
+    // da gama (é um arrasto, não um clique).
+    harness.drag(30.0f, 20.0f, -2000.0f, 20.0f, build);
+    check(low == 0.0f, "dragFloatRange2: o mínimo pára no limite da gama");
+
+    // Com o intervalo dado ao contrário (minRange >= maxRange) não há limites de
+    // gama: o mínimo sai para fora dela, mas continua a não passar o máximo.
+    high = 3.0f;
+    low = 3.0f;
+    auto unbounded = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.dragFloatRange2("range", low, high, 1.0f, 0.0f, 1.0f, 300.0f);
+        c.endWindow();
+    };
+    harness.drag(30.0f, 20.0f, -2000.0f, 20.0f, unbounded);
+    check(low < 1.0f, "dragFloatRange2: sem limites de gama o valor sai dela");
+    check(low <= high, "dragFloatRange2: mas o mínimo continua a não passar o máximo");
+}
+
 void test_slider_angle()
 {
     ig::TestBackend backend;
@@ -511,6 +568,7 @@ int main()
     test_float_typing();
     test_display_follows_value_when_not_editing();
     test_format_drives_display_and_parse();
+    test_drag_range2();
     test_slider_angle();
     test_change_reported_only_for_new_values();
     test_non_finite_values_draw_finite_geometry();
