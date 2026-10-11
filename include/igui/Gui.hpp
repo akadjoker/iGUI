@@ -1319,6 +1319,20 @@ public:
     // um float (o do ImGui é um campo de texto que faz o parse a double).
     bool inputDouble(StringView label, double &value, float width = 0.0f, int precision = 6,
                      const char *format = nullptr);
+    // O DragFloatRange2 do ImGui: o mínimo e o máximo numa só widget, duas caixas
+    // lado a lado (como os drags de N componentes) com o rótulo no fim. Cada caixa
+    // fica limitada pela outra - o que se arrasta não passa para o lado do outro -
+    // e o `format`/`formatMaximum` escrevem cada valor (o segundo, se nulo, usa o
+    // primeiro).
+    bool dragFloatRange2(StringView label, float &minimumValue, float &maximumValue,
+                         float minimumRange, float maximumRange, float speed = 0.01f,
+                         float width = 0.0f, const char *format = nullptr,
+                         const char *formatMaximum = nullptr,
+                         unsigned flags = SliderFlags::None);
+    bool dragIntRange2(StringView label, int &minimumValue, int &maximumValue, int minimumRange,
+                       int maximumRange, int speed = 1, float width = 0.0f,
+                       const char *format = nullptr, const char *formatMaximum = nullptr,
+                       unsigned flags = SliderFlags::None);
     bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
                     float speed = 0.01f, float width = 0.0f);
     bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
