@@ -3720,19 +3720,42 @@ bool Context::beginPopup(StringView idText)
     window->overlayDrawList.addRectFilled(entry.bounds, theme_.menuBg, screen);
     window->overlayDrawList.addRect(entry.bounds, theme_.menuBorder, screen);
     entry.frame = frameNumber_;
-    popupContentIndex_ = index;
     // O corpo de um popup leva a margem da janela (é o WindowPadding do popup no
     // ImGui): os itens não ficam encostados às bordas da caixa. Os menus, esses,
     // continuam com as faixas encostadas (ver beginPopupContent).
-    beginPopupContent(entry.bounds, padding, padding);
+    return beginPopupBody(index, popupContentIndex_, entry.bounds, padding, padding);
+}
+
+bool Context::beginPopupBody(int index, int outer, const Rect &bounds, float insetTop,
+                             float padding)
+{
+    const int depth = popupContentDepth_;
+    beginPopupContent(bounds, insetTop, padding);
+    if (popupContentDepth_ == depth)
+    {
+        popupContentIndex_ = outer;
+        return false;
+    }
+    PopupContentState &content = popupContents_[popupContentDepth_ - 1];
+    content.isPopup = true;
+    content.outerPopupIndex = outer;
+    popupContentIndex_ = index;
     return true;
 }
 
 void Context::endPopup()
 {
-    if (popupContentIndex_ < 0)
+    if (popupContentDepth_ == 0 || !popupContents_[popupContentDepth_ - 1].isPopup)
         return;
-    PopupEntry &entry = popups_[popupContentIndex_];
+    const int outer = popupContents_[popupContentDepth_ - 1].outerPopupIndex;
+    if (popupContentIndex_ >= 0)
+        measurePopup(popups_[popupContentIndex_]);
+    popupContentIndex_ = outer < popupDepth_ ? outer : -1;
+    endPopupContent();
+}
+
+void Context::measurePopup(PopupEntry &entry)
+{
     const float padding = theme_.windowPadding;
     float width = 0.0f;
     float height = 0.0f;
@@ -3770,8 +3793,6 @@ void Context::endPopup()
                            ? height + padding * 2.0f : entry.bounds.height);
         window->overlayDrawList.addRect(box, theme_.menuBorder, screen);
     }
-    popupContentIndex_ = -1;
-    endPopupContent();
 }
 
 void Context::closeCurrentPopup()
@@ -3830,6 +3851,8 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
     entry.modal = true;
     entry.frame = frameNumber_;
+    // O X é um item do modal: o ponteiro só lhe chega com o modal como popup atual.
+    const int outer = popupContentIndex_;
     popupContentIndex_ = index;
     modalPopupDrawList_.addRectFilled(entry.bounds, theme_.menuBg, viewport);
     modalPopupDrawList_.addRect(entry.bounds, theme_.menuBorder, viewport);
@@ -3847,7 +3870,7 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
         {
             *open = false;
             closePopupAt(index);
-            popupContentIndex_ = -1;
+            popupContentIndex_ = outer;
             return false;
         }
         if (closeHovered)
@@ -3870,11 +3893,10 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     if (escapePressed_ && index == popupDepth_ - 1)
     {
         closePopupAt(index);
-        popupContentIndex_ = -1;
+        popupContentIndex_ = outer;
         return false;
     }
-    beginPopupContent(entry.bounds, titleHeight, padding);
-    return true;
+    return beginPopupBody(index, outer, entry.bounds, titleHeight, padding);
 }
 
 void Context::beginPopupContent(const Rect &popupBounds, float insetTop, float padding)
@@ -3882,6 +3904,8 @@ void Context::beginPopupContent(const Rect &popupBounds, float insetTop, float p
     if (popupContentDepth_ >= kPopupContentStackSize)
         return;
     PopupContentState &entry = popupContents_[popupContentDepth_++];
+    entry.isPopup = false;
+    entry.outerPopupIndex = -1;
     // Guarda o layout de fora (o do pai, se este menu está dentro de outro): os
     // itens do pai continuam depois deste contentor fechar.
     entry.layout = layout_;

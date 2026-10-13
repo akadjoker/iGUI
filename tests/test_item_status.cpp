@@ -3316,6 +3316,27 @@ void test_popup_modal()
     assert(okClicks == clicksBefore + 1);
     assert(!context.isPopupOpen("Definicoes"));
     assert(!openModal);
+
+    openModal = true;
+    showModal = true;
+    context.pushEvent(ig::Event::pointerMove(bx, by));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, bx, by));
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("Definicoes"));
+    const float titleHeight = context.theme().titleBarHeight;
+    const float closeSize = titleHeight - context.theme().padding * 0.5f;
+    const float closeX = box.x + box.width - context.theme().padding * 0.25f - closeSize * 0.5f;
+    const float closeY = box.y + titleHeight * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(closeX, closeY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, closeX, closeY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, closeX, closeY));
+    harness.frame(build);
+    assert(!context.isPopupOpen("Definicoes"));
+    assert(!openModal);
 }
 
 // Os flags do openPopup: o NoOpenOverExistingPopup não abre por cima do que já lá
@@ -4371,6 +4392,89 @@ void test_hash_marker()
     assert(plainA.x == 0.0f && plainB.x == 300.0f);
 }
 
+// Um popup dentro de outro, ou um modal dentro de um popup fechado pelo Escape: o
+// endPopup de fora tem de fechar o seu corpo, e o que vem depois na janela fica no
+// layout da janela, com os popups abertos e depois de fechados.
+void test_nested_popup_restores_the_window_layout()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool openOuter = false;
+    bool openInner = false;
+    bool openModal = false;
+    bool innerIsModal = false;
+    ig::Rect after;
+
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.label("antes");
+        if (openOuter)
+        {
+            c.openPopup("fora", ig::Vec2(40.0f, 60.0f));
+            openOuter = false;
+        }
+        if (c.beginPopup("fora"))
+        {
+            c.label("conteudo de fora");
+            if (openInner)
+            {
+                c.openPopup(innerIsModal ? "modal" : "dentro", ig::Vec2(70.0f, 100.0f));
+                openInner = false;
+            }
+            if (!innerIsModal && c.beginPopup("dentro"))
+            {
+                c.label("conteudo de dentro");
+                c.endPopup();
+            }
+            if (innerIsModal && c.beginPopupModal("modal", &openModal))
+            {
+                c.label("conteudo do modal");
+                c.endPopup();
+            }
+            c.endPopup();
+        }
+        c.button("depois");
+        after = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const ig::Rect reference = after;
+    assert(reference.width > 0.0f);
+
+    openOuter = true;
+    harness.frame(build);
+    openInner = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("fora") && context.isPopupOpen("dentro"));
+    assert(after.x == reference.x && after.y == reference.y);
+    assert(after.width == reference.width && after.height == reference.height);
+
+    harness.click(380.0f, 280.0f, build);
+    harness.frame(build);
+    assert(!context.isPopupOpen("fora") && !context.isPopupOpen("dentro"));
+    assert(after.x == reference.x && after.y == reference.y);
+    assert(after.width == reference.width && after.height == reference.height);
+
+    innerIsModal = true;
+    openModal = true;
+    openOuter = true;
+    harness.frame(build);
+    openInner = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("fora") && context.isPopupOpen("modal"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("fora") && !context.isPopupOpen("modal"));
+    assert(after.x == reference.x && after.y == reference.y);
+    assert(after.width == reference.width && after.height == reference.height);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4426,6 +4530,7 @@ int main()
     test_tab_item_button_and_bands();
     test_tab_list_popup_button();
     test_stacked_popups();
+    test_nested_popup_restores_the_window_layout();
     test_menu_inside_a_popup();
     test_submenu_inside_a_popup();
     test_table_sizing_fixed_fit();
