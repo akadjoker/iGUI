@@ -183,7 +183,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
 - [x] `elapsedSeconds_` é um acumulador em float
       ([Gui.cpp:1191](../src/Gui.cpp#L1191)): em sessões longas a muitos fps deixa
       de avançar, e a partir daí qualquer segundo clique perto conta como duplo.
-- [ ] Multi-cursor: o Ctrl+X e o Ctrl+V só atuam no cursor principal e deixam os
+- [x] Multi-cursor: o Ctrl+X e o Ctrl+V só atuam no cursor principal e deixam os
       outros desatualizados
       ([CodeEditorImmediate.cpp:1326-1342](../src/CodeEditorImmediate.cpp#L1326-L1342)).
 - [ ] A lista de completion desenha 8 itens e a seleção percorre até 50
