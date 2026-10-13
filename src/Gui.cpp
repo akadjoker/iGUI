@@ -181,6 +181,13 @@ bool numericSpecIsUnsigned(char type)
     return type == 'u' || type == 'o' || type == 'x' || type == 'X';
 }
 
+// O que sai de uma especificação copiada: o comprimento é o que nós pomos, e uma
+// largura ou precisão "*" pedia um argumento que o snprintf não recebe.
+bool numericSpecDropsChar(char c)
+{
+    return c == 'l' || c == 'h' || c == 'j' || c == 'z' || c == 't' || c == '*';
+}
+
 // O formato do chamador com o comprimento da especificação forçado ao valor que
 // lhe vamos passar: um inteiro vai como long long (é o que cobre o s8..u64 todo)
 // e um real como double, que é o que a linguagem promove de qualquer forma -
@@ -188,63 +195,63 @@ bool numericSpecIsUnsigned(char type)
 // chamador tiver escrito. O desencontro entre o "%04X" que ele escreveu e o
 // valor que passa a ser é o que se evita aqui (é o mesmo que o ImGui faz antes
 // do sprintf dele).
-void sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool integer)
+//
+// Só a primeira especificação é uma conversão: qualquer outro "%" sai como um
+// por-cento escrito, porque o snprintf só recebe um valor. Devolve false quando o
+// formato não cabe em out, e aí quem chama escreve o valor no formato de sempre.
+bool sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool integer)
 {
     if (outSize == 0u)
-        return;
+        return false;
     size_t written = 0u;
+    bool converted = false;
     for (const char *at = format; *at != 0; ++at)
     {
         const char c = *at;
-        if (c == '%' && at[1] == '%')
+        const char type = c == '%' && at[1] != '%' && !converted ? numericSpecType(at) : 0;
+        if (c != '%')
         {
-            if (written + 2u < outSize)
-            {
-                out[written++] = '%';
-                out[written++] = '%';
-            }
-            else
-                break;
-            ++at;
+            if (written + 1u >= outSize)
+                return false;
+            out[written++] = c;
             continue;
         }
-        if (c == '%')
+        if (type == 0)
         {
-            const char type = numericSpecType(at);
-            if (type == 0)
-                return; // não é um formato com que se possa imprimir: quem chama decide
-            if (written + 1u < outSize)
-                out[written++] = '%';
-            const bool length = integer && numericSpecIsInteger(type);
-            for (const char *spec = at + 1; *spec != 0 && written + 1u < outSize; ++spec)
-            {
-                const char s = *spec;
-                if (s == 'l' || s == 'h' || s == 'j' || s == 'z' || s == 't')
-                    continue;
-                if (s == type)
-                {
-                    // O comprimento só entra numa conversão de inteiro: um "%llg"
-                    // não existe, e era o que saía daqui quando o valor de um drag
-                    // de int se escrevia com um "%g".
-                    if (length && written + 2u < outSize)
-                    {
-                        out[written++] = 'l';
-                        out[written++] = 'l';
-                    }
-                    out[written++] = s;
-                    break;
-                }
-                out[written++] = s;
-            }
-            // Salta o resto da especificação: já foi copiada (sem o comprimento).
-            while (*at != 0 && *at != type)
+            if (written + 2u >= outSize)
+                return false;
+            out[written++] = '%';
+            out[written++] = '%';
+            if (at[1] == '%')
                 ++at;
             continue;
         }
-        if (written + 1u < outSize)
-            out[written++] = c;
+        converted = true;
+        // O comprimento só entra numa conversão de inteiro: um "%llg" não existe, e
+        // era o que saía daqui quando o valor de um drag de int se escrevia com um
+        // "%g".
+        const bool length = integer && numericSpecIsInteger(type);
+        size_t needed = length ? 4u : 2u;
+        const char *spec = at + 1;
+        for (const char *p = spec; *p != type; ++p)
+            if (!numericSpecDropsChar(*p))
+                ++needed;
+        if (written + needed >= outSize)
+            return false;
+        out[written++] = '%';
+        for (; *spec != type; ++spec)
+            if (!numericSpecDropsChar(*spec))
+                out[written++] = *spec;
+        if (length)
+        {
+            out[written++] = 'l';
+            out[written++] = 'l';
+        }
+        out[written++] = type;
+        at = spec;
     }
     out[written] = 0;
+    return true;
 }
 
 // O valor escrito com o formato do chamador (as decorações incluídas: o
@@ -263,7 +270,8 @@ int formatNumericValue(char *out, int outSize, double value, bool integer, const
         return snprintf(out, static_cast<size_t>(outSize), "%.3f", value);
     }
     char sanitized[64];
-    sanitizeNumericFormat(sanitized, sizeof(sanitized), format, integer);
+    if (!sanitizeNumericFormat(sanitized, sizeof(sanitized), format, integer))
+        return formatNumericValue(out, outSize, value, integer, nullptr);
     if (numericSpecIsInteger(type))
     {
         // O valor de um tipo inteiro chega aqui arredondado (ver setScalarValue):

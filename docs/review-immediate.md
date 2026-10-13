@@ -35,7 +35,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
       *Arranjo:* o `beginPopup` guarda o índice que lá estava e o `endPopup`
       repõe-no (uma pilha, como a dos popups).
 
-- [ ] **2. `sanitizeNumericFormat` sai sem terminar a string** —
+- [x] **2. `sanitizeNumericFormat` sai sem terminar a string** —
       [Gui.cpp:215](../src/Gui.cpp#L215).
       Quando um `%` mais à frente não é uma conversão numérica, a função faz
       `return` sem escrever o `\0` em `out`, e o `formatNumericValue` passa esse
