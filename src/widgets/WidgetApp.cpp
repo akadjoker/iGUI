@@ -70,7 +70,7 @@ void WidgetApp::shutdown()
         delete popupClosing_;
     popupClosing_ = nullptr; popupClosingOwner_ = nullptr; popupClosingOwned_ = true;
 
-    delete pendingPopupDelete_; pendingPopupDelete_ = nullptr;
+    flushPopupDeletes();
 
     for (auto& [name, stageRoot] : stages_) {
         if (stageRoot != root_)
@@ -192,7 +192,7 @@ void WidgetApp::update(const ig::retained::IO& io)
         pendingFloatDeletes_.erase(pendingFloatDeletes_.begin());
         delete queued;
     }
-    delete pendingPopupDelete_; pendingPopupDelete_ = nullptr;
+    flushPopupDeletes();
 
     // A window state file read before the stages existed: hand the dock
     // layouts over now that the panels they name are there.
@@ -217,12 +217,7 @@ void WidgetApp::update(const ig::retained::IO& io)
             popupAnimClosing_  = false;
             // Now actually destroy
             if (popupClosing_) {
-                popupClosing_->resetPopupState();
-                notifyWidgetRemoved(popupClosing_);
-                if (popupClosingOwned_) {
-                    delete pendingPopupDelete_;
-                    pendingPopupDelete_ = popupClosing_;
-                }
+                retirePopup(popupClosing_, popupClosingOwned_);
                 popupClosing_     = nullptr;
                 popupClosingOwner_= nullptr;
                 popupClosingOwned_= true;
@@ -758,6 +753,10 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     // pointer back to its owner, which would be the memory just freed.
     if (popupOwner_ && isDescendantOf(popupOwner_, w))
     {
+        if (popup_ && popupOwned_ && !isDescendantOf(popup_, w))
+            queuePopupDelete(popup_);
+        if (popupClosing_ && popupClosingOwned_ && !isDescendantOf(popupClosing_, w))
+            queuePopupDelete(popupClosing_);
         popup_             = nullptr;
         popupOwner_        = nullptr;
         popupClosing_      = nullptr;
@@ -972,25 +971,14 @@ void WidgetApp::showPopup(Widget* popup, Widget* owner, bool owned)
 {
     // If a close animation is running, finish it immediately
     if (popupClosing_) {
-        popupClosing_->resetPopupState();
-        notifyWidgetRemoved(popupClosing_);
-        if (popupClosingOwned_) {
-            delete pendingPopupDelete_;
-            pendingPopupDelete_ = popupClosing_;
-        }
+        retirePopup(popupClosing_, popupClosingOwned_);
         popupClosing_     = nullptr;
         popupAnimClosing_ = false;
     }
 
     // Close previous popup instantly if any
-    if (popup_) {
-        popup_->resetPopupState();
-        notifyWidgetRemoved(popup_);
-        if (popupOwned_) {
-            delete pendingPopupDelete_;
-            pendingPopupDelete_ = popup_;
-        }
-    }
+    if (popup_)
+        retirePopup(popup_, popupOwned_);
 
     popup_      = popup;
     popupOwner_ = owner;
@@ -1021,6 +1009,32 @@ void WidgetApp::closePopup()
         popup_      = nullptr;
         popupOwner_ = nullptr;
         popupOwned_ = true;
+    }
+}
+
+void WidgetApp::retirePopup(Widget* popup, bool owned)
+{
+    popup->resetPopupState();
+    notifyWidgetRemoved(popup);
+    if (owned)
+        queuePopupDelete(popup);
+}
+
+void WidgetApp::queuePopupDelete(Widget* popup)
+{
+    for (Widget* queued : pendingPopupDeletes_)
+        if (queued == popup)
+            return;
+    pendingPopupDeletes_.push_back(popup);
+}
+
+void WidgetApp::flushPopupDeletes()
+{
+    while (!pendingPopupDeletes_.empty())
+    {
+        Widget* queued = pendingPopupDeletes_.front();
+        pendingPopupDeletes_.erase(pendingPopupDeletes_.begin());
+        delete queued;
     }
 }
 

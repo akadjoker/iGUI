@@ -996,6 +996,64 @@ static void test_views_let_go_of_their_models()
     shared.endInsertRows();
 }
 
+namespace
+{
+struct CountedPopup : ig::retained::Widget
+{
+    explicit CountedPopup(int* gone)
+            : gone_(gone)
+    {
+    }
+    ~CountedPopup() override
+    {
+        ++*gone_;
+    }
+    int* gone_;
+};
+
+void runFrames(ig::retained::WidgetApp& app, int frames)
+{
+    ig::retained::IO io;
+    for (int i = 0; i < frames; ++i) app.update(io);
+}
+} // namespace
+
+// A popup the manager owns is deleted once it is gone: after its close
+// animation, when another popup replaces it, and when its owner goes away.
+static void test_owned_popups_are_deleted()
+{
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
+    int gone = 0;
+
+    app.showPopup(new CountedPopup(&gone), nullptr, true);
+    app.closePopup();
+    runFrames(app, 60);
+    assert(gone == 1);
+
+    app.showPopup(new CountedPopup(&gone), nullptr, true);
+    app.showPopup(new CountedPopup(&gone), nullptr, true);
+    runFrames(app, 2);
+    assert(gone == 2);
+    app.closePopup();
+    runFrames(app, 60);
+    assert(gone == 3);
+
+    ig::retained::Widget* stage = app.addStage("popupownedowner");
+    auto* owner = stage->createChild<ig::retained::Button>("Pick");
+    app.showPopup(new CountedPopup(&gone), owner, true);
+    stage->removeChild(owner);
+    assert(app.popup() == nullptr);
+    runFrames(app, 2);
+    assert(gone == 4);
+
+    int kept = 0;
+    CountedPopup notOwned(&kept);
+    app.showPopup(&notOwned, nullptr, false);
+    app.closePopup();
+    runFrames(app, 60);
+    assert(kept == 0);
+}
+
 int main()
 {
     using namespace ig;
@@ -1024,6 +1082,7 @@ int main()
     test_dir_cache_keeps_children_when_it_grows();
     test_removing_the_stage_being_left_stops_its_transition();
     test_views_let_go_of_their_models();
+    test_owned_popups_are_deleted();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;
