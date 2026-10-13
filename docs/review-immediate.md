@@ -64,7 +64,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
 
 ## Editor de código
 
-- [ ] **4. Um clique na margem seleciona em vez de mover o cursor** —
+- [x] **4. Um clique na margem seleciona em vez de mover o cursor** —
       [CodeEditorImmediate.cpp:1531](../src/CodeEditorImmediate.cpp#L1531).
       Carregar nos números de linha ou num chevron de fold cai no ramo do arrasto:
       o cursor anda e a âncora fica onde estava.

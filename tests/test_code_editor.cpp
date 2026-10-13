@@ -226,6 +226,45 @@ static void test_replace_all_does_not_overlap()
     check(state.text() == "bb", "replaceAll ignoring case: AAAA becomes bb");
 }
 
+// Um clique nos números de linha leva o cursor para o início dessa linha e não
+// seleciona nada: escrever a seguir não substitui o texto entre o cursor antigo
+// e a margem.
+static void test_gutter_click_moves_the_cursor()
+{
+    Editor editor("line one\nline two\nline three\nline four\nline five\nline six");
+    editor.state.cursorLine = 0;
+    editor.state.cursorColumn = 5;
+    editor.state.clearSelection();
+    editor.frame();
+
+    editor.harness.click(14.0f, 60.0f, [&editor](ig::Context &c) { editor.build(c); });
+    check(!editor.state.hasSelection(), "gutter click: no selection");
+    check(editor.state.cursorColumn == 0, "gutter click: the cursor goes to the start of the line");
+    check(editor.state.cursorLine > 0, "gutter click: the cursor goes to the clicked line");
+
+    editor.type("x");
+    check(editor.state.lineCount() == 6, "gutter click: typing after it keeps every line");
+
+    // Com fold: nenhum clique simples na margem (números ou chevrons) deixa uma
+    // seleção.
+    Editor folded("int main()\n{\n    one();\n    two();\n}\n");
+    folded.state.setHighlighterForFile("main.cpp");
+    folded.frame();
+    bool selected = false;
+    for (float x = 12.0f; x < 90.0f; x += 3.0f)
+    {
+        folded.state.cursorLine = 0;
+        folded.state.cursorColumn = 5;
+        folded.state.clearSelection();
+        for (float y = 20.0f; y < 120.0f; y += 9.0f)
+        {
+            folded.harness.click(x, y, [&folded](ig::Context &c) { folded.build(c); });
+            selected = selected || folded.state.hasSelection();
+        }
+    }
+    check(!selected, "gutter click with folding: no click leaves a selection");
+}
+
 } // namespace
 
 int main()
@@ -234,6 +273,7 @@ int main()
     test_random_editing_keeps_utf8_valid();
     test_overlapping_multi_cursor_erase_does_not_abort();
     test_replace_all_does_not_overlap();
+    test_gutter_click_moves_the_cursor();
     if (gFailures != 0)
     {
         printf("test_code_editor: %d failure(s)\n", gFailures);
