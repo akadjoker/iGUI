@@ -192,7 +192,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
       ([Gui.cpp:9273](../src/Gui.cpp#L9273), também um aviso do compilador).
 - [x] O `shortcut()` não olha para `modalPopupWasOpenAtFrameStart_` e o
       `isKeyPressed()` olha ([Gui.cpp:2051](../src/Gui.cpp#L2051)).
-- [ ] A guarda de overflow do `parseNumericValue` só está certa em base 10
+- [x] A guarda de overflow do `parseNumericValue` só está certa em base 10
       ([Gui.cpp:408](../src/Gui.cpp#L408)).
 - [ ] Um valor negativo com formato sem sinal aparece como zero:
       `inputInt(-1, "%08X")` desenha "00000000" (visto numa sonda).
