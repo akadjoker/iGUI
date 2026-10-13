@@ -107,7 +107,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       e o `dragIntRange2` passam por estes overloads, por isso o `format` e o
       `formatMaximum` deles também se perdem ("Min: %.1f" desenha "2").
 
-- [ ] **8. Sem formato do chamador, o drag escreve com `%.3g`** —
+- [x] **8. Sem formato do chamador, o drag escreve com `%.3g`** —
       [Gui.cpp:5228](../src/Gui.cpp#L5228) (`dragCore`; o mesmo em
       [Gui.cpp:4975](../src/Gui.cpp#L4975)).
       O valor desenhado era `%.3f`; agora é `%.3g`, inteiros incluídos.

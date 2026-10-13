@@ -779,6 +779,46 @@ void test_layout_overloads_keep_the_format()
     check(drewText(data, "1.50") && drewText(data, "2.50"), "inputFloat2: the format");
 }
 
+// Sem formato do chamador, o drag e o slider escrevem o inteiro inteiro e o real
+// com até três casas, sem expoente; e o editor de um drag abre com esse texto,
+// por isso uma edição parte do número que lá está.
+void test_default_format_has_no_exponent()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float big = 1234.5f;
+    int count = 1500;
+    float small = -0.0001f;
+    int editable = 1234;
+    ig::Rect editableRect;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.dragFloat("big", big, 0.0f, 100000.0f, 1.0f, 300.0f);
+        c.dragInt("count", count, 0, 100000, 1, 300.0f);
+        c.sliderFloat("small", small, -1.0f, 1.0f, 300.0f);
+        c.dragInt("editable", editable, 0, 100000, 1, 300.0f);
+        editableRect = c.itemRect();
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "1234.5"), "dragFloat: 1234.5 without an exponent");
+    check(drewText(data, "1500"), "dragInt: 1500 is written as an integer");
+    check(drewText(data, "0"), "sliderFloat: a value that rounds to zero is 0, not -0");
+
+    const float x = editableRect.x + editableRect.width * 0.5f;
+    const float y = editableRect.y + editableRect.height * 0.5f;
+    harness.click(x, y, build);
+    check(drewText(harness.frame(build), "1234"), "dragInt: the editor opens with 1234");
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+    harness.frame(build);
+    context.pushEvent(ig::Event::textInput("9"));
+    harness.frame(build);
+    check(editable == 1239, "dragInt: editing starts from the number that was there");
+}
+
 int main()
 {
     test_int_typing();
@@ -796,6 +836,7 @@ int main()
     test_format_with_stray_percent_signs();
     test_scalar_values_stay_in_their_type();
     test_layout_overloads_keep_the_format();
+    test_default_format_has_no_exponent();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
