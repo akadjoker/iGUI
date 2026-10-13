@@ -146,7 +146,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
 
 ## Texto, tabs e diálogo de ficheiros
 
-- [ ] **12. `EnterReturnsTrue` devolve `true` a cada tecla** —
+- [x] **12. `EnterReturnsTrue` devolve `true` a cada tecla** —
       [Gui.cpp:6388](../src/Gui.cpp#L6388).
       O resultado do Enter é somado ao `changed`, em vez de o substituir. O header
       diz que é o `EnterReturnsTrue` do ImGui, que só devolve `true` no Enter.
