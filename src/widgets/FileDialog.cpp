@@ -881,14 +881,7 @@ void FileDialog::onMousePress(MouseEvent& e)
         bool ctrl  = io.keyCtrl;
         bool shift = io.keyShift;
 
-        // Double-click detection (simple: same index within 400ms)
-        static float lastClickTime = 0;
-        static int   lastIdx = -1;
-        float now = lastClickTime + WidgetApp::instance().deltaTime();
-        // Simple: track via frame-accumulated time
-        bool dblClick = (idx == lastIdx && (now - lastClickTime) < 0.4f);
-        lastClickTime = now;
-        lastIdx = idx;
+        bool dblClick = (e.clickCount == 2);
 
         // Selection
         if (multiSelect_ && ctrl) {
