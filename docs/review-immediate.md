@@ -135,7 +135,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       ([Gui.cpp:5136](../src/Gui.cpp#L5136)) e no `sliderAngle`. O código antigo
       em float devolvia `true` uma vez.
 
-- [ ] **11. Um intervalo invertido ou vazio faz o widget desaparecer** —
+- [x] **11. Um intervalo invertido ou vazio faz o widget desaparecer** —
       [Gui.cpp:4964](../src/Gui.cpp#L4964) (`sliderCore`; o `dragCore` na 5216).
       Com `maximum <= minimum` a função sai antes de desenhar e de registar o
       item, e o layout avança na mesma.
