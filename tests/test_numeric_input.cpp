@@ -665,6 +665,34 @@ void test_drag_allow_out_of_range()
 
 } // namespace
 
+// Um formato só tem uma conversão: um "%" que não seja a do valor sai como um
+// por-cento, e um formato que não cabe sai no texto de sempre - nunca uma string
+// sem fim nem um snprintf a ler um argumento que não lhe foi passado.
+void test_format_with_stray_percent_signs()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float percent = 50.0f;
+    int32_t pair = 7;
+    int32_t longPrefix = 7;
+    const char *longFormat =
+        "123456789012345678901234567890123456789012345678901234567890%d";
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.inputScalar("percent", ig::Context::ScalarType::Float, &percent, "%.0f%", 300.0f);
+        c.inputScalar("pair", ig::Context::ScalarType::S32, &pair, "%d/%d", 300.0f);
+        c.inputScalar("long", ig::Context::ScalarType::S32, &longPrefix, longFormat, 300.0f);
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "50%"), "format: a stray % after the value is a percent sign");
+    check(drewText(data, "7/%d"), "format: a second conversion is printed as text");
+    check(drewText(data, "7"), "format: a format that does not fit falls back to the plain value");
+}
+
 int main()
 {
     test_int_typing();
@@ -679,6 +707,7 @@ int main()
     test_non_finite_values_draw_finite_geometry();
     test_slider_flags();
     test_drag_allow_out_of_range();
+    test_format_with_stray_percent_signs();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
