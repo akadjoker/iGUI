@@ -1835,8 +1835,11 @@ private:
         LayoutState parentLayout;
         Rect rect;
         bool active;
+        // A profundidade da barra dona do conteúdo: uma barra de dentro do
+        // conteúdo tem as suas tabs, a mesma barra não abre outra antes do fim.
+        int barDepth;
 
-        TabContentState() : parentLayout(), rect(), active(false) {}
+        TabContentState() : parentLayout(), rect(), active(false), barDepth(0) {}
     };
     struct UndoState
     {
@@ -2157,6 +2160,8 @@ private:
     void measureTableCellWidth();
     // Põe a tab em x e devolve onde a próxima da mesma banda começa.
     float tabPlacePosition(TabBarState &state, WidgetId tab, float x);
+    // Há uma tab da barra de cima aberta (o seu conteúdo ainda não fechou).
+    bool tabItemOpenInCurrentBar() const;
     static const int kTabBarStackSize = 4;
     TabBarSubmitState tabBarStack_[kTabBarStackSize];
     int tabBarDepth_;

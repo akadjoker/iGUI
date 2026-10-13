@@ -2912,7 +2912,7 @@ void Context::endTabBar()
 
 bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
 {
-    if (tabBarDepth_ <= 0 || tabContentDepth_ > 0)
+    if (tabBarDepth_ <= 0 || tabItemOpenInCurrentBar())
         return false;
     TabBarSubmitState &submit = tabBarStack_[tabBarDepth_ - 1];
     TabBarState *state = tabBars_.find(submit.id);
@@ -3116,6 +3116,7 @@ bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
         return false;
     TabContentState &content = tabContent_[tabContentDepth_++];
     content.parentLayout = layout_;
+    content.barDepth = tabBarDepth_;
     const Rect contentRect(submit.row.x, submit.row.y + submit.row.height, submit.row.width,
                            clip.y + clip.height - (submit.row.y + submit.row.height));
     content.rect = intersect(contentRect, clip);
@@ -3143,13 +3144,18 @@ void Context::endTabItem()
         height = 0.0f;
     content.active = false;
     layout_ = content.parentLayout;
-    if (tabBarDepth_ > 0)
-        tabBarStack_[tabBarDepth_ - 1].contentHeight = height + theme_.itemSpacing;
+    if (content.barDepth > 0 && content.barDepth <= tabBarDepth_)
+        tabBarStack_[content.barDepth - 1].contentHeight = height + theme_.itemSpacing;
+}
+
+bool Context::tabItemOpenInCurrentBar() const
+{
+    return tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].barDepth == tabBarDepth_;
 }
 
 bool Context::tabItemButton(StringView labelText, unsigned flags)
 {
-    if (tabBarDepth_ <= 0 || tabContentDepth_ > 0)
+    if (tabBarDepth_ <= 0 || tabItemOpenInCurrentBar())
         return false;
     TabBarSubmitState &submit = tabBarStack_[tabBarDepth_ - 1];
     DrawList *drawList = currentDrawList();

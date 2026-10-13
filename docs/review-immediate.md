@@ -159,7 +159,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       "hunter2" na área de transferência. O ImGui desliga o copiar e o cortar
       nestes campos.
 
-- [ ] **14. Uma barra de tabs dentro de outra tab não mostra tabs** —
+- [x] **14. Uma barra de tabs dentro de outra tab não mostra tabs** —
       [Gui.cpp:2830](../src/Gui.cpp#L2830) (`beginTabItem`).
       A função recusa-se sempre que `tabContentDepth_ > 0`, apesar de as pilhas
       (`kTabBarStackSize = 4`) terem tamanho para aninhar.
