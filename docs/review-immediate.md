@@ -86,7 +86,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
 Quase tudo aqui veio com os quatro commits dos numéricos, e passa pelo mesmo
 caminho (`sliderCore`, `dragCore`, `numericField`).
 
-- [ ] **6. Escrever num campo float perde dígitos** —
+- [x] **6. Escrever num campo float perde dígitos** —
       [Gui.cpp:6832](../src/Gui.cpp#L6832) (`inputFloat`).
       O `numericField` guarda o double lido em `numericEditValue_`, quem chama
       estreita-o para float, e no frame seguinte a referência já não bate: o
