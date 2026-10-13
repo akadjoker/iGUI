@@ -165,6 +165,20 @@ void test_input_text_flags()
         printf("FAIL EnterReturnsTrue: o Enter não voltou como resposta\n");
     }
 
+    // Sem Enter, escrever não devolve true: quem espera pelo Enter não corre a
+    // cada tecla.
+    const char *typedKeys[] = {"a", "b", "c"};
+    bool returnedWhileTyping = false;
+    const ig::String typedText = edit("", typedKeys, 3, false, "",
+                                      ig::Context::InputTextFlags::EnterReturnsTrue,
+                                      &returnedWhileTyping);
+    expect("EnterReturnsTrue: o que se escreve entra", typedText, "abc");
+    if (returnedWhileTyping)
+    {
+        ++gFailures;
+        printf("FAIL EnterReturnsTrue: escrever sem Enter devolveu true\n");
+    }
+
     // O Tab escreve um tab dentro do campo em vez de passar o foco ao seguinte.
     const char *tabKeys[] = {"<TAB>", "X"};
     expect("AllowTabInput: o Tab entra no campo",

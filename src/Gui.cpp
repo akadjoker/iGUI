@@ -6530,13 +6530,12 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
     }
     // O Enter de um campo que o devolve é consumido aqui: quem escreveu espera pelo
     // Enter, e não pelo item seguinte a ser ativado por ele.
-    const bool enterReturns =
-        (flags & InputTextFlags::EnterReturnsTrue) != 0u && focused && enterPressed_;
+    // Com o flag, o que o campo devolve é o Enter e só ele (o isItemEdited
+    // continua a dizer quando o texto mudou).
+    const bool enterReturnsTrue = (flags & InputTextFlags::EnterReturnsTrue) != 0u;
+    const bool enterReturns = enterReturnsTrue && focused && enterPressed_;
     if (enterReturns)
-    {
         enterPressed_ = false;
-        changed = true;
-    }
 
     const Color background = focused ? theme_.buttonHovered
                                      : (hovered ? theme_.buttonHovered : theme_.buttonBackground);
@@ -6606,7 +6605,7 @@ bool Context::inputTextWithHint(StringView labelText, StringView hint, String &v
     }
     if (changed)
         item_.edited = true;
-    return changed;
+    return enterReturnsTrue ? enterReturns : changed;
 }
 
 bool Context::inputTextMultiline(StringView labelText, String &value, const Rect &bounds,
