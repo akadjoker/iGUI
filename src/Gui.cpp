@@ -489,10 +489,14 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
         if (digit < 0 || digit >= base)
             break;
         digits = true;
-        // Cresce até saturar (não há um valor maior que este para onde ir).
-        if (magnitude <= 1844674407370955161ull)
-            magnitude = magnitude * static_cast<unsigned long long>(base) +
-                        static_cast<unsigned long long>(digit);
+        // Cresce até saturar (não há um valor maior que este para onde ir), em
+        // qualquer base: o limite é o que ainda cabe depois de multiplicar e somar.
+        const unsigned long long ubase = static_cast<unsigned long long>(base);
+        const unsigned long long udigit = static_cast<unsigned long long>(digit);
+        if (magnitude > (ULLONG_MAX - udigit) / ubase)
+            magnitude = ULLONG_MAX;
+        else
+            magnitude = magnitude * ubase + udigit;
     }
     if (!digits)
         return false;

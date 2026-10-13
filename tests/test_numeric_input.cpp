@@ -1057,6 +1057,41 @@ void test_input_scalar_flags()
     check(onEnter == 42 && returns == 1, "inputScalar EnterReturnsTrue: the value enters on Enter");
 }
 
+// Um número escrito que não cabe em 64 bits fica no máximo, em qualquer base: um
+// hexadecimal de 17 dígitos e o 2^64 + 3 em decimal não dão a volta.
+void test_parse_saturates_in_every_base()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    uint64_t hex = 0u;
+    uint64_t decimal = 0u;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.inputScalar("hex", ig::Context::ScalarType::U64, &hex, "%llX", 300.0f);
+        c.inputScalar("decimal", ig::Context::ScalarType::U64, &decimal, nullptr, 300.0f);
+        c.endWindow();
+    };
+    auto typeInto = [&](float x, float y, const char *text)
+    {
+        harness.click(x, y, build);
+        for (int i = 0; i < 6; ++i)
+        {
+            context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+            harness.frame(build);
+        }
+        context.pushEvent(ig::Event::textInput(text));
+        harness.frame(build);
+    };
+    harness.frame(build);
+    typeInto(150.0f, 20.0f, "11000000000000000");
+    check(hex == UINT64_MAX, "parse: a hex number above 64 bits saturates");
+    typeInto(150.0f, 52.0f, "18446744073709551619");
+    check(decimal == UINT64_MAX, "parse: 2^64 + 3 saturates");
+}
+
 int main()
 {
     test_int_typing();
@@ -1080,6 +1115,7 @@ int main()
     test_reversed_and_empty_ranges_still_draw();
     test_float_fields_keep_what_is_typed();
     test_input_scalar_flags();
+    test_parse_saturates_in_every_base();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
