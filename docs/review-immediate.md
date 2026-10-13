@@ -23,7 +23,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
 
 ## Estado corrompido ou memória
 
-- [ ] **1. Um popup dentro de outro estraga a janela de vez** —
+- [x] **1. Um popup dentro de outro estraga a janela de vez** —
       [Gui.cpp:3733](../src/Gui.cpp#L3733) (`endPopup`).
       O `endPopup` de dentro põe `popupContentIndex_ = -1`; o de fora vê `< 0` e sai
       antes do `endPopupContent()`. Ficam por fechar o `popupContentDepth_`, a pilha

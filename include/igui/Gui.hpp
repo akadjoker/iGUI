@@ -2377,8 +2377,13 @@ private:
         LayoutState layout;
         Rect clip;
         float width;
+        bool isPopup;
+        int outerPopupIndex;
 
-        PopupContentState() : layout(), clip(), width(0.0f) {}
+        PopupContentState()
+            : layout(), clip(), width(0.0f), isPopup(false), outerPopupIndex(-1)
+        {
+        }
     };
     static const int kPopupContentStackSize = 4;
     PopupContentState popupContents_[kPopupContentStackSize];
@@ -2771,6 +2776,8 @@ private:
     // (dois menus não podem partilhar os ids dos widgets).
     void beginPopupContent(const Rect &popupBounds, float insetTop = 0.0f, float padding = 0.0f);
     void endPopupContent();
+    bool beginPopupBody(int index, int outer, const Rect &bounds, float insetTop, float padding);
+    void measurePopup(PopupEntry &entry);
     // O clip/o largo do contentor do menu em vigor (o do topo da pilha).
     Rect &popupContentClip();
     const Rect &popupContentClip() const;
