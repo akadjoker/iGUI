@@ -326,6 +326,36 @@ void test_message_box_enter_accepts()
 
 } // namespace
 
+// Um campo Password não se copia: o Ctrl+C deixa a área de transferência como
+// estava (é o que o ImGui faz), e num campo normal continua a copiar.
+void test_password_is_not_copied()
+{
+    for (int password = 0; password < 2; ++password)
+    {
+        ClipboardBackend backend;
+        backend.clipboard = "before";
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::String value("hunter2");
+        const unsigned flags = password ? ig::Context::InputTextFlags::Password
+                                        : ig::Context::InputTextFlags::None;
+        auto build = [&](ig::Context &c)
+        {
+            c.beginMainWindow("main");
+            c.inputText("text", value, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), flags);
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.click(150.0f, 24.0f, build);
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::C, true));
+        harness.frame(build);
+        if (password)
+            expect("Password: Ctrl+C does not copy", backend.clipboard, "before");
+        else
+            expect("plain field: Ctrl+C copies", backend.clipboard, "hunter2");
+    }
+}
+
 int main()
 {
     test_single_line();
@@ -333,6 +363,7 @@ int main()
     test_input_text_flags();
     test_undo_shortcut_belongs_to_focused_text_field();
     test_message_box_enter_accepts();
+    test_password_is_not_copied();
     if (gFailures != 0)
     {
         printf("test_text_editing: %d failure(s)\n", gFailures);
