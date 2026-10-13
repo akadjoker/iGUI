@@ -40,9 +40,21 @@ bool validUtf8(const ig::String &text)
     return true;
 }
 
+class ClipboardBackend : public ig::TestBackend
+{
+public:
+    ig::String clipboard;
+    bool setClipboardText(ig::StringView text) override
+    {
+        clipboard = ig::String(text.data(), text.size());
+        return true;
+    }
+    ig::String clipboardText() override { return clipboard; }
+};
+
 struct Editor
 {
-    ig::TestBackend backend;
+    ClipboardBackend backend;
     ig::Context context;
     ig::Harness harness;
     ig::CodeEditorState state;
@@ -265,6 +277,38 @@ static void test_gutter_click_moves_the_cursor()
     check(!selected, "gutter click with folding: no click leaves a selection");
 }
 
+// Com vários cursores (Ctrl+D), o Ctrl+X corta todas as seleções e o Ctrl+V cola
+// em todos os cursores, em vez de só no principal.
+static void test_cut_and_paste_at_every_cursor()
+{
+    Editor editor("foo foo");
+    editor.state.cursorLine = 0;
+    editor.state.cursorColumn = 1;
+    editor.state.clearSelection();
+    editor.state.addNextOccurrenceCursor();
+    editor.state.addNextOccurrenceCursor();
+    check(editor.state.extraCursorCount() == 1, "multi-cursor: two occurrences selected");
+    editor.key(ig::KeyCode::X, true);
+    check(editor.state.text() == " ", "multi-cursor Ctrl+X: both selections are cut");
+    check(editor.backend.clipboard == "foo\nfoo", "multi-cursor Ctrl+X: the clipboard has both");
+
+    Editor pasted("foo foo");
+    pasted.backend.clipboard = "bar";
+    pasted.state.cursorLine = 0;
+    pasted.state.cursorColumn = 1;
+    pasted.state.clearSelection();
+    pasted.state.addNextOccurrenceCursor();
+    pasted.state.addNextOccurrenceCursor();
+    pasted.key(ig::KeyCode::V, true);
+    check(pasted.state.text() == "bar bar", "multi-cursor Ctrl+V: pasted at both cursors");
+
+    Editor single("ab");
+    single.backend.clipboard = "cd";
+    single.key(ig::KeyCode::V, true);
+    single.type("x");
+    check(single.state.text() == "abcdx", "single cursor Ctrl+V: the caret ends after the paste");
+}
+
 } // namespace
 
 int main()
@@ -274,6 +318,7 @@ int main()
     test_overlapping_multi_cursor_erase_does_not_abort();
     test_replace_all_does_not_overlap();
     test_gutter_click_moves_the_cursor();
+    test_cut_and_paste_at_every_cursor();
     if (gFailures != 0)
     {
         printf("test_code_editor: %d failure(s)\n", gFailures);

@@ -1316,27 +1316,69 @@ int Context::codeEditorColumnAt(const CodeEditorState& state, int line, float lo
     return n;
 }
 
+namespace
+{
+// Every cursor's selection in document order, one per line: what Ctrl+C and
+// Ctrl+X put on the clipboard when there are extra cursors.
+String selectedTextAtAllCursors(const CodeEditorState& state)
+{
+    struct Span { int sl, sc, el, ec; };
+    ct::Vector<Span> spans;
+    if (state.hasSelection())
+    {
+        Span span;
+        state.orderedSelection(span.sl, span.sc, span.el, span.ec);
+        spans.push_back(span);
+    }
+    for (int i = 0; i < state.extraCursorCount(); ++i)
+    {
+        const CodeEditorCursor& c = state.extraCursorAt(i);
+        if (c.line == c.anchorLine && c.column == c.anchorColumn) continue;
+        const bool anchorFirst = c.anchorLine < c.line || (c.anchorLine == c.line && c.anchorColumn < c.column);
+        spans.push_back(anchorFirst ? Span{c.anchorLine, c.anchorColumn, c.line, c.column}
+                                    : Span{c.line, c.column, c.anchorLine, c.anchorColumn});
+    }
+    for (size_t i = 1; i < spans.size(); ++i)
+        for (size_t j = i; j > 0 && (spans[j].sl < spans[j - 1].sl ||
+                                     (spans[j].sl == spans[j - 1].sl && spans[j].sc < spans[j - 1].sc)); --j)
+        {
+            const Span swapped = spans[j];
+            spans[j] = spans[j - 1];
+            spans[j - 1] = swapped;
+        }
+    String text;
+    for (size_t i = 0; i < spans.size(); ++i)
+    {
+        if (i > 0) text.push_back('\n');
+        text += textBetween(state, spans[i].sl, spans[i].sc, spans[i].el, spans[i].ec);
+    }
+    return text;
+}
+} // anonymous namespace
+
 bool Context::codeEditorCopy(CodeEditorState &state)
 {
-    const String selected = state.selectedText();
+    const String selected = state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state)
+                                                          : state.selectedText();
     if (!selected.empty()) backend_.setClipboardText(selected);
     return false; // Copy never changes the buffer
 }
 
 bool Context::codeEditorCut(CodeEditorState &state)
 {
-    const String selected = state.selectedText();
+    const String selected = state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state)
+                                                          : state.selectedText();
     if (selected.empty()) return false;
     backend_.setClipboardText(selected);
-    return state.eraseSelection();
+    return state.eraseSelectionsAtAllCursors();
 }
 
 bool Context::codeEditorPaste(CodeEditorState &state)
 {
     const String clipboard = backend_.clipboardText();
     if (clipboard.empty()) return false;
-    state.eraseSelection();
-    state.insertText(state.cursorLine, state.cursorColumn, clipboard);
+    state.eraseSelectionsAtAllCursors();
+    state.insertTextAtAllCursors(clipboard);
     state.breakUndoCoalescing();
     return true;
 }
