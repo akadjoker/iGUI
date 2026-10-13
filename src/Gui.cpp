@@ -2135,6 +2135,11 @@ bool Context::shortcut(KeyCode key, bool control, bool shift) const
     // via a key this same frame (Escape) must still win that frame.
     if (activeModal_ != InvalidWidgetId || menuWasOpenAtFrameStart_ || windowBlockedByModal())
         return false;
+    // Um popup modal é dono do teclado (como no isKeyPressed); o corpo dele, esse,
+    // continua a ter os seus atalhos.
+    const bool insideModalPopup = popupContentIndex_ >= 0 && popups_[popupContentIndex_].modal;
+    if (modalPopupWasOpenAtFrameStart_ && !insideModalPopup)
+        return false;
     const uint32_t index = static_cast<uint32_t>(key);
     return index < 32u && keyPressed_[index] && keyControl_[index] == control &&
            keyShift_[index] == shift;

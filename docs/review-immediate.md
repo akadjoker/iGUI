@@ -190,7 +190,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
       ([CodeEditorImmediate.cpp:2000](../src/CodeEditorImmediate.cpp#L2000)).
 - [x] O `inputScalar` ignora o parâmetro `flags`
       ([Gui.cpp:9273](../src/Gui.cpp#L9273), também um aviso do compilador).
-- [ ] O `shortcut()` não olha para `modalPopupWasOpenAtFrameStart_` e o
+- [x] O `shortcut()` não olha para `modalPopupWasOpenAtFrameStart_` e o
       `isKeyPressed()` olha ([Gui.cpp:2051](../src/Gui.cpp#L2051)).
 - [ ] A guarda de overflow do `parseNumericValue` só está certa em base 10
       ([Gui.cpp:408](../src/Gui.cpp#L408)).

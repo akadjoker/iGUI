@@ -4648,6 +4648,45 @@ void test_clock_keeps_running_in_long_sessions()
     assert(!doubleClicked);
 }
 
+// Com um popup modal aberto, um atalho da janela de trás não dispara: o modal é
+// dono do teclado, como já era para o isKeyPressed.
+void test_shortcut_is_blocked_by_a_modal_popup()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool openModal = false;
+    bool modalShown = true;
+    bool fired = false;
+    bool firedInside = false;
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("main", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (openModal)
+        {
+            c.openPopup("Definicoes");
+            openModal = false;
+        }
+        if (c.beginPopupModal("Definicoes", &modalShown))
+        {
+            c.label("modal");
+            firedInside = firedInside || c.shortcut(ig::KeyCode::S, true, false);
+            c.endPopup();
+        }
+        fired = fired || c.shortcut(ig::KeyCode::S, true, false);
+        c.endWindow();
+    };
+    harness.frame(build);
+    openModal = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("Definicoes"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::S, true));
+    harness.frame(build);
+    assert(!fired);
+    assert(firedInside);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4699,6 +4738,7 @@ int main()
     test_nested_tab_bars();
     test_file_dialog_double_click_is_timed();
     test_clock_keeps_running_in_long_sessions();
+    test_shortcut_is_blocked_by_a_modal_popup();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
