@@ -124,7 +124,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       legenda). Só por leitura: com `"Value: %.1f"`, uma edição que mantenha o
       prefixo não se lê e é ignorada em silêncio.
 
-- [ ] **10. Sliders e drags de float devolvem `true` em todos os frames** —
+- [x] **10. Sliders e drags de float devolvem `true` em todos os frames** —
       [Gui.cpp:5080](../src/Gui.cpp#L5080).
       Compara-se o valor guardado (arredondado a float) com um double por
       arredondar, a cada frame com o botão em baixo.

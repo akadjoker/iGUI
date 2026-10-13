@@ -368,6 +368,18 @@ bool trailingTextAllowed(const String &text, String::size_type from, const char 
 // não se estranha. A base é a do formato (um "%04X" lê-se em hexadecimal) e o
 // número é dos que o C escreve por extenso: nada de "nan", "inf" nem do
 // hexadecimal com vírgula flutuante, que o sscanf aceitaria.
+// O valor que um float guarda: é com ele que se compara, senão um valor por
+// arredondar parecia mudar a cada frame. Um double finito acima do maior float
+// fica no maior float (o cast seria indefinido).
+double roundedToFloat(double value)
+{
+    if (value > FLT_MAX && value <= DBL_MAX)
+        return FLT_MAX;
+    if (value < -FLT_MAX && value >= -DBL_MAX)
+        return -FLT_MAX;
+    return static_cast<double>(static_cast<float>(value));
+}
+
 // Quantos caracteres do início do texto são o prefixo literal do formato (o
 // "0 < " de "0 < %.3f < 1", com o "%%" a valer um por-cento), ou 0 quando o texto
 // não começa por ele inteiro.
@@ -5093,14 +5105,16 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
     const bool trackHovered = itemHovered(grab, clip, trackId);
     double dragged = clampDouble(value, minimum, maximum);
+    const bool singlePrecision = !integer && !doublePrecision;
     const bool sliderChanged = sliderValue(grab, clip, trackId, dragged, minimum, maximum, false,
-                                           flags);
+                                           flags, integer, singlePrecision);
     // O editor de valor que o slider desenha à parte não pode ser o item que
     // isItemHovered devolve (ver keepItemStatus).
     const ItemStatus trackStatus = item_;
     bool changed = false;
     if (sliderChanged)
-        changed = setScalarValue(value, dragged, minimum, maximum, integer);
+        changed = setScalarValue(value, dragged, minimum, maximum, integer, true,
+                                 singlePrecision);
     const double normalized =
         clampDouble(sliderNormDouble(clampDouble(value, minimum, maximum), minimum, maximum,
                                      sliderLogarithmic(static_cast<float>(minimum),
@@ -5138,7 +5152,8 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
         popId();
         if (textChanged)
             changed = setScalarValue(value, field, minimum, maximum, integer,
-                                     (flags & SliderFlags::AllowOutOfRange) == 0u) ||
+                                     (flags & SliderFlags::AllowOutOfRange) == 0u,
+                                     singlePrecision) ||
                       changed;
     }
     keepItemStatus(trackStatus, rect);
@@ -5149,7 +5164,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
 // é inteiro e limita ao intervalo quando lhe dizem para limitar (o slider limita
 // sempre; o campo de texto só quando o AllowOutOfRange não está posto).
 bool Context::setScalarValue(double &value, double next, double minimum, double maximum,
-                             bool integer, bool clampToRange)
+                             bool integer, bool clampToRange, bool singlePrecision)
 {
     if (integer)
     {
@@ -5162,7 +5177,9 @@ bool Context::setScalarValue(double &value, double next, double minimum, double 
         value = limited;
         return changed;
     }
-    const double limited = clampToRange ? clampDouble(next, minimum, maximum) : next;
+    double limited = clampToRange ? clampDouble(next, minimum, maximum) : next;
+    if (singlePrecision)
+        limited = roundedToFloat(limited);
     const bool changed = limited != value;
     value = limited;
     return changed;
@@ -5232,7 +5249,8 @@ bool Context::vSliderImpl(StringView labelText, float &value, float minimum, flo
     const bool hovered = itemHovered(rect, clip, id);
     double dragged = static_cast<double>(value);
     const bool changed = sliderValue(rect, clip, id, dragged, static_cast<double>(minimum),
-                                     static_cast<double>(maximum), true);
+                                     static_cast<double>(maximum), true, SliderFlags::None,
+                                     false, true);
     value = static_cast<float>(dragged);
     // O item é a faixa: o texto do valor e o rótulo são desenho, não sub-itens.
     const ItemStatus trackStatus = item_;
@@ -5310,6 +5328,7 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
                        double speed, bool integer, bool doublePrecision, const Rect &bounds,
                        unsigned flags, const char *format)
 {
+    const bool singlePrecision = !integer && !doublePrecision;
     WindowState *window = currentWindow();
     if (!window || maximum <= minimum || speed <= 0.0)
         return false;
@@ -5382,10 +5401,14 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
             {
                 const double limited = clampDouble(next, minimum, maximum);
                 next = wrapSliderValueDouble(limited, value, minimum, maximum);
-                changed = setScalarValue(value, next, minimum, maximum, integer, false) || changed;
+                changed = setScalarValue(value, next, minimum, maximum, integer, false,
+                                         singlePrecision) ||
+                          changed;
             }
             else
-                changed = setScalarValue(value, next, minimum, maximum, integer) || changed;
+                changed = setScalarValue(value, next, minimum, maximum, integer, true,
+                                         singlePrecision) ||
+                          changed;
         }
         if (pointer_.released[left])
         {
@@ -5411,7 +5434,8 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
             if (parseNumericValue(edit->text, parsed, integer, !integer && !doublePrecision,
                                   valueFormat))
                 changed = setScalarValue(value, parsed, minimum, maximum, integer,
-                                         (flags & SliderFlags::AllowOutOfRange) == 0u) ||
+                                         (flags & SliderFlags::AllowOutOfRange) == 0u,
+                                         singlePrecision) ||
                           changed;
         }
         if (enterPressed_)
@@ -13047,7 +13071,7 @@ void Context::advanceFocus()
 
 bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                           double &value, double minimum, double maximum, bool vertical,
-                          unsigned flags)
+                          unsigned flags, bool integer, bool singlePrecision)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f || maximum <= minimum)
         return false;
@@ -13097,6 +13121,11 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
         double nextValue = sliderValueFromNormDouble(normalized, minimum, maximum, logarithmic);
         if ((flags & SliderFlags::WrapAround) != 0u)
             nextValue = wrapSliderValueDouble(nextValue, value, minimum, maximum);
+        // O valor que o chamador vai guardar: um ponteiro parado não é uma mudança.
+        if (integer)
+            nextValue = nextValue < 0.0 ? -floor(-nextValue + 0.5) : floor(nextValue + 0.5);
+        else if (singlePrecision)
+            nextValue = roundedToFloat(nextValue);
         changed = nextValue != value;
         value = nextValue;
     }
