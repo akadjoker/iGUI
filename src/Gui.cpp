@@ -254,6 +254,38 @@ bool sanitizeNumericFormat(char *out, size_t outSize, const char *format, bool i
     return true;
 }
 
+// O double de trabalho limitado ao tipo antes do cast: fora do intervalo, o cast
+// é comportamento indefinido (um u64 no fim da pista guardava 0). Os máximos de
+// 64 bits não cabem num double - o 2^63 e o 2^64 que lá ficam já estão fora -,
+// por isso esses dois comparam com a potência e escrevem o máximo à mão.
+template <typename T>
+T scalarClampedTo(double value, double minimum, double maximum)
+{
+    if (value != value)
+        return T(0);
+    return static_cast<T>(value < minimum ? minimum : (value > maximum ? maximum : value));
+}
+
+int64_t scalarClampedToS64(double value)
+{
+    if (value != value)
+        return 0;
+    if (value >= 9223372036854775808.0)
+        return INT64_MAX;
+    if (value <= -9223372036854775808.0)
+        return INT64_MIN;
+    return static_cast<int64_t>(value);
+}
+
+uint64_t scalarClampedToU64(double value)
+{
+    if (value != value || value <= 0.0)
+        return 0u;
+    if (value >= 18446744073709551616.0)
+        return UINT64_MAX;
+    return static_cast<uint64_t>(value);
+}
+
 // O valor escrito com o formato do chamador (as decorações incluídas: o
 // "%.10f grams" sai com o " grams"). Sem formato - ou com um que não mostre o
 // valor - sai no formato de sempre.
@@ -276,16 +308,12 @@ int formatNumericValue(char *out, int outSize, double value, bool integer, const
     {
         // O valor de um tipo inteiro chega aqui arredondado (ver setScalarValue):
         // passa-se como long long, que é o que o sanitizeNumericFormat pôs na
-        // especificação. Um valor maior do que cabe fica no limite.
-        const double limited = clampDouble(value, -9223372036854775807.0, 9223372036854775807.0);
+        // especificação. Um valor maior do que cabe fica no limite do tipo.
         if (numericSpecIsUnsigned(type))
-        {
-            const double positive = limited < 0.0 ? 0.0 : limited;
             return snprintf(out, static_cast<size_t>(outSize), sanitized,
-                            static_cast<unsigned long long>(positive));
-        }
+                            static_cast<unsigned long long>(scalarClampedToU64(value)));
         return snprintf(out, static_cast<size_t>(outSize), sanitized,
-                        static_cast<long long>(limited));
+                        static_cast<long long>(scalarClampedToS64(value)));
     }
     return snprintf(out, static_cast<size_t>(outSize), sanitized, value);
 }
@@ -6185,30 +6213,36 @@ void scalarFromDouble(Context::ScalarType type, void *data, double value)
     switch (type)
     {
     case Context::ScalarType::S8:
-        *static_cast<int8_t *>(data) = static_cast<int8_t>(value);
+        *static_cast<int8_t *>(data) = scalarClampedTo<int8_t>(value, INT8_MIN, INT8_MAX);
         return;
     case Context::ScalarType::U8:
-        *static_cast<uint8_t *>(data) = static_cast<uint8_t>(value < 0.0 ? 0.0 : value);
+        *static_cast<uint8_t *>(data) = scalarClampedTo<uint8_t>(value, 0.0, UINT8_MAX);
         return;
     case Context::ScalarType::S16:
-        *static_cast<int16_t *>(data) = static_cast<int16_t>(value);
+        *static_cast<int16_t *>(data) = scalarClampedTo<int16_t>(value, INT16_MIN, INT16_MAX);
         return;
     case Context::ScalarType::U16:
-        *static_cast<uint16_t *>(data) = static_cast<uint16_t>(value < 0.0 ? 0.0 : value);
+        *static_cast<uint16_t *>(data) = scalarClampedTo<uint16_t>(value, 0.0, UINT16_MAX);
         return;
     case Context::ScalarType::S32:
-        *static_cast<int32_t *>(data) = static_cast<int32_t>(value);
+        *static_cast<int32_t *>(data) = scalarClampedTo<int32_t>(value, INT32_MIN, INT32_MAX);
         return;
     case Context::ScalarType::U32:
-        *static_cast<uint32_t *>(data) = static_cast<uint32_t>(value < 0.0 ? 0.0 : value);
+        *static_cast<uint32_t *>(data) = scalarClampedTo<uint32_t>(value, 0.0, UINT32_MAX);
         return;
     case Context::ScalarType::S64:
-        *static_cast<int64_t *>(data) = static_cast<int64_t>(value);
+        *static_cast<int64_t *>(data) = scalarClampedToS64(value);
         return;
     case Context::ScalarType::U64:
-        *static_cast<uint64_t *>(data) = static_cast<uint64_t>(value < 0.0 ? 0.0 : value);
+        *static_cast<uint64_t *>(data) = scalarClampedToU64(value);
         return;
     case Context::ScalarType::Float:
+        // Um double finito acima do maior float também não tem cast definido; o
+        // infinito, esse, tem.
+        if (value > FLT_MAX && value <= DBL_MAX)
+            value = FLT_MAX;
+        else if (value < -FLT_MAX && value >= -DBL_MAX)
+            value = -FLT_MAX;
         *static_cast<float *>(data) = static_cast<float>(value);
         return;
     case Context::ScalarType::Double:

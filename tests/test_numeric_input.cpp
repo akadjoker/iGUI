@@ -5,6 +5,7 @@
 #include "InteractionHarness.hpp"
 
 #include <limits.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -693,6 +694,58 @@ void test_format_with_stray_percent_signs()
     check(drewText(data, "7"), "format: a format that does not fit falls back to the plain value");
 }
 
+// O valor de trabalho é um double; o que fica guardado tem de caber no tipo. Um
+// slider de u64 ou de s64 arrastado até ao fim guarda o máximo do tipo, um s8
+// escrito à mão com "300" guarda 127, e os extremos de 64 bits escrevem-se certos.
+void test_scalar_values_stay_in_their_type()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    uint64_t u64 = 0u;
+    const uint64_t u64Min = 0u;
+    const uint64_t u64Max = UINT64_MAX;
+    int64_t s64 = 0;
+    const int64_t s64Min = INT64_MIN;
+    const int64_t s64Max = INT64_MAX;
+    int8_t s8 = 0;
+    uint64_t bigU64 = 13835058055282163712ull;
+    int64_t bigS64 = INT64_MAX;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderScalar("u64", ig::Context::ScalarType::U64, &u64, &u64Min, &u64Max, nullptr,
+                       300.0f);
+        c.sliderScalar("s64", ig::Context::ScalarType::S64, &s64, &s64Min, &s64Max, nullptr,
+                       300.0f);
+        c.inputScalar("s8", ig::Context::ScalarType::S8, &s8, nullptr, 300.0f);
+        c.inputScalar("big u64", ig::Context::ScalarType::U64, &bigU64, nullptr, 300.0f);
+        c.inputScalar("big s64", ig::Context::ScalarType::S64, &bigS64, nullptr, 300.0f);
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "13835058055282163712"), "u64 above 2^63 is written unsigned");
+    check(drewText(data, "9223372036854775807"), "INT64_MAX is written as itself");
+
+    harness.drag(60.0f, 20.0f, 4000.0f, 20.0f, build);
+    check(u64 == UINT64_MAX, "sliderScalar u64 at the end of the track stores UINT64_MAX");
+    harness.drag(60.0f, 52.0f, 4000.0f, 52.0f, build);
+    check(s64 == INT64_MAX, "sliderScalar s64 at the end of the track stores INT64_MAX");
+
+    harness.click(150.0f, 84.0f, build);
+    for (int i = 0; i < 20; ++i)
+    {
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+        harness.frame(build);
+    }
+    context.pushEvent(ig::Event::textInput("300"));
+    harness.frame(build);
+    check(s8 == 127, "inputScalar s8: 300 is limited to 127");
+    check(bigU64 == 13835058055282163712ull && bigS64 == INT64_MAX,
+          "values that were not edited are not written back");
+}
+
 int main()
 {
     test_int_typing();
@@ -708,6 +761,7 @@ int main()
     test_slider_flags();
     test_drag_allow_out_of_range();
     test_format_with_stray_percent_signs();
+    test_scalar_values_stay_in_their_type();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
