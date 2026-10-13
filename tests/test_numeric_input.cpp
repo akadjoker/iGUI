@@ -746,6 +746,39 @@ void test_scalar_values_stay_in_their_type()
           "values that were not edited are not written back");
 }
 
+// Os overloads de layout passam o formato ao widget: o "%.1f grams" do slider,
+// o "%04X" do inputInt, o "Min:"/"Max:" do dragFloatRange2 e o formato dos
+// inputFloat2 aparecem no ecrã.
+void test_layout_overloads_keep_the_format()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float grams = 0.5f;
+    int hex = 255;
+    float low = 2.0f;
+    float high = 8.0f;
+    float px = 1.5f;
+    float py = 2.5f;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderFloat("sf", grams, 0.0f, 1.0f, 300.0f, 0u, "%.1f grams");
+        c.inputInt("ii", hex, 300.0f, "%04X");
+        c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.1f, 300.0f, "Min: %.1f",
+                          "Max: %.1f");
+        c.inputFloat2("pair", px, py, 300.0f, 3, "%.2f");
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "0.5 grams"), "sliderFloat (width): the format reaches the slider");
+    check(drewText(data, "00FF"), "inputInt (width): the format reaches the field");
+    check(drewText(data, "Min: 2.0"), "dragFloatRange2: the minimum format");
+    check(drewText(data, "Max: 8.0"), "dragFloatRange2: the maximum format");
+    check(drewText(data, "1.50") && drewText(data, "2.50"), "inputFloat2: the format");
+}
+
 int main()
 {
     test_int_typing();
@@ -762,6 +795,7 @@ int main()
     test_drag_allow_out_of_range();
     test_format_with_stray_percent_signs();
     test_scalar_values_stay_in_their_type();
+    test_layout_overloads_keep_the_format();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

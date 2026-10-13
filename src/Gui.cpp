@@ -8739,7 +8739,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     const bool changed = sliderFloat(labelText, value, minimum, maximum,
                                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                           bounds.width, bounds.height),
-                                     flags);
+                                     flags, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -8755,7 +8755,7 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
                                    Rect(bounds.x - layout_.origin.x,
                                         bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height),
-                                   flags);
+                                   flags, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -8786,7 +8786,7 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
     const bool changed = dragFloat(labelText, value, minimum, maximum, speed,
                                    Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                         bounds.width, bounds.height),
-                                   flags);
+                                   flags, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -8801,7 +8801,7 @@ bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum
     const bool changed = dragInt(labelText, value, minimum, maximum, speed,
                                  Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y,
                                       bounds.width, bounds.height),
-                                 flags);
+                                 flags, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -9078,9 +9078,9 @@ bool Context::inputInt2(StringView labelText, int &x, int &y, float width, const
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputInt("x", x, cell);
+    bool changed = inputInt("x", x, cell, format);
     sameLine();
-    changed = inputInt("y", y, cell) || changed;
+    changed = inputInt("y", y, cell, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9094,11 +9094,11 @@ bool Context::inputInt3(StringView labelText, int &x, int &y, int &z, float widt
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputInt("x", x, cell);
+    bool changed = inputInt("x", x, cell, format);
     sameLine();
-    changed = inputInt("y", y, cell) || changed;
+    changed = inputInt("y", y, cell, format) || changed;
     sameLine();
-    changed = inputInt("z", z, cell) || changed;
+    changed = inputInt("z", z, cell, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9113,13 +9113,13 @@ bool Context::inputInt4(StringView labelText, int &x, int &y, int &z, int &w, fl
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputInt("x", x, cell);
+    bool changed = inputInt("x", x, cell, format);
     sameLine();
-    changed = inputInt("y", y, cell) || changed;
+    changed = inputInt("y", y, cell, format) || changed;
     sameLine();
-    changed = inputInt("z", z, cell) || changed;
+    changed = inputInt("z", z, cell, format) || changed;
     sameLine();
-    changed = inputInt("w", w, cell) || changed;
+    changed = inputInt("w", w, cell, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9135,7 +9135,7 @@ bool Context::inputDouble(StringView labelText, double &value, float width, int 
                                      Rect(bounds.x - layout_.origin.x,
                                           bounds.y - layout_.origin.y, bounds.width,
                                           bounds.height),
-                                     precision);
+                                     precision, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -9165,9 +9165,9 @@ bool Context::inputFloat2(StringView labelText, float &x, float &y, float width,
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputFloat("x", x, cell, precision);
+    bool changed = inputFloat("x", x, cell, precision, format);
     sameLine();
-    changed = inputFloat("y", y, cell, precision) || changed;
+    changed = inputFloat("y", y, cell, precision, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9182,11 +9182,11 @@ bool Context::inputFloat3(StringView labelText, float &x, float &y, float &z, fl
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputFloat("x", x, cell, precision);
+    bool changed = inputFloat("x", x, cell, precision, format);
     sameLine();
-    changed = inputFloat("y", y, cell, precision) || changed;
+    changed = inputFloat("y", y, cell, precision, format) || changed;
     sameLine();
-    changed = inputFloat("z", z, cell, precision) || changed;
+    changed = inputFloat("z", z, cell, precision, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9201,13 +9201,13 @@ bool Context::inputFloat4(StringView labelText, float &x, float &y, float &z, fl
     if (cell <= 0.0f)
         return false;
     pushId(labelText);
-    bool changed = inputFloat("x", x, cell, precision);
+    bool changed = inputFloat("x", x, cell, precision, format);
     sameLine();
-    changed = inputFloat("y", y, cell, precision) || changed;
+    changed = inputFloat("y", y, cell, precision, format) || changed;
     sameLine();
-    changed = inputFloat("z", z, cell, precision) || changed;
+    changed = inputFloat("z", z, cell, precision, format) || changed;
     sameLine();
-    changed = inputFloat("w", w, cell, precision) || changed;
+    changed = inputFloat("w", w, cell, precision, format) || changed;
     popId();
     if (changed)
         item_.edited = true;
@@ -9401,7 +9401,7 @@ bool Context::inputInt(StringView labelText, int &value, float width, const char
     const bool changed = inputInt(labelText, value,
                                   Rect(bounds.x - layout_.origin.x,
                                        bounds.y - layout_.origin.y,
-                                       bounds.width, bounds.height));
+                                       bounds.width, bounds.height), format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
@@ -9416,7 +9416,7 @@ bool Context::inputFloat(StringView labelText, float &value, float width, int pr
     const bool changed = inputFloat(labelText, value,
                                     Rect(bounds.x - layout_.origin.x,
                                          bounds.y - layout_.origin.y,
-                                         bounds.width, bounds.height), precision);
+                                         bounds.width, bounds.height), precision, format);
     advanceLayout(bounds);
     if (changed)
         item_.edited = true;
