@@ -1502,6 +1502,25 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         }
     }
 
+    // Clicking a line number moves the cursor to the start of that line. It does
+    // not start a selection: the drag below only follows a press that landed in
+    // the text.
+    const Rect numberGutterRect(rect.x, rect.y, gutterWidth - foldGutterWidth, rect.height);
+    if (focused && numberGutterRect.width > 0.0f &&
+        pointerPressedIn(intersect(numberGutterRect, clip), leftButton))
+    {
+        const Vec2 local = pointer_.pressedPosition[leftButton];
+        int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
+        if (row < 0) row = 0;
+        if (row >= visibleLineCount) row = visibleLineCount - 1;
+        state.cursorLine = logicalLine(row);
+        state.cursorColumn = 0;
+        state.clearSelection();
+        state.clearExtraCursors();
+        state.breakUndoCoalescing();
+        state.completion.visible = false;
+    }
+
     // Clicking inside the text area places the cursor at that (line, column)
     // and starts a drag-to-select: while the button stays down (dragging ==
     // activeWidget_ == id), every subsequent frame's pointer position - even
@@ -1528,7 +1547,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         state.breakUndoCoalescing();
         state.completion.visible = false;
     }
-    else if (focused && activeWidget_ == id && pointer_.down[leftButton])
+    else if (focused && activeWidget_ == id && pointer_.down[leftButton] &&
+             contains(intersect(textArea, clip), pointer_.pressedPosition[leftButton]))
     {
         // Dragging: move the cursor to follow the pointer, clamped inside
         // textArea, while leaving the anchor set by the press above alone.
