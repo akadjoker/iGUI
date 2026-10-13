@@ -207,6 +207,25 @@ static void test_overlapping_multi_cursor_erase_does_not_abort()
     assert(state.text().empty());
 }
 
+// Substituir em texto simples apanha ocorrências que não se sobrepõem, e cada
+// uma é a do texto original: "aaaa" com "aa" por "b" dá "bb".
+static void test_replace_all_does_not_overlap()
+{
+    ig::CodeEditorState state;
+    state.setText("aaaa");
+    const int replaced = state.replaceAll("aa", "b", true, false);
+    check(replaced == 2, "replaceAll: aaaa has two aa");
+    check(state.text() == "bb", "replaceAll: aaaa becomes bb");
+
+    state.setText("x----y");
+    state.replaceAll("--", "+", true, false);
+    check(state.text() == "x++y", "replaceAll: x----y becomes x++y");
+
+    state.setText("AAAA");
+    state.replaceAll("aa", "b", false, false);
+    check(state.text() == "bb", "replaceAll ignoring case: AAAA becomes bb");
+}
+
 } // namespace
 
 int main()
@@ -214,6 +233,7 @@ int main()
     test_caret_and_erase_by_code_point();
     test_random_editing_keeps_utf8_valid();
     test_overlapping_multi_cursor_erase_does_not_abort();
+    test_replace_all_does_not_overlap();
     if (gFailures != 0)
     {
         printf("test_code_editor: %d failure(s)\n", gFailures);

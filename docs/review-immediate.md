@@ -72,7 +72,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
       âncora (1,17), seleção ativa. Escrever uma letra substituiu a seleção e o
       texto passou de 9 linhas para 4.
 
-- [ ] **5. `replaceAll` em texto simples apanha ocorrências sobrepostas** —
+- [x] **5. `replaceAll` em texto simples apanha ocorrências sobrepostas** —
       [CodeEditorImmediate.cpp:346](../src/CodeEditorImmediate.cpp#L346).
       A procura avança um byte (`pos = found + 1`), e cada substituição é aplicada
       sobre texto que a anterior já mudou.
