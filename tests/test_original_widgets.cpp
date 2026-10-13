@@ -944,6 +944,58 @@ static void test_removing_the_stage_being_left_stops_its_transition()
     assert(data.passes.size() == 1u);
 }
 
+// A view and its model can go away in either order: the view must not stay
+// connected to a model it left, and must not reach a model that is gone.
+static void test_views_let_go_of_their_models()
+{
+    using namespace ig::retained;
+
+    ListModel shared(2);
+    auto* grid = new DataGrid();
+    grid->setModel(&shared);
+    assert(!shared.rowsInserted.empty());
+    delete grid;
+    assert(shared.modelReset.empty() && shared.rowsInserted.empty() && shared.rowsRemoved.empty() &&
+            shared.dataChanged.empty() && shared.layoutChanged.empty());
+    shared.endInsertRows();
+
+    ListModel other(2);
+    DataGrid switched;
+    switched.setModel(&shared);
+    switched.setModel(&other);
+    assert(shared.rowsInserted.empty());
+    assert(!other.rowsInserted.empty());
+
+    DataGrid outlives;
+    {
+        ListModel shortLived(2);
+        outlives.setModel(&shortLived);
+    }
+    assert(outlives.model() == nullptr);
+
+    TreeModel tree(1);
+    auto* view = new TreeView();
+    view->setModel(&tree);
+    assert(!tree.modelReset.empty());
+    delete view;
+    assert(tree.modelReset.empty() && tree.rowsInserted.empty() && tree.dataChanged.empty());
+    tree.endResetModel();
+
+    TreeView treeOutlives;
+    {
+        TreeModel shortLived(1);
+        treeOutlives.setModel(&shortLived);
+    }
+    assert(treeOutlives.model() == nullptr);
+
+    {
+        SortFilterProxyModel proxy(&shared);
+        assert(!shared.rowsInserted.empty());
+    }
+    assert(shared.rowsInserted.empty());
+    shared.endInsertRows();
+}
+
 int main()
 {
     using namespace ig;
@@ -971,6 +1023,7 @@ int main()
     test_a_toolbar_item_can_remove_itself_when_clicked();
     test_dir_cache_keeps_children_when_it_grows();
     test_removing_the_stage_being_left_stops_its_transition();
+    test_views_let_go_of_their_models();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

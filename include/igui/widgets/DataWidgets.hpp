@@ -21,6 +21,7 @@ public:
     enum class SortOrder { None, Ascending, Descending };
 
     DataGrid();
+    ~DataGrid() override;
 
     /// @brief Add a column with name, width and sortability.
     int  addColumn(const String& name, float width, bool sortable = true);
@@ -158,6 +159,8 @@ private:
 
     // Model/View
     AbstractItemModel* model_ = nullptr;
+    AbstractItemModel::Connections modelSlots_;
+    void detachModel();
 
     // Model data accessors (use model if set, otherwise internal rows_)
     int   modelRowCount() const;
