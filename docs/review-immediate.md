@@ -180,7 +180,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
 
 Vistos de passagem e não corridos (a não ser onde se diz):
 
-- [ ] `elapsedSeconds_` é um acumulador em float
+- [x] `elapsedSeconds_` é um acumulador em float
       ([Gui.cpp:1191](../src/Gui.cpp#L1191)): em sessões longas a muitos fps deixa
       de avançar, e a partir daí qualquer segundo clique perto conta como duplo.
 - [ ] Multi-cursor: o Ctrl+X e o Ctrl+V só atuam no cursor principal e deixam os

@@ -1154,7 +1154,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(),
       activeWidget_(InvalidWidgetId), activeWidgetAtFrameStart_(InvalidWidgetId),
       styleColorDepth_(0), styleVarDepth_(0), fontDepth_(0), activeWidgetEdited_(false),
-      hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0f), disabledDepth_(0u),
+      hotWidget_(InvalidWidgetId), elapsedSeconds_(0.0), disabledDepth_(0u),
       faderGrabOffset_(0.0f), lastItemId_(InvalidWidgetId), item_(),
       pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId),
@@ -1186,7 +1186,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), tableOrder_(nullptr), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
       dragStartValue_(0.0f), dragStartX_(0.0f), dragStartNorm_(0.0f), tooltipDelay_(0.45f),
-      lastPressSeconds_{0.0f, 0.0f, 0.0f}, lastPressPosition_{Vec2(), Vec2(), Vec2()},
+      lastPressSeconds_{0.0, 0.0, 0.0}, lastPressPosition_{Vec2(), Vec2(), Vec2()},
       doubleClicked_{false, false, false}, doubleClickInterval_(0.30f), doubleClickDistance_(6.0f),
       hoverDelay_(0.45f), hoverDelayWidget_(InvalidWidgetId), hoverSeconds_(0.0f),
       hoverStationarySeconds_(0.0f), hoverStartPosition_(), tooltipHoverSeconds_(0.0f),
@@ -1273,7 +1273,7 @@ void Context::beginFrame(const FrameInfo &frame)
 {
     frame_ = frame;
     ++frameNumber_;
-    elapsedSeconds_ += frame.deltaSeconds > 0.0f ? frame.deltaSeconds : 0.0f;
+    elapsedSeconds_ += frame.deltaSeconds > 0.0f ? static_cast<double>(frame.deltaSeconds) : 0.0;
     pointer_.wheelX = 0.0f;
     pointer_.wheelY = 0.0f;
     pointer_.wheelControl = false;
@@ -7842,7 +7842,7 @@ void Context::progressBar(float value, float maximum, const Rect &bounds, String
         // Indeterminada: uma faixa de 20% da largura entra pela esquerda e sai
         // pela direita com o tempo do contexto, metade da volta por segundo.
         const float band = 0.2f;
-        float start = fmodf(elapsedSeconds_ * 0.5f, 1.0f) * (1.0f + band) - band;
+        float start = static_cast<float>(fmod(elapsedSeconds_ * 0.5, 1.0)) * (1.0f + band) - band;
         float end = start + band;
         start = clamp(start, 0.0f, 1.0f);
         end = clamp(end, 0.0f, 1.0f);
@@ -12142,18 +12142,18 @@ void Context::consumeEvents()
             // Duplo clique: outra carregada do mesmo botão, perto no tempo e no
             // espaço desta. Depois de um duplo a contagem recomeça, para um triplo
             // não valer como dois.
-            const float sinceLast = elapsedSeconds_ - lastPressSeconds_[index];
+            const double sinceLast = elapsedSeconds_ - lastPressSeconds_[index];
             const float dx = event.position.x - lastPressPosition_[index].x;
             const float dy = event.position.y - lastPressPosition_[index].y;
             const bool near = dx * dx + dy * dy <= doubleClickDistance_ * doubleClickDistance_;
-            if (lastPressSeconds_[index] > 0.0f && sinceLast <= doubleClickInterval_ && near)
+            if (lastPressSeconds_[index] > 0.0 && sinceLast <= doubleClickInterval_ && near)
             {
                 doubleClicked_[index] = true;
-                lastPressSeconds_[index] = 0.0f;
+                lastPressSeconds_[index] = 0.0;
             }
             else
             {
-                lastPressSeconds_[index] = elapsedSeconds_ > 0.0f ? elapsedSeconds_ : 0.0001f;
+                lastPressSeconds_[index] = elapsedSeconds_ > 0.0 ? elapsedSeconds_ : 0.0001;
                 lastPressPosition_[index] = event.position;
             }
             break;

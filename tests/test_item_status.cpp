@@ -4616,6 +4616,38 @@ void test_file_dialog_double_click_is_timed()
     }
 }
 
+// O relógio do Context não pára numa sessão longa: com o relógio já alto, dois
+// cliques a um segundo um do outro não são um duplo clique.
+void test_clock_keeps_running_in_long_sessions()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    bool doubleClicked = false;
+    auto frame = [&](float seconds)
+    {
+        context.beginFrame(ig::FrameInfo(640.0f, 480.0f, 1.0f, seconds));
+        context.beginMainWindow("main");
+        context.button("press", ig::Rect(10.0f, 10.0f, 100.0f, 30.0f));
+        doubleClicked = doubleClicked || context.isPointerDoubleClicked();
+        context.endWindow();
+        context.endFrame();
+    };
+    auto click = [&]()
+    {
+        context.pushEvent(ig::Event::pointerMove(40.0f, 24.0f));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 40.0f, 24.0f));
+        frame(1.0f / 60.0f);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 40.0f, 24.0f));
+        frame(1.0f / 60.0f);
+    };
+    frame(1000000.0f);
+    click();
+    for (int i = 0; i < 60; ++i)
+        frame(1.0f / 60.0f);
+    click();
+    assert(!doubleClicked);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4666,6 +4698,7 @@ int main()
     test_tabs_with_content();
     test_nested_tab_bars();
     test_file_dialog_double_click_is_timed();
+    test_clock_keeps_running_in_long_sessions();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
