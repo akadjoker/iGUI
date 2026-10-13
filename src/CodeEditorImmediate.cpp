@@ -343,7 +343,7 @@ ct::Vector<FindMatch> collectMatches(const CodeEditorState& state, const String&
             }
             if (found == String::npos) break;
             matches.push_back({line, static_cast<int>(found), static_cast<int>(pattern.size())});
-            pos = found + 1;
+            pos = found + pattern.size();
         }
     }
     return matches;
