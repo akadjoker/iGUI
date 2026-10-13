@@ -1128,6 +1128,7 @@ void Context::updateCodeCompletion(CodeEditorState& state, const CodeEditorOptio
 
     completion.items = items;
     completion.selected = 0;
+    completion.firstVisible = 0;
     completion.line = state.cursorLine;
     completion.wordStart = start;
     completion.wordEnd = end;
@@ -2059,11 +2060,17 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             const float popupX = textArea.x + padding +
                 codeEditorColumnX(state, state.completion.line, state.completion.wordStart, options.tabSize, fontSize);
             const float popupY = textArea.y + padding + static_cast<float>(cursorRow - state.scrollLine + 1) * lineHeight;
-            const int shown = static_cast<int>(state.completion.items.size()) < 8
-                ? static_cast<int>(state.completion.items.size()) : 8;
+            const int count = static_cast<int>(state.completion.items.size());
+            const int shown = count < 8 ? count : 8;
+            // The popup scrolls just enough to keep the selection in view.
+            int& first = state.completion.firstVisible;
+            if (state.completion.selected < first) first = state.completion.selected;
+            if (state.completion.selected >= first + shown) first = state.completion.selected - shown + 1;
+            if (first > count - shown) first = count - shown;
+            if (first < 0) first = 0;
             const float popupHeight = static_cast<float>(shown) * lineHeight + padding * 2.0f;
             float popupWidth = 0.0f;
-            for (int i = 0; i < shown; ++i)
+            for (int i = first; i < first + shown; ++i)
             {
                 const TextMetrics itemMetrics = measureText(theme_.font, state.completion.items[static_cast<size_t>(i)], fontSize);
                 if (itemMetrics.width > popupWidth) popupWidth = itemMetrics.width;
@@ -2071,9 +2078,9 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             popupWidth += padding * 2.0f;
             const Rect popupRect(popupX, popupY, popupWidth, popupHeight);
             drawList->addRectFilled(popupRect, theme_.sliderBackground, clip);
-            for (int i = 0; i < shown; ++i)
+            for (int i = first; i < first + shown; ++i)
             {
-                const float itemY = popupY + padding + static_cast<float>(i) * lineHeight;
+                const float itemY = popupY + padding + static_cast<float>(i - first) * lineHeight;
                 if (i == state.completion.selected)
                     drawList->addRectFilled(Rect(popupX, itemY, popupWidth, lineHeight), theme_.buttonHovered, clip);
                 drawText(*drawList, theme_.font, state.completion.items[static_cast<size_t>(i)],

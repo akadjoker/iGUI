@@ -186,7 +186,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
 - [x] Multi-cursor: o Ctrl+X e o Ctrl+V só atuam no cursor principal e deixam os
       outros desatualizados
       ([CodeEditorImmediate.cpp:1326-1342](../src/CodeEditorImmediate.cpp#L1326-L1342)).
-- [ ] A lista de completion desenha 8 itens e a seleção percorre até 50
+- [x] A lista de completion desenha 8 itens e a seleção percorre até 50
       ([CodeEditorImmediate.cpp:2000](../src/CodeEditorImmediate.cpp#L2000)).
 - [ ] O `inputScalar` ignora o parâmetro `flags`
       ([Gui.cpp:9273](../src/Gui.cpp#L9273), também um aviso do compilador).
