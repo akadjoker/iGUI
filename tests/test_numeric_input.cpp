@@ -967,6 +967,52 @@ void test_reversed_and_empty_ranges_still_draw()
     check(reversed == 50, "sliderScalar reversed: the left end is the minimum given (50)");
 }
 
+// O que se escreve num campo de float fica: a referência do campo é o valor que
+// o float guarda, por isso o texto escrito não é trocado pelo valor reformatado
+// a meio ("0.10" não volta a "0.1" e o "5" não vai para o fim).
+void test_float_fields_keep_what_is_typed()
+{
+    {
+        Field f(true, 0.0f);
+        f.clear();
+        f.type("0.105");
+        check(f.floatValue == 0.105f, "inputFloat: 0.105 is stored as typed");
+    }
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    float scalar = 0.0f;
+    float slider = 0.0f;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.inputScalar("scalar", ig::Context::ScalarType::Float, &scalar, nullptr, 300.0f);
+        c.sliderFloat("slider", slider, 0.0f, 1.0f, ig::Rect(10.0f, 40.0f, 300.0f, 28.0f));
+        c.endWindow();
+    };
+    auto typeInto = [&](float x, float y, const char *text)
+    {
+        harness.click(x, y, build);
+        for (int i = 0; i < 20; ++i)
+        {
+            context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+            harness.frame(build);
+        }
+        for (const char *p = text; *p; ++p)
+        {
+            const char one[2] = {*p, 0};
+            context.pushEvent(ig::Event::textInput(one));
+            harness.frame(build);
+        }
+    };
+    harness.frame(build);
+    typeInto(150.0f, 20.0f, "1.15");
+    check(scalar == 1.15f, "inputScalar float: 1.15 is stored as typed");
+    typeInto(290.0f, 54.0f, "0.105");
+    check(slider == 0.105f, "sliderFloat value field: 0.105 is stored as typed");
+}
+
 int main()
 {
     test_int_typing();
@@ -988,6 +1034,7 @@ int main()
     test_parse_skips_the_format_prefix();
     test_held_pointer_reports_one_change();
     test_reversed_and_empty_ranges_still_draw();
+    test_float_fields_keep_what_is_typed();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

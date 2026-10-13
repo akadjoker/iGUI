@@ -6931,8 +6931,11 @@ bool Context::numericField(StringView labelText, double &value, bool integer,
         parsed != value;
     if (changed)
         value = parsed;
+    // A referência é o valor que o chamador vai guardar: um float guarda o double
+    // arredondado, e sem isto o frame seguinte já não batia com ela e o texto
+    // escrito era trocado pelo valor reformatado a meio da escrita.
     if (numericEditId_ == makeWidgetId(labelText))
-        numericEditValue_ = value;
+        numericEditValue_ = singlePrecision ? roundedToFloat(value) : value;
     if (changed)
         item_.edited = true;
     return changed;
