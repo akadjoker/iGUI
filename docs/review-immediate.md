@@ -96,7 +96,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       texto volta a "0.1" e o "5" vai para o fim). `inputScalar(Float)` com "1.15"
       guarda 1.1005. O campo de valor do `sliderFloat` tem o mesmo caminho.
 
-- [ ] **7. Treze overloads de layout recebem `format` e não o passam** —
+- [x] **7. Treze overloads de layout recebem `format` e não o passam** —
       [Gui.cpp:8673](../src/Gui.cpp#L8673).
       `sliderFloat`, `sliderInt`, `dragFloat`, `dragInt`, `inputInt`, `inputFloat`,
       `inputDouble`, `inputInt2/3/4`, `inputFloat2/3/4`. O GCC avisa
