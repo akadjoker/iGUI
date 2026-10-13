@@ -1013,6 +1013,50 @@ void test_float_fields_keep_what_is_typed()
     check(slider == 0.105f, "sliderFloat value field: 0.105 is stored as typed");
 }
 
+// O inputScalar respeita os flags do campo de texto: ReadOnly não deixa
+// escrever, e com EnterReturnsTrue o valor só entra (e o widget só devolve true)
+// com o Enter.
+void test_input_scalar_flags()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int32_t locked = 7;
+    int32_t onEnter = 7;
+    int returns = 0;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.inputScalar("locked", ig::Context::ScalarType::S32, &locked, nullptr, 300.0f,
+                      ig::Context::InputTextFlags::ReadOnly);
+        if (c.inputScalar("enter", ig::Context::ScalarType::S32, &onEnter, nullptr, 300.0f,
+                          ig::Context::InputTextFlags::EnterReturnsTrue))
+            ++returns;
+        c.endWindow();
+    };
+    auto typeInto = [&](float x, float y, const char *text)
+    {
+        harness.click(x, y, build);
+        for (int i = 0; i < 6; ++i)
+        {
+            context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+            harness.frame(build);
+        }
+        context.pushEvent(ig::Event::textInput(text));
+        harness.frame(build);
+    };
+    harness.frame(build);
+    typeInto(150.0f, 20.0f, "42");
+    check(locked == 7, "inputScalar ReadOnly: typing does not change the value");
+
+    typeInto(150.0f, 52.0f, "42");
+    check(onEnter == 7 && returns == 0, "inputScalar EnterReturnsTrue: nothing before Enter");
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+    harness.frame(build);
+    check(onEnter == 42 && returns == 1, "inputScalar EnterReturnsTrue: the value enters on Enter");
+}
+
 int main()
 {
     test_int_typing();
@@ -1035,6 +1079,7 @@ int main()
     test_held_pointer_reports_one_change();
     test_reversed_and_empty_ranges_still_draw();
     test_float_fields_keep_what_is_typed();
+    test_input_scalar_flags();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

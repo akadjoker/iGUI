@@ -6897,7 +6897,8 @@ bool parseDoubleText(const String &text, double &result)
 
 } // namespace
 
-bool Context::editNumericText(StringView labelText, String &text, double value, const Rect &bounds)
+bool Context::editNumericText(StringView labelText, String &text, double value, const Rect &bounds,
+                              unsigned flags)
 {
     const WidgetId id = makeWidgetId(labelText);
     // Resume the user's text unless the application changed the value since;
@@ -6906,7 +6907,7 @@ bool Context::editNumericText(StringView labelText, String &text, double value, 
         text = numericEditText_;
     else if (numericEditId_ == id && textInputWidget_ == id)
         textCursor_ = text.size();
-    const bool edited = inputText(labelText, text, bounds);
+    const bool edited = inputText(labelText, text, bounds, flags);
     if (focusedWidget_ == id)
     {
         numericEditId_ = id;
@@ -6922,7 +6923,8 @@ bool Context::editNumericText(StringView labelText, String &text, double value, 
 }
 
 bool Context::numericField(StringView labelText, double &value, bool integer,
-                           bool singlePrecision, const Rect &bounds, const char *format)
+                           bool singlePrecision, const Rect &bounds, const char *format,
+                           unsigned flags)
 {
     char buffer[64];
     formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer, format);
@@ -6930,7 +6932,7 @@ bool Context::numericField(StringView labelText, double &value, bool integer,
     // O valor é o que o campo tinha quando o texto foi escrito: é o que faz o
     // campo mostrar o que o utilizador escreveu enquanto o escreve, e o valor novo
     // quando a aplicação o muda por fora (ver editNumericText).
-    const bool edited = editNumericText(labelText, text, value, bounds);
+    const bool edited = editNumericText(labelText, text, value, bounds, flags);
     double parsed = value;
     const bool changed =
         edited && parseNumericValue(text, parsed, integer, singlePrecision, format) &&
@@ -9435,7 +9437,7 @@ bool Context::inputScalar(StringView labelText, ScalarType type, void *data, con
         numericField(labelText, working, scalarTypeIsInteger(type), type == ScalarType::Float,
                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
                           bounds.height),
-                     format ? format : scalarDefaultFormat(type));
+                     format ? format : scalarDefaultFormat(type), flags);
     if (working != scalarToDouble(type, data))
         scalarFromDouble(type, data, working);
     advanceLayout(bounds);

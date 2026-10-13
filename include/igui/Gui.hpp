@@ -2712,12 +2712,13 @@ private:
     // inputText for a numeric field: keeps the typed text across frames while
     // the field is focused (see numericEditId_). Returns whether the text was
     // edited this frame; text holds what to parse.
-    bool editNumericText(StringView label, String &text, double value, const Rect &bounds);
+    bool editNumericText(StringView label, String &text, double value, const Rect &bounds,
+                         unsigned flags = 0u);
     // O campo de texto de um número: o texto sai do formato (formatNumericValue) e
     // volta a número por ele (parseNumericValue). É o que faz um campo "%.10f
     // grams" ter a legenda à frente e um "%04X" aceitar hexadecimal à entrada.
     bool numericField(StringView label, double &value, bool integer, bool doublePrecision,
-                      const Rect &bounds, const char *format);
+                      const Rect &bounds, const char *format, unsigned flags = 0u);
     // This frame's editing keys and typed text applied to the focused text
     // field's buffer at cursor (a byte offset kept on a UTF-8 code point
     // boundary). Every text field (inputText, inputTextMultiline, the
