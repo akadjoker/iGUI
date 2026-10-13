@@ -42,6 +42,25 @@ bool drewText(const ig::DrawData &data, const char *expected)
     return false;
 }
 
+// Quantas vezes a widget desenhou este texto no frame.
+int countText(const ig::DrawData &data, const char *expected)
+{
+    int count = 0;
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
+            continue;
+        const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+        if (drawn == ig::StringView(expected))
+            ++count;
+    }
+    return count;
+}
+
 struct Field
 {
     ig::TestBackend backend;
@@ -913,6 +932,41 @@ void test_held_pointer_reports_one_change()
     release(150.0f, 264.0f);
 }
 
+// Um intervalo ao contrário ou vazio não faz o widget desaparecer: o slider
+// "s32 reverse" do demo desenha-se e anda ao contrário, e um dragFloatRange2 com
+// as duas pontas iguais desenha as duas caixas.
+void test_reversed_and_empty_ranges_still_draw()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int32_t reversed = 25;
+    const int32_t fifty = 50;
+    const int32_t zero = 0;
+    float low = 0.0f;
+    float high = 0.0f;
+    float stuck = 3.0f;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.sliderScalar("rev", ig::Context::ScalarType::S32, &reversed, &fifty, &zero, nullptr,
+                       300.0f);
+        c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.1f, 300.0f);
+        c.sliderFloat("same", stuck, 5.0f, 5.0f, 300.0f);
+        c.endWindow();
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "25"), "sliderScalar with a reversed range is drawn");
+    check(countText(data, "0") >= 2, "dragFloatRange2 with both ends at 0 draws both boxes");
+    check(drewText(data, "same"), "sliderFloat with an empty range is drawn");
+
+    harness.drag(60.0f, 20.0f, 4000.0f, 20.0f, build);
+    check(reversed == 0, "sliderScalar reversed: the right end is the maximum given (0)");
+    harness.drag(60.0f, 20.0f, -4000.0f, 20.0f, build);
+    check(reversed == 50, "sliderScalar reversed: the left end is the minimum given (50)");
+}
+
 int main()
 {
     test_int_typing();
@@ -933,6 +987,7 @@ int main()
     test_default_format_has_no_exponent();
     test_parse_skips_the_format_prefix();
     test_held_pointer_reports_one_change();
+    test_reversed_and_empty_ranges_still_draw();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

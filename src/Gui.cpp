@@ -5070,8 +5070,13 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
                          const char *format)
 {
     WindowState *window = currentWindow();
-    if (!window || maximum <= minimum)
+    if (!window)
         return false;
+    // Um intervalo dado ao contrário (o "slider s32 reverse" do demo) fica com o
+    // mínimo dado à esquerda; os limites para limitar o valor são os ordenados. Um
+    // intervalo vazio desenha-se na mesma, com o valor preso a ele.
+    const double low = minimum < maximum ? minimum : maximum;
+    const double high = minimum < maximum ? maximum : minimum;
 
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
@@ -5104,7 +5109,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     // sliderValue só faz o teste do ponteiro) e é ele que dá o realce.
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
     const bool trackHovered = itemHovered(grab, clip, trackId);
-    double dragged = clampDouble(value, minimum, maximum);
+    double dragged = clampDouble(value, low, high);
     const bool singlePrecision = !integer && !doublePrecision;
     const bool sliderChanged = sliderValue(grab, clip, trackId, dragged, minimum, maximum, false,
                                            flags, integer, singlePrecision);
@@ -5113,10 +5118,12 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     const ItemStatus trackStatus = item_;
     bool changed = false;
     if (sliderChanged)
-        changed = setScalarValue(value, dragged, minimum, maximum, integer, true,
+        changed = setScalarValue(value, dragged, low, high, integer, true,
                                  singlePrecision);
     const double normalized =
-        clampDouble(sliderNormDouble(clampDouble(value, minimum, maximum), minimum, maximum,
+        minimum == maximum
+            ? 0.0
+            : clampDouble(sliderNormDouble(clampDouble(value, low, high), minimum, maximum,
                                      sliderLogarithmic(static_cast<float>(minimum),
                                                        static_cast<float>(maximum), flags)),
                     0.0, 1.0);
@@ -5151,7 +5158,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
                                    valueFormat);
         popId();
         if (textChanged)
-            changed = setScalarValue(value, field, minimum, maximum, integer,
+            changed = setScalarValue(value, field, low, high, integer,
                                      (flags & SliderFlags::AllowOutOfRange) == 0u,
                                      singlePrecision) ||
                       changed;
@@ -5235,7 +5242,7 @@ bool Context::vSliderImpl(StringView labelText, float &value, float minimum, flo
                           const Rect &bounds, int precision)
 {
     WindowState *window = currentWindow();
-    if (!window || maximum <= minimum)
+    if (!window)
         return false;
 
     const WidgetId id = makeWidgetId(labelText);
@@ -5254,7 +5261,8 @@ bool Context::vSliderImpl(StringView labelText, float &value, float minimum, flo
     value = static_cast<float>(dragged);
     // O item é a faixa: o texto do valor e o rótulo são desenho, não sub-itens.
     const ItemStatus trackStatus = item_;
-    const float normalized = clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
+    const float normalized =
+        minimum == maximum ? 0.0f : clamp((value - minimum) / (maximum - minimum), 0.0f, 1.0f);
 
     char number[48];
     if (precision < 0)
@@ -5330,8 +5338,16 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
 {
     const bool singlePrecision = !integer && !doublePrecision;
     WindowState *window = currentWindow();
-    if (!window || maximum <= minimum || speed <= 0.0)
+    if (!window || speed <= 0.0)
         return false;
+    // O arrasto não tem direção na caixa: um intervalo ao contrário é o mesmo
+    // intervalo, e um vazio prende o valor (o widget desenha-se na mesma).
+    if (maximum < minimum)
+    {
+        const double swapped = minimum;
+        minimum = maximum;
+        maximum = swapped;
+    }
 
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
@@ -13073,7 +13089,7 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                           double &value, double minimum, double maximum, bool vertical,
                           unsigned flags, bool integer, bool singlePrecision)
 {
-    if (rect.width <= 0.0f || rect.height <= 0.0f || maximum <= minimum)
+    if (rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
     // O item atualiza-se à mão: este caminho não passa pelo itemClicked (faz o
     // teste do ponteiro ele mesmo), e sem isto isItemActive/isItemClicked
@@ -13118,9 +13134,14 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                                     : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f));
         const bool logarithmic = sliderLogarithmic(static_cast<float>(minimum),
                                                    static_cast<float>(maximum), flags);
-        double nextValue = sliderValueFromNormDouble(normalized, minimum, maximum, logarithmic);
+        double nextValue = minimum == maximum
+                               ? minimum
+                               : sliderValueFromNormDouble(normalized, minimum, maximum,
+                                                           logarithmic);
         if ((flags & SliderFlags::WrapAround) != 0u)
-            nextValue = wrapSliderValueDouble(nextValue, value, minimum, maximum);
+            nextValue = wrapSliderValueDouble(nextValue, value,
+                                              minimum < maximum ? minimum : maximum,
+                                              minimum < maximum ? maximum : minimum);
         // O valor que o chamador vai guardar: um ponteiro parado não é uma mudança.
         if (integer)
             nextValue = nextValue < 0.0 ? -floor(-nextValue + 0.5) : floor(nextValue + 0.5);
