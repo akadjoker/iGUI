@@ -838,6 +838,81 @@ void test_parse_skips_the_format_prefix()
     }
 }
 
+// Com o botão em baixo e o ponteiro parado, um slider ou um drag só muda uma vez:
+// o valor guardado num float (ou num int) já é o do ponteiro, e não volta a contar
+// como mudança a cada frame (nem o isItemEdited fica ligado).
+void test_held_pointer_reports_one_change()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float slider = 0.0f;
+    float drag = 0.0f;
+    float vertical = 0.0f;
+    int sliderInt = 0;
+    int sliderChanges = 0;
+    int dragChanges = 0;
+    int verticalChanges = 0;
+    int intChanges = 0;
+    int edited = 0;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        if (c.sliderFloat("sf", slider, 0.0f, 100.0f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f)))
+            ++sliderChanges;
+        if (c.isItemEdited())
+            ++edited;
+        if (c.dragFloat("df", drag, 0.0f, 100.0f, 0.37f, ig::Rect(10.0f, 50.0f, 300.0f, 28.0f)))
+            ++dragChanges;
+        if (c.vSliderFloat("vs", vertical, 0.0f, 100.0f, ig::Rect(10.0f, 90.0f, 30.0f, 150.0f)))
+            ++verticalChanges;
+        if (c.sliderInt("si", sliderInt, 0, 100, ig::Rect(10.0f, 250.0f, 300.0f, 28.0f)))
+            ++intChanges;
+        if (c.isItemEdited())
+            ++edited;
+        c.endWindow();
+    };
+    auto hold = [&](float x, float y, bool move)
+    {
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        harness.frame(build);
+        if (move)
+        {
+            context.pushEvent(ig::Event::pointerMove(x + 10.0f, y));
+            harness.frame(build);
+        }
+        for (int i = 0; i < 6; ++i)
+            harness.frame(build);
+    };
+    auto release = [&](float x, float y)
+    {
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+        harness.frame(build);
+    };
+
+    harness.frame(build);
+    hold(150.0f, 24.0f, false);
+    check(sliderChanges == 1, "sliderFloat: a held pointer changes the value once");
+    check(edited == 1, "sliderFloat: isItemEdited is not on in every frame");
+    release(150.0f, 24.0f);
+
+    hold(150.0f, 64.0f, true);
+    check(dragChanges == 1, "dragFloat: a held pointer after one move changes the value once");
+    release(160.0f, 64.0f);
+
+    hold(25.0f, 160.0f, false);
+    check(verticalChanges == 1, "vSliderFloat: a held pointer changes the value once");
+    release(25.0f, 160.0f);
+
+    edited = 0;
+    hold(150.0f, 264.0f, false);
+    check(intChanges == 1, "sliderInt: a held pointer changes the value once");
+    check(edited == 1, "sliderInt: isItemEdited is not on in every frame");
+    release(150.0f, 264.0f);
+}
+
 int main()
 {
     test_int_typing();
@@ -857,6 +932,7 @@ int main()
     test_layout_overloads_keep_the_format();
     test_default_format_has_no_exponent();
     test_parse_skips_the_format_prefix();
+    test_held_pointer_reports_one_change();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

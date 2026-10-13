@@ -2662,7 +2662,8 @@ private:
     void setItemHoverRect(const Rect &bounds);
     bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
                      double &value, double minimum, double maximum,
-                     bool vertical = false, unsigned flags = SliderFlags::None);
+                     bool vertical = false, unsigned flags = SliderFlags::None,
+                     bool integer = false, bool singlePrecision = false);
     // O slider e o drag com o tipo por dentro (ver o comentário em Gui.cpp).
     bool sliderCore(StringView label, double &value, double minimum, double maximum, bool integer,
                     bool doublePrecision, const Rect &bounds, unsigned flags,
@@ -2673,7 +2674,7 @@ private:
     // Põe o valor que veio do ponteiro ou do campo de texto: arredonda quando o
     // tipo é inteiro e limita ao intervalo quando lhe dizem para limitar.
     bool setScalarValue(double &value, double next, double minimum, double maximum, bool integer,
-                        bool clampToRange = true);
+                        bool clampToRange = true, bool singlePrecision = false);
     // O trabalho dos dois vSlider: precision < 0 escreve o valor como inteiro.
     bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
                      const Rect &bounds, int precision);
