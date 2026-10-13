@@ -1,6 +1,7 @@
 #include <igui/Widgets.hpp>
 #include <igui/widgets/CodeEditor.hpp>
 #include <igui/widgets/DirCache.hpp>
+#include <igui/widgets/FileDialog.hpp>
 #include <igui/widgets/GizmoWidgets.hpp>
 #include <igui/widgets/Theme.hpp>
 #include <igui/widgets/Timeline.hpp>
@@ -1054,6 +1055,65 @@ static void test_owned_popups_are_deleted()
     assert(kept == 0);
 }
 
+// The file dialog opens a folder on a double click, which the manager counts
+// in clickCount: two single clicks on the same row, however far apart in
+// time, are not one.
+static void test_file_dialog_opens_only_on_a_double_click()
+{
+    namespace fs = ig::retained::FileSystem;
+    using ig::retained::String;
+
+    const String root = fs::joinPath(fs::currentDir(), "igui_file_dialog_test");
+    const String folder = fs::joinPath(root, "a");
+    const bool made = fs::createDir(folder);
+    assert(made);
+
+    ig::retained::FileDialog dialog;
+    dialog.setRect({ 0.0f, 0.0f, 700.0f, 480.0f });
+    dialog.layout();
+    dialog.setPath(root);
+    dialog.layout();
+
+    auto press = [&dialog](float x, float y, int clicks)
+    {
+        ig::retained::MouseEvent e;
+        e.button = 0;
+        e.x = x;
+        e.y = y;
+        e.clickCount = clicks;
+        dialog.onMousePress(e);
+        ig::retained::MouseEvent release = e;
+        dialog.onMouseRelease(release);
+        dialog.layout();
+    };
+
+    float rowX = -1.0f;
+    float rowY = -1.0f;
+    for (float y = 0.0f; y < 480.0f && rowY < 0.0f; y += 4.0f)
+    {
+        press(450.0f, y, 1);
+        press(450.0f, y, 2);
+        if (dialog.path() == folder)
+        {
+            rowX = 450.0f;
+            rowY = y;
+        }
+    }
+    assert(rowY >= 0.0f);
+
+    dialog.setPath(root);
+    dialog.layout();
+    press(rowX, rowY, 1);
+    press(rowX, rowY, 1);
+    assert(dialog.path() == root);
+
+    press(rowX, rowY, 2);
+    assert(dialog.path() == folder);
+
+    std::remove(folder.c_str());
+    std::remove(root.c_str());
+}
+
 int main()
 {
     using namespace ig;
@@ -1083,6 +1143,7 @@ int main()
     test_removing_the_stage_being_left_stops_its_transition();
     test_views_let_go_of_their_models();
     test_owned_popups_are_deleted();
+    test_file_dialog_opens_only_on_a_double_click();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

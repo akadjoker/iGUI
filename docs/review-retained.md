@@ -63,7 +63,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
 
 ## Rato e teclado no sítio errado
 
-- [ ] **5. O duplo clique do `FileDialog` é sempre verdade** —
+- [x] **5. O duplo clique do `FileDialog` é sempre verdade** —
       [FileDialog.cpp:887](../src/widgets/FileDialog.cpp#L887).
       Calcula `now = lastClickTime + deltaTime()`, por isso `now - lastClickTime`
       é sempre um frame (menos de 0,4 s), e guarda o estado em `static`s
