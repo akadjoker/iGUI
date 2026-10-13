@@ -775,6 +775,13 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         popupClosing_        = nullptr;
         popupClosingOwner_   = nullptr;
     }
+    if (transOldRoot_ && isDescendantOf(transOldRoot_, w))
+    {
+        transActive_   = false;
+        transProgress_ = 1.0f;
+        transOldRoot_  = nullptr;
+        transOldStage_.clear();
+    }
     if (pressed_ && isDescendantOf(pressed_, w))
         pressed_ = nullptr;
     if (focused_ && isDescendantOf(focused_, w))
