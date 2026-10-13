@@ -6,6 +6,8 @@
 
 #include "InteractionHarness.hpp"
 
+#include <igui/FileDialog.hpp>
+
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -4524,6 +4526,96 @@ void test_nested_tab_bars()
     assert(sameBarRefused);
 }
 
+// O duplo clique do diálogo de ficheiros é em tempo, não em frames: dois cliques
+// a 0,72 s um do outro não abrem a pasta, nem a 30 fps, e um duplo clique a 1000
+// fps abre-a.
+class FolderProvider : public ig::FileDialogProvider
+{
+public:
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries,
+                       bool = true) override
+    {
+        if (ig::String(path.data(), path.size()) != "/root")
+            return true;
+        ig::FileDialogEntry entry;
+        entry.name = "sub";
+        entry.path = "/root/sub";
+        entry.directory = true;
+        entries.push_back(entry);
+        return true;
+    }
+    ig::String parentDirectory(ig::StringView) override { return "/"; }
+    ig::String homeDirectory() override { return "/root"; }
+};
+
+struct DialogRun
+{
+    ig::TestBackend backend;
+    ig::Context context;
+    FolderProvider provider;
+    ig::FileDialogState state;
+    bool open;
+
+    DialogRun() : backend(), context(backend), provider(), state(), open(true) {}
+
+    void frame(float seconds)
+    {
+        context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, seconds));
+        ig::FileDialogOptions options;
+        options.initialPath = "/root";
+        context.fileDialog("files", open, state, options, provider);
+        context.endFrame();
+    }
+
+    void click(float x, float y, float seconds)
+    {
+        context.pushEvent(ig::Event::pointerMove(x, y));
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        frame(seconds);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x, y));
+        frame(seconds);
+    }
+};
+
+void test_file_dialog_double_click_is_timed()
+{
+    float rowX = 640.0f;
+    float rowY = -1.0f;
+    {
+        DialogRun run;
+        run.frame(0.016f);
+        for (float y = 60.0f; y < 760.0f && rowY < 0.0f; y += 4.0f)
+        {
+            run.click(rowX, y, 0.016f);
+            if (run.state.selectedIndex == 0)
+                rowY = y;
+            // Os cliques do varrimento nunca fazem um duplo clique entre si.
+            for (int i = 0; i < 30; ++i)
+                run.frame(0.05f);
+        }
+    }
+    assert(rowY >= 0.0f);
+
+    {
+        DialogRun run;
+        run.frame(0.033f);
+        run.click(rowX, rowY, 0.04f);
+        for (int i = 0; i < 18; ++i)
+            run.frame(0.04f);
+        run.click(rowX, rowY, 0.04f);
+        assert(run.state.path == "/root");
+    }
+    {
+        DialogRun run;
+        run.frame(0.001f);
+        run.click(rowX, rowY, 0.001f);
+        for (int i = 0; i < 40; ++i)
+            run.frame(0.001f);
+        run.click(rowX, rowY, 0.001f);
+        assert(run.state.path == "/root/sub");
+    }
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4573,6 +4665,7 @@ int main()
     test_popup_open_flags();
     test_tabs_with_content();
     test_nested_tab_bars();
+    test_file_dialog_double_click_is_timed();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();

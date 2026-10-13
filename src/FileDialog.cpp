@@ -695,7 +695,8 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     if (hitEntry >= 0)
     {
         FileDialogEntry &entry = state.entries[static_cast<ct::Vector<FileDialogEntry>::size_type>(hitEntry)];
-        const bool doubleClick = state.lastClickedIndex == hitEntry && frameNumber_ - state.lastClickedFrame <= 22u;
+        const bool doubleClick = state.lastClickedIndex == hitEntry &&
+                                 elapsedSeconds_ - state.lastClickedTime <= doubleClickInterval_;
         if (state.previewPath != entry.path)
         {
             state.previewPath = entry.path;
@@ -712,7 +713,7 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
             state.fileError.clear();
         }
         state.lastClickedIndex = hitEntry;
-        state.lastClickedFrame = frameNumber_;
+        state.lastClickedTime = elapsedSeconds_;
         if (entry.directory && doubleClick)
         {
             navigateTo(entry.path, true);
@@ -724,14 +725,15 @@ FileDialogResult Context::fileDialog(StringView idText, bool &open, FileDialogSt
     }
     else if (hitEntry == -2 || hitEntry == -1)
     {
-        const bool doubleClick = state.lastClickedIndex == hitEntry && frameNumber_ - state.lastClickedFrame <= 22u;
+        const bool doubleClick = state.lastClickedIndex == hitEntry &&
+                                 elapsedSeconds_ - state.lastClickedTime <= doubleClickInterval_;
         state.selectedIndex = hitEntry;
         state.selectedPath = hitEntry == -2 ? state.path : provider.parentDirectory(state.path);
         state.previewPath.clear();
         state.previewZoom = 1.0f;
         state.previewPan = Vec2();
         state.lastClickedIndex = hitEntry;
-        state.lastClickedFrame = frameNumber_;
+        state.lastClickedTime = elapsedSeconds_;
         if (hitEntry == -1 && doubleClick && !state.selectedPath.empty() && state.selectedPath != state.path)
         {
             navigateTo(state.selectedPath, true);

@@ -168,7 +168,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       `true` e desenha a faixa, mas o `beginTabItem` de dentro devolve `false` em
       todos os frames.
 
-- [ ] **15. O duplo clique do diálogo de ficheiros conta frames** —
+- [x] **15. O duplo clique do diálogo de ficheiros conta frames** —
       [FileDialog.cpp:698](../src/FileDialog.cpp#L698) (e a linha 727, para o "..").
       Usa `frameNumber_ - lastClickedFrame <= 22u` em vez do intervalo em tempo que
       o `Context` já tem (`doubleClickInterval_`, `elapsedSeconds_`).
