@@ -51,7 +51,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       Chamar `setModel()` duas vezes acumula ligações, e a grid continua a reagir
       ao modelo antigo.
 
-- [ ] **4. Os popups "owned" nunca são destruídos** —
+- [x] **4. Os popups "owned" nunca são destruídos** —
       [WidgetApp.cpp:224](../src/widgets/WidgetApp.cpp#L224).
       O `notifyWidgetRemoved(popupClosing_)` põe o `popupClosing_` a `nullptr`
       antes de ele ser copiado para `pendingPopupDelete_` (o mesmo no `showPopup`,

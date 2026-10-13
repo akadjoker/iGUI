@@ -407,6 +407,9 @@ private:
                        float w, float h, const Color& bgColor = Color(30,30,30,255));
     void paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int depth = 0);
     void paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font);
+    void retirePopup(Widget* popup, bool owned);
+    void queuePopupDelete(Widget* popup);
+    void flushPopupDeletes();
 
     // State
     bool  inited_      = false;
@@ -456,7 +459,7 @@ private:
     // Popup overlay
     Widget* popup_              = nullptr;   // popup widget (may or may not be owned)
     Widget* popupOwner_         = nullptr;   // widget that opened it (not owned)
-    Widget* pendingPopupDelete_ = nullptr;   // deferred delete (safe after event loop)
+    ct::Vector<Widget*> pendingPopupDeletes_;   // deferred delete (safe after event loop)
     bool    popupOwned_         = true;      // if true, popup is deleted on close
 
     // Popup animation
