@@ -6423,7 +6423,8 @@ bool Context::editTextBuffer(String &value, String::size_type &cursor, bool mult
             cursor = end == value.size() ? end : offsetAtColumn(value, end + 1u, column);
         }
     }
-    if (copyRequested_)
+    // Uma palavra-passe não se copia (o ImGui também desliga o copiar nela).
+    if (copyRequested_ && (flags & InputTextFlags::Password) == 0u)
         backend_.setClipboardText(value);
     // O Tab de um campo que o aceita é um tab escrito; sem isso, o Tab passa o
     // foco ao item seguinte (o advanceFocus do fim do frame) e o campo não o vê.

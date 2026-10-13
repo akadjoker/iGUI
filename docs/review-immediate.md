@@ -153,7 +153,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       *Como se vê:* `if (ui.inputText("cmd", buf, w, EnterReturnsTrue)) run(buf);`
       corre a cada tecla; escrever "abc" sem Enter devolveu `true` três vezes.
 
-- [ ] **13. Ctrl+C num campo `Password` copia o texto real** —
+- [x] **13. Ctrl+C num campo `Password` copia o texto real** —
       [Gui.cpp:6281](../src/Gui.cpp#L6281) (`editTextBuffer`).
       *Como se vê:* um campo com "hunter2" desenha "*******" e o Ctrl+C deixa
       "hunter2" na área de transferência. O ImGui desliga o copiar e o cortar
