@@ -298,7 +298,7 @@ este documento é o levantamento exaustivo, independente do que está aberto.
 | --- | --- | --- |
 | `IsKeyPressed/IsKeyDown/IsKeyReleased/IsKeyChordPressed`, `GetKeyPressedAmount` | `isKeyPressed(key)`/`shortcut(key, ctrl, shift)` | parcial: por `KeyCode` (poucas teclas) |
 | `IsMouseDown/Clicked/DoubleClicked/Dragging/Hovered`, `GetMouseDragDelta`, `SetMouseCursor` | `isPointerButtonDown`, `pointerPosition`, `pointerPressedPosition` | parcial |
-| `NavEnableKeyboard/Gamepad`, foco programático (`SetKeyboardFocusHere`, `SetItemDefaultFocus`), `IsItemFocused`, tab order explícita | — | **não existe** (o iGUI tem um `advanceFocus` interno, sem API) |
+| `NavEnableKeyboard/Gamepad`, tab order explícita, `SetKeyboardFocusHere` (pôr o foco de teclado num item por pedido) | — | **não existe**: o iGUI sabe *ler* o foco (`isItemFocused`, `setItemDefaultFocus` na abertura de um popup) e o `advanceFocus` interno anda com o Tab, mas não há API para o pôr num item, nem navegação por setas/gamepad, nem uma ordem de tab escolhida |
 | `WantCaptureMouse/Keyboard` | `wantsPointer`/`wantsKeyboard`/`wantsTextInput` | existe |
 | `SetNextFrameWantCaptureKeyboard/Mouse`, `Shortcut`, `SetKeyOwner` | — | **não existe** |
 | `GetIO`/`ImGuiIO` (config global, `ConfigFlags`, `BackendFlags`, `IniFilename`, `FontGlobalScale`, `MouseDrawCursor`, `ConfigWindowsMoveFromTitleBarOnly`, ...) | `Theme` + `FrameInfo` + `setWindowStatePath` | **não existe** objeto de configuração global |
