@@ -196,7 +196,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
       ([Gui.cpp:408](../src/Gui.cpp#L408)).
 - [ ] Um valor negativo com formato sem sinal aparece como zero:
       `inputInt(-1, "%08X")` desenha "00000000" (visto numa sonda).
-- [ ] Código morto depois dos numéricos em double: `parseIntText`,
+- [x] Código morto depois dos numéricos em double: `parseIntText`,
       `parseFloatText`, os três helpers de slider em float e o
       `scalarTypeIsUnsigned`. Os helpers em
       [Gui.cpp:6112-6247](../src/Gui.cpp#L6112-L6247) estão fora do namespace

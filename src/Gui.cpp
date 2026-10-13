@@ -53,38 +53,8 @@ static bool sliderLogarithmic(float minimum, float maximum, unsigned flags)
            maximum > minimum;
 }
 
-static float sliderNormFromValue(float value, float minimum, float maximum, bool logarithmic)
-{
-    if (logarithmic)
-    {
-        const float ratio = value > minimum ? value : minimum;
-        return logf(ratio / minimum) / logf(maximum / minimum);
-    }
-    return (value - minimum) / (maximum - minimum);
-}
-
-static float sliderValueFromNorm(float norm, float minimum, float maximum, bool logarithmic)
-{
-    if (logarithmic)
-        return minimum * powf(maximum / minimum, norm);
-    return minimum + (maximum - minimum) * norm;
-}
-
-// Chegar a um fim com o valor ainda do lado de dentro passa para o outro
-// (WrapAround). É a regra do ImGui, e é no valor, não na posição: vale para o
-// slider (a posição está limitada à pista) e para o arrasto.
-static float wrapSliderValue(float next, float value, float minimum, float maximum)
-{
-    if (next == maximum && value < maximum)
-        return minimum;
-    if (next == minimum && value > minimum)
-        return maximum;
-    return next;
-}
-
-// As mesmas contas em double: um valor de 64 bits (ou um que se escreve com dez
-// decimais) não cabe num float, e é por isso que o slider e o drag por dentro
-// deles são em double. As versões em float ficam para quem já as usava.
+// As contas do slider e do drag são em double: um valor de 64 bits (ou um que se
+// escreve com dez decimais) não cabe num float.
 static double sliderNormDouble(double value, double minimum, double maximum, bool logarithmic)
 {
     if (logarithmic)
@@ -103,6 +73,9 @@ static double sliderValueFromNormDouble(double norm, double minimum, double maxi
     return minimum + (maximum - minimum) * norm;
 }
 
+// Chegar a um fim com o valor ainda do lado de dentro passa para o outro
+// (WrapAround). É a regra do ImGui, e é no valor, não na posição: vale para o
+// slider (a posição está limitada à pista) e para o arrasto.
 static double wrapSliderValueDouble(double next, double value, double minimum, double maximum)
 {
     if (next == maximum && value < maximum)
@@ -460,9 +433,8 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
         // double), só que agora sobre o número e não sobre o texto todo.
         if (!parseDoubleText(literal, parsed))
             return false;
-        // Num campo de um float, um número que só cabe num double não entra: era o
-        // que o parseFloatText fazia, e sem isto um "1e99" escrito à mão virava
-        // infinito ao passar a float.
+        // Num campo de um float, um número que só cabe num double não entra: sem
+        // isto um "1e99" escrito à mão virava infinito ao passar a float.
         if (singlePrecision && (parsed > FLT_MAX || parsed < -FLT_MAX))
             return false;
         out = parsed;
@@ -6259,6 +6231,9 @@ bool insertText(String &value, String::size_type &cursor, const char *text, Stri
 } // namespace
 
 // ── Os tipos do *Scalar ──────────────────────────────────────────────────────
+namespace
+{
+
 // O que está por trás do ponteiro e o double em que as widgets trabalham por
 // dentro. Um tipo de 64 bits acima de 2^53 perde os bits de baixo nesta viagem,
 // como no ImGui (o FLOATTYPE dele é double nestes dois tipos); um inteiro menor
@@ -6266,12 +6241,6 @@ bool insertText(String &value, String::size_type &cursor, const char *text, Stri
 bool scalarTypeIsInteger(Context::ScalarType type)
 {
     return type != Context::ScalarType::Float && type != Context::ScalarType::Double;
-}
-
-bool scalarTypeIsUnsigned(Context::ScalarType type)
-{
-    return type == Context::ScalarType::U8 || type == Context::ScalarType::U16 ||
-           type == Context::ScalarType::U32 || type == Context::ScalarType::U64;
 }
 
 double scalarToDouble(Context::ScalarType type, const void *data)
@@ -6370,6 +6339,8 @@ const char *scalarDefaultFormat(Context::ScalarType type)
     }
     return "%d";
 }
+
+} // namespace
 
 // ── Os flags do inputText ────────────────────────────────────────────────────
 // O que se escreve (e o que se cola) passa por aqui antes de entrar no campo: os
@@ -6814,32 +6785,6 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
 namespace
 {
 
-// "[+-]digits", clamped to int's range. Anything else - including the
-// in-between states "", "-", "+" - is not a value yet.
-bool parseIntText(const String &text, int &result)
-{
-    String::size_type i = 0u;
-    const bool negative = i < text.size() && text[i] == '-';
-    if (i < text.size() && (text[i] == '-' || text[i] == '+'))
-        ++i;
-    if (i == text.size())
-        return false;
-    long long magnitude = 0;
-    for (; i < text.size(); ++i)
-    {
-        if (text[i] < '0' || text[i] > '9')
-            return false;
-        if (magnitude <= 4294967296LL) // stop growing well past int's range
-            magnitude = magnitude * 10 + (text[i] - '0');
-    }
-    const long long signedValue = negative ? -magnitude : magnitude;
-    result = signedValue > INT_MAX ? INT_MAX : (signedValue < INT_MIN ? INT_MIN : static_cast<int>(signedValue));
-    return true;
-}
-
-// A plain decimal literal: [+-]digits[.digits][(e|E)[+-]digits], at least one
-// mantissa digit. strtof alone would also take "nan", "inf" and hex, and
-// stop silently at trailing garbage.
 bool isDecimalLiteral(const String &text)
 {
     String::size_type i = 0u;
@@ -6879,20 +6824,8 @@ bool isDecimalLiteral(const String &text)
     return i == text.size();
 }
 
-// Non-finite results are rejected, as are the out-of-range ones.
-bool parseFloatText(const String &text, float &result)
-{
-    if (!isDecimalLiteral(text))
-        return false;
-    const float parsed = text.to_float();
-    if (!(parsed == parsed) || parsed > FLT_MAX || parsed < -FLT_MAX)
-        return false;
-    result = parsed;
-    return true;
-}
-
-// O mesmo para um double: passar por float no meio é o que estraga um número com
-// mais dígitos do que o float tem.
+// Um número decimal escrito por extenso, finito e dentro do double. Não passa
+// por float: é isso que estragava um número com mais dígitos do que o float tem.
 bool parseDoubleText(const String &text, double &result)
 {
     if (!isDecimalLiteral(text))
@@ -6963,8 +6896,7 @@ bool Context::inputInt(StringView labelText, int &value, const Rect &bounds, con
     double field = static_cast<double>(value);
     if (!numericField(labelText, field, true, false, bounds, format ? format : "%lld"))
         return false;
-    // O que se escreveu pode sair do intervalo de um int: fica no limite, como
-    // antes (era o parseIntText que o fazia).
+    // O que se escreveu pode sair do intervalo de um int: fica no limite.
     const double limited = clampDouble(field, static_cast<double>(INT_MIN),
                                        static_cast<double>(INT_MAX));
     const int result = static_cast<int>(limited);
