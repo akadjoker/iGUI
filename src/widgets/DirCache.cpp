@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
-#include <cstring>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  DirNode
@@ -51,21 +50,7 @@ DirCache::DirNode* DirCache::allocNode()
 DirCache::DirNode** DirCache::allocKids(int count)
 {
     if (count <= 0) return nullptr;
-    int need = kidsBufUsed_ + count;
-    if (need > kidsBufSize_) {
-        int newSize = std::max(need, kidsBufSize_ * 2);
-        if (newSize < 512) newSize = 512;
-        DirNode** newBuf = static_cast<DirNode**>(std::malloc(newSize * sizeof(DirNode*)));
-        if (kidsBuf_) {
-            std::memcpy(newBuf, kidsBuf_, kidsBufUsed_ * sizeof(DirNode*));
-            std::free(kidsBuf_);
-        }
-        kidsBuf_ = newBuf;
-        kidsBufSize_ = newSize;
-    }
-    DirNode** ptr = kidsBuf_ + kidsBufUsed_;
-    kidsBufUsed_ += count;
-    return ptr;
+    return kidsArena_.allocate_array<DirNode*>(static_cast<size_t>(count));
 }
 
 void DirCache::freeArena()
@@ -86,12 +71,7 @@ void DirCache::freeArena()
     firstBlock_ = nullptr;
     blockUsed_ = kBlockSize;
 
-    if (kidsBuf_) {
-        std::free(kidsBuf_);
-        kidsBuf_ = nullptr;
-    }
-    kidsBufSize_ = 0;
-    kidsBufUsed_ = 0;
+    kidsArena_.release();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

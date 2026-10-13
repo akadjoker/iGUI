@@ -1,8 +1,9 @@
 #include <igui/Widgets.hpp>
 #include <igui/widgets/CodeEditor.hpp>
-#include <igui/widgets/Timeline.hpp>
-#include <igui/widgets/Theme.hpp>
+#include <igui/widgets/DirCache.hpp>
 #include <igui/widgets/GizmoWidgets.hpp>
+#include <igui/widgets/Theme.hpp>
+#include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/ToolBar.hpp>
 
 #include <cassert>
@@ -866,6 +867,57 @@ static void test_a_toolbar_item_can_remove_itself_when_clicked()
     assert(handled);
 }
 
+// Reading a large folder grows the buffer that holds the children of every
+// folder: the folders read before must still list their own children.
+static void test_dir_cache_keeps_children_when_it_grows()
+{
+    using ig::retained::DirCache;
+    using ig::retained::String;
+    namespace fs = ig::retained::FileSystem;
+
+    const String root = "igui_dir_cache_test";
+    const String big = fs::joinPath(root, "big");
+    const String small = fs::joinPath(root, "small");
+    const bool madeBig = fs::createDir(big);
+    const bool madeSmall = fs::createDir(small);
+    assert(madeBig && madeSmall);
+
+    const int fileCount = 600;
+    char name[16];
+    for (int i = 0; i < fileCount; ++i)
+    {
+        std::snprintf(name, sizeof(name), "f%03d", i);
+        FILE* file = std::fopen(fs::joinPath(big, name).c_str(), "wb");
+        assert(file != nullptr);
+        std::fclose(file);
+    }
+
+    {
+        DirCache cache;
+        cache.setRoot(root);
+        DirCache::DirNode* top = cache.root();
+        assert(top != nullptr && top->kidCount == 2);
+
+        DirCache::DirNode* bigNode = cache.navigate(big);
+        assert(bigNode != nullptr && bigNode->kidCount == 0);
+        cache.expand(bigNode);
+        assert(bigNode->kidCount == fileCount);
+
+        assert(top->kids[0]->name == "big");
+        assert(top->kids[1]->name == "small");
+        assert(top->kids[0] == bigNode);
+    }
+
+    for (int i = 0; i < fileCount; ++i)
+    {
+        std::snprintf(name, sizeof(name), "f%03d", i);
+        fs::removeFile(fs::joinPath(big, name));
+    }
+    std::remove(big.c_str());
+    std::remove(small.c_str());
+    std::remove(root.c_str());
+}
+
 int main()
 {
     using namespace ig;
@@ -891,6 +943,7 @@ int main()
     test_tree_nodes_report_structural_changes();
     test_a_popup_goes_away_with_its_owner();
     test_a_toolbar_item_can_remove_itself_when_clicked();
+    test_dir_cache_keeps_children_when_it_grows();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

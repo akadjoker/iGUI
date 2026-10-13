@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FileSystem.hpp"
+#include <ct/arena.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  DirCache — Cached directory tree for fast browsing & search
@@ -33,7 +34,7 @@ public:
         uint64_t    size    = 0;
         time_t      mtime   = 0;
         DirNode*    parent  = nullptr;
-        DirNode**   kids    = nullptr;   // pointer into kidsBuf_
+        DirNode**   kids    = nullptr;   // pointer into kidsArena_
         int         kidCount = 0;
         bool        isDir   = false;
         bool        hidden  = false;
@@ -109,10 +110,8 @@ private:
 
     DirNode* allocNode();
 
-    // Kids buffer — flat array of DirNode* pointers, grown as needed
-    DirNode**  kidsBuf_     = nullptr;
-    int        kidsBufSize_ = 0;
-    int        kidsBufUsed_ = 0;
+    // Kids arrays — blocks never move, so node->kids stays valid as it grows
+    ct::Arena kidsArena_{512 * sizeof(DirNode*)};
 
     DirNode** allocKids(int count);
 
