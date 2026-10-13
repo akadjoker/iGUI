@@ -48,7 +48,7 @@ estão no repo; cada problema que se arranjar deve ganhar o seu teste.
       *Arranjo:* terminar `out` em todas as saídas e contar o terminador nos
       limites do ciclo de cópia.
 
-- [ ] **3. `scalarFromDouble` converte sem limitar ao intervalo do tipo** —
+- [x] **3. `scalarFromDouble` converte sem limitar ao intervalo do tipo** —
       [Gui.cpp:6151](../src/Gui.cpp#L6151).
       O double de trabalho vai direto para o tipo de destino (comportamento
       indefinido fora do intervalo), e o `formatNumericValue`
