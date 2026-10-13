@@ -116,6 +116,8 @@ private:
     ct::Vector<FlatRow>   flatRows_;
     TreeNode*              selected_      = nullptr;
     TreeModel*             model_         = nullptr;
+    AbstractItemModel::Connections modelSlots_;
+    void detachModel();
     float                  scrollOffset_  = 0.0f;
     float                  rowHeight_     = 24.0f;
     float                  indent_        = 16.0f;

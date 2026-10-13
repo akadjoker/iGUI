@@ -268,16 +268,27 @@ void TreeNode::setIcon(const String& name)
 // ═════════════════════════════════════════════════════════════════════════════
 
 TreeView::TreeView()  { acceptsFocus_ = true; }
-TreeView::~TreeView() { clear(); }
+TreeView::~TreeView()
+{
+    detachModel();
+    clear();
+}
+
+void TreeView::detachModel()
+{
+    if (model_) model_->disconnect(modelSlots_);
+    model_ = nullptr;
+}
 
 void TreeView::setModel(TreeModel* model)
 {
+    detachModel();
     model_ = model;
     if (!model_) return;
 
     // Build TreeNode wrappers from the model for rendering
     // (TreeView currently renders via TreeNode, so we sync from model)
-    model_->modelReset.connect([this] {
+    modelSlots_.reset = model_->modelReset.connect([this] {
         // Rebuild tree nodes from model
         clear();
         if (!model_) return;
@@ -300,8 +311,14 @@ void TreeView::setModel(TreeModel* model)
         flatDirty_ = true;
         markDirty();
     });
-    model_->rowsInserted.connect([this] { flatDirty_ = true; markDirty(); });
-    model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
+    modelSlots_.inserted = model_->rowsInserted.connect([this] { flatDirty_ = true; markDirty(); });
+    modelSlots_.changed = model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
+    modelSlots_.destroyed = model_->destroyed.connect([this]
+    {
+        model_ = nullptr;
+        modelSlots_ = AbstractItemModel::Connections();
+        markDirty();
+    });
 
     // Initial sync
     model_->endResetModel();

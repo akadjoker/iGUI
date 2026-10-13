@@ -18,6 +18,11 @@ DataGrid::DataGrid()
     acceptsFocus_ = true;
 }
 
+DataGrid::~DataGrid()
+{
+    detachModel();
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  Columns
 // ═════════════════════════════════════════════════════════════════════════════
@@ -864,8 +869,15 @@ void DataGrid::onTextInput(KeyEvent& e)
 //  DataGrid — Model/View integration
 // ═════════════════════════════════════════════════════════════════════════════
 
+void DataGrid::detachModel()
+{
+    if (model_) model_->disconnect(modelSlots_);
+    model_ = nullptr;
+}
+
 void DataGrid::setModel(AbstractItemModel* model)
 {
+    detachModel();
     model_ = model;
     if (!model_) return;
 
@@ -882,14 +894,21 @@ void DataGrid::setModel(AbstractItemModel* model)
     }
 
     // Connect model signals to refresh the view
-    model_->modelReset.connect([this] {
+    modelSlots_.reset = model_->modelReset.connect([this] {
         selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
         scrollY_ = 0; rebuildSortOrder(); markDirty();
     });
-    model_->rowsInserted.connect([this] { rebuildSortOrder(); markDirty(); });
-    model_->rowsRemoved.connect([this]  { rebuildSortOrder(); markDirty(); });
-    model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
-    model_->layoutChanged.connect([this] { markDirty(); });
+    modelSlots_.inserted = model_->rowsInserted.connect([this] { rebuildSortOrder(); markDirty(); });
+    modelSlots_.removed = model_->rowsRemoved.connect([this]  { rebuildSortOrder(); markDirty(); });
+    modelSlots_.changed = model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
+    modelSlots_.layout = model_->layoutChanged.connect([this] { markDirty(); });
+    modelSlots_.destroyed = model_->destroyed.connect([this]
+    {
+        model_ = nullptr;
+        modelSlots_ = AbstractItemModel::Connections();
+        selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
+        scrollY_ = 0; rebuildSortOrder(); markDirty();
+    });
 
     rebuildSortOrder();
     markDirty();

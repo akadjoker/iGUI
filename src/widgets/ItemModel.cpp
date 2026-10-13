@@ -40,10 +40,20 @@ SortFilterProxyModel::SortFilterProxyModel(AbstractItemModel* source)
     : source_(source)
 {
     // Re-invalidate when source changes
-    source_->modelReset.connect([this] { invalidate(); });
-    source_->rowsInserted.connect([this] { invalidate(); });
-    source_->rowsRemoved.connect([this] { invalidate(); });
-    source_->layoutChanged.connect([this] { invalidate(); });
+    sourceSlots_.reset = source_->modelReset.connect([this] { invalidate(); });
+    sourceSlots_.inserted = source_->rowsInserted.connect([this] { invalidate(); });
+    sourceSlots_.removed = source_->rowsRemoved.connect([this] { invalidate(); });
+    sourceSlots_.layout = source_->layoutChanged.connect([this] { invalidate(); });
+    sourceSlots_.destroyed = source_->destroyed.connect([this]
+    {
+        source_ = nullptr;
+        sourceSlots_ = Connections();
+    });
+}
+
+SortFilterProxyModel::~SortFilterProxyModel()
+{
+    if (source_) source_->disconnect(sourceSlots_);
 }
 
 int SortFilterProxyModel::rowCount(const ModelIndex&) const

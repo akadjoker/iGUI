@@ -41,7 +41,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       *Como se vê:* `app.setStage("game"); app.removeStage("menu");` dá SEGV no
       `WidgetApp::paint` seguinte, com a configuração por omissão.
 
-- [ ] **3. `DataGrid::setModel()` e `TreeView::setModel()` nunca se desligam do
+- [x] **3. `DataGrid::setModel()` e `TreeView::setModel()` nunca se desligam do
       modelo** — [DataWidgets.cpp:885](../src/widgets/DataWidgets.cpp#L885).
       Ligam aos sinais do modelo lambdas que capturam `this`; não há `~DataGrid`
       nem `SlotId`s guardados. *Só por leitura.*

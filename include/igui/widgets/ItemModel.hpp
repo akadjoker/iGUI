@@ -72,7 +72,7 @@ enum class ItemRole
 class AbstractItemModel
 {
 public:
-    virtual ~AbstractItemModel() = default;
+    virtual ~AbstractItemModel() { destroyed.emit(); }
 
     /// @brief Get the row count under a parent index.
     virtual int  rowCount(const ModelIndex& parent = {})    const = 0;
@@ -135,6 +135,31 @@ public:
     Signal<ModelIndex>         dataChanged;
     /// @brief Emitted when sort/reorder occurs.
     Signal<>                   layoutChanged;
+    /// @brief Emitted when the model is destroyed.
+    Signal<>                   destroyed;
+
+    /// @brief Slot ids a view holds on this model, to disconnect it later.
+    struct Connections
+    {
+        Signal<>::SlotId reset     = 0;
+        Signal<>::SlotId inserted  = 0;
+        Signal<>::SlotId removed   = 0;
+        Signal<>::SlotId changed   = 0;
+        Signal<>::SlotId layout    = 0;
+        Signal<>::SlotId destroyed = 0;
+    };
+
+    /// @brief Disconnect every slot in @p c and clear it.
+    void disconnect(Connections& c)
+    {
+        modelReset.disconnect(c.reset);
+        rowsInserted.disconnect(c.inserted);
+        rowsRemoved.disconnect(c.removed);
+        dataChanged.disconnect(c.changed);
+        layoutChanged.disconnect(c.layout);
+        destroyed.disconnect(c.destroyed);
+        c = Connections();
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -400,7 +425,7 @@ class SortFilterProxyModel : public AbstractItemModel
 {
 public:
     explicit SortFilterProxyModel(AbstractItemModel* source);
-    ~SortFilterProxyModel() override = default;
+    ~SortFilterProxyModel() override;
 
     void setFilterColumn(int col)           { filterCol_ = col; invalidate(); }
     void setFilterText(const String& t){ filterText_ = t; invalidate(); }
@@ -427,6 +452,7 @@ private:
     void rebuild() const;
 
     AbstractItemModel*    source_;
+    Connections           sourceSlots_;
     int                   filterCol_      = -1;
     String           filterText_;
     bool                  caseSensitive_  = false;
