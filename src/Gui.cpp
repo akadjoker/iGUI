@@ -368,12 +368,33 @@ bool trailingTextAllowed(const String &text, String::size_type from, const char 
 // não se estranha. A base é a do formato (um "%04X" lê-se em hexadecimal) e o
 // número é dos que o C escreve por extenso: nada de "nan", "inf" nem do
 // hexadecimal com vírgula flutuante, que o sscanf aceitaria.
+// Quantos caracteres do início do texto são o prefixo literal do formato (o
+// "0 < " de "0 < %.3f < 1", com o "%%" a valer um por-cento), ou 0 quando o texto
+// não começa por ele inteiro.
+String::size_type formatPrefixLength(const String &text, const char *format)
+{
+    const char *spec = numericSpec(format);
+    if (!spec)
+        return 0u;
+    String::size_type matched = 0u;
+    for (const char *at = format; at < spec; ++at)
+    {
+        if (matched >= text.size() || text[matched] != *at)
+            return 0u;
+        ++matched;
+        if (at[0] == '%' && at[1] == '%')
+            ++at;
+    }
+    return matched;
+}
+
 bool parseNumericValue(const String &text, double &out, bool integer, bool singlePrecision,
                        const char *format)
 {
-    String::size_type i = 0u;
+    String::size_type i = formatPrefixLength(text, format);
     while (i < text.size() && (text[i] == ' ' || text[i] == '\t'))
         ++i;
+    const String::size_type numberStart = i;
     const bool negative = i < text.size() && text[i] == '-';
     if (i < text.size() && (text[i] == '-' || text[i] == '+'))
         ++i;
@@ -419,7 +440,7 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
             if (!exponent)
                 return false;
         }
-        const String literal(text.c_str(), i);
+        const String literal(text.c_str() + numberStart, i - numberStart);
         if (!trailingTextAllowed(text, i, format))
             return false;
         double parsed = 0.0;

@@ -819,6 +819,25 @@ void test_default_format_has_no_exponent()
     check(editable == 1239, "dragInt: editing starts from the number that was there");
 }
 
+// O texto de um campo com formato traz o prefixo do formato ("0 < 0.500 < 1"):
+// o número lê-se depois dele, e não do início do texto.
+void test_parse_skips_the_format_prefix()
+{
+    {
+        Field f(true, 0.5f, "0 < %.3f < 1");
+        f.key(ig::KeyCode::End);
+        f.key(ig::KeyCode::Backspace);
+        check(f.floatValue == 0.5f, "inputFloat with a prefix: the prefix 0 is not the value");
+    }
+    {
+        Field f(true, 1.0f, "Value: %.1f");
+        f.key(ig::KeyCode::End);
+        f.key(ig::KeyCode::Backspace);
+        f.type("5");
+        check(f.floatValue == 1.5f, "inputFloat with a prefix: an edit that keeps it is read");
+    }
+}
+
 int main()
 {
     test_int_typing();
@@ -837,6 +856,7 @@ int main()
     test_scalar_values_stay_in_their_type();
     test_layout_overloads_keep_the_format();
     test_default_format_has_no_exponent();
+    test_parse_skips_the_format_prefix();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);
