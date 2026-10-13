@@ -299,7 +299,23 @@ int formatNumericValue(char *out, int outSize, double value, bool integer, const
             const double rounded = value < 0.0 ? -floor(-value + 0.5) : floor(value + 0.5);
             return snprintf(out, static_cast<size_t>(outSize), "%.0f", rounded);
         }
-        return snprintf(out, static_cast<size_t>(outSize), "%.3f", value);
+        // Até três casas, sem os zeros do fim: "0.75", "2", "1234.5". É o que
+        // deixa escrever à mão por cima do que lá está (um "0.000" não deixava).
+        int length = snprintf(out, static_cast<size_t>(outSize), "%.3f", value);
+        if (length > 0 && length < outSize && strchr(out, '.'))
+        {
+            while (length > 0 && out[length - 1] == '0')
+                out[--length] = 0;
+            if (length > 0 && out[length - 1] == '.')
+                out[--length] = 0;
+            if (length == 2 && out[0] == '-' && out[1] == '0')
+            {
+                out[0] = '0';
+                out[1] = 0;
+                length = 1;
+            }
+        }
+        return length;
     }
     char sanitized[64];
     if (!sanitizeNumericFormat(sanitized, sizeof(sanitized), format, integer))
@@ -5030,9 +5046,10 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return false;
-    // Sem formato do chamador, o valor escreve-se como sempre se escreveu (%g de
-    // três dígitos: o "0.762" do slider e do drag).
-    const char *valueFormat = format ? format : "%.3g";
+    // Sem formato do chamador, o valor sai no formato de sempre do
+    // formatNumericValue: o inteiro inteiro e o real com até três casas, sem
+    // expoente (um "%g" escrevia "1.23e+03", e o editor abria com isso).
+    const char *valueFormat = format;
     const StringView text = visibleLabel(labelText);
     const TextMetrics metrics = measureText(theme_.font, text, theme_.fontSize);
     const float labelWidth = metrics.width + theme_.windowPadding;
@@ -5283,9 +5300,10 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
     if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
 
-    // Sem formato do chamador, o valor escreve-se como sempre se escreveu (%g de
-    // três dígitos).
-    const char *valueFormat = format ? format : "%.3g";
+    // Sem formato do chamador, o valor sai no formato de sempre do
+    // formatNumericValue: o inteiro inteiro e o real com até três casas, sem
+    // expoente (um "%g" escrevia "1.23e+03", e o editor abria com isso).
+    const char *valueFormat = format;
     const StringView text = visibleLabel(labelText);
     NumericEditState *edit = numericEdits_.find(id);
     if (!edit)
