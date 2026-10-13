@@ -918,6 +918,32 @@ static void test_dir_cache_keeps_children_when_it_grows()
     std::remove(root.c_str());
 }
 
+// A stage can be removed while a transition is still leaving it: the
+// transition must stop painting the tree that was just deleted.
+static void test_removing_the_stage_being_left_stops_its_transition()
+{
+    using ig::retained::TransitionType;
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
+    ig::retained::Widget* menu = app.addStage("transitionmenu");
+    menu->createChild<ig::retained::Button>("Play");
+    app.addStage("transitiongame");
+
+    ig::retained::IO io;
+    io.displayWidth = 320.0f;
+    io.displayHeight = 240.0f;
+    app.update(io);
+    assert(app.setStage("transitionmenu", TransitionType::None));
+    assert(app.setStage("transitiongame", TransitionType::SlideLeft));
+    assert(app.isTransitioning());
+
+    assert(app.removeStage("transitionmenu"));
+    assert(!app.isTransitioning());
+
+    ig::retained::DrawData data;
+    app.paint(data);
+    assert(data.passes.size() == 1u);
+}
+
 int main()
 {
     using namespace ig;
@@ -944,6 +970,7 @@ int main()
     test_a_popup_goes_away_with_its_owner();
     test_a_toolbar_item_can_remove_itself_when_clicked();
     test_dir_cache_keeps_children_when_it_grows();
+    test_removing_the_stage_being_left_stops_its_transition();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

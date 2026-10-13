@@ -20,7 +20,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
 
 ## Memória (use-after-free e fugas)
 
-- [ ] **1. O `DirCache` deixa ponteiros pendurados quando o buffer cresce** —
+- [x] **1. O `DirCache` deixa ponteiros pendurados quando o buffer cresce** —
       [DirCache.cpp:58](../src/widgets/DirCache.cpp#L58) (`allocKids`).
       Entrega ponteiros para dentro de `kidsBuf_` e, quando o buffer cresce, faz
       `malloc` + `memcpy` + `free`: o `node->kids` de todos os nós já lidos fica a
@@ -33,7 +33,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       *Arranjo:* guardar índices no buffer em vez de ponteiros, ou alocar os
       filhos em blocos que não se movem.
 
-- [ ] **2. `removeStage()` apaga uma stage que ainda está a ser pintada** —
+- [x] **2. `removeStage()` apaga uma stage que ainda está a ser pintada** —
       [WidgetApp.cpp:647](../src/widgets/WidgetApp.cpp#L647).
       Não limpa o `transOldRoot_`, que o `paint()` continua a desenhar enquanto a
       transição decorre (SlideLeft de 0,3 s por omissão). O
