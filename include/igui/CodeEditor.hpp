@@ -89,6 +89,7 @@ struct CodeEditorCompletion
 {
     ct::Vector<String> items;
     int selected = 0;
+    int firstVisible = 0;                // first item the popup shows (it scrolls with selected)
     int line = -1;                       // line the popup applies to
     int wordStart = -1, wordEnd = -1;    // byte range of the identifier being completed
     bool visible = false;

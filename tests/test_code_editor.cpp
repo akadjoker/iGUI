@@ -40,6 +40,23 @@ bool validUtf8(const ig::String &text)
     return true;
 }
 
+bool drewText(const ig::DrawData &data, const char *expected)
+{
+    for (size_t i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand &command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text)
+            continue;
+        const ig::TextCommand &text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
+            continue;
+        const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
+        if (drawn == ig::StringView(expected))
+            return true;
+    }
+    return false;
+}
+
 class ClipboardBackend : public ig::TestBackend
 {
 public:
@@ -309,6 +326,31 @@ static void test_cut_and_paste_at_every_cursor()
     check(single.state.text() == "abcdx", "single cursor Ctrl+V: the caret ends after the paste");
 }
 
+// A lista de completion mostra 8 itens e a escolha pode ir até ao 50: a lista rola
+// com a escolha, e o item escolhido está sempre desenhado.
+static void test_completion_list_follows_the_selection()
+{
+    ig::String text;
+    for (int i = 0; i < 20; ++i)
+    {
+        char word[16];
+        snprintf(word, sizeof(word), "word%02d ", i);
+        text += word;
+    }
+    text += "\n";
+    Editor editor(text.c_str());
+    editor.type("wo");
+    check(editor.state.completion.visible, "completion: the list opens");
+    check(editor.state.completion.items.size() > 8u, "completion: more items than the list shows");
+    for (int i = 0; i < 12; ++i)
+        editor.key(ig::KeyCode::Down);
+    const int selected = editor.state.completion.selected;
+    check(selected == 12, "completion: Down moves the selection");
+    const ig::String item = editor.state.completion.items[static_cast<size_t>(selected)];
+    const ig::DrawData &data = editor.harness.frame([&editor](ig::Context &c) { editor.build(c); });
+    check(drewText(data, item.c_str()), "completion: the selected item is drawn");
+}
+
 } // namespace
 
 int main()
@@ -319,6 +361,7 @@ int main()
     test_replace_all_does_not_overlap();
     test_gutter_click_moves_the_cursor();
     test_cut_and_paste_at_every_cursor();
+    test_completion_list_follows_the_selection();
     if (gFailures != 0)
     {
         printf("test_code_editor: %d failure(s)\n", gFailures);
