@@ -115,7 +115,7 @@ caminho (`sliderCore`, `dragCore`, `numericField`).
       desenha "1.5e+03". Carregar num `dragInt` a 1234 abre o editor com
       "1.23e+03", e qualquer edição volta com cerca de 1230.
 
-- [ ] **9. O parse lê o prefixo do formato** —
+- [x] **9. O parse lê o prefixo do formato** —
       [Gui.cpp:319](../src/Gui.cpp#L319) (`parseNumericValue`).
       O número é lido do início do texto, mas o texto traz o prefixo literal do
       formato. Só o "0x" é tratado.
