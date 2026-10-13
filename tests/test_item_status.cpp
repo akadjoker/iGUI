@@ -4475,6 +4475,55 @@ void test_nested_popup_restores_the_window_layout()
     assert(after.width == reference.width && after.height == reference.height);
 }
 
+// Uma barra de tabs dentro do conteúdo de uma tab tem as suas tabs: o
+// beginTabItem da barra de dentro abre, e um segundo beginTabItem da mesma barra
+// antes do endTabItem continua a ser recusado.
+void test_nested_tab_bars()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool outerOpen = false;
+    bool innerOpen = false;
+    bool innerContent = false;
+    bool sameBarRefused = true;
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        outerOpen = false;
+        innerOpen = false;
+        innerContent = false;
+        if (c.beginTabBar("outer"))
+        {
+            if (c.beginTabItem("Outer A"))
+            {
+                outerOpen = true;
+                if (c.beginTabBar("inner"))
+                {
+                    if (c.beginTabItem("Inner 1"))
+                    {
+                        innerOpen = true;
+                        sameBarRefused = !c.beginTabItem("Inner 2") && sameBarRefused;
+                        c.label("inner content");
+                        innerContent = c.itemRect().width > 0.0f;
+                        c.endTabItem();
+                    }
+                    c.endTabBar();
+                }
+                c.endTabItem();
+            }
+            c.endTabBar();
+        }
+        c.endWindow();
+    };
+    harness.frame(build);
+    harness.frame(build);
+    assert(outerOpen);
+    assert(innerOpen);
+    assert(innerContent);
+    assert(sameBarRefused);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4523,6 +4572,7 @@ int main()
     test_popup_modal();
     test_popup_open_flags();
     test_tabs_with_content();
+    test_nested_tab_bars();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
