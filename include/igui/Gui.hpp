@@ -2252,7 +2252,7 @@ private:
     WidgetId hotWidget_;
     // Tempo acumulado desde o primeiro frame, para o que anima sozinho (a barra
     // indeterminada). Soma os deltaSeconds de cada frame.
-    float elapsedSeconds_;
+    double elapsedSeconds_;
     // beginDisabled()/endDisabled() depth: above zero, nothing reacts and the
     // draw lists fade what they draw (see applyDisabledFade).
     uint32_t disabledDepth_;
@@ -2507,7 +2507,7 @@ private:
     float tooltipDelay_;
     // Duplo clique: o instante e o sítio da última carregada de cada botão, e o
     // botão cujo clique deste frame foi um duplo (ver isPointerDoubleClicked).
-    float lastPressSeconds_[3];
+    double lastPressSeconds_[3];
     Vec2 lastPressPosition_[3];
     bool doubleClicked_[3];
     // O intervalo e a distância dentro dos quais duas carregadas são um duplo

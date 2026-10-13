@@ -145,7 +145,7 @@ struct FileDialogState
     float previewZoom;
     int selectedIndex;
     int lastClickedIndex;
-    float lastClickedTime;
+    double lastClickedTime;
     String::size_type newFolderCursor;
     bool initialized;
     bool resizing;
@@ -159,7 +159,7 @@ struct FileDialogState
           sortField(FileDialogSortField::Name), position(), size(),
           resizePointerStart(), resizeSizeStart(), previewPan(), previewPointerStart(), previewPanStart(),
           newFolderName(), newFolderError(), previewPath(), scrollOffset(0.0f), previewZoom(1.0f),
-          selectedIndex(-3), lastClickedIndex(-3), lastClickedTime(0.0f), newFolderCursor(0u),
+          selectedIndex(-3), lastClickedIndex(-3), lastClickedTime(0.0), newFolderCursor(0u),
           initialized(false), resizing(false), creatingFolder(false), previewPanning(false), searchFocused(false), sortAscending(true) {}
 
     // Call reset to discard navigation state manually. Context also resets it
@@ -196,7 +196,7 @@ struct FileDialogState
         previewZoom = 1.0f;
         selectedIndex = -3;
         lastClickedIndex = -3;
-        lastClickedTime = 0.0f;
+        lastClickedTime = 0.0;
         newFolderCursor = 0u;
         initialized = false;
         resizing = false;
