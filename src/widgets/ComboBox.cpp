@@ -251,14 +251,13 @@ void ComboBox::paint(PaintContext& ctx)
 void ComboBox::onMousePress(MouseEvent& e)
 {
     if (!enabled_) return;
-    if (open_) closeDropdown(); else openDropdown();
+    if (isOpen()) closeDropdown(); else openDropdown();
     e.consumed = true;
 }
 
 void ComboBox::openDropdown()
 {
-    if (open_ || items_.empty()) return;
-    open_ = true;
+    if (isOpen() || items_.empty()) return;
 
     Rect abs = absoluteRect();
     float rowH = Theme::instance().inputHeight;
@@ -284,8 +283,12 @@ void ComboBox::openDropdown()
 
 void ComboBox::closeDropdown()
 {
-    if (!open_) return;
-    open_ = false;
+    if (!isOpen()) return;
     WidgetApp::instance().closePopup();
     markDirty();
+}
+
+bool ComboBox::isOpen() const
+{
+    return WidgetApp::instance().popupOwner() == this;
 }

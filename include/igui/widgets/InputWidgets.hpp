@@ -225,11 +225,10 @@ public:
     /// @brief Close the calendar popup.
     void closeCalendar();
     /// @brief Check if the calendar is open.
-    bool isOpen() const { return open_; }
+    bool isOpen() const;
 
 private:
     Date  date_;
-    bool  open_ = false;
 
     String formatDate() const;
 };

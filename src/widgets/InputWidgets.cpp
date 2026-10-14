@@ -892,14 +892,13 @@ void DatePicker::paint(PaintContext& ctx)
 void DatePicker::onMousePress(MouseEvent& e)
 {
     if (!enabled_) return;
-    if (open_) closeCalendar(); else openCalendar();
+    if (isOpen()) closeCalendar(); else openCalendar();
     e.consumed = true;
 }
 
 void DatePicker::openCalendar()
 {
-    if (open_) return;
-    open_ = true;
+    if (isOpen()) return;
 
     Rect abs = absoluteRect();
     float popW = 7 * 32.0f + 16;  // 7 cols * ~32px + padding
@@ -920,10 +919,14 @@ void DatePicker::openCalendar()
 
 void DatePicker::closeCalendar()
 {
-    if (!open_) return;
-    open_ = false;
+    if (!isOpen()) return;
     WidgetApp::instance().closePopup();
     markDirty();
+}
+
+bool DatePicker::isOpen() const
+{
+    return WidgetApp::instance().popupOwner() == this;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

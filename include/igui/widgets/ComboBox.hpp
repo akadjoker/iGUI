@@ -63,12 +63,13 @@ public:
     void openDropdown();
     /// @brief Close the dropdown popup.
     void closeDropdown();
+    /// @brief Check if the dropdown is the popup on screen.
+    bool isOpen() const;
 
 private:
     ct::Vector<String> items_;
     int   selectedIndex_ = -1;
     int   maxVisible_    = 8;
-    bool  open_          = false;
 
     friend class ComboPopup_;
 };

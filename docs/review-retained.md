@@ -102,7 +102,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       `accepted=0 cancelled=0`. No FileDialog, Enter no campo do nome também não
       abre ([FileDialog.cpp:1000-1002](../src/widgets/FileDialog.cpp#L1000-L1002)).
 
-- [ ] **9. Fechar um popup com um clique fora deixa o dono a pensar que está
+- [x] **9. Fechar um popup com um clique fora deixa o dono a pensar que está
       aberto** — [ComboBox.cpp:254](../src/widgets/ComboBox.cpp#L254).
       O estado vive no dono (`ComboBox::open_`, `DatePicker::open_`), mas é o
       `WidgetApp` que fecha sem avisar.
