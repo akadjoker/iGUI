@@ -417,6 +417,7 @@ private:
     int   width_       = 0;
     int   height_      = 0;
     float dt_          = 0.0f;
+    double   elapsedSeconds_ = 0.0;   // accumulated here: a short frame never rounds to 0
     uint32_t elapsedMs_ = 0;
     Color bgColor_     = Color(30, 30, 30, 255);
     bool  debugLayout_ = false;

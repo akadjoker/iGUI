@@ -1210,6 +1210,21 @@ static void test_hidden_widgets_do_not_paint()
     assert(canvasPaints == 1);
 }
 
+// O relógio do WidgetApp não perde os frames curtos: 2 s a 2000 fps são 2000 ms
+// (antes cada frame de 0,5 ms somava 0 ms, e o duplo clique deixava de ter tempo).
+static void test_widget_app_clock_keeps_short_frames()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    IO io;
+    io.deltaTime = 0.0005f;
+    const uint32_t start = app.elapsedMs();
+    for (int i = 0; i < 4000; ++i)
+        app.update(io);
+    const uint32_t elapsed = app.elapsedMs() - start;
+    assert(elapsed >= 1999u && elapsed <= 2001u);
+}
+
 int main()
 {
     using namespace ig;
@@ -1242,6 +1257,7 @@ int main()
     test_file_dialog_opens_only_on_a_double_click();
     test_list_widget_scrolls_its_rows_for_the_pointer_too();
     test_hidden_widgets_do_not_paint();
+    test_widget_app_clock_keeps_short_frames();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

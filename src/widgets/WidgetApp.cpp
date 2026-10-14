@@ -111,7 +111,8 @@ bool WidgetApp::init()
 void WidgetApp::update(const ig::retained::IO& io)
 {
     dt_     = io.deltaTime;
-    elapsedMs_ += static_cast<uint32_t>(dt_ * 1000.0f);
+    elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;
+    elapsedMs_ = static_cast<uint32_t>(fmod(elapsedSeconds_ * 1000.0, 4294967296.0));
 
     // Cache modifier keys & clipboard callbacks from IO
     ioKeyCtrl_  = io.keyCtrl;
