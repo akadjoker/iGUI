@@ -1305,6 +1305,80 @@ static void test_signal_handlers_can_change_the_signal()
     assert(!after);
 }
 
+namespace
+{
+struct TallContent : ig::retained::Widget
+{
+    explicit TallContent(float height)
+            : height_(height)
+    {
+    }
+    Vec2f sizeHint() const override
+    {
+        return { rect_.w, height_ };
+    }
+    float height_;
+};
+} // namespace
+
+// A roda rola só a ScrollView de dentro, e um clique na calha da barra de uma
+// ListBox move a lista sem selecionar a linha que está àquela altura. Uma
+// ScrollView sem nada para rolar deixa a roda passar para a de fora.
+static void test_scrolling_stays_in_the_view_that_scrolls()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("nestedscroll");
+    auto* screen = stage->createChild<Widget>();
+    auto* outer = screen->createChild<ScrollView>();
+    outer->setRect({ 0.0f, 0.0f, 300.0f, 200.0f });
+    auto* outerContent = outer->setContent<TallContent>(1000.0f);
+    auto* inner = outerContent->createChild<ScrollView>();
+    inner->setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    inner->setContent<TallContent>(500.0f);
+    auto* fits = outerContent->createChild<ScrollView>();
+    fits->setRect({ 0.0f, 120.0f, 200.0f, 60.0f });
+    fits->setContent<TallContent>(20.0f);
+    auto* list = screen->createChild<ListBox>();
+    list->setRect({ 0.0f, 250.0f, 200.0f, 100.0f });
+    for (int i = 0; i < 50; ++i) list->addItem("item");
+    int selections = 0;
+    list->selectionChanged.connect([&selections](int) { ++selections; });
+    assert(app.setStage("nestedscroll", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 400.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    io.mouseX = 50.0f;
+    io.mouseY = 50.0f;
+    app.update(io);
+    io.mouseWheelY = -1.0f;
+    app.update(io);
+    io.mouseWheelY = 0.0f;
+    assert(inner->scrollY() > 0.0f);
+    assert(outer->scrollY() == 0.0f);
+
+    io.mouseY = 150.0f;
+    app.update(io);
+    io.mouseWheelY = -1.0f;
+    app.update(io);
+    io.mouseWheelY = 0.0f;
+    assert(outer->scrollY() > 0.0f);
+
+    io.mouseX = 196.0f;
+    io.mouseY = 340.0f;
+    app.update(io);
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(selections == 0);
+    assert(list->selectedIndex() == -1);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1481,6 +1555,7 @@ int main()
     test_widget_app_clock_keeps_short_frames();
     test_key_handler_can_remove_its_widget();
     test_signal_handlers_can_change_the_signal();
+    test_scrolling_stays_in_the_view_that_scrolls();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
