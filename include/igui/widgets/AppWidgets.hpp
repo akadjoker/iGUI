@@ -22,6 +22,8 @@ namespace ig { namespace retained
 class Breadcrumbs : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Breadcrumbs, Widget);
+
     Breadcrumbs();
 
     /// @brief Set the path segments.
@@ -64,6 +66,8 @@ private:
 class SearchBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(SearchBar, Widget);
+
     SearchBar();
 
     /// @brief Set the placeholder text.
@@ -114,6 +118,8 @@ private:
 class SplitButton : public Widget
 {
 public:
+    IG_WIDGET_CLASS(SplitButton, Widget);
+
     explicit SplitButton(const String& text = "Action");
     ~SplitButton() override;
 
@@ -189,6 +195,8 @@ class TreeView;
 class Outliner : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Outliner, Widget);
+
     Outliner();
     ~Outliner() override;
 
@@ -263,6 +271,8 @@ private:
 class RichText : public Widget
 {
 public:
+    IG_WIDGET_CLASS(RichText, Widget);
+
     RichText();
 
     /// @brief Set content from a markdown string.
@@ -326,6 +336,8 @@ private:
 class Viewport3D : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Viewport3D, Widget);
+
     Viewport3D();
 
     /// @brief Set the texture to display (FBO color attachment).

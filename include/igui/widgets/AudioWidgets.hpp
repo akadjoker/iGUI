@@ -17,6 +17,8 @@ namespace ig { namespace retained
 class Knob : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Knob, Widget);
+
     Knob();
 
     /// @brief Set the knob value.
@@ -124,6 +126,8 @@ private:
 class Fader : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Fader, Widget);
+
     Fader();
 
     /// @brief Set the fader value (clamped to the range).
@@ -219,6 +223,8 @@ private:
 class LinearKnob : public Widget
 {
 public:
+    IG_WIDGET_CLASS(LinearKnob, Widget);
+
     LinearKnob();
 
     /// @brief Set the slider value.
@@ -275,6 +281,8 @@ private:
 class ADSRWidget : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ADSRWidget, Widget);
+
     ADSRWidget();
 
     /// @brief Set the attack time in seconds.
@@ -339,6 +347,8 @@ private:
 class VUMeter : public Widget
 {
 public:
+    IG_WIDGET_CLASS(VUMeter, Widget);
+
     enum class Orientation { Vertical, Horizontal };
 
     VUMeter();
@@ -389,6 +399,8 @@ private:
 class SpectrumAnalyzer : public Widget
 {
 public:
+    IG_WIDGET_CLASS(SpectrumAnalyzer, Widget);
+
     SpectrumAnalyzer();
 
     /// @brief Set the number of frequency bins.
@@ -448,6 +460,8 @@ private:
 class WaveformView : public Widget
 {
 public:
+    IG_WIDGET_CLASS(WaveformView, Widget);
+
     WaveformView();
 
     /// @brief Load audio sample data for display.
@@ -531,6 +545,8 @@ struct PianoNote {
 class PianoRoll : public Widget
 {
 public:
+    IG_WIDGET_CLASS(PianoRoll, Widget);
+
     PianoRoll();
 
     /// @brief Add a note to the roll.

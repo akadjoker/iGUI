@@ -52,6 +52,8 @@ using ig::syntax::BlitzHighlighter;
 class CodeEditor : public TextEdit
 {
 public:
+    IG_WIDGET_CLASS(CodeEditor, TextEdit);
+
     CodeEditor();
     ~CodeEditor() override;
 

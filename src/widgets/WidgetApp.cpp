@@ -869,7 +869,7 @@ namespace {
 void collectDockPanels(Widget* widget, ct::Vector<DockPanel*>& out)
 {
     if (!widget) return;
-    if (auto* dock = dynamic_cast<DockPanel*>(widget))
+    if (auto* dock = widget_cast<DockPanel>(widget))
         out.push_back(dock);
     for (auto* child : widget->children())
         collectDockPanels(child, out);

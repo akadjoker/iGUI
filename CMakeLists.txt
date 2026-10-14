@@ -5,6 +5,12 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(IGUI_NO_RTTI "Compile every iGUI target with -fno-rtti (ignored on MSVC)" ON)
+
+if(IGUI_NO_RTTI AND NOT MSVC)
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>)
+endif()
+
 option(IGUI_BUILD_TESTS "Build iGUI core tests" ON)
 option(IGUI_BUILD_FONT "Build the optional embedded font atlas module" OFF)
 set(IGUI_FONT_INPUT "" CACHE FILEPATH

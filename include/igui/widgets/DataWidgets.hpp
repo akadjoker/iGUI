@@ -17,6 +17,8 @@ namespace ig { namespace retained
 class DataGrid : public Widget
 {
 public:
+    IG_WIDGET_CLASS(DataGrid, Widget);
+
     /// @brief Sort order for column headers.
     enum class SortOrder { None, Ascending, Descending };
 
@@ -177,6 +179,8 @@ private:
 class TreeGrid : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TreeGrid, Widget);
+
     struct Node {
         ct::Vector<String> cells;
         ct::Vector<Node*>       children;

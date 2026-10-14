@@ -32,6 +32,8 @@ struct ThumbnailItem {
 class ThumbnailGrid : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ThumbnailGrid, Widget);
+
     ThumbnailGrid();
 
     /// @brief Add a thumbnail item with label and color.

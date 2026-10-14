@@ -32,6 +32,8 @@ namespace ig { namespace retained
 class ToolBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ToolBar, Widget);
+
     ToolBar();
     ~ToolBar() override;
 

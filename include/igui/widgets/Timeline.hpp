@@ -78,6 +78,8 @@ struct TimelineTrack {
 class Timeline : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Timeline, Widget);
+
     Timeline();
     /// Joint IDs are track indices; removing tracks invalidates subsequent IDs.
     int addJoint(const String& name, int parent = -1);

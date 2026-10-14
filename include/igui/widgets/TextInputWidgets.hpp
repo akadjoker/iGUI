@@ -18,6 +18,8 @@ namespace ig { namespace retained
 class TextInput : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TextInput, Widget);
+
     enum class Mode { Normal, Password, NumberOnly, ReadOnly };
 
     explicit TextInput(const String& text = "", Mode mode = Mode::Normal);
@@ -95,6 +97,8 @@ private:
 class TextEdit : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TextEdit, Widget);
+
     struct TextPos
     {
         int line = 0;
