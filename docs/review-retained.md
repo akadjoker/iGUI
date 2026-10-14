@@ -235,7 +235,7 @@ Só por leitura:
       calculado e nunca usado).
 - [x] [ConsoleWidget.cpp:50](../src/widgets/ConsoleWidget.cpp#L50) — as linhas
       duplicadas colapsadas não são contadas mas são subtraídas no trim.
-- [ ] [WidgetApp.hpp:254](../include/igui/widgets/WidgetApp.hpp#L254) e 260 —
+- [x] [WidgetApp.hpp:254](../include/igui/widgets/WidgetApp.hpp#L254) e 260 —
       `setStatusText` e `statusBarHeight` estão declaradas e nunca definidas, e o
       `statusBar_` é sempre nulo.
 - [ ] Eficiência: o `fireEvent("move")` aloca strings e copia callbacks em cada
