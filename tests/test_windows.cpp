@@ -480,6 +480,82 @@ void test_dock_spaces_in_two_windows_keep_their_own_state()
     remove(path);
 }
 
+// One panel's content per region and frame: not on the first frame after the state
+// file names another tab as the one on top, and not on the frame a tab is dropped
+// into a region that already shows one.
+void test_dock_region_draws_one_panel_per_frame()
+{
+    const char* path = "igui_dock_one_panel_test.ini";
+    remove(path);
+    ct::Ini previous;
+    previous.set("dock:host/editor", "tabs_left", "A|B");
+    previous.set("dock:host/editor", "selected_left", "B");
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+    int drawnLeft = 0;
+    int drawnRight = 0;
+    bool withRight = false;
+    auto build = [&](ig::Context& c)
+    {
+        drawnLeft = 0;
+        drawnRight = 0;
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor"))
+        {
+            if (withRight && c.beginDockPanel("R", ig::DockSlot::Right))
+            {
+                c.label("r");
+                ++(c.itemRect().x > 400.0f ? drawnRight : drawnLeft);
+                c.endDockPanel();
+            }
+            const char* names[2] = { "A", "B" };
+            for (const char* name: names)
+                if (c.beginDockPanel(name, ig::DockSlot::Left))
+                {
+                    c.label(name);
+                    ++(c.itemRect().x > 400.0f ? drawnRight : drawnLeft);
+                    c.endDockPanel();
+                }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+
+    for (int i = 0; i < 3; ++i)
+    {
+        harness.frame(build);
+        check(drawnLeft == 1, "two panels drew in the left region in the same frame");
+    }
+
+    withRight = true;
+    harness.frame(build);
+    harness.frame(build);
+    const float tab = context.theme().titleBarHeight + context.theme().widgetHeight * 0.5f;
+    const ig::Vec2 to(650.0f, 300.0f);
+    context.pushEvent(ig::Event::pointerMove(30.0f, tab));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 30.0f, tab));
+    harness.frame(build);
+    for (int step = 1; step <= 4; ++step)
+    {
+        context.pushEvent(ig::Event::pointerMove(30.0f + (to.x - 30.0f) * step / 4.0f,
+                tab + (to.y - tab) * step / 4.0f));
+        harness.frame(build);
+        check(drawnRight <= 1, "two panels drew in the right region in the same frame");
+    }
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, to.x, to.y));
+    harness.frame(build);
+    check(drawnRight <= 1, "the frame a tab was dropped drew two panels in its region");
+    harness.frame(build);
+    check(drawnRight == 1, "the region the tab was dropped into shows nothing");
+
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -807,6 +883,7 @@ int main()
     test_dock_panel_closed_after_a_drag_keeps_its_region();
     test_dock_sizes_survive_a_frame_of_squeezing();
     test_dock_spaces_in_two_windows_keep_their_own_state();
+    test_dock_region_draws_one_panel_per_frame();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();
