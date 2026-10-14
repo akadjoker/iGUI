@@ -7156,6 +7156,56 @@ void test_wheel_areas_forget_what_is_gone()
     assert(context.wheelAreaCount() <= steady + 1u);
 }
 
+// Numa tabela SizingFixedFit, arrastar a borda de uma coluna muda a largura
+// dessa coluna (a medida do conteúdo deixa de mandar nela) e as seguintes andam
+// com ela; a largura escolhida fica de um frame para o outro.
+void test_table_sizing_fixed_fit_resizes()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float weights[] = { 1.0f, 1.0f, 1.0f };
+    ig::Rect header[3];
+    ig::Rect cell[3];
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela redimensiona", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
+        ig::TableStyle style;
+        style.sizingFixedFit = true;
+        if (c.beginTable("fit", ig::Span<float>(weights, 3), style, 0.0f))
+        {
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader(column == 0 ? "um" : (column == 1 ? "dois" : "tres"));
+                header[column] = c.itemRect();
+            }
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.dummy(40.0f, 16.0f);
+                cell[column] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.frame(build);
+    const float before = cell[1].x - cell[0].x;
+    const float secondBefore = cell[2].x - cell[1].x;
+    const float edgeX = header[0].x + header[0].width;
+    const float edgeY = header[0].y + header[0].height * 0.5f;
+    harness.drag(edgeX, edgeY, edgeX + 50.0f, edgeY, build, 4);
+    harness.frame(build);
+    harness.frame(build);
+    assert(cell[1].x - cell[0].x == before + 50.0f);
+    assert(cell[2].x - cell[1].x == secondBefore);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8219,6 +8269,7 @@ int main()
     test_removed_window_lets_go_of_the_pointer();
     test_available_height_follows_the_container();
     test_wheel_areas_forget_what_is_gone();
+    test_table_sizing_fixed_fit_resizes();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

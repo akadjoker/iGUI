@@ -10826,7 +10826,17 @@ void Context::configureTable(const TableStyle &style)
                  i < stored->size() && i < table_.contentWidths.size(); ++i)
                 table_.contentWidths[i] = (*stored)[i];
         }
+        const ct::Vector<float> *user = tableUserWidths_.find(table_.id);
+        table_.userWidths.assign(static_cast<ct::Vector<float>::size_type>(table_.columns), 0.0f);
+        if (user)
+        {
+            for (ct::Vector<float>::size_type i = 0u;
+                 i < user->size() && i < table_.userWidths.size(); ++i)
+                table_.userWidths[i] = (*user)[i];
+        }
     }
+    else
+        table_.userWidths.clear();
     loadTableOrder(style);
     beginTableScroll(style);
 }
@@ -11109,6 +11119,10 @@ float Context::tableColumnWidth(int display) const
         table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(column)] == 0u)
         return 0.0f;
     if (table_.style.sizingFixedFit &&
+        static_cast<ct::Vector<float>::size_type>(column) < table_.userWidths.size() &&
+        table_.userWidths[static_cast<ct::Vector<float>::size_type>(column)] > 0.0f)
+        return table_.userWidths[static_cast<ct::Vector<float>::size_type>(column)];
+    if (table_.style.sizingFixedFit &&
         static_cast<ct::Vector<float>::size_type>(column) < table_.contentWidths.size() &&
         table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)] > 0.0f)
         return table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)];
@@ -11304,7 +11318,16 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         const float rightWidth = tableColumnWidth(table_.column + 1);
         const float pairWidth = leftWidth + rightWidth;
         const float minimumWidth = 32.0f;
-        if (pairWidth > minimumWidth * 2.0f && deltaX != 0.0f)
+        if (table_.style.sizingFixedFit)
+        {
+            const ct::Vector<float>::size_type model = static_cast<ct::Vector<float>::size_type>(leftModel);
+            if (deltaX != 0.0f && model < table_.userWidths.size())
+            {
+                table_.userWidths[model] = leftWidth + deltaX > minimumWidth ? leftWidth + deltaX : minimumWidth;
+                tableUserWidths_.put(table_.id, table_.userWidths);
+            }
+        }
+        else if (pairWidth > minimumWidth * 2.0f && deltaX != 0.0f)
         {
             const float nextLeftWidth = clamp(leftWidth + deltaX, minimumWidth, pairWidth - minimumWidth);
             const float nextRightWidth = pairWidth - nextLeftWidth;
@@ -12790,6 +12813,7 @@ void Context::clearWidgetState()
     dockSpaces_.clear();
     tableResize_ = TableResizeState();
     tableScrolls_.clear();
+    tableUserWidths_.clear();
     numericEditId_ = InvalidWidgetId;
     numericEditText_.clear();
     numericEditValue_ = 0.0;

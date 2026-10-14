@@ -149,7 +149,9 @@ struct TableStyle
     // largura da tabela pelos pesos (é o SizingFixedFit do ImGui). A largura é a que
     // as células pediram no frame anterior (o conteúdo de uma célula só se sabe
     // depois de ela ser submetida, como tudo o que se mede aqui); na primeira vez
-    // vale a divisão pelos pesos, que é onde as colunas já estavam.
+    // vale a divisão pelos pesos, que é onde as colunas já estavam. Arrastar a
+    // borda de uma coluna (com os pesos editáveis) dá-lhe a largura escolhida, que
+    // passa à frente da medida; as outras colunas não mudam de largura.
     bool sizingFixedFit;
 
     TableStyle()
@@ -2081,6 +2083,9 @@ private:
         // SizingFixedFit: a largura que cada coluna (do modelo) pediu neste frame, para
         // o frame seguinte a usar. O cabeçalho também conta.
         ct::Vector<float> contentWidths;
+        // SizingFixedFit: the width the user dragged a column to, which wins over
+        // what its content measures (0 = not resized).
+        ct::Vector<float> userWidths;
         int freezeRows;
         float viewHeight;
         bool scrollY;
@@ -2212,6 +2217,7 @@ private:
     // As larguras que cada coluna pediu, por tabela (ver TableStyle::sizingFixedFit):
     // o que o conteúdo de uma coluna mede vale para o frame seguinte.
     ct::HashMap<WidgetId, ct::Vector<float>> tableFitWidths_;
+    ct::HashMap<WidgetId, ct::Vector<float>> tableUserWidths_;
     // Mede a largura do conteúdo da célula em curso (o chamador já a submeteu) e
     // guarda-a na coluna dela do modelo.
     void measureTableCellWidth();
