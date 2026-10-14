@@ -4972,6 +4972,56 @@ void test_main_menu_bar_item_responds_to_its_edges()
     }
 }
 
+// A barra de rolagem de um beginCombo arrasta-se.
+void test_combo_scrollbar_can_be_dragged()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    char names[14][4];
+    ig::StringView items[14];
+    for (int i = 0; i < 14; ++i)
+    {
+        snprintf(names[i], sizeof(names[i]), "%02d", i);
+        items[i] = ig::StringView(names[i], 2);
+    }
+    ig::Rect header;
+    ig::Rect first;
+    bool open = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
+        open = c.beginCombo("escolha", items[0], 0.0f, 8);
+        if (open)
+        {
+            for (int i = 0; i < 14; ++i)
+            {
+                c.selectable(items[i], i == 0);
+                if (i == 0) first = c.itemRect();
+            }
+            c.endCombo();
+        }
+        else
+            header = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(header.x + header.width * 0.5f, header.y + header.height * 0.5f, build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(open);
+    const ig::Theme& theme = context.theme();
+    const float bar = theme.scrollbarWidth > 4.0f ? theme.scrollbarWidth * 0.35f : 4.0f;
+    const float barX = header.x + header.width - theme.windowPadding - bar * 0.5f;
+    const float barY = header.y + header.height + theme.windowPadding + 3.0f;
+    const float before = first.y;
+    harness.drag(barX, barY, barX, barY + 150.0f, build, 6);
+    harness.frame(build);
+    assert(open);
+    assert(first.y < before);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5992,6 +6042,7 @@ int main()
     test_virtual_list_that_shrinks_is_not_empty();
     test_submenu_closes_when_another_item_is_hovered();
     test_main_menu_bar_item_responds_to_its_edges();
+    test_combo_scrollbar_can_be_dragged();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
