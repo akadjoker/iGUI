@@ -2416,6 +2416,10 @@ private:
     // A barra de menu da aplicação (ver beginMainMenuBar): a janela dela, que é a
     // última a ser desenhada, e se ela foi submetida neste frame.
     WindowHandle mainMenuBarWindow_;
+    // Height of the application menu bar while it is submitted (0 without one):
+    // maximized, tiled and main windows start below it (see workArea).
+    float menuBarStrip_ = 0.0f;
+    Rect workArea() const;
     bool mainMenuBarOpen_;
     // Combo de conteúdo livre (ver beginCombo/endCombo). Enquanto o popup está
     // aberto o cursor do layout está dentro dele e o que o chamador submete vai

@@ -5835,6 +5835,75 @@ void test_window_without_open_flag_has_no_close_button()
     assert(!shown);
 }
 
+// Com a barra de menu principal à vista, uma janela maximizada, as janelas em
+// mosaico e a janela principal começam por baixo dela, e o X da maximizada fecha.
+void test_maximized_window_stays_below_the_main_menu_bar()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool open = true;
+    bool useMain = false;
+    ig::Rect mainLabel;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginMainMenuBar())
+        {
+            if (c.beginMenu("File"))
+            {
+                c.menuItem("Quit");
+                c.endMenu();
+            }
+            c.endMainMenuBar();
+        }
+        if (useMain)
+        {
+            if (c.beginMainWindow("principal"))
+            {
+                c.label("topo");
+                mainLabel = c.itemRect();
+                c.endWindow();
+            }
+            return;
+        }
+        if (c.beginWindow("W", ig::Rect(100.0f, 100.0f, 400.0f, 300.0f), &open))
+        {
+            c.label("x");
+            c.endWindow();
+        }
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float bar = context.mainMenuBarHeight();
+    context.maximizeWindow("W");
+    harness.frame(build);
+    harness.frame(build);
+    ig::Rect bounds = context.windowBounds("W");
+    assert(bounds.y == bar);
+    assert(bounds.y + bounds.height <= 800.0f);
+
+    context.restoreWindow("W");
+    context.tileAllWindows();
+    harness.frame(build);
+    bounds = context.windowBounds("W");
+    assert(bounds.y >= bar);
+
+    context.maximizeWindow("W");
+    harness.frame(build);
+    bounds = context.windowBounds("W");
+    const float title = context.theme().titleBarHeight;
+    harness.click(bounds.x + bounds.width - title * 0.5f, bounds.y + title * 0.5f, build);
+    harness.frame(build);
+    assert(!open);
+
+    useMain = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(mainLabel.y >= bar);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6871,6 +6940,7 @@ int main()
     test_dialog_and_modal_popup_scrims_are_drawn();
     test_escape_closes_a_popup_inside_a_dialog_first();
     test_window_without_open_flag_has_no_close_button();
+    test_maximized_window_stays_below_the_main_menu_bar();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

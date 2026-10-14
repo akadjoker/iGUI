@@ -96,7 +96,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [x] **W8. Uma janela sem `bool *open` mostra o X, e o clique fecha-a sem volta** —
       [Gui.cpp:13383](../src/Gui.cpp#L13383) e 1739. Nem `restoreWindow` nem
       `raiseWindow` a trazem de volta.
-- [ ] **W9. Uma janela maximizada fica com a barra de título debaixo da barra de
+- [x] **W9. Uma janela maximizada fica com a barra de título debaixo da barra de
       menu** — [Gui.cpp:1892](../src/Gui.cpp#L1892), 13337, 1973 (tile). O X e o
       restaurar deixam de se poder clicar.
 - [ ] **W10. Um `beginChild` fora de vista não avança o layout** —
