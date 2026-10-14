@@ -699,6 +699,50 @@ void test_set_dock_sizes_is_a_starting_size()
     remove(path);
 }
 
+// The tab bar of a region is drawn once per frame, not once per panel of the region.
+void test_dock_tab_bar_is_drawn_once_per_region()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor"))
+        {
+            const char* names[3] = { "Alpha", "Bravo", "Charlie" };
+            for (const char* name: names)
+                if (c.beginDockPanel(name, ig::DockSlot::Left))
+                {
+                    c.label("x");
+                    c.endDockPanel();
+                }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+    auto count = [](const ig::DrawData& data, const char* text)
+    {
+        const ig::StringView wanted(text);
+        int found = 0;
+        for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand& command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text) continue;
+            const ig::TextCommand& run = command.payload.text;
+            if (run.textSize == wanted.size() && memcmp(data.textBytes.data() + run.textOffset,
+                                                         wanted.data(), wanted.size()) == 0)
+                ++found;
+        }
+        return found;
+    };
+
+    harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
+    check(count(data, "Alpha") == 1, "the first tab was drawn more than once");
+    check(count(data, "Charlie") == 1, "the last tab was drawn more than once");
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -1029,6 +1073,7 @@ int main()
     test_dock_region_draws_one_panel_per_frame();
     test_dock_tab_title_follows_the_label_convention();
     test_set_dock_sizes_is_a_starting_size();
+    test_dock_tab_bar_is_drawn_once_per_region();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();

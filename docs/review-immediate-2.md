@@ -151,7 +151,7 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
 - [x] **D7. `setDockSizes` no primeiro frame apaga os tamanhos lidos do `.ini`, e
       nesse frame não há clamp** — [Gui.cpp:10003](../src/Gui.cpp#L10003). Um
       tamanho grande esconde o painel Center nesse frame.
-- [ ] **D8 (menor). A barra de tabs de um slot é redesenhada por cada painel do
+- [x] **D8 (menor). A barra de tabs de um slot é redesenhada por cada painel do
       slot** — [Gui.cpp:10106](../src/Gui.cpp#L10106). A geometria sai duplicada e
       um hover translúcido mistura-se duas vezes.
 
