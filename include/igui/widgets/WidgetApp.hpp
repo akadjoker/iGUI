@@ -127,6 +127,8 @@ public:
     const ig::retained::Font* font() const { return font_; }
     /// @brief Measure text width using the cached font.
     float textWidth(const char* text) const;
+    /// @brief Measure text width with a font (nullptr: the cached font) and a scale.
+    float textWidth(const char* text, const ig::retained::Font* font, float scale = 1.0f) const;
     /// @brief Get approximate frames per second.
     int   fps()       const { return dt_ > 0.0f ? static_cast<int>(1.0f / dt_) : 0; }
     /// @brief Get the current mouse X position.

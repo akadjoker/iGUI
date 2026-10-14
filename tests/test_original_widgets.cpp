@@ -2715,6 +2715,99 @@ static void test_text_edit_scrolls_to_a_line_before_painting()
     assert(edit->firstVisibleLine() == 100);
 }
 
+// Os campos de texto medem os cliques com a fonte e o zoom com que pintam: um
+// clique a um quarto do 11.º carácter põe o cursor na coluna 10 num TextEdit
+// com zoom 2, num TextInput e num TextEdit com fonte própria (também com os
+// números de linha à vista), e o Alt+clique do CodeEditor com fonte própria
+// acrescenta um cursor na coluna 10. O End leva a vista ao fim da linha.
+static void test_text_fields_hit_test_with_their_paint_font()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    atlas.addFontDefault(16.0f);
+    atlas.addFontDefault(32.0f);
+    assert(atlas.build());
+    const Font* font = atlas.font(0);
+    const Font* big = atlas.font(1);
+    const float smallAdvance = font->findGlyph('a')->advanceX;
+    const float bigAdvance = big->findGlyph('a')->advanceX;
+    assert(bigAdvance > smallAdvance * 1.5f);
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("hitfont");
+    auto* screen = stage->createChild<Widget>();
+    auto* zoomed = screen->createChild<TextEdit>();
+    zoomed->setRect({ 0.0f, 0.0f, 600.0f, 80.0f });
+    zoomed->setShowLineNumbers(false);
+    zoomed->setFontScale(2.0f);
+    zoomed->setText(String(40, 'a'));
+    auto* field = screen->createChild<TextInput>();
+    field->setRect({ 0.0f, 100.0f, 600.0f, 40.0f });
+    field->setFont(big);
+    field->setText(String(40, 'a'));
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 150.0f, 600.0f, 80.0f });
+    edit->setShowLineNumbers(false);
+    edit->setFont(big);
+    edit->setText(String(40, 'a'));
+    auto* code = screen->createChild<CodeEditor>();
+    code->setRect({ 0.0f, 250.0f, 600.0f, 80.0f });
+    code->setShowLineNumbers(false);
+    code->setShowFolding(false);
+    code->setFont(big);
+    code->setText(String(40, 'a'));
+    assert(app.setStage("hitfont", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    GetDrawList().clear();
+    DrawData data;
+    app.paint(data, font);
+
+    const Theme& theme = Theme::instance();
+    auto click = [](Widget* widget, float localX, float localY, bool alt)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.alt = alt;
+        press.localX = localX;
+        press.localY = localY;
+        press.x = widget->absoluteRect().x + localX;
+        press.y = widget->absoluteRect().y + localY;
+        widget->onMousePress(press);
+        MouseEvent release = press;
+        widget->onMouseRelease(release);
+    };
+    const float pad = theme.textEditPadding;
+    click(zoomed, pad + smallAdvance * 2.0f * 10.25f, 4.0f, false);
+    assert(zoomed->cursorPos().col == 10);
+    click(field, theme.padding + bigAdvance * 10.25f, 20.0f, false);
+    assert(field->cursorPos() == 10);
+    click(edit, pad + bigAdvance * 10.25f, 4.0f, false);
+    assert(edit->cursorPos().col == 10);
+    edit->setShowLineNumbers(true);
+    edit->setText(String(200, 'a'));
+    GetDrawList().clear();
+    DrawData numbered;
+    app.paint(numbered, font);
+    const float gutter = big->findGlyph('9')->advanceX * 2.0f + theme.gutterPadding * 2.0f;
+    click(edit, gutter + pad + bigAdvance * 10.25f, 4.0f, false);
+    assert(edit->cursorPos().col == 10);
+    KeyEvent endKey;
+    endKey.key = Key::End;
+    edit->onKeyPress(endKey);
+    GetDrawList().clear();
+    DrawData scrolled;
+    app.paint(scrolled, font);
+    click(edit, 590.0f, 4.0f, false);
+    assert(edit->cursorPos().col >= 195);
+    code->setCursorPos(0, 30);
+    click(code, pad + bigAdvance * 10.25f, 4.0f, true);
+    assert(code->cursorCount() == 2);
+    assert(code->cursorPosAt(1).col == 10);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3092,6 +3185,7 @@ int main()
     test_global_events_reach_their_handlers();
     test_text_edit_wrap_rows_are_stable();
     test_text_edit_scrolls_to_a_line_before_painting();
+    test_text_fields_hit_test_with_their_paint_font();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

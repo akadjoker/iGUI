@@ -1370,13 +1370,12 @@ void CodeEditor::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
 
     // Cache font pointer for helper functions and set scale
+    if (overrideFont_) ctx.pushFont(overrideFont_);
     lastPaintFont_ = ctx.buFont;
     ctx.font.scale = fontScale_;
 
     // What follows the horizontal scroll stays right of the gutter.
-    if (overrideFont_) ctx.pushFont(overrideFont_);
     updateGutterWidth(ctx);
-    if (overrideFont_) ctx.popFont();
     const Rect textRect = {abs.x + gutterW_, abs.y, std::max(0.0f, abs.w - gutterW_), abs.h};
 
     paintCurrentLineHighlight(ctx, abs);
@@ -1408,6 +1407,7 @@ void CodeEditor::paint(PaintContext& ctx)
         Rect fullAbs = absoluteRect();
         paintMinimap(ctx, fullAbs);
     }
+    if (overrideFont_) ctx.popFont();
 }
 
 // ── Key handling ─────────────────────────────────────────────────────────────
