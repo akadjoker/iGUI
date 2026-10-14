@@ -87,6 +87,9 @@ void GridLayout::paint(PaintContext& ctx)
 void BorderLayout::setWidget(BorderRegion region, Widget* w)
 {
     int idx = static_cast<int>(region);
+    if (regions_[idx] == w) return;
+    for (Widget*& slot : regions_)
+        if (slot == w) slot = nullptr;
     if (regions_[idx])
         removeChild(regions_[idx]);
     regions_[idx] = w;
