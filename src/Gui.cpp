@@ -9669,7 +9669,10 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     const Rect outer(layout_.cursor.x, layout_.cursor.y, resolvedWidth, height);
     const Rect parentClip = contentClip();
     if (intersect(outer, parentClip).width <= 0.0f || intersect(outer, parentClip).height <= 0.0f)
+    {
+        advanceLayout(outer);
         return false;
+    }
 
     const WidgetId id = combineIds(makeWidgetId(idText), 0x4348494c44ull);
     ChildScrollState *scroll = childScrolls_.find(id);
