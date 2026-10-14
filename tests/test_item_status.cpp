@@ -5954,6 +5954,53 @@ void test_child_out_of_view_keeps_its_place()
     assert(!innerShown);
 }
 
+// Um child cuja última linha tem um item alto seguido de um sameLine baixo rola até
+// ao fundo do item alto.
+void test_child_measures_the_last_line()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect tall;
+    ig::Rect child;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 300.0f, 400.0f)));
+        if (c.beginChild("ch", 120.0f))
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                char name[8];
+                snprintf(name, sizeof(name), "b%d", i);
+                c.button(name);
+            }
+            c.dummy(40.0f, 90.0f);
+            tall = c.itemRect();
+            c.sameLine();
+            c.label("pequeno");
+            c.endChild();
+        }
+        child = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int i = 0; i < 30; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(50.0f, 80.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    harness.frame(build);
+    const float contentBottom = child.y + child.height - context.theme().padding;
+    assert(tall.y + tall.height <= contentBottom + 0.01f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6992,6 +7039,7 @@ int main()
     test_window_without_open_flag_has_no_close_button();
     test_maximized_window_stays_below_the_main_menu_bar();
     test_child_out_of_view_keeps_its_place();
+    test_child_measures_the_last_line();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

@@ -9770,8 +9770,16 @@ void Context::endChild()
     const ChildState state = childStack_.back();
     ChildScrollState *scroll = childScrolls_.find(state.id);
     const float offset = scroll ? scroll->offset : 0.0f;
-    const float contentBottom = layout_.hasLastItem
-        ? layout_.lastItem.y + layout_.lastItem.height + offset : state.content.y;
+    float contentBottom = state.content.y;
+    if (layout_.hasLastItem)
+    {
+        float bottom = layout_.lastItem.y + layout_.lastItem.height;
+        if (layout_.lineTop + layout_.lineHeight > bottom)
+            bottom = layout_.lineTop + layout_.lineHeight;
+        if (layout_.contentExtent.y > bottom)
+            bottom = layout_.contentExtent.y;
+        contentBottom = bottom + offset;
+    }
     const float contentHeight = contentBottom > state.content.y ? contentBottom - state.content.y : 0.0f;
     if (scroll)
     {
