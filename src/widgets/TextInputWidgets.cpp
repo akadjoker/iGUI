@@ -987,6 +987,15 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
     wrapDirty_ = false;
 }
 
+bool TextEdit::wrapNeedsRebuild(const PaintContext& ctx, float textW) const
+{
+    if (wrapDirty_) return true;
+    if (wrapKey_.font != ctx.buFont || wrapKey_.scale != ctx.font.scale ||
+            wrapKey_.tabSize != tabSize_ || wrapKey_.wrap != wordWrap_)
+        return true;
+    return wordWrap_ && std::abs(textW - wrapWidth_) > 1.0f;
+}
+
 int TextEdit::totalVisualRows() const
 {
     int total = 0;
@@ -1090,8 +1099,7 @@ void TextEdit::paint(PaintContext& ctx)
     updateGutterWidth(ctx);
 
     float newWrapW = abs.w - gutterW_ - t.textEditPadding * 2;
-    if (wrapDirty_ || (wordWrap_ && std::abs(newWrapW - wrapWidth_) > 1.0f))
-        rebuildWrap(ctx);
+    if (wrapNeedsRebuild(ctx, newWrapW)) rebuildWrap(ctx);
     scrollX_ = std::max(0.0f, std::min(scrollX_, maxScrollX()));
 
     float pad = t.textEditPadding;

@@ -320,6 +320,7 @@ private:
     TextPos hitTest(PaintContext& ctx, float localX, float localY) const;
     TextPos hitTestMouse(float localX, float localY) const;
     void rebuildWrap(PaintContext& ctx);
+    bool wrapNeedsRebuild(const PaintContext& ctx, float textW) const;
 
     // Visual row helpers (for word-wrap)
     struct VisualPos { int line, row; };

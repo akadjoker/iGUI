@@ -2808,6 +2808,68 @@ static void test_text_fields_hit_test_with_their_paint_font()
     assert(code->cursorPosAt(1).col == 10);
 }
 
+// Sem word-wrap, a largura do texto (o limite do scroll horizontal) volta a ser
+// medida quando o zoom ou o tamanho do tab mudam: o End mostra o fim da linha.
+static void test_text_edit_measures_again_after_zoom_and_tab_size()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("remeasure");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 200.0f, 120.0f });
+    edit->setShowLineNumbers(false);
+    assert(app.setStage("remeasure", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    auto columnAtRightEdge = [edit]()
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.localX = 190.0f;
+        press.localY = 2.0f;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+        return edit->cursorPos().col;
+    };
+    auto end = [edit]()
+    {
+        KeyEvent press;
+        press.key = Key::End;
+        edit->onKeyPress(press);
+    };
+
+    edit->setText(String(300, 'a'));
+    paint();
+    edit->setFontScale(2.0f);
+    paint();
+    end();
+    paint();
+    assert(columnAtRightEdge() >= 295);
+
+    edit->setFontScale(1.0f);
+    edit->setText(String(60, '\t') + "x");
+    paint();
+    edit->setTabSize(8);
+    paint();
+    end();
+    paint();
+    assert(columnAtRightEdge() >= 60);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3186,6 +3248,7 @@ int main()
     test_text_edit_wrap_rows_are_stable();
     test_text_edit_scrolls_to_a_line_before_painting();
     test_text_fields_hit_test_with_their_paint_font();
+    test_text_edit_measures_again_after_zoom_and_tab_size();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
