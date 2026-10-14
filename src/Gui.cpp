@@ -560,6 +560,15 @@ float snapGizmoValue(float value, float increment)
     return increment > 0.0f ? roundf(value / increment) * increment : value;
 }
 
+float snapGizmoScale(float value, float increment)
+{
+    const float minimum = 0.01f;
+    const float snapped = snapGizmoValue(value > minimum ? value : minimum, increment);
+    if (snapped >= minimum)
+        return snapped;
+    return increment > 0.0f ? ceilf(minimum / increment) * increment : minimum;
+}
+
 float absoluteValue(float value)
 {
     return value < 0.0f ? -value : value;
@@ -5655,12 +5664,8 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
                     transform.scale.y = state->transformStart.scale.y *
                                         (1.0f + alongY / options.axisLength);
                 }
-                if (transform.scale.x < 0.01f)
-                    transform.scale.x = 0.01f;
-                if (transform.scale.y < 0.01f)
-                    transform.scale.y = 0.01f;
-                transform.scale.x = snapGizmoValue(transform.scale.x, options.scaleSnap);
-                transform.scale.y = snapGizmoValue(transform.scale.y, options.scaleSnap);
+                transform.scale.x = snapGizmoScale(transform.scale.x, options.scaleSnap);
+                transform.scale.y = snapGizmoScale(transform.scale.y, options.scaleSnap);
             }
             changed = previous.position.x != transform.position.x ||
                       previous.position.y != transform.position.y ||
@@ -5871,12 +5876,9 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                 activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisYZ) transform.scale.y *= factor;
             if (activeAxis == Gizmo3DAxisZ || activeAxis == Gizmo3DAxisXYZ ||
                 activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ) transform.scale.z *= factor;
-            if (transform.scale.x < 0.01f) transform.scale.x = 0.01f;
-            if (transform.scale.y < 0.01f) transform.scale.y = 0.01f;
-            if (transform.scale.z < 0.01f) transform.scale.z = 0.01f;
-            transform.scale.x = snapGizmoValue(transform.scale.x, options.scaleSnap);
-            transform.scale.y = snapGizmoValue(transform.scale.y, options.scaleSnap);
-            transform.scale.z = snapGizmoValue(transform.scale.z, options.scaleSnap);
+            transform.scale.x = snapGizmoScale(transform.scale.x, options.scaleSnap);
+            transform.scale.y = snapGizmoScale(transform.scale.y, options.scaleSnap);
+            transform.scale.z = snapGizmoScale(transform.scale.z, options.scaleSnap);
         }
         changed = previous.position.x != transform.position.x || previous.position.y != transform.position.y ||
                   previous.position.z != transform.position.z || previous.rotation.x != transform.rotation.x ||

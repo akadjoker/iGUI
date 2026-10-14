@@ -6670,6 +6670,57 @@ void test_message_box_keys_are_spent_by_the_box()
     }
 }
 
+// Encolher a escala com snap pára no menor passo, não em 0: no gizmo2D e no gizmo3D.
+void test_gizmo_scale_snap_never_reaches_zero()
+{
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Vec2 o;
+        ig::Transform2D transform;
+        transform.position = ig::Vec2(150.0f, 150.0f);
+        ig::Gizmo2DOptions options;
+        options.scaleSnap = 0.5f;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+            c.dummy(1.0f, 1.0f);
+            o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+            c.gizmo2D("g", transform, ig::Gizmo2DMode::Scale, ig::Rect(0.0f, 0.0f, 300.0f, 300.0f),
+                    options);
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.drag(o.x + 205.0f, o.y + 150.0f, o.x + 135.0f, o.y + 150.0f, build, 4);
+        assert(transform.scale.x == 0.5f);
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Vec2 o;
+        ig::Transform3D transform;
+        const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -5, 1 };
+        const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+        ig::Gizmo3DOptions options;
+        options.showModel = false;
+        options.scaleSnap = 0.5f;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+            c.dummy(1.0f, 1.0f);
+            o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+            c.gizmo3D("g", transform, ig::Gizmo3DMode::Scale, ig::Rect(0.0f, 0.0f, 500.0f, 500.0f),
+                    view, projection, options);
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.drag(o.x + 250.0f, o.y + 250.0f, o.x, o.y + 260.0f, build, 4);
+        assert(transform.scale.x == 0.5f && transform.scale.y == 0.5f && transform.scale.z == 0.5f);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7709,6 +7760,7 @@ int main()
     test_drop_target_behind_another_window_does_not_accept();
     test_tree_drop_behind_another_window_does_not_accept();
     test_message_box_keys_are_spent_by_the_box();
+    test_gizmo_scale_snap_never_reaches_zero();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
