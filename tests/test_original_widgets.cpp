@@ -3060,6 +3060,72 @@ static void test_text_edit_click_before_the_wrap_is_measured()
     assert(pos.col >= 0 && pos.col <= static_cast<int>(edit->lineAt(pos.line).size()));
 }
 
+// Com um bloco dobrado, as linhas escondidas não ocupam filas: um clique em cada
+// fila cai na linha visível certa, antes e depois de editar o texto.
+static void test_code_editor_rows_skip_folded_lines()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("foldrows");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    editor->setShowMinimap(false);
+    editor->setHighlighterForFile("main.cpp");
+    editor->setText("int a()\n{\n    return 1;\n}\nint b()\n{\n    return 2;\n}\nend");
+    assert(app.setStage("foldrows", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto rowLines = [&]()
+    {
+        String lines;
+        for (int row = 0; row < 9; ++row)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.clickCount = 1;
+            press.localX = 300.0f;
+            press.localY = rowHeight * (static_cast<float>(row) + 0.5f);
+            press.x = press.localX;
+            press.y = press.localY;
+            editor->onMousePress(press);
+            MouseEvent release = press;
+            editor->onMouseRelease(release);
+            lines += String::number(editor->cursorPos().line) + " ";
+        }
+        return lines;
+    };
+    paint();
+    assert(rowLines() == "0 1 2 3 4 5 6 7 8 ");
+    editor->foldAt(1);
+    paint();
+    assert(editor->isFolded(1));
+    assert(rowLines() == "0 1 4 5 6 7 8 8 8 ");
+    editor->foldAt(5);
+    paint();
+    assert(rowLines() == "0 1 4 5 8 8 8 8 8 ");
+    editor->setCursorPos(8, 3);
+    KeyEvent typed;
+    typed.text[0] = 'x';
+    editor->onTextInput(typed);
+    paint();
+    assert(editor->lineAt(8) == "endx");
+    assert(rowLines() == "0 1 4 5 8 8 8 8 8 ");
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3441,6 +3507,7 @@ int main()
     test_text_edit_measures_again_after_zoom_and_tab_size();
     test_text_edit_wraps_only_the_edited_lines();
     test_text_edit_click_before_the_wrap_is_measured();
+    test_code_editor_rows_skip_folded_lines();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

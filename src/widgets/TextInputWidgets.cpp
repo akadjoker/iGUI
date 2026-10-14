@@ -461,6 +461,7 @@ void TextEdit::setText(const String& text)
     wrapRows_.resize(lines_.size());
     for (int i = 0; i < static_cast<int>(lines_.size()); ++i)
         wrapRows_[i].push_back({ 0, lineColCount(i) });
+    rowStartsDirty_ = true;
     wrapDirty_ = true;
     markDirty();
 }
@@ -995,6 +996,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
     }
     wrapCache_ = std::move(cache);
     wrapDirty_ = false;
+    rowStartsDirty_ = true;
 }
 
 bool TextEdit::wrapNeedsRebuild(const PaintContext& ctx, float textW) const
@@ -1056,6 +1058,7 @@ void TextEdit::linesChanged(int line, int removed, int inserted)
         lineWidths_[i] = 0.0f;
         staleWrapLines_.push_back(i);
     }
+    rowStartsDirty_ = true;
 }
 
 void TextEdit::measureStaleLines(PaintContext& ctx)
@@ -1070,6 +1073,7 @@ void TextEdit::measureStaleLines(PaintContext& ctx)
             wrapRows_[line] = std::move(measured.rows);
     }
     staleWrapLines_.clear();
+    rowStartsDirty_ = true;
     if (widestLineGone_)
     {
         maxContentW_ = 0;
@@ -1079,32 +1083,54 @@ void TextEdit::measureStaleLines(PaintContext& ctx)
     }
 }
 
+const ct::Vector<int>& TextEdit::rowStarts() const
+{
+    const int lines = static_cast<int>(wrapRows_.size());
+    if (rowStartsDirty_ || static_cast<int>(rowStarts_.size()) != lines + 1)
+    {
+        rowStarts_.resize(lines + 1);
+        int row = 0;
+        for (int i = 0; i < lines; ++i)
+        {
+            rowStarts_[i] = row;
+            row += static_cast<int>(wrapRows_[i].size());
+        }
+        rowStarts_[lines] = row;
+        rowStartsDirty_ = false;
+    }
+    return rowStarts_;
+}
+
 int TextEdit::totalVisualRows() const
 {
-    int total = 0;
-    for (auto& rows : wrapRows_) total += static_cast<int>(rows.size());
-    return total;
+    const ct::Vector<int>& starts = rowStarts();
+    return starts[starts.size() - 1];
 }
 
 TextEdit::VisualPos TextEdit::visualToLogical(int visualRow) const
 {
-    int row = 0;
-    for (int i = 0; i < static_cast<int>(wrapRows_.size()); ++i)
+    const ct::Vector<int>& starts = rowStarts();
+    const int lines = static_cast<int>(wrapRows_.size());
+    if (lines == 0) return { 0, 0 };
+    if (visualRow < 0) return { 0, visualRow };
+    if (visualRow >= starts[lines])
+        return { lines - 1, static_cast<int>(wrapRows_[lines - 1].size()) - 1 };
+    int low = 0, high = lines - 1;
+    while (low < high)
     {
-        int nRows = static_cast<int>(wrapRows_[i].size());
-        if (visualRow < row + nRows) return {i, visualRow - row};
-        row += nRows;
+        const int mid = (low + high + 1) / 2;
+        if (starts[mid] <= visualRow) low = mid;
+        else
+            high = mid - 1;
     }
-    int last = static_cast<int>(wrapRows_.size()) - 1;
-    return {last, static_cast<int>(wrapRows_[last].size()) - 1};
+    return { low, visualRow - starts[low] };
 }
 
 int TextEdit::logicalToVisualRow(int line, int row) const
 {
-    int vr = 0;
-    for (int i = 0; i < line && i < static_cast<int>(wrapRows_.size()); ++i)
-        vr += static_cast<int>(wrapRows_[i].size());
-    return vr + row;
+    const ct::Vector<int>& starts = rowStarts();
+    const int lines = static_cast<int>(wrapRows_.size());
+    return starts[std::max(0, std::min(line, lines))] + row;
 }
 
 void TextEdit::ensureCursorVisible()
