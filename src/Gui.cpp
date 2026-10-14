@@ -3182,6 +3182,7 @@ bool Context::beginTabItem(StringView labelText, bool *open, unsigned flags)
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = contentRect.x;
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     layout_.contentExtent = Vec2(0.0f, 0.0f);
     layout_.nextItemWidth = 0.0f;
     layout_.lineTop = contentRect.y;
@@ -3195,7 +3196,7 @@ void Context::endTabItem()
         return;
     TabContentState &content = tabContent_[--tabContentDepth_];
     float height = 0.0f;
-    if (layout_.hasLastItem)
+    if (layout_.hasExtent)
         height = layout_.contentExtent.y - content.rect.y;
     if (height < 0.0f)
         height = 0.0f;
@@ -4016,9 +4017,9 @@ void Context::measurePopup(PopupEntry &entry)
     const float padding = theme_.windowPadding;
     float width = 0.0f;
     float height = 0.0f;
-    if (layout_.hasLastItem)
+    if (layout_.hasExtent)
     {
-        width = layout_.contentExtent.x - layout_.origin.x;
+        width = layout_.contentExtent.x - layout_.baseOriginX;
         height = layout_.contentExtent.y - layout_.origin.y;
     }
     if (width < 0.0f)
@@ -4188,6 +4189,7 @@ void Context::beginPopupContent(const Rect &popupBounds, float insetTop, float p
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     layout_.contentExtent = Vec2(0.0f, 0.0f);
     layout_.nextItemWidth = 0.0f;
     layout_.lineTop = layout_.origin.y;
@@ -4547,6 +4549,7 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     layout_.contentExtent = Vec2(0.0f, 0.0f);
     layout_.fitRight = layout_.origin.x;
     layout_.nextItemWidth = 0.0f;
@@ -4575,9 +4578,9 @@ void Context::endCombo()
     const float padding = theme_.windowPadding;
     float width = 0.0f;
     float height = 0.0f;
-    if (layout_.hasLastItem)
+    if (layout_.hasExtent)
     {
-        width = layout_.fitRight - layout_.origin.x;
+        width = layout_.fitRight - layout_.baseOriginX;
         height = layout_.contentExtent.y - layout_.origin.y;
     }
     if (width < 0.0f)
@@ -4811,9 +4814,9 @@ void Context::endMenu()
             menuPopupWidth_ = menuMeasuredWidth_ > theme_.menuMinWidth ? menuMeasuredWidth_ : theme_.menuMinWidth;
         }
     }
-    if (popupContentDepth_ > 0 && layout_.hasLastItem)
+    if (popupContentDepth_ > 0 && layout_.hasExtent)
     {
-        const float contentRight = layout_.contentExtent.x - layout_.origin.x;
+        const float contentRight = layout_.contentExtent.x - layout_.baseOriginX;
         if (contentRight > menuMeasuredWidth_)
             menuMeasuredWidth_ = contentRight;
     }
@@ -5040,9 +5043,9 @@ void Context::endSubMenu()
             subMenuPopupWidth_ = subMenuMeasuredWidth_ > theme_.menuMinWidth ? subMenuMeasuredWidth_ : theme_.menuMinWidth;
         }
     }
-    if (popupContentDepth_ > 0 && layout_.hasLastItem)
+    if (popupContentDepth_ > 0 && layout_.hasExtent)
     {
-        const float contentRight = layout_.contentExtent.x - layout_.origin.x;
+        const float contentRight = layout_.contentExtent.x - layout_.baseOriginX;
         if (contentRight > subMenuMeasuredWidth_)
             subMenuMeasuredWidth_ = contentRight;
     }
@@ -8501,6 +8504,7 @@ bool Context::beginTooltip()
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     layout_.contentExtent = Vec2(0.0f, 0.0f);
     tooltipOpen_ = true;
     return true;
@@ -8518,11 +8522,11 @@ void Context::endTooltip()
     const float lineHeight = metrics.height > 0.0f ? metrics.height : theme_.fontSize;
     float width = 0.0f;
     float height = 0.0f;
-    if (layout_.hasLastItem)
+    if (layout_.hasExtent)
     {
         // O maior item, não o último: um rótulo curto depois de uma tabela larga
         // não pode encolher a caixa.
-        width = layout_.contentExtent.x - layout_.origin.x;
+        width = layout_.contentExtent.x - layout_.baseOriginX;
         height = layout_.contentExtent.y - layout_.origin.y;
     }
     if (width < 0.0f)
@@ -9761,6 +9765,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     layout_.baseOriginX = content.x;
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     return true;
 }
 
@@ -9772,12 +9777,17 @@ void Context::endChild()
     ChildScrollState *scroll = childScrolls_.find(state.id);
     const float offset = scroll ? scroll->offset : 0.0f;
     float contentBottom = state.content.y;
-    if (layout_.hasLastItem)
+    if (layout_.hasLastItem || layout_.hasExtent)
     {
-        float bottom = layout_.lastItem.y + layout_.lastItem.height;
-        if (layout_.lineTop + layout_.lineHeight > bottom)
-            bottom = layout_.lineTop + layout_.lineHeight;
-        if (layout_.contentExtent.y > bottom)
+        float bottom = state.content.y - offset;
+        if (layout_.hasLastItem)
+        {
+            if (layout_.lastItem.y + layout_.lastItem.height > bottom)
+                bottom = layout_.lastItem.y + layout_.lastItem.height;
+            if (layout_.lineTop + layout_.lineHeight > bottom)
+                bottom = layout_.lineTop + layout_.lineHeight;
+        }
+        if (layout_.hasExtent && layout_.contentExtent.y > bottom)
             bottom = layout_.contentExtent.y;
         contentBottom = bottom + offset;
     }
@@ -10427,6 +10437,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     layout_.baseOriginX = panel.content.x;
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     return true;
 }
 
@@ -11125,6 +11136,7 @@ bool Context::tableNextColumn()
     layout_.cursor = Vec2(cellX, table_.rowY);
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     layout_.fitRight = cellX;
     return true;
 }
@@ -11133,9 +11145,9 @@ void Context::measureTableCellWidth()
 {
     if (!table_.style.sizingFixedFit || table_.column < 0 || table_.column >= table_.columns)
         return;
-    if (!layout_.hasLastItem)
+    if (!layout_.hasExtent)
         return;
-    const float content = layout_.fitRight - layout_.origin.x;
+    const float content = layout_.fitRight - layout_.baseOriginX;
     if (content <= 0.0f)
         return;
     const float width = content + theme_.windowPadding * 2.0f;
@@ -11577,6 +11589,7 @@ bool Context::beginPropertyRow(StringView labelText, float labelWidth)
     layout_.cursor = Vec2(valueX, propertyRow_.bounds.y);
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     propertyRowActive_ = true;
     return true;
 }
@@ -12471,6 +12484,7 @@ void Context::beginLayout(const WindowState &window)
     layout_.baseOriginX = origin.x;
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.hasExtent = false;
     // Um beginGroup sem endGroup não sobrevive à janela/child onde foi aberto.
     groups_.clear();
     layout_.groupDepth = 0;
@@ -12491,8 +12505,11 @@ void Context::advanceLayout(const Rect &item)
     layout_.lastItem = item;
     layout_.nextItemWidth = 0.0f;
     item_.bounds = item;
-    if (!layout_.hasLastItem)
+    if (!layout_.hasExtent)
+    {
         layout_.contentExtent = Vec2(item.x + item.width, item.y + item.height);
+        layout_.hasExtent = true;
+    }
     else
     {
         const float right = item.x + item.width;

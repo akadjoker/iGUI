@@ -107,7 +107,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [x] **W12. `availableWidth` num child dentro de um dock panel devolve a largura do
       painel** — [Gui.cpp:12077](../src/Gui.cpp#L12077). O dock é aplicado depois
       do child; o `availableHeight` faz a ordem certa.
-- [ ] **W13. O `contentExtent` recomeça a cada `indent`/`setCursor`/`beginGroup`** —
+- [x] **W13. O `contentExtent` recomeça a cada `indent`/`setCursor`/`beginGroup`** —
       [Gui.cpp:12440](../src/Gui.cpp#L12440). As caixas medidas encolhem: um
       tooltip rico passa de 280 px a 24 px; afeta também o `measurePopup`, os
       menus e o `measureTableCellWidth`.

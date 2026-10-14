@@ -6045,6 +6045,72 @@ void test_child_inside_a_dock_panel_reports_its_own_width()
     assert(docked == plain);
 }
 
+// Um indent, um grupo ou um setCursor não recomeçam a medida do conteúdo: um
+// tooltip com uma linha longa no princípio fica com a largura dela.
+void test_indent_group_and_set_cursor_keep_the_content_extent()
+{
+    float widths[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    for (int mode = 0; mode < 4; ++mode)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Theme theme = context.theme();
+        theme.tooltipBg = ig::Color(1u, 2u, 3u, 255u);
+        context.setTheme(theme);
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 600.0f, 400.0f)));
+            c.button("passa aqui");
+            if (c.beginTooltip())
+            {
+                c.label("Uma linha de tooltip bastante longa");
+                if (mode == 1)
+                {
+                    c.indent(10.0f);
+                    c.label("x");
+                }
+                else if (mode == 2)
+                {
+                    c.beginGroup();
+                    c.label("x");
+                    c.endGroup();
+                }
+                else if (mode == 3)
+                {
+                    c.setCursor(ig::Vec2(0.0f, 40.0f));
+                    c.label("x");
+                }
+                else
+                    c.label("x");
+                c.endTooltip();
+            }
+            c.endWindow();
+        };
+        context.pushEvent(ig::Event::pointerMove(20.0f, 45.0f));
+        const ig::DrawData* data = nullptr;
+        for (int frame = 0; frame < 4; ++frame)
+        {
+            context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, 0.5f));
+            build(context);
+            data = &context.endFrame();
+        }
+        float left = 1.0e9f;
+        float right = -1.0e9f;
+        for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data->vertices.size(); ++i)
+        {
+            const ig::DrawVertex& vertex = data->vertices[i];
+            if (vertex.color.r == 1u && vertex.color.g == 2u && vertex.color.b == 3u)
+            {
+                left = vertex.position.x < left ? vertex.position.x : left;
+                right = vertex.position.x > right ? vertex.position.x : right;
+            }
+        }
+        widths[mode] = right - left;
+    }
+    assert(widths[0] > 100.0f);
+    for (int mode = 1; mode < 4; ++mode) assert(widths[mode] >= widths[0]);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7085,6 +7151,7 @@ int main()
     test_child_out_of_view_keeps_its_place();
     test_child_measures_the_last_line();
     test_child_inside_a_dock_panel_reports_its_own_width();
+    test_indent_group_and_set_cursor_keep_the_content_extent();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
