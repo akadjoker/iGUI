@@ -17,13 +17,13 @@ Nenhum destes foi arranjado ainda.
 
 Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 
-- [ ] **N1. Um submenu aberto dentro de um popup bloqueia a interface toda** —
+- [x] **N1. Um submenu aberto dentro de um popup bloqueia a interface toda** —
       [Gui.cpp:4910](../src/Gui.cpp#L4910), 1372, 1470. Depois de passar pelo
       submenu e fechar o popup com um clique fora, nenhum clique chega a nada até
       um Escape: o `openSubMenu_` nunca é limpo e o `menuWasOpenAtFrameStart_` fica
       ligado. *Arranjo:* limpar o `openSubMenu_` e as bounds dele no
       `releaseUnsubmittedBlockers` quando o submenu deixou de ser submetido.
-- [ ] **N2. As bounds de um submenu fechado continuam a comer cliques e o menu não
+- [x] **N2. As bounds de um submenu fechado continuam a comer cliques e o menu não
       fecha** — [Gui.cpp:4651](../src/Gui.cpp#L4651), 4673, 4841, 5056, 13615. O
       `subMenuPopupBounds_` só é zerado na troca por hover.
 - [ ] **N3. O submenu não fecha quando o rato passa para outro item do menu pai** —

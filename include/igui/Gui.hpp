@@ -2281,6 +2281,9 @@ private:
     WidgetId openMenu_;
     WidgetId openContextMenu_;
     WidgetId openSubMenu_;
+    // frameNumber_ of the last frame the open submenu was submitted: one that is no
+    // longer submitted (its popup or menu closed) stops counting as open.
+    uint64_t openSubMenuFrame_;
     WidgetId activeMenu_;
     WidgetId subMenuParent_;
     // Snapshot of openMenu_/openContextMenu_ and the popup rects, taken once
