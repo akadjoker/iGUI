@@ -1942,10 +1942,13 @@ private:
         // Falso quando o nível máximo já estava atingido: o par begin/end não
         // mexe em nada, mas fica equilibrado.
         bool active;
+        // Os contentores abertos no beginGroup (ver layoutNesting): o que é submetido
+        // dentro de um child, de uma tabela ou de um popup não faz crescer o grupo.
+        uint32_t nesting;
 
         GroupState()
             : originX(0.0f), baseOriginX(0.0f), nextItemWidth(0.0f), hasLastItem(false),
-              lineTop(0.0f), lineHeight(0.0f), start(), extent(), active(false)
+              lineTop(0.0f), lineHeight(0.0f), start(), extent(), active(false), nesting(0u)
         {
         }
     };
@@ -2671,6 +2674,7 @@ private:
     bool pointerInsideOwnPopup(const Vec2 &point) const;
     WindowHandle popupOwnerAt(const Vec2 &point) const;
     bool outsideModalPopup() const;
+    uint32_t layoutNesting() const;
     // What a popup is clipped to: the screen, not the content of the window it
     // hangs from - a combo list at the bottom of a panel used to be cut off at
     // the window's edge, and its rows were then unclickable.

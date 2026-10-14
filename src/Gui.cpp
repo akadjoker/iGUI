@@ -11957,6 +11957,7 @@ void Context::beginGroup()
     group.lineHeight = layout_.lineHeight;
     group.start = layout_.cursor;
     group.extent = layout_.cursor;
+    group.nesting = layoutNesting();
     group.active = active;
     groups_.push_back(group);
     ++layout_.groupDepth;
@@ -12524,7 +12525,7 @@ void Context::advanceLayout(const Rect &item)
     fillEdgeSet_ = false;
     if (!fills && itemRight > layout_.fitRight)
         layout_.fitRight = itemRight;
-    if (!groups_.empty() && groups_.back().active)
+    if (!groups_.empty() && groups_.back().active && groups_.back().nesting == layoutNesting())
     {
         GroupState &group = groups_.back();
         const float right = item.x + item.width;
@@ -13878,6 +13879,13 @@ bool Context::pointerOver(const Rect &visible) const
 bool Context::hasKeyboardFocus(WidgetId id) const
 {
     return focusedWidget_ == id && !inputBlockedByModal() && !outsideModalPopup();
+}
+
+uint32_t Context::layoutNesting() const
+{
+    return static_cast<uint32_t>(childStack_.size()) + static_cast<uint32_t>(popupContentDepth_) +
+           static_cast<uint32_t>(popupContentIndex_ + 1) + (comboContentOpen_ ? 1u : 0u) +
+           (tooltipOpen_ ? 1u : 0u) + (tableActive_ ? 1u : 0u);
 }
 
 bool Context::outsideModalPopup() const
