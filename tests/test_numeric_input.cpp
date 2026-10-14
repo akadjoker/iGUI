@@ -1092,6 +1092,54 @@ void test_parse_saturates_in_every_base()
     check(decimal == UINT64_MAX, "parse: 2^64 + 3 saturates");
 }
 
+// Um negativo de um tipo com sinal num formato sem sinal ("%X", "%u") escreve-se
+// em complemento para dois na largura do tipo, e lê-se de volta: o -1 de um int é
+// "FFFFFFFF", o de um s8 é "FF", e escrever "FFFFFFFE" num int dá -2.
+void test_negative_values_in_unsigned_formats()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int value = -1;
+    int8_t small = -1;
+    int64_t wide = -1;
+    uint32_t plain = 7u;
+    auto build = [&](ig::Context &c)
+    {
+        c.beginMainWindow("main");
+        c.inputInt("int", value, 300.0f, "%08X");
+        c.inputScalar("s8", ig::Context::ScalarType::S8, &small, "%02X", 300.0f);
+        c.inputScalar("s64", ig::Context::ScalarType::S64, &wide, "%llX", 300.0f);
+        c.inputScalar("u32", ig::Context::ScalarType::U32, &plain, "%X", 300.0f);
+        c.endWindow();
+    };
+    auto typeInto = [&](float x, float y, const char *text)
+    {
+        harness.click(x, y, build);
+        for (int i = 0; i < 20; ++i)
+        {
+            context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
+            harness.frame(build);
+        }
+        context.pushEvent(ig::Event::textInput(text));
+        harness.frame(build);
+    };
+    const ig::DrawData &data = harness.frame(build);
+    check(drewText(data, "FFFFFFFF"), "inputInt -1 with %08X is FFFFFFFF");
+    check(drewText(data, "FF"), "s8 -1 with %02X is FF");
+    check(drewText(data, "FFFFFFFFFFFFFFFF"), "s64 -1 with %llX is sixteen F");
+
+    typeInto(150.0f, 20.0f, "FFFFFFFE");
+    check(value == -2, "inputInt with %08X: FFFFFFFE reads back as -2");
+    typeInto(150.0f, 52.0f, "80");
+    check(small == -128, "s8 with %02X: 80 reads back as -128");
+    typeInto(150.0f, 84.0f, "8000000000000000");
+    check(wide == INT64_MIN, "s64 with %llX: 8000000000000000 reads back as INT64_MIN");
+    typeInto(150.0f, 116.0f, "FFFFFFFF");
+    check(plain == 0xFFFFFFFFu, "u32 with %X: FFFFFFFF stays unsigned");
+}
+
 int main()
 {
     test_int_typing();
@@ -1116,6 +1164,7 @@ int main()
     test_float_fields_keep_what_is_typed();
     test_input_scalar_flags();
     test_parse_saturates_in_every_base();
+    test_negative_values_in_unsigned_formats();
     if (gFailures != 0)
     {
         printf("test_numeric_input: %d failure(s)\n", gFailures);

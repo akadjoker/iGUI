@@ -262,7 +262,17 @@ uint64_t scalarClampedToU64(double value)
 // O valor escrito com o formato do chamador (as decorações incluídas: o
 // "%.10f grams" sai com o " grams"). Sem formato - ou com um que não mostre o
 // valor - sai no formato de sempre.
-int formatNumericValue(char *out, int outSize, double value, bool integer, const char *format)
+// Um negativo de um inteiro com sinal nos bits do tipo, como o printf o escreve
+// num "%X" ou num "%u": o -1 de um int é 0xFFFFFFFF.
+unsigned long long twosComplementBits(double value, int bits)
+{
+    const unsigned long long raw = static_cast<unsigned long long>(scalarClampedToS64(value));
+    return bits >= 64 ? raw : raw & ((1ull << bits) - 1ull);
+}
+
+// bits e isSigned dizem o tipo de um inteiro (0 bits: sem tipo conhecido).
+int formatNumericValue(char *out, int outSize, double value, bool integer, const char *format,
+                       int bits = 0, bool isSigned = true)
 {
     const char type = numericSpecType(numericSpec(format));
     if (type == 0)
@@ -292,15 +302,19 @@ int formatNumericValue(char *out, int outSize, double value, bool integer, const
     }
     char sanitized[64];
     if (!sanitizeNumericFormat(sanitized, sizeof(sanitized), format, integer))
-        return formatNumericValue(out, outSize, value, integer, nullptr);
+        return formatNumericValue(out, outSize, value, integer, nullptr, bits, isSigned);
     if (numericSpecIsInteger(type))
     {
         // O valor de um tipo inteiro chega aqui arredondado (ver setScalarValue):
         // passa-se como long long, que é o que o sanitizeNumericFormat pôs na
         // especificação. Um valor maior do que cabe fica no limite do tipo.
         if (numericSpecIsUnsigned(type))
-            return snprintf(out, static_cast<size_t>(outSize), sanitized,
-                            static_cast<unsigned long long>(scalarClampedToU64(value)));
+        {
+            const unsigned long long shown = value < 0.0 && isSigned && bits > 0
+                                                 ? twosComplementBits(value, bits)
+                                                 : scalarClampedToU64(value);
+            return snprintf(out, static_cast<size_t>(outSize), sanitized, shown);
+        }
         return snprintf(out, static_cast<size_t>(outSize), sanitized,
                         static_cast<long long>(scalarClampedToS64(value)));
     }
@@ -374,7 +388,7 @@ String::size_type formatPrefixLength(const String &text, const char *format)
 }
 
 bool parseNumericValue(const String &text, double &out, bool integer, bool singlePrecision,
-                       const char *format)
+                       const char *format, int bits = 0, bool isSigned = true)
 {
     String::size_type i = formatPrefixLength(text, format);
     while (i < text.size() && (text[i] == ' ' || text[i] == '\t'))
@@ -447,6 +461,7 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
         (text[i + 1u] == 'x' || text[i + 1u] == 'X'))
         i += 2u;
     bool digits = false;
+    bool overflowed = false;
     unsigned long long magnitude = 0ull;
     for (; i < text.size(); ++i)
     {
@@ -466,7 +481,10 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
         const unsigned long long ubase = static_cast<unsigned long long>(base);
         const unsigned long long udigit = static_cast<unsigned long long>(digit);
         if (magnitude > (ULLONG_MAX - udigit) / ubase)
+        {
             magnitude = ULLONG_MAX;
+            overflowed = true;
+        }
         else
             magnitude = magnitude * ubase + udigit;
     }
@@ -474,6 +492,21 @@ bool parseNumericValue(const String &text, double &out, bool integer, bool singl
         return false;
     if (!trailingTextAllowed(text, i, format))
         return false;
+    // Um formato sem sinal num tipo com sinal lê o complemento para dois dos bits do
+    // tipo: o "FFFFFFFF" de um int é -1 (é o caminho inverso do formatNumericValue).
+    // Um número maior do que os bits do tipo não é um negativo: fica no máximo.
+    if (!negative && !overflowed && isSigned && bits > 0 && numericSpecIsUnsigned(type))
+    {
+        const unsigned long long half = bits >= 64 ? (1ull << 63) : (1ull << (bits - 1));
+        const unsigned long long top = bits >= 64 ? ULLONG_MAX : (1ull << bits) - 1ull;
+        if (magnitude >= half && magnitude <= top)
+        {
+            out = bits >= 64 ? -static_cast<double>(~magnitude + 1ull)
+                             : static_cast<double>(magnitude) -
+                                   static_cast<double>(top) - 1.0;
+            return true;
+        }
+    }
     const double signedValue = static_cast<double>(magnitude);
     out = negative ? -signedValue : signedValue;
     return true;
@@ -5053,9 +5086,10 @@ void Context::endContextMenu()
 // dele - com o FLOATTYPE a ser double nos tipos de 64 bits -, e é o que faz o
 // "%04X", o "%.10f grams" e os s8..u64 valerem em todas as widgets numéricas.
 bool Context::sliderCore(StringView labelText, double &value, double minimum, double maximum,
-                         bool integer, bool doublePrecision, const Rect &bounds, unsigned flags,
+                         const NumericKind &kind, const Rect &bounds, unsigned flags,
                          const char *format)
 {
+    const bool integer = kind.integer;
     WindowState *window = currentWindow();
     if (!window)
         return false;
@@ -5097,7 +5131,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
     const bool trackHovered = itemHovered(grab, clip, trackId);
     double dragged = clampDouble(value, low, high);
-    const bool singlePrecision = !integer && !doublePrecision;
+    const bool singlePrecision = kind.singlePrecision;
     const bool sliderChanged = sliderValue(grab, clip, trackId, dragged, minimum, maximum, false,
                                            flags, integer, singlePrecision);
     // O editor de valor que o slider desenha à parte não pode ser o item que
@@ -5138,7 +5172,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
                              rect.height);
         pushId(id);
         double field = value;
-        textChanged = numericField("value", field, integer, !integer && !doublePrecision,
+        textChanged = numericField("value", field, kind,
                                    Rect(valueRect.x - layout_.origin.x,
                                         valueRect.y - layout_.origin.y, valueRect.width,
                                         valueRect.height),
@@ -5185,7 +5219,7 @@ bool Context::sliderFloat(StringView labelText, float &value, float minimum, flo
     double working = static_cast<double>(value);
     const bool changed =
         sliderCore(labelText, working, static_cast<double>(minimum),
-                   static_cast<double>(maximum), false, false, bounds, flags, format);
+                   static_cast<double>(maximum), realKind(true), bounds, flags, format);
     value = static_cast<float>(working);
     return changed;
 }
@@ -5195,7 +5229,7 @@ bool Context::sliderInt(StringView labelText, int &value, int minimum, int maxim
 {
     double working = static_cast<double>(value);
     sliderCore(labelText, working, static_cast<double>(minimum), static_cast<double>(maximum),
-               true, false, bounds, flags, format);
+               intKind(), bounds, flags, format);
     const double limited = clampDouble(working, static_cast<double>(INT_MIN),
                                        static_cast<double>(INT_MAX));
     const int result = static_cast<int>(limited);
@@ -5320,10 +5354,11 @@ bool Context::vSliderInt(StringView labelText, int &value, int minimum, int maxi
 // Como o slider, é um só caminho em double com o tipo a decidir o arredondamento
 // e o formato do valor (ver o comentário do sliderCore).
 bool Context::dragCore(StringView labelText, double &value, double minimum, double maximum,
-                       double speed, bool integer, bool doublePrecision, const Rect &bounds,
+                       double speed, const NumericKind &kind, const Rect &bounds,
                        unsigned flags, const char *format)
 {
-    const bool singlePrecision = !integer && !doublePrecision;
+    const bool integer = kind.integer;
+    const bool singlePrecision = kind.singlePrecision;
     WindowState *window = currentWindow();
     if (!window || speed <= 0.0)
         return false;
@@ -5422,7 +5457,7 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
                 edit->editing = true;
                 char buffer[64];
                 formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer,
-                                   valueFormat);
+                                   valueFormat, kind.bits, kind.isSigned);
                 edit->text = String(buffer);
                 textCursor_ = edit->text.size();
                 textInputWidget_ = id;
@@ -5434,8 +5469,8 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
         if (inputText(labelText, edit->text, bounds))
         {
             double parsed = value;
-            if (parseNumericValue(edit->text, parsed, integer, !integer && !doublePrecision,
-                                  valueFormat))
+            if (parseNumericValue(edit->text, parsed, integer, singlePrecision, valueFormat,
+                                  kind.bits, kind.isSigned))
                 changed = setScalarValue(value, parsed, minimum, maximum, integer,
                                          (flags & SliderFlags::AllowOutOfRange) == 0u,
                                          singlePrecision) ||
@@ -5450,7 +5485,8 @@ bool Context::dragCore(StringView labelText, double &value, double minimum, doub
     else
     {
         char number[64];
-        formatNumericValue(number, static_cast<int>(sizeof(number)), value, integer, valueFormat);
+        formatNumericValue(number, static_cast<int>(sizeof(number)), value, integer, valueFormat,
+                           kind.bits, kind.isSigned);
         drawFrame(*drawList, rect, hovered ? theme_.buttonHovered : theme_.buttonBackground,
                   hovered ? theme_.inputBorderHover : theme_.buttonBorder, theme_.borderRadius,
                   clip);
@@ -5471,8 +5507,8 @@ bool Context::dragFloat(StringView labelText, float &value, float minimum, float
 {
     double working = static_cast<double>(value);
     const bool changed = dragCore(labelText, working, static_cast<double>(minimum),
-                                  static_cast<double>(maximum), static_cast<double>(speed), false,
-                                  false, bounds, flags, format);
+                                  static_cast<double>(maximum), static_cast<double>(speed),
+                                  realKind(true), bounds, flags, format);
     value = static_cast<float>(working);
     return changed;
 }
@@ -5482,7 +5518,7 @@ bool Context::dragInt(StringView labelText, int &value, int minimum, int maximum
 {
     double working = static_cast<double>(value);
     dragCore(labelText, working, static_cast<double>(minimum), static_cast<double>(maximum),
-             static_cast<double>(speed), true, false, bounds, flags, format);
+             static_cast<double>(speed), intKind(), bounds, flags, format);
     const double limited = clampDouble(working, static_cast<double>(INT_MIN),
                                        static_cast<double>(INT_MAX));
     const int result = static_cast<int>(limited);
@@ -6238,11 +6274,6 @@ namespace
 // dentro. Um tipo de 64 bits acima de 2^53 perde os bits de baixo nesta viagem,
 // como no ImGui (o FLOATTYPE dele é double nestes dois tipos); um inteiro menor
 // não perde nada.
-bool scalarTypeIsInteger(Context::ScalarType type)
-{
-    return type != Context::ScalarType::Float && type != Context::ScalarType::Double;
-}
-
 double scalarToDouble(Context::ScalarType type, const void *data)
 {
     switch (type)
@@ -6341,6 +6372,24 @@ const char *scalarDefaultFormat(Context::ScalarType type)
 }
 
 } // namespace
+
+Context::NumericKind Context::scalarKind(ScalarType type)
+{
+    switch (type)
+    {
+    case ScalarType::S8: return {true, false, 8, true};
+    case ScalarType::U8: return {true, false, 8, false};
+    case ScalarType::S16: return {true, false, 16, true};
+    case ScalarType::U16: return {true, false, 16, false};
+    case ScalarType::S32: return {true, false, 32, true};
+    case ScalarType::U32: return {true, false, 32, false};
+    case ScalarType::S64: return {true, false, 64, true};
+    case ScalarType::U64: return {true, false, 64, false};
+    case ScalarType::Float: return realKind(true);
+    case ScalarType::Double: return realKind(false);
+    }
+    return realKind(false);
+}
 
 // ── Os flags do inputText ────────────────────────────────────────────────────
 // O que se escreve (e o que se cola) passa por aqui antes de entrar no campo: os
@@ -6864,12 +6913,14 @@ bool Context::editNumericText(StringView labelText, String &text, double value, 
     return edited;
 }
 
-bool Context::numericField(StringView labelText, double &value, bool integer,
-                           bool singlePrecision, const Rect &bounds, const char *format,
-                           unsigned flags)
+bool Context::numericField(StringView labelText, double &value, const NumericKind &kind,
+                           const Rect &bounds, const char *format, unsigned flags)
 {
+    const bool integer = kind.integer;
+    const bool singlePrecision = kind.singlePrecision;
     char buffer[64];
-    formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer, format);
+    formatNumericValue(buffer, static_cast<int>(sizeof(buffer)), value, integer, format, kind.bits,
+                       kind.isSigned);
     String text(buffer);
     // O valor é o que o campo tinha quando o texto foi escrito: é o que faz o
     // campo mostrar o que o utilizador escreveu enquanto o escreve, e o valor novo
@@ -6877,7 +6928,8 @@ bool Context::numericField(StringView labelText, double &value, bool integer,
     const bool edited = editNumericText(labelText, text, value, bounds, flags);
     double parsed = value;
     const bool changed =
-        edited && parseNumericValue(text, parsed, integer, singlePrecision, format) &&
+        edited && parseNumericValue(text, parsed, integer, singlePrecision, format, kind.bits,
+                                    kind.isSigned) &&
         parsed != value;
     if (changed)
         value = parsed;
@@ -6894,7 +6946,7 @@ bool Context::numericField(StringView labelText, double &value, bool integer,
 bool Context::inputInt(StringView labelText, int &value, const Rect &bounds, const char *format)
 {
     double field = static_cast<double>(value);
-    if (!numericField(labelText, field, true, false, bounds, format ? format : "%lld"))
+    if (!numericField(labelText, field, intKind(), bounds, format ? format : "%lld"))
         return false;
     // O que se escreveu pode sair do intervalo de um int: fica no limite.
     const double limited = clampDouble(field, static_cast<double>(INT_MIN),
@@ -6920,7 +6972,7 @@ bool Context::inputFloat(StringView labelText, float &value, const Rect &bounds,
         format = spec;
     }
     double field = static_cast<double>(value);
-    if (!numericField(labelText, field, false, true, bounds, format))
+    if (!numericField(labelText, field, realKind(true), bounds, format))
         return false;
     // O valor guardado é o do float, e é ele que o campo volta a mostrar no frame
     // seguinte: o valor de referência do campo (numericEditValue_) é o que ficou
@@ -9185,7 +9237,7 @@ bool Context::inputDouble(StringView labelText, double &value, const Rect &bound
     // O parse é o do campo de texto dos números; a diferença é não passar por um
     // float no meio, que é o que estraga um número com mais dígitos do que o float
     // tem.
-    return numericField(labelText, value, false, false, bounds, format);
+    return numericField(labelText, value, realKind(false), bounds, format);
 }
 
 bool Context::inputFloat2(StringView labelText, float &x, float &y, float width, int precision,
@@ -9328,10 +9380,9 @@ bool Context::sliderScalar(StringView labelText, ScalarType type, void *data, co
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed =
-        sliderCore(labelText, working, low, high, scalarTypeIsInteger(type),
-                   type == ScalarType::Double, Rect(bounds.x - layout_.origin.x,
-                                                    bounds.y - layout_.origin.y, bounds.width,
-                                                    bounds.height),
+        sliderCore(labelText, working, low, high, scalarKind(type),
+                   Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
+                        bounds.height),
                    flags, format ? format : scalarDefaultFormat(type));
     if (working != scalarToDouble(type, data))
         scalarFromDouble(type, data, working);
@@ -9353,8 +9404,7 @@ bool Context::dragScalar(StringView labelText, ScalarType type, void *data, floa
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed =
-        dragCore(labelText, working, low, high, static_cast<double>(speed),
-                 scalarTypeIsInteger(type), type == ScalarType::Double,
+        dragCore(labelText, working, low, high, static_cast<double>(speed), scalarKind(type),
                  Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
                       bounds.height),
                  flags, format ? format : scalarDefaultFormat(type));
@@ -9375,7 +9425,7 @@ bool Context::inputScalar(StringView labelText, ScalarType type, void *data, con
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
     const Rect bounds(layout_.cursor.x, layout_.cursor.y, resolvedWidth, theme_.widgetHeight);
     const bool changed =
-        numericField(labelText, working, scalarTypeIsInteger(type), type == ScalarType::Float,
+        numericField(labelText, working, scalarKind(type),
                      Rect(bounds.x - layout_.origin.x, bounds.y - layout_.origin.y, bounds.width,
                           bounds.height),
                      format ? format : scalarDefaultFormat(type), flags);

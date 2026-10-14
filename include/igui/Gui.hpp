@@ -2669,12 +2669,25 @@ private:
                      double &value, double minimum, double maximum,
                      bool vertical = false, unsigned flags = SliderFlags::None,
                      bool integer = false, bool singlePrecision = false);
+    // O tipo do valor de um widget numérico por dentro: real (float ou double) ou
+    // inteiro, e de um inteiro a largura e o sinal - é o que faz o -1 de um int sair
+    // "FFFFFFFF" num "%X" e voltar a -1 quando se lê.
+    struct NumericKind
+    {
+        bool integer;
+        bool singlePrecision;
+        int bits;
+        bool isSigned;
+    };
+    static NumericKind realKind(bool singlePrecision) { return {false, singlePrecision, 0, true}; }
+    static NumericKind intKind() { return {true, false, 32, true}; }
+    static NumericKind scalarKind(ScalarType type);
     // O slider e o drag com o tipo por dentro (ver o comentário em Gui.cpp).
-    bool sliderCore(StringView label, double &value, double minimum, double maximum, bool integer,
-                    bool doublePrecision, const Rect &bounds, unsigned flags,
+    bool sliderCore(StringView label, double &value, double minimum, double maximum,
+                    const NumericKind &kind, const Rect &bounds, unsigned flags,
                     const char *format);
     bool dragCore(StringView label, double &value, double minimum, double maximum, double speed,
-                  bool integer, bool doublePrecision, const Rect &bounds, unsigned flags,
+                  const NumericKind &kind, const Rect &bounds, unsigned flags,
                   const char *format);
     // Põe o valor que veio do ponteiro ou do campo de texto: arredonda quando o
     // tipo é inteiro e limita ao intervalo quando lhe dizem para limitar.
@@ -2717,7 +2730,7 @@ private:
     // O campo de texto de um número: o texto sai do formato (formatNumericValue) e
     // volta a número por ele (parseNumericValue). É o que faz um campo "%.10f
     // grams" ter a legenda à frente e um "%04X" aceitar hexadecimal à entrada.
-    bool numericField(StringView label, double &value, bool integer, bool doublePrecision,
+    bool numericField(StringView label, double &value, const NumericKind &kind,
                       const Rect &bounds, const char *format, unsigned flags = 0u);
     // This frame's editing keys and typed text applied to the focused text
     // field's buffer at cursor (a byte offset kept on a UTF-8 code point
