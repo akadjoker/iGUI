@@ -1901,6 +1901,9 @@ private:
         float usedLeft;
         float usedRight;
         float usedBottom;
+        // Left, right, bottom: read from the state file, so setDockSizes (a size to
+        // start with) leaves them alone.
+        bool sizeFromState[3];
         WidgetId selected[4];
         bool tabListOpen[4];
         bool tabBarHidden[4];
@@ -1914,7 +1917,7 @@ private:
 
         DockSpaceState()
             : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f),
-              usedLeft(180.0f), usedRight(240.0f), usedBottom(180.0f), tabs()
+              usedLeft(180.0f), usedRight(240.0f), usedBottom(180.0f), sizeFromState(), tabs()
         {
             for (uint32_t i = 0u; i < 4u; ++i)
             {
@@ -2812,6 +2815,15 @@ private:
                  const Rect &bounds, int offset, StringView overlay, float scaleMin,
                  float scaleMax);
     Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
+    struct DockLimits
+    {
+        float minimumCenter;
+        float minimumSide;
+        float minimumBottom;
+        float bottomMaximum;
+    };
+    // Fits the sizes asked for to the dock space's bounds (the used* sizes).
+    DockLimits fitDockSizes(DockSpaceState &dockSpace) const;
     bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
     static uint32_t dockSlotIndex(DockSlot slot);
     // Dock arrangement in the state file: the slot a panel was left in, the tab

@@ -623,6 +623,82 @@ void test_dock_tab_title_follows_the_label_convention()
     remove(path);
 }
 
+// setDockSizes on the first frame gives the starting sizes: it does not override
+// the ones the state file kept, and it takes effect (fitted) on that same frame.
+void test_set_dock_sizes_is_a_starting_size()
+{
+    const char* path = "igui_dock_set_sizes_test.ini";
+    remove(path);
+    ct::Ini previous;
+    previous.set("dock:host/editor", "left_width", 260.0);
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    float requested = 200.0f;
+    bool first = true;
+    float leftAvailable = 0.0f;
+    float centerAvailable = 0.0f;
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor"))
+        {
+            if (first) c.setDockSizes(requested, 0.0f, 0.0f);
+            if (c.beginDockPanel("L", ig::DockSlot::Left))
+            {
+                leftAvailable = c.availableWidth();
+                c.endDockPanel();
+            }
+            if (c.beginDockPanel("C", ig::DockSlot::Center))
+            {
+                centerAvailable = c.availableWidth();
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        context.setWindowStatePath(path);
+        harness.frame(build);
+        first = false;
+        harness.frame(build);
+        const float padding = context.theme().padding;
+        check(leftAvailable == 260.0f - padding * 2.0f,
+                "setDockSizes overrode the size the state file kept");
+        check(context.saveWindowState(), "the state file was not written");
+        ct::Ini saved;
+        check(saved.load(path), "the written state file could not be read back");
+        check(saved.get_double("dock:host/editor", "left_width") == 260.0,
+                "setDockSizes changed the size the state file keeps");
+        context.setWindowStatePath(ig::String());
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        first = true;
+        requested = 300.0f;
+        harness.frame(build);
+        const float padding = context.theme().padding;
+        check(leftAvailable == 300.0f - padding * 2.0f,
+                "setDockSizes did not take effect on the frame it was called");
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        first = true;
+        requested = 700.0f;
+        harness.frame(build);
+        check(centerAvailable > 100.0f, "a size too big hid the center region on the first frame");
+    }
+    remove(path);
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -952,6 +1028,7 @@ int main()
     test_dock_spaces_in_two_windows_keep_their_own_state();
     test_dock_region_draws_one_panel_per_frame();
     test_dock_tab_title_follows_the_label_convention();
+    test_set_dock_sizes_is_a_starting_size();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();
