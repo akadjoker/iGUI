@@ -5129,6 +5129,112 @@ void test_list_rows_are_not_tab_stops()
     assert(comboCurrent == 2);
 }
 
+// A lista de um comboBox com muitos itens fica dentro do ecrã e rola: a roda leva
+// até ao último item.
+void test_long_combo_box_list_stays_on_screen_and_scrolls()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    harness.setViewport(400.0f, 300.0f);
+
+    char names[20][4];
+    ig::StringView items[20];
+    for (int i = 0; i < 20; ++i)
+    {
+        snprintf(names[i], sizeof(names[i]), "%02d", i);
+        items[i] = ig::StringView(names[i], 2);
+    }
+    int current = 0;
+    ig::Rect header;
+    bool measured = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.comboBox("combo", current, ig::Span<const ig::StringView>(items, 20), 150.0f);
+        if (!measured)
+        {
+            header = c.itemRect();
+            measured = true;
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(header.x + 10.0f, header.y + 5.0f, build);
+    const ig::DrawData& data = harness.frame(build);
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text) continue;
+        const ig::TextCommand& text = command.payload.text;
+        const bool insideClip =
+                text.position.y >= text.clip.y && text.position.y < text.clip.y + text.clip.height;
+        if (insideClip) assert(text.position.y + text.logicalSize <= 300.0f);
+    }
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int i = 0; i < 30; ++i)
+    {
+        context.pushEvent(
+                ig::Event::pointerMove(header.x + 10.0f, header.y + header.height * 2.5f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    float lastRowY = header.y + header.height;
+    while (lastRowY + header.height * 2.0f <= 300.0f) lastRowY += header.height;
+    harness.click(header.x + 10.0f, lastRowY + header.height * 0.5f, build);
+    assert(current == 19);
+}
+
+// Um comboBox perto do fundo do ecrã abre a lista por cima, e a lista abre com a
+// linha escolhida à vista.
+void test_combo_box_opens_above_and_shows_the_current_item()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    harness.setViewport(400.0f, 300.0f);
+
+    char names[20][4];
+    ig::StringView items[20];
+    for (int i = 0; i < 20; ++i)
+    {
+        snprintf(names[i], sizeof(names[i]), "%02d", i);
+        items[i] = ig::StringView(names[i], 2);
+    }
+    int current = 15;
+    int count = 5;
+    ig::Rect header;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.comboBox("combo", current, ig::Span<const ig::StringView>(items, count),
+                ig::Rect(0.0f, 220.0f, 150.0f, 28.0f));
+        c.endWindow();
+    };
+    auto measure = [&](ig::Context& c)
+    {
+        build(c);
+        header = c.itemRect();
+    };
+
+    current = 0;
+    harness.frame(measure);
+    harness.click(header.x + 10.0f, header.y + 5.0f, build);
+    harness.click(header.x + 10.0f, header.y - header.height * 0.5f, build);
+    assert(current == 4);
+
+    count = 20;
+    current = 15;
+    harness.frame(measure);
+    harness.click(header.x + 10.0f, header.y + 5.0f, build);
+    harness.click(header.x + 10.0f, header.y - header.height * 0.5f, build);
+    assert(current == 15);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6152,6 +6258,8 @@ int main()
     test_combo_scrollbar_can_be_dragged();
     test_wide_scrolling_combo_does_not_clip_its_content();
     test_list_rows_are_not_tab_stops();
+    test_long_combo_box_list_stays_on_screen_and_scrolls();
+    test_combo_box_opens_above_and_shows_the_current_item();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
