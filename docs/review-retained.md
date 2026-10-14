@@ -219,7 +219,7 @@ Só por leitura:
       percorre o `slots_` enquanto um handler pode ligar ou desligar slots.
 - [x] [WidgetApp.cpp:526-531](../src/widgets/WidgetApp.cpp#L526-L531) — o bubble
       das teclas não tem a guarda de `deletions_` que o do rato tem.
-- [ ] [InputWidgets.cpp:480](../src/widgets/InputWidgets.cpp#L480) —
+- [x] [InputWidgets.cpp:480](../src/widgets/InputWidgets.cpp#L480) —
       `DatePicker::setDate()` não valida o mês, que indexa `d[month]` e
       `months[]`.
 - [ ] [WidgetApp.cpp:914](../src/widgets/WidgetApp.cpp#L914) — o estado das
