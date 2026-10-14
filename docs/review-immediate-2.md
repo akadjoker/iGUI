@@ -11,7 +11,8 @@ Cada ponto das listas foi reproduzido com uma sonda headless sobre o
 sondas não estão no repo; cada problema que se arranjar deve ganhar o seu teste.
 Os pontos de "Não confirmados" foram vistos só no código.
 
-Nenhum destes foi arranjado ainda.
+Os pontos das listas estão todos arranjados, cada um com o seu teste. Os de
+"Não confirmados" continuam por ver.
 
 ## Menus, combos, listas e árvores
 
