@@ -2566,6 +2566,7 @@ private:
     // O corpo (e a caixa) de um modal de popup: sai depois das sobreposições de
     // todas as janelas e antes das message boxes (ver beginPopupModal).
     DrawList modalPopupDrawList_;
+    DrawList dialogScrimDrawList_;
     bool wantsKeyboard_;
     bool wantsTextInput_;
     bool backspacePressed_;
