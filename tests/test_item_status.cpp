@@ -4590,6 +4590,58 @@ void test_table_sideways_scroll_is_clamped_when_inner_width_shrinks()
     assert(fabsf(header[2].x + header[2].width - (left + tableWidth)) < 0.01f);
 }
 
+// SizingFixedFit com itens que ocupam a largura que sobra (o cabeçalho, uma
+// progressBar): eles não pedem largura, e as colunas param no que os itens de
+// largura fixa pedem.
+void test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.sizingFixedFit = true;
+    ig::Rect header[3];
+    ig::Rect bar;
+    const float padding = context.theme().windowPadding;
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 900.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            const char* names[3] = { "A", "B", "C" };
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader(names[column]);
+                header[column] = c.itemRect();
+            }
+            c.tableNextColumn();
+            c.dummy(40.0f, 16.0f);
+            c.tableNextColumn();
+            c.dummy(60.0f, 16.0f);
+            c.progressBar(0.5f, 1.0f);
+            bar = c.itemRect();
+            c.tableNextColumn();
+            c.dummy(20.0f, 16.0f);
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    for (int frame = 0; frame < 4; ++frame) harness.frame(build);
+    float widths[3];
+    for (int column = 0; column < 3; ++column) widths[column] = header[column].width;
+    assert(widths[0] == 40.0f + padding * 2.0f);
+    assert(widths[1] == 60.0f + padding * 2.0f);
+    assert(bar.width == widths[1]);
+
+    for (int frame = 0; frame < 8; ++frame) harness.frame(build);
+    for (int column = 0; column < 3; ++column) assert(header[column].width == widths[column]);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5603,6 +5655,7 @@ int main()
     test_table_lost_header_drag_releases_the_pointer();
     test_table_with_column_count_uses_its_style();
     test_table_sideways_scroll_is_clamped_when_inner_width_shrinks();
+    test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

@@ -184,7 +184,7 @@ Lido: 10334-11542.
       [Gui.cpp:10633](../src/Gui.cpp#L10633). Não chama o `configureTable`.
 - [x] **T9. O `offsetX` não é limitado quando a `innerWidth` diminui** —
       [Gui.cpp:10862](../src/Gui.cpp#L10862).
-- [ ] **T10. Com `sizingFixedFit` as colunas crescem 16 px por frame, sem parar** —
+- [x] **T10. Com `sizingFixedFit` as colunas crescem 16 px por frame, sem parar** —
       [Gui.cpp:11066](../src/Gui.cpp#L11066). Um item que ocupa a coluna toda
       (o próprio cabeçalho, uma progressBar) mede a coluna mais as margens.
 - [ ] **T11. Uma tabela `scrollY` cujas linhas cabem engole a roda dentro de um child
