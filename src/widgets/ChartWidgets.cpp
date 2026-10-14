@@ -412,7 +412,7 @@ void HistogramWidget::paint(PaintContext& ctx)
         ctx.fillRect(bx + 0.5f, by, barW - 1.0f, bh);
 
         if (showValues_ && val > 0) {
-            char buf[8];
+            char buf[32];
             snprintf(buf, sizeof(buf), "%g", val);
             float asc = setupFont(ctx, Color(220, 220, 220, 200));
             ctx.font.Print(buf, bx + 1, by - 12 + asc);

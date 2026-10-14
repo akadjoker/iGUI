@@ -269,7 +269,7 @@ void drawScene(ig::Context &c, Scene &s)
         {
             for (int i = first; i < last; ++i)
             {
-                char label[16];
+                char label[32];
                 snprintf(label, sizeof(label), "item %d", i);
                 c.selectable(label, i == s.list, c.virtualListItemRect(i));
             }
