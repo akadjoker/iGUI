@@ -81,7 +81,7 @@ String TextInput::displayText() const
     return text_;
 }
 
-int TextInput::hitTestChar(const ig::retained::Font* /*font*/, float localX) const
+int TextInput::hitTestChar(const ig::retained::Font* font, float localX) const
 {
     auto& wa = WidgetApp::instance();
     String disp = displayText();
@@ -92,18 +92,18 @@ int TextInput::hitTestChar(const ig::retained::Font* /*font*/, float localX) con
     for (int i = 0; i < len; ++i)
     {
         String ch = utf8Substr(disp, i, i + 1);
-        float cw = wa.textWidth(ch.c_str());
+        float cw = wa.textWidth(ch.c_str(), font);
         if (localX < x + cw * 0.5f) return i;
         x += cw;
     }
     return len;
 }
 
-float TextInput::cursorXOffset(const ig::retained::Font* /*font*/, int pos) const
+float TextInput::cursorXOffset(const ig::retained::Font* font, int pos) const
 {
     String disp = displayText();
     String sub = utf8Substr(disp, 0, pos);
-    return WidgetApp::instance().textWidth(sub.c_str());
+    return WidgetApp::instance().textWidth(sub.c_str(), font);
 }
 
 void TextInput::deleteSelection()
@@ -253,7 +253,7 @@ void TextInput::paint(PaintContext& ctx)
 void TextInput::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
-    const ig::retained::Font* font = WidgetApp::instance().font();
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
     cursor_   = hitTestChar(font, e.localX);
     selStart_ = selEnd_ = cursor_;
     dragging_ = true;
@@ -272,7 +272,8 @@ void TextInput::onMouseMove(MouseEvent& e)
     if (!isEnabledInTree()) return;
     if (dragging_)
     {
-        const ig::retained::Font* font = WidgetApp::instance().font();
+        const ig::retained::Font* font =
+                overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
         cursor_ = hitTestChar(font, e.localX);
         selEnd_ = cursor_;
         blinkTimer_ = 0;
@@ -743,10 +744,10 @@ TextEdit::TextPos TextEdit::hitTestMouse(float localX, float localY) const
         float cw;
         if (ch[0] == '\t') {
             int spaces = tabSize_ - (visCol % tabSize_);
-            cw = spaces * wa.textWidth(" ");
+            cw = spaces * wa.textWidth(" ", overrideFont_, fontScale_);
             visCol += spaces;
         } else {
-            cw = wa.textWidth(ch.c_str());
+            cw = wa.textWidth(ch.c_str(), overrideFont_, fontScale_);
             visCol++;
         }
         if (textX < cx + cw * 0.5f) return {line, startCol + i};
@@ -894,7 +895,7 @@ float TextEdit::computeGutterWidth(const ig::retained::Font& font) const
     if (!showLineNumbers_) return 0;
     char buf[16];
     snprintf(buf, sizeof(buf), "%d", std::max(static_cast<int>(lines_.size()), 99));
-    return WidgetApp::instance().textWidth(buf) + Theme::instance().gutterPadding * 2;
+    return WidgetApp::instance().textWidth(buf, &font) + Theme::instance().gutterPadding * 2;
 }
 
 float TextEdit::computeLineHeight(const ig::retained::Font& font) const
@@ -1042,7 +1043,7 @@ void TextEdit::ensureCursorVisible()
     if (wordWrap_ || cursor_.line < 0 || cursor_.line >= static_cast<int>(lines_.size()))
         return;
     const String before = expandTabs(utf8Substr(lines_[cursor_.line], 0, cursor_.col));
-    const float cx = WidgetApp::instance().textWidth(before.c_str()) * fontScale_;
+    const float cx = WidgetApp::instance().textWidth(before.c_str(), overrideFont_, fontScale_);
     const float view = textViewWidth();
     const float margin = std::min(view * 0.25f, 20.0f);
     if (cx < scrollX_) scrollX_ = cx - margin;

@@ -1726,8 +1726,14 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
 
 float WidgetApp::textWidth(const char* text) const
 {
-    if (!font_ || !drawList_ || !text) return 0.0f;
-    return drawList_->calcTextSize(*font_, text).x;
+    return textWidth(text, nullptr);
+}
+
+float WidgetApp::textWidth(const char* text, const ig::retained::Font* font, float scale) const
+{
+    if (!font) font = font_;
+    if (!font || !drawList_ || !text) return 0.0f;
+    return drawList_->calcTextSize(*font, text, scale).x;
 }
 
 ig::retained::TextureHandle WidgetApp::loadImageTexture(const char* path, int& outW, int& outH)
