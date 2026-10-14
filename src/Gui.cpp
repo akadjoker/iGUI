@@ -9881,39 +9881,43 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     dockSpace->clip = clip;
     const float minimumCenter = outer.width < 352.0f ? outer.width * (160.0f / 352.0f) : 160.0f;
     const float minimumSide = outer.width < 352.0f ? outer.width * (96.0f / 352.0f) : 96.0f;
+    float left = dockSpace->leftWidth;
+    float right = dockSpace->rightWidth;
     const float maximumSide = outer.width - minimumCenter - minimumSide;
-    if (dockSpace->leftWidth < minimumSide)
-        dockSpace->leftWidth = minimumSide;
-    if (dockSpace->rightWidth < minimumSide)
-        dockSpace->rightWidth = minimumSide;
+    if (left < minimumSide)
+        left = minimumSide;
+    if (right < minimumSide)
+        right = minimumSide;
     if (maximumSide > minimumSide)
     {
-        if (dockSpace->leftWidth > maximumSide)
-            dockSpace->leftWidth = maximumSide;
-        if (dockSpace->rightWidth > maximumSide)
-            dockSpace->rightWidth = maximumSide;
+        if (left > maximumSide)
+            left = maximumSide;
+        if (right > maximumSide)
+            right = maximumSide;
     }
     else
     {
-        dockSpace->leftWidth = minimumSide;
-        dockSpace->rightWidth = minimumSide;
+        left = minimumSide;
+        right = minimumSide;
     }
     const float sideBudget = outer.width - minimumCenter;
-    if (dockSpace->leftWidth + dockSpace->rightWidth > sideBudget)
+    if (left + right > sideBudget)
     {
-        dockSpace->rightWidth = sideBudget - dockSpace->leftWidth;
-        if (dockSpace->rightWidth < minimumSide)
+        right = sideBudget - left;
+        if (right < minimumSide)
         {
-            dockSpace->rightWidth = minimumSide;
-            dockSpace->leftWidth = sideBudget - minimumSide;
+            right = minimumSide;
+            left = sideBudget - minimumSide;
         }
     }
+    dockSpace->usedLeft = left;
+    dockSpace->usedRight = right;
     const float minimumBottom = outer.height < theme_.widgetHeight * 5.0f
         ? outer.height * 0.4f : theme_.widgetHeight * 2.0f;
     const float maximumBottom = outer.height - (outer.height < theme_.widgetHeight * 5.0f
         ? outer.height * 0.6f : theme_.widgetHeight * 3.0f);
     const float bottomMaximum = maximumBottom > minimumBottom ? maximumBottom : minimumBottom;
-    dockSpace->bottomHeight = clamp(dockSpace->bottomHeight, minimumBottom, bottomMaximum);
+    dockSpace->usedBottom = clamp(dockSpace->bottomHeight, minimumBottom, bottomMaximum);
 
     drawList->addRectFilled(outer, theme_.panelColor, clip);
     drawList->addRect(outer, theme_.borderColor, clip);
@@ -9923,9 +9927,9 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     const Rect rightRegion = dockSlotBounds(*dockSpace, DockSlot::Right);
     const Rect bottomRegion = dockSlotBounds(*dockSpace, DockSlot::Bottom);
     const Rect leftSplitter(leftRegion.x + leftRegion.width - splitterThickness * 0.5f,
-                            outer.y, splitterThickness, outer.height - dockSpace->bottomHeight);
+                            outer.y, splitterThickness, outer.height - dockSpace->usedBottom);
     const Rect rightSplitter(rightRegion.x - splitterThickness * 0.5f,
-                             outer.y, splitterThickness, outer.height - dockSpace->bottomHeight);
+                             outer.y, splitterThickness, outer.height - dockSpace->usedBottom);
     const Rect bottomSplitter(outer.x, bottomRegion.y - splitterThickness * 0.5f,
                               outer.width, splitterThickness);
     const WidgetId leftId = combineIds(id, 0x4c454654ull);
@@ -9945,14 +9949,24 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
             if (pointer_.down[leftButton] || pointer_.pressed[leftButton])
             {
                 if (splitter == 0u)
-                    dockSpace->leftWidth = clamp(pointer_.position.x - outer.x, minimumSide,
-                                                outer.width - minimumCenter - dockSpace->rightWidth);
+                {
+                    dockSpace->usedLeft = clamp(pointer_.position.x - outer.x, minimumSide,
+                                                outer.width - minimumCenter - dockSpace->usedRight);
+                    dockSpace->leftWidth = dockSpace->usedLeft;
+                }
                 else if (splitter == 1u)
-                    dockSpace->rightWidth = clamp(outer.x + outer.width - pointer_.position.x,
-                                                  minimumSide, outer.width - minimumCenter - dockSpace->leftWidth);
+                {
+                    dockSpace->usedRight = clamp(outer.x + outer.width - pointer_.position.x,
+                                                 minimumSide,
+                                                 outer.width - minimumCenter - dockSpace->usedLeft);
+                    dockSpace->rightWidth = dockSpace->usedRight;
+                }
                 else
-                    dockSpace->bottomHeight = clamp(outer.y + outer.height - pointer_.position.y,
-                                                    minimumBottom, bottomMaximum);
+                {
+                    dockSpace->usedBottom = clamp(outer.y + outer.height - pointer_.position.y,
+                                                  minimumBottom, bottomMaximum);
+                    dockSpace->bottomHeight = dockSpace->usedBottom;
+                }
             }
             if (pointer_.released[leftButton])
                 activeWidget_ = InvalidWidgetId;
@@ -13795,20 +13809,20 @@ uint32_t Context::dockSlotIndex(DockSlot slot)
 Rect Context::dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const
 {
     const Rect &outer = dockSpace.bounds;
-    const float topHeight = outer.height - dockSpace.bottomHeight;
-    const float centerWidth = outer.width - dockSpace.leftWidth - dockSpace.rightWidth;
+    const float topHeight = outer.height - dockSpace.usedBottom;
+    const float centerWidth = outer.width - dockSpace.usedLeft - dockSpace.usedRight;
     switch (slot)
     {
     case DockSlot::Left:
-        return Rect(outer.x, outer.y, dockSpace.leftWidth, topHeight);
+        return Rect(outer.x, outer.y, dockSpace.usedLeft, topHeight);
     case DockSlot::Right:
-        return Rect(outer.x + outer.width - dockSpace.rightWidth, outer.y,
-                    dockSpace.rightWidth, topHeight);
+        return Rect(outer.x + outer.width - dockSpace.usedRight, outer.y,
+                    dockSpace.usedRight, topHeight);
     case DockSlot::Bottom:
-        return Rect(outer.x, outer.y + topHeight, outer.width, dockSpace.bottomHeight);
+        return Rect(outer.x, outer.y + topHeight, outer.width, dockSpace.usedBottom);
     case DockSlot::Center:
     default:
-        return Rect(outer.x + dockSpace.leftWidth, outer.y, centerWidth, topHeight);
+        return Rect(outer.x + dockSpace.usedLeft, outer.y, centerWidth, topHeight);
     }
 }
 
