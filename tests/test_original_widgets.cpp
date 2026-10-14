@@ -3008,6 +3008,58 @@ static void test_text_edit_wraps_only_the_edited_lines()
     }
 }
 
+// Um clique antes da primeira pintura, ou depois de um setText com mais linhas
+// e antes de a pintura voltar a medir, não lê o wrap fora dos limites e põe o
+// cursor numa posição válida.
+static void test_text_edit_click_before_the_wrap_is_measured()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("clickfirst");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 300.0f, 200.0f });
+    edit->setText("first line\nsecond line");
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    paint();
+    auto click = [edit](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.localX = x;
+        press.localY = y;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+        return edit->cursorPos();
+    };
+    TextEdit::TextPos pos = click(60.0f, 30.0f);
+    assert(pos.line >= 0 && pos.line < edit->lineCount());
+    assert(pos.col >= 0 && pos.col <= static_cast<int>(edit->lineAt(pos.line).size()));
+
+    assert(app.setStage("clickfirst", TransitionType::None));
+    paint();
+    String longer;
+    for (int i = 0; i < 400; ++i) longer += "line\n";
+    edit->setText(longer);
+    pos = click(60.0f, 150.0f);
+    assert(pos.line >= 0 && pos.line < edit->lineCount());
+    assert(pos.col >= 0 && pos.col <= static_cast<int>(edit->lineAt(pos.line).size()));
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3388,6 +3440,7 @@ int main()
     test_text_fields_hit_test_with_their_paint_font();
     test_text_edit_measures_again_after_zoom_and_tab_size();
     test_text_edit_wraps_only_the_edited_lines();
+    test_text_edit_click_before_the_wrap_is_measured();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

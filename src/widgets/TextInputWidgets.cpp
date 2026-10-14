@@ -457,6 +457,10 @@ void TextEdit::setText(const String& text)
     cursor_    = {0, 0};
     selAnchor_ = cursor_;
     scrollX_ = scrollY_ = 0;
+    wrapRows_.clear();
+    wrapRows_.resize(lines_.size());
+    for (int i = 0; i < static_cast<int>(lines_.size()); ++i)
+        wrapRows_[i].push_back({ 0, lineColCount(i) });
     wrapDirty_ = true;
     markDirty();
 }
