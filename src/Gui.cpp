@@ -1821,9 +1821,11 @@ bool Context::beginDialog(StringView title, bool &open, const Vec2 &size)
         return false;
     }
 
-    // Escape closes, like messageBox. Checked before the window is drawn so the
-    // content never sees the frame that dismissed it.
-    if (escapePressed_)
+    bool popupTakesEscape = menuWasOpenAtFrameStart_ || comboWasOpenAtFrameStart_;
+    for (int i = 0; i < popupDepth_; ++i)
+        if (popups_[i].wasOpenAtFrameStart)
+            popupTakesEscape = true;
+    if (escapePressed_ && !popupTakesEscape)
     {
         open = false;
         activeModal_ = InvalidWidgetId;
