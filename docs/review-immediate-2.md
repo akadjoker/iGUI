@@ -76,7 +76,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       13552, 13671. O foco muda no press antes de se saber que o press é do popup;
       o `pointerInsideOwnPopup` só conhece menus e combos. A lista de um combo que
       cai sobre outra janela funciona, mas tapa a janela onde se estava.
-- [ ] **W3. O Tab num popup modal passa o foco para um campo de trás** —
+- [x] **W3. O Tab num popup modal passa o foco para um campo de trás** —
       [Gui.cpp:13043](../src/Gui.cpp#L13043). O `inputBlockedByModal` não conhece o
       `beginPopupModal`; o texto escrito a seguir vai para o campo de trás.
 - [ ] **W4. O Tab salta para widgets de outra janela** —
