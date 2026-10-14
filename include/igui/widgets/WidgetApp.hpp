@@ -521,9 +521,14 @@ private:
     DestroyTextureFn destroyTex_;
     UpdateTextureFn  updateTex_;
 
-    // Global event dispatcher
-    // Key = "event:widgetId" for targeted, "event:*" for catch-all
-    ct::HashMap<String, ct::Vector<EventCallback>> globalHandlers_;
+    // Global event dispatcher: per event, the handlers by widget id and the
+    // catch-all ones.
+    struct EventHandlers
+    {
+        ct::HashMap<String, ct::Vector<EventCallback>> byId;
+        ct::Vector<EventCallback> any;
+    };
+    ct::HashMap<String, EventHandlers> globalHandlers_;
 
     // ── Drag & Drop state ─────────────────────────────────────────────────
     DragPayload* dragPayload_  = nullptr;   // active payload (owned)
