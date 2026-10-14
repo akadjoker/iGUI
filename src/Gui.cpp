@@ -9668,6 +9668,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     if (!window || !drawList || height <= 0.0f || tableActive_ || propertyRowActive_)
         return false;
     const float resolvedWidth = width > 0.0f ? width : calcItemWidth();
+    layout_.nextItemWidth = 0.0f;
     if (resolvedWidth <= 0.0f)
         return false;
     const Rect outer(layout_.cursor.x, layout_.cursor.y, resolvedWidth, height);

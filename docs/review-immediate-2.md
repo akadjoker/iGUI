@@ -118,7 +118,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [x] **W16. O `separator` usa a borda direita da janela** —
       [Gui.cpp:11997](../src/Gui.cpp#L11997) (e o `separatorText`). Num popup à
       direita da janela tem largura 0; devia usar o `availableWidth()`.
-- [ ] **W17. O `setNextItemWidth` antes do `beginChild` passa para o primeiro item de
+- [x] **W17. O `setNextItemWidth` antes do `beginChild` passa para o primeiro item de
       dentro** — [Gui.cpp:9588](../src/Gui.cpp#L9588).
 
 Não confirmados: o `removeWindow` não invalida a janela do ponteiro (dura um
