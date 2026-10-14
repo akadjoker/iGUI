@@ -1371,25 +1371,30 @@ void CodeEditor::paint(PaintContext& ctx)
     lastPaintFont_ = ctx.buFont;
     ctx.font.scale = fontScale_;
 
-    // Paint extras before TextEdit paints
+    // What follows the horizontal scroll stays right of the gutter.
+    if (overrideFont_) ctx.pushFont(overrideFont_);
+    updateGutterWidth(ctx);
+    if (overrideFont_) ctx.popFont();
+    const Rect textRect = {abs.x + gutterW_, abs.y, std::max(0.0f, abs.w - gutterW_), abs.h};
+
     paintCurrentLineHighlight(ctx, abs);
+    ctx.pushClip(textRect);
     paintIndentGuides(ctx, abs);
     paintSearchHighlights(ctx, abs);
+    ctx.popClip();
 
-    // Delegate to TextEdit for the main rendering
     TextEdit::paint(ctx);
 
     // Restore font scale for overlays (TextEdit::paint resets it)
     ctx.font.scale = fontScale_;
 
-    // Paint overlays after
-    ctx.pushClip(abs);
+    ctx.pushClip(textRect);
     paintExtraSelections(ctx, abs);
     paintExtraCursors(ctx, abs);
-    ctx.popClip();
     paintWhitespace(ctx, abs);
     paintScopeLines(ctx, abs);
     paintBracketMatch(ctx, abs);
+    ctx.popClip();
     paintFoldGutter(ctx, abs);
 
     // Restore default scale for other widgets

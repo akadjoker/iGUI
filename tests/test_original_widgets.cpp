@@ -2433,6 +2433,109 @@ static void test_widget_animations_stop_with_their_widget()
     assert(kept->rect().x == 0.0f);
 }
 
+// O TextEdit sem word-wrap rola na horizontal: o End leva a vista ao fim de uma
+// linha comprida, o Home volta ao princípio, e a roda horizontal (ou Shift+roda)
+// também rola. Com os números de linha à vista, o texto rolado não passa para a
+// coluna dos números: o que se desenha com o clip dessa coluna não se mexe.
+static void test_text_edit_scrolls_sideways_without_wrap()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("sideways");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 200.0f, 120.0f });
+    edit->setText(String(100, 'a'));
+    assert(app.setStage("sideways", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    auto gutterVertices = [&app, font]()
+    {
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        ct::Vector<float> xs;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            const DrawList& list = *pass.list;
+            for (const DrawCmd& cmd: list.commands())
+            {
+                if (cmd.clip.x != 0.0f || cmd.clip.w != 200.0f) continue;
+                for (uint32_t i = 0; i < cmd.indexCount; ++i)
+                    xs.push_back(list.vertices()[list.indices()[cmd.indexOffset + i]].x);
+            }
+        }
+        return xs;
+    };
+    const ct::Vector<float> unscrolled = gutterVertices();
+    const Theme& theme = Theme::instance();
+    const float rowY = (theme.fontSize + theme.lineSpacing) * 0.5f;
+    auto clickColumn = [edit, rowY](float x)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.localX = x;
+        press.localY = rowY;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+        return edit->cursorPos().col;
+    };
+    auto key = [edit](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        edit->onKeyPress(press);
+    };
+
+    const int startCol = clickColumn(190.0f);
+    assert(startCol < 40);
+    key(Key::End);
+    const ct::Vector<float> scrolled = gutterVertices();
+    assert(scrolled.size() == unscrolled.size());
+    for (size_t i = 0; i < scrolled.size(); ++i) assert(scrolled[i] == unscrolled[i]);
+    assert(clickColumn(190.0f) >= 90);
+    key(Key::Home);
+    gutterVertices();
+    assert(clickColumn(190.0f) == startCol);
+
+    MouseEvent wheel;
+    wheel.scrollX = -3.0f;
+    edit->onMouseScroll(wheel);
+    gutterVertices();
+    assert(clickColumn(190.0f) > startCol);
+    MouseEvent back;
+    back.scrollY = 3.0f;
+    back.shift = true;
+    edit->onMouseScroll(back);
+    gutterVertices();
+    assert(clickColumn(190.0f) == startCol);
+
+    auto* code = screen->createChild<CodeEditor>();
+    code->setRect({ 0.0f, 200.0f, 200.0f, 120.0f });
+    code->setShowMinimap(false);
+    code->setShowWhitespace(true);
+    code->setShowIndentGuides(true);
+    String spaced;
+    for (int i = 0; i < 40; ++i) spaced += "    a b";
+    code->setText(spaced);
+    const ct::Vector<float> codeUnscrolled = gutterVertices();
+    KeyEvent end;
+    end.key = Key::End;
+    code->onKeyPress(end);
+    const ct::Vector<float> codeScrolled = gutterVertices();
+    assert(codeScrolled.size() == codeUnscrolled.size());
+    for (size_t i = 0; i < codeScrolled.size(); ++i) assert(codeScrolled[i] == codeUnscrolled[i]);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2629,6 +2732,7 @@ int main()
     test_file_dialog_breadcrumbs_follow_the_path_root();
     test_shaded_colors_stay_in_range();
     test_widget_animations_stop_with_their_widget();
+    test_text_edit_scrolls_sideways_without_wrap();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
