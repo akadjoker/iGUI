@@ -11258,7 +11258,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     if (tableOrder_ && tableOrder_->count > 0 && !resizing)
     {
         const WidgetId reorderId = combineIds(id, 0x54424c524f524445ull);
-        tableOrder_->reorderWidget = reorderId;
         // O que reordena é arrastar (é o que o ImGui faz): por isso o press fica só
         // pendente, e um clique sem andar continua a ser o clique que ordena.
         if (tableOrder_->reorderFrom < 0 && pointerPressedIn(intersect(bounds, clip), left) &&
@@ -11282,6 +11281,7 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
             {
                 tableOrder_->reordering = true;
                 tableOrder_->reorderFrame = frameNumber_;
+                tableOrder_->reorderWidget = reorderId;
                 activeWidget_ = reorderId;
                 focusedWidget_ = reorderId;
             }
