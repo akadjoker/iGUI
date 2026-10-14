@@ -114,7 +114,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       *Arranjo:* o `WidgetApp` avisar o dono, ou o dono perguntar
       `popup() == o meu`.
 
-- [ ] **10. O relógio do `WidgetApp` trunca a cada frame** —
+- [x] **10. O relógio do `WidgetApp` trunca a cada frame** —
       [WidgetApp.cpp:114](../src/widgets/WidgetApp.cpp#L114).
       `elapsedMs_ += uint32_t(dt_ * 1000)`: acima de 1000 fps nunca avança, e a
       144 Hz atrasa cerca de 13%.
