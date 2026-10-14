@@ -8256,13 +8256,24 @@ void Context::showToast(StringView idText, StringView text, ToastPosition positi
     if (duration <= 0.0f || text.empty())
         return;
     const WidgetId id = hashText(idText);
-    ToastState toast;
-    toast.id = id;
-    toast.text = String(text.data(), text.size());
-    toast.position = position;
-    toast.remaining = duration;
-    toast.duration = duration;
-    toasts_.push_back(toast);
+    ToastState *toast = nullptr;
+    for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
+        if (toasts_[i].id == id)
+        {
+            toast = &toasts_[i];
+            break;
+        }
+    if (!toast)
+    {
+        toasts_.push_back(ToastState());
+        toast = &toasts_.back();
+        toast->id = id;
+    }
+    if (toast->text.size() != text.size() || memcmp(toast->text.data(), text.data(), text.size()) != 0)
+        toast->text = String(text.data(), text.size());
+    toast->position = position;
+    toast->remaining = duration;
+    toast->duration = duration;
 }
 
 bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, StringView preview,
