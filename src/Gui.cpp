@@ -13082,7 +13082,8 @@ void Context::registerFocusable(WidgetId id)
 {
     // Behind a modal a widget is out of the Tab order, so Tab cannot walk
     // focus (and then typing) into the blocked background.
-    if (id == InvalidWidgetId || inputBlockedByModal() || focusSeen_.contains(id))
+    if (id == InvalidWidgetId || inputBlockedByModal() || outsideModalPopup() ||
+        focusSeen_.contains(id))
         return;
     focusSeen_.insert(id);
     focusOrder_.push_back(id);
@@ -13808,7 +13809,15 @@ bool Context::pointerOver(const Rect &visible) const
 
 bool Context::hasKeyboardFocus(WidgetId id) const
 {
-    return focusedWidget_ == id && !inputBlockedByModal();
+    return focusedWidget_ == id && !inputBlockedByModal() && !outsideModalPopup();
+}
+
+bool Context::outsideModalPopup() const
+{
+    for (int i = popupDepth_ - 1; i >= 0; --i)
+        if (popups_[i].open && popups_[i].modal)
+            return popupContentIndex_ < i;
+    return false;
 }
 
 uint32_t Context::dockSlotIndex(DockSlot slot)

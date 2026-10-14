@@ -5560,6 +5560,65 @@ void test_popup_over_another_window_keeps_its_owner()
     assert(bClicks == 0);
 }
 
+// Com um popup modal aberto, o Tab anda só pelos campos dele, e um campo de trás
+// que tinha o foco não recebe o que se escreve.
+void test_modal_popup_keeps_the_keyboard()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::String back1("bg1");
+    ig::String back2("bg2");
+    ig::String first("m1");
+    ig::String second("m2");
+    bool openRequest = false;
+    bool open = false;
+    ig::Rect back1Rect;
+    ig::Rect secondRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 600.0f, 400.0f)));
+        c.inputText("fundo1", back1);
+        back1Rect = c.itemRect();
+        c.inputText("fundo2", back2);
+        if (openRequest)
+        {
+            c.openPopup("Modal");
+            openRequest = false;
+        }
+        open = c.beginPopupModal("Modal");
+        if (open)
+        {
+            c.inputText("modal1", first);
+            c.inputText("modal2", second);
+            secondRect = c.itemRect();
+            c.endPopup();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(back1Rect.x + 10.0f, back1Rect.y + 5.0f, build);
+    openRequest = true;
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(open);
+    context.pushEvent(ig::Event::textInput("Q"));
+    harness.frame(build);
+    assert(back1 == "bg1");
+
+    harness.click(secondRect.x + 10.0f, secondRect.y + secondRect.height * 0.5f, build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    harness.frame(build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::textInput("Z"));
+    harness.frame(build);
+    assert(back1 == "bg1");
+    assert(back2 == "bg2");
+    assert(first == "m1Z");
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6591,6 +6650,7 @@ int main()
     test_list_widgets_report_their_own_item_status();
     test_right_click_outside_closes_menus();
     test_popup_over_another_window_keeps_its_owner();
+    test_modal_popup_keeps_the_keyboard();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

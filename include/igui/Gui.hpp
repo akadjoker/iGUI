@@ -2652,6 +2652,7 @@ private:
     // the popup reaches outside its bounds.
     bool pointerInsideOwnPopup(const Vec2 &point) const;
     WindowHandle popupOwnerAt(const Vec2 &point) const;
+    bool outsideModalPopup() const;
     // What a popup is clipped to: the screen, not the content of the window it
     // hangs from - a combo list at the bottom of a panel used to be cut off at
     // the window's edge, and its rows were then unclickable.
