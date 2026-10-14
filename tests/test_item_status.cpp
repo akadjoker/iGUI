@@ -4373,6 +4373,54 @@ void test_table_scrolling_both_ways_keeps_its_height()
     assert(after.y - (header.y + style.height) == gap);
 }
 
+// Redimensionar colunas numa tabela que rola na horizontal: arrastar o grip 30 px
+// passa 30 px de uma coluna para a seguinte, como sem rolagem.
+void test_table_resize_with_sideways_scroll_follows_the_pointer()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollX = true;
+    style.innerWidth = 600.0f;
+    ig::Rect header[3];
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<float>(weights, 3), style, 300.0f))
+        {
+            const char* names[3] = { "A", "B", "C" };
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader(names[column]);
+                header[column] = c.itemRect();
+            }
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float first = header[1].x - header[0].x;
+    const float second = header[2].x - header[1].x;
+    const float gripX = header[0].x + header[0].width;
+    const float gripY = header[0].y + header[0].height * 0.5f;
+    harness.drag(gripX, gripY, gripX + 30.0f, gripY, build, 3);
+    harness.frame(build);
+    assert(fabsf(header[1].x - header[0].x - (first + 30.0f)) < 0.01f);
+    assert(fabsf(header[2].x - header[1].x - (second - 30.0f)) < 0.01f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5382,6 +5430,7 @@ int main()
     test_table_scrolling_both_ways_drags_the_bottom_bar();
     test_table_scrolling_both_ways_shows_the_last_row();
     test_table_scrolling_both_ways_keeps_its_height();
+    test_table_resize_with_sideways_scroll_follows_the_pointer();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
