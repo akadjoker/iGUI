@@ -1314,6 +1314,17 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     frame_ = frame;
     ++frameNumber_;
+    // Only last frame's scroll areas decide who gets the wheel; older ones are
+    // gone (their id changed or they stopped being submitted).
+    if (!wheelAreas_.empty())
+    {
+        ct::Vector<WidgetId> stale;
+        for (auto &entry : wheelAreas_)
+            if (entry.value.frame + 1u < frameNumber_)
+                stale.push_back(entry.key);
+        for (WidgetId id : stale)
+            wheelAreas_.erase(id);
+    }
     elapsedSeconds_ += frame.deltaSeconds > 0.0f ? static_cast<double>(frame.deltaSeconds) : 0.0;
     pointer_.wheelX = 0.0f;
     pointer_.wheelY = 0.0f;
