@@ -6721,6 +6721,59 @@ void test_gizmo_scale_snap_never_reaches_zero()
     }
 }
 
+// O punho do plano XZ do gizmo3D move no plano o ponto que está debaixo do ponteiro:
+// para baixo no ecrã (o +Z desta câmara) muda o Z, para a direita muda o X, e o Y
+// fica. A projeção tem o plano de longe no infinito.
+void test_gizmo3d_plane_handle_follows_the_pointer()
+{
+    const float a = 0.70710678f;
+    const float view[16] = { 1, 0, 0, 0, 0, a, a, 0, 0, -a, a, 0, 0, 0, -4.95f, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+    const auto project = [&](const ig::Rect& viewport, float x, float y, float z)
+    {
+        const float vx = view[0] * x + view[4] * y + view[8] * z + view[12];
+        const float vy = view[1] * x + view[5] * y + view[9] * z + view[13];
+        const float vz = view[2] * x + view[6] * y + view[10] * z + view[14];
+        const float w = projection[11] * vz + projection[15];
+        return ig::Vec2(viewport.x + (projection[0] * vx / w * 0.5f + 0.5f) * viewport.width,
+                viewport.y + (0.5f - projection[5] * vy / w * 0.5f) * viewport.height);
+    };
+    for (int direction = 0; direction < 2; ++direction)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Vec2 o;
+        ig::Transform3D transform;
+        ig::Gizmo3DOptions options;
+        options.showModel = false;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+            c.dummy(1.0f, 1.0f);
+            o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+            c.gizmo3D("g", transform, ig::Gizmo3DMode::Translate,
+                    ig::Rect(0.0f, 0.0f, 500.0f, 500.0f), view, projection, options);
+            c.endWindow();
+        };
+        harness.frame(build);
+        const ig::Vec2 handle = project(ig::Rect(o.x, o.y, 500.0f, 500.0f), 0.45f, 0.0f, 0.45f);
+        if (direction == 0)
+        {
+            harness.drag(handle.x, handle.y, handle.x, handle.y + 40.0f, build, 4);
+            assert(transform.position.z > 0.5f);
+            assert(fabsf(transform.position.x) < 0.1f);
+        }
+        else
+        {
+            harness.drag(handle.x, handle.y, handle.x + 40.0f, handle.y, build, 4);
+            assert(transform.position.x > 0.5f);
+            assert(fabsf(transform.position.z) < 0.01f);
+        }
+        assert(transform.position.y == 0.0f);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7761,6 +7814,7 @@ int main()
     test_tree_drop_behind_another_window_does_not_accept();
     test_message_box_keys_are_spent_by_the_box();
     test_gizmo_scale_snap_never_reaches_zero();
+    test_gizmo3d_plane_handle_follows_the_pointer();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();

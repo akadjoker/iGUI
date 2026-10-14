@@ -234,7 +234,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       Escape (8126) tem o mesmo caminho.
 - [x] **M9. O snap de escala dos gizmos leva a escala a 0** —
       [Gui.cpp:5672](../src/Gui.cpp#L5672), 5888. Limita-se a 0.01 antes do snap.
-- [ ] **M10. No gizmo3D, o plano XZ move em diagonal e ignora o movimento vertical** —
+- [x] **M10. No gizmo3D, o plano XZ move em diagonal e ignora o movimento vertical** —
       [Gui.cpp:5830](../src/Gui.cpp#L5830).
 - [ ] **M11. A rotação dos gizmos salta 360° a meio do arrasto** —
       [Gui.cpp:5646](../src/Gui.cpp#L5646), 5860. O ângulo não é desenrolado.
