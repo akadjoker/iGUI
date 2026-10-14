@@ -9885,6 +9885,9 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
                         windowState_.put(section, key->c_str(), windowState_.get(legacy, key->c_str()));
             }
         }
+        state.sizeFromState[0] = !windowState_.get(section, "left_width").empty();
+        state.sizeFromState[1] = !windowState_.get(section, "right_width").empty();
+        state.sizeFromState[2] = !windowState_.get(section, "bottom_height").empty();
         state.leftWidth =
             static_cast<float>(windowState_.getNumber(section, "left_width", state.leftWidth));
         state.rightWidth =
@@ -9899,45 +9902,11 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
 
     dockSpace->bounds = outer;
     dockSpace->clip = clip;
-    const float minimumCenter = outer.width < 352.0f ? outer.width * (160.0f / 352.0f) : 160.0f;
-    const float minimumSide = outer.width < 352.0f ? outer.width * (96.0f / 352.0f) : 96.0f;
-    float left = dockSpace->leftWidth;
-    float right = dockSpace->rightWidth;
-    const float maximumSide = outer.width - minimumCenter - minimumSide;
-    if (left < minimumSide)
-        left = minimumSide;
-    if (right < minimumSide)
-        right = minimumSide;
-    if (maximumSide > minimumSide)
-    {
-        if (left > maximumSide)
-            left = maximumSide;
-        if (right > maximumSide)
-            right = maximumSide;
-    }
-    else
-    {
-        left = minimumSide;
-        right = minimumSide;
-    }
-    const float sideBudget = outer.width - minimumCenter;
-    if (left + right > sideBudget)
-    {
-        right = sideBudget - left;
-        if (right < minimumSide)
-        {
-            right = minimumSide;
-            left = sideBudget - minimumSide;
-        }
-    }
-    dockSpace->usedLeft = left;
-    dockSpace->usedRight = right;
-    const float minimumBottom = outer.height < theme_.widgetHeight * 5.0f
-        ? outer.height * 0.4f : theme_.widgetHeight * 2.0f;
-    const float maximumBottom = outer.height - (outer.height < theme_.widgetHeight * 5.0f
-        ? outer.height * 0.6f : theme_.widgetHeight * 3.0f);
-    const float bottomMaximum = maximumBottom > minimumBottom ? maximumBottom : minimumBottom;
-    dockSpace->usedBottom = clamp(dockSpace->bottomHeight, minimumBottom, bottomMaximum);
+    const DockLimits limits = fitDockSizes(*dockSpace);
+    const float minimumCenter = limits.minimumCenter;
+    const float minimumSide = limits.minimumSide;
+    const float minimumBottom = limits.minimumBottom;
+    const float bottomMaximum = limits.bottomMaximum;
 
     drawList->addRectFilled(outer, theme_.panelColor, clip);
     drawList->addRect(outer, theme_.borderColor, clip);
@@ -9999,6 +9968,55 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     return true;
 }
 
+Context::DockLimits Context::fitDockSizes(DockSpaceState &dockSpace) const
+{
+    const float minimumCenter = dockSpace.bounds.width < 352.0f ? dockSpace.bounds.width * (160.0f / 352.0f) : 160.0f;
+    const float minimumSide = dockSpace.bounds.width < 352.0f ? dockSpace.bounds.width * (96.0f / 352.0f) : 96.0f;
+    float left = dockSpace.leftWidth;
+    float right = dockSpace.rightWidth;
+    const float maximumSide = dockSpace.bounds.width - minimumCenter - minimumSide;
+    if (left < minimumSide)
+        left = minimumSide;
+    if (right < minimumSide)
+        right = minimumSide;
+    if (maximumSide > minimumSide)
+    {
+        if (left > maximumSide)
+            left = maximumSide;
+        if (right > maximumSide)
+            right = maximumSide;
+    }
+    else
+    {
+        left = minimumSide;
+        right = minimumSide;
+    }
+    const float sideBudget = dockSpace.bounds.width - minimumCenter;
+    if (left + right > sideBudget)
+    {
+        right = sideBudget - left;
+        if (right < minimumSide)
+        {
+            right = minimumSide;
+            left = sideBudget - minimumSide;
+        }
+    }
+    dockSpace.usedLeft = left;
+    dockSpace.usedRight = right;
+    const float minimumBottom = dockSpace.bounds.height < theme_.widgetHeight * 5.0f
+        ? dockSpace.bounds.height * 0.4f : theme_.widgetHeight * 2.0f;
+    const float maximumBottom = dockSpace.bounds.height - (dockSpace.bounds.height < theme_.widgetHeight * 5.0f
+        ? dockSpace.bounds.height * 0.6f : theme_.widgetHeight * 3.0f);
+    const float bottomMaximum = maximumBottom > minimumBottom ? maximumBottom : minimumBottom;
+    dockSpace.usedBottom = clamp(dockSpace.bottomHeight, minimumBottom, bottomMaximum);
+    DockLimits limits;
+    limits.minimumCenter = minimumCenter;
+    limits.minimumSide = minimumSide;
+    limits.minimumBottom = minimumBottom;
+    limits.bottomMaximum = bottomMaximum;
+    return limits;
+}
+
 void Context::endDockSpace()
 {
     if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty())
@@ -10047,12 +10065,13 @@ void Context::setDockSizes(float leftWidth, float rightWidth, float bottomHeight
     DockSpaceState *dockSpace = activeDockSpace_ != InvalidWidgetId ? dockSpaces_.find(activeDockSpace_) : nullptr;
     if (!dockSpace)
         return;
-    if (leftWidth > 0.0f)
+    if (leftWidth > 0.0f && !dockSpace->sizeFromState[0])
         dockSpace->leftWidth = leftWidth;
-    if (rightWidth > 0.0f)
+    if (rightWidth > 0.0f && !dockSpace->sizeFromState[1])
         dockSpace->rightWidth = rightWidth;
-    if (bottomHeight > 0.0f)
+    if (bottomHeight > 0.0f && !dockSpace->sizeFromState[2])
         dockSpace->bottomHeight = bottomHeight;
+    fitDockSizes(*dockSpace);
 }
 
 bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
