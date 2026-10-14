@@ -12113,14 +12113,28 @@ float Context::availableHeight() const
 {
     const WindowState *window = currentWindow();
     if (!window) return 0.0f;
-    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
-    float bottom = window->bounds.y + window->bounds.height - padding;
-    const bool childInside =
-        !childStack_.empty() && childStack_.back().dockDepth >= dockPanelStack_.size();
-    if (!dockPanelStack_.empty() && !childInside)
-        bottom = dockPanelStack_.back().content.y + dockPanelStack_.back().content.height;
-    else if (!childStack_.empty())
-        bottom = childStack_.back().content.y + childStack_.back().content.height;
+    float bottom = 0.0f;
+    if (comboContentOpen_)
+        bottom = comboContentClip_.y + comboContentClip_.height;
+    else if (popupContentDepth_ > 0)
+        bottom = popupContentClip().y + popupContentClip().height;
+    else
+    {
+        const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+        bottom = window->bounds.y + window->bounds.height - padding;
+        const bool childInside =
+            !childStack_.empty() && childStack_.back().dockDepth >= dockPanelStack_.size();
+        if (!dockPanelStack_.empty() && !childInside)
+            bottom = dockPanelStack_.back().content.y + dockPanelStack_.back().content.height;
+        else if (!childStack_.empty())
+            bottom = childStack_.back().content.y + childStack_.back().content.height;
+    }
+    if (tableActive_ && table_.scrollY)
+    {
+        const float tableBottom = table_.bounds.y + table_.bounds.height - table_.barStripH;
+        if (tableBottom < bottom)
+            bottom = tableBottom;
+    }
     return bottom > layout_.cursor.y ? bottom - layout_.cursor.y : 0.0f;
 }
 
