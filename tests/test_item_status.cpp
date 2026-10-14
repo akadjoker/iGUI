@@ -5740,6 +5740,66 @@ void test_dialog_and_modal_popup_scrims_are_drawn()
     assert(box > popupScrim);
 }
 
+// O Escape fecha o combo ou o popup aberto dentro de um beginDialog, e só o
+// seguinte fecha o diálogo.
+void test_escape_closes_a_popup_inside_a_dialog_first()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool open = true;
+    int current = 0;
+    bool popupRequest = false;
+    bool popupOpen = false;
+    ig::Rect combo;
+    const ig::StringView items[3] = { "a", "b", "c" };
+    auto build = [&](ig::Context& c)
+    {
+        popupOpen = false;
+        if (c.beginDialog("Dialogo", open, ig::Vec2(300.0f, 200.0f)))
+        {
+            c.comboBox("cb", current, ig::Span<const ig::StringView>(items, 3));
+            combo = c.itemRect();
+            if (popupRequest)
+            {
+                c.openPopup("pp");
+                popupRequest = false;
+            }
+            popupOpen = c.beginPopup("pp");
+            if (popupOpen)
+            {
+                c.label("popup");
+                c.endPopup();
+            }
+            c.endDialog();
+        }
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(combo.x + 10.0f, combo.y + combo.height * 0.5f, build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    harness.frame(build);
+    assert(open);
+
+    popupRequest = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(popupOpen);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    harness.frame(build);
+    assert(open);
+    assert(!popupOpen);
+
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    assert(!open);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6774,6 +6834,7 @@ int main()
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
+    test_escape_closes_a_popup_inside_a_dialog_first();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
