@@ -1744,8 +1744,12 @@ private:
         uint8_t axis;
         Vec2 pointerStart;
         Transform2D transformStart;
+        // The angle the drag has turned, unwrapped frame by frame (see
+        // unwrapGizmoAngle), and the raw one of the last frame.
+        float swept;
+        float sweptRaw;
 
-        Gizmo2DState() : axis(0u), pointerStart(), transformStart() {}
+        Gizmo2DState() : axis(0u), pointerStart(), transformStart(), swept(0.0f), sweptRaw(0.0f) {}
     };
 
     struct Gizmo3DState
@@ -1758,8 +1762,13 @@ private:
         // here to wherever the ray crosses now, on that plane rather than on the
         // screen - see gizmo3DSweptAngle.
         Vec3 ringStart;
+        float swept;
+        float sweptRaw;
 
-        Gizmo3DState() : axis(0u), pointerStart(), transformStart(), ringStart() {}
+        Gizmo3DState()
+            : axis(0u), pointerStart(), transformStart(), ringStart(), swept(0.0f), sweptRaw(0.0f)
+        {
+        }
     };
 
     struct ChildState

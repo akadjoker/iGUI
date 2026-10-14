@@ -236,7 +236,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       [Gui.cpp:5672](../src/Gui.cpp#L5672), 5888. Limita-se a 0.01 antes do snap.
 - [x] **M10. No gizmo3D, o plano XZ move em diagonal e ignora o movimento vertical** —
       [Gui.cpp:5830](../src/Gui.cpp#L5830).
-- [ ] **M11. A rotação dos gizmos salta 360° a meio do arrasto** —
+- [x] **M11. A rotação dos gizmos salta 360° a meio do arrasto** —
       [Gui.cpp:5646](../src/Gui.cpp#L5646), 5860. O ângulo não é desenrolado.
 - [ ] **M12 (menor). `colorEdit` devolve true sem mudar a cor** —
       [Gui.cpp:7132](../src/Gui.cpp#L7132), 7158.

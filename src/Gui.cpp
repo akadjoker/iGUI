@@ -560,6 +560,18 @@ float snapGizmoValue(float value, float increment)
     return increment > 0.0f ? roundf(value / increment) * increment : value;
 }
 
+float unwrapGizmoAngle(float raw, float &previousRaw, float &swept)
+{
+    float step = raw - previousRaw;
+    while (step > GizmoPi)
+        step -= GizmoPi * 2.0f;
+    while (step < -GizmoPi)
+        step += GizmoPi * 2.0f;
+    previousRaw = raw;
+    swept += step;
+    return swept;
+}
+
 float snapGizmoScale(float value, float increment)
 {
     const float minimum = 0.01f;
@@ -5599,6 +5611,8 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
         state->axis = static_cast<uint8_t>(hoveredAxis);
         state->pointerStart = pointer_.pressedPosition[left];
         state->transformStart = transform;
+        state->swept = 0.0f;
+        state->sweptRaw = 0.0f;
     }
 
     bool changed = false;
@@ -5642,7 +5656,9 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
                                                 state->pointerStart.x - center.x);
                 const float currentAngle = atan2f(pointer_.position.y - center.y,
                                                   pointer_.position.x - center.x);
-                const float deltaDegrees = (currentAngle - startAngle) * 180.0f / GizmoPi;
+                const float swept =
+                    unwrapGizmoAngle(currentAngle - startAngle, state->sweptRaw, state->swept);
+                const float deltaDegrees = swept * 180.0f / GizmoPi;
                 transform.rotation = snapGizmoValue(state->transformStart.rotation + deltaDegrees,
                                                     options.rotateSnap);
             }
@@ -5792,6 +5808,8 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         state->pointerStart = pointer_.pressedPosition[left];
         state->transformStart = transform;
         state->ringStart = Vec3();
+        state->swept = 0.0f;
+        state->sweptRaw = 0.0f;
         if (mode == Gizmo3DMode::Rotate && hoveredAxis >= Gizmo3DAxisX && hoveredAxis <= Gizmo3DAxisZ)
             gizmo3DRingPoint(projector, pointer_.pressedPosition[left], transform.position,
                              gizmo3DAxisVector(hoveredAxis), state->ringStart);
@@ -5875,6 +5893,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                                      normal, local))
                     swept = gizmo3DSweptAngle(normal, state->ringStart, local);
             }
+            swept = unwrapGizmoAngle(swept, state->sweptRaw, state->swept);
             ringSweep = swept;
             const float amount = snapGizmoValue(swept * 180.0f / GizmoPi, options.rotateSnap);
             transform.rotation = state->transformStart.rotation;
