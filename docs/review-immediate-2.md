@@ -173,7 +173,7 @@ Lido: 10334-11542.
       [Gui.cpp:10734](../src/Gui.cpp#L10734).
 - [x] **T5. Uma tabela com X e Y ocupa mais 7,8 px do que a altura pedida** —
       [Gui.cpp:11461](../src/Gui.cpp#L11461). A barra é somada duas vezes.
-- [ ] **T6. Redimensionar colunas com `scrollX` usa a escala errada** —
+- [x] **T6. Redimensionar colunas com `scrollX` usa a escala errada** —
       [Gui.cpp:11185](../src/Gui.cpp#L11185). Divide por `bounds.width` em vez de
       `contentWidth`; um arrasto de 30 px soma 119 e 46 px às duas colunas.
 - [ ] **T7. Perder um arrasto de cabeçalho deixa a interface morta** —

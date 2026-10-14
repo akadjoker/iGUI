@@ -11237,7 +11237,8 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         {
             const float nextLeftWidth = clamp(leftWidth + deltaX, minimumWidth, pairWidth - minimumWidth);
             const float nextRightWidth = pairWidth - nextLeftWidth;
-            const float scale = table_.totalColumnWeight / table_.bounds.width;
+            // Os pesos repartem a contentWidth (a innerWidth com rolagem horizontal).
+            const float scale = table_.totalColumnWeight / table_.contentWidth;
             table_.columnWeights[static_cast<ct::Vector<float>::size_type>(leftModel)] = nextLeftWidth * scale;
             table_.columnWeights[static_cast<ct::Vector<float>::size_type>(rightModel)] = nextRightWidth * scale;
             table_.resizableColumnWeights[leftModel] = table_.columnWeights[static_cast<ct::Vector<float>::size_type>(leftModel)];
