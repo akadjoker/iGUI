@@ -1,9 +1,8 @@
 name: CI
 
+# Só corre quando é pedido (Actions > CI > Run workflow): não em cada commit.
 on:
-  push:
-    branches: ["**"]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   immediate:
