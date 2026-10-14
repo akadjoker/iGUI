@@ -1,6 +1,7 @@
 #include <igui/Widgets.hpp>
 #include <igui/widgets/CodeEditor.hpp>
 #include <igui/widgets/DirCache.hpp>
+#include <igui/widgets/DockPanel.hpp>
 #include <igui/widgets/FileDialog.hpp>
 #include <igui/widgets/GizmoWidgets.hpp>
 #include <igui/widgets/Theme.hpp>
@@ -1164,6 +1165,51 @@ static void test_list_widget_scrolls_its_rows_for_the_pointer_too()
     assert(listAfter->selectedIndex() == 1);
 }
 
+// setVisible(false) esconde mesmo: um Canvas escondido não corre o seu desenho e
+// um DockPanel escondido não desenha nada (o layout já os saltava, o paint não).
+static void test_hidden_widgets_do_not_paint()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("hiddenpaint");
+    auto* canvas = stage->createChild<Canvas>();
+    int canvasPaints = 0;
+    canvas->setOnPaint([&canvasPaints](PaintContext&, const Rect&) { ++canvasPaints; });
+    auto* dock = stage->createChild<DockPanel>();
+    dock->addPanel<Label>("Scene", "scene");
+    assert(app.setStage("hiddenpaint", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    auto vertexCount = [&app]()
+    {
+        // O backend limpa a lista depois de a desenhar; aqui limpa-se antes.
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data);
+        size_t count = 0;
+        for (const DrawPass& pass : data.passes)
+            if (pass.list)
+                count += pass.list->vertices().size();
+        return count;
+    };
+
+    canvas->setVisible(false);
+    const size_t withDock = vertexCount();
+    dock->setVisible(false);
+    const size_t withoutDock = vertexCount();
+    assert(canvasPaints == 0);
+    assert(withoutDock < withDock);
+    const size_t emptyStage = vertexCount();
+    assert(emptyStage == withoutDock);
+
+    canvas->setVisible(true);
+    vertexCount();
+    assert(canvasPaints == 1);
+}
+
 int main()
 {
     using namespace ig;
@@ -1195,6 +1241,7 @@ int main()
     test_owned_popups_are_deleted();
     test_file_dialog_opens_only_on_a_double_click();
     test_list_widget_scrolls_its_rows_for_the_pointer_too();
+    test_hidden_widgets_do_not_paint();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

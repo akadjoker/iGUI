@@ -78,6 +78,7 @@ int ThumbnailGrid::hitTest(float mx, float my) const
 
 void ThumbnailGrid::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 

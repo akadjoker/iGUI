@@ -129,7 +129,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
 
 ## Estado que não é respeitado
 
-- [ ] **11. `setVisible(false)` não esconde 16 widgets** —
+- [x] **11. `setVisible(false)` não esconde 16 widgets** —
       [Widget.cpp:445](../src/widgets/Widget.cpp#L445) (`Widget::paint`).
       O `Widget::paint()` (e o do GridLayout, do Collapsible, etc.) pinta todos os
       filhos sem ver o `isVisible()`, e estes widgets não testam o `visible_` no

@@ -152,6 +152,7 @@ void GradientEditor::emit()
 
 void GradientEditor::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b  = absoluteRect();
     const Rect br = barRect();
 
@@ -368,6 +369,7 @@ void HistogramWidget::recomputeBins()
 
 void HistogramWidget::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
 
     // Background
@@ -710,6 +712,7 @@ void PlotWidget::paintAxes(PaintContext& ctx, const Rect& b, const Rect& pa)
 
 void PlotWidget::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b  = absoluteRect();
     const Rect pa = plotArea(b);
     plotArea_ = pa;
