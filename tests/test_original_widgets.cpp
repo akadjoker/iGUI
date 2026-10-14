@@ -2536,6 +2536,22 @@ static void test_text_edit_scrolls_sideways_without_wrap()
     for (size_t i = 0; i < codeScrolled.size(); ++i) assert(codeScrolled[i] == codeUnscrolled[i]);
 }
 
+// As repetições colapsadas de uma mensagem contam para o total do nível, e o
+// corte das linhas antigas tira exatamente o que elas somaram.
+static void test_console_counts_collapsed_repeats()
+{
+    using namespace ig::retained;
+    ConsoleWidget console;
+    console.setCollapseDuplicates(true);
+    console.setMaxLines(2);
+    for (int i = 0; i < 3; ++i) console.log(LogLevel::Error, "disk full");
+    assert(console.messageCount(LogLevel::Error) == 3);
+    console.log(LogLevel::Info, "a");
+    console.log(LogLevel::Info, "b");
+    assert(console.messageCount(LogLevel::Error) == 0);
+    assert(console.messageCount(LogLevel::Info) == 2);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2733,6 +2749,7 @@ int main()
     test_shaded_colors_stay_in_range();
     test_widget_animations_stop_with_their_widget();
     test_text_edit_scrolls_sideways_without_wrap();
+    test_console_counts_collapsed_repeats();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
