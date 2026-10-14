@@ -461,9 +461,10 @@ CodeEditor::BracketPair CodeEditor::findMatchingBracket(TextPos pos) const
 
     if (pos.line < 0 || pos.line >= lineCount()) return result;
     const auto& line = lineAt(pos.line);
-    if (pos.col < 0 || pos.col >= static_cast<int>(line.size())) return result;
+    if (pos.col < 0 || pos.col >= lineColCount(pos.line)) return result;
+    const int byte = static_cast<int>(utf8ByteOffset(line, pos.col));
 
-    char ch = line[pos.col];
+    char ch = line[byte];
     char match = 0;
     int dir = 0;
     switch (ch) {
@@ -479,27 +480,28 @@ CodeEditor::BracketPair CodeEditor::findMatchingBracket(TextPos pos) const
     result.open = pos;
     int depth = 1;
     int curLine = pos.line;
-    int curCol  = pos.col + dir;
+    int curByte = byte + dir;
     int lc = lineCount();
 
     while (curLine >= 0 && curLine < lc && depth > 0) {
         const auto& ln = lineAt(curLine);
         int len = static_cast<int>(ln.size());
 
-        while (curCol >= 0 && curCol < len && depth > 0) {
-            char c = ln[curCol];
+        while (curByte >= 0 && curByte < len && depth > 0)
+        {
+            char c = ln[curByte];
             if (c == ch) depth++;
             else if (c == match) depth--;
             if (depth == 0) {
-                result.close = {curLine, curCol};
+                result.close = { curLine, utf8Length(ln.substr(0, static_cast<size_t>(curByte))) };
                 return result;
             }
-            curCol += dir;
+            curByte += dir;
         }
 
         curLine += dir;
         if (curLine >= 0 && curLine < lc) {
-            curCol = (dir > 0) ? 0 : static_cast<int>(lineAt(curLine).size()) - 1;
+            curByte = (dir > 0) ? 0 : static_cast<int>(lineAt(curLine).size()) - 1;
         }
     }
 
