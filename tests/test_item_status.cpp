@@ -6147,6 +6147,33 @@ void test_group_with_a_child_ignores_the_hidden_content()
     assert(group.y + group.height == child.y + child.height);
 }
 
+// newLine depois de um sameLine começa por baixo do item mais alto da linha.
+void test_new_line_after_same_line_clears_the_tallest_item()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect tall;
+    ig::Rect next;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+        c.dummy(40.0f, 90.0f);
+        tall = c.itemRect();
+        c.sameLine();
+        c.label("baixo");
+        c.sameLine();
+        c.newLine();
+        c.button("seguinte");
+        next = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(next.y == tall.y + tall.height + context.theme().itemSpacing);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7189,6 +7216,7 @@ int main()
     test_child_inside_a_dock_panel_reports_its_own_width();
     test_indent_group_and_set_cursor_keep_the_content_extent();
     test_group_with_a_child_ignores_the_hidden_content();
+    test_new_line_after_same_line_clears_the_tallest_item();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
