@@ -167,9 +167,8 @@ void AssetBrowser::paint(PaintContext& ctx)
             bool sel = (selected_ == i);
 
             Color tc = (it.thumbColor.r != 60) ? it.thumbColor : typeToColor(it.type);
-            ctx.fill.SetColor(sel ? tc.r + 20 : tc.r * 40 / 100,
-                              sel ? tc.g + 20 : tc.g * 40 / 100,
-                              sel ? tc.b + 20 : tc.b * 40 / 100, 255);
+            const Color face = sel ? tc.Shifted(20) : Color(tc.r * 40 / 100, tc.g * 40 / 100, tc.b * 40 / 100);
+            ctx.fill.SetColor(face.r, face.g, face.b, 255);
             ctx.fillRect(cx, cy, g.cellW, thumbSize_);
 
             ctx.fill.SetColor(tc.r, tc.g, tc.b, sel ? 255 : 180);

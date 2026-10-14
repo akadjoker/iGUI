@@ -43,6 +43,16 @@ struct Color
                      static_cast<uint8_t>(a * inverse + other.a * amount));
     }
 
+    Color Shifted(int delta) const
+    {
+        const auto shift = [delta](uint8_t channel)
+        {
+            const int value = static_cast<int>(channel) + delta;
+            return static_cast<uint8_t>(value < 0 ? 0 : (value > 255 ? 255 : value));
+        };
+        return Color(shift(r), shift(g), shift(b), a);
+    }
+
     static Color FromFloat(float red, float green, float blue, float alpha = 1.0f)
     {
         return Color(static_cast<uint8_t>(red * 255.0f),
