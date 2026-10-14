@@ -1899,6 +1899,29 @@ static void test_collapsible_keeps_its_children_while_closed()
     assert(field->rect().h == fieldHeight);
 }
 
+// Pôr no BorderLayout o widget que já lá está não o apaga, e mudá-lo de região
+// deixa a antiga vazia em vez de ficar com um ponteiro para ele.
+static void test_border_layout_keeps_a_widget_set_again()
+{
+    using namespace ig::retained;
+    BorderLayout border;
+    border.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    auto* centre = border.set<Label>(BorderRegion::Center, "centre");
+    border.setWidget(BorderRegion::Center, centre);
+    assert(border.get(BorderRegion::Center) == centre);
+    assert(border.children().size() == 1u);
+    border.layout();
+    assert(centre->text() == "centre");
+
+    border.setWidget(BorderRegion::Left, centre);
+    assert(border.get(BorderRegion::Center) == nullptr);
+    assert(border.get(BorderRegion::Left) == centre);
+    auto* other = border.set<Label>(BorderRegion::Center, "other");
+    assert(border.children().size() == 2u);
+    border.layout();
+    assert(centre->text() == "centre" && other->text() == "other");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2084,6 +2107,7 @@ int main()
     test_text_edit_rewraps_after_every_edit();
     test_hover_after_a_click_stays_on_the_float();
     test_collapsible_keeps_its_children_while_closed();
+    test_border_layout_keeps_a_widget_set_again();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

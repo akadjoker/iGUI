@@ -195,7 +195,7 @@ Reproduzidos com sonda:
 - [x] [LayoutWidgets.cpp:329](../src/widgets/LayoutWidgets.cpp#L329) — o
       Collapsible fechado zera o rect dos filhos; os que usam o `sizeHint()` por
       omissão (Canvas, ImageView) voltam com altura 0 ao reabrir.
-- [ ] [LayoutWidgets.cpp:87](../src/widgets/LayoutWidgets.cpp#L87) —
+- [x] [LayoutWidgets.cpp:87](../src/widgets/LayoutWidgets.cpp#L87) —
       `BorderLayout::setWidget(região, mesmoWidget)` apaga-o e volta a
       adicioná-lo (SEGV no `layout()`).
 - [ ] [WidgetApp.cpp:156](../src/widgets/WidgetApp.cpp#L156) — o F1 (scancode 58)
