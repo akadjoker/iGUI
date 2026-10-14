@@ -4038,80 +4038,85 @@ void test_submenu_inside_a_popup()
     assert(!popupOpen);
 }
 
-// SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do
-// frame anterior), em vez de dividirem a largura da tabela pelos pesos. Uma
-// tabela que rola sem linhas presas (freezeRows = 0): a linha 0 rola como as
+// Uma tabela que rola sem linhas presas (freezeRows = 0): a linha 0 rola como as
 // outras, e o clique por cima dela vai para a linha que lá está.
-void test_table_without_frozen_rows_scrolls_the_first_row() {
-  ig::TestBackend backend;
-  ig::Context context(backend);
-  ig::Harness harness(context);
+void test_table_without_frozen_rows_scrolls_the_first_row()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
 
-  const float weights[2] = {1.0f, 1.0f};
-  ig::TableStyle style;
-  style.scrollY = true;
-  style.height = 120.0f;
-  style.freezeRows = 0;
-  const int kRows = 20;
-  ig::Rect rects[kRows];
-  bool visible[kRows];
-  bool clicked[kRows];
+    const float weights[2] = { 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 120.0f;
+    style.freezeRows = 0;
+    const int kRows = 20;
+    ig::Rect rects[kRows];
+    bool visible[kRows];
+    bool clicked[kRows];
 
-  auto build = [&](ig::Context &c) {
-    assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 500.0f, 500.0f)));
-    if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f)) {
-      for (int row = 0; row < kRows; ++row) {
-        c.tableNextColumn();
-        char text[16];
-        snprintf(text, sizeof(text), "linha%d", row);
-        clicked[row] = c.button(text);
-        rects[row] = c.itemRect();
-        visible[row] = c.isItemVisible();
-        c.tableNextColumn();
-        c.label("x");
-      }
-      c.endTable();
-    }
-    c.endWindow();
-  };
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 500.0f, 500.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f))
+        {
+            for (int row = 0; row < kRows; ++row)
+            {
+                c.tableNextColumn();
+                char text[16];
+                snprintf(text, sizeof(text), "linha%d", row);
+                clicked[row] = c.button(text);
+                rects[row] = c.itemRect();
+                visible[row] = c.isItemVisible();
+                c.tableNextColumn();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
 
-  harness.frame(build);
-  harness.frame(build);
-  const float step = rects[1].y - rects[0].y;
-  assert(step > 0.0f);
-  const float firstBefore = rects[0].y;
+    harness.frame(build);
+    harness.frame(build);
+    const float step = rects[1].y - rects[0].y;
+    assert(step > 0.0f);
+    const float firstBefore = rects[0].y;
 
-  ig::Event wheel;
-  wheel.type = ig::EventType::PointerWheel;
-  wheel.wheelY = -1.0f;
-  context.pushEvent(ig::Event::pointerMove(50.0f, rects[1].y + 5.0f));
-  context.pushEvent(wheel);
-  harness.frame(build);
-  const float moved = firstBefore - rects[0].y;
-  assert(moved > 0.0f);
-  assert(rects[1].y - rects[0].y == step);
-  assert(rects[2].y - rects[1].y == step);
-
-  for (int i = 0; i < 3; ++i) {
-    context.pushEvent(ig::Event::pointerMove(50.0f, rects[3].y + 5.0f));
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    context.pushEvent(ig::Event::pointerMove(50.0f, rects[1].y + 5.0f));
     context.pushEvent(wheel);
     harness.frame(build);
-  }
-  assert(!visible[0]);
-  assert(rects[1].y - rects[0].y == step);
+    const float moved = firstBefore - rects[0].y;
+    assert(moved > 0.0f);
+    assert(rects[1].y - rects[0].y == step);
+    assert(rects[2].y - rects[1].y == step);
 
-  int target = -1;
-  for (int row = 0; row < kRows; ++row)
-    if (visible[row] && rects[row].y >= firstBefore) {
-      target = row;
-      break;
+    for (int i = 0; i < 3; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(50.0f, rects[3].y + 5.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
     }
-  assert(target > 0);
-  harness.click(50.0f, rects[target].y + 5.0f, build);
-  for (int row = 0; row < kRows; ++row)
-    assert(clicked[row] == (row == target));
+    assert(!visible[0]);
+    assert(rects[1].y - rects[0].y == step);
+
+    int target = -1;
+    for (int row = 0; row < kRows; ++row)
+        if (visible[row] && rects[row].y >= firstBefore)
+        {
+            target = row;
+            break;
+        }
+    assert(target > 0);
+    harness.click(50.0f, rects[target].y + 5.0f, build);
+    for (int row = 0; row < kRows; ++row) assert(clicked[row] == (row == target));
 }
 
+// SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
+// anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
 {
     ig::TestBackend backend;
