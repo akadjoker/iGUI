@@ -302,6 +302,12 @@ private:
     bool widestLineGone_ = false;
     void measureStaleLines(PaintContext& ctx);
 
+    // First visual row of each line (and the total at the end), rebuilt when
+    // the wrap changes.
+    mutable ct::Vector<int> rowStarts_;
+    mutable bool rowStartsDirty_ = true;
+    const ct::Vector<int>& rowStarts() const;
+
     // Rows and width of each distinct line, kept between full rebuilds so a
     // rebuild only measures the lines it has not seen.
     struct WrapLine { ct::Vector<WrapRow> rows; float width = 0; };
