@@ -269,12 +269,12 @@ void test_dock_arrangement_round_trips_through_ini()
 
     ct::Ini saved;
     check(saved.load(path), "the written state file could not be read back");
-    check(saved.get("dock:editor", "tabs_left") == "Hierarchy",
-          "a panel left in the left region did not come back there");
-    check(saved.get("dock:editor", "tabs_center").empty(),
-          "the panel was stored in the region the application asked for");
-    check(saved.get_double("dock:editor", "left_width") == 260.0,
-          "the region size the user dragged was not kept");
+    check(saved.get("dock:host/editor", "tabs_left") == "Hierarchy",
+            "a panel left in the left region did not come back there");
+    check(saved.get("dock:host/editor", "tabs_center").empty(),
+            "the panel was stored in the region the application asked for");
+    check(saved.get_double("dock:host/editor", "left_width") == 260.0,
+            "the region size the user dragged was not kept");
 
     // Persistence off, so the destructor of the context writes nothing.
     context.setWindowStatePath(ig::String());
@@ -344,9 +344,9 @@ void test_dock_panel_closed_after_a_drag_keeps_its_region()
     check(context.saveWindowState(), "the state file was not written");
     ct::Ini saved;
     check(saved.load(path), "the written state file could not be read back");
-    check(saved.get("dock:editor", "tabs_right") == "H",
+    check(saved.get("dock:host/editor", "tabs_right") == "H",
             "a closed panel was not stored in the region it was dragged to");
-    check(saved.get("dock:editor", "tabs_left").empty(),
+    check(saved.get("dock:host/editor", "tabs_left").empty(),
             "a closed panel was still stored in its old region");
 
     context.setWindowStatePath(ig::String());
@@ -401,10 +401,82 @@ void test_dock_sizes_survive_a_frame_of_squeezing()
     check(context.saveWindowState(), "the state file was not written");
     ct::Ini saved;
     check(saved.load(path), "the written state file could not be read back");
-    check(saved.get_double("dock:editor", "left_width") == 260.0,
+    check(saved.get_double("dock:host/editor", "left_width") == 260.0,
             "a frame of squeezing changed the size the state file keeps");
 
     context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
+// Dock spaces with the same id in two windows keep their arrangements apart: each
+// window gets its panels back where they were.
+void test_dock_spaces_in_two_windows_keep_their_own_state()
+{
+    const char* path = "igui_dock_two_windows_test.ini";
+    remove(path);
+    float aX = 0.0f;
+    float bX = 0.0f;
+    auto run = [&](ig::Context& context, ig::Harness& harness, bool drag)
+    {
+        auto build = [&](ig::Context& c)
+        {
+            const char* windows[2] = { "Scene A", "Scene B" };
+            for (int w = 0; w < 2; ++w)
+            {
+                if (!c.beginWindow(windows[w],
+                            ig::Rect(static_cast<float>(w) * 820.0f, 0.0f, 800.0f, 600.0f)))
+                    continue;
+                if (c.beginDockSpace("main"))
+                {
+                    if (c.beginDockPanel("Inspector", ig::DockSlot::Left))
+                    {
+                        c.label("i");
+                        (w == 0 ? aX : bX) = c.itemRect().x - static_cast<float>(w) * 820.0f;
+                        c.endDockPanel();
+                    }
+                    if (c.beginDockPanel("View", ig::DockSlot::Center))
+                    {
+                        c.label("v");
+                        c.endDockPanel();
+                    }
+                    c.endDockSpace();
+                }
+                c.endWindow();
+            }
+        };
+        harness.frame(build);
+        harness.frame(build);
+        if (drag)
+        {
+            const float tab = context.theme().titleBarHeight + context.theme().widgetHeight * 0.5f;
+            harness.drag(820.0f + 15.0f, tab, 820.0f + 650.0f, 300.0f, build, 4);
+            harness.frame(build);
+        }
+        harness.frame(build);
+    };
+
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        harness.setViewport(1700.0f, 700.0f);
+        context.setWindowStatePath(path);
+        run(context, harness, true);
+        check(aX < 200.0f && bX > 400.0f, "the panel of the second window was not dragged right");
+        check(context.saveWindowState(), "the state file was not written");
+        context.setWindowStatePath(ig::String());
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        harness.setViewport(1700.0f, 700.0f);
+        context.setWindowStatePath(path);
+        run(context, harness, false);
+        check(aX < 200.0f, "the first window took the arrangement of the second");
+        check(bX > 400.0f, "the second window lost its arrangement");
+        context.setWindowStatePath(ig::String());
+    }
     remove(path);
 }
 
@@ -734,6 +806,7 @@ int main()
     test_dock_arrangement_round_trips_through_ini();
     test_dock_panel_closed_after_a_drag_keeps_its_region();
     test_dock_sizes_survive_a_frame_of_squeezing();
+    test_dock_spaces_in_two_windows_keep_their_own_state();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();
