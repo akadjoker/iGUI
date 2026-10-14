@@ -4315,14 +4315,18 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     const float measuredWidth = measured ? comboMeasured_.x : 0.0f;
     // A altura toda do conteúdo (sem o corte): é ela que diz quanto há para rolar.
     const float contentHeight = measured ? comboMeasured_.y : theme_.widgetHeight;
-    const float popupWidth =
-        measuredWidth > rect.width ? measuredWidth + padding * 2.0f : rect.width;
     // O que cabe no popup: no máximo visibleItems linhas (o HeightRegular do
     // ImGui), no mínimo uma.
     float visibleHeight = contentHeight > maxHeight ? maxHeight : contentHeight;
     if (visibleHeight < theme_.widgetHeight)
         visibleHeight = theme_.widgetHeight;
     const float maxScroll = contentHeight > visibleHeight ? contentHeight - visibleHeight : 0.0f;
+    const float barWidth = maxScroll > 0.0f
+                               ? (theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f
+                                                               : 4.0f)
+                               : 0.0f;
+    const float fittedWidth = measuredWidth + padding * 2.0f + barWidth;
+    const float popupWidth = fittedWidth > rect.width ? fittedWidth : rect.width;
     const float popupHeight = visibleHeight + padding * 2.0f;
     const Rect popup(rect.x, rect.y + rect.height, popupWidth, popupHeight);
     const Rect popupClip = intersect(popup, popupClipRect());
@@ -4365,12 +4369,6 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
         pointer_.wheelY = 0.0f;   // a lista levou com ele: quem a contém não rola também
     }
     const float scroll = *scrollEntry;
-    // A barra fica na borda direita e o conteúdo acaba antes dela, senão o texto
-    // passava por baixo.
-    const float barWidth = maxScroll > 0.0f
-                               ? (theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f
-                                                               : 4.0f)
-                               : 0.0f;
     comboScrollbarVisible_ = maxScroll > 0.0f && barWidth > 0.0f;
     comboScroll_ = scroll;
     comboMaxScroll_ = maxScroll;
@@ -4462,6 +4460,7 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     layout_.baseOriginX = layout_.origin.x;
     layout_.hasLastItem = false;
     layout_.contentExtent = Vec2(0.0f, 0.0f);
+    layout_.fitRight = layout_.origin.x;
     layout_.nextItemWidth = 0.0f;
     layout_.lineTop = layout_.origin.y;
     layout_.lineHeight = 0.0f;
@@ -4493,9 +4492,7 @@ void Context::endCombo()
     float height = 0.0f;
     if (layout_.hasLastItem)
     {
-        // A extensão é a do maior item, não a do último: um rótulo curto depois de
-        // uma lista larga não pode encolher a caixa.
-        width = layout_.contentExtent.x - layout_.origin.x;
+        width = layout_.fitRight - layout_.origin.x;
         height = layout_.contentExtent.y - layout_.origin.y;
     }
     if (width < 0.0f)
@@ -12055,34 +12052,29 @@ float Context::availableWidth() const
     const WindowState *window = currentWindow();
     if (!window)
         return 0.0f;
-    // Dentro do popup de um combo de conteúdo livre a largura que sobra é a dele,
-    // não a da janela: os itens lá dentro esticam até à borda do popup, como no
-    // ImGui.
+    float right = 0.0f;
     if (comboContentOpen_)
+        right = layout_.origin.x + comboContentWidth_;
+    else if (popupContentDepth_ > 0)
+        right = layout_.origin.x + popupContentWidth();
+    else
     {
-        const float right = layout_.origin.x + comboContentWidth_;
-        return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
+        const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
+        right = window->bounds.x + window->bounds.width - padding;
+        if (!childStack_.empty())
+            right = childStack_.back().content.x + childStack_.back().content.width;
+        if (!dockPanelStack_.empty())
+            right = dockPanelStack_.back().content.x + dockPanelStack_.back().content.width;
+        if (tableActive_ && table_.columns > 0 && table_.column >= 0)
+            right = tableColumnX(table_.column) + tableColumnWidth(table_.column);
+        if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
+            right = tabContent_[tabContentDepth_ - 1].rect.x +
+                    tabContent_[tabContentDepth_ - 1].rect.width;
+        if (propertyRowActive_)
+            right = propertyRow_.bounds.x + propertyRow_.bounds.width;
     }
-    // O mesmo dentro de um menu aberto (ver beginPopupContent).
-    if (popupContentDepth_ > 0)
-    {
-        const float right = layout_.origin.x + popupContentWidth();
-        return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
-    }
-    const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
-    float right = window->bounds.x + window->bounds.width - padding;
-    if (!childStack_.empty())
-        right = childStack_.back().content.x + childStack_.back().content.width;
-    if (!dockPanelStack_.empty())
-        right = dockPanelStack_.back().content.x + dockPanelStack_.back().content.width;
-    if (tableActive_ && table_.columns > 0 && table_.column >= 0)
-        right = tableColumnX(table_.column) + tableColumnWidth(table_.column);
-    // O conteúdo de uma tab vai até à largura da barra (o rect que o beginTabItem
-    // deixou).
-    if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
-        right = tabContent_[tabContentDepth_ - 1].rect.x + tabContent_[tabContentDepth_ - 1].rect.width;
-    if (propertyRowActive_)
-        right = propertyRow_.bounds.x + propertyRow_.bounds.width;
+    fillEdge_ = right;
+    fillEdgeSet_ = true;
     return right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f;
 }
 
@@ -12450,13 +12442,11 @@ void Context::advanceLayout(const Rect &item)
         if (bottom > layout_.contentExtent.y)
             layout_.contentExtent.y = bottom;
     }
-    if (tableActive_ && table_.style.sizingFixedFit && table_.column >= 0)
-    {
-        const float right = item.x + item.width;
-        const float edge = tableColumnX(table_.column) + tableColumnWidth(table_.column);
-        if (fabsf(right - edge) > 0.5f && right > layout_.fitRight)
-            layout_.fitRight = right;
-    }
+    const float itemRight = item.x + item.width;
+    const bool fills = fillEdgeSet_ && fabsf(itemRight - fillEdge_) <= 0.5f;
+    fillEdgeSet_ = false;
+    if (!fills && itemRight > layout_.fitRight)
+        layout_.fitRight = itemRight;
     // Um grupo aberto cresce com tudo o que lhe passa por dentro - labels e dummies
     // incluídos, que também passam por aqui (ver endGroup).
     if (!groups_.empty() && groups_.back().active)

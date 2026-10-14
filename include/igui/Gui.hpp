@@ -1642,9 +1642,8 @@ private:
         // container: é o que dá a medida de uma caixa que tem de se dimensionar
         // sozinha, como o tooltip rico (ver beginTooltip).
         Vec2 contentExtent;
-        // A borda direita do maior item de uma célula de tabela que não encosta à
-        // borda da coluna: um item que ocupa a largura que sobra não pede largura
-        // (ver measureTableCellWidth).
+        // A borda direita do maior item que não ocupa só a largura que sobra (ver
+        // measureTableCellWidth e endCombo).
         float fitRight;
         // Largura do próximo item (setNextItemWidth) e o valor por omissão de
         // dentro dos pushItemWidth (ver calcItemWidth). Zero quer dizer "a
@@ -2484,6 +2483,10 @@ private:
     // an empty field are not numbers yet), so while one is focused its text
     // lives here; numericEditValue_ is the value that text last produced, to
     // spot the application changing the value underneath.
+    // The right edge the last availableWidth() handed out: an item that ends there
+    // took the room it was given and does not ask for width (see advanceLayout).
+    mutable float fillEdge_ = 0.0f;
+    mutable bool fillEdgeSet_ = false;
     WidgetId numericEditId_ = InvalidWidgetId;
     String numericEditText_;
     double numericEditValue_ = 0.0;

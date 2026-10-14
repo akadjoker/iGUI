@@ -35,7 +35,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N5. A barra de rolagem do `beginCombo` não se deixa arrastar** —
       [Gui.cpp:4368](../src/Gui.cpp#L4368). O teste do polegar corre antes de o
       `comboItemsSubmitted_` ficar ligado, e o ponteiro é bloqueado.
-- [ ] **N6. Com conteúdo mais largo que o cabeçalho e com rolagem, o `beginCombo`
+- [x] **N6. Com conteúdo mais largo que o cabeçalho e com rolagem, o `beginCombo`
       corta o conteúdo** — [Gui.cpp:4292](../src/Gui.cpp#L4292), 4428 contra 4493.
       O begin calcula a largura sem a barra e o end com ela.
 - [ ] **N7. As linhas do `listBox` (e do `comboBox`) são paragens do Tab, e as setas

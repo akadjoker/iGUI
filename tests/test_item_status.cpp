@@ -5022,6 +5022,58 @@ void test_combo_scrollbar_can_be_dragged()
     assert(first.y < before);
 }
 
+// Um beginCombo que rola, com conteúdo mais largo do que o cabeçalho, mostra o
+// conteúdo inteiro antes da barra.
+void test_wide_scrolling_combo_does_not_clip_its_content()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const char* wide = "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW";
+    ig::Rect header;
+    ig::Rect wideRect;
+    bool open = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 500.0f, 500.0f)));
+        open = c.beginCombo("escolha", "x", 100.0f, 4);
+        if (open)
+        {
+            c.label(wide);
+            wideRect = c.itemRect();
+            for (int i = 0; i < 10; ++i)
+            {
+                char text[16];
+                snprintf(text, sizeof(text), "i%d", i);
+                c.selectable(text, false);
+            }
+            c.endCombo();
+        }
+        else
+            header = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(header.x + 10.0f, header.y + header.height * 0.5f, build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
+    assert(open);
+    assert(wideRect.width > header.width);
+    bool found = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text || command.payload.text.textSize != 30u)
+            continue;
+        found = true;
+        const ig::Rect clip = command.payload.text.clip;
+        assert(clip.x + clip.width >= wideRect.x + wideRect.width - 0.01f);
+    }
+    assert(found);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6043,6 +6095,7 @@ int main()
     test_submenu_closes_when_another_item_is_hovered();
     test_main_menu_bar_item_responds_to_its_edges();
     test_combo_scrollbar_can_be_dragged();
+    test_wide_scrolling_combo_does_not_clip_its_content();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
