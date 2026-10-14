@@ -215,7 +215,7 @@ Só por leitura:
 - [ ] DataGrid, TreeGrid, PropertyGrid e ConsoleWidget editam o buffer byte a
       byte: um Backspace sobre "ç" ou "ã" deixa UTF-8 inválido (deviam usar a
       lógica do TextInput).
-- [ ] [Signal.hpp:64](../include/igui/widgets/Signal.hpp#L64) — o `emit()`
+- [x] [Signal.hpp:64](../include/igui/widgets/Signal.hpp#L64) — o `emit()`
       percorre o `slots_` enquanto um handler pode ligar ou desligar slots.
 - [x] [WidgetApp.cpp:526-531](../src/widgets/WidgetApp.cpp#L526-L531) — o bubble
       das teclas não tem a guarda de `deletions_` que o do rato tem.
