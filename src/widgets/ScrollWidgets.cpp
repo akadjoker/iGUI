@@ -75,7 +75,8 @@ void ScrollBar::paint(PaintContext& ctx)
 
 void ScrollBar::onMousePress(MouseEvent& e)
 {
-    if (e.button != 0) return;
+    if (e.button != 0 || !needed()) return;
+    e.consumed = true;
     Rect thumb = thumbRect();
     if (thumb.contains(e.x, e.y))
     {
@@ -260,19 +261,21 @@ void ScrollView::paint(PaintContext& ctx)
 void ScrollView::onMouseScroll(MouseEvent& e)
 {
     float step = 30.0f;
-    if (e.scrollY != 0.0f)
+    if (e.scrollY != 0.0f && vbar_->isVisible())
     {
         scrollY_ -= e.scrollY * step;
         scrollY_  = std::max(0.0f, std::min(scrollY_, std::max(0.0f, contentH_ - rect_.h)));
         vbar_->setValue(scrollY_);
         markDirty();
+        e.consumed = true;
     }
-    if (e.scrollX != 0.0f)
+    if (e.scrollX != 0.0f && hbar_->isVisible())
     {
         scrollX_ -= e.scrollX * step;
         scrollX_  = std::max(0.0f, std::min(scrollX_, std::max(0.0f, contentW_ - rect_.w)));
         hbar_->setValue(scrollX_);
         markDirty();
+        e.consumed = true;
     }
 }
 
@@ -445,6 +448,8 @@ void ListBox::onMousePress(MouseEvent& e)
 
 void ListBox::onMouseScroll(MouseEvent& e)
 {
+    if (!vbar_ || !vbar_->needed()) return;
+    e.consumed = true;
     float step = itemHeight() * 2.0f;
     scrollOffset_ -= e.scrollY * step;
     clampScroll();
@@ -600,6 +605,8 @@ void ListWidget::paint(PaintContext& ctx)
 
 void ListWidget::onMouseScroll(MouseEvent& e)
 {
+    if (!vbar_ || !vbar_->needed()) return;
+    e.consumed = true;
     float step = rowH() * 1.5f;
     scrollOffset_ -= e.scrollY * step;
     clampScroll();

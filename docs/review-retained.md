@@ -82,7 +82,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       Um botão "apagar" atua sobre o item errado. O `connectRowPress` também
       captura o índice no `addRow`, que fica errado depois de um `removeRow()`.
 
-- [ ] **7. A roda e a barra de scroll não consomem o evento** —
+- [x] **7. A roda e a barra de scroll não consomem o evento** —
       [ScrollWidgets.cpp:260](../src/widgets/ScrollWidgets.cpp#L260).
       `ScrollView`/`ListBox`/`ListWidget::onMouseScroll` e
       `ScrollBar::onMousePress` nunca põem `e.consumed`.
