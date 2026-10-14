@@ -6223,6 +6223,42 @@ void test_separator_uses_the_available_width()
     assert(popupSeparator.width > 0.0f);
 }
 
+// O setNextItemWidth antes de um beginChild é a largura do child, e não passa para
+// o primeiro item de dentro.
+void test_next_item_width_is_spent_by_the_child()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float first = 0.5f;
+    float second = 0.5f;
+    ig::Rect child;
+    ig::Rect firstRect;
+    ig::Rect secondRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 500.0f, 400.0f)));
+        c.setNextItemWidth(200.0f);
+        if (c.beginChild("ch", 100.0f))
+        {
+            c.sliderFloat("primeiro", first, 0.0f, 1.0f);
+            firstRect = c.itemRect();
+            c.sliderFloat("segundo", second, 0.0f, 1.0f);
+            secondRect = c.itemRect();
+            c.endChild();
+        }
+        child = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(child.width == 200.0f);
+    assert(firstRect.width == secondRect.width);
+    assert(firstRect.x + firstRect.width <= child.x + child.width);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7267,6 +7303,7 @@ int main()
     test_group_with_a_child_ignores_the_hidden_content();
     test_new_line_after_same_line_clears_the_tallest_item();
     test_separator_uses_the_available_width();
+    test_next_item_width_is_spent_by_the_child();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
