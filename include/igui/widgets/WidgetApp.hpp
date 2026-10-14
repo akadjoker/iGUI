@@ -390,6 +390,7 @@ private:
 
     // Hit test
     Widget* hitTest(Widget* w, float x, float y);
+    Widget* topWidgetAt(float x, float y);
     void fillLocal(Widget* target, MouseEvent& e);
 
     template <typename Func>

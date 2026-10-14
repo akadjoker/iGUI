@@ -264,24 +264,7 @@ void WidgetApp::dispatchMouseMove(float x, float y)
         return;
     }
 
-    Widget* hit = popup_ ? hitTest(popup_, x, y) : nullptr;
-    if (!hit && popup_ && popup_->popupContains(x, y))
-        hit = popup_;
-    if (!hit && popup_) {
-        if (hovered_) updateHover(nullptr);
-        return;
-    }
-    if (!hit) {
-        for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i) {
-            auto* fw = floats_[i];
-            if (!fw->isVisible()) continue;
-            hit = hitTest(fw, x, y);
-            if (hit) break;
-        }
-    }
-    if (!hit)
-        hit = hitTest(root_, x, y);
-
+    Widget* hit = topWidgetAt(x, y);
     if (hit != hovered_)
         updateHover(hit);
 
@@ -443,7 +426,7 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
         MouseEvent me = makeMouseEvent(x, y, btn);
         bubble(pressed_, me, &Widget::onMouseRelease);
         pressed_ = nullptr;
-        Widget* hit2 = hitTest(root_, x, y);
+        Widget* hit2 = topWidgetAt(x, y);
         if (hit2 != hovered_) updateHover(hit2);
     }
 }
@@ -1133,6 +1116,25 @@ Widget* WidgetApp::hitTest(Widget* w, float x, float y)
     }
 
     return w;
+}
+
+Widget* WidgetApp::topWidgetAt(float x, float y)
+{
+    if (popup_)
+    {
+        Widget* hit = hitTest(popup_, x, y);
+        if (!hit && popup_->popupContains(x, y))
+            hit = popup_;
+        return hit;
+    }
+    for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i)
+    {
+        FloatWindow* fw = floats_[i];
+        if (!fw->isVisible()) continue;
+        if (Widget* hit = hitTest(fw, x, y))
+            return hit;
+    }
+    return hitTest(root_, x, y);
 }
 
 void WidgetApp::fillLocal(Widget* target, MouseEvent& e)

@@ -1806,6 +1806,43 @@ static void test_text_edit_rewraps_after_every_edit()
     assert(clickAt(1.0f, rowHeight * 1.5f) == start);
 }
 
+// Depois de largar o botão, o hover volta a ser o widget de cima: num
+// FloatWindow por cima da stage, o botão da janela continua com o hover e o da
+// stage por baixo não o ganha.
+static void test_hover_after_a_click_stays_on_the_float()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("floathover");
+    auto* screen = stage->createChild<Widget>();
+    auto* below = screen->createChild<Button>("Below");
+    below->setRect({ 0.0f, 0.0f, 800.0f, 600.0f });
+    assert(app.setStage("floathover", TransitionType::None));
+    auto* window = app.addFloat<FloatWindow>("Above");
+    window->setFloatPos(100.0f, 100.0f);
+    window->setFloatSize(300.0f, 200.0f);
+    auto* above = window->setContent<Button>("Above");
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    io.mouseX = 250.0f;
+    io.mouseY = 200.0f;
+    app.update(io);
+    assert(above->isHovered() && !below->isHovered());
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(above->isHovered());
+    assert(!below->isHovered());
+    app.removeFloat(window);
+    app.update(io);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1989,6 +2026,7 @@ int main()
     test_disabled_fields_ignore_input();
     test_invalid_utf8_stays_inside_the_text();
     test_text_edit_rewraps_after_every_edit();
+    test_hover_after_a_click_stays_on_the_float();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
