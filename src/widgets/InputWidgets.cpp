@@ -831,10 +831,13 @@ DatePicker::DatePicker()
 
 void DatePicker::setDate(const Date& d)
 {
-    if (d == date_) return;
-    date_ = d;
+    Date valid = d;
+    valid.month = std::max(1, std::min(12, valid.month));
+    valid.day   = std::max(1, std::min(daysInMonth(valid.year, valid.month), valid.day));
+    if (valid == date_) return;
+    date_ = valid;
     markDirty();
-    onDateChanged.emit(d.year, d.month, d.day);
+    onDateChanged.emit(valid.year, valid.month, valid.day);
 }
 
 void DatePicker::setDate(int year, int month, int day)

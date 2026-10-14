@@ -2219,6 +2219,25 @@ static void test_cell_editors_work_on_whole_characters()
     assert(command == "a");
 }
 
+// O DatePicker só guarda datas que existem: um mês fora de 1-12 ou um dia
+// para lá do fim do mês ficam no limite (o calendário indexava tabelas com o
+// mês tal como vinha).
+static void test_date_picker_keeps_real_dates()
+{
+    using namespace ig::retained;
+    DatePicker picker;
+    picker.setDate(2026, 13, 40);
+    assert(picker.date().month == 12 && picker.date().day == 31);
+    picker.setDate(2024, 2, 30);
+    assert(picker.date().month == 2 && picker.date().day == 29);
+    picker.setDate(2026, 0, 0);
+    assert(picker.date().month == 1 && picker.date().day == 1);
+    int changes = 0;
+    picker.onDateChanged.connect([&changes](int, int, int) { ++changes; });
+    picker.setDate(2026, -5, -5);
+    assert(changes == 0);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2410,6 +2429,7 @@ int main()
     test_removing_a_tab_reports_the_current_one();
     test_text_edit_word_and_line_clicks_count_characters();
     test_cell_editors_work_on_whole_characters();
+    test_date_picker_keeps_real_dates();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
