@@ -2664,7 +2664,7 @@ bool Context::treeItem(WidgetId nodeId, StringView labelText, bool &expanded,
                   rect.y + (rect.height - metrics.height) * 0.5f),
              theme_.fontSize, textColor, clip);
     if (drop && dragDrop_.active && dragDrop_.payload.type == 0x545245454954454dull &&
-        dragDrop_.payload.source != nodeId && !style.disabled && contains(visible, pointer_.position))
+        dragDrop_.payload.source != nodeId && !style.disabled && pointerOver(visible))
     {
         const float localY = pointer_.position.y - rect.y;
         const TreeDropPosition position = localY < rect.height * 0.25f ? TreeDropPosition::Before
