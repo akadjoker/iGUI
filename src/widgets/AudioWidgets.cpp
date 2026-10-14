@@ -458,6 +458,7 @@ Rect LinearKnob::trackRect() const
 
 void LinearKnob::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b    = absoluteRect();
     const float labelH = label_.empty() ? 0.f : 14.f;
     const float valH   = showValue_     ? 12.f :  0.f;
@@ -610,6 +611,7 @@ int ADSRWidget::hitHandle(float mx, float my) const
 
 void ADSRWidget::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 
@@ -820,6 +822,7 @@ void VUMeter::paintChannel(PaintContext& ctx, const Rect& bar, const Channel& ch
 
 void VUMeter::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 
@@ -925,6 +928,7 @@ void SpectrumAnalyzer::update(float dt)
 
 void SpectrumAnalyzer::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 
@@ -1057,6 +1061,7 @@ ct::Vector<WaveformView::EnvPair> WaveformView::buildEnvelope(int ch, float vs, 
 
 void WaveformView::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);
 
@@ -1357,6 +1362,7 @@ void PianoRoll::paintPlayhead(PaintContext& ctx, const Rect& ga) const
 
 void PianoRoll::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect b  = absoluteRect();
     const Rect ka = keyArea();
     const Rect ga = gridArea();

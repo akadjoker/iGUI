@@ -467,6 +467,7 @@ Rect DockPanel::toScreen(const Rect& local) const
 
 void DockPanel::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     if (!root_) return;
     const Rect b = absoluteRect();
     ctx.pushClip(b);

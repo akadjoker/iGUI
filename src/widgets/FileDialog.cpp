@@ -523,6 +523,7 @@ void FileDialog::layout()
 
 void FileDialog::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     FloatWindow::paint(ctx);
 
     if (!fileListLayout_) return;

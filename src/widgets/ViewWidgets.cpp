@@ -294,6 +294,7 @@ void Canvas::layout()
 
 void Canvas::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
@@ -333,6 +334,7 @@ void ImageView::setTexture(ig::retained::TextureHandle tex, int w, int h)
 
 void ImageView::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     if (!texture_) return;
 
     Rect abs = absoluteRect();
@@ -441,6 +443,7 @@ Widget::Vec2f VideoCanvas::imageToScreen(float px, float py) const
 
 void VideoCanvas::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     const Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 

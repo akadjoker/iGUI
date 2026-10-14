@@ -204,6 +204,7 @@ void ConsoleWidget::layout()
 
 void ConsoleWidget::paint(PaintContext& ctx)
 {
+    if (!visible_) return;
     Rect r = absoluteRect();
     ctx.pushClip(r);
 
