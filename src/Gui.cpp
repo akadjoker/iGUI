@@ -11938,7 +11938,12 @@ void Context::newLine()
         return;
     layout_.cursor.x = layout_.baseOriginX;
     if (layout_.hasLastItem)
-        layout_.cursor.y = layout_.lastItem.y + layout_.lastItem.height + theme_.itemSpacing;
+    {
+        float bottom = layout_.lastItem.y + layout_.lastItem.height;
+        if (layout_.lineTop + layout_.lineHeight > bottom)
+            bottom = layout_.lineTop + layout_.lineHeight;
+        layout_.cursor.y = bottom + theme_.itemSpacing;
+    }
 }
 
 void Context::beginGroup()
