@@ -1644,6 +1644,9 @@ private:
         // container: é o que dá a medida de uma caixa que tem de se dimensionar
         // sozinha, como o tooltip rico (ver beginTooltip).
         Vec2 contentExtent;
+        // A extensão já tem um item: só o início de um contentor a limpa (um indent,
+        // um setCursor ou um grupo não recomeçam a medida).
+        bool hasExtent;
         // A borda direita do maior item que não ocupa só a largura que sobra (ver
         // measureTableCellWidth e endCombo).
         float fitRight;
@@ -1668,7 +1671,7 @@ private:
 
         LayoutState()
             : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false),
-              contentExtent(), fitRight(0.0f), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
+              contentExtent(), hasExtent(false), fitRight(0.0f), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
               groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
         {
         }
