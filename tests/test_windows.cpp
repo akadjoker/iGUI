@@ -281,6 +281,78 @@ void test_dock_arrangement_round_trips_through_ini()
     remove(path);
 }
 
+// A panel dragged to another region and then closed comes back to that region
+// when it is opened again, and that is the region the state file keeps.
+void test_dock_panel_closed_after_a_drag_keeps_its_region()
+{
+    const char* path = "igui_dock_closed_test.ini";
+    remove(path);
+    ct::Ini previous;
+    previous.set("dock:editor", "tabs_left", "H");
+    previous.set("dock:editor", "selected_left", "H");
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+    const float title = context.theme().titleBarHeight;
+    const float tab = context.theme().widgetHeight;
+    bool open = true;
+    bool inLeft = false;
+    bool inRight = false;
+    auto build = [&](ig::Context& c)
+    {
+        inLeft = false;
+        inRight = false;
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor"))
+        {
+            if (c.beginDockPanel("C", ig::DockSlot::Center))
+            {
+                c.label("c");
+                c.endDockPanel();
+            }
+            if (open && c.beginDockPanel("H", ig::DockSlot::Left, &open))
+            {
+                c.label("h");
+                inRight = c.itemRect().x > 400.0f;
+                inLeft = c.itemRect().x < 200.0f;
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    check(inLeft, "the panel did not start in the region the state file gave it");
+    harness.drag(15.0f, title + tab * 0.5f, 650.0f, 300.0f, build, 4);
+    harness.frame(build);
+    check(inRight, "the panel was not dragged to the right region");
+
+    open = false;
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    open = true;
+    harness.frame(build);
+    harness.frame(build);
+    check(inRight, "a panel closed after a drag came back in its old region");
+
+    open = false;
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    check(context.saveWindowState(), "the state file was not written");
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    check(saved.get("dock:editor", "tabs_right") == "H",
+            "a closed panel was not stored in the region it was dragged to");
+    check(saved.get("dock:editor", "tabs_left").empty(),
+            "a closed panel was still stored in its old region");
+
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -605,6 +677,7 @@ int main()
     test_maximized_window_follows_viewport();
     test_window_state_round_trips_through_ini();
     test_dock_arrangement_round_trips_through_ini();
+    test_dock_panel_closed_after_a_drag_keeps_its_region();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();

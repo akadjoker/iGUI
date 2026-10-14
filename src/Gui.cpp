@@ -9972,6 +9972,12 @@ void Context::endDockSpace()
     DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
     if (dockSpace)
     {
+        bool leaving = false;
+        for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
+            if (dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_ || dockSpace->tabs[i].closed)
+                leaving = true;
+        if (leaving)
+            captureDockArrangement(*dockSpace);
         for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size();)
         {
             // A panel the application stopped submitting loses its tab, and so does
