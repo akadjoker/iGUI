@@ -248,3 +248,23 @@ Só por leitura:
 2. O 5, o 6 e o 8: fazem a aplicação agir sobre o item errado ou não responder.
 3. O 11 no `Widget::paint`, que arranja os 16 widgets de uma vez.
 4. O 14, que aborta com ficheiros reais em Windows.
+
+## Por fazer (2026-10-14)
+
+- [ ] **Dobras do CodeEditor perdem-se nas edições** — confirmado: com um
+      bloco dobrado na linha 1, um Enter na linha 6 desdobra-o. Qualquer edição
+      que ponha `hlDirty_` (Enter, juntar linhas, colar, apagar/mover linhas,
+      undo) chama o `rebuildFoldRanges`, que recria todas as dobras abertas.
+      Plano: as edições avisam que linhas mudaram (`linesChanged`) e o
+      CodeEditor desloca as dobras fechadas com as suas linhas.
+- [ ] **Custo do CodeEditor por edição** — medido (Release, 100 000 linhas):
+      Enter com pintura ~87 ms. 64% é o `reHighlight` do documento inteiro e 18%
+      o `foldDelta` de todas as linhas. Plano: estados do realce e deltas das
+      dobras por linha, deslocados nas edições, e realce só a partir da linha
+      editada até o estado convergir; as edições próprias do CodeEditor passam
+      de `invalidateWrap()` para `linesChanged`.
+- [ ] **Marcadores da goteira não acompanham as linhas** (`setMarker`): um
+      Enter acima de um breakpoint deixa-o na linha antiga. Precisa de decisão:
+      se a API conta com a aplicação a gerir as linhas ou se devem deslocar-se.
+- [ ] Atualizar o submódulo do iGUI no prisma3d (ramo
+      `dev/fervent-johnson-6h17x3`), construir e correr os testes de lá.
