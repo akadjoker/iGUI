@@ -149,30 +149,52 @@ void CodeEditor::reHighlightFrom(int line) const
 
 void CodeEditor::rebuildFoldRanges()
 {
+    ct::Vector<FoldRange> collapsedBefore;
+    for (const FoldRange& fr: foldRanges_)
+        if (fr.collapsed) collapsedBefore.push_back(fr);
     foldRanges_.clear();
-    if (!highlighter_) return;
 
-    int lc = lineCount();
-    ct::Vector<int> foldStack; // stack of line indices that opened a fold
+    if (highlighter_)
+    {
+        int lc = lineCount();
+        ct::Vector<int> foldStack; // stack of line indices that opened a fold
 
-    for (int i = 0; i < lc; i++) {
-        int delta = highlighter_->foldDelta(i, lineAt(i));
-        for (int d = 0; d < delta; d++)
-            foldStack.push_back(i);
-        for (int d = 0; d > delta; d--) {
-            if (!foldStack.empty()) {
-                int startLine = foldStack.back();
-                foldStack.pop_back();
-                foldRanges_.push_back({startLine, i, false});
+        for (int i = 0; i < lc; i++)
+        {
+            int delta = highlighter_->foldDelta(i, lineAt(i));
+            for (int d = 0; d < delta; d++) foldStack.push_back(i);
+            for (int d = 0; d > delta; d--)
+            {
+                if (!foldStack.empty())
+                {
+                    int startLine = foldStack.back();
+                    foldStack.pop_back();
+                    foldRanges_.push_back({ startLine, i, false });
+                }
             }
         }
+        // Close any unclosed ranges at EOF
+        while (!foldStack.empty())
+        {
+            int startLine = foldStack.back();
+            foldStack.pop_back();
+            foldRanges_.push_back({ startLine, lc - 1, false });
+        }
     }
-    // Close any unclosed ranges at EOF
-    while (!foldStack.empty()) {
-        int startLine = foldStack.back();
-        foldStack.pop_back();
-        foldRanges_.push_back({startLine, lc - 1, false});
+
+    // The wrap gives hidden lines no rows: it follows any change in what is hidden.
+    ct::Vector<FoldRange>::size_type collapsedAfter = 0;
+    bool sameHidden = true;
+    for (const FoldRange& fr: foldRanges_)
+    {
+        if (!fr.collapsed) continue;
+        const bool matches = collapsedAfter < collapsedBefore.size() &&
+                             collapsedBefore[collapsedAfter].startLine == fr.startLine &&
+                             collapsedBefore[collapsedAfter].endLine == fr.endLine;
+        sameHidden = sameHidden && matches;
+        ++collapsedAfter;
     }
+    if (!sameHidden || collapsedAfter != collapsedBefore.size()) invalidateWrap();
 }
 
 void CodeEditor::foldAt(int line)

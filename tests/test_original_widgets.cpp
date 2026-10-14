@@ -3259,6 +3259,70 @@ static void test_code_editor_rows_skip_folded_lines()
     assert(rowLines() == "0 1 4 5 8 8 8 8 8 ");
 }
 
+// Quando as dobras são refeitas depois de uma edição, as filas seguem o que está
+// escondido agora: um undo com um bloco dobrado não deixa linhas sem filas.
+static void test_code_editor_rows_follow_the_folds_after_undo()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("foldundo");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    editor->setShowMinimap(false);
+    editor->setHighlighterForFile("main.cpp");
+    editor->setText("int a()\n{\n    return 1;\n}\nint b()\n{\n    return 2;\n}\nend");
+    assert(app.setStage("foldundo", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto rowLines = [&]()
+    {
+        String lines;
+        for (int row = 0; row < 9; ++row)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.clickCount = 1;
+            press.localX = 300.0f;
+            press.localY = rowHeight * (static_cast<float>(row) + 0.5f);
+            press.x = press.localX;
+            press.y = press.localY;
+            editor->onMousePress(press);
+            MouseEvent release = press;
+            editor->onMouseRelease(release);
+            lines += String::number(editor->cursorPos().line) + " ";
+        }
+        return lines;
+    };
+    paint();
+    editor->foldAt(1);
+    paint();
+    assert(rowLines() == "0 1 4 5 6 7 8 8 8 ");
+    app.setFocused(editor);
+    editor->setCursorPos(6, 4);
+    KeyEvent typed;
+    typed.text[0] = 'x';
+    editor->onTextInput(typed);
+    paint();
+    editor->undo();
+    paint();
+    assert(editor->lineAt(6) == "    return 2;");
+    assert(rowLines() == (editor->isFolded(1) ? "0 1 4 5 6 7 8 8 8 " : "0 1 2 3 4 5 6 7 8 "));
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3643,6 +3707,7 @@ int main()
     test_text_edit_keeps_the_cursor_visible_while_typing_wrapped();
     test_code_editor_highlights_the_cursor_row_while_typing_wrapped();
     test_code_editor_rows_skip_folded_lines();
+    test_code_editor_rows_follow_the_folds_after_undo();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
