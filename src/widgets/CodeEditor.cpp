@@ -253,7 +253,7 @@ void CodeEditor::paintFoldGutter(PaintContext& ctx, const Rect& abs)
 {
     if (!showFolding_ || !highlighter_) return;
 
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     // Fold icons sit between line numbers and code text
     float fgW = static_cast<float>(foldGutterWidth());
@@ -599,7 +599,7 @@ void CodeEditor::paintBracketMatch(PaintContext& ctx, const Rect& abs)
     }
     if (bp.open.line < 0 || bp.close.line < 0) return;
 
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     float textX = abs.x + gutterW_;
     float pad = Theme::instance().textEditPadding;
@@ -628,7 +628,7 @@ void CodeEditor::paintCurrentLineHighlight(PaintContext& ctx, const Rect& abs)
     if (!highlightCurrentLine_ || !isFocused()) return;
     if (isLineHidden(cursor_.line)) return;
 
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     int vRow = logicalToVisualRow(cursor_.line);
     float y = abs.y + vRow * lh - scrollY_;
@@ -647,7 +647,7 @@ void CodeEditor::paintIndentGuides(PaintContext& ctx, const Rect& abs)
     if (!showIndentGuides_) return;
 
     float charW = ctx.font.GetTextWidth(" ");
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     float textX = abs.x + gutterW_;
     int ts = tabSize();
@@ -687,7 +687,7 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
     const ig::retained::Font* font = ctx.buFont;
     if (!font) return;
 
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     float scale = fontScale_;
     float textX = abs.x + gutterW_;
@@ -785,7 +785,7 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
     if (!showScopeLines_ || foldRanges_.empty()) return;
 
     float charW = ctx.font.GetTextWidth(" ");
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0 || charW <= 0) return;
     float textX = abs.x + gutterW_;
     float pad = 4.0f;
@@ -1091,7 +1091,7 @@ void CodeEditor::paintSearchHighlights(PaintContext& ctx, const Rect& abs)
 {
     if (searchMatches_.empty()) return;
 
-    float lh = lineHeight_;
+    float lh = lineHeight();
     if (lh <= 0) return;
     float textX = abs.x + gutterW_;
     float pad = Theme::instance().textEditPadding;
@@ -1164,7 +1164,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
     // ── Scroll offset for minimap ────────────────────────────────────────
     // If total content fits, no scroll. Otherwise, track editor scroll.
     float mmScrollY = 0.0f;
-    float totalEditorH = visLines * lineHeight_;
+    float totalEditorH = visLines * lineHeight();
     if (totalMmContentH > mmH && totalEditorH > mmH) {
         float editorMaxScroll = totalEditorH - mmH;
         float mmMaxScroll     = totalMmContentH - mmH;
@@ -1742,7 +1742,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
             for (int i = 0; i < lc; i++) {
                 if (!isLineHidden(i)) visLines++;
             }
-            float totalEditorH = visLines * lineHeight_;
+            float totalEditorH = visLines * lineHeight();
             float totalMmH     = visLines * 3.0f;  // lineH = 3.0f
             float maxScroll    = std::max(0.0f, totalEditorH - abs.h);
 
@@ -1763,7 +1763,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
             clickedVisLine = std::max(0, std::min(visLines - 1, clickedVisLine));
 
             // Scroll editor to center clicked line
-            float targetScrollY = clickedVisLine * lineHeight_ - abs.h * 0.5f;
+            float targetScrollY = clickedVisLine * lineHeight() - abs.h * 0.5f;
             scrollY_ = std::max(0.0f, std::min(maxScroll, targetScrollY));
 
             markDirty();
@@ -1778,7 +1778,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
         float fgW = static_cast<float>(foldGutterWidth());
         float fgX = abs.x + gutterW_ - fgW;
         if (e.x >= fgX && e.x < fgX + fgW) {
-            float lh = lineHeight_;
+            float lh = lineHeight();
             if (lh > 0) {
                 int vRow = static_cast<int>((e.y - abs.y + scrollY_) / lh);
                 int lc = lineCount();
@@ -1804,7 +1804,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
         Rect abs = absoluteRect();
         float localX = e.x - abs.x;
         float localY = e.y - abs.y;
-        int vRow = static_cast<int>((localY + scrollY_) / lineHeight_);
+        int vRow = static_cast<int>((localY + scrollY_) / lineHeight());
         vRow = std::max(0, vRow);
         // Convert vRow to logical line
         int lc = lineCount();
@@ -1856,7 +1856,7 @@ void CodeEditor::onMouseMove(MouseEvent& e)
         for (int i = 0; i < lc; i++) {
             if (!isLineHidden(i)) visLines++;
         }
-        float totalEditorH = visLines * lineHeight_;
+        float totalEditorH = visLines * lineHeight();
         float totalMmH     = visLines * 3.0f;
         float maxScroll    = std::max(0.0f, totalEditorH - abs.h);
 
@@ -1873,7 +1873,7 @@ void CodeEditor::onMouseMove(MouseEvent& e)
         int clickedVisLine = static_cast<int>(mmContentY / 3.0f);
         clickedVisLine = std::max(0, std::min(visLines - 1, clickedVisLine));
 
-        float targetScrollY = clickedVisLine * lineHeight_ - abs.h * 0.5f;
+        float targetScrollY = clickedVisLine * lineHeight() - abs.h * 0.5f;
         scrollY_ = std::max(0.0f, std::min(maxScroll, targetScrollY));
 
         markDirty();
@@ -2407,14 +2407,14 @@ void CodeEditor::paintExtraCursors(PaintContext& ctx, const Rect& abs)
 
     for (auto& ec : extraCursors_) {
         int vRow = logicalToVisualRow(ec.pos.line);
-        float cy = abs.y + vRow * lineHeight_ - scrollY_;
-        if (cy + lineHeight_ < abs.y || cy > abs.y + abs.h) continue;
+        float cy = abs.y + vRow * lineHeight() - scrollY_;
+        if (cy + lineHeight() < abs.y || cy > abs.y + abs.h) continue;
 
         float cx = textX + pad + colToPixelX(ec.pos.line, ec.pos.col) - scrollX_;
         if (cx >= textX && cx <= abs.x + abs.w) {
             ctx.line.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
-            ctx.line.Line2D(static_cast<int>(cx), static_cast<int>(cy + 1),
-                            static_cast<int>(cx), static_cast<int>(cy + lineHeight_ - 1));
+            ctx.line.Line2D(static_cast<int>(cx), static_cast<int>(cy + 1), static_cast<int>(cx),
+                    static_cast<int>(cy + lineHeight() - 1));
         }
     }
 }
@@ -2435,8 +2435,8 @@ void CodeEditor::paintExtraSelections(PaintContext& ctx, const Rect& abs)
 
         for (int i = s.line; i <= e.line; i++) {
             int vRow = logicalToVisualRow(i);
-            float ly = abs.y + vRow * lineHeight_ - scrollY_;
-            if (ly + lineHeight_ < abs.y || ly > abs.y + abs.h) continue;
+            float ly = abs.y + vRow * lineHeight() - scrollY_;
+            if (ly + lineHeight() < abs.y || ly > abs.y + abs.h) continue;
 
             int selS = (i == s.line) ? s.col : 0;
             int selE = (i == e.line) ? e.col : lineColCount(i);
@@ -2451,7 +2451,7 @@ void CodeEditor::paintExtraSelections(PaintContext& ctx, const Rect& abs)
                 ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
                                   t.selectionColor.b, t.selectionColor.a);
                 ctx.fill.Rectangle(static_cast<int>(cx1), static_cast<int>(ly),
-                                   static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight_), true);
+                        static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight()), true);
             }
         }
     }

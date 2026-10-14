@@ -262,10 +262,10 @@ protected:
     ct::HashMap<int, ct::HashSet<int>> markers_;  // int = MarkerType
 
     // Computed each paint
-    mutable float lineHeight_ = 0;
     mutable float gutterW_    = 0;
 
     // Helpers accessible to subclasses
+    float lineHeight() const;
     int  lineColCount(int line) const;
     void clampPos(TextPos& p) const;
     void deleteSelection();
