@@ -56,7 +56,6 @@ enum class TransitionType
 };
 
 class FloatWindow;
-class StatusBar;
 
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -247,20 +246,6 @@ public:
     void setStageBgColor(const String& name, const Color& c);
     /// @brief Get a stage's background color.
     Color stageBgColor(const String& name) const;
-
-    // ── Status bar (managed by WidgetApp, pinned to window bottom) ─────
-    // One shared StatusBar across all stages. Painted and hit-tested by
-    // WidgetApp after the stage tree. Stages access it via statusBar().
-    /// @brief Get the shared status bar widget.
-    StatusBar* statusBar() const { return statusBar_; }
-    /// @brief Set the status bar text.
-    void setStatusText(const String& text);
-    /// @brief Show or hide the status bar.
-    void setShowStatusBar(bool show) { showStatusBar_ = show; needsLayout_ = true; }
-    /// @brief Check if the status bar is shown.
-    bool showStatusBar() const       { return showStatusBar_; }
-    /// @brief Get the status bar height.
-    float statusBarHeight() const;
 
     /// @brief Request a layout pass on the next frame.
     void requestLayout() { needsLayout_ = true; }
@@ -527,10 +512,6 @@ private:
     EaseType       transEaseCur_  = EaseType::InOutCubic; // ease of active transition
     Widget*        transOldRoot_  = nullptr;
     String    transOldStage_;
-
-    // Status bar (owned, painted after stage)
-    StatusBar* statusBar_    = nullptr;
-    bool       showStatusBar_ = true;
 
     // Optional overlay callback
     ct::Function<void(PaintContext&)> overlay_;

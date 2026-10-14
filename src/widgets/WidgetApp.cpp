@@ -1,6 +1,5 @@
 #include "pch.hpp"
 #include "ViewWidgets.hpp"   // FloatWindow (real implementation)
-#include "LayoutWidgets.hpp" // StatusBar
 #include "Animation.hpp"     // Animator
 #include "DockPanel.hpp"     // DockPanel layout persistence
 #include "MenuWidgets.hpp"   // Menu::exec (for context menu)
