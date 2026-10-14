@@ -7307,6 +7307,40 @@ void test_empty_scrolling_table_keeps_its_height()
     assert(after.y - before.y == full);
 }
 
+// Um objeto atrás da câmara não tem gizmo: projetado, aparecia espelhado no
+// ecrã (o w negativo invertia o ponto).
+void test_gizmo3d_behind_the_camera_draws_nothing()
+{
+    const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -5, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    ig::Transform3D transform;
+    transform.position = ig::Vec3(0.0f, 0.0f, 8.0f);
+    ig::Gizmo3DOptions options;
+    options.showModel = false;
+    bool withGizmo = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (withGizmo)
+            c.gizmo3D("g", transform, ig::Gizmo3DMode::Translate,
+                    ig::Rect(0.0f, 0.0f, 500.0f, 500.0f), view, projection, options);
+        c.endWindow();
+    };
+    harness.frame(build);
+    const size_t without = harness.frame(build).vertices.size();
+    withGizmo = true;
+    harness.frame(build);
+    const size_t behind = harness.frame(build).vertices.size();
+    assert(behind == without);
+
+    transform.position = ig::Vec3(0.0f, 0.0f, 0.0f);
+    harness.frame(build);
+    assert(harness.frame(build).vertices.size() > without);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8373,6 +8407,7 @@ int main()
     test_table_sizing_fixed_fit_resizes();
     test_table_reorder_applies_on_the_next_frame();
     test_empty_scrolling_table_keeps_its_height();
+    test_gizmo3d_behind_the_camera_draws_nothing();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

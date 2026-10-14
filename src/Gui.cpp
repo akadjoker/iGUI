@@ -643,7 +643,9 @@ bool projectGizmo3D(const Gizmo3DProjector &projector, const Vec3 &world, Vec2 &
                         projector.projection[9] * viewZ + projector.projection[13] * viewW;
     const float clipW = projector.projection[3] * viewX + projector.projection[7] * viewY +
                         projector.projection[11] * viewZ + projector.projection[15] * viewW;
-    if (clipW < 0.00001f && clipW > -0.00001f)
+    // Behind the camera (or on its plane) w is not positive, and dividing by it
+    // would mirror the point onto the screen.
+    if (clipW < 0.00001f)
         return false;
     const float inverseW = 1.0f / clipW;
     screen.x = projector.viewport.x + (clipX * inverseW * 0.5f + 0.5f) * projector.viewport.width;
