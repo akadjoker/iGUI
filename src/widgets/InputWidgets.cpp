@@ -608,7 +608,7 @@ public:
                 }
             }
 
-            char buf[4];
+            char buf[16];
             std::snprintf(buf, sizeof(buf), "%d", d);
             tw = ctx.font.GetTextWidth(buf);
             ctx.font.SetColor(isSel ? Color(255,255,255,255) : t.textColor);

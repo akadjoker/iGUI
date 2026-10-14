@@ -170,7 +170,7 @@ String humanDate(time_t t)
 #else
     localtime_r(&t, &tm);
 #endif
-    char buf[32];
+    char buf[64];
     snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d",
              tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
              tm.tm_hour, tm.tm_min);

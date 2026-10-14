@@ -1282,7 +1282,7 @@ void PianoRoll::paintKeys(PaintContext& ctx, const Rect& ka) const
         ctx.fillRect(ka.x, y + rowH_ - 1, ka.w, 1);
 
         if (p % 12 == 0 && showOctave_) {
-            char buf[8];
+            char buf[16];
             snprintf(buf, sizeof(buf), "C%d", p / 12 - 1);
             ctx.font.SetColor(black ? Color(180,180,185,255) : Color(40,40,45,255));
             ctx.font.Print(buf, ka.x + 2, y + (rowH_ - 9.f) * 0.5f + asc);
@@ -1317,7 +1317,7 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
     for (float beat = firstBeat; beat <= viewEnd_; beat += float(bpb_)) {
         float x = beatToX(beat);
         if (x < ga.x || x > ga.x + ga.w) continue;
-        char buf[8];
+        char buf[16];
         snprintf(buf, sizeof(buf), "%d", static_cast<int>(beat / bpb_) + 1);
         ctx.font.Print(buf, x + 2, ga.y + 1 + asc);
     }
