@@ -768,6 +768,8 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     // pointer back to its owner, which would be the memory just freed.
     if (popupOwner_ && isDescendantOf(popupOwner_, w))
     {
+        if (popup_)
+            returnFocus(popup_);
         if (popup_ && popupOwned_ && !isDescendantOf(popup_, w))
             queuePopupDelete(popup_);
         if (popupClosing_ && popupClosingOwned_ && !isDescendantOf(popupClosing_, w))
@@ -798,8 +800,24 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     }
     if (pressed_ && isDescendantOf(pressed_, w))
         pressed_ = nullptr;
-    if (focused_ && isDescendantOf(focused_, w))
+    const bool focusWentAway = focused_ && isDescendantOf(focused_, w);
+    if (focusWentAway)
         focused_ = nullptr;
+    for (ct::Vector<FocusLoan>::size_type i = 0; i < focusLoans_.size();)
+    {
+        FocusLoan& loan = focusLoans_[i];
+        if (loan.previous && isDescendantOf(loan.previous, w))
+            loan.previous = nullptr;
+        if (!isDescendantOf(loan.holder, w))
+        {
+            ++i;
+            continue;
+        }
+        Widget* previous = loan.previous;
+        focusLoans_.erase(focusLoans_.begin() + i);
+        if (focusWentAway && !focused_ && previous)
+            setFocused(previous);
+    }
     if (dragSource_ && isDescendantOf(dragSource_, w))
         cancelDrag();
     if (hovered_ && isDescendantOf(hovered_, w))
@@ -827,6 +845,8 @@ void WidgetApp::addFloatImpl(FloatWindow* fw)
     applyWindowState(fw);
     floats_.push_back(fw);
     fw->layout();
+    if (Widget* target = fw->focusOnOpen())
+        lendFocus(fw, target);
 }
 
 void WidgetApp::removeFloat(FloatWindow* fw)
@@ -1021,10 +1041,32 @@ void WidgetApp::closePopup()
         popupAnimEase_     = EaseType::InCubic;
 
         // Clear the active popup pointer so input goes through
+        returnFocus(popup_);
         popup_      = nullptr;
         popupOwner_ = nullptr;
         popupOwned_ = true;
     }
+}
+
+void WidgetApp::lendFocus(Widget* holder, Widget* target)
+{
+    if (!holder) return;
+    focusLoans_.push_back({holder, focused_});
+    setFocused(target);
+}
+
+void WidgetApp::returnFocus(Widget* holder)
+{
+    Widget* previous = nullptr;
+    for (ct::Vector<FocusLoan>::size_type i = 0; i < focusLoans_.size(); ++i)
+    {
+        if (focusLoans_[i].holder != holder) continue;
+        previous = focusLoans_[i].previous;
+        focusLoans_.erase(focusLoans_.begin() + i);
+        break;
+    }
+    if (focused_ && isDescendantOf(focused_, holder))
+        setFocused(previous);
 }
 
 void WidgetApp::retirePopup(Widget* popup, bool owned)

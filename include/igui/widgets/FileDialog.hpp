@@ -96,6 +96,7 @@ public:
     void onMouseRelease(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
+    Widget* focusOnOpen() override;
 
 private:
     Mode     mode_     = Mode::Open;

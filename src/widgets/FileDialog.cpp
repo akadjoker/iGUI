@@ -404,6 +404,7 @@ void FileDialog::buildUI()
     fileNameInput_ = bottomBar_->createChild<TextInput>();
     fileNameInput_->setStretch(1);
     fileNameInput_->setPlaceholder("filename");
+    fileNameInput_->submitted.connect([this](const String&) { onOk(); });
 
     cancelButton_ = bottomBar_->createChild<Button>("Cancel");
     cancelButton_->setSize(70, 0);
@@ -1032,6 +1033,11 @@ void FileDialog::onKeyPress(KeyEvent& e)
 // ═════════════════════════════════════════════════════════════════════════════
 //  Actions
 // ═════════════════════════════════════════════════════════════════════════════
+
+Widget* FileDialog::focusOnOpen()
+{
+    return fileNameInput_;
+}
 
 void FileDialog::onOk()
 {

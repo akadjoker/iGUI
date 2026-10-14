@@ -315,6 +315,9 @@ public:
     void setFocused(Widget* w);
     /// @brief Get the currently focused widget.
     Widget* focused() const { return focused_; }
+    /// @brief Focus @p target while @p holder is open; when @p holder closes
+    ///        or goes away, the focus goes back to the widget that had it.
+    void lendFocus(Widget* holder, Widget* target);
 
     // ── Widget lookup ─────────────────────────────────────────────────────
     /// @brief Find a widget by ID.
@@ -411,6 +414,7 @@ private:
     // guard as the mouse bubble against a handler that deletes a widget.
     void bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&));
     void retirePopup(Widget* popup, bool owned);
+    void returnFocus(Widget* holder);
     void queuePopupDelete(Widget* popup);
     void flushPopupDeletes();
 
@@ -454,6 +458,12 @@ private:
     uint32_t deletions_ = 0;   // bumped whenever a widget is reported gone
     Widget* root_    = nullptr;
     Widget* focused_ = nullptr;
+    struct FocusLoan
+    {
+        Widget* holder;
+        Widget* previous;
+    };
+    ct::Vector<FocusLoan> focusLoans_;
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
     ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered

@@ -33,6 +33,7 @@ void Dialog::show()
     setPosition((sw - sz.x) * 0.5f, (sh - sz.y) * 0.5f);
     setSize(sz.x, sz.y);
     WidgetApp::instance().showPopup(this, nullptr, true);
+    WidgetApp::instance().lendFocus(this, this);
 }
 
 void Dialog::close()
@@ -549,6 +550,7 @@ void InputBox::buildUI()
         promptLabel_ = mainLayout_->createChild<Label>(prompt_);
 
     textInput_ = mainLayout_->createChild<TextInput>();
+    textInput_->submitted.connect([this](const String&) { onOk(); });
     textInput_->setStretch(0);
     textInput_->setSize(0, 32);
     errorLabel_ = mainLayout_->createChild<Label>("");
@@ -607,6 +609,11 @@ void InputBox::onCancel()
 {
     cancelled.emit();
     WidgetApp::instance().removeFloat(this);
+}
+
+Widget* InputBox::focusOnOpen()
+{
+    return textInput_;
 }
 
 void InputBox::onKeyPress(KeyEvent& e)

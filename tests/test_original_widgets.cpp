@@ -1379,6 +1379,87 @@ static void test_scrolling_stays_in_the_view_that_scrolls()
     assert(list->selectedIndex() == -1);
 }
 
+// Uma InputBox, um FileDialog, uma MessageBox e um Dialog modal ficam com o
+// teclado quando abrem: o que se escreve vai para o diálogo e não para o campo
+// de trás, Enter aceita, Escape cancela (mesmo com o texto selecionado), e ao
+// fechar o teclado volta ao campo que o tinha. Um Enter a meio da animação de
+// fecho do Dialog não repete a ação.
+static void test_dialogs_take_the_keyboard_while_open()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("dialogkeys");
+    auto* editor = stage->createChild<TextInput>();
+    assert(app.setStage("dialogkeys", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    app.setFocused(editor);
+    auto type = [&app, &io](const char* text)
+    {
+        for (const char* c = text; *c; ++c) io.inputChars.push_back(static_cast<uint32_t>(*c));
+        app.update(io);
+        io.inputChars.clear();
+    };
+    auto key = [&app, &io](int code)
+    {
+        IO::KeyEvent press;
+        press.key = code;
+        io.keyEvents.push_back(press);
+        app.update(io);
+        io.keyEvents.clear();
+    };
+
+    String accepted;
+    auto* rename = app.addFloat<InputBox>("Rename");
+    rename->accepted.connect([&accepted](const String& text) { accepted = text; });
+    type("ab");
+    assert(rename->text() == "ab");
+    assert(editor->text().empty());
+    key(Key::Return);
+    assert(accepted == "ab");
+    assert(app.focused() == editor);
+
+    int cancels = 0;
+    auto* other = app.addFloat<InputBox>("Rename");
+    other->cancelled.connect([&cancels]() { ++cancels; });
+    other->setText("old");
+    key(Key::Escape);
+    assert(cancels == 1);
+    assert(app.focused() == editor);
+
+    String saved;
+    auto* save = app.addFloat<FileDialog>("Save");
+    save->setMode(FileDialog::Mode::Save);
+    save->accepted.connect([&saved](const String& path) { saved = path; });
+    type("out.txt");
+    key(Key::Return);
+    assert(FileSystem::fileName(saved) == "out.txt");
+    assert(app.focused() == editor);
+
+    int answer = -1;
+    auto* message = app.addFloat<MessageBox>("Close", "Save first?", MessageBox::YesNo);
+    message->result.connect([&answer](MessageBox::Result result) { answer = result; });
+    key(Key::Return);
+    assert(answer == MessageBox::ResultYes);
+    assert(app.focused() == editor);
+
+    int accepts = 0;
+    auto* dialog = new Dialog("Delete", "Sure?");
+    dialog->addButton("Cancel", Dialog::Role::Cancel);
+    dialog->addButton("OK", Dialog::Role::Accept, [&accepts]() { ++accepts; });
+    dialog->show();
+    type("z");
+    key(Key::Return);
+    key(Key::Return);
+    assert(accepts == 1);
+    assert(app.focused() == editor);
+    assert(editor->text().empty());
+    runFrames(app, 60);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1556,6 +1637,7 @@ int main()
     test_key_handler_can_remove_its_widget();
     test_signal_handlers_can_change_the_signal();
     test_scrolling_stays_in_the_view_that_scrolls();
+    test_dialogs_take_the_keyboard_while_open();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

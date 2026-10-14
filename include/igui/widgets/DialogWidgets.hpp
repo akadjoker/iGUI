@@ -202,6 +202,7 @@ private:
     void buildUI();
     void close(Result r);
     void onKeyPress(KeyEvent& e) override;
+    Widget* focusOnOpen() override { return this; }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -248,6 +249,7 @@ private:
     void onOk();
     void onCancel();
     void onKeyPress(KeyEvent& e) override;
+    Widget* focusOnOpen() override;
 };
 
 } // namespace retained
