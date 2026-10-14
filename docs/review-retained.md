@@ -231,7 +231,7 @@ Só por leitura:
       pretas).
 - [x] [Animation.cpp:303-331](../src/widgets/Animation.cpp#L303-L331) — o
       `fadeOut` e o `slideIn` guardam `Widget*` cru, sem cancelamento.
-- [ ] O TextEdit sem word-wrap não tem scroll horizontal (o `maxContentW_` é
+- [x] O TextEdit sem word-wrap não tem scroll horizontal (o `maxContentW_` é
       calculado e nunca usado).
 - [ ] [ConsoleWidget.cpp:50](../src/widgets/ConsoleWidget.cpp#L50) — as linhas
       duplicadas colapsadas não são contadas mas são subtraídas no trim.

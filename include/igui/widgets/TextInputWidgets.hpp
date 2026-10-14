@@ -166,7 +166,7 @@ public:
     bool showLineNumbers() const    { return showLineNumbers_; }
 
     /// @brief Enable or disable word wrap.
-    void setWordWrap(bool w) { wordWrap_ = w; wrapDirty_ = true; markDirty(); }
+    void setWordWrap(bool w) { wordWrap_ = w; wrapDirty_ = true; if (w) scrollX_ = 0; markDirty(); }
     /// @brief Check if word wrap is enabled.
     bool wordWrap() const    { return wordWrap_; }
 
@@ -274,6 +274,9 @@ protected:
     void mergeWithPrevLine();
     void mergeWithNextLine();
     void ensureCursorVisible();
+    float textViewWidth() const;
+    void  updateGutterWidth(PaintContext& ctx);
+    float maxScrollX() const;
     float computeGutterWidth(const ig::retained::Font& font) const;
     float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
