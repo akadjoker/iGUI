@@ -5425,6 +5425,56 @@ void test_list_widgets_report_their_own_item_status()
     assert(comboHovered);
 }
 
+// Um clique direito fora fecha o menu de contexto e o menu da barra.
+void test_right_click_outside_closes_menus()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool fileOpen = false;
+    bool contextOpen = false;
+    ig::Rect fileRect;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginMainMenuBar())
+        {
+            fileOpen = c.beginMenu("File");
+            if (!fileOpen) fileRect = c.itemRect();
+            else
+            {
+                c.menuItem("New");
+                c.endMenu();
+            }
+            c.endMainMenuBar();
+        }
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 40.0f, 600.0f, 500.0f)));
+        contextOpen = c.beginContextMenu("ctx", ig::Rect(0.0f, 0.0f, 580.0f, 400.0f));
+        if (contextOpen)
+        {
+            c.menuItem("Copy");
+            c.endContextMenu();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(100.0f, 150.0f, build, ig::PointerButton::Right);
+    harness.frame(build);
+    assert(contextOpen);
+    harness.click(500.0f, 400.0f, build, ig::PointerButton::Right);
+    harness.frame(build);
+    assert(!contextOpen);
+
+    harness.click(fileRect.x + 10.0f, fileRect.y + 10.0f, build);
+    harness.frame(build);
+    assert(fileOpen);
+    harness.click(500.0f, 400.0f, build, ig::PointerButton::Right);
+    harness.frame(build);
+    assert(!fileOpen);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6454,6 +6504,7 @@ int main()
     test_multi_select_ctrl_a_waits_while_typing();
     test_checkbox_flags_with_a_multi_bit_mask();
     test_list_widgets_report_their_own_item_status();
+    test_right_click_outside_closes_menus();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

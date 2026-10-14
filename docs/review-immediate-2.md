@@ -53,7 +53,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N12. Depois do `listBox` e do `comboBox` aberto, as consultas do item falam
       da última linha** — [Gui.cpp:3415](../src/Gui.cpp#L3415), 3444, 3523. Um
       tooltip com `isItemHovered()` depois do widget nunca aparece.
-- [ ] **N13. Um clique direito fora não fecha o menu de contexto** —
+- [x] **N13. Um clique direito fora não fecha o menu de contexto** —
       [Gui.cpp:5056](../src/Gui.cpp#L5056) (e o `beginMenu`, 4651).
 
 Não confirmados: o `listBox` e o `comboBox` põem um `currentItem` fora do

@@ -4790,10 +4790,13 @@ bool Context::beginMenu(StringView labelText)
     // Any press outside closes the menu - in another window too, where
     // pointerBlockedByOpenPopup already swallows it; checking only this
     // window left the menu open and every click elsewhere eaten.
-    if (openMenu_ == id && pointer_.pressed[left] &&
-        !contains(button, pointer_.pressedPosition[left]) &&
-        !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
-        !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
+    const auto pressedOutside = [&](uint32_t index) {
+        return pointer_.pressed[index] && !contains(button, pointer_.pressedPosition[index]) &&
+               !contains(menuPopupBounds_, pointer_.pressedPosition[index]) &&
+               !contains(subMenuPopupBounds_, pointer_.pressedPosition[index]);
+    };
+    if (openMenu_ == id &&
+        (pressedOutside(left) || pressedOutside(buttonIndex(PointerButton::Right))))
     {
         openMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
@@ -5192,7 +5195,8 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     const Rect visible = intersect(target, contentClip());
     const uint32_t right = buttonIndex(PointerButton::Right);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    if (pointerPressedIn(visible, right))
+    const bool openedNow = pointerPressedIn(visible, right);
+    if (openedNow)
     {
         openContextMenu_ = id;
         openMenu_ = InvalidWidgetId;
@@ -5202,10 +5206,12 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     }
     if (openContextMenu_ != id)
         return false;
-    // Any press outside closes it, in whatever window it lands (see beginMenu).
-    if (pointer_.pressed[left] &&
-        !contains(menuPopupBounds_, pointer_.pressedPosition[left]) &&
-        !contains(subMenuPopupBounds_, pointer_.pressedPosition[left]))
+    const auto pressedOutside = [&](uint32_t index) {
+        return pointer_.pressed[index] &&
+               !contains(menuPopupBounds_, pointer_.pressedPosition[index]) &&
+               !contains(subMenuPopupBounds_, pointer_.pressedPosition[index]);
+    };
+    if (!openedNow && (pressedOutside(left) || pressedOutside(right)))
     {
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
