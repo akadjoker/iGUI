@@ -1489,6 +1489,9 @@ void Context::releaseUnsubmittedBlockers()
     }
     // Um popup de conteúdo livre que deixou de ser submetido fecha-se: não há nada
     // no écra para o utilizador clicar.
+    // Sem popups a bandeira também se repõe: um modal fechado pelo Escape esvazia a
+    // pilha, e a bandeira ficava ligada e o teclado preso.
+    modalPopupWasOpenAtFrameStart_ = false;
     if (popupDepth_ > 0)
     {
         modalPopupWasOpenAtFrameStart_ = anyPopupOpen() && popups_[popupDepth_ - 1].modal;

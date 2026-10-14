@@ -65,7 +65,7 @@ não atualiza o item; o drop do `treeItem` aceita através de uma janela por cim
 
 Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 
-- [ ] **W1. Fechar um popup modal com Escape bloqueia o teclado para sempre** —
+- [x] **W1. Fechar um popup modal com Escape bloqueia o teclado para sempre** —
       [Gui.cpp:1485](../src/Gui.cpp#L1485). O `modalPopupWasOpenAtFrameStart_` só é
       recalculado com `popupDepth_ > 0`; depois do Escape fica a true. O
       `isKeyPressed`, o `shortcut` e o Ctrl+Z/Y deixam de responder.

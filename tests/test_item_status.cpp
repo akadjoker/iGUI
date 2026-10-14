@@ -4809,6 +4809,50 @@ void test_closed_submenus_do_not_block_the_pointer()
     }
 }
 
+// Fechar um popup modal com Escape devolve o teclado à aplicação: o atalho e o
+// isKeyPressed voltam a responder (W1).
+void test_keyboard_returns_after_a_modal_closes_with_escape()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    bool openModal = false;
+    bool modalShown = true;
+    bool shortcutFired = false;
+    bool keyPressed = false;
+    auto build = [&](ig::Context &c) {
+        assert(c.beginWindow("main", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (openModal)
+        {
+            c.openPopup("Modal");
+            openModal = false;
+        }
+        if (c.beginPopupModal("Modal", &modalShown))
+        {
+            c.label("modal");
+            c.endPopup();
+        }
+        shortcutFired = shortcutFired || c.shortcut(ig::KeyCode::S, true, false);
+        keyPressed = keyPressed || c.isKeyPressed(ig::KeyCode::F5);
+        c.endWindow();
+    };
+    harness.frame(build);
+    openModal = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(context.isPopupOpen("Modal"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+    harness.frame(build);
+    harness.frame(build);
+    assert(!context.isPopupOpen("Modal"));
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::S, true));
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::F5));
+    harness.frame(build);
+    assert(shortcutFired);
+    assert(keyPressed);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4862,6 +4906,7 @@ int main()
     test_clock_keeps_running_in_long_sessions();
     test_shortcut_is_blocked_by_a_modal_popup();
     test_closed_submenus_do_not_block_the_pointer();
+    test_keyboard_returns_after_a_modal_closes_with_escape();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
