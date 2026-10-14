@@ -1457,7 +1457,9 @@ void Context::beginFrame(const FrameInfo &frame)
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
     if (pointer_.pressed[leftButton] && activeModal_ == InvalidWidgetId)
     {
-        const WindowHandle target = topWindowAt(pointer_.pressedPosition[leftButton]);
+        const WindowHandle owner = popupOwnerAt(pointer_.pressedPosition[leftButton]);
+        const WindowHandle target =
+            owner ? owner : topWindowAt(pointer_.pressedPosition[leftButton]);
         const WindowState *targetWindow = windows_.get(target);
         if (modalWindowId_ == InvalidWidgetId || (targetWindow && targetWindow->id == modalWindowId_))
             focusWindow(target);
@@ -3956,6 +3958,7 @@ bool Context::beginPopup(StringView idText)
     window->overlayDrawList.addRectFilled(entry.bounds, theme_.menuBg, screen);
     window->overlayDrawList.addRect(entry.bounds, theme_.menuBorder, screen);
     entry.frame = frameNumber_;
+    entry.window = currentWindow_;
     // O corpo de um popup leva a margem da janela (é o WindowPadding do popup no
     // ImGui): os itens não ficam encostados às bordas da caixa. Os menus, esses,
     // continuam com as faixas encostadas (ver beginPopupContent).
@@ -4087,6 +4090,7 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
     entry.modal = true;
     entry.frame = frameNumber_;
+    entry.window = currentWindow_;
     // O X é um item do modal: o ponteiro só lhe chega com o modal como popup atual.
     const int outer = popupContentIndex_;
     popupContentIndex_ = index;
@@ -13704,14 +13708,24 @@ Rect Context::popupClipRect() const
 
 bool Context::pointerInsideOwnPopup(const Vec2 &point) const
 {
-    if (!windows_.get(popupWindow_) || popupWindow_ != currentWindow_)
-        return false;
+    const WindowHandle owner = popupOwnerAt(point);
+    return owner && owner == currentWindow_;
+}
+
+WindowHandle Context::popupOwnerAt(const Vec2 &point) const
+{
+    for (int i = popupDepth_ - 1; i >= 0; --i)
+        if (popups_[i].wasOpenAtFrameStart && windows_.get(popups_[i].window) &&
+            contains(popups_[i].boundsAtFrameStart, point))
+            return popups_[i].window;
+    if (!windows_.get(popupWindow_))
+        return WindowHandle();
     if (comboWasOpenAtFrameStart_ && contains(comboPopupBoundsAtFrameStart_, point))
-        return true;
-    if (!menuWasOpenAtFrameStart_)
-        return false;
-    return contains(menuPopupBoundsAtFrameStart_, point) ||
-           contains(subMenuPopupBoundsAtFrameStart_, point);
+        return popupWindow_;
+    if (menuWasOpenAtFrameStart_ && (contains(menuPopupBoundsAtFrameStart_, point) ||
+                                     contains(subMenuPopupBoundsAtFrameStart_, point)))
+        return popupWindow_;
+    return WindowHandle();
 }
 
 bool Context::movingTowardSubMenu(const Rect &parent) const

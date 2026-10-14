@@ -5475,6 +5475,91 @@ void test_right_click_outside_closes_menus()
     assert(!fileOpen);
 }
 
+// Um popup ou a lista de um combo que passam por cima de outra janela são da
+// janela que os abriu: recebem o clique e não trazem a outra janela para a frente.
+void test_popup_over_another_window_keeps_its_owner()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool openRequest = false;
+    bool popupOpen = false;
+    int clicks[4] = { 0, 0, 0, 0 };
+    ig::Rect buttons[4];
+    bool aFocused = false;
+    int bClicks = 0;
+    int current = 0;
+    const ig::StringView items[6] = { "zero", "one", "two", "three", "four", "five" };
+    ig::Rect comboRect;
+    bool comboMeasured = false;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginWindow("B", ig::Rect(0.0f, 130.0f, 300.0f, 300.0f)))
+        {
+            if (c.button("bb")) ++bClicks;
+            c.endWindow();
+        }
+        if (c.beginWindow("A", ig::Rect(0.0f, 0.0f, 300.0f, 120.0f)))
+        {
+            if (openRequest)
+            {
+                c.openPopup("P", ig::Vec2(20.0f, 80.0f));
+                openRequest = false;
+            }
+            c.comboBox("cb", current, ig::Span<const ig::StringView>(items, 6),
+                    ig::Rect(150.0f, 0.0f, 120.0f, 28.0f));
+            if (!comboMeasured)
+            {
+                comboRect = c.itemRect();
+                comboMeasured = true;
+            }
+            aFocused = c.isWindowFocused();
+            popupOpen = c.beginPopup("P");
+            if (popupOpen)
+            {
+                for (int i = 0; i < 4; ++i)
+                {
+                    char name[8];
+                    snprintf(name, sizeof(name), "b%d", i);
+                    if (c.button(name)) ++clicks[i];
+                    buttons[i] = c.itemRect();
+                }
+                c.endPopup();
+            }
+            c.endWindow();
+        }
+    };
+
+    harness.frame(build);
+    openRequest = true;
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(popupOpen);
+    assert(buttons[3].y > 130.0f);
+    const float x = buttons[3].x + buttons[3].width * 0.5f;
+    const float y = buttons[3].y + buttons[3].height * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    harness.frame(build);
+    harness.click(x, y, build);
+    harness.frame(build);
+    assert(clicks[3] == 1);
+    assert(aFocused);
+    assert(bClicks == 0);
+
+    harness.click(280.0f, 100.0f, build);
+    harness.frame(build);
+    assert(!popupOpen);
+    harness.click(comboRect.x + 10.0f, comboRect.y + 5.0f, build);
+    harness.frame(build);
+    const float rowY = comboRect.y + comboRect.height * 5.5f;
+    assert(rowY > 130.0f);
+    harness.click(comboRect.x + 10.0f, rowY, build);
+    harness.frame(build);
+    assert(current == 4);
+    assert(aFocused);
+    assert(bClicks == 0);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6505,6 +6590,7 @@ int main()
     test_checkbox_flags_with_a_multi_bit_mask();
     test_list_widgets_report_their_own_item_status();
     test_right_click_outside_closes_menus();
+    test_popup_over_another_window_keeps_its_owner();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

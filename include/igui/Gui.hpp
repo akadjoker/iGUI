@@ -2364,11 +2364,12 @@ private:
         bool modal;
         // Fechado pelo closeCurrentPopup (o corpo ainda vai até ao endPopup).
         bool open;
+        WindowHandle window;
 
         PopupEntry()
             : id(InvalidWidgetId), position(), width(0.0f), frame(0u), bounds(),
               boundsAtFrameStart(), measured(), measuredWidth(0.0f), measuredThisFrame(false),
-              wasOpenAtFrameStart(false), modal(false), open(true)
+              wasOpenAtFrameStart(false), modal(false), open(true), window()
         {
         }
     };
@@ -2650,6 +2651,7 @@ private:
     // to the window being drawn: the window receives the pointer there even when
     // the popup reaches outside its bounds.
     bool pointerInsideOwnPopup(const Vec2 &point) const;
+    WindowHandle popupOwnerAt(const Vec2 &point) const;
     // What a popup is clipped to: the screen, not the content of the window it
     // hangs from - a combo list at the bottom of a panel used to be cut off at
     // the window's edge, and its rows were then unclickable.

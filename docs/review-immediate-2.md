@@ -71,7 +71,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       recalculado com `popupDepth_ > 0`; depois do Escape fica a true. O
       `isKeyPressed`, o `shortcut` e o Ctrl+Z/Y deixam de responder.
       *Arranjo:* pô-lo a false antes do `if`.
-- [ ] **W2. Um popup que passa por cima de outra janela não recebe cliques e traz
+- [x] **W2. Um popup que passa por cima de outra janela não recebe cliques e traz
       essa janela para a frente** — [Gui.cpp:1444](../src/Gui.cpp#L1444),
       13552, 13671. O foco muda no press antes de se saber que o press é do popup;
       o `pointerInsideOwnPopup` só conhece menus e combos. A lista de um combo que
