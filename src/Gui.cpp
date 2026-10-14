@@ -10032,9 +10032,6 @@ void Context::endDockSpace()
             captureDockArrangement(*dockSpace);
         for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size();)
         {
-            // A panel the application stopped submitting loses its tab, and so does
-            // one whose close was handed to its beginDockPanel. The open flag is
-            // never read here: that pointer belongs to the panel's own call.
             const bool dropped = dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_;
             if (dropped || dockSpace->tabs[i].closed)
                 dockSpace->tabs.erase(dockSpace->tabs.begin() + i);
@@ -10100,9 +10097,6 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         tab.title = String(title.data(), title.size());
         const StringView key = idLabel(title);
         tab.key = String(key.data(), key.size());
-        // Where the panel was left wins over the slot the application asks for,
-        // so a panel dragged to another region comes back there; so does the tab
-        // that was on top of its group.
         tab.slot = storedDockSlot(dockSpace->name, tab.key, slot);
         dockSpace->tabs.push_back(tab);
         tabState = &dockSpace->tabs.back();
@@ -10114,8 +10108,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     if (tabState->title.size() != title.size() ||
         memcmp(tabState->title.data(), title.data(), title.size()) != 0)
         tabState->title = String(title.data(), title.size());
-    // The X of this tab was clicked (maybe while another panel of the slot drew the
-    // tab bar): the close reaches the application through its own pointer, now.
+    // O X desta tab foi clicado: o fecho chega à aplicação pelo ponteiro do próprio painel.
     if (tabState->closeRequested)
     {
         tabState->closeRequested = false;
@@ -10135,8 +10128,6 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect clip = contentClip();
     if (region.width <= 0.0f || region.height <= theme_.widgetHeight)
         return false;
-    // Every tab of a slot comes through here; the region is drawn by the first one of the frame. A second background
-    // would paint over the content of a tab that was built before it.
     if (dockSpace->regionFrame[slotIndex] != frameNumber_)
     {
         dockSpace->regionFrame[slotIndex] = frameNumber_;
@@ -10184,7 +10175,6 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect tabListButton(tabBar.x + tabBar.width - tabListWidth, tabBar.y,
                              tabListWidth, tabListWidth);
     const float tabRight = tabListButton.x;
-    // One continuous header; controls only gain a background on interaction.
     drawList->addRectFilled(tabBar, theme_.panelColor, clip);
     drawList->addLine(Vec2(tabBar.x, tabBar.bottom() - 1.0f),
                       Vec2(tabBar.right(), tabBar.bottom() - 1.0f), theme_.borderColor, clip);
@@ -10206,8 +10196,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                                tab.y + (tab.height - closeSize) * 0.5f, closeSize, closeSize);
         const bool hovered = itemHovered(tab, clip, candidate.id);
         const WidgetId closeId = combineIds(candidate.id, 0x444f434b434c4f53ull);
-        // Keep processing the close button while it owns the press: the tab's
-        // hover test deliberately rejects input captured by a different ID.
+        // O botão de fechar continua a ser tratado enquanto é dono do press.
         const bool closeVisible = candidate.closable && (hovered || activeWidget_ == closeId);
         const bool closeHovered = closeVisible && itemHovered(closeButton, clip, closeId);
         if (closeVisible && itemClicked(closeButton, clip, closeId, false))
@@ -12761,9 +12750,7 @@ void Context::captureDockArrangement(const DockSpaceState &space)
     if (section.empty())
         return;
 
-    // Titles drawn this run: one the file remembers but that is not here now is
-    // a panel the application stopped drawing, while one drawn in another slot
-    // has been dragged.
+    // Um título lembrado mas não desenhado é um painel fechado; desenhado noutra região, foi arrastado.
     ct::Vector<String> drawn;
     for (const DockTabState &tab : space.tabs)
         if (dockTitleStorable(tab.key))
@@ -12795,8 +12782,6 @@ void Context::captureDockArrangement(const DockSpaceState &space)
 
         if (selected.empty())
         {
-            // Nothing is docked there right now: whichever of the remembered
-            // tabs is still in the list stays on top.
             const String rememberedSelected = windowState_.get(section, selectedKey.c_str());
             if (dockListHas(tabs, rememberedSelected))
                 selected = rememberedSelected;
