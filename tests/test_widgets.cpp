@@ -4604,9 +4604,36 @@ static void test_window_status_queries()
     (void)firstWindowSeen;
 }
 
+// Um plot com muitas amostras numa largura grande não lê fora do buffer: o índice
+// de cada coluna (coluna * amostras / colunas) passa de int a meio da conta (M3).
+static void test_plot_with_many_samples_stays_in_the_buffer()
+{
+    WidgetBackend backend;
+    ig::Context context(backend);
+    const int count = 2000000;
+    ct::Vector<float> values;
+    values.resize(static_cast<ct::Vector<float>::size_type>(count));
+    for (int i = 0; i < count; ++i)
+        values[static_cast<ct::Vector<float>::size_type>(i)] = static_cast<float>(i % 100);
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        context.pushEvent(ig::Event::pointerMove(1100.0f, 100.0f));
+        context.beginFrame(ig::FrameInfo(1280.0f, 400.0f));
+        assert(context.beginWindow("plot", ig::Rect(0.0f, 0.0f, 1280.0f, 400.0f)));
+        const ig::Rect bounds(0.0f, 0.0f, 1200.0f, 200.0f);
+        if (pass == 0)
+            context.plotLines("many", values.data(), count, bounds);
+        else
+            context.plotHistogram("many", values.data(), count, bounds);
+        context.endWindow();
+        context.endFrame();
+    }
+}
+
 int main()
 {
     test_knob_accent_comes_from_the_caller();
+    test_plot_with_many_samples_stays_in_the_buffer();
     test_fader_pushes_with_the_pointer();
     test_fader_cap_keeps_its_grab_offset();
     test_fader_accent_comes_from_the_caller();
