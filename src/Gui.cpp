@@ -1190,7 +1190,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       activeDockSpace_(InvalidWidgetId),
       dockDragSpace_(InvalidWidgetId), dockDragTab_(InvalidWidgetId),
       textCursor_(0), frameNumber_(0), nextZOrder_(1), windowDragOffset_(), dockDragStart_(), menuBarBounds_(),
-      menuPopupBounds_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
+      menuPopupBounds_(), contextMenuAnchor_(), activeMenuBounds_(), subMenuPopupBounds_(), subMenuParentBounds_(),
       subMenuRestoreMenu_(InvalidWidgetId),
       menuBarCursorX_(0.0f), menuBarActive_(false), forceWindowBounds_(false),
       table_(), tableResize_(), tableOrder_(nullptr), propertyRow_(), tableActive_(false), enabled_(true), propertyRowActive_(false),
@@ -4761,6 +4761,12 @@ bool Context::beginMenu(StringView labelText)
     // Size the popup at the width measured for this menu (menuMinWidth until
     // its items have been submitted at least once - see endMenu).
     const float popupWidth = menuWidthId_ == id ? menuPopupWidth_ : theme_.menuMinWidth;
+    const Rect screen = popupClipRect();
+    float popupX = button.x;
+    if (popupX + popupWidth > screen.x + screen.width)
+        popupX = screen.x + screen.width - popupWidth;
+    if (popupX < screen.x)
+        popupX = screen.x;
     const uint32_t left = buttonIndex(PointerButton::Left);
     // Any press outside closes the menu - in another window too, where
     // pointerBlockedByOpenPopup already swallows it; checking only this
@@ -4782,7 +4788,7 @@ bool Context::beginMenu(StringView labelText)
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
         subMenuPopupBounds_ = Rect();
-        menuPopupBounds_ = Rect(button.x, button.bottom(), popupWidth, 0.0f);
+        menuPopupBounds_ = Rect(popupX, button.bottom(), popupWidth, 0.0f);
         focusedWidget_ = id;
     }
     if (itemClicked(button, contentClip(), id))
@@ -4791,7 +4797,7 @@ bool Context::beginMenu(StringView labelText)
         openContextMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
         if (openMenu_ == id)
-            menuPopupBounds_ = Rect(button.x, button.y + button.height, popupWidth, 0.0f);
+            menuPopupBounds_ = Rect(popupX, button.y + button.height, popupWidth, 0.0f);
     }
     drawList->addRectFilled(button, openMenu_ == id || hovered ? theme_.menuBarItemHover : theme_.menuBarBg,
                             contentClip());
@@ -4806,7 +4812,7 @@ bool Context::beginMenu(StringView labelText)
     popupWindow_ = currentWindow_;
     activeMenu_ = id;
     activeMenuBounds_ = menuPopupBounds_;
-    activeMenuBounds_.x = button.x;
+    activeMenuBounds_.x = popupX;
     activeMenuBounds_.y = button.y + button.height;
     activeMenuBounds_.width = popupWidth;
     activeMenuBounds_.height = 0.0f;
@@ -5172,8 +5178,8 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
         openContextMenu_ = id;
         openMenu_ = InvalidWidgetId;
         openSubMenu_ = InvalidWidgetId;
-        menuPopupBounds_ = Rect(pointer_.pressedPosition[right].x, pointer_.pressedPosition[right].y,
-                                popupWidth, 0.0f);
+        contextMenuAnchor_ = pointer_.pressedPosition[right];
+        menuPopupBounds_ = Rect(contextMenuAnchor_.x, contextMenuAnchor_.y, popupWidth, 0.0f);
     }
     if (openContextMenu_ != id)
         return false;
@@ -5189,9 +5195,22 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     openMenuFrame_ = frameNumber_;
     popupWindow_ = currentWindow_;
     activeMenu_ = id;
-    activeMenuBounds_ = menuPopupBounds_;
-    activeMenuBounds_.width = popupWidth;
-    activeMenuBounds_.height = 0.0f;
+    const Rect screen = popupClipRect();
+    const float popupHeight = menuPopupBounds_.height;
+    float popupX = contextMenuAnchor_.x;
+    if (popupX + popupWidth > screen.x + screen.width)
+        popupX = contextMenuAnchor_.x - popupWidth >= screen.x ? contextMenuAnchor_.x - popupWidth
+                                                               : screen.x + screen.width - popupWidth;
+    if (popupX < screen.x)
+        popupX = screen.x;
+    float popupY = contextMenuAnchor_.y;
+    if (popupY + popupHeight > screen.y + screen.height)
+        popupY = contextMenuAnchor_.y - popupHeight >= screen.y
+                     ? contextMenuAnchor_.y - popupHeight
+                     : screen.y + screen.height - popupHeight;
+    if (popupY < screen.y)
+        popupY = screen.y;
+    activeMenuBounds_ = Rect(popupX, popupY, popupWidth, 0.0f);
     // Como o beginMenu: o corpo de um menu de contexto também é um contentor de
     // layout (e o endContextMenu fecha-o pelo endMenu, que é o mesmo caminho).
     beginPopupContent(activeMenuBounds_);
