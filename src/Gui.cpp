@@ -8323,8 +8323,7 @@ bool Context::acceptDragDropTarget(WidgetId acceptedType, const Rect &bounds,
         return false;
     const Rect rect = contentRect(bounds);
     const Rect visible = intersect(rect, contentClip());
-    const bool hovered = contains(visible, pointer_.position);
-    if (hovered)
+    if (pointerOver(visible))
     {
         drawList->addRect(rect, theme_.dialogBtnPrimary, contentClip(), 2.0f);
         const uint32_t left = buttonIndex(PointerButton::Left);
