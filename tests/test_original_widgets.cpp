@@ -1460,6 +1460,74 @@ static void test_dialogs_take_the_keyboard_while_open()
     runFrames(app, 60);
 }
 
+// Um popup fechado pelo WidgetApp com um clique fora fica fechado também para
+// quem o abriu: o clique seguinte na ComboBox ou no DatePicker volta a abri-lo
+// logo. Na MenuBar, clicar no título do menu aberto fecha-o, tal como um clique
+// numa parte vazia da barra.
+static void test_popups_closed_from_outside_are_closed_for_their_owner()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("popupowners");
+    auto* screen = stage->createChild<Widget>();
+    auto* combo = screen->createChild<ComboBox>();
+    combo->setRect({ 20.0f, 300.0f, 160.0f, 28.0f });
+    combo->addItem("one");
+    combo->addItem("two");
+    auto* date = screen->createChild<DatePicker>();
+    date->setRect({ 220.0f, 300.0f, 160.0f, 28.0f });
+    auto* bar = screen->createChild<MenuBar>();
+    bar->setRect({ 0.0f, 0.0f, 600.0f, 28.0f });
+    bar->addMenu("File")->addAction("Open");
+    assert(app.setStage("popupowners", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    auto click = [&app, &io](float x, float y)
+    {
+        io.mouseX = x;
+        io.mouseY = y;
+        app.update(io);
+        io.mouseDown[0] = true;
+        app.update(io);
+        io.mouseDown[0] = false;
+        app.update(io);
+    };
+
+    click(100.0f, 314.0f);
+    assert(app.popupOwner() == combo);
+    click(700.0f, 550.0f);
+    assert(app.popup() == nullptr);
+    click(100.0f, 314.0f);
+    assert(app.popupOwner() == combo);
+    click(100.0f, 314.0f);
+    assert(app.popup() == nullptr);
+
+    click(300.0f, 314.0f);
+    assert(date->isOpen());
+    click(700.0f, 550.0f);
+    assert(app.popup() == nullptr);
+    assert(!date->isOpen());
+    click(300.0f, 314.0f);
+    assert(date->isOpen());
+    click(300.0f, 314.0f);
+    assert(app.popup() == nullptr);
+
+    click(20.0f, 14.0f);
+    assert(app.popup() == bar->menu(0));
+    click(20.0f, 14.0f);
+    assert(app.popup() == nullptr);
+    click(20.0f, 14.0f);
+    assert(app.popup() == bar->menu(0));
+    click(500.0f, 14.0f);
+    assert(app.popup() == nullptr);
+    runFrames(app, 30);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1638,6 +1706,7 @@ int main()
     test_signal_handlers_can_change_the_signal();
     test_scrolling_stays_in_the_view_that_scrolls();
     test_dialogs_take_the_keyboard_while_open();
+    test_popups_closed_from_outside_are_closed_for_their_owner();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

@@ -100,7 +100,7 @@ public:
     MenuAction* action(int idx) const;
 
     /// @brief Show the menu as a popup at screen coordinates.
-    void exec(float x, float y);
+    void exec(float x, float y, Widget* owner = nullptr);
 
     // ── Widget overrides ──────────────────────────────────────────────────
     void resetPopupState()                     override;

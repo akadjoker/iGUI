@@ -114,7 +114,7 @@ Widget::Vec2f Menu::sizeHint() const
     return {computeWidth_(), h};
 }
 
-void Menu::exec(float x, float y)
+void Menu::exec(float x, float y, Widget* owner)
 {
     Vec2f sz = sizeHint();
     float sw = static_cast<float>(WidgetApp::instance().width());
@@ -126,7 +126,7 @@ void Menu::exec(float x, float y)
     setPosition(x, y);
     setSize(sz.x, sz.y);
     hoveredIdx_ = -1;
-    WidgetApp::instance().showPopup(this, nullptr, false);
+    WidgetApp::instance().showPopup(this, owner, false);
 }
 
 void Menu::resetPopupState()
@@ -416,7 +416,7 @@ void MenuBar::openMenu_(int idx)
     closeMenu_();
     auto& e = entries_[idx];
     Rect abs = absoluteRect();
-    e.menu->exec(abs.x + e.x, abs.y + abs.h);
+    e.menu->exec(abs.x + e.x, abs.y + abs.h, this);
 }
 
 void MenuBar::closeMenu_()
@@ -491,8 +491,12 @@ void MenuBar::onMousePress(MouseEvent& e)
 {
     Rect abs    = absoluteRect();
     int  idx    = hitEntry_(e.x - abs.x);
-    if (idx < 0) return;
     int  open   = openMenuIdx_();
+    if (idx < 0)
+    {
+        if (open >= 0) closeMenu_();
+        return;
+    }
     if (open == idx)
         closeMenu_();
     else
