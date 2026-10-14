@@ -67,6 +67,12 @@ public:
     void resume();
     /// @brief Stop the animation and jump to the end value.
     void stop();
+    /// @brief End the animation where it is, without onUpdate or onFinished.
+    void cancel() { state_ = State::Finished; }
+    /// @brief The widget the animation moves; it is cancelled when that widget goes away.
+    void setTarget(Widget* w) { target_ = w; }
+    /// @brief Get the widget the animation moves.
+    Widget* target() const { return target_; }
     /// @brief Reset and restart the animation from the beginning.
     void restart();
 
@@ -116,6 +122,7 @@ private:
     int       loopIndex_ = 0;
     bool      autoDelete_= true;
     String tag_;
+    Widget*   target_    = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -150,6 +157,13 @@ public:
     /// @brief Emitted when all animations in the group complete.
     Signal<> onFinished;
 
+    /// @brief End the group where it is, without onFinished.
+    void cancel();
+    /// @brief The widget the group moves; it is cancelled when that widget goes away.
+    void setTarget(Widget* w) { target_ = w; }
+    /// @brief Get the widget the group moves.
+    Widget* target() const { return target_; }
+
 private:
     Mode mode_;
     ct::Vector<Animation*> anims_;
@@ -157,6 +171,7 @@ private:
     bool running_      = false;
     bool finished_     = false;
     bool autoDelete_   = true;
+    Widget* target_    = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -171,6 +186,12 @@ class Animator
 public:
     /// @brief Get the singleton Animator instance.
     static Animator& instance();
+    /// @brief The instance while it exists (null during static destruction).
+    static Animator* existing();
+    ~Animator();
+
+    /// @brief Cancel the animations whose target is @p w or inside it.
+    void forget(Widget* w);
 
     /// @brief Add a standalone animation (takes ownership if autoDelete).
     void add(Animation* a);

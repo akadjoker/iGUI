@@ -120,6 +120,14 @@ void AnimationGroup::add(Animation* a)
     anims_.push_back(a);
 }
 
+void AnimationGroup::cancel()
+{
+    for (Animation* a : anims_)
+        a->cancel();
+    running_  = false;
+    finished_ = true;
+}
+
 void AnimationGroup::start()
 {
     running_      = true;
@@ -183,10 +191,50 @@ void AnimationGroup::tick(float dt)
 //  Animator (singleton)
 // ═════════════════════════════════════════════════════════════════════════════
 
+namespace { Animator* gAnimator = nullptr; }
+
 Animator& Animator::instance()
 {
     static Animator inst;
+    gAnimator = &inst;
     return inst;
+}
+
+Animator* Animator::existing()
+{
+    return gAnimator;
+}
+
+Animator::~Animator()
+{
+    gAnimator = nullptr;
+}
+
+static bool insideWidget(Widget* candidate, Widget* root)
+{
+    for (Widget* w = candidate; w; w = w->parent())
+        if (w == root)
+            return true;
+    return false;
+}
+
+template <typename T>
+static void forgetIn(ct::Vector<T*>& list, Widget* w)
+{
+    for (T* item : list)
+    {
+        if (!item->target() || !insideWidget(item->target(), w)) continue;
+        item->cancel();
+        item->setTarget(nullptr);
+    }
+}
+
+void Animator::forget(Widget* w)
+{
+    forgetIn(anims_, w);
+    forgetIn(pendingAnims_, w);
+    forgetIn(groups_, w);
+    forgetIn(pendingGroups_, w);
 }
 
 void Animator::add(Animation* a)
@@ -302,10 +350,12 @@ Animation* Animator::fadeIn(Widget* w, float duration, EaseType ease)
 
 Animation* Animator::fadeOut(Widget* w, float duration, EaseType ease)
 {
-    return animate(1.0f, 0.0f, duration,
-                   ease == EaseType{} ? EaseType::OutCubic : ease,
-                   nullptr,
-                   [w] { if (w) w->setVisible(false); });
+    Animation* a = animate(1.0f, 0.0f, duration,
+                           ease == EaseType{} ? EaseType::OutCubic : ease,
+                           nullptr,
+                           [w] { if (w) w->setVisible(false); });
+    a->setTarget(w);
+    return a;
 }
 
 Animation* Animator::slideIn(Widget* w, float fromX, float fromY,
@@ -331,6 +381,7 @@ Animation* Animator::slideIn(Widget* w, float fromX, float fromY,
     });
 
     auto* group = new AnimationGroup(AnimationGroup::Mode::Parallel);
+    group->setTarget(w);
     group->add(gx);
     group->add(gy);
     group->start();

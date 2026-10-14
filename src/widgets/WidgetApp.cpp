@@ -749,6 +749,8 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
 {
     if (!w) return;
     ++deletions_;
+    if (Animator* animator = Animator::existing())
+        animator->forget(w);
     if (tooltipWidget_ && isDescendantOf(tooltipWidget_, w))
     {
         tooltipWidget_  = nullptr;

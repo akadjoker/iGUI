@@ -2400,6 +2400,39 @@ static void test_shaded_colors_stay_in_range()
     theme = saved;
 }
 
+// O fadeOut e o slideIn param quando o widget que animam desaparece, em vez de
+// lhe tocarem depois de apagado.
+static void test_widget_animations_stop_with_their_widget()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("animgone");
+    auto* faded = stage->createChild<Label>("faded");
+    auto* slid = stage->createChild<Label>("slid");
+    slid->setRect({ 0.0f, 0.0f, 100.0f, 20.0f });
+    auto* kept = stage->createChild<Label>("kept");
+    kept->setRect({ 0.0f, 50.0f, 100.0f, 20.0f });
+    assert(app.setStage("animgone", TransitionType::None));
+
+    Animator& animator = Animator::instance();
+    const int before = animator.count();
+    Animator::fadeOut(faded, 0.5f);
+    Animator::slideIn(slid, 100.0f, 0.0f, 0.5f);
+    Animator::slideIn(kept, 100.0f, 0.0f, 0.5f);
+    IO io;
+    io.deltaTime = 0.01f;
+    app.update(io);
+    assert(animator.count() == before + 3);
+
+    stage->removeChild(faded);
+    stage->removeChild(slid);
+    app.update(io);
+    assert(animator.count() == before + 1);
+    for (int i = 0; i < 60; ++i) app.update(io);
+    assert(animator.count() == before);
+    assert(kept->rect().x == 0.0f);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2595,6 +2628,7 @@ int main()
     test_restored_windows_stay_on_screen();
     test_file_dialog_breadcrumbs_follow_the_path_root();
     test_shaded_colors_stay_in_range();
+    test_widget_animations_stop_with_their_widget();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
