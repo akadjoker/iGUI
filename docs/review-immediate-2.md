@@ -191,7 +191,7 @@ Lido: 10334-11542.
       que rola** — [Gui.cpp:10789](../src/Gui.cpp#L10789).
 - [x] **T12. Dois `tableTreeCell` na mesma linha partilham o id; o segundo nunca
       abre** — [Gui.cpp:11371](../src/Gui.cpp#L11371).
-- [ ] **T13. Com `scrollX` e `freezeCols > 0` a faixa alternada das linhas fica
+- [x] **T13. Com `scrollX` e `freezeCols > 0` a faixa alternada das linhas fica
       cortada à coluna presa** — [Gui.cpp:11093](../src/Gui.cpp#L11093).
 - [ ] **T14 (menor). Uma lista virtual que encolhe passa um frame vazia** —
       [Gui.cpp:10350](../src/Gui.cpp#L10350).
