@@ -206,7 +206,7 @@ nova no mesmo frame; uma tabela `scrollY` sem linhas fica com altura 0.
 
 Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
 
-- [ ] **M1. Vários widgets editam o valor dentro de `beginDisabled()`** — splitter
+- [x] **M1. Vários widgets editam o valor dentro de `beginDisabled()`** — splitter
       [Gui.cpp:5548](../src/Gui.cpp#L5548), colorEdit 7097/7120/7139, gizmo2D 5598,
       gizmo3D 5794, gradientEditor 7289, curveEditor 7382, sequencer 7547,
       timeline 7609, updateTimeView 7446, beginDragSource 8290. O clique não olha

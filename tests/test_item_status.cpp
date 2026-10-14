@@ -6259,6 +6259,101 @@ void test_next_item_width_is_spent_by_the_child()
     assert(firstRect.x + firstRect.width <= child.x + child.width);
 }
 
+// Dentro de um beginDisabled() nenhum widget muda o valor nem começa um arrasto:
+// splitter, colorEdit, gizmos, gradiente, curva, sequencer, timeline e a fonte de
+// um arrasto.
+void test_disabled_widgets_do_not_edit()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Vec2 o;
+    float split = 50.0f;
+    ig::Color color(255u, 0u, 0u, 255u);
+    ig::Transform2D t2;
+    t2.position = ig::Vec2(100.0f, 300.0f);
+    ct::Vector<ig::GradientStop> stops;
+    stops.push_back(ig::GradientStop(0.0f, ig::Color(0u, 0u, 0u, 255u)));
+    stops.push_back(ig::GradientStop(1.0f, ig::Color(255u, 255u, 255u, 255u)));
+    int gradientSelected = -1;
+    ct::Vector<ig::CurvePoint> points;
+    points.push_back(ig::CurvePoint(0.0f, 0.0f));
+    points.push_back(ig::CurvePoint(1.0f, 1.0f));
+    int curveSelected = -1;
+    ct::Vector<ig::SequencerTrack> sequence;
+    sequence.push_back(ig::SequencerTrack("a", 10, 20, ig::Color(1u, 2u, 3u)));
+    int sequenceFrame = 0;
+    int sequenceTrack = -1;
+    ct::Vector<ig::TimelineTrack> timeline(1);
+    timeline[0].label = ig::String("k");
+    int timelineFrame = 0;
+    int timelineTrack = -1;
+    int timelineKey = -1;
+    ig::Transform3D t3;
+    const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -5, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+    bool dragStarted = false;
+    int page = 0;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 900.0f, 800.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        c.beginDisabled();
+        if (page == 0)
+        {
+            c.splitter("split", split, 0.0f, 200.0f, ig::SplitterAxis::Vertical,
+                    ig::Rect(0.0f, 0.0f, 300.0f, 40.0f), 6.0f);
+            c.colorEdit("cor", color, ig::Rect(0.0f, 50.0f, 300.0f, 200.0f));
+            c.gizmo2D("g2", t2, ig::Gizmo2DMode::Translate, ig::Rect(0.0f, 0.0f, 300.0f, 600.0f));
+            c.gradientEditor("grad", stops, gradientSelected,
+                    ig::Rect(400.0f, 0.0f, 300.0f, 40.0f));
+            dragStarted = c.beginDragSource(42u, 7u, 1u, "item",
+                                  ig::Rect(400.0f, 300.0f, 120.0f, 28.0f)) ||
+                          dragStarted;
+        }
+        else
+        {
+            c.curveEditor("curva", points, curveSelected, ig::Rect(0.0f, 0.0f, 200.0f, 200.0f),
+                    ig::Vec2(0.0f, 0.0f), ig::Vec2(1.0f, 1.0f));
+            c.sequencer("seq", sequence, 0, 99, sequenceFrame, sequenceTrack,
+                    ig::Rect(0.0f, 220.0f, 500.0f, 100.0f));
+            c.timeline("tl", timeline, 0, 100, timelineFrame, timelineTrack, timelineKey,
+                    ig::Rect(0.0f, 340.0f, 500.0f, 100.0f));
+            c.gizmo3D("g3", t3, ig::Gizmo3DMode::Translate, ig::Rect(500.0f, 0.0f, 300.0f, 300.0f),
+                    view, projection);
+        }
+        c.endDisabled();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.drag(o.x + 50.0f, o.y + 20.0f, o.x + 120.0f, o.y + 20.0f, build);
+    harness.drag(o.x + 20.0f, o.y + 150.0f, o.x + 30.0f, o.y + 170.0f, build);
+    harness.drag(o.x + 100.0f, o.y + 300.0f, o.x + 150.0f, o.y + 340.0f, build);
+    harness.click(o.x + 550.0f, o.y + 15.0f, build);
+    harness.drag(o.x + 420.0f, o.y + 310.0f, o.x + 600.0f, o.y + 450.0f, build, 5);
+    assert(split == 50.0f);
+    assert(color.r == 255u && color.g == 0u && color.b == 0u);
+    assert(t2.position.x == 100.0f && t2.position.y == 300.0f);
+    assert(stops.size() == 2u);
+    assert(!dragStarted);
+
+    page = 1;
+    harness.frame(build);
+    harness.click(o.x + 100.0f, o.y + 60.0f, build);
+    harness.click(o.x + 320.0f, o.y + 230.0f, build);
+    harness.click(o.x + 300.0f, o.y + 350.0f, build);
+    harness.click(o.x + 300.0f, o.y + 374.0f, build);
+    harness.drag(o.x + 650.0f, o.y + 150.0f, o.x + 700.0f, o.y + 120.0f, build);
+    assert(points.size() == 2u);
+    assert(sequenceFrame == 0);
+    assert(timelineFrame == 0);
+    assert(timeline[0].keys.size() == 0u);
+    assert(t3.position.x == 0.0f && t3.position.y == 0.0f && t3.position.z == 0.0f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7290,6 +7385,7 @@ int main()
     test_list_widgets_report_their_own_item_status();
     test_right_click_outside_closes_menus();
     test_popup_over_another_window_keeps_its_owner();
+    test_disabled_widgets_do_not_edit();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
