@@ -4421,6 +4421,60 @@ void test_table_resize_with_sideways_scroll_follows_the_pointer()
     assert(fabsf(header[2].x - header[1].x - (second - 30.0f)) < 0.01f);
 }
 
+// Um arrasto de cabeçalho que se perde (a tabela não foi submetida durante uns
+// frames) larga o ponteiro quando a tabela volta, seja qual for a coluna
+// arrastada, mesmo com o botão ainda premido.
+void test_table_lost_header_drag_releases_the_pointer()
+{
+    for (int dragged = 0; dragged < 3; ++dragged)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+
+        bool showTable = true;
+        ig::Rect header[3];
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+            ig::TableStyle style;
+            style.reorderable = true;
+            const float weights[3] = { 1.0f, 1.0f, 1.0f };
+            if (showTable && c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+            {
+                const char* names[3] = { "A", "B", "C" };
+                for (int column = 0; column < 3; ++column)
+                {
+                    c.tableNextColumn();
+                    c.tableHeader(names[column]);
+                    header[column] = c.itemRect();
+                }
+                c.endTable();
+            }
+            c.endWindow();
+        };
+
+        harness.frame(build);
+        harness.frame(build);
+        const float x = header[dragged].x + 20.0f;
+        const float y = header[dragged].y + 5.0f;
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, x, y));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerMove(x + 30.0f, y));
+        harness.frame(build);
+        assert(context.wantsPointer());
+
+        showTable = false;
+        harness.frame(build);
+        harness.frame(build);
+        showTable = true;
+        context.pushEvent(ig::Event::pointerMove(500.0f, 400.0f));
+        harness.frame(build);
+        harness.frame(build);
+        assert(!context.wantsPointer());
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5431,6 +5485,7 @@ int main()
     test_table_scrolling_both_ways_shows_the_last_row();
     test_table_scrolling_both_ways_keeps_its_height();
     test_table_resize_with_sideways_scroll_follows_the_pointer();
+    test_table_lost_header_drag_releases_the_pointer();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

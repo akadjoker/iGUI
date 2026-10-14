@@ -176,7 +176,7 @@ Lido: 10334-11542.
 - [x] **T6. Redimensionar colunas com `scrollX` usa a escala errada** —
       [Gui.cpp:11185](../src/Gui.cpp#L11185). Divide por `bounds.width` em vez de
       `contentWidth`; um arrasto de 30 px soma 119 e 46 px às duas colunas.
-- [ ] **T7. Perder um arrasto de cabeçalho deixa a interface morta** —
+- [x] **T7. Perder um arrasto de cabeçalho deixa a interface morta** —
       [Gui.cpp:11205](../src/Gui.cpp#L11205), 10913. O `reorderWidget` é reescrito
       por cada cabeçalho, e a limpeza compara com o id errado.
 - [ ] **T8. `beginTable(id, int columns, style)` ignora `scrollY`, `height`,
