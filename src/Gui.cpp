@@ -9752,6 +9752,7 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     state.parentClip = parentClip;
     state.id = id;
     state.border = border;
+    state.dockDepth = static_cast<uint32_t>(dockPanelStack_.size());
     childStack_.push_back(state);
     const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     idStack_.push_back(combineIds(parentId, id));
@@ -12103,9 +12104,11 @@ float Context::availableHeight() const
     if (!window) return 0.0f;
     const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
     float bottom = window->bounds.y + window->bounds.height - padding;
-    if (!dockPanelStack_.empty())
+    const bool childInside =
+        !childStack_.empty() && childStack_.back().dockDepth >= dockPanelStack_.size();
+    if (!dockPanelStack_.empty() && !childInside)
         bottom = dockPanelStack_.back().content.y + dockPanelStack_.back().content.height;
-    if (!childStack_.empty())
+    else if (!childStack_.empty())
         bottom = childStack_.back().content.y + childStack_.back().content.height;
     return bottom > layout_.cursor.y ? bottom - layout_.cursor.y : 0.0f;
 }
@@ -12124,10 +12127,12 @@ float Context::availableWidth() const
     {
         const float padding = window->useClientArea ? 0.0f : theme_.windowPadding;
         right = window->bounds.x + window->bounds.width - padding;
-        if (!childStack_.empty())
-            right = childStack_.back().content.x + childStack_.back().content.width;
-        if (!dockPanelStack_.empty())
+        const bool childInside =
+            !childStack_.empty() && childStack_.back().dockDepth >= dockPanelStack_.size();
+        if (!dockPanelStack_.empty() && !childInside)
             right = dockPanelStack_.back().content.x + dockPanelStack_.back().content.width;
+        else if (!childStack_.empty())
+            right = childStack_.back().content.x + childStack_.back().content.width;
         if (tableActive_ && table_.columns > 0 && table_.column >= 0)
             right = tableColumnX(table_.column) + tableColumnWidth(table_.column);
         if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
