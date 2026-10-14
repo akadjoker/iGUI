@@ -1528,6 +1528,32 @@ static void test_popups_closed_from_outside_are_closed_for_their_owner()
     runFrames(app, 30);
 }
 
+// Um PageView só deixa visíveis a página atual e, durante a animação, a que
+// está a sair: sem transição a anterior esconde-se logo, e uma troca a meio de
+// um slide esconde a página que já estava a sair.
+static void test_page_view_hides_the_pages_it_leaves()
+{
+    using namespace ig::retained;
+    PageView view;
+    view.setRect({ 0.0f, 0.0f, 300.0f, 200.0f });
+    Widget* pages[3] = { view.addPage<Widget>(), view.addPage<Widget>(), view.addPage<Widget>() };
+    auto visible = [&pages](bool first, bool second, bool third)
+    {
+        return pages[0]->isVisible() == first && pages[1]->isVisible() == second &&
+               pages[2]->isVisible() == third;
+    };
+
+    view.setPage(1, PageView::None);
+    assert(visible(false, true, false));
+    view.setPage(2, PageView::SlideLeft);
+    assert(visible(false, true, true));
+    view.setPage(0, PageView::SlideRight);
+    assert(visible(true, false, true));
+    view.setPage(1, PageView::None);
+    assert(visible(false, true, false));
+    assert(view.currentPage() == 1);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1707,6 +1733,7 @@ int main()
     test_scrolling_stays_in_the_view_that_scrolls();
     test_dialogs_take_the_keyboard_while_open();
     test_popups_closed_from_outside_are_closed_for_their_owner();
+    test_page_view_hides_the_pages_it_leaves();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
