@@ -1263,6 +1263,48 @@ static void test_key_handler_can_remove_its_widget()
     assert(stage->children().empty());
 }
 
+// Um handler pode ligar e desligar ligações do sinal que o está a chamar: a que
+// se desliga a si própria acaba de correr, a seguinte continua a ser chamada, e
+// as que se ligam durante o emit só contam no próximo.
+static void test_signal_handlers_can_change_the_signal()
+{
+    using ig::retained::Signal;
+    Signal<int> signal;
+    Signal<int>::SlotId once = 0;
+    int onceCalls = 0;
+    int otherCalls = 0;
+    int addedCalls = 0;
+    int captured = 41;
+    once = signal.connect([&signal, &once, &onceCalls, captured](int) mutable {
+        signal.disconnect(once);
+        ++captured;
+        onceCalls += captured - 41;
+    });
+    signal.connect([&signal, &otherCalls, &addedCalls](int) {
+        ++otherCalls;
+        for (int i = 0; i < 16; ++i)
+            signal.connect([&addedCalls](int) { ++addedCalls; });
+    });
+    signal.connect([&otherCalls](int) { ++otherCalls; });
+
+    signal.emit(1);
+    assert(onceCalls == 1);
+    assert(otherCalls == 2);
+    assert(addedCalls == 0);
+
+    signal.emit(2);
+    assert(onceCalls == 1);
+    assert(addedCalls == 16);
+
+    auto* owned = new Signal<>();
+    bool after = false;
+    owned->connect([&owned]() { delete owned; owned = nullptr; });
+    owned->connect([&after]() { after = true; });
+    owned->emit();
+    assert(owned == nullptr);
+    assert(!after);
+}
+
 int main()
 {
     using namespace ig;
@@ -1297,6 +1339,7 @@ int main()
     test_hidden_widgets_do_not_paint();
     test_widget_app_clock_keeps_short_frames();
     test_key_handler_can_remove_its_widget();
+    test_signal_handlers_can_change_the_signal();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;
