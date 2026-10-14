@@ -111,7 +111,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       [Gui.cpp:12440](../src/Gui.cpp#L12440). As caixas medidas encolhem: um
       tooltip rico passa de 280 px a 24 px; afeta também o `measurePopup`, os
       menus e o `measureTableCellWidth`.
-- [ ] **W14. Um grupo que contém um child cresce com o conteúdo escondido do child** —
+- [x] **W14. Um grupo que contém um child cresce com o conteúdo escondido do child** —
       [Gui.cpp:12453](../src/Gui.cpp#L12453).
 - [ ] **W15. `newLine` depois de `sameLine` ignora a altura da linha** —
       [Gui.cpp:11865](../src/Gui.cpp#L11865). O item seguinte sai por cima.

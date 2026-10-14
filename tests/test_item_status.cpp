@@ -6111,6 +6111,42 @@ void test_indent_group_and_set_cursor_keep_the_content_extent()
     for (int mode = 1; mode < 4; ++mode) assert(widths[mode] >= widths[0]);
 }
 
+// Um grupo com um child lá dentro tem a altura da caixa do child, não a do
+// conteúdo escondido dele.
+void test_group_with_a_child_ignores_the_hidden_content()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect child;
+    ig::Rect group;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 400.0f, 700.0f)));
+        c.beginGroup();
+        if (c.beginChild("ch", 100.0f, true, 150.0f))
+        {
+            for (int i = 0; i < 15; ++i)
+            {
+                char name[8];
+                snprintf(name, sizeof(name), "b%d", i);
+                c.button(name);
+            }
+            c.endChild();
+        }
+        child = c.itemRect();
+        c.endGroup();
+        group = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(group.y == child.y);
+    assert(group.y + group.height == child.y + child.height);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7152,6 +7188,7 @@ int main()
     test_child_measures_the_last_line();
     test_child_inside_a_dock_panel_reports_its_own_width();
     test_indent_group_and_set_cursor_keep_the_content_extent();
+    test_group_with_a_child_ignores_the_hidden_content();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
