@@ -26,7 +26,7 @@ void Label::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     const auto& t = Theme::instance();
-    const Color& c = enabled_ ? color_ : t.textDisabled;
+    const Color& c = isEnabledInTree() ? color_ : t.textDisabled;
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
@@ -148,7 +148,7 @@ void Button::paint(PaintContext& ctx)
         {
             bg = pressed_ ? t.buttonPressed : (hovered_ ? t.buttonHover : t.buttonNormal);
         }
-        if (!enabled_) bg = t.panelColor;
+        if (!isEnabledInTree()) bg = t.panelColor;
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(
@@ -164,7 +164,7 @@ void Button::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
-    ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.SetBatch(&ctx.text);
     float textW = ctx.font.GetTextWidth(text_.c_str());
 
@@ -252,7 +252,7 @@ void ImageButton::paint(PaintContext& ctx)
         {
             bg = pressed_ ? t.buttonPressed : (hovered_ ? t.buttonHover : t.buttonNormal);
         }
-        if (!enabled_) bg = t.panelColor;
+        if (!isEnabledInTree()) bg = t.panelColor;
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(
@@ -346,7 +346,7 @@ void IconButton::paint(PaintContext& ctx)
     if (ctx.clipRectIntersect(abs, clipped))
     {
         Color bg = pressed_ ? t.buttonPressed : (hovered_ ? t.buttonHover : t.buttonNormal);
-        if (!enabled_) bg = t.panelColor;
+        if (!isEnabledInTree()) bg = t.panelColor;
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(
             clipped.x, clipped.y, clipped.w, clipped.h,
@@ -585,7 +585,7 @@ void CheckBox::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
-    ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.SetBatch(&ctx.text);
     float tx = bx + boxSize + t.padding;
     float asc = ctx.font.GetAscender();
@@ -730,7 +730,7 @@ void RadioButton::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
-    ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.SetBatch(&ctx.text);
     float rtx = abs.x + t.padding + t.fontSize + t.padding;
     float asc2 = ctx.font.GetAscender();
@@ -810,7 +810,7 @@ void Switch::paint(PaintContext& ctx)
     if (!text_.empty())
     {
         ctx.font.SetFontSize(t.fontSize);
-        ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+        ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
         ctx.font.SetBatch(&ctx.text);
         float lx = swx + trackW + t.padding;
         float asc3 = ctx.font.GetAscender();

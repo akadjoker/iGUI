@@ -344,7 +344,7 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
         Widget* fwHit = hitTest(fw, x, y);
         if (fwHit) {
             bringToFront(fw);
-            if (fwHit->acceptsFocus() && fwHit != focused_)
+            if (fwHit->acceptsFocus() && fwHit->isEnabledInTree() && fwHit != focused_)
                 setFocused(fwHit);
             MouseEvent me = makeMouseEvent(x, y, btn);
             bubble(fwHit, me, &Widget::onMousePress);
@@ -368,7 +368,7 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
                 w = w->parent();
             }
         }
-        if (hit->acceptsFocus() && hit != focused_)
+        if (hit->acceptsFocus() && hit->isEnabledInTree() && hit != focused_)
             setFocused(hit);
 
         // Check for drag source on left-button press
@@ -538,7 +538,8 @@ void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
                 return;
             seen = deletions_;
         }
-        (w->*handler)(e);
+        if (w->isEnabledInTree())
+            (w->*handler)(e);
     }
 }
 
@@ -1167,6 +1168,8 @@ void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
                 return;
             seen = deletions_;
         }
+        if (!w->isEnabledInTree())
+            continue;
         fillLocal(w, e);
         (w->*handler)(e);
     }
