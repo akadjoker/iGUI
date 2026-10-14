@@ -2794,6 +2794,75 @@ static void test_code_editor_matches_brackets_after_multibyte_text()
     assert(highlightColumns(1, 2, 1) == "0:0 1:2 ");
 }
 
+// Um byte que não começa uma sequência completa desenha-se como U+FFFD. O
+// CodeEditor mede a linha com essa mesma regra nos cursores extra, no realce dos
+// parênteses, nos pontos dos espaços e no minimapa: o texto com bytes inválidos
+// pinta exatamente o mesmo que o texto com U+FFFD no lugar deles.
+static void test_code_editor_draws_invalid_utf8_as_the_replacement()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("codeutf8");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    editor->setShowWhitespace(true);
+    editor->setShowMinimap(true);
+    editor->setShowBracketMatch(true);
+    assert(app.setStage("codeutf8", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    io.deltaTime = 0.0f;
+    auto paintText = [&](const String& text)
+    {
+        editor->setText(text);
+        editor->clearExtraCursors();
+        editor->setCursorPos(0, 5);
+        editor->addCursor(0, 8);
+        editor->addCursor(2, 4);
+        app.setFocused(editor);
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        ct::Vector<float> values;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            const DrawList& list = *pass.list;
+            for (const DrawCmd& cmd: list.commands())
+            {
+                values.push_back(cmd.clip.x);
+                values.push_back(cmd.clip.w);
+                for (uint32_t i = 0; i < cmd.indexCount; ++i)
+                {
+                    const DrawVertex& vertex = list.vertices()[list.indices()[cmd.indexOffset + i]];
+                    values.push_back(vertex.x);
+                    values.push_back(vertex.y);
+                    values.push_back(vertex.u);
+                    values.push_back(vertex.v);
+                    values.push_back(static_cast<float>(vertex.color.a));
+                }
+            }
+        }
+        return values;
+    };
+    const String invalid = "Bal\xE3o() x\nab\xE3\n\t\xC3x y";
+    const String replaced = "Bal\xEF\xBF\xBDo() x\nab\xEF\xBF\xBD\n\t\xEF\xBF\xBDx y";
+    const ct::Vector<float> drawn = paintText(invalid);
+    const ct::Vector<float> expected = paintText(replaced);
+    const ct::Vector<float> again = paintText(invalid);
+    assert(!expected.empty());
+    assert(again.size() == drawn.size());
+    for (size_t i = 0; i < drawn.size(); ++i) assert(again[i] == drawn[i]);
+    assert(drawn.size() == expected.size());
+    for (size_t i = 0; i < drawn.size(); ++i) assert(drawn[i] == expected[i]);
+}
+
 static void test_scroll_view_wheel_reaches_the_end_with_both_bars()
 {
     using namespace ig::retained;
@@ -3024,6 +3093,7 @@ int main()
     test_text_edit_wrap_rows_are_stable();
     test_text_edit_scrolls_to_a_line_before_painting();
     test_code_editor_matches_brackets_after_multibyte_text();
+    test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
