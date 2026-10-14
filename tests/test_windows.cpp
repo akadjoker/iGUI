@@ -353,6 +353,61 @@ void test_dock_panel_closed_after_a_drag_keeps_its_region()
     remove(path);
 }
 
+// A dock space squeezed for one frame gets its region sizes back when it grows
+// again, and the sizes the state file keeps are the ones the user chose.
+void test_dock_sizes_survive_a_frame_of_squeezing()
+{
+    const char* path = "igui_dock_squeeze_test.ini";
+    remove(path);
+    ct::Ini previous;
+    previous.set("dock:editor", "left_width", 260.0);
+    check(previous.save(path), "the state file the test seeds could not be written");
+
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+    float width = 800.0f;
+    float leftAvailable = 0.0f;
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 900.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, width, 500.0f)))
+        {
+            if (c.beginDockPanel("C", ig::DockSlot::Center))
+            {
+                c.label("c");
+                c.endDockPanel();
+            }
+            if (c.beginDockPanel("L", ig::DockSlot::Left))
+            {
+                leftAvailable = c.availableWidth();
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float before = leftAvailable;
+    width = 300.0f;
+    harness.frame(build);
+    width = 800.0f;
+    harness.frame(build);
+    harness.frame(build);
+    check(leftAvailable == before, "the left region did not get its width back");
+    check(context.saveWindowState(), "the state file was not written");
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    check(saved.get_double("dock:editor", "left_width") == 260.0,
+            "a frame of squeezing changed the size the state file keeps");
+
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -678,6 +733,7 @@ int main()
     test_window_state_round_trips_through_ini();
     test_dock_arrangement_round_trips_through_ini();
     test_dock_panel_closed_after_a_drag_keeps_its_region();
+    test_dock_sizes_survive_a_frame_of_squeezing();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();

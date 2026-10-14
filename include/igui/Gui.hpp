@@ -1889,9 +1889,15 @@ private:
         String name;   // id the dock space was opened with, for the state file
         Rect bounds;
         Rect clip;
+        // The sizes asked for (dragged, read from the state file or set with
+        // setDockSizes) and the ones this frame uses, fitted to the dock space: a
+        // frame of squeezing must not lose what was asked for.
         float leftWidth;
         float rightWidth;
         float bottomHeight;
+        float usedLeft;
+        float usedRight;
+        float usedBottom;
         WidgetId selected[4];
         bool tabListOpen[4];
         bool tabBarHidden[4];
@@ -1900,7 +1906,9 @@ private:
         uint64_t regionFrame[4];
         ct::Vector<DockTabState> tabs;
 
-        DockSpaceState() : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f), tabs()
+        DockSpaceState()
+            : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f),
+              usedLeft(180.0f), usedRight(240.0f), usedBottom(180.0f), tabs()
         {
             for (uint32_t i = 0u; i < 4u; ++i)
             {
