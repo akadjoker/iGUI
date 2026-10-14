@@ -10679,7 +10679,7 @@ bool Context::beginTable(StringView idText, int columns, const TableStyle &style
 {
     if (!beginTable(idText, columns, width))
         return false;
-    table_.style = style;
+    configureTable(style);
     return true;
 }
 
