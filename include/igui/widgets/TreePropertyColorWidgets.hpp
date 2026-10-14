@@ -73,6 +73,8 @@ private:
 class TreeView : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TreeView, Widget);
+
     TreeView();
     ~TreeView() override;
 
@@ -131,6 +133,8 @@ private:
 class PropertyGrid : public Widget
 {
 public:
+    IG_WIDGET_CLASS(PropertyGrid, Widget);
+
     PropertyGrid();
 
     /// @brief Add a section header.
@@ -302,6 +306,8 @@ private:
 class ColorPicker : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ColorPicker, Widget);
+
     ColorPicker();
     ~ColorPicker() override;
 

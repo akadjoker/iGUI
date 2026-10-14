@@ -10,6 +10,7 @@
 #include <ct/hashset.hpp>
 #include <ct/hashmap.hpp>
 #include <any>
+#include <type_traits>
 
 
 namespace ig { namespace retained
@@ -258,6 +259,9 @@ enum class CursorType
 
 class Widget;   // forward decl for DragPayload::source
 
+template <typename T> T* widget_cast(Widget* w);
+template <typename T> const T* widget_cast(const Widget* w);
+
 struct DragPayload
 {
     String   type;        // e.g. "color", "file", "widget"
@@ -275,6 +279,16 @@ class Widget
     friend class WidgetApp;   // manages hover state
     friend class UIApp;
 public:
+    using SelfType = Widget;
+    static void* classPtrStatic()
+    {
+        static int ptr;
+        return &ptr;
+    }
+    virtual bool isClassPtr(void* ptr) const { return ptr == classPtrStatic(); }
+    static const char* typeNameStatic() { return "Widget"; }
+    virtual const char* typeName() const { return typeNameStatic(); }
+
     Widget() = default;
     virtual ~Widget();
 
@@ -431,7 +445,7 @@ public:
     template <typename T>
     T* findById(const String& id)
     {
-        return dynamic_cast<T*>(findById(id));
+        return widget_cast<T>(findById(id));
     }
 
     // ── Tags (for grouping/filtering) ─────────────────────────────────────
@@ -455,7 +469,7 @@ public:
         findByTag(tag, all);
         ct::Vector<T*> typed;
         for (auto* w : all)
-            if (auto* t = dynamic_cast<T*>(w))
+            if (auto* t = widget_cast<T>(w))
                 typed.push_back(t);
         return typed;
     }
@@ -569,6 +583,44 @@ protected:
     const ig::retained::Font* overrideFont_ = nullptr;  // optional per-widget font
 };
 
+#define IG_WIDGET_CLASS(m_class, m_inherits)                                                       \
+public:                                                                                            \
+    using SelfType = m_class;                                                                      \
+    using SuperType = m_inherits;                                                                  \
+    static void* classPtrStatic()                                                                  \
+    {                                                                                              \
+        static int ptr;                                                                            \
+        return &ptr;                                                                               \
+    }                                                                                              \
+    bool isClassPtr(void* ptr) const override                                                      \
+    {                                                                                              \
+        return (ptr == classPtrStatic()) || m_inherits::isClassPtr(ptr);                           \
+    }                                                                                              \
+    static const char* typeNameStatic()                                                            \
+    {                                                                                              \
+        return #m_class;                                                                           \
+    }                                                                                              \
+    const char* typeName() const override                                                          \
+    {                                                                                              \
+        return typeNameStatic();                                                                   \
+    }
+
+template <typename T>
+T* widget_cast(Widget* w)
+{
+    static_assert(std::is_base_of<Widget, T>::value, "widget_cast needs a Widget subclass");
+    static_assert(std::is_same<T, typename T::SelfType>::value, "T must use IG_WIDGET_CLASS");
+    return (w && w->isClassPtr(T::classPtrStatic())) ? static_cast<T*>(w) : nullptr;
+}
+
+template <typename T>
+const T* widget_cast(const Widget* w)
+{
+    static_assert(std::is_base_of<Widget, T>::value, "widget_cast needs a Widget subclass");
+    static_assert(std::is_same<T, typename T::SelfType>::value, "T must use IG_WIDGET_CLASS");
+    return (w && w->isClassPtr(T::classPtrStatic())) ? static_cast<const T*>(w) : nullptr;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  Layouts
 // ═════════════════════════════════════════════════════════════════════════════
@@ -578,6 +630,8 @@ enum class LayoutDir { Vertical, Horizontal };
 class BoxLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(BoxLayout, Widget);
+
     explicit BoxLayout(LayoutDir dir) : dir_(dir) {}
 
     void setSpacing(float s) { spacing_ = s; }

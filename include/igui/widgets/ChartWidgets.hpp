@@ -20,6 +20,8 @@ struct GradientStop {
 class GradientEditor : public Widget
 {
 public:
+    IG_WIDGET_CLASS(GradientEditor, Widget);
+
     GradientEditor();
 
     /// @brief Add a color stop at the given position.
@@ -85,6 +87,8 @@ private:
 class HistogramWidget : public Widget
 {
 public:
+    IG_WIDGET_CLASS(HistogramWidget, Widget);
+
     HistogramWidget();
 
     /// @brief Set the raw data values and recompute bins.
@@ -172,6 +176,8 @@ struct PlotSeries {
 class PlotWidget : public Widget
 {
 public:
+    IG_WIDGET_CLASS(PlotWidget, Widget);
+
     PlotWidget();
 
     /// @brief Add a named data series and return its index.
@@ -283,6 +289,8 @@ struct CurveData {
 class CurveEditor : public Widget
 {
 public:
+    IG_WIDGET_CLASS(CurveEditor, Widget);
+
     CurveEditor();
 
     /// @brief Add a named curve and return its id.

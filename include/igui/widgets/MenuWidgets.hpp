@@ -78,6 +78,8 @@ private:
 class Menu : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Menu, Widget);
+
     Menu();
     ~Menu() override;
 
@@ -140,6 +142,8 @@ private:
 class MenuBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(MenuBar, Widget);
+
     MenuBar();
     ~MenuBar() override;
 

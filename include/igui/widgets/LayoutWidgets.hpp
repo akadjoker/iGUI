@@ -21,6 +21,8 @@ namespace ig { namespace retained
 class GridLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(GridLayout, Widget);
+
     explicit GridLayout(int cols = 2);
 
     /// @brief Set the number of columns.
@@ -75,6 +77,8 @@ enum class BorderRegion { Top, Bottom, Left, Right, Center };
 class BorderLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(BorderLayout, Widget);
+
     BorderLayout() = default;
 
     // Place a widget in a region. Creates the widget and returns it.
@@ -130,6 +134,8 @@ private:
 class Collapsible : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Collapsible, Widget);
+
     explicit Collapsible(const String& title = "", bool expanded = true);
 
     /// @brief Set the section title text.
@@ -188,6 +194,8 @@ private:
 class StatusBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(StatusBar, Widget);
+
     StatusBar() = default;
 
     /// @brief Set the status bar background color.
@@ -223,6 +231,8 @@ private:
 class StackLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(StackLayout, Widget);
+
     StackLayout() = default;
 
     /// @brief Set the active child by index (0-based, -1 = none).
@@ -265,6 +275,8 @@ private:
 class FormLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(FormLayout, Widget);
+
     FormLayout() = default;
 
     // Add a row: creates a Label + places widget side by side
@@ -309,6 +321,8 @@ private:
 class FlowLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(FlowLayout, Widget);
+
     FlowLayout() = default;
 
     void setSpacing(float h, float v) { spacingH_ = h; spacingV_ = v; markDirty(); }
@@ -340,6 +354,8 @@ private:
 class Overlay : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Overlay, Widget);
+
     Overlay() = default;
 
     void layout() override;
@@ -355,6 +371,8 @@ public:
 class Splitter : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Splitter, Widget);
+
     explicit Splitter(LayoutDir dir = LayoutDir::Horizontal);
 
     /// @brief Get the layout direction.
@@ -423,6 +441,8 @@ enum class TabPosition { Top, Bottom, Left, Right };
 class TabLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TabLayout, Widget);
+
     TabLayout() = default;
 
     // Add a tab with a label. Creates widget of type T as content. Returns it.
@@ -535,6 +555,8 @@ struct AnchorRule
 class AnchorLayout : public Widget
 {
 public:
+    IG_WIDGET_CLASS(AnchorLayout, Widget);
+
     AnchorLayout() = default;
 
     /// @brief Set anchor rules for a child widget.
@@ -571,6 +593,8 @@ private:
 class Carousel : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Carousel, Widget);
+
     Carousel();
 
     // Add a page (creates widget of type T as content, returns it)
@@ -669,6 +693,8 @@ private:
 class SlidePanel : public Widget
 {
 public:
+    IG_WIDGET_CLASS(SlidePanel, Widget);
+
     enum Side { Left, Right };
 
     explicit SlidePanel(Side side = Left, float width = 260.0f);

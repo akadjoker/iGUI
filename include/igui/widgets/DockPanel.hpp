@@ -65,6 +65,8 @@ struct DockNode
 class DockPanel : public Widget
 {
 public:
+    IG_WIDGET_CLASS(DockPanel, Widget);
+
     DockPanel() = default;
     ~DockPanel() override;
 

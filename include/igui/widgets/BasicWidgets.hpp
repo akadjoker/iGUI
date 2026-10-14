@@ -14,6 +14,8 @@ class RadioButton;
 class Label : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Label, Widget);
+
     explicit Label(const String& text = "");
 
     /// @brief Set the display text.
@@ -44,6 +46,8 @@ private:
 class Spacer : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Spacer, Widget);
+
     explicit Spacer(float size = 0.0f);
 
     Vec2f sizeHint() const override;
@@ -60,6 +64,8 @@ private:
 class Line : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Line, Widget);
+
     explicit Line(float thickness = 1.0f);
 
     /// @brief Set the line thickness in pixels.
@@ -87,6 +93,8 @@ private:
 class Button : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Button, Widget);
+
     explicit Button(const String& text = "");
 
     /// @brief Set the button label text.
@@ -130,6 +138,8 @@ private:
 class ImageButton : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ImageButton, Widget);
+
     ImageButton() = default;
 
     /// @brief Set the texture, dimensions for UV calculation.
@@ -179,6 +189,8 @@ private:
 class IconButton : public Widget
 {
 public:
+    IG_WIDGET_CLASS(IconButton, Widget);
+
     enum Icon {
         Hamburger,   // ≡  three horizontal lines
         Close,       // ×  X mark
@@ -235,6 +247,8 @@ private:
 class Panel : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Panel, Widget);
+
     Panel() = default;
 
     /// @brief Set the panel background color.
@@ -256,6 +270,8 @@ private:
 class CheckBox : public Widget
 {
 public:
+    IG_WIDGET_CLASS(CheckBox, Widget);
+
     explicit CheckBox(const String& text = "");
 
     /// @brief Set the checkbox label text.
@@ -315,6 +331,8 @@ private:
 class RadioButton : public Widget
 {
 public:
+    IG_WIDGET_CLASS(RadioButton, Widget);
+
     explicit RadioButton(const String& text = "", RadioGroup* group = nullptr);
     ~RadioButton() override;
 
@@ -353,6 +371,8 @@ private:
 class Switch : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Switch, Widget);
+
     explicit Switch(const String& text = "");
 
     /// @brief Set the switch label text.
@@ -395,6 +415,8 @@ private:
 class Toolbar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Toolbar, Widget);
+
     explicit Toolbar(float height = 32.0f);
 
     /// @brief Add an icon button with callback.

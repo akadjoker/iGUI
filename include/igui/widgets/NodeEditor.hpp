@@ -54,6 +54,8 @@ struct Link {
 class NodeEditor : public Widget
 {
 public:
+    IG_WIDGET_CLASS(NodeEditor, Widget);
+
     NodeEditor();
 
     /// @brief Add a node at position (x, y).

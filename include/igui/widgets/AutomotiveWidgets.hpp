@@ -23,6 +23,8 @@ namespace ig { namespace retained
 class RadialGauge : public Widget
 {
 public:
+    IG_WIDGET_CLASS(RadialGauge, Widget);
+
     RadialGauge(float minVal = 0.0f, float maxVal = 260.0f, float value = 0.0f);
 
     /// @brief Get the current value.
@@ -123,6 +125,8 @@ private:
 class PowerBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(PowerBar, Widget);
+
     PowerBar(float minVal = -100.0f, float maxVal = 200.0f, float value = 0.0f);
 
     /// @brief Get the current value.
@@ -175,6 +179,8 @@ private:
 class InfoTile : public Widget
 {
 public:
+    IG_WIDGET_CLASS(InfoTile, Widget);
+
     InfoTile(const String& icon = "", const String& value = "",
              const String& suffix = "");
 
@@ -208,6 +214,8 @@ private:
 class DriveMode : public Widget
 {
 public:
+    IG_WIDGET_CLASS(DriveMode, Widget);
+
     DriveMode();
 
     /// @brief Add a drive mode and return its index.
@@ -242,6 +250,8 @@ private:
 class DigitalSpeed : public Widget
 {
 public:
+    IG_WIDGET_CLASS(DigitalSpeed, Widget);
+
     DigitalSpeed(float value = 0.0f);
 
     /// @brief Get the current speed value.
@@ -280,6 +290,8 @@ private:
 class BatteryGauge : public Widget
 {
 public:
+    IG_WIDGET_CLASS(BatteryGauge, Widget);
+
     BatteryGauge(float percent = 100.0f);
 
     /// @brief Get the current charge percentage.

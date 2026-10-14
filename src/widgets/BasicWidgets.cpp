@@ -69,7 +69,7 @@ Line::Line(float thickness) : thickness_(thickness) {}
 
 Widget::Vec2f Line::sizeHint() const
 {
-    auto* p = dynamic_cast<BoxLayout*>(parent());
+    auto* p = widget_cast<BoxLayout>(parent());
     if (p && p->dir() == LayoutDir::Horizontal)
         return {thickness_, 0.0f};
     return {0.0f, thickness_};
@@ -82,7 +82,7 @@ void Line::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    auto* p = dynamic_cast<BoxLayout*>(parent());
+    auto* p = widget_cast<BoxLayout>(parent());
     bool vertical = p && p->dir() == LayoutDir::Horizontal;
 
     ctx.line.SetColor(color_.r, color_.g, color_.b, color_.a);

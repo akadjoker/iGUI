@@ -36,6 +36,8 @@ class InputBox;
 class FileDialog : public FloatWindow
 {
 public:
+    IG_WIDGET_CLASS(FileDialog, FloatWindow);
+
     enum class Mode { Open, Save, SelectFolder, OpenImage };
     enum class ViewMode { Detail, List, Icon };
 

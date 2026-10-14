@@ -33,6 +33,8 @@ struct AssetItem
 class AssetBrowser : public Widget
 {
 public:
+    IG_WIDGET_CLASS(AssetBrowser, Widget);
+
     AssetBrowser();
 
     /// @brief Add an asset item.

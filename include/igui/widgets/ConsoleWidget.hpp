@@ -38,6 +38,8 @@ struct LogEntry {
 class ConsoleWidget : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ConsoleWidget, Widget);
+
     ConsoleWidget();
 
     /// @brief Log a message at a given level.

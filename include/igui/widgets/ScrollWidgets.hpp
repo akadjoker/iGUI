@@ -22,6 +22,8 @@ enum class ScrollBarOrientation { Horizontal, Vertical };
 class ScrollBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ScrollBar, Widget);
+
     explicit ScrollBar(ScrollBarOrientation orientation = ScrollBarOrientation::Vertical);
 
     /// @brief Set the total content size.
@@ -76,6 +78,8 @@ private:
 class ScrollView : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ScrollView, Widget);
+
     ScrollView();
 
     // Set the single content widget (takes ownership). Returns it for chaining.
@@ -126,6 +130,8 @@ private:
 class ListBox : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ListBox, Widget);
+
     ListBox() = default;
 
     /// @brief Add a string item to the list.
@@ -176,6 +182,8 @@ private:
 class ListWidget : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ListWidget, Widget);
+
     ListWidget() = default;
 
     // Add a new row — creates a child widget of type T inside the list.

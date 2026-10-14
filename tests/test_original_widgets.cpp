@@ -1305,6 +1305,147 @@ static void test_signal_handlers_can_change_the_signal()
     assert(!after);
 }
 
+static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
+              "SuperType must name the declared base");
+static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
+              "SuperType must name the declared base");
+
+// widget_cast e typeName seguem a cadeia declarada em IG_WIDGET_CLASS, sem RTTI.
+static void test_widget_cast_follows_the_declared_chain()
+{
+    using namespace ig::retained;
+    Widget root;
+    auto* label = root.createChild<Label>("a");
+    auto* button = root.createChild<Button>("b");
+    auto* editor = root.createChild<CodeEditor>();
+    auto* alert = root.createChild<AlertDialog>("t", "m");
+    editor->setId("editor");
+    editor->addTag("code");
+    label->setId("label");
+
+    Widget* asWidget = editor;
+    assert(widget_cast<Widget>(asWidget) == asWidget);
+    assert(widget_cast<CodeEditor>(asWidget) == editor);
+    assert(widget_cast<TextEdit>(asWidget) == static_cast<TextEdit*>(editor));
+    assert(widget_cast<Label>(asWidget) == nullptr);
+    assert(widget_cast<Label>(static_cast<Widget*>(button)) == nullptr);
+    assert(widget_cast<Button>(static_cast<Widget*>(button)) == button);
+    assert(widget_cast<TextEdit>(static_cast<Widget*>(label)) == nullptr);
+
+    TextEdit plain;
+    assert(widget_cast<CodeEditor>(static_cast<Widget*>(&plain)) == nullptr);
+    assert(widget_cast<TextEdit>(static_cast<Widget*>(&plain)) == &plain);
+
+    assert(widget_cast<Dialog>(static_cast<Widget*>(alert)) == static_cast<Dialog*>(alert));
+    assert(widget_cast<AlertDialog>(static_cast<Widget*>(alert)) == alert);
+    assert(widget_cast<ConfirmDialog>(static_cast<Widget*>(alert)) == nullptr);
+
+    assert(widget_cast<Label>(static_cast<Widget*>(nullptr)) == nullptr);
+
+    const Widget* constWidget = label;
+    assert(widget_cast<Label>(constWidget) == label);
+    assert(widget_cast<Button>(constWidget) == nullptr);
+    const Label* constLabel = widget_cast<Label>(constWidget);
+    assert(constLabel != nullptr);
+
+    assert(String(label->typeName()) == "Label");
+    assert(String(asWidget->typeName()) == "CodeEditor");
+    assert(String(static_cast<Widget*>(alert)->typeName()) == "AlertDialog");
+    assert(String(root.typeName()) == "Widget");
+    assert(String(CodeEditor::typeNameStatic()) == "CodeEditor");
+
+    assert(root.findById<CodeEditor>("editor") == editor);
+    assert(root.findById<Label>("editor") == nullptr);
+    assert(root.findById<Label>("label") == label);
+    assert(root.findByTag<TextEdit>("code").size() == 1u);
+    assert(root.findByTag<Label>("code").empty());
+}
+
+// O serializador grava e lê os 27 tipos da lista com os mesmos nomes de sempre; um
+// widget fora da lista continua a gravar-se como "Widget" (e a ler-se como tal).
+static void test_serializer_round_trips_every_listed_type()
+{
+    using namespace ig::retained;
+    WidgetSerializer::registerBuiltinTypes();
+
+    auto* root = new BoxLayout(LayoutDir::Vertical);
+    static const char* const expected[] = {
+        "ImageView", "ScrollView", "ScrollBar", "Canvas", "ProgressBar", "Slider",
+        "ComboBox", "ListWidget", "ListBox", "RadioButton", "Switch", "CheckBox",
+        "Button", "Line", "Spacer", "Label", "Panel", "StatusBar", "Collapsible",
+        "StackLayout", "FormLayout", "FlowLayout", "Overlay", "Splitter",
+        "GridLayout", "BorderLayout", "BoxLayout"};
+    root->createChild<ImageView>();
+    root->createChild<ScrollView>();
+    root->createChild<ScrollBar>();
+    root->createChild<Canvas>();
+    root->createChild<ProgressBar>();
+    root->createChild<Slider>();
+    root->createChild<ComboBox>();
+    root->createChild<ListWidget>();
+    root->createChild<ListBox>();
+    root->createChild<RadioButton>("r");
+    root->createChild<Switch>("s");
+    root->createChild<CheckBox>("c");
+    root->createChild<Button>("b");
+    root->createChild<Line>();
+    root->createChild<Spacer>(8.0f);
+    root->createChild<Label>("l");
+    root->createChild<Panel>();
+    root->createChild<StatusBar>();
+    root->createChild<Collapsible>("c");
+    root->createChild<StackLayout>();
+    root->createChild<FormLayout>();
+    root->createChild<FlowLayout>();
+    root->createChild<Overlay>();
+    root->createChild<Splitter>();
+    root->createChild<GridLayout>();
+    root->createChild<BorderLayout>();
+    root->createChild<BoxLayout>(LayoutDir::Horizontal);
+    const size_t listed = sizeof(expected) / sizeof(expected[0]);
+    assert(listed == 27u);
+    assert(root->children().size() == listed);
+
+    root->createChild<ImageButton>();
+    auto* tabs = root->createChild<TabLayout>();
+    tabs->setTabPosition(TabPosition::Left);
+    tabs->setTabsClosable(true);
+    tabs->setTabBarSize(40.0f);
+    auto* anchors = root->createChild<AnchorLayout>();
+    anchors->setPadding(1.0f, 2.0f, 3.0f, 4.0f);
+
+    const json saved = WidgetSerializer::save(root);
+    assert(String(saved["type"].str()) == "BoxLayout");
+    assert(saved["children"].size() == listed + 3u);
+    for (size_t i = 0; i < listed; ++i)
+    {
+        assert(WidgetSerializer::typeName(root->children()[i]) == expected[i]);
+        assert(String(saved["children"][i]["type"].str()) == expected[i]);
+    }
+    assert(WidgetSerializer::typeName(root->children()[listed]) == "Widget");
+    assert(WidgetSerializer::typeName(root->children()[listed + 1]) == "TabLayout");
+    assert(WidgetSerializer::typeName(root->children()[listed + 2]) == "AnchorLayout");
+    assert(WidgetSerializer::typeName(nullptr) == "Widget");
+
+    Widget destination;
+    Widget* loaded = WidgetSerializer::load(saved, &destination);
+    assert(loaded != nullptr);
+    assert(loaded->children().size() == listed + 3u);
+    for (size_t i = 0; i < listed; ++i)
+        assert(WidgetSerializer::typeName(loaded->children()[i]) == expected[i]);
+    auto* loadedTabs = widget_cast<TabLayout>(loaded->children()[listed + 1]);
+    assert(loadedTabs != nullptr);
+    assert(loadedTabs->tabPosition() == TabPosition::Left);
+    assert(loadedTabs->tabsClosable());
+    assert(loadedTabs->tabBarSize() == 40.0f);
+    auto* loadedAnchors = widget_cast<AnchorLayout>(loaded->children()[listed + 2]);
+    assert(loadedAnchors != nullptr);
+    assert(loadedAnchors->padding().top == 1.0f && loadedAnchors->padding().right == 2.0f);
+    assert(loadedAnchors->padding().bottom == 3.0f && loadedAnchors->padding().left == 4.0f);
+
+    delete root;
+}
+
 int main()
 {
     using namespace ig;
@@ -1340,6 +1481,8 @@ int main()
     test_widget_app_clock_keeps_short_frames();
     test_key_handler_can_remove_its_widget();
     test_signal_handlers_can_change_the_signal();
+    test_widget_cast_follows_the_declared_chain();
+    test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

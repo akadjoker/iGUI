@@ -24,6 +24,8 @@ namespace ig { namespace retained
 class FloatWindow : public Widget
 {
 public:
+    IG_WIDGET_CLASS(FloatWindow, Widget);
+
     explicit FloatWindow(const String& title = "Window");
     ~FloatWindow() override;
 
@@ -137,6 +139,8 @@ private:
 class Canvas : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Canvas, Widget);
+
     Canvas() = default;
 
     /// @brief Set the background color.
@@ -167,6 +171,8 @@ private:
 class ImageView : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ImageView, Widget);
+
     ImageView() = default;
 
     /// @brief Set the texture, width and height.
@@ -210,6 +216,8 @@ private:
 class VideoCanvas : public Widget
 {
 public:
+    IG_WIDGET_CLASS(VideoCanvas, Widget);
+
     /// How the frame is sized at zoom 1.
     enum class Fit { Contain, Cover, Actual };
 
@@ -291,6 +299,8 @@ private:
 class PageView : public Widget
 {
 public:
+    IG_WIDGET_CLASS(PageView, Widget);
+
     enum Transition { None, Fade, SlideLeft, SlideRight, SlideAuto };
 
     PageView() = default;

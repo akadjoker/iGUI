@@ -22,38 +22,62 @@ void WidgetSerializer::registerType(const String& typeName, WidgetFactory factor
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  Type name from widget (dynamic_cast chain, most derived first)
+//  Type name from widget (serializable types only, most derived first)
 // ═════════════════════════════════════════════════════════════════════════════
+
+namespace {
+
+struct SerializableType
+{
+    void* classPtr;
+    const char* name;
+};
+
+template <typename T>
+SerializableType serializableType()
+{
+    return {T::classPtrStatic(), T::typeNameStatic()};
+}
+
+} // namespace
 
 String WidgetSerializer::typeName(const Widget* w)
 {
-    if (dynamic_cast<const ImageView*>(w))     return "ImageView";
-    if (dynamic_cast<const ScrollView*>(w))    return "ScrollView";
-    if (dynamic_cast<const ScrollBar*>(w))     return "ScrollBar";
-    if (dynamic_cast<const Canvas*>(w))        return "Canvas";
-    if (dynamic_cast<const ProgressBar*>(w))   return "ProgressBar";
-    if (dynamic_cast<const Slider*>(w))        return "Slider";
-    if (dynamic_cast<const ComboBox*>(w))      return "ComboBox";
-    if (dynamic_cast<const ListWidget*>(w))    return "ListWidget";
-    if (dynamic_cast<const ListBox*>(w))       return "ListBox";
-    if (dynamic_cast<const RadioButton*>(w))   return "RadioButton";
-    if (dynamic_cast<const Switch*>(w))        return "Switch";
-    if (dynamic_cast<const CheckBox*>(w))      return "CheckBox";
-    if (dynamic_cast<const Button*>(w))        return "Button";
-    if (dynamic_cast<const Line*>(w))          return "Line";
-    if (dynamic_cast<const Spacer*>(w))        return "Spacer";
-    if (dynamic_cast<const Label*>(w))         return "Label";
-    if (dynamic_cast<const Panel*>(w))         return "Panel";
-    if (dynamic_cast<const StatusBar*>(w))     return "StatusBar";
-    if (dynamic_cast<const Collapsible*>(w))   return "Collapsible";
-    if (dynamic_cast<const StackLayout*>(w))   return "StackLayout";
-    if (dynamic_cast<const FormLayout*>(w))    return "FormLayout";
-    if (dynamic_cast<const FlowLayout*>(w))    return "FlowLayout";
-    if (dynamic_cast<const Overlay*>(w))       return "Overlay";
-    if (dynamic_cast<const Splitter*>(w))      return "Splitter";
-    if (dynamic_cast<const GridLayout*>(w))    return "GridLayout";
-    if (dynamic_cast<const BorderLayout*>(w))  return "BorderLayout";
-    if (dynamic_cast<const BoxLayout*>(w))     return "BoxLayout";
+    static const SerializableType types[] = {
+        serializableType<ImageView>(),
+        serializableType<ScrollView>(),
+        serializableType<ScrollBar>(),
+        serializableType<Canvas>(),
+        serializableType<ProgressBar>(),
+        serializableType<Slider>(),
+        serializableType<ComboBox>(),
+        serializableType<ListWidget>(),
+        serializableType<ListBox>(),
+        serializableType<RadioButton>(),
+        serializableType<Switch>(),
+        serializableType<CheckBox>(),
+        serializableType<Button>(),
+        serializableType<Line>(),
+        serializableType<Spacer>(),
+        serializableType<Label>(),
+        serializableType<Panel>(),
+        serializableType<StatusBar>(),
+        serializableType<Collapsible>(),
+        serializableType<StackLayout>(),
+        serializableType<FormLayout>(),
+        serializableType<FlowLayout>(),
+        serializableType<Overlay>(),
+        serializableType<Splitter>(),
+        serializableType<GridLayout>(),
+        serializableType<BorderLayout>(),
+        serializableType<BoxLayout>(),
+        serializableType<TabLayout>(),
+        serializableType<AnchorLayout>(),
+    };
+    if (!w) return "Widget";
+    for (const auto& type : types)
+        if (w->isClassPtr(type.classPtr))
+            return type.name;
     return "Widget";
 }
 
@@ -479,6 +503,20 @@ json WidgetSerializer::save(const Widget* root)
             j["padding"] = edgesToJson(p);
         if (w->mainAlign() != MainAlign::Start)
             j["mainAlign"] = mainAlignToStr(w->mainAlign());
+    }
+    else if (type == "TabLayout") {
+        auto* w = static_cast<const TabLayout*>(root);
+        if (w->tabPosition() == TabPosition::Bottom) j["tabPosition"] = "Bottom";
+        else if (w->tabPosition() == TabPosition::Left) j["tabPosition"] = "Left";
+        else if (w->tabPosition() == TabPosition::Right) j["tabPosition"] = "Right";
+        if (w->tabsClosable()) j["closable"] = true;
+        j["tabBarSize"] = w->tabBarSize();
+    }
+    else if (type == "AnchorLayout") {
+        auto* w = static_cast<const AnchorLayout*>(root);
+        const auto& p = w->padding();
+        if (p.top != 0 || p.right != 0 || p.bottom != 0 || p.left != 0)
+            j["padding"] = edgesToJson(p);
     }
 
     if (!root->children().empty())

@@ -17,6 +17,8 @@ namespace ig { namespace retained
 class ComboBox : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ComboBox, Widget);
+
     ComboBox();
 
     /// @brief Add an item to the dropdown list.

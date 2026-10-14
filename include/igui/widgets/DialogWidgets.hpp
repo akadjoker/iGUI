@@ -26,6 +26,8 @@ namespace ig { namespace retained
 class Dialog : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Dialog, Widget);
+
     enum class Role { Normal, Cancel, Accept, Danger };
 
     struct ButtonDef {
@@ -89,6 +91,8 @@ public:
 class AlertDialog : public Dialog
 {
 public:
+    IG_WIDGET_CLASS(AlertDialog, Dialog);
+
     AlertDialog(const String& title, const String& message);
 
     /// @brief Show a simple alert with a single OK button.
@@ -105,6 +109,8 @@ public:
 class ConfirmDialog : public Dialog
 {
 public:
+    IG_WIDGET_CLASS(ConfirmDialog, Dialog);
+
     ConfirmDialog(const String& title, const String& message,
                   ct::Function<void()> onConfirm = nullptr,
                   ct::Function<void()> onCancel  = nullptr);
@@ -173,6 +179,8 @@ class TextInput;
 class MessageBox : public FloatWindow
 {
 public:
+    IG_WIDGET_CLASS(MessageBox, FloatWindow);
+
     enum Type     { Info, Warning, Error, Question };
     enum Buttons  { Ok, OkCancel, YesNo, YesNoCancel };
     enum Result   { ResultOk, ResultCancel, ResultYes, ResultNo };
@@ -207,6 +215,8 @@ private:
 class InputBox : public FloatWindow
 {
 public:
+    IG_WIDGET_CLASS(InputBox, FloatWindow);
+
     InputBox(const String& title, const String& prompt = "");
 
     /// @brief Set the input text.

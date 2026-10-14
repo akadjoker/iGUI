@@ -149,7 +149,7 @@ int main(int argc, char **argv)
             ig::retained::PropertyGrid *grid = nullptr;
             auto findGrid = [&](auto &&self, ig::retained::Widget *widget) -> void {
                 if (!widget || grid) return;
-                if (auto *candidate = dynamic_cast<ig::retained::PropertyGrid *>(widget);
+                if (auto *candidate = ig::retained::widget_cast<ig::retained::PropertyGrid>(widget);
                     candidate && candidate->isVisible()) {
                     grid = candidate;
                     return;

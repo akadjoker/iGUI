@@ -13,6 +13,8 @@ namespace ig { namespace retained
 class Slider : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Slider, Widget);
+
     Slider(float minVal = 0.0f, float maxVal = 1.0f, float value = 0.5f);
 
     /// @brief Get the current value.
@@ -55,6 +57,8 @@ private:
 class ProgressBar : public Widget
 {
 public:
+    IG_WIDGET_CLASS(ProgressBar, Widget);
+
     ProgressBar(float minVal = 0.0f, float maxVal = 1.0f, float value = 0.0f);
 
     /// @brief Get the current progress value.
@@ -115,6 +119,8 @@ private:
 class SpinBox : public Widget
 {
 public:
+    IG_WIDGET_CLASS(SpinBox, Widget);
+
     SpinBox(float minVal = 0.0f, float maxVal = 100.0f, float value = 0.0f, float step = 1.0f);
 
     /// @brief Get the current value.
@@ -196,6 +202,8 @@ struct Date {
 class DatePicker : public Widget
 {
 public:
+    IG_WIDGET_CLASS(DatePicker, Widget);
+
     DatePicker();
 
     /// @brief Get the selected date.
@@ -243,6 +251,8 @@ struct Time {
 class TimePicker : public Widget
 {
 public:
+    IG_WIDGET_CLASS(TimePicker, Widget);
+
     TimePicker();
 
     /// @brief Get the current time.

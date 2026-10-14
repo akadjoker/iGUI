@@ -27,6 +27,8 @@ enum class GizmoAxis  { None, X, Y, XY };   // XY = center/free move
 class Gizmo2D : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Gizmo2D, Widget);
+
     Gizmo2D();
 
     /// @brief Set the gizmo position in parent space.
@@ -140,6 +142,8 @@ enum class GizmoAxis3D { None, X, Y, Z, XY, XZ, YZ, XYZ };
 class Gizmo3D : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Gizmo3D, Widget);
+
     Gizmo3D();
 
     /// @brief Set the view and projection matrices (column-major).
