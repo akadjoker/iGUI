@@ -6473,6 +6473,50 @@ void test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline()
     assert(bullet.height == withoutSpaces.height);
 }
 
+// A fonte de um arrasto não tira o press ao item a que pertence: depois de um
+// button o arrasto começa, e antes de um selectable o clique ainda chega a ele.
+void test_drag_source_leaves_the_press_to_its_item()
+{
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Rect item;
+        bool dragging = false;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+            c.button("item", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+            item = c.itemRect();
+            dragging =
+                    c.beginDragSource(42u, 7u, 1u, "item", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f)) ||
+                    dragging;
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.drag(item.x + 20.0f, item.y + 10.0f, item.x + 200.0f, item.y + 150.0f, build, 6);
+        assert(dragging);
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Rect item;
+        bool clicked = false;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+            c.beginDragSource(42u, 7u, 1u, "item", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+            if (c.selectable("item", false, ig::Rect(0.0f, 0.0f, 120.0f, 28.0f))) clicked = true;
+            item = c.itemRect();
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.click(item.x + 20.0f, item.y + 10.0f, build);
+        assert(clicked);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7508,6 +7552,7 @@ int main()
     test_dragging_past_a_neighbour_leaves_it_in_place();
     test_toast_with_the_same_id_is_updated();
     test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline();
+    test_drag_source_leaves_the_press_to_its_item();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();

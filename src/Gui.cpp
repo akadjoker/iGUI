@@ -8286,10 +8286,10 @@ bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, Str
     const Rect visible = intersect(rect, contentClip());
     const uint32_t left = buttonIndex(PointerButton::Left);
     const WidgetId widget = combineIds(makeWidgetId(StringView("drag source")), source);
-    const bool pressedHere = itemPressedIn(visible, left) && activeWidget_ == InvalidWidgetId;
-    if (pressedHere)
+    const bool ownerFree = activeWidget_ == InvalidWidgetId ||
+                           (item_.id != InvalidWidgetId && activeWidget_ == item_.id);
+    if (itemPressedIn(visible, left) && ownerFree)
     {
-        activeWidget_ = widget;
         dragDrop_.widget = widget;
         dragDrop_.payload.type = type;
         dragDrop_.payload.source = source;
@@ -8301,7 +8301,7 @@ bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, Str
         dragDrop_.accepted = false;
     }
 
-    if (dragDrop_.armed && dragDrop_.widget == widget && activeWidget_ == widget)
+    if (dragDrop_.armed && dragDrop_.widget == widget)
     {
         const float deltaX = pointer_.position.x - dragDrop_.pressedPosition.x;
         const float deltaY = pointer_.position.y - dragDrop_.pressedPosition.y;
