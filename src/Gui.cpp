@@ -6193,17 +6193,14 @@ bool Context::stepperInt(StringView labelText, int &value, int minimum, int maxi
     const bool decrementClicked = itemClicked(decrement, clip, decrementId);
     const bool incrementClicked = itemClicked(increment, clip, incrementId);
 
-    bool changed = false;
-    if (decrementClicked && value > minimum)
-    {
-        --value;
-        changed = true;
-    }
-    if (incrementClicked && value < maximum)
-    {
-        ++value;
-        changed = true;
-    }
+    // A click steps and lands inside the range, also from a value that was
+    // outside it.
+    const int previous = value;
+    if (decrementClicked)
+        value = value > maximum ? maximum : (value > minimum ? value - 1 : minimum);
+    if (incrementClicked)
+        value = value < minimum ? minimum : (value < maximum ? value + 1 : maximum);
+    const bool changed = value != previous;
 
     const TextMetrics labelMetrics = measureText(theme_.font, text, theme_.fontSize);
     drawText(*drawList, theme_.font, text,
