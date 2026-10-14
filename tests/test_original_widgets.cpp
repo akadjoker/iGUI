@@ -1722,6 +1722,90 @@ static void test_invalid_utf8_stays_inside_the_text()
     assert(edit.lineAt(1).empty());
 }
 
+// O TextEdit com word-wrap refaz as linhas visuais depois de qualquer edição:
+// juntar duas linhas com Backspace, apagar uma seleção de várias linhas e
+// apagar dentro de uma linha que deixa de precisar de quebra. O clique usa as
+// linhas visuais, por isso cai onde o texto está de facto.
+static void test_text_edit_rewraps_after_every_edit()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("rewrap");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 200.0f, 200.0f });
+    edit->setShowLineNumbers(false);
+    edit->setWordWrap(true);
+    assert(app.setStage("rewrap", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    auto paint = [&app, font]()
+    {
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto clickAt = [edit](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.localX = x;
+        press.localY = y;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+        return edit->cursorPos();
+    };
+    auto key = [edit](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        edit->onKeyPress(press);
+    };
+
+    edit->setText("abc\ndefgh\nijklmnop");
+    paint();
+    edit->setCursorPos(1, 0);
+    key(Key::Backspace);
+    paint();
+    TextEdit::TextPos endOfFirst{ 0, 8 };
+    assert(clickAt(190.0f, rowHeight * 0.5f) == endOfFirst);
+
+    edit->setText("abc\ndefgh\nij");
+    paint();
+    edit->setSelection({ 0, 1 }, { 1, 2 });
+    key(Key::Delete);
+    paint();
+    TextEdit::TextPos endOfJoined{ 0, 4 };
+    assert(clickAt(190.0f, rowHeight * 0.5f) == endOfJoined);
+
+    edit->setText(String(40, 'a'));
+    paint();
+    TextEdit::TextPos secondRow = clickAt(1.0f, rowHeight * 1.5f);
+    assert(secondRow.line == 0 && secondRow.col > 0);
+    edit->setCursorPos(0, 40);
+    for (int i = 0; i < 35; ++i) key(Key::Backspace);
+    paint();
+    TextEdit::TextPos start{ 0, 0 };
+    assert(clickAt(1.0f, rowHeight * 1.5f) == start);
+
+    edit->setText(String(40, 'a'));
+    paint();
+    edit->setCursorPos(0, 0);
+    for (int i = 0; i < 35; ++i) key(Key::Delete);
+    paint();
+    assert(clickAt(1.0f, rowHeight * 1.5f) == start);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1904,6 +1988,7 @@ int main()
     test_page_view_hides_the_pages_it_leaves();
     test_disabled_fields_ignore_input();
     test_invalid_utf8_stays_inside_the_text();
+    test_text_edit_rewraps_after_every_edit();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

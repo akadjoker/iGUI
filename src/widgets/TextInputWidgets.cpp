@@ -809,6 +809,7 @@ void TextEdit::deleteSelection()
         lines_.erase(lines_.begin() + s.line + 1, lines_.begin() + e.line + 1);
     }
     cursor_ = s; selAnchor_ = cursor_;
+    wrapDirty_ = true;
 }
 
 void TextEdit::insertTextAtCursor(const String& t)
@@ -871,6 +872,7 @@ void TextEdit::mergeWithPrevLine()
     cursor_.line--;
     cursor_.col = prevCol;
     selAnchor_ = cursor_;
+    wrapDirty_ = true;
 }
 
 void TextEdit::mergeWithNextLine()
@@ -1448,6 +1450,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
                 size_t byteStart = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
                 lines_[cursor_.line].erase(byteStart, byteEnd - byteStart);
                 selAnchor_ = cursor_;
+                wrapDirty_ = true;
             }
             else { mergeWithPrevLine(); }
             ensureCursorVisible(); markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);
@@ -1462,6 +1465,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
                 size_t be = utf8ByteOffset(lines_[cursor_.line], cursor_.col + 1);
                 lines_[cursor_.line].erase(bs, be - bs);
                 selAnchor_ = cursor_;
+                wrapDirty_ = true;
             }
             else { mergeWithNextLine(); }
             markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);
