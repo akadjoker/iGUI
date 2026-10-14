@@ -899,9 +899,63 @@ float TextEdit::computeLineHeight(const ig::retained::Font& font) const
 
 // ── Word-wrap ─────────────────────────────────────────────────────────────────
 
+TextEdit::WrapLine TextEdit::measureLine(PaintContext& ctx, const String& line, float textW) const
+{
+    WrapLine out;
+    out.width = ctx.font.GetTextWidth(expandTabs(line).c_str());
+
+    ct::Vector<float> widths;
+    ct::Vector<bool> spaces;
+    char glyph[8];
+    for (size_t b = 0; b < line.size();)
+    {
+        const int n = utf8CharLen(line.c_str() + b);
+        for (int k = 0; k < n; ++k) glyph[k] = line[b + k];
+        glyph[n] = '\0';
+        widths.push_back(ctx.font.GetTextWidth(glyph));
+        spaces.push_back(line[b] == ' ');
+        b += static_cast<size_t>(n);
+    }
+    const int len = static_cast<int>(widths.size());
+    if (len == 0 || !wordWrap_ || textW <= 0) {
+        out.rows.push_back({0, len});
+        return out;
+    }
+
+    int start = 0;
+    while (start < len)
+    {
+        int end = start, lastSpace = -1;
+        float w = 0;
+        while (end < len)
+        {
+            if (w + widths[end] > textW && end > start) break;
+            if (spaces[end]) lastSpace = end;
+            w += widths[end]; end++;
+        }
+        if (end < len && lastSpace > start) end = lastSpace + 1;
+        out.rows.push_back({start, end});
+        start = end;
+    }
+    return out;
+}
+
 void TextEdit::rebuildWrap(PaintContext& ctx)
 {
     float textW = rect_.w - gutterW_ - Theme::instance().textEditPadding * 2;
+    WrapKey key;
+    key.width   = wordWrap_ ? textW : 0.0f;
+    key.font    = ctx.buFont;
+    key.scale   = ctx.font.scale;
+    key.tabSize = tabSize_;
+    key.wrap    = wordWrap_;
+    if (!(key == wrapKey_)) {
+        wrapCache_.clear();
+        wrapKey_ = key;
+    }
+
+    ct::HashMap<String, WrapLine> cache;
+    cache.reserve(lines_.size());
     wrapRows_.clear();
     wrapRows_.resize(lines_.size());
     wrapWidth_   = textW;
@@ -909,35 +963,20 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
 
     for (int i = 0; i < static_cast<int>(lines_.size()); ++i)
     {
-        int len    = lineColCount(i);
-        String expanded = expandTabs(lines_[i]);
-        float lineW = ctx.font.GetTextWidth(expanded.c_str());
-        if (lineW > maxContentW_) maxContentW_ = lineW;
+        const String& line = lines_[i];
+        WrapLine reused;
+        WrapLine* entry = nullptr;
+        if (wrapCache_.erase(line, reused))
+            entry = &cache.put(line, std::move(reused));
+        else if (!(entry = cache.find(line)))
+            entry = &cache.put(line, measureLine(ctx, line, textW));
+        if (entry->width > maxContentW_) maxContentW_ = entry->width;
 
         // If a line filter hides this line, give it 0 visual rows
         if (lineFilterCb_ && !lineFilterCb_(i)) continue;
-
-        if (len == 0 || !wordWrap_ || textW <= 0) {
-            wrapRows_[i].push_back({0, len}); continue;
-        }
-
-        int start = 0;
-        while (start < len)
-        {
-            int end = start, lastSpace = -1;
-            float w = 0;
-            while (end < len)
-            {
-                float cw = ctx.font.GetTextWidth(utf8Substr(lines_[i], end, end + 1).c_str());
-                if (w + cw > textW && end > start) break;
-                if (utf8Substr(lines_[i], end, end + 1)[0] == ' ') lastSpace = end;
-                w += cw; end++;
-            }
-            if (end < len && lastSpace > start) end = lastSpace + 1;
-            wrapRows_[i].push_back({start, end});
-            start = end;
-        }
+        wrapRows_[i] = entry->rows;
     }
+    wrapCache_ = std::move(cache);
     wrapDirty_ = false;
 }
 

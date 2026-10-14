@@ -238,7 +238,7 @@ Só por leitura:
 - [x] [WidgetApp.hpp:254](../include/igui/widgets/WidgetApp.hpp#L254) e 260 —
       `setStatusText` e `statusBarHeight` estão declaradas e nunca definidas, e o
       `statusBar_` é sempre nulo.
-- [ ] Eficiência: o `fireEvent("move")` aloca strings e copia callbacks em cada
+- [x] Eficiência: o `fireEvent("move")` aloca strings e copia callbacks em cada
       movimento do rato, por cada widget da cadeia; o `TextEdit::rebuildWrap`
       volta a medir o documento inteiro a cada tecla.
 

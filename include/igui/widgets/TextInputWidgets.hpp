@@ -294,6 +294,26 @@ private:
     float wrapWidth_   = 0;
     float maxContentW_ = 0;
 
+    // Rows and width of each distinct line, kept between rebuilds so an edit
+    // only measures the lines it changed.
+    struct WrapLine { ct::Vector<WrapRow> rows; float width = 0; };
+    struct WrapKey
+    {
+        float width = -1.0f;
+        const ig::retained::Font* font = nullptr;
+        float scale = 0.0f;
+        int   tabSize = 0;
+        bool  wrap = false;
+        bool operator==(const WrapKey& o) const
+        {
+            return width == o.width && font == o.font && scale == o.scale &&
+                   tabSize == o.tabSize && wrap == o.wrap;
+        }
+    };
+    ct::HashMap<String, WrapLine> wrapCache_;
+    WrapKey wrapKey_;
+    WrapLine measureLine(PaintContext& ctx, const String& line, float textW) const;
+
     // Internal helpers
     float colToX(PaintContext& ctx, int line, int col) const;
     int   xToCol(PaintContext& ctx, int line, float x) const;
