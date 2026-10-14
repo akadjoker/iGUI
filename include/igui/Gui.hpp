@@ -1854,9 +1854,18 @@ private:
         String title;
         DockSlot slot;
         uint64_t lastSeenFrame;
-        bool *open;
+        // O ponteiro open de um painel só vale dentro da chamada que o recebeu: a
+        // tab guarda se se pode fechar e o pedido do X, e é o beginDockPanel desse
+        // painel que escreve o *open.
+        bool closable;
+        bool closeRequested;
+        bool closed;
 
-        DockTabState() : id(InvalidWidgetId), title(), slot(DockSlot::Center), lastSeenFrame(0u), open(nullptr) {}
+        DockTabState()
+            : id(InvalidWidgetId), title(), slot(DockSlot::Center), lastSeenFrame(0u),
+              closable(false), closeRequested(false), closed(false)
+        {
+        }
     };
 
     struct DockSpaceState

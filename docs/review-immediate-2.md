@@ -127,7 +127,7 @@ nunca perde entradas.
 
 Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
 
-- [ ] **D1. O `bool *open` de um painel é lido e escrito fora da chamada que o
+- [x] **D1. O `bool *open` de um painel é lido e escrito fora da chamada que o
       recebeu** — [Gui.cpp:9978](../src/Gui.cpp#L9978), 10050, 10136. Um `open`
       apagado dá heap-use-after-free no ASan; com o padrão do ImGui (um `bool`
       local por painel) dá stack-use-after-return, e sem ASan o X da tab "Beta"

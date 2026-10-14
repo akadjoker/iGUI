@@ -4912,6 +4912,69 @@ void test_unsubmitted_active_widget_is_released()
     }
 }
 
+// O X de uma tab do dock fecha o painel dessa tab, com o open que o painel
+// passou na sua própria chamada (o bool local de cada painel, o padrão do ImGui):
+// o dock não guarda o ponteiro de um frame para o outro (D1).
+namespace
+{
+bool gDockClosedA = false;
+bool gDockClosedB = false;
+bool gDockShowA = true;
+bool gDockShowB = true;
+
+void dockPanelWithLocalOpen(ig::Context &c, const char *name, bool &show, bool &closed)
+{
+    if (!show)
+        return;
+    bool open = true;
+    if (c.beginDockPanel(name, ig::DockSlot::Left, &open))
+    {
+        c.label(name);
+        c.endDockPanel();
+    }
+    if (!open)
+    {
+        closed = true;
+        show = false;
+    }
+}
+} // namespace
+
+void test_dock_tab_close_uses_its_own_open()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    auto build = [&](ig::Context &c) {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f)))
+            return;
+        if (c.beginDockSpace("editor"))
+        {
+            dockPanelWithLocalOpen(c, "Alpha", gDockShowA, gDockClosedA);
+            dockPanelWithLocalOpen(c, "Beta", gDockShowB, gDockClosedB);
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+    harness.frame(build);
+    harness.frame(build);
+    const float fontSize = context.theme().fontSize;
+    const float padding = context.theme().windowPadding;
+    const float closeSize = context.theme().widgetHeight * 0.55f;
+    const float alphaWidth = 5.0f * fontSize * 0.5f + padding * 2.0f + closeSize;
+    const float betaWidth = 4.0f * fontSize * 0.5f + padding * 2.0f + closeSize;
+    const float x = alphaWidth + betaWidth - closeSize * 0.5f - padding * 0.35f;
+    const float y = context.theme().titleBarHeight + context.theme().widgetHeight * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(x, y));
+    harness.frame(build);
+    harness.click(x, y, build);
+    harness.frame(build);
+    harness.frame(build);
+    assert(gDockClosedB);
+    assert(!gDockClosedA);
+    assert(gDockShowA);
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4967,6 +5030,7 @@ int main()
     test_closed_submenus_do_not_block_the_pointer();
     test_keyboard_returns_after_a_modal_closes_with_escape();
     test_unsubmitted_active_widget_is_released();
+    test_dock_tab_close_uses_its_own_open();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
