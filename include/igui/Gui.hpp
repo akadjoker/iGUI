@@ -2675,6 +2675,7 @@ private:
                                        ct::Vector<StringView> &lines) const;
     bool itemHovered(const Rect &rect, const Rect &clip, WidgetId id);
     bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable = true);
+    bool subItemHovered(const Rect &rect, const Rect &clip, WidgetId id);
     // Um widget composto (o slider com o editor de valor ao lado, o drag com o
     // campo que abre no clique) submete mais do que um sub-item: sem isto, as
     // consultas do item (isItemHovered e companhia) devolviam o último deles - o
