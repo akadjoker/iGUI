@@ -4853,6 +4853,65 @@ void test_keyboard_returns_after_a_modal_closes_with_escape()
     assert(keyPressed);
 }
 
+// Um widget ativo que deixa de ser submetido não fica ativo para sempre: largado o
+// botão, a interface volta a receber cliques - depois de arrastar uma janela que
+// desaparece a meio, e depois de um slider que desaparece a meio do arrasto (W5).
+void test_unsubmitted_active_widget_is_released()
+{
+    for (int scenario = 0; scenario < 2; ++scenario)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool showTool = true;
+        bool showSlider = true;
+        int clicks = 0;
+        ig::Rect button;
+        ig::Rect slider;
+        float value = 0.5f;
+        auto build = [&](ig::Context &c) {
+            if (c.beginWindow("Main", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)))
+            {
+                if (c.button("ok"))
+                    ++clicks;
+                button = c.itemRect();
+                if (showSlider)
+                {
+                    c.sliderFloat("s", value, 0.0f, 1.0f);
+                    slider = c.itemRect();
+                }
+                c.endWindow();
+            }
+            if (showTool && c.beginWindow("Tool", ig::Rect(400.0f, 100.0f, 300.0f, 200.0f)))
+            {
+                c.label("tool");
+                c.endWindow();
+            }
+        };
+        harness.frame(build);
+        harness.frame(build);
+        const ig::Vec2 grab = scenario == 0 ? ig::Vec2(450.0f, 110.0f)
+                                            : ig::Vec2(slider.x + 20.0f, slider.y + 5.0f);
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, grab.x, grab.y));
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerMove(grab.x + 10.0f, grab.y + 10.0f));
+        harness.frame(build);
+        if (scenario == 0)
+            showTool = false;
+        else
+            showSlider = false;
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, grab.x + 10.0f, grab.y + 10.0f));
+        harness.frame(build);
+        for (int i = 0; i < 3; ++i)
+        {
+            context.pushEvent(ig::Event::pointerMove(button.x + 5.0f, button.y + 5.0f));
+            harness.click(button.x + 5.0f, button.y + 5.0f, build);
+        }
+        assert(clicks == 3);
+    }
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4907,6 +4966,7 @@ int main()
     test_shortcut_is_blocked_by_a_modal_popup();
     test_closed_submenus_do_not_block_the_pointer();
     test_keyboard_returns_after_a_modal_closes_with_escape();
+    test_unsubmitted_active_widget_is_released();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
