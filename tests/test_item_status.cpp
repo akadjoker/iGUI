@@ -4814,6 +4814,56 @@ void test_table_alternate_rows_span_the_table_with_frozen_columns()
     assert(scrolledLines > 0);
 }
 
+// Uma lista virtual rolada até ao fim que encolhe mostra logo os itens que sobram.
+void test_virtual_list_that_shrinks_is_not_empty()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int count = 100;
+    int first = 0;
+    int last = 0;
+    ig::Rect firstRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginVirtualList("lista", count, 20.0f, 200.0f, first, last))
+        {
+            for (int i = first; i < last; ++i)
+            {
+                char text[16];
+                snprintf(text, sizeof(text), "i%d", i);
+                c.button(text, c.virtualListItemRect(i));
+                if (i == 0) firstRect = c.itemRect();
+            }
+            c.endVirtualList();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float top = firstRect.y;
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int i = 0; i < 100; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(50.0f, top + 50.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(last == count);
+    assert(first > 0);
+
+    count = 5;
+    harness.frame(build);
+    assert(first == 0);
+    assert(last == count);
+    assert(firstRect.y == top);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5831,6 +5881,7 @@ int main()
     test_wheel_over_an_area_that_fits_scrolls_the_outer_child();
     test_table_tree_cells_in_one_row_toggle_apart();
     test_table_alternate_rows_span_the_table_with_frozen_columns();
+    test_virtual_list_that_shrinks_is_not_empty();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
