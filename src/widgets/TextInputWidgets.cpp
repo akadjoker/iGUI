@@ -816,7 +816,7 @@ void TextEdit::deleteSelection()
         lines_.erase(lines_.begin() + s.line + 1, lines_.begin() + e.line + 1);
     }
     cursor_ = s; selAnchor_ = cursor_;
-    wrapDirty_ = true;
+    linesChanged(s.line, e.line - s.line + 1, 1);
 }
 
 void TextEdit::insertTextAtCursor(const String& t)
@@ -830,6 +830,7 @@ void TextEdit::insertTextAtCursor(const String& t)
         else if (c != '\r') line += c;
     }
     insertLines.push_back(std::move(line));
+    const int firstLine = cursor_.line;
     if (insertLines.size() == 1)
     {
         size_t bytePos = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
@@ -848,7 +849,7 @@ void TextEdit::insertTextAtCursor(const String& t)
         cursor_.col  = utf8Length(insertLines.back());
     }
     selAnchor_ = cursor_;
-    wrapDirty_ = true;
+    linesChanged(firstLine, 1, static_cast<int>(insertLines.size()));
     markDirty();
     textChanged.emit();
     cursorMoved.emit(cursor_);
@@ -864,7 +865,7 @@ void TextEdit::splitLine()
     cursor_.line++;
     cursor_.col = 0;
     selAnchor_ = cursor_;
-    wrapDirty_ = true;
+    linesChanged(cursor_.line - 1, 1, 2);
     markDirty();
     textChanged.emit();
     cursorMoved.emit(cursor_);
@@ -879,7 +880,7 @@ void TextEdit::mergeWithPrevLine()
     cursor_.line--;
     cursor_.col = prevCol;
     selAnchor_ = cursor_;
-    wrapDirty_ = true;
+    linesChanged(cursor_.line, 2, 1);
 }
 
 void TextEdit::mergeWithNextLine()
@@ -887,7 +888,7 @@ void TextEdit::mergeWithNextLine()
     if (cursor_.line >= static_cast<int>(lines_.size()) - 1) return;
     lines_[cursor_.line] += lines_[cursor_.line + 1];
     lines_.erase(lines_.begin() + cursor_.line + 1);
-    wrapDirty_ = true;
+    linesChanged(cursor_.line, 2, 1);
 }
 
 float TextEdit::computeGutterWidth(const ig::retained::Font& font) const
@@ -965,6 +966,10 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
     cache.reserve(lines_.size());
     wrapRows_.clear();
     wrapRows_.resize(lines_.size());
+    lineWidths_.clear();
+    lineWidths_.resize(lines_.size());
+    staleWrapLines_.clear();
+    widestLineGone_ = false;
     wrapWidth_   = textW;
     maxContentW_ = 0;
 
@@ -977,6 +982,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
             entry = &cache.put(line, std::move(reused));
         else if (!(entry = cache.find(line)))
             entry = &cache.put(line, measureLine(ctx, line, textW));
+        lineWidths_[i] = entry->width;
         if (entry->width > maxContentW_) maxContentW_ = entry->width;
 
         // If a line filter hides this line, give it 0 visual rows
@@ -989,11 +995,84 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
 
 bool TextEdit::wrapNeedsRebuild(const PaintContext& ctx, float textW) const
 {
-    if (wrapDirty_) return true;
+    if (wrapDirty_ || wrapRows_.size() != lines_.size()) return true;
     if (wrapKey_.font != ctx.buFont || wrapKey_.scale != ctx.font.scale ||
             wrapKey_.tabSize != tabSize_ || wrapKey_.wrap != wordWrap_)
         return true;
     return wordWrap_ && std::abs(textW - wrapWidth_) > 1.0f;
+}
+
+void TextEdit::linesChanged(int line, int removed, int inserted)
+{
+    if (wrapDirty_) return;
+    const int count = static_cast<int>(wrapRows_.size());
+    if (line < 0 || removed < 0 || inserted < 0 || line + removed > count ||
+            count - removed + inserted != static_cast<int>(lines_.size()))
+    {
+        wrapDirty_ = true;
+        return;
+    }
+
+    int kept = 0;
+    for (int stale: staleWrapLines_)
+    {
+        if (stale >= line + removed) staleWrapLines_[kept++] = stale + inserted - removed;
+        else if (stale < line)
+            staleWrapLines_[kept++] = stale;
+    }
+    staleWrapLines_.resize(kept);
+    for (int i = line; i < line + removed; ++i)
+        if (lineWidths_[i] >= maxContentW_) widestLineGone_ = true;
+
+    const int delta = inserted - removed;
+    if (delta > 0)
+    {
+        wrapRows_.resize(count + delta);
+        lineWidths_.resize(count + delta);
+        for (int i = count - 1; i >= line + removed; --i)
+        {
+            wrapRows_[i + delta] = std::move(wrapRows_[i]);
+            lineWidths_[i + delta] = lineWidths_[i];
+        }
+    }
+    else if (delta < 0)
+    {
+        for (int i = line + removed; i < count; ++i)
+        {
+            wrapRows_[i + delta] = std::move(wrapRows_[i]);
+            lineWidths_[i + delta] = lineWidths_[i];
+        }
+        wrapRows_.resize(count + delta);
+        lineWidths_.resize(count + delta);
+    }
+    for (int i = line; i < line + inserted; ++i)
+    {
+        wrapRows_[i].clear();
+        wrapRows_[i].push_back({ 0, lineColCount(i) });
+        lineWidths_[i] = 0.0f;
+        staleWrapLines_.push_back(i);
+    }
+}
+
+void TextEdit::measureStaleLines(PaintContext& ctx)
+{
+    for (int line: staleWrapLines_)
+    {
+        WrapLine measured = measureLine(ctx, lines_[line], wrapWidth_);
+        lineWidths_[line] = measured.width;
+        if (measured.width > maxContentW_) maxContentW_ = measured.width;
+        if (lineFilterCb_ && !lineFilterCb_(line)) wrapRows_[line].clear();
+        else
+            wrapRows_[line] = std::move(measured.rows);
+    }
+    staleWrapLines_.clear();
+    if (widestLineGone_)
+    {
+        maxContentW_ = 0;
+        for (float width: lineWidths_)
+            if (width > maxContentW_) maxContentW_ = width;
+        widestLineGone_ = false;
+    }
 }
 
 int TextEdit::totalVisualRows() const
@@ -1100,6 +1179,8 @@ void TextEdit::paint(PaintContext& ctx)
 
     float newWrapW = abs.w - gutterW_ - t.textEditPadding * 2;
     if (wrapNeedsRebuild(ctx, newWrapW)) rebuildWrap(ctx);
+    else if (!staleWrapLines_.empty() || widestLineGone_)
+        measureStaleLines(ctx);
     scrollX_ = std::max(0.0f, std::min(scrollX_, maxScrollX()));
 
     float pad = t.textEditPadding;
@@ -1561,7 +1642,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
                 size_t byteStart = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
                 lines_[cursor_.line].erase(byteStart, byteEnd - byteStart);
                 selAnchor_ = cursor_;
-                wrapDirty_ = true;
+                linesChanged(cursor_.line, 1, 1);
             }
             else { mergeWithPrevLine(); }
             ensureCursorVisible(); markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);
@@ -1576,7 +1657,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
                 size_t be = utf8ByteOffset(lines_[cursor_.line], cursor_.col + 1);
                 lines_[cursor_.line].erase(bs, be - bs);
                 selAnchor_ = cursor_;
-                wrapDirty_ = true;
+                linesChanged(cursor_.line, 1, 1);
             }
             else { mergeWithNextLine(); }
             markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);

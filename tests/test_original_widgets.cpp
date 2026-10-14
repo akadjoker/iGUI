@@ -2870,6 +2870,144 @@ static void test_text_edit_measures_again_after_zoom_and_tab_size()
     assert(columnAtRightEdge() >= 60);
 }
 
+// As edições só voltam a medir as linhas que mudaram: depois de cada passo
+// (escrever, Enter, apagar e juntar linhas com Backspace e Delete, substituir
+// uma seleção de várias linhas, colar várias linhas, várias edições sem pintar
+// no meio), o TextEdit pinta exatamente o mesmo que com o mesmo texto medido do
+// zero, com e sem word-wrap.
+static void test_text_edit_wraps_only_the_edited_lines()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("editwrap");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 260.0f, 590.0f });
+    assert(app.setStage("editwrap", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto snapshot = [&]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        ct::Vector<float> values;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            for (const DrawVertex& vertex: pass.list->vertices())
+            {
+                values.push_back(vertex.x);
+                values.push_back(vertex.y);
+                values.push_back(vertex.u);
+            }
+        }
+        return values;
+    };
+    auto views = [&]()
+    {
+        KeyEvent top;
+        top.key = Key::Home;
+        top.ctrl = true;
+        edit->onKeyPress(top);
+        ct::Vector<float> values = snapshot();
+        MouseEvent wheel;
+        wheel.scrollX = -1000.0f;
+        edit->onMouseScroll(wheel);
+        const ct::Vector<float> right = snapshot();
+        for (float value: right) values.push_back(value);
+        return values;
+    };
+    auto matchesFresh = [&]()
+    {
+        const ct::Vector<float> edited = views();
+        edit->setText(edit->text());
+        const ct::Vector<float> fresh = views();
+        if (edited.size() != fresh.size()) return false;
+        for (size_t i = 0; i < edited.size(); ++i)
+            if (edited[i] != fresh[i]) return false;
+        return true;
+    };
+    auto key = [edit](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        edit->onKeyPress(press);
+    };
+    auto type = [edit](const char* text)
+    {
+        for (const char* c = text; *c; ++c)
+        {
+            KeyEvent typed;
+            typed.text[0] = *c;
+            edit->onTextInput(typed);
+        }
+    };
+
+    for (int wrap = 1; wrap >= 0; --wrap)
+    {
+        edit->setWordWrap(wrap == 1);
+        edit->setText("the quick brown fox jumps over the lazy dog again and again\n"
+                      "short\n"
+                      "a\xC3\xA7\xC3\xA3o r\xC3\xA1pida sobre o c\xC3\xA3o pregui\xC3\xA7oso e "
+                      "mais nada\n"
+                      "\tindented line with a tab and some words to wrap around\n"
+                      "line four is here with enough words to wrap twice in this box\n"
+                      "five\n"
+                      "six six six six six six six six six six six six six six six six\n"
+                      "last");
+        snapshot();
+        edit->setCursorPos(0, 10);
+        type("hello world ");
+        assert(matchesFresh());
+        edit->setCursorPos(0, 40);
+        key(Key::Return);
+        assert(edit->lineCount() == 9);
+        assert(matchesFresh());
+        edit->setCursorPos(1, 0);
+        key(Key::Backspace);
+        assert(matchesFresh());
+        edit->setCursorPos(1, edit->lineAt(1).size());
+        key(Key::Delete);
+        assert(edit->lineCount() == 7);
+        assert(matchesFresh());
+        edit->setSelection({ 1, 2 }, { 2, 3 });
+        type("X");
+        assert(edit->lineCount() == 6);
+        assert(matchesFresh());
+        edit->insertTextAt({ 1, 2 },
+                "abc\ndef ghi jkl mno pqr stu vwx yz abc def ghi jkl mno\nend ");
+        assert(edit->lineCount() == 8);
+        assert(matchesFresh());
+
+        edit->setCursorPos(4, 4);
+        type("more words that make the line wrap one more time ");
+        edit->setCursorPos(0, 0);
+        key(Key::Return);
+        edit->setCursorPos(edit->lineCount() - 1, 0);
+        key(Key::Backspace);
+        type("tail ");
+        key(Key::Backspace);
+        key(Key::Backspace);
+        edit->setCursorPos(2, 1);
+        key(Key::Delete);
+        edit->setCursorPos(1, 0);
+        key(Key::Tab);
+        assert(edit->lineCount() == 8);
+        assert(matchesFresh());
+        edit->setSelection({ 0, 0 }, { edit->lineCount() - 1, 2 });
+        key(Key::Delete);
+        assert(edit->lineCount() == 1);
+        assert(matchesFresh());
+    }
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3249,6 +3387,7 @@ int main()
     test_text_edit_scrolls_to_a_line_before_painting();
     test_text_fields_hit_test_with_their_paint_font();
     test_text_edit_measures_again_after_zoom_and_tab_size();
+    test_text_edit_wraps_only_the_edited_lines();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

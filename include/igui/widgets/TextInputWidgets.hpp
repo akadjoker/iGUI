@@ -280,6 +280,7 @@ protected:
     float computeGutterWidth(const ig::retained::Font& font) const;
     float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
+    void linesChanged(int line, int removed, int inserted);
     int  logicalToVisualRow(int line, int row = 0) const;
     String expandTabs(const String& text) const;
     String expandTabs(const String& text, int startVisCol) const;
@@ -294,8 +295,15 @@ private:
     float wrapWidth_   = 0;
     float maxContentW_ = 0;
 
-    // Rows and width of each distinct line, kept between rebuilds so an edit
-    // only measures the lines it changed.
+    // Width of each line, and the lines an edit changed since the last paint:
+    // only those are measured again.
+    ct::Vector<float> lineWidths_;
+    ct::Vector<int> staleWrapLines_;
+    bool widestLineGone_ = false;
+    void measureStaleLines(PaintContext& ctx);
+
+    // Rows and width of each distinct line, kept between full rebuilds so a
+    // rebuild only measures the lines it has not seen.
     struct WrapLine { ct::Vector<WrapRow> rows; float width = 0; };
     struct WrapKey
     {
