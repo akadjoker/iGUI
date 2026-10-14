@@ -5531,7 +5531,7 @@ bool Context::splitter(StringView idText, float &value, float minimum, float max
     const WidgetId id = combineIds(makeWidgetId(idText), 0x53504c4954544552ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const bool hovered = itemHovered(handle, clip, id);
-    if (pointerPressedIn(intersect(handle, clip), left) && activeWidget_ == InvalidWidgetId)
+    if (itemPressedIn(intersect(handle, clip), left) && activeWidget_ == InvalidWidgetId)
         activeWidget_ = id;
     bool changed = false;
     if (activeWidget_ == id)
@@ -5581,7 +5581,7 @@ bool Context::gizmo2D(StringView idText, Transform2D &transform, Gizmo2DMode mod
     const GizmoAxis2D hoveredAxis = hitGizmo2D(mode, pointer_.position, center,
                                                 axisX, axisY, options.axisLength);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedHere = pointerPressedIn(clip, left) &&
+    const bool pressedHere = itemPressedIn(clip, left) &&
                              activeWidget_ == InvalidWidgetId;
     if (pressedHere && hoveredAxis != GizmoAxisNone)
     {
@@ -5777,7 +5777,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     const GizmoAxis3D hoveredAxis = hitGizmo3D(mode, pointer_.position, transform, projector,
                                                options.axisLength);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    const bool pressedHere = pointerPressedIn(clip, left) &&
+    const bool pressedHere = itemPressedIn(clip, left) &&
                              activeWidget_ == InvalidWidgetId;
     if (pressedHere && hoveredAxis != Gizmo3DAxisNone)
     {
@@ -7080,7 +7080,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     itemHovered(hueBar, clip, hueId);
     itemHovered(alphaBar, clip, alphaId);
 
-    const bool pressSaturationValue = pointerPressedIn(intersect(saturationValue, clip), left) &&
+    const bool pressSaturationValue = itemPressedIn(intersect(saturationValue, clip), left) &&
                                       activeWidget_ == InvalidWidgetId;
     if (pressSaturationValue)
     {
@@ -7103,7 +7103,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
             activeWidget_ = InvalidWidgetId;
     }
 
-    const bool pressHue = pointerPressedIn(intersect(hueBar, clip), left) &&
+    const bool pressHue = itemPressedIn(intersect(hueBar, clip), left) &&
                           activeWidget_ == InvalidWidgetId;
     if (pressHue)
     {
@@ -7122,7 +7122,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
             activeWidget_ = InvalidWidgetId;
     }
 
-    const bool pressAlpha = pointerPressedIn(intersect(alphaBar, clip), left) &&
+    const bool pressAlpha = itemPressedIn(intersect(alphaBar, clip), left) &&
                             activeWidget_ == InvalidWidgetId && alphaBar.width > 0.0f;
     if (pressAlpha)
     {
@@ -7272,13 +7272,13 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
     }
     // Handles sit inside area, so one gate on it covers bar and handles.
     const Rect visibleArea = intersect(area, clip);
-    if (pointerPressedIn(visibleArea, right) && hit > 0 &&
+    if (itemPressedIn(visibleArea, right) && hit > 0 &&
         hit + 1 < static_cast<int>(stops.size())) {
         stops.erase(stops.begin() + hit);
         selectedStop = -1;
         changed = true;
     }
-    if (pointerPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
+    if (itemPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
         if (hit >= 0) {
             selectedStop = hit;
             activeWidget_ = id;
@@ -7365,12 +7365,12 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
     // Point handles overhang canvas by 6px, which is exactly the margin
     // canvas was shrunk by, so the widget's own rect covers them.
     const Rect visibleArea = intersect(contentRect(bounds), clip);
-    if (pointerPressedIn(visibleArea, right) && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
+    if (itemPressedIn(visibleArea, right) && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
         points.erase(points.begin() + hit);
         selectedPoint = -1;
         changed = true;
     }
-    if (pointerPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
+    if (itemPressedIn(visibleArea, left) && activeWidget_ == InvalidWidgetId) {
         if (hit >= 0) { selectedPoint = hit; activeWidget_ = id; }
         else if (contains(canvas, pointer_.pressedPosition[left])) {
             const CurvePoint point = screenToPoint(pointer_.pressedPosition[left]);
@@ -7429,7 +7429,7 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
     const Rect scroll(ruler.x, area.bottom(), ruler.width, 12);
     // The zoom buttons sit inside area; the scroll strip hangs 12px below it.
     const Rect controls = intersect(Rect(area.x, area.y, area.width, area.height + 12.0f), contentClip());
-    if (pointerPressedIn(controls, left) && activeWidget_ == InvalidWidgetId) {
+    if (itemPressedIn(controls, left) && activeWidget_ == InvalidWidgetId) {
         const Vec2 p = pointer_.pressedPosition[left];
         for (int i=0;i<3;++i) {
             const Rect button(area.x+2+i*36,area.y+2,34,20);
@@ -7452,14 +7452,14 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
         }
     }
     const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u, true);
-    if (wheelMine && pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
+    if (wheelMine && disabledDepth_ == 0u && pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
         const float anchor = clamp((pointer_.position.x-ruler.x)/ruler.width, 0, 1);
         const float at = view.offset + anchor/view.zoom;
         view.zoom = clamp(view.zoom * powf(1.2f, pointer_.wheelY), 1, 64);
         view.offset = clamp(at-anchor/view.zoom, 0, 1-1/view.zoom);
         pointer_.wheelY = 0;
     }
-    if (pointerPressedIn(visible, middle) && activeWidget_ == InvalidWidgetId) {
+    if (itemPressedIn(visible, middle) && activeWidget_ == InvalidWidgetId) {
         activeWidget_ = panId;
         view.panX = pointer_.pressedPosition[middle].x; view.panOffset = view.offset;
     }
@@ -7530,7 +7530,7 @@ bool Context::sequencer(StringView idText, ct::Vector<SequencerTrack>& tracks, i
     if (!drag) { sequenceDrags_.put(id, SequenceDrag()); drag = sequenceDrags_.find(id); }
     if (!drag) return false;
     bool changed = false; const uint32_t left = buttonIndex(PointerButton::Left);
-    if (pointerPressedIn(clip, left) && activeWidget_ == InvalidWidgetId) {
+    if (itemPressedIn(clip, left) && activeWidget_ == InvalidWidgetId) {
         const Vec2 p = pointer_.pressedPosition[left];
         if (contains(ruler, p)) { const int next = frameAt(p.x); changed = next != currentFrame; currentFrame = next; }
         else if (contains(intersect(area, clip), p) && p.y >= ruler.bottom()) {
@@ -7593,7 +7593,7 @@ bool Context::timeline(StringView idText, ct::Vector<TimelineTrack>& tracks, int
     const auto left = buttonIndex(PointerButton::Left), right = buttonIndex(PointerButton::Right);
     bool changed = false;
     if (activeWidget_ == InvalidWidgetId &&
-        (pointerPressedIn(clip, left) || pointerPressedIn(clip, right))) {
+        (itemPressedIn(clip, left) || itemPressedIn(clip, right))) {
         const bool remove = pointer_.pressed[right];
         const Vec2 p = pointer_.pressedPosition[remove ? right : left];
         if (contains(clip,p) && contains(ruler,p) && !remove) {
@@ -8273,7 +8273,7 @@ bool Context::beginDragSource(WidgetId source, WidgetId type, uint64_t data, Str
     const Rect visible = intersect(rect, contentClip());
     const uint32_t left = buttonIndex(PointerButton::Left);
     const WidgetId widget = combineIds(makeWidgetId(StringView("drag source")), source);
-    const bool pressedHere = pointerPressedIn(visible, left) && activeWidget_ == InvalidWidgetId;
+    const bool pressedHere = itemPressedIn(visible, left) && activeWidget_ == InvalidWidgetId;
     if (pressedHere)
     {
         activeWidget_ = widget;
@@ -13691,6 +13691,11 @@ bool Context::pointerBlockedByOpenPopup(const Vec2 &point) const
 bool Context::inputBlockedByModal() const
 {
     return activeModal_ != InvalidWidgetId || windowBlockedByModal();
+}
+
+bool Context::itemPressedIn(const Rect &visible, uint32_t button) const
+{
+    return disabledDepth_ == 0u && !tooltipOpen_ && pointerPressedIn(visible, button);
 }
 
 bool Context::pointerPressedIn(const Rect &visible, uint32_t button) const

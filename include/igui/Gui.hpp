@@ -2785,6 +2785,7 @@ private:
     // or open popup owning that point. Use it instead of reading
     // pointer_.pressed directly.
     bool pointerPressedIn(const Rect &visible, uint32_t button) const;
+    bool itemPressedIn(const Rect &visible, uint32_t button) const;
     // The pointer is over visible and nothing (modal, popup, another window)
     // sits on top of it - for hover and the wheel.
     bool pointerOver(const Rect &visible) const;
