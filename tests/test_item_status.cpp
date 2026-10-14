@@ -6443,6 +6443,36 @@ void test_toast_with_the_same_id_is_updated()
     assert(count(data, "Guardado") == 0);
 }
 
+// textWrapped com espaços antes de um \n no ponto do corte não acrescenta uma linha
+// vazia: ocupa o mesmo que o texto sem esses espaços.
+void test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect withSpaces;
+    ig::Rect withoutSpaces;
+    ig::Rect bullet;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+        const float width = c.theme().fontSize * 0.5f * 4.0f;
+        c.textWrapped("aaaa \nbb", width);
+        withSpaces = c.itemRect();
+        c.textWrapped("aaaa\nbb", width);
+        withoutSpaces = c.itemRect();
+        c.bulletText("aaaa  \nbb", width);
+        bullet = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    assert(withoutSpaces.height > 0.0f);
+    assert(withSpaces.height == withoutSpaces.height);
+    assert(bullet.height == withoutSpaces.height);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7477,6 +7507,7 @@ int main()
     test_disabled_widgets_do_not_edit();
     test_dragging_past_a_neighbour_leaves_it_in_place();
     test_toast_with_the_same_id_is_updated();
+    test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
