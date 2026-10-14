@@ -1554,6 +1554,134 @@ static void test_page_view_hides_the_pages_it_leaves()
     assert(view.currentPage() == 1);
 }
 
+// Um campo desativado, ou dentro de um painel desativado, não ganha foco com um
+// clique nem aceita texto e teclas, e o SpinBox não muda com os botões nem com a
+// roda. Desativar o campo que tem o foco tira-lho; voltar a ativar o painel
+// devolve tudo ao normal.
+static void test_disabled_fields_ignore_input()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("disabledfields");
+    auto* screen = stage->createChild<Widget>();
+    auto* panel = screen->createChild<Widget>();
+    panel->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    auto* field = panel->createChild<TextInput>();
+    field->setRect({ 10.0f, 10.0f, 200.0f, 28.0f });
+    auto* spin = panel->createChild<SpinBox>(0.0f, 100.0f, 50.0f, 1.0f);
+    spin->setRect({ 10.0f, 50.0f, 200.0f, 28.0f });
+    auto* edit = panel->createChild<TextEdit>();
+    edit->setRect({ 10.0f, 100.0f, 300.0f, 150.0f });
+    auto* list = panel->createChild<ListBox>();
+    list->setRect({ 10.0f, 260.0f, 200.0f, 30.0f });
+    list->addItem("only");
+    auto* clock = panel->createChild<TimePicker>();
+    clock->setRect({ 220.0f, 260.0f, 150.0f, 30.0f });
+    clock->setTime(10, 0);
+    assert(app.setStage("disabledfields", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    auto click = [&app, &io](float x, float y)
+    {
+        io.mouseX = x;
+        io.mouseY = y;
+        app.update(io);
+        io.mouseDown[0] = true;
+        app.update(io);
+        io.mouseDown[0] = false;
+        app.update(io);
+    };
+    auto type = [&app, &io](const char* text)
+    {
+        for (const char* c = text; *c; ++c) io.inputChars.push_back(static_cast<uint32_t>(*c));
+        app.update(io);
+        io.inputChars.clear();
+        IO::KeyEvent backspace;
+        backspace.key = Key::Backspace;
+        io.keyEvents.push_back(backspace);
+        app.update(io);
+        io.keyEvents.clear();
+    };
+
+    field->setText("keep");
+    field->setEnabled(false);
+    assert(!field->isEnabledInTree());
+    click(100.0f, 24.0f);
+    assert(app.focused() != field);
+    app.setFocused(field);
+    type("x");
+    assert(field->text() == "keep");
+
+    field->setEnabled(true);
+    panel->setEnabled(false);
+    assert(field->isEnabled() && !field->isEnabledInTree());
+    click(100.0f, 24.0f);
+    assert(app.focused() != field);
+    const float plusX = 10.0f + 200.0f - 3.0f;
+    click(plusX, 64.0f);
+    io.mouseWheelY = 1.0f;
+    app.update(io);
+    io.mouseWheelY = 0.0f;
+    assert(spin->value() == 50.0f);
+    click(100.0f, 150.0f);
+    assert(app.focused() != edit);
+    app.setFocused(edit);
+    type("y");
+    assert(edit->text().empty());
+    click(50.0f, 270.0f);
+    assert(list->selectedIndex() == -1);
+    app.setFocused(clock);
+    IO::KeyEvent up;
+    up.key = Key::Up;
+    io.keyEvents.push_back(up);
+    app.update(io);
+    io.keyEvents.clear();
+    assert(clock->time().hour == 10);
+
+    panel->setEnabled(true);
+    field->setText("");
+    click(100.0f, 24.0f);
+    assert(app.focused() == field);
+    type("ab");
+    assert(field->text() == "a");
+    click(plusX, 64.0f);
+    assert(spin->value() == 51.0f);
+    click(100.0f, 24.0f);
+    panel->setEnabled(false);
+    assert(app.focused() == nullptr);
+
+    auto painted = [&app](const Color& color)
+    {
+        GetDrawList().clear();
+        DrawData frame;
+        app.paint(frame);
+        size_t count = 0;
+        for (const DrawPass& pass: frame.passes)
+            if (pass.list)
+                for (const DrawVertex& vertex: pass.list->vertices())
+                    if (vertex.color.r == color.r && vertex.color.g == color.g &&
+                            vertex.color.b == color.b && vertex.color.a == color.a)
+                        ++count;
+        return count;
+    };
+    const Theme& theme = Theme::instance();
+    const Color fill = theme.panelColor;
+    edit->setVisible(false);
+    const size_t fieldOff = painted(fill);
+    panel->setEnabled(true);
+    assert(fieldOff > painted(fill));
+    edit->setVisible(true);
+    field->setVisible(false);
+    const size_t editOn = painted(fill);
+    panel->setEnabled(false);
+    assert(painted(fill) > editOn);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1734,6 +1862,7 @@ int main()
     test_dialogs_take_the_keyboard_while_open();
     test_popups_closed_from_outside_are_closed_for_their_owner();
     test_page_view_hides_the_pages_it_leaves();
+    test_disabled_fields_ignore_input();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

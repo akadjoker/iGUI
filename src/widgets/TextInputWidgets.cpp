@@ -167,8 +167,10 @@ void TextInput::paint(PaintContext& ctx)
     blinkTimer_ += WidgetApp::instance().deltaTime();
     if (blinkTimer_ > 1.0f) blinkTimer_ -= 1.0f;
 
+    const bool enabled = isEnabledInTree();
+
     // Background
-    Color bg = (isFocused() || isHovered()) ? t.inputBgHover : t.inputBg;
+    Color bg = !enabled ? t.panelColor : ((isFocused() || isHovered()) ? t.inputBgHover : t.inputBg);
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
@@ -178,7 +180,7 @@ void TextInput::paint(PaintContext& ctx)
     }
 
     // Border
-    Color bc = isFocused() ? t.focusColor : (isHovered() ? t.inputBorderHover : t.inputBorder);
+    Color bc = isFocused() ? t.focusColor : ((enabled && isHovered()) ? t.inputBorderHover : t.inputBorder);
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
@@ -229,7 +231,7 @@ void TextInput::paint(PaintContext& ctx)
         }
 
         // Text
-        ctx.font.SetColor(t.textColor);
+        ctx.font.SetColor(enabled ? t.textColor : t.textDisabled);
         ctx.font.Print(displayText().c_str(), textX, textY);
 
         // Cursor
@@ -250,6 +252,7 @@ void TextInput::paint(PaintContext& ctx)
 
 void TextInput::onMousePress(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     const ig::retained::Font* font = WidgetApp::instance().font();
     cursor_   = hitTestChar(font, e.localX);
     selStart_ = selEnd_ = cursor_;
@@ -266,6 +269,7 @@ void TextInput::onMouseRelease(MouseEvent& e)
 
 void TextInput::onMouseMove(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (dragging_)
     {
         const ig::retained::Font* font = WidgetApp::instance().font();
@@ -279,6 +283,7 @@ void TextInput::onMouseMove(MouseEvent& e)
 
 void TextInput::onKeyPress(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (mode_ == Mode::ReadOnly && !(e.ctrl && e.key == ig::retained::Key::C)) return;
 
     int len = utf8Length(text_);
@@ -379,6 +384,7 @@ void TextInput::onKeyPress(KeyEvent& e)
 
 void TextInput::onTextInput(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
     String t(e.text);
     if (t.empty()) return;
@@ -1031,11 +1037,14 @@ void TextEdit::paint(PaintContext& ctx)
     Rect fullArea = {abs.x, abs.y, abs.w, abs.h};
 
     int totalVRows = totalVisualRows();
+    const bool enabled = isEnabledInTree();
+    const Color textColor = enabled ? t.textColor : t.textDisabled;
 
     // Background
+    const Color bg = enabled ? t.inputBg : t.panelColor;
     if (ctx.clipRectIntersect(abs, clipped))
     {
-        ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, t.inputBg.a);
+        ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
                                    static_cast<int>(clipped.w), static_cast<int>(clipped.h),
                                    t.borderRadius, 6, true);
@@ -1177,7 +1186,7 @@ void TextEdit::paint(PaintContext& ctx)
         if (syntaxCb_ && rowIdx == 0 && !lines_[i].empty()) {
             auto spans = syntaxCb_(i, lines_[i]);
             if (spans.empty()) {
-                ctx.font.SetColor(t.textColor);
+                ctx.font.SetColor(textColor);
                 ctx.font.Print(rowText.c_str(), tx, lty);
             } else {
                 // Render text span by span, tracking visual column for correct tab expansion
@@ -1191,14 +1200,14 @@ void TextEdit::paint(PaintContext& ctx)
                     // Gap before span (default color)
                     if (s0 > prevCol) {
                         String gap = expandTabs(utf8Substr(lines_[i], prevCol, s0), curVisCol);
-                        ctx.font.SetColor(t.textColor);
+                        ctx.font.SetColor(textColor);
                         ctx.font.Print(gap.c_str(), cx, lty);
                         cx += ctx.font.GetTextWidth(gap.c_str());
                         curVisCol += utf8Length(gap);
                     }
                     // Colored span
                     String seg = expandTabs(utf8Substr(lines_[i], s0, s1), curVisCol);
-                    ctx.font.SetColor(sp.color);
+                    ctx.font.SetColor(enabled ? sp.color : textColor);
                     ctx.font.Print(seg.c_str(), cx, lty);
                     cx += ctx.font.GetTextWidth(seg.c_str());
                     curVisCol += utf8Length(seg);
@@ -1207,12 +1216,12 @@ void TextEdit::paint(PaintContext& ctx)
                 // Trailing text after last span
                 if (prevCol < endCol) {
                     String tail = expandTabs(utf8Substr(lines_[i], prevCol, endCol), curVisCol);
-                    ctx.font.SetColor(t.textColor);
+                    ctx.font.SetColor(textColor);
                     ctx.font.Print(tail.c_str(), cx, lty);
                 }
             }
         } else {
-            ctx.font.SetColor(t.textColor);
+            ctx.font.SetColor(textColor);
             ctx.font.Print(rowText.c_str(), tx, lty);
         }
     }
@@ -1274,6 +1283,7 @@ void TextEdit::paint(PaintContext& ctx)
 
 void TextEdit::onMousePress(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     // Gutter click → toggle breakpoint / emit markerClicked
     if (showLineNumbers_ && e.localX < gutterW_) {
         int clickedLine = static_cast<int>((e.localY + scrollY_) / lineHeight_);
@@ -1342,6 +1352,7 @@ void TextEdit::onMouseRelease(MouseEvent& e)
 
 void TextEdit::onMouseMove(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (!dragging_) return;
     cursor_ = hitTestMouse(e.localX, e.localY);
     clampPos(cursor_);
@@ -1352,6 +1363,7 @@ void TextEdit::onMouseMove(MouseEvent& e)
 
 void TextEdit::onMouseScroll(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     float scroll = -e.scrollY * lineHeight_ * 3;
     scrollY_ += scroll;
     float maxY = std::max(0.0f, static_cast<float>(totalVisualRows()) * lineHeight_ - rect_.h);
@@ -1362,6 +1374,7 @@ void TextEdit::onMouseScroll(MouseEvent& e)
 
 void TextEdit::onKeyPress(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (readOnly_ && !e.ctrl) return;
     blinkTimer_ = 0;
     int lc = static_cast<int>(lines_.size());
@@ -1472,6 +1485,7 @@ void TextEdit::onKeyPress(KeyEvent& e)
 
 void TextEdit::onTextInput(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (readOnly_) { e.consumed = true; return; }
     String t(e.text);
     if (t.empty()) return;

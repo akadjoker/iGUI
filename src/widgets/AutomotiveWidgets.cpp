@@ -429,7 +429,7 @@ void DriveMode::paint(PaintContext& ctx)
 
 void DriveMode::onMousePress(MouseEvent& e)
 {
-    if (!enabled_ || modes_.empty()) return;
+    if (!isEnabledInTree() || modes_.empty()) return;
     Rect abs = absoluteRect();
     float midY = abs.y + abs.h * 0.5f;
     if (e.y < midY)
@@ -441,7 +441,7 @@ void DriveMode::onMousePress(MouseEvent& e)
 
 void DriveMode::onMouseScroll(MouseEvent& e)
 {
-    if (!enabled_ || modes_.empty()) return;
+    if (!isEnabledInTree() || modes_.empty()) return;
     int delta = (e.scrollY > 0) ? 1 : -1;
     setMode((current_ + delta + static_cast<int>(modes_.size())) % static_cast<int>(modes_.size()));
     e.consumed = true;

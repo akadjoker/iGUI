@@ -141,7 +141,7 @@ void Slider::paint(PaintContext& ctx)
 
 void Slider::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
     dragging_ = true;
     updateFromMouse(e.localX, e.localY);
     e.consumed = true;
@@ -403,7 +403,7 @@ void SpinBox::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
     float tx = abs.x + bw + (abs.w - 2 * bw - tw) * 0.5f;
     float ty = abs.y + (abs.h + asc) * 0.5f;
-    ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.Print(txt.c_str(), tx, ty);
     if (overrideFont_) ctx.popFont();
 
@@ -419,6 +419,7 @@ void SpinBox::paint(PaintContext& ctx)
 
 void SpinBox::onMousePress(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     auto zone = hitZone(e.localX);
     if (zone == Minus) {
         setValue(value_ - step_);
@@ -441,6 +442,7 @@ void SpinBox::onMouseRelease(MouseEvent& e)
 
 void SpinBox::onMouseMove(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (dragging_) {
         float dy = dragStartY_ - e.y;  // up = increase
         float delta = dy * step_ * dragSens_;
@@ -451,6 +453,7 @@ void SpinBox::onMouseMove(MouseEvent& e)
 
 void SpinBox::onMouseScroll(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (isHovered() || isFocused()) {
         setValue(value_ + e.scrollY * step_);
         e.consumed = true;
@@ -459,6 +462,7 @@ void SpinBox::onMouseScroll(MouseEvent& e)
 
 void SpinBox::onKeyPress(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (e.key == ig::retained::Key::Up) {
         setValue(value_ + step_);
         e.consumed = true;
@@ -891,7 +895,7 @@ void DatePicker::paint(PaintContext& ctx)
 
 void DatePicker::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
     if (isOpen()) closeCalendar(); else openCalendar();
     e.consumed = true;
 }
@@ -1097,7 +1101,7 @@ void TimePicker::paint(PaintContext& ctx)
 
 void TimePicker::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
 
     // Check up/down arrow area
     if (e.localX > rect_.w - 18) {

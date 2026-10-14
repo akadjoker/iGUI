@@ -447,7 +447,7 @@ void TreeView::paint(PaintContext& ctx)
 
 void TreeView::onMousePress(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
     e.consumed = true;
@@ -476,7 +476,7 @@ void TreeView::onMousePress(MouseEvent& e)
 
 void TreeView::onMouseScroll(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     if (!absoluteRect().contains(e.x, e.y)) return;
     e.consumed = true;
     scrollOffset_ -= e.scrollY * rowHeight_ * 2.f;
@@ -954,7 +954,7 @@ void PropertyGrid::paint(PaintContext& ctx)
 
 void PropertyGrid::onMousePress(MouseEvent& e)
 {
-    if (!visible_||!enabled_) return;
+    if (!visible_||!isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x,e.y)) return;
     e.consumed = true;
@@ -1072,7 +1072,7 @@ void PropertyGrid::onMouseRelease(MouseEvent& e)
 
 void PropertyGrid::onMouseMove(MouseEvent& e)
 {
-    if (!visible_||!enabled_) return;
+    if (!visible_||!isEnabledInTree()) return;
     Rect abs = absoluteRect();
 
     if (draggingSlider_ && activeRow_>=0 && activeRow_<(int)rows_.size()) {
@@ -1123,7 +1123,7 @@ void PropertyGrid::onMouseMove(MouseEvent& e)
 
 void PropertyGrid::onMouseScroll(MouseEvent& e)
 {
-    if (!visible_||!enabled_) return;
+    if (!visible_||!isEnabledInTree()) return;
     if (!absoluteRect().contains(e.x,e.y)) return;
     e.consumed=true;
     scrollOffset_ -= e.scrollY*rowHeight_*2.f;
@@ -1365,7 +1365,7 @@ void ColorPicker::paint(PaintContext& ctx)
 
 void ColorPicker::onMousePress(MouseEvent& e)
 {
-    if (!visible_||!enabled_) return;
+    if (!visible_||!isEnabledInTree()) return;
     Rect abs=absoluteRect();
     if (!abs.contains(e.x,e.y)) return;
     e.consumed=true;

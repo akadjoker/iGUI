@@ -350,10 +350,12 @@ public:
     void setVisible(bool v) { visible_ = v; }
     /// @brief Check if the widget is visible.
     bool isVisible() const  { return visible_; }
-    /// @brief Enable or disable the widget.
-    void setEnabled(bool e) { enabled_ = e; }
-    /// @brief Check if the widget is enabled.
+    /// @brief Enable or disable the widget and, with it, its descendants.
+    void setEnabled(bool e);
+    /// @brief Check the widget's own enabled flag.
     bool isEnabled() const  { return enabled_; }
+    /// @brief Check that the widget and all its ancestors are enabled.
+    bool isEnabledInTree() const;
 
     // ── Focus ─────────────────────────────────────────────────────────────
     /// @brief Check if the widget has keyboard focus.

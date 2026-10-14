@@ -270,7 +270,7 @@ void Collapsible::setExpanded(bool e)
 
 void Collapsible::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
 
     // Only toggle if click is in the header area
     Rect abs = absoluteRect();
@@ -394,7 +394,7 @@ void Collapsible::paint(PaintContext& ctx)
     float textY = abs.y + (headerH_ + asc) * 0.5f;
 
     ctx.font.SetFontSize(t.fontSize);
-    ctx.font.SetColor(enabled_ ? t.textColor : t.textDisabled);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.SetBatch(&ctx.text);
 
     Rect textRect = {textX, textY - asc, abs.w, asc};
@@ -976,7 +976,7 @@ void Splitter::paint(PaintContext& ctx)
 
 void Splitter::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
 
     Rect abs = absoluteRect();
     float localX = e.x - abs.x;
@@ -1411,7 +1411,7 @@ void TabLayout::paint(PaintContext& ctx)
 
 void TabLayout::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
 
     Rect abs = absoluteRect();
     Rect barR, contentR;

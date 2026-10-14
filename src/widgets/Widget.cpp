@@ -449,9 +449,32 @@ void Widget::paint(PaintContext& ctx)
 //  Widget — base event handlers (emit signals)
 // ═════════════════════════════════════════════════════════════════════════════
 
+void Widget::setEnabled(bool e)
+{
+    if (enabled_ == e) return;
+    enabled_ = e;
+    markDirty();
+    if (e) return;
+    WidgetApp& app = WidgetApp::instance();
+    for (Widget* w = app.focused(); w; w = w->parent())
+        if (w == this)
+        {
+            app.setFocused(nullptr);
+            return;
+        }
+}
+
+bool Widget::isEnabledInTree() const
+{
+    for (const Widget* w = this; w; w = w->parent())
+        if (!w->enabled_)
+            return false;
+    return true;
+}
+
 void Widget::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
     pressed_ = true;
     const uint32_t deletions = WidgetApp::instance().deletions();
     pressed.emit(e.button);
@@ -467,7 +490,7 @@ void Widget::onMousePress(MouseEvent& e)
 
 void Widget::onMouseRelease(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
     bool wasPressed = pressed_;
     pressed_ = false;
     const uint32_t deletions = WidgetApp::instance().deletions();

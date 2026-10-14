@@ -152,7 +152,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       cliques caem em widgets que não se veem. Dois `setPage()` em menos de
       0,25 s prendem a primeira página da mesma maneira.
 
-- [ ] **13. `setEnabled(false)` não tem efeito nos campos de texto** —
+- [x] **13. `setEnabled(false)` não tem efeito nos campos de texto** —
       [TextInputWidgets.cpp:251](../src/widgets/TextInputWidgets.cpp#L251).
       Nem o dispatch do `WidgetApp` nem os handlers de TextInput, TextEdit,
       CodeEditor e SpinBox olham para o `enabled_`, e o estado não desce aos

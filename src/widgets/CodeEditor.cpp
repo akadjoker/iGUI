@@ -1457,6 +1457,7 @@ void CodeEditor::paint(PaintContext& ctx)
 
 void CodeEditor::onKeyPress(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     // Multi-cursor: Ctrl+D = add cursor for next occurrence
     if (e.ctrl && e.key == ig::retained::Key::D) {
         addCursorForNextOccurrence();
@@ -1700,6 +1701,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
 void CodeEditor::onTextInput(KeyEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (readOnly_) { e.consumed = true; return; }
 
     TextPos before = cursor_;
@@ -1768,6 +1770,7 @@ void CodeEditor::onTextInput(KeyEvent& e)
 
 void CodeEditor::onMousePress(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     // Check minimap click — use full rect (before width shrink)
     if (showMinimap_) {
         Rect abs = absoluteRect();
@@ -1887,6 +1890,7 @@ void CodeEditor::onMouseRelease(MouseEvent& e)
 
 void CodeEditor::onMouseMove(MouseEvent& e)
 {
+    if (!isEnabledInTree()) return;
     if (minimapDrag_ && showMinimap_) {
         Rect abs = absoluteRect();
 

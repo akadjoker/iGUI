@@ -250,7 +250,7 @@ void ComboBox::paint(PaintContext& ctx)
 
 void ComboBox::onMousePress(MouseEvent& e)
 {
-    if (!enabled_) return;
+    if (!isEnabledInTree()) return;
     if (isOpen()) closeDropdown(); else openDropdown();
     e.consumed = true;
 }

@@ -531,7 +531,7 @@ void DataGrid::paint(PaintContext& ctx)
 
 void DataGrid::onMousePress(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
 
@@ -674,7 +674,7 @@ void DataGrid::onMouseRelease(MouseEvent& e)
 
 void DataGrid::onMouseMove(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
 
     if (hScrollDrag_)
@@ -712,7 +712,7 @@ void DataGrid::onMouseMove(MouseEvent& e)
 
 void DataGrid::onMouseScroll(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
 
@@ -1438,7 +1438,7 @@ void TreeGrid::paint(PaintContext& ctx)
 
 void TreeGrid::onMousePress(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
 
@@ -1533,7 +1533,7 @@ void TreeGrid::onMouseRelease(MouseEvent& e)
 
 void TreeGrid::onMouseMove(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
 
     if (resizeCol_ >= 0) {
@@ -1553,7 +1553,7 @@ void TreeGrid::onMouseMove(MouseEvent& e)
 
 void TreeGrid::onMouseScroll(MouseEvent& e)
 {
-    if (!visible_ || !enabled_) return;
+    if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
 
