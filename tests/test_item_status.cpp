@@ -5300,6 +5300,49 @@ void test_menu_popups_stay_on_screen()
     assert(picked == 1);
 }
 
+// O Ctrl+A de um bloco de escolha múltipla não dispara enquanto se escreve num
+// campo de texto; fora dele seleciona tudo.
+void test_multi_select_ctrl_a_waits_while_typing()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::String text("ola");
+    bool selected[4] = { false, false, false, false };
+    ig::Rect field;
+    ig::Rect firstRow;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+        c.inputText("nome", text, 200.0f);
+        field = c.itemRect();
+        c.beginMultiSelect(ig::Span<bool>(selected, 4));
+        const char* names[4] = { "a", "b", "c", "d" };
+        for (int i = 0; i < 4; ++i)
+        {
+            c.selectable(names[i], selected[i]);
+            if (i == 0) firstRow = c.itemRect();
+        }
+        c.endMultiSelect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(field.x + 20.0f, field.y + field.height * 0.5f, build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::A, true, false));
+    harness.frame(build);
+    for (int i = 0; i < 4; ++i) assert(!selected[i]);
+
+    harness.click(firstRow.x + 5.0f, firstRow.y + 5.0f, build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::A, true, false));
+    harness.frame(build);
+    for (int i = 0; i < 4; ++i) assert(selected[i]);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6326,6 +6369,7 @@ int main()
     test_long_combo_box_list_stays_on_screen_and_scrolls();
     test_combo_box_opens_above_and_shows_the_current_item();
     test_menu_popups_stay_on_screen();
+    test_multi_select_ctrl_a_waits_while_typing();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

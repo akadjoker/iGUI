@@ -1410,9 +1410,7 @@ void Context::beginFrame(const FrameInfo &frame)
     propertyRowActive_ = false;
     focusOrder_.clear();
     focusSeen_.clear();
-    // Whether a text field had the keyboard last frame - read before the
-    // reset below, for the undo shortcuts further down.
-    const bool textFieldHadKeyboard = wantsTextInput_;
+    textFieldHadKeyboard_ = wantsTextInput_;
     wantsKeyboard_ = false;
     wantsTextInput_ = false;
     backspacePressed_ = false;
@@ -1445,7 +1443,7 @@ void Context::beginFrame(const FrameInfo &frame)
     // code editor has its own undo): taking them for the application's
     // history reverted unrelated actions under the user's typing, and in the
     // code editor undid twice.
-    if (!textFieldHadKeyboard)
+    if (!textFieldHadKeyboard_)
     {
         if (shortcut(KeyCode::Z))
             undo();
@@ -3696,7 +3694,8 @@ bool Context::beginMultiSelect(Span<bool> selected, unsigned flags)
     // As teclas só valem com o foco na janela: quem está a escrever noutra janela não
     // pode estar a mexer nesta seleção sem querer.
     const bool focused = currentWindow_ == focusedWindow_;
-    if (!single && focused && (flags & MultiSelectFlags::NoSelectAll) == 0u &&
+    const bool typing = textFieldHadKeyboard_ || wantsTextInput_;
+    if (!single && focused && !typing && (flags & MultiSelectFlags::NoSelectAll) == 0u &&
         shortcut(KeyCode::A, true, false))
     {
         for (Span<bool>::size_type i = 0u; i < selected.size(); ++i)
