@@ -128,7 +128,11 @@ void WidgetApp::update(const ig::retained::IO& io)
         width_  = newW;
         height_ = newH;
         if (width_ != 0 && height_ != 0)
+        {
             needsLayout_ = true;
+            for (FloatWindow* fw : floats_)
+                keepOnScreen(fw);
+        }
     }
 
     float mx = io.mouseX;
@@ -942,6 +946,25 @@ void WidgetApp::applyWindowState(FloatWindow* fw)
     fw->setFloatPos(geometry.x, geometry.y);
     fw->setFloatSize(geometry.w, geometry.h);
     fw->setMinimized(geometry.minimized);
+    keepOnScreen(fw);
+}
+
+// The window fits the display and enough of its title bar stays on it to be
+// dragged back.
+void WidgetApp::keepOnScreen(FloatWindow* fw)
+{
+    const float sw = static_cast<float>(width_);
+    const float sh = static_cast<float>(height_);
+    if (!fw || sw <= 0.0f || sh <= 0.0f) return;
+    const float w = std::min(fw->floatW(), sw);
+    const float h = std::min(fw->floatH(), sh);
+    const float grip = std::min(w, 40.0f);
+    const float x = std::max(grip - w, std::min(fw->floatX(), sw - grip));
+    const float y = std::max(0.0f, std::min(fw->floatY(), sh - fw->titleBarHeight()));
+    if (w != fw->floatW() || h != fw->floatH())
+        fw->setFloatSize(w, h);
+    if (x != fw->floatX() || y != fw->floatY())
+        fw->setFloatPos(x, y);
 }
 
 void WidgetApp::captureDockLayouts()

@@ -2238,6 +2238,49 @@ static void test_date_picker_keeps_real_dates()
     assert(changes == 0);
 }
 
+// Uma janela gravada num ecrã maior volta alcançável: cabe no ecrã atual e a
+// barra de título fica à vista. O mesmo quando o ecrã encolhe depois.
+static void test_restored_windows_stay_on_screen()
+{
+    using namespace ig::retained;
+    const char* path = "igui_window_offscreen_test.ini";
+    ct::Ini saved;
+    saved.set("Far", "pos_x", 3000.0);
+    saved.set("Far", "pos_y", 2000.0);
+    saved.set("Far", "size_w", 1200.0);
+    saved.set("Far", "size_h", 900.0);
+    assert(saved.save(path));
+
+    WidgetApp& app = WidgetApp::instance();
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    app.setWindowStatePath(path);
+    assert(app.loadWindowState());
+    auto* far = app.addFloat<FloatWindow>("Far");
+    auto reachable = [far](float width, float height)
+    {
+        return far->floatW() <= width && far->floatH() <= height && far->floatY() >= 0.0f &&
+               far->floatY() + far->titleBarHeight() <= height &&
+               far->floatX() + far->floatW() >= 40.0f && far->floatX() <= width - 40.0f;
+    };
+    assert(reachable(800.0f, 600.0f));
+
+    far->setFloatPos(700.0f, 500.0f);
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    assert(reachable(400.0f, 300.0f));
+
+    app.removeFloat(far);
+    app.setWindowStatePath(String());
+    std::remove(path);
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2430,6 +2473,7 @@ int main()
     test_text_edit_word_and_line_clicks_count_characters();
     test_cell_editors_work_on_whole_characters();
     test_date_picker_keeps_real_dates();
+    test_restored_windows_stay_on_screen();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

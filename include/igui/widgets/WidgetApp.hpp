@@ -502,6 +502,7 @@ private:
     bool dockLayoutPending_ = false;
     void captureWindowState(FloatWindow* fw);
     void applyWindowState(FloatWindow* fw);
+    void keepOnScreen(FloatWindow* fw);
     void captureDockLayouts();
     void restoreDockLayouts();
 
