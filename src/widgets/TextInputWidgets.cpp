@@ -594,6 +594,7 @@ int TextEdit::visibleLineCount() const
 void TextEdit::scrollToLine(int n)
 {
     if (lineHeight() <= 0) return;
+    revealCursor_ = false;
     scrollY_ = n * lineHeight();
     float maxY = std::max(0.0f, static_cast<int>(lines_.size()) * lineHeight() - rect_.h);
     scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
@@ -1101,6 +1102,19 @@ const ct::Vector<int>& TextEdit::rowStarts() const
     return rowStarts_;
 }
 
+void TextEdit::updateWrap(PaintContext& ctx)
+{
+    const float textW = rect_.w - gutterW_ - Theme::instance().textEditPadding * 2;
+    if (wrapNeedsRebuild(ctx, textW)) rebuildWrap(ctx);
+    else if (!staleWrapLines_.empty() || widestLineGone_)
+        measureStaleLines(ctx);
+    if (revealCursor_)
+    {
+        ensureCursorVisible();
+        revealCursor_ = false;
+    }
+}
+
 int TextEdit::totalVisualRows() const
 {
     const ct::Vector<int>& starts = rowStarts();
@@ -1136,6 +1150,7 @@ int TextEdit::logicalToVisualRow(int line, int row) const
 void TextEdit::ensureCursorVisible()
 {
     if (lineHeight() <= 0 || rect_.h <= 0) return;
+    revealCursor_ = true;
 
     int cursorRowInLine = 0;
     if (!wrapRows_.empty() && cursor_.line < static_cast<int>(wrapRows_.size()))
@@ -1207,10 +1222,7 @@ void TextEdit::paint(PaintContext& ctx)
 
     updateGutterWidth(ctx);
 
-    float newWrapW = abs.w - gutterW_ - t.textEditPadding * 2;
-    if (wrapNeedsRebuild(ctx, newWrapW)) rebuildWrap(ctx);
-    else if (!staleWrapLines_.empty() || widestLineGone_)
-        measureStaleLines(ctx);
+    updateWrap(ctx);
     scrollX_ = std::max(0.0f, std::min(scrollX_, maxScrollX()));
 
     float pad = t.textEditPadding;
@@ -1571,6 +1583,7 @@ void TextEdit::onMouseMove(MouseEvent& e)
 void TextEdit::onMouseScroll(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
+    revealCursor_ = false;
     const float horizontal = (e.scrollX != 0.0f) ? e.scrollX : (e.shift ? e.scrollY : 0.0f);
     if (horizontal != 0.0f)
     {

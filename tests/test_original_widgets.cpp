@@ -3060,6 +3060,139 @@ static void test_text_edit_click_before_the_wrap_is_measured()
     assert(pos.col >= 0 && pos.col <= static_cast<int>(edit->lineAt(pos.line).size()));
 }
 
+// Escrever no fim de uma linha com word-wrap, no fundo da vista, até ela passar
+// para uma fila nova: depois da pintura, o cursor continua dentro da vista. Um
+// scroll pedido depois da tecla (scrollToLine, roda) não é desfeito.
+static void test_text_edit_keeps_the_cursor_visible_while_typing_wrapped()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("typewrap");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    edit->setRect({ 0.0f, 0.0f, 200.0f, rowHeight * 4.0f });
+    edit->setShowLineNumbers(false);
+    edit->setWordWrap(true);
+    edit->setText("one\ntwo\nthree\nfour");
+    assert(app.setStage("typewrap", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    paint();
+    edit->setCursorPos(3, 4);
+    for (int i = 0; i < 120; ++i)
+    {
+        KeyEvent typed;
+        typed.text[0] = (i % 6 == 5) ? ' ' : 'w';
+        edit->onTextInput(typed);
+        paint();
+        const int length = static_cast<int>(edit->lineAt(3).size());
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.localX = 199.0f;
+        press.localY = rowHeight * 3.5f;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+        assert(edit->cursorPos().line == 3);
+        assert(edit->cursorPos().col == length);
+        edit->setCursorPos(3, length);
+    }
+    assert(edit->firstVisibleLine() > 0);
+
+    KeyEvent typed;
+    typed.text[0] = 'w';
+    edit->onTextInput(typed);
+    edit->scrollToLine(0);
+    paint();
+    assert(edit->firstVisibleLine() == 0);
+    edit->onTextInput(typed);
+    MouseEvent wheel;
+    wheel.scrollY = 100.0f;
+    edit->onMouseScroll(wheel);
+    paint();
+    assert(edit->firstVisibleLine() == 0);
+}
+
+// O mesmo no CodeEditor: o cursor é desenhado em todas as pinturas, e o realce
+// da linha atual fica sempre à mesma distância do número da linha na goteira,
+// mesmo quando a pintura teve de rolar a vista.
+static void test_code_editor_highlights_the_cursor_row_while_typing_wrapped()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("codetypewrap");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    editor->setRect({ 0.0f, 0.0f, 240.0f, rowHeight * 6.0f });
+    editor->setShowFolding(false);
+    editor->setShowMinimap(false);
+    editor->setHighlightCurrentLine(true);
+    editor->setWordWrap(true);
+    editor->setText("one\ntwo\nthree\nfour");
+    assert(app.setStage("codetypewrap", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    io.deltaTime = 0.0f;
+    app.setFocused(editor);
+    editor->setCursorPos(3, 4);
+    auto same = [](Color a, Color b)
+    { return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a; };
+    const Vec2 white = atlas.whitePixelUV();
+    GetDrawList().setWhitePixel(TextureHandle{ 1 }, white);
+    float firstGap = 0.0f;
+    for (int i = 0; i < 90; ++i)
+    {
+        KeyEvent typed;
+        typed.text[0] = (i % 6 == 5) ? ' ' : 'w';
+        editor->onTextInput(typed);
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        float highlightTop = 1.0e9f, numberTop = 1.0e9f;
+        bool caret = false;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            for (const DrawVertex& vertex: pass.list->vertices())
+            {
+                const bool solid = vertex.u == white.x && vertex.v == white.y;
+                if (solid && same(vertex.color, Color(45, 50, 60, 255)) && vertex.y < highlightTop)
+                    highlightTop = vertex.y;
+                if (!solid && vertex.x < 30.0f && same(vertex.color, theme.lineNumberActive) &&
+                        vertex.y < numberTop)
+                    numberTop = vertex.y;
+                if (solid && vertex.x > 40.0f && same(vertex.color, theme.textColor)) caret = true;
+            }
+        }
+        assert(caret);
+        assert(highlightTop < 1.0e9f && numberTop < 1.0e9f);
+        if (i == 0) firstGap = numberTop - highlightTop;
+        assert(numberTop - highlightTop == firstGap);
+    }
+}
+
 // Com um bloco dobrado, as linhas escondidas não ocupam filas: um clique em cada
 // fila cai na linha visível certa, antes e depois de editar o texto.
 static void test_code_editor_rows_skip_folded_lines()
@@ -3507,6 +3640,8 @@ int main()
     test_text_edit_measures_again_after_zoom_and_tab_size();
     test_text_edit_wraps_only_the_edited_lines();
     test_text_edit_click_before_the_wrap_is_measured();
+    test_text_edit_keeps_the_cursor_visible_while_typing_wrapped();
+    test_code_editor_highlights_the_cursor_row_while_typing_wrapped();
     test_code_editor_rows_skip_folded_lines();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

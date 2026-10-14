@@ -1376,6 +1376,7 @@ void CodeEditor::paint(PaintContext& ctx)
 
     // What follows the horizontal scroll stays right of the gutter.
     updateGutterWidth(ctx);
+    updateWrap(ctx);
     const Rect textRect = {abs.x + gutterW_, abs.y, std::max(0.0f, abs.w - gutterW_), abs.h};
 
     paintCurrentLineHighlight(ctx, abs);
