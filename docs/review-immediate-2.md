@@ -129,7 +129,7 @@ frame; confirmado e corrigido: só até ao próximo `beginWindow`, que já a
 invalidava); o `availableHeight` não conhece popup, tab nem tabela (confirmado e corrigido
 para o popup, o conteúdo de um combo e a tabela com scrollY; na tab já dava o
 mesmo que a janela); o `wheelAreas_`
-nunca perde entradas.
+nunca perde entradas (confirmado e corrigido).
 
 ## Dock
 

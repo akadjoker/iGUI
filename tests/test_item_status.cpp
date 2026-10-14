@@ -7123,6 +7123,39 @@ void test_available_height_follows_the_container()
     assert(gap > -1.0f && gap < 1.0f);
 }
 
+// As áreas de scroll que a roda conhece são só as do frame anterior: uma área
+// que deixou de ser submetida sai, e uma interface com ids que mudam não faz a
+// lista crescer sem fim.
+void test_wheel_areas_forget_what_is_gone()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int generation = 0;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("rolar", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f)));
+        char id[32];
+        snprintf(id, sizeof(id), "area%d", generation);
+        if (c.beginChild(id, 80.0f))
+        {
+            for (int i = 0; i < 20; ++i) c.label("linha");
+        }
+        c.endChild();
+        c.endWindow();
+    };
+
+    context.pushEvent(ig::Event::pointerMove(50.0f, 60.0f));
+    harness.frame(build);
+    harness.frame(build);
+    const size_t steady = context.wheelAreaCount();
+    assert(steady > 0u);
+    for (generation = 1; generation < 50; ++generation)
+        for (int frame = 0; frame < 3; ++frame) harness.frame(build);
+    assert(context.wheelAreaCount() <= steady + 1u);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8185,6 +8218,7 @@ int main()
     test_disabled_menu_item_is_the_last_item();
     test_removed_window_lets_go_of_the_pointer();
     test_available_height_follows_the_container();
+    test_wheel_areas_forget_what_is_gone();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

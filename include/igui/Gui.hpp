@@ -1188,6 +1188,8 @@ public:
     // label ou um dummy não identifica item nenhum: ficam com o id do último
     // widget que se identificou.
     Rect itemRect() const { return item_.bounds; }
+    /// @brief How many scroll areas the mouse wheel remembers (diagnostics).
+    size_t wheelAreaCount() const { return wheelAreas_.size(); }
     WidgetId itemId() const { return item_.id; }
     void drawRectFilled(const Rect &bounds, const Color &color);
     void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
