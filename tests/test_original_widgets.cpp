@@ -2281,6 +2281,59 @@ static void test_restored_windows_stay_on_screen()
     app.update(io);
 }
 
+// Os breadcrumbs partem o caminho pela raiz que ele tem ("/", uma letra de
+// drive ou um caminho UNC), com o caminho de cada pasta, e um nome longo é
+// cortado num carácter inteiro.
+static void test_file_dialog_breadcrumbs_follow_the_path_root()
+{
+    namespace fs = ig::retained::FileSystem;
+    using ig::retained::String;
+    auto names = [](const ct::Vector<fs::PathCrumb>& crumbs)
+    {
+        String joined;
+        for (const fs::PathCrumb& crumb: crumbs) joined += crumb.name + "|" + crumb.path + ";";
+        return joined;
+    };
+    assert(names(fs::pathCrumbs("/home/me")) == "/|/;home|/home;me|/home/me;");
+    assert(names(fs::pathCrumbs("/")) == "/|/;");
+    assert(names(fs::pathCrumbs("D:\\Users\\me")) == "D:|D:/;Users|D:/Users;me|D:/Users/me;");
+    assert(names(fs::pathCrumbs("D:/")) == "D:|D:/;");
+    assert(names(fs::pathCrumbs("\\\\server\\share\\docs")) ==
+            "//server/share|//server/share;docs|//server/share/docs;");
+
+    const String root = fs::joinPath(fs::currentDir(), "igui_crumbs_test");
+    const String deep =
+            fs::joinPath(root, "a\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7"
+                               "\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7\xC3\xA7");
+    assert(fs::createDir(deep));
+    ig::retained::FileDialog dialog;
+    dialog.setRect({ 0.0f, 0.0f, 700.0f, 480.0f });
+    dialog.layout();
+    dialog.setPath(deep);
+    dialog.layout();
+    int checked = 0;
+    ct::Vector<ig::retained::Widget*> pending;
+    pending.push_back(&dialog);
+    while (!pending.empty())
+    {
+        ig::retained::Widget* widget = pending.back();
+        pending.pop_back();
+        for (ig::retained::Widget* child: widget->children()) pending.push_back(child);
+        auto* button = ig::retained::widget_cast<ig::retained::Button>(widget);
+        if (!button || button->text().find("\xC3") == String::npos) continue;
+        const String& label = button->text();
+        for (size_t i = 0; i < label.size(); i += ig::retained::utf8CharLen(label.c_str() + i))
+        {
+            int length = 0;
+            assert(ig::retained::utf8Decode(label.c_str() + i, length) != 0xFFFDu);
+        }
+        ++checked;
+    }
+    assert(checked == 1);
+    std::remove(deep.c_str());
+    std::remove(root.c_str());
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2474,6 +2527,7 @@ int main()
     test_cell_editors_work_on_whole_characters();
     test_date_picker_keeps_real_dates();
     test_restored_windows_stay_on_screen();
+    test_file_dialog_breadcrumbs_follow_the_path_root();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

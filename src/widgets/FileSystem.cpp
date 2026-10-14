@@ -1,4 +1,5 @@
 #include "pch.hpp"
+#include <cctype>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Platform includes
@@ -83,6 +84,49 @@ String normalizePath(const String& path)
     if (result.size() > 1 && result.back() == '/')
         result.pop_back();
     return result;
+}
+
+ct::Vector<PathCrumb> pathCrumbs(const String& path)
+{
+    ct::Vector<PathCrumb> crumbs;
+    const bool unc = path.size() >= 2 && (path[0] == '/' || path[0] == '\\') &&
+                     (path[1] == '/' || path[1] == '\\');
+    const String p = normalizePath(path);
+    String accum;
+    size_t start = 0;
+    if (p.size() >= 2 && p[1] == ':' && std::isalpha(static_cast<unsigned char>(p[0])))
+    {
+        accum = p.substr(0, 2);
+        crumbs.push_back({accum, accum + "/"});
+        start = 2;
+    }
+    else if (unc)
+    {
+        size_t end = p.find('/', 1);
+        if (end != String::npos) end = p.find('/', end + 1);
+        if (end == String::npos) end = p.size();
+        accum = "/" + p.substr(0, end);
+        crumbs.push_back({accum, accum});
+        start = end;
+    }
+    else if (!p.empty() && p[0] == '/')
+    {
+        crumbs.push_back({"/", "/"});
+        start = 1;
+    }
+    while (start < p.size())
+    {
+        size_t end = p.find('/', start);
+        if (end == String::npos) end = p.size();
+        const String segment = p.substr(start, end - start);
+        if (!segment.empty())
+        {
+            accum = (accum.empty() && crumbs.empty()) ? segment : accum + "/" + segment;
+            crumbs.push_back({segment, accum});
+        }
+        start = end + 1;
+    }
+    return crumbs;
 }
 
 bool isAbsolute(const String& path)
