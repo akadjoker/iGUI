@@ -5816,8 +5816,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     }
 
     bool changed = false;
-    // The angle the live drag has swept on the ring's plane, for the wedge drawn
-    // around the centre below.
     float ringSweep = 0.0f;
     const GizmoAxis3D activeAxis = activeWidget_ == id
         ? static_cast<GizmoAxis3D>(state->axis) : Gizmo3DAxisNone;
@@ -5878,10 +5876,7 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         }
         else if (mode == Gizmo3DMode::Rotate)
         {
-            // A ring is turned by its own plane's angle. Turning it by the angle
-            // the pointer sweeps on the screen instead reads as the model
-            // lagging the hand: the drawn ring is an ellipse, so equal steps
-            // across the screen are unequal steps around the model.
+            // O anel roda pelo ângulo no plano dele, não pelo do ecrã (o anel desenhado é uma elipse).
             const float startAngle = atan2f(state->pointerStart.y - center.y, state->pointerStart.x - center.x);
             const float currentAngle = atan2f(pointer_.position.y - center.y, pointer_.position.x - center.x);
             float swept = currentAngle - startAngle;
@@ -5927,8 +5922,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         }
     }
 
-    // The object first, then the handles on top of it: a ring has to stay
-    // grabbable where the box covers it.
     if (options.showModel)
         drawGizmo3DModel(projector, transform, options.axisLength, clip, drawList);
 
@@ -5992,9 +5985,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
                     continue;
                 if (hasPrevious)
                 {
-                    // The whole ring is drawn, the way a modelling tool draws
-                    // it: the far half faint, so the ring reads as one circle
-                    // instead of an arc that stops halfway round.
                     const float middle = angle - GizmoPi / 40.0f;
                     const float radialX = u.x * cosf(middle) + v.x * sinf(middle);
                     const float radialY = u.y * cosf(middle) + v.y * sinf(middle);
@@ -6055,9 +6045,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
             (state->ringStart.x != 0.0f || state->ringStart.y != 0.0f || state->ringStart.z != 0.0f);
         if (turningRing)
         {
-            // The wedge follows the ring, not the screen: it is the source vector
-            // turned around the ring's own axis by the angle the drag has swept,
-            // which is the angle the transform is being given.
             const Vec3 normal = gizmo3DAxisVector(activeAxis);
             const float sourceLength = sqrtf(state->ringStart.x * state->ringStart.x +
                                              state->ringStart.y * state->ringStart.y +
@@ -7087,9 +7074,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     if (!picker)
         return false;
 
-    // RGB cannot represent hue for greys and black.  Keep the last hue chosen
-    // by the user so dragging through the left/bottom edge of the SV square
-    // does not make the next drag jump back to red.
+    // O RGB não guarda o matiz de um cinzento: fica o último que o utilizador escolheu.
     if (!picker->initialized || picker->lastColor != value)
     {
         float nextHue = 0.0f;
@@ -7192,8 +7177,7 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
 
     drawText(*drawList, theme_.font, text, Vec2(rect.x, rect.y), theme_.fontSize,
              theme_.labelText, clip);
-    // A single quad has a visible diagonal because the GPU splits it into two
-    // triangles. Thin horizontal bands preserve the SV curve without a seam.
+    // Faixas finas em vez de um quad: o quad mostraria a diagonal dos dois triângulos.
     const uint32_t saturationValueBands = 32u;
     for (uint32_t band = 0u; band < saturationValueBands; ++band)
     {
@@ -7326,7 +7310,6 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
             break;
         }
     }
-    // Handles sit inside area, so one gate on it covers bar and handles.
     const Rect visibleArea = intersect(area, clip);
     if (itemPressedIn(visibleArea, right) && hit > 0 &&
         hit + 1 < static_cast<int>(stops.size())) {
@@ -7409,8 +7392,6 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
         if (contains(Rect(p.x - 6.0f, p.y - 6.0f, 12.0f, 12.0f), pointer_.position)) { hit = i; break; }
     }
     bool changed = false;
-    // Point handles overhang canvas by 6px, which is exactly the margin
-    // canvas was shrunk by, so the widget's own rect covers them.
     const Rect visibleArea = intersect(contentRect(bounds), clip);
     if (itemPressedIn(visibleArea, right) && hit > 0 && hit + 1 < static_cast<int>(points.size())) {
         points.erase(points.begin() + hit);
@@ -7468,7 +7449,6 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
     const auto left = buttonIndex(PointerButton::Left);
     const WidgetId scrollId = combineIds(id, 0x5343524f4c4c);
     const Rect scroll(ruler.x, area.bottom(), ruler.width, 12);
-    // The zoom buttons sit inside area; the scroll strip hangs 12px below it.
     const Rect controls = intersect(Rect(area.x, area.y, area.width, area.height + 12.0f), contentClip());
     if (itemPressedIn(controls, left) && activeWidget_ == InvalidWidgetId) {
         const Vec2 p = pointer_.pressedPosition[left];
@@ -7478,7 +7458,6 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
                 const float center = view.offset + .5f/view.zoom;
                 view.zoom = i==2 ? 1.f : clamp(view.zoom*(i==0 ? 1.f/1.5f : 1.5f),1,64);
                 view.offset = clamp(center-.5f/view.zoom,0,1-1/view.zoom);
-                // This press belongs to the viewport controls.
                 pointer_.pressed[left] = false;
             }
         }
@@ -11737,7 +11716,6 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
 
     if (!(wrapWidth > 0.0f))
     {
-        // Sem largura: as linhas são as que o texto já traz.
         StringView::size_type start = 0u;
         for (StringView::size_type i = 0u; i <= size; ++i)
         {
@@ -11784,9 +11762,6 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
 
         if (i == lineStart)
         {
-            // Primeira unidade da linha: os espaços ficam (não vale a pena
-            // começar a linha por causa deles), e uma palavra que não caiba é
-            // partida aqui mesmo.
             if (space)
             {
                 lastSpace = i;
@@ -11830,7 +11805,6 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
 
         if (lastSpace != StringView::npos && lastSpace > lineStart)
         {
-            // Há um espaço onde cortar; os espaços do corte não vão para a linha.
             lines.push_back(StringView(text.data() + lineStart, lastSpace - lineStart));
             lineStart = lastSpace;
             while (lineStart < size && text[lineStart] == ' ')
@@ -11841,8 +11815,6 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
             continue;
         }
 
-        // A palavra não cabe nesta linha e não há espaço onde cortar: a linha
-        // acaba aqui e a palavra (que se parte, se for preciso) começa a seguir.
         lines.push_back(StringView(text.data() + lineStart, i - lineStart));
         lineStart = i;
         width = 0.0f;
