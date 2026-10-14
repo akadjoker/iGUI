@@ -5343,6 +5343,37 @@ void test_multi_select_ctrl_a_waits_while_typing()
     for (int i = 0; i < 4; ++i) assert(selected[i]);
 }
 
+// checkboxFlags com uma máscara de vários bits: marcado só com todos os bits, e um
+// clique com só parte deles liga-os todos.
+void test_checkbox_flags_with_a_multi_bit_mask()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    unsigned flags = 0x1u;
+    unsigned other = 0x1u;
+    ig::Rect box;
+    ig::Rect otherBox;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+        c.checkboxFlags("ambos", flags, 0x3u);
+        box = c.itemRect();
+        c.checkboxFlags("outros", other, 0x3u, ig::Rect(0.0f, 60.0f, 200.0f, 28.0f));
+        otherBox = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(box.x + 5.0f, box.y + box.height * 0.5f, build);
+    assert(flags == 0x3u);
+    harness.click(box.x + 5.0f, box.y + box.height * 0.5f, build);
+    assert(flags == 0x0u);
+    harness.click(otherBox.x + 5.0f, otherBox.y + otherBox.height * 0.5f, build);
+    assert(other == 0x3u);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6370,6 +6401,7 @@ int main()
     test_combo_box_opens_above_and_shows_the_current_item();
     test_menu_popups_stay_on_screen();
     test_multi_select_ctrl_a_waits_while_typing();
+    test_checkbox_flags_with_a_multi_bit_mask();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
