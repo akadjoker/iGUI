@@ -1101,8 +1101,76 @@ void test_dock_slot_outside_the_enum_is_the_center()
     remove(path);
 }
 
+// The tab list of a dock region is a popup: while it is open over the panel
+// content, the content under it is not hovered and does not take the click
+// that picks a tab from the list.
+void test_dock_tab_list_is_a_popup()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect under;
+    bool underHovered = false;
+    bool underClicked = false;
+    bool bShown = false;
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f))) return;
+        if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
+        {
+            if (c.beginDockPanel("C", ig::DockSlot::Center))
+            {
+                c.label("c");
+                c.endDockPanel();
+            }
+            if (c.beginDockPanel("A", ig::DockSlot::Left))
+            {
+                underClicked =
+                        c.button("fundo", ig::Rect(0.0f, 0.0f, c.availableWidth(), 300.0f)) ||
+                        underClicked;
+                under = c.itemRect();
+                underHovered = c.isItemHovered();
+                c.endDockPanel();
+            }
+            bShown = false;
+            if (c.beginDockPanel("B", ig::DockSlot::Left))
+            {
+                bShown = true;
+                c.label("b");
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+    harness.frame(build);
+    harness.frame(build);
+    check(!bShown, "the first panel of the region was not the selected one");
+
+    // The tab bar sits right above the content, the list button at its right end.
+    const float bar = context.theme().widgetHeight;
+    const float pad = under.y - (context.theme().titleBarHeight + bar);
+    const float listX = under.x + under.width + pad - bar * 0.5f;
+    const float listY = under.y - pad - bar * 0.5f;
+    harness.click(listX, listY, build);
+    // The second row of the list is panel B, right over the content button.
+    const float rowX = under.x + under.width - 20.0f;
+    const float rowY = under.y - pad + bar * 1.5f;
+    check(rowY > under.y && rowY < under.y + under.height, "the list does not cover the content");
+    context.pushEvent(ig::Event::pointerMove(rowX, rowY));
+    harness.frame(build);
+    check(!underHovered, "the content under the tab list was hovered");
+    underClicked = false;
+    harness.click(rowX, rowY, build);
+    harness.frame(build);
+    check(bShown, "picking a tab from the list did not select it");
+    check(!underClicked, "the click that picked a tab also clicked the content under the list");
+}
+
 int main()
 {
+    test_dock_tab_list_is_a_popup();
     test_dock_slot_outside_the_enum_is_the_center();
     test_tile_ignores_windows_no_longer_submitted();
     test_drag_keeps_title_bar_reachable();
