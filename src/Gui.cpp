@@ -7907,6 +7907,16 @@ void Context::progressBar(float value, float maximum, const Rect &bounds, String
     }
 }
 
+// Where a sample sits between the bottom (0) and the top (1) of the plot; a NaN
+// (also inf times a zero scale) sits at the bottom.
+static float plotFraction(float value, float scaleMin, float inverseScale)
+{
+    const float fraction = (value - scaleMin) * inverseScale;
+    if (!(fraction == fraction))
+        return 0.0f;
+    return fraction < 0.0f ? 0.0f : (fraction > 1.0f ? 1.0f : fraction);
+}
+
 int Context::plotImpl(bool histogram, StringView labelText, const float *values, int count,
                       const Rect &bounds, int offset, StringView overlay, float scaleMin,
                       float scaleMax)
@@ -7945,7 +7955,8 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
             for (int i = 0; i < count; ++i)
             {
                 const float value = values[i];
-                if (!(value == value))
+                // NaN and the infinities stay out of the scale (inf - inf is NaN).
+                if (!(value - value == 0.0f))
                     continue;
                 if (!seen)
                 {
@@ -8007,7 +8018,7 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
                 const int first = static_cast<int>(static_cast<int64_t>(column) * sampleCount / columns);
                 const float value = values[(offset + first) % count];
                 const float y = inner.bottom() -
-                                clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
+                                plotFraction(value, scaleMin, inverseScale) * inner.height;
                 const float left = inner.x + inner.width * static_cast<float>(column) /
                                                 static_cast<float>(columns);
                 float right = inner.x + inner.width * static_cast<float>(column + 1) /
@@ -8035,7 +8046,7 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
                 const int index = static_cast<int>(static_cast<int64_t>(column) * sampleCount / columns);
                 const float value = values[(offset + index) % count];
                 const float y = inner.bottom() -
-                                clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
+                                plotFraction(value, scaleMin, inverseScale) * inner.height;
                 const float x = inner.x + inner.width * static_cast<float>(column) /
                                             static_cast<float>(columns);
                 plotPoints_.push_back(Vec2(x, y));

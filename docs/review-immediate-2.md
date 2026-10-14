@@ -12,7 +12,8 @@ sondas não estão no repo; cada problema que se arranjar deve ganhar o seu test
 Os pontos de "Não confirmados" foram vistos só no código.
 
 Os pontos das listas estão todos arranjados, cada um com o seu teste. Os de
-"Não confirmados" continuam por ver.
+"Não confirmados" foram vistos depois, um a um, com um teste: cada nota diz o
+que se confirmou.
 
 ## Menus, combos, listas e árvores
 
@@ -255,4 +256,5 @@ Não confirmados: um ponto atrás da câmara é projetado espelhado no
 `item_.edited` (confirmado e corrigido); o splitter salta até meia espessura no press (confirmado e
 corrigido); o `stepperInt` não
 limita um valor que já está fora do intervalo (confirmado e corrigido: o
-primeiro clique trá-lo para dentro); um `+inf` num plot achata a série.
+primeiro clique trá-lo para dentro); um `+inf` num plot achata a série (confirmado e corrigido; um NaN também
+deixava vértices NaN, corrigido no mesmo sítio).
