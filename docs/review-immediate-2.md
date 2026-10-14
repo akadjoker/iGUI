@@ -13,6 +13,54 @@ Os pontos de "Não confirmados" foram vistos só no código.
 
 Nenhum destes foi arranjado ainda.
 
+## Menus, combos, listas e árvores
+
+Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
+
+- [ ] **N1. Um submenu aberto dentro de um popup bloqueia a interface toda** —
+      [Gui.cpp:4910](../src/Gui.cpp#L4910), 1372, 1470. Depois de passar pelo
+      submenu e fechar o popup com um clique fora, nenhum clique chega a nada até
+      um Escape: o `openSubMenu_` nunca é limpo e o `menuWasOpenAtFrameStart_` fica
+      ligado. *Arranjo:* limpar o `openSubMenu_` e as bounds dele no
+      `releaseUnsubmittedBlockers` quando o submenu deixou de ser submetido.
+- [ ] **N2. As bounds de um submenu fechado continuam a comer cliques e o menu não
+      fecha** — [Gui.cpp:4651](../src/Gui.cpp#L4651), 4673, 4841, 5056, 13615. O
+      `subMenuPopupBounds_` só é zerado na troca por hover.
+- [ ] **N3. O submenu não fecha quando o rato passa para outro item do menu pai** —
+      [Gui.cpp:4743](../src/Gui.cpp#L4743), 4908.
+- [ ] **N4. A barra de menu principal corta o texto e só responde numa faixa de
+      10 px** — [Gui.cpp:4574](../src/Gui.cpp#L4574), 4614, 4660, 4671. O clip
+      desconta a margem da janela. *Arranjo:* `useClientArea = true` na janela da
+      barra.
+- [ ] **N5. A barra de rolagem do `beginCombo` não se deixa arrastar** —
+      [Gui.cpp:4368](../src/Gui.cpp#L4368). O teste do polegar corre antes de o
+      `comboItemsSubmitted_` ficar ligado, e o ponteiro é bloqueado.
+- [ ] **N6. Com conteúdo mais largo que o cabeçalho e com rolagem, o `beginCombo`
+      corta o conteúdo** — [Gui.cpp:4292](../src/Gui.cpp#L4292), 4428 contra 4493.
+      O begin calcula a largura sem a barra e o end com ela.
+- [ ] **N7. As linhas do `listBox` (e do `comboBox`) são paragens do Tab, e as setas
+      deixam de funcionar** — [Gui.cpp:3416](../src/Gui.cpp#L3416), 3524.
+- [ ] **N8. A lista do `comboBox` sai do ecrã sem maneira de lá chegar** —
+      [Gui.cpp:3492](../src/Gui.cpp#L3492). Sem limite de altura nem roda.
+- [ ] **N9. Os popups do `beginMenu` e do menu de contexto não ficam dentro do
+      ecrã** — [Gui.cpp:4668](../src/Gui.cpp#L4668), 4677, 5050. O
+      `beginSubMenu` já o faz.
+- [ ] **N10. O Ctrl+A de um bloco de escolha múltipla dispara enquanto se escreve
+      num campo de texto** — [Gui.cpp:3573](../src/Gui.cpp#L3573).
+- [ ] **N11. O `checkboxFlags` com uma máscara de vários bits faz o contrário do
+      ImGui** — [Gui.cpp:4183](../src/Gui.cpp#L4183). *Arranjo:*
+      `(flags & flagValue) == flagValue`.
+- [ ] **N12. Depois do `listBox` e do `comboBox` aberto, as consultas do item falam
+      da última linha** — [Gui.cpp:3415](../src/Gui.cpp#L3415), 3444, 3523. Um
+      tooltip com `isItemHovered()` depois do widget nunca aparece.
+- [ ] **N13. Um clique direito fora não fecha o menu de contexto** —
+      [Gui.cpp:5056](../src/Gui.cpp#L5056) (e o `beginMenu`, 4651).
+
+Não confirmados: o `listBox` e o `comboBox` põem um `currentItem` fora do
+intervalo a 0 sem devolver true; depois de escolher uma linha do `comboBox` o
+foco fica na linha e as setas deixam de mexer no combo; um `menuItem` desativado
+não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima.
+
 ## Janelas, frame, child e layout
 
 Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
