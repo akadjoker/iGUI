@@ -7341,6 +7341,45 @@ void test_gizmo3d_behind_the_camera_draws_nothing()
     assert(harness.frame(build).vertices.size() > without);
 }
 
+// Um gizmo3D que muda o transform num frame em que o centro não se projeta (o
+// objeto ficou atrás da câmara a meio do arrasto) também marca o item como
+// editado.
+void test_gizmo3d_edit_without_a_center_is_reported()
+{
+    const float front[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -5, 1 };
+    const float behind[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 5, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    ig::Transform3D transform;
+    ig::Gizmo3DOptions options;
+    options.showModel = false;
+    const float* view = front;
+    bool changed = false;
+    bool edited = false;
+    ig::Vec2 o;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        changed = c.gizmo3D("g", transform, ig::Gizmo3DMode::Scale,
+                ig::Rect(0.0f, 0.0f, 500.0f, 500.0f), view, projection, options);
+        edited = c.isItemEdited();
+        c.endWindow();
+    };
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerMove(o.x + 250.0f, o.y + 250.0f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, o.x + 250.0f, o.y + 250.0f));
+    harness.frame(build);
+    view = behind;
+    context.pushEvent(ig::Event::pointerMove(o.x + 300.0f, o.y + 250.0f));
+    harness.frame(build);
+    assert(changed);
+    assert(edited);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8408,6 +8447,7 @@ int main()
     test_table_reorder_applies_on_the_next_frame();
     test_empty_scrolling_table_keeps_its_height();
     test_gizmo3d_behind_the_camera_draws_nothing();
+    test_gizmo3d_edit_without_a_center_is_reported();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

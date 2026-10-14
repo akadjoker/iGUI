@@ -5960,6 +5960,8 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     if (options.showModel)
         drawGizmo3DModel(projector, transform, options.axisLength, clip, drawList);
 
+    if (changed)
+        item_.edited = true;
     Vec2 center;
     if (!projectGizmo3D(projector, transform.position, center))
         return changed;
@@ -6155,8 +6157,6 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
     drawList->addCircleFilled(center, 6.0f,
                               hoveredAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXYZ
                                   ? theme_.gizmoHighlight : Color(245u, 200u, 75u, 255u), clip);
-    if (changed)
-        item_.edited = true;
     return changed;
 }
 
