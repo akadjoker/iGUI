@@ -66,6 +66,7 @@ int main(int argc, char **argv)
     app.setTextureUpload([&bridge](const unsigned char *p, int w, int h) { return bridge.createTexture(w, h, p); });
     app.setTextureUpdate([&bridge](ig::retained::TextureHandle t, const unsigned char *p, int w, int h) { return bridge.updateTexture(t, p, w, h); });
     app.setTextureDestroy([&bridge](ig::retained::TextureHandle t) { bridge.destroyTexture(t); });
+    app.setDebugLayoutKey(SDL_SCANCODE_F1);
     registerDemoStage(app);
     registerMenuStage(app);
     registerBasicStage(app);

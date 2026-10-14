@@ -154,9 +154,11 @@ void WidgetApp::update(const ig::retained::IO& io)
     // Key press / release events
     for (const auto& ke : io.keyEvents)
     {
-        // F1 → toggle debug layout
-        if (ke.down && ke.scancode == 58 /*F1*/)
-            debugLayout_ = !debugLayout_;
+        if (debugLayoutKey_ != 0 && ke.scancode == debugLayoutKey_)
+        {
+            if (ke.down)
+                debugLayout_ = !debugLayout_;
+        }
         else
             dispatchKeyEvent(ke);
     }

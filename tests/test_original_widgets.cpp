@@ -1922,6 +1922,50 @@ static void test_border_layout_keeps_a_widget_set_again()
     assert(centre->text() == "centre" && other->text() == "other");
 }
 
+namespace
+{
+struct CountsKeys : ig::retained::Widget
+{
+    CountsKeys()
+    {
+        acceptsFocus_ = true;
+    }
+    void onKeyPress(ig::retained::KeyEvent&) override
+    {
+        ++presses;
+    }
+    int presses = 0;
+};
+} // namespace
+
+// O F1 chega aos widgets como qualquer tecla; só liga o overlay de debug numa
+// aplicação que escolha essa tecla com setDebugLayoutKey.
+static void test_debug_layout_key_is_opt_in()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("debugkey");
+    auto* target = stage->createChild<CountsKeys>();
+    assert(app.setStage("debugkey", TransitionType::None));
+    app.setFocused(target);
+
+    IO io;
+    IO::KeyEvent f1;
+    f1.scancode = 58;
+    io.keyEvents.push_back(f1);
+    app.update(io);
+    assert(target->presses == 1);
+    assert(!app.debugLayout());
+
+    app.setDebugLayoutKey(58);
+    app.update(io);
+    assert(target->presses == 1);
+    assert(app.debugLayout());
+    app.update(io);
+    assert(!app.debugLayout());
+    app.setDebugLayoutKey(0);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2108,6 +2152,7 @@ int main()
     test_hover_after_a_click_stays_on_the_float();
     test_collapsible_keeps_its_children_while_closed();
     test_border_layout_keeps_a_widget_set_again();
+    test_debug_layout_key_is_opt_in();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
