@@ -611,18 +611,18 @@ void PageView::setPage(int idx, Transition tr)
     if (idx < 0 || idx >= static_cast<int>(pages_.size())) return;
     if (idx == currentIdx_ && transProgress_ >= 1.0f) return;
 
-    prevIdx_ = currentIdx_;
-    currentIdx_ = idx;
-
+    const int from = currentIdx_;
     if (tr == SlideAuto) {
-        if (prevIdx_ < 0) tr = None;
-        else tr = (idx > prevIdx_) ? SlideLeft : SlideRight;
+        if (from < 0) tr = None;
+        else tr = (idx > from) ? SlideLeft : SlideRight;
     }
+    prevIdx_ = (tr == None || from == idx) ? -1 : from;
+    currentIdx_ = idx;
     transType_ = tr;
-    transProgress_ = (tr == None) ? 1.0f : 0.0f;
+    transProgress_ = (prevIdx_ < 0) ? 1.0f : 0.0f;
 
-    if (currentIdx_ >= 0 && currentIdx_ < static_cast<int>(pages_.size()))
-        pages_[currentIdx_]->setVisible(true);
+    for (int i = 0; i < static_cast<int>(pages_.size()); ++i)
+        pages_[i]->setVisible(i == currentIdx_ || i == prevIdx_);
 
     pageChanged.emit(currentIdx_);
     markDirty();

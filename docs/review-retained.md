@@ -143,7 +143,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       *Arranjo:* o teste no ciclo de filhos do `Widget::paint`, não em cada
       widget.
 
-- [ ] **12. `PageView::setPage()` só esconde a página anterior no fim de uma
+- [x] **12. `PageView::setPage()` só esconde a página anterior no fim de uma
       animação** — [ViewWidgets.cpp:619](../src/widgets/ViewWidgets.cpp#L619).
       Com `Transition::None`, ou a trocar a meio de um slide, a anterior fica
       visível para sempre.
