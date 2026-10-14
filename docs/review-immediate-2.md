@@ -81,7 +81,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [ ] **W4. O Tab salta para widgets de outra janela** —
       [Gui.cpp:13053](../src/Gui.cpp#L13053). O `focusOrder_` junta todas as
       janelas; o texto pode ir para uma janela escondida.
-- [ ] **W5. Um widget ativo que deixa de ser submetido bloqueia a interface para
+- [x] **W5. Um widget ativo que deixa de ser submetido bloqueia a interface para
       sempre** — [Gui.cpp:13421](../src/Gui.cpp#L13421) (arrasto e resize de
       janela), 9630 (scrollbar do child), e o mesmo com um slider. `wantsPointer()`
       fica a 1 e nenhum clique chega a outro widget.

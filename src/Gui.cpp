@@ -1280,6 +1280,20 @@ bool Context::enabled() const
 
 void Context::beginFrame(const FrameInfo &frame)
 {
+    // Um widget só é ativo enquanto um botão do ponteiro está em baixo, e é ele
+    // que se larga no frame em que o botão sobe. Se o frame anterior acabou sem
+    // nenhum botão em baixo e ainda há um ativo, ninguém o largou: deixou de ser
+    // submetido (uma janela escondida a meio do arrasto, um slider que
+    // desapareceu). Larga-se aqui, antes dos eventos novos, senão nenhum outro
+    // widget voltava a receber o ponteiro.
+    if (!pointer_.down[0] && !pointer_.down[1] && !pointer_.down[2])
+    {
+        activeWidget_ = InvalidWidgetId;
+        dragWidget_ = InvalidWidgetId;
+        draggingWindow_ = WindowHandle();
+        resizingWindow_ = WindowHandle();
+        tableResize_ = TableResizeState();
+    }
     frame_ = frame;
     ++frameNumber_;
     elapsedSeconds_ += frame.deltaSeconds > 0.0f ? static_cast<double>(frame.deltaSeconds) : 0.0;
@@ -1425,6 +1439,7 @@ void Context::beginFrame(const FrameInfo &frame)
     }
     textEvents_.clear();
     consumeEvents();
+
 
     // While a text field has the keyboard, Ctrl+Z/Ctrl+Y are its own (the
     // code editor has its own undo): taking them for the application's
