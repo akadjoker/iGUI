@@ -6354,6 +6354,55 @@ void test_disabled_widgets_do_not_edit()
     assert(t3.position.x == 0.0f && t3.position.y == 0.0f && t3.position.z == 0.0f);
 }
 
+// Arrastar uma paragem do gradiente ou um ponto da curva para lá do vizinho mexe só
+// no que foi agarrado: o vizinho fica onde estava.
+void test_dragging_past_a_neighbour_leaves_it_in_place()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Vec2 o;
+    ct::Vector<ig::GradientStop> stops;
+    stops.push_back(ig::GradientStop(0.0f, ig::Color(0u, 0u, 0u, 255u)));
+    stops.push_back(ig::GradientStop(0.3f, ig::Color(255u, 0u, 0u, 255u)));
+    stops.push_back(ig::GradientStop(0.5f, ig::Color(0u, 255u, 0u, 255u)));
+    stops.push_back(ig::GradientStop(1.0f, ig::Color(255u, 255u, 255u, 255u)));
+    int stop = -1;
+    ct::Vector<ig::CurvePoint> points;
+    points.push_back(ig::CurvePoint(0.0f, 0.0f));
+    points.push_back(ig::CurvePoint(0.3f, 0.5f));
+    points.push_back(ig::CurvePoint(0.5f, 0.5f));
+    points.push_back(ig::CurvePoint(1.0f, 1.0f));
+    int point = -1;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 900.0f, 700.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        c.gradientEditor("grad", stops, stop, ig::Rect(0.0f, 0.0f, 412.0f, 40.0f));
+        c.curveEditor("curva", points, point, ig::Rect(0.0f, 100.0f, 412.0f, 412.0f),
+                ig::Vec2(0.0f, 0.0f), ig::Vec2(1.0f, 1.0f));
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.drag(o.x + 6.0f + 0.3f * 400.0f, o.y + 33.0f, o.x + 6.0f + 0.8f * 400.0f, o.y + 33.0f,
+            build, 5);
+    harness.frame(build);
+    assert(stops.size() == 4u);
+    assert(stops[1].color.g == 255u && fabsf(stops[1].position - 0.5f) < 0.001f);
+    assert(stops[2].color.r == 255u && stops[2].color.g == 0u &&
+            fabsf(stops[2].position - 0.8f) < 0.001f);
+
+    harness.drag(o.x + 6.0f + 0.3f * 400.0f, o.y + 306.0f, o.x + 6.0f + 0.8f * 400.0f, o.y + 306.0f,
+            build, 5);
+    harness.frame(build);
+    assert(points.size() == 4u);
+    assert(fabsf(points[1].x - 0.5f) < 0.001f);
+    assert(fabsf(points[2].x - 0.8f) < 0.001f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7386,6 +7435,7 @@ int main()
     test_right_click_outside_closes_menus();
     test_popup_over_another_window_keeps_its_owner();
     test_disabled_widgets_do_not_edit();
+    test_dragging_past_a_neighbour_leaves_it_in_place();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();

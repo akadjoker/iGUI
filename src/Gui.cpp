@@ -7220,6 +7220,24 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
     return changed;
 }
 
+// Ordena e mantém o tracked no elemento que ele indicava (o que está a ser arrastado).
+template <typename T, typename Key>
+static void sortTracking(ct::Vector<T> &items, int &tracked, Key key)
+{
+    using Index = typename ct::Vector<T>::size_type;
+    for (Index i = 1u; i < items.size(); ++i)
+        for (Index j = i; j > 0u && key(items[j]) < key(items[j - 1u]); --j)
+        {
+            const T held = items[j];
+            items[j] = items[j - 1u];
+            items[j - 1u] = held;
+            if (tracked == static_cast<int>(j))
+                tracked = static_cast<int>(j - 1u);
+            else if (tracked == static_cast<int>(j - 1u))
+                tracked = static_cast<int>(j);
+        }
+}
+
 bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
                              int &selectedStop, const Rect &bounds)
 {
@@ -7237,10 +7255,9 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
 
     for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
         stops[i].position = clamp(stops[i].position, 0.0f, 1.0f);
-    ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
-        return a.position < b.position;
-    });
+    const auto stopKey = [](const GradientStop &stop) { return stop.position; };
     if (selectedStop >= static_cast<int>(stops.size())) selectedStop = -1;
+    sortTracking(stops, selectedStop, stopKey);
 
     const auto sample = [&stops](float position) -> Color {
         if (stops.empty()) return Color(255u, 255u, 255u, 255u);
@@ -7285,11 +7302,8 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
         } else if (contains(bar, pointer_.pressedPosition[left])) {
             const float position = clamp((pointer_.pressedPosition[left].x - bar.x) / bar.width, 0.0f, 1.0f);
             stops.push_back(GradientStop(position, sample(position)));
-            ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
-                return a.position < b.position;
-            });
-            for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
-                if (stops[i].position == position) { selectedStop = static_cast<int>(i); break; }
+            selectedStop = static_cast<int>(stops.size()) - 1;
+            sortTracking(stops, selectedStop, stopKey);
             activeWidget_ = id;
             changed = true;
         }
@@ -7303,14 +7317,7 @@ bool Context::gradientEditor(StringView idText, ct::Vector<GradientStop> &stops,
         }
         if (pointer_.released[left]) {
             activeWidget_ = InvalidWidgetId;
-            if (selectedStop >= 0 && selectedStop < static_cast<int>(stops.size())) {
-                const float selectedPosition = stops[static_cast<ct::Vector<GradientStop>::size_type>(selectedStop)].position;
-                ct::sort(stops.begin(), stops.end(), [](const GradientStop &a, const GradientStop &b) {
-                    return a.position < b.position;
-                });
-                for (ct::Vector<GradientStop>::size_type i = 0u; i < stops.size(); ++i)
-                    if (stops[i].position == selectedPosition) { selectedStop = static_cast<int>(i); break; }
-            }
+            sortTracking(stops, selectedStop, stopKey);
         }
     }
 
@@ -7351,8 +7358,9 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
         return CurvePoint(clamp(minimum.x + (position.x - canvas.x) / canvas.width * (maximum.x - minimum.x), minimum.x, maximum.x),
                           clamp(minimum.y + (canvas.bottom() - position.y) / canvas.height * (maximum.y - minimum.y), minimum.y, maximum.y));
     };
-    ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
+    const auto pointKey = [](const CurvePoint &point) { return point.x; };
     if (selectedPoint >= static_cast<int>(points.size())) selectedPoint = -1;
+    sortTracking(points, selectedPoint, pointKey);
     const WidgetId id = combineIds(makeWidgetId(idText), 0x4355525645454449ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const uint32_t right = buttonIndex(PointerButton::Right);
@@ -7375,9 +7383,8 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
         else if (contains(canvas, pointer_.pressedPosition[left])) {
             const CurvePoint point = screenToPoint(pointer_.pressedPosition[left]);
             points.push_back(point);
-            ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
-            for (ct::Vector<CurvePoint>::size_type i = 0u; i < points.size(); ++i)
-                if (points[i].x == point.x && points[i].y == point.y) { selectedPoint = static_cast<int>(i); break; }
+            selectedPoint = static_cast<int>(points.size()) - 1;
+            sortTracking(points, selectedPoint, pointKey);
             activeWidget_ = id;
             changed = true;
         }
@@ -7391,12 +7398,7 @@ bool Context::curveEditor(StringView idText, ct::Vector<CurvePoint> &points, int
         }
         if (pointer_.released[left]) {
             activeWidget_ = InvalidWidgetId;
-            if (selectedPoint >= 0 && selectedPoint < static_cast<int>(points.size())) {
-                const CurvePoint selected = points[static_cast<ct::Vector<CurvePoint>::size_type>(selectedPoint)];
-                ct::sort(points.begin(), points.end(), [](const CurvePoint &a, const CurvePoint &b) { return a.x < b.x; });
-                for (ct::Vector<CurvePoint>::size_type i = 0u; i < points.size(); ++i)
-                    if (points[i].x == selected.x && points[i].y == selected.y) { selectedPoint = static_cast<int>(i); break; }
-            }
+            sortTracking(points, selectedPoint, pointKey);
         }
     }
     drawList->addRectFilled(canvas, theme_.inputBg, clip);
