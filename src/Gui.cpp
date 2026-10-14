@@ -10153,6 +10153,10 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect tabBar(region.x, region.y, region.width, theme_.widgetHeight);
     const bool tabBarVisible = tabCount != 1 || !dockSpace->tabBarHidden[slotIndex];
     const float hiddenTabBarHeight = 10.0f;
+    const bool drawTabBar = dockSpace->tabBarFrame[slotIndex] != frameNumber_;
+    if (drawTabBar)
+    {
+    dockSpace->tabBarFrame[slotIndex] = frameNumber_;
     if (!tabBarVisible)
     {
         const Rect hiddenTabBar(region.x, region.y, region.width, hiddenTabBarHeight);
@@ -10184,9 +10188,6 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     drawList->addRectFilled(tabBar, theme_.panelColor, clip);
     drawList->addLine(Vec2(tabBar.x, tabBar.bottom() - 1.0f),
                       Vec2(tabBar.right(), tabBar.bottom() - 1.0f), theme_.borderColor, clip);
-    const bool handleTabInput = dockSpace->tabBarFrame[slotIndex] != frameNumber_;
-    if (handleTabInput)
-        dockSpace->tabBarFrame[slotIndex] = frameNumber_;
     float tabX = region.x;
     for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
     {
@@ -10209,7 +10210,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         // hover test deliberately rejects input captured by a different ID.
         const bool closeVisible = candidate.closable && (hovered || activeWidget_ == closeId);
         const bool closeHovered = closeVisible && itemHovered(closeButton, clip, closeId);
-        if (closeVisible && handleTabInput && itemClicked(closeButton, clip, closeId, false))
+        if (closeVisible && itemClicked(closeButton, clip, closeId, false))
         {
             if (candidate.id == id && open)
             {
@@ -10225,8 +10226,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
             tabX += tabWidth;
             continue;
         }
-        const bool pressedHere = handleTabInput &&
-            pointerPressedIn(intersect(tab, clip), buttonIndex(PointerButton::Left)) &&
+        const bool pressedHere = pointerPressedIn(intersect(tab, clip), buttonIndex(PointerButton::Left)) &&
             activeWidget_ == InvalidWidgetId;
         if (pressedHere)
         {
@@ -10269,7 +10269,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                 dockDragTab_ = InvalidWidgetId;
             }
         }
-        else if (handleTabInput && itemClicked(tab, clip, candidate.id, false))
+        else if (itemClicked(tab, clip, candidate.id, false))
         {
             dockSpace->selected[slotIndex] = candidate.id;
             focusedWidget_ = activeDockSpace_;
@@ -10303,7 +10303,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
 
     const WidgetId tabListId = combineIds(activeDockSpace_, 0x5441424c495354ull + slotIndex);
     const bool tabListHovered = itemHovered(tabListButton, clip, tabListId);
-    if (handleTabInput && itemClicked(tabListButton, clip, tabListId, false))
+    if (itemClicked(tabListButton, clip, tabListId, false))
         dockSpace->tabListOpen[slotIndex] = !dockSpace->tabListOpen[slotIndex];
     if (tabListHovered || dockSpace->tabListOpen[slotIndex])
         drawList->addRectFilled(Rect(tabListButton.x + 3.0f, tabListButton.y + 3.0f,
@@ -10323,7 +10323,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     const Rect tabListPopup(tabListButton.x + tabListButton.width - popupWidth,
                             tabListButton.y + tabListButton.height, popupWidth,
                             tabBar.height * static_cast<float>(tabCount + (tabCount == 1 ? 1 : 0)));
-    if (handleTabInput && dockSpace->tabListOpen[slotIndex] && pointer_.pressed[buttonIndex(PointerButton::Left)] &&
+    if (dockSpace->tabListOpen[slotIndex] && pointer_.pressed[buttonIndex(PointerButton::Left)] &&
         !contains(tabListButton, pointer_.pressedPosition[buttonIndex(PointerButton::Left)]) &&
         !contains(tabListPopup, pointer_.pressedPosition[buttonIndex(PointerButton::Left)]))
         dockSpace->tabListOpen[slotIndex] = false;
@@ -10344,7 +10344,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                                 tabListPopup.width, tabBar.height);
                 const WidgetId itemId = combineIds(candidate.id, 0x5441424c495354ull);
                 const bool hovered = itemHovered(item, clip, itemId);
-                if (handleTabInput && itemClicked(item, clip, itemId, false))
+                if (itemClicked(item, clip, itemId, false))
                 {
                     dockSpace->selected[slotIndex] = candidate.id;
                     dockSpace->tabListOpen[slotIndex] = false;
@@ -10367,7 +10367,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                                     tabListPopup.width, tabBar.height);
                 const WidgetId hideId = combineIds(activeDockSpace_, 0x48494445544142ull + slotIndex);
                 const bool hovered = itemHovered(hideItem, clip, hideId);
-                if (handleTabInput && itemClicked(hideItem, clip, hideId, false))
+                if (itemClicked(hideItem, clip, hideId, false))
                 {
                     dockSpace->tabBarHidden[slotIndex] = true;
                     dockSpace->tabListOpen[slotIndex] = false;
@@ -10382,6 +10382,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                          theme_.fontSize, theme_.menuItemText, clip);
             }
         }
+    }
     }
     }
 
