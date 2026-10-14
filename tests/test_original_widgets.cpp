@@ -2584,6 +2584,73 @@ static void test_global_events_reach_their_handlers()
     assert(order == "n**+a+");
 }
 
+// As linhas visuais do word-wrap: com palavras, tabs e UTF-8, cada linha visual
+// começa na coluna esperada, e editar uma linha não muda as outras.
+static void test_text_edit_wrap_rows_are_stable()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("wraprows");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 160.0f, 400.0f });
+    edit->setShowLineNumbers(false);
+    edit->setWordWrap(true);
+    edit->setText("the quick\tbrown fox jumps over the lazy dog\n"
+                  "a\xC3\xA7\xC3\xA3o r\xC3\xA1pida sobre o c\xC3\xA3o pregui\xC3\xA7oso e mais\n"
+                  "nospacesatallinthisverylonglinethatmustbreakanyway");
+    assert(app.setStage("wraprows", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    auto paint = [&app, font]()
+    {
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    paint();
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto rowStarts = [edit, rowHeight]()
+    {
+        String starts;
+        for (int row = 0; row < 14; ++row)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.clickCount = 1;
+            press.localX = 1.0f;
+            press.localY = rowHeight * (static_cast<float>(row) + 0.5f);
+            edit->onMousePress(press);
+            MouseEvent release = press;
+            edit->onMouseRelease(release);
+            const TextEdit::TextPos pos = edit->cursorPos();
+            starts += String::number(pos.line) + ":" + String::number(pos.col) + " ";
+        }
+        return starts;
+    };
+    const String before = rowStarts();
+    assert(before == "0:0 0:20 0:40 1:0 1:20 1:37 2:0 2:21 2:41 2:41 2:41 2:41 2:41 2:41 ");
+
+    edit->setCursorPos(2, 0);
+    KeyEvent typed;
+    typed.text[0] = 'x';
+    edit->onTextInput(typed);
+    paint();
+    const String after = rowStarts();
+    assert(after.substr(0, after.find("2:")) == before.substr(0, before.find("2:")));
+
+    edit->setRect({ 0.0f, 0.0f, 600.0f, 400.0f });
+    paint();
+    const String wide = rowStarts();
+    assert(wide.substr(0, 8) == "0:0 1:0 ");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2783,6 +2850,7 @@ int main()
     test_text_edit_scrolls_sideways_without_wrap();
     test_console_counts_collapsed_repeats();
     test_global_events_reach_their_handlers();
+    test_text_edit_wrap_rows_are_stable();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
