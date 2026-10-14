@@ -189,7 +189,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
 
 Reproduzidos com sonda:
 
-- [ ] [WidgetApp.cpp:450](../src/widgets/WidgetApp.cpp#L450) — depois de largar o
+- [x] [WidgetApp.cpp:450](../src/widgets/WidgetApp.cpp#L450) — depois de largar o
       botão, o hover é recalculado só contra o `root_`: depois de um clique num
       FloatWindow passa para o widget por baixo.
 - [ ] [LayoutWidgets.cpp:329](../src/widgets/LayoutWidgets.cpp#L329) — o
