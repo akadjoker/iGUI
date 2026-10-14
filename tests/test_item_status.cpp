@@ -4188,6 +4188,70 @@ void test_table_scroll_is_clamped_when_rows_shrink()
     assert(rects[5].y + rects[5].height <= top + style.height);
 }
 
+// Uma tabela que rola nos dois eixos: a barra de baixo vê-se e arrasta-se como numa
+// tabela que só rola na horizontal.
+void test_table_scrolling_both_ways_drags_the_bottom_bar()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 200.0f;
+    style.freezeRows = 1;
+    style.scrollX = true;
+    style.innerWidth = 900.0f;
+    ig::Rect header[3];
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            const char* names[3] = { "A", "B", "C" };
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader(names[column]);
+                header[column] = c.itemRect();
+            }
+            for (int row = 0; row < 20; ++row)
+                for (int column = 0; column < 3; ++column)
+                {
+                    c.tableNextColumn();
+                    c.label("x");
+                }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float top = header[0].y;
+    const float barHeight = context.theme().scrollbarWidth * 0.65f;
+    const float barY = top + style.height - barHeight * 0.5f;
+    const float columnBefore = header[1].x;
+
+    const ig::DrawData& data = harness.frame(build);
+    bool barDrawn = false;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Geometry) continue;
+        const ig::Rect clip = command.payload.geometry.clip;
+        if (clip.y <= barY && clip.y + clip.height >= barY && clip.height <= barHeight + 0.5f &&
+                clip.width > 0.0f && command.payload.geometry.indexCount > 0u)
+            barDrawn = true;
+    }
+    assert(barDrawn);
+
+    harness.drag(header[0].x + 20.0f, barY, header[0].x + 250.0f, barY, build, 4);
+    assert(header[1].x < columnBefore);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5194,6 +5258,7 @@ int main()
     test_table_sizing_fixed_fit();
     test_table_without_frozen_rows_scrolls_the_first_row();
     test_table_scroll_is_clamped_when_rows_shrink();
+    test_table_scrolling_both_ways_drags_the_bottom_bar();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

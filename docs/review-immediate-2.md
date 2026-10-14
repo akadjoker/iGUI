@@ -166,7 +166,7 @@ Lido: 10334-11542.
 - [x] **T2. O `offsetY` não é limitado quando o conteúdo encolhe** —
       [Gui.cpp:10734](../src/Gui.cpp#L10734). As linhas ficam fora de vista e a
       roda não as traz de volta.
-- [ ] **T3. Com `scrollX` e `scrollY` a barra horizontal não se vê nem se arrasta** —
+- [x] **T3. Com `scrollX` e `scrollY` a barra horizontal não se vê nem se arrasta** —
       [Gui.cpp:10813](../src/Gui.cpp#L10813), 10826, 10873. O clip dela fica com
       altura 0.
 - [ ] **T4. Com X e Y o fim da última linha fica tapado pela barra de baixo** —
