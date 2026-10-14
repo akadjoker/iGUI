@@ -4475,6 +4475,63 @@ void test_table_lost_header_drag_releases_the_pointer()
     }
 }
 
+// beginTable(id, int columns, style) segue o style como a versão com pesos: a
+// altura própria, a rolagem e as colunas reordenáveis.
+void test_table_with_column_count_uses_its_style()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 100.0f;
+    style.freezeRows = 1;
+    style.reorderable = true;
+    ig::Rect header[2];
+    ig::Rect after;
+    bool lastVisible = true;
+    int firstModel = -1;
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 1200.0f)));
+        if (c.beginTable("t", 2, style, 300.0f))
+        {
+            const char* names[2] = { "A", "B" };
+            for (int column = 0; column < 2; ++column)
+            {
+                c.tableNextColumn();
+                if (column == 0) firstModel = c.tableColumnIndex();
+                c.tableHeader(names[column]);
+                header[column] = c.itemRect();
+            }
+            for (int row = 0; row < 20; ++row)
+            {
+                c.tableNextColumn();
+                c.label("r");
+                lastVisible = c.isItemVisible();
+                c.tableNextColumn();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.button("depois");
+        after = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(after.y < header[0].y + style.height + 20.0f);
+    assert(!lastVisible);
+
+    harness.drag(header[0].x + 20.0f, header[0].y + 5.0f, header[1].x + 50.0f, header[0].y + 5.0f,
+            build, 4);
+    harness.frame(build);
+    assert(firstModel == 1);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5486,6 +5543,7 @@ int main()
     test_table_scrolling_both_ways_keeps_its_height();
     test_table_resize_with_sideways_scroll_follows_the_pointer();
     test_table_lost_header_drag_releases_the_pointer();
+    test_table_with_column_count_uses_its_style();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

@@ -179,7 +179,7 @@ Lido: 10334-11542.
 - [x] **T7. Perder um arrasto de cabeçalho deixa a interface morta** —
       [Gui.cpp:11205](../src/Gui.cpp#L11205), 10913. O `reorderWidget` é reescrito
       por cada cabeçalho, e a limpeza compara com o id errado.
-- [ ] **T8. `beginTable(id, int columns, style)` ignora `scrollY`, `height`,
+- [x] **T8. `beginTable(id, int columns, style)` ignora `scrollY`, `height`,
       `reorderable`, `scrollX` e `sizingFixedFit`** —
       [Gui.cpp:10633](../src/Gui.cpp#L10633). Não chama o `configureTable`.
 - [ ] **T9. O `offsetX` não é limitado quando a `innerWidth` diminui** —
