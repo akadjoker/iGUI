@@ -7180,8 +7180,10 @@ bool Context::colorEdit(StringView labelText, Color &value, const Rect &bounds)
 
     if (changed)
     {
-        value = colorFromHsv(hue, saturation, brightness,
-                             static_cast<uint8_t>(alpha * 255.0f + 0.5f));
+        const Color next = colorFromHsv(hue, saturation, brightness,
+                                        static_cast<uint8_t>(alpha * 255.0f + 0.5f));
+        changed = next != value;
+        value = next;
         picker->hue = hue;
         picker->saturation = saturation;
         picker->brightness = brightness;
