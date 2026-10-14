@@ -101,7 +101,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       restaurar deixam de se poder clicar.
 - [x] **W10. Um `beginChild` fora de vista não avança o layout** —
       [Gui.cpp:9593](../src/Gui.cpp#L9593). O conteúdo de baixo salta.
-- [ ] **W11. O `endChild` mede a altura pelo último item, não pela linha** —
+- [x] **W11. O `endChild` mede a altura pelo último item, não pela linha** —
       [Gui.cpp:9690](../src/Gui.cpp#L9690). Com `sameLine` no fim, parte do
       conteúdo fica fora do scroll.
 - [ ] **W12. `availableWidth` num child dentro de um dock panel devolve a largura do
