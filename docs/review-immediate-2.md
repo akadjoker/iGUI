@@ -146,7 +146,7 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
 - [x] **D5. Dois painéis desenham na mesma região no mesmo frame** —
       [Gui.cpp:10046](../src/Gui.cpp#L10046), 10176. Acontece no primeiro frame
       depois de ler o `.ini` e no frame em que se larga uma tab.
-- [ ] **D6. O título da tab ignora `##`/`###` e não se atualiza** —
+- [x] **D6. O título da tab ignora `##`/`###` e não se atualiza** —
       [Gui.cpp:10039](../src/Gui.cpp#L10039), 10118, 10201, 10271.
 - [ ] **D7. `setDockSizes` no primeiro frame apaga os tamanhos lidos do `.ini`, e
       nesse frame não há clamp** — [Gui.cpp:10003](../src/Gui.cpp#L10003). Um

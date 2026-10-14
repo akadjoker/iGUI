@@ -10079,17 +10079,22 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         DockTabState tab;
         tab.id = id;
         tab.title = String(title.data(), title.size());
+        const StringView key = idLabel(title);
+        tab.key = String(key.data(), key.size());
         // Where the panel was left wins over the slot the application asks for,
         // so a panel dragged to another region comes back there; so does the tab
         // that was on top of its group.
-        tab.slot = storedDockSlot(dockSpace->name, tab.title, slot);
+        tab.slot = storedDockSlot(dockSpace->name, tab.key, slot);
         dockSpace->tabs.push_back(tab);
         tabState = &dockSpace->tabs.back();
-        if (storedDockTabOnTop(dockSpace->name, tabState->slot, tabState->title))
+        if (storedDockTabOnTop(dockSpace->name, tabState->slot, tabState->key))
             dockSpace->selected[dockSlotIndex(tabState->slot)] = id;
     }
     tabState->lastSeenFrame = frameNumber_;
     tabState->closable = open != nullptr;
+    if (tabState->title.size() != title.size() ||
+        memcmp(tabState->title.data(), title.data(), title.size()) != 0)
+        tabState->title = String(title.data(), title.size());
     // The X of this tab was clicked (maybe while another panel of the slot drew the
     // tab bar): the close reaches the application through its own pointer, now.
     if (tabState->closeRequested)
@@ -10169,7 +10174,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         DockTabState &candidate = dockSpace->tabs[i];
         if (candidate.slot != resolvedSlot)
             continue;
-        const TextMetrics metrics = measureText(theme_.font, candidate.title, theme_.fontSize);
+        const TextMetrics metrics = measureText(theme_.font, visibleLabel(candidate.title), theme_.fontSize);
         const float closeSize = candidate.closable ? tabBar.height * 0.55f : 0.0f;
         const float requestedWidth = metrics.width + theme_.windowPadding * 2.0f + closeSize;
         const float remaining = tabRight - tabX;
@@ -10260,7 +10265,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                                          tab.width > 8.0f ? tab.width - 8.0f : 0.0f, 2.0f), theme_.focusColor, clip);
         const Rect titleClip = intersect(clip, Rect(tab.x, tab.y,
             candidate.closable ? (closeButton.x > tab.x ? closeButton.x - tab.x : 0.0f) : tab.width, tab.height));
-        drawText(*drawList, theme_.font, candidate.title,
+        drawText(*drawList, theme_.font, visibleLabel(candidate.title),
                  Vec2(tab.x + theme_.windowPadding,
                       tab.y + (tab.height - metrics.height) * 0.5f),
                  theme_.fontSize, selected || hovered ? theme_.buttonText : theme_.textDisabled, titleClip);
@@ -10329,8 +10334,9 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                 if (selected || hovered)
                     window->overlayDrawList.addRectFilled(item, selected ? theme_.selectableSelected
                                                                           : theme_.menuItemHover, clip);
-                const TextMetrics metrics = measureText(theme_.font, candidate.title, theme_.fontSize);
-                drawText(window->overlayDrawList, theme_.font, candidate.title,
+                const TextMetrics metrics =
+                    measureText(theme_.font, visibleLabel(candidate.title), theme_.fontSize);
+                drawText(window->overlayDrawList, theme_.font, visibleLabel(candidate.title),
                          Vec2(item.x + theme_.menuItemPadX,
                               item.y + (item.height - metrics.height) * 0.5f),
                          theme_.fontSize, theme_.menuItemText, clip);
@@ -12740,8 +12746,8 @@ void Context::captureDockArrangement(const DockSpaceState &space)
     // has been dragged.
     ct::Vector<String> drawn;
     for (const DockTabState &tab : space.tabs)
-        if (dockTitleStorable(tab.title))
-            drawn.push_back(tab.title);
+        if (dockTitleStorable(tab.key))
+            drawn.push_back(tab.key);
 
     for (const DockSlotName &slotName : kDockSlotNames)
     {
@@ -12753,11 +12759,11 @@ void Context::captureDockArrangement(const DockSpaceState &space)
         String selected;
         for (const DockTabState &tab : space.tabs)
         {
-            if (dockSlotIndex(tab.slot) != slotIndex || !dockTitleStorable(tab.title))
+            if (dockSlotIndex(tab.slot) != slotIndex || !dockTitleStorable(tab.key))
                 continue;
-            dockAppendTitle(tabs, tab.title);
+            dockAppendTitle(tabs, tab.key);
             if (tab.id == space.selected[slotIndex])
-                selected = tab.title;
+                selected = tab.key;
         }
 
         const String remembered = windowState_.get(section, tabsKey.c_str());

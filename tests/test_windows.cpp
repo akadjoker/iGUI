@@ -5,6 +5,7 @@
 #include <ct/ini.hpp>
 
 #include <stdio.h>
+#include <string.h>
 
 namespace
 {
@@ -556,6 +557,72 @@ void test_dock_region_draws_one_panel_per_frame()
     remove(path);
 }
 
+// A tab shows the part of the title before "##", follows a title that changes
+// behind a "###" id, and the state file keeps the id, not a passing title.
+void test_dock_tab_title_follows_the_label_convention()
+{
+    const char* path = "igui_dock_title_test.ini";
+    remove(path);
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+    const char* title = "doc.txt###doc";
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
+        if (c.beginDockSpace("editor"))
+        {
+            if (c.beginDockPanel(title, ig::DockSlot::Left))
+            {
+                c.label("x");
+                c.endDockPanel();
+            }
+            if (c.beginDockPanel("Scene##1", ig::DockSlot::Left))
+            {
+                c.label("y");
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+    auto drew = [](const ig::DrawData& data, const char* text)
+    {
+        const ig::StringView wanted(text);
+        for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand& command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text) continue;
+            const ig::TextCommand& run = command.payload.text;
+            if (run.textSize == wanted.size() && memcmp(data.textBytes.data() + run.textOffset,
+                                                         wanted.data(), wanted.size()) == 0)
+                return true;
+        }
+        return false;
+    };
+
+    harness.frame(build);
+    const ig::DrawData& first = harness.frame(build);
+    check(drew(first, "doc.txt"), "the tab did not show the title before ###");
+    check(drew(first, "Scene"), "the tab did not show the title before ##");
+    check(!drew(first, "doc.txt###doc") && !drew(first, "Scene##1"),
+            "the tab showed the id part of its title");
+
+    title = "doc.txt*###doc";
+    harness.frame(build);
+    const ig::DrawData& second = harness.frame(build);
+    check(drew(second, "doc.txt*"), "the tab did not follow a title that changed");
+
+    check(context.saveWindowState(), "the state file was not written");
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    check(saved.get("dock:host/editor", "tabs_left") == "###doc|Scene##1",
+            "the state file did not keep the ids of the tabs");
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 // A state file written on a bigger screen can put a window where none of it is
 // reachable, and there is no public way to move a window from outside: it has to
 // be fitted to the viewport it is opened in.
@@ -884,6 +951,7 @@ int main()
     test_dock_sizes_survive_a_frame_of_squeezing();
     test_dock_spaces_in_two_windows_keep_their_own_state();
     test_dock_region_draws_one_panel_per_frame();
+    test_dock_tab_title_follows_the_label_convention();
     test_a_window_restored_off_screen_is_fitted_to_the_viewport();
     test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it();
     test_the_wheel_goes_to_the_innermost_scroll_area();
