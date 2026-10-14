@@ -4709,6 +4709,43 @@ void test_wheel_over_an_area_that_fits_scrolls_the_outer_child()
     }
 }
 
+// Dois tableTreeCell na mesma linha abrem e fecham cada um o seu.
+void test_table_tree_cells_in_one_row_toggle_apart()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[2] = { 1.0f, 1.0f };
+    bool expanded[2] = { false, false };
+    ig::Rect cells[2];
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), 300.0f))
+        {
+            for (int column = 0; column < 2; ++column)
+            {
+                c.tableNextColumn();
+                c.tableTreeCell("no", 0, true, expanded[column]);
+                cells[column] = c.itemRect();
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(cells[1].x + 5.0f, cells[1].y + cells[1].height * 0.5f, build);
+    assert(!expanded[0]);
+    assert(expanded[1]);
+    harness.click(cells[0].x + 5.0f, cells[0].y + cells[0].height * 0.5f, build);
+    assert(expanded[0]);
+    assert(expanded[1]);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5724,6 +5761,7 @@ int main()
     test_table_sideways_scroll_is_clamped_when_inner_width_shrinks();
     test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell();
     test_wheel_over_an_area_that_fits_scrolls_the_outer_child();
+    test_table_tree_cells_in_one_row_toggle_apart();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

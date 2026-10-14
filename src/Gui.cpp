@@ -11432,8 +11432,10 @@ bool Context::tableTreeCell(StringView labelText, int depth, bool hasChildren, b
     if (hasChildren)
     {
         const Rect arrowRect(nodeX, bounds.y, step, height);
-        const WidgetId id = combineIds(table_.id,
-                                       0x5452454543454c4cull + static_cast<uint64_t>(table_.row));
+        const WidgetId rowId = combineIds(table_.id,
+                                          0x5452454543454c4cull + static_cast<uint64_t>(table_.row));
+        const WidgetId id =
+            combineIds(rowId, static_cast<uint64_t>(tableModelColumn(table_.column)) + 1u);
         const bool hovered = itemHovered(arrowRect, contentClip(), id);
         if (itemClicked(arrowRect, contentClip(), id))
         {
