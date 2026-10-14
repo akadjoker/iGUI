@@ -3221,8 +3221,12 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
     if (!window || items.empty())
         return false;
 
+    bool changed = false;
     if (currentItem < 0 || static_cast<Span<const StringView>::size_type>(currentItem) >= items.size())
+    {
         currentItem = 0;
+        changed = true;
+    }
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
@@ -3231,7 +3235,6 @@ bool Context::tabBar(StringView labelText, int &currentItem, Span<const StringVi
         return false;
 
     const float tabWidth = rect.width / static_cast<float>(items.size());
-    bool changed = false;
     registerFocusable(id);
     if (hasKeyboardFocus(id))
     {
@@ -3282,8 +3285,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
     if (!window || items.empty())
         return false;
 
-    if (currentItem < 0 || static_cast<Span<const StringView>::size_type>(currentItem) >= items.size())
-        currentItem = 0;
+    const bool validItem =
+        currentItem >= 0 && static_cast<Span<const StringView>::size_type>(currentItem) < items.size();
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
@@ -3331,18 +3334,23 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
                                  homePressed_ || endPressed_))
     {
         const int previous = currentItem;
-        if (upPressed_ && currentItem > 0)
-            --currentItem;
-        if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
-            ++currentItem;
-        if (pageUpPressed_)
-            currentItem -= visibleRows;
-        if (pageDownPressed_)
-            currentItem += visibleRows;
-        if (homePressed_)
-            currentItem = 0;
-        if (endPressed_)
-            currentItem = static_cast<int>(items.size()) - 1;
+        if (!validItem)
+            currentItem = (upPressed_ || pageUpPressed_ || endPressed_) ? static_cast<int>(items.size()) - 1 : 0;
+        else
+        {
+            if (upPressed_ && currentItem > 0)
+                --currentItem;
+            if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
+                ++currentItem;
+            if (pageUpPressed_)
+                currentItem -= visibleRows;
+            if (pageDownPressed_)
+                currentItem += visibleRows;
+            if (homePressed_)
+                currentItem = 0;
+            if (endPressed_)
+                currentItem = static_cast<int>(items.size()) - 1;
+        }
         if (currentItem < 0)
             currentItem = 0;
         if (currentItem >= static_cast<int>(items.size()))
@@ -3455,8 +3463,8 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (!window || items.empty())
         return false;
 
-    if (currentItem < 0 || static_cast<Span<const StringView>::size_type>(currentItem) >= items.size())
-        currentItem = 0;
+    const bool validItem =
+        currentItem >= 0 && static_cast<Span<const StringView>::size_type>(currentItem) < items.size();
 
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
@@ -3469,16 +3477,23 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (hasKeyboardFocus(id) && (upPressed_ || downPressed_ || homePressed_ || endPressed_))
     {
         const int previous = currentItem;
-        if (upPressed_ && currentItem > 0)
-            --currentItem;
-        if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
-            ++currentItem;
-        if (homePressed_)
-            currentItem = 0;
-        if (endPressed_)
-            currentItem = static_cast<int>(items.size()) - 1;
+        if (!validItem)
+            currentItem = (upPressed_ || endPressed_) ? static_cast<int>(items.size()) - 1 : 0;
+        else
+        {
+            if (upPressed_ && currentItem > 0)
+                --currentItem;
+            if (downPressed_ && currentItem + 1 < static_cast<int>(items.size()))
+                ++currentItem;
+            if (homePressed_)
+                currentItem = 0;
+            if (endPressed_)
+                currentItem = static_cast<int>(items.size()) - 1;
+        }
         changed = currentItem != previous;
     }
+    const bool shown =
+        currentItem >= 0 && static_cast<Span<const StringView>::size_type>(currentItem) < items.size();
 
     const bool hovered = itemHovered(rect, clip, id);
     if (itemClicked(rect, clip, id))
@@ -3488,7 +3503,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     const ItemStatus headerStatus = item_;
 
     drawComboHeader(*drawList, rect,
-                    items[static_cast<Span<const StringView>::size_type>(currentItem)],
+                    shown ? items[static_cast<Span<const StringView>::size_type>(currentItem)] : StringView(),
                     hovered, clip);
 
     if (openCombo_ != id)
@@ -3541,7 +3556,7 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         return changed;
     const int maximumScroll = itemCount - visibleRows;
     const bool justOpened = openComboFrame_ + 1u != frameNumber_;
-    if (justOpened || changed)
+    if (shown && (justOpened || changed))
     {
         if (currentItem < *scroll)
             *scroll = currentItem;
