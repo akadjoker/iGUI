@@ -104,7 +104,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [x] **W11. O `endChild` mede a altura pelo último item, não pela linha** —
       [Gui.cpp:9690](../src/Gui.cpp#L9690). Com `sameLine` no fim, parte do
       conteúdo fica fora do scroll.
-- [ ] **W12. `availableWidth` num child dentro de um dock panel devolve a largura do
+- [x] **W12. `availableWidth` num child dentro de um dock panel devolve a largura do
       painel** — [Gui.cpp:12077](../src/Gui.cpp#L12077). O dock é aplicado depois
       do child; o `availableHeight` faz a ordem certa.
 - [ ] **W13. O `contentExtent` recomeça a cada `indent`/`setCursor`/`beginGroup`** —

@@ -6001,6 +6001,50 @@ void test_child_measures_the_last_line()
     assert(tall.y + tall.height <= contentBottom + 0.01f);
 }
 
+// Um child dentro de um dock panel dá a largura dele, como numa janela simples.
+void test_child_inside_a_dock_panel_reports_its_own_width()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float docked = 0.0f;
+    float plain = 0.0f;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginWindow("A", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f)))
+        {
+            if (c.beginDockSpace("ds"))
+            {
+                if (c.beginDockPanel("Painel", ig::DockSlot::Center))
+                {
+                    if (c.beginChild("filho", 100.0f, true, 150.0f))
+                    {
+                        docked = c.availableWidth();
+                        c.endChild();
+                    }
+                    c.endDockPanel();
+                }
+                c.endDockSpace();
+            }
+            c.endWindow();
+        }
+        if (c.beginWindow("B", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f)))
+        {
+            if (c.beginChild("filho", 100.0f, true, 150.0f))
+            {
+                plain = c.availableWidth();
+                c.endChild();
+            }
+            c.endWindow();
+        }
+    };
+
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(plain > 0.0f && plain < 150.0f);
+    assert(docked == plain);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7040,6 +7084,7 @@ int main()
     test_maximized_window_stays_below_the_main_menu_bar();
     test_child_out_of_view_keeps_its_place();
     test_child_measures_the_last_line();
+    test_child_inside_a_dock_panel_reports_its_own_width();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

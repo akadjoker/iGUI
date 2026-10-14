@@ -1767,8 +1767,15 @@ private:
         Rect parentClip;
         WidgetId id;
         bool border;
+        // How many dock panels were open when the child began: the child is inside
+        // the innermost one only when no panel was opened after it.
+        uint32_t dockDepth;
 
-        ChildState() : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true) {}
+        ChildState()
+            : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true),
+              dockDepth(0u)
+        {
+        }
     };
 
     // A barra de tabs (ver beginTabBar): o que está escolhido, a ordem das tabs (que
