@@ -11516,9 +11516,11 @@ void Context::endTable()
             height = table_.viewHeight;
         }
         else
-            height = table_.rowY + rowHeight - table_.bounds.y;
-        // A barra de baixo vive dentro da caixa da tabela (é uma faixa a mais).
-        height += table_.barStripH;
+        {
+            // Sem altura própria a barra de baixo é uma faixa a mais, por baixo das
+            // linhas; com ela, já vive dentro da viewHeight.
+            height = table_.rowY + rowHeight - table_.bounds.y + table_.barStripH;
+        }
         DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
         if (drawList)
         {
