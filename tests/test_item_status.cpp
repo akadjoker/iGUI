@@ -6560,6 +6560,54 @@ void test_drop_target_behind_another_window_does_not_accept()
     assert(backDropped);
 }
 
+// Largar um treeItem sobre uma janela que tapa outro treeItem não o entrega ao de
+// trás.
+void test_tree_drop_behind_another_window_does_not_accept()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::TreeDrop drop;
+    ig::Rect source;
+    ig::Rect target;
+    auto build = [&](ig::Context& c)
+    {
+        bool expanded = false;
+        ig::TreeItemStyle style;
+        style.leaf = true;
+        if (c.beginWindow("fonte", ig::Rect(400.0f, 0.0f, 300.0f, 200.0f)))
+        {
+            ig::TreeDrop ignored;
+            c.treeItem(1u, "um", expanded, style, ig::Rect(0.0f, 0.0f, 260.0f, 28.0f), &ignored);
+            source = c.itemRect();
+            c.endWindow();
+        }
+        if (c.beginWindow("arvore", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)))
+        {
+            c.treeItem(2u, "dois", expanded, style, ig::Rect(0.0f, 120.0f, 260.0f, 28.0f), &drop);
+            target = c.itemRect();
+            c.endWindow();
+        }
+        if (c.beginWindow("tampa", ig::Rect(100.0f, 130.0f, 200.0f, 120.0f)))
+        {
+            c.label("tampa");
+            c.endWindow();
+        }
+    };
+
+    harness.frame(build);
+    harness.click(250.0f, 240.0f, build);
+    const float y = target.y + target.height * 0.5f;
+    harness.drag(source.x + 20.0f, source.y + 10.0f, target.x + 150.0f, y, build, 6);
+    harness.frame(build);
+    assert(drop.target == ig::InvalidWidgetId);
+
+    harness.drag(source.x + 20.0f, source.y + 10.0f, target.x + 40.0f, y, build, 6);
+    harness.frame(build);
+    assert(drop.target == 2u);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7597,6 +7645,7 @@ int main()
     test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline();
     test_drag_source_leaves_the_press_to_its_item();
     test_drop_target_behind_another_window_does_not_accept();
+    test_tree_drop_behind_another_window_does_not_accept();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();

@@ -60,7 +60,8 @@ Não confirmados: o `listBox` e o `comboBox` põem um `currentItem` fora do
 intervalo a 0 sem devolver true; depois de escolher uma linha do `comboBox` o
 foco fica na linha e as setas deixam de mexer no combo (confirmado e corrigido
 com o N7); um `menuItem` desativado
-não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima.
+não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima (confirmado e corrigido
+depois do M7).
 
 ## Janelas, frame, child e layout
 
