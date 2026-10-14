@@ -10776,7 +10776,10 @@ void Context::beginTableScroll(const TableStyle &style)
         // A altura do que rola é a da tabela menos as linhas presas, e o que sobra do
         // conteúdo (medido no frame anterior) diz se há barra - e a barra tira largura
         // às colunas, como num child.
-        const float scrolledHeight = style.height - scroll->frozenHeight;
+        // Com rolagem horizontal a barra de baixo existe sempre (a innerWidth já é
+        // maior do que a tabela) e tira a altura dela ao que rola.
+        const float bottomBar = table_.scrollX ? theme_.scrollbarWidth * 0.65f : 0.0f;
+        const float scrolledHeight = style.height - scroll->frozenHeight - bottomBar;
         maximumScroll = scroll->contentHeight > scrolledHeight
             ? scroll->contentHeight - scrolledHeight : 0.0f;
         // O conteúdo pode ter encolhido desde o último frame: a rolagem volta para

@@ -169,7 +169,7 @@ Lido: 10334-11542.
 - [x] **T3. Com `scrollX` e `scrollY` a barra horizontal não se vê nem se arrasta** —
       [Gui.cpp:10813](../src/Gui.cpp#L10813), 10826, 10873. O clip dela fica com
       altura 0.
-- [ ] **T4. Com X e Y o fim da última linha fica tapado pela barra de baixo** —
+- [x] **T4. Com X e Y o fim da última linha fica tapado pela barra de baixo** —
       [Gui.cpp:10734](../src/Gui.cpp#L10734).
 - [ ] **T5. Uma tabela com X e Y ocupa mais 7,8 px do que a altura pedida** —
       [Gui.cpp:11461](../src/Gui.cpp#L11461). A barra é somada duas vezes.

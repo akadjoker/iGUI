@@ -4252,6 +4252,74 @@ void test_table_scrolling_both_ways_drags_the_bottom_bar()
     assert(header[1].x < columnBefore);
 }
 
+// Uma tabela que rola nos dois eixos, rolada até ao fim: a última linha fica toda
+// por cima da barra de baixo e responde ao clique no fundo dela.
+void test_table_scrolling_both_ways_shows_the_last_row()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 200.0f;
+    style.freezeRows = 1;
+    style.scrollX = true;
+    style.innerWidth = 900.0f;
+    const int kRows = 20;
+    ig::Rect header;
+    ig::Rect rects[kRows];
+    bool clicked[kRows];
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader("H");
+                if (column == 0) header = c.itemRect();
+            }
+            for (int row = 0; row < kRows; ++row)
+            {
+                c.tableNextColumn();
+                char text[16];
+                snprintf(text, sizeof(text), "linha%d", row);
+                clicked[row] = c.button(text);
+                rects[row] = c.itemRect();
+                c.tableNextColumn();
+                c.label("x");
+                c.tableNextColumn();
+                c.label("y");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float top = header.y;
+    const float barHeight = context.theme().scrollbarWidth * 0.65f;
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int i = 0; i < 60; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(header.x + 20.0f, top + 60.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    const ig::Rect last = rects[kRows - 1];
+    assert(last.y + last.height <= top + style.height - barHeight + 0.01f);
+    harness.click(last.x + 10.0f, last.y + last.height - 2.0f, build);
+    assert(clicked[kRows - 1]);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5259,6 +5327,7 @@ int main()
     test_table_without_frozen_rows_scrolls_the_first_row();
     test_table_scroll_is_clamped_when_rows_shrink();
     test_table_scrolling_both_ways_drags_the_bottom_bar();
+    test_table_scrolling_both_ways_shows_the_last_row();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
