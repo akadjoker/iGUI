@@ -6517,6 +6517,49 @@ void test_drag_source_leaves_the_press_to_its_item()
     }
 }
 
+// Largar sobre uma janela que está por cima de um alvo não entrega o arrasto ao alvo
+// de trás.
+void test_drop_target_behind_another_window_does_not_accept()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool backDropped = false;
+    bool frontDropped = false;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginWindow("fonte", ig::Rect(0.0f, 0.0f, 200.0f, 100.0f)))
+        {
+            c.beginDragSource(42u, 7u, 1u, "item", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
+            c.endWindow();
+        }
+        if (c.beginWindow("tras", ig::Rect(300.0f, 0.0f, 300.0f, 300.0f)))
+        {
+            ig::DragDropPayload payload;
+            if (c.acceptDragDropTarget(7u, ig::Rect(0.0f, 0.0f, 280.0f, 260.0f), payload))
+                backDropped = true;
+            c.endWindow();
+        }
+        if (c.beginWindow("frente", ig::Rect(350.0f, 50.0f, 200.0f, 200.0f)))
+        {
+            ig::DragDropPayload payload;
+            if (c.acceptDragDropTarget(7u, ig::Rect(0.0f, 0.0f, 100.0f, 40.0f), payload))
+                frontDropped = true;
+            c.endWindow();
+        }
+    };
+
+    harness.frame(build);
+    harness.click(450.0f, 200.0f, build);
+    harness.drag(20.0f, 40.0f, 450.0f, 150.0f, build, 6);
+    assert(!backDropped);
+    assert(!frontDropped);
+
+    harness.drag(20.0f, 40.0f, 320.0f, 280.0f, build, 6);
+    assert(backDropped);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7553,6 +7596,7 @@ int main()
     test_toast_with_the_same_id_is_updated();
     test_wrapped_text_does_not_add_a_line_for_spaces_before_a_newline();
     test_drag_source_leaves_the_press_to_its_item();
+    test_drop_target_behind_another_window_does_not_accept();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
