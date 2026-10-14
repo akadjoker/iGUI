@@ -10844,6 +10844,10 @@ void Context::beginTableScroll(const TableStyle &style)
             pointer_.wheelY = 0.0f;
         }
         table_.offsetY = scroll->offsetY;
+        // Sem linhas presas a primeira linha também rola (as seguintes recebem o
+        // offset no tableNextColumn).
+        if (table_.freezeRows == 0)
+            table_.rowY = table_.bounds.y - table_.offsetY;
     }
 
     // ── A barra de baixo (a do eixo X) e a roda horizontal. A barra encosta ao fundo

@@ -160,7 +160,7 @@ lista de tabs não é um popup registado e pode deixar o clique cair no splitter
 
 Lido: 10334-11542.
 
-- [ ] **T1. Com `scrollY` e `freezeRows=0` (o valor por omissão) a linha 0 não
+- [x] **T1. Com `scrollY` e `freezeRows=0` (o valor por omissão) a linha 0 não
       rola** — [Gui.cpp:10538](../src/Gui.cpp#L10538), 11025. As outras linhas
       passam por cima dela, e o clique vai para a linha 0.
 - [ ] **T2. O `offsetY` não é limitado quando o conteúdo encolhe** —
