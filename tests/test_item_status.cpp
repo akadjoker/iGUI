@@ -4939,6 +4939,39 @@ void test_submenu_closes_when_another_item_is_hovered()
     assert(picked);
 }
 
+// A barra de menu principal responde em toda a altura dela e nas bordas do item.
+void test_main_menu_bar_item_responds_to_its_edges()
+{
+    const float points[][2] = { { 3.0f, 13.0f }, { 12.0f, 2.0f }, { 12.0f, 24.0f },
+        { 30.0f, 13.0f } };
+    for (const auto& point: points)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool fileOpen = false;
+        auto build = [&](ig::Context& c)
+        {
+            if (c.beginMainMenuBar())
+            {
+                fileOpen = c.beginMenu("File");
+                if (fileOpen)
+                {
+                    c.menuItem("New");
+                    c.endMenu();
+                }
+                c.endMainMenuBar();
+            }
+        };
+        harness.frame(build);
+        harness.frame(build);
+        assert(point[1] < context.mainMenuBarHeight());
+        harness.click(point[0], point[1], build);
+        harness.frame(build);
+        assert(fileOpen);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5958,6 +5991,7 @@ int main()
     test_table_alternate_rows_span_the_table_with_frozen_columns();
     test_virtual_list_that_shrinks_is_not_empty();
     test_submenu_closes_when_another_item_is_hovered();
+    test_main_menu_bar_item_responds_to_its_edges();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
