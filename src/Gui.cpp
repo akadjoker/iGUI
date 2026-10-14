@@ -8113,12 +8113,14 @@ MessageBoxResult Context::messageBox(StringView title, StringView message, bool 
     }
     if (escapePressed_ && options.showCancel) {
         open=false; activeModal_=InvalidWidgetId; activeWidget_=InvalidWidgetId; result=MessageBoxResult::Cancelled;
+        escapePressed_ = false;
     }
     if (enterPressed_ && shownLastFrame && open)
     {
         open = false;
         activeModal_ = InvalidWidgetId;
         result = MessageBoxResult::Accepted;
+        enterPressed_ = false;
     }
     if (pointer_.released[left] && activeWidget_ == acceptId)
     {

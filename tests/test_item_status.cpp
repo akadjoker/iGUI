@@ -6608,6 +6608,68 @@ void test_tree_drop_behind_another_window_does_not_accept()
     assert(drop.target == 2u);
 }
 
+// O Enter que aceita um messageBox não clica também o botão com foco, e o Escape que
+// o cancela não fecha também um diálogo submetido depois.
+void test_message_box_keys_are_spent_by_the_box()
+{
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool open = false;
+        int fires = 0;
+        int accepted = 0;
+        ig::Rect button;
+        auto build = [&](ig::Context& c)
+        {
+            if (c.messageBox("Apagar", "Apagar mesmo?", open, true) ==
+                    ig::MessageBoxResult::Accepted)
+                ++accepted;
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+            if (c.button("Apagar", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f)))
+            {
+                ++fires;
+                open = true;
+            }
+            button = c.itemRect();
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.click(button.x + 20.0f, button.y + 10.0f, build);
+        harness.frame(build);
+        harness.frame(build);
+        assert(fires == 1 && open);
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Enter));
+        harness.frame(build);
+        harness.frame(build);
+        assert(accepted == 1);
+        assert(fires == 1);
+        assert(!open);
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool boxOpen = true;
+        bool dialogOpen = true;
+        auto build = [&](ig::Context& c)
+        {
+            c.messageBox("Aviso", "Continuar?", boxOpen, true);
+            if (c.beginDialog("Dialogo", dialogOpen, ig::Vec2(300.0f, 200.0f)))
+            {
+                c.label("dialogo");
+                c.endDialog();
+            }
+        };
+        harness.frame(build);
+        harness.frame(build);
+        context.pushEvent(ig::Event::keyDown(ig::KeyCode::Escape));
+        harness.frame(build);
+        assert(!boxOpen);
+        assert(dialogOpen);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7646,6 +7708,7 @@ int main()
     test_drag_source_leaves_the_press_to_its_item();
     test_drop_target_behind_another_window_does_not_accept();
     test_tree_drop_behind_another_window_does_not_accept();
+    test_message_box_keys_are_spent_by_the_box();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();

@@ -229,7 +229,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       começa; antes de um `selectable`, o selectable nunca devolve o clique.
 - [x] **M7. `acceptDragDropTarget` aceita a largada através de uma janela por cima** —
       [Gui.cpp:8327](../src/Gui.cpp#L8327).
-- [ ] **M8. O Enter que aceita um `messageBox` também clica o botão com foco** —
+- [x] **M8. O Enter que aceita um `messageBox` também clica o botão com foco** —
       [Gui.cpp:8129](../src/Gui.cpp#L8129). O `enterPressed_` não é consumido; o
       Escape (8126) tem o mesmo caminho.
 - [ ] **M9. O snap de escala dos gizmos leva a escala a 0** —
