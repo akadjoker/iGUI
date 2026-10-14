@@ -1867,7 +1867,10 @@ private:
     struct DockTabState
     {
         WidgetId id;
+        // The title as the panel gave it this frame, and the part of it that names
+        // the panel in the state file (the "###id" when there is one).
         String title;
+        String key;
         DockSlot slot;
         uint64_t lastSeenFrame;
         // O ponteiro open de um painel só vale dentro da chamada que o recebeu: a
@@ -1878,7 +1881,7 @@ private:
         bool closed;
 
         DockTabState()
-            : id(InvalidWidgetId), title(), slot(DockSlot::Center), lastSeenFrame(0u),
+            : id(InvalidWidgetId), title(), key(), slot(DockSlot::Center), lastSeenFrame(0u),
               closable(false), closeRequested(false), closed(false)
         {
         }
