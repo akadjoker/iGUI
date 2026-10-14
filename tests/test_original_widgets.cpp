@@ -2070,6 +2070,61 @@ static void test_removing_a_tab_reports_the_current_one()
     assert(middle.currentIndex() == 1 && middle.currentWidget() == active);
 }
 
+// O duplo clique do TextEdit seleciona a palavra inteira e o triplo a linha
+// inteira, contando em caracteres e não em bytes ("olá mundo" selecionava
+// "undo").
+static void test_text_edit_word_and_line_clicks_count_characters()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("wordclick");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    edit->setShowLineNumbers(false);
+    edit->setText("olá mundo");
+    assert(app.setStage("wordclick", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data, font);
+    const Theme& theme = Theme::instance();
+    const float rowY = (theme.fontSize + theme.lineSpacing) * 0.5f;
+    auto clicks = [edit, rowY](float x, int count)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = count;
+        press.localX = x;
+        press.localY = rowY;
+        edit->onMousePress(press);
+        MouseEvent release = press;
+        edit->onMouseRelease(release);
+    };
+
+    const float mundoX = theme.textEditPadding + app.textWidth("olá ") + 1.0f;
+    clicks(mundoX, 2);
+    assert(edit->selectedText() == "mundo");
+    clicks(theme.textEditPadding + 1.0f, 2);
+    assert(edit->selectedText() == "olá");
+    clicks(mundoX, 3);
+    assert(edit->selectedText() == "olá mundo");
+    TextEdit::TextPos lineEnd{ 0, 9 };
+    assert(edit->cursorPos() == lineEnd);
+
+    CodeEditor code;
+    code.setText("olá mundo");
+    code.setCursorPos(0, 1);
+    code.addCursorForNextOccurrence();
+    assert(code.selectedText() == "olá");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2259,6 +2314,7 @@ int main()
     test_debug_layout_key_is_opt_in();
     test_data_grid_tab_moves_the_edit();
     test_removing_a_tab_reports_the_current_one();
+    test_text_edit_word_and_line_clicks_count_characters();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

@@ -2189,7 +2189,8 @@ void CodeEditor::toggleComment()
 
 bool CodeEditor::isWordChar(char c) const
 {
-    return std::isalnum(static_cast<unsigned char>(c)) || c == '_';
+    const unsigned char byte = static_cast<unsigned char>(c);
+    return byte >= 0x80 || std::isalnum(byte) || c == '_';
 }
 
 TextEdit::TextPos CodeEditor::findWordStart(TextPos pos) const
