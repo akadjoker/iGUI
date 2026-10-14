@@ -2636,8 +2636,9 @@ private:
     // is reachable.
     void clampWindowToViewport(WindowState &window);
     // Whether the wheel over a scroll area belongs to this area (the innermost
-    // one under the pointer last frame), remembering the area for the next one.
-    bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth);
+    // one under the pointer last frame); an area that cannot scroll leaves it to
+    // the one around it.
+    bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth, bool canScroll);
     // True when @p point is inside an open popup (menu, combo list) that belongs
     // to the window being drawn: the window receives the pointer there even when
     // the popup reaches outside its bounds.
