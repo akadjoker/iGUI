@@ -6851,6 +6851,48 @@ void test_gizmo_rotation_does_not_jump_a_full_turn()
     }
 }
 
+// O colorEdit só devolve true quando a cor muda: arrastar o matiz de um cinzento não
+// muda a cor, e não conta.
+void test_color_edit_reports_only_real_changes()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Color color(128u, 128u, 128u, 255u);
+    int changes = 0;
+    int real = 0;
+    ig::Vec2 o;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 400.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        const ig::Color before = color;
+        if (c.colorEdit("cor", color, ig::Rect(0.0f, 0.0f, 400.0f, 260.0f)))
+        {
+            ++changes;
+            if (before != color) ++real;
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const ig::Theme& theme = context.theme();
+    const float contentY = 16.0f + theme.itemSpacing;
+    const float available = 260.0f - contentY - theme.windowPadding * 0.5f;
+    const float picker = available < 193.6f ? available : 193.6f;
+    const float hueX = o.x + picker + theme.windowPadding + 7.0f;
+    const float y = o.y + contentY + 10.0f;
+    harness.drag(hueX, y, hueX, y + 100.0f, build, 6);
+    assert(color.r == 128u && color.g == 128u && color.b == 128u);
+    assert(changes == 0);
+
+    harness.drag(o.x + 10.0f, y, o.x + picker - 10.0f, y, build, 4);
+    assert(real > 0);
+    assert(changes == real);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7893,6 +7935,7 @@ int main()
     test_gizmo_scale_snap_never_reaches_zero();
     test_gizmo3d_plane_handle_follows_the_pointer();
     test_gizmo_rotation_does_not_jump_a_full_turn();
+    test_color_edit_reports_only_real_changes();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
