@@ -1114,6 +1114,56 @@ static void test_file_dialog_opens_only_on_a_double_click()
     std::remove(root.c_str());
 }
 
+// A ListWidget rola de verdade: com a lista rolada, um clique no botão da linha
+// que está no topo chega a esse botão e não ao da linha 0. E o clique numa linha
+// seleciona-a pelo índice que ela tem agora, mesmo depois de um removeRow.
+static void test_list_widget_scrolls_its_rows_for_the_pointer_too()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("listscroll");
+    auto* list = stage->createChild<ListWidget>();
+    int clickedRow = -1;
+    for (int i = 0; i < 20; ++i)
+    {
+        auto* row = list->addRow<Button>("row");
+        row->clicked.connect([&clickedRow, i]() { clickedRow = i; });
+    }
+    assert(app.setStage("listscroll", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+
+    MouseEvent wheel;
+    wheel.scrollY = -2.0f;
+    list->onMouseScroll(wheel);
+    // Dois entalhes de 1,5 linhas cada: a linha 3 fica no topo.
+    const float rowHeight = Theme::instance().buttonHeight + 8.0f;
+    const int topRow = 3;
+
+    io.mouseX = 100.0f;
+    io.mouseY = rowHeight * 0.5f;
+    app.update(io);
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(clickedRow == topRow);
+    assert(list->selectedIndex() == topRow);
+
+    auto* listAfter = stage->createChild<ListWidget>();
+    listAfter->addRow<Button>("a");
+    listAfter->addRow<Button>("b");
+    auto* third = listAfter->addRow<Button>("c");
+    listAfter->removeRow(0);
+    third->pressed.emit(0);
+    assert(listAfter->selectedIndex() == 1);
+}
+
 int main()
 {
     using namespace ig;
@@ -1144,6 +1194,7 @@ int main()
     test_views_let_go_of_their_models();
     test_owned_popups_are_deleted();
     test_file_dialog_opens_only_on_a_double_click();
+    test_list_widget_scrolls_its_rows_for_the_pointer_too();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

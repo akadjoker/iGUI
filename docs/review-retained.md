@@ -74,7 +74,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       listagem seguinte também abre.
       *Arranjo:* usar o `e.clickCount`, que o `WidgetApp` já calcula.
 
-- [ ] **6. A `ListWidget` rola no paint e o hit-test não sabe** —
+- [x] **6. A `ListWidget` rola no paint e o hit-test não sabe** —
       [ScrollWidgets.cpp:596](../src/widgets/ScrollWidgets.cpp#L596).
       Move a linha, pinta e repõe, sem redefinir o `scrollOffset()`.
       *Como se vê:* lista com um Button por linha, scroll de 3 linhas, clique no

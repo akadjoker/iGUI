@@ -508,13 +508,16 @@ void ListWidget::clearRows()
     markDirty();
 }
 
-void ListWidget::connectRowPress(Widget* w, int idx)
+void ListWidget::connectRowPress(Widget* target, Widget* row)
 {
-    w->pressed.connect([this, idx](int btn){
-        if (btn == 0) setSelectedIndex(idx);
+    // The row, not its index: a removeRow() above it changes the index.
+    target->pressed.connect([this, row](int btn){
+        if (btn != 0) return;
+        for (int i = 0; i < static_cast<int>(rows_.size()); ++i)
+            if (rows_[static_cast<size_t>(i)] == row) { setSelectedIndex(i); return; }
     });
-    for (auto* c : w->children())
-        connectRowPress(c, idx);
+    for (auto* c : target->children())
+        connectRowPress(c, row);
 }
 
 void ListWidget::layout()
@@ -589,13 +592,7 @@ void ListWidget::paint(PaintContext& ctx)
             ctx.fill.Rectangle(abs.x + 1, ry, viewW - 2, rh, true);
         }
 
-        // Temporarily move row to its scroll-adjusted relative position for paint
-        Widget* row = rows_[static_cast<size_t>(i)];
-        Rect savedRect = row->rect();
-        float newY = static_cast<float>(i) * rh - scrollOffset_ + kRowPad;
-        row->setPosition(kRowPad, newY);
-        row->paint(ctx);
-        row->setPosition(savedRect.x, savedRect.y);
+        rows_[static_cast<size_t>(i)]->paint(ctx);
     }
 
     ctx.popClip();

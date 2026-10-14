@@ -183,12 +183,11 @@ public:
     template <typename T, typename... Args>
     T* addRow(Args&&... args)
     {
-        int idx = static_cast<int>(rows_.size());
         auto* w = createChild<T>(std::forward<Args>(args)...);
         rows_.push_back(w);
         w->setScrollable(true);
         // Forward clicks from any descendant to select the row
-        connectRowPress(w, idx);
+        connectRowPress(w, w);
         markDirty();
         return static_cast<T*>(w);
     }
@@ -211,12 +210,14 @@ public:
     void paint(PaintContext& ctx) override;
     void onMouseScroll(MouseEvent& e) override;
     void onMousePress(MouseEvent& e) override;
+    // The rows scroll as children: hit testing and absoluteRect see the offset.
+    Vec2f scrollOffset() const override { return {0.0f, scrollOffset_}; }
 
     Signal<int> selectionChanged;
 
 private:
     void clampScroll();
-    void connectRowPress(Widget* w, int idx);
+    void connectRowPress(Widget* target, Widget* row);
     int  rowAtY(float absY) const;
     float rowH() const;
 
