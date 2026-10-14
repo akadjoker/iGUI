@@ -10360,8 +10360,9 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     }
     }
 
-    if (dockSpace->selected[slotIndex] != id)
+    if (dockSpace->selected[slotIndex] != id || dockSpace->contentFrame[slotIndex] == frameNumber_)
         return false;
+    dockSpace->contentFrame[slotIndex] = frameNumber_;
     DockPanelState panel;
     panel.parentLayout = layout_;
     const float contentTop = region.y + (tabBarVisible ? theme_.widgetHeight : hiddenTabBarHeight);

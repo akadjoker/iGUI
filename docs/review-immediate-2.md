@@ -143,7 +143,7 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
       `leftWidth`/`rightWidth`/`bottomHeight`, e é isso que se grava.
 - [x] **D4. Dock spaces com o mesmo id em janelas diferentes partilham a secção do
       `.ini`** — [Gui.cpp:9861](../src/Gui.cpp#L9861), 12625.
-- [ ] **D5. Dois painéis desenham na mesma região no mesmo frame** —
+- [x] **D5. Dois painéis desenham na mesma região no mesmo frame** —
       [Gui.cpp:10046](../src/Gui.cpp#L10046), 10176. Acontece no primeiro frame
       depois de ler o `.ini` e no frame em que se larga uma tab.
 - [ ] **D6. O título da tab ignora `##`/`###` e não se atualiza** —
