@@ -252,5 +252,6 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
 
 Não confirmados: um ponto atrás da câmara é projetado espelhado no
 `projectGizmo3D` (confirmado e corrigido); o `return changed` do gizmo3D sem centro salta o
-`item_.edited` (confirmado e corrigido); o splitter salta até meia espessura no press; o `stepperInt` não
+`item_.edited` (confirmado e corrigido); o splitter salta até meia espessura no press (confirmado e
+corrigido); o `stepperInt` não
 limita um valor que já está fora do intervalo; um `+inf` num plot achata a série.

@@ -2329,6 +2329,8 @@ private:
     // dragged: only one widget is active at a time, so one float is enough to
     // let a press on the cap carry on from where it landed.
     float faderGrabOffset_;
+    // Where the splitter being dragged was grabbed, from its line.
+    float splitterGrabOffset_ = 0.0f;
     WidgetId lastItemId_;
     ItemStatus item_;
     // Cache do topWindowAt(pointer_.position) para o frame corrente. mutável
