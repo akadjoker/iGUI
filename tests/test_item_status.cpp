@@ -4320,6 +4320,59 @@ void test_table_scrolling_both_ways_shows_the_last_row()
     assert(clicked[kRows - 1]);
 }
 
+// Uma tabela com altura própria ocupa essa altura, role ou não na horizontal: o
+// item seguinte cai no mesmo sítio.
+void test_table_scrolling_both_ways_keeps_its_height()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 200.0f;
+    style.freezeRows = 1;
+    style.innerWidth = 900.0f;
+    ig::Rect header;
+    ig::Rect after;
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader("H");
+                if (column == 0) header = c.itemRect();
+            }
+            for (int row = 0; row < 20; ++row)
+                for (int column = 0; column < 3; ++column)
+                {
+                    c.tableNextColumn();
+                    c.label("x");
+                }
+            c.endTable();
+        }
+        c.button("depois");
+        after = c.itemRect();
+        c.endWindow();
+    };
+
+    style.scrollX = false;
+    harness.frame(build);
+    harness.frame(build);
+    const float gap = after.y - (header.y + style.height);
+    assert(gap > 0.0f);
+
+    style.scrollX = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(after.y - (header.y + style.height) == gap);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5328,6 +5381,7 @@ int main()
     test_table_scroll_is_clamped_when_rows_shrink();
     test_table_scrolling_both_ways_drags_the_bottom_bar();
     test_table_scrolling_both_ways_shows_the_last_row();
+    test_table_scrolling_both_ways_keeps_its_height();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
