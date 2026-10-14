@@ -10137,6 +10137,8 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
 {
     if (activeDockSpace_ == InvalidWidgetId || !dockPanelStack_.empty() || (open && !*open))
         return false;
+    if (static_cast<uint32_t>(slot) > static_cast<uint32_t>(DockSlot::Bottom))
+        slot = DockSlot::Center;
     DockSpaceState *dockSpace = dockSpaces_.find(activeDockSpace_);
     DrawList *drawList = currentDrawList();
     if (!dockSpace || !drawList)
@@ -13911,7 +13913,8 @@ bool Context::outsideModalPopup() const
 
 uint32_t Context::dockSlotIndex(DockSlot slot)
 {
-    return static_cast<uint32_t>(slot);
+    const uint32_t index = static_cast<uint32_t>(slot);
+    return index <= static_cast<uint32_t>(DockSlot::Bottom) ? index : static_cast<uint32_t>(DockSlot::Center);
 }
 
 Rect Context::dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const

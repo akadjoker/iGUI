@@ -161,7 +161,8 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
       slot** — [Gui.cpp:10106](../src/Gui.cpp#L10106). A geometria sai duplicada e
       um hover translúcido mistura-se duas vezes.
 
-Não confirmados: um `DockSlot` fora do enum indexa fora do array; o popup da
+Não confirmados: um `DockSlot` fora do enum indexa fora do array (confirmado,
+rebentava; corrigido: conta como o centro); o popup da
 lista de tabs não é um popup registado e pode deixar o clique cair no splitter.
 
 ## Tabelas e listas virtuais
