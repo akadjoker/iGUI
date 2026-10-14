@@ -567,23 +567,29 @@ String TextEdit::selectedText() const
     return result;
 }
 
+float TextEdit::lineHeight() const
+{
+    const auto& t = Theme::instance();
+    return (t.fontSize + t.lineSpacing) * fontScale_;
+}
+
 int TextEdit::firstVisibleLine() const
 {
-    if (lineHeight_ <= 0) return 0;
-    return static_cast<int>(scrollY_ / lineHeight_);
+    if (lineHeight() <= 0) return 0;
+    return static_cast<int>(scrollY_ / lineHeight());
 }
 
 int TextEdit::visibleLineCount() const
 {
-    if (lineHeight_ <= 0) return 0;
-    return static_cast<int>(rect_.h / lineHeight_) + 2;
+    if (lineHeight() <= 0) return 0;
+    return static_cast<int>(rect_.h / lineHeight()) + 2;
 }
 
 void TextEdit::scrollToLine(int n)
 {
-    if (lineHeight_ <= 0) return;
-    scrollY_ = n * lineHeight_;
-    float maxY = std::max(0.0f, static_cast<int>(lines_.size()) * lineHeight_ - rect_.h);
+    if (lineHeight() <= 0) return;
+    scrollY_ = n * lineHeight();
+    float maxY = std::max(0.0f, static_cast<int>(lines_.size()) * lineHeight() - rect_.h);
     scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
     markDirty();
 }
@@ -707,8 +713,8 @@ int TextEdit::xToCol(PaintContext& ctx, int line, float x) const
 TextEdit::TextPos TextEdit::hitTestMouse(float localX, float localY) const
 {
     auto& wa = WidgetApp::instance();
-    if (lineHeight_ <= 0) return {0, 0};
-    int vRow = static_cast<int>((localY + scrollY_) / lineHeight_);
+    if (lineHeight() <= 0) return { 0, 0 };
+    int vRow = static_cast<int>((localY + scrollY_) / lineHeight());
     int tvr  = totalVisualRows();
     vRow = std::max(0, std::min(vRow, tvr - 1));
     if (vRow < 0) return {0, 0};
@@ -751,7 +757,7 @@ TextEdit::TextPos TextEdit::hitTestMouse(float localX, float localY) const
 
 TextEdit::TextPos TextEdit::hitTest(PaintContext& ctx, float localX, float localY) const
 {
-    int vRow = static_cast<int>((localY + scrollY_) / lineHeight_);
+    int vRow = static_cast<int>((localY + scrollY_) / lineHeight());
     int tvr  = totalVisualRows();
     vRow = std::max(0, std::min(vRow, tvr - 1));
     if (vRow < 0) return {0, 0};
@@ -1010,7 +1016,7 @@ int TextEdit::logicalToVisualRow(int line, int row) const
 
 void TextEdit::ensureCursorVisible()
 {
-    if (lineHeight_ <= 0) return;
+    if (lineHeight() <= 0 || rect_.h <= 0) return;
 
     int cursorRowInLine = 0;
     if (!wrapRows_.empty() && cursor_.line < static_cast<int>(wrapRows_.size()))
@@ -1024,12 +1030,13 @@ void TextEdit::ensureCursorVisible()
         }
     }
     int cursorVRow = logicalToVisualRow(cursor_.line, cursorRowInLine);
-    float cy = cursorVRow * lineHeight_;
+    float cy = cursorVRow * lineHeight();
 
     if (cy < scrollY_) scrollY_ = cy;
-    else if (cy + lineHeight_ > scrollY_ + rect_.h) scrollY_ = cy + lineHeight_ - rect_.h;
+    else if (cy + lineHeight() > scrollY_ + rect_.h)
+        scrollY_ = cy + lineHeight() - rect_.h;
 
-    float maxY = std::max(0.0f, totalVisualRows() * lineHeight_ - rect_.h);
+    float maxY = std::max(0.0f, totalVisualRows() * lineHeight() - rect_.h);
     scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
 
     if (wordWrap_ || cursor_.line < 0 || cursor_.line >= static_cast<int>(lines_.size()))
@@ -1079,7 +1086,6 @@ void TextEdit::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
 
-    lineHeight_ = (t.fontSize + t.lineSpacing) * fontScale_;
     updateGutterWidth(ctx);
 
     float newWrapW = abs.w - gutterW_ - t.textEditPadding * 2;
@@ -1119,8 +1125,8 @@ void TextEdit::paint(PaintContext& ctx)
 
     ctx.font.SetBatch(&ctx.text);
 
-    int firstVRow = std::max(0, static_cast<int>(scrollY_ / lineHeight_));
-    int lastVRow  = std::min(firstVRow + static_cast<int>(abs.h / lineHeight_) + 2, totalVRows - 1);
+    int firstVRow = std::max(0, static_cast<int>(scrollY_ / lineHeight()));
+    int lastVRow = std::min(firstVRow + static_cast<int>(abs.h / lineHeight()) + 2, totalVRows - 1);
 
     // Cursor visual row
     int cursorVRow = 0, cursorRowInLine = 0;
@@ -1143,9 +1149,9 @@ void TextEdit::paint(PaintContext& ctx)
         int  i      = vp.line;
         int  rowIdx = vp.row;
         if (i < 0 || i >= static_cast<int>(lines_.size())) continue;
-        float ly  = abs.y + vr * lineHeight_ - scrollY_;
-        float lty = ly + lineHeight_ - t.lineSpacing;
-        if (ly + lineHeight_ < abs.y || ly > abs.y + abs.h) continue;
+        float ly = abs.y + vr * lineHeight() - scrollY_;
+        float lty = ly + lineHeight() - t.lineSpacing;
+        if (ly + lineHeight() < abs.y || ly > abs.y + abs.h) continue;
         if (rowIdx == 0)
         {
             char numBuf[16];
@@ -1159,9 +1165,9 @@ void TextEdit::paint(PaintContext& ctx)
             // Gutter markers (left of line numbers)
             ct::HashSet<int>* lineMarkers = markers_.find(i);
             if (lineMarkers) {
-                float markerR = lineHeight_ * 0.3f;
+                float markerR = lineHeight() * 0.3f;
                 float mx = abs.x + markerR + 3.0f;
-                float my = ly + lineHeight_ * 0.5f;
+                float my = ly + lineHeight() * 0.5f;
                 // Pick highest-priority marker color
                 Color mc = {100, 100, 100, 255}; // default grey
                 if (lineMarkers->contains(static_cast<int>(MarkerType::Error)))
@@ -1198,10 +1204,10 @@ void TextEdit::paint(PaintContext& ctx)
         String rowTextRaw = utf8Substr(lines_[i], startCol, endCol);
         String rowText = expandTabs(rowTextRaw, startVisCol);
 
-        float ly  = abs.y + vr * lineHeight_ - scrollY_;
-        float lty = ly + lineHeight_ - t.lineSpacing;  // baseline
+        float ly = abs.y + vr * lineHeight() - scrollY_;
+        float lty = ly + lineHeight() - t.lineSpacing; // baseline
 
-        if (ly + lineHeight_ < abs.y || ly > abs.y + abs.h) continue;
+        if (ly + lineHeight() < abs.y || ly > abs.y + abs.h) continue;
 
         // Selection highlight
         if (isFocused() && hasSelection())
@@ -1227,7 +1233,7 @@ void TextEdit::paint(PaintContext& ctx)
                         ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
                                           t.selectionColor.b, t.selectionColor.a);
                         ctx.fill.Rectangle(static_cast<int>(cx1), static_cast<int>(ly),
-                                           static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight_), true);
+                                static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight()), true);
                     }
                 }
             }
@@ -1236,7 +1242,7 @@ void TextEdit::paint(PaintContext& ctx)
         // Current-line highlight
         if (isFocused() && !hasSelection() && i == cursor_.line)
         {
-            Rect lineRect = {textArea.x, ly, textArea.w, lineHeight_};
+            Rect lineRect = { textArea.x, ly, textArea.w, lineHeight() };
             Rect lc2;
             if (ctx.clipRectIntersect(lineRect, lc2))
             {
@@ -1295,7 +1301,7 @@ void TextEdit::paint(PaintContext& ctx)
     // Cursor line
     if (isFocused() && blinkTimer_ < 0.5f && !readOnly_)
     {
-        float cy = abs.y + cursorVRow * lineHeight_ - scrollY_;
+        float cy = abs.y + cursorVRow * lineHeight() - scrollY_;
         int rowStart = 0;
         if (cursor_.line < static_cast<int>(wrapRows_.size()) &&
             cursorRowInLine < static_cast<int>(wrapRows_[cursor_.line].size()))
@@ -1305,18 +1311,18 @@ void TextEdit::paint(PaintContext& ctx)
         String pre = expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
         float cx = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
 
-        if (cx >= textArea.x && cx <= textArea.x + textArea.w &&
-            cy >= abs.y && cy + lineHeight_ <= abs.y + abs.h)
+        if (cx >= textArea.x && cx <= textArea.x + textArea.w && cy >= abs.y &&
+                cy + lineHeight() <= abs.y + abs.h)
         {
             ctx.line.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
-            ctx.line.Line2D(static_cast<int>(cx), static_cast<int>(cy + 1),
-                            static_cast<int>(cx), static_cast<int>(cy + lineHeight_ - 1));
+            ctx.line.Line2D(static_cast<int>(cx), static_cast<int>(cy + 1), static_cast<int>(cx),
+                    static_cast<int>(cy + lineHeight() - 1));
         }
     }
 
     // Scrollbar — inside same clip so it merges
     float barW   = t.scrollbarWidth;
-    float totalH = totalVRows * lineHeight_;
+    float totalH = totalVRows * lineHeight();
     bool needVBar = totalH > abs.h;
     if (needVBar)
     {
@@ -1362,7 +1368,7 @@ void TextEdit::onMousePress(MouseEvent& e)
     if (!isEnabledInTree()) return;
     // Gutter click → toggle breakpoint / emit markerClicked
     if (showLineNumbers_ && e.localX < gutterW_) {
-        int clickedLine = static_cast<int>((e.localY + scrollY_) / lineHeight_);
+        int clickedLine = static_cast<int>((e.localY + scrollY_) / lineHeight());
         if (clickedLine >= 0 && clickedLine < static_cast<int>(lines_.size())) {
             // Find the highest-priority marker on this line
             ct::HashSet<int>* lineMarkers = markers_.find(clickedLine);
@@ -1448,13 +1454,13 @@ void TextEdit::onMouseScroll(MouseEvent& e)
     const float horizontal = (e.scrollX != 0.0f) ? e.scrollX : (e.shift ? e.scrollY : 0.0f);
     if (horizontal != 0.0f)
     {
-        scrollX_ -= horizontal * lineHeight_ * 3;
+        scrollX_ -= horizontal * lineHeight() * 3;
         scrollX_ = std::max(0.0f, std::min(scrollX_, maxScrollX()));
     }
     if (!e.shift)
     {
-        scrollY_ -= e.scrollY * lineHeight_ * 3;
-        float maxY = std::max(0.0f, static_cast<float>(totalVisualRows()) * lineHeight_ - rect_.h);
+        scrollY_ -= e.scrollY * lineHeight() * 3;
+        float maxY = std::max(0.0f, static_cast<float>(totalVisualRows()) * lineHeight() - rect_.h);
         scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
     }
     markDirty();

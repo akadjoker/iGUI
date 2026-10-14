@@ -2664,6 +2664,57 @@ struct BigContent : ig::retained::Widget
 
 // Com as duas barras à vista, a roda chega ao fim do conteúdo nos dois eixos:
 // o limite conta com a barra do outro eixo, como a própria barra conta.
+// A altura da linha não espera pela primeira pintura: o scrollToLine logo depois
+// do setText leva a vista à linha pedida, e depois de mudar o zoom usa logo a
+// altura nova, que a pintura seguinte mantém. Sem altura ainda, mover o cursor
+// não rola a vista.
+static void test_text_edit_scrolls_to_a_line_before_painting()
+{
+    using namespace ig::retained;
+    String text;
+    for (int i = 0; i < 200; ++i) text += "line " + String::number(i) + "\n";
+    TextEdit lonely;
+    lonely.setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    lonely.setText(text);
+    lonely.scrollToLine(150);
+    assert(lonely.firstVisibleLine() == 150);
+    assert(lonely.visibleLineCount() > 2);
+    TextEdit unplaced;
+    unplaced.setText(text);
+    KeyEvent down;
+    down.key = Key::Down;
+    unplaced.onKeyPress(down);
+    unplaced.onKeyPress(down);
+    assert(unplaced.cursorPos().line == 2);
+    assert(unplaced.firstVisibleLine() == 0);
+
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("scrolltoline");
+    auto* screen = stage->createChild<Widget>();
+    auto* edit = screen->createChild<TextEdit>();
+    edit->setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    edit->setText(text);
+    assert(app.setStage("scrolltoline", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    paint();
+    edit->setFontScale(2.0f);
+    edit->scrollToLine(100);
+    paint();
+    assert(edit->firstVisibleLine() == 100);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -2971,6 +3022,7 @@ int main()
     test_console_counts_collapsed_repeats();
     test_global_events_reach_their_handlers();
     test_text_edit_wrap_rows_are_stable();
+    test_text_edit_scrolls_to_a_line_before_painting();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
     test_widget_cast_follows_the_declared_chain();
