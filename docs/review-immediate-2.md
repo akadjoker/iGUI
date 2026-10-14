@@ -213,7 +213,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       arrasta também o vizinho** — [Gui.cpp:7254](../src/Gui.cpp#L7254), 7312,
       7368, 7400. O sort de cada frame muda os índices e o selecionado fica com o
       antigo.
-- [ ] **M3. Overflow de `int` no índice das colunas dos plots lê fora do buffer** —
+- [x] **M3. Overflow de `int` no índice das colunas dos plots lê fora do buffer** —
       [Gui.cpp:7965](../src/Gui.cpp#L7965), 7993, 8012. Com 2 000 000 amostras
       e 1100 px, SEGV.
 - [ ] **M4. `showToast` com o mesmo id duplica em vez de atualizar** —

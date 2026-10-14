@@ -7988,7 +7988,7 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
             plotBars_.clear();
             for (int column = 0; column < columns; ++column)
             {
-                const int first = column * sampleCount / columns;
+                const int first = static_cast<int>(static_cast<int64_t>(column) * sampleCount / columns);
                 const float value = values[(offset + first) % count];
                 const float y = inner.bottom() -
                                 clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
@@ -8016,7 +8016,7 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
             plotPoints_.reserve(static_cast<size_t>(columns) + 1u);
             for (int column = 0; column <= columns; ++column)
             {
-                const int index = column * sampleCount / columns;
+                const int index = static_cast<int>(static_cast<int64_t>(column) * sampleCount / columns);
                 const float value = values[(offset + index) % count];
                 const float y = inner.bottom() -
                                 clamp((value - scaleMin) * inverseScale, 0.0f, 1.0f) * inner.height;
@@ -8035,7 +8035,7 @@ int Context::plotImpl(bool histogram, StringView labelText, const float *values,
         }
 
         if (hoveredColumn >= 0)
-            hoveredIndex = hoveredColumn * sampleCount / columns;
+            hoveredIndex = static_cast<int>(static_cast<int64_t>(hoveredColumn) * sampleCount / columns);
 
         if (hoveredIndex >= 0)
         {
