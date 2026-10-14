@@ -1682,6 +1682,46 @@ static void test_disabled_fields_ignore_input()
     assert(painted(fill) > editOn);
 }
 
+// Texto que não é UTF-8 válido (um nome em Latin-1, uma sequência cortada no
+// fim) conta um carácter por byte inválido, os offsets nunca passam do fim, e
+// escrever ou partir a linha no fim desse texto não aborta.
+static void test_invalid_utf8_stays_inside_the_text()
+{
+    using namespace ig::retained;
+    const String latin1("Bal\xE3o");
+    assert(utf8Length(latin1) == 5);
+    assert(utf8ByteOffset(latin1, 5) == latin1.size());
+    const String truncated("ab\xE2\x82");
+    assert(utf8Length(truncated) == 4);
+    assert(utf8ByteOffset(truncated, 9) == truncated.size());
+    assert(utf8Length(String("\xF0")) == 1);
+    assert(utf8Length(String("a\xC3\xA3")) == 2);
+    int length = 0;
+    assert(utf8Decode("\xC3\xA3", length) == 0xE3u && length == 2);
+    assert(utf8Decode("\xE3o", length) == 0xFFFDu && length == 1);
+
+    TextInput input;
+    input.setText(latin1);
+    KeyEvent end;
+    end.key = Key::End;
+    input.onKeyPress(end);
+    KeyEvent typed;
+    typed.text[0] = 'x';
+    input.onTextInput(typed);
+    assert(input.text() == "Bal\xE3ox");
+
+    TextEdit edit;
+    edit.setText("Bal\xE3o\nab\xE2\x82");
+    edit.setSelection({ 1, 0 }, { 1, 4 });
+    assert(edit.selectedText() == "ab\xE2\x82");
+    edit.setCursorPos(0, 5);
+    KeyEvent enter;
+    enter.key = Key::Return;
+    edit.onKeyPress(enter);
+    assert(edit.lineAt(0) == latin1);
+    assert(edit.lineAt(1).empty());
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -1863,6 +1903,7 @@ int main()
     test_popups_closed_from_outside_are_closed_for_their_owner();
     test_page_view_hides_the_pages_it_leaves();
     test_disabled_fields_ignore_input();
+    test_invalid_utf8_stays_inside_the_text();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

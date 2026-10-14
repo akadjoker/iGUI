@@ -539,21 +539,8 @@ float CodeEditor::colToPixelX(int line, int col) const
             curCol++;
             i++;
         } else {
-            // Decode UTF-8 codepoint
-            unsigned char uc = static_cast<unsigned char>(text[i]);
             int seqLen = 1;
-            if      (uc >= 0xF0) seqLen = 4;
-            else if (uc >= 0xE0) seqLen = 3;
-            else if (uc >= 0xC0) seqLen = 2;
-
-            uint32_t cp = uc;
-            if (seqLen == 2 && i + 1 < text.size())
-                cp = ((uc & 0x1F) << 6) | (text[i+1] & 0x3F);
-            else if (seqLen == 3 && i + 2 < text.size())
-                cp = ((uc & 0x0F) << 12) | ((text[i+1] & 0x3F) << 6) | (text[i+2] & 0x3F);
-            else if (seqLen == 4 && i + 3 < text.size())
-                cp = ((uc & 0x07) << 18) | ((text[i+1] & 0x3F) << 12) | ((text[i+2] & 0x3F) << 6) | (text[i+3] & 0x3F);
-
+            const uint32_t cp = utf8Decode(text.c_str() + i, seqLen);
             const ig::retained::FontGlyph* g = font->findGlyph(cp);
             penX += g ? g->advanceX * scale : spaceAdv;
             visCol++;
@@ -586,28 +573,13 @@ float CodeEditor::colCharWidth(int line, int col) const
             } else if (text[i] == ' ') {
                 return spaceAdv;
             } else {
-                unsigned char uc = static_cast<unsigned char>(text[i]);
                 int seqLen = 1;
-                if      (uc >= 0xF0) seqLen = 4;
-                else if (uc >= 0xE0) seqLen = 3;
-                else if (uc >= 0xC0) seqLen = 2;
-                uint32_t cp = uc;
-                if (seqLen == 2 && i + 1 < text.size())
-                    cp = ((uc & 0x1F) << 6) | (text[i+1] & 0x3F);
-                else if (seqLen == 3 && i + 2 < text.size())
-                    cp = ((uc & 0x0F) << 12) | ((text[i+1] & 0x3F) << 6) | (text[i+2] & 0x3F);
-                else if (seqLen == 4 && i + 3 < text.size())
-                    cp = ((uc & 0x07) << 18) | ((text[i+1] & 0x3F) << 12) | ((text[i+2] & 0x3F) << 6) | (text[i+3] & 0x3F);
+                const uint32_t cp = utf8Decode(text.c_str() + i, seqLen);
                 const ig::retained::FontGlyph* g = font->findGlyph(cp);
                 return g ? g->advanceX * scale : spaceAdv;
             }
         }
-        unsigned char uc = static_cast<unsigned char>(text[i]);
-        int seqLen = 1;
-        if      (uc >= 0xF0) seqLen = 4;
-        else if (uc >= 0xE0) seqLen = 3;
-        else if (uc >= 0xC0) seqLen = 2;
-        i += seqLen;
+        i += utf8CharLen(text.c_str() + i);
         curCol++;
     }
     return spaceAdv;
@@ -787,32 +759,15 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
             } else {
                 // Regular char: decode from expanded to get exact glyph advance
                 if (ei < expanded.size()) {
-                    unsigned char uc = static_cast<unsigned char>(expanded[ei]);
                     int seqLen = 1;
-                    if      (uc >= 0xF0) seqLen = 4;
-                    else if (uc >= 0xE0) seqLen = 3;
-                    else if (uc >= 0xC0) seqLen = 2;
-
-                    uint32_t cp = uc;
-                    if (seqLen == 2 && ei + 1 < expanded.size())
-                        cp = ((uc & 0x1F) << 6) | (expanded[ei+1] & 0x3F);
-                    else if (seqLen == 3 && ei + 2 < expanded.size())
-                        cp = ((uc & 0x0F) << 12) | ((expanded[ei+1] & 0x3F) << 6) | (expanded[ei+2] & 0x3F);
-                    else if (seqLen == 4 && ei + 3 < expanded.size())
-                        cp = ((uc & 0x07) << 18) | ((expanded[ei+1] & 0x3F) << 12) | ((expanded[ei+2] & 0x3F) << 6) | (expanded[ei+3] & 0x3F);
-
+                    const uint32_t cp = utf8Decode(expanded.c_str() + ei, seqLen);
                     const ig::retained::FontGlyph* g = font->findGlyph(cp);
                     penX += g ? g->advanceX * scale : spaceAdv;
                     ei += seqLen;
                 }
 
                 // Advance original text
-                unsigned char ouc = static_cast<unsigned char>(text[oi]);
-                int oseq = 1;
-                if      (ouc >= 0xF0) oseq = 4;
-                else if (ouc >= 0xE0) oseq = 3;
-                else if (ouc >= 0xC0) oseq = 2;
-                oi += oseq;
+                oi += utf8CharLen(text.c_str() + oi);
                 visCol++;
             }
         }
@@ -1345,12 +1300,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
                 runCols   = 1;
             }
 
-            // Advance past UTF-8 sequence
-            int seqLen = 1;
-            if (ch >= 0xC0 && ch < 0xE0) seqLen = 2;
-            else if (ch >= 0xE0 && ch < 0xF0) seqLen = 3;
-            else if (ch >= 0xF0) seqLen = 4;
-            byteIdx += seqLen;
+            byteIdx += utf8CharLen(text.c_str() + byteIdx);
             visCol++;
         }
         flushRun();
