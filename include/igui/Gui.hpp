@@ -2199,6 +2199,7 @@ private:
     ct::Vector<WindowHandle> windowOrder_;
     ct::Vector<WidgetId> idStack_;
     ct::Vector<WidgetId> focusOrder_;
+    ct::Vector<WindowHandle> focusWindows_;
     // Same ids as focusOrder_, for an O(1) "is this one already in the Tab
     // order?" - the scan it replaces was quadratic in the number of widgets.
     ct::HashSet<WidgetId> focusSeen_;

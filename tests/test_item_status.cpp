@@ -5619,6 +5619,47 @@ void test_modal_popup_keeps_the_keyboard()
     assert(first == "m1Z");
 }
 
+// O Tab anda pelos widgets da janela onde está o foco e volta ao princípio dela,
+// sem saltar para outra janela.
+void test_tab_stays_in_its_window()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::String a1("a1");
+    ig::String a2("a2");
+    ig::String b1("b1");
+    ig::Rect a2Rect;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginWindow("A", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)))
+        {
+            c.inputText("fa1", a1);
+            c.inputText("fa2", a2);
+            a2Rect = c.itemRect();
+            c.endWindow();
+        }
+        if (c.beginWindow("B", ig::Rect(400.0f, 0.0f, 300.0f, 300.0f)))
+        {
+            c.inputText("fb1", b1);
+            c.endWindow();
+        }
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(a2Rect.x + 10.0f, a2Rect.y + a2Rect.height * 0.5f, build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    harness.frame(build);
+    harness.frame(build);
+    context.pushEvent(ig::Event::textInput("Z"));
+    harness.frame(build);
+    assert(b1 == "b1");
+    assert(a1 == "a1Z");
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6651,6 +6692,7 @@ int main()
     test_right_click_outside_closes_menus();
     test_popup_over_another_window_keeps_its_owner();
     test_modal_popup_keeps_the_keyboard();
+    test_tab_stays_in_its_window();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
