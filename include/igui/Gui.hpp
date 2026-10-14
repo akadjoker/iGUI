@@ -1614,6 +1614,7 @@ private:
     struct PointerState
     {
         Vec2 position;
+        Vec2 previousPosition;
         Vec2 pressedPosition[3];
         Vec2 releasedPosition[3];
         bool down[3];
@@ -2639,6 +2640,7 @@ private:
     // one under the pointer last frame); an area that cannot scroll leaves it to
     // the one around it.
     bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth, bool canScroll);
+    bool movingTowardSubMenu(const Rect &parent) const;
     // True when @p point is inside an open popup (menu, combo list) that belongs
     // to the window being drawn: the window receives the pointer there even when
     // the popup reaches outside its bounds.

@@ -1141,7 +1141,7 @@ void colorToHsv(const Color &color, float &hue, float &saturation, float &value)
 } // namespace
 
 Context::PointerState::PointerState()
-    : position(), wheelX(0.0f), wheelY(0.0f), wheelControl(false), pressedControl(),
+    : position(), previousPosition(), wheelX(0.0f), wheelY(0.0f), wheelControl(false), pressedControl(),
       pressedShift()
 {
     for (uint32_t i = 0; i < 3u; ++i)
@@ -4931,7 +4931,14 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     const WidgetId parentId = insideMenu ? activeMenu_ : id;
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
-    if (enabled && (hovered || clicked))
+    const Rect parent = insideMenu ? menuPopupBounds_ : popupContentClip();
+    const bool overParent = contains(parent, pointer_.position);
+    const bool towardChild =
+        openSubMenu_ != InvalidWidgetId && overParent && movingTowardSubMenu(parent);
+    if (openSubMenu_ == id && !hovered && !clicked && overParent && !towardChild &&
+        activeWidget_ == InvalidWidgetId)
+        openSubMenu_ = InvalidWidgetId;
+    if (enabled && ((hovered && !towardChild) || clicked))
     {
         openSubMenu_ = id;
         const float popupWidth = subMenuWidthId_ == id ? subMenuPopupWidth_ : theme_.menuMinWidth;
@@ -12111,6 +12118,7 @@ WidgetId Context::makeWidgetId(StringView labelText) const
 
 void Context::consumeEvents()
 {
+    pointer_.previousPosition = pointer_.position;
     while (!events_.empty())
     {
         const Event event = events_.front();
@@ -13687,6 +13695,32 @@ bool Context::pointerInsideOwnPopup(const Vec2 &point) const
         return false;
     return contains(menuPopupBoundsAtFrameStart_, point) ||
            contains(subMenuPopupBoundsAtFrameStart_, point);
+}
+
+bool Context::movingTowardSubMenu(const Rect &parent) const
+{
+    const Rect child = subMenuPopupBounds_;
+    if (child.height <= 0.0f)
+        return false;
+    const float unit = theme_.fontSize;
+    const float direction = parent.x < child.x ? 1.0f : -1.0f;
+    Vec2 a = pointer_.previousPosition;
+    Vec2 b = direction > 0.0f ? Vec2(child.x, child.y) : Vec2(child.x + child.width, child.y);
+    Vec2 c = direction > 0.0f ? Vec2(child.x, child.y + child.height)
+                              : Vec2(child.x + child.width, child.y + child.height);
+    const float slack = clamp(fabsf(a.x - b.x) * 0.30f, unit * 0.5f, unit * 2.5f);
+    a.x += direction * -0.5f;
+    b.x += direction * unit;
+    c.x += direction * unit;
+    const float up = (b.y - slack) - a.y;
+    const float down = (c.y + slack) - a.y;
+    b.y = a.y + (up > -unit * 8.0f ? up : -unit * 8.0f);
+    c.y = a.y + (down < unit * 8.0f ? down : unit * 8.0f);
+    const Vec2 p = pointer_.position;
+    const bool b1 = ((p.x - b.x) * (a.y - b.y) - (p.y - b.y) * (a.x - b.x)) < 0.0f;
+    const bool b2 = ((p.x - c.x) * (b.y - c.y) - (p.y - c.y) * (b.x - c.x)) < 0.0f;
+    const bool b3 = ((p.x - a.x) * (c.y - a.y) - (p.y - a.y) * (c.x - a.x)) < 0.0f;
+    return b1 == b2 && b2 == b3;
 }
 
 bool Context::ownWheelArea(WidgetId id, const Rect &area, uint32_t depth, bool canScroll)
