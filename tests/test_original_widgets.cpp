@@ -2651,6 +2651,47 @@ static void test_text_edit_wrap_rows_are_stable()
     assert(wide.substr(0, 8) == "0:0 1:0 ");
 }
 
+namespace
+{
+struct BigContent : ig::retained::Widget
+{
+    Vec2f sizeHint() const override
+    {
+        return { 1000.0f, 1000.0f };
+    }
+};
+} // namespace
+
+// Com as duas barras à vista, a roda chega ao fim do conteúdo nos dois eixos:
+// o limite conta com a barra do outro eixo, como a própria barra conta.
+static void test_scroll_view_wheel_reaches_the_end_with_both_bars()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("bothbars");
+    auto* screen = stage->createChild<Widget>();
+    auto* view = screen->createChild<ScrollView>();
+    view->setRect({ 0.0f, 0.0f, 300.0f, 200.0f });
+    view->setContent<BigContent>();
+    assert(app.setStage("bothbars", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+
+    const float bar = ScrollBar::kBarThickness + 2.0f;
+    MouseEvent down;
+    down.scrollY = -1000.0f;
+    view->onMouseScroll(down);
+    assert(view->scrollY() == 1000.0f - (200.0f - bar));
+    MouseEvent right;
+    right.scrollX = -1000.0f;
+    view->onMouseScroll(right);
+    assert(view->scrollX() == 1000.0f - (300.0f - bar));
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2851,6 +2892,7 @@ int main()
     test_console_counts_collapsed_repeats();
     test_global_events_reach_their_handlers();
     test_text_edit_wrap_rows_are_stable();
+    test_scroll_view_wheel_reaches_the_end_with_both_bars();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
