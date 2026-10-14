@@ -229,7 +229,7 @@ Só por leitura:
 - [x] [FileDialog.cpp:545](../src/widgets/FileDialog.cpp#L545) e 588 —
       `panelColor.r + 15` dá overflow de u8 com o `Theme::light()` (barras
       pretas).
-- [ ] [Animation.cpp:303-331](../src/widgets/Animation.cpp#L303-L331) — o
+- [x] [Animation.cpp:303-331](../src/widgets/Animation.cpp#L303-L331) — o
       `fadeOut` e o `slideIn` guardam `Widget*` cru, sem cancelamento.
 - [ ] O TextEdit sem word-wrap não tem scroll horizontal (o `maxContentW_` é
       calculado e nunca usado).
