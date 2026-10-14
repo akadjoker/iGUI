@@ -4304,7 +4304,7 @@ bool Context::checkboxFlags(StringView labelText, unsigned &flags, unsigned flag
 {
     if (flagValue == 0u)
         return false;
-    bool checked = (flags & flagValue) != 0u;
+    bool checked = (flags & flagValue) == flagValue;
     // O desenho e a interação são os do checkbox: o que muda é onde o resultado
     // fica, que aqui é um bit em vez de um bool sozinho.
     const bool changed = checkbox(labelText, checked, bounds);
@@ -8715,7 +8715,7 @@ bool Context::checkboxFlags(StringView labelText, unsigned &flags, unsigned flag
 {
     if (flagValue == 0u)
         return false;
-    bool checked = (flags & flagValue) != 0u;
+    bool checked = (flags & flagValue) == flagValue;
     const bool changed = checkbox(labelText, checked);
     if (!changed)
         return false;

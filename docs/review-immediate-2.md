@@ -47,7 +47,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
       `beginSubMenu` já o faz.
 - [x] **N10. O Ctrl+A de um bloco de escolha múltipla dispara enquanto se escreve
       num campo de texto** — [Gui.cpp:3573](../src/Gui.cpp#L3573).
-- [ ] **N11. O `checkboxFlags` com uma máscara de vários bits faz o contrário do
+- [x] **N11. O `checkboxFlags` com uma máscara de vários bits faz o contrário do
       ImGui** — [Gui.cpp:4183](../src/Gui.cpp#L4183). *Arranjo:*
       `(flags & flagValue) == flagValue`.
 - [ ] **N12. Depois do `listBox` e do `comboBox` aberto, as consultas do item falam
