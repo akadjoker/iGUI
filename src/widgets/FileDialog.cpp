@@ -529,7 +529,8 @@ void FileDialog::paint(PaintContext& ctx)
     if (mode_ == Mode::OpenImage && previewPanel_ && previewPanel_->isVisible()) {
         Rect pr = previewPanel_->absoluteRect();
         auto& t = Theme::instance();
-        ctx.fill.SetColor(t.panelColor.r + 15, t.panelColor.g + 15, t.panelColor.b + 15, 255);
+        const Color shade = t.panelColor.Shifted(15);
+        ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
         ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
         ctx.line.SetColor(60, 62, 66, 255);
         ctx.drawLine(pr.x, pr.y, pr.x, pr.y + pr.h);
@@ -540,7 +541,8 @@ void FileDialog::paint(PaintContext& ctx)
 void FileDialog::paintFileArea(PaintContext& ctx, const Rect& area)
 {
     auto& t = Theme::instance();
-    ctx.fill.SetColor(t.panelColor.r - 5, t.panelColor.g - 5, t.panelColor.b - 5, 255);
+    const Color shade = t.panelColor.Shifted(-5);
+    ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
     ctx.fillRect(area.x, area.y, area.w, area.h);
 
     switch (viewMode_) {
@@ -572,7 +574,8 @@ void FileDialog::paintFileArea(PaintContext& ctx, const Rect& area)
 void FileDialog::paintHeader(PaintContext& ctx, const Rect& area)
 {
     auto& t = Theme::instance();
-    ctx.fill.SetColor(t.panelColor.r + 10, t.panelColor.g + 10, t.panelColor.b + 10, 255);
+    const Color shade = t.panelColor.Shifted(10);
+    ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
     ctx.fillRect(area.x, area.y, area.w, area.h);
 
     float asc = setupFont(ctx, t.textColor, t.fontSize * 0.9f);
@@ -614,7 +617,8 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
 
         // Zebra
         if (i % 2 == 1) {
-            ctx.fill.SetColor(t.panelColor.r + 3, t.panelColor.g + 3, t.panelColor.b + 3, 255);
+            const Color shade = t.panelColor.Shifted(3);
+            ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
             ctx.fillRect(area.x, ry, area.w, rowHeight_);
         }
         // Selection

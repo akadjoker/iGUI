@@ -67,7 +67,11 @@ void ScrollBar::paint(PaintContext& ctx)
     bool hovered = isHovered();
     Color tc = t.scrollbarThumb;
     if (hovered || dragging_)
-        tc = Color(tc.r + 40, tc.g + 40, tc.b + 40, std::min(255, (int)tc.a + 80));
+    {
+        const int alpha = std::min(255, (int)tc.a + 80);
+        tc = tc.Shifted(40);
+        tc.a = static_cast<u8>(alpha);
+    }
 
     ctx.fill.SetColor(tc.r, tc.g, tc.b, tc.a);
     ctx.fill.RoundedRectangle(thumb.x, thumb.y, thumb.w, thumb.h, 4.0f, 4, true);

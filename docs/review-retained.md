@@ -226,7 +226,7 @@ Só por leitura:
       janelas é reposto sem limitar ao ecrã atual.
 - [x] [FileDialog.cpp:426-441](../src/widgets/FileDialog.cpp#L426-L441) — os
       breadcrumbs no Windows assumem "C:" e geram caminhos "C:/:/…".
-- [ ] [FileDialog.cpp:545](../src/widgets/FileDialog.cpp#L545) e 588 —
+- [x] [FileDialog.cpp:545](../src/widgets/FileDialog.cpp#L545) e 588 —
       `panelColor.r + 15` dá overflow de u8 com o `Theme::light()` (barras
       pretas).
 - [ ] [Animation.cpp:303-331](../src/widgets/Animation.cpp#L303-L331) — o

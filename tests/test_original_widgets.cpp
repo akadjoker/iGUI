@@ -2334,6 +2334,72 @@ static void test_file_dialog_breadcrumbs_follow_the_path_root()
     std::remove(root.c_str());
 }
 
+// Clarear ou escurecer uma cor fica nos limites de cada canal: com o tema
+// claro (painel 250) as barras do FileDialog não dão a volta para preto.
+static void test_shaded_colors_stay_in_range()
+{
+    using namespace ig::retained;
+    assert(ig::Color(250, 10, 128, 7).Shifted(15) == ig::Color(255, 25, 143, 7));
+    assert(ig::Color(3, 250, 128, 255).Shifted(-5) == ig::Color(0, 245, 123, 255));
+
+    Theme& theme = Theme::instance();
+    const Theme saved = theme;
+    theme = Theme::light();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("lightdialog");
+    assert(app.setStage("lightdialog", TransitionType::None));
+    auto* dialog = app.addFloat<FileDialog>("Open");
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    auto darkVertices = [&app]()
+    {
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data);
+        size_t dark = 0;
+        for (const DrawPass& pass: data.passes)
+            if (pass.list)
+                for (const DrawVertex& vertex: pass.list->vertices())
+                    if (vertex.color.r < 20 && vertex.color.g < 20 && vertex.color.b < 20) ++dark;
+        return dark;
+    };
+    assert(darkVertices() == 0);
+    app.removeFloat(dialog);
+    app.update(io);
+
+    theme.scrollbarThumb = ig::Color(250, 250, 250, 100);
+    auto* screen = stage->createChild<Widget>();
+    auto* list = screen->createChild<ListBox>();
+    list->setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    for (int i = 0; i < 50; ++i) list->addItem("item");
+    auto* assets = screen->createChild<AssetBrowser>();
+    assets->setRect({ 300.0f, 0.0f, 400.0f, 300.0f });
+    AssetItem white;
+    white.name = "white";
+    white.thumbColor = ig::Color(250, 250, 250, 255);
+    assets->addItem(white);
+    int picked = 0;
+    assets->onSelect.connect([&picked](AssetItem) { ++picked; });
+    darkVertices();
+    for (float y = 30.0f; y < 300.0f && picked == 0; y += 10.0f)
+        for (float x = 310.0f; x < 700.0f && picked == 0; x += 10.0f)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.x = x;
+            press.y = y;
+            assets->onMousePress(press);
+        }
+    assert(picked == 1);
+    io.mouseX = 196.0f;
+    io.mouseY = 50.0f;
+    app.update(io);
+    assert(darkVertices() == 0);
+    theme = saved;
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2528,6 +2594,7 @@ int main()
     test_date_picker_keeps_real_dates();
     test_restored_windows_stay_on_screen();
     test_file_dialog_breadcrumbs_follow_the_path_root();
+    test_shaded_colors_stay_in_range();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
