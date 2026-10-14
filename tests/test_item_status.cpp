@@ -5800,6 +5800,41 @@ void test_escape_closes_a_popup_inside_a_dialog_first()
     assert(!open);
 }
 
+// Uma janela sem bool *open não tem X: o clique onde ele estaria não a fecha. Com
+// o bool *open o X fecha-a.
+void test_window_without_open_flag_has_no_close_button()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool shown = false;
+    bool withFlag = false;
+    bool open = true;
+    auto build = [&](ig::Context& c)
+    {
+        shown = c.beginWindow("A", ig::Rect(100.0f, 100.0f, 300.0f, 200.0f),
+                withFlag ? &open : nullptr);
+        if (shown) c.endWindow();
+    };
+
+    context.setWindowButtons("A", false, false);
+    harness.frame(build);
+    const float title = context.theme().titleBarHeight;
+    const float x = 100.0f + 300.0f - title * 0.5f;
+    const float y = 100.0f + title * 0.5f;
+    harness.click(x, y, build);
+    harness.frame(build);
+    assert(shown);
+
+    withFlag = true;
+    harness.frame(build);
+    harness.click(x, y, build);
+    harness.frame(build);
+    assert(!open);
+    assert(!shown);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6835,6 +6870,7 @@ int main()
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
     test_escape_closes_a_popup_inside_a_dialog_first();
+    test_window_without_open_flag_has_no_close_button();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

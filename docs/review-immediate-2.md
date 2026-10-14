@@ -93,7 +93,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       `beginPopupModal` tinha o mesmo defeito (corrigido no mesmo commit).
 - [x] **W7. O Escape que fecha um popup dentro do `beginDialog` fecha também o
       diálogo** — [Gui.cpp:1793](../src/Gui.cpp#L1793).
-- [ ] **W8. Uma janela sem `bool *open` mostra o X, e o clique fecha-a sem volta** —
+- [x] **W8. Uma janela sem `bool *open` mostra o X, e o clique fecha-a sem volta** —
       [Gui.cpp:13383](../src/Gui.cpp#L13383) e 1739. Nem `restoreWindow` nem
       `raiseWindow` a trazem de volta.
 - [ ] **W9. Uma janela maximizada fica com a barra de título debaixo da barra de

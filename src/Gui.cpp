@@ -1771,6 +1771,7 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
 
     if (open)
         window->open = *open;
+    window->closable = open != nullptr;
 
     if (!window->open)
     {
@@ -13396,13 +13397,15 @@ void Context::drawWindow(WindowState &window)
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float controlWidth = theme_.titleBarHeight;
+    const bool showClose = window.showWindowControls && window.closable;
     const bool showMinimize = window.showWindowControls && window.showMinimizeButton;
     const bool showMaximize = window.showWindowControls && window.showMaximizeButton;
-    const float controlsCount = 1.0f + (showMinimize ? 1.0f : 0.0f) + (showMaximize ? 1.0f : 0.0f);
+    const float controlsCount = (showClose ? 1.0f : 0.0f) + (showMinimize ? 1.0f : 0.0f) +
+                                (showMaximize ? 1.0f : 0.0f);
     const float controlsWidth = window.showWindowControls ? controlWidth * controlsCount : 0.0f;
     const Rect closeButton(window.bounds.x + window.bounds.width - controlWidth,
                            window.bounds.y, controlWidth, titleHeight);
-    float controlsX = closeButton.x;
+    float controlsX = showClose ? closeButton.x : window.bounds.x + window.bounds.width;
     Rect minimizeButton;
     Rect maximizeButton;
     if (showMinimize)
@@ -13430,10 +13433,10 @@ void Context::drawWindow(WindowState &window)
     const WidgetId minimizeId = combineIds(window.id, 0x4d494e494d495a45ull);
     const WidgetId dragId = combineIds(window.id, 0x44524147ull);
     const WidgetId resizeId = combineIds(window.id, 0x524553495a45ull);
-    const bool closeHovered = window.showWindowControls && itemHovered(closeButton, viewport, closeId);
+    const bool closeHovered = showClose && itemHovered(closeButton, viewport, closeId);
     const bool minimizeHovered = showMinimize && itemHovered(minimizeButton, viewport, minimizeId);
 
-    if (window.showWindowControls && itemClicked(closeButton, viewport, closeId, false))
+    if (showClose && itemClicked(closeButton, viewport, closeId, false))
     {
         window.open = false;
         window.minimized = false;
@@ -13508,7 +13511,8 @@ void Context::drawWindow(WindowState &window)
         window.drawList.addRectFilled(resolvedTitleBar, theme_.titleBarBackground, viewport);
     const Rect resolvedCloseButton(window.bounds.x + window.bounds.width - controlWidth,
                                    window.bounds.y, controlWidth, titleHeight);
-    float resolvedControlsX = resolvedCloseButton.x;
+    float resolvedControlsX =
+        showClose ? resolvedCloseButton.x : window.bounds.x + window.bounds.width;
     Rect resolvedMinimizeButton;
     Rect resolvedMaximizeButton;
     if (showMinimize)
@@ -13523,7 +13527,7 @@ void Context::drawWindow(WindowState &window)
     }
     if (showMinimize && minimizeHovered)
         window.drawList.addRectFilled(resolvedMinimizeButton, theme_.buttonHovered, viewport);
-    if (window.showWindowControls && closeHovered)
+    if (showClose && closeHovered)
         window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
     if (window.showTitleBar)
     {
@@ -13554,10 +13558,11 @@ void Context::drawWindow(WindowState &window)
                           resolvedMinimizeButton.y + (titleHeight - minimizeMetrics.height) * 0.5f),
                      theme_.fontSize, theme_.labelText, viewport);
         }
-        drawText(window.drawList, theme_.font, StringView("x"),
-                 Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
-                      resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
-                 theme_.fontSize, theme_.labelText, viewport);
+        if (showClose)
+            drawText(window.drawList, theme_.font, StringView("x"),
+                     Vec2(resolvedCloseButton.x + (controlWidth - closeMetrics.width) * 0.5f,
+                          resolvedCloseButton.y + (titleHeight - closeMetrics.height) * 0.5f),
+                     theme_.fontSize, theme_.labelText, viewport);
     }
 }
 

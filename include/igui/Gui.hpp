@@ -37,6 +37,8 @@ struct WindowState
     bool minimized;
     bool focused;
     bool showWindowControls;
+    // Submitted with a bool *open this frame: only then is there an X to close it.
+    bool closable = false;
     bool showMinimizeButton;
     bool showMaximizeButton;
     bool showTitleBar;
