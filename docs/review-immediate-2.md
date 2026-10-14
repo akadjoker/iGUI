@@ -62,7 +62,7 @@ intervalo a 0 sem devolver true (confirmado e corrigido: o valor fica como
 está até o utilizador escolher; o `tabBar` acerta-o e devolve true); depois de escolher uma linha do `comboBox` o
 foco fica na linha e as setas deixam de mexer no combo (confirmado e corrigido
 com o N7); um `menuItem` desativado
-não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima (confirmado e corrigido
+não atualiza o item (confirmado e corrigido); o drop do `treeItem` aceita através de uma janela por cima (confirmado e corrigido
 depois do M7).
 
 ## Janelas, frame, child e layout
