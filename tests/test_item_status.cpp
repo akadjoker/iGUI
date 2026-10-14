@@ -4864,6 +4864,81 @@ void test_virtual_list_that_shrinks_is_not_empty()
     assert(firstRect.y == top);
 }
 
+// Um submenu aberto fecha quando o rato passa para outro item do menu pai, mas não
+// quando o rato vai na direção dele por cima desse item.
+void test_submenu_closes_when_another_item_is_hovered()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool subOpen = false;
+    bool picked = false;
+    ig::Rect fileRect;
+    ig::Rect newRect;
+    ig::Rect recentRect;
+    ig::Rect exitRect;
+    ig::Rect pickRect;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginMainMenuBar())
+        {
+            const bool fileOpen = c.beginMenu("File");
+            fileRect = c.itemRect();
+            if (fileOpen)
+            {
+                c.menuItem("New");
+                newRect = c.itemRect();
+                subOpen = c.beginSubMenu("Recent");
+                recentRect = c.itemRect();
+                if (subOpen)
+                {
+                    c.menuItem("a.txt");
+                    if (c.menuItem("b.txt")) picked = true;
+                    pickRect = c.itemRect();
+                    c.endSubMenu();
+                }
+                c.menuItem("Exit");
+                exitRect = c.itemRect();
+                c.endMenu();
+            }
+            c.endMainMenuBar();
+        }
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(fileRect.x + 20.0f, fileRect.y + 10.0f, build);
+    const float x = recentRect.x + 10.0f;
+    context.pushEvent(ig::Event::pointerMove(x, recentRect.y + 5.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(subOpen);
+
+    context.pushEvent(ig::Event::pointerMove(x, exitRect.y + 5.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(!subOpen);
+    context.pushEvent(ig::Event::pointerMove(x, newRect.y + 5.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(!subOpen);
+
+    context.pushEvent(ig::Event::pointerMove(x, recentRect.y + 5.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(subOpen);
+    assert(pickRect.y >= exitRect.y);
+    const float midX = (x + pickRect.x) * 0.5f + 20.0f;
+    assert(midX < exitRect.x + exitRect.width);
+    context.pushEvent(ig::Event::pointerMove(midX, exitRect.y + 5.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(subOpen);
+    harness.click(pickRect.x + 10.0f, pickRect.y + 5.0f, build);
+    assert(picked);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5882,6 +5957,7 @@ int main()
     test_table_tree_cells_in_one_row_toggle_apart();
     test_table_alternate_rows_span_the_table_with_frozen_columns();
     test_virtual_list_that_shrinks_is_not_empty();
+    test_submenu_closes_when_another_item_is_hovered();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

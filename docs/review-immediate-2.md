@@ -26,7 +26,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N2. As bounds de um submenu fechado continuam a comer cliques e o menu não
       fecha** — [Gui.cpp:4651](../src/Gui.cpp#L4651), 4673, 4841, 5056, 13615. O
       `subMenuPopupBounds_` só é zerado na troca por hover.
-- [ ] **N3. O submenu não fecha quando o rato passa para outro item do menu pai** —
+- [x] **N3. O submenu não fecha quando o rato passa para outro item do menu pai** —
       [Gui.cpp:4743](../src/Gui.cpp#L4743), 4908.
 - [ ] **N4. A barra de menu principal corta o texto e só responde numa faixa de
       10 px** — [Gui.cpp:4574](../src/Gui.cpp#L4574), 4614, 4660, 4671. O clip
