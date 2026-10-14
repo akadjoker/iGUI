@@ -520,8 +520,10 @@ public:
     T data(const String& key) const
     {
         const std::any* value = data_.find(key);
-        if (value)
-            return std::any_cast<T>(*value);
+        if (value) {
+            if (const T* typed = std::any_cast<T>(value))
+                return *typed;
+        }
         return T{};
     }
 
@@ -531,8 +533,8 @@ public:
     {
         const std::any* value = data_.find(key);
         if (value) {
-            try { return std::any_cast<T>(*value); }
-            catch (...) {}
+            if (const T* typed = std::any_cast<T>(value))
+                return *typed;
         }
         return fallback;
     }
