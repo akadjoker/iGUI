@@ -176,7 +176,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       insert: pos fora dos limites". O mesmo no `TextEdit::selectedText/splitLine`
       com o cursor no fim de uma linha de um `.bb` em CP1252.
 
-- [ ] **15. O `TextEdit` não refaz o wrap depois de juntar linhas** —
+- [x] **15. O `TextEdit` não refaz o wrap depois de juntar linhas** —
       [TextInputWidgets.cpp:872](../src/widgets/TextInputWidgets.cpp#L872).
       O `mergeWithPrevLine()` e o `deleteSelection()` mudam o `lines_` sem pôr
       `wrapDirty_ = true`.
