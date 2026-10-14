@@ -79,7 +79,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
 - [x] **W3. O Tab num popup modal passa o foco para um campo de trás** —
       [Gui.cpp:13043](../src/Gui.cpp#L13043). O `inputBlockedByModal` não conhece o
       `beginPopupModal`; o texto escrito a seguir vai para o campo de trás.
-- [ ] **W4. O Tab salta para widgets de outra janela** —
+- [x] **W4. O Tab salta para widgets de outra janela** —
       [Gui.cpp:13053](../src/Gui.cpp#L13053). O `focusOrder_` junta todas as
       janelas; o texto pode ir para uma janela escondida.
 - [x] **W5. Um widget ativo que deixa de ser submetido bloqueia a interface para

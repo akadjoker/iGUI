@@ -1159,7 +1159,7 @@ Context::PointerState::PointerState()
 Context::Context(Backend &backend, TextProvider *textProvider)
     : backend_(backend), textProvider_(textProvider), theme_(), frame_(), pointer_(), layout_(), events_(), textEvents_(),
       windows_(), windowsById_(), windowButtons_(), listScrolls_(), textScrolls_(), colorPickers_(), childScrolls_(), gizmo2DStates_(), gizmo3DStates_(), dockSpaces_(), wheelAreas_(), wheelOrderCounter_(0u),
-      windowOrder_(), idStack_(), focusOrder_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
+      windowOrder_(), idStack_(), focusOrder_(), focusWindows_(), focusSeen_(), childStack_(), virtualListStack_(), virtualTableStack_(), virtualTreeStack_(), dockPanelStack_(), toasts_(), undoStack_(), redoStack_(), dragDrop_(), frameDrawList_(), dragDropDrawList_(), toastDrawList_(), modalDrawList_(), drawData_(),
       currentWindow_(), focusedWindow_(), popupWindow_(), draggingWindow_(), resizingWindow_(),
       activeWidget_(InvalidWidgetId), activeWidgetAtFrameStart_(InvalidWidgetId),
       styleColorDepth_(0), styleVarDepth_(0), fontDepth_(0), activeWidgetEdited_(false),
@@ -1226,6 +1226,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     windowOrder_.reserve(8);
     idStack_.reserve(8);
     focusOrder_.reserve(32);
+    focusWindows_.reserve(32);
     focusSeen_.reserve(32);
     childStack_.reserve(4);
     virtualListStack_.reserve(2);
@@ -1409,6 +1410,7 @@ void Context::beginFrame(const FrameInfo &frame)
     tableOrder_ = nullptr;
     propertyRowActive_ = false;
     focusOrder_.clear();
+    focusWindows_.clear();
     focusSeen_.clear();
     textFieldHadKeyboard_ = wantsTextInput_;
     wantsKeyboard_ = false;
@@ -13087,6 +13089,7 @@ void Context::registerFocusable(WidgetId id)
         return;
     focusSeen_.insert(id);
     focusOrder_.push_back(id);
+    focusWindows_.push_back(currentWindow_);
 }
 
 void Context::advanceFocus()
@@ -13100,29 +13103,42 @@ void Context::advanceFocus()
     if (!tabPressed_ || focusOrder_.empty() || tabConsumedByWidget_)
         return;
 
-    ct::Vector<WidgetId>::size_type selected = 0u;
-    bool found = false;
-    for (ct::Vector<WidgetId>::size_type i = 0u; i < focusOrder_.size(); ++i)
-    {
+    using Index = ct::Vector<WidgetId>::size_type;
+    WindowHandle window = focusedWindow_;
+    for (Index i = 0u; i < focusOrder_.size(); ++i)
         if (focusOrder_[i] == focusedWidget_)
+        {
+            window = focusWindows_[i];
+            break;
+        }
+    ct::Vector<Index> cycle;
+    for (Index i = 0u; i < focusOrder_.size(); ++i)
+        if (focusWindows_[i] == window)
+            cycle.push_back(i);
+    if (cycle.empty())
+        return;
+
+    Index selected = 0u;
+    bool found = false;
+    for (Index i = 0u; i < cycle.size(); ++i)
+        if (focusOrder_[cycle[i]] == focusedWidget_)
         {
             selected = i;
             found = true;
             break;
         }
-    }
     if (tabShiftPressed_)
     {
         if (found)
-            selected = selected == 0u ? focusOrder_.size() - 1u : selected - 1u;
+            selected = selected == 0u ? cycle.size() - 1u : selected - 1u;
         else
-            selected = focusOrder_.size() - 1u;
+            selected = cycle.size() - 1u;
     }
     else if (found)
     {
-        selected = selected + 1u == focusOrder_.size() ? 0u : selected + 1u;
+        selected = selected + 1u == cycle.size() ? 0u : selected + 1u;
     }
-    focusedWidget_ = focusOrder_[selected];
+    focusedWidget_ = focusOrder_[cycle[selected]];
     textInputWidget_ = InvalidWidgetId;
 }
 
