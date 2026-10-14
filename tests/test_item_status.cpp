@@ -7380,6 +7380,42 @@ void test_gizmo3d_edit_without_a_center_is_reported()
     assert(edited);
 }
 
+// Carregar no splitter fora do meio da pega não o faz saltar para o ponteiro:
+// o arrasto anda a partir de onde se agarrou.
+void test_splitter_does_not_jump_on_press()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    float value = 100.0f;
+    bool changed = false;
+    ig::Vec2 o;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        changed = c.splitter("s", value, 20.0f, 300.0f, ig::SplitterAxis::Vertical,
+                          ig::Rect(0.0f, 0.0f, 350.0f, 200.0f), 8.0f) ||
+                  changed;
+        c.endWindow();
+    };
+    harness.frame(build);
+    const float grabX = o.x + 100.0f + 3.0f;
+    const float grabY = o.y + 50.0f;
+    context.pushEvent(ig::Event::pointerMove(grabX, grabY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, grabX, grabY));
+    harness.frame(build);
+    harness.frame(build);
+    assert(value == 100.0f && !changed);
+    context.pushEvent(ig::Event::pointerMove(grabX + 20.0f, grabY));
+    harness.frame(build);
+    assert(value == 120.0f && changed);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, grabX + 20.0f, grabY));
+    harness.frame(build);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8448,6 +8484,7 @@ int main()
     test_empty_scrolling_table_keeps_its_height();
     test_gizmo3d_behind_the_camera_draws_nothing();
     test_gizmo3d_edit_without_a_center_is_reported();
+    test_splitter_does_not_jump_on_press();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

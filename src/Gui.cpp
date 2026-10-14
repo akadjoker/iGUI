@@ -5587,15 +5587,19 @@ bool Context::splitter(StringView idText, float &value, float minimum, float max
     const WidgetId id = combineIds(makeWidgetId(idText), 0x53504c4954544552ull);
     const uint32_t left = buttonIndex(PointerButton::Left);
     const bool hovered = itemHovered(handle, clip, id);
+    const float along = axis == SplitterAxis::Vertical ? pointer_.position.x - area.x
+                                                       : pointer_.position.y - area.y;
     if (itemPressedIn(intersect(handle, clip), left) && activeWidget_ == InvalidWidgetId)
+    {
         activeWidget_ = id;
+        splitterGrabOffset_ = along - clampedValue;
+    }
     bool changed = false;
     if (activeWidget_ == id)
     {
         if (pointer_.down[left])
         {
-            const float next = (axis == SplitterAxis::Vertical ? pointer_.position.x - area.x
-                                                                 : pointer_.position.y - area.y);
+            const float next = along - splitterGrabOffset_;
             const float limited = clamp(next, minimum, maximum);
             changed = limited != value;
             value = limited;
