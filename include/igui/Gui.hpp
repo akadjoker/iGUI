@@ -2470,6 +2470,7 @@ private:
     Vec2 dockDragStart_;
     Rect menuBarBounds_;
     Rect menuPopupBounds_;
+    Vec2 contextMenuAnchor_;
     // Width of the open menu's popup, keyed by menu id. A dropdown cannot
     // know how wide its widest item is before the items are submitted, so
     // menuItemInternal records the widest label it drew and endMenu latches

@@ -5235,6 +5235,71 @@ void test_combo_box_opens_above_and_shows_the_current_item()
     assert(current == 15);
 }
 
+// O popup de um menu da barra e o de um menu de contexto ficam dentro do ecrã.
+void test_menu_popups_stay_on_screen()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    harness.setViewport(300.0f, 400.0f);
+
+    bool helpOpen = false;
+    bool contextOpen = false;
+    int picked = 0;
+    ig::Rect helpRect;
+    ig::Rect aboutRect;
+    ig::Rect contextItem;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginMainMenuBar())
+        {
+            const char* names[] = { "File", "Edit", "View" };
+            for (const char* name: names)
+                if (c.beginMenu(name)) c.endMenu();
+            helpOpen = c.beginMenu("Help");
+            if (!helpOpen) helpRect = c.itemRect();
+            else
+            {
+                c.menuItem("About this program");
+                aboutRect = c.itemRect();
+                c.endMenu();
+            }
+            c.endMainMenuBar();
+        }
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 40.0f, 300.0f, 360.0f)));
+        contextOpen = c.beginContextMenu("ctx", ig::Rect(0.0f, 0.0f, 280.0f, 300.0f));
+        if (contextOpen)
+        {
+            c.menuItem("Copy");
+            if (c.menuItem("Paste")) ++picked;
+            contextItem = c.itemRect();
+            c.endContextMenu();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(helpRect.x + 10.0f, helpRect.y + 10.0f, build);
+    harness.frame(build);
+    harness.frame(build);
+    assert(helpOpen);
+    assert(aboutRect.x >= 0.0f);
+    assert(aboutRect.x + aboutRect.width <= 300.0f);
+    harness.click(150.0f, 395.0f, build);
+    assert(!helpOpen);
+
+    harness.click(280.0f, 330.0f, build, ig::PointerButton::Right);
+    harness.frame(build);
+    harness.frame(build);
+    assert(contextOpen);
+    assert(contextItem.x >= 0.0f);
+    assert(contextItem.x + contextItem.width <= 300.0f);
+    assert(contextItem.y + contextItem.height <= 400.0f);
+    harness.click(contextItem.x + 10.0f, contextItem.y + 5.0f, build);
+    assert(picked == 1);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6260,6 +6325,7 @@ int main()
     test_list_rows_are_not_tab_stops();
     test_long_combo_box_list_stays_on_screen_and_scrolls();
     test_combo_box_opens_above_and_shows_the_current_item();
+    test_menu_popups_stay_on_screen();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
