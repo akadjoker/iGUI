@@ -28,7 +28,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
       `subMenuPopupBounds_` só é zerado na troca por hover.
 - [x] **N3. O submenu não fecha quando o rato passa para outro item do menu pai** —
       [Gui.cpp:4743](../src/Gui.cpp#L4743), 4908.
-- [ ] **N4. A barra de menu principal corta o texto e só responde numa faixa de
+- [x] **N4. A barra de menu principal corta o texto e só responde numa faixa de
       10 px** — [Gui.cpp:4574](../src/Gui.cpp#L4574), 4614, 4660, 4671. O clip
       desconta a margem da janela. *Arranjo:* `useClientArea = true` na janela da
       barra.

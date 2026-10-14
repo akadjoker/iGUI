@@ -4608,9 +4608,8 @@ bool Context::beginMainMenuBar()
         return false;
     mainMenuBarWindow_ = currentWindow_;
     mainMenuBarOpen_ = true;
-    // A barra é a janela toda: o beginMenuBar mede a partir do cursor de dentro da
-    // janela, e o cursor tem a margem dela.
-    const WindowState *window = currentWindow();
+    WindowState *window = currentWindow();
+    window->useClientArea = true;
     const Rect bar(window->bounds.x, window->bounds.y, window->bounds.width, height);
     return beginMenuBar(Rect(bar.x - layout_.origin.x, bar.y - layout_.origin.y,
                              bar.width, bar.height));
