@@ -1168,7 +1168,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
       pointerWindowFrame_(0u), pointerWindowValid_(false), comboItemsSubmitted_(false),
       focusedWidget_(InvalidWidgetId), textInputWidget_(InvalidWidgetId),
       openCombo_(InvalidWidgetId),
-      openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId),
+      openMenu_(InvalidWidgetId), openContextMenu_(InvalidWidgetId), openSubMenu_(InvalidWidgetId), openSubMenuFrame_(0u),
       activeMenu_(InvalidWidgetId), subMenuParent_(InvalidWidgetId),
       menuWasOpenAtFrameStart_(false), menuPopupBoundsAtFrameStart_(), subMenuPopupBoundsAtFrameStart_(),
       comboWasOpenAtFrameStart_(false), comboBoundsAtFrameStart_(), comboPopupBoundsAtFrameStart_(),
@@ -1453,6 +1453,13 @@ void Context::beginFrame(const FrameInfo &frame)
 
 void Context::releaseUnsubmittedBlockers()
 {
+    // Um submenu que não foi submetido aberto no frame anterior já não está à
+    // vista (o popup ou o menu dele fechou): deixa de bloquear o ponteiro, e as
+    // bounds dele deixam de comer cliques.
+    if (openSubMenu_ != InvalidWidgetId && openSubMenuFrame_ + 1u < frameNumber_)
+        openSubMenu_ = InvalidWidgetId;
+    if (openSubMenu_ == InvalidWidgetId)
+        subMenuPopupBounds_ = Rect();
     // frameNumber_ was just advanced: a blocker submitted during the previous
     // frame has frame + 1 == frameNumber_.
     if (activeModal_ != InvalidWidgetId && activeModalFrame_ + 1u < frameNumber_)
@@ -4942,6 +4949,7 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     if (openSubMenu_ != id)
         return false;
 
+    openSubMenuFrame_ = frameNumber_;
     subMenuParent_ = parentId;
     subMenuRestoreMenu_ = activeMenu_;
     subMenuParentBounds_ = activeMenuBounds_;

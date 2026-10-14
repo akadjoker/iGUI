@@ -4687,6 +4687,128 @@ void test_shortcut_is_blocked_by_a_modal_popup()
     assert(firedInside);
 }
 
+// Um submenu que deixou de ser submetido deixa de contar como menu aberto: um
+// submenu visitado dentro de um popup, com o popup fechado por um clique fora,
+// não pode bloquear os cliques da janela (N1), e as bounds de um submenu fechado
+// não comem o clique que fecha o menu (N2).
+void test_closed_submenus_do_not_block_the_pointer()
+{
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool wantPopup = false;
+        ig::Rect openButton;
+        ig::Rect other;
+        ig::Rect subItem;
+        int otherClicks = 0;
+        bool submenuOpen = false;
+        auto build = [&](ig::Context &c) {
+            assert(c.beginWindow("w", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+            if (c.button("abrir"))
+                wantPopup = true;
+            openButton = c.itemRect();
+            if (c.button("other"))
+                ++otherClicks;
+            other = c.itemRect();
+            if (wantPopup)
+            {
+                c.openPopup("pp", ig::Vec2(40.0f, 40.0f));
+                wantPopup = false;
+            }
+            if (c.beginPopup("pp"))
+            {
+                c.menuItem("Bream");
+                submenuOpen = c.beginSubMenu("Sub-menu");
+                if (!submenuOpen)
+                    subItem = c.itemRect();
+                if (submenuOpen)
+                {
+                    c.menuItem("Click me");
+                    c.endSubMenu();
+                }
+                c.endPopup();
+            }
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.click(openButton.x + 5.0f, openButton.y + 5.0f, build);
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerMove(subItem.x + 10.0f, subItem.y + subItem.height * 0.5f));
+        harness.frame(build);
+        harness.frame(build);
+        assert(submenuOpen);
+        harness.click(390.0f, 290.0f, build);
+        harness.frame(build);
+        assert(!context.isPopupOpen("pp"));
+        for (int i = 0; i < 3; ++i)
+        {
+            harness.click(other.x + 5.0f, other.y + 5.0f, build);
+            harness.frame(build);
+        }
+        assert(otherClicks == 3);
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        bool fileOpen = false;
+        bool subOpen = false;
+        ig::Rect fileRect;
+        ig::Rect recentRect;
+        int under = 0;
+        ig::Rect underRect;
+        auto build = [&](ig::Context &c) {
+            if (c.beginMainMenuBar())
+            {
+                fileOpen = c.beginMenu("File");
+                if (!fileOpen)
+                    fileRect = c.itemRect();
+                if (fileOpen)
+                {
+                    c.menuItem("New");
+                    subOpen = c.beginSubMenu("Recent");
+                    if (!subOpen)
+                        recentRect = c.itemRect();
+                    if (subOpen)
+                    {
+                        c.menuItem("a.txt");
+                        c.menuItem("b.txt");
+                        c.endSubMenu();
+                    }
+                    c.menuItem("Exit");
+                    c.endMenu();
+                }
+                c.endMainMenuBar();
+            }
+            assert(c.beginWindow("w", ig::Rect(0.0f, 26.0f, 600.0f, 400.0f)));
+            if (c.button("under", ig::Rect(180.0f, 0.0f, 120.0f, 30.0f)))
+                ++under;
+            underRect = c.itemRect();
+            c.endWindow();
+        };
+        harness.frame(build);
+        harness.frame(build);
+        const float fx = fileRect.x + fileRect.width * 0.5f;
+        const float fy = fileRect.y + fileRect.height * 0.5f;
+        harness.click(fx, fy, build);
+        harness.frame(build);
+        context.pushEvent(ig::Event::pointerMove(recentRect.x + 10.0f, recentRect.y + 5.0f));
+        harness.frame(build);
+        harness.frame(build);
+        assert(subOpen);
+        harness.click(fx, fy, build);
+        harness.frame(build);
+        assert(!fileOpen);
+        harness.click(fx, fy, build);
+        harness.frame(build);
+        assert(fileOpen && !subOpen);
+        harness.click(underRect.x + 10.0f, underRect.y + 10.0f, build);
+        harness.frame(build);
+        assert(!fileOpen);
+    }
+}
+
 int main()
 {
     test_slider_item_status();
@@ -4739,6 +4861,7 @@ int main()
     test_file_dialog_double_click_is_timed();
     test_clock_keeps_running_in_long_sessions();
     test_shortcut_is_blocked_by_a_modal_popup();
+    test_closed_submenus_do_not_block_the_pointer();
     test_tab_bar_fitting();
     test_table_scrolls_sideways();
     test_table_without_sideways_scroll_keeps_the_width();
