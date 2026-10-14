@@ -2788,6 +2788,7 @@ private:
     // Onde é que a linha atual pode desenhar: com uma tabela que rola, o que rola
     // está cortado pelas linhas presas por cima e pelo fundo da tabela.
     Rect tableRowClip() const;
+    Rect tableFrameClip() const;
     // A ordem das colunas da tabela aberta (colunas reordenáveis), ou nullptr quando
     // ela não é reordenável. Aponta para a entrada guardada por id, por isso o
     // arrasto que ocupa vários frames vive lá.

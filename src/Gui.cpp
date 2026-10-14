@@ -10809,7 +10809,7 @@ void Context::beginTableScroll(const TableStyle &style)
             const Rect thumb(bar.x, thumbY, bar.width, thumbHeight);
             const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4cull);
             const uint32_t left = buttonIndex(PointerButton::Left);
-            const Rect barClip = intersect(bar, contentClip());
+            const Rect barClip = intersect(bar, tableFrameClip());
             if (pointerPressedIn(barClip, left) && activeWidget_ == InvalidWidgetId)
                 activeWidget_ = scrollbarId;
             if (activeWidget_ == scrollbarId)
@@ -10875,7 +10875,7 @@ void Context::beginTableScroll(const TableStyle &style)
         const Rect thumb(thumbX, bar.y, thumbWidth, bar.height);
         const WidgetId scrollbarId = combineIds(table_.id, 0x545343524f4c4c58ull);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const Rect barClip = intersect(bar, contentClip());
+        const Rect barClip = intersect(bar, tableFrameClip());
         if (pointerPressedIn(barClip, left) && activeWidget_ == InvalidWidgetId)
             activeWidget_ = scrollbarId;
         if (activeWidget_ == scrollbarId)
@@ -12849,6 +12849,16 @@ Vec2 Context::toContentSpace(const Vec2 &absolute) const
 
 Rect Context::contentClip() const
 {
+    // Uma tabela que rola corta o que rola no fundo dela: os itens das linhas que
+    // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
+    if (tableActive_ && (table_.scrollY || table_.scrollX))
+        return intersect(tableFrameClip(), tableRowClip());
+    return tableFrameClip();
+}
+
+// O clip de fora da tabela em curso: as barras dela vivem aqui, fora das linhas.
+Rect Context::tableFrameClip() const
+{
     const WindowState *window = currentWindow();
     if (!window)
         return Rect();
@@ -12885,10 +12895,6 @@ Rect Context::contentClip() const
         clip = intersect(clip, childStack_.back().content);
     if (!dockPanelStack_.empty())
         clip = intersect(clip, dockPanelStack_.back().content);
-    // Uma tabela que rola corta o que rola no fundo dela: os itens das linhas que
-    // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
-    if (tableActive_ && (table_.scrollY || table_.scrollX))
-        clip = intersect(clip, tableRowClip());
     // O conteúdo de uma tab é cortado pela barra (a largura dela e o que sobra para
     // baixo).
     if (tabContentDepth_ > 0 && tabContent_[tabContentDepth_ - 1].active)
