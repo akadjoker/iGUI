@@ -2664,6 +2664,85 @@ struct BigContent : ig::retained::Widget
 
 // Com as duas barras à vista, a roda chega ao fim do conteúdo nos dois eixos:
 // o limite conta com a barra do outro eixo, como a própria barra conta.
+// O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
+// cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
+// meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
+static void test_code_editor_matches_brackets_after_multibyte_text()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("codebrackets");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    editor->setShowBracketMatch(true);
+    editor->setText("a\xC3\xA7\xC3\xA3o(x)");
+    assert(app.setStage("codebrackets", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto highlightColumns = [&](int cursorLine, int cursorCol, int closeLine)
+    {
+        editor->clearExtraCursors();
+        editor->setCursorPos(cursorLine, cursorCol);
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        ct::Vector<float> xs;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            for (const DrawVertex& vertex: pass.list->vertices())
+            {
+                if (vertex.color.r != 255 || vertex.color.g != 210 || vertex.color.b != 80 ||
+                        vertex.color.a != 60)
+                    continue;
+                bool seen = false;
+                for (float x: xs) seen = seen || x == vertex.x;
+                if (!seen) xs.push_back(vertex.x);
+            }
+        }
+        String columns;
+        if (xs.size() != 4) return columns;
+        editor->setCursorPos(0, 0);
+        for (size_t i = 0; i < xs.size(); ++i)
+            for (size_t j = i + 1; j < xs.size(); ++j)
+                if (xs[j] < xs[i])
+                {
+                    const float swap = xs[i];
+                    xs[i] = xs[j];
+                    xs[j] = swap;
+                }
+        for (size_t rect = 0; rect < 2; ++rect)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.alt = true;
+            press.x = (xs[rect * 2] + xs[rect * 2 + 1]) * 0.5f;
+            press.y = rowHeight * (static_cast<float>(rect == 0 ? 0 : closeLine) + 0.5f);
+            press.localX = press.x;
+            press.localY = press.y;
+            editor->onMousePress(press);
+            const TextEdit::TextPos added = editor->cursorPosAt(editor->cursorCount() - 1);
+            columns += String::number(added.line) + ":" + String::number(added.col) + " ";
+        }
+        return columns;
+    };
+    assert(highlightColumns(0, 6, 0) == "0:4 0:6 ");
+    assert(highlightColumns(0, 4, 0) == "0:4 0:6 ");
+    assert(highlightColumns(0, 7, 0) == "0:4 0:6 ");
+    assert(highlightColumns(0, 2, 0) == "");
+    editor->setText("(\n\xC3\xA7\xC3\xA7)");
+    assert(highlightColumns(0, 0, 1) == "0:0 1:2 ");
+    assert(highlightColumns(1, 2, 1) == "0:0 1:2 ");
+}
+
 static void test_scroll_view_wheel_reaches_the_end_with_both_bars()
 {
     using namespace ig::retained;
@@ -2892,6 +2971,7 @@ int main()
     test_console_counts_collapsed_repeats();
     test_global_events_reach_their_handlers();
     test_text_edit_wrap_rows_are_stable();
+    test_code_editor_matches_brackets_after_multibyte_text();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
