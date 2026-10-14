@@ -3354,7 +3354,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
             *scroll = 0;
         if (*scroll > maximumScroll)
             *scroll = maximumScroll;
-        pointer_.wheelY = 0.0f;   // the list took it: an enclosing area must not scroll too
+        pointer_.wheelY = 0.0f;
     }
 
     itemHovered(rect, visible, id);
@@ -3555,9 +3555,6 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                      popupHeight);
     const Rect popupClip = intersect(popup, screen);
     const uint32_t left = buttonIndex(PointerButton::Left);
-    // Any press outside the header and the list closes it, in whatever
-    // window it lands; pointerBlockedByOpenPopup keeps that press from also
-    // reaching the widget under it.
     if (pointer_.pressed[left] &&
         !contains(rect, pointer_.pressedPosition[left]) &&
         !contains(popupClip, pointer_.pressedPosition[left]))
@@ -3601,13 +3598,8 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     comboBounds_ = intersect(rect, clip);
     comboPopupBounds_ = popupClip;
 
-    // Popups are deferred to the window overlay so controls declared after a
-    // combo box cannot paint over its open list.
     DrawList &popupDrawList = window->overlayDrawList;
     popupDrawList.addRectFilled(popup, theme_.selectableBackground, popupClip);
-    // Daqui até ao fim da lista somos nós que estamos a submeter itens de popup:
-    // é o que deixa a lista receber o ponteiro sem o deixar passar para o que
-    // está por baixo dela (ver pointerBlockedByOpenPopup).
     comboItemsSubmitted_ = true;
     float scrollbarWidth = 0.0f;
     if (maximumScroll > 0)
@@ -3691,7 +3683,6 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
 bool Context::beginMultiSelect(Span<bool> selected, unsigned flags)
 {
     WindowState *window = currentWindow();
-    // Sem blocos dentro de blocos, como no ImGui: um bloco é uma lista só.
     if (!window || multiSelect_.active)
         return false;
     multiSelect_.active = true;
@@ -3700,8 +3691,6 @@ bool Context::beginMultiSelect(Span<bool> selected, unsigned flags)
     multiSelect_.nextIndex = 0;
     multiSelect_.lastSelected = false;
     multiSelect_.lastToggled = false;
-    // O alcance do Shift é de uma lista: quando a seleção que está a ser submetida
-    // não é a mesma do último clique, o item de origem esquece-se.
     if (multiSelect_.anchorOwner != selected.data())
     {
         multiSelect_.anchor = -1;
@@ -3711,8 +3700,6 @@ bool Context::beginMultiSelect(Span<bool> selected, unsigned flags)
         return true;
 
     const bool single = (flags & MultiSelectFlags::SingleSelect) != 0u;
-    // As teclas só valem com o foco na janela: quem está a escrever noutra janela não
-    // pode estar a mexer nesta seleção sem querer.
     const bool focused = currentWindow_ == focusedWindow_;
     const bool typing = textFieldHadKeyboard_ || wantsTextInput_;
     if (!single && focused && !typing && (flags & MultiSelectFlags::NoSelectAll) == 0u &&
@@ -4325,8 +4312,6 @@ bool Context::checkboxFlags(StringView labelText, unsigned &flags, unsigned flag
     if (flagValue == 0u)
         return false;
     bool checked = (flags & flagValue) == flagValue;
-    // O desenho e a interação são os do checkbox: o que muda é onde o resultado
-    // fica, que aqui é um bit em vez de um bool sozinho.
     const bool changed = checkbox(labelText, checked, bounds);
     if (!changed)
         return false;
@@ -4384,8 +4369,6 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
                              int visibleItems, bool advanceHeader)
 {
     WindowState *window = currentWindow();
-    // Sem combos dentro de combos, como no ImGui: um popup tem o seu cursor e a
-    // sua lista, e não há segundo.
     if (!window || comboContentOpen_)
         return false;
     const WidgetId id = makeWidgetId(labelText);
@@ -4400,20 +4383,13 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
     const bool open = openCombo_ == id;
-    // O primeiro frame de um popup: é o único em que o item escolhido o pode trazer
-    // à vista sem lutar com quem rola (ver setItemDefaultFocus).
     comboJustOpened_ = open && openComboFrame_ + 1u != frameNumber_;
     comboFocusArmed_ = comboJustOpened_;
-    // Com o popup aberto o cabeçalho fica em destaque, como no ImGui.
     drawComboHeader(*drawList, rect, preview, hovered || open, clip);
-    // Fechado, o cabeçalho avança o layout aqui mesmo: é o endCombo que o faz
-    // quando o popup está aberto, porque até lá o layout é o de dentro dele.
     const auto closeHeader = [&]() {
         comboAdvanceHeader_ = false;
         if (advanceHeader)
             advanceLayout(rect);
-        // Um combo fechado esquece onde a lista estava: reabri-la começa no topo,
-        // como no ImGui (o popup é criado de novo).
         if (float *entry = comboScrolls_.find(id))
             *entry = 0.0f;
         comboFocusArmed_ = false;
@@ -4425,16 +4401,10 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
 
     const float padding = theme_.windowPadding;
     const float maxHeight = comboPopupMaxHeight(visibleItems);
-    // A caixa deste frame é a medida do frame anterior: o tamanho do que o
-    // chamador vai submeter só se sabe depois de o submeter, e o sítio e o clip
-    // têm de estar decididos antes disso (o ImGui resolve-o com o AutoFitFrames,
-    // que também só acerta no segundo frame). Sem medida ainda, uma linha.
+    // A caixa deste frame usa a medida do frame anterior; sem medida, uma linha.
     const bool measured = comboMeasuredId_ == id;
     const float measuredWidth = measured ? comboMeasured_.x : 0.0f;
-    // A altura toda do conteúdo (sem o corte): é ela que diz quanto há para rolar.
     const float contentHeight = measured ? comboMeasured_.y : theme_.widgetHeight;
-    // O que cabe no popup: no máximo visibleItems linhas (o HeightRegular do
-    // ImGui), no mínimo uma.
     float visibleHeight = contentHeight > maxHeight ? maxHeight : contentHeight;
     if (visibleHeight < theme_.widgetHeight)
         visibleHeight = theme_.widgetHeight;
@@ -4450,8 +4420,6 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     const Rect popupClip = intersect(popup, popupClipRect());
     const uint32_t left = buttonIndex(PointerButton::Left);
 
-    // A lista rola: a roda do rato e a barra à direita, como no listBox. O que não
-    // cabe é cortado pelo clip (ver comboContentClip_), não submetido fora.
     float *scrollEntry = comboScrolls_.find(id);
     if (!scrollEntry)
     {
@@ -4465,18 +4433,13 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     if (*scrollEntry > maxScroll)
         *scrollEntry = maxScroll;
 
-    // Enquanto o ponteiro está sobre a lista é ela que leva com a roda (a lista de
-    // fora não rola por baixo).
     const Rect popupVisible = intersect(popup, popupClipRect());
-    // O teste do ponteiro é o rect do popup, não o pointerOver(): enquanto a lista
-    // está a ser submetida ela é dona do ponteiro (ver pointerBlockedByOpenPopup),
-    // e é isso que faz o pointerOver dizer que não a ela própria.
+    // O rect do popup e não o pointerOver(): enquanto é submetida, a lista é dona do ponteiro.
     if (maxScroll > 0.0f && !inputBlockedByModal() && contains(popupVisible, pointer_.position) &&
         ownWheelArea(id, popupVisible, static_cast<uint32_t>(childStack_.size()) + 1u, true) &&
         pointer_.wheelY != 0.0f)
     {
         const float rowStep = theme_.widgetHeight + theme_.itemSpacing;
-        // Rolar à mão desiste do item que o popup queria mostrar.
         comboFocusArmed_ = false;
         comboFocusPending_ = false;
         *scrollEntry -= pointer_.wheelY * rowStep;
@@ -4484,7 +4447,7 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
             *scrollEntry = 0.0f;
         if (*scrollEntry > maxScroll)
             *scrollEntry = maxScroll;
-        pointer_.wheelY = 0.0f;   // a lista levou com ele: quem a contém não rola também
+        pointer_.wheelY = 0.0f;
     }
     const float scroll = *scrollEntry;
     comboScrollbarVisible_ = maxScroll > 0.0f && barWidth > 0.0f;
@@ -4506,10 +4469,7 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
         comboScrollThumb_ = Rect(comboScrollbar_.x, comboScrollbar_.y + offset, barWidth,
                                  thumbHeight);
     }
-    // Um clique fora do cabeçalho e da caixa fecha, em qualquer janela onde caia;
-    // pointerBlockedByOpenPopup impede que essa mesma pressão chegue ao que está
-    // por baixo. A caixa é a do frame anterior (é a única medida que existe antes
-    // de o conteúdo ser submetido).
+    // A caixa do frame anterior é a única medida que existe antes de o conteúdo ser submetido.
     const Rect outside(comboWasOpenAtFrameStart_ ? comboPopupBoundsAtFrameStart_ : popupClip);
     if (pointer_.pressed[left] && !contains(rect, pointer_.pressedPosition[left]) &&
         !contains(outside, pointer_.pressedPosition[left]))
@@ -4522,20 +4482,12 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     comboBounds_ = intersect(rect, clip);
     comboPopupBounds_ = popupClip;
 
-    // Daqui até ao endCombo somos nós que estamos a submeter o popup: o cursor do
-    // layout fica lá dentro (availableWidth passa a ser a largura dele) e o que for
-    // submetido vai para a lista do popup, que sai à frente da caixa. É o mesmo
-    // comboItemsSubmitted_ que deixa estes itens receberem o ponteiro sem o
-    // deixarem passar para o que está por baixo (ver pointerBlockedByOpenPopup).
     comboLayout_ = layout_;
     comboContentOpen_ = true;
     comboContentId_ = id;
     comboVisibleItems_ = visibleItems;
     comboContentWindow_ = currentWindow_;
     comboHeaderRect_ = rect;
-    // O conteúdo é cortado pela área de DENTRO do popup (sem a margem): é o que o
-    // ImGui faz com a região de conteúdo da janela do popup, e é o que impede a
-    // última linha de escorregar para a margem e ficar meio desenhada.
     float innerWidth = popupWidth - padding * 2.0f - barWidth;
     if (innerWidth < 1.0f)
         innerWidth = 1.0f;
@@ -4571,8 +4523,6 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
         }
         comboScrollThumb_.y = comboScrollbar_.y + travel * (*scrollEntry / maxScroll);
     }
-    // O cursor começa dentro da caixa e sobe o que a lista já rolou: o que sai por
-    // cima do popup fica fora do clip e não se vê (é o corte que a rolagem faz).
     layout_.origin = Vec2(popup.x + padding, popup.y + padding - *scrollEntry);
     layout_.cursor = layout_.origin;
     layout_.baseOriginX = layout_.origin.x;
@@ -4602,9 +4552,6 @@ void Context::endCombo()
     comboContentOpen_ = false;
     comboItemsSubmitted_ = false;
 
-    // A medida do conteúdo submetido, como no endTooltip: é ela que dá a altura da
-    // caixa agora e a largura que o frame seguinte usa, para o popup ter o tamanho
-    // do que lá está em vez de o cortar.
     const float padding = theme_.windowPadding;
     float width = 0.0f;
     float height = 0.0f;
@@ -4617,8 +4564,6 @@ void Context::endCombo()
         width = 0.0f;
     if (height < theme_.widgetHeight)
         height = theme_.widgetHeight;
-    // A medida guardada é a do conteúdo TODO, sem o corte: é ela que diz no frame
-    // seguinte quanto há para rolar (o beginCombo é que decide o que cabe).
     comboMeasuredId_ = comboContentId_;
     comboMeasured_ = Vec2(width, height);
 
@@ -4635,8 +4580,6 @@ void Context::endCombo()
                          popupWidth, visibleHeight + padding * 2.0f);
         DrawList &overlay = window->overlayDrawList;
         overlay.addRectFilled(popup, theme_.selectableBackground, popupClipRect());
-        // A barra agora, antes do conteúdo (que o frame já submeteu na lista dele e
-        // sai à frente desta): o conteúdo acaba antes dela, por isso não se tapam.
         if (comboScrollbarVisible_)
         {
             const Rect bar(comboHeaderRect_.x + popupWidth - padding - comboScrollbar_.width,
@@ -4651,10 +4594,6 @@ void Context::endCombo()
         comboBounds_ = comboHeaderRect_;
     }
 
-    // O item que o setItemDefaultFocus() marcou: se ele está fora da vista, a lista
-    // rola o mínimo para ele aparecer (a rolagem aplica-se no frame seguinte, como a
-    // medida do conteúdo). Só com a medida feita: no primeiro frame de um popup
-    // ainda não se sabe o que há para rolar.
     if (comboFocusPending_ && comboMaxScroll_ > 0.0f && comboFocusBounds_.height > 0.0f)
     {
         float *entry = comboScrolls_.find(comboContentId_);
@@ -4670,14 +4609,10 @@ void Context::endCombo()
                 *entry = 0.0f;
             if (*entry > comboMaxScroll_)
                 *entry = comboMaxScroll_;
-            // O realce desenhado neste frame ainda usou a rolagem antiga: quem manda
-            // no próximo frame é a nova, que é o que o setItemDefaultFocus anuncia.
             comboFocusPending_ = false;
             comboFocusArmed_ = false;
         }
     }
-    // O layout de fora volta por inteiro, e só agora o cabeçalho avança: o popup
-    // não é do layout de fora (ver beginCombo do layout).
     const bool advanceHeader = comboAdvanceHeader_;
     layout_ = comboLayout_;
     comboAdvanceHeader_ = false;
@@ -4703,11 +4638,6 @@ bool Context::beginMainMenuBar()
     const float height = mainMenuBarHeight();
     if (height <= 0.0f || frame_.displaySize.x <= 0.0f)
         return false;
-    // A barra da aplicação é uma janela sem nada à volta: sem barra de título, sem
-    // mover nem redimensionar, com os limites fixos (é o topo do ecrã) e sem estado
-    // guardado. É o que o BeginMainMenuBar do ImGui faz (uma janela no topo do
-    // viewport) e é o que faz o beginMenu/endMenu servirem aqui como servem dentro
-    // de uma janela - incluindo os popups, que são desenhados na sobreposição dela.
     WindowOptions options;
     options.titleBar = false;
     options.move = false;
@@ -4777,8 +4707,6 @@ bool Context::beginMenu(StringView labelText)
     const Rect button(menuBarCursorX_, menuBarBounds_.y, width, menuBarBounds_.height);
     menuBarCursorX_ += width;
     const WidgetId id = combineIds(makeWidgetId(labelText), 0x4d454e55ull);
-    // Size the popup at the width measured for this menu (menuMinWidth until
-    // its items have been submitted at least once - see endMenu).
     const float popupWidth = menuWidthId_ == id ? menuPopupWidth_ : theme_.menuMinWidth;
     const Rect screen = popupClipRect();
     float popupX = button.x;
@@ -4787,9 +4715,6 @@ bool Context::beginMenu(StringView labelText)
     if (popupX < screen.x)
         popupX = screen.x;
     const uint32_t left = buttonIndex(PointerButton::Left);
-    // Any press outside closes the menu - in another window too, where
-    // pointerBlockedByOpenPopup already swallows it; checking only this
-    // window left the menu open and every click elsewhere eaten.
     const auto pressedOutside = [&](uint32_t index) {
         return pointer_.pressed[index] && !contains(button, pointer_.pressedPosition[index]) &&
                !contains(menuPopupBounds_, pointer_.pressedPosition[index]) &&
@@ -4838,8 +4763,6 @@ bool Context::beginMenu(StringView labelText)
     activeMenuBounds_.y = button.y + button.height;
     activeMenuBounds_.width = popupWidth;
     activeMenuBounds_.height = 0.0f;
-    // O corpo do menu é um contentor de layout: um slider ou um child lá dentro
-    // ficam no popup (ver beginPopupContent).
     beginPopupContent(activeMenuBounds_);
     return true;
 }
@@ -4848,8 +4771,6 @@ void Context::endMenu()
 {
     if (activeMenu_ == InvalidWidgetId)
         return;
-    // O que o layout submeteu dentro do menu (um slider, um child) faz o popup
-    // crescer: a altura do que se desenhou é a do último item do layout.
     if (popupContentDepth_ > 0 && layout_.hasLastItem)
     {
         const float contentBottom = layout_.lastItem.y + layout_.lastItem.height;
@@ -4863,17 +4784,12 @@ void Context::endMenu()
         const Rect clip = popupClipRect();
         window->overlayDrawList.addRect(activeMenuBounds_, theme_.menuBorder, clip);
         menuPopupBounds_ = activeMenuBounds_;
-        // Latch the width measured while this menu's items were submitted:
-        // the panel just drawn used the previous frame's number, and the
-        // next frame's beginMenu picks this one up.
         if (menuMeasuredWidth_ > 0.0f)
         {
             menuWidthId_ = activeMenu_;
             menuPopupWidth_ = menuMeasuredWidth_ > theme_.menuMinWidth ? menuMeasuredWidth_ : theme_.menuMinWidth;
         }
     }
-    // A largura medida também conta com o que o layout submeteu (um slider largo,
-    // uma tabela): o popup tem de crescer com isso, não só com os rótulos.
     if (popupContentDepth_ > 0 && layout_.hasLastItem)
     {
         const float contentRight = layout_.contentExtent.x - layout_.origin.x;
@@ -4888,10 +4804,6 @@ void Context::endMenu()
 bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked,
                                StringView shortcut)
 {
-    // Um item de menu vale dentro de um menu e dentro do corpo de um popup: num
-    // menu as faixas são encostadas às bordas e a largura é a do popup do menu,
-    // num popup é uma linha do layout dele (é o MenuItem do ImGui, que funciona
-    // em qualquer sítio).
     const bool insideMenu = activeMenu_ != InvalidWidgetId;
     WindowState *window = currentWindow();
     if (!window || (!insideMenu && popupContentDepth_ == 0))
@@ -4904,8 +4816,6 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     Rect item;
     if (insideMenu)
     {
-        // Com o contentor de layout aberto o cursor dele é que manda: um widget
-        // submetido antes (um slider) já empurrou o item seguinte para baixo.
         const float itemTop = popupContentDepth_ > 0
                                   ? layout_.cursor.y
                                   : activeMenuBounds_.y + activeMenuBounds_.height;
@@ -4928,20 +4838,13 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
     const bool clicked = enabled && itemClicked(item, clip, id);
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
-    // O atalho entra na largura do popup: um menu com atalhos tem de caber.
     const TextMetrics shortcutMetrics =
         shortcut.size() > 0u ? measureText(theme_.font, shortcut, theme_.fontSize) : TextMetrics();
     const float checkWidth = checked ? theme_.menuItemHeight : 0.0f;
-    // Remember the widest label drawn this frame so endMenu can size the
-    // popup for it. Only this menu's own items count: while a submenu's
-    // items are being submitted subMenuParent_ is set, and the parent's
-    // width must not grow to fit the submenu's labels.
     const float shortcutWidth =
         shortcut.size() > 0u ? shortcutMetrics.width + theme_.menuItemPadX * 2.0f : 0.0f;
     const float itemWidth =
         metrics.width + theme_.menuItemPadX * 2.0f + checkWidth + shortcutWidth;
-    // A largura medida é do popup do menu (o de um popup de conteúdo livre é a que
-    // foi pedida no openPopup, por isso não entra aqui).
     if (insideMenu)
     {
         if (subMenuParent_ == InvalidWidgetId)
@@ -4973,7 +4876,6 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
              clip);
     if (shortcut.size() > 0u)
     {
-        // O atalho à direita, na cor mais baixa: é texto, não é clicável por si.
         drawText(popup, theme_.font, shortcut,
                  Vec2(item.x + item.width - theme_.menuItemPadX - shortcutMetrics.width,
                       item.y + (item.height - shortcutMetrics.height) * 0.5f),
@@ -5010,8 +4912,6 @@ bool Context::menuCheckbox(StringView labelText, bool &checked, bool enabled)
 
 bool Context::beginSubMenu(StringView labelText, bool enabled)
 {
-    // Como o menuItem: também vale dentro do corpo de um popup (é o BeginMenu do
-    // ImGui, que abre um submenu de qualquer item).
     const bool insideMenu = activeMenu_ != InvalidWidgetId;
     WindowState *window = currentWindow();
     if (!window || (!insideMenu && popupContentDepth_ == 0) || subMenuParent_ != InvalidWidgetId)
@@ -5042,11 +4942,7 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
         ? combineIds(activeMenu_, combineIds(makeWidgetId(labelText), 0x5355424d454e55ull))
         : combineIds(idStack_.empty() ? InvalidWidgetId : idStack_.back(),
                      combineIds(makeWidgetId(labelText), 0x5355424d454e55ull));
-    // O "pai" do submenu é o que diz ao endSubMenu que há um submenu aberto: num
-    // menu é o id do menu, num popup é o id do próprio item. Um popup não tem id de
-    // menu nenhum, e o idStack_ de dentro dele tem o id inválido - usá-lo como pai
-    // fazia o endSubMenu sair sem repor nada, e o popup desenhava os itens seguintes
-    // (e media a caixa) como se ainda estivesse dentro do submenu.
+    // Num popup não há id de menu: o pai do submenu é o próprio item.
     const WidgetId parentId = insideMenu ? activeMenu_ : id;
     const bool hovered = enabled && itemHovered(item, clip, id);
     const bool clicked = enabled && itemClicked(item, clip, id);
@@ -5061,10 +4957,6 @@ bool Context::beginSubMenu(StringView labelText, bool enabled)
     {
         openSubMenu_ = id;
         const float popupWidth = subMenuWidthId_ == id ? subMenuPopupWidth_ : theme_.menuMinWidth;
-        // O lugar da caixa procura-se no écran, não dentro do popup: um menu dentro
-        // de um popup (o "With a menu.." do demo) abre ao lado dele, como no ImGui -
-        // com o clip do popup o submenu não tinha para onde ir à direita e caía-lhe
-        // em cima.
         const Rect place = popupClipRect();
         float popupX = item.x + item.width;
         const float clipRight = place.x + place.width;
@@ -5134,8 +5026,6 @@ void Context::endSubMenu()
             subMenuMeasuredWidth_ = contentRight;
     }
     subMenuMeasuredWidth_ = 0.0f;
-    // Fecha o contentor do submenu: o do menu de fora volta com o cursor onde estava
-    // (os itens do pai continuam a seguir ao submenu).
     endPopupContent();
     activeMenu_ = subMenuRestoreMenu_;
     activeMenuBounds_ = subMenuParentBounds_;
@@ -5236,8 +5126,6 @@ bool Context::beginContextMenu(StringView idText, const Rect &bounds)
     if (popupY < screen.y)
         popupY = screen.y;
     activeMenuBounds_ = Rect(popupX, popupY, popupWidth, 0.0f);
-    // Como o beginMenu: o corpo de um menu de contexto também é um contentor de
-    // layout (e o endContextMenu fecha-o pelo endMenu, que é o mesmo caminho).
     beginPopupContent(activeMenuBounds_);
     return true;
 }
@@ -12564,16 +12452,8 @@ void Context::beginLayout(const WindowState &window)
 void Context::advanceLayout(const Rect &item)
 {
     layout_.lastItem = item;
-    // A largura do próximo item valeu para este, que é o que acabou de passar por
-    // aqui (ver setNextItemWidth).
     layout_.nextItemWidth = 0.0f;
-    // Os bounds do último item (ver isItemHovered). O id e o resto não se mexem
-    // aqui: um label ou um dummy não identifica item nenhum, e como no ImGui o
-    // que as consultas devolvem continua a ser o último widget que o fez (o id
-    // limpa-se no início do frame seguinte).
     item_.bounds = item;
-    // O primeiro item de um container abre a extensão do conteúdo; os seguintes
-    // só a podem aumentar (ver LayoutState::contentExtent).
     if (!layout_.hasLastItem)
         layout_.contentExtent = Vec2(item.x + item.width, item.y + item.height);
     else
@@ -12590,8 +12470,6 @@ void Context::advanceLayout(const Rect &item)
     fillEdgeSet_ = false;
     if (!fills && itemRight > layout_.fitRight)
         layout_.fitRight = itemRight;
-    // Um grupo aberto cresce com tudo o que lhe passa por dentro - labels e dummies
-    // incluídos, que também passam por aqui (ver endGroup).
     if (!groups_.empty() && groups_.back().active)
     {
         GroupState &group = groups_.back();
@@ -12603,9 +12481,7 @@ void Context::advanceLayout(const Rect &item)
             group.extent.y = bottom;
     }
     layout_.hasLastItem = true;
-    // A linha é a do primeiro item dela; um mesmoLine() copia o y do último item,
-    // por isso todos os itens de uma linha têm o mesmo y. O mais alto é que manda
-    // na altura da linha (ver LayoutState::lineTop).
+    // A altura da linha é a do item mais alto dela (o sameLine copia o y do último).
     if (fabsf(item.y - layout_.lineTop) < 0.5f)
     {
         if (item.height > layout_.lineHeight)
