@@ -10779,6 +10779,9 @@ void Context::beginTableScroll(const TableStyle &style)
         const float scrolledHeight = style.height - scroll->frozenHeight;
         maximumScroll = scroll->contentHeight > scrolledHeight
             ? scroll->contentHeight - scrolledHeight : 0.0f;
+        // O conteúdo pode ter encolhido desde o último frame: a rolagem volta para
+        // dentro do que existe.
+        scroll->offsetY = clamp(scroll->offsetY, 0.0f, maximumScroll);
         const float barWidth = theme_.scrollbarWidth * 0.65f;
         const bool hasBar = maximumScroll > 0.0f;
         if (hasBar)
