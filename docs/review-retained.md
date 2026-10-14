@@ -198,7 +198,7 @@ Reproduzidos com sonda:
 - [x] [LayoutWidgets.cpp:87](../src/widgets/LayoutWidgets.cpp#L87) —
       `BorderLayout::setWidget(região, mesmoWidget)` apaga-o e volta a
       adicioná-lo (SEGV no `layout()`).
-- [ ] [WidgetApp.cpp:156](../src/widgets/WidgetApp.cpp#L156) — o F1 (scancode 58)
+- [x] [WidgetApp.cpp:156](../src/widgets/WidgetApp.cpp#L156) — o F1 (scancode 58)
       liga o overlay de debug em qualquer aplicação e engole a tecla.
 - [ ] [DataWidgets.cpp:765](../src/widgets/DataWidgets.cpp#L765) — o Tab em edição
       na DataGrid nunca passa à célula seguinte, porque o `commitEdit()` já pôs

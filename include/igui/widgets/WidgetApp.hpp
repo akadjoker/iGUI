@@ -139,6 +139,9 @@ public:
     bool debugLayout() const    { return debugLayout_; }
     /// @brief Enable/disable debug layout wireframe.
     void setDebugLayout(bool d) { debugLayout_ = d; }
+    /// @brief Scancode that toggles the debug layout (0, the default, for none).
+    ///        While set, that key does not reach the widgets.
+    void setDebugLayoutKey(int scancode) { debugLayoutKey_ = scancode; }
 
     /// @brief Set per-frame overlay paint callback.
     void setOverlayCallback(ct::Function<void(PaintContext&)> cb) { overlay_ = std::move(cb); }
@@ -429,6 +432,7 @@ private:
     uint32_t elapsedMs_ = 0;
     Color bgColor_     = Color(30, 30, 30, 255);
     bool  debugLayout_ = false;
+    int   debugLayoutKey_ = 0;
 
     // Cursor hint (set by applyCursor, read by backend via wantedCursor())
     CursorType wantedCursor_ = CursorType::Arrow;

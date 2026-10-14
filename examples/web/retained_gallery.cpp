@@ -171,6 +171,7 @@ int main(int, char **)
     app.setTextureUpload([](const unsigned char *p, int w, int h) { return g.bridge->createTexture(w, h, p); });
     app.setTextureUpdate([](ig::retained::TextureHandle t, const unsigned char *p, int w, int h) { return g.bridge->updateTexture(t, p, w, h); });
     app.setTextureDestroy([](ig::retained::TextureHandle t) { g.bridge->destroyTexture(t); });
+    app.setDebugLayoutKey(SDL_SCANCODE_F1);
     registerDemoStage(app);
     registerMenuStage(app);
     registerBasicStage(app);
