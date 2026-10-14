@@ -11383,14 +11383,8 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
             {
                 if (tableOrder_->reorderTo >= 0 && tableOrder_->reorderTo != tableOrder_->reorderFrom)
                 {
-                    const int moved = tableOrder_->order[tableOrder_->reorderFrom];
-                    if (tableOrder_->reorderFrom < tableOrder_->reorderTo)
-                        for (int i = tableOrder_->reorderFrom; i < tableOrder_->reorderTo; ++i)
-                            tableOrder_->order[i] = tableOrder_->order[i + 1];
-                    else
-                        for (int i = tableOrder_->reorderFrom; i > tableOrder_->reorderTo; --i)
-                            tableOrder_->order[i] = tableOrder_->order[i - 1];
-                    tableOrder_->order[tableOrder_->reorderTo] = moved;
+                    tableOrder_->dropFrom = tableOrder_->reorderFrom;
+                    tableOrder_->dropTo = tableOrder_->reorderTo;
                 }
                 tableOrder_->reordering = false;
                 tableOrder_->reorderFrom = -1;
@@ -11546,6 +11540,21 @@ void Context::endTable()
 {
     if (!tableActive_)
         return;
+    if (tableOrder_ && tableOrder_->dropFrom >= 0 && tableOrder_->dropTo >= 0)
+    {
+        const int from = tableOrder_->dropFrom;
+        const int to = tableOrder_->dropTo;
+        const int moved = tableOrder_->order[from];
+        if (from < to)
+            for (int i = from; i < to; ++i)
+                tableOrder_->order[i] = tableOrder_->order[i + 1];
+        else
+            for (int i = from; i > to; --i)
+                tableOrder_->order[i] = tableOrder_->order[i - 1];
+        tableOrder_->order[to] = moved;
+        tableOrder_->dropFrom = -1;
+        tableOrder_->dropTo = -1;
+    }
     if (table_.column >= 0 && layout_.hasLastItem)
     {
         const float itemHeight = layout_.lastItem.y + layout_.lastItem.height - table_.rowY;

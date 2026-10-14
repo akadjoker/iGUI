@@ -7206,6 +7206,63 @@ void test_table_sizing_fixed_fit_resizes()
     assert(cell[2].x - cell[1].x == secondBefore);
 }
 
+// Largar um reorder muda a ordem no frame seguinte: no frame do largar a
+// linha toda (os cabeçalhos e as células) usa ainda a ordem antiga, e nenhuma
+// coluna aparece duas vezes.
+void test_table_reorder_applies_on_the_next_frame()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.reorderable = true;
+    ig::Rect headerRects[3];
+    int headerOrder[3] = { -1, -1, -1 };
+    int cellOrder[3] = { -1, -1, -1 };
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                c.tableNextColumn();
+                headerOrder[i] = c.tableColumnIndex();
+                c.tableHeader(headerOrder[i] == 0 ? "A" : (headerOrder[i] == 1 ? "B" : "C"));
+                headerRects[i] = c.itemRect();
+            }
+            for (int i = 0; i < 3; ++i)
+            {
+                c.tableNextColumn();
+                cellOrder[i] = c.tableColumnIndex();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const float fromX = headerRects[0].x + headerRects[0].width * 0.5f;
+    const float fromY = headerRects[0].y + headerRects[0].height * 0.5f;
+    const float toX = headerRects[2].x + headerRects[2].width * 0.5f;
+    context.pushEvent(ig::Event::pointerMove(fromX, fromY));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, fromX, fromY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerMove(toX, fromY));
+    harness.frame(build);
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, toX, fromY));
+    harness.frame(build);
+    assert(headerOrder[0] == 0 && headerOrder[1] == 1 && headerOrder[2] == 2);
+    assert(cellOrder[0] == 0 && cellOrder[1] == 1 && cellOrder[2] == 2);
+    harness.frame(build);
+    assert(headerOrder[0] == 1 && headerOrder[1] == 2 && headerOrder[2] == 0);
+    assert(cellOrder[0] == 1 && cellOrder[1] == 2 && cellOrder[2] == 0);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8270,6 +8327,7 @@ int main()
     test_available_height_follows_the_container();
     test_wheel_areas_forget_what_is_gone();
     test_table_sizing_fixed_fit_resizes();
+    test_table_reorder_applies_on_the_next_frame();
     printf("test_item_status: all tests passed\n");
     return 0;
 }

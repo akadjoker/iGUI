@@ -2031,10 +2031,15 @@ private:
         float reorderStartX;
         WidgetId reorderWidget;
         uint64_t reorderFrame;
+        // Um reorder largado neste frame: só entra na ordem no endTable, para a
+        // linha toda deste frame ver a mesma ordem.
+        int dropFrom;
+        int dropTo;
 
         TableOrderState()
             : order(), count(0), reordering(false), reorderFrom(-1), reorderTo(-1),
-              reorderStartX(0.0f), reorderWidget(InvalidWidgetId), reorderFrame(0) {}
+              reorderStartX(0.0f), reorderWidget(InvalidWidgetId), reorderFrame(0),
+              dropFrom(-1), dropTo(-1) {}
     };
     // Onde está a rolagem de cada tabela (TableStyle::scrollY), em pixels do
     // conteúdo e pelo id da tabela: a altura do que rola e das linhas presas só se
