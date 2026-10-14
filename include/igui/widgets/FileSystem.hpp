@@ -54,6 +54,14 @@ String joinPath(const String& a, const String& b);
 String normalizePath(const String& path); // collapse "//", trailing "/"
 bool        isAbsolute(const String& path);
 
+struct PathCrumb {
+    String name;       // what a breadcrumb shows
+    String path;       // where it leads
+};
+// The root ("/", "C:" or "//server/share") and then each folder, whatever the
+// platform the path came from.
+ct::Vector<PathCrumb> pathCrumbs(const String& path);
+
 // ── Special directories ─────────────────────────────────────────────────
 
 String homePath();     // user home directory

@@ -224,7 +224,7 @@ Só por leitura:
       `months[]`.
 - [x] [WidgetApp.cpp:914](../src/widgets/WidgetApp.cpp#L914) — o estado das
       janelas é reposto sem limitar ao ecrã atual.
-- [ ] [FileDialog.cpp:426-441](../src/widgets/FileDialog.cpp#L426-L441) — os
+- [x] [FileDialog.cpp:426-441](../src/widgets/FileDialog.cpp#L426-L441) — os
       breadcrumbs no Windows assumem "C:" e geram caminhos "C:/:/…".
 - [ ] [FileDialog.cpp:545](../src/widgets/FileDialog.cpp#L545) e 588 —
       `panelColor.r + 15` dá overflow de u8 com o `Theme::light()` (barras

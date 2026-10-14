@@ -425,24 +425,8 @@ void FileDialog::buildBreadcrumbs()
         breadcrumbBar_->removeChild(breadcrumbBar_->children().back());
 
     ct::Vector<std::pair<String, String>> parts;
-#if defined(_WIN32)
-    parts.push_back({"C:", "C:\\"});
-    String accum = "C:";
-#else
-    parts.push_back({"/", "/"});
-    String accum;
-#endif
-    size_t start = 1;
-    for (size_t i = start; i <= currentPath_.size(); ++i) {
-        if (i == currentPath_.size() || currentPath_[i] == '/') {
-            String seg = currentPath_.substr(start, i - start);
-            if (!seg.empty()) {
-                accum += "/" + seg;
-                parts.push_back({seg, accum});
-            }
-            start = i + 1;
-        }
-    }
+    for (const FileSystem::PathCrumb& crumb : FileSystem::pathCrumbs(currentPath_))
+        parts.push_back({crumb.name, crumb.path});
 
     // Deep paths keep the root and the last few folders, with long names cut,
     // so the bar does not run under the view buttons.
@@ -455,7 +439,8 @@ void FileDialog::buildBreadcrumbs()
         parts = shown;
     }
     for (auto& part : parts)
-        if (part.first.size() > kMaxName) part.first = part.first.substr(0, kMaxName - 2) + "..";
+        if (utf8Length(part.first) > static_cast<int>(kMaxName))
+            part.first = utf8Substr(part.first, 0, static_cast<int>(kMaxName) - 2) + "..";
 
     for (size_t i = 0; i < parts.size(); ++i) {
         if (i > 0) {
