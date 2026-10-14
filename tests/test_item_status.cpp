@@ -7416,6 +7416,42 @@ void test_splitter_does_not_jump_on_press()
     harness.frame(build);
 }
 
+// Um stepperInt com o valor fora do intervalo volta para dentro ao primeiro
+// clique (antes andava de 1 a partir de fora, ou não fazia nada).
+void test_stepper_int_brings_the_value_into_range()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int value = 50;
+    bool changed = false;
+    ig::Vec2 o;
+    const float height = 28.0f;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 200.0f)));
+        c.dummy(1.0f, 1.0f);
+        o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+        changed = c.stepperInt("passo", value, 0, 10, ig::Rect(0.0f, 0.0f, 300.0f, height));
+        c.endWindow();
+    };
+    harness.frame(build);
+    const float controls = height * 2.0f + height * 1.7f;
+    const float decrementX = o.x + 300.0f - controls + height * 0.5f;
+    const float incrementX = o.x + 300.0f - height * 0.5f;
+    const float y = o.y + height * 0.5f;
+    harness.frame(build);
+    assert(value == 50 && !changed);
+    harness.click(decrementX, y, build);
+    assert(value == 10);
+    value = -5;
+    harness.click(incrementX, y, build);
+    assert(value == 0);
+    harness.click(incrementX, y, build);
+    assert(value == 1);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8485,6 +8521,7 @@ int main()
     test_gizmo3d_behind_the_camera_draws_nothing();
     test_gizmo3d_edit_without_a_center_is_reported();
     test_splitter_does_not_jump_on_press();
+    test_stepper_int_brings_the_value_into_range();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
