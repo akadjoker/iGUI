@@ -1282,12 +1282,7 @@ bool Context::enabled() const
 
 void Context::beginFrame(const FrameInfo &frame)
 {
-    // Um widget só é ativo enquanto um botão do ponteiro está em baixo, e é ele
-    // que se larga no frame em que o botão sobe. Se o frame anterior acabou sem
-    // nenhum botão em baixo e ainda há um ativo, ninguém o largou: deixou de ser
-    // submetido (uma janela escondida a meio do arrasto, um slider que
-    // desapareceu). Larga-se aqui, antes dos eventos novos, senão nenhum outro
-    // widget voltava a receber o ponteiro.
+    // Um ativo sem botão em baixo no fim do frame anterior deixou de ser submetido: larga-se.
     if (!pointer_.down[0] && !pointer_.down[1] && !pointer_.down[2])
     {
         activeWidget_ = InvalidWidgetId;
@@ -1316,34 +1311,18 @@ void Context::beginFrame(const FrameInfo &frame)
     tooltipDrawList_.clear();
     modalPopupDrawList_.clear();
     dialogScrimDrawList_.clear();
-    // O mesmo para o conteúdo de um combo de conteúdo livre: quem o quiser tem de
-    // voltar a chamar beginCombo (ver beginCombo/endCombo).
     comboDrawList_.clear();
     comboContentOpen_ = false;
     comboContentWindow_ = WindowHandle();
-    // A barra da aplicação tem de ser submetida a cada frame, como tudo no modo
-    // imediato: quem não a submeter deixou de a ter.
     mainMenuBarWindow_ = WindowHandle();
     mainMenuBarOpen_ = false;
-    // Um bloco de escolha múltipla não sobrevive ao frame, como tudo no modo imediato:
-    // quem o quiser tem de o voltar a abrir.
     multiSelect_.active = false;
     multiSelect_.selected = Span<bool>();
-    // O que estava ativo no início do frame: é com isto que o item sabe se ficou
-    // ativo agora ou se já estava (ver isItemActivated/isItemDeactivated).
     activeWidgetAtFrameStart_ = activeWidget_;
     if (activeWidget_ == InvalidWidgetId)
         activeWidgetEdited_ = false;
-    // Um alignTextToFramePadding() sem texto à frente não vale para o frame seguinte.
     alignTextNext_ = false;
-    // Um tooltip de um frame não sobrevive para o seguinte: quem o quiser tem de
-    // voltar a chamar beginTooltip (o bloco é submetido a cada frame, como tudo
-    // no modo imediato).
     tooltipOpen_ = false;
-    // One texture for the whole frame when the text provider offers a white
-    // texel: solid geometry then samples the atlas the glyphs come from, so
-    // consecutive shapes and text merge into a single draw command instead of
-    // breaking at every text run. See DrawList::setSolidStyle.
     applySolidStyle(frameDrawList_);
     applySolidStyle(dragDropDrawList_);
     applySolidStyle(toastDrawList_);
@@ -1374,19 +1353,9 @@ void Context::beginFrame(const FrameInfo &frame)
     hotWidget_ = InvalidWidgetId;
     lastItemId_ = InvalidWidgetId;
     item_ = ItemStatus();
-    // Um beginDisabled() sem endDisabled() acaba com o frame, em vez de deixar a
-    // aplicação presa num estado que já não consegue desligar.
     disabledDepth_ = 0u;
     releaseUnsubmittedBlockers();
-    // Snapshot taken before anything this frame can touch openMenu_/
-    // openContextMenu_ - see pointerBlockedByOpenPopup. A click that closes
-    // the menu (beginMenu's "clicked outside" branch) clears openMenu_
-    // mid-frame, but the popup was still on screen when the pointer went
-    // down, so widgets drawn later this same frame (a symbol tree, ...)
-    // must still treat that click as having landed on the menu, not on them.
-    // O submenu conta como menu aberto: um submenu aberto de dentro de um popup tem
-    // a caixa fora do popup (é um menu), e o clique nos itens dele é do menu, não do
-    // que está por baixo.
+    // Retrato do início do frame: um clique que fecha o menu a meio do frame continua a ser do menu.
     menuWasOpenAtFrameStart_ = openMenu_ != InvalidWidgetId || openContextMenu_ != InvalidWidgetId ||
                               openSubMenu_ != InvalidWidgetId;
     menuPopupBoundsAtFrameStart_ = menuPopupBounds_;
@@ -1394,8 +1363,6 @@ void Context::beginFrame(const FrameInfo &frame)
     comboWasOpenAtFrameStart_ = openCombo_ != InvalidWidgetId;
     comboBoundsAtFrameStart_ = comboBounds_;
     comboPopupBoundsAtFrameStart_ = comboPopupBounds_;
-    // Os popups que estavam abertos no início do frame: a caixa e o id ficam como
-    // estavam (é com essa que um clique fora conta, mesmo que o popup feche agora).
     for (int i = 0; i < popupDepth_; ++i)
     {
         popups_[i].wasOpenAtFrameStart = popups_[i].open;
@@ -1444,10 +1411,6 @@ void Context::beginFrame(const FrameInfo &frame)
     consumeEvents();
 
 
-    // While a text field has the keyboard, Ctrl+Z/Ctrl+Y are its own (the
-    // code editor has its own undo): taking them for the application's
-    // history reverted unrelated actions under the user's typing, and in the
-    // code editor undid twice.
     if (!textFieldHadKeyboard_)
     {
         if (shortcut(KeyCode::Z))
@@ -1456,9 +1419,6 @@ void Context::beginFrame(const FrameInfo &frame)
             redo();
     }
 
-    // A press raises and focuses the window under it - unless a modal owns
-    // the pointer: raising a background window over a setModalWindow() one
-    // would hide the modal behind the window it is meant to block.
     const uint32_t leftButton = buttonIndex(PointerButton::Left);
     if (pointer_.pressed[leftButton] && activeModal_ == InvalidWidgetId)
     {
@@ -1535,11 +1495,7 @@ bool Context::windowSubmittedRecently(const WindowState &window) const
 
 const DrawData &Context::endFrame()
 {
-    // A barra de menu da aplicação fica com a ordem mais alta no fim do frame. É o
-    // que a desenha por cima de todas as janelas (o sort abaixo é por zOrder) e é o
-    // que faz dela a janela de cima para o ponteiro no frame seguinte: ela é
-    // submetida antes das janelas da aplicação, e uma criada depois dela ficava-lhe
-    // por cima e comia-lhe o clique do menu. A ordem, não o foco: o foco é do teclado.
+    // A barra de menu fica por cima das janelas, também para o ponteiro do frame seguinte.
     if (WindowState *bar = windows_.get(mainMenuBarWindow_))
         bar->zOrder = nextZOrder_++;
     else
@@ -1553,15 +1509,8 @@ const DrawData &Context::endFrame()
         return left->zOrder < right->zOrder;
     });
 
-    // The geometry of every list already sits in frameDrawList_'s arrays; what
-    // is gathered here is the order of the commands.
     frameDrawList_.clearCommands();
-    // Two passes, not one per window: every window's content first, then what
-    // each window deferred to its overlay (menus, combo lists, tooltips). The
-    // overlay is a layer - it has to sit above the windows' content, including
-    // that of the windows submitted after it - and interleaving it with its own
-    // window put a menu or a tooltip of a background panel underneath the next
-    // window, which painted over it.
+    // Primeiro o conteúdo de todas as janelas, depois as sobreposições (menus, combos, tooltips).
     for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
@@ -1577,9 +1526,6 @@ const DrawData &Context::endFrame()
         if (window && window->open)
         {
             frameDrawList_.append(window->overlayDrawList);
-            // O conteúdo de um combo de conteúdo livre vem logo depois da
-            // sobreposição da sua janela: a caixa do popup está lá (o endCombo
-            // desenhou-a com a medida do conteúdo) e fica por baixo dele.
             if (windowOrder_[i] == comboContentWindow_)
                 frameDrawList_.append(comboDrawList_);
         }
@@ -1588,9 +1534,6 @@ const DrawData &Context::endFrame()
     frameDrawList_.append(dragDropDrawList_);
     drawToasts();
     frameDrawList_.append(toastDrawList_);
-    // O conteúdo de um tooltip rico vem depois de todas as sobreposições (é o
-    // que o põe por cima dos menus e dos combos abertos) mas antes dos modais,
-    // que tapam tudo.
     frameDrawList_.append(tooltipDrawList_);
     frameDrawList_.append(modalPopupDrawList_);
     frameDrawList_.append(modalDrawList_);
@@ -1604,8 +1547,6 @@ const DrawData &Context::endFrame()
     }
     advanceFocus();
 
-    // Um pushStyleColor/pushStyleVar sem pop vale só para o frame dele: quem se
-    // esqueceu não cola a cor ao frame seguinte.
     clearStyleStacks();
 
     currentWindow_ = WindowHandle();
@@ -1724,8 +1665,6 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, bool *ope
 bool Context::beginWindow(StringView title, const Rect &initialBounds, const WindowOptions &options,
                           bool *open)
 {
-    // O interruptor do interface (setEnabled) desliga tudo: sem janela também não
-    // há widget nenhum submetido, com opções ou sem elas.
     if (!enabled_)
         return false;
     const WidgetId id = hashText(title);
@@ -1733,8 +1672,6 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
     if (!window)
         return false;
 
-    // A submissão por frame, não uma definição: uma janela pedida com barra de
-    // título num frame e sem ela no seguinte volta a ter barra.
     window->showTitleBar = options.titleBar;
     window->showWindowControls = options.titleBar;
     window->allowMove = options.move;
@@ -1744,8 +1681,6 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
         window->bounds = initialBounds;
     if (!options.saveSettings && window->lastFrame == 0u)
     {
-        // A geometria só pode ter vindo do ficheiro de estado: quem não a quer
-        // guardada também não a quer de lá.
         window->bounds = initialBounds;
         window->maximized = false;
         window->minimized = false;
@@ -1766,9 +1701,6 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
         window->clampToViewport = false;
     }
 
-    // Os bounds desta janela são os deste frame (do ficheiro de estado, do
-    // forceWindowBounds_ ou dos options): quem está debaixo do ponteiro pode ter
-    // mudado.
     invalidatePointerWindow();
 
     if (open)
@@ -1785,13 +1717,8 @@ bool Context::beginWindow(StringView title, const Rect &initialBounds, const Win
     }
 
     currentWindow_ = windowsById_[id];
-    // A window created after beginFrame cleared the lists still has to draw with
-    // the frame's solid style (see beginFrame).
     applySolidStyle(window->drawList);
     applySolidStyle(window->overlayDrawList);
-    // O que apareceu agora: um lastFrame de 0 é uma janela que nunca foi submetida
-    // (o frame 0 nunca é de submissão) e um lastFrame que não é o frame anterior é
-    // uma janela que esteve fora (ver isWindowAppearing).
     window->appeared = window->lastFrame == 0u || window->lastFrame + 1u < frameNumber_;
     window->lastFrame = frameNumber_;
     const WindowState *focused = windows_.get(focusedWindow_);
@@ -1854,8 +1781,6 @@ bool Context::beginDialog(StringView title, bool &open, const Vec2 &size)
         return false;
     }
 
-    // forceWindowBounds_ strips the title bar, so draw one that matches the
-    // message box's.
     WindowState *window = currentWindow();
     if (window)
     {
@@ -3923,22 +3848,15 @@ bool Context::beginPopup(StringView idText)
     PopupEntry &entry = popups_[index];
     const Rect screen = popupClipRect();
     const uint32_t left = buttonIndex(PointerButton::Left);
-    // Um clique fora (em qualquer janela onde caia) e o Escape fecham - mas só o
-    // popup de cima: um clique dentro de um filho não fecha o pai, e um clique fora
-    // de todos fecha a pilha toda (cada um fecha-se a si, e o pai leva os filhos).
+    // Um clique fora e o Escape fecham só o popup de cima.
     bool insideChild = false;
     for (int i = index + 1; i < popupDepth_ && !insideChild; ++i)
         insideChild = contains(popups_[i].boundsAtFrameStart, pointer_.pressedPosition[left]) ||
                       contains(popups_[i].bounds, pointer_.pressedPosition[left]);
-    // A caixa é a do frame anterior: antes de o corpo ser submetido não há outra
-    // medida.
     const Rect outside(entry.frame == frameNumber_ && entry.wasOpenAtFrameStart
                            ? entry.boundsAtFrameStart
                            : entry.bounds);
-    // Um menu aberto por cima do popup (uma barra de menus dentro dele, o "With a
-    // menu.." do demo) é dele: os itens desse menu saem fora da caixa do popup, e
-    // sem isto um clique num deles fechava o popup e deixava o menu pendurado à
-    // espera de ser submetido outra vez (o clique era comido duas vezes).
+    // Um menu aberto por cima do popup é dele: o clique nos itens não fecha o popup.
     const bool insideOpenMenu =
         menuWasOpenAtFrameStart_ &&
         (contains(menuPopupBoundsAtFrameStart_, pointer_.pressedPosition[left]) ||
@@ -3952,15 +3870,12 @@ bool Context::beginPopup(StringView idText)
     }
 
     const float padding = theme_.windowPadding;
-    // Largura pedida (0 = a do menu do tema); altura medida do frame anterior.
     float width = entry.width > 0.0f ? entry.width : theme_.menuMinWidth;
     float height = entry.measuredThisFrame ? entry.measured.y + padding * 2.0f : 0.0f;
     if (width < 1.0f)
         width = theme_.menuMinWidth;
     if (height < theme_.widgetHeight + padding * 2.0f)
         height = theme_.widgetHeight + padding * 2.0f;
-    // Fica onde foi aberto, encostado ao ecrã quando não cabe (o
-    // FindBestWindowPosForPopup do ImGui faz o mesmo, virado para dentro).
     float x = entry.position.x;
     float y = entry.position.y;
     if (x + width > screen.x + screen.width)
@@ -3972,15 +3887,10 @@ bool Context::beginPopup(StringView idText)
     if (y < screen.y)
         y = screen.y;
     entry.bounds = Rect(x, y, width, height);
-    // A caixa sai na sobreposição da janela, que é o que a põe por cima dela (e do
-    // conteúdo vai sair na mesma lista, ver currentDrawList).
     window->overlayDrawList.addRectFilled(entry.bounds, theme_.menuBg, screen);
     window->overlayDrawList.addRect(entry.bounds, theme_.menuBorder, screen);
     entry.frame = frameNumber_;
     entry.window = currentWindow_;
-    // O corpo de um popup leva a margem da janela (é o WindowPadding do popup no
-    // ImGui): os itens não ficam encostados às bordas da caixa. Os menus, esses,
-    // continuam com as faixas encostadas (ver beginPopupContent).
     return beginPopupBody(index, popupContentIndex_, entry.bounds, padding, padding);
 }
 
@@ -4090,8 +4000,6 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     const float padding = theme_.windowPadding;
     const float titleHeight = theme_.titleBarHeight;
     const bool measured = entry.measuredThisFrame;
-    // Um modal mede-se (ao contrário de um popup comum): a caixa é a do conteúdo
-    // do frame anterior, com um mínimo para o que ainda não tem medida nenhuma.
     float width = measured ? entry.measuredWidth + padding * 2.0f : theme_.menuMinWidth;
     float height = measured ? entry.measured.y + padding * 2.0f : theme_.widgetHeight * 2.0f;
     width += 0.0f;
@@ -4108,12 +4016,10 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     entry.modal = true;
     entry.frame = frameNumber_;
     entry.window = currentWindow_;
-    // O X é um item do modal: o ponteiro só lhe chega com o modal como popup atual.
     const int outer = popupContentIndex_;
     popupContentIndex_ = index;
     modalPopupDrawList_.addRectFilled(entry.bounds, theme_.menuBg, viewport);
     modalPopupDrawList_.addRect(entry.bounds, theme_.menuBorder, viewport);
-    // A barra do título é a da janela (com a letra e o X do p_open).
     const Rect titleBar(entry.bounds.x, entry.bounds.y, entry.bounds.width, titleHeight);
     modalPopupDrawList_.addRectFilled(titleBar, theme_.titleBarBackground, viewport);
     const float closeSize = titleHeight - theme_.padding * 0.5f;
@@ -4145,8 +4051,7 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     drawText(modalPopupDrawList_, theme_.font, titleText,
              Vec2(titleBar.x + padding, titleBar.y + (titleHeight - metrics.height) * 0.5f),
              theme_.fontSize, theme_.labelText, viewport);
-    // Um modal fecha com o Escape (o clique fora não o fecha: é isso que o
-    // distingue de um popup).
+    // Um modal fecha com o Escape, não com o clique fora.
     if (escapePressed_ && index == popupDepth_ - 1)
     {
         closePopupAt(index);
@@ -9730,10 +9635,6 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
                 activeWidget_ = InvalidWidgetId;
         }
     }
-    // Only an area that can actually move takes the wheel, and only when it is
-    // the innermost one under the pointer: swallowing it here (a child whose
-    // content fits, or a panel wrapping a list) left an inner list no way to be
-    // scrolled by anything but its own scrollbar.
     const bool wheelMine = ownWheelArea(id, outer, static_cast<uint32_t>(childStack_.size()),
                                         maximumScroll > 0.0f);
     if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
@@ -11934,7 +11835,6 @@ void Context::sameLine(float spacingValue)
 
 void Context::newLine()
 {
-    // Já na margem: a linha está vazia e não há nada para fechar.
     if (layout_.cursor.x <= layout_.baseOriginX + 0.5f)
         return;
     layout_.cursor.x = layout_.baseOriginX;
@@ -11951,8 +11851,6 @@ void Context::beginGroup()
 {
     if (!currentWindow())
         return;
-    // O grupo mais fundo que faz sentido é o que cabe numa linha legível; a partir
-    // daí o par fica inerte em vez de rebentar (ver GroupState::active).
     const bool active = layout_.groupDepth < 16;
     GroupState group;
     group.originX = layout_.origin.x;
@@ -11969,14 +11867,10 @@ void Context::beginGroup()
     ++layout_.groupDepth;
     if (!active)
         return;
-    // Dentro do grupo a margem é o canto dele, e a linha começa vazia: um
-    // sameLine() lá dentro não pode saltar para um item de fora.
     layout_.origin.x = group.start.x;
     layout_.baseOriginX = group.start.x;
     layout_.hasLastItem = false;
     layout_.nextItemWidth = 0.0f;
-    // As linhas do grupo são as dele: sem isto a altura do grupo anterior (ou de
-    // um item alto da mesma linha) empurrava a segunda linha do grupo para baixo.
     layout_.lineTop = group.start.y;
     layout_.lineHeight = 0.0f;
 }
@@ -12090,8 +11984,6 @@ void Context::separatorText(StringView text, float width)
         return;
 
     const Rect clip = contentClip();
-    // O título de uma secção segue a mesma convenção dos rótulos (o que vem depois
-    // de "##" não se escreve).
     const StringView visible = visibleLabel(text);
     const TextMetrics metrics = measureText(theme_.font, visible, theme_.fontSize);
     const float available = availableWidth();
@@ -13135,8 +13027,6 @@ void Context::setItemHoverRect(const Rect &bounds)
 
 void Context::registerFocusable(WidgetId id)
 {
-    // Behind a modal a widget is out of the Tab order, so Tab cannot walk
-    // focus (and then typing) into the blocked background.
     if (id == InvalidWidgetId || inputBlockedByModal() || outsideModalPopup() ||
         focusSeen_.contains(id))
         return;
@@ -13147,12 +13037,7 @@ void Context::registerFocusable(WidgetId id)
 
 void Context::advanceFocus()
 {
-    // A widget that used Tab itself this frame (codeEditor indenting or
-    // accepting an autocomplete suggestion, say) sets tabConsumedByWidget_
-    // so Tab does not ALSO silently move focus away from it here - without
-    // this, the widget would edit correctly but the very next keystroke
-    // would go to some other widget instead. inputText/inputTextMultiline
-    // never set this, so Tab still moves between ordinary text fields.
+    // Um widget que usou o Tab para si (o editor de código) não perde o foco por ele.
     if (!tabPressed_ || focusOrder_.empty() || tabConsumedByWidget_)
         return;
 
@@ -13541,9 +13426,7 @@ void Context::drawWindow(WindowState &window)
             window.bounds.x = pointer_.position.x - windowDragOffset_.x;
             window.bounds.y = pointer_.position.y - windowDragOffset_.y;
             invalidatePointerWindow();
-            // Backends keep reporting the pointer outside the viewport while
-            // a button is held, so a fling could park the title bar off
-            // screen, leaving nothing to grab the window by.
+            // Com o botão premido o ponteiro pode sair do ecrã: a barra de título não pode ir atrás.
             clampWindowToViewport(window);
         }
         if (pointer_.released[left])
@@ -13580,8 +13463,6 @@ void Context::drawWindow(WindowState &window)
         window.drawList.addRectFilled(resolvedCloseButton, theme_.buttonHovered, viewport);
     if (window.showTitleBar)
     {
-        // O que se lê é a parte antes do "##" (é o CalcTextSize/FindRenderedTextEnd do
-        // ImGui na barra de título): o resto do nome só serve para o id.
         const StringView title = visibleLabel(window.title);
         const TextMetrics metrics = measureText(theme_.font, title, theme_.fontSize);
         const Vec2 titlePosition(window.bounds.x + theme_.windowPadding,
