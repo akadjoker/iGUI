@@ -7452,6 +7452,55 @@ void test_stepper_int_brings_the_value_into_range()
     assert(value == 1);
 }
 
+// Um valor infinito numa série não entra na escala automática (tal como o NaN):
+// as outras amostras continuam a ocupar a altura do gráfico, e o infinito fica
+// na borda.
+void test_plot_ignores_infinite_values_in_the_scale()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float infinity = 1.0f / 0.0f;
+    float values[5] = { 0.0f, 1.0f, 2.0f, 3.0f, 4.0f };
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("plot", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.plotLines("serie", values, 5, ig::Rect(0.0f, 0.0f, 300.0f, 120.0f));
+        c.endWindow();
+    };
+    auto lineHeight = [&]()
+    {
+        const ig::DrawData& data = harness.frame(build);
+        const ig::Color line = context.theme().plotLines;
+        float top = 100000.0f;
+        float bottom = -100000.0f;
+        for (size_t i = 0; i < data.vertices.size(); ++i)
+        {
+            const ig::DrawVertex& vertex = data.vertices[i];
+            if (vertex.color != line) continue;
+            top = vertex.position.y < top ? vertex.position.y : top;
+            bottom = vertex.position.y > bottom ? vertex.position.y : bottom;
+        }
+        return bottom - top;
+    };
+    harness.frame(build);
+    const float finite = lineHeight();
+    assert(finite > 50.0f);
+    values[3] = infinity;
+    const float withInfinity = lineHeight();
+    assert(withInfinity > 50.0f);
+    values[3] = -infinity;
+    assert(lineHeight() > 50.0f);
+
+    // Um NaN também fica fora da escala, e não deixa vértices NaN na geometria.
+    values[3] = 0.0f / 0.0f;
+    assert(lineHeight() > 50.0f);
+    const ig::DrawData& data = harness.frame(build);
+    for (size_t i = 0; i < data.vertices.size(); ++i)
+        assert(data.vertices[i].position.y == data.vertices[i].position.y);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8522,6 +8571,7 @@ int main()
     test_gizmo3d_edit_without_a_center_is_reported();
     test_splitter_does_not_jump_on_press();
     test_stepper_int_brings_the_value_into_range();
+    test_plot_ignores_infinite_values_in_the_scale();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
