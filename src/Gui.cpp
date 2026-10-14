@@ -11778,8 +11778,9 @@ void Context::wrapText(StringView text, float wrapWidth, ct::Vector<StringView> 
 
         if (space)
         {
-            // A linha acaba antes destes espaços.
             lines.push_back(StringView(text.data() + lineStart, i - lineStart));
+            if (unitEnd < size && text[unitEnd] == '\n')
+                ++unitEnd;
             lineStart = unitEnd;
             width = 0.0f;
             lastSpace = StringView::npos;
