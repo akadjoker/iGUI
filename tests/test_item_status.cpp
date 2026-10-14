@@ -6774,6 +6774,83 @@ void test_gizmo3d_plane_handle_follows_the_pointer()
     }
 }
 
+// A rotação dos gizmos acompanha o ponteiro para lá de meia volta, sem saltar 360°.
+void test_gizmo_rotation_does_not_jump_a_full_turn()
+{
+    const float pi = 3.14159265f;
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Vec2 o;
+        ig::Transform2D transform;
+        transform.position = ig::Vec2(150.0f, 150.0f);
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+            c.dummy(1.0f, 1.0f);
+            o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+            c.gizmo2D("g", transform, ig::Gizmo2DMode::Rotate,
+                    ig::Rect(0.0f, 0.0f, 300.0f, 300.0f));
+            c.endWindow();
+        };
+        harness.frame(build);
+        const float r = 60.0f * 0.82f;
+        const float cx = o.x + 150.0f;
+        const float cy = o.y + 150.0f;
+        const float start = 170.0f * pi / 180.0f;
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, cx + cosf(start) * r,
+                cy + sinf(start) * r));
+        harness.frame(build);
+        for (int degrees = 175; degrees <= 200; degrees += 5)
+        {
+            const float angle = static_cast<float>(degrees) * pi / 180.0f;
+            context.pushEvent(ig::Event::pointerMove(cx + cosf(angle) * r, cy + sinf(angle) * r));
+            harness.frame(build);
+            assert(fabsf(transform.rotation - static_cast<float>(degrees - 170)) < 0.5f);
+        }
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, cx, cy));
+        harness.frame(build);
+    }
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+        ig::Vec2 o;
+        ig::Transform3D transform;
+        const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -5, 1 };
+        const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, -1, 0, 0, -0.2f, 0 };
+        ig::Gizmo3DOptions options;
+        options.showModel = false;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
+            c.dummy(1.0f, 1.0f);
+            o = ig::Vec2(c.itemRect().x, c.itemRect().y);
+            c.gizmo3D("g", transform, ig::Gizmo3DMode::Rotate, ig::Rect(0.0f, 0.0f, 300.0f, 300.0f),
+                    view, projection, options);
+            c.endWindow();
+        };
+        harness.frame(build);
+        const float cx = o.x + 150.0f;
+        const float cy = o.y + 150.0f;
+        const float r = 30.0f;
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, cx + r, cy));
+        harness.frame(build);
+        float previous = 0.0f;
+        for (int degrees = 30; degrees <= 240; degrees += 30)
+        {
+            const float angle = static_cast<float>(degrees) * pi / 180.0f;
+            context.pushEvent(ig::Event::pointerMove(cx + cosf(angle) * r, cy + sinf(angle) * r));
+            harness.frame(build);
+            assert(transform.rotation.z < previous);
+            assert(fabsf(transform.rotation.z - previous) < 60.0f);
+            previous = transform.rotation.z;
+        }
+        assert(fabsf(transform.rotation.z + 240.0f) < 1.0f);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7815,6 +7892,7 @@ int main()
     test_message_box_keys_are_spent_by_the_box();
     test_gizmo_scale_snap_never_reaches_zero();
     test_gizmo3d_plane_handle_follows_the_pointer();
+    test_gizmo_rotation_does_not_jump_a_full_turn();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
