@@ -1101,16 +1101,19 @@ void TabLayout::removeTab(int index)
 {
     if (index < 0 || index >= static_cast<int>(tabs_.size())) return;
 
-    auto& tab = tabs_[index];
-    removeChild(tab.content);
+    const int before = currentIndex_;
+    removeChild(tabs_[index].content);
     tabs_.erase(tabs_.begin() + index);
 
-    // Adjust current index
-    if (currentIndex_ >= static_cast<int>(tabs_.size()))
+    if (index < currentIndex_)
+        --currentIndex_;
+    else if (currentIndex_ >= static_cast<int>(tabs_.size()))
         currentIndex_ = static_cast<int>(tabs_.size()) - 1;
 
     markDirty();
     WidgetApp::instance().requestLayout();
+    if (currentIndex_ != before || index == before)
+        currentChanged.emit(currentIndex_);
 }
 
 void TabLayout::setCurrentIndex(int idx)

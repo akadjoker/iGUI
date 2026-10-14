@@ -203,7 +203,7 @@ Reproduzidos com sonda:
 - [x] [DataWidgets.cpp:765](../src/widgets/DataWidgets.cpp#L765) — o Tab em edição
       na DataGrid nunca passa à célula seguinte, porque o `commitEdit()` já pôs
       `editRow_/editCol_` a -1.
-- [ ] [LayoutWidgets.cpp:1103](../src/widgets/LayoutWidgets.cpp#L1103) —
+- [x] [LayoutWidgets.cpp:1103](../src/widgets/LayoutWidgets.cpp#L1103) —
       `TabLayout::removeTab()` de uma tab à esquerda da ativa muda a ativa sem
       emitir `currentChanged`.
 - [ ] [TextInputWidgets.cpp:1303-1327](../src/widgets/TextInputWidgets.cpp#L1303-L1327)

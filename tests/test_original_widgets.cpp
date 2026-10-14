@@ -2032,6 +2032,44 @@ static void test_data_grid_tab_moves_the_edit()
     assert(grid.cell(1, 0) == "a13");
 }
 
+// Remover uma tab à esquerda da ativa mantém a mesma tab ativa (o índice desce)
+// e avisa com currentChanged; remover a ativa também avisa, mesmo quando o
+// índice fica igual.
+static void test_removing_a_tab_reports_the_current_one()
+{
+    using namespace ig::retained;
+    TabLayout tabs;
+    tabs.addTab<Label>("one", "one");
+    auto* second = tabs.addTab<Label>("two", "two");
+    auto* third = tabs.addTab<Label>("three", "three");
+    tabs.setCurrentIndex(2);
+    ct::Vector<int> reported;
+    tabs.currentChanged.connect([&reported](int index) { reported.push_back(index); });
+
+    tabs.removeTab(0);
+    assert(tabs.currentIndex() == 1 && tabs.currentWidget() == third);
+    assert(reported.size() == 1u && reported[0] == 1);
+
+    tabs.setCurrentIndex(0);
+    tabs.removeTab(0);
+    assert(tabs.currentIndex() == 0 && tabs.currentWidget() == third);
+    assert(reported.size() == 3u && reported[2] == 0);
+    (void) second;
+
+    tabs.removeTab(0);
+    assert(tabs.currentIndex() == -1 && tabs.currentWidget() == nullptr);
+    assert(reported.size() == 4u && reported[3] == -1);
+
+    TabLayout middle;
+    middle.addTab<Label>("a", "a");
+    middle.addTab<Label>("b", "b");
+    auto* active = middle.addTab<Label>("c", "c");
+    middle.addTab<Label>("d", "d");
+    middle.setCurrentIndex(2);
+    middle.removeTab(0);
+    assert(middle.currentIndex() == 1 && middle.currentWidget() == active);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2220,6 +2258,7 @@ int main()
     test_border_layout_keeps_a_widget_set_again();
     test_debug_layout_key_is_opt_in();
     test_data_grid_tab_moves_the_edit();
+    test_removing_a_tab_reports_the_current_one();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
