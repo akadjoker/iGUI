@@ -268,7 +268,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
     if (e.scrollY != 0.0f && vbar_->isVisible())
     {
         scrollY_ -= e.scrollY * step;
-        scrollY_  = std::max(0.0f, std::min(scrollY_, std::max(0.0f, contentH_ - rect_.h)));
+        scrollY_  = std::max(0.0f, std::min(scrollY_, vbar_->maxValue()));
         vbar_->setValue(scrollY_);
         markDirty();
         e.consumed = true;
@@ -276,7 +276,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
     if (e.scrollX != 0.0f && hbar_->isVisible())
     {
         scrollX_ -= e.scrollX * step;
-        scrollX_  = std::max(0.0f, std::min(scrollX_, std::max(0.0f, contentW_ - rect_.w)));
+        scrollX_  = std::max(0.0f, std::min(scrollX_, hbar_->maxValue()));
         hbar_->setValue(scrollX_);
         markDirty();
         e.consumed = true;
