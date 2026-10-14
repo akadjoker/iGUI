@@ -2,6 +2,7 @@
 #include "TreePropertyColorWidgets.hpp"
 #include "WidgetApp.hpp"
 #include "Theme.hpp"
+#include "Utf8.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -1139,10 +1140,12 @@ void PropertyGrid::onKeyPress(KeyEvent& e)
         switch (e.key) {
         case ig::retained::Key::Return: case ig::retained::Key::KPEnter: commitEdit(); return;
         case ig::retained::Key::Escape: cancelEdit(); return;
-        case ig::retained::Key::Backspace: if (editCursor_>0&&!editBuf_.empty()) { editBuf_.erase(editCursor_-1,1); editCursor_--; markDirty(); } return;
-        case ig::retained::Key::Delete: if (editCursor_<(int)editBuf_.size()) { editBuf_.erase(editCursor_,1); markDirty(); } return;
-        case ig::retained::Key::Right: if (editCursor_<(int)editBuf_.size()) { editCursor_++; markDirty(); } return;
-        case ig::retained::Key::Left:  if (editCursor_>0) { editCursor_--; markDirty(); } return;
+        case ig::retained::Key::Backspace:
+            if (editCursor_>0) { const int prev=(int)utf8PrevOffset(editBuf_,editCursor_); editBuf_.erase(prev,editCursor_-prev); editCursor_=prev; markDirty(); } return;
+        case ig::retained::Key::Delete:
+            if (editCursor_<(int)editBuf_.size()) { const int next=(int)utf8NextOffset(editBuf_,editCursor_); editBuf_.erase(editCursor_,next-editCursor_); markDirty(); } return;
+        case ig::retained::Key::Right: if (editCursor_<(int)editBuf_.size()) { editCursor_=(int)utf8NextOffset(editBuf_,editCursor_); markDirty(); } return;
+        case ig::retained::Key::Left:  if (editCursor_>0) { editCursor_=(int)utf8PrevOffset(editBuf_,editCursor_); markDirty(); } return;
         case ig::retained::Key::Home: editCursor_=0; markDirty(); return;
         case ig::retained::Key::End:  editCursor_=(int)editBuf_.size(); markDirty(); return;
         }

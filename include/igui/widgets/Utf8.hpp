@@ -54,6 +54,20 @@ inline size_t utf8ByteOffset(const String& s, int cpIndex)
     return static_cast<size_t>(p - s.c_str());
 }
 
+inline size_t utf8PrevOffset(const String& s, size_t byte)
+{
+    size_t prev = 0;
+    for (size_t b = 0; b < byte && b < s.size(); b += utf8CharLen(s.c_str() + b))
+        prev = b;
+    return prev;
+}
+
+inline size_t utf8NextOffset(const String& s, size_t byte)
+{
+    if (byte >= s.size()) return s.size();
+    return byte + static_cast<size_t>(utf8CharLen(s.c_str() + byte));
+}
+
 inline String utf8Substr(const String& s, int cpStart, int cpEnd)
 {
     size_t byteStart = utf8ByteOffset(s, cpStart);

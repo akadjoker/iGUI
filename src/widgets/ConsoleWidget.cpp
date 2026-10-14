@@ -1,4 +1,5 @@
 #include "ConsoleWidget.hpp"
+#include "Utf8.hpp"
 #include <cstdarg>
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -655,7 +656,8 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     // If search mode, route keys to search buffer
     if (searchMode_ && !inputFocused_) {
         if (e.key == ig::retained::Key::Backspace) {
-            if (!searchBuf_.empty()) searchBuf_.pop_back();
+            const size_t prev = utf8PrevOffset(searchBuf_, searchBuf_.size());
+            searchBuf_.erase(prev, searchBuf_.size() - prev);
             searchText_ = searchBuf_;
             markDirty();
             e.consumed = true;
@@ -682,9 +684,10 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             return;
 
         case ig::retained::Key::Backspace:
-            if (cursorPos_ > 0 && !inputBuf_.empty()) {
-                inputBuf_.erase(cursorPos_ - 1, 1);
-                cursorPos_--;
+            if (cursorPos_ > 0) {
+                const int prev = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_));
+                inputBuf_.erase(prev, cursorPos_ - prev);
+                cursorPos_ = prev;
                 markDirty();
             }
             e.consumed = true;
@@ -692,19 +695,20 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
 
         case ig::retained::Key::Delete:
             if (cursorPos_ < (int)inputBuf_.size()) {
-                inputBuf_.erase(cursorPos_, 1);
+                const int next = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_));
+                inputBuf_.erase(cursorPos_, next - cursorPos_);
                 markDirty();
             }
             e.consumed = true;
             return;
 
         case ig::retained::Key::Left:
-            if (cursorPos_ > 0) { cursorPos_--; markDirty(); }
+            if (cursorPos_ > 0) { cursorPos_ = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_)); markDirty(); }
             e.consumed = true;
             return;
 
         case ig::retained::Key::Right:
-            if (cursorPos_ < (int)inputBuf_.size()) { cursorPos_++; markDirty(); }
+            if (cursorPos_ < (int)inputBuf_.size()) { cursorPos_ = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_)); markDirty(); }
             e.consumed = true;
             return;
 

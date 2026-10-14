@@ -1,6 +1,7 @@
 #include "pch.hpp"
 #include "DataWidgets.hpp"
 #include "Theme.hpp"
+#include "Utf8.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -749,20 +750,22 @@ void DataGrid::onKeyPress(KeyEvent& e)
         case ig::retained::Key::Escape:
             cancelEdit(); return;
         case ig::retained::Key::Backspace:
-            if (editCursor_ > 0 && !editBuf_.empty()) {
-                editBuf_.erase(editCursor_ - 1, 1);
-                editCursor_--;
+            if (editCursor_ > 0) {
+                const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                editBuf_.erase(prev, editCursor_ - prev);
+                editCursor_ = prev;
                 markDirty();
             } return;
         case ig::retained::Key::Delete:
             if (editCursor_ < static_cast<int>(editBuf_.size())) {
-                editBuf_.erase(editCursor_, 1);
+                const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                editBuf_.erase(editCursor_, next - editCursor_);
                 markDirty();
             } return;
         case ig::retained::Key::Left:
-            if (editCursor_ > 0) { editCursor_--; markDirty(); } return;
+            if (editCursor_ > 0) { editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_)); markDirty(); } return;
         case ig::retained::Key::Right:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_++; markDirty(); } return;
+            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_)); markDirty(); } return;
         case ig::retained::Key::Home:
             editCursor_ = 0; markDirty(); return;
         case ig::retained::Key::End:
@@ -1593,18 +1596,22 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         case ig::retained::Key::Escape:
             cancelEdit(); return;
         case ig::retained::Key::Backspace:
-            if (editCursor_ > 0 && !editBuf_.empty()) {
-                editBuf_.erase(editCursor_ - 1, 1);
-                editCursor_--; markDirty();
+            if (editCursor_ > 0) {
+                const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                editBuf_.erase(prev, editCursor_ - prev);
+                editCursor_ = prev;
+                markDirty();
             } return;
         case ig::retained::Key::Delete:
             if (editCursor_ < static_cast<int>(editBuf_.size())) {
-                editBuf_.erase(editCursor_, 1); markDirty();
+                const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                editBuf_.erase(editCursor_, next - editCursor_);
+                markDirty();
             } return;
         case ig::retained::Key::Left:
-            if (editCursor_ > 0) { editCursor_--; markDirty(); } return;
+            if (editCursor_ > 0) { editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_)); markDirty(); } return;
         case ig::retained::Key::Right:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_++; markDirty(); } return;
+            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_)); markDirty(); } return;
         case ig::retained::Key::Home: editCursor_ = 0; markDirty(); return;
         case ig::retained::Key::End:  editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
         case ig::retained::Key::C:

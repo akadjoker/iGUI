@@ -212,7 +212,7 @@ Reproduzidos com sonda:
 
 Só por leitura:
 
-- [ ] DataGrid, TreeGrid, PropertyGrid e ConsoleWidget editam o buffer byte a
+- [x] DataGrid, TreeGrid, PropertyGrid e ConsoleWidget editam o buffer byte a
       byte: um Backspace sobre "ç" ou "ã" deixa UTF-8 inválido (deviam usar a
       lógica do TextInput).
 - [x] [Signal.hpp:64](../include/igui/widgets/Signal.hpp#L64) — o `emit()`
