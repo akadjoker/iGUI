@@ -10860,6 +10860,9 @@ void Context::beginTableScroll(const TableStyle &style)
     // da tabela quando ela tem altura própria; sem ela, cai por baixo das linhas do
     // frame anterior (uma tabela com rolagem horizontal e sem altura própria cresce
     // com o conteúdo).
+    // A innerWidth pode ter diminuído desde o último frame: a rolagem volta para
+    // dentro do que existe.
+    scroll->offsetX = clamp(scroll->offsetX, 0.0f, tableMaximumOffsetX());
     if (table_.scrollX && tableMaximumOffsetX() > 0.0f)
     {
         const float barHeight = theme_.scrollbarWidth * 0.65f;

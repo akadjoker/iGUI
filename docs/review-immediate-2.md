@@ -182,7 +182,7 @@ Lido: 10334-11542.
 - [x] **T8. `beginTable(id, int columns, style)` ignora `scrollY`, `height`,
       `reorderable`, `scrollX` e `sizingFixedFit`** —
       [Gui.cpp:10633](../src/Gui.cpp#L10633). Não chama o `configureTable`.
-- [ ] **T9. O `offsetX` não é limitado quando a `innerWidth` diminui** —
+- [x] **T9. O `offsetX` não é limitado quando a `innerWidth` diminui** —
       [Gui.cpp:10862](../src/Gui.cpp#L10862).
 - [ ] **T10. Com `sizingFixedFit` as colunas crescem 16 px por frame, sem parar** —
       [Gui.cpp:11066](../src/Gui.cpp#L11066). Um item que ocupa a coluna toda

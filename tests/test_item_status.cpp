@@ -4532,6 +4532,64 @@ void test_table_with_column_count_uses_its_style()
     assert(firstModel == 1);
 }
 
+// Uma tabela que rola na horizontal e cuja innerWidth diminui: a rolagem volta
+// para dentro do que existe e a última coluna fica encostada à direita.
+void test_table_sideways_scroll_is_clamped_when_inner_width_shrinks()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollX = true;
+    style.innerWidth = 900.0f;
+    ig::Rect header[3];
+    const float tableWidth = 300.0f;
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), style, tableWidth))
+        {
+            const char* names[3] = { "A", "B", "C" };
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.tableHeader(names[column]);
+                header[column] = c.itemRect();
+            }
+            for (int column = 0; column < 3; ++column)
+            {
+                c.tableNextColumn();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float left = header[0].x;
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelX = -1.0f;
+    for (int i = 0; i < 40; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(left + 50.0f, header[0].y + 5.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(fabsf(header[0].x - (left - (style.innerWidth - tableWidth))) < 0.01f);
+
+    style.innerWidth = 400.0f;
+    harness.frame(build);
+    assert(fabsf(header[0].x - (left - (style.innerWidth - tableWidth))) < 0.01f);
+    assert(fabsf(header[2].x + header[2].width - (left + tableWidth)) < 0.01f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5544,6 +5602,7 @@ int main()
     test_table_resize_with_sideways_scroll_follows_the_pointer();
     test_table_lost_header_drag_releases_the_pointer();
     test_table_with_column_count_uses_its_style();
+    test_table_sideways_scroll_is_clamped_when_inner_width_shrinks();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
