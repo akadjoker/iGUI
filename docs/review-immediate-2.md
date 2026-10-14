@@ -232,7 +232,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
 - [x] **M8. O Enter que aceita um `messageBox` também clica o botão com foco** —
       [Gui.cpp:8129](../src/Gui.cpp#L8129). O `enterPressed_` não é consumido; o
       Escape (8126) tem o mesmo caminho.
-- [ ] **M9. O snap de escala dos gizmos leva a escala a 0** —
+- [x] **M9. O snap de escala dos gizmos leva a escala a 0** —
       [Gui.cpp:5672](../src/Gui.cpp#L5672), 5888. Limita-se a 0.01 antes do snap.
 - [ ] **M10. No gizmo3D, o plano XZ move em diagonal e ignora o movimento vertical** —
       [Gui.cpp:5830](../src/Gui.cpp#L5830).
