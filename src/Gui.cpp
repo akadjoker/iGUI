@@ -764,8 +764,8 @@ bool gizmo3DRayThrough(const Gizmo3DProjector &projector, const Vec2 &pixel,
 
     const float horizontal = (pixel.x - projector.viewport.x) / projector.viewport.width * 2.0f - 1.0f;
     const float vertical = 1.0f - (pixel.y - projector.viewport.y) / projector.viewport.height * 2.0f;
-    const float nearPoint[4] = {horizontal, vertical, -1.0f, 1.0f};
-    const float farPoint[4] = {horizontal, vertical, 1.0f, 1.0f};
+    const float nearPoint[4] = {horizontal, vertical, -0.5f, 1.0f};
+    const float farPoint[4] = {horizontal, vertical, 0.5f, 1.0f};
     float nearWorld[4];
     float farWorld[4];
     for (int row = 0; row < 4; ++row)
@@ -5812,18 +5812,34 @@ bool Context::gizmo3D(StringView idText, Transform3D &transform, Gizmo3DMode mod
         projectGizmo3D(projector, state->transformStart.position, center);
         if (mode == Gizmo3DMode::Translate)
         {
-            if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY ||
-                activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ)
+            if (activeAxis == Gizmo3DAxisXYZ)
             {
                 const float horizontal = deltaX * options.axisLength / viewport.width;
                 const float vertical = -deltaY * options.axisLength / viewport.height;
                 transform.position = state->transformStart.position;
-                if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisXZ)
-                    transform.position.x = snapGizmoValue(transform.position.x + horizontal, options.translateSnap);
-                if (activeAxis == Gizmo3DAxisXYZ || activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisYZ)
-                    transform.position.y = snapGizmoValue(transform.position.y + vertical, options.translateSnap);
-                if (activeAxis == Gizmo3DAxisXZ || activeAxis == Gizmo3DAxisYZ)
-                    transform.position.z = snapGizmoValue(transform.position.z + horizontal, options.translateSnap);
+                transform.position.x = snapGizmoValue(transform.position.x + horizontal, options.translateSnap);
+                transform.position.y = snapGizmoValue(transform.position.y + vertical, options.translateSnap);
+            }
+            else if (activeAxis == Gizmo3DAxisXY || activeAxis == Gizmo3DAxisXZ ||
+                     activeAxis == Gizmo3DAxisYZ)
+            {
+                const Vec3 normal = activeAxis == Gizmo3DAxisXY ? Vec3(0.0f, 0.0f, 1.0f)
+                                    : activeAxis == Gizmo3DAxisXZ ? Vec3(0.0f, 1.0f, 0.0f)
+                                                                  : Vec3(1.0f, 0.0f, 0.0f);
+                const Vec3 start = state->transformStart.position;
+                Vec3 from;
+                Vec3 to;
+                transform.position = start;
+                if (gizmo3DRingPoint(projector, state->pointerStart, start, normal, from) &&
+                    gizmo3DRingPoint(projector, pointer_.position, start, normal, to))
+                {
+                    if (normal.x == 0.0f)
+                        transform.position.x = snapGizmoValue(start.x + to.x - from.x, options.translateSnap);
+                    if (normal.y == 0.0f)
+                        transform.position.y = snapGizmoValue(start.y + to.y - from.y, options.translateSnap);
+                    if (normal.z == 0.0f)
+                        transform.position.z = snapGizmoValue(start.z + to.z - from.z, options.translateSnap);
+                }
             }
             else if (activeAxis >= Gizmo3DAxisX && activeAxis <= Gizmo3DAxisZ)
             {
