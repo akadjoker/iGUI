@@ -208,7 +208,7 @@ Lido: 10334-11542.
       [Gui.cpp:10350](../src/Gui.cpp#L10350).
 
 Não confirmados: redimensionar com `sizingFixedFit` parece não ter efeito (fica
-para depois do T10); ao largar um reorder, os cabeçalhos seguintes usam a ordem
+para depois do T10; confirmado e corrigido); ao largar um reorder, os cabeçalhos seguintes usam a ordem
 nova no mesmo frame; uma tabela `scrollY` sem linhas fica com altura 0.
 
 ## Widgets diversos
