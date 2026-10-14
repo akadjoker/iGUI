@@ -10584,8 +10584,6 @@ bool Context::beginTable(StringView idText, int columns, float width)
         return false;
     table_.parentLayout = layout_;
     table_.bounds = Rect(layout_.cursor.x, layout_.cursor.y, resolvedWidth, 0.0f);
-    // A largura das colunas é a da faixa que rola: sem rolagem horizontal é a da
-    // tabela (o beginTableScroll sobe-a para a innerWidth quando o style a pede).
     table_.contentWidth = resolvedWidth;
     const WidgetId parentId = idStack_.empty() ? InvalidWidgetId : idStack_.back();
     table_.id = combineIds(parentId, combineIds(makeWidgetId(idText), 0x5441424c45ull));
@@ -10594,8 +10592,7 @@ bool Context::beginTable(StringView idText, int columns, float width)
     table_.rowY = layout_.cursor.y;
     table_.contentY = 0.0f;
     table_.rowHeight = 0.0f;
-    // A contagem das linhas é a partir de -1 porque a primeira linha só se sabe que
-    // começou quando a primeira célula é submetida: o ++ que a abre deixa-a em 0.
+    // A linha só começa na primeira célula: o ++ dela deixa-a em 0.
     table_.row = -1;
     table_.columnVisible.clear();
     table_.headerHoveredColumn = -1;
@@ -10642,7 +10639,6 @@ bool Context::beginTable(StringView idText, Span<const float> columnWeights,
     for (Span<const float>::size_type i = 0u; i < columnWeights.size(); ++i)
         if (columnVisible[i])
             table_.totalColumnWeight += columnWeights[i];
-    // Uma tabela sem colunas visíveis não tem nada para mostrar.
     if (table_.totalColumnWeight <= 0.0f)
     {
         endTable();
@@ -10715,8 +10711,7 @@ bool Context::beginTable(StringView idText, Span<float> columnWeights, const Tab
 void Context::configureTable(const TableStyle &style)
 {
     table_.style = style;
-    // SizingFixedFit: as larguras deste frame são as que as células pediram no frame
-    // anterior, guardadas por tabela (ver tableColumnWidth/endTable).
+    // As larguras deste frame são as que as células pediram no anterior.
     if (style.sizingFixedFit)
     {
         const ct::Vector<float> *stored = tableFitWidths_.find(table_.id);
@@ -10746,8 +10741,6 @@ void Context::beginTableScroll(const TableStyle &style)
     table_.pinWidth = 0.0f;
     table_.barStripH = 0.0f;
     table_.freezeCols = 0;
-    // Sem rolagem horizontal as colunas vivem da largura da tabela (é o que o
-    // beginTable deixou); com ela, da largura que o chamador pediu.
     table_.contentWidth = table_.bounds.width;
     const bool wantsY = style.scrollY && style.height > 0.0f;
     const bool wantsX = style.scrollX && style.innerWidth > table_.bounds.width;
@@ -10762,8 +10755,6 @@ void Context::beginTableScroll(const TableStyle &style)
             return;
     }
 
-    // ── O eixo X: as colunas são a largura pedida (innerWidth) e o que não couber
-    // rola dentro da tabela, com as primeiras freezeCols presas à esquerda.
     if (wantsX)
     {
         table_.scrollX = true;
@@ -10775,8 +10766,6 @@ void Context::beginTableScroll(const TableStyle &style)
             table_.pinWidth += tableColumnWidth(i);
     }
 
-    // ── O eixo Y: a tabela tem uma altura fixa e as linhas rolam dentro dela, com as
-    // primeiras freezeRows presas no topo (a linha 0 é o cabeçalho).
     float maximumScroll = 0.0f;
     if (wantsY)
     {
@@ -10784,17 +10773,10 @@ void Context::beginTableScroll(const TableStyle &style)
         table_.freezeRows = style.freezeRows >= 0 ? style.freezeRows : 1;
         table_.viewHeight = style.height;
         table_.bounds.height = style.height;
-        // A altura do que rola é a da tabela menos as linhas presas, e o que sobra do
-        // conteúdo (medido no frame anterior) diz se há barra - e a barra tira largura
-        // às colunas, como num child.
-        // Com rolagem horizontal a barra de baixo existe sempre (a innerWidth já é
-        // maior do que a tabela) e tira a altura dela ao que rola.
         const float bottomBar = table_.scrollX ? theme_.scrollbarWidth * 0.65f : 0.0f;
         const float scrolledHeight = style.height - scroll->frozenHeight - bottomBar;
         maximumScroll = scroll->contentHeight > scrolledHeight
             ? scroll->contentHeight - scrolledHeight : 0.0f;
-        // O conteúdo pode ter encolhido desde o último frame: a rolagem volta para
-        // dentro do que existe.
         scroll->offsetY = clamp(scroll->offsetY, 0.0f, maximumScroll);
         const float barWidth = theme_.scrollbarWidth * 0.65f;
         const bool hasBar = maximumScroll > 0.0f;
@@ -10802,12 +10784,9 @@ void Context::beginTableScroll(const TableStyle &style)
         {
             table_.barStrip = barWidth + theme_.padding * 0.5f;
             table_.bounds.width -= table_.barStrip;
-            // Sem rolagem horizontal as colunas vivem da largura que sobra da barra.
             if (!table_.scrollX)
                 table_.contentWidth = table_.bounds.width;
         }
-        // A roda e o arrasto da barra são tratados antes das linhas, com a medida do
-        // frame anterior (é o mesmo que um child faz: ver beginChild).
         if (hasBar)
         {
             const float barX = table_.bounds.x + table_.bounds.width + theme_.padding * 0.5f;
@@ -10862,18 +10841,10 @@ void Context::beginTableScroll(const TableStyle &style)
             pointer_.wheelY = 0.0f;
         }
         table_.offsetY = scroll->offsetY;
-        // Sem linhas presas a primeira linha também rola (as seguintes recebem o
-        // offset no tableNextColumn).
         if (table_.freezeRows == 0)
             table_.rowY = table_.bounds.y - table_.offsetY;
     }
 
-    // ── A barra de baixo (a do eixo X) e a roda horizontal. A barra encosta ao fundo
-    // da tabela quando ela tem altura própria; sem ela, cai por baixo das linhas do
-    // frame anterior (uma tabela com rolagem horizontal e sem altura própria cresce
-    // com o conteúdo).
-    // A innerWidth pode ter diminuído desde o último frame: a rolagem volta para
-    // dentro do que existe.
     scroll->offsetX = clamp(scroll->offsetX, 0.0f, tableMaximumOffsetX());
     if (table_.scrollX && tableMaximumOffsetX() > 0.0f)
     {
@@ -10913,10 +10884,6 @@ void Context::beginTableScroll(const TableStyle &style)
             drawList->addRectFilled(bar, theme_.inputBg, barClip);
             drawList->addRectFilled(thumb, theme_.scrollbarThumb, barClip);
         }
-        // A roda horizontal (o wheelX de um trackpad) rola a tabela com o ponteiro em
-        // cima dela.
-        // A região é a da tabela; o pointerOver (e não o clip do momento) é que diz
-        // se a roda é dela - o clip da célula que está a ser submetida não vale aqui.
         const Rect xRegion(table_.bounds.x, table_.bounds.y, table_.bounds.width,
                            table_.viewHeight > 0.0f ? table_.viewHeight : scroll->rowsHeight);
         if (pointer_.wheelX != 0.0f && xRegion.height > 0.0f && pointerOver(xRegion))
@@ -10934,17 +10901,12 @@ void Context::beginTableScroll(const TableStyle &style)
 
 Rect Context::tableRowClip() const
 {
-    // O que rola é cortado por baixo das linhas presas; as presas só são cortadas
-    // pelo fundo da tabela (elas ficam por cima do que rola, que já vem depois). Sem
-    // altura própria não há limite por baixo: quem manda é o clip de fora.
     const Rect screen = popupClipRect();
     const float top = table_.row < table_.freezeRows ? table_.bounds.y
                                                      : table_.bounds.y + table_.frozenHeight;
     const float bottom = table_.scrollY
         ? table_.bounds.y + table_.viewHeight - table_.barStripH
         : screen.y + screen.height;
-    // Na horizontal o que rola é cortado à esquerda pelas colunas presas, e as presas
-    // são cortadas à direita por ele.
     float left = table_.bounds.x;
     float right = table_.bounds.x + table_.bounds.width + table_.barStrip;
     if (table_.scrollX && table_.freezeCols > 0 && table_.column >= 0)
@@ -10960,9 +10922,6 @@ Rect Context::tableRowClip() const
 
 void Context::loadTableOrder(const TableStyle &style)
 {
-    // A ordem das colunas desta tabela (colunas reordenáveis): a que ficou guardada
-    // dela, ou a identidade quando é a primeira vez (ou quando o número de colunas
-    // mudou).
     tableOrder_ = nullptr;
     if (!style.reorderable || table_.columns > TableOrderState::kMaxColumns)
         return;
@@ -10977,9 +10936,6 @@ void Context::loadTableOrder(const TableStyle &style)
         for (int column = 0; column < table_.columns; ++column)
             tableOrder_->order[column] = column;
     }
-    // Um arrasto de coluna que deixe de ser submetido (a tabela desapareceu a meio)
-    // não pode ficar com o rato agarrado: o frame em que o arrasto foi visto diz que
-    // ele já não o foi neste.
     if (tableOrder_->reordering && tableOrder_->reorderFrame + 1u < frameNumber_)
     {
         if (activeWidget_ == tableOrder_->reorderWidget)
@@ -11034,7 +10990,6 @@ float Context::tableNaturalColumnX(int column) const
 float Context::tableColumnX(int column) const
 {
     const float natural = tableNaturalColumnX(column);
-    // As presas ficam onde estão; o resto anda com a rolagem.
     if (!table_.scrollX || column < table_.freezeCols)
         return natural;
     return natural - table_.offsetX;
@@ -11044,24 +10999,16 @@ float Context::tableColumnWidth(int display) const
 {
     if (display < 0 || display >= table_.columns || table_.columns <= 0)
         return 0.0f;
-    // A largura (e a visibilidade) são da coluna do MODELO: é ela que anda com os
-    // dados quando a ordem muda.
+    // A largura é a da coluna do modelo, que anda com os dados quando a ordem muda.
     const int column = tableModelColumn(display);
-    // Uma coluna escondida não ocupa largura: as seguintes fecham o espaço dela (o
-    // totalColumnWeight já não conta com ela, ver o beginTable das visíveis).
     if (!table_.columnVisible.empty() &&
         static_cast<ct::Vector<uint8_t>::size_type>(column) < table_.columnVisible.size() &&
         table_.columnVisible[static_cast<ct::Vector<uint8_t>::size_type>(column)] == 0u)
         return 0.0f;
-    // SizingFixedFit: a largura é a que a coluna pediu (o maior conteúdo dela no
-    // frame anterior). Uma coluna ainda sem medida cai na divisão pelos pesos, que é
-    // onde ela já estava na primeira vez que a tabela se desenhou.
     if (table_.style.sizingFixedFit &&
         static_cast<ct::Vector<float>::size_type>(column) < table_.contentWidths.size() &&
         table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)] > 0.0f)
         return table_.contentWidths[static_cast<ct::Vector<float>::size_type>(column)];
-    // A largura das colunas é a da faixa que rola (contentWidth): sem scrollX é a da
-    // tabela, com ele é a que o chamador pediu.
     if (table_.columnWeights.empty() || table_.totalColumnWeight <= 0.0f)
         return table_.contentWidth / static_cast<float>(table_.columns);
     if (display + 1 == table_.columns)
@@ -11087,8 +11034,6 @@ bool Context::tableNextColumn()
         const float minimum = tableMinimumRowHeight();
         const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
         const float step = rowHeight + tableRowSpacing();
-        // A linha que acabou conta para a altura das presas; a que vem a seguir fica
-        // onde a rolagem a põe (o que está preso não anda).
         if (table_.row < table_.freezeRows)
             table_.frozenHeight += step;
         table_.contentY += step;
@@ -11106,8 +11051,6 @@ bool Context::tableNextColumn()
         ++table_.row;
         drawTableRowStyle();
     }
-    // Uma coluna escondida: o chamador salta-lhe a célula (é o contrato das tabelas
-    // com colunas visíveis - ver o beginTable das visíveis).
     const int model = tableModelColumn(table_.column);
     if (!table_.columnVisible.empty() &&
         static_cast<ct::Vector<uint8_t>::size_type>(model) < table_.columnVisible.size() &&
@@ -11123,17 +11066,12 @@ bool Context::tableNextColumn()
     return true;
 }
 
-// A largura que o conteúdo da célula em curso pediu (ver TableStyle::sizingFixedFit):
-// o conteúdo de uma célula é o que o chamador submeteu desde o tableNextColumn, e o
-// layout já o mediu no fitRight.
 void Context::measureTableCellWidth()
 {
     if (!table_.style.sizingFixedFit || table_.column < 0 || table_.column >= table_.columns)
         return;
     if (!layout_.hasLastItem)
         return;
-    // A largura da célula leva a margem dos dois lados: sem ela o texto de uma coluna
-    // encostava ao da seguinte (a divisão pelos pesos dava essa folga de graça).
     const float content = layout_.fitRight - layout_.origin.x;
     if (content <= 0.0f)
         return;
@@ -11216,8 +11154,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         return false;
 
     const StringView text = visibleLabel(labelText);
-    // SizingFixedFit: o cabeçalho conta para a largura da coluna (senão uma coluna
-    // ficava mais estreita do que o nome dela).
     if (table_.style.sizingFixedFit)
     {
         const TextMetrics headerMetrics = measureText(theme_.font, text, theme_.fontSize);
@@ -11258,8 +11194,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     if (resizing && (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left]))
     {
         const float deltaX = pointer_.position.x - tableResize_.lastPointerX;
-        // Os pesos são da coluna do modelo, por isso o que o grip mexe é o peso das
-        // duas colunas que ali estão - seja qual for a ordem.
         const int leftModel = tableModelColumn(table_.column);
         const int rightModel = tableModelColumn(table_.column + 1);
         const float leftWidth = tableColumnWidth(table_.column);
@@ -11270,7 +11204,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         {
             const float nextLeftWidth = clamp(leftWidth + deltaX, minimumWidth, pairWidth - minimumWidth);
             const float nextRightWidth = pairWidth - nextLeftWidth;
-            // Os pesos repartem a contentWidth (a innerWidth com rolagem horizontal).
             const float scale = table_.totalColumnWeight / table_.contentWidth;
             table_.columnWeights[static_cast<ct::Vector<float>::size_type>(leftModel)] = nextLeftWidth * scale;
             table_.columnWeights[static_cast<ct::Vector<float>::size_type>(rightModel)] = nextRightWidth * scale;
@@ -11285,14 +11218,9 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         tableResize_ = TableResizeState();
     }
 
-    // Reordenar: carregar num cabeçalho (fora do grip de resize) e largar noutro
-    // troca a coluna do modelo de sítio na ordem (é a ordem do ImGui: o que anda é a
-    // coluna, não a posição).
     if (tableOrder_ && tableOrder_->count > 0 && !resizing)
     {
         const WidgetId reorderId = combineIds(id, 0x54424c524f524445ull);
-        // O que reordena é arrastar (é o que o ImGui faz): por isso o press fica só
-        // pendente, e um clique sem andar continua a ser o clique que ordena.
         if (tableOrder_->reorderFrom < 0 && pointerPressedIn(intersect(bounds, clip), left) &&
             activeWidget_ == InvalidWidgetId)
         {
@@ -11304,8 +11232,7 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
         if (tableOrder_->reorderFrom == table_.column && !tableOrder_->reordering)
         {
             const float moved = pointer_.position.x - tableOrder_->reorderStartX;
-            // Se o botão já nem está premido nem foi largado agora, o press perdeu-se
-            // (a tabela não foi submetida no frame do largar): não se fica à espera.
+            // O press perdeu-se quando a tabela não foi submetida no frame do largar.
             const bool stale = !pointer_.down[left] && !pointer_.released[left] &&
                                tableOrder_->reorderFrame + 1u < frameNumber_;
             const float threshold = 5.0f;
@@ -11329,8 +11256,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
             {
                 if (tableOrder_->reorderTo >= 0 && tableOrder_->reorderTo != tableOrder_->reorderFrom)
                 {
-                    // Tira a coluna de onde estava e enfia-a onde foi largada, sem
-                    // mexer no resto da ordem.
                     const int moved = tableOrder_->order[tableOrder_->reorderFrom];
                     if (tableOrder_->reorderFrom < tableOrder_->reorderTo)
                         for (int i = tableOrder_->reorderFrom; i < tableOrder_->reorderTo; ++i)
@@ -11346,7 +11271,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
                 activeWidget_ = InvalidWidgetId;
             }
         }
-        // O cabeçalho para onde vai é o que fica realçado enquanto se arrasta.
         if (tableOrder_->reordering && tableOrder_->reorderTo == table_.column)
             drawList->addRect(bounds, theme_.dialogBtnPrimary, clip, 2.0f);
     }
@@ -11354,10 +11278,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     const bool sortable = sortColumn != nullptr && sortAscending != nullptr;
     const bool hovered = sortable && !resizing && itemHovered(bounds, clip, id);
     const bool clicked = sortable && !resizing && itemClicked(bounds, clip, id);
-    // A coluna do cabeçalho sob o ponteiro: é o que um menu de contexto do
-    // cabeçalho precisa de saber (ver tableHoveredColumn). O itemHovered do ramo
-    // não-sortable fica no else, para a resposta não depender de a coluna ser
-    // ordenável.
     if (!sortable)
     {
         const bool headerHovered = !resizing && itemHovered(bounds, clip, id);
@@ -11366,8 +11286,6 @@ bool Context::tableHeaderCell(StringView labelText, int *sortColumn, bool *sortA
     }
     else if (hovered)
         table_.headerHoveredColumn = table_.column;
-    // A coluna que o chamador ordena é a do modelo: é com essa que ele indexa o
-    // próprio dado, e é ela que a ordem guarda.
     const int modelColumn = tableModelColumn(table_.column);
     bool changed = false;
     if (clicked)
@@ -11508,13 +11426,8 @@ void Context::endTable()
             table_.rowHeight = itemHeight;
         measureTableCellWidth();
     }
-    // SizingFixedFit: o que as células pediram neste frame é a largura que as colunas
-    // vão ter no próximo (é o mesmo contrato de tudo o que se mede aqui).
     if (table_.style.sizingFixedFit && table_.id != InvalidWidgetId)
     {
-        // Uma coluna que não chegou a medir nada (uma tabela sem linhas, um frame em
-        // que a coluna não foi submetida) fica com a largura que já tinha, em vez de
-        // cair para zero.
         const ct::Vector<float> *stored = tableFitWidths_.find(table_.id);
         for (ct::Vector<float>::size_type i = 0u; i < table_.contentWidths.size(); ++i)
         {
@@ -11532,16 +11445,11 @@ void Context::endTable()
         const float rowHeight = table_.rowHeight > minimum ? table_.rowHeight : minimum;
         if (table_.row < table_.freezeRows)
             table_.frozenHeight += rowHeight + tableRowSpacing();
-        // A altura natural das linhas (sem rolagem) é o que a barra de baixo de uma
-        // tabela que só rola na horizontal usa para saber onde cai. O contentY já é
-        // relativo ao topo da tabela (ao contrário do rowY, que é absoluto).
         const float rowsHeight = table_.contentY + rowHeight;
         if (TableScrollState *scroll = tableScrolls_.find(table_.id))
             scroll->rowsHeight = rowsHeight > 0.0f ? rowsHeight : 0.0f;
         if (table_.scrollY)
         {
-            // A medida destes dois vai dizer ao próximo frame quanto é que rola e
-            // quantas linhas ficam presas (ver beginTableScroll).
             TableScrollState *scroll = tableScrolls_.find(table_.id);
             if (scroll)
             {
@@ -11553,8 +11461,6 @@ void Context::endTable()
         }
         else
         {
-            // Sem altura própria a barra de baixo é uma faixa a mais, por baixo das
-            // linhas; com ela, já vive dentro da viewHeight.
             height = table_.rowY + rowHeight - table_.bounds.y + table_.barStripH;
         }
         DrawList *drawList = table_.style.borders ? currentDrawList() : nullptr;
@@ -12897,14 +12803,11 @@ Vec2 Context::toContentSpace(const Vec2 &absolute) const
 
 Rect Context::contentClip() const
 {
-    // Uma tabela que rola corta o que rola no fundo dela: os itens das linhas que
-    // saíram de vista não aparecem (nem respondem, que o clip vai no itemHovered).
     if (tableActive_ && (table_.scrollY || table_.scrollX))
         return intersect(tableFrameClip(), tableRowClip());
     return tableFrameClip();
 }
 
-// O clip de fora da tabela em curso: as barras dela vivem aqui, fora das linhas.
 Rect Context::tableFrameClip() const
 {
     const WindowState *window = currentWindow();
