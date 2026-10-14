@@ -1542,6 +1542,8 @@ const DrawData &Context::endFrame()
     // por cima e comia-lhe o clique do menu. A ordem, não o foco: o foco é do teclado.
     if (WindowState *bar = windows_.get(mainMenuBarWindow_))
         bar->zOrder = nextZOrder_++;
+    else
+        menuBarStrip_ = 0.0f;
     ct::sort(windowOrder_.begin(), windowOrder_.end(), [this](WindowHandle a, WindowHandle b)
     {
         const WindowState *left = windows_.get(a);
@@ -1880,10 +1882,16 @@ void Context::endDialog()
     endWindow();
 }
 
+Rect Context::workArea() const
+{
+    const float height = frame_.displaySize.y - menuBarStrip_;
+    return Rect(0.0f, menuBarStrip_, frame_.displaySize.x, height > 0.0f ? height : 0.0f);
+}
+
 bool Context::beginMainWindow(StringView title, bool *open)
 {
     forceWindowBounds_ = true;
-    const bool opened = beginWindow(title, Rect(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y), open);
+    const bool opened = beginWindow(title, workArea(), open);
     forceWindowBounds_ = false;
     return opened;
 }
@@ -1922,7 +1930,7 @@ void Context::maximizeWindow(StringView title)
     if (!w || !w->open || !w->showWindowControls) return;
     if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
     w->maximized=true; w->minimized=false;
-    w->bounds=Rect(0,0,frame_.displaySize.x,frame_.displaySize.y);
+    w->bounds=workArea();
     invalidatePointerWindow();
 }
 
@@ -2003,8 +2011,9 @@ void Context::tileAllWindows()
         auto w=windows_.get(h); if(!w || !w->open || !w->showWindowControls || !windowSubmittedRecently(*w)) continue;
         if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
         w->maximized=false; w->minimized=false;
-        w->bounds=Rect((i%columns)*frame_.displaySize.x/columns,(i/columns)*frame_.displaySize.y/rows,
-                       frame_.displaySize.x/columns,frame_.displaySize.y/rows); ++i;
+        const Rect area=workArea();
+        w->bounds=Rect(area.x+(i%columns)*area.width/columns,area.y+(i/columns)*area.height/rows,
+                       area.width/columns,area.height/rows); ++i;
     }
 }
 void Context::cascadeWindows()
@@ -2015,7 +2024,8 @@ void Context::cascadeWindows()
         if (!w->hasRestoreBounds) { w->restoreBounds=w->bounds; w->hasRestoreBounds=true; }
         w->maximized=false; w->minimized=false;
         const float offset=(i++%8)*24.f;
-        w->bounds=Rect(offset,offset,frame_.displaySize.x*.65f,frame_.displaySize.y*.65f);
+        const Rect area=workArea();
+        w->bounds=Rect(area.x+offset,area.y+offset,area.width*.65f,area.height*.65f);
     }
 }
 
@@ -4659,6 +4669,7 @@ bool Context::beginMainMenuBar()
         return false;
     mainMenuBarWindow_ = currentWindow_;
     mainMenuBarOpen_ = true;
+    menuBarStrip_ = height;
     WindowState *window = currentWindow();
     window->useClientArea = true;
     const Rect bar(window->bounds.x, window->bounds.y, window->bounds.width, height);
@@ -13393,7 +13404,7 @@ bool Context::fader(StringView idText, float &value, float minimum, float maximu
 
 void Context::drawWindow(WindowState &window)
 {
-    if (window.maximized) window.bounds=Rect(0,0,frame_.displaySize.x,frame_.displaySize.y);
+    if (window.maximized) window.bounds=workArea();
     const Rect viewport(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
     const float titleHeight = window.showTitleBar ? theme_.titleBarHeight : 0.0f;
     const float controlWidth = theme_.titleBarHeight;
