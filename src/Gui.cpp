@@ -12731,6 +12731,7 @@ bool Context::removeWindow(StringView title)
         draggingWindow_ = WindowHandle();
     if (resizingWindow_ == removed)
         resizingWindow_ = WindowHandle();
+    invalidatePointerWindow();
     // modalWindowId_ and activeModal_ end by themselves on the next frame: the
     // window is not there to be submitted any more (releaseUnsubmittedBlockers).
     return true;

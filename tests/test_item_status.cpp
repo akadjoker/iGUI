@@ -7000,6 +7000,41 @@ void test_disabled_menu_item_is_the_last_item()
     assert(!disabledHovered);
 }
 
+// Remover, a meio de outra janela, a janela que está debaixo do ponteiro passa
+// logo o hover à de baixo (o ponteiro ficava preso à removida até ao próximo
+// beginWindow).
+void test_removed_window_lets_go_of_the_pointer()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    bool removeTop = false;
+    bool belowHovered = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("baixo", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f)));
+        c.button("antes", ig::Rect(0.0f, 120.0f, 50.0f, 20.0f));
+        if (removeTop) c.removeWindow("cima");
+        c.button("alvo", ig::Rect(0.0f, 0.0f, 200.0f, 100.0f));
+        belowHovered = c.isItemHovered();
+        c.endWindow();
+        if (!removeTop && c.beginWindow("cima", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f)))
+        {
+            c.button("tampa", ig::Rect(0.0f, 0.0f, 200.0f, 100.0f));
+            c.endWindow();
+        }
+    };
+
+    context.pushEvent(ig::Event::pointerMove(60.0f, 60.0f));
+    harness.frame(build);
+    harness.frame(build);
+    assert(!belowHovered);
+    removeTop = true;
+    harness.frame(build);
+    assert(belowHovered);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8060,6 +8095,7 @@ int main()
     test_hash_marker();
     test_out_of_range_selection_is_left_alone();
     test_disabled_menu_item_is_the_last_item();
+    test_removed_window_lets_go_of_the_pointer();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
