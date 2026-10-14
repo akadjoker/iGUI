@@ -58,7 +58,8 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
       [Gui.cpp:5056](../src/Gui.cpp#L5056) (e o `beginMenu`, 4651).
 
 Não confirmados: o `listBox` e o `comboBox` põem um `currentItem` fora do
-intervalo a 0 sem devolver true; depois de escolher uma linha do `comboBox` o
+intervalo a 0 sem devolver true (confirmado e corrigido: o valor fica como
+está até o utilizador escolher; o `tabBar` acerta-o e devolve true); depois de escolher uma linha do `comboBox` o
 foco fica na linha e as setas deixam de mexer no combo (confirmado e corrigido
 com o N7); um `menuItem` desativado
 não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima (confirmado e corrigido

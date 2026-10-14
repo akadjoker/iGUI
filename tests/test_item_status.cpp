@@ -6893,6 +6893,67 @@ void test_color_edit_reports_only_real_changes()
     assert(changes == real);
 }
 
+// Um currentItem fora do intervalo (-1 = nada escolhido) fica como está: a
+// listBox e o comboBox não o põem a 0 às escondidas. Só muda quando o
+// utilizador escolhe (com as setas, Up vai para o último e Down para o
+// primeiro), e aí devolvem true.
+void test_out_of_range_selection_is_left_alone()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = { "zero", "one", "two", "three", "four" };
+    int listCurrent = -1;
+    int comboCurrent = 7;
+    bool listChanged = false;
+    bool comboChanged = false;
+    ig::Rect aRect;
+    ig::Rect comboRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 600.0f)));
+        c.button("A");
+        aRect = c.itemRect();
+        listChanged = c.listBox("lista", listCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 40.0f, 200.0f, c.theme().widgetHeight * 3.0f));
+        comboChanged = c.comboBox("combo", comboCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 200.0f, 200.0f, c.theme().widgetHeight));
+        comboRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(listCurrent == -1 && !listChanged);
+    assert(comboCurrent == 7 && !comboChanged);
+
+    harness.click(comboRect.x + 10.0f, comboRect.y + 5.0f, build);
+    assert(comboCurrent == 7);
+    harness.click(comboRect.x + 10.0f, comboRect.y + comboRect.height * 2.5f, build);
+    assert(comboCurrent == 1);
+
+    harness.click(aRect.x + 5.0f, aRect.y + 5.0f, build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Up));
+    harness.frame(build);
+    assert(listCurrent == 4 && listChanged);
+
+    // Uma tab tem sempre de estar ativa: o tabBar acerta o valor e diz que mudou.
+    int tab = 9;
+    bool tabChanged = false;
+    harness.frame(
+            [&](ig::Context& c)
+            {
+                assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 400.0f, 100.0f)));
+                tabChanged = c.tabBar("barra", tab, ig::Span<const ig::StringView>(items, 3),
+                        ig::Rect(0.0f, 0.0f, 300.0f, c.theme().widgetHeight));
+                c.endWindow();
+            });
+    assert(tab == 0 && tabChanged);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7951,6 +8012,7 @@ int main()
     test_separator_uses_the_available_width();
     test_next_item_width_is_spent_by_the_child();
     test_hash_marker();
+    test_out_of_range_selection_is_left_alone();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
