@@ -11609,6 +11609,19 @@ void Context::endTable()
                               theme_.borderColor, contentClip(), 1.0f);
         }
     }
+    else if (table_.scrollY)
+    {
+        // No rows at all: the table keeps the height it asked for, and nothing is
+        // left to scroll.
+        if (TableScrollState *scroll = tableScrolls_.find(table_.id))
+        {
+            scroll->contentHeight = 0.0f;
+            scroll->frozenHeight = 0.0f;
+            scroll->rowsHeight = 0.0f;
+            scroll->offsetY = 0.0f;
+        }
+        height = table_.viewHeight;
+    }
     const LayoutState parent = table_.parentLayout;
     const Rect bounds(parent.cursor.x, parent.cursor.y, table_.bounds.width, height);
     table_ = TableState();
