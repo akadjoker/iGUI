@@ -4389,37 +4389,6 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
         const float offset = maxScroll > 0.0f ? travel * scroll / maxScroll : 0.0f;
         comboScrollThumb_ = Rect(comboScrollbar_.x, comboScrollbar_.y + offset, barWidth,
                                  thumbHeight);
-        // A barra é um item da lista como outro qualquer: carregar nela e arrastar.
-        const WidgetId scrollbarId = combineIds(id, 0x5343524f4c4cull);
-        if (pointerPressedIn(intersect(comboScrollThumb_, popupVisible), left) &&
-            activeWidget_ == InvalidWidgetId)
-        {
-            activeWidget_ = scrollbarId;
-            focusedWidget_ = id;
-        }
-        if (activeWidget_ == scrollbarId)
-        {
-            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
-            {
-                // Arrastar a barra à mão desiste do item que o popup queria mostrar.
-                comboFocusArmed_ = false;
-                comboFocusPending_ = false;
-                const float normalized =
-                    travel > 0.0f ? clamp((pointer_.position.y - comboScrollbar_.y -
-                                           comboScrollThumb_.height * 0.5f) / travel, 0.0f, 1.0f)
-                                  : 0.0f;
-                const float next = normalized * maxScroll;
-                *scrollEntry = next < 0.0f ? 0.0f : (next > maxScroll ? maxScroll : next);
-            }
-            if (pointer_.released[left])
-                activeWidget_ = InvalidWidgetId;
-        }
-        const float finalFraction = visibleHeight / (visibleHeight + maxScroll);
-        const float finalThumb = visibleHeight * finalFraction > minimumThumb
-                                     ? visibleHeight * finalFraction
-                                     : minimumThumb;
-        comboScrollThumb_.y = comboScrollbar_.y +
-                              (visibleHeight - finalThumb) * (*scrollEntry / maxScroll);
     }
     // Um clique fora do cabeçalho e da caixa fecha, em qualquer janela onde caia;
     // pointerBlockedByOpenPopup impede que essa mesma pressão chegue ao que está
@@ -4459,6 +4428,33 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
                                   popupClipRect());
     comboContentWidth_ = innerWidth;
     comboItemsSubmitted_ = true;
+    if (comboScrollbarVisible_)
+    {
+        const WidgetId scrollbarId = combineIds(id, 0x5343524f4c4cull);
+        const float travel = visibleHeight - comboScrollThumb_.height;
+        if (pointerPressedIn(intersect(comboScrollThumb_, popupVisible), left) &&
+            activeWidget_ == InvalidWidgetId)
+        {
+            activeWidget_ = scrollbarId;
+            focusedWidget_ = id;
+        }
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+            {
+                comboFocusArmed_ = false;
+                comboFocusPending_ = false;
+                const float normalized =
+                    travel > 0.0f ? clamp((pointer_.position.y - comboScrollbar_.y -
+                                           comboScrollThumb_.height * 0.5f) / travel, 0.0f, 1.0f)
+                                  : 0.0f;
+                *scrollEntry = normalized * maxScroll;
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        comboScrollThumb_.y = comboScrollbar_.y + travel * (*scrollEntry / maxScroll);
+    }
     // O cursor começa dentro da caixa e sobe o que a lista já rolou: o que sai por
     // cima do popup fica fora do clip e não se vê (é o corte que a rolagem faz).
     layout_.origin = Vec2(popup.x + padding, popup.y + padding - *scrollEntry);

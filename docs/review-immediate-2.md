@@ -32,7 +32,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
       10 px** — [Gui.cpp:4574](../src/Gui.cpp#L4574), 4614, 4660, 4671. O clip
       desconta a margem da janela. *Arranjo:* `useClientArea = true` na janela da
       barra.
-- [ ] **N5. A barra de rolagem do `beginCombo` não se deixa arrastar** —
+- [x] **N5. A barra de rolagem do `beginCombo` não se deixa arrastar** —
       [Gui.cpp:4368](../src/Gui.cpp#L4368). O teste do polegar corre antes de o
       `comboItemsSubmitted_` ficar ligado, e o ponteiro é bloqueado.
 - [ ] **N6. Com conteúdo mais largo que o cabeçalho e com rolagem, o `beginCombo`
