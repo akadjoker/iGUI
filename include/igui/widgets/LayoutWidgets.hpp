@@ -173,6 +173,7 @@ public:
 
     void layout() override;
     Vec2f sizeHint() const override;
+    bool childrenShown() const override { return expanded_; }
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
 

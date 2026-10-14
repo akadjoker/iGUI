@@ -344,6 +344,9 @@ public:
 
     // ── Minimum / preferred size ──────────────────────────────────────────
     virtual Vec2f sizeHint() const { return {rect_.w, rect_.h}; }
+    /// @brief False while the widget hides its children (a closed section):
+    ///        they keep their geometry but are not hit or reached by Tab.
+    virtual bool childrenShown() const { return true; }
 
     // ── Visibility / Enabled ──────────────────────────────────────────────
     /// @brief Set widget visibility.

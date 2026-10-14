@@ -1843,6 +1843,62 @@ static void test_hover_after_a_click_stays_on_the_float()
     app.update(io);
 }
 
+// Fechar e reabrir um Collapsible não muda o tamanho dos filhos (um Canvas, que
+// usa o sizeHint por omissão, voltava com altura 0). Fechado, mesmo esticado
+// pelo pai, os filhos não recebem cliques nem o Tab.
+static void test_collapsible_keeps_its_children_while_closed()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("collapsible");
+    auto* screen = stage->createChild<Widget>();
+    auto* section = screen->createChild<Collapsible>("Section", true);
+    section->setRect({ 0.0f, 0.0f, 300.0f, 400.0f });
+    auto* canvas = section->createChild<Canvas>();
+    canvas->setRect({ 0.0f, 0.0f, 280.0f, 80.0f });
+    auto* field = section->createChild<TextInput>();
+    field->setRect({ 0.0f, 0.0f, 280.0f, 28.0f });
+    assert(app.setStage("collapsible", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    section->layout();
+    assert(canvas->rect().h == 80.0f);
+    const Rect fieldRect = field->absoluteRect();
+    const float fieldHeight = field->rect().h;
+
+    section->setExpanded(false);
+    section->layout();
+    section->setRect({ 0.0f, 0.0f, 300.0f, 400.0f });
+    io.mouseX = fieldRect.x + 10.0f;
+    io.mouseY = fieldRect.y + 10.0f;
+    app.update(io);
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(app.focused() != field);
+    app.setFocused(nullptr);
+    IO::KeyEvent tab;
+    tab.key = Key::Tab;
+    for (int i = 0; i < 3; ++i)
+    {
+        io.keyEvents.push_back(tab);
+        app.update(io);
+        io.keyEvents.clear();
+        assert(app.focused() != field);
+    }
+
+    section->setExpanded(true);
+    section->layout();
+    assert(canvas->rect().h == 80.0f);
+    assert(field->rect().h == fieldHeight);
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2027,6 +2083,7 @@ int main()
     test_invalid_utf8_stays_inside_the_text();
     test_text_edit_rewraps_after_every_edit();
     test_hover_after_a_click_stays_on_the_float();
+    test_collapsible_keeps_its_children_while_closed();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
