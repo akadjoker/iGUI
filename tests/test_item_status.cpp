@@ -4746,6 +4746,74 @@ void test_table_tree_cells_in_one_row_toggle_apart()
     assert(expanded[1]);
 }
 
+// Com rolagem horizontal e colunas presas, a faixa das linhas alternadas cobre a
+// largura toda da tabela.
+void test_table_alternate_rows_span_the_table_with_frozen_columns()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[6] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.alternateRows = true;
+    style.scrollX = true;
+    style.innerWidth = 600.0f;
+    style.freezeCols = 1;
+    style.borders = true;
+    const float tableWidth = 300.0f;
+    ig::Rect firstCell;
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 6), style, tableWidth))
+        {
+            for (int row = 0; row < 3; ++row)
+                for (int column = 0; column < 6; ++column)
+                {
+                    c.tableNextColumn();
+                    c.label("x");
+                    if (row == 0 && column == 0) firstCell = c.itemRect();
+                }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
+    int bands = 0;
+    int scrolledLines = 0;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Geometry) continue;
+        const ig::GeometryCommand& geometry = command.payload.geometry;
+        const float pinRight = firstCell.x + 100.0f;
+        const ig::Color border = context.theme().borderColor;
+        bool band = false;
+        for (uint32_t index = 0u; index < geometry.indexCount; ++index)
+        {
+            const ig::DrawIndex vertex = data.indices[geometry.firstIndex + index];
+            const ig::DrawVertex& v =
+                    data.vertices[static_cast<uint32_t>(geometry.vertexOffset) + vertex];
+            if (v.color.a == 14u) band = true;
+            if (v.color.r == border.r && v.color.g == border.g && v.color.b == border.b &&
+                    v.color.a == border.a && v.position.x > pinRight + 2.0f &&
+                    v.position.x < firstCell.x + tableWidth - 2.0f &&
+                    v.position.x >= geometry.clip.x &&
+                    v.position.x <= geometry.clip.x + geometry.clip.width)
+                ++scrolledLines;
+        }
+        if (!band) continue;
+        ++bands;
+        assert(geometry.clip.width >= tableWidth - 0.5f);
+    }
+    assert(bands > 0);
+    assert(scrolledLines > 0);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5762,6 +5830,7 @@ int main()
     test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell();
     test_wheel_over_an_area_that_fits_scrolls_the_outer_child();
     test_table_tree_cells_in_one_row_toggle_apart();
+    test_table_alternate_rows_span_the_table_with_frozen_columns();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

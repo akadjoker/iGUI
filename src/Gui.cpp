@@ -11153,7 +11153,13 @@ void Context::drawTableRowStyle()
     DrawList *drawList = currentDrawList();
     if (!drawList)
         return;
-    const Rect clip = contentClip();
+    Rect clip = tableFrameClip();
+    if (table_.scrollY || table_.scrollX)
+    {
+        const Rect rows = tableRowClip();
+        clip = intersect(clip, Rect(table_.bounds.x, rows.y, table_.bounds.width + table_.barStrip,
+                                    rows.height));
+    }
     const float top = table_.rowY - tableRowSpacing() * 0.5f;
     const float height = tableMinimumRowHeight() + tableRowSpacing();
     if (table_.style.alternateRows && (table_.row & 1) != 0)
@@ -11165,10 +11171,20 @@ void Context::drawTableRowStyle()
     const float left = table_.bounds.x;
     const float right = table_.bounds.x + table_.bounds.width;
     drawList->addLine(Vec2(left, top), Vec2(right, top), theme_.borderColor, clip, 1.0f);
+    const bool pinned = table_.scrollX && table_.freezeCols > 0;
+    const float pinRight = table_.bounds.x + table_.pinWidth;
+    const Rect frozenClip =
+        intersect(clip, Rect(left, clip.y, pinRight > left ? pinRight - left : 0.0f, clip.height));
+    const float scrolledWidth = right + table_.barStrip - pinRight;
+    const Rect scrolledClip = intersect(
+        clip, Rect(pinRight, clip.y, scrolledWidth > 0.0f ? scrolledWidth : 0.0f, clip.height));
     for (int column = 0; column <= table_.columns; ++column)
     {
         const float x = column == table_.columns ? right : tableColumnX(column);
-        drawList->addLine(Vec2(x, top), Vec2(x, top + height), theme_.borderColor, clip, 1.0f);
+        Rect lineClip = clip;
+        if (pinned && column < table_.columns)
+            lineClip = column < table_.freezeCols ? frozenClip : scrolledClip;
+        drawList->addLine(Vec2(x, top), Vec2(x, top + height), theme_.borderColor, lineClip, 1.0f);
     }
 }
 
