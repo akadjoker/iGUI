@@ -4642,6 +4642,73 @@ void test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell()
     for (int column = 0; column < 3; ++column) assert(header[column].width == widths[column]);
 }
 
+// A roda por cima de uma área que não rola (uma tabela scrollY cujas linhas cabem,
+// um child cujo conteúdo cabe) rola o child de fora.
+void test_wheel_over_an_area_that_fits_scrolls_the_outer_child()
+{
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        ig::TestBackend backend;
+        ig::Context context(backend);
+        ig::Harness harness(context);
+
+        ig::Rect first;
+        ig::Rect inner;
+        auto build = [&](ig::Context& c)
+        {
+            assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 600.0f, 600.0f)));
+            if (c.beginChild("fora", 300.0f))
+            {
+                c.button("primeiro");
+                first = c.itemRect();
+                if (mode == 0)
+                {
+                    ig::TableStyle style;
+                    style.scrollY = true;
+                    style.height = 150.0f;
+                    style.freezeRows = 1;
+                    const float weights[2] = { 1.0f, 1.0f };
+                    if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f))
+                    {
+                        for (int row = 0; row < 2; ++row)
+                        {
+                            c.tableNextColumn();
+                            c.label("a");
+                            c.tableNextColumn();
+                            c.label("b");
+                        }
+                        c.endTable();
+                    }
+                }
+                else if (c.beginChild("dentro", 150.0f))
+                {
+                    c.label("a");
+                    c.label("b");
+                    c.endChild();
+                }
+                inner = c.itemRect();
+                for (int i = 0; i < 30; ++i) c.label("enchimento");
+                c.endChild();
+            }
+            c.endWindow();
+        };
+
+        harness.frame(build);
+        harness.frame(build);
+        const float before = first.y;
+        ig::Event wheel;
+        wheel.type = ig::EventType::PointerWheel;
+        wheel.wheelY = -1.0f;
+        for (int i = 0; i < 3; ++i)
+        {
+            context.pushEvent(ig::Event::pointerMove(inner.x + 20.0f, inner.y + 40.0f));
+            context.pushEvent(wheel);
+            harness.frame(build);
+        }
+        assert(before - first.y > 0.0f);
+    }
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5656,6 +5723,7 @@ int main()
     test_table_with_column_count_uses_its_style();
     test_table_sideways_scroll_is_clamped_when_inner_width_shrinks();
     test_table_sizing_fixed_fit_ignores_items_that_fill_the_cell();
+    test_wheel_over_an_area_that_fits_scrolls_the_outer_child();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

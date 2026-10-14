@@ -3346,7 +3346,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         *scroll = maximumScroll > 0 ? maximumScroll : 0;
 
     const bool hovered = pointerOver(visible);
-    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u);
+    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u,
+                                        maximumScroll > 0);
     if (hovered && wheelMine && pointer_.wheelY != 0.0f && maximumScroll > 0)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
@@ -4349,7 +4350,7 @@ bool Context::beginComboImpl(StringView labelText, StringView preview, const Rec
     // está a ser submetida ela é dona do ponteiro (ver pointerBlockedByOpenPopup),
     // e é isso que faz o pointerOver dizer que não a ela própria.
     if (maxScroll > 0.0f && !inputBlockedByModal() && contains(popupVisible, pointer_.position) &&
-        ownWheelArea(id, popupVisible, static_cast<uint32_t>(childStack_.size()) + 1u) &&
+        ownWheelArea(id, popupVisible, static_cast<uint32_t>(childStack_.size()) + 1u, true) &&
         pointer_.wheelY != 0.0f)
     {
         const float rowStep = theme_.widgetHeight + theme_.itemSpacing;
@@ -6721,7 +6722,7 @@ bool Context::inputTextMultiline(StringView labelText, String &value, const Rect
     const bool hovered = itemHovered(textArea, clip, id);
     itemClicked(textArea, clip, id);
     const bool wheelMine = ownWheelArea(id, intersect(rect, clip),
-                                        static_cast<uint32_t>(childStack_.size()) + 1u);
+                                        static_cast<uint32_t>(childStack_.size()) + 1u, hasScrollbar);
     if (hasScrollbar && wheelMine && pointerOver(intersect(rect, clip)) && pointer_.wheelY != 0.0f)
     {
         const int delta = pointer_.wheelY > 0.0f ? -1 : 1;
@@ -7491,7 +7492,7 @@ void Context::updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, T
             pointer_.pressed[left] = false;
         }
     }
-    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u);
+    const bool wheelMine = ownWheelArea(id, visible, static_cast<uint32_t>(childStack_.size()) + 1u, true);
     if (wheelMine && pointerOver(visible) && activeWidget_ == InvalidWidgetId && pointer_.wheelY != 0) {
         const float anchor = clamp((pointer_.position.x-ruler.x)/ruler.width, 0, 1);
         const float at = view.offset + anchor/view.zoom;
@@ -9674,7 +9675,8 @@ bool Context::beginChild(StringView idText, float height, bool border, float wid
     // the innermost one under the pointer: swallowing it here (a child whose
     // content fits, or a panel wrapping a list) left an inner list no way to be
     // scrolled by anything but its own scrollbar.
-    const bool wheelMine = ownWheelArea(id, outer, static_cast<uint32_t>(childStack_.size()));
+    const bool wheelMine = ownWheelArea(id, outer, static_cast<uint32_t>(childStack_.size()),
+                                        maximumScroll > 0.0f);
     if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
         pointerOver(intersect(outer, parentClip)))
     {
@@ -10838,7 +10840,8 @@ void Context::beginTableScroll(const TableStyle &style)
                           table_.bounds.width + (hasBar ? barWidth + theme_.padding * 0.5f : 0.0f),
                           style.height);
         const bool wheelMine = ownWheelArea(combineIds(table_.id, 0x54574845454cull), region,
-                                            static_cast<uint32_t>(childStack_.size()));
+                                            static_cast<uint32_t>(childStack_.size()),
+                                            maximumScroll > 0.0f);
         if (maximumScroll > 0.0f && wheelMine && pointer_.wheelY != 0.0f &&
             pointerOver(intersect(region, contentClip())))
         {
@@ -13756,8 +13759,10 @@ bool Context::pointerInsideOwnPopup(const Vec2 &point) const
            contains(subMenuPopupBoundsAtFrameStart_, point);
 }
 
-bool Context::ownWheelArea(WidgetId id, const Rect &area, uint32_t depth)
+bool Context::ownWheelArea(WidgetId id, const Rect &area, uint32_t depth, bool canScroll)
 {
+    if (!canScroll)
+        return false;
     const WindowState *window = currentWindow();
     const WidgetId windowId = window ? window->id : InvalidWidgetId;
     // The deepest area under the pointer wins; at the same depth the one
