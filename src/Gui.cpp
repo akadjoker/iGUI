@@ -9759,9 +9759,11 @@ bool Context::beginDockSpace(StringView idText, float topInset)
 // ─────────────────────────────────────────────────────────────────────────────
 //  Dock arrangement in the state file
 //
-//  One list of titles per slot, plus which of them is the tab on top:
+//  One section per window and dock space, with one list of titles per slot plus
+//  which of them is the tab on top (a file from before the window was part of
+//  the name, [dock:editor], is read when the new section is not there yet):
 //
-//    [dock:editor]
+//    [dock:host/editor]
 //    left_width=180
 //    tabs_left=Hierarchy|Assets
 //    selected_left=Assets
@@ -9861,10 +9863,28 @@ bool Context::beginDockSpaceInternal(StringView idText, const Rect &outer, const
     if (!dockSpace)
     {
         DockSpaceState state;
-        state.name = String(idText.data(), idText.size());
-        // Split sizes the user dragged last run; the clamping below still makes
-        // sure they fit the window they are opened in now.
+        state.name = window->title;
+        state.name.push_back('/');
+        state.name.append(idText.data(), idText.size());
         const String section = dockStateSection(state.name);
+        const String legacy = dockStateSection(idText);
+        if (!section.empty() && !legacy.empty())
+        {
+            const char *keys[] = {"left_width", "right_width", "bottom_height"};
+            for (const char *key : keys)
+                if (windowState_.get(section, key).empty() && !windowState_.get(legacy, key).empty())
+                    windowState_.put(section, key, windowState_.get(legacy, key));
+            for (const DockSlotName &slotName : kDockSlotNames)
+            {
+                const String tabsKey = dockKey("tabs_", slotName.key);
+                const String selectedKey = dockKey("selected_", slotName.key);
+                const String *listKeys[] = {&tabsKey, &selectedKey};
+                for (const String *key : listKeys)
+                    if (windowState_.get(section, key->c_str()).empty() &&
+                        !windowState_.get(legacy, key->c_str()).empty())
+                        windowState_.put(section, key->c_str(), windowState_.get(legacy, key->c_str()));
+            }
+        }
         state.leftWidth =
             static_cast<float>(windowState_.getNumber(section, "left_width", state.leftWidth));
         state.rightWidth =
