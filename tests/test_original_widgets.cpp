@@ -2125,6 +2125,100 @@ static void test_text_edit_word_and_line_clicks_count_characters()
     assert(code.selectedText() == "olá");
 }
 
+// A DataGrid, a TreeGrid, a PropertyGrid e a ConsoleWidget apagam e andam um
+// carácter inteiro de cada vez: um Backspace sobre "ç" não deixa meio carácter.
+static void test_cell_editors_work_on_whole_characters()
+{
+    using namespace ig::retained;
+    auto key = [](Widget& widget, int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        widget.onKeyPress(press);
+    };
+    auto type = [](Widget& widget, const char* text)
+    {
+        KeyEvent typed;
+        std::memcpy(typed.text, text, std::strlen(text) + 1);
+        widget.onTextInput(typed);
+    };
+    auto doublePress = [](Widget& widget, float x, float y)
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.x = x;
+            press.y = y;
+            widget.onMousePress(press);
+            MouseEvent release = press;
+            widget.onMouseRelease(release);
+        }
+    };
+
+    DataGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    grid.addColumn("a", 100.0f);
+    grid.addRow({ "a\xC3\xA7" });
+    grid.addRow({ "\xC3\xA7"
+                  "b" });
+    doublePress(grid, 50.0f, 40.0f);
+    key(grid, Key::Backspace);
+    key(grid, Key::Return);
+    assert(grid.cell(0, 0) == "a");
+    doublePress(grid, 50.0f, 64.0f);
+    key(grid, Key::Left);
+    key(grid, Key::Left);
+    key(grid, Key::Right);
+    type(grid, "x");
+    key(grid, Key::Home);
+    key(grid, Key::Delete);
+    key(grid, Key::Return);
+    assert(grid.cell(1, 0) == "xb");
+
+    TreeGrid tree;
+    tree.setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    tree.addColumn("name", 100.0f);
+    tree.addColumn("value", 100.0f);
+    TreeGrid::Node* node = tree.addRoot({ "n", "a\xC3\xA7" });
+    doublePress(tree, 150.0f, 40.0f);
+    key(tree, Key::Left);
+    key(tree, Key::Delete);
+    key(tree, Key::Return);
+    assert(node->cells[1] == "a");
+
+    PropertyGrid props;
+    props.setRect({ 0.0f, 0.0f, 400.0f, 180.0f });
+    String value;
+    props.addString("Name", "a\xC3\xA7", [&value](const String& text) { value = text; });
+    MouseEvent press;
+    press.button = 0;
+    press.x = 180.0f;
+    press.y = 12.0f;
+    props.onMousePress(press);
+    props.onMouseRelease(press);
+    key(props, Key::End);
+    key(props, Key::Backspace);
+    key(props, Key::Return);
+    assert(value == "a");
+
+    ConsoleWidget console;
+    String command;
+    console.onCommand.connect([&command](const String& text) { command = text; });
+    KeyEvent find;
+    find.key = Key::F;
+    find.ctrl = true;
+    console.onKeyPress(find);
+    type(console, "a\xC3\xA7");
+    key(console, Key::Backspace);
+    assert(console.searchText() == "a");
+    console.onKeyPress(find);
+    type(console, "a\xC3\xA7");
+    key(console, Key::Backspace);
+    key(console, Key::Return);
+    assert(command == "a");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2315,6 +2409,7 @@ int main()
     test_data_grid_tab_moves_the_edit();
     test_removing_a_tab_reports_the_current_one();
     test_text_edit_word_and_line_clicks_count_characters();
+    test_cell_editors_work_on_whole_characters();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
