@@ -209,7 +209,8 @@ Lido: 10334-11542.
 
 Não confirmados: redimensionar com `sizingFixedFit` parece não ter efeito (fica
 para depois do T10; confirmado e corrigido); ao largar um reorder, os cabeçalhos seguintes usam a ordem
-nova no mesmo frame (confirmado e corrigido: a ordem nova entra no `endTable`); uma tabela `scrollY` sem linhas fica com altura 0.
+nova no mesmo frame (confirmado e corrigido: a ordem nova entra no `endTable`); uma tabela `scrollY` sem linhas fica com altura 0 (confirmado e
+corrigido).
 
 ## Widgets diversos
 

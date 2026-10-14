@@ -7263,6 +7263,50 @@ void test_table_reorder_applies_on_the_next_frame()
     assert(cellOrder[0] == 1 && cellOrder[1] == 2 && cellOrder[2] == 0);
 }
 
+// Uma tabela com scrollY tem a altura que pediu mesmo sem linhas (por exemplo
+// uma lista que ficou vazia): o que vem depois dela não sobe para cima dela.
+void test_empty_scrolling_table_keeps_its_height()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    int rows = 30;
+    ig::Rect before;
+    ig::Rect after;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("vazia", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.label("antes");
+        before = c.itemRect();
+        ig::TableStyle style;
+        style.scrollY = true;
+        style.height = 80.0f;
+        if (c.beginTable("t", 2, style))
+        {
+            for (int row = 0; row < rows; ++row)
+            {
+                c.tableNextColumn();
+                c.label("a");
+                c.tableNextColumn();
+                c.label("b");
+            }
+            c.endTable();
+        }
+        c.label("depois");
+        after = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float full = after.y - before.y;
+    rows = 0;
+    harness.frame(build);
+    harness.frame(build);
+    assert(after.y - before.y == full);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8328,6 +8372,7 @@ int main()
     test_wheel_areas_forget_what_is_gone();
     test_table_sizing_fixed_fit_resizes();
     test_table_reorder_applies_on_the_next_frame();
+    test_empty_scrolling_table_keeps_its_height();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
