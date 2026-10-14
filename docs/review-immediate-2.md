@@ -218,7 +218,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
 - [x] **M3. Overflow de `int` no índice das colunas dos plots lê fora do buffer** —
       [Gui.cpp:7965](../src/Gui.cpp#L7965), 7993, 8012. Com 2 000 000 amostras
       e 1100 px, SEGV.
-- [ ] **M4. `showToast` com o mesmo id duplica em vez de atualizar** —
+- [x] **M4. `showToast` com o mesmo id duplica em vez de atualizar** —
       [Gui.cpp:8266](../src/Gui.cpp#L8266). O id é guardado e nunca usado.
 - [ ] **M5. `wrapText` acrescenta uma linha vazia quando o corte cai em espaços antes
       de um `\n`** — [Gui.cpp:11733](../src/Gui.cpp#L11733). Afeta o

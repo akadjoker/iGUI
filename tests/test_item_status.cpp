@@ -11,6 +11,7 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 namespace
 {
@@ -6403,6 +6404,45 @@ void test_dragging_past_a_neighbour_leaves_it_in_place()
     assert(fabsf(points[2].x - 0.8f) < 0.001f);
 }
 
+// Um showToast com o id de um toast que ainda está à vista atualiza-o em vez de
+// juntar outro.
+void test_toast_with_the_same_id_is_updated()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const char* text = "Guardado";
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
+        c.showToast("gravar", text);
+        c.endWindow();
+    };
+    auto count = [](const ig::DrawData& data, const char* wanted)
+    {
+        const size_t size = strlen(wanted);
+        int found = 0;
+        for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+        {
+            const ig::DrawCommand& command = data.commands[i];
+            if (command.type == ig::DrawCommandType::Text &&
+                    command.payload.text.textSize == size &&
+                    memcmp(data.textBytes.data() + command.payload.text.textOffset, wanted, size) ==
+                            0)
+                ++found;
+        }
+        return found;
+    };
+
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(count(harness.frame(build), "Guardado") == 1);
+    text = "Guardado de novo";
+    const ig::DrawData& data = harness.frame(build);
+    assert(count(data, "Guardado de novo") == 1);
+    assert(count(data, "Guardado") == 0);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7436,6 +7476,7 @@ int main()
     test_popup_over_another_window_keeps_its_owner();
     test_disabled_widgets_do_not_edit();
     test_dragging_past_a_neighbour_leaves_it_in_place();
+    test_toast_with_the_same_id_is_updated();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
     test_dialog_and_modal_popup_scrims_are_drawn();
