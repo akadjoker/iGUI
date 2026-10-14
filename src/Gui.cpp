@@ -3515,8 +3515,33 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     if (openCombo_ != id)
         return changed;
 
-    const Rect popup(rect.x, rect.y + rect.height, rect.width, rect.height * static_cast<float>(items.size()));
-    const Rect popupClip = intersect(popup, popupClipRect());
+    const int itemCount = static_cast<int>(items.size());
+    const float rowHeight = rect.height;
+    const Rect screen = popupClipRect();
+    const int maxRows = itemCount < 8 ? itemCount : 8;
+    const int rowsBelow =
+        static_cast<int>((screen.y + screen.height - (rect.y + rect.height)) / rowHeight);
+    const int rowsAbove = static_cast<int>((rect.y - screen.y) / rowHeight);
+    bool openAbove = false;
+    int visibleRows = maxRows;
+    if (rowsBelow < maxRows)
+    {
+        if (rowsAbove >= maxRows)
+            openAbove = true;
+        else if (rowsAbove > rowsBelow)
+        {
+            openAbove = true;
+            visibleRows = rowsAbove;
+        }
+        else
+            visibleRows = rowsBelow;
+    }
+    if (visibleRows < 1)
+        visibleRows = 1;
+    const float popupHeight = rowHeight * static_cast<float>(visibleRows);
+    const Rect popup(rect.x, openAbove ? rect.y - popupHeight : rect.y + rect.height, rect.width,
+                     popupHeight);
+    const Rect popupClip = intersect(popup, screen);
     const uint32_t left = buttonIndex(PointerButton::Left);
     // Any press outside the header and the list closes it, in whatever
     // window it lands; pointerBlockedByOpenPopup keeps that press from also
@@ -3528,6 +3553,37 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         openCombo_ = InvalidWidgetId;
         return false;
     }
+
+    const WidgetId scrollId = combineIds(id, 0x434f4d424f4c495354ull);
+    int *scroll = listScrolls_.find(scrollId);
+    if (!scroll)
+    {
+        listScrolls_.put(scrollId, 0);
+        scroll = listScrolls_.find(scrollId);
+    }
+    if (!scroll)
+        return changed;
+    const int maximumScroll = itemCount - visibleRows;
+    const bool justOpened = openComboFrame_ + 1u != frameNumber_;
+    if (justOpened || changed)
+    {
+        if (currentItem < *scroll)
+            *scroll = currentItem;
+        if (currentItem >= *scroll + visibleRows)
+            *scroll = currentItem - visibleRows + 1;
+    }
+    if (maximumScroll > 0 && !inputBlockedByModal() && contains(popupClip, pointer_.position) &&
+        ownWheelArea(scrollId, popupClip, static_cast<uint32_t>(childStack_.size()) + 1u, true) &&
+        pointer_.wheelY != 0.0f)
+    {
+        *scroll += pointer_.wheelY > 0.0f ? -1 : 1;
+        pointer_.wheelY = 0.0f;
+    }
+    if (*scroll > maximumScroll)
+        *scroll = maximumScroll > 0 ? maximumScroll : 0;
+    if (*scroll < 0)
+        *scroll = 0;
+
     openComboFrame_ = frameNumber_;
     popupWindow_ = currentWindow_;
     comboBounds_ = intersect(rect, clip);
@@ -3541,27 +3597,69 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     // é o que deixa a lista receber o ponteiro sem o deixar passar para o que
     // está por baixo dela (ver pointerBlockedByOpenPopup).
     comboItemsSubmitted_ = true;
-    for (Span<const StringView>::size_type i = 0; i < items.size(); ++i)
+    float scrollbarWidth = 0.0f;
+    if (maximumScroll > 0)
     {
-        const Rect item(rect.x, rect.y + rect.height * static_cast<float>(i + 1u),
-                        rect.width, rect.height);
-        const WidgetId itemId = combineIds(id, static_cast<WidgetId>(i + 1u));
+        scrollbarWidth = theme_.scrollbarWidth > 4.0f ? theme_.scrollbarWidth * 0.35f : 4.0f;
+        const float fraction = static_cast<float>(visibleRows) / static_cast<float>(itemCount);
+        const float minimumThumb =
+            theme_.scrollbarMinThumb < popup.height ? theme_.scrollbarMinThumb : popup.height;
+        const float thumbHeight =
+            popup.height * fraction > minimumThumb ? popup.height * fraction : minimumThumb;
+        const float travel = popup.height - thumbHeight;
+        const Rect bar(popup.x + popup.width - scrollbarWidth, popup.y, scrollbarWidth,
+                       popup.height);
+        Rect thumb(bar.x,
+                   popup.y + travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll),
+                   scrollbarWidth, thumbHeight);
+        const WidgetId scrollbarId = combineIds(scrollId, 0x5343524f4c4cull);
+        if (pointerPressedIn(intersect(thumb, popupClip), left) && activeWidget_ == InvalidWidgetId)
+        {
+            activeWidget_ = scrollbarId;
+            focusedWidget_ = id;
+        }
+        if (activeWidget_ == scrollbarId)
+        {
+            if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
+            {
+                const float normalized =
+                    travel > 0.0f ? clamp((pointer_.position.y - popup.y - thumb.height * 0.5f) /
+                                              travel, 0.0f, 1.0f)
+                                  : 0.0f;
+                *scroll = static_cast<int>(normalized * static_cast<float>(maximumScroll) + 0.5f);
+            }
+            if (pointer_.released[left])
+                activeWidget_ = InvalidWidgetId;
+        }
+        thumb.y = popup.y + travel * static_cast<float>(*scroll) / static_cast<float>(maximumScroll);
+        popupDrawList.addRectFilled(bar, theme_.inputBg, popupClip);
+        popupDrawList.addRectFilled(thumb, theme_.scrollbarThumb, popupClip);
+    }
+    for (int row = 0; row < visibleRows; ++row)
+    {
+        const int i = *scroll + row;
+        if (i >= itemCount)
+            break;
+        const Span<const StringView>::size_type index = static_cast<Span<const StringView>::size_type>(i);
+        const Rect item(popup.x, popup.y + rowHeight * static_cast<float>(row),
+                        popup.width - scrollbarWidth, rowHeight);
+        const WidgetId itemId = combineIds(id, static_cast<WidgetId>(i + 1));
         const bool itemHoveredValue = itemHovered(item, popupClip, itemId);
         if (itemClicked(item, popupClip, itemId, false))
         {
-            currentItem = static_cast<int>(i);
+            currentItem = i;
             focusedWidget_ = id;
             openCombo_ = InvalidWidgetId;
             comboItemsSubmitted_ = false;
             return true;
         }
-        if (itemHoveredValue || static_cast<int>(i) == currentItem)
-            popupDrawList.addRectFilled(item, static_cast<int>(i) == currentItem
+        if (itemHoveredValue || i == currentItem)
+            popupDrawList.addRectFilled(item, i == currentItem
                                             ? theme_.selectableSelected : theme_.selectableHovered,
                                        popupClip);
 
-        const TextMetrics itemMetrics = measureText(theme_.font, items[i], theme_.fontSize);
-        drawText(popupDrawList, theme_.font, items[i],
+        const TextMetrics itemMetrics = measureText(theme_.font, items[index], theme_.fontSize);
+        drawText(popupDrawList, theme_.font, items[index],
                  Vec2(item.x + theme_.windowPadding * 0.5f,
                       item.y + (item.height - itemMetrics.height) * 0.5f),
                  theme_.fontSize, theme_.labelText, popupClip);

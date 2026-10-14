@@ -40,7 +40,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
       O begin calcula a largura sem a barra e o end com ela.
 - [x] **N7. As linhas do `listBox` (e do `comboBox`) são paragens do Tab, e as setas
       deixam de funcionar** — [Gui.cpp:3416](../src/Gui.cpp#L3416), 3524.
-- [ ] **N8. A lista do `comboBox` sai do ecrã sem maneira de lá chegar** —
+- [x] **N8. A lista do `comboBox` sai do ecrã sem maneira de lá chegar** —
       [Gui.cpp:3492](../src/Gui.cpp#L3492). Sem limite de altura nem roda.
 - [ ] **N9. Os popups do `beginMenu` e do menu de contexto não ficam dentro do
       ecrã** — [Gui.cpp:4668](../src/Gui.cpp#L4668), 4677, 5050. O
