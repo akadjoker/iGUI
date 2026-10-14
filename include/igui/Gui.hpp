@@ -2486,6 +2486,7 @@ private:
     // spot the application changing the value underneath.
     // The right edge the last availableWidth() handed out: an item that ends there
     // took the room it was given and does not ask for width (see advanceLayout).
+    bool textFieldHadKeyboard_ = false;
     mutable float fillEdge_ = 0.0f;
     mutable bool fillEdgeSet_ = false;
     WidgetId numericEditId_ = InvalidWidgetId;

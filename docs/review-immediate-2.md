@@ -45,7 +45,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N9. Os popups do `beginMenu` e do menu de contexto não ficam dentro do
       ecrã** — [Gui.cpp:4668](../src/Gui.cpp#L4668), 4677, 5050. O
       `beginSubMenu` já o faz.
-- [ ] **N10. O Ctrl+A de um bloco de escolha múltipla dispara enquanto se escreve
+- [x] **N10. O Ctrl+A de um bloco de escolha múltipla dispara enquanto se escreve
       num campo de texto** — [Gui.cpp:3573](../src/Gui.cpp#L3573).
 - [ ] **N11. O `checkboxFlags` com uma máscara de vários bits faz o contrário do
       ImGui** — [Gui.cpp:4183](../src/Gui.cpp#L4183). *Arranjo:*
