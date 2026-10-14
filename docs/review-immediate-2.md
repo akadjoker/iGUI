@@ -136,7 +136,7 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
       fecha "Alpha".
       *Arranjo:* marcar `closeRequested` na tab e escrever o `*open` só dentro do
       `beginDockPanel` desse painel.
-- [ ] **D2. Um painel arrastado para outra região volta à antiga quando é fechado, e
+- [x] **D2. Um painel arrastado para outra região volta à antiga quando é fechado, e
       é a antiga que se grava** — [Gui.cpp:9972](../src/Gui.cpp#L9972), 12693, 12753.
 - [ ] **D3. Encolher o dock space um frame estraga para sempre os tamanhos das
       regiões** — [Gui.cpp:9882](../src/Gui.cpp#L9882). O clamp escreve por cima de
