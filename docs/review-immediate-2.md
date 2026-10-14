@@ -50,7 +50,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N11. O `checkboxFlags` com uma máscara de vários bits faz o contrário do
       ImGui** — [Gui.cpp:4183](../src/Gui.cpp#L4183). *Arranjo:*
       `(flags & flagValue) == flagValue`.
-- [ ] **N12. Depois do `listBox` e do `comboBox` aberto, as consultas do item falam
+- [x] **N12. Depois do `listBox` e do `comboBox` aberto, as consultas do item falam
       da última linha** — [Gui.cpp:3415](../src/Gui.cpp#L3415), 3444, 3523. Um
       tooltip com `isItemHovered()` depois do widget nunca aparece.
 - [ ] **N13. Um clique direito fora não fecha o menu de contexto** —

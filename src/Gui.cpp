@@ -3357,6 +3357,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         pointer_.wheelY = 0.0f;   // the list took it: an enclosing area must not scroll too
     }
 
+    itemHovered(rect, visible, id);
+    const ItemStatus listStatus = item_;
     bool changed = false;
     if (hasKeyboardFocus(id) && (upPressed_ || downPressed_ || pageUpPressed_ || pageDownPressed_ ||
                                  homePressed_ || endPressed_))
@@ -3428,6 +3430,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
 
     drawList->addRectFilled(rect, theme_.selectableBackground, visible);
     const int itemCount = static_cast<int>(items.size());
+    bool rowClicked = false;
+    bool rowActive = activeWidget_ == scrollbarId && scrollbarId != InvalidWidgetId;
     for (int row = 0; row < visibleRows; ++row)
     {
         const int itemIndex = *scroll + row;
@@ -3436,9 +3440,10 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         const Rect item(rect.x, rect.y + theme_.widgetHeight * static_cast<float>(row),
                         rect.width - scrollbarWidth, theme_.widgetHeight);
         const WidgetId itemId = combineIds(id, static_cast<WidgetId>(itemIndex + 1));
-        const bool itemHoveredValue = itemHovered(item, visible, itemId);
+        const bool itemHoveredValue = subItemHovered(item, visible, itemId);
         if (itemClicked(item, visible, itemId, false))
         {
+            rowClicked = true;
             if (currentItem != itemIndex)
             {
                 currentItem = itemIndex;
@@ -3446,6 +3451,8 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
             }
             focusedWidget_ = id;
         }
+        if (activeWidget_ == itemId)
+            rowActive = true;
         if (itemIndex == currentItem || itemHoveredValue)
             drawList->addRectFilled(item, itemIndex == currentItem
                                             ? theme_.selectableSelected : theme_.selectableHovered,
@@ -3465,8 +3472,12 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
         drawList->addRectFilled(scrollbar, theme_.inputBg, visible);
         drawList->addRectFilled(thumb, theme_.scrollbarThumb, visible);
     }
-    if (changed)
-        item_.edited = true;
+    item_ = listStatus;
+    lastItemId_ = id;
+    item_.clicked = rowClicked;
+    item_.edited = changed;
+    item_.focused = focusedWidget_ == id;
+    item_.active = item_.active || rowActive;
     return changed;
 }
 
@@ -3505,6 +3516,9 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
     const bool hovered = itemHovered(rect, clip, id);
     if (itemClicked(rect, clip, id))
         openCombo_ = openCombo_ == id ? InvalidWidgetId : id;
+    if (changed)
+        item_.edited = true;
+    const ItemStatus headerStatus = item_;
 
     drawComboHeader(*drawList, rect,
                     items[static_cast<Span<const StringView>::size_type>(currentItem)],
@@ -3642,13 +3656,18 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
         const Rect item(popup.x, popup.y + rowHeight * static_cast<float>(row),
                         popup.width - scrollbarWidth, rowHeight);
         const WidgetId itemId = combineIds(id, static_cast<WidgetId>(i + 1));
-        const bool itemHoveredValue = itemHovered(item, popupClip, itemId);
+        const bool itemHoveredValue = subItemHovered(item, popupClip, itemId);
         if (itemClicked(item, popupClip, itemId, false))
         {
             currentItem = i;
             focusedWidget_ = id;
             openCombo_ = InvalidWidgetId;
             comboItemsSubmitted_ = false;
+            item_ = headerStatus;
+            lastItemId_ = id;
+            item_.clicked = true;
+            item_.edited = true;
+            item_.focused = true;
             return true;
         }
         if (itemHoveredValue || i == currentItem)
@@ -3663,8 +3682,9 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                  theme_.fontSize, theme_.labelText, popupClip);
     }
     comboItemsSubmitted_ = false;
-    if (changed)
-        item_.edited = true;
+    item_ = headerStatus;
+    lastItemId_ = id;
+    item_.focused = focusedWidget_ == id;
     return changed;
 }
 
@@ -13125,6 +13145,19 @@ bool Context::itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool 
     item_.deactivatedAfterEdit = item_.deactivated && activeWidgetEdited_;
     item_.focused = focusedWidget_ == id;
     return activated;
+}
+
+bool Context::subItemHovered(const Rect &rect, const Rect &clip, WidgetId id)
+{
+    if (tooltipOpen_ || disabledDepth_ > 0u)
+        return false;
+    if (activeWidget_ != InvalidWidgetId && activeWidget_ != id)
+        return false;
+    if (pointerBlockedByOpenPopup(pointer_.position) || !currentWindowReceivesPointer() ||
+        !contains(intersect(rect, clip), pointer_.position))
+        return false;
+    hotWidget_ = id;
+    return true;
 }
 
 void Context::keepItemStatus(const ItemStatus &primary, const Rect &bounds)

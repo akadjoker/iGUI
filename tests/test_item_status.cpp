@@ -5374,6 +5374,57 @@ void test_checkbox_flags_with_a_multi_bit_mask()
     assert(other == 0x3u);
 }
 
+// Depois de um listBox, e de um comboBox aberto, as consultas do item falam do
+// widget e não da última linha.
+void test_list_widgets_report_their_own_item_status()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = { "zero", "one", "two", "three", "four" };
+    int listCurrent = 0;
+    int comboCurrent = 0;
+    bool listHovered = false;
+    bool listEdited = false;
+    ig::Rect listRect;
+    bool comboHovered = false;
+    ig::Rect comboRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 600.0f)));
+        c.listBox("lista", listCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 0.0f, 200.0f, c.theme().widgetHeight * 3.0f));
+        listHovered = c.isItemHovered();
+        listEdited = c.isItemEdited();
+        listRect = c.itemRect();
+        c.comboBox("combo", comboCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 200.0f, 200.0f, 28.0f));
+        comboHovered = c.isItemHovered();
+        comboRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(listRect.height == context.theme().widgetHeight * 3.0f);
+    context.pushEvent(ig::Event::pointerMove(listRect.x + 20.0f, listRect.y + 5.0f));
+    harness.frame(build);
+    assert(listHovered);
+    harness.click(listRect.x + 20.0f, listRect.y + listRect.height * 0.5f, build);
+    assert(listCurrent == 1);
+    assert(listEdited);
+
+    const ig::Rect header = comboRect;
+    harness.click(header.x + 10.0f, header.y + 5.0f, build);
+    harness.frame(build);
+    assert(comboRect.y == header.y);
+    assert(comboRect.height == header.height);
+    context.pushEvent(ig::Event::pointerMove(header.x + 10.0f, header.y + 5.0f));
+    harness.frame(build);
+    assert(comboHovered);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6402,6 +6453,7 @@ int main()
     test_menu_popups_stay_on_screen();
     test_multi_select_ctrl_a_waits_while_typing();
     test_checkbox_flags_with_a_multi_bit_mask();
+    test_list_widgets_report_their_own_item_status();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
