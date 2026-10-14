@@ -7035,6 +7035,94 @@ void test_removed_window_lets_go_of_the_pointer()
     assert(belowHovered);
 }
 
+// O availableHeight conhece onde o conteúdo está: num popup é o espaço até ao
+// fundo do ecrã (e não o que sobra da janela que o abriu), no conteúdo de um
+// combo é a lista visível, numa tabela com scrollY é o que sobra da caixa da
+// tabela, e numa tab é o mesmo que a janela.
+void test_available_height_follows_the_container()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    harness.setViewport(400.0f, 300.0f);
+
+    float inWindow = -1.0f;
+    float inTab = -1.0f;
+    float inPopup = -1.0f;
+    float popupTop = -1.0f;
+    float inTable = -1.0f;
+    float tableTop = -1.0f;
+    bool openPopup = false;
+    float inCombo = -1.0f;
+    ig::Rect comboHeader;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("altura", ig::Rect(0.0f, 0.0f, 300.0f, 120.0f)));
+        if (c.beginTabBar("abas"))
+        {
+            if (c.beginTabItem("uma"))
+            {
+                inTab = c.availableHeight();
+                const bool comboOpen = c.beginCombo("escolha", "x", 120.0f);
+                comboHeader = c.itemRect();
+                if (comboOpen)
+                {
+                    inCombo = c.availableHeight();
+                    for (int i = 0; i < 20; ++i) c.label("linha");
+                    c.endCombo();
+                }
+                c.endTabItem();
+            }
+            c.endTabBar();
+        }
+        c.endWindow();
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 130.0f, 300.0f, 160.0f)));
+        inWindow = c.availableHeight();
+        ig::TableStyle style;
+        style.scrollY = true;
+        style.height = 80.0f;
+        if (c.beginTable("t", 2, style))
+        {
+            c.tableNextColumn();
+            inTable = c.availableHeight();
+            c.label("x");
+            tableTop = c.itemRect().y;
+            c.endTable();
+        }
+        if (openPopup)
+        {
+            c.openPopup("menu", ig::Vec2(10.0f, 150.0f));
+            openPopup = false;
+        }
+        if (c.beginPopup("menu"))
+        {
+            inPopup = c.availableHeight();
+            c.label("item");
+            popupTop = c.itemRect().y;
+            c.endPopup();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    assert(inTab > 0.0f);
+    harness.click(comboHeader.x + 5.0f, comboHeader.y + 5.0f, build);
+    harness.frame(build);
+    assert(inCombo >= 4.0f * context.theme().widgetHeight);
+    assert(inCombo <= 8.0f * (context.theme().widgetHeight + context.theme().itemSpacing));
+    harness.click(390.0f, 5.0f, build);
+    assert(inTable > 0.0f && inTable <= 80.0f);
+    assert(tableTop + inTable <= 130.0f + 160.0f);
+    openPopup = true;
+    harness.frame(build);
+    harness.frame(build);
+    assert(popupTop >= 150.0f);
+    assert(inPopup > 0.0f);
+    const float gap = popupTop + inPopup - 300.0f;
+    assert(gap > -1.0f && gap < 1.0f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8096,6 +8184,7 @@ int main()
     test_out_of_range_selection_is_left_alone();
     test_disabled_menu_item_is_the_last_item();
     test_removed_window_lets_go_of_the_pointer();
+    test_available_height_follows_the_container();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
