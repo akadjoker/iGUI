@@ -4799,8 +4799,12 @@ bool Context::menuItemInternal(StringView labelText, bool enabled, bool *checked
         ? combineIds(activeMenu_, static_cast<WidgetId>(activeMenuBounds_.height * 100.0f))
         : combineIds(idStack_.empty() ? InvalidWidgetId : idStack_.back(),
                      makeWidgetId(labelText));
-    const bool hovered = enabled && itemHovered(item, clip, id);
-    const bool clicked = enabled && itemClicked(item, clip, id);
+    if (!enabled)
+        ++disabledDepth_;
+    const bool hovered = itemHovered(item, clip, id);
+    const bool clicked = itemClicked(item, clip, id);
+    if (!enabled)
+        --disabledDepth_;
     popup.addRectFilled(item, hovered ? theme_.menuItemHover : theme_.menuBg, clip);
     const TextMetrics metrics = measureText(theme_.font, visibleLabel(labelText), theme_.fontSize);
     const TextMetrics shortcutMetrics =

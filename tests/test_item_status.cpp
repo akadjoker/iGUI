@@ -6954,6 +6954,52 @@ void test_out_of_range_selection_is_left_alone()
     assert(tab == 0 && tabChanged);
 }
 
+// Um menuItem desativado também passa a ser o último item: o itemRect é o dele
+// e o isItemDisabled diz que está desativado (antes ficava o item anterior).
+void test_disabled_menu_item_is_the_last_item()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect barButton;
+    ig::Rect first;
+    ig::Rect disabled;
+    bool disabledFlag = false;
+    bool disabledHovered = true;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("menus", ig::Rect(0.0f, 0.0f, 320.0f, 260.0f)));
+        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
+        {
+            const bool open = c.beginMenu("Edit");
+            barButton = c.itemRect();
+            if (open)
+            {
+                c.menuItem("Copiar");
+                first = c.itemRect();
+                c.menuItem("Cortar", false);
+                disabled = c.itemRect();
+                disabledFlag = c.isItemDisabled();
+                disabledHovered = c.isItemHovered();
+                c.endMenu();
+            }
+            c.endMenuBar();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.click(barButton.x + 5.0f, barButton.y + 5.0f, build);
+    assert(first.height > 0.0f);
+    context.pushEvent(
+            ig::Event::pointerMove(disabled.x + 10.0f, disabled.y + disabled.height * 0.5f));
+    harness.frame(build);
+    assert(disabled.y == first.y + first.height);
+    assert(disabledFlag);
+    assert(!disabledHovered);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -8013,6 +8059,7 @@ int main()
     test_next_item_width_is_spent_by_the_child();
     test_hash_marker();
     test_out_of_range_selection_is_left_alone();
+    test_disabled_menu_item_is_the_last_item();
     printf("test_item_status: all tests passed\n");
     return 0;
 }
