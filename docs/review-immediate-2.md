@@ -125,7 +125,8 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       dentro** — [Gui.cpp:9588](../src/Gui.cpp#L9588).
 
 Não confirmados: o `removeWindow` não invalida a janela do ponteiro (dura um
-frame); o `availableHeight` não conhece popup, tab nem tabela; o `wheelAreas_`
+frame; confirmado e corrigido: só até ao próximo `beginWindow`, que já a
+invalidava); o `availableHeight` não conhece popup, tab nem tabela; o `wheelAreas_`
 nunca perde entradas.
 
 ## Dock
