@@ -323,12 +323,6 @@ void Collapsible::layout()
             y += h + contentSpacing_;
         }
     }
-    else
-    {
-        // Collapsed: hide all children by giving them zero size
-        for (auto* c : children_)
-            c->setRect({0, headerH_, 0, 0});
-    }
 }
 
 void Collapsible::paint(PaintContext& ctx)

@@ -22,6 +22,7 @@ static void collectFocusable(Widget* w, ct::Vector<Widget*>& out)
 {
     if (!w || !w->isVisible() || !w->isEnabled()) return;
     if (w->acceptsFocus()) out.push_back(w);
+    if (!w->childrenShown()) return;
     for (auto* c : w->children())
         collectFocusable(c, out);
 }
@@ -1091,6 +1092,8 @@ Widget* WidgetApp::hitTest(Widget* w, float x, float y)
     Rect abs = w->absoluteRect();
     if (!abs.contains(x, y))
         return nullptr;
+    if (!w->childrenShown())
+        return w;
 
     // Deepest child first (reverse order = topmost drawn last)
     const auto& ch = w->children();

@@ -192,7 +192,7 @@ Reproduzidos com sonda:
 - [x] [WidgetApp.cpp:450](../src/widgets/WidgetApp.cpp#L450) — depois de largar o
       botão, o hover é recalculado só contra o `root_`: depois de um clique num
       FloatWindow passa para o widget por baixo.
-- [ ] [LayoutWidgets.cpp:329](../src/widgets/LayoutWidgets.cpp#L329) — o
+- [x] [LayoutWidgets.cpp:329](../src/widgets/LayoutWidgets.cpp#L329) — o
       Collapsible fechado zera o rect dos filhos; os que usam o `sizeHint()` por
       omissão (Canvas, ImageView) voltam com altura 0 ao reabrir.
 - [ ] [LayoutWidgets.cpp:87](../src/widgets/LayoutWidgets.cpp#L87) —
