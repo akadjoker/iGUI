@@ -371,7 +371,7 @@ void TextInput::onKeyPress(KeyEvent& e)
         submitted.emit(text_); e.consumed = true; break;
 
     case ig::retained::Key::Escape:
-        clearSelection(); e.consumed = true; break;
+        clearSelection(); break;
 
     default: break;
     }

@@ -94,6 +94,9 @@ public:
     void  onMouseMove(MouseEvent& e) override;
     Vec2f sizeHint() const override;
 
+    /// @brief The widget that gets the keyboard when the window is added.
+    virtual Widget* focusOnOpen() { return nullptr; }
+
 private:
     String title_;
     Widget*     content_    = nullptr;

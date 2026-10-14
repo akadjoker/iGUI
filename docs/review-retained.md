@@ -91,7 +91,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
       `ListBox::onMousePress`, que seleciona a linha a essa altura e emite
       `selectionChanged(30)`.
 
-- [ ] **8. Enter e Escape não fazem nada na `InputBox` nem no `FileDialog`** —
+- [x] **8. Enter e Escape não fazem nada na `InputBox` nem no `FileDialog`** —
       [DialogWidgets.cpp:612](../src/widgets/DialogWidgets.cpp#L612).
       O `TextInput::onKeyPress` consome sempre o Return e o Escape, e nenhum dos
       dois diálogos liga o `submitted`. Além disso nada dá foco ao campo da
