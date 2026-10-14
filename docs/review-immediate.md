@@ -194,7 +194,7 @@ Vistos de passagem e não corridos (a não ser onde se diz):
       `isKeyPressed()` olha ([Gui.cpp:2051](../src/Gui.cpp#L2051)).
 - [x] A guarda de overflow do `parseNumericValue` só está certa em base 10
       ([Gui.cpp:408](../src/Gui.cpp#L408)).
-- [ ] Um valor negativo com formato sem sinal aparece como zero:
+- [x] Um valor negativo com formato sem sinal aparece como zero:
       `inputInt(-1, "%08X")` desenha "00000000" (visto numa sonda).
 - [x] Código morto depois dos numéricos em double: `parseIntText`,
       `parseFloatText`, os três helpers de slider em float e o
