@@ -115,7 +115,7 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       [Gui.cpp:12453](../src/Gui.cpp#L12453).
 - [x] **W15. `newLine` depois de `sameLine` ignora a altura da linha** —
       [Gui.cpp:11865](../src/Gui.cpp#L11865). O item seguinte sai por cima.
-- [ ] **W16. O `separator` usa a borda direita da janela** —
+- [x] **W16. O `separator` usa a borda direita da janela** —
       [Gui.cpp:11997](../src/Gui.cpp#L11997) (e o `separatorText`). Num popup à
       direita da janela tem largura 0; devia usar o `availableWidth()`.
 - [ ] **W17. O `setNextItemWidth` antes do `beginChild` passa para o primeiro item de

@@ -12076,9 +12076,7 @@ void Context::separator(float thickness)
     if (!window || !drawList || thickness <= 0.0f)
         return;
     const Rect clip = contentClip();
-    const float right = window->bounds.x + window->bounds.width - theme_.windowPadding;
-    const Rect line(layout_.cursor.x, layout_.cursor.y,
-                    right > layout_.cursor.x ? right - layout_.cursor.x : 0.0f, thickness);
+    const Rect line(layout_.cursor.x, layout_.cursor.y, availableWidth(), thickness);
     drawList->addRectFilled(line, theme_.titleBarBackground, clip);
     advanceLayout(line);
 }
@@ -12095,7 +12093,7 @@ void Context::separatorText(StringView text, float width)
     // de "##" não se escreve).
     const StringView visible = visibleLabel(text);
     const TextMetrics metrics = measureText(theme_.font, visible, theme_.fontSize);
-    const float available = window->bounds.x + window->bounds.width - theme_.windowPadding - layout_.cursor.x;
+    const float available = availableWidth();
     const float resolvedWidth = width > 0.0f && width < available ? width : available;
     const float lineY = layout_.cursor.y + metrics.height * 0.5f;
     drawText(*drawList, theme_.font, visible, layout_.cursor, theme_.fontSize, theme_.labelText, clip);

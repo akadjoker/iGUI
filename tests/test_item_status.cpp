@@ -6174,6 +6174,55 @@ void test_new_line_after_same_line_clears_the_tallest_item()
     assert(next.y == tall.y + tall.height + context.theme().itemSpacing);
 }
 
+// O separator e o separatorText vão até à borda do contentor onde estão (um child,
+// um popup fora da janela), não até à da janela.
+void test_separator_uses_the_available_width()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect childSeparator;
+    ig::Rect childText;
+    ig::Rect child;
+    ig::Rect popupSeparator;
+    bool request = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)));
+        if (c.beginChild("ch", 100.0f, true, 120.0f))
+        {
+            c.label("filho");
+            c.separator();
+            childSeparator = c.itemRect();
+            c.separatorText("titulo");
+            childText = c.itemRect();
+            c.endChild();
+        }
+        child = c.itemRect();
+        if (request)
+        {
+            c.openPopup("P", ig::Vec2(350.0f, 50.0f));
+            request = false;
+        }
+        if (c.beginPopup("P"))
+        {
+            c.label("item do popup");
+            c.separator();
+            popupSeparator = c.itemRect();
+            c.endPopup();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    request = true;
+    for (int i = 0; i < 3; ++i) harness.frame(build);
+    assert(childSeparator.x + childSeparator.width <= child.x + child.width);
+    assert(childText.x + childText.width <= child.x + child.width);
+    assert(popupSeparator.width > 0.0f);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -7217,6 +7266,7 @@ int main()
     test_indent_group_and_set_cursor_keep_the_content_extent();
     test_group_with_a_child_ignores_the_hidden_content();
     test_new_line_after_same_line_clears_the_tallest_item();
+    test_separator_uses_the_available_width();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
