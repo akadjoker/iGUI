@@ -768,11 +768,15 @@ void DataGrid::onKeyPress(KeyEvent& e)
         case ig::retained::Key::End:
             editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
         case ig::retained::Key::Tab: {
+            const int cols = static_cast<int>(columns_.size());
+            const int step = e.shift ? -1 : 1;
+            int visual = editRow_;
+            for (int v = 0; v < static_cast<int>(sortedIndices_.size()); ++v)
+                if (sortedIndices_[v] == editRow_) { visual = v; break; }
+            int cell = visual * cols + editCol_ + step;
             commitEdit();
-            int nextCol = editCol_ + 1;
-            int nextRow = editRow_;
-            if (nextCol >= static_cast<int>(columns_.size())) { nextCol = 0; nextRow++; }
-            if (nextRow < modelRowCount()) startEdit(nextRow, nextCol);
+            for (; cell >= 0 && cell < modelRowCount() * cols && !editing_; cell += step)
+                startEdit(displayRow(cell / cols), cell % cols);
             return;
         }
         case ig::retained::Key::C:

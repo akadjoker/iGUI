@@ -1966,6 +1966,72 @@ static void test_debug_layout_key_is_opt_in()
     app.setDebugLayoutKey(0);
 }
 
+// Tab durante a edição de uma célula da DataGrid guarda-a e passa à seguinte
+// que se pode editar (salta colunas só de leitura e passa à linha de baixo);
+// Shift+Tab volta para trás.
+static void test_data_grid_tab_moves_the_edit()
+{
+    using namespace ig::retained;
+    DataGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    grid.addColumn("a", 100.0f);
+    grid.addColumn("b", 100.0f);
+    grid.addColumn("c", 100.0f);
+    grid.setColumnReadOnly(1, true);
+    grid.addRow({ "a0", "b0", "c0" });
+    grid.addRow({ "a1", "b1", "c1" });
+
+    auto pressCell = [&grid](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = y;
+        grid.onMousePress(press);
+        MouseEvent release = press;
+        grid.onMouseRelease(release);
+    };
+    auto key = [&grid](int code, bool shift)
+    {
+        KeyEvent press;
+        press.key = code;
+        press.shift = shift;
+        grid.onKeyPress(press);
+    };
+    auto type = [&grid](char c)
+    {
+        KeyEvent text;
+        text.text[0] = c;
+        grid.onTextInput(text);
+    };
+
+    pressCell(50.0f, 40.0f);
+    pressCell(50.0f, 40.0f);
+    type('1');
+    key(Key::Tab, false);
+    type('2');
+    key(Key::Tab, false);
+    type('3');
+    key(Key::Tab, true);
+    type('4');
+    key(Key::Return, false);
+    assert(grid.cell(0, 0) == "a01");
+    assert(grid.cell(0, 1) == "b0");
+    assert(grid.cell(0, 2) == "c024");
+    assert(grid.cell(1, 0) == "a13");
+
+    pressCell(50.0f, 10.0f);
+    pressCell(50.0f, 10.0f);
+    pressCell(50.0f, 40.0f);
+    pressCell(50.0f, 40.0f);
+    key(Key::Tab, false);
+    key(Key::Tab, false);
+    type('5');
+    key(Key::Return, false);
+    assert(grid.cell(0, 0) == "a015");
+    assert(grid.cell(1, 0) == "a13");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2153,6 +2219,7 @@ int main()
     test_collapsible_keeps_its_children_while_closed();
     test_border_layout_keeps_a_widget_set_again();
     test_debug_layout_key_is_opt_in();
+    test_data_grid_tab_moves_the_edit();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
