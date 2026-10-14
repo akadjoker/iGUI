@@ -51,6 +51,7 @@ void ConsoleWidget::log(LogLevel level, const String& message)
         auto& last = entries_.back();
         if (last.level == level && last.message == message) {
             last.count++;
+            updateCount(level, 1);
             markDirty();
             return;
         }
@@ -141,6 +142,17 @@ void ConsoleWidget::trimEntries()
         updateCount(entries_.front().level, -entries_.front().count);
         entries_.erase(entries_.begin());
     }
+}
+
+int ConsoleWidget::messageCount(LogLevel level) const
+{
+    switch (level) {
+    case LogLevel::Trace: return countTrace_;
+    case LogLevel::Info:  return countInfo_;
+    case LogLevel::Warn:  return countWarn_;
+    case LogLevel::Error: return countError_;
+    }
+    return 0;
 }
 
 void ConsoleWidget::updateCount(LogLevel l, int delta)

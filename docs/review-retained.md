@@ -233,7 +233,7 @@ Só por leitura:
       `fadeOut` e o `slideIn` guardam `Widget*` cru, sem cancelamento.
 - [x] O TextEdit sem word-wrap não tem scroll horizontal (o `maxContentW_` é
       calculado e nunca usado).
-- [ ] [ConsoleWidget.cpp:50](../src/widgets/ConsoleWidget.cpp#L50) — as linhas
+- [x] [ConsoleWidget.cpp:50](../src/widgets/ConsoleWidget.cpp#L50) — as linhas
       duplicadas colapsadas não são contadas mas são subtraídas no trim.
 - [ ] [WidgetApp.hpp:254](../include/igui/widgets/WidgetApp.hpp#L254) e 260 —
       `setStatusText` e `statusBarHeight` estão declaradas e nunca definidas, e o

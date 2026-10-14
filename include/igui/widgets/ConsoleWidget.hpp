@@ -77,6 +77,8 @@ public:
     void setSearchText(const String& s);
     /// @brief Get the current search filter text.
     const String& searchText() const { return searchText_; }
+    /// @brief Messages of @p level still in the log, repeats included.
+    int messageCount(LogLevel level) const;
 
     /// @brief Set the console background color.
     void setBgColor(const Color& c) { bgColor_ = c; }
