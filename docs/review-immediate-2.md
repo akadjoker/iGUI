@@ -251,6 +251,6 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       [Gui.cpp:7132](../src/Gui.cpp#L7132), 7158.
 
 Não confirmados: um ponto atrás da câmara é projetado espelhado no
-`projectGizmo3D`; o `return changed` do gizmo3D sem centro salta o
+`projectGizmo3D` (confirmado e corrigido); o `return changed` do gizmo3D sem centro salta o
 `item_.edited`; o splitter salta até meia espessura no press; o `stepperInt` não
 limita um valor que já está fora do intervalo; um `+inf` num plot achata a série.
