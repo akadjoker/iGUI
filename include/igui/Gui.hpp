@@ -1641,6 +1641,10 @@ private:
         // container: é o que dá a medida de uma caixa que tem de se dimensionar
         // sozinha, como o tooltip rico (ver beginTooltip).
         Vec2 contentExtent;
+        // A borda direita do maior item de uma célula de tabela que não encosta à
+        // borda da coluna: um item que ocupa a largura que sobra não pede largura
+        // (ver measureTableCellWidth).
+        float fitRight;
         // Largura do próximo item (setNextItemWidth) e o valor por omissão de
         // dentro dos pushItemWidth (ver calcItemWidth). Zero quer dizer "a
         // largura que sobra", como no ImGui.
@@ -1662,7 +1666,7 @@ private:
 
         LayoutState()
             : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false),
-              contentExtent(), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
+              contentExtent(), fitRight(0.0f), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
               groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
         {
         }

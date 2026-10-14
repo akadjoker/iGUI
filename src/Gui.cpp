@@ -11107,12 +11107,13 @@ bool Context::tableNextColumn()
     layout_.cursor = Vec2(cellX, table_.rowY);
     layout_.lastItem = Rect();
     layout_.hasLastItem = false;
+    layout_.fitRight = cellX;
     return true;
 }
 
 // A largura que o conteúdo da célula em curso pediu (ver TableStyle::sizingFixedFit):
 // o conteúdo de uma célula é o que o chamador submeteu desde o tableNextColumn, e o
-// layout já o mediu no contentExtent.
+// layout já o mediu no fitRight.
 void Context::measureTableCellWidth()
 {
     if (!table_.style.sizingFixedFit || table_.column < 0 || table_.column >= table_.columns)
@@ -11121,9 +11122,10 @@ void Context::measureTableCellWidth()
         return;
     // A largura da célula leva a margem dos dois lados: sem ela o texto de uma coluna
     // encostava ao da seguinte (a divisão pelos pesos dava essa folga de graça).
-    const float width = layout_.contentExtent.x - layout_.origin.x + theme_.windowPadding * 2.0f;
-    if (width <= 0.0f)
+    const float content = layout_.fitRight - layout_.origin.x;
+    if (content <= 0.0f)
         return;
+    const float width = content + theme_.windowPadding * 2.0f;
     const int model = tableModelColumn(table_.column);
     if (model < 0 || static_cast<ct::Vector<float>::size_type>(model) >= table_.contentWidths.size())
         return;
@@ -12508,6 +12510,13 @@ void Context::advanceLayout(const Rect &item)
             layout_.contentExtent.x = right;
         if (bottom > layout_.contentExtent.y)
             layout_.contentExtent.y = bottom;
+    }
+    if (tableActive_ && table_.style.sizingFixedFit && table_.column >= 0)
+    {
+        const float right = item.x + item.width;
+        const float edge = tableColumnX(table_.column) + tableColumnWidth(table_.column);
+        if (fabsf(right - edge) > 0.5f && right > layout_.fitRight)
+            layout_.fitRight = right;
     }
     // Um grupo aberto cresce com tudo o que lhe passa por dentro - labels e dummies
     // incluídos, que também passam por aqui (ver endGroup).
