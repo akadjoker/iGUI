@@ -407,6 +407,9 @@ private:
                        float w, float h, const Color& bgColor = Color(30,30,30,255));
     void paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int depth = 0);
     void paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font);
+    // Bubbles a key or text event up from the focused widget, with the same
+    // guard as the mouse bubble against a handler that deletes a widget.
+    void bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&));
     void retirePopup(Widget* popup, bool owned);
     void queuePopupDelete(Widget* popup);
     void flushPopupDeletes();

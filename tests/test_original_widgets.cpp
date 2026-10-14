@@ -1225,6 +1225,44 @@ static void test_widget_app_clock_keeps_short_frames()
     assert(elapsed >= 1999u && elapsed <= 2001u);
 }
 
+namespace
+{
+// Um widget que se remove a si próprio quando recebe uma tecla ou texto, sem os
+// consumir: o bubble continua para o pai depois de o widget ter sido apagado.
+struct RemovesItselfOnKey : ig::retained::Widget
+{
+    RemovesItselfOnKey() { acceptsFocus_ = true; }
+    void onKeyPress(ig::retained::KeyEvent&) override { parent()->removeChild(this); }
+    void onTextInput(ig::retained::KeyEvent&) override { parent()->removeChild(this); }
+};
+} // namespace
+
+// Uma tecla ou um texto cujo handler apaga o widget focado não lê o widget
+// apagado a seguir (o bubble do rato já tinha esta guarda).
+static void test_key_handler_can_remove_its_widget()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("keyremove");
+    assert(app.setStage("keyremove", TransitionType::None));
+
+    auto* first = stage->createChild<RemovesItselfOnKey>();
+    app.setFocused(first);
+    IO io;
+    IO::KeyEvent escape;
+    escape.key = Key::Escape;
+    io.keyEvents.push_back(escape);
+    app.update(io);
+    assert(stage->children().empty());
+
+    auto* second = stage->createChild<RemovesItselfOnKey>();
+    app.setFocused(second);
+    IO typing;
+    typing.inputChars.push_back(static_cast<uint32_t>('a'));
+    app.update(typing);
+    assert(stage->children().empty());
+}
+
 int main()
 {
     using namespace ig;
@@ -1258,6 +1296,7 @@ int main()
     test_list_widget_scrolls_its_rows_for_the_pointer_too();
     test_hidden_widgets_do_not_paint();
     test_widget_app_clock_keeps_short_frames();
+    test_key_handler_can_remove_its_widget();
     PropertyGrid transformGrid;
     transformGrid.setRect({0, 0, 400, 180});
     float editedX = 1, editedY = 2, editedZ = 3;

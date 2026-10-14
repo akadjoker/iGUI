@@ -217,7 +217,7 @@ Só por leitura:
       lógica do TextInput).
 - [ ] [Signal.hpp:64](../include/igui/widgets/Signal.hpp#L64) — o `emit()`
       percorre o `slots_` enquanto um handler pode ligar ou desligar slots.
-- [ ] [WidgetApp.cpp:526-531](../src/widgets/WidgetApp.cpp#L526-L531) — o bubble
+- [x] [WidgetApp.cpp:526-531](../src/widgets/WidgetApp.cpp#L526-L531) — o bubble
       das teclas não tem a guarda de `deletions_` que o do rato tem.
 - [ ] [InputWidgets.cpp:480](../src/widgets/InputWidgets.cpp#L480) —
       `DatePicker::setDate()` não valida o mês, que indexa `d[month]` e

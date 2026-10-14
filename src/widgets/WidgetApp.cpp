@@ -519,11 +519,26 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
     we.shift    = ke.shift;
     we.ctrl     = ke.ctrl;
     we.alt      = ke.alt;
-    Widget* w = focused_;
-    while (w && !we.consumed) {
-        if (ke.down)  w->onKeyPress(we);
-        else          w->onKeyRelease(we);
-        w = w->parent();
+    bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
+}
+
+void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
+{
+    ct::Vector<Widget*> chain;
+    for (Widget* w = focused_; w; w = w->parent())
+        chain.push_back(w);
+
+    uint32_t seen = deletions_;
+    for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
+    {
+        Widget* w = chain[i];
+        if (seen != deletions_)
+        {
+            if (!isWidgetInTrees(w))
+                return;
+            seen = deletions_;
+        }
+        (w->*handler)(e);
     }
 }
 
@@ -540,8 +555,7 @@ void WidgetApp::dispatchTextInput(const ct::Vector<uint32_t>& chars)
         else if (cp<=0x10FFFF){ if (off+4>28) break; ke.text[off++] = static_cast<char>(0xF0 | (cp >> 18)); ke.text[off++] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F)); ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F)); }
     }
     ke.text[off] = 0;
-    Widget* w = focused_;
-    while (w && !ke.consumed) { w->onTextInput(ke); w = w->parent(); }
+    bubbleKey(ke, &Widget::onTextInput);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
