@@ -38,7 +38,7 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 - [x] **N6. Com conteúdo mais largo que o cabeçalho e com rolagem, o `beginCombo`
       corta o conteúdo** — [Gui.cpp:4292](../src/Gui.cpp#L4292), 4428 contra 4493.
       O begin calcula a largura sem a barra e o end com ela.
-- [ ] **N7. As linhas do `listBox` (e do `comboBox`) são paragens do Tab, e as setas
+- [x] **N7. As linhas do `listBox` (e do `comboBox`) são paragens do Tab, e as setas
       deixam de funcionar** — [Gui.cpp:3416](../src/Gui.cpp#L3416), 3524.
 - [ ] **N8. A lista do `comboBox` sai do ecrã sem maneira de lá chegar** —
       [Gui.cpp:3492](../src/Gui.cpp#L3492). Sem limite de altura nem roda.
@@ -58,7 +58,8 @@ Lido: 2368-2757, 3288-3669, 4097-4550, 4551-5087.
 
 Não confirmados: o `listBox` e o `comboBox` põem um `currentItem` fora do
 intervalo a 0 sem devolver true; depois de escolher uma linha do `comboBox` o
-foco fica na linha e as setas deixam de mexer no combo; um `menuItem` desativado
+foco fica na linha e as setas deixam de mexer no combo (confirmado e corrigido
+com o N7); um `menuItem` desativado
 não atualiza o item; o drop do `treeItem` aceita através de uma janela por cima.
 
 ## Janelas, frame, child e layout

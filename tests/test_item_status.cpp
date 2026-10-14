@@ -5074,6 +5074,61 @@ void test_wide_scrolling_combo_does_not_clip_its_content()
     assert(found);
 }
 
+// As linhas do listBox e do comboBox não são paragens do Tab: o Tab salta a lista
+// inteira, as setas mexem nela, e depois de escolher uma linha do comboBox as setas
+// continuam a mexer no combo.
+void test_list_rows_are_not_tab_stops()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const ig::StringView items[] = { "zero", "one", "two", "three", "four" };
+    int listCurrent = 0;
+    int comboCurrent = 0;
+    bool aFocused = false;
+    bool bFocused = false;
+    ig::Rect aRect;
+    ig::Rect comboRect;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 400.0f, 600.0f)));
+        c.button("A");
+        aFocused = c.isItemFocused();
+        aRect = c.itemRect();
+        c.listBox("lista", listCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 40.0f, 200.0f, c.theme().widgetHeight * 3.0f));
+        c.button("B");
+        bFocused = c.isItemFocused();
+        c.comboBox("combo", comboCurrent, ig::Span<const ig::StringView>(items, 5),
+                ig::Rect(0.0f, 200.0f, 200.0f, c.theme().widgetHeight));
+        comboRect = c.itemRect();
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    harness.click(aRect.x + 5.0f, aRect.y + 5.0f, build);
+    assert(aFocused);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    harness.frame(build);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+    harness.frame(build);
+    assert(listCurrent == 1);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Tab));
+    harness.frame(build);
+    harness.frame(build);
+    assert(bFocused);
+
+    const ig::Rect header = comboRect;
+    harness.click(header.x + 10.0f, header.y + 5.0f, build);
+    harness.click(header.x + 10.0f, header.y + header.height * 2.5f, build);
+    assert(comboCurrent == 1);
+    context.pushEvent(ig::Event::keyDown(ig::KeyCode::Down));
+    harness.frame(build);
+    assert(comboCurrent == 2);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6096,6 +6151,7 @@ int main()
     test_main_menu_bar_item_responds_to_its_edges();
     test_combo_scrollbar_can_be_dragged();
     test_wide_scrolling_combo_does_not_clip_its_content();
+    test_list_rows_are_not_tab_stops();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

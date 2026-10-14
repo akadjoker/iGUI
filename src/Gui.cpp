@@ -3439,7 +3439,7 @@ bool Context::listBox(StringView labelText, int &currentItem, Span<const StringV
                         rect.width - scrollbarWidth, theme_.widgetHeight);
         const WidgetId itemId = combineIds(id, static_cast<WidgetId>(itemIndex + 1));
         const bool itemHoveredValue = itemHovered(item, visible, itemId);
-        if (itemClicked(item, visible, itemId))
+        if (itemClicked(item, visible, itemId, false))
         {
             if (currentItem != itemIndex)
             {
@@ -3547,9 +3547,10 @@ bool Context::comboBox(StringView labelText, int &currentItem, Span<const String
                         rect.width, rect.height);
         const WidgetId itemId = combineIds(id, static_cast<WidgetId>(i + 1u));
         const bool itemHoveredValue = itemHovered(item, popupClip, itemId);
-        if (itemClicked(item, popupClip, itemId))
+        if (itemClicked(item, popupClip, itemId, false))
         {
             currentItem = static_cast<int>(i);
+            focusedWidget_ = id;
             openCombo_ = InvalidWidgetId;
             comboItemsSubmitted_ = false;
             return true;
