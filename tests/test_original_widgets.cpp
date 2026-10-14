@@ -2552,6 +2552,38 @@ static void test_console_counts_collapsed_repeats()
     assert(console.messageCount(LogLevel::Info) == 2);
 }
 
+// Os eventos globais: um handler por id só ouve esse widget, o catch-all ouve
+// todos, o do id corre antes do catch-all, e um handler pode registar outro
+// durante o evento (o novo só conta no seguinte).
+static void test_global_events_reach_their_handlers()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget named;
+    named.setId("events-named");
+    Widget other;
+    other.setId("events-other");
+    Widget anonymous;
+    String order;
+    app.on("events-test", "events-named", [&order](Widget*) { order += "n"; });
+    app.onAny("events-test",
+            [&order, &app](Widget* w)
+            {
+                order += w->id().empty() ? "a" : "*";
+                if (order.size() == 2)
+                    app.onAny("events-test", [&order](Widget*) { order += "+"; });
+            });
+
+    app.fireEvent("events-test", &named);
+    assert(order == "n*");
+    app.fireEvent("events-test", &other);
+    assert(order == "n**+");
+    app.fireEvent("events-test", &anonymous);
+    assert(order == "n**+a+");
+    app.fireEvent("events-other-name", &named);
+    assert(order == "n**+a+");
+}
+
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
               "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
@@ -2750,6 +2782,7 @@ int main()
     test_widget_animations_stop_with_their_widget();
     test_text_edit_scrolls_sideways_without_wrap();
     test_console_counts_collapsed_repeats();
+    test_global_events_reach_their_handlers();
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;

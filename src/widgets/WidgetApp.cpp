@@ -672,36 +672,30 @@ ct::Vector<Widget*> WidgetApp::widgetsByTag(const String& tag)
 
 void WidgetApp::on(const String& event, const String& widgetId, EventCallback cb)
 {
-    globalHandlers_[event + ":" + widgetId].push_back(std::move(cb));
+    globalHandlers_[event].byId[widgetId].push_back(std::move(cb));
 }
 
 void WidgetApp::onAny(const String& event, EventCallback cb)
 {
-    globalHandlers_[event + ":*"].push_back(std::move(cb));
+    globalHandlers_[event].any.push_back(std::move(cb));
 }
 
 void WidgetApp::fireEvent(const String& event, Widget* w)
 {
-    if (!w) return;
+    if (!w || globalHandlers_.empty()) return;
+    EventHandlers* handlers = globalHandlers_.find(event);
+    if (!handlers) return;
+    ct::Vector<EventCallback>* targeted = w->id().empty() ? nullptr : handlers->byId.find(w->id());
+    if ((!targeted || targeted->empty()) && handlers->any.empty()) return;
 
     // The handlers are walked from a copy: a handler is allowed to register
     // another one (on()/onAny()), and inserting into the map can move its
     // storage out from under a pointer taken before the call.
     ct::Vector<EventCallback> callbacks;
-
-    // Targeted: by widget ID
-    if (!w->id().empty())
-    {
-        ct::Vector<EventCallback>* found = globalHandlers_.find(event + ":" + w->id());
-        if (found)
-            callbacks = *found;
-    }
-
-    // Catch-all
-    ct::Vector<EventCallback>* any = globalHandlers_.find(event + ":*");
-    if (any)
-        for (auto& cb : *any)
-            callbacks.push_back(cb);
+    if (targeted)
+        callbacks = *targeted;
+    for (auto& cb : handlers->any)
+        callbacks.push_back(cb);
 
     for (auto& cb : callbacks)
         cb(w);
