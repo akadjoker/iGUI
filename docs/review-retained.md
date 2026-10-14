@@ -222,7 +222,7 @@ Só por leitura:
 - [x] [InputWidgets.cpp:480](../src/widgets/InputWidgets.cpp#L480) —
       `DatePicker::setDate()` não valida o mês, que indexa `d[month]` e
       `months[]`.
-- [ ] [WidgetApp.cpp:914](../src/widgets/WidgetApp.cpp#L914) — o estado das
+- [x] [WidgetApp.cpp:914](../src/widgets/WidgetApp.cpp#L914) — o estado das
       janelas é reposto sem limitar ao ecrã atual.
 - [ ] [FileDialog.cpp:426-441](../src/widgets/FileDialog.cpp#L426-L441) — os
       breadcrumbs no Windows assumem "C:" e geram caminhos "C:/:/…".
