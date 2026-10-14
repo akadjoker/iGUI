@@ -281,6 +281,7 @@ protected:
     float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
     void linesChanged(int line, int removed, int inserted);
+    void updateWrap(PaintContext& ctx);
     int  logicalToVisualRow(int line, int row = 0) const;
     String expandTabs(const String& text) const;
     String expandTabs(const String& text, int startVisCol) const;
@@ -301,6 +302,10 @@ private:
     ct::Vector<int> staleWrapLines_;
     bool widestLineGone_ = false;
     void measureStaleLines(PaintContext& ctx);
+
+    // The cursor was brought into view before its line was measured again; the
+    // next paint does it once more with the measured rows.
+    bool revealCursor_ = false;
 
     // First visual row of each line (and the total at the end), rebuilt when
     // the wrap changes.
