@@ -1059,8 +1059,51 @@ void test_a_combo_popup_escapes_the_window_it_hangs_from()
 
 } // namespace
 
+// A dock slot outside the enum (a cast from a stored or computed number) is
+// taken as the center instead of indexing past the regions.
+void test_dock_slot_outside_the_enum_is_the_center()
+{
+    const char* path = "igui_dock_bad_slot_test.ini";
+    remove(path);
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    context.setWindowStatePath(path);
+
+    auto build = [](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f))) return;
+        if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
+        {
+            if (c.beginDockPanel("C", ig::DockSlot::Center))
+            {
+                c.label("c");
+                c.endDockPanel();
+            }
+            if (c.beginDockPanel("X", static_cast<ig::DockSlot>(9)))
+            {
+                c.label("x");
+                c.endDockPanel();
+            }
+            c.endDockSpace();
+        }
+        c.endWindow();
+    };
+    harness.frame(build);
+    harness.frame(build);
+    check(context.saveWindowState(), "the state file was not written");
+    ct::Ini saved;
+    check(saved.load(path), "the written state file could not be read back");
+    const ig::String center = saved.get("dock:host/editor", "tabs_center");
+    check(center.find("X") != ig::String::npos,
+            "a slot outside the enum did not land in the center");
+    context.setWindowStatePath(ig::String());
+    remove(path);
+}
+
 int main()
 {
+    test_dock_slot_outside_the_enum_is_the_center();
     test_tile_ignores_windows_no_longer_submitted();
     test_drag_keeps_title_bar_reachable();
     test_drag_inside_screen_is_unchanged();
