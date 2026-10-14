@@ -9997,12 +9997,11 @@ void Context::endDockSpace()
     {
         for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size();)
         {
-            // A panel the application stopped submitting loses its tab without
-            // its open flag being read: that pointer belongs to the frame the
-            // panel was last drawn in and may be gone by now.
+            // A panel the application stopped submitting loses its tab, and so does
+            // one whose close was handed to its beginDockPanel. The open flag is
+            // never read here: that pointer belongs to the panel's own call.
             const bool dropped = dockSpace->tabs[i].lastSeenFrame + 1u < frameNumber_;
-            const bool closed  = !dropped && dockSpace->tabs[i].open && !*dockSpace->tabs[i].open;
-            if (dropped || closed)
+            if (dropped || dockSpace->tabs[i].closed)
                 dockSpace->tabs.erase(dockSpace->tabs.begin() + i);
             else
                 ++i;
@@ -10073,7 +10072,19 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
             dockSpace->selected[dockSlotIndex(tabState->slot)] = id;
     }
     tabState->lastSeenFrame = frameNumber_;
-    tabState->open = open;
+    tabState->closable = open != nullptr;
+    // The X of this tab was clicked (maybe while another panel of the slot drew the
+    // tab bar): the close reaches the application through its own pointer, now.
+    if (tabState->closeRequested)
+    {
+        tabState->closeRequested = false;
+        tabState->closed = true;
+        if (open)
+            *open = false;
+        if (dockSpace->selected[dockSlotIndex(tabState->slot)] == id)
+            dockSpace->selected[dockSlotIndex(tabState->slot)] = InvalidWidgetId;
+        return false;
+    }
     const DockSlot resolvedSlot = tabState->slot;
     const uint32_t slotIndex = dockSlotIndex(resolvedSlot);
     if (dockSpace->selected[slotIndex] == InvalidWidgetId)
@@ -10138,11 +10149,11 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
     float tabX = region.x;
     for (ct::Vector<DockTabState>::size_type i = 0u; i < dockSpace->tabs.size(); ++i)
     {
-        const DockTabState &candidate = dockSpace->tabs[i];
+        DockTabState &candidate = dockSpace->tabs[i];
         if (candidate.slot != resolvedSlot)
             continue;
         const TextMetrics metrics = measureText(theme_.font, candidate.title, theme_.fontSize);
-        const float closeSize = candidate.open ? tabBar.height * 0.55f : 0.0f;
+        const float closeSize = candidate.closable ? tabBar.height * 0.55f : 0.0f;
         const float requestedWidth = metrics.width + theme_.windowPadding * 2.0f + closeSize;
         const float remaining = tabRight - tabX;
         const float tabWidth = requestedWidth < remaining ? requestedWidth : remaining;
@@ -10155,11 +10166,19 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         const WidgetId closeId = combineIds(candidate.id, 0x444f434b434c4f53ull);
         // Keep processing the close button while it owns the press: the tab's
         // hover test deliberately rejects input captured by a different ID.
-        const bool closeVisible = candidate.open && (hovered || activeWidget_ == closeId);
+        const bool closeVisible = candidate.closable && (hovered || activeWidget_ == closeId);
         const bool closeHovered = closeVisible && itemHovered(closeButton, clip, closeId);
         if (closeVisible && handleTabInput && itemClicked(closeButton, clip, closeId, false))
         {
-            *candidate.open = false;
+            if (candidate.id == id && open)
+            {
+                candidate.closed = true;
+                *open = false;
+            }
+            else
+            {
+                candidate.closeRequested = true;
+            }
             if (dockSpace->selected[slotIndex] == candidate.id)
                 dockSpace->selected[slotIndex] = InvalidWidgetId;
             tabX += tabWidth;
@@ -10223,7 +10242,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
             drawList->addRectFilled(Rect(tab.x + 4.0f, tab.bottom() - 2.0f,
                                          tab.width > 8.0f ? tab.width - 8.0f : 0.0f, 2.0f), theme_.focusColor, clip);
         const Rect titleClip = intersect(clip, Rect(tab.x, tab.y,
-            candidate.open ? (closeButton.x > tab.x ? closeButton.x - tab.x : 0.0f) : tab.width, tab.height));
+            candidate.closable ? (closeButton.x > tab.x ? closeButton.x - tab.x : 0.0f) : tab.width, tab.height));
         drawText(*drawList, theme_.font, candidate.title,
                  Vec2(tab.x + theme_.windowPadding,
                       tab.y + (tab.height - metrics.height) * 0.5f),
