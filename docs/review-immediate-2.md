@@ -211,7 +211,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
       gizmo3D 5794, gradientEditor 7289, curveEditor 7382, sequencer 7547,
       timeline 7609, updateTimeView 7446, beginDragSource 8290. O clique não olha
       para o `disabledDepth_`; o `sliderValue` e o `itemClicked` olham.
-- [ ] **M2. Arrastar uma paragem do gradiente ou um ponto da curva para lá do vizinho
+- [x] **M2. Arrastar uma paragem do gradiente ou um ponto da curva para lá do vizinho
       arrasta também o vizinho** — [Gui.cpp:7254](../src/Gui.cpp#L7254), 7312,
       7368, 7400. O sort de cada frame muda os índices e o selecionado fica com o
       antigo.
