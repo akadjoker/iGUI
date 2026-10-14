@@ -193,7 +193,7 @@ Lido: 10334-11542.
       abre** — [Gui.cpp:11371](../src/Gui.cpp#L11371).
 - [x] **T13. Com `scrollX` e `freezeCols > 0` a faixa alternada das linhas fica
       cortada à coluna presa** — [Gui.cpp:11093](../src/Gui.cpp#L11093).
-- [ ] **T14 (menor). Uma lista virtual que encolhe passa um frame vazia** —
+- [x] **T14 (menor). Uma lista virtual que encolhe passa um frame vazia** —
       [Gui.cpp:10350](../src/Gui.cpp#L10350).
 
 Não confirmados: redimensionar com `sizingFixedFit` parece não ter efeito (fica

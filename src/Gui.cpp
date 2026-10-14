@@ -10394,6 +10394,15 @@ bool Context::beginVirtualList(StringView idText, int itemCount, float itemHeigh
         return false;
     }
 
+    const float contentHeight = static_cast<float>(itemCount) * itemHeight;
+    const float maximumScroll =
+        contentHeight > child.content.height ? contentHeight - child.content.height : 0.0f;
+    if (scroll->offset > maximumScroll)
+    {
+        scroll->offset = maximumScroll;
+        layout_.cursor.y = child.content.y - scroll->offset;
+    }
+
     const int first = static_cast<int>(scroll->offset / itemHeight);
     int last = static_cast<int>((scroll->offset + child.content.height) / itemHeight) + 1;
     firstVisible = first < itemCount ? first : itemCount;
