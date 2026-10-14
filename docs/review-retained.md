@@ -206,7 +206,7 @@ Reproduzidos com sonda:
 - [x] [LayoutWidgets.cpp:1103](../src/widgets/LayoutWidgets.cpp#L1103) —
       `TabLayout::removeTab()` de uma tab à esquerda da ativa muda a ativa sem
       emitir `currentChanged`.
-- [ ] [TextInputWidgets.cpp:1303-1327](../src/widgets/TextInputWidgets.cpp#L1303-L1327)
+- [x] [TextInputWidgets.cpp:1303-1327](../src/widgets/TextInputWidgets.cpp#L1303-L1327)
       — o duplo e o triplo clique do TextEdit misturam índices de byte com
       colunas de codepoint ("olá mundo" seleciona "undo").
 

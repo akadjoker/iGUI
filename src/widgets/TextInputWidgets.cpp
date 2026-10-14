@@ -1304,29 +1304,34 @@ void TextEdit::onMousePress(MouseEvent& e)
         int line = cursor_.line;
         if (line >= 0 && line < static_cast<int>(lines_.size())) {
             if (e.clickCount == 2) {
-                // Select word under cursor
                 const auto& text = lines_[line];
-                int len = static_cast<int>(text.size());
+                ct::Vector<size_t> starts;
+                for (size_t b = 0; b < text.size(); b += utf8CharLen(text.c_str() + b))
+                    starts.push_back(b);
+                int len = static_cast<int>(starts.size());
                 int col = cursor_.col;
                 if (col > len) col = len;
-                // Find word boundaries (alphanumeric + underscore)
-                auto isWord = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+                // Letters outside ASCII count as word characters.
+                auto isWord = [&text, &starts](int c) {
+                    const unsigned char ch = static_cast<unsigned char>(text[starts[c]]);
+                    return ch >= 0x80 || std::isalnum(ch) || ch == '_';
+                };
                 int start = col, end = col;
-                if (col < len && isWord(text[col])) {
-                    while (start > 0   && isWord(text[start - 1])) --start;
-                    while (end   < len && isWord(text[end]))        ++end;
-                } else if (col > 0 && isWord(text[col - 1])) {
+                if (col < len && isWord(col)) {
+                    while (start > 0   && isWord(start - 1)) --start;
+                    while (end   < len && isWord(end))       ++end;
+                } else if (col > 0 && isWord(col - 1)) {
                     start = col - 1;
                     end   = col;
-                    while (start > 0   && isWord(text[start - 1])) --start;
-                    while (end   < len && isWord(text[end]))        ++end;
+                    while (start > 0   && isWord(start - 1)) --start;
+                    while (end   < len && isWord(end))       ++end;
                 }
                 selAnchor_ = { line, start };
                 cursor_    = { line, end };
             } else {
                 // Triple-click → select entire line
                 selAnchor_ = { line, 0 };
-                cursor_    = { line, static_cast<int>(lines_[line].size()) };
+                cursor_    = { line, lineColCount(line) };
             }
         }
     }
