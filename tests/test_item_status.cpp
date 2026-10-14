@@ -4115,6 +4115,79 @@ void test_table_without_frozen_rows_scrolls_the_first_row()
     for (int row = 0; row < kRows; ++row) assert(clicked[row] == (row == target));
 }
 
+// Uma tabela que rola e cujo conteúdo encolhe: a rolagem volta para dentro do que
+// existe, e as linhas que sobram ficam à vista.
+void test_table_scroll_is_clamped_when_rows_shrink()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    const float weights[2] = { 1.0f, 1.0f };
+    ig::TableStyle style;
+    style.scrollY = true;
+    style.height = 120.0f;
+    int rows = 20;
+    ig::Rect rects[20];
+    bool visible[20];
+
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 500.0f, 500.0f)));
+        if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f))
+        {
+            for (int row = 0; row < rows; ++row)
+            {
+                c.tableNextColumn();
+                c.label("linha");
+                rects[row] = c.itemRect();
+                visible[row] = c.isItemVisible();
+                c.tableNextColumn();
+                c.label("x");
+            }
+            c.endTable();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float top = rects[0].y;
+
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int i = 0; i < 30; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(50.0f, top + 20.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    assert(!visible[0]);
+    assert(visible[19]);
+
+    rows = 3;
+    harness.frame(build);
+    harness.frame(build);
+    assert(rects[0].y == top);
+    for (int row = 0; row < rows; ++row) assert(visible[row]);
+
+    rows = 8;
+    for (int i = 0; i < 30; ++i)
+    {
+        context.pushEvent(ig::Event::pointerMove(50.0f, top + 20.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+    }
+    const float bottomWhenScrolled = rects[7].y;
+    rows = 6;
+    harness.frame(build);
+    harness.frame(build);
+    assert(visible[5]);
+    assert(rects[5].y <= bottomWhenScrolled);
+    assert(rects[5].y + rects[5].height <= top + style.height);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -5120,6 +5193,7 @@ int main()
     test_submenu_inside_a_popup();
     test_table_sizing_fixed_fit();
     test_table_without_frozen_rows_scrolls_the_first_row();
+    test_table_scroll_is_clamped_when_rows_shrink();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;

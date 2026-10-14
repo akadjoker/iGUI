@@ -163,7 +163,7 @@ Lido: 10334-11542.
 - [x] **T1. Com `scrollY` e `freezeRows=0` (o valor por omissão) a linha 0 não
       rola** — [Gui.cpp:10538](../src/Gui.cpp#L10538), 11025. As outras linhas
       passam por cima dela, e o clique vai para a linha 0.
-- [ ] **T2. O `offsetY` não é limitado quando o conteúdo encolhe** —
+- [x] **T2. O `offsetY` não é limitado quando o conteúdo encolhe** —
       [Gui.cpp:10734](../src/Gui.cpp#L10734). As linhas ficam fora de vista e a
       roda não as traz de volta.
 - [ ] **T3. Com `scrollX` e `scrollY` a barra horizontal não se vê nem se arrasta** —
