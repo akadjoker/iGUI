@@ -1395,6 +1395,9 @@ void Context::beginFrame(const FrameInfo &frame)
     comboWasOpenAtFrameStart_ = openCombo_ != InvalidWidgetId;
     comboBoundsAtFrameStart_ = comboBounds_;
     comboPopupBoundsAtFrameStart_ = comboPopupBounds_;
+    dockTabListWasOpenAtFrameStart_ = dockTabListOpen_;
+    dockTabListBoundsAtFrameStart_ = dockTabListBounds_;
+    dockTabListOpen_ = false;
     for (int i = 0; i < popupDepth_; ++i)
     {
         popups_[i].wasOpenAtFrameStart = popups_[i].open;
@@ -10385,6 +10388,9 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
         WindowState *window = currentWindow();
         if (window)
         {
+            dockTabListOpen_ = true;
+            dockTabListBounds_ = tabListPopup;
+            dockTabListItemsSubmitted_ = true;
             window->overlayDrawList.addRectFilled(tabListPopup, theme_.menuBg, clip);
             window->overlayDrawList.addRect(tabListPopup, theme_.menuBorder, clip);
             int row = 0;
@@ -10434,6 +10440,7 @@ bool Context::beginDockPanel(StringView title, DockSlot slot, bool *open)
                               hideItem.y + (hideItem.height - metrics.height) * 0.5f),
                          theme_.fontSize, theme_.menuItemText, clip);
             }
+            dockTabListItemsSubmitted_ = false;
         }
     }
     }
@@ -13743,6 +13750,8 @@ bool Context::pointerBlockedByOpenPopup(const Vec2 &point) const
         if (contains(popups_[i].boundsAtFrameStart, point))
             insidePopup = true;
     }
+    if (dockTabListWasOpenAtFrameStart_ && contains(dockTabListBoundsAtFrameStart_, point))
+        return !dockTabListItemsSubmitted_;
     if (insideComboPopup || insideMenuPopup || insidePopup)
         return activeMenu_ == InvalidWidgetId && popupContentIndex_ < 0 &&
                !comboItemsSubmitted_;

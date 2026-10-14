@@ -2356,6 +2356,13 @@ private:
     bool comboWasOpenAtFrameStart_;
     Rect comboBoundsAtFrameStart_;
     Rect comboPopupBoundsAtFrameStart_;
+    // The same for the tab list of a dock region: its rect as drawn last frame,
+    // and whether its rows are being submitted right now.
+    Rect dockTabListBounds_ = Rect();
+    bool dockTabListOpen_ = false;
+    Rect dockTabListBoundsAtFrameStart_ = Rect();
+    bool dockTabListWasOpenAtFrameStart_ = false;
+    bool dockTabListItemsSubmitted_ = false;
     Rect comboBounds_;
     Rect comboPopupBounds_;
     // alignTextToFramePadding() pedido e ainda não consumido (ver label).

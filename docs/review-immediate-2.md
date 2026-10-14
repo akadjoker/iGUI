@@ -163,7 +163,9 @@ Lido: 9729-10333, 12535-12773, 13738-13762, e o `WindowStateIni.hpp`.
 
 Não confirmados: um `DockSlot` fora do enum indexa fora do array (confirmado,
 rebentava; corrigido: conta como o centro); o popup da
-lista de tabs não é um popup registado e pode deixar o clique cair no splitter.
+lista de tabs não é um popup registado e pode deixar o clique cair no splitter
+(confirmado no conteúdo por baixo, que ficava com o hover; corrigido: a lista
+passa a contar como popup).
 
 ## Tabelas e listas virtuais
 
