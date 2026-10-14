@@ -5904,6 +5904,56 @@ void test_maximized_window_stays_below_the_main_menu_bar()
     assert(mainLabel.y >= bar);
 }
 
+// Um child que sai de vista continua a ocupar o lugar dele: o que vem a seguir
+// anda com a rolagem, sem saltar.
+void test_child_out_of_view_keeps_its_place()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+
+    ig::Rect first;
+    bool innerShown = false;
+    auto build = [&](ig::Context& c)
+    {
+        assert(c.beginWindow("A", ig::Rect(0.0f, 0.0f, 300.0f, 400.0f)));
+        if (c.beginChild("fora", 150.0f))
+        {
+            innerShown = c.beginChild("dentro", 60.0f);
+            if (innerShown)
+            {
+                c.label("dentro");
+                c.endChild();
+            }
+            for (int i = 0; i < 12; ++i)
+            {
+                char name[8];
+                snprintf(name, sizeof(name), "b%d", i);
+                c.button(name);
+                if (i == 0) first = c.itemRect();
+            }
+            c.endChild();
+        }
+        c.endWindow();
+    };
+
+    harness.frame(build);
+    harness.frame(build);
+    const float start = first.y;
+    ig::Event wheel;
+    wheel.type = ig::EventType::PointerWheel;
+    wheel.wheelY = -1.0f;
+    for (int step = 1; step <= 5; ++step)
+    {
+        context.pushEvent(ig::Event::pointerMove(100.0f, 100.0f));
+        context.pushEvent(wheel);
+        harness.frame(build);
+        harness.frame(build);
+        assert(first.y == start - context.theme().widgetHeight * static_cast<float>(step));
+    }
+    assert(!innerShown);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6941,6 +6991,7 @@ int main()
     test_escape_closes_a_popup_inside_a_dialog_first();
     test_window_without_open_flag_has_no_close_button();
     test_maximized_window_stays_below_the_main_menu_bar();
+    test_child_out_of_view_keeps_its_place();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
