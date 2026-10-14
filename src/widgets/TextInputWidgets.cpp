@@ -607,12 +607,7 @@ String TextEdit::expandTabs(const String& text, int startVisCol) const
             visCol += spaces;
             i++;
         } else {
-            // Advance one UTF-8 character
-            unsigned char uc = static_cast<unsigned char>(text[i]);
-            int seqLen = 1;
-            if (uc >= 0xF0)      seqLen = 4;
-            else if (uc >= 0xE0) seqLen = 3;
-            else if (uc >= 0xC0) seqLen = 2;
+            int seqLen = utf8CharLen(text.c_str() + i);
             for (int k = 0; k < seqLen && i + k < text.size(); k++)
                 out += text[i + k];
             visCol++;
@@ -641,11 +636,7 @@ String TextEdit::expandTabsVisible(const String& text, int startVisCol) const
             visCol++;
             i++;
         } else {
-            unsigned char uc = static_cast<unsigned char>(text[i]);
-            int seqLen = 1;
-            if (uc >= 0xF0)      seqLen = 4;
-            else if (uc >= 0xE0) seqLen = 3;
-            else if (uc >= 0xC0) seqLen = 2;
+            int seqLen = utf8CharLen(text.c_str() + i);
             for (int k = 0; k < seqLen && i + k < text.size(); k++)
                 out += text[i + k];
             visCol++;

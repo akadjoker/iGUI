@@ -164,7 +164,7 @@ arranjar deve ganhar o seu teste em `tests/test_original_widgets.cpp`.
 
 ## Texto
 
-- [ ] **14. UTF-8 inválido aborta o processo** —
+- [x] **14. UTF-8 inválido aborta o processo** —
       [Utf8.hpp:32](../include/igui/widgets/Utf8.hpp#L32) (`utf8CharLen`).
       Confia no byte inicial, por isso o `utf8ByteOffset()` e o `utf8Length()`
       saltam para lá do fim em sequências truncadas ou em Latin-1, e devolvem
