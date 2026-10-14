@@ -223,7 +223,7 @@ Lido: 5532-6375, 6990-8518, 11593-11849, 12337-12401.
 - [x] **M5. `wrapText` acrescenta uma linha vazia quando o corte cai em espaços antes
       de um `\n`** — [Gui.cpp:11733](../src/Gui.cpp#L11733). Afeta o
       `textWrapped` e o `bulletText`.
-- [ ] **M6. `beginDragSource` rouba o `activeWidget_` ao item a que pertence** —
+- [x] **M6. `beginDragSource` rouba o `activeWidget_` ao item a que pertence** —
       [Gui.cpp:8290](../src/Gui.cpp#L8290). Depois de um `button` o arrasto nunca
       começa; antes de um `selectable`, o selectable nunca devolve o clique.
 - [ ] **M7. `acceptDragDropTarget` aceita a largada através de uma janela por cima** —
