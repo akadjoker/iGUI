@@ -1250,6 +1250,7 @@ Context::Context(Backend &backend, TextProvider *textProvider)
     toastDrawList_.shareGeometry(frameDrawList_);
     modalDrawList_.shareGeometry(frameDrawList_);
     comboDrawList_.shareGeometry(frameDrawList_);
+    dialogScrimDrawList_.shareGeometry(frameDrawList_);
 }
 
 void Context::pushEvent(const Event &event)
@@ -1314,6 +1315,7 @@ void Context::beginFrame(const FrameInfo &frame)
     modalDrawList_.clear();
     tooltipDrawList_.clear();
     modalPopupDrawList_.clear();
+    dialogScrimDrawList_.clear();
     // O mesmo para o conteúdo de um combo de conteúdo livre: quem o quiser tem de
     // voltar a chamar beginCombo (ver beginCombo/endCombo).
     comboDrawList_.clear();
@@ -1349,6 +1351,7 @@ void Context::beginFrame(const FrameInfo &frame)
     applySolidStyle(tooltipDrawList_);
     applySolidStyle(modalPopupDrawList_);
     applySolidStyle(comboDrawList_);
+    applySolidStyle(dialogScrimDrawList_);
     for (ct::Vector<ToastState>::size_type i = 0u; i < toasts_.size(); ++i)
     {
         if (toasts_[i].remaining > 0.0f)
@@ -1560,8 +1563,11 @@ const DrawData &Context::endFrame()
     for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
     {
         const WindowState *window = windows_.get(windowOrder_[i]);
-        if (window && window->open)
-            frameDrawList_.append(window->drawList);
+        if (!window || !window->open)
+            continue;
+        if (window->id == modalWindowId_)
+            frameDrawList_.append(dialogScrimDrawList_);
+        frameDrawList_.append(window->drawList);
     }
     for (ct::Vector<WindowHandle>::size_type i = 0; i < windowOrder_.size(); ++i)
     {
@@ -1832,10 +1838,7 @@ bool Context::beginDialog(StringView title, bool &open, const Vec2 &size)
     const Rect bounds((viewport.width - width) * 0.5f, (viewport.height - height) * 0.5f,
                       width, height);
 
-    // The scrim goes on the frame draw list rather than modalDrawList_, which
-    // messageBox owns - a message box raised from inside a dialog must still
-    // paint its own scrim over this one.
-    frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
+    dialogScrimDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
 
     forceWindowBounds_ = true;
     const bool opened = beginWindow(title, bounds, &open);
@@ -4087,9 +4090,7 @@ bool Context::beginPopupModal(StringView titleText, bool *open)
     const float y = (viewport.height - height) * 0.5f;
     entry.bounds = Rect(x > viewport.x ? x : viewport.x, y > viewport.y ? y : viewport.y,
                         width, height);
-    // O resto da interface fica atrás de um véu: sai na lista do frame (por baixo
-    // das janelas, como o scrim do beginDialog).
-    frameDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
+    modalPopupDrawList_.addRectFilled(viewport, theme_.dialogScrim, viewport);
     entry.modal = true;
     entry.frame = frameNumber_;
     entry.window = currentWindow_;

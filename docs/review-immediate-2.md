@@ -87,9 +87,10 @@ Lido: 1254-2160, 9582-9728, 11850-12090, 12402-12960, 13043-13092, 13335-13769.
       janela), 9630 (scrollbar do child), e o mesmo com um slider. `wantsPointer()`
       fica a 1 e nenhum clique chega a outro widget.
       *Arranjo:* no `beginFrame`, largar o ativo que não foi visto no frame anterior.
-- [ ] **W6. O scrim do `beginDialog` nunca se desenha** —
+- [x] **W6. O scrim do `beginDialog` nunca se desenha** —
       [Gui.cpp:1811](../src/Gui.cpp#L1811). Vai para o `frameDrawList_`, cujos
-      comandos o `endFrame` limpa (1526) antes de juntar as listas.
+      comandos o `endFrame` limpa (1526) antes de juntar as listas. O scrim do
+      `beginPopupModal` tinha o mesmo defeito (corrigido no mesmo commit).
 - [ ] **W7. O Escape que fecha um popup dentro do `beginDialog` fecha também o
       diálogo** — [Gui.cpp:1793](../src/Gui.cpp#L1793).
 - [ ] **W8. Uma janela sem `bool *open` mostra o X, e o clique fecha-a sem volta** —

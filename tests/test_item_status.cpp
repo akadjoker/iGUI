@@ -5660,6 +5660,86 @@ void test_tab_stays_in_its_window()
     assert(a1 == "a1Z");
 }
 
+// A ordem de desenho do primeiro vértice com esta cor (-1 se nenhum): a posição no
+// fluxo de índices, comando a comando.
+static int firstDrawWithColor(const ig::DrawData& data, const ig::Color& color)
+{
+    int position = 0;
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
+    {
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Geometry) continue;
+        const ig::GeometryCommand& geometry = command.payload.geometry;
+        for (uint32_t index = 0u; index < geometry.indexCount; ++index, ++position)
+        {
+            const ig::DrawVertex& vertex =
+                    data.vertices[static_cast<uint32_t>(geometry.vertexOffset) +
+                                  data.indices[geometry.firstIndex + index]];
+            if (vertex.color.r == color.r && vertex.color.g == color.g &&
+                    vertex.color.b == color.b && vertex.color.a == color.a)
+                return position;
+        }
+    }
+    return -1;
+}
+
+// O scrim do beginDialog e o do beginPopupModal desenham-se: por cima do que está
+// atrás e por baixo da caixa.
+void test_dialog_and_modal_popup_scrims_are_drawn()
+{
+    ig::TestBackend backend;
+    ig::Context context(backend);
+    ig::Harness harness(context);
+    ig::Theme theme = context.theme();
+    theme.dialogScrim = ig::Color(7u, 8u, 9u, 100u);
+    theme.windowBackground = ig::Color(21u, 22u, 23u, 255u);
+    theme.menuBg = ig::Color(31u, 32u, 33u, 255u);
+    context.setTheme(theme);
+
+    bool dialogOpen = true;
+    bool popupRequest = false;
+    bool usePopup = false;
+    auto build = [&](ig::Context& c)
+    {
+        if (c.beginWindow("fundo", ig::Rect(0.0f, 0.0f, 600.0f, 400.0f)))
+        {
+            c.label("fundo");
+            if (popupRequest)
+            {
+                c.openPopup("Modal");
+                popupRequest = false;
+            }
+            if (usePopup && c.beginPopupModal("Modal"))
+            {
+                c.label("modal");
+                c.endPopup();
+            }
+            c.endWindow();
+        }
+        if (!usePopup && c.beginDialog("Dialogo", dialogOpen, ig::Vec2(300.0f, 200.0f)))
+        {
+            c.label("dialogo");
+            c.endDialog();
+        }
+    };
+
+    harness.frame(build);
+    const ig::DrawData& dialogFrame = harness.frame(build);
+    const int dialogScrim = firstDrawWithColor(dialogFrame, theme.dialogScrim);
+    assert(dialogScrim >= 0);
+    assert(firstDrawWithColor(dialogFrame, theme.windowBackground) < dialogScrim);
+
+    usePopup = true;
+    popupRequest = true;
+    harness.frame(build);
+    harness.frame(build);
+    const ig::DrawData& popupFrame = harness.frame(build);
+    const int popupScrim = firstDrawWithColor(popupFrame, theme.dialogScrim);
+    const int box = firstDrawWithColor(popupFrame, theme.menuBg);
+    assert(popupScrim >= 0);
+    assert(box > popupScrim);
+}
+
 // SizingFixedFit: as colunas ficam com a largura do maior conteúdo delas (a do frame
 // anterior), em vez de dividirem a largura da tabela pelos pesos.
 void test_table_sizing_fixed_fit()
@@ -6693,6 +6773,7 @@ int main()
     test_popup_over_another_window_keeps_its_owner();
     test_modal_popup_keeps_the_keyboard();
     test_tab_stays_in_its_window();
+    test_dialog_and_modal_popup_scrims_are_drawn();
     test_hash_marker();
     printf("test_item_status: all tests passed\n");
     return 0;
