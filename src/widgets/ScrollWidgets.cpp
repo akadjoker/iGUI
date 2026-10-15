@@ -669,6 +669,35 @@ void ListWidget::onMouseScroll(MouseEvent& e)
 void ListWidget::onMousePress(MouseEvent& e)
 {
     if (e.button != 0) return;
+    // A press that reaches the list was not taken by a widget of the row, so
+    // the list takes the focus the row did not.
+    if (!focused_ && isEnabledInTree()) WidgetApp::instance().setFocused(this);
     int idx = rowAtY(e.y);
     if (idx >= 0) setSelectedIndex(idx);
+}
+
+void ListWidget::scrollToRow(int index)
+{
+    const float rh = rowH();
+    const float top = static_cast<float>(index) * rh;
+    if (top < scrollOffset_) scrollOffset_ = top;
+    else if (top + rh > scrollOffset_ + rect_.h)
+        scrollOffset_ = top + rh - rect_.h;
+    clampScroll();
+    if (vbar_) vbar_->setValue(scrollOffset_);
+    markDirty();
+}
+
+void ListWidget::onKeyPress(KeyEvent& e)
+{
+    if (!focused_ || !isEnabledInTree()) return;
+    int next = -1;
+    if (e.key == ig::retained::Key::Up && selectedIdx_ > 0) next = selectedIdx_ - 1;
+    else if (e.key == ig::retained::Key::Down && selectedIdx_ < rowCount() - 1)
+        next = selectedIdx_ + 1;
+    else
+        return;
+    e.consumed = true;
+    setSelectedIndex(next);
+    scrollToRow(next);
 }

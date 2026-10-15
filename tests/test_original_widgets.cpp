@@ -4199,6 +4199,78 @@ static void test_list_widget_places_rows_added_after_layout()
     assert(!bar->needed() && bar->value() == 0.0f);
 }
 
+// A ListWidget aceita foco (também pelo Tab) e anda pelas setas como a
+// ListBox. Um clique numa
+// linha de texto dá-lhe o foco; um clique num botão de uma linha deixa o foco
+// no botão. A vista de duas linhas acompanha a seleção: depois de descer à
+// linha 2, a linha 1 (o botão) está no topo.
+static void test_list_widget_moves_with_the_arrow_keys()
+{
+    using namespace ig::retained;
+    const float rowH = Theme::instance().buttonHeight + 8.0f;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("listkeys");
+    auto* list = stage->createChild<ListWidget>();
+    list->addRow<Label>("zero");
+    auto* button = list->addRow<Button>("one");
+    for (int i = 0; i < 3; ++i) list->addRow<Label>("row");
+    assert(app.setStage("listkeys", TransitionType::None));
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = rowH * 2.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    auto click = [&app, &io](float y)
+    {
+        io.mouseX = 100.0f;
+        io.mouseY = y;
+        app.update(io);
+        io.mouseDown[0] = true;
+        app.update(io);
+        io.mouseDown[0] = false;
+        app.update(io);
+    };
+    auto key = [&app, &io](int code)
+    {
+        IO::KeyEvent press;
+        press.key = code;
+        io.keyEvents.push_back(press);
+        app.update(io);
+        io.keyEvents.clear();
+    };
+    auto direct = [list](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        list->onKeyPress(press);
+        return press.consumed;
+    };
+
+    click(rowH * 0.5f);
+    assert(app.focused() == list && list->selectedIndex() == 0);
+    assert(!direct(Key::Up));
+    key(Key::Down);
+    key(Key::Down);
+    assert(list->selectedIndex() == 2);
+    click(rowH * 0.5f);
+    assert(list->selectedIndex() == 1);
+    assert(app.focused() == button);
+
+    app.setFocused(list);
+    key(Key::Down);
+    key(Key::Down);
+    key(Key::Down);
+    assert(list->selectedIndex() == 4);
+    assert(!direct(Key::Down));
+    key(Key::Up);
+    assert(list->selectedIndex() == 3);
+    app.setFocused(nullptr);
+    assert(!direct(Key::Up));
+    key(Key::Tab);
+    assert(app.focused() == list);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4676,6 +4748,7 @@ int main()
     test_tree_view_moves_with_the_arrow_keys();
     test_list_box_moves_with_the_arrow_keys();
     test_list_widget_places_rows_added_after_layout();
+    test_list_widget_moves_with_the_arrow_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
