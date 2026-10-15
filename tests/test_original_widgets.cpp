@@ -2871,7 +2871,8 @@ static void test_text_edit_measures_again_after_zoom_and_tab_size()
 }
 
 // As edições só voltam a medir as linhas que mudaram: depois de cada passo
-// (escrever, Enter, apagar e juntar linhas com Backspace e Delete, substituir
+// (escrever, Enter no meio, no início e no fim de uma linha, apagar e juntar
+// linhas com Backspace e Delete, também com linhas vazias, substituir
 // uma seleção de várias linhas, colar várias linhas, várias edições sem pintar
 // no meio), o TextEdit pinta exatamente o mesmo que com o mesmo texto medido do
 // zero, com e sem word-wrap.
@@ -3000,6 +3001,45 @@ static void test_text_edit_wraps_only_the_edited_lines()
         edit->setCursorPos(1, 0);
         key(Key::Tab);
         assert(edit->lineCount() == 8);
+        assert(matchesFresh());
+        edit->setCursorPos(2, 0);
+        key(Key::Return);
+        edit->setCursorPos(4, static_cast<int>(edit->lineAt(4).size()));
+        key(Key::Return);
+        assert(edit->lineCount() == 10);
+        assert(matchesFresh());
+        auto length = [edit](int line) { return static_cast<int>(edit->lineAt(line).size()); };
+        edit->setCursorPos(3, 0);
+        key(Key::Backspace);
+        assert(edit->lineCount() == 9);
+        edit->setCursorPos(4, 0);
+        assert(edit->lineAt(4).empty());
+        key(Key::Backspace);
+        assert(edit->lineCount() == 8);
+        assert(matchesFresh());
+        edit->setCursorPos(1, length(1));
+        key(Key::Return);
+        snapshot();
+        edit->setCursorPos(1, length(1));
+        key(Key::Delete);
+        edit->setCursorPos(1, 0);
+        key(Key::Return);
+        snapshot();
+        edit->setCursorPos(1, 0);
+        assert(edit->lineAt(1).empty());
+        key(Key::Delete);
+        assert(edit->lineCount() == 8);
+        assert(matchesFresh());
+        edit->insertTextAt({ 2, 0 }, "front line\n");
+        snapshot();
+        edit->insertTextAt({ 4, length(4) }, "\nback");
+        assert(edit->lineCount() == 10);
+        assert(matchesFresh());
+        edit->setSelection({ 1, 0 }, { 3, 0 });
+        key(Key::Delete);
+        edit->setSelection({ 3, length(3) }, { 5, length(5) });
+        key(Key::Delete);
+        assert(edit->lineCount() == 6);
         assert(matchesFresh());
         edit->setSelection({ 0, 0 }, { edit->lineCount() - 1, 2 });
         key(Key::Delete);
@@ -3321,6 +3361,131 @@ static void test_code_editor_rows_follow_the_folds_after_undo()
     paint();
     assert(editor->lineAt(6) == "    return 2;");
     assert(rowLines() == (editor->isFolded(1) ? "0 1 4 5 6 7 8 8 8 " : "0 1 2 3 4 5 6 7 8 "));
+}
+
+// Um bloco dobrado continua dobrado quando o texto muda à volta dele, e anda com
+// a sua linha: Enter noutra linha, Enter no início do documento ou da própria
+// linha, juntar a linha vazia de volta, undo, remover e duplicar uma linha
+// acima. Um setText novo não herda dobras, e as do texto novo dobram.
+static void test_code_editor_folds_survive_edits()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("foldedits");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    editor->setShowMinimap(false);
+    editor->setHighlighterForFile("main.cpp");
+    editor->setText("int a()\n{\n    return 1;\n}\nint b()\n{\n    return 2;\n}\nend");
+    assert(app.setStage("foldedits", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto paint = [&app, &io, font]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+    };
+    const Theme& theme = Theme::instance();
+    const float rowHeight = theme.fontSize + theme.lineSpacing;
+    auto rowLines = [&](int rows)
+    {
+        const TextEdit::TextPos keep = editor->cursorPos();
+        String lines;
+        for (int row = 0; row < rows; ++row)
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.clickCount = 1;
+            press.localX = 300.0f;
+            press.localY = rowHeight * (static_cast<float>(row) + 0.5f);
+            press.x = press.localX;
+            press.y = press.localY;
+            editor->onMousePress(press);
+            MouseEvent release = press;
+            editor->onMouseRelease(release);
+            lines += String::number(editor->cursorPos().line) + " ";
+        }
+        editor->setCursorPos(keep);
+        return lines;
+    };
+    auto key = [editor](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        editor->onKeyPress(press);
+    };
+    paint();
+    editor->foldAt(1);
+    paint();
+    app.setFocused(editor);
+
+    editor->setCursorPos(6, 13);
+    key(Key::Return);
+    paint();
+    assert(editor->lineCount() == 10);
+    assert(editor->isFolded(1));
+    assert(rowLines(8) == "0 1 4 5 6 7 8 9 ");
+
+    editor->setCursorPos(0, 0);
+    key(Key::Return);
+    paint();
+    assert(editor->lineAt(2) == "{");
+    assert(!editor->isFolded(1) && editor->isFolded(2));
+    assert(rowLines(8) == "0 1 2 5 6 7 8 9 ");
+
+    editor->setCursorPos(1, 0);
+    key(Key::Backspace);
+    paint();
+    assert(editor->lineAt(1) == "{");
+    assert(editor->isFolded(1));
+    assert(rowLines(8) == "0 1 4 5 6 7 8 9 ");
+
+    editor->undo();
+    paint();
+    assert(editor->isFolded(2));
+    editor->redo();
+    paint();
+    assert(editor->isFolded(1));
+    assert(rowLines(8) == "0 1 4 5 6 7 8 9 ");
+
+    editor->setCursorPos(0, 0);
+    editor->duplicateLine();
+    paint();
+    assert(editor->isFolded(2));
+    editor->setCursorPos(0, 0);
+    editor->removeLine();
+    paint();
+    assert(editor->isFolded(1));
+    assert(rowLines(8) == "0 1 4 5 6 7 8 9 ");
+
+    editor->setAutoIndent(false);
+    editor->setCursorPos(1, 0);
+    key(Key::Return);
+    paint();
+    assert(editor->lineAt(2) == "{");
+    assert(editor->isFolded(2));
+    assert(rowLines(8) == "0 1 2 5 6 7 8 9 ");
+    editor->setCursorPos(2, 0);
+    key(Key::Backspace);
+    paint();
+    assert(editor->isFolded(1));
+    editor->setAutoIndent(true);
+
+    editor->setText("x\ny\nint c()\n{\n    return 3;\n}\nend");
+    paint();
+    assert(!editor->isFolded(1) && !editor->isFolded(3));
+    assert(rowLines(7) == "0 1 2 3 4 5 6 ");
+    editor->foldAt(3);
+    paint();
+    assert(editor->isFolded(3));
+    assert(rowLines(5) == "0 1 2 3 6 ");
 }
 
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
@@ -3708,6 +3873,7 @@ int main()
     test_code_editor_highlights_the_cursor_row_while_typing_wrapped();
     test_code_editor_rows_skip_folded_lines();
     test_code_editor_rows_follow_the_folds_after_undo();
+    test_code_editor_folds_survive_edits();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

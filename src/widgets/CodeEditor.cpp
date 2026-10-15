@@ -182,6 +182,12 @@ void CodeEditor::rebuildFoldRanges()
         }
     }
 
+    // A fold stays collapsed while it starts on the same line; edits move that
+    // line with them (onLinesChanged).
+    for (FoldRange& fr: foldRanges_)
+        for (const FoldRange& old: collapsedBefore)
+            if (old.startLine == fr.startLine) fr.collapsed = true;
+
     // The wrap gives hidden lines no rows: it follows any change in what is hidden.
     ct::Vector<FoldRange>::size_type collapsedAfter = 0;
     bool sameHidden = true;
@@ -195,6 +201,32 @@ void CodeEditor::rebuildFoldRanges()
         ++collapsedAfter;
     }
     if (!sameHidden || collapsedAfter != collapsedBefore.size()) invalidateWrap();
+}
+
+void CodeEditor::onLinesChanged(int line, int removed, int inserted)
+{
+    if (lineCount() == inserted)
+    {
+        if (!foldRanges_.empty()) invalidateWrap();
+        foldRanges_.clear();
+        hlDirty_ = true;
+        return;
+    }
+    const int delta = inserted - removed;
+    bool unfolded = false;
+    for (FoldRange& fr: foldRanges_)
+    {
+        if (fr.startLine >= line + removed) fr.startLine += delta;
+        else if (fr.startLine > line || (fr.startLine == line && inserted == 0))
+        {
+            unfolded = unfolded || fr.collapsed;
+            fr.collapsed = false;
+        }
+        if (fr.endLine >= line + removed) fr.endLine += delta;
+        else if (fr.endLine >= line)
+            fr.endLine = std::max(fr.startLine, line + inserted - 1);
+    }
+    if (unfolded) invalidateWrap();
 }
 
 void CodeEditor::foldAt(int line)
@@ -1610,6 +1642,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
                     size_t byteStart = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
                     lines_[cursor_.line].erase(byteStart, byteEnd - byteStart);
                     selAnchor_ = cursor_;
+                    linesChanged(cursor_.line, 1, 1);
                 } else if (cursor_.line > 0) {
                     mergeWithPrevLine();
                 }
@@ -1619,6 +1652,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
                     size_t be = utf8ByteOffset(lines_[cursor_.line], cursor_.col + 1);
                     lines_[cursor_.line].erase(bs, be - bs);
                     selAnchor_ = cursor_;
+                    linesChanged(cursor_.line, 1, 1);
                 } else if (cursor_.line < lineCount() - 1) {
                     mergeWithNextLine();
                 }
@@ -1713,6 +1747,7 @@ void CodeEditor::onTextInput(KeyEvent& e)
             // Direct insert (no signal spam)
             size_t bytePos = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
             lines_[cursor_.line].insert(bytePos, inputText);
+            linesChanged(cursor_.line, 1, 1);
             cursor_.col += utf8Length(inputText);
             selAnchor_ = cursor_;
             ci.pos = cursor_;
@@ -2062,6 +2097,7 @@ void CodeEditor::moveLineUp()
     if (readOnly_ || cursor_.line <= 0) return;
     int ln = cursor_.line;
     std::swap(lines_[ln], lines_[ln - 1]);
+    linesChanged(ln - 1, 2, 2);
     cursor_.line--;
     selAnchor_ = cursor_;
     hlDirty_ = true;
@@ -2074,6 +2110,7 @@ void CodeEditor::moveLineDown()
     if (readOnly_ || cursor_.line >= lineCount() - 1) return;
     int ln = cursor_.line;
     std::swap(lines_[ln], lines_[ln + 1]);
+    linesChanged(ln, 2, 2);
     cursor_.line++;
     selAnchor_ = cursor_;
     hlDirty_ = true;
@@ -2116,9 +2153,15 @@ void CodeEditor::removeLine()
         }
     }
 
-    if (lc <= 1) { lines_[0].clear(); cursor_ = {0, 0}; }
+    if (lc <= 1)
+    {
+        lines_[0].clear();
+        cursor_ = { 0, 0 };
+        linesChanged(0, 1, 1);
+    }
     else {
         lines_.erase(lines_.begin() + ln);
+        linesChanged(ln, 1, 0);
         if (cursor_.line >= lineCount()) cursor_.line = lineCount() - 1;
         cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
     }
@@ -2136,6 +2179,7 @@ void CodeEditor::duplicateLine()
     if (readOnly_) return;
     int ln = cursor_.line;
     lines_.insert(lines_.begin() + ln + 1, lines_[ln]);
+    linesChanged(ln + 1, 0, 1);
     cursor_.line++;
     selAnchor_ = cursor_;
     hlDirty_ = true;
@@ -2148,6 +2192,7 @@ void CodeEditor::indent()
     if (readOnly_) return;
     int ln = cursor_.line;
     lines_[ln].insert(0, "\t");
+    linesChanged(ln, 1, 1);
     cursor_.col++;
     selAnchor_ = cursor_;
     hlDirty_ = true;
@@ -2172,6 +2217,7 @@ void CodeEditor::unindent()
             cursor_.col = std::max(0, cursor_.col - spaces);
         }
     }
+    linesChanged(ln, 1, 1);
     selAnchor_ = cursor_;
     hlDirty_ = true;
     invalidateWrap();
@@ -2207,6 +2253,7 @@ void CodeEditor::toggleComment()
         if (cursor_.col >= static_cast<int>(ws))
             cursor_.col += static_cast<int>(prefix.size());
     }
+    linesChanged(ln, 1, 1);
     selAnchor_ = cursor_;
     hlDirty_ = true;
     invalidateWrap();

@@ -446,6 +446,7 @@ bool TextEdit::hasMarker(int line, MarkerType type) const
 
 void TextEdit::setText(const String& text)
 {
+    const int oldCount = static_cast<int>(lines_.size());
     lines_.clear();
     String line;
     for (char c : text)
@@ -463,6 +464,7 @@ void TextEdit::setText(const String& text)
         wrapRows_[i].push_back({ 0, lineColCount(i) });
     rowStartsDirty_ = true;
     wrapDirty_ = true;
+    linesChanged(0, oldCount, static_cast<int>(lines_.size()));
     markDirty();
 }
 
@@ -808,6 +810,8 @@ void TextEdit::deleteSelection()
 {
     if (!hasSelection()) return;
     TextPos s = selectionStart(), e = selectionEnd();
+    const bool wholeLines = s.col == 0 && e.col == 0;
+    const bool afterLastCol = s.col == lineColCount(s.line) && e.col == lineColCount(e.line);
     if (s.line == e.line)
     {
         size_t bs = utf8ByteOffset(lines_[s.line], s.col);
@@ -822,7 +826,11 @@ void TextEdit::deleteSelection()
         lines_.erase(lines_.begin() + s.line + 1, lines_.begin() + e.line + 1);
     }
     cursor_ = s; selAnchor_ = cursor_;
-    linesChanged(s.line, e.line - s.line + 1, 1);
+    if (s.line != e.line && wholeLines) linesChanged(s.line, e.line - s.line, 0);
+    else if (s.line != e.line && afterLastCol)
+        linesChanged(s.line + 1, e.line - s.line, 0);
+    else
+        linesChanged(s.line, e.line - s.line + 1, 1);
 }
 
 void TextEdit::insertTextAtCursor(const String& t)
@@ -837,6 +845,9 @@ void TextEdit::insertTextAtCursor(const String& t)
     }
     insertLines.push_back(std::move(line));
     const int firstLine = cursor_.line;
+    const int added = static_cast<int>(insertLines.size()) - 1;
+    const bool beforeLine = cursor_.col == 0 && insertLines.back().empty();
+    const bool afterLine = cursor_.col == lineColCount(cursor_.line) && insertLines[0].empty();
     if (insertLines.size() == 1)
     {
         size_t bytePos = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
@@ -855,7 +866,11 @@ void TextEdit::insertTextAtCursor(const String& t)
         cursor_.col  = utf8Length(insertLines.back());
     }
     selAnchor_ = cursor_;
-    linesChanged(firstLine, 1, static_cast<int>(insertLines.size()));
+    if (added > 0 && beforeLine) linesChanged(firstLine, 0, added);
+    else if (added > 0 && afterLine)
+        linesChanged(firstLine + 1, 0, added);
+    else
+        linesChanged(firstLine, 1, added + 1);
     markDirty();
     textChanged.emit();
     cursorMoved.emit(cursor_);
@@ -865,13 +880,20 @@ void TextEdit::splitLine()
 {
     if (readOnly_) return;
     deleteSelection();
-    String tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
-    lines_[cursor_.line] = utf8Substr(lines_[cursor_.line], 0, cursor_.col);
-    lines_.insert(lines_.begin() + cursor_.line + 1, tail);
+    const int line = cursor_.line;
+    const int length = lineColCount(line);
+    const int col = cursor_.col;
+    String tail = utf8Substr(lines_[line], col, length);
+    lines_[line] = utf8Substr(lines_[line], 0, col);
+    lines_.insert(lines_.begin() + line + 1, tail);
     cursor_.line++;
     cursor_.col = 0;
     selAnchor_ = cursor_;
-    linesChanged(cursor_.line - 1, 1, 2);
+    if (col == 0) linesChanged(line, 0, 1);
+    else if (col == length)
+        linesChanged(line + 1, 0, 1);
+    else
+        linesChanged(line, 1, 2);
     markDirty();
     textChanged.emit();
     cursorMoved.emit(cursor_);
@@ -880,21 +902,35 @@ void TextEdit::splitLine()
 void TextEdit::mergeWithPrevLine()
 {
     if (cursor_.line <= 0) return;
-    int prevCol = lineColCount(cursor_.line - 1);
-    lines_[cursor_.line - 1] += lines_[cursor_.line];
-    lines_.erase(lines_.begin() + cursor_.line);
+    const int line = cursor_.line;
+    const bool lineEmpty = lines_[line].empty();
+    const bool prevEmpty = lines_[line - 1].empty();
+    int prevCol = lineColCount(line - 1);
+    lines_[line - 1] += lines_[line];
+    lines_.erase(lines_.begin() + line);
     cursor_.line--;
     cursor_.col = prevCol;
     selAnchor_ = cursor_;
-    linesChanged(cursor_.line, 2, 1);
+    if (lineEmpty) linesChanged(line, 1, 0);
+    else if (prevEmpty)
+        linesChanged(line - 1, 1, 0);
+    else
+        linesChanged(line - 1, 2, 1);
 }
 
 void TextEdit::mergeWithNextLine()
 {
     if (cursor_.line >= static_cast<int>(lines_.size()) - 1) return;
-    lines_[cursor_.line] += lines_[cursor_.line + 1];
-    lines_.erase(lines_.begin() + cursor_.line + 1);
-    linesChanged(cursor_.line, 2, 1);
+    const int line = cursor_.line;
+    const bool lineEmpty = lines_[line].empty();
+    const bool nextEmpty = lines_[line + 1].empty();
+    lines_[line] += lines_[line + 1];
+    lines_.erase(lines_.begin() + line + 1);
+    if (nextEmpty) linesChanged(line + 1, 1, 0);
+    else if (lineEmpty)
+        linesChanged(line, 1, 0);
+    else
+        linesChanged(line, 2, 1);
 }
 
 float TextEdit::computeGutterWidth(const ig::retained::Font& font) const
@@ -1011,6 +1047,7 @@ bool TextEdit::wrapNeedsRebuild(const PaintContext& ctx, float textW) const
 
 void TextEdit::linesChanged(int line, int removed, int inserted)
 {
+    onLinesChanged(line, removed, inserted);
     if (wrapDirty_) return;
     const int count = static_cast<int>(wrapRows_.size());
     if (line < 0 || removed < 0 || inserted < 0 || line + removed > count ||

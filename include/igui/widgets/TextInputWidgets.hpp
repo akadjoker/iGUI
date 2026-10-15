@@ -281,6 +281,10 @@ protected:
     float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
     void linesChanged(int line, int removed, int inserted);
+    // Told about every change to lines_: `removed` lines at `line` became `inserted`.
+    virtual void onLinesChanged(int, int, int)
+    {
+    }
     void updateWrap(PaintContext& ctx);
     int  logicalToVisualRow(int line, int row = 0) const;
     String expandTabs(const String& text) const;
