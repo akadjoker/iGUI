@@ -266,5 +266,7 @@ Só por leitura:
 - [ ] **Marcadores da goteira não acompanham as linhas** (`setMarker`): um
       Enter acima de um breakpoint deixa-o na linha antiga. Precisa de decisão:
       se a API conta com a aplicação a gerir as linhas ou se devem deslocar-se.
-- [ ] Atualizar o submódulo do iGUI no prisma3d (ramo
+- [x] Atualizar o submódulo do iGUI no prisma3d (ramo
       `dev/fervent-johnson-6h17x3`), construir e correr os testes de lá.
+- [x] **Auto-indent do Enter** dobrava a indentação de uma linha quando o
+      Enter era dado no início dela; corrigido.
