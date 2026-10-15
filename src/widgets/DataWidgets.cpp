@@ -1686,19 +1686,18 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
             if (flatList_[i].node == selectedNode_) { curIdx = i; break; }
 
-        if (e.key == ig::retained::Key::Up && curIdx > 0) {
+        const int page = static_cast<int>((rect_.h - headerHeight_) / rowHeight_);
+        const int target = listKeyTarget(e.key, curIdx, static_cast<int>(flatList_.size()), page);
+        if (target != curIdx)
+        {
             e.consumed = true;
-            selectedNode_  = flatList_[curIdx - 1].node;
+            selectedNode_ = flatList_[target].node;
             selectedNodes_ = {selectedNode_};
             selectionChanged.emit(selectedNode_);
             markDirty();
-        } else if (e.key == ig::retained::Key::Down && curIdx < static_cast<int>(flatList_.size()) - 1) {
-            e.consumed = true;
-            selectedNode_  = flatList_[curIdx + 1].node;
-            selectedNodes_ = {selectedNode_};
-            selectionChanged.emit(selectedNode_);
-            markDirty();
-        } else if (e.key == ig::retained::Key::Left && selectedNode_) {
+        }
+        else if (e.key == ig::retained::Key::Left && selectedNode_)
+        {
             e.consumed = true;
             if (selectedNode_->expanded && !selectedNode_->children.empty()) {
                 selectedNode_->expanded = false;
@@ -1710,7 +1709,9 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
-        } else if (e.key == ig::retained::Key::Right && selectedNode_) {
+        }
+        else if (e.key == ig::retained::Key::Right && selectedNode_)
+        {
             e.consumed = true;
             if (!selectedNode_->expanded && !selectedNode_->children.empty()) {
                 selectedNode_->expanded = true;
@@ -1722,10 +1723,14 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
-        } else if (e.key == ig::retained::Key::Return && selectedNode_) {
+        }
+        else if (e.key == ig::retained::Key::Return && selectedNode_)
+        {
             e.consumed = true;
             startEdit(selectedNode_, 0);
-        } else if (e.key == ig::retained::Key::C && e.ctrl && selectedNode_) {
+        }
+        else if (e.key == ig::retained::Key::C && e.ctrl && selectedNode_)
+        {
             e.consumed = true;
             String text;
             for (int c = 0; c < static_cast<int>(selectedNode_->cells.size()); ++c) {

@@ -4397,6 +4397,64 @@ static void test_lists_jump_with_home_end_and_page_keys()
     }
 }
 
+// A TreeView e a TreeGrid com seis linhas e vista de duas: End vai à última e
+// a vista desce até ela, Home volta à primeira, PageDown e PageUp andam duas
+// linhas, e nas pontas a tecla fica para o pai.
+static void test_trees_jump_with_home_end_and_page_keys()
+{
+    using namespace ig::retained;
+    TreeView view;
+    view.setRect({ 0.0f, 0.0f, 200.0f, 48.0f });
+    TreeGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 28.0f + 48.0f });
+    grid.addColumn("Name", 200.0f);
+    for (int i = 0; i < 6; ++i)
+    {
+        view.addRoot(String::number(i));
+        grid.addRoot({ String::number(i) });
+    }
+    view.setFocused(true);
+    grid.setFocused(true);
+    for (int t = 0; t < 2; ++t)
+    {
+        Widget* tree = t == 0 ? static_cast<Widget*>(&view) : static_cast<Widget*>(&grid);
+        const float top = t == 0 ? 0.0f : 28.0f;
+        auto key = [tree](int code)
+        {
+            KeyEvent press;
+            press.key = code;
+            tree->onKeyPress(press);
+            return press.consumed;
+        };
+        auto selected = [&view, &grid, t]()
+        {
+            if (t == 0) return view.selectedNode() ? view.selectedNode()->text() : String("none");
+            return grid.selectedNode() ? grid.selectedNode()->cells[0] : String("none");
+        };
+        auto rowOnTop = [tree, top, &selected]()
+        {
+            MouseEvent press;
+            press.button = 0;
+            press.clickCount = 1;
+            press.x = press.localX = 150.0f;
+            press.y = press.localY = top + 4.0f;
+            tree->onMousePress(press);
+            MouseEvent release = press;
+            tree->onMouseRelease(release);
+            return selected();
+        };
+        assert(key(Key::End) && selected() == "5");
+        assert(!key(Key::End) && !key(Key::PageDown) && !key(Key::Down));
+        assert(rowOnTop() == "4");
+        assert(key(Key::Home) && selected() == "0");
+        assert(!key(Key::Home) && !key(Key::PageUp));
+        assert(key(Key::PageDown) && selected() == "2");
+        assert(key(Key::PageDown) && selected() == "4");
+        assert(key(Key::PageUp) && selected() == "2");
+        assert(rowOnTop() == "2");
+    }
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4878,6 +4936,7 @@ int main()
     test_thumbnail_grid_moves_with_the_arrow_keys();
     test_list_key_target_covers_every_list_key();
     test_lists_jump_with_home_end_and_page_keys();
+    test_trees_jump_with_home_end_and_page_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
