@@ -246,8 +246,8 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         // Label (truncated to thumb width)
         if (showLabels_ && !item.label.empty()) {
             ctx.font.SetColor(item.selected ? Color(255, 220, 80, 255) : Color(180, 182, 190, 255));
-            // Simple truncation: measure and clip
-            ctx.font.Print(item.label.c_str(), x, y + thumbH_ + (labelH - 9.f) * 0.5f + asc);
+            const String shown = ctx.fitText(item.label, thumbW_);
+            ctx.font.Print(shown.c_str(), x, y + thumbH_ + (labelH - 9.f) * 0.5f + asc);
         }
     }
 

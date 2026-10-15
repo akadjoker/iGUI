@@ -291,8 +291,10 @@ e a TreeView na 1.ª pintura (3,3 ms); a ListWidget cria um widget por linha
 compensa se houver uso que mude a árvore em todos os frames.
 
 - [x] ThumbnailGrid sem scroll: só se viam as filas que cabiam; agora rola.
-- [ ] ThumbnailGrid: `onItemDoubleClicked` nunca é emitido e as legendas não
-      são cortadas (invadem as vizinhas).
+- [x] ThumbnailGrid: `onItemDoubleClicked` nunca era emitido e as legendas não
+      eram cortadas (invadiam as vizinhas).
+- [ ] FileDialog: os nomes na grelha são cortados aos 10 bytes, o que parte
+      caracteres UTF-8 a meio e não olha para a largura; passar para `fitText`.
 - [x] ListBox: `removeItem` e `clearItems` não atualizavam a barra; rolada até
       ao fim e encurtada, ficava em branco e o clique não acertava.
 - [ ] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.
