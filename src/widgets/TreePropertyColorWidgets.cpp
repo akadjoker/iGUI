@@ -512,15 +512,11 @@ void TreeView::onKeyPress(KeyEvent& e)
     TreeNode* node = cur >= 0 ? flatRows_[cur].node : nullptr;
     TreeNode* const before = selected_;
 
-    if (e.key == ig::retained::Key::Up && cur > 0)
+    const int target = listKeyTarget(e.key, cur, count, static_cast<int>(rect_.h / rowHeight_));
+    if (target != cur)
     {
         e.consumed = true;
-        setSelectedNode(flatRows_[cur - 1].node);
-    }
-    else if (e.key == ig::retained::Key::Down && cur < count - 1)
-    {
-        e.consumed = true;
-        setSelectedNode(flatRows_[cur + 1].node);
+        setSelectedNode(flatRows_[target].node);
     }
     else if (e.key == ig::retained::Key::Left && node)
     {
