@@ -104,8 +104,12 @@ private:
         bool checked = false;
     };
 
-    void  rebuildSortOrder();
-    void  sortByColumn(int col);
+    void rebuildSortOrder() const;
+    void sortByColumn(int col) const;
+    void ensureSortOrder() const
+    {
+        if (sortDirty_) rebuildSortOrder();
+    }
     void  startEdit(int row, int col);
     void  commitEdit();
     void  cancelEdit();
@@ -119,7 +123,8 @@ private:
 
     ct::Vector<Column> columns_;
     ct::Vector<Row>    rows_;
-    ct::Vector<int>    sortedIndices_;
+    mutable ct::Vector<int> sortedIndices_;
+    mutable bool sortDirty_ = true; // rows changed: the order is rebuilt before it is read
 
     int  selectedRow_   = -1;
     ct::Vector<int> selectedRows_;

@@ -3662,6 +3662,41 @@ static void test_tree_grid_shows_new_children_without_rebuild()
     assert(tree.selectedNode() == child);
 }
 
+// Com uma coluna ordenada, uma linha acrescentada entra logo no seu lugar: um
+// clique na primeira linha do ecrã seleciona a linha com o valor mais pequeno.
+static void test_data_grid_sorts_new_rows_into_place()
+{
+    using namespace ig::retained;
+    DataGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 200.0f });
+    grid.addColumn("Name", 100.0f);
+    grid.addColumn("Value", 100.0f);
+    grid.addRow({ "a", "30" });
+    grid.addRow({ "b", "10" });
+    grid.addRow({ "c", "20" });
+    auto click = [&grid](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.x = press.localX = x;
+        press.y = press.localY = y;
+        grid.onMousePress(press);
+        MouseEvent release = press;
+        grid.onMouseRelease(release);
+    };
+    click(130.0f, 10.0f);
+    const float firstRow = 28.0f + 4.0f;
+    click(50.0f, firstRow);
+    assert(grid.selectedRow() == 1);
+    grid.addRow({ "d", "5" });
+    click(50.0f, firstRow);
+    assert(grid.selectedRow() == 3);
+    grid.removeRow(3);
+    click(50.0f, firstRow);
+    assert(grid.selectedRow() == 1);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4051,6 +4086,7 @@ int main()
     test_code_editor_highlights_only_the_edited_lines();
     test_code_editor_auto_indent_uses_the_text_before_the_cursor();
     test_tree_grid_shows_new_children_without_rebuild();
+    test_data_grid_sorts_new_rows_into_place();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
