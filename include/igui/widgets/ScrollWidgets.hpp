@@ -170,6 +170,7 @@ public:
 
 private:
     void clampScroll();
+    void syncScrollBar();
     float itemHeight() const;
     int   itemAtY(float absY) const;
 
