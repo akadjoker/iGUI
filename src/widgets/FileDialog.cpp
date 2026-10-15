@@ -742,9 +742,7 @@ void FileDialog::paintIcons(PaintContext& ctx, const Rect& area)
         float iy = cy + 6;
         if (fe.icon != IconId::None) ctx.drawIcon(fe.icon, ix, iy, isz);
 
-        // Truncated label
-        String disp = fe.name;
-        if (disp.size() > 12) disp = disp.substr(0, 10) + "..";
+        const String disp = ctx.fitText(fe.name, cell - 8.f);
         float tw = ctx.font.GetTextWidth(disp.c_str());
         float tx = cx + (cell - tw) * 0.5f;
         float ty = cy + cell - 20 + asc;
