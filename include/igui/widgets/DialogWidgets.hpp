@@ -71,6 +71,7 @@ public:
 
     String              title_;
     String              message_;
+    String              wrapped_;
     ct::Vector<ButtonDef>   buttons_;
     ct::Function<void()>    onClose_;
 

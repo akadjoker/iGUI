@@ -11,8 +11,46 @@
 //  Dialog
 // ═════════════════════════════════════════════════════════════════════════════
 
+namespace
+{
+
+String wrapMessage(const String& text, size_t limit)
+{
+    String out;
+    size_t lineStart = 0;
+    size_t i = 0;
+    size_t lastSpace = String::npos;
+    while (i < text.size())
+    {
+        const char c = text[i];
+        if (c == '\n')
+        {
+            out += text.substr(lineStart, i - lineStart + 1);
+            lineStart = ++i;
+            lastSpace = String::npos;
+            continue;
+        }
+        if (c == ' ') lastSpace = i;
+        if (i - lineStart >= limit && lastSpace != String::npos && lastSpace > lineStart)
+        {
+            out += text.substr(lineStart, lastSpace - lineStart);
+            out += '\n';
+            lineStart = lastSpace + 1;
+            lastSpace = String::npos;
+            i = lineStart;
+            continue;
+        }
+        ++i;
+    }
+    out += text.substr(lineStart);
+    return out;
+}
+
+} // namespace
+
 Dialog::Dialog(const String& title, const String& message)
-    : title_(title), message_(message)
+    : title_(title), message_(message), wrapped_(wrapMessage(message,
+          static_cast<size_t>((kWidth - kPad * 2.0f) / (Theme::instance().fontSize * 0.52f))))
 {
     acceptsFocus_ = true;
     scrollable_   = false;
@@ -50,7 +88,7 @@ float Dialog::dialogH_() const
     // Title + top-padding + message lines + button-row + bottom-padding
     // Approximate message height: split by \n
     int lines = 1;
-    for (char c : message_) if (c == '\n') ++lines;
+    for (char c : wrapped_) if (c == '\n') ++lines;
     float msgH = lines * (t.fontSize + 4.0f) + kMsgPad * 2;
     return kTitleH + msgH + kPad + kBtnH + kPad;
 }
@@ -212,11 +250,11 @@ void Dialog::paint(PaintContext& ctx)
         float ly   = dr.y + kTitleH + kMsgPad + asc;
         float lineH = t.fontSize + 4.0f;
         size_t start = 0;
-        while (start <= message_.size())
+        while (start <= wrapped_.size())
         {
-            size_t end = message_.find('\n', start);
-            if (end == String::npos) end = message_.size();
-            ctx.font.Print(message_.substr(start, end - start).c_str(),
+            size_t end = wrapped_.find('\n', start);
+            if (end == String::npos) end = wrapped_.size();
+            ctx.font.Print(wrapped_.substr(start, end - start).c_str(),
                            dr.x + kPad, ly);
             ly    += lineH;
             start  = end + 1;
@@ -534,7 +572,7 @@ InputBox::InputBox(const String& title, const String& prompt)
     setMinimizable(false);
     buildUI();
 
-    float fw = 440, fh = 210;
+    float fw = 440, fh = 236;
     setFloatSize(fw, fh);
     auto& io = ig::retained::GetIO();
     setFloatPos((io.displayWidth - fw) * 0.5f, (io.displayHeight - fh) * 0.5f);

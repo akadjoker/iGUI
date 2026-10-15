@@ -168,8 +168,19 @@ public:
     /// @brief Get the content spacing.
     float contentSpacing() const    { return contentSpacing_; }
 
+    /// @brief Show a checkbox in the header (a group that can be switched on and off).
+    void setCheckable(bool c) { checkable_ = c; markDirty(); }
+    bool isCheckable() const  { return checkable_; }
+    /// @brief Set the checkbox state without emitting checkedChanged.
+    void setChecked(bool c)   { if (checked_ != c) { checked_ = c; markDirty(); } }
+    bool isChecked() const    { return checked_; }
+    /// @brief Screen rectangle of the header checkbox.
+    Rect checkRect() const;
+
     /// @brief Emitted when expanded/collapsed state changes.
     Signal<bool> expandedChanged;
+    /// @brief Emitted when the user toggles the header checkbox.
+    Signal<bool> checkedChanged;
 
     void layout() override;
     Vec2f sizeHint() const override;
@@ -180,6 +191,8 @@ public:
 private:
     String title_;
     bool  expanded_       = true;
+    bool  checkable_      = false;
+    bool  checked_        = false;
     float headerH_        = 26.0f;
     float contentPad_     = 4.0f;
     float contentSpacing_ = 2.0f;
