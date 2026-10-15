@@ -166,6 +166,9 @@ struct PaintContext
     float textWidth(const char* text)  const;
     /// @brief Get text line height.
     float textHeight()                 const;
+    /// @brief @p text as the font proxy draws it in @p room at most: cut at a
+    ///        character and ended with "..." when the whole text does not fit.
+    String fitText(const String& text, float room);
 
     /// @brief Draw a textured image in dst rect with UV and tint.
     void drawImage(ig::retained::TextureHandle tex, const Rect& dst,

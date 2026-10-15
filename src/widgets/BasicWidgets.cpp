@@ -173,19 +173,12 @@ void Button::paint(PaintContext& ctx)
     float iconW  = (iconId_ != IconId::None) ? (iconSz + (text_.empty() ? 0.f : 2.f)) : 0.f;
 
     // a label wider than the button is cut with "..." instead of spilling over its neighbours
-    std::string shown = text_.c_str();
+    String shown = text_;
     float room = abs.w - iconW - t.padding * 4;
     bool cut = !shown.empty() && textW > room && abs.w > 0;
     if (cut)
     {
-        while (!shown.empty())
-        {
-            size_t last = shown.size() - 1;
-            while (last > 0 && (static_cast<unsigned char>(shown[last]) & 0xC0) == 0x80) --last;
-            shown.erase(last);
-            if (ctx.font.GetTextWidth((shown + "...").c_str()) <= room) break;
-        }
-        shown += "...";
+        shown = ctx.fitText(text_, room);
         textW = ctx.font.GetTextWidth(shown.c_str());
     }
     float totalW = iconW + textW;

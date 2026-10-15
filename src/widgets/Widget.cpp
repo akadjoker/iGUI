@@ -228,6 +228,21 @@ float PaintContext::textWidth(const char* text) const
     return drawList.calcTextSize(*buFont, text).x;
 }
 
+String PaintContext::fitText(const String& text, float room)
+{
+    if (text.empty() || font.GetTextWidth(text.c_str()) <= room) return text;
+    String shown = text;
+    while (!shown.empty())
+    {
+        size_t last = shown.size() - 1;
+        while (last > 0 && (static_cast<unsigned char>(shown[last]) & 0xC0) == 0x80) --last;
+        shown.resize(last);
+        if (font.GetTextWidth((shown + "...").c_str()) <= room) break;
+    }
+    shown += "...";
+    return shown;
+}
+
 float PaintContext::textHeight() const
 {
     return buFont ? buFont->lineHeight() : 16.0f;
