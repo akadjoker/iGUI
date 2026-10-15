@@ -271,9 +271,26 @@ void Collapsible::setExpanded(bool e)
     }
 }
 
+Rect Collapsible::checkRect() const
+{
+    const auto& t = Theme::instance();
+    const Rect abs = absoluteRect();
+    const float size = t.fontSize;
+    return {abs.x + 8.0f + 8.0f + 6.0f, abs.y + (headerH_ - size) * 0.5f, size, size};
+}
+
 void Collapsible::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
+
+    if (checkable_ && e.button == 0 && checkRect().contains(e.x, e.y))
+    {
+        checked_ = !checked_;
+        checkedChanged.emit(checked_);
+        e.consumed = true;
+        markDirty();
+        return;
+    }
 
     // Only toggle if click is in the header area
     Rect abs = absoluteRect();
@@ -385,8 +402,32 @@ void Collapsible::paint(PaintContext& ctx)
         ctx.fill.Triangle(x1, y1, x2, y2, x3, y3, true);
     }
 
-    // ── Title text ───────────────────────────────────────────────────────
     float textX = triX + triSize + 6.0f;
+    if (checkable_)
+    {
+        const Rect box = checkRect();
+        Rect clippedBox;
+        if (ctx.clipRectIntersect(box, clippedBox))
+        {
+            const bool over = box.contains(WidgetApp::instance().mouseX(),
+                                           WidgetApp::instance().mouseY());
+            Color bg = over ? t.inputBgHover : t.inputBg;
+            ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
+            ctx.fill.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, true);
+            Color border = over ? t.inputBorderHover : t.inputBorder;
+            ctx.line.SetColor(border.r, border.g, border.b, border.a);
+            ctx.line.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, false);
+            if (checked_)
+            {
+                const float m = 3.0f;
+                ctx.fill.SetColor(t.checkMark.r, t.checkMark.g, t.checkMark.b, t.checkMark.a);
+                ctx.fill.Rectangle(box.x + m, box.y + m, box.w - m * 2, box.h - m * 2, true);
+            }
+        }
+        textX = box.x + box.w + 6.0f;
+    }
+
+    // ── Title text ───────────────────────────────────────────────────────
     float asc   = ctx.font.GetAscender();
     float textY = abs.y + (headerH_ + asc) * 0.5f;
 

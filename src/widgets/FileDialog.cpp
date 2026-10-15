@@ -1045,9 +1045,18 @@ void FileDialog::onOk()
     }
     if (fname.empty()) return;
 
-    selectedPath_ = FileSystem::joinPath(currentPath_, fname);
+    selectedPath_ = FileSystem::isAbsolute(fname) ? FileSystem::normalizePath(fname)
+                                                  : FileSystem::joinPath(currentPath_, fname);
+    if (FileSystem::isDir(selectedPath_) && mode_ != Mode::Save) {
+        navigateTo(selectedPath_);
+        if (fileNameInput_) fileNameInput_->setText("");
+        return;
+    }
     bool needsExist = (mode_ == Mode::Open || mode_ == Mode::OpenImage);
-    if (needsExist && !FileSystem::exists(selectedPath_)) return;
+    if (needsExist && !FileSystem::exists(selectedPath_)) {
+        if (statusLabel_) statusLabel_->setText("File not found: " + fname);
+        return;
+    }
 
     accepted.emit(selectedPath_);
     WidgetApp::instance().removeFloat(this);
