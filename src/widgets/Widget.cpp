@@ -302,6 +302,39 @@ const char* iconGlyph(IconId id)
 }
 }
 
+namespace ig { namespace retained
+{
+namespace
+{
+struct ImageIcon
+{
+    TextureHandle texture;
+    Rect uv;
+};
+
+ct::Vector<ImageIcon>& imageIcons()
+{
+    static ct::Vector<ImageIcon> icons;
+    return icons;
+}
+} // namespace
+
+IconId registerImageIcon(TextureHandle texture, const Rect &uv)
+{
+    imageIcons().push_back(ImageIcon{texture, uv});
+    return static_cast<IconId>(static_cast<int>(IconId::COUNT) + static_cast<int>(imageIcons().size()));
+}
+
+bool imageIcon(IconId id, TextureHandle &texture, Rect &uv)
+{
+    const int index = static_cast<int>(id) - static_cast<int>(IconId::COUNT) - 1;
+    if (index < 0 || index >= static_cast<int>(imageIcons().size())) return false;
+    texture = imageIcons()[static_cast<size_t>(index)].texture;
+    uv = imageIcons()[static_cast<size_t>(index)].uv;
+    return true;
+}
+}} // namespace ig::retained
+
 void PaintContext::drawIcon(IconId id, float x, float y, float size)
 {
     drawIcon(id, x, y, size, Color(255, 255, 255, 255));
@@ -313,6 +346,13 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 
     Rect bb{x, y, size, size};
     if (isClipped(bb)) return;
+
+    ig::retained::TextureHandle imageTexture;
+    ig::retained::Rect imageUv;
+    if (ig::retained::imageIcon(id, imageTexture, imageUv)) {
+        drawImage(imageTexture, bb, imageUv, tint);
+        return;
+    }
 
     // Vector strokes when there is a drawing (sharp at any size), then the
     // procedural atlas when the backend built one, then the glyph font.

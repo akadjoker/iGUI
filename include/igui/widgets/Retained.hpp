@@ -213,6 +213,12 @@ namespace ig { namespace retained
         COUNT  // must be last
     };
 
+    // Icons drawn from a texture region. Each call returns a new IconId past
+    // COUNT that every widget taking an IconId can show (trees, tool bars,
+    // buttons); PaintContext::drawIcon draws the region tinted.
+    IconId registerImageIcon(TextureHandle texture, const Rect &uv);
+    bool imageIcon(IconId id, TextureHandle &texture, Rect &uv);
+
     struct FontGlyph
     {
         uint32_t codepoint = 0;
