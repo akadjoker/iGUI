@@ -210,7 +210,8 @@ public:
         w->setScrollable(true);
         // Forward clicks from any descendant to select the row
         connectRowPress(w, w);
-        markDirty();
+        placeRow(static_cast<int>(rows_.size()) - 1);
+        syncScrollBar();
         return static_cast<T*>(w);
     }
 
@@ -239,6 +240,8 @@ public:
 
 private:
     void clampScroll();
+    void syncScrollBar();
+    void placeRow(int index);
     void connectRowPress(Widget* target, Widget* row);
     int  rowAtY(float absY) const;
     float rowH() const;
