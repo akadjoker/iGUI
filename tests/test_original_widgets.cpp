@@ -4455,6 +4455,55 @@ static void test_trees_jump_with_home_end_and_page_keys()
     }
 }
 
+// A DataGrid ordenada pela coluna Value (crescente: a linha 5 fica no topo)
+// com vista de duas linhas: End vai à última do ecrã (a linha 0) e a vista
+// desce até ela, Home volta à primeira do ecrã, PageDown e PageUp andam duas
+// linhas no ecrã, e nas pontas a tecla fica para o pai.
+static void test_data_grid_jumps_with_home_end_and_page_keys()
+{
+    using namespace ig::retained;
+    DataGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 28.0f + 48.0f });
+    grid.addColumn("Name", 100.0f);
+    grid.addColumn("Value", 100.0f);
+    for (int i = 0; i < 6; ++i)
+        grid.addRow({ String("row ") + String::number(i), String::number(100 - i) });
+    auto click = [&grid](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.x = press.localX = x;
+        press.y = press.localY = y;
+        grid.onMousePress(press);
+        MouseEvent release = press;
+        grid.onMouseRelease(release);
+    };
+    auto key = [&grid](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        grid.onKeyPress(press);
+        return press.consumed;
+    };
+    auto rowOnTop = [&grid, &click]()
+    {
+        click(50.0f, 28.0f + 4.0f);
+        return grid.selectedRow();
+    };
+    click(130.0f, 10.0f);
+    grid.setFocused(true);
+    assert(key(Key::End) && grid.selectedRow() == 0);
+    assert(!key(Key::End) && !key(Key::PageDown) && !key(Key::Down));
+    assert(rowOnTop() == 1);
+    assert(key(Key::Home) && grid.selectedRow() == 5);
+    assert(!key(Key::Home) && !key(Key::PageUp) && !key(Key::Up));
+    assert(key(Key::PageDown) && grid.selectedRow() == 3);
+    assert(key(Key::PageDown) && grid.selectedRow() == 1);
+    assert(key(Key::PageUp) && grid.selectedRow() == 3);
+    assert(rowOnTop() == 3);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4937,6 +4986,7 @@ int main()
     test_list_key_target_covers_every_list_key();
     test_lists_jump_with_home_end_and_page_keys();
     test_trees_jump_with_home_end_and_page_keys();
+    test_data_grid_jumps_with_home_end_and_page_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

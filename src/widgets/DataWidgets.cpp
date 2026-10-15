@@ -840,27 +840,21 @@ void DataGrid::onKeyPress(KeyEvent& e)
     }
 
     if (!editing_) {
-        if (e.key == ig::retained::Key::Up || e.key == ig::retained::Key::Down)
+        if (e.key == ig::retained::Key::Up || e.key == ig::retained::Key::Down ||
+                e.key == ig::retained::Key::Home || e.key == ig::retained::Key::End ||
+                e.key == ig::retained::Key::PageUp || e.key == ig::retained::Key::PageDown)
         {
-            e.consumed = true;
             // Move by position on screen, which a sorted column reorders
             const int count = modelRowCount();
             int pos = -1;
             for (int i = 0; i < count && pos < 0; ++i)
                 if (displayRow(i) == selectedRow_) pos = i;
-            int next = pos;
-            if (e.key == ig::retained::Key::Up)
-            {
-                if (pos > 0) next = pos - 1;
-            }
-            else if (pos < count - 1)
-            {
-                next = pos + 1;
-            }
+            const float bodyH = rect_.h - headerHeight_;
+            const int next = listKeyTarget(e.key, pos, count, static_cast<int>(bodyH / rowHeight_));
             if (next != pos)
             {
+                e.consumed = true;
                 setSelectedRow(displayRow(next));
-                const float bodyH = rect_.h - headerHeight_;
                 const float top = static_cast<float>(next) * rowHeight_;
                 if (top < scrollY_) scrollY_ = top;
                 else if (top + rowHeight_ > scrollY_ + bodyH)
