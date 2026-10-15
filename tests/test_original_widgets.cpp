@@ -3950,6 +3950,47 @@ static void test_thumbnail_grid_scrolls_to_every_row()
     assert(hit(184.0f, 20.0f) == 2);
 }
 
+// O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
+// o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
+// espaço entre eles ficam a menos de 5 px) também não.
+static void test_thumbnail_grid_reports_double_clicks_on_one_item()
+{
+    using namespace ig::retained;
+    ThumbnailGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 216.0f });
+    for (int i = 0; i < 6; ++i) grid.addItem("t");
+    int clicked = 0, doubled = 0, doubledItem = -1;
+    grid.onItemClicked.connect([&clicked](int) { ++clicked; });
+    grid.onItemDoubleClicked.connect(
+            [&doubled, &doubledItem](int item)
+            {
+                ++doubled;
+                doubledItem = item;
+            });
+    auto press = [&grid](float x, float y, int count)
+    {
+        MouseEvent e;
+        e.button = 0;
+        e.clickCount = count;
+        e.x = x;
+        e.y = y;
+        grid.onMousePress(e);
+    };
+    press(100.0f, 20.0f, 1);
+    assert(clicked == 1 && doubled == 0);
+    press(100.0f, 20.0f, 2);
+    assert(clicked == 2 && doubled == 1 && doubledItem == 1);
+    press(100.0f, 20.0f, 3);
+    assert(clicked == 3 && doubled == 1);
+
+    grid.setSpacing(0.0f);
+    press(79.0f, 20.0f, 1);
+    assert(grid.selected() == 0);
+    press(82.0f, 20.0f, 2);
+    assert(grid.selected() == 1);
+    assert(doubled == 1);
+}
+
 // A ListBox rolada até ao fim e depois encurtada volta a mostrar o que tem:
 // remover itens traz o scroll para dentro do conteúdo, o clique na primeira
 // linha acerta no primeiro item e, sem itens a mais, a barra deixa de ser
@@ -4379,6 +4420,7 @@ int main()
     test_console_keeps_its_visible_lines_while_trimming();
     test_thumbnail_grid_paints_and_hits_only_its_cells();
     test_thumbnail_grid_scrolls_to_every_row();
+    test_thumbnail_grid_reports_double_clicks_on_one_item();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
