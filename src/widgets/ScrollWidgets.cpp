@@ -468,6 +468,32 @@ void ListBox::onMouseScroll(MouseEvent& e)
     markDirty();
 }
 
+void ListBox::scrollToItem(int idx)
+{
+    const float ih = itemHeight();
+    const float top = static_cast<float>(idx) * ih;
+    if (top < scrollOffset_) scrollOffset_ = top;
+    else if (top + ih > scrollOffset_ + rect_.h)
+        scrollOffset_ = top + ih - rect_.h;
+    clampScroll();
+    if (vbar_) vbar_->setValue(scrollOffset_);
+    markDirty();
+}
+
+void ListBox::onKeyPress(KeyEvent& e)
+{
+    if (!focused_ || !isEnabledInTree()) return;
+    int next = -1;
+    if (e.key == ig::retained::Key::Up && selectedIdx_ > 0) next = selectedIdx_ - 1;
+    else if (e.key == ig::retained::Key::Down && selectedIdx_ < itemCount() - 1)
+        next = selectedIdx_ + 1;
+    else
+        return;
+    e.consumed = true;
+    setSelectedIndex(next);
+    scrollToItem(next);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  ListWidget
 // ═════════════════════════════════════════════════════════════════════════════
