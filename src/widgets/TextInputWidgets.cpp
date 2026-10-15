@@ -1177,6 +1177,11 @@ TextEdit::VisualPos TextEdit::visualToLogical(int visualRow) const
     return { low, visualRow - starts[low] };
 }
 
+int TextEdit::lineAtVisualRow(int visualRow) const
+{
+    return visualToLogical(visualRow).line;
+}
+
 int TextEdit::logicalToVisualRow(int line, int row) const
 {
     const ct::Vector<int>& starts = rowStarts();

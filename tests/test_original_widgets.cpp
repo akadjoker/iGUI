@@ -3488,6 +3488,136 @@ static void test_code_editor_folds_survive_edits()
     assert(rowLines(5) == "0 1 2 3 6 ");
 }
 
+// As edições do CodeEditor só voltam a realçar a partir das linhas que mudaram:
+// abrir e fechar um comentário de bloco (que muda o estado das linhas seguintes),
+// Enter, juntar linhas, undo e redo, mover, duplicar e remover linhas, escrever
+// com vários cursores, editar acima de uma linha ainda por realçar. Depois de
+// cada passo pinta exatamente o mesmo (cores dos glifos e ícones das dobras),
+// com a vista rolada e no topo, que o mesmo texto realçado do zero.
+static void test_code_editor_highlights_only_the_edited_lines()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("codehl");
+    auto* screen = stage->createChild<Widget>();
+    auto* editor = screen->createChild<CodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 600.0f, 90.0f });
+    editor->setShowMinimap(false);
+    editor->setHighlighterForFile("main.cpp");
+    editor->setText("int a()\n{\n    return 1; // one\n}\n\nint b()\n{\n    if (x)\n    {\n        "
+                    "y();\n    }\n}\n"
+                    "const char* s = \"text\";\nint c = 3;\nend");
+    assert(app.setStage("codehl", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    auto snapshot = [&]()
+    {
+        app.update(io);
+        GetDrawList().clear();
+        DrawData data;
+        app.paint(data, font);
+        ct::Vector<float> values;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            for (const DrawVertex& vertex: pass.list->vertices())
+            {
+                values.push_back(vertex.x);
+                values.push_back(vertex.y);
+                values.push_back(vertex.u);
+                values.push_back(static_cast<float>(vertex.color.r));
+                values.push_back(static_cast<float>(vertex.color.g));
+                values.push_back(static_cast<float>(vertex.color.b));
+            }
+        }
+        return values;
+    };
+    auto views = [&]()
+    {
+        editor->scrollToLine(10);
+        assert(editor->firstVisibleLine() == 10);
+        ct::Vector<float> values = snapshot();
+        editor->scrollToLine(0);
+        const ct::Vector<float> top = snapshot();
+        for (float value: top) values.push_back(value);
+        return values;
+    };
+    auto matchesFresh = [&]()
+    {
+        editor->clearExtraCursors();
+        editor->setCursorPos(0, 0);
+        const ct::Vector<float> edited = views();
+        editor->setText(editor->text());
+        const ct::Vector<float> fresh = views();
+        if (edited.size() != fresh.size()) return false;
+        for (size_t i = 0; i < edited.size(); ++i)
+            if (edited[i] != fresh[i]) return false;
+        return true;
+    };
+    auto key = [editor](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        editor->onKeyPress(press);
+    };
+    auto type = [editor](const char* text)
+    {
+        for (const char* c = text; *c; ++c)
+        {
+            KeyEvent typed;
+            typed.text[0] = *c;
+            editor->onTextInput(typed);
+        }
+    };
+    snapshot();
+    editor->setCursorPos(2, 0);
+    type("/*");
+    assert(matchesFresh());
+    editor->setCursorPos(9, 0);
+    type("*/");
+    assert(matchesFresh());
+    editor->setCursorPos(2, 0);
+    key(Key::Delete);
+    key(Key::Delete);
+    assert(matchesFresh());
+    editor->setCursorPos(6, 1);
+    key(Key::Return);
+    type("{ z();");
+    snapshot();
+    editor->setCursorPos(5, static_cast<int>(editor->lineAt(5).size()));
+    key(Key::Delete);
+    assert(matchesFresh());
+    editor->undo();
+    editor->undo();
+    assert(matchesFresh());
+    editor->redo();
+    assert(matchesFresh());
+    editor->setCursorPos(12, 0);
+    editor->moveLineUp();
+    editor->duplicateLine();
+    assert(matchesFresh());
+    editor->setCursorPos(1, 0);
+    editor->removeLine();
+    editor->setCursorPos(0, 0);
+    type("/* ");
+    assert(matchesFresh());
+    editor->setCursorPos(3, 0);
+    editor->addCursor(7, 0);
+    editor->addCursor(10, 0);
+    type("*/");
+    assert(matchesFresh());
+    editor->setCursorPos(8, 0);
+    type("/*");
+    editor->setCursorPos(0, 0);
+    key(Key::Return);
+    assert(matchesFresh());
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -3874,6 +4004,7 @@ int main()
     test_code_editor_rows_skip_folded_lines();
     test_code_editor_rows_follow_the_folds_after_undo();
     test_code_editor_folds_survive_edits();
+    test_code_editor_highlights_only_the_edited_lines();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
