@@ -4047,6 +4047,74 @@ static void test_file_dialog_icon_names_fit_their_cell()
     std::remove(root.c_str());
 }
 
+// A TreeView anda pelas teclas como a TreeGrid: Baixo sem seleção vai à
+// primeira linha, Cima e Baixo mudam de linha (e nas pontas deixam a tecla ao
+// pai), Esquerda fecha o nó ou sobe ao pai, Direita abre o nó ou desce ao
+// primeiro filho, e a vista de duas linhas acompanha a seleção. Sem foco, as
+// teclas não lhe tocam, e um nó selecionado que já foi apagado não é lido.
+static void test_tree_view_moves_with_the_arrow_keys()
+{
+    using namespace ig::retained;
+    TreeView tree;
+    tree.setRect({ 0.0f, 0.0f, 200.0f, 48.0f });
+    TreeNode* a = tree.addRoot("A");
+    TreeNode* a1 = a->addChild("a1");
+    TreeNode* a2 = a->addChild("a2");
+    TreeNode* b = tree.addRoot("B");
+    TreeNode* b1 = b->addChild("b1");
+    b->setExpanded(false);
+    int changes = 0, expanded = 0, collapsed = 0;
+    tree.selectionChanged.connect([&changes](TreeNode*) { ++changes; });
+    tree.nodeExpanded.connect([&expanded](TreeNode*) { ++expanded; });
+    tree.nodeCollapsed.connect([&collapsed](TreeNode*) { ++collapsed; });
+    auto key = [&tree](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        tree.onKeyPress(press);
+        return press.consumed;
+    };
+    auto rowOnTop = [&tree]()
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.x = 150.0f;
+        press.y = 1.0f;
+        tree.onMousePress(press);
+        return tree.selectedNode();
+    };
+
+    assert(!key(Key::Down));
+    assert(tree.selectedNode() == nullptr);
+    tree.setFocused(true);
+    assert(key(Key::Down) && tree.selectedNode() == a);
+    assert(key(Key::Down) && tree.selectedNode() == a1);
+    assert(key(Key::Down) && tree.selectedNode() == a2);
+    assert(changes == 3);
+    assert(rowOnTop() == a1);
+    tree.setSelectedNode(a2);
+
+    assert(key(Key::Left) && tree.selectedNode() == a);
+    assert(rowOnTop() == a);
+    assert(key(Key::Left) && !a->isExpanded() && collapsed == 1);
+    assert(tree.selectedNode() == a);
+    assert(key(Key::Down) && tree.selectedNode() == b);
+    assert(!key(Key::Down));
+    assert(key(Key::Right) && b->isExpanded() && expanded == 1);
+    assert(tree.selectedNode() == b);
+    assert(key(Key::Right) && tree.selectedNode() == b1);
+    assert(key(Key::Right) && tree.selectedNode() == b1);
+    assert(key(Key::Up) && tree.selectedNode() == b);
+    assert(key(Key::Up) && tree.selectedNode() == a);
+    assert(!key(Key::Up));
+    assert(key(Key::Left) && tree.selectedNode() == a);
+    assert(rowOnTop() == a);
+
+    tree.setSelectedNode(b1);
+    b->removeChild(0);
+    assert(!key(Key::Left) && !key(Key::Right));
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4521,6 +4589,7 @@ int main()
     test_paint_context_fits_text_at_a_character();
     test_thumbnail_grid_keeps_labels_inside_their_cell();
     test_file_dialog_icon_names_fit_their_cell();
+    test_tree_view_moves_with_the_arrow_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

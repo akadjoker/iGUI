@@ -485,6 +485,78 @@ void TreeView::onMouseScroll(MouseEvent& e)
     markDirty();
 }
 
+int TreeView::rowOf(const TreeNode* n) const
+{
+    for (int i = 0; i < static_cast<int>(flatRows_.size()); ++i)
+        if (flatRows_[i].node == n) return i;
+    return -1;
+}
+
+void TreeView::scrollToRow(int row)
+{
+    const float top = static_cast<float>(row) * rowHeight_;
+    if (top < scrollOffset_) scrollOffset_ = top;
+    else if (top + rowHeight_ > scrollOffset_ + rect_.h)
+        scrollOffset_ = top + rowHeight_ - rect_.h;
+    scrollOffset_ = clamp(scrollOffset_, 0.f, maxScroll());
+}
+
+void TreeView::onKeyPress(KeyEvent& e)
+{
+    if (!focused_ || !isEnabledInTree()) return;
+    rebuildFlat();
+    const int count = static_cast<int>(flatRows_.size());
+    const int cur = rowOf(selected_);
+    // Only a node on a row is touched: the selection may name one that was
+    // deleted behind the view's back.
+    TreeNode* node = cur >= 0 ? flatRows_[cur].node : nullptr;
+    TreeNode* const before = selected_;
+
+    if (e.key == ig::retained::Key::Up && cur > 0)
+    {
+        e.consumed = true;
+        setSelectedNode(flatRows_[cur - 1].node);
+    }
+    else if (e.key == ig::retained::Key::Down && cur < count - 1)
+    {
+        e.consumed = true;
+        setSelectedNode(flatRows_[cur + 1].node);
+    }
+    else if (e.key == ig::retained::Key::Left && node)
+    {
+        e.consumed = true;
+        if (node->isExpanded() && node->hasChildren())
+        {
+            node->setExpanded(false);
+            nodeCollapsed.emit(node);
+            flatDirty_ = true;
+            markDirty();
+        }
+        else if (node->parent())
+            setSelectedNode(node->parent());
+    }
+    else if (e.key == ig::retained::Key::Right && node)
+    {
+        e.consumed = true;
+        if (!node->isExpanded() && node->hasChildren())
+        {
+            node->setExpanded(true);
+            nodeExpanded.emit(node);
+            flatDirty_ = true;
+            markDirty();
+        }
+        else if (node->hasChildren())
+            setSelectedNode(node->children()[0]);
+    }
+
+    if (selected_ != before && selected_)
+    {
+        rebuildFlat();
+        const int row = rowOf(selected_);
+        if (row >= 0) scrollToRow(row);
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  PropertyGrid
 // ═════════════════════════════════════════════════════════════════════════════

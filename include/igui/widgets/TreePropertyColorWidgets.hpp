@@ -108,11 +108,14 @@ public:
     void  paint(PaintContext& ctx)           override;
     void  onMousePress(MouseEvent& e)        override;
     void  onMouseScroll(MouseEvent& e)       override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
     struct FlatRow { TreeNode* node; int depth; };
 
     void  rebuildFlat();
+    int rowOf(const TreeNode* n) const;
+    void scrollToRow(int row);
     void  flattenNode(TreeNode* n, int depth);
     float maxScroll() const;
 
