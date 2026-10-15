@@ -469,8 +469,10 @@ static void test_slider_and_radio()
     TestBackend backend;
     ig::Context context(backend);
     float value = 0.0f;
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 114.0f, 64.0f));
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 114.0f, 64.0f));
+    // The track runs from x = 82 to 124 and the handle's centre stops 9.84 in
+    // from each end: x = 108.5 is three quarters of the way along.
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, 108.5f, 64.0f));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, 108.5f, 64.0f));
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     assert(context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f)));
@@ -485,6 +487,92 @@ static void test_slider_and_radio()
     assert(context.radioButton("choice", false, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
     context.endWindow();
     context.endFrame();
+}
+
+// The slider's handle stays inside its track with a gap at each end, at the
+// minimum and at the maximum (the antialiased fringe included), and the pointer
+// uses the same travel: a press on the handle's centre at either end gives the
+// minimum and the maximum (to within the centre read off the drawn circle). A
+// track too short for the handle uses its whole length. The track and the handle
+// are found by their colours, with the pointer away.
+static void test_slider_handle_stays_inside_its_track()
+{
+    TestBackend backend;
+    ig::Context context(backend);
+    const ig::Color handleColor = context.theme().sliderHandle;
+    const ig::Color trackColor = context.theme().sliderBackground;
+    auto frame = [&context](float& value)
+    {
+        context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+        assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+        context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 240.0f, 28.0f),
+                ig::Context::SliderFlags::NoInput);
+        context.endWindow();
+        return &context.endFrame();
+    };
+    auto span = [](const ig::DrawData& data, const ig::Color& color, float& low, float& high,
+                        float& centreY)
+    {
+        low = 1e9f;
+        high = -1e9f;
+        float top = 1e9f, bottom = -1e9f;
+        for (size_t i = 0; i < data.vertices.size(); ++i)
+        {
+            const ig::DrawVertex& v = data.vertices[i];
+            if (v.color.r != color.r || v.color.g != color.g || v.color.b != color.b ||
+                    v.color.a == 0u)
+                continue;
+            low = v.position.x < low ? v.position.x : low;
+            high = v.position.x > high ? v.position.x : high;
+            top = v.position.y < top ? v.position.y : top;
+            bottom = v.position.y > bottom ? v.position.y : bottom;
+        }
+        centreY = (top + bottom) * 0.5f;
+        assert(high > low);
+    };
+    const float ends[2] = { 0.0f, 1.0f };
+    for (int end = 0; end < 2; ++end)
+    {
+        float value = ends[end];
+        context.pushEvent(ig::Event::pointerMove(600.0f, 450.0f));
+        const ig::DrawData& data = *frame(value);
+        float trackLow, trackHigh, trackY, handleLow, handleHigh, handleY;
+        span(data, trackColor, trackLow, trackHigh, trackY);
+        span(data, handleColor, handleLow, handleHigh, handleY);
+        assert(handleLow >= trackLow + 1.0f && handleHigh <= trackHigh - 1.0f);
+
+        const float other = 1.0f - ends[end];
+        float pressed = other;
+        context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left,
+                (handleLow + handleHigh) * 0.5f, handleY));
+        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left,
+                (handleLow + handleHigh) * 0.5f, handleY));
+        frame(pressed);
+        const float miss = pressed - ends[end];
+        assert(miss < 0.002f && miss > -0.002f);
+    }
+
+    // A track too short for the handle (under 2 x 9.84 px here) gives the handle
+    // its whole length: a press a quarter of the way along gives a quarter.
+    auto narrow = [&context](float& value)
+    {
+        context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
+        assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
+        context.sliderFloat("##narrow", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 24.0f, 28.0f),
+                ig::Context::SliderFlags::NoInput);
+        context.endWindow();
+        return &context.endFrame();
+    };
+    float shortValue = 0.0f;
+    context.pushEvent(ig::Event::pointerMove(600.0f, 450.0f));
+    float trackLow, trackHigh, trackY;
+    span(*narrow(shortValue), trackColor, trackLow, trackHigh, trackY);
+    assert(trackHigh - trackLow < 19.68f);
+    const float quarter = trackLow + (trackHigh - trackLow) * 0.25f;
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, quarter, trackY));
+    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, quarter, trackY));
+    narrow(shortValue);
+    assert(shortValue > 0.2f && shortValue < 0.3f);
 }
 
 static void test_slider_float_value_editing()
@@ -969,6 +1057,7 @@ int main()
     test_automatic_layout();
     test_slider_and_radio();
     test_slider_float_value_editing();
+    test_slider_handle_stays_inside_its_track();
     test_selectable();
     test_progress_bar();
     test_automatic_selectable_and_progress_bar();

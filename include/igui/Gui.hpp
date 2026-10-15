@@ -2764,10 +2764,11 @@ private:
     // Um rect sem id como item (o grupo, a barra de menus): o rect e o hover são
     // dele, mas clique/edição/foco não - isso é sempre de um widget lá dentro.
     void setItemHoverRect(const Rect &bounds);
-    bool sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                     double &value, double minimum, double maximum,
-                     bool vertical = false, unsigned flags = SliderFlags::None,
-                     bool integer = false, bool singlePrecision = false);
+    // `inset` keeps the value's ends that far in from each end of the rect, where
+    // the centre of a handle stops; the rect stays whole for the press.
+    bool sliderValue(const Rect& rect, const Rect& clip, WidgetId id, double& value, double minimum,
+            double maximum, bool vertical = false, unsigned flags = SliderFlags::None,
+            bool integer = false, bool singlePrecision = false, float inset = 0.0f);
     // O tipo do valor de um widget numérico por dentro: real (float ou double) ou
     // inteiro, e de um inteiro a largura e o sinal - é o que faz o -1 de um int sair
     // "FFFFFFFF" num "%X" e voltar a -1 quando se lê.

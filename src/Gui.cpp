@@ -5299,6 +5299,11 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     const Rect track(rect.x + labelWidth, rect.y + rect.height * 0.4f, trackWidth,
                      rect.height * 0.2f);
     const Rect grab(track.x, rect.y, track.width, rect.height);
+    // The handle's centre stops this far in from each end of the track, so the
+    // whole handle and a small gap fit; a track too short for it uses its length.
+    const float handleRadius = rect.height * 0.28f;
+    const float handleInset =
+            track.width > (handleRadius + 2.0f) * 2.0f ? handleRadius + 2.0f : 0.0f;
     // O item é a track: é este itemHovered que identifica o slider (o
     // sliderValue só faz o teste do ponteiro) e é ele que dá o realce.
     const WidgetId trackId = combineIds(id, 0x534c49444552ull);
@@ -5306,7 +5311,7 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     double dragged = clampDouble(value, low, high);
     const bool singlePrecision = kind.singlePrecision;
     const bool sliderChanged = sliderValue(grab, clip, trackId, dragged, minimum, maximum, false,
-                                           flags, integer, singlePrecision);
+            flags, integer, singlePrecision, handleInset);
     // O editor de valor que o slider desenha à parte não pode ser o item que
     // isItemHovered devolve (ver keepItemStatus).
     const ItemStatus trackStatus = item_;
@@ -5321,7 +5326,8 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
                                      sliderLogarithmic(static_cast<float>(minimum),
                                                        static_cast<float>(maximum), flags)),
                     0.0, 1.0);
-    const float handleX = track.x + track.width * static_cast<float>(normalized);
+    const float handleX = track.x + handleInset +
+                          (track.width - handleInset * 2.0f) * static_cast<float>(normalized);
     drawText(*drawList, theme_.font, text,
              Vec2(rect.x, rect.y + (rect.height - metrics.height) * 0.5f), theme_.fontSize,
              theme_.labelText, clip);
@@ -5329,14 +5335,13 @@ bool Context::sliderCore(StringView labelText, double &value, double minimum, do
     drawList->addRectFilledRounded(track, trackRadius,
                                    trackHovered ? theme_.sliderTrackHover : theme_.sliderBackground,
                                    clip);
-    drawList->addRectFilledRounded(
-        Rect(track.x, track.y, track.width * static_cast<float>(normalized), track.height),
-        trackRadius, trackHovered ? theme_.sliderFillHover : theme_.sliderFilled, clip);
-    drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f), rect.height * 0.28f,
-                              activeWidget_ == trackId ? theme_.sliderThumbPressed
-                                                       : (trackHovered ? theme_.sliderThumbHover
-                                                                       : theme_.sliderHandle),
-                              clip);
+    drawList->addRectFilledRounded(Rect(track.x, track.y, handleX - track.x, track.height),
+            trackRadius, trackHovered ? theme_.sliderFillHover : theme_.sliderFilled, clip);
+    drawList->addCircleFilled(Vec2(handleX, track.y + track.height * 0.5f), handleRadius,
+            activeWidget_ == trackId
+                    ? theme_.sliderThumbPressed
+                    : (trackHovered ? theme_.sliderThumbHover : theme_.sliderHandle),
+            clip);
 
     bool textChanged = false;
     if (hasValueEditor)
@@ -13403,9 +13408,9 @@ void Context::advanceFocus()
     textInputWidget_ = InvalidWidgetId;
 }
 
-bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
-                          double &value, double minimum, double maximum, bool vertical,
-                          unsigned flags, bool integer, bool singlePrecision)
+bool Context::sliderValue(const Rect& rect, const Rect& clip, WidgetId id, double& value,
+        double minimum, double maximum, bool vertical, unsigned flags, bool integer,
+        bool singlePrecision, float inset)
 {
     if (rect.width <= 0.0f || rect.height <= 0.0f)
         return false;
@@ -13445,11 +13450,10 @@ bool Context::sliderValue(const Rect &rect, const Rect &clip, WidgetId id,
     if (activeWidget_ == id && (pointer_.down[left] || pointer_.pressed[left]))
     {
         // Vertical: o valor cresce para cima, por isso o topo do rect é o máximo.
-        const double normalized =
-            static_cast<double>(vertical
-                                    ? clamp((rect.y + rect.height - pointer_.position.y) / rect.height,
-                                            0.0f, 1.0f)
-                                    : clamp((pointer_.position.x - rect.x) / rect.width, 0.0f, 1.0f));
+        const float along = vertical ? rect.y + rect.height - inset - pointer_.position.y
+                                     : pointer_.position.x - rect.x - inset;
+        const float travel = (vertical ? rect.height : rect.width) - inset * 2.0f;
+        const double normalized = static_cast<double>(clamp(along / travel, 0.0f, 1.0f));
         const bool logarithmic = sliderLogarithmic(static_cast<float>(minimum),
                                                    static_cast<float>(maximum), flags);
         double nextValue = minimum == maximum
