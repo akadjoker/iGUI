@@ -3950,6 +3950,40 @@ static void test_thumbnail_grid_scrolls_to_every_row()
     assert(hit(184.0f, 20.0f) == 2);
 }
 
+// A ListBox rolada até ao fim e depois encurtada volta a mostrar o que tem:
+// remover itens traz o scroll para dentro do conteúdo, o clique na primeira
+// linha acerta no primeiro item e, sem itens a mais, a barra deixa de ser
+// precisa; limpar também a esconde.
+static void test_list_box_scroll_follows_removed_items()
+{
+    using namespace ig::retained;
+    ListBox list;
+    list.setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    for (int i = 0; i < 50; ++i) list.addItem("item");
+    list.layout();
+    ScrollBar* bar = static_cast<ScrollBar*>(list.children()[0]);
+    MouseEvent wheel;
+    wheel.scrollY = -1000.0f;
+    list.onMouseScroll(wheel);
+    assert(bar->value() > 0.0f);
+
+    while (list.itemCount() > 2) list.removeItem(list.itemCount() - 1);
+    assert(!bar->needed());
+    assert(bar->value() == 0.0f);
+    MouseEvent press;
+    press.button = 0;
+    press.x = 10.0f;
+    press.y = 5.0f;
+    list.onMousePress(press);
+    assert(list.selectedIndex() == 0);
+
+    for (int i = 0; i < 50; ++i) list.addItem("item");
+    list.onMouseScroll(wheel);
+    list.clearItems();
+    assert(!bar->needed());
+    assert(bar->value() == 0.0f);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4345,6 +4379,7 @@ int main()
     test_console_keeps_its_visible_lines_while_trimming();
     test_thumbnail_grid_paints_and_hits_only_its_cells();
     test_thumbnail_grid_scrolls_to_every_row();
+    test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

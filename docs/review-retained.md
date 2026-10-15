@@ -293,6 +293,6 @@ compensa se houver uso que mude a árvore em todos os frames.
 - [x] ThumbnailGrid sem scroll: só se viam as filas que cabiam; agora rola.
 - [ ] ThumbnailGrid: `onItemDoubleClicked` nunca é emitido e as legendas não
       são cortadas (invadem as vizinhas).
-- [ ] ListBox: `removeItem` e `clearItems` não atualizam a barra; por
-      confirmar com teste.
+- [x] ListBox: `removeItem` e `clearItems` não atualizavam a barra; rolada até
+      ao fim e encurtada, ficava em branco e o clique não acertava.
 - [ ] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.

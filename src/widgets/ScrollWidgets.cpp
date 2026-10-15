@@ -290,11 +290,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
 void ListBox::addItem(const String& text)
 {
     items_.push_back(text);
-    markDirty();
-    if (vbar_) {
-        vbar_->setContentSize(static_cast<float>(items_.size()) * itemHeight());
-        vbar_->setViewSize(rect_.h);
-    }
+    syncScrollBar();
 }
 
 void ListBox::removeItem(int index)
@@ -303,7 +299,7 @@ void ListBox::removeItem(int index)
     items_.erase(items_.begin() + index);
     if (selectedIdx_ == index) selectedIdx_ = -1;
     else if (selectedIdx_ > index) --selectedIdx_;
-    markDirty();
+    syncScrollBar();
 }
 
 void ListBox::clearItems()
@@ -311,7 +307,7 @@ void ListBox::clearItems()
     items_.clear();
     selectedIdx_  = -1;
     scrollOffset_ = 0.0f;
-    markDirty();
+    syncScrollBar();
 }
 
 static const String kEmptyString;
@@ -345,6 +341,17 @@ void ListBox::clampScroll()
     float total  = static_cast<float>(items_.size()) * itemHeight();
     float maxOff = std::max(0.0f, total - rect_.h);
     scrollOffset_ = std::max(0.0f, std::min(scrollOffset_, maxOff));
+}
+
+void ListBox::syncScrollBar()
+{
+    clampScroll();
+    if (vbar_)
+    {
+        vbar_->setContentSize(static_cast<float>(items_.size()) * itemHeight());
+        vbar_->setViewSize(rect_.h);
+    }
+    markDirty();
 }
 
 int ListBox::itemAtY(float absY) const
