@@ -1681,6 +1681,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
     }
 
     if (!editing_) {
+        Node* before = selectedNode_;
         int curIdx = -1;
         for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
             if (flatList_[i].node == selectedNode_) { curIdx = i; break; }
@@ -1732,6 +1733,22 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 text += selectedNode_->cells[c];
             }
             WidgetApp::instance().setClipboardText(text.c_str());
+        }
+
+        // Keep the node the arrows moved to in view
+        if (selectedNode_ != before && selectedNode_)
+        {
+            ensureFlatList();
+            for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
+            {
+                if (flatList_[i].node != selectedNode_) continue;
+                const float bodyH = rect_.h - headerHeight_;
+                const float top = static_cast<float>(i) * rowHeight_;
+                if (top < scrollY_) scrollY_ = top;
+                else if (top + rowHeight_ > scrollY_ + bodyH)
+                    scrollY_ = top + rowHeight_ - bodyH;
+                break;
+            }
         }
     }
 }
