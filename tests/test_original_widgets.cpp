@@ -4115,6 +4115,51 @@ static void test_tree_view_moves_with_the_arrow_keys()
     assert(!key(Key::Left) && !key(Key::Right));
 }
 
+// A ListBox aceita foco e anda pelas setas: Baixo sem seleção vai ao primeiro
+// item, Cima e Baixo mudam de item e nas pontas deixam a tecla ao pai, e a
+// vista de dois itens (e a sua barra) acompanha a seleção. Sem foco, as
+// teclas não lhe tocam.
+static void test_list_box_moves_with_the_arrow_keys()
+{
+    using namespace ig::retained;
+    const Theme& theme = Theme::instance();
+    const float itemH = theme.fontSize + theme.padding * 2.0f;
+    ListBox list;
+    assert(list.acceptsFocus());
+    list.setRect({ 0.0f, 0.0f, 200.0f, itemH * 2.0f });
+    for (int i = 0; i < 5; ++i) list.addItem("item");
+    list.layout();
+    ScrollBar* bar = static_cast<ScrollBar*>(list.children()[0]);
+    int changes = 0;
+    list.selectionChanged.connect([&changes](int) { ++changes; });
+    auto key = [&list](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        list.onKeyPress(press);
+        return press.consumed;
+    };
+
+    assert(!key(Key::Down));
+    list.setFocused(true);
+    assert(key(Key::Down) && list.selectedIndex() == 0);
+    assert(key(Key::Down) && key(Key::Down) && list.selectedIndex() == 2);
+    assert(changes == 3);
+    assert(bar->value() == itemH);
+    assert(key(Key::Down) && key(Key::Down) && list.selectedIndex() == 4);
+    assert(!key(Key::Down));
+    assert(bar->value() == itemH * 3.0f);
+    for (int i = 0; i < 4; ++i) assert(key(Key::Up));
+    assert(list.selectedIndex() == 0 && bar->value() == 0.0f);
+    assert(!key(Key::Up));
+    MouseEvent press;
+    press.button = 0;
+    press.x = 10.0f;
+    press.y = itemH * 1.5f;
+    list.onMousePress(press);
+    assert(list.selectedIndex() == 1);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4590,6 +4635,7 @@ int main()
     test_thumbnail_grid_keeps_labels_inside_their_cell();
     test_file_dialog_icon_names_fit_their_cell();
     test_tree_view_moves_with_the_arrow_keys();
+    test_list_box_moves_with_the_arrow_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

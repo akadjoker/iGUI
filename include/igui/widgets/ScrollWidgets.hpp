@@ -140,7 +140,10 @@ class ListBox : public Widget
 public:
     IG_WIDGET_CLASS(ListBox, Widget);
 
-    ListBox() = default;
+    ListBox()
+    {
+        acceptsFocus_ = true;
+    }
 
     /// @brief Add a string item to the list.
     void addItem(const String& text);
@@ -164,6 +167,7 @@ public:
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
     /// @brief Emitted when the selected item changes.
     Signal<int> selectionChanged;  // -1 = deselected
@@ -171,6 +175,7 @@ public:
 private:
     void clampScroll();
     void syncScrollBar();
+    void scrollToItem(int idx);
     float itemHeight() const;
     int   itemAtY(float absY) const;
 
