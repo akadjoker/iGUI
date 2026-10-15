@@ -3742,6 +3742,43 @@ static void test_data_grid_arrows_follow_the_screen_order()
     assert(grid.selectedRow() == 19);
 }
 
+// As setas da TreeGrid rolam a vista para o nó selecionado continuar à vista.
+static void test_tree_grid_arrows_keep_the_selection_in_view()
+{
+    using namespace ig::retained;
+    TreeGrid tree;
+    tree.setRect({ 0.0f, 0.0f, 300.0f, 28.0f + 24.0f * 4.0f });
+    tree.addColumn("Name", 200.0f);
+    for (int i = 0; i < 60; ++i) tree.addRoot({ String::number(i) });
+    tree.setFocused(true);
+    auto key = [&tree](int code, int times)
+    {
+        for (int i = 0; i < times; ++i)
+        {
+            KeyEvent press;
+            press.key = code;
+            tree.onKeyPress(press);
+        }
+    };
+    auto clickRow = [&tree](int row)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.x = press.localX = 50.0f;
+        press.y = press.localY = 28.0f + 24.0f * static_cast<float>(row) + 4.0f;
+        tree.onMousePress(press);
+        MouseEvent release = press;
+        tree.onMouseRelease(release);
+        return tree.selectedNode() ? tree.selectedNode()->cells[0] : String("none");
+    };
+    key(Key::Down, 30);
+    assert(tree.selectedNode()->cells[0] == "29");
+    assert(clickRow(3) == "29");
+    key(Key::Up, 29);
+    assert(clickRow(0) == "0");
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4133,6 +4170,7 @@ int main()
     test_tree_grid_shows_new_children_without_rebuild();
     test_data_grid_sorts_new_rows_into_place();
     test_data_grid_arrows_follow_the_screen_order();
+    test_tree_grid_arrows_keep_the_selection_in_view();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
