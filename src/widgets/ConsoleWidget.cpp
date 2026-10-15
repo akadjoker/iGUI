@@ -58,6 +58,8 @@ void ConsoleWidget::log(LogLevel level, const String& message)
     }
 
     entries_.push_back({level, message, ts, 1});
+    if (visibleValid_ && passesFilter(entries_.back()))
+        shownLines_.push_back(firstSerial_ + entries_.size() - 1);
     updateCount(level, 1);
     trimEntries();
 
@@ -79,7 +81,9 @@ void ConsoleWidget::logf(LogLevel level, const char* fmt, ...)
 
 void ConsoleWidget::clear()
 {
+    firstSerial_ += entries_.size();
     entries_.clear();
+    shownLines_.clear();
     countTrace_ = countInfo_ = countWarn_ = countError_ = 0;
     scrollY_ = 0;
     scrollLocked_ = false;
@@ -119,6 +123,29 @@ void ConsoleWidget::setSearchText(const String& s)
     markDirty();
 }
 
+const ct::Deque<size_t>& ConsoleWidget::visibleLines() const
+{
+    if (!visibleValid_ || builtTrace_ != showTrace_ || builtInfo_ != showInfo_ ||
+            builtWarn_ != showWarn_ || builtError_ != showError_ || !(builtSearch_ == searchText_))
+    {
+        shownLines_.clear();
+        for (size_t i = 0; i < entries_.size(); ++i)
+            if (passesFilter(entries_[i])) shownLines_.push_back(firstSerial_ + i);
+        builtTrace_ = showTrace_;
+        builtInfo_ = showInfo_;
+        builtWarn_ = showWarn_;
+        builtError_ = showError_;
+        builtSearch_ = searchText_;
+        visibleValid_ = true;
+    }
+    return shownLines_;
+}
+
+const LogEntry& ConsoleWidget::visibleEntry(int line) const
+{
+    return entries_[visibleLines()[static_cast<size_t>(line)] - firstSerial_];
+}
+
 bool ConsoleWidget::passesFilter(const LogEntry& e) const
 {
     switch (e.level) {
@@ -141,6 +168,8 @@ void ConsoleWidget::trimEntries()
     while ((int)entries_.size() > maxLines_) {
         updateCount(entries_.front().level, -entries_.front().count);
         entries_.pop_front();
+        ++firstSerial_;
+        while (!shownLines_.empty() && shownLines_.front() < firstSerial_) shownLines_.pop_front();
     }
 }
 
@@ -335,11 +364,8 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
 {
     ctx.pushClip(area);
 
-    // Count visible entries
-    int visCount = 0;
-    for (auto& e : entries_)
-        if (passesFilter(e)) visCount++;
-
+    const ct::Deque<size_t>& visible = visibleLines();
+    const int visCount = static_cast<int>(visible.size());
     float totalH = visCount * kLineH;
 
     // Auto-scroll: snap to bottom when not locked
@@ -354,14 +380,14 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
     if (scrollY_ < 0) scrollY_ = 0;
 
     float y = area.y - scrollY_;
-    int visIdx = 0;
 
-    for (int i = 0; i < (int)entries_.size(); i++) {
-        auto& e = entries_[i];
-        if (!passesFilter(e)) continue;
+    // Lines above the one at the top of the view are skipped below anyway
+    for (int visIdx = std::max(0, static_cast<int>(scrollY_ / kLineH) - 1); visIdx < visCount;
+            visIdx++)
+    {
+        const LogEntry& e = entries_[visible[static_cast<size_t>(visIdx)] - firstSerial_];
 
         float lineY = y + visIdx * kLineH;
-        visIdx++;
 
         // Skip if above or below viewport
         if (lineY + kLineH < area.y) continue;
@@ -375,7 +401,8 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         }
 
         // Selection highlight
-        if (visIdx - 1 == selectedLine_) {
+        if (visIdx == selectedLine_)
+        {
             ctx.fill.SetColor(50, 70, 120, 80);
             ctx.fillRect(area.x, lineY, area.w, kLineH);
         }
@@ -534,9 +561,7 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
         int line = (int)(relY / kLineH);
 
         // Map to visible index
-        int visCount = 0;
-        for (auto& en : entries_)
-            if (passesFilter(en)) visCount++;
+        const int visCount = static_cast<int>(visibleLines().size());
 
         if (line >= 0 && line < visCount)
             selectedLine_ = line;
@@ -588,11 +613,7 @@ void ConsoleWidget::onMouseScroll(MouseEvent& e)
 
     scrollY_ -= e.scrollY * kLineH * 3.f;
 
-    // Count visible
-    int visCount = 0;
-    for (auto& en : entries_)
-        if (passesFilter(en)) visCount++;
-
+    const int visCount = static_cast<int>(visibleLines().size());
     float totalH = visCount * kLineH;
     float maxScroll = std::max(0.f, totalH - logArea.h);
 
@@ -627,18 +648,11 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
 
     // Ctrl+C — copy selected line
     if (e.ctrl && e.key == ig::retained::Key::C) {
-        if (selectedLine_ >= 0) {
-            int vis = 0;
-            for (auto& en : entries_) {
-                if (!passesFilter(en)) continue;
-                if (vis == selectedLine_) {
-                    auto& io = ig::retained::GetIO();
-                    if (io.setClipboardText)
-                        io.setClipboardText(en.message.c_str());
-                    break;
-                }
-                vis++;
-            }
+        if (selectedLine_ >= 0 && selectedLine_ < static_cast<int>(visibleLines().size()))
+        {
+            auto& io = ig::retained::GetIO();
+            if (io.setClipboardText)
+                io.setClipboardText(visibleEntry(selectedLine_).message.c_str());
         }
         e.consumed = true;
         return;
@@ -755,9 +769,7 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             return;
         }
         if (e.key == ig::retained::Key::Down) {
-            int visCount = 0;
-            for (auto& en : entries_)
-                if (passesFilter(en)) visCount++;
+            const int visCount = static_cast<int>(visibleLines().size());
             if (selectedLine_ < visCount - 1) selectedLine_++;
             markDirty();
             e.consumed = true;

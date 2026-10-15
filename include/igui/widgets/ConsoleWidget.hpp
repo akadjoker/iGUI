@@ -116,6 +116,17 @@ private:
 
     bool passesFilter(const LogEntry& e) const;
 
+    // Entries that pass the filters, by serial number (entries_[i] is serial
+    // firstSerial_ + i): kept as lines are logged and trimmed, rebuilt when the
+    // filters or the search differ from the ones the list was built with.
+    size_t firstSerial_ = 0;
+    mutable ct::Deque<size_t> shownLines_;
+    mutable bool visibleValid_ = false;
+    mutable bool builtTrace_ = true, builtInfo_ = true, builtWarn_ = true, builtError_ = true;
+    mutable String builtSearch_;
+    const ct::Deque<size_t>& visibleLines() const;
+    const LogEntry& visibleEntry(int line) const;
+
     // ── Counts ───────────────────────────────────────────────────────────
     int countTrace_ = 0, countInfo_ = 0, countWarn_ = 0, countError_ = 0;
     void updateCount(LogLevel l, int delta);
