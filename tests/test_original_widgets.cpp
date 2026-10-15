@@ -3779,6 +3779,56 @@ static void test_tree_grid_arrows_keep_the_selection_in_view()
     assert(clickRow(0) == "0");
 }
 
+// A consola cheia corta as linhas antigas sem perder a conta das que se veem:
+// depois do corte, o Ctrl+C da primeira e da última linha visível copia a mais
+// antiga e a mais recente que ficaram, também com um filtro de nível ativo.
+static ig::retained::String gConsoleClipboard;
+static void test_console_keeps_its_visible_lines_while_trimming()
+{
+    using namespace ig::retained;
+    ConsoleWidget console;
+    console.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    console.setCollapseDuplicates(false);
+    console.setMaxLines(5);
+    GetIO().setClipboardText = [](const char* text) { gConsoleClipboard = text; };
+    auto key = [&console](int code, bool ctrl)
+    {
+        KeyEvent press;
+        press.key = code;
+        press.ctrl = ctrl;
+        console.onKeyPress(press);
+    };
+    auto copyFirstLine = [&]()
+    {
+        for (int i = 0; i < 10; ++i) key(Key::Up, false);
+        key(Key::C, true);
+        return gConsoleClipboard;
+    };
+    auto copyLastLine = [&]()
+    {
+        for (int i = 0; i < 10; ++i) key(Key::Down, false);
+        key(Key::C, true);
+        return gConsoleClipboard;
+    };
+    for (int i = 0; i < 5; ++i) console.log(LogLevel::Info, "m" + String::number(i));
+    key(Key::Down, false);
+    assert(copyFirstLine() == "m0");
+    assert(copyLastLine() == "m4");
+    for (int i = 5; i < 8; ++i) console.log(LogLevel::Info, "m" + String::number(i));
+    assert(copyFirstLine() == "m3");
+    assert(copyLastLine() == "m7");
+    console.setFilter(LogLevel::Info, false);
+    console.log(LogLevel::Warn, "w0");
+    console.log(LogLevel::Info, "m8");
+    console.log(LogLevel::Warn, "w1");
+    assert(copyFirstLine() == "w0");
+    assert(copyLastLine() == "w1");
+    console.setFilter(LogLevel::Info, true);
+    assert(copyFirstLine() == "m6");
+    assert(copyLastLine() == "w1");
+    GetIO().setClipboardText = nullptr;
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4171,6 +4221,7 @@ int main()
     test_data_grid_sorts_new_rows_into_place();
     test_data_grid_arrows_follow_the_screen_order();
     test_tree_grid_arrows_keep_the_selection_in_view();
+    test_console_keeps_its_visible_lines_while_trimming();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();
