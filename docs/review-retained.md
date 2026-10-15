@@ -300,4 +300,9 @@ compensa se houver uso que mude a árvore em todos os frames.
 - [x] ListWidget: as linhas acrescentadas depois do layout ficavam sem sítio (o
       layout só corre ao mudar o tamanho ou o stage), e a barra e o scroll não
       seguiam as linhas acrescentadas, removidas e limpas.
-- [ ] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.
+- [x] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.
+      Os seis widgets de dados andam agora pelas setas, Home, End, PageUp e
+      PageDown (`listKeyTarget`), a vista acompanha, e a tecla só é consumida
+      quando a seleção muda.
+- [ ] TreeView: a seleção pode apontar para um nó já apagado (`removeChild` e
+      `clear` de um `TreeNode` não avisam a vista); por confirmar com teste.
