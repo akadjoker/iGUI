@@ -261,8 +261,10 @@ void ThumbnailGrid::onMousePress(MouseEvent& e)
     if (e.button != 0) return;
     int idx = hitTest(e.x, e.y);
     if (idx >= 0) {
+        const bool again = e.clickCount == 2 && idx == selected_;
         setSelected(idx);
         onItemClicked.emit(idx);
+        if (again) onItemDoubleClicked.emit(idx);
         e.consumed = true;
     }
 }
