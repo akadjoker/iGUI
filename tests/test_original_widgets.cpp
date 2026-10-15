@@ -4582,6 +4582,66 @@ static void test_tree_view_forgets_a_deleted_selection()
     delete loose;
 }
 
+// Os marcadores da goteira acompanham a sua linha: um Enter no início de uma
+// linha marcada leva o marcador com o texto, e o desfazer devolve-o; um Enter a
+// meio deixa-o na linha; juntar duas linhas marcadas junta os marcadores; mover
+// uma linha leva os seus marcadores e troca-os com os da vizinha; apagar a linha
+// apaga os seus; o setText de um documento novo não lhes mexe.
+static void test_code_editor_markers_follow_their_lines()
+{
+    using namespace ig::retained;
+    using Marker = TextEdit::MarkerType;
+    CodeEditor editor;
+    editor.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    editor.setFocused(true);
+    editor.setText("l0\nl1\nl2\nl3\nl4\nl5");
+    editor.setMarker(1, Marker::Error);
+    editor.setMarker(3, Marker::Breakpoint);
+    editor.setMarker(5, Marker::Bookmark);
+    auto key = [&editor](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        editor.onKeyPress(press);
+    };
+
+    editor.setCursorPos(3, 0);
+    key(Key::Return);
+    assert(editor.hasMarker(4, Marker::Breakpoint) && !editor.hasMarker(3));
+    assert(editor.hasMarker(6, Marker::Bookmark) && editor.hasMarker(1, Marker::Error));
+    editor.undo();
+    assert(editor.hasMarker(3, Marker::Breakpoint) && !editor.hasMarker(4));
+    assert(editor.hasMarker(5, Marker::Bookmark));
+
+    editor.setCursorPos(3, 1);
+    key(Key::Return);
+    assert(editor.hasMarker(3, Marker::Breakpoint) && !editor.hasMarker(4));
+    assert(editor.hasMarker(6, Marker::Bookmark));
+    key(Key::Backspace);
+    assert(editor.hasMarker(3, Marker::Breakpoint) && editor.hasMarker(5, Marker::Bookmark));
+
+    editor.setMarker(4, Marker::Warning);
+    editor.setCursorPos(3, 0);
+    editor.moveLineDown();
+    assert(editor.hasMarker(4, Marker::Breakpoint) && !editor.hasMarker(4, Marker::Warning));
+    assert(editor.hasMarker(3, Marker::Warning) && !editor.hasMarker(3, Marker::Breakpoint));
+    editor.moveLineUp();
+    assert(editor.hasMarker(3, Marker::Breakpoint) && editor.hasMarker(4, Marker::Warning));
+
+    editor.setCursorPos(3, 2);
+    key(Key::Delete);
+    assert(editor.hasMarker(3, Marker::Breakpoint) && editor.hasMarker(3, Marker::Warning));
+    assert(editor.hasMarker(4, Marker::Bookmark) && !editor.hasMarker(5));
+
+    editor.setCursorPos(1, 0);
+    editor.removeLine();
+    assert(!editor.hasMarker(0) && !editor.hasMarker(1, Marker::Error));
+    assert(editor.hasMarker(2, Marker::Breakpoint) && editor.hasMarker(3, Marker::Bookmark));
+
+    editor.setText("a\nb");
+    assert(editor.hasMarker(2, Marker::Breakpoint) && editor.hasMarker(3, Marker::Bookmark));
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -5067,6 +5127,7 @@ int main()
     test_data_grid_jumps_with_home_end_and_page_keys();
     test_thumbnail_grid_jumps_with_home_end_and_page_keys();
     test_tree_view_forgets_a_deleted_selection();
+    test_code_editor_markers_follow_their_lines();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

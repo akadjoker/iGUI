@@ -464,7 +464,10 @@ void TextEdit::setText(const String& text)
         wrapRows_[i].push_back({ 0, lineColCount(i) });
     rowStartsDirty_ = true;
     wrapDirty_ = true;
+    // A new text keeps the markers on the lines the caller put them.
+    ct::HashMap<int, ct::HashSet<int>> markers = std::move(markers_);
     linesChanged(0, oldCount, static_cast<int>(lines_.size()));
+    markers_ = std::move(markers);
     markDirty();
 }
 
@@ -1045,8 +1048,40 @@ bool TextEdit::wrapNeedsRebuild(const PaintContext& ctx, float textW) const
     return wordWrap_ && std::abs(textW - wrapWidth_) > 1.0f;
 }
 
+void TextEdit::shiftMarkers(int line, int removed, int inserted)
+{
+    if (markers_.empty()) return;
+    const int delta = inserted - removed;
+    ct::HashMap<int, ct::HashSet<int>> moved;
+    for (auto& entry: markers_)
+    {
+        int at = entry.key;
+        if (at >= line + removed) at += delta;
+        else if (at >= line)
+        {
+            // A marker on a line that is gone goes with it; one on a changed
+            // line stays there, on the last line the change left if it shrank.
+            if (inserted == 0) continue;
+            at = std::min(at, line + inserted - 1);
+        }
+        ct::HashSet<int>& types = moved[at];
+        for (int type: entry.value) types.insert(type);
+    }
+    markers_ = std::move(moved);
+}
+
+void TextEdit::swapLineMarkers(int a, int b)
+{
+    ct::HashSet<int> atA, atB;
+    const bool hadA = markers_.erase(a, atA);
+    const bool hadB = markers_.erase(b, atB);
+    if (hadA) markers_[b] = std::move(atA);
+    if (hadB) markers_[a] = std::move(atB);
+}
+
 void TextEdit::linesChanged(int line, int removed, int inserted)
 {
+    shiftMarkers(line, removed, inserted);
     onLinesChanged(line, removed, inserted);
     if (wrapDirty_) return;
     const int count = static_cast<int>(wrapRows_.size());

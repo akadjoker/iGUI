@@ -260,6 +260,7 @@ protected:
 
     // Gutter markers: line → set of marker types
     ct::HashMap<int, ct::HashSet<int>> markers_;  // int = MarkerType
+    void shiftMarkers(int line, int removed, int inserted);
 
     // Computed each paint
     mutable float gutterW_    = 0;
@@ -281,6 +282,8 @@ protected:
     float computeLineHeight(const ig::retained::Font& font) const;
     void invalidateWrap() { wrapDirty_ = true; }
     void linesChanged(int line, int removed, int inserted);
+    // The markers of lines a and b change places, as the lines just did.
+    void swapLineMarkers(int a, int b);
     // Told about every change to lines_: `removed` lines at `line` became `inserted`.
     virtual void onLinesChanged(int, int, int)
     {
