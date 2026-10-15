@@ -40,7 +40,7 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
     for (auto& row : rows_)
         while (row.cells.size() < columns_.size())
             row.cells.push_back("");
-    rebuildSortOrder();
+    sortDirty_ = true;
     markDirty();
     return static_cast<int>(columns_.size()) - 1;
 }
@@ -64,7 +64,7 @@ int DataGrid::addRow(const ct::Vector<String>& cells)
     while (r.cells.size() < columns_.size())
         r.cells.push_back("");
     rows_.push_back(std::move(r));
-    rebuildSortOrder();
+    sortDirty_ = true;
     markDirty();
     return static_cast<int>(rows_.size()) - 1;
 }
@@ -90,7 +90,7 @@ void DataGrid::removeRow(int row)
 {
     if (row >= 0 && row < static_cast<int>(rows_.size())) {
         rows_.erase(rows_.begin() + row);
-        rebuildSortOrder();
+        sortDirty_ = true;
         if (selectedRow_ == row) selectedRow_ = -1;
         else if (selectedRow_ > row) selectedRow_--;
         markDirty();
@@ -166,8 +166,9 @@ bool DataGrid::isSelected(int row) const
 //  Sort
 // ═════════════════════════════════════════════════════════════════════════════
 
-void DataGrid::rebuildSortOrder()
+void DataGrid::rebuildSortOrder() const
 {
+    sortDirty_ = false;
     int nRows = modelRowCount();
     sortedIndices_.resize(nRows);
     std::iota(sortedIndices_.begin(), sortedIndices_.end(), 0);
@@ -175,10 +176,9 @@ void DataGrid::rebuildSortOrder()
         sortByColumn(sortCol_);
 }
 
-void DataGrid::sortByColumn(int col)
+void DataGrid::sortByColumn(int col) const
 {
     if (col < 0 || col >= static_cast<int>(columns_.size())) return;
-    sortCol_ = col;
     bool asc = (sortOrder_ == SortOrder::Ascending);
 
     if (model_) {
@@ -211,6 +211,7 @@ void DataGrid::sortByColumn(int col)
 
 int DataGrid::displayRow(int idx) const
 {
+    ensureSortOrder();
     if (idx >= 0 && idx < static_cast<int>(sortedIndices_.size()))
         return sortedIndices_[idx];
     return idx;
@@ -248,6 +249,7 @@ int DataGrid::hitColumn(float localX) const
 
 int DataGrid::hitRow(float localY) const
 {
+    ensureSortOrder();
     if (localY < headerHeight_) return -1;
     float y = localY - headerHeight_ + scrollY_;
     int idx = static_cast<int>(y / rowHeight_);
@@ -330,6 +332,7 @@ void DataGrid::cancelEdit()
 
 void DataGrid::paint(PaintContext& ctx)
 {
+    ensureSortOrder();
     if (!visible_) return;
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
@@ -589,7 +592,7 @@ void DataGrid::onMousePress(MouseEvent& e)
                 sortCol_   = col;
                 sortOrder_ = SortOrder::Ascending;
             }
-            rebuildSortOrder();
+            sortDirty_ = true;
             columnSorted.emit(col);
             markDirty();
         }
@@ -739,6 +742,7 @@ void DataGrid::onMouseScroll(MouseEvent& e)
 
 void DataGrid::onKeyPress(KeyEvent& e)
 {
+    ensureSortOrder();
     if (!focused_ && !editing_) return;
 
     if (editing_) {
@@ -903,10 +907,22 @@ void DataGrid::setModel(AbstractItemModel* model)
     // Connect model signals to refresh the view
     modelSlots_.reset = model_->modelReset.connect([this] {
         selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
-        scrollY_ = 0; rebuildSortOrder(); markDirty();
+        scrollY_ = 0;
+        sortDirty_ = true;
+        markDirty();
     });
-    modelSlots_.inserted = model_->rowsInserted.connect([this] { rebuildSortOrder(); markDirty(); });
-    modelSlots_.removed = model_->rowsRemoved.connect([this]  { rebuildSortOrder(); markDirty(); });
+    modelSlots_.inserted = model_->rowsInserted.connect(
+            [this]
+            {
+                sortDirty_ = true;
+                markDirty();
+            });
+    modelSlots_.removed = model_->rowsRemoved.connect(
+            [this]
+            {
+                sortDirty_ = true;
+                markDirty();
+            });
     modelSlots_.changed = model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
     modelSlots_.layout = model_->layoutChanged.connect([this] { markDirty(); });
     modelSlots_.destroyed = model_->destroyed.connect([this]
@@ -914,10 +930,12 @@ void DataGrid::setModel(AbstractItemModel* model)
         model_ = nullptr;
         modelSlots_ = AbstractItemModel::Connections();
         selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
-        scrollY_ = 0; rebuildSortOrder(); markDirty();
+        scrollY_ = 0;
+        sortDirty_ = true;
+        markDirty();
     });
 
-    rebuildSortOrder();
+    sortDirty_ = true;
     markDirty();
 }
 
