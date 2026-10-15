@@ -4504,6 +4504,45 @@ static void test_data_grid_jumps_with_home_end_and_page_keys()
     assert(rowOnTop() == 3);
 }
 
+// A ThumbnailGrid com vinte itens em três colunas e vista de duas filas: End
+// vai ao último e a vista desce ao fundo, Home volta ao primeiro, PageDown e
+// PageUp andam duas filas na mesma coluna (na última fila, sem essa coluna,
+// PageDown vai ao último item), e nas pontas a tecla fica para o pai.
+static void test_thumbnail_grid_jumps_with_home_end_and_page_keys()
+{
+    using namespace ig::retained;
+    ThumbnailGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 216.0f });
+    for (int i = 0; i < 20; ++i) grid.addItem("t");
+    grid.layout();
+    grid.setFocused(true);
+    auto key = [&grid](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        grid.onKeyPress(press);
+        return press.consumed;
+    };
+    assert(key(Key::End) && grid.selected() == 19 && grid.scrollY() == 520.0f);
+    assert(!key(Key::End) && !key(Key::PageDown) && !key(Key::Down));
+    assert(key(Key::Home) && grid.selected() == 0 && grid.scrollY() == 0.0f);
+    assert(!key(Key::Home) && !key(Key::PageUp) && !key(Key::Up));
+    assert(key(Key::Right) && grid.selected() == 1);
+    assert(key(Key::PageDown) && grid.selected() == 7);
+    assert(key(Key::PageDown) && grid.selected() == 13);
+    assert(key(Key::PageDown) && grid.selected() == 19);
+    assert(!key(Key::PageDown));
+    assert(key(Key::PageUp) && grid.selected() == 13);
+    assert(key(Key::PageUp) && key(Key::PageUp) && grid.selected() == 1);
+    assert(!key(Key::PageUp));
+    grid.setSelected(17);
+    assert(key(Key::PageDown) && grid.selected() == 19);
+    grid.setSelected(15);
+    assert(key(Key::PageDown) && grid.selected() == 18);
+    grid.setSelected(4);
+    assert(key(Key::PageUp) && grid.selected() == 1);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4987,6 +5026,7 @@ int main()
     test_lists_jump_with_home_end_and_page_keys();
     test_trees_jump_with_home_end_and_page_keys();
     test_data_grid_jumps_with_home_end_and_page_keys();
+    test_thumbnail_grid_jumps_with_home_end_and_page_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

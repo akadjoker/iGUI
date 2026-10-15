@@ -294,11 +294,29 @@ void ThumbnailGrid::onKeyPress(KeyEvent& e)
 {
     if (!focused_ || !isEnabledInTree()) return;
     const int count = static_cast<int>(items_.size());
-    const int cols = metrics().cols;
+    const Metrics m = metrics();
+    const int cols = m.cols;
+    const int lastRow = (count - 1) / cols;
+    const int pageRows = std::max(1, static_cast<int>(rect_.h / m.cellH));
     const int cur = selected_ >= 0 && selected_ < count ? selected_ : -1;
     int next = -1;
     switch (e.key)
     {
+        case ig::retained::Key::Home:
+            if (count > 0) next = 0;
+            break;
+        case ig::retained::Key::End:
+            if (count > 0) next = count - 1;
+            break;
+        case ig::retained::Key::PageUp:
+            if (cur >= cols) next = std::max(0, cur / cols - pageRows) * cols + cur % cols;
+            break;
+        case ig::retained::Key::PageDown:
+            if (cur < 0) next = count > 0 ? 0 : -1;
+            else if (cur / cols < lastRow)
+                next = std::min(std::min(lastRow, cur / cols + pageRows) * cols + cur % cols,
+                        count - 1);
+            break;
         case ig::retained::Key::Left:
             if (cur > 0) next = cur - 1;
             break;
@@ -310,13 +328,13 @@ void ThumbnailGrid::onKeyPress(KeyEvent& e)
             break;
         case ig::retained::Key::Down:
             if (cur < 0) next = count > 0 ? 0 : -1;
-            else if (cur / cols < (count - 1) / cols)
+            else if (cur / cols < lastRow)
                 next = std::min(cur + cols, count - 1);
             break;
         default:
             break;
     }
-    if (next < 0) return;
+    if (next < 0 || next == cur) return;
     e.consumed = true;
     setSelected(next);
     scrollToItem(next);
