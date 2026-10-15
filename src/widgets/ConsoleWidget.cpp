@@ -140,7 +140,7 @@ void ConsoleWidget::trimEntries()
 {
     while ((int)entries_.size() > maxLines_) {
         updateCount(entries_.front().level, -entries_.front().count);
-        entries_.erase(entries_.begin());
+        entries_.pop_front();
     }
 }
 
