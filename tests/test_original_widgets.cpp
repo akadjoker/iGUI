@@ -3697,6 +3697,51 @@ static void test_data_grid_sorts_new_rows_into_place()
     assert(grid.selectedRow() == 1);
 }
 
+// As setas da DataGrid andam pela ordem do ecrã (também com uma coluna
+// ordenada) e rolam a vista para a linha selecionada continuar à vista.
+static void test_data_grid_arrows_follow_the_screen_order()
+{
+    using namespace ig::retained;
+    DataGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 28.0f + 24.0f * 4.0f });
+    grid.addColumn("Name", 100.0f);
+    grid.addColumn("Value", 100.0f);
+    for (int i = 0; i < 20; ++i)
+        grid.addRow({ String("row ") + String::number(i), String::number(100 - i) });
+    auto click = [&grid](float x, float y)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.clickCount = 1;
+        press.x = press.localX = x;
+        press.y = press.localY = y;
+        grid.onMousePress(press);
+        MouseEvent release = press;
+        grid.onMouseRelease(release);
+    };
+    auto key = [&grid](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        grid.onKeyPress(press);
+    };
+    click(130.0f, 10.0f);
+    grid.setFocused(true);
+    key(Key::Down);
+    assert(grid.selectedRow() == 19);
+    key(Key::Down);
+    assert(grid.selectedRow() == 18);
+    key(Key::Up);
+    assert(grid.selectedRow() == 19);
+    for (int i = 0; i < 10; ++i) key(Key::Down);
+    assert(grid.selectedRow() == 9);
+    click(50.0f, 28.0f + 24.0f * 3.0f + 4.0f);
+    assert(grid.selectedRow() == 9);
+    for (int i = 0; i < 10; ++i) key(Key::Up);
+    click(50.0f, 28.0f + 4.0f);
+    assert(grid.selectedRow() == 19);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4087,6 +4132,7 @@ int main()
     test_code_editor_auto_indent_uses_the_text_before_the_cursor();
     test_tree_grid_shows_new_children_without_rebuild();
     test_data_grid_sorts_new_rows_into_place();
+    test_data_grid_arrows_follow_the_screen_order();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

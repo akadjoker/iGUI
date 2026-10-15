@@ -840,18 +840,41 @@ void DataGrid::onKeyPress(KeyEvent& e)
     }
 
     if (!editing_) {
-        if (e.key == ig::retained::Key::Up) {
+        if (e.key == ig::retained::Key::Up || e.key == ig::retained::Key::Down)
+        {
             e.consumed = true;
-            if (selectedRow_ > 0) { setSelectedRow(selectedRow_ - 1); selectionChanged.emit(selectedRow_); }
-        } else if (e.key == ig::retained::Key::Down) {
-            e.consumed = true;
-            if (selectedRow_ < modelRowCount() - 1) {
-                setSelectedRow(selectedRow_ + 1); selectionChanged.emit(selectedRow_);
+            // Move by position on screen, which a sorted column reorders
+            const int count = modelRowCount();
+            int pos = -1;
+            for (int i = 0; i < count && pos < 0; ++i)
+                if (displayRow(i) == selectedRow_) pos = i;
+            int next = pos;
+            if (e.key == ig::retained::Key::Up)
+            {
+                if (pos > 0) next = pos - 1;
             }
-        } else if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) {
+            else if (pos < count - 1)
+            {
+                next = pos + 1;
+            }
+            if (next != pos)
+            {
+                setSelectedRow(displayRow(next));
+                const float bodyH = rect_.h - headerHeight_;
+                const float top = static_cast<float>(next) * rowHeight_;
+                if (top < scrollY_) scrollY_ = top;
+                else if (top + rowHeight_ > scrollY_ + bodyH)
+                    scrollY_ = top + rowHeight_ - bodyH;
+                selectionChanged.emit(selectedRow_);
+            }
+        }
+        else if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter)
+        {
             e.consumed = true;
             if (selectedRow_ >= 0) startEdit(selectedRow_, 0);
-        } else if (e.key == ig::retained::Key::Space && showCheckboxes_) {
+        }
+        else if (e.key == ig::retained::Key::Space && showCheckboxes_)
+        {
             e.consumed = true;
             if (selectedRow_ >= 0 && selectedRow_ < modelRowCount()) {
                 if (model_) {
