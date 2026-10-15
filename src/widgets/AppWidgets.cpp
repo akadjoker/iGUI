@@ -667,11 +667,13 @@ void Outliner::paint(PaintContext& ctx)
 
         // Node text
         bool vis = isNodeVisible(fr.node);
+        float eyeX = abs.x + eyeColX();
         ctx.font.SetColor(vis ? t.textColor : t.textDisabled);
+        ctx.pushClip(Rect{tx, ry, std::max(0.0f, eyeX - 4.0f - tx), rowHeight_});
         ctx.font.Print(fr.node->text().c_str(), tx, tty);
+        ctx.popClip();
 
         // Eye icon (visibility toggle)
-        float eyeX = abs.x + eyeColX();
         Color eyeCol = vis ? Color(180, 180, 185, 255) : Color(80, 80, 85, 255);
         ctx.fill.SetColor(eyeCol);
         // Simple eye: circle + dot
