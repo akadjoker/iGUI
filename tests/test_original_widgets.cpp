@@ -3983,6 +3983,33 @@ static void test_paint_context_fits_text_at_a_character()
     assert(cuts > 0);
 }
 
+// A legenda de cada miniatura fica dentro da largura da miniatura: um nome
+// comprido é cortado em vez de entrar pela vizinha. Miniaturas de 80 px a
+// partir de x = 8.
+static void test_thumbnail_grid_keeps_labels_inside_their_cell()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    ThumbnailGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 216.0f });
+    grid.addItem("a_very_long_file_name_for_testing.png");
+    DrawList list;
+    PaintContext ctx(list, &atlas.defaultFont());
+    grid.paint(ctx);
+    float lowX = 1e9f, highX = -1e9f;
+    for (size_t v = 0; v < list.vertices().size(); ++v)
+    {
+        const DrawVertex& vertex = list.vertices()[v];
+        if (!(vertex.color == Color(180, 182, 190, 255))) continue;
+        lowX = vertex.x < lowX ? vertex.x : lowX;
+        highX = vertex.x > highX ? vertex.x : highX;
+    }
+    assert(highX > lowX);
+    assert(lowX >= 8.0f && highX <= 88.0f);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4455,6 +4482,7 @@ int main()
     test_thumbnail_grid_scrolls_to_every_row();
     test_thumbnail_grid_reports_double_clicks_on_one_item();
     test_paint_context_fits_text_at_a_character();
+    test_thumbnail_grid_keeps_labels_inside_their_cell();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
