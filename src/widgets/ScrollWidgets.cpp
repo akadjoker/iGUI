@@ -483,12 +483,9 @@ void ListBox::scrollToItem(int idx)
 void ListBox::onKeyPress(KeyEvent& e)
 {
     if (!focused_ || !isEnabledInTree()) return;
-    int next = -1;
-    if (e.key == ig::retained::Key::Up && selectedIdx_ > 0) next = selectedIdx_ - 1;
-    else if (e.key == ig::retained::Key::Down && selectedIdx_ < itemCount() - 1)
-        next = selectedIdx_ + 1;
-    else
-        return;
+    const int page = static_cast<int>(rect_.h / itemHeight());
+    const int next = listKeyTarget(e.key, selectedIdx_, itemCount(), page);
+    if (next == selectedIdx_) return;
     e.consumed = true;
     setSelectedIndex(next);
     scrollToItem(next);
@@ -691,12 +688,9 @@ void ListWidget::scrollToRow(int index)
 void ListWidget::onKeyPress(KeyEvent& e)
 {
     if (!focused_ || !isEnabledInTree()) return;
-    int next = -1;
-    if (e.key == ig::retained::Key::Up && selectedIdx_ > 0) next = selectedIdx_ - 1;
-    else if (e.key == ig::retained::Key::Down && selectedIdx_ < rowCount() - 1)
-        next = selectedIdx_ + 1;
-    else
-        return;
+    const int page = static_cast<int>(rect_.h / rowH());
+    const int next = listKeyTarget(e.key, selectedIdx_, rowCount(), page);
+    if (next == selectedIdx_) return;
     e.consumed = true;
     setSelectedIndex(next);
     scrollToRow(next);

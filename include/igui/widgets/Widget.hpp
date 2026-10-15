@@ -214,6 +214,11 @@ struct KeyEvent
     char text[32] = {};
 };
 
+/// @brief Where a list key takes the selection: Up, Down, Home, End, PageUp and
+///        PageDown over @p count items from @p current (-1 = none), a page being
+///        @p page items. Returns @p current when the key does not move it.
+int listKeyTarget(int key, int current, int count, int page);
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  Layout enums & structs
 // ═════════════════════════════════════════════════════════════════════════════
