@@ -348,6 +348,31 @@ bool imageIcon(IconId id, TextureHandle &texture, Rect &uv)
     uv = imageIcons()[static_cast<size_t>(index)].uv;
     return true;
 }
+
+int listKeyTarget(int key, int current, int count, int page)
+{
+    if (count <= 0) return current;
+    const int last = count - 1;
+    const int from = current >= 0 && current <= last ? current : -1;
+    page = std::max(1, page);
+    switch (key)
+    {
+        case Key::Up:
+            return from > 0 ? from - 1 : current;
+        case Key::Down:
+            return from < last ? from + 1 : current;
+        case Key::Home:
+            return 0;
+        case Key::End:
+            return last;
+        case Key::PageUp:
+            return from > 0 ? std::max(0, from - page) : current;
+        case Key::PageDown:
+            return from < last ? std::min(last, from + page) : current;
+        default:
+            return current;
+    }
+}
 }} // namespace ig::retained
 
 void PaintContext::drawIcon(IconId id, float x, float y, float size)

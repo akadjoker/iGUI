@@ -4315,6 +4315,88 @@ static void test_thumbnail_grid_moves_with_the_arrow_keys()
     assert(changes == 11);
 }
 
+// listKeyTarget, para 10 itens e páginas de 3: sem seleção, Baixo vai ao 0,
+// PageDown ao 2 e Cima e PageUp não mexem; Home e End vão às pontas; nas pontas
+// as teclas que sairiam devolvem a posição atual; uma página de 0 vale 1; uma
+// posição fora da lista conta como nenhuma; sem itens nada muda.
+static void test_list_key_target_covers_every_list_key()
+{
+    using namespace ig::retained;
+    assert(listKeyTarget(Key::Down, -1, 10, 3) == 0);
+    assert(listKeyTarget(Key::PageDown, -1, 10, 3) == 2);
+    assert(listKeyTarget(Key::Up, -1, 10, 3) == -1);
+    assert(listKeyTarget(Key::PageUp, -1, 10, 3) == -1);
+    assert(listKeyTarget(Key::Home, -1, 10, 3) == 0);
+    assert(listKeyTarget(Key::End, -1, 10, 3) == 9);
+    assert(listKeyTarget(Key::Up, 5, 10, 3) == 4);
+    assert(listKeyTarget(Key::Down, 5, 10, 3) == 6);
+    assert(listKeyTarget(Key::PageUp, 5, 10, 3) == 2);
+    assert(listKeyTarget(Key::PageDown, 5, 10, 3) == 8);
+    assert(listKeyTarget(Key::PageUp, 1, 10, 3) == 0);
+    assert(listKeyTarget(Key::PageDown, 8, 10, 3) == 9);
+    assert(listKeyTarget(Key::Up, 0, 10, 3) == 0);
+    assert(listKeyTarget(Key::PageUp, 0, 10, 3) == 0);
+    assert(listKeyTarget(Key::Home, 0, 10, 3) == 0);
+    assert(listKeyTarget(Key::Down, 9, 10, 3) == 9);
+    assert(listKeyTarget(Key::PageDown, 9, 10, 3) == 9);
+    assert(listKeyTarget(Key::End, 9, 10, 3) == 9);
+    assert(listKeyTarget(Key::PageDown, 0, 10, 0) == 1);
+    assert(listKeyTarget(Key::Down, 12, 10, 3) == 0);
+    assert(listKeyTarget(Key::Left, 5, 10, 3) == 5);
+    assert(listKeyTarget(Key::Down, -1, 0, 3) == -1);
+    assert(listKeyTarget(Key::End, 2, 0, 3) == 2);
+}
+
+// A ListBox e a ListWidget com vista de duas linhas e cinco itens: End vai ao
+// último e a vista desce, Home volta ao primeiro, PageDown e PageUp andam duas
+// linhas, e nas pontas a tecla fica para o pai.
+static void test_lists_jump_with_home_end_and_page_keys()
+{
+    using namespace ig::retained;
+    const Theme& theme = Theme::instance();
+    const float itemH = theme.fontSize + theme.padding * 2.0f;
+    const float rowH = theme.buttonHeight + 8.0f;
+    ListBox box;
+    box.setRect({ 0.0f, 0.0f, 200.0f, itemH * 2.0f });
+    ListWidget widget;
+    widget.setRect({ 0.0f, 0.0f, 200.0f, rowH * 2.0f });
+    for (int i = 0; i < 5; ++i)
+    {
+        box.addItem("item");
+        widget.addRow<Label>("row");
+    }
+    box.layout();
+    widget.layout();
+    box.setFocused(true);
+    widget.setFocused(true);
+    Widget* lists[] = { &box, &widget };
+    const float steps[] = { itemH, rowH };
+    for (int l = 0; l < 2; ++l)
+    {
+        Widget* list = lists[l];
+        ScrollBar* bar = nullptr;
+        for (Widget* child: list->children())
+            if (auto* found = widget_cast<ScrollBar>(child)) bar = found;
+        assert(bar);
+        auto selected = [&box, &widget, l]()
+        { return l == 0 ? box.selectedIndex() : widget.selectedIndex(); };
+        auto key = [list](int code)
+        {
+            KeyEvent press;
+            press.key = code;
+            list->onKeyPress(press);
+            return press.consumed;
+        };
+        assert(key(Key::End) && selected() == 4 && bar->value() == steps[l] * 3.0f);
+        assert(!key(Key::End) && !key(Key::PageDown));
+        assert(key(Key::Home) && selected() == 0 && bar->value() == 0.0f);
+        assert(!key(Key::Home) && !key(Key::PageUp));
+        assert(key(Key::PageDown) && selected() == 2 && bar->value() == steps[l]);
+        assert(key(Key::PageDown) && selected() == 4);
+        assert(key(Key::PageUp) && selected() == 2);
+    }
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4794,6 +4876,8 @@ int main()
     test_list_widget_places_rows_added_after_layout();
     test_list_widget_moves_with_the_arrow_keys();
     test_thumbnail_grid_moves_with_the_arrow_keys();
+    test_list_key_target_covers_every_list_key();
+    test_lists_jump_with_home_end_and_page_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
