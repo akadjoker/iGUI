@@ -4010,6 +4010,43 @@ static void test_thumbnail_grid_keeps_labels_inside_their_cell()
     assert(lowX >= 8.0f && highX <= 88.0f);
 }
 
+// Na vista de ícones do FileDialog, o nome de cada entrada fica dentro da sua
+// célula de 80 px: "WWWWWWWWWWWW" tem só 12 bytes, mas é mais largo do que a
+// célula, e é cortado pela largura e não pelo número de bytes.
+static void test_file_dialog_icon_names_fit_their_cell()
+{
+    namespace fs = ig::retained::FileSystem;
+    using namespace ig::retained;
+    const String root = fs::joinPath(fs::currentDir(), "igui_icon_names_test");
+    const String folder = fs::joinPath(root, "WWWWWWWWWWWW");
+    assert(fs::createDir(folder));
+
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    FileDialog dialog;
+    dialog.setRect({ 0.0f, 0.0f, 700.0f, 480.0f });
+    dialog.layout();
+    dialog.setPath(root);
+    dialog.setViewMode(FileDialog::ViewMode::Icon);
+    dialog.layout();
+    DrawList list;
+    PaintContext ctx(list, &atlas.defaultFont());
+    dialog.paint(ctx);
+    float lowX = 1e9f, highX = -1e9f;
+    for (size_t v = 0; v < list.vertices().size(); ++v)
+    {
+        const DrawVertex& vertex = list.vertices()[v];
+        if (!(vertex.color == Color(120, 180, 255, 255))) continue;
+        lowX = vertex.x < lowX ? vertex.x : lowX;
+        highX = vertex.x > highX ? vertex.x : highX;
+    }
+    assert(highX > lowX);
+    assert(highX - lowX <= 72.0f);
+    std::remove(folder.c_str());
+    std::remove(root.c_str());
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4483,6 +4520,7 @@ int main()
     test_thumbnail_grid_reports_double_clicks_on_one_item();
     test_paint_context_fits_text_at_a_character();
     test_thumbnail_grid_keeps_labels_inside_their_cell();
+    test_file_dialog_icon_names_fit_their_cell();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
