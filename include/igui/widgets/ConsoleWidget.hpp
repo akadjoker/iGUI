@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Signal.hpp"
+#include "Widget.hpp"
+#include <ct/deque.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ConsoleWidget — full-featured developer console / log viewer
@@ -98,7 +99,7 @@ public:
 
 private:
     // ── Entries ──────────────────────────────────────────────────────────
-    ct::Vector<LogEntry> entries_;
+    ct::Deque<LogEntry> entries_;
     int maxLines_ = 10000;
     bool collapse_      = true;
     bool showTimestamp_  = false;
