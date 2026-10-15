@@ -33,6 +33,8 @@ public:
     void       clear();
     /// @brief Set the icon by name.
     void       setIcon(const String& name);
+    /// @brief Set the icon by id (built-in or registerImageIcon).
+    void       setIconId(IconId id) { iconId_ = id; iconStr_.clear(); bumpRevision(); }
 
     /// @brief Get the node's display text.
     const String&             text()        const { return text_; }
