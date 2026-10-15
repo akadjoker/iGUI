@@ -88,6 +88,8 @@ public:
         return scrollY_;
     }
 
+    /// @brief Emitted when the selected item changes (-1 = none).
+    Signal<int> selectionChanged;
     /// @brief Emitted when an item is clicked.
     Signal<int> onItemClicked;
     /// @brief Emitted when an item is double-clicked.
@@ -98,6 +100,7 @@ public:
     void  paint(PaintContext& ctx) override;
     void  onMousePress(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
     ct::Vector<ThumbnailItem> items_;
@@ -120,6 +123,7 @@ private:
     };
     Metrics metrics() const;
     void syncScroll();
+    void scrollToItem(int idx);
     int hitTest(float mx, float my) const;
 };
 

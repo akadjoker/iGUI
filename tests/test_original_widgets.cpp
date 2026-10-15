@@ -4271,6 +4271,50 @@ static void test_list_widget_moves_with_the_arrow_keys()
     assert(app.focused() == list);
 }
 
+// A ThumbnailGrid aceita foco e anda pelas setas: Esquerda e Direita pela
+// ordem dos itens (mudando de fila), Cima e Baixo uma fila; Baixo para uma
+// célula vazia da última fila vai ao último item; sem seleção, Direita e Baixo
+// vão ao primeiro; nas pontas a tecla fica para o pai. A vista acompanha a fila
+// e cada mudança avisa selectionChanged. Oito itens em três colunas de 88x104;
+// com a barra, a vista de 216 rola até 104.
+static void test_thumbnail_grid_moves_with_the_arrow_keys()
+{
+    using namespace ig::retained;
+    ThumbnailGrid grid;
+    assert(grid.acceptsFocus());
+    grid.setRect({ 0.0f, 0.0f, 300.0f, 216.0f });
+    for (int i = 0; i < 8; ++i) grid.addItem("t");
+    grid.layout();
+    int changes = 0;
+    grid.selectionChanged.connect([&changes](int) { ++changes; });
+    auto key = [&grid](int code)
+    {
+        KeyEvent press;
+        press.key = code;
+        grid.onKeyPress(press);
+        return press.consumed;
+    };
+
+    assert(!key(Key::Right));
+    grid.setFocused(true);
+    assert(!key(Key::Left) && !key(Key::Up));
+    assert(key(Key::Right) && grid.selected() == 0);
+    assert(key(Key::Right) && grid.selected() == 1);
+    assert(key(Key::Down) && grid.selected() == 4 && grid.scrollY() == 0.0f);
+    assert(key(Key::Down) && grid.selected() == 7 && grid.scrollY() == 104.0f);
+    assert(!key(Key::Down) && !key(Key::Right));
+    assert(key(Key::Up) && grid.selected() == 4 && grid.scrollY() == 104.0f);
+    assert(key(Key::Up) && grid.selected() == 1 && grid.scrollY() == 0.0f);
+    assert(key(Key::Left) && grid.selected() == 0);
+    assert(!key(Key::Left) && !key(Key::Up));
+    assert(key(Key::Right) && key(Key::Right) && grid.selected() == 2);
+    assert(key(Key::Down) && grid.selected() == 5);
+    assert(key(Key::Down) && grid.selected() == 7);
+    assert(changes == 11);
+    grid.setSelected(7);
+    assert(changes == 11);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4749,6 +4793,7 @@ int main()
     test_list_box_moves_with_the_arrow_keys();
     test_list_widget_places_rows_added_after_layout();
     test_list_widget_moves_with_the_arrow_keys();
+    test_thumbnail_grid_moves_with_the_arrow_keys();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
