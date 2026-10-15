@@ -574,15 +574,6 @@ String CodeEditor::getLineIndent(int line) const
     return ln.substr(0, i);
 }
 
-bool CodeEditor::lineEndsWith(int line, char c) const
-{
-    if (line < 0 || line >= lineCount()) return false;
-    const auto& ln = lineAt(line);
-    int last = static_cast<int>(ln.size()) - 1;
-    while (last >= 0 && (ln[last] == ' ' || ln[last] == '\t')) last--;
-    return last >= 0 && ln[last] == c;
-}
-
 // ── Bracket matching ─────────────────────────────────────────────────────────
 
 CodeEditor::BracketPair CodeEditor::findMatchingBracket(TextPos pos) const
@@ -1672,10 +1663,14 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
         TextPos oldCur = cursor_;
         String indent = getLineIndent(cursor_.line);
+        if (static_cast<int>(indent.size()) > cursor_.col)
+            indent = indent.substr(0, static_cast<size_t>(cursor_.col));
 
-        // Extra indent after { or :
-        if (lineEndsWith(cursor_.line, '{') || lineEndsWith(cursor_.line, ':'))
-            indent += "\t";
+        // Extra indent after { or : before the cursor
+        const String head = utf8Substr(lineAt(cursor_.line), 0, cursor_.col);
+        int last = static_cast<int>(head.size()) - 1;
+        while (last >= 0 && (head[last] == ' ' || head[last] == '\t')) last--;
+        if (last >= 0 && (head[last] == '{' || head[last] == ':')) indent += "\t";
 
         // Record for undo
         String insertedText = "\n" + indent;
