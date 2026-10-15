@@ -35,6 +35,7 @@ namespace {
 
 ThumbnailGrid::ThumbnailGrid()
 {
+    acceptsFocus_ = true;
     vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
     vbar_->setScrollable(false);
     vbar_->scrolled.connect(
@@ -125,10 +126,12 @@ void ThumbnailGrid::setSelected(int idx)
 {
     if (selected_ >= 0 && selected_ < static_cast<int>(items_.size()))
         items_[selected_].selected = false;
+    const bool changed = selected_ != idx;
     selected_ = idx;
     if (idx >= 0 && idx < static_cast<int>(items_.size()))
         items_[idx].selected = true;
     markDirty();
+    if (changed) selectionChanged.emit(idx);
 }
 
 int ThumbnailGrid::hitTest(float mx, float my) const
@@ -275,4 +278,46 @@ void ThumbnailGrid::onMouseScroll(MouseEvent& e)
     if (!m.bar) return;
     e.consumed = true;
     setScrollY(m.scroll - e.scrollY * m.cellH);
+}
+
+void ThumbnailGrid::scrollToItem(int idx)
+{
+    const Metrics m = metrics();
+    const float top = static_cast<float>(idx / m.cols) * m.cellH;
+    const float bottom = top + m.cellH + spacing_;
+    if (top < scrollY_) setScrollY(top);
+    else if (bottom > scrollY_ + rect_.h)
+        setScrollY(bottom - rect_.h);
+}
+
+void ThumbnailGrid::onKeyPress(KeyEvent& e)
+{
+    if (!focused_ || !isEnabledInTree()) return;
+    const int count = static_cast<int>(items_.size());
+    const int cols = metrics().cols;
+    const int cur = selected_ >= 0 && selected_ < count ? selected_ : -1;
+    int next = -1;
+    switch (e.key)
+    {
+        case ig::retained::Key::Left:
+            if (cur > 0) next = cur - 1;
+            break;
+        case ig::retained::Key::Right:
+            if (cur < count - 1) next = cur + 1;
+            break;
+        case ig::retained::Key::Up:
+            if (cur >= cols) next = cur - cols;
+            break;
+        case ig::retained::Key::Down:
+            if (cur < 0) next = count > 0 ? 0 : -1;
+            else if (cur / cols < (count - 1) / cols)
+                next = std::min(cur + cols, count - 1);
+            break;
+        default:
+            break;
+    }
+    if (next < 0) return;
+    e.consumed = true;
+    setSelected(next);
+    scrollToItem(next);
 }
