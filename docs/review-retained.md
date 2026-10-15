@@ -263,9 +263,10 @@ Só por leitura:
       dobras por linha, deslocados nas edições, e realce só a partir da linha
       editada até o estado convergir; as edições próprias do CodeEditor passam
       de `invalidateWrap()` para `linesChanged`.
-- [ ] **Marcadores da goteira não acompanham as linhas** (`setMarker`): um
-      Enter acima de um breakpoint deixa-o na linha antiga. Precisa de decisão:
-      se a API conta com a aplicação a gerir as linhas ou se devem deslocar-se.
+- [x] **Marcadores da goteira não acompanham as linhas** (`setMarker`): um
+      Enter acima de um breakpoint deixava-o na linha antiga. Decidido: os
+      marcadores acompanham a linha (apagar a linha apaga-os; o `setText` de um
+      texto novo não lhes mexe).
 - [x] Atualizar o submódulo do iGUI no prisma3d (ramo
       `dev/fervent-johnson-6h17x3`), construir e correr os testes de lá.
 - [x] **Auto-indent do Enter** dobrava a indentação de uma linha quando o

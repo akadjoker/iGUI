@@ -2172,6 +2172,7 @@ void CodeEditor::moveLineUp()
     int ln = cursor_.line;
     std::swap(lines_[ln], lines_[ln - 1]);
     linesChanged(ln - 1, 2, 2);
+    swapLineMarkers(ln - 1, ln);
     cursor_.line--;
     selAnchor_ = cursor_;
     ensureCursorVisible(); markDirty(); textChanged.emit();
@@ -2183,6 +2184,7 @@ void CodeEditor::moveLineDown()
     int ln = cursor_.line;
     std::swap(lines_[ln], lines_[ln + 1]);
     linesChanged(ln, 2, 2);
+    swapLineMarkers(ln, ln + 1);
     cursor_.line++;
     selAnchor_ = cursor_;
     ensureCursorVisible(); markDirty(); textChanged.emit();
