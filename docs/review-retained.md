@@ -257,7 +257,7 @@ Só por leitura:
       undo) chama o `rebuildFoldRanges`, que recria todas as dobras abertas.
       Plano: as edições avisam que linhas mudaram (`linesChanged`) e o
       CodeEditor desloca as dobras fechadas com as suas linhas.
-- [ ] **Custo do CodeEditor por edição** — medido (Release, 100 000 linhas):
+- [x] **Custo do CodeEditor por edição** — medido (Release, 100 000 linhas):
       Enter com pintura ~87 ms. 64% é o `reHighlight` do documento inteiro e 18%
       o `foldDelta` de todas as linhas. Plano: estados do realce e deltas das
       dobras por linha, deslocados nas edições, e realce só a partir da linha

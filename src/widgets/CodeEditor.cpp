@@ -1,11 +1,12 @@
-#include "pch.hpp"
 #include "CodeEditor.hpp"
-#include "WidgetApp.hpp"
 #include "Utf8.hpp"
+#include "WidgetApp.hpp"
+#include "pch.hpp"
 #include <algorithm>
 #include <cctype>
-#include <cstring>
+#include <climits>
 #include <cmath>
+#include <cstring>
 #include <ct/regex.hpp>
 
 // The lexical highlighter classes (SyntaxHighlighter, SyntaxLanguage,
@@ -32,6 +33,26 @@ int leadingIndent(const String& text, int tabSize = 4)
         else break;
     }
     return visCol;
+}
+
+// A line an edit inserted: its lexer state and fold delta are not known yet.
+constexpr int unknownLine = INT_MIN;
+
+void spliceLines(ct::Vector<int>& values, int line, int removed, int inserted)
+{
+    const int count = static_cast<int>(values.size());
+    const int delta = inserted - removed;
+    if (delta > 0)
+    {
+        values.resize(count + delta);
+        for (int i = count - 1; i >= line + removed; --i) values[i + delta] = values[i];
+    }
+    else if (delta < 0)
+    {
+        for (int i = line + removed; i < count; ++i) values[i + delta] = values[i];
+        values.resize(count + delta);
+    }
+    for (int i = line; i < line + inserted; ++i) values[i] = unknownLine;
 }
 
 } // anonymous namespace
@@ -125,30 +146,48 @@ void CodeEditor::reHighlight() const
         lineStates_[i] = result.state;
         state = result.state;
     }
+    hlStarts_.clear();
     hlDirty_ = false;
 }
 
-void CodeEditor::reHighlightFrom(int line) const
+// From each line an edit changed, until a line that was already there ends in
+// the state it ended in before: the lines after it start as they did.
+void CodeEditor::reHighlightStale() const
 {
-    if (!highlighter_) return;
-    int lc = lineCount();
-    if (line < 0) line = 0;
-    lineStates_.resize(lc, 0);
-    int state = (line > 0) ? lineStates_[line - 1] : 0;
-    for (int i = line; i < lc; i++) {
-        auto result = highlighter_->highlightLine(i, lineAt(i), state);
-        int oldState = lineStates_[i];
-        lineStates_[i] = result.state;
-        state = result.state;
-        // If state didn't change, subsequent lines won't change either
-        if (i > line && oldState == result.state) break;
+    std::sort(hlStarts_.begin(), hlStarts_.end());
+    const int lc = lineCount();
+    int done = -1;
+    for (int start: hlStarts_)
+    {
+        if (start <= done || start >= lc) continue;
+        int state = start > 0 ? lineStates_[start - 1] : 0;
+        int i = start;
+        for (; i < lc; ++i)
+        {
+            const int oldState = lineStates_[i];
+            auto result = highlighter_->highlightLine(i, lineAt(i), state);
+            lineStates_[i] = result.state;
+            state = result.state;
+            if (oldState == result.state) break;
+        }
+        done = i;
     }
+    hlStarts_.clear();
 }
 
 // ── Folding ──────────────────────────────────────────────────────────────────
 
+int CodeEditor::lineFoldDelta(int line)
+{
+    if (foldDeltas_[line] == unknownLine)
+        foldDeltas_[line] = highlighter_->foldDelta(line, lineAt(line));
+    return foldDeltas_[line];
+}
+
 void CodeEditor::rebuildFoldRanges()
 {
+    foldsStale_ = false;
+    hiddenDirty_ = true;
     ct::Vector<FoldRange> collapsedBefore;
     for (const FoldRange& fr: foldRanges_)
         if (fr.collapsed) collapsedBefore.push_back(fr);
@@ -157,11 +196,16 @@ void CodeEditor::rebuildFoldRanges()
     if (highlighter_)
     {
         int lc = lineCount();
+        if (static_cast<int>(foldDeltas_.size()) != lc)
+        {
+            foldDeltas_.clear();
+            foldDeltas_.resize(lc, unknownLine);
+        }
         ct::Vector<int> foldStack; // stack of line indices that opened a fold
 
         for (int i = 0; i < lc; i++)
         {
-            int delta = highlighter_->foldDelta(i, lineAt(i));
+            int delta = lineFoldDelta(i);
             for (int d = 0; d < delta; d++) foldStack.push_back(i);
             for (int d = 0; d > delta; d--)
             {
@@ -205,6 +249,7 @@ void CodeEditor::rebuildFoldRanges()
 
 void CodeEditor::onLinesChanged(int line, int removed, int inserted)
 {
+    hiddenDirty_ = true;
     if (lineCount() == inserted)
     {
         if (!foldRanges_.empty()) invalidateWrap();
@@ -227,10 +272,32 @@ void CodeEditor::onLinesChanged(int line, int removed, int inserted)
             fr.endLine = std::max(fr.startLine, line + inserted - 1);
     }
     if (unfolded) invalidateWrap();
+
+    if (hlDirty_ || !highlighter_) return;
+    const int before = lineCount() - delta;
+    if (static_cast<int>(lineStates_.size()) != before ||
+            static_cast<int>(foldDeltas_.size()) != before)
+    {
+        hlDirty_ = true;
+        return;
+    }
+    spliceLines(lineStates_, line, removed, inserted);
+    spliceLines(foldDeltas_, line, removed, inserted);
+    int kept = 0;
+    for (int start: hlStarts_)
+    {
+        if (start >= line + removed) hlStarts_[kept++] = start + delta;
+        else if (start < line)
+            hlStarts_[kept++] = start;
+    }
+    hlStarts_.resize(kept);
+    hlStarts_.push_back(line);
+    foldsStale_ = true;
 }
 
 void CodeEditor::foldAt(int line)
 {
+    hiddenDirty_ = true;
     for (auto& fr : foldRanges_) {
         if (fr.startLine == line && !fr.collapsed) {
             fr.collapsed = true;
@@ -244,6 +311,7 @@ void CodeEditor::foldAt(int line)
 
 void CodeEditor::unfoldAt(int line)
 {
+    hiddenDirty_ = true;
     for (auto& fr : foldRanges_) {
         if (fr.startLine == line && fr.collapsed) {
             fr.collapsed = false;
@@ -257,6 +325,7 @@ void CodeEditor::unfoldAt(int line)
 
 void CodeEditor::toggleFoldAt(int line)
 {
+    hiddenDirty_ = true;
     for (auto& fr : foldRanges_) {
         if (fr.startLine == line) {
             fr.collapsed = !fr.collapsed;
@@ -277,6 +346,7 @@ bool CodeEditor::isFolded(int line) const
 
 void CodeEditor::foldAll()
 {
+    hiddenDirty_ = true;
     for (auto& fr : foldRanges_) fr.collapsed = true;
     invalidateWrap();
     markDirty();
@@ -284,6 +354,7 @@ void CodeEditor::foldAll()
 
 void CodeEditor::unfoldAll()
 {
+    hiddenDirty_ = true;
     for (auto& fr : foldRanges_) fr.collapsed = false;
     invalidateWrap();
     markDirty();
@@ -291,11 +362,18 @@ void CodeEditor::unfoldAll()
 
 bool CodeEditor::isLineHidden(int line) const
 {
-    for (auto& fr : foldRanges_) {
-        if (fr.collapsed && line > fr.startLine && line <= fr.endLine)
-            return true;
+    const int lc = lineCount();
+    if (hiddenDirty_ || static_cast<int>(hiddenLines_.size()) != lc)
+    {
+        hiddenLines_.clear();
+        hiddenLines_.resize(lc, 0);
+        for (const FoldRange& fr: foldRanges_)
+            if (fr.collapsed)
+                for (int i = std::max(fr.startLine + 1, 0); i <= fr.endLine && i < lc; ++i)
+                    hiddenLines_[i] = 1;
+        hiddenDirty_ = false;
     }
-    return false;
+    return line >= 0 && line < lc && hiddenLines_[line] != 0;
 }
 
 int CodeEditor::foldGutterWidth() const
@@ -394,7 +472,6 @@ void CodeEditor::undo()
     recording_ = false;
 
     redoStack_.push_back(action);
-    hlDirty_ = true;
     markDirty();
     undoRedoChanged.emit(canUndo(), canRedo());
 }
@@ -410,7 +487,6 @@ void CodeEditor::redo()
     recording_ = false;
 
     undoStack_.push_back(action);
-    hlDirty_ = true;
     markDirty();
     undoRedoChanged.emit(canUndo(), canRedo());
 }
@@ -710,7 +786,9 @@ void CodeEditor::paintIndentGuides(PaintContext& ctx, const Rect& abs)
     ctx.line.SetColor(55, 60, 70, 120);
 
     int lc = lineCount();
-    for (int line = 0; line < lc; line++) {
+    for (int line = lineAtVisualRow(std::max(0, static_cast<int>(scrollY_ / lh) - 1)); line < lc;
+            line++)
+    {
         if (isLineHidden(line)) continue;
 
         int indent = leadingIndent(lineAt(line));
@@ -757,7 +835,9 @@ void CodeEditor::paintWhitespace(PaintContext& ctx, const Rect& abs)
     ctx.pushClip(abs);
 
     int lc = lineCount();
-    for (int line = 0; line < lc; line++) {
+    for (int line = lineAtVisualRow(std::max(0, static_cast<int>(scrollY_ / lh) - 1)); line < lc;
+            line++)
+    {
         if (isLineHidden(line)) continue;
 
         int vRow = logicalToVisualRow(line);
@@ -857,11 +937,30 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
 
     ctx.pushClip(abs);
 
+    // Only the blocks that reach the lines on screen draw anything
+    const int firstLine = lineAtVisualRow(std::max(0, static_cast<int>(scrollY_ / lh) - 1));
+    const int lastLine = lineAtVisualRow(static_cast<int>((scrollY_ + abs.h) / lh) + 1);
+
     // Sort ranges by startLine for consistent depth colouring
     int depth = 0;
     for (int ri = 0; ri < static_cast<int>(foldRanges_.size()); ri++) {
         auto& fr = foldRanges_[ri];
         if (fr.collapsed) continue;
+        if (fr.endLine < firstLine || fr.startLine > lastLine) continue;
+
+        // Visual rows of the first and of the last line inside it that are shown
+        const int startVis = logicalToVisualRow(fr.startLine + 1);
+        const int afterVis = logicalToVisualRow(fr.endLine + 1);
+        if (afterVis == startVis) continue;
+        const int endVis = logicalToVisualRow(lineAtVisualRow(afterVis - 1));
+
+        float y1 = abs.y + startVis * lh - scrollY_;
+        float y2 = abs.y + endVis * lh + lh - scrollY_;
+
+        // Clip to visible area
+        float cy1 = std::max(y1, abs.y);
+        float cy2 = std::min(y2, abs.y + abs.h);
+        if (cy1 >= cy2) continue;
 
         // Calculate indent of the opening line to position the vertical line
         const String& openLine = lineAt(fr.startLine);
@@ -880,23 +979,6 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
         ctx.line.SetColor(sc.r, sc.g, sc.b, sc.a);
 
         float x = textX + pad + indent * charW - scrollX_ + charW * 0.5f;
-
-        // Find visual rows for start+1 and end
-        int startVis = -1, endVis = -1;
-        for (int ln = fr.startLine + 1; ln <= fr.endLine; ln++) {
-            if (isLineHidden(ln)) continue;
-            if (startVis < 0) startVis = logicalToVisualRow(ln);
-            endVis = logicalToVisualRow(ln);
-        }
-        if (startVis < 0) continue;
-
-        float y1 = abs.y + startVis * lh - scrollY_;
-        float y2 = abs.y + endVis * lh + lh - scrollY_;
-
-        // Clip to visible area
-        float cy1 = std::max(y1, abs.y);
-        float cy2 = std::min(y2, abs.y + abs.h);
-        if (cy1 >= cy2) continue;
 
         // Vertical scope line
         ctx.line.Line2D(x, cy1, x, cy2);
@@ -1084,7 +1166,6 @@ bool CodeEditor::replaceNext(const String& find, const String& replace,
                 TextPos afterDel = cursor_;
                 insertTextAtCursor(replacement);
                 recordInsert(afterDel, replacement, oldCur, cursor_);
-                hlDirty_ = true;
             }
         } else {
             selectionMatches = selected == find;
@@ -1094,7 +1175,6 @@ bool CodeEditor::replaceNext(const String& find, const String& replace,
                 TextPos afterDel = cursor_;
                 insertTextAtCursor(replace);
                 recordInsert(afterDel, replace, oldCur, cursor_);
-                hlDirty_ = true;
             }
         }
     }
@@ -1136,7 +1216,6 @@ int CodeEditor::replaceAll(const String& find, const String& replace,
         count++;
     }
 
-    hlDirty_ = true;
     markDirty();
     return count;
 }
@@ -1408,10 +1487,17 @@ void CodeEditor::paint(PaintContext& ctx)
 {
     if (!visible_) return;
 
-    // Rebuild highlight cache if needed
-    if (hlDirty_ && highlighter_) {
+    // Highlight again what the edits changed (everything after setText)
+    if (highlighter_ && hlDirty_)
+    {
         reHighlight();
+        foldDeltas_.clear();
         rebuildFoldRanges();
+    }
+    else if (highlighter_)
+    {
+        if (!hlStarts_.empty()) reHighlightStale();
+        if (foldsStale_) rebuildFoldRanges();
     }
 
     // Reserve gutter space for fold icons (between line numbers and code)
@@ -1602,7 +1688,6 @@ void CodeEditor::onKeyPress(KeyEvent& e)
         }
 
         recordInsert(oldCur, insertedText, oldCur, cursor_);
-        hlDirty_ = true;
         ensureCursorVisible();
         markDirty();
         e.consumed = true;
@@ -1672,8 +1757,6 @@ void CodeEditor::onKeyPress(KeyEvent& e)
             }
         }
 
-        hlDirty_ = true;
-        invalidateWrap();
         ensureCursorVisible();
         markDirty();
         textChanged.emit();
@@ -1704,7 +1787,6 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
             if (!deletedText.empty()) {
                 recordDelete(cursor_, deletedText, before, cursor_);
-                hlDirty_ = true;
             }
             return;
         }
@@ -1765,8 +1847,6 @@ void CodeEditor::onTextInput(KeyEvent& e)
             }
         }
 
-        hlDirty_ = true;
-        invalidateWrap();
         ensureCursorVisible();
         markDirty();
         textChanged.emit();
@@ -1779,7 +1859,6 @@ void CodeEditor::onTextInput(KeyEvent& e)
 
     if (!inputText.empty() && cursor_ != before) {
         recordInsert(before, inputText, before, cursor_);
-        reHighlightFrom(before.line);
     }
 }
 
@@ -2100,8 +2179,6 @@ void CodeEditor::moveLineUp()
     linesChanged(ln - 1, 2, 2);
     cursor_.line--;
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     ensureCursorVisible(); markDirty(); textChanged.emit();
 }
 
@@ -2113,8 +2190,6 @@ void CodeEditor::moveLineDown()
     linesChanged(ln, 2, 2);
     cursor_.line++;
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     ensureCursorVisible(); markDirty(); textChanged.emit();
 }
 
@@ -2169,8 +2244,6 @@ void CodeEditor::removeLine()
     if (recorded)
         recordDelete(removedAt, removed, oldCursor, cursor_);
 
-    hlDirty_ = true;
-    invalidateWrap();
     markDirty(); textChanged.emit();
 }
 
@@ -2182,8 +2255,6 @@ void CodeEditor::duplicateLine()
     linesChanged(ln + 1, 0, 1);
     cursor_.line++;
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     markDirty(); textChanged.emit();
 }
 
@@ -2195,8 +2266,6 @@ void CodeEditor::indent()
     linesChanged(ln, 1, 1);
     cursor_.col++;
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     markDirty(); textChanged.emit();
 }
 
@@ -2219,8 +2288,6 @@ void CodeEditor::unindent()
     }
     linesChanged(ln, 1, 1);
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     markDirty(); textChanged.emit();
 }
 
@@ -2255,8 +2322,6 @@ void CodeEditor::toggleComment()
     }
     linesChanged(ln, 1, 1);
     selAnchor_ = cursor_;
-    hlDirty_ = true;
-    invalidateWrap();
     markDirty(); textChanged.emit();
 }
 

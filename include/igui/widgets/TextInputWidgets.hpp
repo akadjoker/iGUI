@@ -287,6 +287,7 @@ protected:
     }
     void updateWrap(PaintContext& ctx);
     int  logicalToVisualRow(int line, int row = 0) const;
+    int lineAtVisualRow(int visualRow) const;
     String expandTabs(const String& text) const;
     String expandTabs(const String& text, int startVisCol) const;
     String expandTabsVisible(const String& text, int startVisCol) const;

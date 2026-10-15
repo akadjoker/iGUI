@@ -302,8 +302,9 @@ private:
     // Cached highlight state per line (invalidated on edit)
     mutable ct::Vector<int> lineStates_;     // lexer state after each line
     mutable bool             hlDirty_ = true; // full re-highlight needed
+    mutable ct::Vector<int> hlStarts_;        // lines an edit changed: highlight again from there
     void reHighlight() const;
-    void reHighlightFrom(int line) const;
+    void reHighlightStale() const;
 
     // Bridge to TextEdit's SyntaxCallback
     void installSyntaxCallback();
@@ -312,9 +313,14 @@ private:
     bool showFolding_ = true;
     struct FoldRange { int startLine, endLine; bool collapsed; };
     ct::Vector<FoldRange> foldRanges_;
+    ct::Vector<int> foldDeltas_; // what each line opens or closes, measured once
+    bool foldsStale_ = false;
+    int lineFoldDelta(int line);
     void rebuildFoldRanges();
     void onLinesChanged(int line, int removed, int inserted) override;
     bool isLineHidden(int line) const;
+    mutable ct::Vector<unsigned char> hiddenLines_; // per line, rebuilt when the folds change
+    mutable bool hiddenDirty_ = true;
     int  foldGutterWidth() const;
     void paintFoldGutter(PaintContext& ctx, const Rect& abs);
 
