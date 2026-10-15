@@ -4642,6 +4642,94 @@ static void test_code_editor_markers_follow_their_lines()
     assert(editor.hasMarker(2, Marker::Breakpoint) && editor.hasMarker(3, Marker::Bookmark));
 }
 
+// O botão do Slider fica sempre dentro do widget, com 2 px de folga (1,5 px
+// depois da franja do anti-aliasing): no mínimo e no máximo não sai pelas pontas. O rato usa o
+// mesmo percurso: um clique no centro do botão em cada ponta dá o mínimo e o máximo, e o meio dá o
+// meio. Na horizontal com 120x20 o botão tem raio 8 e anda de x = 10 a x = 110; na vertical com
+// 20x120 anda de y = 110 (mínimo) a y = 10 (máximo). Um slider mais curto do que o botão usa o
+// comprimento todo.
+static void test_slider_thumb_stays_inside_its_track()
+{
+    using namespace ig::retained;
+    const Color thumb = Theme::instance().sliderThumb;
+    for (int vertical = 0; vertical < 2; ++vertical)
+    {
+        Slider slider(0.0f, 100.0f, 0.0f);
+        if (vertical)
+        {
+            slider.setOrientation(LayoutDir::Vertical);
+            slider.setRect({ 0.0f, 0.0f, 20.0f, 120.0f });
+        }
+        else
+            slider.setRect({ 0.0f, 0.0f, 120.0f, 20.0f });
+        auto thumbSpan = [&slider, &thumb, vertical](float& low, float& high)
+        {
+            DrawList list;
+            PaintContext ctx(list);
+            slider.paint(ctx);
+            low = 1e9f;
+            high = -1e9f;
+            for (size_t v = 0; v < list.vertices().size(); ++v)
+            {
+                const DrawVertex& vertex = list.vertices()[v];
+                if (!(vertex.color == thumb)) continue;
+                const float at = vertical ? vertex.y : vertex.x;
+                low = at < low ? at : low;
+                high = at > high ? at : high;
+            }
+            assert(high > low);
+        };
+        float low = 0.0f, high = 0.0f;
+        slider.setValue(0.0f);
+        thumbSpan(low, high);
+        if (vertical) assert(high <= 119.0f && low >= 101.0f);
+        else
+            assert(low >= 1.0f && high <= 19.0f);
+        slider.setValue(100.0f);
+        thumbSpan(low, high);
+        if (vertical) assert(low >= 1.0f && high <= 19.0f);
+        else
+            assert(high <= 119.0f && low >= 101.0f);
+
+        auto press = [&slider, vertical](float along)
+        {
+            MouseEvent e;
+            e.button = 0;
+            e.localX = vertical ? 10.0f : along;
+            e.localY = vertical ? along : 10.0f;
+            slider.onMousePress(e);
+            MouseEvent release = e;
+            slider.onMouseRelease(release);
+            return slider.value();
+        };
+        assert(press(vertical ? 110.0f : 10.0f) == 0.0f);
+        assert(press(vertical ? 10.0f : 110.0f) == 100.0f);
+        assert(press(60.0f) == 50.0f);
+        assert(press(vertical ? 115.0f : 5.0f) == 0.0f);
+    }
+
+    Slider tiny(0.0f, 100.0f, 0.0f);
+    tiny.setRect({ 0.0f, 0.0f, 10.0f, 20.0f });
+    MouseEvent e;
+    e.button = 0;
+    e.localX = 2.5f;
+    e.localY = 10.0f;
+    tiny.onMousePress(e);
+    assert(tiny.value() == 25.0f);
+    DrawList list;
+    PaintContext ctx(list);
+    tiny.paint(ctx);
+    float low = 1e9f, high = -1e9f;
+    for (size_t v = 0; v < list.vertices().size(); ++v)
+    {
+        const DrawVertex& vertex = list.vertices()[v];
+        if (!(vertex.color == Theme::instance().sliderThumbPressed)) continue;
+        low = vertex.x < low ? vertex.x : low;
+        high = vertex.x > high ? vertex.x : high;
+    }
+    assert(high > low && std::fabs((low + high) * 0.5f - 2.5f) < 0.01f);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -5128,6 +5216,7 @@ int main()
     test_thumbnail_grid_jumps_with_home_end_and_page_keys();
     test_tree_view_forgets_a_deleted_selection();
     test_code_editor_markers_follow_their_lines();
+    test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

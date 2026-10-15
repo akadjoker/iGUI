@@ -47,6 +47,9 @@ private:
     LayoutDir orientation_ = LayoutDir::Horizontal;
     bool      dragging_    = false;
 
+    // The thumb's centre travels this far in from each end, so the whole thumb
+    // and a small gap stay inside the slider (0 when the slider is too short).
+    float thumbInset() const;
     void updateFromMouse(float localX, float localY);
 };
 

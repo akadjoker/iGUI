@@ -26,6 +26,14 @@ void Slider::setValue(float v)
     }
 }
 
+float Slider::thumbInset() const
+{
+    const bool vert = orientation_ == LayoutDir::Vertical;
+    const float inset = (vert ? std::min(rect_.w, 24.0f) * 0.4f : rect_.h * 0.4f) + 2.0f;
+    // A slider too short for the thumb lets it travel the whole length.
+    return (vert ? rect_.h : rect_.w) > inset * 2.0f ? inset : 0.0f;
+}
+
 Widget::Vec2f Slider::sizeHint() const
 {
     const auto& t = Theme::instance();
@@ -44,6 +52,7 @@ void Slider::paint(PaintContext& ctx)
     const auto& t = Theme::instance();
     float ratio = (max_ > min_) ? (value_ - min_) / (max_ - min_) : 0.0f;
     bool vert = (orientation_ == LayoutDir::Vertical);
+    const float inset = thumbInset();
 
     if (vert)
     {
@@ -61,8 +70,8 @@ void Slider::paint(PaintContext& ctx)
                                       clippedTrack.w, clippedTrack.h, 2.0f, 4, true);
         }
 
-        float fillH = abs.h * ratio;
-        float fillY = abs.y + abs.h - fillH;
+        float fillY = abs.y + abs.h - inset - (abs.h - inset * 2.0f) * ratio;
+        float fillH = abs.y + abs.h - fillY;
         Rect fillRect = {trackX, fillY, trackW, fillH};
         Rect clippedFill;
         if (ctx.clipRectIntersect(fillRect, clippedFill))
@@ -100,7 +109,7 @@ void Slider::paint(PaintContext& ctx)
                                       clippedTrack.w, clippedTrack.h, 2.0f, 4, true);
         }
 
-        float fillW = abs.w * ratio;
+        float fillW = inset + (abs.w - inset * 2.0f) * ratio;
         Rect fillRect = {abs.x, trackY, fillW, trackH};
         Rect clippedFill;
         if (ctx.clipRectIntersect(fillRect, clippedFill))
@@ -166,17 +175,13 @@ void Slider::onMouseMove(MouseEvent& e)
 
 void Slider::updateFromMouse(float localX, float localY)
 {
-    float ratio;
-    if (orientation_ == LayoutDir::Vertical)
-    {
-        if (rect_.h <= 0.0f) return;
-        ratio = 1.0f - std::clamp(localY / rect_.h, 0.0f, 1.0f);
-    }
-    else
-    {
-        if (rect_.w <= 0.0f) return;
-        ratio = std::clamp(localX / rect_.w, 0.0f, 1.0f);
-    }
+    const bool vert = orientation_ == LayoutDir::Vertical;
+    const float length = vert ? rect_.h : rect_.w;
+    if (length <= 0.0f) return;
+    // The thumb's travel, as paint draws it.
+    const float inset = thumbInset();
+    const float along = ((vert ? rect_.h - localY : localX) - inset) / (length - inset * 2.0f);
+    const float ratio = std::clamp(along, 0.0f, 1.0f);
     setValue(min_ + ratio * (max_ - min_));
 }
 
