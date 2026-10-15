@@ -15,6 +15,7 @@ namespace ig { namespace retained
 // ─────────────────────────────────────────────────────────────────────────────
 class ColorPicker;
 class PropertyGrid;
+class TreeView;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  TreeNode — node in a tree hierarchy (not a Widget)
@@ -60,10 +61,13 @@ public:
     TreeNode*                      parent()            { return parent_; }
 
 private:
+    friend class TreeView;
+
     String           text_;
     String           iconStr_;
     IconId                iconId_   = IconId::None;
     TreeNode*             parent_   = nullptr;
+    TreeView* view_ = nullptr; // the view showing this node, told when it is deleted
     ct::Vector<TreeNode*> children_;
     bool                  expanded_ = true;
     static unsigned int   sRevision_;
@@ -111,9 +115,12 @@ public:
     void onKeyPress(KeyEvent& e) override;
 
 private:
+    friend class TreeNode;
     struct FlatRow { TreeNode* node; int depth; };
 
     void  rebuildFlat();
+    void forgetNode(TreeNode* n);
+    void reportLostSelection();
     int rowOf(const TreeNode* n) const;
     void scrollToRow(int row);
     void  flattenNode(TreeNode* n, int depth);
@@ -122,6 +129,7 @@ private:
     ct::Vector<TreeNode*> roots_;
     ct::Vector<FlatRow>   flatRows_;
     TreeNode*              selected_      = nullptr;
+    bool selectionLost_ = false;
     TreeModel*             model_         = nullptr;
     AbstractItemModel::Connections modelSlots_;
     void detachModel();

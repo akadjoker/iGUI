@@ -203,12 +203,14 @@ TreeNode::TreeNode(const String& text) : text_(text) {}
 TreeNode::~TreeNode()
 {
     for (auto* c : children_) delete c;
+    if (view_) view_->forgetNode(this);
 }
 
 TreeNode* TreeNode::addChild(const String& text)
 {
     auto* n = new TreeNode(text);
     n->parent_ = this;
+    n->view_ = view_;
     children_.push_back(n);
     bumpRevision();
     return n;
@@ -220,6 +222,7 @@ void TreeNode::removeChild(int index)
     delete children_[index];
     children_.erase(children_.begin() + index);
     bumpRevision();
+    if (view_) view_->reportLostSelection();
 }
 
 void TreeNode::clear()
@@ -227,6 +230,7 @@ void TreeNode::clear()
     for (auto* c : children_) delete c;
     children_.clear();
     bumpRevision();
+    if (view_) view_->reportLostSelection();
 }
 
 void TreeNode::setIcon(const String& name)
@@ -328,6 +332,7 @@ void TreeView::setModel(TreeModel* model)
 TreeNode* TreeView::addRoot(const String& text)
 {
     auto* n = new TreeNode(text);
+    n->view_ = this;
     roots_.push_back(n);
     flatDirty_ = true;
     markDirty();
@@ -339,6 +344,7 @@ void TreeView::clear()
     for (auto* r : roots_) delete r;
     roots_.clear();
     selected_     = nullptr;
+    selectionLost_ = false;
     scrollOffset_ = 0;
     flatDirty_ = true;
     markDirty();
@@ -351,6 +357,23 @@ void TreeView::setSelectedNode(TreeNode* n)
         selectionChanged.emit(n);
         markDirty();
     }
+}
+
+void TreeView::forgetNode(TreeNode* n)
+{
+    if (selected_ != n) return;
+    selected_ = nullptr;
+    selectionLost_ = true;
+    markDirty();
+}
+
+void TreeView::reportLostSelection()
+{
+    // Told once the node that held the selection is out of the tree, not from
+    // inside its destructor, so a handler sees a whole tree.
+    if (!selectionLost_) return;
+    selectionLost_ = false;
+    selectionChanged.emit(nullptr);
 }
 
 Widget::Vec2f TreeView::sizeHint() const { return {200.f, 200.f}; }

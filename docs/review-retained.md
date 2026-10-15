@@ -304,5 +304,5 @@ compensa se houver uso que mude a árvore em todos os frames.
       Os seis widgets de dados andam agora pelas setas, Home, End, PageUp e
       PageDown (`listKeyTarget`), a vista acompanha, e a tecla só é consumida
       quando a seleção muda.
-- [ ] TreeView: a seleção pode apontar para um nó já apagado (`removeChild` e
-      `clear` de um `TreeNode` não avisam a vista); por confirmar com teste.
+- [x] TreeView: a seleção ficava a apontar para um nó já apagado
+      (`removeChild` e `clear` de um `TreeNode` não avisavam a vista).

@@ -4543,6 +4543,45 @@ static void test_thumbnail_grid_jumps_with_home_end_and_page_keys()
     assert(key(Key::PageUp) && grid.selected() == 1);
 }
 
+// Apagar o nó selecionado de uma TreeView (sozinho, com o pai ou com um
+// clear) deixa a vista sem seleção e avisa selectionChanged(nullptr) uma vez,
+// já com a árvore arrumada; apagar outro nó não mexe na seleção. Um TreeNode
+// fora de qualquer vista apaga-se como antes.
+static void test_tree_view_forgets_a_deleted_selection()
+{
+    using namespace ig::retained;
+    TreeView tree;
+    TreeNode* a = tree.addRoot("A");
+    a->addChild("a0");
+    TreeNode* a1 = a->addChild("a1");
+    TreeNode* deep = a1->addChild("deep");
+    int lost = 0;
+    tree.selectionChanged.connect(
+            [&lost, a](TreeNode* node)
+            {
+                if (node) return;
+                ++lost;
+                assert(a->children().empty());
+            });
+
+    tree.setSelectedNode(a);
+    a->removeChild(0);
+    assert(tree.selectedNode() == a && lost == 0);
+
+    tree.setSelectedNode(deep);
+    a->removeChild(0);
+    assert(tree.selectedNode() == nullptr && lost == 1);
+
+    TreeNode* b = a->addChild("b");
+    tree.setSelectedNode(b);
+    a->clear();
+    assert(tree.selectedNode() == nullptr && lost == 2);
+
+    TreeNode* loose = new TreeNode("loose");
+    loose->addChild("child");
+    delete loose;
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -5027,6 +5066,7 @@ int main()
     test_trees_jump_with_home_end_and_page_keys();
     test_data_grid_jumps_with_home_end_and_page_keys();
     test_thumbnail_grid_jumps_with_home_end_and_page_keys();
+    test_tree_view_forgets_a_deleted_selection();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
