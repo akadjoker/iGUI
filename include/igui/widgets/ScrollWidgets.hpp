@@ -198,7 +198,10 @@ class ListWidget : public Widget
 public:
     IG_WIDGET_CLASS(ListWidget, Widget);
 
-    ListWidget() = default;
+    ListWidget()
+    {
+        acceptsFocus_ = true;
+    }
 
     // Add a new row — creates a child widget of type T inside the list.
     // The widget is the "row root"; it will be sized to fill the row width.
@@ -233,6 +236,7 @@ public:
     void paint(PaintContext& ctx) override;
     void onMouseScroll(MouseEvent& e) override;
     void onMousePress(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
     // The rows scroll as children: hit testing and absoluteRect see the offset.
     Vec2f scrollOffset() const override { return {0.0f, scrollOffset_}; }
 
@@ -242,6 +246,7 @@ private:
     void clampScroll();
     void syncScrollBar();
     void placeRow(int index);
+    void scrollToRow(int index);
     void connectRowPress(Widget* target, Widget* row);
     int  rowAtY(float absY) const;
     float rowH() const;
