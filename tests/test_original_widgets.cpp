@@ -3950,6 +3950,39 @@ static void test_thumbnail_grid_scrolls_to_every_row()
     assert(hit(184.0f, 20.0f) == 2);
 }
 
+// fitText deixa o texto inteiro quando cabe; quando não cabe, guarda o maior
+// início que cabe com "..." a seguir, cortado entre caracteres e nunca a meio
+// dos bytes de um "ã"; sem lugar nem para isso, fica só "...".
+static void test_paint_context_fits_text_at_a_character()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    DrawList list;
+    PaintContext ctx(list, &atlas.defaultFont());
+    ctx.font.SetFontSize(14.0f);
+    const String text = "ação são ções";
+    const float full = ctx.font.GetTextWidth(text.c_str());
+    assert(ctx.fitText(text, full) == text);
+    assert(ctx.fitText("", 0.0f) == "");
+    assert(ctx.fitText(text, 0.0f) == "...");
+    int cuts = 0;
+    for (float room = 0.0f; room < full; room += 0.5f)
+    {
+        const String shown = ctx.fitText(text, room);
+        assert(shown.size() >= 3 && shown.substr(shown.size() - 3) == "...");
+        const size_t kept = shown.size() - 3;
+        assert(kept < text.size() && shown.substr(0, kept) == text.substr(0, kept));
+        assert((static_cast<unsigned char>(text[kept]) & 0xC0) != 0x80);
+        if (kept > 0)
+        {
+            assert(ctx.font.GetTextWidth(shown.c_str()) <= room);
+            ++cuts;
+        }
+    }
+    assert(cuts > 0);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4421,6 +4454,7 @@ int main()
     test_thumbnail_grid_paints_and_hits_only_its_cells();
     test_thumbnail_grid_scrolls_to_every_row();
     test_thumbnail_grid_reports_double_clicks_on_one_item();
+    test_paint_context_fits_text_at_a_character();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
