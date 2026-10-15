@@ -270,3 +270,29 @@ Só por leitura:
       `dev/fervent-johnson-6h17x3`), construir e correr os testes de lá.
 - [x] **Auto-indent do Enter** dobrava a indentação de uma linha quando o
       Enter era dado no início dela; corrigido.
+
+## Desempenho com 100 000 itens (2026-10-15)
+
+Medido em Release, por operação seguida de pintura. Tudo o que corre a cada
+frame (pintura, roda, clique, setas) ficou constante:
+
+| Widget | Antes | Agora |
+|---|---|---|
+| TreeGrid, encher | 6,6 s | 25 ms |
+| DataGrid, encher | 733 ms | 20 ms |
+| Console, linha nova com a consola cheia | 17 µs | 0,09 µs |
+| Console, pintura | 0,63 ms | 0,01 ms |
+| ThumbnailGrid, pintura e clique | 0,41 ms | 0,04 ms |
+
+Fica linear só quando a estrutura muda, e uma vez por frame no máximo: a
+TreeView e a TreeGrid refazem a lista plana ao acrescentar um nó (0,9 e 1,2 ms)
+e a TreeView na 1.ª pintura (3,3 ms); a ListWidget cria um widget por linha
+(61 ms a encher). Torná-las incrementais pede contagens de subárvore por nó; só
+compensa se houver uso que mude a árvore em todos os frames.
+
+- [x] ThumbnailGrid sem scroll: só se viam as filas que cabiam; agora rola.
+- [ ] ThumbnailGrid: `onItemDoubleClicked` nunca é emitido e as legendas não
+      são cortadas (invadem as vizinhas).
+- [ ] ListBox: `removeItem` e `clearItems` não atualizam a barra; por
+      confirmar com teste.
+- [ ] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.
