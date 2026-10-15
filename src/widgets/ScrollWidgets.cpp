@@ -511,6 +511,27 @@ void ListWidget::clampScroll()
     scrollOffset_ = std::max(0.0f, std::min(scrollOffset_, maxOff));
 }
 
+void ListWidget::syncScrollBar()
+{
+    clampScroll();
+    if (vbar_)
+    {
+        vbar_->setContentSize(static_cast<float>(rows_.size()) * rowH());
+        vbar_->setViewSize(rect_.h);
+    }
+    markDirty();
+}
+
+void ListWidget::placeRow(int index)
+{
+    const float rh = rowH();
+    const float viewW = rect_.w - (ScrollBar::kBarThickness + 2.0f);
+    Widget* row = rows_[static_cast<size_t>(index)];
+    row->setRect({ kRowPad, static_cast<float>(index) * rh + kRowPad, viewW - kRowPad * 2,
+        rh - kRowPad * 2 });
+    row->layout();
+}
+
 int ListWidget::rowAtY(float absY) const
 {
     Rect abs = absoluteRect();
@@ -538,7 +559,8 @@ void ListWidget::removeRow(int index)
     removeChild(w);
     if (selectedIdx_ == index) selectedIdx_ = -1;
     else if (selectedIdx_ > index) --selectedIdx_;
-    markDirty();
+    for (int i = index; i < static_cast<int>(rows_.size()); ++i) placeRow(i);
+    syncScrollBar();
 }
 
 void ListWidget::clearRows()
@@ -547,7 +569,7 @@ void ListWidget::clearRows()
     rows_.clear();
     selectedIdx_  = -1;
     scrollOffset_ = 0.0f;
-    markDirty();
+    syncScrollBar();
 }
 
 void ListWidget::connectRowPress(Widget* target, Widget* row)
@@ -584,14 +606,7 @@ void ListWidget::layout()
     vbar_->setViewSize(rect_.h);
     clampScroll();
 
-    // Position each row (relative to ListBox/ListWidget parent — 0,0 based)
-    for (int i = 0; i < static_cast<int>(rows_.size()); ++i)
-    {
-        float ry = static_cast<float>(i) * rh + kRowPad;
-        rows_[static_cast<size_t>(i)]->setRect({kRowPad, ry,
-                                                 viewW - kRowPad * 2, rh - kRowPad * 2});
-        rows_[static_cast<size_t>(i)]->layout();
-    }
+    for (int i = 0; i < static_cast<int>(rows_.size()); ++i) placeRow(i);
 }
 
 void ListWidget::paint(PaintContext& ctx)

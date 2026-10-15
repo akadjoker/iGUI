@@ -4160,6 +4160,45 @@ static void test_list_box_moves_with_the_arrow_keys()
     assert(list.selectedIndex() == 1);
 }
 
+// Uma ListWidget que recebe linhas depois do layout põe-nas no sítio delas, e
+// a barra e o scroll seguem as linhas acrescentadas, removidas e limpas: rolada
+// até ao fim e encurtada, mostra o que ficou e o clique acerta na primeira.
+static void test_list_widget_places_rows_added_after_layout()
+{
+    using namespace ig::retained;
+    const float rowH = Theme::instance().buttonHeight + 8.0f;
+    ListWidget list;
+    list.setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    list.layout();
+    ScrollBar* bar = static_cast<ScrollBar*>(list.children()[0]);
+    Label* first = list.addRow<Label>("first");
+    Label* second = list.addRow<Label>("second");
+    assert(first->rect().h == rowH - 8.0f && first->rect().y == 4.0f);
+    assert(second->rect().y == rowH + 4.0f);
+    for (int i = 0; i < 48; ++i) list.addRow<Label>("row");
+    assert(bar->needed());
+    MouseEvent wheel;
+    wheel.scrollY = -1000.0f;
+    list.onMouseScroll(wheel);
+    assert(bar->value() > 0.0f);
+
+    list.removeRow(0);
+    assert(second->rect().y == 4.0f);
+    while (list.rowCount() > 2) list.removeRow(list.rowCount() - 1);
+    assert(!bar->needed() && bar->value() == 0.0f);
+    MouseEvent press;
+    press.button = 0;
+    press.x = 10.0f;
+    press.y = 5.0f;
+    list.onMousePress(press);
+    assert(list.selectedIndex() == 0);
+
+    for (int i = 0; i < 50; ++i) list.addRow<Label>("row");
+    list.onMouseScroll(wheel);
+    list.clearRows();
+    assert(!bar->needed() && bar->value() == 0.0f);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -4636,6 +4675,7 @@ int main()
     test_file_dialog_icon_names_fit_their_cell();
     test_tree_view_moves_with_the_arrow_keys();
     test_list_box_moves_with_the_arrow_keys();
+    test_list_widget_places_rows_added_after_layout();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();

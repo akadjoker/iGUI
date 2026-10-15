@@ -297,4 +297,7 @@ compensa se houver uso que mude a árvore em todos os frames.
       caracteres UTF-8 a meio e não olhava para a largura.
 - [x] ListBox: `removeItem` e `clearItems` não atualizavam a barra; rolada até
       ao fim e encurtada, ficava em branco e o clique não acertava.
+- [x] ListWidget: as linhas acrescentadas depois do layout ficavam sem sítio (o
+      layout só corre ao mudar o tamanho ou o stage), e a barra e o scroll não
+      seguiam as linhas acrescentadas, removidas e limpas.
 - [ ] TreeView, ListBox, ListWidget e ThumbnailGrid sem navegação por teclado.
