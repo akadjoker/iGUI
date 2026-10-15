@@ -3829,6 +3829,55 @@ static void test_console_keeps_its_visible_lines_while_trimming()
     GetIO().setClipboardText = nullptr;
 }
 
+// A grelha pinta só as filas que tocam o seu retângulo, também a que começa na
+// borda de baixo, e um clique acerta no item cujo quadrado ou legenda contém o
+// ponto, bordas incluídas; nos intervalos entre células e depois do último item
+// não acerta em nenhum. Células de 88x104 a partir de (28, 38), três por fila.
+static void test_thumbnail_grid_paints_and_hits_only_its_cells()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+
+    ThumbnailGrid painted;
+    painted.setRect({ 20.0f, 30.0f, 300.0f, 216.0f });
+    for (int i = 0; i < 14; ++i)
+        painted.addItem("t", Color(static_cast<uint8_t>(10 + i), 200, 100, 255));
+    DrawList list;
+    PaintContext ctx(list, &atlas.defaultFont());
+    painted.paint(ctx);
+    for (int i = 0; i < 14; ++i)
+    {
+        bool found = false;
+        for (size_t v = 0; v < list.vertices().size(); ++v)
+            if (list.vertices()[v].color == Color(static_cast<uint8_t>(10 + i), 200, 100, 255))
+                found = true;
+        assert(found == (i < 9));
+    }
+
+    ThumbnailGrid grid;
+    grid.setRect({ 20.0f, 30.0f, 300.0f, 300.0f });
+    for (int i = 0; i < 8; ++i) grid.addItem("t");
+    auto hit = [&grid](float x, float y)
+    {
+        grid.setSelected(-1);
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = y;
+        grid.onMousePress(press);
+        return grid.selected();
+    };
+    assert(hit(28.0f, 38.0f) == 0);
+    assert(hit(116.0f, 142.0f) == 4);
+    assert(hit(196.0f, 238.0f) == 4);
+    assert(hit(115.9f, 150.0f) == -1);
+    assert(hit(196.1f, 150.0f) == -1);
+    assert(hit(150.0f, 238.1f) == -1);
+    assert(hit(120.0f, 250.0f) == 7);
+    assert(hit(210.0f, 250.0f) == -1);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4222,6 +4271,7 @@ int main()
     test_data_grid_arrows_follow_the_screen_order();
     test_tree_grid_arrows_keep_the_selection_in_view();
     test_console_keeps_its_visible_lines_while_trimming();
+    test_thumbnail_grid_paints_and_hits_only_its_cells();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

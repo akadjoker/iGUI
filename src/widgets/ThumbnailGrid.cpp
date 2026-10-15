@@ -11,6 +11,25 @@ namespace {
         ctx.font.SetColor(color);
         return ctx.font.GetAscender();
     }
+
+    // First index in [lo, hi) where pred holds, for a pred that stays true once true.
+    template<typename Pred>
+    int firstWhere(int lo, int hi, Pred pred)
+    {
+        while (lo < hi)
+        {
+            const int mid = lo + (hi - lo) / 2;
+            if (pred(mid))
+            {
+                hi = mid;
+            }
+            else
+            {
+                lo = mid + 1;
+            }
+        }
+        return lo;
+    }
 }
 
 ThumbnailGrid::ThumbnailGrid() {}
@@ -65,15 +84,29 @@ int ThumbnailGrid::hitTest(float mx, float my) const
     const float padX   = spacing_;
     const float padY   = spacing_;
 
-    for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
-        int col = i % cols;
-        int row = i / cols;
-        float x = b.x + padX + col * cellW;
-        float y = b.y + padY + row * cellH;
-        if (mx >= x && mx <= x + thumbW_ && my >= y && my <= y + thumbH_ + labelH)
-            return i;
+    const int count = static_cast<int>(items_.size());
+    auto colX = [&](int col) { return b.x + padX + col * cellW; };
+    auto rowY = [&](int row) { return b.y + padY + row * cellH; };
+
+    if (cellW < 0.f || cellH < 0.f)
+    {
+        for (int i = 0; i < count; ++i)
+        {
+            float x = colX(i % cols);
+            float y = rowY(i / cols);
+            if (mx >= x && mx <= x + thumbW_ && my >= y && my <= y + thumbH_ + labelH) return i;
+        }
+        return -1;
     }
-    return -1;
+
+    // Cell edges grow with the index, so the cells under the mouse are one run
+    // of columns and one of rows; the first item of both runs is the hit.
+    const int rows = (count + cols - 1) / cols;
+    const int col = firstWhere(0, cols, [&](int c) { return mx <= colX(c) + thumbW_; });
+    const int row = firstWhere(0, rows, [&](int r) { return my <= rowY(r) + thumbH_ + labelH; });
+    if (col == cols || row == rows || !(mx >= colX(col)) || !(my >= rowY(row))) return -1;
+    const int i = row * cols + col;
+    return i < count ? i : -1;
 }
 
 void ThumbnailGrid::paint(PaintContext& ctx)
@@ -97,12 +130,22 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     if (showLabels_)
         asc = setupFont(ctx, Color(200, 200, 205, 255), 9.f);
 
-    for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
+    const int count = static_cast<int>(items_.size());
+    auto rowY = [&](int row) { return b.y + padY + row * cellH; };
+    int firstRow = 0, endRow = (count + cols - 1) / cols;
+    if (cellH >= 0.f)
+    {
+        firstRow = firstWhere(0, endRow, [&](int r) { return !(rowY(r) + cellH < b.y); });
+        endRow = firstWhere(firstRow, endRow, [&](int r) { return rowY(r) > b.y + b.h; });
+    }
+
+    for (int i = firstRow * cols; i < count && i < endRow * cols; ++i)
+    {
         const auto& item = items_[i];
         int col = i % cols;
         int row = i / cols;
         float x = b.x + padX + col * cellW;
-        float y = b.y + padY + row * cellH;
+        float y = rowY(row);
 
         // Skip if off-screen
         if (y + cellH < b.y || y > b.y + b.h) continue;
