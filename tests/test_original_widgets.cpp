@@ -3465,7 +3465,6 @@ static void test_code_editor_folds_survive_edits()
     assert(editor->isFolded(1));
     assert(rowLines(8) == "0 1 4 5 6 7 8 9 ");
 
-    editor->setAutoIndent(false);
     editor->setCursorPos(1, 0);
     key(Key::Return);
     paint();
@@ -3476,7 +3475,6 @@ static void test_code_editor_folds_survive_edits()
     key(Key::Backspace);
     paint();
     assert(editor->isFolded(1));
-    editor->setAutoIndent(true);
 
     editor->setText("x\ny\nint c()\n{\n    return 3;\n}\nend");
     paint();
@@ -3616,6 +3614,34 @@ static void test_code_editor_highlights_only_the_edited_lines()
     editor->setCursorPos(0, 0);
     key(Key::Return);
     assert(matchesFresh());
+}
+
+// O auto-indent do Enter conta só o texto antes do cursor: Enter no início ou no
+// meio da indentação de uma linha empurra-a para baixo sem lhe mudar a
+// indentação, e um "{" só dá indentação extra quando fica antes do cursor.
+static void test_code_editor_auto_indent_uses_the_text_before_the_cursor()
+{
+    using namespace ig::retained;
+    CodeEditor editor;
+    auto enterAt = [&editor](const char* text, int col)
+    {
+        editor.setText(text);
+        editor.setCursorPos(0, col);
+        KeyEvent press;
+        press.key = Key::Return;
+        editor.onKeyPress(press);
+        String lines;
+        for (int i = 0; i < editor.lineCount(); ++i) lines += "[" + editor.lineAt(i) + "]";
+        return lines;
+    };
+    assert(enterAt("    foo", 0) == "[][    foo]");
+    assert(enterAt("    foo", 2) == "[  ][    foo]");
+    assert(enterAt("{", 0) == "[][{]");
+    assert(enterAt("int a() {", 9) == "[int a() {][\t]");
+    assert(enterAt("    x = 1;", 10) == "[    x = 1;][    ]");
+    assert(enterAt("    x = 1;", 6) == "[    x ][    = 1;]");
+    editor.undo();
+    assert(editor.lineCount() == 1 && editor.lineAt(0) == "    x = 1;");
 }
 
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
@@ -4005,6 +4031,7 @@ int main()
     test_code_editor_rows_follow_the_folds_after_undo();
     test_code_editor_folds_survive_edits();
     test_code_editor_highlights_only_the_edited_lines();
+    test_code_editor_auto_indent_uses_the_text_before_the_cursor();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

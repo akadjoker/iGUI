@@ -349,7 +349,6 @@ private:
     // ── Auto-indent ──────────────────────────────────────────────────────
     bool autoIndent_ = true;
     String getLineIndent(int line) const;
-    bool lineEndsWith(int line, char c) const;
 
     // ── Bracket matching ─────────────────────────────────────────────────
     bool showBracketMatch_ = true;
