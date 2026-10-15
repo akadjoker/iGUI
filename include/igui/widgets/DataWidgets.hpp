@@ -268,8 +268,12 @@ private:
     };
     struct FlatEntry { Node* node; int depth; };
 
-    void  rebuildFlatList();
-    void  flattenNode(Node* n, int depth);
+    void rebuildFlatList() const;
+    void flattenNode(Node* n, int depth) const;
+    void ensureFlatList() const
+    {
+        if (flatDirty_) rebuildFlatList();
+    }
     void  deleteNodes(Node* n);
     void  startEdit(Node* node, int col);
     void  commitEdit();
@@ -282,7 +286,8 @@ private:
 
     ct::Vector<Node*>    roots_;
     ct::Vector<Column>   columns_;
-    ct::Vector<FlatEntry> flatList_;
+    mutable ct::Vector<FlatEntry> flatList_;
+    mutable bool flatDirty_ = true; // a node was added: the flat list is rebuilt before it is read
 
     Node* selectedNode_  = nullptr;
     ct::Vector<Node*> selectedNodes_;

@@ -3644,6 +3644,24 @@ static void test_code_editor_auto_indent_uses_the_text_before_the_cursor()
     assert(editor.lineCount() == 1 && editor.lineAt(0) == "    x = 1;");
 }
 
+// Um filho acrescentado à TreeGrid aparece sem um rebuild() explícito: a seta
+// para baixo passa da raiz para o filho novo.
+static void test_tree_grid_shows_new_children_without_rebuild()
+{
+    using namespace ig::retained;
+    TreeGrid tree;
+    tree.addColumn("Name", 120.0f);
+    TreeGrid::Node* root = tree.addRoot({ "root" });
+    tree.setFocused(true);
+    KeyEvent down;
+    down.key = Key::Down;
+    tree.onKeyPress(down);
+    assert(tree.selectedNode() == root);
+    TreeGrid::Node* child = root->addChild({ "child" });
+    tree.onKeyPress(down);
+    assert(tree.selectedNode() == child);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4032,6 +4050,7 @@ int main()
     test_code_editor_folds_survive_edits();
     test_code_editor_highlights_only_the_edited_lines();
     test_code_editor_auto_indent_uses_the_text_before_the_cursor();
+    test_tree_grid_shows_new_children_without_rebuild();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

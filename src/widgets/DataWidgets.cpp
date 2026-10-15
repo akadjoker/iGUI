@@ -977,6 +977,11 @@ TreeGrid::Node* TreeGrid::Node::addChild(const ct::Vector<String>& cellData)
     child->owner_ = owner_;
     child->depth  = depth + 1;
     children.push_back(child);
+    if (owner_)
+    {
+        owner_->flatDirty_ = true;
+        owner_->markDirty();
+    }
     return child;
 }
 
@@ -1056,7 +1061,7 @@ TreeGrid::Node* TreeGrid::addRoot(const ct::Vector<String>& cells)
     n->depth  = 0;
     n->owner_ = this;
     roots_.push_back(n);
-    rebuildFlatList();
+    flatDirty_ = true;
     markDirty();
     return n;
 }
@@ -1065,14 +1070,15 @@ TreeGrid::Node* TreeGrid::addRoot(const ct::Vector<String>& cells)
 //  Flat list
 // ═════════════════════════════════════════════════════════════════════════════
 
-void TreeGrid::rebuildFlatList()
+void TreeGrid::rebuildFlatList() const
 {
+    flatDirty_ = false;
     flatList_.clear();
     for (auto* r : roots_)
         flattenNode(r, 0);
 }
 
-void TreeGrid::flattenNode(Node* n, int depth)
+void TreeGrid::flattenNode(Node* n, int depth) const
 {
     flatList_.push_back({n, depth});
     if (n->expanded) {
@@ -1159,6 +1165,7 @@ int TreeGrid::hitColumn(float localX) const
 
 int TreeGrid::hitRow(float localY) const
 {
+    ensureFlatList();
     if (localY < headerHeight_) return -1;
     float y  = localY - headerHeight_ + scrollY_;
     int   idx = static_cast<int>(y / rowHeight_);
@@ -1179,6 +1186,7 @@ int TreeGrid::hitResizeEdge(float localX) const
 
 Widget::Vec2f TreeGrid::sizeHint() const
 {
+    ensureFlatList();
     return {totalColumnsWidth(), headerHeight_ + flatList_.size() * rowHeight_};
 }
 
@@ -1231,6 +1239,7 @@ void TreeGrid::cancelEdit()
 
 void TreeGrid::paint(PaintContext& ctx)
 {
+    ensureFlatList();
     if (!visible_) return;
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
@@ -1445,6 +1454,7 @@ void TreeGrid::paint(PaintContext& ctx)
 
 void TreeGrid::onMousePress(MouseEvent& e)
 {
+    ensureFlatList();
     if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
@@ -1560,6 +1570,7 @@ void TreeGrid::onMouseMove(MouseEvent& e)
 
 void TreeGrid::onMouseScroll(MouseEvent& e)
 {
+    ensureFlatList();
     if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
@@ -1586,6 +1597,7 @@ void TreeGrid::onMouseScroll(MouseEvent& e)
 
 void TreeGrid::onKeyPress(KeyEvent& e)
 {
+    ensureFlatList();
     if (!focused_ && !editing_) return;
 
     if (editing_) {
