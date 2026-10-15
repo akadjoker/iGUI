@@ -3878,6 +3878,78 @@ static void test_thumbnail_grid_paints_and_hits_only_its_cells()
     assert(hit(210.0f, 250.0f) == -1);
 }
 
+// Uma grelha mais alta do que a vista rola: a roda anda uma fila por passo e
+// pára no fim, a barra salta para onde se clica, os cliques e a pintura seguem
+// o scroll, e as colunas deixam lugar à barra (272 de largura dá três colunas
+// sem ela e duas com ela). Sem filas a mais, a barra fica escondida e a roda
+// passa ao pai. Células de 88x104 a partir de (8, 8).
+static void test_thumbnail_grid_scrolls_to_every_row()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    ThumbnailGrid grid;
+    grid.setRect({ 0.0f, 0.0f, 272.0f, 216.0f });
+    for (int i = 0; i < 30; ++i)
+        grid.addItem("t", Color(static_cast<uint8_t>(10 + i), 200, 100, 255));
+    grid.layout();
+    auto hit = [&grid](float x, float y)
+    {
+        grid.setSelected(-1);
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = y;
+        grid.onMousePress(press);
+        return grid.selected();
+    };
+    auto wheel = [&grid](float notches)
+    {
+        MouseEvent e;
+        e.scrollY = notches;
+        grid.onMouseScroll(e);
+        return e.consumed;
+    };
+    auto paints = [&grid, &atlas](int item)
+    {
+        DrawList list;
+        PaintContext ctx(list, &atlas.defaultFont());
+        grid.paint(ctx);
+        for (size_t v = 0; v < list.vertices().size(); ++v)
+            if (list.vertices()[v].color == Color(static_cast<uint8_t>(10 + item), 200, 100, 255))
+                return true;
+        return false;
+    };
+    ScrollBar* bar = static_cast<ScrollBar*>(grid.children()[0]);
+    assert(bar->isVisible());
+    assert(hit(10.0f, 120.0f) == 2);
+
+    assert(wheel(-1.0f));
+    assert(grid.scrollY() == 104.0f);
+    assert(hit(10.0f, 120.0f) == 4);
+    assert(wheel(-100.0f));
+    assert(grid.scrollY() == 1352.0f);
+    assert(hit(100.0f, 120.0f) == 29);
+    assert(paints(29) && !paints(0));
+    assert(wheel(100.0f));
+    assert(grid.scrollY() == 0.0f);
+    assert(paints(0) && !paints(29));
+
+    MouseEvent track;
+    track.button = 0;
+    track.x = 268.0f;
+    track.y = 216.0f;
+    bar->onMousePress(track);
+    assert(grid.scrollY() == 1352.0f);
+    assert(paints(29));
+
+    for (int i = 0; i < 26; ++i) grid.removeItem(0);
+    assert(grid.scrollY() == 0.0f);
+    assert(!bar->isVisible());
+    assert(!wheel(-1.0f));
+    assert(hit(184.0f, 20.0f) == 2);
+}
+
 // O realce dos parênteses conta caracteres e não bytes: em "ação(x)" com o
 // cursor no ")", os dois realces ficam sobre o "(" e o ")", e um Alt+clique no
 // meio de cada um põe um cursor nessa coluna. O mesmo com o par em duas linhas.
@@ -4272,6 +4344,7 @@ int main()
     test_tree_grid_arrows_keep_the_selection_in_view();
     test_console_keeps_its_visible_lines_while_trimming();
     test_thumbnail_grid_paints_and_hits_only_its_cells();
+    test_thumbnail_grid_scrolls_to_every_row();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
     test_scroll_view_wheel_reaches_the_end_with_both_bars();

@@ -8,6 +8,8 @@
 
 namespace ig { namespace retained
 {
+class ScrollBar;
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  ThumbnailGrid — Grid of thumbnail cards with label + selection
 //
@@ -57,13 +59,34 @@ public:
     int  selected() const { return selected_; }
 
     /// @brief Set the thumbnail cell size.
-    void setThumbSize(float w, float h) { thumbW_ = w; thumbH_ = h; markDirty(); }
+    void setThumbSize(float w, float h)
+    {
+        thumbW_ = w;
+        thumbH_ = h;
+        syncScroll();
+    }
     /// @brief Set the spacing between thumbnails.
-    void setSpacing(float s)            { spacing_ = s; markDirty(); }
+    void setSpacing(float s)
+    {
+        spacing_ = s;
+        syncScroll();
+    }
     /// @brief Show or hide item labels.
-    void setShowLabels(bool s)          { showLabels_ = s; markDirty(); }
+    void setShowLabels(bool s)
+    {
+        showLabels_ = s;
+        syncScroll();
+    }
     /// @brief Set the background color.
     void setBgColor(const Color& c)     { bgColor_ = c; markDirty(); }
+
+    /// @brief Scroll the grid to @p y pixels from the top, kept within the content.
+    void setScrollY(float y);
+    /// @brief Get the vertical scroll offset in pixels.
+    float scrollY() const
+    {
+        return scrollY_;
+    }
 
     /// @brief Emitted when an item is clicked.
     Signal<int> onItemClicked;
@@ -71,8 +94,10 @@ public:
     Signal<int> onItemDoubleClicked;
 
     Vec2f sizeHint() const override { return {300, 200}; }
+    void layout() override;
     void  paint(PaintContext& ctx) override;
     void  onMousePress(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
 
 private:
     ct::Vector<ThumbnailItem> items_;
@@ -82,7 +107,19 @@ private:
     float spacing_  = 8.f;
     bool  showLabels_ = true;
     Color bgColor_  = Color(24, 26, 30, 255);
+    ScrollBar* vbar_ = nullptr;
+    float scrollY_ = 0.f;
 
+    // The grid as the current size lays it out: the columns leave room for the
+    // scroll bar when the rows do not fit, and the scroll is kept in range.
+    struct Metrics
+    {
+        float labelH, cellW, cellH, viewW, contentH, scroll;
+        int cols;
+        bool bar;
+    };
+    Metrics metrics() const;
+    void syncScroll();
     int hitTest(float mx, float my) const;
 };
 

@@ -1,7 +1,8 @@
 #include "ThumbnailGrid.hpp"
+#include "ScrollWidgets.hpp"
 #include "Theme.hpp"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 
 namespace {
     inline float setupFont(PaintContext& ctx, const Color& color, float size)
@@ -32,12 +33,68 @@ namespace {
     }
 }
 
-ThumbnailGrid::ThumbnailGrid() {}
+ThumbnailGrid::ThumbnailGrid()
+{
+    vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
+    vbar_->setScrollable(false);
+    vbar_->scrolled.connect(
+            [this](float v)
+            {
+                scrollY_ = v;
+                markDirty();
+            });
+    syncScroll();
+}
+
+ThumbnailGrid::Metrics ThumbnailGrid::metrics() const
+{
+    Metrics m;
+    m.labelH = showLabels_ ? 16.f : 0.f;
+    m.cellW = thumbW_ + spacing_;
+    m.cellH = thumbH_ + m.labelH + spacing_;
+    const int count = static_cast<int>(items_.size());
+    auto layOut = [&](float viewW)
+    {
+        m.viewW = viewW;
+        m.cols = std::max(1, static_cast<int>((viewW - spacing_) / m.cellW));
+        const int rows = (count + m.cols - 1) / m.cols;
+        m.contentH = rows == 0 ? 0.f : spacing_ + rows * m.cellH;
+    };
+    layOut(rect_.w);
+    m.bar = ScrollBar::neededFor(m.contentH, rect_.h);
+    if (m.bar) layOut(rect_.w - (ScrollBar::kBarThickness + 2.f));
+    m.scroll = std::max(0.f, std::min(scrollY_, m.contentH - rect_.h));
+    return m;
+}
+
+void ThumbnailGrid::syncScroll()
+{
+    const Metrics m = metrics();
+    scrollY_ = m.scroll;
+    vbar_->setVisible(m.bar);
+    vbar_->setRect({ m.viewW + 2.f, 0.f, ScrollBar::kBarThickness, rect_.h });
+    vbar_->setContentSize(m.contentH);
+    vbar_->setViewSize(rect_.h);
+    vbar_->setValue(scrollY_);
+    markDirty();
+}
+
+void ThumbnailGrid::setScrollY(float y)
+{
+    scrollY_ = y;
+    syncScroll();
+}
+
+void ThumbnailGrid::layout()
+{
+    syncScroll();
+    Widget::layout();
+}
 
 int ThumbnailGrid::addItem(const String& label, const Color& color)
 {
     items_.push_back({label, color, {}, false});
-    markDirty();
+    syncScroll();
     return static_cast<int>(items_.size()) - 1;
 }
 
@@ -54,14 +111,14 @@ void ThumbnailGrid::removeItem(int idx)
     items_.erase(items_.begin() + idx);
     if (selected_ == idx) selected_ = -1;
     else if (selected_ > idx) --selected_;
-    markDirty();
+    syncScroll();
 }
 
 void ThumbnailGrid::clearItems()
 {
     items_.clear();
     selected_ = -1;
-    markDirty();
+    syncScroll();
 }
 
 void ThumbnailGrid::setSelected(int idx)
@@ -77,16 +134,17 @@ void ThumbnailGrid::setSelected(int idx)
 int ThumbnailGrid::hitTest(float mx, float my) const
 {
     const Rect b = absoluteRect();
-    const float labelH = showLabels_ ? 16.f : 0.f;
-    const float cellW  = thumbW_ + spacing_;
-    const float cellH  = thumbH_ + labelH + spacing_;
-    const int   cols   = std::max(1, static_cast<int>((b.w - spacing_) / cellW));
+    const Metrics m = metrics();
+    const float labelH = m.labelH;
+    const float cellW = m.cellW;
+    const float cellH = m.cellH;
+    const int cols = m.cols;
     const float padX   = spacing_;
     const float padY   = spacing_;
 
     const int count = static_cast<int>(items_.size());
     auto colX = [&](int col) { return b.x + padX + col * cellW; };
-    auto rowY = [&](int row) { return b.y + padY + row * cellH; };
+    auto rowY = [&](int row) { return b.y + padY + row * cellH - m.scroll; };
 
     if (cellW < 0.f || cellH < 0.f)
     {
@@ -119,19 +177,21 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
-    const float labelH = showLabels_ ? 16.f : 0.f;
-    const float cellW  = thumbW_ + spacing_;
-    const float cellH  = thumbH_ + labelH + spacing_;
-    const int   cols   = std::max(1, static_cast<int>((b.w - spacing_) / cellW));
+    const Metrics m = metrics();
+    const float labelH = m.labelH;
+    const float cellW = m.cellW;
+    const float cellH = m.cellH;
+    const int cols = m.cols;
     const float padX   = spacing_;
     const float padY   = spacing_;
+    if (m.bar) ctx.pushClip({ b.x, b.y, m.viewW, b.h });
 
     float asc = 0;
     if (showLabels_)
         asc = setupFont(ctx, Color(200, 200, 205, 255), 9.f);
 
     const int count = static_cast<int>(items_.size());
-    auto rowY = [&](int row) { return b.y + padY + row * cellH; };
+    auto rowY = [&](int row) { return b.y + padY + row * cellH - m.scroll; };
     int firstRow = 0, endRow = (count + cols - 1) / cols;
     if (cellH >= 0.f)
     {
@@ -191,6 +251,7 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         }
     }
 
+    if (m.bar) ctx.popClip();
     ctx.popClip();
     Widget::paint(ctx);
 }
@@ -204,4 +265,12 @@ void ThumbnailGrid::onMousePress(MouseEvent& e)
         onItemClicked.emit(idx);
         e.consumed = true;
     }
+}
+
+void ThumbnailGrid::onMouseScroll(MouseEvent& e)
+{
+    const Metrics m = metrics();
+    if (!m.bar) return;
+    e.consumed = true;
+    setScrollY(m.scroll - e.scrollY * m.cellH);
 }

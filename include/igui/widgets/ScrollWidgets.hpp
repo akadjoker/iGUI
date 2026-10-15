@@ -37,7 +37,15 @@ public:
     /// @brief Get the maximum scroll value.
     float maxValue() const         { return max2(0.0f, contentSize_ - viewSize_); }
     /// @brief Check if scrolling is needed (content > view).
-    bool  needed() const           { return contentSize_ > viewSize_ + 0.5f; }
+    bool needed() const
+    {
+        return neededFor(contentSize_, viewSize_);
+    }
+    /// @brief Check if a content of @p content needs scrolling in a view of @p view.
+    static bool neededFor(float content, float view)
+    {
+        return content > view + 0.5f;
+    }
 
     Widget::Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
