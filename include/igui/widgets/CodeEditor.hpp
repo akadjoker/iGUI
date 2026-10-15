@@ -313,6 +313,7 @@ private:
     struct FoldRange { int startLine, endLine; bool collapsed; };
     ct::Vector<FoldRange> foldRanges_;
     void rebuildFoldRanges();
+    void onLinesChanged(int line, int removed, int inserted) override;
     bool isLineHidden(int line) const;
     int  foldGutterWidth() const;
     void paintFoldGutter(PaintContext& ctx, const Rect& abs);

@@ -251,7 +251,7 @@ Só por leitura:
 
 ## Por fazer (2026-10-14)
 
-- [ ] **Dobras do CodeEditor perdem-se nas edições** — confirmado: com um
+- [x] **Dobras do CodeEditor perdem-se nas edições** — confirmado: com um
       bloco dobrado na linha 1, um Enter na linha 6 desdobra-o. Qualquer edição
       que ponha `hlDirty_` (Enter, juntar linhas, colar, apagar/mover linhas,
       undo) chama o `rebuildFoldRanges`, que recria todas as dobras abertas.
