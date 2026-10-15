@@ -635,8 +635,6 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     const uint64_t u64Max = 18446744073709551615ull;
     const double f64Zero = 0.0;
     const double f64One = 1.0;
-    const float fZero = 0.0f;
-    const float fOne = 1.0f;
     // O "Clamp integers to 0..50" do demo: o mesmo valor com dois intervalos.
     ui.dragScalar("drag s8", ig::Context::ScalarType::S8, &s.scalarS8, 1.0f, &s8Min, &s8Max);
     item();
