@@ -1,10 +1,12 @@
 #include "pch.hpp"
 
 #include "SpinSlider.hpp"
+#include "TextInputWidgets.hpp"
 
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 
 namespace
 {
@@ -26,6 +28,19 @@ Color scaledAlpha(Color c, float factor)
 {
     c.a = static_cast<u8>(std::lround(c.a * factor));
     return c;
+}
+
+bool visibleInTree(const Widget* w)
+{
+    for (; w; w = w->parent())
+        if (!w->isVisible()) return false;
+    return true;
+}
+
+bool isAccept(const KeyEvent& e)
+{
+    const bool key = e.key == Key::Return || e.key == Key::KPEnter || e.key == Key::Space;
+    return key && !e.shift && !e.ctrl && !e.alt;
 }
 
 // Bytes of the longest start of `text` whose glyphs all fit in `room`.
@@ -96,6 +111,31 @@ private:
     SpinSlider* owner_;
 };
 
+class SpinSlider::ValueInput : public TextInput
+{
+public:
+    explicit ValueInput(SpinSlider* owner)
+            : owner_(owner)
+    {
+    }
+
+    void onKeyPress(KeyEvent& e) override
+    {
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        owner_->valueInputKey(e);
+        if (WidgetApp::instance().deletions() != deletions || !isVisible()) return;
+        TextInput::onKeyPress(e);
+    }
+    void onFocusLost() override
+    {
+        TextInput::onFocusLost();
+        owner_->valueFocusExit();
+    }
+
+private:
+    SpinSlider* owner_;
+};
+
 SpinSlider::SpinSlider()
 {
     acceptsFocus_ = true;
@@ -156,6 +196,8 @@ void SpinSlider::setEditingInteger(bool editingInteger)
 void SpinSlider::setReadOnly(bool enable)
 {
     readOnly_ = enable;
+    if (readOnly_ && valueInput_ && valueInput_->isFocused())
+        WidgetApp::instance().setFocused(nullptr);
     markDirty();
 }
 
@@ -271,7 +313,7 @@ void SpinSlider::paint(PaintContext& ctx)
 
         const bool displayGrabber = !readOnly_ &&
                                     (grabbingGrabber_ || mouseOverSpin_ || mouseOverGrabber_) &&
-                                    !grabbingSpinner_;
+                                    !grabbingSpinner_ && !(valueInput_ && valueInput_->isVisible());
         if (grabber_->isVisible() != displayGrabber) grabber_->setVisible(displayGrabber);
 
         if (displayGrabber)
@@ -290,6 +332,7 @@ void SpinSlider::paint(PaintContext& ctx)
     }
 
     if (overrideFont_) ctx.popFont();
+    if (valueInput_) valueInput_->setRect({ 0.0f, 0.0f, rect_.w, rect_.h });
     Widget::paint(ctx);
 }
 
@@ -361,7 +404,14 @@ void SpinSlider::onMouseMove(MouseEvent& e)
 
 void SpinSlider::onKeyPress(KeyEvent& e)
 {
-    if (readOnly_ || !isGrabbing()) return;
+    if (readOnly_) return;
+    if (isAccept(e))
+    {
+        e.consumed = true;
+        focusEntered();
+        return;
+    }
+    if (!isGrabbing()) return;
     e.consumed = true;
     if (e.key == Key::Escape && !e.shift && !e.ctrl && !e.alt)
     {
@@ -399,6 +449,11 @@ void SpinSlider::grabEnd()
             ungrabbed.emit();
             if (WidgetApp::instance().deletions() != deletions) return;
         }
+        else
+        {
+            focusEntered();
+            if (WidgetApp::instance().deletions() != deletions) return;
+        }
     }
 
     if (grabbingGrabber_)
@@ -407,6 +462,144 @@ void SpinSlider::grabEnd()
         mousewheelOverGrabber_ = false;
         ungrabbed.emit();
     }
+}
+
+TextInput* SpinSlider::lineEdit()
+{
+    ensureValueInput();
+    return valueInput_;
+}
+
+void SpinSlider::ensureValueInput()
+{
+    if (valueInput_) return;
+    valueInput_ = createChild<ValueInput>(this);
+    valueInput_->setVisible(false);
+    valueInput_->setRect({ 0.0f, 0.0f, rect_.w, rect_.h });
+    valueInput_->submitted.connect([this](const String&) { valueInputSubmitted(); });
+}
+
+void SpinSlider::focusEntered()
+{
+    if (readOnly_) return;
+    ensureValueInput();
+    valueInput_->setText(textValue());
+    WidgetApp::instance().callDeferred(this,
+            [this]()
+            {
+                valueInput_->setRect({ 0.0f, 0.0f, rect_.w, rect_.h });
+                valueInput_->setVisible(true);
+                if (!valueInput_->isFocused()) WidgetApp::instance().setFocused(valueInput_);
+                valueInput_->selectAll();
+            });
+    valueFocusEntered.emit();
+}
+
+// The field hides: the focus leaves it first, then it reads its text.
+void SpinSlider::hideValueInput()
+{
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    valueInput_->setVisible(false);
+    if (valueInput_->isFocused())
+    {
+        WidgetApp::instance().setFocused(valueInputClosing_ ? this : nullptr);
+        if (WidgetApp::instance().deletions() != deletions) return;
+    }
+    evaluateInputText();
+}
+
+void SpinSlider::evaluateInputText()
+{
+    String text = valueInput_->text();
+    if (text.empty())
+    {
+        setValue(0);
+        return;
+    }
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] == ',') text[i] = '.';
+        else if (text[i] == ';')
+            text[i] = ',';
+    }
+
+    size_t begin = 0;
+    size_t end = text.size();
+    while (begin < end && static_cast<unsigned char>(text[begin]) <= 32) ++begin;
+    while (end > begin && static_cast<unsigned char>(text[end - 1]) <= 32) --end;
+    if (begin == end) return;
+    const String number = text.substr(begin, end - begin);
+    char* stop = nullptr;
+    const double v = std::strtod(number.c_str(), &stop);
+    if (stop != number.c_str() + number.size() || !std::isfinite(v)) return;
+    setValue(v);
+}
+
+void SpinSlider::valueInputKey(KeyEvent& e)
+{
+    if (readOnly_) return;
+    if (e.key == Key::Up || e.key == Key::Down)
+    {
+        e.consumed = true;
+        double step = this->step();
+        if (step < 1)
+        {
+            const double divisor = 1.0 / step;
+            if (std::trunc(divisor) == divisor) step = 1.0;
+        }
+
+        if (e.ctrl) step *= 100.0;
+        else if (e.shift)
+            step *= 10.0;
+        else if (e.alt)
+            step *= 0.1;
+
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        evaluateInputText();
+        if (WidgetApp::instance().deletions() != deletions) return;
+        const double lastValue = value();
+        if (e.key == Key::Down) step *= -1;
+        setValue(lastValue + step);
+        if (WidgetApp::instance().deletions() != deletions) return;
+
+        valueInputDirty_ = true;
+        WidgetApp::instance().callDeferred(this,
+                [this]()
+                {
+                    if (!valueInputDirty_) return;
+                    valueInputDirty_ = false;
+                    valueInput_->setText(textValue());
+                });
+    }
+    else if (e.key == Key::Escape)
+    {
+        e.consumed = true;
+        valueInputClosing_ = true;
+        hideValueInput();
+        valueInputClosing_ = false;
+    }
+}
+
+void SpinSlider::valueInputSubmitted()
+{
+    valueInputClosing_ = true;
+    hideValueInput();
+    valueInputClosing_ = false;
+}
+
+void SpinSlider::valueFocusExit()
+{
+    if (readOnly_) return;
+
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    evaluateInputText();
+    if (WidgetApp::instance().deletions() != deletions) return;
+    if (!visibleInTree(this) || !valueInputClosing_)
+    {
+        if (valueInput_->isVisible()) hideValueInput();
+        if (WidgetApp::instance().deletions() != deletions) return;
+    }
+    valueFocusExited.emit();
 }
 
 void SpinSlider::onMouseScroll(MouseEvent& e)

@@ -5239,6 +5239,33 @@ struct SpinDrag
     {
         return spin->children()[0];
     }
+
+    void type(const char* text)
+    {
+        for (const char* c = text; *c; ++c)
+            io.inputChars.push_back(static_cast<uint32_t>(static_cast<unsigned char>(*c)));
+        ig::retained::WidgetApp::instance().update(io);
+        io.inputChars.clear();
+    }
+
+    void key(int code, bool shift = false, bool ctrl = false, bool alt = false)
+    {
+        ig::retained::IO::KeyEvent k;
+        k.key = code;
+        k.shift = shift;
+        k.ctrl = ctrl;
+        k.alt = alt;
+        io.keyEvents.push_back(k);
+        ig::retained::WidgetApp::instance().update(io);
+        io.keyEvents.clear();
+    }
+
+    void click(float x, float y)
+    {
+        moveTo(x, y);
+        button(0, true);
+        button(0, false);
+    }
 };
 } // namespace
 
@@ -5470,6 +5497,119 @@ static void test_spin_slider_grabber_visibility_and_spinner_warp()
     d.spin->setEditingInteger(true);
     d.paintRing(74);
     assert(!d.grabber()->isVisible());
+}
+
+// Um clique sem arrasto abre o campo de texto com o valor todo selecionado; o
+// Enter e o Escape aplicam o número escrito (com vírgula ou ponto), voltam ao
+// campo e emitem a saída; Enter e Espaço abrem-no também, sem escrever o
+// espaço; texto que não é um número deixa o valor, e texto vazio põe 0.
+static void test_spin_slider_value_input_opens_and_applies()
+{
+    using namespace ig::retained;
+    SpinDrag d("spinvalueinput");
+    int entered = 0;
+    int exited = 0;
+    d.spin->valueFocusEntered.connect([&entered]() { ++entered; });
+    d.spin->valueFocusExited.connect([&exited]() { ++exited; });
+
+    d.click(150.0f, 12.0f);
+    TextInput* input = d.spin->lineEdit();
+    assert(entered == 1 && input->isVisible() && input->isFocused());
+    assert(input->text() == "12.5" && input->selectedText() == "12.5");
+    assert(d.paintRing(74) == 0 && d.paintRing(255) == 0);
+
+    d.type("3,25");
+    assert(d.spin->value() == 12.5);
+    d.key(Key::Return);
+    assert(d.spin->value() == 3.25 && !input->isVisible());
+    assert(d.spin->isFocused() && exited == 1);
+
+    d.key(Key::Return);
+    assert(entered == 2 && input->isVisible() && input->isFocused());
+    d.type("7");
+    d.key(Key::Escape);
+    assert(d.spin->value() == 7.0 && !input->isVisible() && d.spin->isFocused());
+    assert(exited == 2);
+
+    IO::KeyEvent space;
+    space.key = Key::Space;
+    d.io.keyEvents.push_back(space);
+    d.io.inputChars.push_back(static_cast<uint32_t>(' '));
+    WidgetApp::instance().update(d.io);
+    d.io.keyEvents.clear();
+    d.io.inputChars.clear();
+    assert(input->isVisible() && input->isFocused() && input->text() == "7.0");
+
+    d.type(" 2.5e1 ");
+    d.key(Key::Return);
+    assert(d.spin->value() == 25.0);
+
+    d.key(Key::Return);
+    d.type("abc");
+    d.key(Key::Return);
+    assert(d.spin->value() == 25.0);
+    d.key(Key::Return);
+    d.type("3x");
+    d.key(Key::Return);
+    assert(d.spin->value() == 25.0);
+    d.key(Key::Return);
+    d.type("inf");
+    d.key(Key::Return);
+    assert(d.spin->value() == 25.0);
+    d.key(Key::Return);
+    d.type("\x01"
+           "8\x02");
+    d.key(Key::Return);
+    assert(d.spin->value() == 8.0);
+
+    d.key(Key::Return);
+    d.key(Key::Backspace);
+    d.key(Key::Return);
+    assert(d.spin->value() == 0.0);
+}
+
+// No campo de texto, Cima e Baixo leem o texto e somam o passo (1 quando o
+// passo divide a unidade), vezes 10 com Shift, 100 com Ctrl e 0.1 com Alt, e o
+// texto mostra o valor novo. Clicar noutro campo aplica o texto e fecha este.
+// Passar a só de leitura a meio tira o foco ao campo sem aplicar o texto nem o
+// esconder; só de leitura, o campo não abre.
+static void test_spin_slider_value_input_keys_and_focus()
+{
+    using namespace ig::retained;
+    SpinDrag d("spinvalueinputkeys");
+    auto* other = d.stage->createChild<SpinSlider>();
+    other->setRect({ 0.0f, 100.0f, 200.0f, 24.0f });
+    int exited = 0;
+    d.spin->valueFocusExited.connect([&exited]() { ++exited; });
+
+    d.click(150.0f, 12.0f);
+    TextInput* input = d.spin->lineEdit();
+    d.type("5");
+    d.key(Key::Up);
+    assert(d.spin->value() == 6.0 && input->text() == "6.0");
+    d.key(Key::Up, true);
+    assert(d.spin->value() == 16.0);
+    d.key(Key::Up, false, false, true);
+    assert(d.spin->value() == 16.1 && input->text() == "16.1");
+    d.key(Key::Down, false, true);
+    assert(d.spin->value() == 0.0 && input->text() == "0.0");
+    assert(input->isVisible() && input->isFocused());
+
+    d.key(Key::Backspace);
+    d.type("42");
+    d.click(150.0f, 112.0f);
+    assert(d.spin->value() == 42.0 && !input->isVisible() && exited == 1);
+    assert(other->lineEdit()->isVisible() && other->lineEdit()->isFocused());
+
+    d.click(150.0f, 12.0f);
+    assert(input->isVisible() && input->isFocused());
+    d.type("9");
+    d.spin->setReadOnly(true);
+    assert(!input->isFocused() && input->isVisible());
+    assert(d.spin->value() == 42.0 && exited == 1);
+    input->setVisible(false);
+    d.click(150.0f, 12.0f);
+    assert(!input->isVisible() && d.spin->value() == 42.0);
 }
 
 static void test_spin_slider_text_and_size()
@@ -6118,6 +6258,8 @@ int main()
     test_spin_slider_drag_read_only_and_removed();
     test_spin_slider_grabber_drags_and_wheels();
     test_spin_slider_grabber_visibility_and_spinner_warp();
+    test_spin_slider_value_input_opens_and_applies();
+    test_spin_slider_value_input_keys_and_focus();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
