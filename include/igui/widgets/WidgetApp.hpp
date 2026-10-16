@@ -468,6 +468,7 @@ private:
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
     int pressedButtons_ = 0;           // buttons held since a press went to pressed_
+    void dropMouseFocus();
     ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered
     float   mouseX_  = 0;
     float   mouseY_  = 0;

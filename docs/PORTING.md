@@ -77,12 +77,19 @@ chunks. O que já entrou:
   máscara) e 2037-2055 (o release tira o botão da máscara e vai sempre para o
   `mouse_focus`, que só é largado quando a máscara fica vazia).
 - O que entrou: `pressedButtons_` na `WidgetApp` faz de `mouse_focus_mask` e o
-  `pressed_` de `mouse_focus`.
+  `pressed_` de `mouse_focus`. `dropMouseFocus` é o `_drop_mouse_focus`
+  (2785-2806): ao trocar de stage, que esconde o widget como o
+  `_gui_hide_control` (2574-2577), o widget que tinha os botões recebe o
+  release de cada botão ainda em baixo, e a máscara fica vazia. Um widget
+  apagado limpa o `pressed_` e a máscara, como o `_gui_remove_control`
+  (2590-2594).
 - Diferenças: (1) o botão encaminhado não mexe no foco do teclado (o original
   dá o foco ao `mouse_focus` com o botão esquerdo quando o ponteiro está sobre
   ele); (2) o arrasto e largada do iGUI fica como estava (o original larga com o
   botão direito durante um arrasto); (3) a contagem de cliques duplos corre
-  também para o botão encaminhado.
+  também para o botão encaminhado; (4) os releases do `dropMouseFocus` sobem
+  pelos pais como os outros eventos do rato do iGUI, e o original só os dá ao
+  controlo.
 
 ## IO: modo do rato e movimento relativo
 
