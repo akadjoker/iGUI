@@ -17,13 +17,14 @@ struct ContextMenu {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-static void collectFocusable(Widget* w, ct::Vector<Widget*>& out)
+// The widgets Tab reaches, in DFS order, with `from` in its place even when Tab
+// does not stop there.
+static void collectFocusable(Widget* w, ct::Vector<Widget*>& out, const Widget* from)
 {
     if (!w || !w->isVisible() || !w->isEnabled()) return;
-    if (w->acceptsFocus()) out.push_back(w);
+    if ((w->acceptsFocus() && w->isTabStop()) || w == from) out.push_back(w);
     if (!w->childrenShown()) return;
-    for (auto* c : w->children())
-        collectFocusable(c, out);
+    for (auto* c: w->children()) collectFocusable(c, out, from);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -516,6 +517,30 @@ void WidgetApp::dropMouseFocus()
     }
 }
 
+void WidgetApp::focusNeighbor(Widget* from, bool backward)
+{
+    ct::Vector<Widget*> focusable;
+    collectFocusable(root_, focusable, from);
+    for (auto* fw: floats_) collectFocusable(fw, focusable, from);
+    if (focusable.empty()) return;
+
+    auto it = std::find(focusable.begin(), focusable.end(), from);
+    if (backward)
+    {
+        if (it == focusable.begin() || it == focusable.end()) it = focusable.end();
+        --it;
+    }
+    else
+    {
+        if (it != focusable.end()) ++it;
+        if (it == focusable.end()) it = focusable.begin();
+    }
+    if (*it == from && !from->isTabStop()) return;
+    focusFromTab_ = true;
+    setFocused(*it);
+    focusFromTab_ = false;
+}
+
 void WidgetApp::callDeferred(Widget* owner, ct::Function<void()> fn)
 {
     deferredCalls_.push_back({ owner, std::move(fn) });
@@ -553,23 +578,7 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
             focused_->onKeyPress(we);
             if (we.consumed) return;
         }
-        // Collect all focusable widgets in DFS order
-        ct::Vector<Widget*> focusable;
-        collectFocusable(root_, focusable);
-        for (auto* fw : floats_)
-            collectFocusable(fw, focusable);
-        if (focusable.empty()) return;
-
-        auto it = std::find(focusable.begin(), focusable.end(), focused_);
-        if (ke.shift) {
-            if (it == focusable.begin() || it == focusable.end())
-                it = focusable.end();
-            --it;
-        } else {
-            if (it != focusable.end()) ++it;
-            if (it == focusable.end()) it = focusable.begin();
-        }
-        setFocused(*it);
+        focusNeighbor(focused_, ke.shift);
         return;
     }
 
