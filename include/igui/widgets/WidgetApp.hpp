@@ -259,6 +259,10 @@ public:
     /// @brief Request a layout pass on the next frame.
     void requestLayout() { needsLayout_ = true; }
 
+    /// @brief Call @p fn at the end of this update(), after every event of the
+    ///        frame. The call is dropped when @p owner goes away first.
+    void callDeferred(Widget* owner, ct::Function<void()> fn);
+
     /// @brief Clear internal refs to a widget being destroyed.
     void notifyWidgetRemoved(Widget* w);
 
@@ -468,6 +472,12 @@ private:
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
     int pressedButtons_ = 0;           // buttons held since a press went to pressed_
+    struct DeferredCall
+    {
+        Widget* owner;
+        ct::Function<void()> fn;
+    };
+    ct::Vector<DeferredCall> deferredCalls_;
     void dropMouseFocus();
     ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered
     float   mouseX_  = 0;

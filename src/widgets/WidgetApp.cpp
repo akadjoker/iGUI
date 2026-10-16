@@ -176,6 +176,15 @@ void WidgetApp::update(const ig::retained::IO& io)
     if (!io.dropEvents.empty())
         dispatchDropEvents(io.dropEvents);
 
+    // Calls deferred by the handlers above, in the order they were made; one
+    // deferred while they run joins this same pass.
+    for (ct::Vector<DeferredCall>::size_type i = 0; i < deferredCalls_.size(); ++i)
+    {
+        DeferredCall call = std::move(deferredCalls_[i]);
+        if (call.owner) call.fn();
+    }
+    deferredCalls_.clear();
+
     // Tooltip timer
     if (hovered_ && !hovered_->tooltip().empty())
     {
@@ -507,6 +516,11 @@ void WidgetApp::dropMouseFocus()
     }
 }
 
+void WidgetApp::callDeferred(Widget* owner, ct::Function<void()> fn)
+{
+    deferredCalls_.push_back({ owner, std::move(fn) });
+}
+
 void WidgetApp::setMouseCaptured(bool captured)
 {
     if (mouseCapture_) mouseCapture_(captured);
@@ -803,6 +817,8 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     ++deletions_;
     if (Animator* animator = Animator::existing())
         animator->forget(w);
+    for (DeferredCall& call: deferredCalls_)
+        if (call.owner && isDescendantOf(call.owner, w)) call.owner = nullptr;
     if (tooltipWidget_ && isDescendantOf(tooltipWidget_, w))
     {
         tooltipWidget_  = nullptr;
