@@ -4855,6 +4855,154 @@ static void test_range_number_text_and_step_decimals()
     assert(Range::rangeStepDecimals(0.0) == 16);
 }
 
+// O texto do SpinSlider: as casas que o passo pede (0.01 dá "1.5", 1 dá "25"),
+// e um inteiro sem casas, cortado para zero (-2.7 dá "-2"). O tamanho mínimo é
+// a caixa com o lugar das setas e a altura de um botão.
+static void test_spin_slider_text_and_size()
+{
+    using namespace ig::retained;
+    SpinSlider slider;
+    slider.setValue(25.0);
+    assert(slider.textValue() == "25");
+    slider.setStep(0.01);
+    slider.setValue(1.5);
+    assert(slider.textValue() == "1.5");
+    slider.setMin(-10.0);
+    slider.setStep(0.1);
+    slider.setValue(-2.7);
+    slider.setEditingInteger(true);
+    assert(slider.textValue() == "-2");
+    const Theme& theme = Theme::instance();
+    const Widget::Vec2f size = slider.sizeHint();
+    assert(size.x == theme.padding * 2.0f + 16.0f);
+    assert(size.y == (theme.padding * 2.0f + theme.fontSize > theme.buttonHeight
+                                     ? theme.padding * 2.0f + theme.fontSize
+                                     : theme.buttonHeight));
+    assert(slider.acceptsFocus());
+}
+
+// O desenho do SpinSlider numa caixa de 200x28 em (10, 20) com o valor 25 de
+// 0..100: a barra fina vai de x = 16 a 200 (2 px de alto), a parte cheia até 62 e
+// o botão de 62 a 66 (4 px de alto, 1 px acima da barra). Um inteiro mostra as
+// setas e não a barra, a menos que prefira a barra; escondido não mostra nada.
+// O rótulo sai a meio alfa e o sufixo mais fraco do que o número; numa caixa
+// estreita só se desenham os glifos do número que cabem inteiros no seu lugar.
+// Só de leitura, as letras são as desativadas e o fundo o do painel; plano, não
+// há caixa e o rótulo fica sobre um fundo; com foco há a borda do foco.
+static void test_spin_slider_draws_label_number_suffix_and_bar()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    atlas.setTexture(TextureHandle{ 1 });
+    const Theme& theme = Theme::instance();
+    struct Span
+    {
+        int count = 0;
+        float left = 1e9f, right = -1e9f, top = 1e9f, bottom = -1e9f;
+    };
+    auto paint = [&atlas](SpinSlider& slider, DrawList& list)
+    {
+        PaintContext ctx(list, &atlas.defaultFont());
+        slider.paint(ctx);
+    };
+    auto span = [](const DrawList& list, Color color, int alpha)
+    {
+        Span out;
+        for (size_t v = 0; v < list.vertices().size(); ++v)
+        {
+            const DrawVertex& vertex = list.vertices()[v];
+            if (vertex.color.r != color.r || vertex.color.g != color.g ||
+                    vertex.color.b != color.b || vertex.color.a != alpha)
+                continue;
+            ++out.count;
+            out.left = vertex.x < out.left ? vertex.x : out.left;
+            out.right = vertex.x > out.right ? vertex.x : out.right;
+            out.top = vertex.y < out.top ? vertex.y : out.top;
+            out.bottom = vertex.y > out.bottom ? vertex.y : out.bottom;
+        }
+        return out;
+    };
+    const Color text = theme.textColor;
+
+    SpinSlider slider;
+    slider.setRect({ 10.0f, 20.0f, 200.0f, 28.0f });
+    slider.setValue(25.0);
+    DrawList bar;
+    paint(slider, bar);
+    const Span track = span(bar, text, 51);
+    const Span filled = span(bar, text, 115);
+    const Span grabber = span(bar, text, 230);
+    assert(track.left == 16.0f && track.right == 200.0f && track.bottom - track.top == 2.0f);
+    assert(filled.left == 16.0f && filled.right == 62.0f && filled.top == track.top);
+    assert(grabber.left == 62.0f && grabber.right == 66.0f && grabber.bottom - grabber.top == 4.0f);
+    assert(grabber.top == track.top - 1.0f);
+    assert(span(bar, theme.inputBg, theme.inputBg.a).count > 0);
+    assert(span(bar, theme.focusColor, theme.focusColor.a).count == 0);
+
+    slider.setEditingInteger(true);
+    DrawList integer;
+    paint(slider, integer);
+    assert(span(integer, text, 51).count == 0);
+    slider.setControlState(SpinSlider::ControlState::PreferSlider);
+    DrawList preferred;
+    paint(slider, preferred);
+    assert(span(preferred, text, 51).count > 0);
+    slider.setControlState(SpinSlider::ControlState::Hide);
+    slider.setEditingInteger(false);
+    DrawList hidden;
+    paint(slider, hidden);
+    assert(span(hidden, text, 51).count == 0);
+    slider.setControlState(SpinSlider::ControlState::Default);
+
+    slider.setLabel("x");
+    slider.setSuffix("m");
+    DrawList labelled;
+    paint(slider, labelled);
+    assert(span(labelled, text, 128).count > 0);
+    assert(span(labelled, text, 102).count > 0);
+    assert(span(labelled, text, 255).count > 0);
+
+    SpinSlider narrow;
+    narrow.setRect({ 10.0f, 20.0f, 60.0f, 28.0f });
+    narrow.setStep(0.001);
+    narrow.setAllowGreater(true);
+    narrow.setValue(123456.789);
+    narrow.setControlState(SpinSlider::ControlState::Hide);
+    DrawList clipped;
+    paint(narrow, clipped);
+    const Span digits = span(clipped, text, 255);
+    assert(digits.count > 0 && digits.left >= 26.0f && digits.right <= 26.0f + 38.0f);
+    narrow.setRect({ 10.0f, 20.0f, 400.0f, 28.0f });
+    DrawList wide;
+    paint(narrow, wide);
+    assert(span(wide, text, 255).count > digits.count);
+
+    slider.setReadOnly(true);
+    DrawList readOnly;
+    paint(slider, readOnly);
+    assert(span(readOnly, text, 255).count == 0);
+    assert(span(readOnly, theme.textDisabled, 255).count > 0);
+    assert(span(readOnly, theme.panelColor, theme.panelColor.a).count > 0);
+    slider.setReadOnly(false);
+
+    slider.setFlat(true);
+    DrawList flat;
+    paint(slider, flat);
+    assert(span(flat, theme.inputBg, theme.inputBg.a).count == 0);
+    assert(span(flat, theme.bgColor, theme.bgColor.a).count > 0);
+    slider.setLabel("");
+    DrawList flatNoLabel;
+    paint(slider, flatNoLabel);
+    assert(span(flatNoLabel, theme.bgColor, theme.bgColor.a).count == 0);
+    slider.setFlat(false);
+
+    slider.setFocused(true);
+    DrawList focused;
+    paint(slider, focused);
+    assert(span(focused, theme.focusColor, theme.focusColor.a).count > 0);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -5344,6 +5492,8 @@ int main()
     test_range_keeps_the_value_in_range_and_step();
     test_range_ratio_is_linear_or_exponential();
     test_range_number_text_and_step_decimals();
+    test_spin_slider_text_and_size();
+    test_spin_slider_draws_label_number_suffix_and_bar();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();

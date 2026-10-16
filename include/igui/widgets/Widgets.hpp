@@ -19,6 +19,7 @@
 #include "Timeline.hpp"
 #include "AudioWidgets.hpp"
 #include "Range.hpp"
+#include "SpinSlider.hpp"
 #include "ThumbnailGrid.hpp"
 #include "FileDialog.hpp"
 #include "ConsoleWidget.hpp"
