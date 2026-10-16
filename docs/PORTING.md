@@ -85,7 +85,7 @@ chunks. O que já entrou:
   `editor/settings/editor_settings.cpp` 594-595 (`float_drag_speed` 5.0,
   `integer_drag_speed` 0.5) e 601 (`default_float_step` 0.001).
 - Por vir: o clique sem arrasto e o `ui_accept` abrem a edição do texto
-  (`_focus_entered`, chunk 5); o grabber e a roda (chunk 4); as setas (chunk 6).
+  (`_focus_entered`, chunk 5); as setas (chunk 6).
 - Diferenças do chunk 3: (1) as definições do editor ficam fixas nos valores
   por omissão; (2) um campo desativado (`isEnabledInTree`) não arrasta, como o
   só de leitura; (3) os eventos do rato ficam no campo, como o
@@ -96,6 +96,37 @@ chunks. O que já entrou:
   limpo, e o campo não lê nada depois de um sinal em que um widget foi apagado;
   (7) o Ctrl é só o Ctrl (sem o Cmd do macOS); (8) até ao chunk 5, o Enter com
   o arrasto em curso fica no campo como as outras teclas.
+
+- Chunk 4, o grabber. Origem: `_grabber_gui_input` 210-272 (com o grabber
+  premido, a roda soma ou tira um passo e passa ao modo roda; o botão esquerdo
+  agarra, guarda o valor, a proporção e o ponto de partida fora do modo roda,
+  dá o foco ao campo e emite `grabbed`, e ao largar emite `ungrabbed`; o
+  direito com o grabber premido repõe o valor; o movimento põe a proporção
+  mais o deslocamento sobre o comprimento da barra, e no modo roda não conta),
+  a roda sobre o campo 113-117, o `mouse_over_grabber` no fim do arrasto 192,
+  a parte do grabber de `_grab_end` 203-207, o grabber escondido na edição de
+  inteiros 426-428, a parte do grabber de `_draw_spin_slider` 450-477 (o rato
+  volta ao centro do botão da barra no fim do arrasto, o grabber aparece sem
+  arrasto do campo com o rato sobre o campo ou sobre ele ou agarrado,
+  realçado com o rato sobre ele ou agarrado, centrado no botão da barra, e no
+  modo roda o rato vai para o canto do grabber mais o tamanho do botão), o
+  `NOTIFICATION_MOUSE_ENTER`/`EXIT` 519-527, `_grabber_mouse_entered` e
+  `_grabber_mouse_exited` 677-685 e o grabber do construtor 829-836. O ícone é
+  o `HSlider/grabber` e `grabber_highlight` (`BIND_THEME_ITEM_EXT` 802-803;
+  `editor/themes/theme_classic.cpp` 1204-1205):
+  `editor/icons/GuiSliderGrabber.svg` e `GuiSliderGrabberHl.svg`, 16 x 16, um
+  disco branco de raio 3 a 0.9 e um anel de raio 6 e 2 de traço em `#e0e0e0`
+  a 0.29 (realçado a 1).
+- Diferenças do chunk 4: (1) o ícone desenha-se com círculos, com as cores do
+  SVG do tema escuro (sem a troca de cores dos temas claros); (2) o iGUI pinta
+  tudo em cada frame: o que o desenho do original calcula (a posição do
+  grabber, o comprimento da barra, o ponto para onde o rato volta) é calculado
+  em cada pintura, e o warp do modo roda, que muda o rato, só corre numa
+  pintura com o campo marcado por `markDirty`, que faz de `queue_redraw`; (3) o
+  grabber só recebe o rato dentro do retângulo do campo, porque o hit-test do
+  iGUI não chega a filhos fora do pai; (4) a roda conta um passo por evento,
+  com o sinal do `scrollY`; (5) o foco dado pelo grabber mostra o realce do
+  foco (sem o `grab_focus(true)` que o esconde); (6) a escala da tela é 1.
 
 ## WidgetApp: botões com outro já premido
 

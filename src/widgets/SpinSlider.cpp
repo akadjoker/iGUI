@@ -14,6 +14,7 @@ constexpr int kSeparation = 4;
 constexpr float kFloatDragSpeed = 5.0f;
 constexpr float kIntegerDragSpeed = 0.5f;
 constexpr double kDefaultFloatStep = 0.001;
+constexpr float kGrabberIconSize = 16.0f;
 
 Color withAlpha(Color c, float alpha)
 {
@@ -45,10 +46,62 @@ size_t fittingBytes(PaintContext& ctx, const String& text, float room)
 }
 } // namespace
 
+class SpinSlider::Grabber : public Widget
+{
+public:
+    explicit Grabber(SpinSlider* owner)
+            : owner_(owner)
+    {
+    }
+
+    bool highlight = false;
+
+    void paint(PaintContext& ctx) override
+    {
+        if (!visible_) return;
+        const Rect abs = absoluteRect();
+        const Vec2 center = { abs.x + abs.w * 0.5f, abs.y + abs.h * 0.5f };
+        ctx.drawList.addCircleFilled(center, 3.0f, Color(255, 255, 255, 230));
+        ctx.drawList.addCircle(center, 6.0f, Color(224, 224, 224, highlight ? 255 : 74), 2.0f);
+    }
+    void onMousePress(MouseEvent& e) override
+    {
+        e.consumed = true;
+        owner_->grabberPress(e);
+    }
+    void onMouseRelease(MouseEvent& e) override
+    {
+        e.consumed = true;
+        owner_->grabberRelease(e);
+    }
+    void onMouseMove(MouseEvent& e) override
+    {
+        e.consumed = true;
+        owner_->grabberMove(e);
+    }
+    void onMouseScroll(MouseEvent& e) override
+    {
+        owner_->grabberScroll(e);
+    }
+    void onMouseEnter() override
+    {
+        owner_->grabberMouseEntered();
+    }
+    void onMouseLeave() override
+    {
+        owner_->grabberMouseExited();
+    }
+
+private:
+    SpinSlider* owner_;
+};
+
 SpinSlider::SpinSlider()
 {
     acceptsFocus_ = true;
     grabbingSpinnerSpeed_ = kFloatDragSpeed;
+    grabber_ = createChild<Grabber>(this);
+    grabber_->setVisible(false);
 }
 
 SpinSlider::~SpinSlider()
@@ -126,6 +179,8 @@ void SpinSlider::paint(PaintContext& ctx)
     const Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
     const auto& t = Theme::instance();
+    const bool redraw = isDirty();
+    clearDirty();
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     const float pad = t.padding;
@@ -185,8 +240,12 @@ void SpinSlider::paint(PaintContext& ctx)
                 abs.y + static_cast<float>(vofs));
     }
 
-    if (controlState_ != ControlState::Hide &&
-            !(editingInteger_ && controlState_ == ControlState::Default))
+    if (controlState_ != ControlState::Hide && editingInteger_ &&
+            controlState_ == ControlState::Default)
+    {
+        if (grabber_->isVisible()) grabber_->setVisible(false);
+    }
+    else if (controlState_ != ControlState::Hide)
     {
         const int width = static_cast<int>(abs.w) - sbMinWidth - kGrabberWidth;
         const int ofs = sbOffsetX;
@@ -204,6 +263,30 @@ void SpinSlider::paint(PaintContext& ctx)
         c = withAlpha(fc, 0.9f);
         ctx.fill.SetColor(c.r, c.g, c.b, c.a);
         ctx.fillRect(abs.x + ofs + gofs, abs.y + svofs, static_cast<float>(kGrabberWidth), 4.0f);
+
+        const float grabberCenterX = static_cast<float>(ofs + gofs) + kGrabberWidth * 0.5f;
+        const float grabberCenterY = static_cast<float>(svofs) + 2.0f;
+        grabbingSpinnerMouseX_ = abs.x + grabberCenterX;
+        grabbingSpinnerMouseY_ = abs.y + grabberCenterY;
+
+        const bool displayGrabber = !readOnly_ &&
+                                    (grabbingGrabber_ || mouseOverSpin_ || mouseOverGrabber_) &&
+                                    !grabbingSpinner_;
+        if (grabber_->isVisible() != displayGrabber) grabber_->setVisible(displayGrabber);
+
+        if (displayGrabber)
+        {
+            grabber_->highlight = mouseOverGrabber_ || grabbingGrabber_;
+            grabber_->setRect({ grabberCenterX - kGrabberIconSize * 0.5f,
+                grabberCenterY - kGrabberIconSize * 0.5f, kGrabberIconSize, kGrabberIconSize });
+            if (mousewheelOverGrabber_ && redraw)
+            {
+                const Rect grabberAbs = grabber_->absoluteRect();
+                WidgetApp::instance().warpMouse(grabberAbs.x + static_cast<float>(kGrabberWidth),
+                        grabberAbs.y + 4.0f);
+            }
+            grabberRange_ = width;
+        }
     }
 
     if (overrideFont_) ctx.popFont();
@@ -302,14 +385,119 @@ void SpinSlider::grabStart(float x, float y)
 
 void SpinSlider::grabEnd()
 {
-    if (!grabbingSpinnerAttempt_) return;
-    grabbingSpinnerAttempt_ = false;
-    if (grabbingSpinner_)
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    if (grabbingSpinnerAttempt_)
     {
-        WidgetApp::instance().setMouseCaptured(false);
-        WidgetApp::instance().warpMouse(grabbingSpinnerMouseX_, grabbingSpinnerMouseY_);
-        markDirty();
-        grabbingSpinner_ = false;
+        grabbingSpinnerAttempt_ = false;
+        if (grabbingSpinner_)
+        {
+            WidgetApp::instance().setMouseCaptured(false);
+            WidgetApp::instance().warpMouse(grabbingSpinnerMouseX_, grabbingSpinnerMouseY_);
+            mouseOverGrabber_ = true;
+            markDirty();
+            grabbingSpinner_ = false;
+            ungrabbed.emit();
+            if (WidgetApp::instance().deletions() != deletions) return;
+        }
+    }
+
+    if (grabbingGrabber_)
+    {
+        grabbingGrabber_ = false;
+        mousewheelOverGrabber_ = false;
         ungrabbed.emit();
     }
+}
+
+void SpinSlider::onMouseScroll(MouseEvent& e)
+{
+    (void) e;
+    if (readOnly_) return;
+    if (grabber_->isVisible()) markDirty();
+}
+
+void SpinSlider::onMouseEnter()
+{
+    mouseOverSpin_ = true;
+    markDirty();
+    Widget::onMouseEnter();
+}
+
+void SpinSlider::onMouseLeave()
+{
+    mouseOverSpin_ = false;
+    markDirty();
+    Widget::onMouseLeave();
+}
+
+void SpinSlider::grabberMouseEntered()
+{
+    mouseOverGrabber_ = true;
+    markDirty();
+}
+
+void SpinSlider::grabberMouseExited()
+{
+    mouseOverGrabber_ = false;
+    markDirty();
+}
+
+void SpinSlider::grabberPress(MouseEvent& e)
+{
+    if (readOnly_ || !isEnabledInTree()) return;
+    if (e.button == 0)
+    {
+        grabbingGrabber_ = true;
+        preGrabValue_ = value();
+        if (!mousewheelOverGrabber_)
+        {
+            grabbingRatio_ = static_cast<float>(asRatio());
+            grabbingFrom_ = static_cast<int>(e.x - absoluteRect().x);
+        }
+        if (!isFocused()) WidgetApp::instance().setFocused(this);
+        grabbed.emit();
+    }
+    else if (e.button == 1 && grabbingGrabber_)
+    {
+        grabbingGrabber_ = false;
+        mousewheelOverGrabber_ = false;
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        setValue(preGrabValue_);
+        if (WidgetApp::instance().deletions() != deletions) return;
+        ungrabbed.emit();
+    }
+}
+
+void SpinSlider::grabberRelease(MouseEvent& e)
+{
+    if (readOnly_ || !isEnabledInTree() || e.button != 0) return;
+    if (grabbingGrabber_)
+    {
+        grabbingGrabber_ = false;
+        if (!mouseOverGrabber_) markDirty();
+    }
+    mousewheelOverGrabber_ = false;
+    ungrabbed.emit();
+}
+
+void SpinSlider::grabberMove(MouseEvent& e)
+{
+    if (readOnly_ || !isEnabledInTree() || !grabbingGrabber_ || mousewheelOverGrabber_) return;
+    const float grabbingOfs = (e.x - absoluteRect().x - static_cast<float>(grabbingFrom_)) /
+                              static_cast<float>(grabberRange_);
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    setAsRatio(grabbingRatio_ + grabbingOfs);
+    if (WidgetApp::instance().deletions() != deletions) return;
+    markDirty();
+}
+
+void SpinSlider::grabberScroll(MouseEvent& e)
+{
+    if (readOnly_ || !isEnabledInTree() || !grabbingGrabber_) return;
+    if (e.scrollY == 0.0f) return;
+    e.consumed = true;
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    setValue(e.scrollY > 0.0f ? value() + step() : value() - step());
+    if (WidgetApp::instance().deletions() != deletions) return;
+    mousewheelOverGrabber_ = true;
 }
