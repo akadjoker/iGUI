@@ -5069,6 +5069,81 @@ static void test_widget_app_runs_deferred_calls_after_the_events()
     assert(log == "ktdn");
 }
 
+// Um widget que aceita o foco e regista se ele chegou pelo Tab.
+struct FocusLog : ig::retained::Widget
+{
+    int gained = 0;
+    bool lastFromTab = false;
+    FocusLog()
+    {
+        acceptsFocus_ = true;
+    }
+    void onFocusGained() override
+    {
+        ++gained;
+        lastFromTab = ig::retained::WidgetApp::instance().focusFromTab();
+    }
+};
+
+// O Tab salta um widget que só recebe o foco com um clique; focusNeighbor anda
+// a partir do widget dado (também desse), com a volta nas pontas; focusFromTab só é verdade
+// quando o foco chega pelo Tab ou pelo focusNeighbor.
+static void test_widget_app_tab_stops_and_focus_neighbor()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("tabstops");
+    auto* a = stage->createChild<FocusLog>();
+    auto* clickOnly = stage->createChild<FocusLog>();
+    auto* c = stage->createChild<FocusLog>();
+    clickOnly->setTabStop(false);
+    assert(app.setStage("tabstops", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    a->setRect({ 0.0f, 0.0f, 100.0f, 20.0f });
+    clickOnly->setRect({ 0.0f, 30.0f, 100.0f, 20.0f });
+    c->setRect({ 0.0f, 60.0f, 100.0f, 20.0f });
+
+    app.setFocused(a);
+    assert(!a->lastFromTab);
+    IO::KeyEvent tab;
+    tab.key = Key::Tab;
+    io.keyEvents.push_back(tab);
+    app.update(io);
+    io.keyEvents.clear();
+    assert(c->isFocused() && c->lastFromTab && clickOnly->gained == 0);
+    assert(!app.focusFromTab());
+
+    io.mouseX = 50.0f;
+    io.mouseY = 40.0f;
+    app.update(io);
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(clickOnly->isFocused() && clickOnly->gained == 1 && !clickOnly->lastFromTab);
+
+    app.focusNeighbor(a, true);
+    assert(c->isFocused() && c->gained == 2 && c->lastFromTab);
+    app.focusNeighbor(c, false);
+    assert(a->isFocused() && a->lastFromTab);
+    app.focusNeighbor(clickOnly, false);
+    assert(c->isFocused() && c->gained == 3);
+    app.focusNeighbor(clickOnly, true);
+    assert(a->isFocused() && a->gained == 3);
+
+    a->setVisible(false);
+    c->setVisible(false);
+    app.setFocused(clickOnly);
+    app.focusNeighbor(clickOnly, false);
+    assert(clickOnly->isFocused() && clickOnly->gained == 2);
+}
+
 namespace
 {
 bool capturedByHook = false;
@@ -6251,6 +6326,7 @@ int main()
     test_widget_app_releases_the_buttons_when_the_stage_changes();
     test_widget_app_forgets_the_buttons_of_a_removed_widget();
     test_widget_app_runs_deferred_calls_after_the_events();
+    test_widget_app_tab_stops_and_focus_neighbor();
     test_spin_slider_text_and_size();
     test_spin_slider_draws_label_number_suffix_and_bar();
     test_spin_slider_drags_the_value();

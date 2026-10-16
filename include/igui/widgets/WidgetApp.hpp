@@ -259,6 +259,16 @@ public:
     /// @brief Request a layout pass on the next frame.
     void requestLayout() { needsLayout_ = true; }
 
+    /// @brief Move the focus from @p from to the next widget Tab reaches, or with
+    ///        @p backward to the previous one, as Tab and Shift+Tab do.
+    void focusNeighbor(Widget* from, bool backward);
+    /// @brief Check if the focus is moving by Tab or Shift+Tab (true while the
+    ///        widgets hear about that move).
+    bool focusFromTab() const
+    {
+        return focusFromTab_;
+    }
+
     /// @brief Call @p fn at the end of this update(), after every event of the
     ///        frame. The call is dropped when @p owner goes away first.
     void callDeferred(Widget* owner, ct::Function<void()> fn);
@@ -472,6 +482,7 @@ private:
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
     int pressedButtons_ = 0;           // buttons held since a press went to pressed_
+    bool focusFromTab_ = false;
     struct DeferredCall
     {
         Widget* owner;

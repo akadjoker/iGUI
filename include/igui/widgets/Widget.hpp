@@ -376,6 +376,17 @@ public:
     void setFocused(bool f) { focused_ = f; }
     /// @brief Check if this widget can receive keyboard focus.
     bool acceptsFocus() const { return acceptsFocus_; }
+    /// @brief Let Tab and Shift+Tab bring the focus here (true, the default),
+    ///        or only a click (false).
+    void setTabStop(bool tabStop)
+    {
+        tabStop_ = tabStop;
+    }
+    /// @brief Check if Tab and Shift+Tab bring the focus here.
+    bool isTabStop() const
+    {
+        return tabStop_;
+    }
 
     // ── Dirty (needs repaint) ─────────────────────────────────────────────
     /// @brief Check if the widget needs repainting.
@@ -581,6 +592,7 @@ protected:
     bool hovered_      = false;
     bool pressed_      = false;
     bool acceptsFocus_ = false;
+    bool tabStop_ = true;
     bool dirty_        = true;
     bool scrollable_   = true;   // affected by parent's scroll offset
 

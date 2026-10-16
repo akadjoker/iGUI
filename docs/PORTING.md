@@ -207,3 +207,25 @@ ordem das chamadas, e uma chamada adiada durante essa passagem corre nela.
 - Diferenças: (1) a chamada é descartada quando o widget dono é apagado antes
   de correr (o original descarta a de um objeto já libertado); (2) corre no fim
   da entrada e não no fim do frame inteiro.
+
+## WidgetApp: paragens de Tab e foco vindo do Tab
+
+O que o `EditorSpinSlider` usa da navegação do foco do original, sem código
+copiado:
+
+- `Widget::setTabStop(false)` faz do `FOCUS_CLICK`: o widget recebe o foco com um
+  clique e o Tab passa por cima dele, porque a procura do vizinho só para nos
+  `FOCUS_ALL` (`scene/gui/control.cpp` 3250-3251, em `find_next_valid_focus`
+  3172-3278 e `find_prev_valid_focus` 3279).
+- `WidgetApp::focusNeighbor(from, backward)` é o `find_next_valid_focus` /
+  `find_prev_valid_focus` seguido do `grab_focus` do `ui_focus_next` /
+  `ui_focus_prev` (`scene/main/viewport.cpp` 2407-2413): anda a partir do sítio
+  de `from` na ordem do Tab, mesmo que `from` não seja uma paragem, e sem outra
+  paragem não mexe no foco (3254-3256 do `control.cpp`).
+- `WidgetApp::focusFromTab()` é o `is_action_pressed("ui_focus_next")` /
+  `("ui_focus_prev")` que o `NOTIFICATION_FOCUS_ENTER` consulta: verdade enquanto
+  o widget ouve que o foco chegou pelo Tab ou pelo `focusNeighbor`.
+- Diferenças: (1) a ordem é a busca em profundidade do iGUI (a árvore e depois
+  as janelas flutuantes), com a volta nas pontas, e não a do original por
+  janela; (2) sem `focus_next` / `focus_previous` guardados no widget: quem os
+  quer chama `focusNeighbor` com o widget de onde se anda.
