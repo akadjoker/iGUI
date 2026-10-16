@@ -172,8 +172,12 @@ public:
     void setCheckable(bool c) { checkable_ = c; markDirty(); }
     bool isCheckable() const  { return checkable_; }
     /// @brief Set the checkbox state without emitting checkedChanged.
-    void setChecked(bool c)   { if (checked_ != c) { checked_ = c; markDirty(); } }
+    void setChecked(bool c);
     bool isChecked() const    { return checked_; }
+    /// @brief True when the content is shown: expanded, and checked if the header has a checkbox.
+    ///        A switched-off group draws no arrow and ignores header clicks; its expanded state
+    ///        is kept for when it is switched on again.
+    bool isOpen() const       { return expanded_ && (!checkable_ || checked_); }
     /// @brief Screen rectangle of the header checkbox.
     Rect checkRect() const;
 
@@ -184,7 +188,7 @@ public:
 
     void layout() override;
     Vec2f sizeHint() const override;
-    bool childrenShown() const override { return expanded_; }
+    bool childrenShown() const override { return isOpen(); }
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
 
