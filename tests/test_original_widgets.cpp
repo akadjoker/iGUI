@@ -5078,6 +5078,195 @@ static void test_widget_app_reports_relative_motion_and_mouse_hooks()
     app.update(io);
 }
 
+namespace
+{
+// Um stage com um SpinSlider de 200 x 24 no canto, com o rato sobre ele e os
+// ganchos de captura e de warp ligados.
+struct SpinDrag
+{
+    ig::retained::IO io;
+    ig::retained::SpinSlider* spin = nullptr;
+    ig::retained::Widget* stage = nullptr;
+    int grabbed = 0;
+    int ungrabbed = 0;
+    int changes = 0;
+    double last = 0.0;
+
+    explicit SpinDrag(const char* name)
+    {
+        using namespace ig::retained;
+        WidgetApp& app = WidgetApp::instance();
+        stage = app.addStage(name);
+        spin = stage->createChild<SpinSlider>();
+        assert(app.setStage(name, TransitionType::None));
+        io.displayWidth = 400.0f;
+        io.displayHeight = 300.0f;
+        io.setMouseCaptured = [](bool captured)
+        {
+            capturedByHook = captured;
+            ++captureCalls;
+        };
+        io.warpMouse = [](float x, float y)
+        {
+            warpedX = x;
+            warpedY = y;
+        };
+        io.mouseX = 50.0f;
+        io.mouseY = 12.0f;
+        app.update(io);
+        DrawData data;
+        app.paint(data);
+        spin->setRect({ 0.0f, 0.0f, 200.0f, 24.0f });
+        spin->setStep(0.01);
+        spin->setValue(12.5);
+        spin->grabbed.connect([this]() { ++grabbed; });
+        spin->ungrabbed.connect([this]() { ++ungrabbed; });
+        spin->valueChanged.connect(
+                [this](double v)
+                {
+                    ++changes;
+                    last = v;
+                });
+        capturedByHook = false;
+        captureCalls = 0;
+        warpedX = -1.0f;
+        warpedY = -1.0f;
+    }
+
+    void button(int index, bool down)
+    {
+        io.mouseDown[index] = down;
+        ig::retained::WidgetApp::instance().update(io);
+    }
+
+    void move(float dx)
+    {
+        io.mouseX += dx;
+        ig::retained::WidgetApp::instance().update(io);
+    }
+};
+} // namespace
+
+// Arrastar muda o valor só depois de 4 px vezes a velocidade (5 nos decimais):
+// aí o rato fica capturado e cada píxel soma 5 passos; Shift divide por 10,
+// Ctrl arredonda à unidade, e Escape repõe o valor e devolve o rato ao sítio.
+static void test_spin_slider_drags_the_value()
+{
+    using namespace ig::retained;
+    SpinDrag d("spindrag");
+
+    d.button(0, true);
+    assert(d.grabbed == 1 && !d.spin->isGrabbing());
+    d.move(1.0f);
+    assert(!d.spin->isGrabbing() && captureCalls == 0 && d.spin->value() == 12.5);
+    d.move(3.0f);
+    assert(!d.spin->isGrabbing() && d.changes == 0);
+    d.move(1.0f);
+    assert(d.spin->isGrabbing() && capturedByHook && captureCalls == 1);
+    assert(d.spin->value() == 12.75 && d.changes == 1 && d.last == 12.75);
+
+    d.io.keyShift = true;
+    d.move(10.0f);
+    d.io.keyShift = false;
+    assert(d.spin->value() == 12.8);
+
+    d.io.keyCtrl = true;
+    d.move(2.0f);
+    d.io.keyCtrl = false;
+    assert(d.spin->value() == 13.0);
+
+    IO::KeyEvent escape;
+    escape.key = Key::Escape;
+    d.io.keyEvents.push_back(escape);
+    WidgetApp::instance().update(d.io);
+    d.io.keyEvents.clear();
+    assert(d.spin->value() == 12.5 && !d.spin->isGrabbing());
+    assert(d.ungrabbed == 1 && !capturedByHook && captureCalls == 2);
+    assert(warpedX == 50.0f && warpedY == 12.0f);
+
+    d.button(0, false);
+    assert(d.ungrabbed == 1 && d.spin->value() == 12.5);
+}
+
+// O botão direito cancela o arrasto; Shift só abranda depois de o arrasto
+// começar; no modo diferido o valor só é emitido ao largar; um valor fora do
+// intervalo começa o arrasto no limite; um passo mais fino que 0.001 arrasta
+// em passos de 0.001; a edição de inteiros usa velocidade 0.5.
+static void test_spin_slider_drag_cancels_defers_and_clamps()
+{
+    using namespace ig::retained;
+    SpinDrag d("spindragmodes");
+
+    d.button(0, true);
+    d.move(5.0f);
+    assert(d.spin->value() == 12.75);
+    d.button(1, true);
+    assert(d.spin->value() == 12.5 && !d.spin->isGrabbing());
+    assert(d.ungrabbed == 1 && !capturedByHook);
+    d.button(1, false);
+    d.button(0, false);
+
+    d.spin->setDeferredDragMode(true);
+    d.changes = 0;
+    d.io.keyShift = true;
+    d.button(0, true);
+    d.move(5.0f);
+    assert(d.spin->isGrabbing() && d.spin->value() == 12.75);
+    d.move(10.0f);
+    assert(d.spin->value() == 12.8 && d.changes == 0);
+    d.io.keyShift = false;
+    d.button(0, false);
+    assert(d.changes == 1 && d.last == 12.8);
+    d.spin->setDeferredDragMode(false);
+
+    d.spin->setAllowGreater(true);
+    d.spin->setValue(150.0);
+    d.spin->setAllowGreater(false);
+    d.button(0, true);
+    d.move(-5.0f);
+    assert(d.spin->value() == 99.75);
+    d.button(0, false);
+
+    d.spin->setStep(0.0001);
+    d.spin->setValue(1.0);
+    d.button(0, true);
+    d.move(5.0f);
+    assert(d.spin->value() == 1.025);
+    d.button(0, false);
+
+    d.spin->setEditingInteger(true);
+    d.spin->setStep(1.0);
+    d.spin->setValue(10.0);
+    d.button(0, true);
+    d.move(4.0f);
+    assert(!d.spin->isGrabbing());
+    d.move(1.0f);
+    assert(d.spin->isGrabbing() && d.spin->value() == 13.0);
+    d.button(0, false);
+}
+
+// Só de leitura não arrasta; apagado a meio de um arrasto, devolve o rato.
+static void test_spin_slider_drag_read_only_and_removed()
+{
+    using namespace ig::retained;
+    SpinDrag d("spindragreadonly");
+
+    d.spin->setReadOnly(true);
+    d.button(0, true);
+    d.move(10.0f);
+    assert(d.grabbed == 0 && captureCalls == 0 && d.spin->value() == 12.5);
+    d.button(0, false);
+
+    d.spin->setReadOnly(false);
+    d.io.mouseX = 60.0f;
+    d.button(0, true);
+    d.move(5.0f);
+    assert(d.spin->isGrabbing() && capturedByHook);
+    d.stage->removeChild(d.spin);
+    assert(!capturedByHook && warpedX == 60.0f && warpedY == 12.0f);
+    d.button(0, false);
+}
+
 static void test_spin_slider_text_and_size()
 {
     using namespace ig::retained;
@@ -5718,6 +5907,9 @@ int main()
     test_widget_app_forgets_the_buttons_of_a_removed_widget();
     test_spin_slider_text_and_size();
     test_spin_slider_draws_label_number_suffix_and_bar();
+    test_spin_slider_drags_the_value();
+    test_spin_slider_drag_cancels_defers_and_clamps();
+    test_spin_slider_drag_read_only_and_removed();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
