@@ -84,8 +84,7 @@ chunks. O que já entrou:
   `grabbed` e `ungrabbed` 777-778. As definições do editor vêm de
   `editor/settings/editor_settings.cpp` 594-595 (`float_drag_speed` 5.0,
   `integer_drag_speed` 0.5) e 601 (`default_float_step` 0.001).
-- Por vir: entrar e sair do campo de texto com o Tab (chunk 5b); as setas
-  (chunk 6).
+- Por vir: as setas (chunk 6).
 - Diferenças do chunk 3: (1) as definições do editor ficam fixas nos valores
   por omissão; (2) um campo desativado (`isEnabledInTree`) não arrasta, como o
   só de leitura; (3) os eventos do rato ficam no campo, como o
@@ -159,6 +158,17 @@ chunks. O que já entrou:
   caixa e margens (sem a margem esquerda `line_edit_margin`); (8) sem menu de
   contexto no campo, nem o `focus visible`; (9) o `is_visible_in_tree` vê os
   pais escondidos com `setVisible`, não a troca de stage.
+
+- Chunk 5b, o Tab. Origem: o `NOTIFICATION_FOCUS_ENTER` 529-535 (o foco que
+  chega pelo `ui_focus_next` ou `ui_focus_prev`, fora do frame em que o campo
+  fechou, abre o campo de texto), o `focus_next` e `focus_previous` do campo
+  postos no SpinSlider seguinte e anterior em `_focus_entered` 728-729, e o
+  `FOCUS_CLICK` do campo em `_ensure_value_input` 813.
+- Diferenças do chunk 5b: (1) o Tab no campo chama `focusNeighbor` a partir do
+  SpinSlider, em vez de guardar o seguinte e o anterior quando o campo abre;
+  (2) o "fora do frame em que fechou" é a marca `valueInputClosing_`, que no
+  iGUI nunca coincide com o foco vindo do Tab, porque o Enter e o Escape
+  devolvem o foco sem Tab.
 
 ## WidgetApp: botões com outro já premido
 

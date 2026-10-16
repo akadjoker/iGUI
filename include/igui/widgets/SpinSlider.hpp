@@ -120,6 +120,7 @@ public:
     void onMouseScroll(MouseEvent& e) override;
     void onMouseEnter() override;
     void onMouseLeave() override;
+    void onFocusGained() override;
 
 private:
     class Grabber;
