@@ -68,3 +68,32 @@ chunks. O que já entrou:
   localizados (`format_number`); (4) o número desenha-se como o maior início do
   texto (número, espaço fino, sufixo) cujos glifos cabem, que é o que o ciclo
   por glifo do original desenha da esquerda para a direita; (5) o `EDSCALE` é 1.
+
+## WidgetApp: botões com outro já premido
+
+- Origem: `scene/main/viewport.cpp` 1951-1972 (um botão premido com outros em
+  baixo vai para o `mouse_focus`, sem novo hit-test; sem `mouse_focus` perde-se;
+  com a máscara vazia, o controlo atingido passa a `mouse_focus` e entra na
+  máscara) e 2037-2055 (o release tira o botão da máscara e vai sempre para o
+  `mouse_focus`, que só é largado quando a máscara fica vazia).
+- O que entrou: `pressedButtons_` na `WidgetApp` faz de `mouse_focus_mask` e o
+  `pressed_` de `mouse_focus`.
+- Diferenças: (1) o botão encaminhado não mexe no foco do teclado (o original
+  dá o foco ao `mouse_focus` com o botão esquerdo quando o ponteiro está sobre
+  ele); (2) o arrasto e largada do iGUI fica como estava (o original larga com o
+  botão direito durante um arrasto); (3) a contagem de cliques duplos corre
+  também para o botão encaminhado.
+
+## IO: modo do rato e movimento relativo
+
+O que o `EditorSpinSlider` usa do `Input` do original, sem código copiado:
+`MouseEvent::relX`/`relY` fazem de `InputEventMouseMotion::get_relative`, e os
+ganchos `IO::setMouseCaptured` e `IO::warpMouse` (com `WidgetApp::setMouseCaptured`
+e `WidgetApp::warpMouse`) fazem de `Input::set_mouse_mode(MOUSE_MODE_CAPTURED /
+MOUSE_MODE_VISIBLE)` e `Input::warp_mouse`.
+
+- Diferenças: (1) o movimento relativo é a diferença entre duas posições de
+  `IO::mouseX`/`mouseY`; com o rato capturado, o backend continua a somar o
+  movimento a essas posições para lá da borda da janela; (2) depois de um
+  `warpMouse` o movimento conta a partir do ponto para onde o ponteiro foi, e o
+  salto não conta como movimento.

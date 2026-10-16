@@ -123,6 +123,13 @@ public:
     /// @brief Get clipboard text.
     String getClipboardText() const;
 
+    // ── Mouse mode (set by backend via IO) ───────────────────────────────
+    /// @brief Hide the pointer and keep reporting its motion past the window
+    ///        edges (true), or show it again (false).
+    void setMouseCaptured(bool captured);
+    /// @brief Put the pointer at x, y (window coordinates).
+    void warpMouse(float x, float y);
+
     /// @brief Get the cached font from the last paint() call.
     const ig::retained::Font* font() const { return font_; }
     /// @brief Measure text width using the cached font.
@@ -440,6 +447,8 @@ private:
 
     void        (*clipSet_)(const char*) = nullptr;
     String (*clipGet_)()            = nullptr;
+    void (*mouseCapture_)(bool) = nullptr;
+    void (*mouseWarp_)(float, float) = nullptr;
 
     // Subsystems
     IconAtlas* iconAtlas_ = nullptr;
@@ -458,6 +467,7 @@ private:
     ct::Vector<FocusLoan> focusLoans_;
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
+    int pressedButtons_ = 0;           // buttons held since a press went to pressed_
     ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered
     float   mouseX_  = 0;
     float   mouseY_  = 0;
