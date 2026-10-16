@@ -223,6 +223,8 @@ public:
     Signal<TreeNode*, bool> visibilityChanged;
     /// @brief Emitted when lock is toggled.
     Signal<TreeNode*, bool> lockChanged;
+    /// @brief Emitted when a row is double-clicked.
+    Signal<TreeNode*> nodeActivated;
 
     /// @brief Where a dragged node lands relative to the row under the pointer.
     enum class DropZone { Before, Inside, After };

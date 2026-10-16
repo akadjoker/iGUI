@@ -771,6 +771,7 @@ void Outliner::onMousePress(MouseEvent& e)
         selectionChanged.emit(selected_);
         markDirty();
     }
+    if (e.button == 0 && e.clickCount == 2) nodeActivated.emit(fr.node);
     dragCandidate_ = fr.node;
     e.consumed = true;
 }
