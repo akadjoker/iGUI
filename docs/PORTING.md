@@ -163,3 +163,15 @@ MOUSE_MODE_VISIBLE)` e `Input::warp_mouse`.
   movimento a essas posições para lá da borda da janela; (2) depois de um
   `warpMouse` o movimento conta a partir do ponto para onde o ponteiro foi, e o
   salto não conta como movimento.
+
+## WidgetApp: chamadas adiadas
+
+O que o `EditorSpinSlider` usa do `call_deferred` do original
+(`callable_mp(...).call_deferred()`, posto na fila de mensagens e corrido no fim
+do frame), sem código copiado: `WidgetApp::callDeferred(owner, fn)` corre `fn`
+no fim do `update()`, depois das teclas, do texto e das largadas do frame, pela
+ordem das chamadas, e uma chamada adiada durante essa passagem corre nela.
+
+- Diferenças: (1) a chamada é descartada quando o widget dono é apagado antes
+  de correr (o original descarta a de um objeto já libertado); (2) corre no fim
+  da entrada e não no fim do frame inteiro.

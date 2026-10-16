@@ -5012,6 +5012,63 @@ static void test_widget_app_forgets_the_buttons_of_a_removed_widget()
     assert(under->releases[1] == 1);
 }
 
+// Um widget que, a uma tecla, adia uma chamada sua e outra de um irmão que
+// apaga logo a seguir.
+struct DefersOnKey : ig::retained::Widget
+{
+    ig::retained::String* log = nullptr;
+    ig::retained::Widget* doomed = nullptr;
+    DefersOnKey()
+    {
+        acceptsFocus_ = true;
+    }
+    void onKeyPress(ig::retained::KeyEvent& e) override
+    {
+        using namespace ig::retained;
+        *log += "k";
+        String* out = log;
+        WidgetApp::instance().callDeferred(this, [out]() { *out += "d"; });
+        WidgetApp::instance().callDeferred(this, [this, out]()
+                { WidgetApp::instance().callDeferred(this, [out]() { *out += "n"; }); });
+        WidgetApp::instance().callDeferred(doomed, [out]() { *out += "x"; });
+        parent()->removeChild(doomed);
+        e.consumed = true;
+    }
+    void onTextInput(ig::retained::KeyEvent& e) override
+    {
+        *log += "t";
+        e.consumed = true;
+    }
+};
+
+// As chamadas adiadas correm no fim do update, depois das teclas e do texto, pela
+// ordem em que foram feitas, também as adiadas por elas; a de um widget apagado
+// não corre.
+static void test_widget_app_runs_deferred_calls_after_the_events()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("deferred");
+    auto* keys = stage->createChild<DefersOnKey>();
+    String log;
+    keys->log = &log;
+    keys->doomed = stage->createChild<Widget>();
+    assert(app.setStage("deferred", TransitionType::None));
+    app.setFocused(keys);
+
+    IO io;
+    IO::KeyEvent key;
+    key.key = 'a';
+    io.keyEvents.push_back(key);
+    io.inputChars.push_back(static_cast<uint32_t>('a'));
+    app.update(io);
+    assert(log == "ktdn");
+    io.keyEvents.clear();
+    io.inputChars.clear();
+    app.update(io);
+    assert(log == "ktdn");
+}
+
 namespace
 {
 bool capturedByHook = false;
@@ -6053,6 +6110,7 @@ int main()
     test_widget_app_reports_relative_motion_and_mouse_hooks();
     test_widget_app_releases_the_buttons_when_the_stage_changes();
     test_widget_app_forgets_the_buttons_of_a_removed_widget();
+    test_widget_app_runs_deferred_calls_after_the_events();
     test_spin_slider_text_and_size();
     test_spin_slider_draws_label_number_suffix_and_bar();
     test_spin_slider_drags_the_value();
