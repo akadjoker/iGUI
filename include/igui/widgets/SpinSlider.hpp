@@ -91,13 +91,13 @@ public:
     {
         return deferredDragMode_;
     }
-    /// @brief Check if the value is being dragged.
+    /// @brief Check if the value is being dragged, on the field or on the grabber.
     bool isGrabbing() const
     {
-        return grabbingSpinner_;
+        return grabbingGrabber_ || grabbingSpinner_;
     }
 
-    /// @brief Emitted when the left button goes down on the field.
+    /// @brief Emitted when the left button goes down on the field or on the grabber.
     Signal<> grabbed;
     /// @brief Emitted when a drag of the value ends.
     Signal<> ungrabbed;
@@ -108,10 +108,21 @@ public:
     void onMouseRelease(MouseEvent& e) override;
     void onMouseMove(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onMouseEnter() override;
+    void onMouseLeave() override;
 
 private:
+    class Grabber;
+
     void grabStart(float x, float y);
     void grabEnd();
+    void grabberMouseEntered();
+    void grabberMouseExited();
+    void grabberPress(MouseEvent& e);
+    void grabberRelease(MouseEvent& e);
+    void grabberMove(MouseEvent& e);
+    void grabberScroll(MouseEvent& e);
 
     String label_;
     String suffix_;
@@ -120,6 +131,14 @@ private:
     bool readOnly_ = false;
     bool flat_ = false;
     bool deferredDragMode_ = false;
+    Grabber* grabber_ = nullptr;
+    int grabberRange_ = 1;
+    bool mouseOverSpin_ = false;
+    bool mouseOverGrabber_ = false;
+    bool mousewheelOverGrabber_ = false;
+    bool grabbingGrabber_ = false;
+    int grabbingFrom_ = 0;
+    float grabbingRatio_ = 0.0f;
     bool grabbingSpinnerAttempt_ = false;
     bool grabbingSpinner_ = false;
     float grabbingSpinnerSpeed_ = 0.0f;

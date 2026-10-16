@@ -5144,6 +5144,44 @@ struct SpinDrag
         io.mouseX += dx;
         ig::retained::WidgetApp::instance().update(io);
     }
+
+    void moveTo(float x, float y)
+    {
+        io.mouseX = x;
+        io.mouseY = y;
+        ig::retained::WidgetApp::instance().update(io);
+    }
+
+    void wheel(float dy)
+    {
+        io.mouseWheelY = dy;
+        ig::retained::WidgetApp::instance().update(io);
+        io.mouseWheelY = 0.0f;
+    }
+
+    // Pinta e conta os vértices do anel do grabber com o alfa dado.
+    int paintRing(int alpha)
+    {
+        ig::retained::NewFrame();
+        ig::retained::DrawData data;
+        ig::retained::WidgetApp::instance().paint(data);
+        int count = 0;
+        for (size_t p = 0; p < data.passes.size(); ++p)
+        {
+            const ig::retained::DrawList* list = data.passes[p].list;
+            for (size_t v = 0; v < list->vertices().size(); ++v)
+            {
+                const ig::retained::Color c = list->vertices()[v].color;
+                if (c.r == 224 && c.g == 224 && c.b == 224 && c.a == alpha) ++count;
+            }
+        }
+        return count;
+    }
+
+    ig::retained::Widget* grabber() const
+    {
+        return spin->children()[0];
+    }
 };
 } // namespace
 
@@ -5265,6 +5303,116 @@ static void test_spin_slider_drag_read_only_and_removed()
     d.stage->removeChild(d.spin);
     assert(!capturedByHook && warpedX == 60.0f && warpedY == 12.0f);
     d.button(0, false);
+}
+
+// O grabber aparece com o rato sobre o campo, realçado com o rato sobre ele;
+// arrastá-lo põe o valor na proporção do movimento sobre a barra; com ele
+// premido a roda soma um passo, prende o rato ao grabber em cada redesenho e o
+// movimento deixa de contar; o botão direito e o Escape repõem o valor.
+static void test_spin_slider_grabber_drags_and_wheels()
+{
+    using namespace ig::retained;
+    SpinDrag d("spingrabber");
+    const float pad = Theme::instance().padding;
+    const float width = 200.0f - pad * 2.0f - 4.0f;
+
+    assert(!d.grabber()->isVisible());
+    d.moveTo(150.0f, 12.0f);
+    assert(d.paintRing(74) > 0 && d.paintRing(255) == 0);
+    assert(d.grabber()->isVisible());
+    const Rect g = d.grabber()->absoluteRect();
+    const float gofs = static_cast<float>(static_cast<int>(0.125 * width));
+    assert(g.w == 16.0f && g.h == 16.0f);
+    assert(g.x + 8.0f == pad + gofs + 2.0f);
+
+    d.moveTo(g.x + 8.0f, g.y + 8.0f);
+    assert(d.paintRing(255) > 0 && d.paintRing(74) == 0);
+    d.button(0, true);
+    assert(d.grabbed == 1 && d.spin->isGrabbing() && d.spin->isFocused());
+    assert(captureCalls == 0);
+    d.move(width * 0.1f);
+    assert(d.spin->value() == 22.5);
+
+    d.paintRing(255);
+    warpedX = -1.0f;
+    d.wheel(1.0f);
+    assert(d.spin->value() == 22.51);
+    d.move(width * 0.1f);
+    assert(d.spin->value() == 22.51);
+    d.paintRing(255);
+    const Rect wheeled = d.grabber()->absoluteRect();
+    assert(warpedX == wheeled.x + 4.0f && warpedY == wheeled.y + 4.0f);
+    warpedX = -1.0f;
+    d.paintRing(255);
+    assert(warpedX == -1.0f);
+    d.wheel(-1.0f);
+    assert(d.spin->value() == 22.5);
+
+    d.button(0, false);
+    assert(d.ungrabbed == 1 && !d.spin->isGrabbing());
+
+    const Rect at = d.grabber()->absoluteRect();
+    d.moveTo(at.x + 8.0f, at.y + 8.0f);
+    d.button(0, true);
+    d.move(width * 0.1f);
+    assert(d.spin->value() == 32.5);
+    d.button(1, true);
+    assert(d.spin->value() == 22.5 && !d.spin->isGrabbing() && d.ungrabbed == 2);
+    d.button(1, false);
+    d.button(0, false);
+    assert(d.ungrabbed == 3);
+
+    d.paintRing(255);
+    const Rect again = d.grabber()->absoluteRect();
+    d.moveTo(again.x + 8.0f, again.y + 8.0f);
+    d.button(0, true);
+    d.move(width * 0.1f);
+    IO::KeyEvent escape;
+    escape.key = Key::Escape;
+    d.io.keyEvents.push_back(escape);
+    WidgetApp::instance().update(d.io);
+    d.io.keyEvents.clear();
+    assert(d.spin->value() == 22.5 && !d.spin->isGrabbing() && d.ungrabbed == 4);
+    d.button(0, false);
+}
+
+// Sem o grabber premido, a roda sobre ele não muda o valor. Durante o arrasto
+// do campo o grabber some, e no fim o rato vai para o centro do botão da barra
+// já no valor novo. Só de leitura e na edição de inteiros não há grabber.
+static void test_spin_slider_grabber_visibility_and_spinner_warp()
+{
+    using namespace ig::retained;
+    SpinDrag d("spingrabbershow");
+    const float pad = Theme::instance().padding;
+    const float width = 200.0f - pad * 2.0f - 4.0f;
+
+    d.moveTo(150.0f, 12.0f);
+    d.paintRing(74);
+    const Rect g = d.grabber()->absoluteRect();
+    d.moveTo(g.x + 8.0f, g.y + 8.0f);
+    d.wheel(1.0f);
+    assert(d.spin->value() == 12.5);
+
+    d.moveTo(150.0f, 12.0f);
+    d.button(0, true);
+    d.move(5.0f);
+    assert(d.spin->value() == 12.75);
+    d.paintRing(74);
+    assert(!d.grabber()->isVisible());
+    d.button(0, false);
+    const float gofs = static_cast<float>(static_cast<int>(d.spin->asRatio() * width));
+    assert(warpedX == pad + gofs + 2.0f && warpedY == g.y + 8.0f);
+    assert(d.paintRing(255) > 0 && d.grabber()->isVisible());
+
+    d.spin->setReadOnly(true);
+    d.paintRing(74);
+    assert(!d.grabber()->isVisible());
+    d.spin->setReadOnly(false);
+    d.paintRing(255);
+    assert(d.grabber()->isVisible());
+    d.spin->setEditingInteger(true);
+    d.paintRing(74);
+    assert(!d.grabber()->isVisible());
 }
 
 static void test_spin_slider_text_and_size()
@@ -5910,6 +6058,8 @@ int main()
     test_spin_slider_drags_the_value();
     test_spin_slider_drag_cancels_defers_and_clamps();
     test_spin_slider_drag_read_only_and_removed();
+    test_spin_slider_grabber_drags_and_wheels();
+    test_spin_slider_grabber_visibility_and_spinner_warp();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
