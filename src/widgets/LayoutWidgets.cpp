@@ -271,6 +271,16 @@ void Collapsible::setExpanded(bool e)
     }
 }
 
+void Collapsible::setChecked(bool c)
+{
+    if (checked_ != c)
+    {
+        checked_ = c;
+        markDirty();
+        WidgetApp::instance().requestLayout();
+    }
+}
+
 Rect Collapsible::checkRect() const
 {
     const auto& t = Theme::instance();
@@ -289,8 +299,11 @@ void Collapsible::onMousePress(MouseEvent& e)
         checkedChanged.emit(checked_);
         e.consumed = true;
         markDirty();
+        WidgetApp::instance().requestLayout();
         return;
     }
+
+    if (checkable_ && !checked_) return;
 
     // Only toggle if click is in the header area
     Rect abs = absoluteRect();
@@ -308,7 +321,7 @@ Widget::Vec2f Collapsible::sizeHint() const
     float w = 200.0f;
     float h = headerH_;
 
-    if (expanded_)
+    if (isOpen())
     {
         for (auto* c : children_)
         {
@@ -328,7 +341,7 @@ void Collapsible::layout()
 {
     float y = headerH_;
 
-    if (expanded_)
+    if (isOpen())
     {
         float contentW = rect_.w - contentPad_ * 2;
         if (contentW < 0) contentW = 0;
@@ -379,7 +392,9 @@ void Collapsible::paint(PaintContext& ctx)
 
     ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
 
-    if (expanded_)
+    const bool showArrow = !checkable_ || checked_;
+
+    if (showArrow && expanded_)
     {
         // ▼ Down-pointing triangle
         float x1 = triX;
@@ -390,7 +405,7 @@ void Collapsible::paint(PaintContext& ctx)
         float y3 = triCY + triSize * 0.5f;
         ctx.fill.Triangle(x1, y1, x2, y2, x3, y3, true);
     }
-    else
+    else if (showArrow)
     {
         // ▶ Right-pointing triangle
         float x1 = triX + 1.0f;
@@ -442,7 +457,7 @@ void Collapsible::paint(PaintContext& ctx)
     }
 
     // ── Content (children) - only if expanded ────────────────────────────
-    if (expanded_)
+    if (isOpen())
     {
         ctx.pushClip(abs);
         for (auto* c : children_)
