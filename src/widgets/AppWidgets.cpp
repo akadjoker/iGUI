@@ -528,6 +528,10 @@ void Outliner::clear()
     roots_.clear();
     flatRows_.clear();
     selected_ = nullptr;
+    dragCandidate_ = nullptr;
+    dragNode_ = nullptr;
+    dropSpot_ = DropSpot();
+    hoveredRow_ = -1;
     flatDirty_ = true;
     markDirty();
 }
@@ -693,6 +697,25 @@ void Outliner::paint(PaintContext& ctx)
             ctx.line.Circle(lockX + 8, ry + rowHeight_ * 0.5f - 2, 4, false);
     }
 
+    if (dragNode_ && dropSpot_.valid) {
+        const Color accent(100, 170, 255, 255);
+        const float scrolled = abs.y - scrollOffset_;
+        if (dropSpot_.row >= 0 && dropSpot_.zone == DropZone::Inside) {
+            const float ry = scrolled + dropSpot_.row * rowHeight_;
+            ctx.fill.SetColor(Color(100, 170, 255, 40));
+            ctx.fill.Rectangle(abs.x, ry, abs.w, rowHeight_, true);
+            ctx.line.SetColor(accent);
+            ctx.line.Rectangle(abs.x + 1, ry + 1, abs.w - 2, rowHeight_ - 2, false);
+        } else {
+            const int rows = static_cast<int>(flatRows_.size());
+            const int below = dropSpot_.row < 0 ? rows : dropSpot_.row + (dropSpot_.zone == DropZone::After ? 1 : 0);
+            const int depth = dropSpot_.row < 0 ? 0 : flatRows_[dropSpot_.row].depth;
+            const float x = abs.x + textColX(depth) - 16;
+            ctx.fill.SetColor(accent);
+            ctx.fill.Rectangle(x, scrolled + below * rowHeight_ - 1, abs.x + abs.w - x, 2, true);
+        }
+    }
+
     ctx.popClip();
 
     Widget::paint(ctx);
@@ -702,6 +725,7 @@ void Outliner::onMousePress(MouseEvent& e)
 {
     if (flatDirty_) rebuildFlat();
 
+    dragCandidate_ = nullptr;
     int row = hitTestRow(e.localY);
     if (row < 0 || row >= static_cast<int>(flatRows_.size())) {
         e.consumed = true;
@@ -747,6 +771,7 @@ void Outliner::onMousePress(MouseEvent& e)
         selectionChanged.emit(selected_);
         markDirty();
     }
+    dragCandidate_ = fr.node;
     e.consumed = true;
 }
 
@@ -760,9 +785,19 @@ void Outliner::onMouseScroll(MouseEvent& e)
 
 void Outliner::onMouseMove(MouseEvent& e)
 {
+    hoverX_ = e.localX;
     int row = hitTestRow(e.localY);
     if (row != hoveredRow_) {
         hoveredRow_ = row;
+        markDirty();
+    }
+    if (dragNode_) {
+        const float edge = 14.0f;
+        if (e.localY < edge)
+            scrollOffset_ = std::max(0.0f, scrollOffset_ - 6.0f);
+        else if (e.localY > rect_.h - edge)
+            scrollOffset_ = std::min(scrollOffset_ + 6.0f, maxScroll());
+        dropSpot_ = dropSpotAt(e.localY);
         markDirty();
     }
 }
@@ -773,7 +808,82 @@ void Outliner::onMouseLeave()
         hoveredRow_ = -1;
         markDirty();
     }
+    if (dragNode_) {
+        dropSpot_ = DropSpot();
+        markDirty();
+    }
     Widget::onMouseLeave();
+}
+
+bool Outliner::isDragSource() const
+{
+    if (!dragEnabled_ || hoveredRow_ < 0 || hoveredRow_ >= static_cast<int>(flatRows_.size()))
+        return false;
+    if (hoverX_ >= rect_.w - 40)
+        return false;
+    const FlatRow& fr = flatRows_[hoveredRow_];
+    const float triX = 4 + indent_ * fr.depth;
+    if (fr.node->hasChildren() && hoverX_ >= triX && hoverX_ < triX + 16)
+        return false;
+    return !dragFilter_ || dragFilter_(fr.node);
+}
+
+DragPayload Outliner::onDragBegin()
+{
+    DragPayload payload;
+    if (!dragCandidate_)
+        return payload;
+    dragNode_ = dragCandidate_;
+    payload.type = "outliner-node";
+    payload.data = dragNode_;
+    return payload;
+}
+
+void Outliner::onDragEnd(bool accepted)
+{
+    (void)accepted;
+    dragNode_ = nullptr;
+    dragCandidate_ = nullptr;
+    dropSpot_ = DropSpot();
+    markDirty();
+}
+
+bool Outliner::acceptsDrop(const DragPayload& p)
+{
+    return dragEnabled_ && dragNode_ && p.source == this;
+}
+
+void Outliner::onDropReceive(const DragPayload& p)
+{
+    if (!dragNode_)
+        return;
+    const DropSpot spot = dropSpotAt(p.dropY - absoluteRect().y);
+    if (!spot.valid)
+        return;
+    nodeDropped.emit(dragNode_, spot.target, spot.zone);
+}
+
+Outliner::DropSpot Outliner::dropSpotAt(float localY)
+{
+    DropSpot spot;
+    if (!dragNode_)
+        return spot;
+    if (flatDirty_) rebuildFlat();
+    const float content = std::max(0.0f, localY + scrollOffset_);
+    const int rows = static_cast<int>(flatRows_.size());
+    const int row = static_cast<int>(content / rowHeight_);
+    if (row >= rows) {
+        spot.zone = DropZone::After;
+    } else {
+        const float fraction = content / rowHeight_ - static_cast<float>(row);
+        spot.row = row;
+        spot.target = flatRows_[row].node;
+        spot.zone = fraction < 0.25f ? DropZone::Before
+                  : fraction > 0.75f ? DropZone::After
+                                     : DropZone::Inside;
+    }
+    spot.valid = !dropFilter_ || dropFilter_(dragNode_, spot.target, spot.zone);
+    return spot;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
