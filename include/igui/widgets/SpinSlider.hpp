@@ -33,6 +33,7 @@ public:
     };
 
     SpinSlider();
+    ~SpinSlider() override;
 
     /// @brief The value as the field shows it: an integer, or the digits the step needs.
     String textValue() const;
@@ -79,17 +80,53 @@ public:
     {
         return flat_;
     }
+    /// @brief While dragging, change the value without valueChanged and emit it
+    ///        once when the drag ends.
+    void setDeferredDragMode(bool enable)
+    {
+        deferredDragMode_ = enable;
+    }
+    /// @brief Check if the value is emitted only when a drag ends.
+    bool deferredDragMode() const
+    {
+        return deferredDragMode_;
+    }
+    /// @brief Check if the value is being dragged.
+    bool isGrabbing() const
+    {
+        return grabbingSpinner_;
+    }
+
+    /// @brief Emitted when the left button goes down on the field.
+    Signal<> grabbed;
+    /// @brief Emitted when a drag of the value ends.
+    Signal<> ungrabbed;
 
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
+    void grabStart(float x, float y);
+    void grabEnd();
+
     String label_;
     String suffix_;
     ControlState controlState_ = ControlState::Default;
     bool editingInteger_ = false;
     bool readOnly_ = false;
     bool flat_ = false;
+    bool deferredDragMode_ = false;
+    bool grabbingSpinnerAttempt_ = false;
+    bool grabbingSpinner_ = false;
+    float grabbingSpinnerSpeed_ = 0.0f;
+    float grabbingSpinnerDistCache_ = 0.0f;
+    float grabbingSpinnerMouseX_ = 0.0f;
+    float grabbingSpinnerMouseY_ = 0.0f;
+    double preGrabValue_ = 0.0;
 };
 
 } // namespace retained

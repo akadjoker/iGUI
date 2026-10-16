@@ -69,6 +69,34 @@ chunks. O que já entrou:
   texto (número, espaço fino, sufixo) cujos glifos cabem, que é o que o ciclo
   por glifo do original desenha da esquerda para a direita; (5) o `EDSCALE` é 1.
 
+- Chunk 3, o arrasto do valor. Origem: `gui_input` 78-176 (o botão esquerdo
+  começa a tentativa de arrasto e o release acaba-a, emitindo o valor no modo
+  diferido; o botão direito com o arrasto em curso cancela; no movimento, o
+  Shift multiplica por 0.1 só com o arrasto começado, a distância soma o
+  movimento vezes a velocidade, o arrasto começa acima de 4 vezes a velocidade
+  e captura o rato, o valor de partida fica dentro do intervalo, o passo é no
+  mínimo o `default_float_step`, o Ctrl arredonda fora da edição de inteiros, e
+  o valor entra com ou sem sinal; nas teclas, com o arrasto em curso o
+  `ui_cancel` (Escape sem modificadores) cancela e todas as teclas ficam no
+  campo), `_grab_start` 178-185, a parte do arrasto de `_grab_end` 187-201, o
+  `EXIT_TREE` 509-516, a velocidade de `set_editing_integer` 569,
+  `is_grabbing` 709-711, `set_deferred_drag_mode_enabled` 713-715 e os sinais
+  `grabbed` e `ungrabbed` 777-778. As definições do editor vêm de
+  `editor/settings/editor_settings.cpp` 594-595 (`float_drag_speed` 5.0,
+  `integer_drag_speed` 0.5) e 601 (`default_float_step` 0.001).
+- Por vir: o clique sem arrasto e o `ui_accept` abrem a edição do texto
+  (`_focus_entered`, chunk 5); o grabber e a roda (chunk 4); as setas (chunk 6).
+- Diferenças do chunk 3: (1) as definições do editor ficam fixas nos valores
+  por omissão; (2) um campo desativado (`isEnabledInTree`) não arrasta, como o
+  só de leitura; (3) os eventos do rato ficam no campo, como o
+  `MOUSE_FILTER_STOP`; (4) o arrasto não acaba ao perder o foco da janela nem
+  ao pedido de fecho (`WM_WINDOW_FOCUS_OUT`, `WM_CLOSE_REQUEST`), que a IO não
+  reporta; a troca de stage acaba-o pelo release que a `WidgetApp` entrega; (5)
+  o `EXIT_TREE` é o destrutor; (6) o `ungrabbed` sai com o estado do arrasto já
+  limpo, e o campo não lê nada depois de um sinal em que um widget foi apagado;
+  (7) o Ctrl é só o Ctrl (sem o Cmd do macOS); (8) até ao chunk 5, o Enter com
+  o arrasto em curso fica no campo como as outras teclas.
+
 ## WidgetApp: botões com outro já premido
 
 - Origem: `scene/main/viewport.cpp` 1951-1972 (um botão premido com outros em

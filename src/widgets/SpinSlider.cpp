@@ -11,6 +11,9 @@ namespace
 constexpr float kUpdownWidth = 16.0f;
 constexpr int kGrabberWidth = 4;
 constexpr int kSeparation = 4;
+constexpr float kFloatDragSpeed = 5.0f;
+constexpr float kIntegerDragSpeed = 0.5f;
+constexpr double kDefaultFloatStep = 0.001;
 
 Color withAlpha(Color c, float alpha)
 {
@@ -45,6 +48,17 @@ size_t fittingBytes(PaintContext& ctx, const String& text, float room)
 SpinSlider::SpinSlider()
 {
     acceptsFocus_ = true;
+    grabbingSpinnerSpeed_ = kFloatDragSpeed;
+}
+
+SpinSlider::~SpinSlider()
+{
+    if (!grabbingSpinner_) return;
+    if (WidgetApp* app = WidgetApp::existing())
+    {
+        app->setMouseCaptured(false);
+        app->warpMouse(grabbingSpinnerMouseX_, grabbingSpinnerMouseY_);
+    }
 }
 
 String SpinSlider::textValue() const
@@ -82,6 +96,7 @@ void SpinSlider::setEditingInteger(bool editingInteger)
 {
     if (editingInteger == editingInteger_) return;
     editingInteger_ = editingInteger;
+    grabbingSpinnerSpeed_ = editingInteger_ ? kIntegerDragSpeed : kFloatDragSpeed;
     markDirty();
 }
 
@@ -193,4 +208,108 @@ void SpinSlider::paint(PaintContext& ctx)
 
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
+}
+
+void SpinSlider::onMousePress(MouseEvent& e)
+{
+    e.consumed = true;
+    if (!readOnly_ && isEnabledInTree())
+    {
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        if (e.button == 0)
+        {
+            grabStart(e.x, e.y);
+        }
+        else if (e.button == 1 && isGrabbing())
+        {
+            grabEnd();
+            if (WidgetApp::instance().deletions() != deletions) return;
+            setValue(preGrabValue_);
+        }
+        if (WidgetApp::instance().deletions() != deletions) return;
+    }
+    Widget::onMousePress(e);
+}
+
+void SpinSlider::onMouseRelease(MouseEvent& e)
+{
+    e.consumed = true;
+    if (!readOnly_ && isEnabledInTree() && e.button == 0)
+    {
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        const bool grabbing = grabbingSpinner_;
+        grabEnd();
+        if (WidgetApp::instance().deletions() != deletions) return;
+        if (deferredDragMode_ && grabbing) notifyValueChanged();
+        if (WidgetApp::instance().deletions() != deletions) return;
+    }
+    Widget::onMouseRelease(e);
+}
+
+void SpinSlider::onMouseMove(MouseEvent& e)
+{
+    e.consumed = true;
+    if (readOnly_ || !isEnabledInTree() || !grabbingSpinnerAttempt_) return;
+
+    double diffX = e.relX;
+    if (e.shift && grabbingSpinner_) diffX *= 0.1;
+    grabbingSpinnerDistCache_ += diffX * grabbingSpinnerSpeed_;
+
+    if (!grabbingSpinner_ && std::fabs(grabbingSpinnerDistCache_) > 4 * grabbingSpinnerSpeed_)
+    {
+        WidgetApp::instance().setMouseCaptured(true);
+        grabbingSpinner_ = true;
+    }
+
+    if (grabbingSpinner_)
+    {
+        if (preGrabValue_ < minValue() && !lesserAllowed()) preGrabValue_ = minValue();
+        if (preGrabValue_ > maxValue() && !greaterAllowed()) preGrabValue_ = maxValue();
+
+        const double dragStep = step() > kDefaultFloatStep ? step() : kDefaultFloatStep;
+        const double newValue = preGrabValue_ + dragStep * grabbingSpinnerDistCache_;
+
+        const double val = (e.ctrl && !editingInteger_) ? std::round(newValue) : newValue;
+        if (deferredDragMode_) setValueNoSignal(val);
+        else
+            setValue(val);
+    }
+}
+
+void SpinSlider::onKeyPress(KeyEvent& e)
+{
+    if (readOnly_ || !isGrabbing()) return;
+    e.consumed = true;
+    if (e.key == Key::Escape && !e.shift && !e.ctrl && !e.alt)
+    {
+        const uint32_t deletions = WidgetApp::instance().deletions();
+        grabEnd();
+        if (WidgetApp::instance().deletions() != deletions) return;
+        setValue(preGrabValue_);
+    }
+}
+
+void SpinSlider::grabStart(float x, float y)
+{
+    grabbingSpinnerAttempt_ = true;
+    grabbingSpinnerDistCache_ = 0.0f;
+    preGrabValue_ = value();
+    grabbingSpinner_ = false;
+    grabbingSpinnerMouseX_ = x;
+    grabbingSpinnerMouseY_ = y;
+    grabbed.emit();
+}
+
+void SpinSlider::grabEnd()
+{
+    if (!grabbingSpinnerAttempt_) return;
+    grabbingSpinnerAttempt_ = false;
+    if (grabbingSpinner_)
+    {
+        WidgetApp::instance().setMouseCaptured(false);
+        WidgetApp::instance().warpMouse(grabbingSpinnerMouseX_, grabbingSpinnerMouseY_);
+        markDirty();
+        grabbingSpinner_ = false;
+        ungrabbed.emit();
+    }
 }
