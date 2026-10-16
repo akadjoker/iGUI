@@ -7,6 +7,8 @@ namespace ig
 {
 namespace retained
 {
+class TextInput;
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  SpinSlider — a number field with a slider bar under the number
 //
@@ -101,6 +103,13 @@ public:
     Signal<> grabbed;
     /// @brief Emitted when a drag of the value ends.
     Signal<> ungrabbed;
+    /// @brief Emitted when the text field opens to type the value.
+    Signal<> valueFocusEntered;
+    /// @brief Emitted when the text field loses the focus.
+    Signal<> valueFocusExited;
+
+    /// @brief The text field that opens to type the value (created on first use).
+    TextInput* lineEdit();
 
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
@@ -114,6 +123,7 @@ public:
 
 private:
     class Grabber;
+    class ValueInput;
 
     void grabStart(float x, float y);
     void grabEnd();
@@ -123,6 +133,13 @@ private:
     void grabberRelease(MouseEvent& e);
     void grabberMove(MouseEvent& e);
     void grabberScroll(MouseEvent& e);
+    void focusEntered();
+    void ensureValueInput();
+    void hideValueInput();
+    void evaluateInputText();
+    void valueInputKey(KeyEvent& e);
+    void valueInputSubmitted();
+    void valueFocusExit();
 
     String label_;
     String suffix_;
@@ -139,6 +156,9 @@ private:
     bool grabbingGrabber_ = false;
     int grabbingFrom_ = 0;
     float grabbingRatio_ = 0.0f;
+    ValueInput* valueInput_ = nullptr;
+    bool valueInputClosing_ = false;
+    bool valueInputDirty_ = false;
     bool grabbingSpinnerAttempt_ = false;
     bool grabbingSpinner_ = false;
     float grabbingSpinnerSpeed_ = 0.0f;

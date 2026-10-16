@@ -84,8 +84,8 @@ chunks. O que já entrou:
   `grabbed` e `ungrabbed` 777-778. As definições do editor vêm de
   `editor/settings/editor_settings.cpp` 594-595 (`float_drag_speed` 5.0,
   `integer_drag_speed` 0.5) e 601 (`default_float_step` 0.001).
-- Por vir: o clique sem arrasto e o `ui_accept` abrem a edição do texto
-  (`_focus_entered`, chunk 5); as setas (chunk 6).
+- Por vir: entrar e sair do campo de texto com o Tab (chunk 5b); as setas
+  (chunk 6).
 - Diferenças do chunk 3: (1) as definições do editor ficam fixas nos valores
   por omissão; (2) um campo desativado (`isEnabledInTree`) não arrasta, como o
   só de leitura; (3) os eventos do rato ficam no campo, como o
@@ -127,6 +127,38 @@ chunks. O que já entrou:
   iGUI não chega a filhos fora do pai; (4) a roda conta um passo por evento,
   com o sinal do `scrollY`; (5) o foco dado pelo grabber mostra o realce do
   foco (sem o `grab_focus(true)` que o esconde); (6) a escala da tela é 1.
+
+- Chunk 5a, o campo de texto. Origem: o `ui_accept` (Enter, Enter do teclado
+  numérico e Espaço, sem modificadores) de `gui_input` 166-167, o clique sem
+  arrasto de `_grab_end` 196-198, `_value_input_gui_input` 274-321 (Cima e Baixo
+  somam o passo, que passa a 1 quando divide a unidade, vezes 100 com Ctrl, 10
+  com Shift ou 0.1 com Alt, depois de ler o texto, e o texto mostra o valor
+  novo; o Escape esconde o campo), `_evaluate_input_text` 600-632,
+  `_value_input_submitted` 634-640, `_value_input_hidden` 642-645,
+  `_value_focus_exited` 647-675, `set_read_only` 687-694 (tira o foco ao campo),
+  `_focus_entered` 721-734, `_ensure_value_input` 806-825, o
+  `INTERNAL_PROCESS` 494-500, o `get_line_edit` 538-541, o grabber escondido
+  com o campo à vista em `_draw_spin_slider` 452 e os sinais
+  `value_focus_entered` e `value_focus_exited` 780-781. Ao esconder o campo, a
+  perda de foco vem antes do sinal `hidden` (`scene/gui/control.cpp` 4926-4930,
+  `scene/main/viewport.cpp` 2574-2580, `scene/main/canvas_item.cpp` 102-110), e
+  o `LineEdit` fica com o Escape e as setas (`scene/gui/line_edit.cpp` 966-973,
+  1065-1075).
+- Diferenças do chunk 5a: (1) só um número: o texto, com a vírgula trocada pelo
+  ponto e sem os carácteres até 32 das pontas, é lido pelo `strtod` inteiro e
+  tem de dar um número finito; sem expressões, constantes (`PI`, `INF`), o
+  `parse_number` da língua nem a segunda tentativa sem a troca da vírgula; (2)
+  o `value_input_closed_frame` é a marca `valueInputClosing_` enquanto o Enter
+  ou o Escape fecham o campo; (3) o `call_deferred` é o
+  `WidgetApp::callDeferred`, e o `INTERNAL_PROCESS` do texto novo também; (4)
+  ao fechar com Enter ou Escape, o foco passa do campo de texto para o
+  SpinSlider numa só mudança, e o `valueFocusExited` sai antes de o SpinSlider
+  ter o foco; (5) o `ui_accept` fica no SpinSlider (o original deixa-o subir
+  aos pais); (6) Cima e Baixo não levam o cursor ao início e ao fim do texto,
+  que o texto novo substitui; (7) o campo é o `TextInput` do iGUI, com a sua
+  caixa e margens (sem a margem esquerda `line_edit_margin`); (8) sem menu de
+  contexto no campo, nem o `focus visible`; (9) o `is_visible_in_tree` vê os
+  pais escondidos com `setVisible`, não a troca de stage.
 
 ## WidgetApp: botões com outro já premido
 
