@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstring>
 #include <ct/ini.hpp>
+#include <limits>
 #include <type_traits>
 
 static_assert(std::is_same<ig::Color, ig::retained::Color>::value,
@@ -4730,6 +4731,130 @@ static void test_slider_thumb_stays_inside_its_track()
     assert(high > low && std::fabs((low + high) * 0.5f - 2.5f) < 0.01f);
 }
 
+// O Range guarda o valor dentro da gama e no passo. O passo arredonda em
+// decimal: 0.1 + 0.2 com passo 0.1 dá 0.3 exato. Com um mínimo de 0.1 e passo
+// 0.2 os degraus são 0.1, 0.3, 0.5..., e 0.35 vai para 0.2 + 0.1 somados em
+// double. Um valor enorme (acima de 1e18 passos) arredonda em double. A página
+// tira à gama o seu tamanho; sem passo, o arredondamento a inteiros ainda vale.
+// O sinal só sai quando o valor muda (de NaN para NaN não muda).
+static void test_range_keeps_the_value_in_range_and_step()
+{
+    using namespace ig::retained;
+    Range range;
+    assert(range.value() == 0.0 && range.minValue() == 0.0 && range.maxValue() == 100.0);
+    assert(range.step() == 1.0 && range.page() == 0.0);
+    int changes = 0, rangeChanges = 0;
+    range.valueChanged.connect([&changes](double) { ++changes; });
+    range.changed.connect([&rangeChanges]() { ++rangeChanges; });
+
+    range.setStep(0.1);
+    range.setValue(0.1 + 0.2);
+    assert(range.value() == 0.3);
+    assert(changes == 1 && rangeChanges == 1);
+    range.setValue(0.3);
+    assert(changes == 1);
+    range.setValueNoSignal(5.0);
+    assert(range.value() == 5.0 && changes == 1);
+
+    range.setValue(150.0);
+    assert(range.value() == 100.0);
+    range.setValue(-5.0);
+    assert(range.value() == 0.0);
+    range.setAllowGreater(true);
+    range.setAllowLesser(true);
+    range.setValue(150.0);
+    assert(range.value() == 150.0);
+    range.setValue(-5.0);
+    assert(range.value() == -5.0);
+    range.setStep(1.0);
+    range.setValue(4.5e19);
+    assert(range.value() == 4.5e19);
+
+    Range offset;
+    offset.setMin(0.1);
+    offset.setStep(0.2);
+    offset.setValue(0.35);
+    assert(offset.value() == 0.2 + 0.1);
+
+    Range paged;
+    paged.setValue(95.0);
+    paged.setPage(10.0);
+    assert(paged.value() == 90.0);
+    paged.setPage(500.0);
+    assert(paged.page() == 100.0 && paged.value() == 0.0);
+
+    Range rounded;
+    rounded.setStep(0.0);
+    rounded.setValue(2.345);
+    assert(rounded.value() == 2.345);
+    rounded.setUseRoundedValues(true);
+    rounded.setValue(2.6);
+    assert(rounded.value() == 3.0);
+
+    Range limits;
+    int limitChanges = 0;
+    limits.valueChanged.connect([&limitChanges](double) { ++limitChanges; });
+    limits.setValue(50.0);
+    limits.setMin(200.0);
+    assert(limits.minValue() == 200.0 && limits.maxValue() == 200.0 && limits.value() == 200.0);
+    limits.setMax(10.0);
+    assert(limits.maxValue() == 200.0);
+    assert(limitChanges == 2);
+    limits.setAllowGreater(true);
+    limits.setValue(std::numeric_limits<double>::quiet_NaN());
+    limits.setValue(std::numeric_limits<double>::quiet_NaN());
+    assert(limitChanges == 3);
+}
+
+// O rácio de um Range: linear entre o mínimo e o máximo e no passo (0.333 dá
+// 33); exponencial em base 2 com o exp ligado (1 a 16: o meio é 4); 1 quando o
+// mínimo e o máximo são iguais.
+static void test_range_ratio_is_linear_or_exponential()
+{
+    using namespace ig::retained;
+    Range linear;
+    linear.setValue(25.0);
+    assert(linear.asRatio() == 0.25);
+    linear.setAsRatio(0.333);
+    assert(linear.value() == 33.0);
+
+    Range exponential;
+    exponential.setMin(1.0);
+    exponential.setMax(16.0);
+    exponential.setExpRatio(true);
+    exponential.setAsRatio(0.5);
+    assert(exponential.value() == 4.0);
+    assert(exponential.asRatio() == 0.5);
+
+    Range flat;
+    flat.setMax(0.0);
+    assert(flat.asRatio() == 1.0);
+}
+
+// O texto de um número: as casas pedidas sem os zeros do fim (fica um depois do
+// ponto); sem casas pedidas, 14 menos uma por cada dígito acima de 10 (1234.1
+// sai sem o ruído binário que 14 casas mostrariam), e acima de 1e15 o formato
+// por omissão de seis casas. As casas de um passo: 0.001 três,
+// 0.05 duas, 0.25 uma, 1 nenhuma, 0 dezasseis.
+static void test_range_number_text_and_step_decimals()
+{
+    using namespace ig::retained;
+    assert(Range::numberText(0.1) == "0.1");
+    assert(Range::numberText(3.0) == "3.0");
+    assert(Range::numberText(-0.5, 3) == "-0.5");
+    assert(Range::numberText(1234.5) == "1234.5");
+    assert(Range::numberText(1234.1) == "1234.1");
+    assert(Range::numberText(1e16) == "10000000000000000.0");
+    assert(Range::numberText(7.0, 0) == "7");
+    assert(Range::numberText(std::numeric_limits<double>::quiet_NaN()) == "nan");
+    assert(Range::numberText(-std::numeric_limits<double>::infinity()) == "-inf");
+    assert(Range::rangeStepDecimals(0.001) == 3);
+    assert(Range::rangeStepDecimals(0.05) == 2);
+    assert(Range::rangeStepDecimals(0.25) == 1);
+    assert(Range::rangeStepDecimals(1.0) == 0);
+    assert(Range::rangeStepDecimals(0.0) == 16);
+}
+
 // O segundo clique de um duplo clique no mesmo item avisa onItemDoubleClicked;
 // o terceiro não volta a avisar, e dois cliques rápidos em itens vizinhos (sem
 // espaço entre eles ficam a menos de 5 px) também não.
@@ -5216,6 +5341,9 @@ int main()
     test_thumbnail_grid_jumps_with_home_end_and_page_keys();
     test_tree_view_forgets_a_deleted_selection();
     test_code_editor_markers_follow_their_lines();
+    test_range_keeps_the_value_in_range_and_step();
+    test_range_ratio_is_linear_or_exponential();
+    test_range_number_text_and_step_decimals();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
