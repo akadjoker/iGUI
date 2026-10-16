@@ -18,6 +18,7 @@
 #include "NodeEditor.hpp"
 #include "Timeline.hpp"
 #include "AudioWidgets.hpp"
+#include "Range.hpp"
 #include "ThumbnailGrid.hpp"
 #include "FileDialog.hpp"
 #include "ConsoleWidget.hpp"

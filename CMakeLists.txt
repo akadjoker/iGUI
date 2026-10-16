@@ -219,6 +219,9 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
             -Wno-array-bounds)
     endif()
 
+    add_library(igui_widgets_r128 STATIC third_party/r128/r128_impl.cpp)
+    target_include_directories(igui_widgets_r128 PUBLIC third_party/r128)
+
     set(IGUI_WIDGET_SOURCES
         src/widgets/Animation.cpp
         src/widgets/AppWidgets.cpp
@@ -245,6 +248,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/LayoutWidgets.cpp
         src/widgets/MenuWidgets.cpp
         src/widgets/NodeEditor.cpp
+        src/widgets/Range.cpp
         src/widgets/ScrollWidgets.cpp
         src/widgets/TextInputWidgets.cpp
         src/widgets/ThumbnailGrid.cpp
@@ -263,7 +267,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         PRIVATE src/widgets third_party/stb)
     # The retained widget headers expose ct containers, so propagate the
     # core target (and therefore ct's include directory) to consumers.
-    target_link_libraries(igui_widgets PUBLIC igui_core PRIVATE igui_widgets_stb)
+    target_link_libraries(igui_widgets PUBLIC igui_core PRIVATE igui_widgets_stb igui_widgets_r128)
     # Same reasoning as igui above: linking selects the retained API.
     target_compile_definitions(igui_widgets PUBLIC IGUI_RETAINEDMODE=1)
     target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
