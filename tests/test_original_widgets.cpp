@@ -5687,6 +5687,46 @@ static void test_spin_slider_value_input_keys_and_focus()
     assert(!input->isVisible() && d.spin->value() == 42.0);
 }
 
+// O Tab que chega a um SpinSlider abre o campo de texto; o Tab e o Shift+Tab no
+// campo aplicam o texto e levam ao SpinSlider seguinte ou anterior, que abre o
+// seu; o foco dado sem Tab e o regresso do Enter não abrem; só de leitura, o Tab
+// para no SpinSlider sem abrir.
+static void test_spin_slider_value_input_tab()
+{
+    using namespace ig::retained;
+    SpinDrag d("spinvalueinputtab");
+    auto* second = d.stage->createChild<SpinSlider>();
+    second->setRect({ 0.0f, 40.0f, 200.0f, 24.0f });
+    auto* third = d.stage->createChild<SpinSlider>();
+    third->setRect({ 0.0f, 80.0f, 200.0f, 24.0f });
+    WidgetApp& app = WidgetApp::instance();
+
+    app.setFocused(d.spin);
+    app.update(d.io);
+    assert(!d.spin->lineEdit()->isVisible());
+
+    d.key(Key::Tab);
+    assert(second->lineEdit()->isVisible() && second->lineEdit()->isFocused());
+    assert(second->lineEdit()->selectedText() == "0");
+    d.type("4");
+    d.key(Key::Tab);
+    assert(second->value() == 4.0 && !second->lineEdit()->isVisible());
+    assert(third->lineEdit()->isVisible() && third->lineEdit()->isFocused());
+
+    d.key(Key::Tab, true);
+    assert(!third->lineEdit()->isVisible());
+    assert(second->lineEdit()->isVisible() && second->lineEdit()->isFocused());
+    d.key(Key::Tab, true);
+    assert(d.spin->lineEdit()->isVisible() && d.spin->lineEdit()->isFocused());
+
+    d.key(Key::Return);
+    assert(d.spin->isFocused() && !d.spin->lineEdit()->isVisible());
+
+    second->setReadOnly(true);
+    d.key(Key::Tab);
+    assert(second->isFocused() && !second->lineEdit()->isVisible());
+}
+
 static void test_spin_slider_text_and_size()
 {
     using namespace ig::retained;
@@ -6336,6 +6376,7 @@ int main()
     test_spin_slider_grabber_visibility_and_spinner_warp();
     test_spin_slider_value_input_opens_and_applies();
     test_spin_slider_value_input_keys_and_focus();
+    test_spin_slider_value_input_tab();
     test_slider_thumb_stays_inside_its_track();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();

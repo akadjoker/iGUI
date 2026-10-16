@@ -117,10 +117,17 @@ public:
     explicit ValueInput(SpinSlider* owner)
             : owner_(owner)
     {
+        setTabStop(false);
     }
 
     void onKeyPress(KeyEvent& e) override
     {
+        if (e.key == Key::Tab && !e.ctrl && !e.alt)
+        {
+            e.consumed = true;
+            WidgetApp::instance().focusNeighbor(owner_, e.shift);
+            return;
+        }
         const uint32_t deletions = WidgetApp::instance().deletions();
         owner_->valueInputKey(e);
         if (WidgetApp::instance().deletions() != deletions || !isVisible()) return;
@@ -607,6 +614,11 @@ void SpinSlider::onMouseScroll(MouseEvent& e)
     (void) e;
     if (readOnly_) return;
     if (grabber_->isVisible()) markDirty();
+}
+
+void SpinSlider::onFocusGained()
+{
+    if (WidgetApp::instance().focusFromTab() && !valueInputClosing_) focusEntered();
 }
 
 void SpinSlider::onMouseEnter()
