@@ -489,6 +489,24 @@ String WidgetApp::getClipboardText() const
     return {};
 }
 
+// The widget the buttons went to stops being shown: it gets the release of
+// every button still held, as if they had gone up.
+void WidgetApp::dropMouseFocus()
+{
+    Widget* target = pressed_;
+    const int buttons = pressedButtons_;
+    pressed_ = nullptr;
+    pressedButtons_ = 0;
+    if (!target) return;
+    for (int i = 0; i < 3; ++i)
+    {
+        if ((buttons & (1 << i)) == 0) continue;
+        if (!isWidgetInTrees(target)) return;
+        MouseEvent me = makeMouseEvent(mouseX_, mouseY_, i);
+        bubble(target, me, &Widget::onMouseRelease);
+    }
+}
+
 void WidgetApp::setMouseCaptured(bool captured)
 {
     if (mouseCapture_) mouseCapture_(captured);
@@ -602,6 +620,7 @@ void WidgetApp::setRoot(Widget* r)
     focused_ = nullptr;
     hovered_ = nullptr;
     pressed_ = nullptr;
+    pressedButtons_ = 0;
     hoverChain_.clear();
 }
 
@@ -648,9 +667,9 @@ bool WidgetApp::setStage(const String& name, TransitionType transition, EaseType
     if (name == currentStage_) return true;
 
     // Clear interaction state (old tree pointers become invalid)
+    dropMouseFocus();
     focused_ = nullptr;
     hovered_ = nullptr;
-    pressed_ = nullptr;
     hoverChain_.clear();
     needsLayout_ = true;
 
@@ -825,7 +844,10 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         transOldStage_.clear();
     }
     if (pressed_ && isDescendantOf(pressed_, w))
+    {
         pressed_ = nullptr;
+        pressedButtons_ = 0;
+    }
     const bool focusWentAway = focused_ && isDescendantOf(focused_, w);
     if (focusWentAway)
         focused_ = nullptr;

@@ -4930,6 +4930,88 @@ static void test_widget_app_keeps_the_pressed_widget_until_every_button_is_up()
     assert(left->presses[1] == 1);
 }
 
+// Trocar de stage com botões em baixo entrega ao widget que os tinha o release
+// de cada um, e o release verdadeiro que vem depois já não lhe chega.
+static void test_widget_app_releases_the_buttons_when_the_stage_changes()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("dropfocus");
+    auto* log = stage->createChild<MouseLog>();
+    auto* next = app.addStage("dropfocusother")->createChild<MouseLog>();
+    assert(app.setStage("dropfocus", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    io.mouseX = 50.0f;
+    io.mouseY = 50.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    log->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseDown[1] = true;
+    app.update(io);
+    assert(log->presses[0] == 1 && log->presses[1] == 1);
+
+    assert(app.setStage("dropfocusother", TransitionType::None));
+    assert(log->releases[0] == 1 && log->releases[1] == 1);
+    app.paint(data);
+    next->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+
+    io.mouseDown[1] = false;
+    app.update(io);
+    assert(log->releases[1] == 1);
+    io.mouseDown[1] = true;
+    app.update(io);
+    assert(next->presses[1] == 1);
+    io.mouseDown[0] = false;
+    io.mouseDown[1] = false;
+    app.update(io);
+    assert(log->releases[0] == 1 && log->releases[1] == 1);
+    assert(next->releases[1] == 1);
+}
+
+// O widget que tinha os botões é apagado com um deles em baixo: outro botão
+// volta a ir para o widget sob o ponteiro.
+static void test_widget_app_forgets_the_buttons_of_a_removed_widget()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("removedpress");
+    auto* under = stage->createChild<MouseLog>();
+    auto* gone = stage->createChild<MouseLog>();
+    assert(app.setStage("removedpress", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    io.mouseX = 50.0f;
+    io.mouseY = 50.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    under->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+    gone->setRect({ 0.0f, 0.0f, 100.0f, 100.0f });
+
+    io.mouseDown[0] = true;
+    app.update(io);
+    assert(gone->presses[0] == 1);
+    stage->removeChild(gone);
+
+    io.mouseDown[1] = true;
+    app.update(io);
+    assert(under->presses[1] == 1);
+    io.mouseDown[1] = false;
+    app.update(io);
+    io.mouseDown[0] = false;
+    app.update(io);
+    assert(under->releases[1] == 1);
+}
+
 namespace
 {
 bool capturedByHook = false;
@@ -5632,6 +5714,8 @@ int main()
     test_range_number_text_and_step_decimals();
     test_widget_app_keeps_the_pressed_widget_until_every_button_is_up();
     test_widget_app_reports_relative_motion_and_mouse_hooks();
+    test_widget_app_releases_the_buttons_when_the_stage_changes();
+    test_widget_app_forgets_the_buttons_of_a_removed_widget();
     test_spin_slider_text_and_size();
     test_spin_slider_draws_label_number_suffix_and_bar();
     test_slider_thumb_stays_inside_its_track();
