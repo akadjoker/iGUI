@@ -120,6 +120,8 @@ void WidgetApp::update(const ig::retained::IO& io)
     ioKeyAlt_   = io.keyAlt;
     clipSet_    = io.setClipboardText;
     clipGet_    = io.getClipboardText;
+    mouseCapture_ = io.setMouseCaptured;
+    mouseWarp_ = io.warpMouse;
 
     int newW = static_cast<int>(io.displayWidth);
     int newH = static_cast<int>(io.displayHeight);
@@ -248,6 +250,8 @@ void WidgetApp::update(const ig::retained::IO& io)
 
 void WidgetApp::dispatchMouseMove(float x, float y)
 {
+    const float relX = x - mouseX_;
+    const float relY = y - mouseY_;
     mouseX_ = x;
     mouseY_ = y;
 
@@ -266,6 +270,8 @@ void WidgetApp::dispatchMouseMove(float x, float y)
         }
         applyCursor(dragPayload_ ? CursorType::SizeAll : pressed_->cursor());
         MouseEvent me = makeMouseEvent(x, y);
+        me.relX = relX;
+        me.relY = relY;
         bubble(pressed_, me, &Widget::onMouseMove);
         return;
     }
@@ -276,6 +282,8 @@ void WidgetApp::dispatchMouseMove(float x, float y)
 
     if (hovered_) {
         MouseEvent me = makeMouseEvent(x, y);
+        me.relX = relX;
+        me.relY = relY;
         bubble(hovered_, me, &Widget::onMouseMove);
         // Re-read cursor — walk chain leaf→root, pick first non-Arrow
         CursorType cur = CursorType::Arrow;
@@ -310,6 +318,19 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
     lastClickY_   = y;
     lastClickBtn_ = btn;
 
+    // While a button is held, the other buttons go to the widget that took it.
+    const int bit = 1 << btn;
+    if (pressedButtons_ != 0 && (pressedButtons_ & bit) == 0)
+    {
+        pressedButtons_ |= bit;
+        if (pressed_)
+        {
+            MouseEvent me = makeMouseEvent(x, y, btn);
+            bubble(pressed_, me, &Widget::onMousePress);
+        }
+        return;
+    }
+
     if (popup_)
     {
         Widget* popupHit = hitTest(popup_, x, y);
@@ -319,6 +340,7 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
             MouseEvent me = makeMouseEvent(x, y, btn);
             bubble(popupHit, me, &Widget::onMousePress);
             if (popup_) pressed_ = popupHit;
+            if (pressed_) pressedButtons_ = bit;
             return;
         }
         bool ownerToggle = (btn == 0) && popupOwner_ &&
@@ -341,6 +363,7 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
             // only keep pressed_ if the window is still alive in the float list.
             if (std::find(floats_.begin(), floats_.end(), fw) != floats_.end())
                 pressed_ = fwHit;
+            if (pressed_) pressedButtons_ = bit;
             return;
         }
     }
@@ -379,6 +402,7 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
         bubble(hit, me, &Widget::onMousePress);
         // The handler may have removed the widget, or the window that holds it.
         pressed_ = isWidgetInTrees(hit) ? hit : nullptr;
+        if (pressed_) pressedButtons_ = bit;
     } else {
         setFocused(nullptr);
     }
@@ -428,12 +452,16 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
         dragSource_  = nullptr;
     }
 
+    pressedButtons_ &= ~(1 << btn);
     if (pressed_) {
         MouseEvent me = makeMouseEvent(x, y, btn);
         bubble(pressed_, me, &Widget::onMouseRelease);
-        pressed_ = nullptr;
-        Widget* hit2 = topWidgetAt(x, y);
-        if (hit2 != hovered_) updateHover(hit2);
+        if (pressedButtons_ == 0)
+        {
+            pressed_ = nullptr;
+            Widget* hit2 = topWidgetAt(x, y);
+            if (hit2 != hovered_) updateHover(hit2);
+        }
     }
 }
 
@@ -459,6 +487,18 @@ String WidgetApp::getClipboardText() const
 {
     if (clipGet_) return clipGet_();
     return {};
+}
+
+void WidgetApp::setMouseCaptured(bool captured)
+{
+    if (mouseCapture_) mouseCapture_(captured);
+}
+
+void WidgetApp::warpMouse(float x, float y)
+{
+    if (mouseWarp_) mouseWarp_(x, y);
+    mouseX_ = x;
+    mouseY_ = y;
 }
 
 void WidgetApp::dispatchMouseScroll(float x, float y, float sx, float sy)

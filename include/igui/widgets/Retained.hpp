@@ -121,6 +121,13 @@ namespace ig { namespace retained
         String (*readFile )(const String& path)                          = nullptr;
         bool        (*writeFile)(const String& path, const String& data) = nullptr;
 
+        // ── Mouse mode (set by backend) ──────────────────────────────────
+        // setMouseCaptured(true): hide the pointer and keep its motion counting
+        // in mouseX/mouseY past the window edges; false shows it again.
+        // warpMouse: put the pointer at x, y and report that place from then on.
+        void (*setMouseCaptured)(bool captured) = nullptr;
+        void (*warpMouse)(float x, float y) = nullptr;
+
         // ── OS-level file/text drop (set by backend) ─────────────────────
         // Backend pushes drop events each frame; WidgetApp consumes them.
         struct DropEvent {

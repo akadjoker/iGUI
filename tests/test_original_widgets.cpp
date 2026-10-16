@@ -4858,6 +4858,144 @@ static void test_range_number_text_and_step_decimals()
 // O texto do SpinSlider: as casas que o passo pede (0.01 dá "1.5", 1 dá "25"),
 // e um inteiro sem casas, cortado para zero (-2.7 dá "-2"). O tamanho mínimo é
 // a caixa com o lugar das setas e a altura de um botão.
+// Um widget que regista o que o rato lhe faz.
+struct MouseLog : ig::retained::Widget
+{
+    int presses[3] = {};
+    int releases[3] = {};
+    float relX = 0.0f;
+    float relY = 0.0f;
+    void onMousePress(ig::retained::MouseEvent& e) override
+    {
+        ++presses[e.button];
+        e.consumed = true;
+    }
+    void onMouseRelease(ig::retained::MouseEvent& e) override
+    {
+        ++releases[e.button];
+        e.consumed = true;
+    }
+    void onMouseMove(ig::retained::MouseEvent& e) override
+    {
+        relX += e.relX;
+        relY += e.relY;
+        e.consumed = true;
+    }
+};
+
+// Com um botão premido, os outros botões vão para o widget que o recebeu, mesmo
+// com o ponteiro sobre outro, e esse widget recebe os releases até ao último.
+static void test_widget_app_keeps_the_pressed_widget_until_every_button_is_up()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("buttonmask");
+    auto* left = stage->createChild<MouseLog>();
+    auto* right = stage->createChild<MouseLog>();
+    assert(app.setStage("buttonmask", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    left->setRect({ 0.0f, 0.0f, 200.0f, 300.0f });
+    right->setRect({ 200.0f, 0.0f, 200.0f, 300.0f });
+
+    io.mouseX = 50.0f;
+    io.mouseY = 50.0f;
+    app.update(io);
+    io.mouseDown[0] = true;
+    app.update(io);
+    io.mouseX = 300.0f;
+    app.update(io);
+    io.mouseDown[1] = true;
+    app.update(io);
+    assert(left->presses[0] == 1 && left->presses[1] == 1);
+    assert(right->presses[1] == 0);
+
+    io.mouseDown[0] = false;
+    app.update(io);
+    io.mouseDown[1] = false;
+    app.update(io);
+    assert(left->releases[0] == 1 && left->releases[1] == 1);
+    assert(right->releases[0] == 0 && right->releases[1] == 0);
+
+    io.mouseDown[1] = true;
+    app.update(io);
+    io.mouseDown[1] = false;
+    app.update(io);
+    assert(right->presses[1] == 1 && right->releases[1] == 1);
+    assert(left->presses[1] == 1);
+}
+
+namespace
+{
+bool capturedByHook = false;
+int captureCalls = 0;
+float warpedX = -1.0f;
+float warpedY = -1.0f;
+} // namespace
+
+// O movimento chega com o deslocamento desde o evento anterior; os ganchos de
+// captura e de warp chegam ao backend, e depois de um warp o deslocamento conta
+// a partir do sítio para onde o ponteiro foi.
+static void test_widget_app_reports_relative_motion_and_mouse_hooks()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("relmotion");
+    auto* log = stage->createChild<MouseLog>();
+    assert(app.setStage("relmotion", TransitionType::None));
+
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    io.setMouseCaptured = [](bool captured)
+    {
+        capturedByHook = captured;
+        ++captureCalls;
+    };
+    io.warpMouse = [](float x, float y)
+    {
+        warpedX = x;
+        warpedY = y;
+    };
+    io.mouseX = 100.0f;
+    io.mouseY = 100.0f;
+    app.update(io);
+    DrawData data;
+    app.paint(data);
+    log->setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
+
+    io.mouseDown[0] = true;
+    app.update(io);
+    log->relX = 0.0f;
+    log->relY = 0.0f;
+    io.mouseX = 107.0f;
+    io.mouseY = 97.0f;
+    app.update(io);
+    assert(log->relX == 7.0f && log->relY == -3.0f);
+
+    app.setMouseCaptured(true);
+    assert(capturedByHook && captureCalls == 1);
+    app.warpMouse(20.0f, 30.0f);
+    assert(warpedX == 20.0f && warpedY == 30.0f);
+    io.mouseX = 25.0f;
+    io.mouseY = 30.0f;
+    app.update(io);
+    assert(log->relX == 12.0f && log->relY == -3.0f);
+    app.setMouseCaptured(false);
+    assert(!capturedByHook && captureCalls == 2);
+
+    io.mouseDown[0] = false;
+    app.update(io);
+    io.setMouseCaptured = nullptr;
+    io.warpMouse = nullptr;
+    app.update(io);
+}
+
 static void test_spin_slider_text_and_size()
 {
     using namespace ig::retained;
@@ -5492,6 +5630,8 @@ int main()
     test_range_keeps_the_value_in_range_and_step();
     test_range_ratio_is_linear_or_exponential();
     test_range_number_text_and_step_decimals();
+    test_widget_app_keeps_the_pressed_widget_until_every_button_is_up();
+    test_widget_app_reports_relative_motion_and_mouse_hooks();
     test_spin_slider_text_and_size();
     test_spin_slider_draws_label_number_suffix_and_bar();
     test_slider_thumb_stays_inside_its_track();

@@ -194,6 +194,7 @@ struct MouseEvent
 {
     float x = 0, y = 0;       // absolute screen coords
     float localX = 0, localY = 0; // relative to widget
+    float relX = 0, relY = 0;     // motion since the previous event (moves only)
     int   button = 0;          // 0=left, 1=right, 2=middle
     int   clickCount = 1;      // 1=single, 2=double, 3=triple
     float scrollX = 0, scrollY = 0;
