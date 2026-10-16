@@ -692,9 +692,9 @@ void Outliner::paint(PaintContext& ctx)
         Color lockCol = locked ? Color(200, 150, 50, 255) : Color(100, 100, 105, 255);
         ctx.line.SetColor(lockCol);
         // Simple lock: rect + arc
-        ctx.line.Rectangle(lockX + 3, ry + rowHeight_ * 0.5f, 10, 8, false);
+        ctx.line.Rectangle(lockX + 3, ry + rowHeight_ * 0.5f - 4, 10, 8, false);
         if (locked)
-            ctx.line.Circle(lockX + 8, ry + rowHeight_ * 0.5f - 2, 4, false);
+            ctx.line.Circle(lockX + 8, ry + rowHeight_ * 0.5f - 6, 4, false);
     }
 
     if (dragNode_ && dropSpot_.valid) {
