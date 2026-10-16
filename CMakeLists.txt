@@ -250,6 +250,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/NodeEditor.cpp
         src/widgets/Range.cpp
         src/widgets/ScrollWidgets.cpp
+        src/widgets/SpinSlider.cpp
         src/widgets/TextInputWidgets.cpp
         src/widgets/ThumbnailGrid.cpp
         src/widgets/Timeline.cpp

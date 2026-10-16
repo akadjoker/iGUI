@@ -39,3 +39,32 @@ o que entrou e onde difere. Os números de linha do Godot referem-se ao commit
   resultado; (5) o `MIN(18, ...)` e os `MAX` seguem a semântica das macros do
   original (`a < b ? a : b`), não a do `std::fmin`/`std::fmax`, que difere com
   NaN.
+
+## SpinSlider (include/igui/widgets/SpinSlider.hpp, src/widgets/SpinSlider.cpp)
+
+Port do `EditorSpinSlider` (`editor/gui/editor_spin_slider.h` e `.cpp`), em
+chunks. O que já entrou:
+
+- Chunk 2, o desenho. Origem: `get_minimum_size` 63-72, `get_text_value` 74-76,
+  a parte de desenho de `_draw_spin_slider` 339-450 (a caixa normal ou só de
+  leitura, o fundo do rótulo quando plano, o foco, o rótulo a meio alfa, o
+  número e o sufixo glifo a glifo, só os que cabem inteiros na área do número,
+  o sufixo a 0.4 do alfa, e a barra: fundo a 0.2, cheio a 0.45, botão de 4 px a
+  0.9), `set_control_state` 543-546, `set_editing_integer` 562-572,
+  `set_label` 578-585, `set_suffix` 591-594, `set_read_only` 687-694,
+  `set_flat` 700-703 e o foco do construtor 827-828. O tema é o do editor
+  (`editor/themes/theme_classic.cpp` 1797-1815: `label_color` é a cor das
+  letras, `read_only_label_color` a das letras só de leitura, `label_bg` o
+  `dark_color_3` sem borda; 2187-2191: `inspector_property_height` é a altura
+  mínima de um botão mais a da fonte) e o ícone `editor/icons/GuiSpinboxUpdown.svg`
+  tem 16 px de largura.
+- Diferenças: (1) as caixas do tema (`normal`, `read_only`, `focus`) são as do
+  `TextInput` do iGUI: fundo `inputBg` (só de leitura `panelColor`) com a borda
+  `inputBorder`, e a borda `focusColor` com foco; as margens do conteúdo são o
+  `padding` do tema; o `label_bg` é o `bgColor`; a altura mínima de um botão é o
+  `buttonHeight`; (2) as cores com alfa em `float` passam a 8 bits com
+  arredondamento ao mais próximo (0.2 dá 51, 0.45 dá 115, 0.9 dá 230, 0.5 dá
+  128 e o sufixo 0.4 do alfa); (3) sem esquerda-direita (RTL) nem números
+  localizados (`format_number`); (4) o número desenha-se como o maior início do
+  texto (número, espaço fino, sufixo) cujos glifos cabem, que é o que o ciclo
+  por glifo do original desenha da esquerda para a direita; (5) o `EDSCALE` é 1.
