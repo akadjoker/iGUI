@@ -1214,6 +1214,13 @@ public:
     // always uses the theme's label colour and reports no width.
     void drawText(StringView text, const Vec2 &position, const Color &color);
     float textWidth(StringView text) const;
+    // A list drawn above every window and below the popups, in display
+    // coordinates: where a game HUD or an overlay that belongs to no window goes.
+    // The text calls take the theme font; a logicalSize of 0 means the theme size.
+    DrawList &foregroundDrawList();
+    void drawText(DrawList &drawList, StringView text, const Vec2 &position, float logicalSize,
+                  const Color &color, const Rect &clip);
+    TextMetrics textMetrics(StringView text, float logicalSize) const;
     bool isKeyPressed(KeyCode key) const;
     bool shortcut(KeyCode key, bool control = true, bool shift = false) const;
     // True for every frame the given button is held down, from the press
@@ -2270,6 +2277,7 @@ private:
     DrawList frameDrawList_;
     DrawList dragDropDrawList_;
     DrawList toastDrawList_;
+    DrawList foregroundDrawList_;
     DrawList modalDrawList_;
     DrawData drawData_;
     WindowHandle currentWindow_;
