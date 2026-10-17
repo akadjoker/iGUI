@@ -1473,6 +1473,7 @@ void Context::beginFrame(const FrameInfo &frame)
     frameDrawList_.clear();
     dragDropDrawList_.clear();
     toastDrawList_.clear();
+    foregroundDrawList_.clear();
     modalDrawList_.clear();
     tooltipDrawList_.clear();
     modalPopupDrawList_.clear();
@@ -1699,6 +1700,7 @@ const DrawData &Context::endFrame()
                 frameDrawList_.append(comboDrawList_);
         }
     }
+    frameDrawList_.append(foregroundDrawList_);
     drawDragDropPreview();
     frameDrawList_.append(dragDropDrawList_);
     drawToasts();
@@ -8556,6 +8558,23 @@ void Context::drawText(StringView text, const Vec2 &position, const Color &color
 float Context::textWidth(StringView text) const
 {
     return measureText(theme_.font, text, theme_.fontSize).width;
+}
+
+DrawList &Context::foregroundDrawList()
+{
+    return foregroundDrawList_;
+}
+
+void Context::drawText(DrawList &drawList, StringView text, const Vec2 &position,
+                       float logicalSize, const Color &color, const Rect &clip)
+{
+    drawText(drawList, theme_.font, text, position,
+             logicalSize > 0.0f ? logicalSize : theme_.fontSize, color, clip);
+}
+
+TextMetrics Context::textMetrics(StringView text, float logicalSize) const
+{
+    return measureText(theme_.font, text, logicalSize > 0.0f ? logicalSize : theme_.fontSize);
 }
 
 void Context::label(StringView text, const Vec2 &position)
