@@ -346,6 +346,11 @@ void FileDialog::buildUI()
     toolBar_->setSize(0, 26);
     toolBar_->setSpacing(2);
 
+    btnUp_ = toolBar_->createChild<Button>();
+    btnUp_->setIconId(IconId::ArrowUp);
+    btnUp_->setSize(24, 22); btnUp_->setTooltip("Parent folder (Alt+Backspace)");
+    btnUp_->clicked.connect([this] { navigateTo(FileSystem::parentPath(currentPath_)); });
+
     breadcrumbBar_ = toolBar_->createChild<BoxLayout>(LayoutDir::Horizontal);
     breadcrumbBar_->setStretch(1);
     breadcrumbBar_->setSpacing(2);
