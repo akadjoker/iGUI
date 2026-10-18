@@ -176,6 +176,7 @@ private:
     Button* btnViewGrid_   = nullptr;
     Button* btnHidden_     = nullptr;
     Button* btnNewFolder_  = nullptr;
+    Button* btnUp_         = nullptr;
     void         updateViewModeButtons();
     /// Asks for a name and creates that folder in the current one, then enters it.
     void         newFolderPrompt();
