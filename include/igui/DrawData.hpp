@@ -214,6 +214,10 @@ public:
                          const Color &bottomRight, const Color &bottomLeft, const Rect &clip);
     void addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
                   const Vec2 &uvMax, const Color &color, const Rect &clip);
+    // An image on any four corners, in order around the quad (a turned or
+    // sheared image); the clip is the scissor, the quad is not trimmed.
+    void addImageQuad(TextureId texture, const Vec2 (&corners)[4], const Vec2 (&uvs)[4],
+                      const Color &color, const Rect &clip);
     void addCircleFilled(const Vec2 &center, float radius,
                          const Color &color, const Rect &clip, uint32_t segments = 0u);
     // Tessellates a simple polygon. Points may be clockwise or counter-clockwise.

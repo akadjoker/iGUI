@@ -565,6 +565,38 @@ void DrawList::addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
     emitGeometry(firstIndex, 6u, clip, texture, &rect);
 }
 
+void DrawList::addImageQuad(TextureId texture, const Vec2 (&corners)[4], const Vec2 (&uvs)[4],
+                            const Color &color, const Rect &clip)
+{
+    const Color shade = faded(color);
+    if (shade.a == 0u)
+        return;
+    float left = corners[0].x;
+    float top = corners[0].y;
+    float right = corners[0].x;
+    float bottom = corners[0].y;
+    for (int i = 1; i < 4; ++i)
+    {
+        left = corners[i].x < left ? corners[i].x : left;
+        top = corners[i].y < top ? corners[i].y : top;
+        right = corners[i].x > right ? corners[i].x : right;
+        bottom = corners[i].y > bottom ? corners[i].y : bottom;
+    }
+    const Rect bounds(left, top, right - left, bottom - top);
+    if (bounds.width <= 0.0f || bounds.height <= 0.0f)
+        return;
+    if (rectOutsideClip(bounds, 0.0f, clip))
+        return;
+
+    const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
+    const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
+    for (int i = 0; i < 4; ++i)
+        geometry_->vertices.emplace_back(corners[i], uvs[i], shade);
+    writeQuadIndices(firstVertex);
+
+    emitGeometry(firstIndex, 6u, clip, texture, &bounds);
+}
+
 void DrawList::addCircleFilled(const Vec2 &center, float radius,
                                const Color &color, const Rect &clip, uint32_t segments)
 {
