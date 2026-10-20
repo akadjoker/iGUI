@@ -237,12 +237,18 @@ public:
     /// @brief Pixel aspect ratio (width / height of one pixel); 1 = square.
     void setPixelAspect(float par);
 
+    /// @brief Empty space kept around the frame at zoom 1 (screen pixels), e.g. so box handles fit.
+    void setMargin(float pixels) { margin_ = pixels; markDirty(); }
+
     /// @brief Choose the base size and reset zoom and pan.
     void setFit(Fit fit);
     Fit  fit() const { return fit_; }
     /// @brief Zoom as a multiplier over the base size (1 = unchanged).
     void  setZoom(float zoom);
     float zoom() const { return zoom_; }
+    float viewPanX() const { return panX_; }
+    float viewPanY() const { return panY_; }
+    void setViewTransform(float zoom, float panX, float panY) { setView(zoom, panX, panY); }
     /// @brief Screen pixels per frame pixel (1 = 100%).
     float scale() const { return baseScale() * zoom_; }
     /// @brief Contain, zoom 1, centred.
@@ -264,6 +270,18 @@ public:
     Vec2f screenToImage(float x, float y) const;
     /// @brief Frame pixel coordinates to screen position.
     Vec2f imageToScreen(float px, float py) const;
+
+    /// @brief A red box with handles over the frame, to move, scale and crop what is shown (like OBS).
+    /// The corners are fractions of the frame (0 to 1, y down); it may go beyond it.
+    void setBox(bool show, float x0, float y0, float x1, float y1);
+    bool boxShown() const { return boxShown_; }
+    /// Handles: 0 inside (move), 1 left, 2 top, 3 right, 4 bottom, 5 top-left, 6 top-right,
+    /// 7 bottom-right, 8 bottom-left.
+    Signal<int> boxGrabbed;
+    /// The movement since the grab, in fractions of the frame.
+    Signal<int, float, float> boxDragged;
+    Signal<int> boxReleased;
+    Signal<> boxDoubleClicked;
 
     /// @brief Emitted when zoom or pan changed.
     Signal<> viewChanged;
@@ -293,6 +311,13 @@ private:
     bool  dragging_ = false;
     float dragX_ = 0, dragY_ = 0, dragPanX_ = 0, dragPanY_ = 0;
     int   lastPixelX_ = -2, lastPixelY_ = -2;
+
+    int  boxHit(float x, float y) const;
+    float margin_ = 0.0f;
+    bool  boxShown_ = false;
+    float box_[4] = {0, 0, 1, 1};
+    int   boxHandle_ = -1; // the handle being dragged
+    float boxGrabX_ = 0, boxGrabY_ = 0;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

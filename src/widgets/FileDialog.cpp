@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 
 using namespace ig::retained;
@@ -597,8 +598,13 @@ void FileDialog::paintHeader(PaintContext& ctx, const Rect& area)
                 ctx.fillTriangle(ax, ay - 3, ax + 6, ay - 3, ax + 3, ay + 3);
         }
         x += columns_[c].width;
-        ctx.line.SetColor(55, 58, 65, 60);
-        ctx.drawLine(x, area.y + 2, x, area.y + area.h - 2);
+        if (c + 1 < kColCount) {
+            ctx.line.SetColor(105, 110, 122, 180);
+            ctx.drawLine(x, area.y + 3, x, area.y + area.h - 3);
+            ctx.fill.SetColor(150, 155, 165, 200);
+            ctx.fillRect(x - 2, area.y + area.h * 0.5f - 4, 1, 8);
+            ctx.fillRect(x + 1, area.y + area.h * 0.5f - 4, 1, 8);
+        }
     }
     ctx.line.SetColor(55, 58, 65, 255);
     ctx.drawLine(area.x, area.y + area.h, area.x + area.w, area.y + area.h);
@@ -649,19 +655,25 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
 
         ctx.font.SetColor(fe.isDir ? Color(120, 180, 255, 255) :
                            (sel ? Color(255, 255, 255, 255) : t.textColor));
-        ctx.font.Print(fe.name.c_str(), cx, textY);
+        const float nameAvailable = std::max(0.f, area.x + nameW - cx - 4.f);
+        const String name = ctx.fitText(fe.name, nameAvailable);
+        ctx.font.Print(name.c_str(), cx, textY);
         cx = area.x + nameW;
 
         // Size
         if (!fe.isDir) {
             ctx.font.SetColor(Color(160, 160, 165, 255));
-            ctx.font.Print(FileSystem::humanSize(fe.size).c_str(), cx + 4, textY);
+            const String size = ctx.fitText(FileSystem::humanSize(fe.size),
+                std::max(0.f, columns_[1].width - 8.f));
+            ctx.font.Print(size.c_str(), cx + 4, textY);
         }
         cx += columns_[1].width;
 
         // Date
         ctx.font.SetColor(Color(140, 140, 145, 255));
-        ctx.font.Print(FileSystem::humanDate(fe.mtime).c_str(), cx + 4, textY);
+        const String date = ctx.fitText(FileSystem::humanDate(fe.mtime),
+            std::max(0.f, columns_[2].width - 8.f));
+        ctx.font.Print(date.c_str(), cx + 4, textY);
     }
 
     // Scrollbar
@@ -840,6 +852,19 @@ void FileDialog::onMousePress(MouseEvent& e)
     if (viewMode_ == ViewMode::Detail) {
         Rect hdr = {area.x, area.y, area.w, 22.f};
         if (hdr.contains(e.x, e.y)) {
+            if (e.button == 0) {
+                float boundary = area.x;
+                for (int c = 0; c + 1 < kColCount; ++c) {
+                    boundary += columns_[c].width;
+                    if (std::fabs(e.x - boundary) <= 5.f) {
+                        resizingColumn_ = c;
+                        resizeStartX_ = e.x;
+                        resizeStartWidth_ = columns_[c].width;
+                        e.consumed = true;
+                        return;
+                    }
+                }
+            }
             e.consumed = true;
             float cx = area.x;
             for (int c = 0; c < kColCount; ++c) {
@@ -907,6 +932,8 @@ void FileDialog::onMousePress(MouseEvent& e)
         if (dblClick) {
             if (fe.isDir) {
                 navigateTo(fe.path);
+            } else if (mode_ == Mode::Save) {
+                onOk(); // asks before replacing; the name field was just filled from this entry
             } else {
                 selectedPath_ = fe.path;
                 accepted.emit(selectedPath_);
@@ -922,6 +949,19 @@ void FileDialog::onMousePress(MouseEvent& e)
 
 void FileDialog::onMouseMove(MouseEvent& e)
 {
+    if (resizingColumn_ >= 0 && fileListLayout_) {
+        Rect area = fileListLayout_->absoluteRect();
+        float otherWidths = 0.f;
+        for (int c = 0; c < kColCount; ++c)
+            if (c != resizingColumn_) otherWidths += columns_[c].width;
+        const float minWidths[] = {120.f, 70.f, 100.f};
+        const float maxWidth = std::max(minWidths[resizingColumn_], area.w - otherWidths);
+        columns_[resizingColumn_].width = std::clamp(
+                resizeStartWidth_ + e.x - resizeStartX_, minWidths[resizingColumn_], maxWidth);
+        e.consumed = true;
+        markDirty();
+        return;
+    }
     if (fileListLayout_) {
         Rect area = fileListLayout_->absoluteRect();
         bool inBody = false;
@@ -946,7 +986,16 @@ void FileDialog::onMouseMove(MouseEvent& e)
     FloatWindow::onMouseMove(e);
 }
 
-void FileDialog::onMouseRelease(MouseEvent& e) { FloatWindow::onMouseRelease(e); }
+void FileDialog::onMouseRelease(MouseEvent& e)
+{
+    if (resizingColumn_ >= 0) {
+        resizingColumn_ = -1;
+        e.consumed = true;
+        markDirty();
+        return;
+    }
+    FloatWindow::onMouseRelease(e);
+}
 
 void FileDialog::onMouseScroll(MouseEvent& e)
 {
@@ -1060,6 +1109,15 @@ void FileDialog::onOk()
     bool needsExist = (mode_ == Mode::Open || mode_ == Mode::OpenImage);
     if (needsExist && !FileSystem::exists(selectedPath_)) {
         if (statusLabel_) statusLabel_->setText("File not found: " + fname);
+        return;
+    }
+
+    // Saving over a file that is there: the first time it asks, the same name again replaces it.
+    if (mode_ == Mode::Save && FileSystem::exists(selectedPath_) && overwritePath_ != selectedPath_) {
+        overwritePath_ = selectedPath_;
+        if (okButton_) okButton_->setText("Replace");
+        if (statusLabel_) statusLabel_->setText(fname + " already exists: press Replace to overwrite it");
+        markDirty();
         return;
     }
 

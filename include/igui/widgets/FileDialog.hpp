@@ -104,6 +104,7 @@ private:
 
     String currentPath_;
     String selectedPath_;
+    String overwritePath_; // Save mode: the existing file the user was asked about
     String filter_;
     bool showHidden_  = false;
     bool multiSelect_ = false;
@@ -185,6 +186,9 @@ private:
     float scrollY_      = 0.f;
     float rowHeight_    = 22.f;
     float iconCellSize_ = 80.f;
+    int resizingColumn_ = -1;
+    float resizeStartX_ = 0.f;
+    float resizeStartWidth_ = 0.f;
 
     // Deferred nav
     String pendingNav_;
