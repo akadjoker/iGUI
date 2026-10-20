@@ -1,4 +1,8 @@
 #include "pch.hpp"
+
+#if defined(_MSC_VER)
+#define strcasecmp _stricmp
+#endif
 #include <stb_image.h>
 #include <stb_image_write.h>
 
