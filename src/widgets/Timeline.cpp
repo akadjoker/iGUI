@@ -339,6 +339,7 @@ float Timeline::snap(float t, int track, int clip) const
     consider(0.0f);
     consider(playhead_);
     for (int ti = 0; ti < trackCount(); ++ti) {
+        for (const auto& kf : tracks_[ti].keyframes) consider(kf.time);
         const auto& clips = tracks_[ti].clips;
         for (int ci = 0; ci < static_cast<int>(clips.size()); ++ci) {
             if (ti == track && ci == clip) continue;
@@ -438,10 +439,13 @@ void Timeline::onMousePress(MouseEvent& e)
             onClipSelected.emit(ti, ci);
 
             // The volume curve inside the bar: a point is grabbed, a double-click adds or removes one.
+            // The first and last points sit on the edges of the bar, where a drag would resize it: a point is
+            // grabbed there too when the pointer is on it.
             TimelineClip& clip = trk.clips[ci];
-            if (clip.editableEnvelope && e.x > cx0 + 6 && e.x < cx1 - 6) {
+            if (clip.editableEnvelope) {
+                const bool inside = e.x > cx0 + 6 && e.x < cx1 - 6;
                 const int hit = envelopeKeyAt(clip, e.x, e.y, cy, ch);
-                if (e.clickCount >= 2) {
+                if (inside && e.clickCount >= 2) {
                     if (hit >= 0) {
                         clip.envelope.erase(clip.envelope.begin() + hit);
                     } else {
@@ -637,7 +641,7 @@ void Timeline::onMouseMove(MouseEvent& e)
         float end = snap(dragOrigEnd_ + dt, dragTrack_, dragIndex_);
         end = std::max(end, clip.start + 0.04f);
         float speed = used / (end - clip.start);
-        speed = std::max(0.1f, std::min(8.0f, speed));
+        speed = std::max(0.1f, std::min(32.0f, speed));
         clip.speed = speed;
         clip.end = clip.start + used / speed;
         dragMoved_ = true;

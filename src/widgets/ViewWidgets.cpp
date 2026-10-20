@@ -380,8 +380,8 @@ float VideoCanvas::baseScale() const
     if (texW_ <= 0 || texH_ <= 0 || fit_ == Fit::Actual)
         return 1.0f;
     const Rect r = absoluteRect();
-    const float sx = r.w / (texW_ * pixelAspect_);
-    const float sy = r.h / texH_;
+    const float sx = std::max(1.0f, r.w - 2.0f * margin_) / (texW_ * pixelAspect_);
+    const float sy = std::max(1.0f, r.h - 2.0f * margin_) / texH_;
     return fit_ == Fit::Contain ? std::min(sx, sy) : std::max(sx, sy);
 }
 
@@ -390,11 +390,51 @@ void VideoCanvas::setView(float zoom, float panX, float panY)
     const float base = baseScale();
     const float lo = base > 0.0f ? kMinScale / base : 0.0f;
     const float hi = base > 0.0f ? kMaxScale / base : 1.0f;
-    zoom_ = std::clamp(zoom, lo, hi);
+    zoom = std::clamp(zoom, lo, hi);
+    if (zoom == zoom_ && panX == panX_ && panY == panY_) return;
+    zoom_ = zoom;
     panX_ = panX;
     panY_ = panY;
     markDirty();
     viewChanged.emit();
+}
+
+void VideoCanvas::setBox(bool show, float x0, float y0, float x1, float y1)
+{
+    if (show == boxShown_ && x0 == box_[0] && y0 == box_[1] && x1 == box_[2] && y1 == box_[3]) return;
+    boxShown_ = show;
+    box_[0] = x0;
+    box_[1] = y0;
+    box_[2] = x1;
+    box_[3] = y1;
+    markDirty();
+}
+
+// Which handle of the box is at a screen position: the corners, the edges, the inside, or none (-1).
+int VideoCanvas::boxHit(float x, float y) const
+{
+    if (!boxShown_ || texW_ <= 0 || texH_ <= 0) return -1;
+    const Rect img = imageRect();
+    const float x0 = img.x + box_[0] * img.w, y0 = img.y + box_[1] * img.h;
+    const float x1 = img.x + box_[2] * img.w, y1 = img.y + box_[3] * img.h;
+    const float grab = 10.0f;
+    const float mx = (x0 + x1) * 0.5f, my = (y0 + y1) * 0.5f;
+    auto closeTo = [&](float px, float py) { return std::fabs(x - px) <= grab && std::fabs(y - py) <= grab; };
+    if (closeTo(x0, y0)) return 5;
+    if (closeTo(x1, y0)) return 6;
+    if (closeTo(x1, y1)) return 7;
+    if (closeTo(x0, y1)) return 8;
+    if (closeTo(x0, my)) return 1;
+    if (closeTo(mx, y0)) return 2;
+    if (closeTo(x1, my)) return 3;
+    if (closeTo(mx, y1)) return 4;
+    const bool withinX = x >= x0 - grab && x <= x1 + grab, withinY = y >= y0 - grab && y <= y1 + grab;
+    if (withinY && std::fabs(x - x0) <= grab * 0.5f) return 1;
+    if (withinX && std::fabs(y - y0) <= grab * 0.5f) return 2;
+    if (withinY && std::fabs(x - x1) <= grab * 0.5f) return 3;
+    if (withinX && std::fabs(y - y1) <= grab * 0.5f) return 4;
+    if (x > x0 && x < x1 && y > y0 && y < y1) return 0;
+    return -1;
 }
 
 void VideoCanvas::setFit(Fit fit)
@@ -499,6 +539,26 @@ void VideoCanvas::paint(PaintContext& ctx)
 
         ctx.line.SetColor(Color(255, 255, 255, 40));
         ctx.lineRect(img.x, img.y, img.w, img.h);
+
+        if (boxShown_)
+        {
+            const float bx0 = img.x + box_[0] * img.w, by0 = img.y + box_[1] * img.h;
+            const float bx1 = img.x + box_[2] * img.w, by1 = img.y + box_[3] * img.h;
+            const Color red(235, 25, 25, 255);
+            ctx.line.SetColor(red);
+            for (int k = 0; k < 3; ++k) ctx.lineRect(bx0 + k, by0 + k, bx1 - bx0 - 2 * k, by1 - by0 - 2 * k);
+            const float mx = (bx0 + bx1) * 0.5f, my = (by0 + by1) * 0.5f;
+            const float px[8] = {bx0, bx1, bx1, bx0, bx0, mx, bx1, mx};
+            const float py[8] = {by0, by0, by1, by1, my, by0, my, by1};
+            const float h = 7.0f; // half the side of a handle: 14 x 14 pixels
+            for (int i = 0; i < 8; ++i)
+            {
+                ctx.fill.SetColor(255, 255, 255, 255);
+                ctx.fillRect(px[i] - h - 1.0f, py[i] - h - 1.0f, 2.0f * h + 2.0f, 2.0f * h + 2.0f);
+                ctx.fill.SetColor(red);
+                ctx.fillRect(px[i] - h, py[i] - h, 2.0f * h, 2.0f * h);
+            }
+        }
     }
     else
     {
@@ -512,6 +572,25 @@ void VideoCanvas::paint(PaintContext& ctx)
 
 void VideoCanvas::onMousePress(MouseEvent& e)
 {
+    if (e.button == 0)
+    {
+        const int handle = boxHit(e.x, e.y);
+        if (handle >= 0 && e.clickCount >= 2)
+        {
+            boxDoubleClicked.emit();
+            e.consumed = true;
+            return;
+        }
+        if (handle >= 0)
+        {
+            boxHandle_ = handle;
+            boxGrabX_ = e.x;
+            boxGrabY_ = e.y;
+            boxGrabbed.emit(handle);
+            e.consumed = true;
+            return;
+        }
+    }
     if (e.button != 0 && e.button != 2) return;
     if (e.clickCount >= 2)
     {
@@ -530,11 +609,25 @@ void VideoCanvas::onMousePress(MouseEvent& e)
 void VideoCanvas::onMouseRelease(MouseEvent& e)
 {
     dragging_ = false;
+    if (boxHandle_ >= 0)
+    {
+        const int handle = boxHandle_;
+        boxHandle_ = -1;
+        boxReleased.emit(handle);
+    }
     e.consumed = true;
 }
 
 void VideoCanvas::onMouseMove(MouseEvent& e)
 {
+    if (boxHandle_ >= 0)
+    {
+        const Rect img = imageRect();
+        if (img.w > 0.0f && img.h > 0.0f)
+            boxDragged.emit(boxHandle_, (e.x - boxGrabX_) / img.w, (e.y - boxGrabY_) / img.h);
+        e.consumed = true;
+        return;
+    }
     if (dragging_)
     {
         setView(zoom_, dragPanX_ + e.x - dragX_, dragPanY_ + e.y - dragY_);

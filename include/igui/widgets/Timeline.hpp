@@ -57,7 +57,9 @@ struct TimelineClip {
     float envelopeRest = 0;         // the value a new curve starts flat at
     float envelopeMin  = -40;
     float envelopeMax  = 12;
-    float params[4]    = {0, 0, 0, 0}; // free for the application (effects, volume); copied when a clip is split
+    float params[16]   = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // free for the application (effects, volume); copied when a clip is split
+    // A curve per entry of params over the media's own time (seconds); when there is one it replaces the constant.
+    ct::Vector<CurveKey> automation[12];
 };
 
 /// What a track carries; the timeline draws the same, the application decides.
