@@ -1,4 +1,5 @@
 #include <igui/Widgets.hpp>
+#include <igui/widgets/AppWidgets.hpp>
 #include <igui/widgets/CodeEditor.hpp>
 #include <igui/widgets/DirCache.hpp>
 #include <igui/widgets/DockPanel.hpp>
@@ -1020,6 +1021,60 @@ void runFrames(ig::retained::WidgetApp& app, int frames)
     for (int i = 0; i < frames; ++i) app.update(io);
 }
 } // namespace
+
+static void test_split_button_popup_is_forgotten_when_destroyed()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("splitbuttonpopup");
+    auto* split = stage->createChild<SplitButton>("Split");
+    split->setRect({0.0f, 0.0f, 100.0f, 30.0f});
+    split->addAction("Action", [] {});
+
+    MouseEvent press;
+    press.button = 0;
+    press.x = 99.0f;
+    press.y = 15.0f;
+    press.localX = 99.0f;
+    press.localY = 15.0f;
+    split->onMousePress(press);
+    assert(app.popup() != nullptr);
+
+    stage->removeChild(split);
+    runFrames(app, 2);
+}
+
+static void test_tiny_widgets_do_not_emit_non_finite_scrollbar_vertices()
+{
+    using namespace ig::retained;
+    auto assertFinite = [](const DrawList& list)
+    {
+        for (const DrawVertex& vertex: list.vertices())
+            assert(std::isfinite(vertex.x) && std::isfinite(vertex.y)
+                   && std::isfinite(vertex.u) && std::isfinite(vertex.v));
+    };
+
+    DataGrid dataGrid;
+    dataGrid.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    DrawList dataDraw;
+    PaintContext dataContext(dataDraw);
+    dataGrid.paint(dataContext);
+    assertFinite(dataDraw);
+
+    TreeGrid treeGrid;
+    treeGrid.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    DrawList treeDraw;
+    PaintContext treeContext(treeDraw);
+    treeGrid.paint(treeContext);
+    assertFinite(treeDraw);
+
+    ConsoleWidget console;
+    console.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    DrawList consoleDraw;
+    PaintContext consoleContext(consoleDraw);
+    console.paint(consoleContext);
+    assertFinite(consoleDraw);
+}
 
 // A popup the manager owns is deleted once it is gone: after its close
 // animation, when another popup replaces it, and when its owner goes away.
@@ -6288,6 +6343,8 @@ int main()
     test_setting_the_same_float_content_again_keeps_it();
     test_tree_nodes_report_structural_changes();
     test_a_popup_goes_away_with_its_owner();
+    test_split_button_popup_is_forgotten_when_destroyed();
+    test_tiny_widgets_do_not_emit_non_finite_scrollbar_vertices();
     test_a_toolbar_item_can_remove_itself_when_clicked();
     test_dir_cache_keeps_children_when_it_grows();
     test_removing_the_stage_being_left_stops_its_transition();

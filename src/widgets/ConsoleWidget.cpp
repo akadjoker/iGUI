@@ -458,7 +458,7 @@ void ConsoleWidget::paintScrollbar(PaintContext& ctx, const Rect& logArea, float
 {
     float sbW = 8.f;
     float sbX = logArea.right() - sbW;
-    float ratio = logArea.h / totalH;
+    float ratio = totalH > 0.f ? logArea.h / totalH : 1.f;
     float thumbH = std::max(20.f, logArea.h * ratio);
     float maxScroll = totalH - logArea.h;
     float t = (maxScroll > 0) ? scrollY_ / maxScroll : 0.f;

@@ -357,6 +357,7 @@ SplitButton::SplitButton(const String& text) : text_(text)
 
 SplitButton::~SplitButton()
 {
+    WidgetApp::instance().forgetPopup(dropMenu_);
     delete dropMenu_;
 }
 
