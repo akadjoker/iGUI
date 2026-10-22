@@ -370,6 +370,8 @@ public:
     // ── Popup overlay ─────────────────────────────────────────────────
     /// @brief Show a popup widget on top of everything.
     void showPopup(Widget* popup, Widget* owner = nullptr, bool owned = true);
+    /// @brief Drop every popup reference to @p w without deleting it.
+    void forgetPopup(Widget* w);
     /// @brief Close the current popup.
     void closePopup();
     /// @brief Get the active popup widget.
