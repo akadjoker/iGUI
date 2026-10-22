@@ -7,6 +7,8 @@
 //  ComboPopup_ — internal popup widget
 // ─────────────────────────────────────────────────────────────────────────────
 
+namespace ig { namespace retained {
+
 class ComboPopup_ : public Widget
 {
 public:
@@ -120,6 +122,8 @@ private:
     float rowHeight_ = 24.0f;
     float scrollOff_ = 0.0f;
 };
+
+} }
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ComboBox

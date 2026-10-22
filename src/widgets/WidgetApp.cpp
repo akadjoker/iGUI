@@ -1118,6 +1118,26 @@ void WidgetApp::showPopup(Widget* popup, Widget* owner, bool owned)
     popupAnimEase_     = EaseType::OutCubic;
 }
 
+void WidgetApp::forgetPopup(Widget* w)
+{
+    if (!w) return;
+    if (popup_ == w) {
+        popup_ = nullptr; popupOwner_ = nullptr; popupOwned_ = true;
+    }
+    if (popupClosing_ == w) {
+        popupClosing_ = nullptr; popupClosingOwner_ = nullptr; popupClosingOwned_ = true;
+        popupAnimClosing_ = false;
+    }
+    if (popupOwner_ == w) popupOwner_ = nullptr;
+    if (popupClosingOwner_ == w) popupClosingOwner_ = nullptr;
+    for (size_t i = 0; i < pendingPopupDeletes_.size(); ) {
+        if (pendingPopupDeletes_[i] == w)
+            pendingPopupDeletes_.erase(pendingPopupDeletes_.begin() + i);
+        else
+            ++i;
+    }
+}
+
 void WidgetApp::closePopup()
 {
     if (popup_)

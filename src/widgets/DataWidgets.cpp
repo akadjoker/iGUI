@@ -492,7 +492,7 @@ void DataGrid::paint(PaintContext& ctx)
     float contentH = static_cast<float>(nRows) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (contentH > bodyH) {
+    if (bodyH > 0.0f && contentH > bodyH) {
         float sbW = 8.0f;
         float sbX = abs.x + abs.w - sbW;
         float trackH = bodyH;
@@ -508,7 +508,7 @@ void DataGrid::paint(PaintContext& ctx)
         ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
     }
 
-    if (contentW > abs.w) {
+    if (abs.w > 0.0f && contentW > abs.w) {
         float sbH = 8.0f;
         float sbY = abs.y + abs.h - sbH;
         float trackW = abs.w;
@@ -1447,7 +1447,7 @@ void TreeGrid::paint(PaintContext& ctx)
     float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (contentH > bodyH) {
+    if (bodyH > 0.0f && contentH > bodyH) {
         float sbW  = 8.0f;
         float sbX  = abs.x + abs.w - sbW;
         float trackH = bodyH;
@@ -1463,7 +1463,7 @@ void TreeGrid::paint(PaintContext& ctx)
         ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
     }
 
-    if (contentW > abs.w) {
+    if (abs.w > 0.0f && contentW > abs.w) {
         float sbH  = 8.0f;
         float sbY  = abs.y + abs.h - sbH;
         float trackW = abs.w;
