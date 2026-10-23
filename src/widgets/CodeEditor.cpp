@@ -917,12 +917,12 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
 
     // Colors: cycle through a palette for nested scopes (VS Code style)
     static const Color scopeColors[] = {
-        { 90, 105, 180, 140},   // blue
-        { 90, 170, 100, 140},   // green
-        {190, 160,  70, 140},   // gold
-        {180,  90,  90, 140},   // red
-        { 90, 160, 180, 140},   // teal
-        {160, 100, 180, 140},   // purple
+        { 90, 105, 180, 70},   // blue
+        { 90, 170, 100, 70},   // green
+        {190, 160,  70, 70},   // gold
+        {180,  90,  90, 70},   // red
+        { 90, 160, 180, 70},   // teal
+        {160, 100, 180, 70},   // purple
     };
     constexpr int numColors = 6;
 
@@ -1513,6 +1513,7 @@ void CodeEditor::paint(PaintContext& ctx)
     paintCurrentLineHighlight(ctx, abs);
     ctx.pushClip(textRect);
     paintIndentGuides(ctx, abs);
+    paintScopeLines(ctx, abs);
     paintSearchHighlights(ctx, abs);
     ctx.popClip();
 
@@ -1525,7 +1526,6 @@ void CodeEditor::paint(PaintContext& ctx)
     paintExtraSelections(ctx, abs);
     paintExtraCursors(ctx, abs);
     paintWhitespace(ctx, abs);
-    paintScopeLines(ctx, abs);
     paintBracketMatch(ctx, abs);
     ctx.popClip();
     paintFoldGutter(ctx, abs);
