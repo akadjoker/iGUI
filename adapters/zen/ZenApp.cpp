@@ -312,7 +312,21 @@ void App::frameGl()
         gl_.readPixels(pixels.data(), width, height);
         saveScreenshot(pixels.data(), width, height, width);
     }
+    if (afterRenderCallback_)
+        afterRenderCallback_();
     // No window_swap here: app_run swaps after every frame callback.
+}
+
+bool App::readWindowPixels(ct::Vector<uint32_t> &out, int &width, int &height)
+{
+    width = 0;
+    height = 0;
+    window_get_framebuffer_size(window_, &width, &height);
+    if (width <= 0 || height <= 0 || !usesOpenGL())
+        return false;
+    out.resize(static_cast<size_t>(width) * height);
+    gl_.readPixels(out.data(), width, height);
+    return true;
 }
 
 void App::framePixels()
