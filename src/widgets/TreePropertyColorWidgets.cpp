@@ -127,7 +127,8 @@ public:
         ctx.font.SetBatch(&ctx.text);
 
         for (int i = 0; i < n; ++i) {
-            float ry = abs.y + i * rowH;
+            float ry = abs.y + i * rowH - scroll_;
+            if (ry + rowH < abs.y || ry > abs.y + abs.h) continue;
             bool isHov = (i == hovered_);
             bool isSel = (i == selected_);
 
@@ -152,7 +153,7 @@ public:
         e.consumed = true;
 
         float rowH = 22.0f;
-        int idx = static_cast<int>((e.y - abs.y) / rowH);
+        int idx = static_cast<int>((e.y - abs.y + scroll_) / rowH);
         if (idx >= 0 && idx < static_cast<int>(items_.size())) {
             if (row_ >= 0 && row_ < static_cast<int>(grid_->rows_.size())) {
                 auto& d = grid_->propData<PropertyGrid::PropCombo>(row_);
@@ -169,7 +170,7 @@ public:
     {
         Rect abs = absoluteRect();
         float rowH = 22.0f;
-        int idx = static_cast<int>((e.y - abs.y) / rowH);
+        int idx = static_cast<int>((e.y - abs.y + scroll_) / rowH);
         if (idx < 0 || idx >= static_cast<int>(items_.size())) idx = -1;
         if (idx != hovered_) { hovered_ = idx; markDirty(); }
     }
@@ -177,6 +178,19 @@ public:
     void onMouseLeave() override
     {
         if (hovered_ != -1) { hovered_ = -1; markDirty(); }
+    }
+
+    void onMouseScroll(MouseEvent& e) override
+    {
+        setScroll(scroll_ - e.scrollY * 22.0f * 3.0f);
+        e.consumed = true;
+    }
+
+    // Scrolls so the selected item sits inside the list (call after setRect).
+    void revealSelected()
+    {
+        const float rowH = 22.0f;
+        setScroll(selected_ * rowH - (rect_.h - rowH) * 0.5f);
     }
 
     bool popupContains(float x, float y) const override
@@ -190,6 +204,15 @@ private:
     ct::Vector<String> items_;
     int                      selected_ = -1;
     int                      hovered_  = -1;
+    float                    scroll_   = 0.0f;
+
+    void setScroll(float value)
+    {
+        const float maxScroll = static_cast<float>(items_.size()) * 22.0f + 2.0f - rect_.h;
+        if (value > maxScroll) value = maxScroll;
+        if (value < 0.0f) value = 0.0f;
+        if (value != scroll_) { scroll_ = value; markDirty(); }
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1106,14 +1129,14 @@ void PropertyGrid::onMousePress(MouseEvent& e)
         auto vis=visibleRows(); float rowY=abs.y;
         for (int vi=0;vi<(int)vis.size();++vi) { if (vis[vi]==idx) { rowY=abs.y+vi*rowHeight_-scrollOffset_; break; } }
         const auto& io2=ig::retained::GetIO();
-        int n=(int)d.options.size(); float itemH=22.f, popH=n*itemH+2, popW=abs.w-abs.w*labelRatio_;
+        int n=(int)d.options.size(); float itemH=22.f, popH=(n<16?n:16)*itemH+2, popW=abs.w-abs.w*labelRatio_;
         float popX=abs.x+abs.w*labelRatio_;
         float popY=rowY+rowHeight_;
         if (popX+popW > io2.displayWidth)  popX = io2.displayWidth  - popW;
         if (popX < 0.f) popX = 0.f;
         if (popY+popH > io2.displayHeight) popY = (rowY-popH >= 0.f) ? rowY-popH : io2.displayHeight-popH;
         if (popY < 0.f) popY = 0.f;
-        auto* popup=new PropComboPopup_(this,idx); popup->setRect({popX,popY,popW,popH});
+        auto* popup=new PropComboPopup_(this,idx); popup->setRect({popX,popY,popW,popH}); popup->revealSelected();
         WidgetApp::instance().showPopup(popup,nullptr); e.consumed=true; markDirty(); break;
     }
     case PropType::Button: { auto& d=std::get<PropButton>(row.data); if (d.onClick) d.onClick(); markDirty(); break; }
