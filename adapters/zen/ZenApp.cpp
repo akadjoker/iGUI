@@ -255,6 +255,12 @@ void App::frame()
 
     rt::NewFrame();
     widgets().update(io);
+    if (frameCallback_)
+    {
+        if (useGl_)
+            window_make_current(window_);
+        frameCallback_(io.deltaTime);
+    }
     widgets().paint(*rt::GetDrawData(), font_, nullptr);
     rt::Render();
     mouse_set_cursor(window_, cursorShape(io.wantedCursor));
