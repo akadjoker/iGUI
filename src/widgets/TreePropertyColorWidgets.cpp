@@ -429,6 +429,20 @@ float TreeView::maxScroll() const
     return (total > visible) ? total - visible : 0.f;
 }
 
+bool TreeView::scrollbar(Rect& track, Rect& thumb) const
+{
+    const float range = maxScroll();
+    if (range <= 0.f) return false;
+    const Rect abs = absoluteRect();
+    const float barW = 8.f;
+    const float total = static_cast<float>(flatRows_.size()) * rowHeight_;
+    const float thumbH = std::max(20.f, abs.h * (abs.h / total));
+    const float thumbY = abs.y + (scrollOffset_ / range) * (abs.h - thumbH);
+    track = Rect(abs.x + abs.w - barW, abs.y, barW, abs.h);
+    thumb = Rect(track.x + 1.f, thumbY, barW - 2.f, thumbH);
+    return true;
+}
+
 void TreeView::paint(PaintContext& ctx)
 {
     if (!visible_) return;
@@ -487,6 +501,14 @@ void TreeView::paint(PaintContext& ctx)
         ctx.font.Print(row.node->text().c_str(), indX, ty);
     }
 
+    Rect track, thumb;
+    if (scrollbar(track, thumb)) {
+        ctx.fill.SetColor(25, 27, 32, 200);
+        ctx.fillRect(track.x, track.y, track.w, track.h);
+        ctx.fill.SetColor(draggingBar_ ? 100 : 70, draggingBar_ ? 106 : 75, draggingBar_ ? 118 : 85, 200);
+        ctx.fillRoundedRect(thumb.x, thumb.y, thumb.w, thumb.h, 3.f);
+    }
+
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
     ctx.lineRect(abs.x, abs.y, abs.w, abs.h);
     ctx.popClip();
@@ -498,6 +520,22 @@ void TreeView::onMousePress(MouseEvent& e)
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
     e.consumed = true;
+
+    rebuildFlat();
+    Rect track, thumb;
+    if (scrollbar(track, thumb) && e.x >= track.x) {
+        // A press on the track away from the thumb centres the thumb under the cursor.
+        if (e.y < thumb.y || e.y > thumb.y + thumb.h) {
+            const float range = maxScroll();
+            const float travel = abs.h - thumb.h;
+            scrollOffset_ = travel > 0.f ? clamp((e.y - thumb.h * 0.5f - abs.y) / travel * range, 0.f, range) : 0.f;
+            scrollbar(track, thumb);
+        }
+        draggingBar_ = true;
+        barGrab_ = e.y - thumb.y;
+        markDirty();
+        return;
+    }
 
     rebuildFlat();
     float localY = e.y - abs.y + scrollOffset_;
@@ -519,6 +557,27 @@ void TreeView::onMousePress(MouseEvent& e)
         }
     }
     setSelectedNode(row.node);
+}
+
+void TreeView::onMouseMove(MouseEvent& e)
+{
+    if (!draggingBar_) return;
+    Rect track, thumb;
+    if (!scrollbar(track, thumb)) return;
+    const Rect abs = absoluteRect();
+    const float travel = abs.h - thumb.h;
+    const float range = maxScroll();
+    scrollOffset_ = travel > 0.f ? clamp((e.y - barGrab_ - abs.y) / travel * range, 0.f, range) : 0.f;
+    e.consumed = true;
+    markDirty();
+}
+
+void TreeView::onMouseRelease(MouseEvent& e)
+{
+    if (!draggingBar_) return;
+    draggingBar_ = false;
+    e.consumed = true;
+    markDirty();
 }
 
 void TreeView::onMouseScroll(MouseEvent& e)

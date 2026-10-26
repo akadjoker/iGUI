@@ -112,6 +112,8 @@ public:
     void  paint(PaintContext& ctx)           override;
     void  onMousePress(MouseEvent& e)        override;
     void  onMouseScroll(MouseEvent& e)       override;
+    void  onMouseMove(MouseEvent& e)         override;
+    void  onMouseRelease(MouseEvent& e)      override;
     void onKeyPress(KeyEvent& e) override;
 
 private:
@@ -125,6 +127,8 @@ private:
     void scrollToRow(int row);
     void  flattenNode(TreeNode* n, int depth);
     float maxScroll() const;
+    // Track and thumb of the vertical scrollbar; false when every row fits.
+    bool  scrollbar(Rect& track, Rect& thumb) const;
 
     ct::Vector<TreeNode*> roots_;
     ct::Vector<FlatRow>   flatRows_;
@@ -138,6 +142,8 @@ private:
     float                  indent_        = 16.0f;
     unsigned int          revisionSeen_  = 0;   // revision the rows were built from
     bool                   flatDirty_     = true;
+    bool                   draggingBar_   = false;
+    float                  barGrab_       = 0.0f;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
