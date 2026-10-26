@@ -5,6 +5,8 @@
 
 #include <WidgetApp.hpp>
 
+#include <ct/function.hpp>
+
 #include <stdint.h>
 
 struct PlatformWindow;
@@ -49,6 +51,10 @@ public:
     // True when drawing with OpenGL. The GL context is current on the thread that runs the frame.
     bool usesOpenGL() const { return useGl_; }
     GlRaster &gl() { return gl_; }
+    // Runs every frame after the widgets update and before they paint, with the delta time. With OpenGL the
+    // context is current: the place to advance the application and draw into its own framebuffers and
+    // textures, which the widgets then show. It must leave framebuffer 0 bound.
+    void setFrameCallback(ct::Function<void(float)> callback) { frameCallback_ = std::move(callback); }
     PlatformWindow *window() { return window_; }
 
 private:
@@ -76,6 +82,7 @@ private:
     double rasterMs_ = 0.0;
     int statsFrames_ = 0;
     int rasterFrames_ = 0;
+    ct::Function<void(float)> frameCallback_;
 };
 
 } // namespace zen
