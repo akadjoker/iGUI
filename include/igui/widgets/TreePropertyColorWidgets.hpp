@@ -225,6 +225,11 @@ public:
     /// @brief Set a range property value by row.
     void setRange  (int row, float lo, float hi);
 
+    /// @brief How much a drag changes a number or vector row per pixel (0, the default, spreads the
+    ///        whole range over the field). Shift drags ten times slower and Ctrl ten times faster.
+    void setDragStep(int row, float perPixel);
+    /// @brief True while a value is typed or dragged, so the application does not overwrite it.
+    bool isEditing() const { return editing_ || draggingSlider_; }
     /// @brief Emitted when any property value changes.
     Signal<int> propertyChanged;
 
@@ -268,6 +273,7 @@ public:
         String name;
         String description;
         PropData    data;
+        float       dragStep = 0.0f;   // value per pixel when dragged; 0 = the range over the field width
     };
 
     // ── Typed accessors (convenience) ────────────────────────────────────
