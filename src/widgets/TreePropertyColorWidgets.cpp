@@ -705,6 +705,9 @@ void PropertyGrid::setCombo(int row, int idx)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Combo) { auto& d=std::get<PropCombo>(rows_[row].data); if (idx>=0&&idx<(int)d.options.size()) d.index=idx; markDirty(); } }
 void PropertyGrid::setVec2(int row, float x, float y)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Vec2) { auto& d=std::get<PropVec>(rows_[row].data); d.value[0]=clamp(x,d.min,d.max); d.value[1]=clamp(y,d.min,d.max); markDirty(); } }
+void PropertyGrid::setDragStep(int row, float perPixel)
+{ if (row>=0&&row<(int)rows_.size()&&std::isfinite(perPixel)) rows_[row].dragStep = std::max(0.0f, perPixel); }
+
 void PropertyGrid::setVec3(int row, float x, float y, float z)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Vec3) { auto& d=std::get<PropVec>(rows_[row].data); d.value[0]=clamp(x,d.min,d.max); d.value[1]=clamp(y,d.min,d.max); d.value[2]=clamp(z,d.min,d.max); markDirty(); } }
 void PropertyGrid::setVec4(int row, float x, float y, float z, float w)
@@ -1186,8 +1189,9 @@ void PropertyGrid::onMouseMove(MouseEvent& e)
             if (std::abs(e.x - dragStartX_) < 3.0f) return;
             float ratio=clamp((e.x-sliderX)/sliderW,0.f,1.f);
             const float sensitivity = e.shift ? 0.1f : (e.ctrl ? 10.0f : 1.0f);
+            const float perPixel = row.dragStep > 0.0f ? row.dragStep : range / std::max(200.0f, sliderW);
             float newVal = row.type == PropType::Range ? mn + ratio * range
-                : clamp(dragStartVal_ + (e.x - dragStartX_) * range / std::max(200.0f, sliderW) * sensitivity, mn, mx2);
+                : clamp(dragStartVal_ + (e.x - dragStartX_) * perPixel * sensitivity, mn, mx2);
             if (row.type==PropType::Float) { auto& d=std::get<PropFloat>(row.data); d.value=newVal; if (d.onChange) d.onChange(d.value); }
             else if (row.type==PropType::Int) { auto& d=std::get<PropInt>(row.data); d.value=(int)std::round(newVal); if (d.onChange) d.onChange(d.value); }
             else if (row.type==PropType::Range) {
