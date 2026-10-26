@@ -555,12 +555,19 @@ void Timeline::onMouseRelease(MouseEvent& e)
          dragMode_ == DragMode::StretchClipR);
     const int editedTrack = dragTrack_;
     const int editedClip = dragIndex_;
+    const bool keyDragged = dragMode_ == DragMode::MoveKey && dragTrack_ >= 0 &&
+        dragTrack_ < static_cast<int>(tracks_.size()) && dragIndex_ >= 0 &&
+        dragIndex_ < static_cast<int>(tracks_[dragTrack_].keyframes.size());
+    const float droppedTime = keyDragged ? tracks_[dragTrack_].keyframes[dragIndex_].time : 0.0f;
+    const float startTime = dragOrigTime_;
     dragMoved_ = false;
     dragMode_  = DragMode::None;
     dragTrack_ = -1;
     dragIndex_ = -1;
     e.consumed = true;
     if (edited) onClipEdited.emit(editedTrack, editedClip);
+    if (keyDragged && droppedTime != startTime)
+        onKeyframeDropped.emit(editedTrack, editedClip, startTime, droppedTime);
 }
 
 void Timeline::onMouseMove(MouseEvent& e)

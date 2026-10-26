@@ -96,6 +96,8 @@ public:
     Signal<int, bool> onTrackMuteChanged;
     Signal<int, bool> onTrackLockChanged;
     Signal<int, int, float> onKeyframeMoved;
+    /// Emitted once when a dragged keyframe is released: track id, key index, start time, end time.
+    Signal<int, int, float, float> onKeyframeDropped;
     Signal<int, int> onKeyframeAdded;
 
     /// @brief Add a named track with optional color.
