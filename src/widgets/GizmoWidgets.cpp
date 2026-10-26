@@ -670,8 +670,11 @@ void Gizmo3D::onMouseMove(MouseEvent& e)
         Vec3f delta = {};
         Pt2 center = project(targetPos_);
 
+        // An axis one world unit long can be shorter than a pixel in a large scene (centimetres):
+        // the direction is measured on a segment about a hundred pixels long instead.
+        const float probe = std::max(1e-6f, pixelToWorld * 100.0f);
         auto axisMove = [&](const Vec3f& axis) {
-            Pt2 axEnd = project(targetPos_ + axis);
+            Pt2 axEnd = project(targetPos_ + axis * probe);
             float axX = axEnd.x - center.x, axY = axEnd.y - center.y;
             float axLen = std::sqrt(axX*axX + axY*axY);
             if (axLen < 1.0f) return 0.0f;
