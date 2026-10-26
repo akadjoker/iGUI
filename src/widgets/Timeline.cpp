@@ -22,7 +22,45 @@ namespace {
 //  Timeline
 // ═════════════════════════════════════════════════════════════════════════════
 
-Timeline::Timeline() { acceptsFocus_ = true; }
+Timeline::Timeline()
+{
+    acceptsFocus_ = true;
+    vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
+    vbar_->setVisible(false);
+    vbar_->scrolled.connect([this](float value) { verticalScroll_ = value; markDirty(); });
+}
+
+float Timeline::maxVerticalScroll() const
+{
+    return std::max(0.0f, visibleTracks().size() * kTrackH - (rect_.h - kRulerH));
+}
+
+void Timeline::setVerticalScroll(float pixels)
+{
+    if (!std::isfinite(pixels)) return;
+    verticalScroll_ = std::clamp(pixels, 0.0f, maxVerticalScroll());
+    syncScrollBar();
+    markDirty();
+}
+
+void Timeline::syncScrollBar()
+{
+    const float view = std::max(0.0f, rect_.h - kRulerH);
+    const float content = visibleTracks().size() * kTrackH;
+    verticalScroll_ = std::clamp(verticalScroll_, 0.0f, std::max(0.0f, content - view));
+    vbar_->setContentSize(content);
+    vbar_->setViewSize(view);
+    vbar_->setValue(verticalScroll_);
+    vbar_->setVisible(ScrollBar::neededFor(content, view));
+}
+
+void Timeline::layout()
+{
+    const float thick = ScrollBar::kBarThickness;
+    vbar_->setRect({rect_.w - thick - 2.0f, kRulerH + 1.0f, thick, std::max(0.0f, rect_.h - kRulerH - 2.0f)});
+    syncScrollBar();
+    Widget::layout();
+}
 
 int Timeline::addJoint(const String& name, int parent)
 {
@@ -675,10 +713,11 @@ void Timeline::onDropReceive(const DragPayload& p)
 void Timeline::onMouseScroll(MouseEvent& e)
 {
     if (e.scrollY == 0) return;
-    if (e.x < absoluteRect().x + kHeaderW) {
-        const float maxScroll = std::max(0.0f, visibleTracks().size() * kTrackH - (absoluteRect().h - kRulerH));
-        verticalScroll_ = std::clamp(verticalScroll_ - e.scrollY * kTrackH, 0.0f, maxScroll);
-        markDirty(); e.consumed = true; return;
+    const bool overHeader = e.x < absoluteRect().x + kHeaderW;
+    const bool overBar = vbar_->isVisible() && vbar_->absoluteRect().contains(e.x, e.y);
+    if (overHeader || overBar || (wheelScrollsTracks_ && !e.ctrl)) {
+        setVerticalScroll(verticalScroll_ - e.scrollY * kTrackH);
+        e.consumed = true; return;
     }
     // Zoom centred on mouse X
     float tAtMouse = xToTime(e.x);
@@ -699,6 +738,7 @@ void Timeline::paint(PaintContext& ctx)
 {
     if (!visible_) return;
     Rect b = absoluteRect();
+    syncScrollBar();
 
     ctx.pushClip(b);
 
