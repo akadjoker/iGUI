@@ -73,6 +73,14 @@ float Menu::rowY_(int idx) const
     return y;
 }
 
+Rect Menu::actionRect(int idx) const
+{
+    if (idx < 0 || idx >= static_cast<int>(actions_.size())) return Rect();
+    const auto& t = Theme::instance();
+    const float h = actions_[idx]->isSeparator() ? kSepH : t.menuItemHeight;
+    return Rect(rect_.x, rowY_(idx), rect_.w, h);
+}
+
 int Menu::hitItem_(float screenY) const
 {
     const auto& t = Theme::instance();
@@ -408,6 +416,13 @@ int MenuBar::openMenuIdx_() const
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i)
         if (entries_[i].menu == p) return i;
     return -1;
+}
+
+Rect MenuBar::titleRect(int i) const
+{
+    if (i < 0 || i >= static_cast<int>(entries_.size())) return Rect();
+    const Rect abs = absoluteRect();
+    return Rect(abs.x + entries_[i].x, abs.y, entries_[i].w, abs.h);
 }
 
 void MenuBar::openMenu_(int idx)
