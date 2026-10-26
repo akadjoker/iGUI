@@ -101,6 +101,10 @@ public:
 
     /// @brief Show the menu as a popup at screen coordinates.
     void exec(float x, float y, Widget* owner = nullptr);
+    /// @brief Highlight an item as if the mouse were over it (-1 clears).
+    void highlight(int idx) { hoveredIdx_ = idx; markDirty(); }
+    /// @brief Screen rectangle of an item while the menu is shown.
+    Rect actionRect(int idx) const;
 
     // ── Widget overrides ──────────────────────────────────────────────────
     void resetPopupState()                     override;
@@ -155,6 +159,12 @@ public:
     Menu*              menu(int i)      const;
     /// @brief Get a menu title by index.
     const String& menuTitle(int i) const;
+    /// @brief Open a menu by index, as a click on its title does.
+    void openMenu(int i) { openMenu_(i); }
+    /// @brief Close the open menu, if any.
+    void closeMenu() { closeMenu_(); }
+    /// @brief Screen rectangle of a menu title.
+    Rect titleRect(int i) const;
 
     Vec2f sizeHint() const override;
     void  layout()   override;
