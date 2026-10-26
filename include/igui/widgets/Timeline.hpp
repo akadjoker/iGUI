@@ -3,6 +3,7 @@
 #include "Widget.hpp"
 #include "Signal.hpp"
 #include "ChartWidgets.hpp"
+#include "ScrollWidgets.hpp"
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
@@ -142,6 +143,13 @@ public:
     void clearSelection();
     /// @brief First clip on the track covering time t, or -1. Later clips win.
     int  clipAt(int trackId, float t) const;
+    /// @brief The mouse wheel scrolls the tracks up and down everywhere and Ctrl+wheel zooms the time
+    ///        (true), or the wheel zooms the time and only scrolls over the track names (false, the default).
+    void setWheelScrollsTracks(bool on) { wheelScrollsTracks_ = on; }
+    bool wheelScrollsTracks() const { return wheelScrollsTracks_; }
+    /// @brief How far the tracks are scrolled down, in pixels.
+    float verticalScroll() const { return verticalScroll_; }
+    void  setVerticalScroll(float pixels);
     /// @brief Snap clip edges to other clips, the playhead and zero while dragging.
     void setSnapping(bool on) { snapping_ = on; }
     bool snapping() const { return snapping_; }
@@ -190,6 +198,7 @@ public:
     Signal<const DragPayload&, int, float> onDrop;
 
     // ── Overrides ────────────────────────────────────────────────────────
+    void layout() override;
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
     void onMouseRelease(MouseEvent& e) override;
@@ -212,6 +221,10 @@ private:
     float kHeaderW = 160;
     float edgePadding_ = 16;
     float verticalScroll_ = 0;
+    bool  wheelScrollsTracks_ = false;
+    ScrollBar* vbar_ = nullptr;
+    float maxVerticalScroll() const;
+    void  syncScrollBar();
     static constexpr float kRulerH  = 24;
 
     // Interaction state
