@@ -168,6 +168,10 @@ public:
     /// @brief Get the visible end time.
     float viewEnd()   const { return viewEnd_; }
 
+    /// @brief Shade the range between two times (an in/out selection); out <= in hides it.
+    void  setMarkedRange(float in, float out) { rangeIn_ = in; rangeOut_ = out; markDirty(); }
+    void  clearMarkedRange()                  { rangeIn_ = 0.0f; rangeOut_ = -1.0f; markDirty(); }
+
     /// @brief Set the frame rate (fps) for tick marks.
     void  setFrameRate(float fps) { fps_ = fps; }
     /// @brief Get the frame rate.
@@ -218,6 +222,8 @@ private:
     float viewStart_  = 0;
     float viewEnd_    = 5;
     float fps_        = 30.0f;
+    float rangeIn_    = 0.0f;
+    float rangeOut_   = -1.0f;
 
     static constexpr float kTrackH  = 28;
     float kHeaderW = 160;
@@ -261,6 +267,7 @@ private:
 
     void paintRuler(PaintContext& ctx, const Rect& b);
     void paintTracks(PaintContext& ctx, const Rect& b);
+    void paintMarkedRange(PaintContext& ctx, const Rect& b);
     void paintPlayhead(PaintContext& ctx, const Rect& b);
 };
 
