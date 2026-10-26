@@ -55,6 +55,9 @@ public:
     // context is current: the place to advance the application and draw into its own framebuffers and
     // textures, which the widgets then show. It must leave framebuffer 0 bound.
     void setFrameCallback(ct::Function<void(float)> callback) { frameCallback_ = std::move(callback); }
+    // Runs every frame after the platform input is read into the IO and before the widgets update, with the
+    // frame number: a test or a recorder can replace the mouse and add keys there.
+    void setInputHook(ct::Function<void(int, ig::retained::IO &)> hook) { inputHook_ = std::move(hook); }
     PlatformWindow *window() { return window_; }
 
 private:
@@ -83,6 +86,8 @@ private:
     int statsFrames_ = 0;
     int rasterFrames_ = 0;
     ct::Function<void(float)> frameCallback_;
+    ct::Function<void(int, ig::retained::IO &)> inputHook_;
+    int frameIndex_ = 0;
 };
 
 } // namespace zen

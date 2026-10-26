@@ -252,6 +252,9 @@ void App::frame()
     io.mouseDown[1] = mouse_button_down(window_, MOUSE_RIGHT);
     io.mouseDown[2] = mouse_button_down(window_, MOUSE_MIDDLE);
     feedInput();
+    if (inputHook_)
+        inputHook_(frameIndex_, io);
+    ++frameIndex_;
 
     rt::NewFrame();
     widgets().update(io);
