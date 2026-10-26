@@ -58,6 +58,10 @@ public:
     // Runs every frame after the platform input is read into the IO and before the widgets update, with the
     // frame number: a test or a recorder can replace the mouse and add keys there.
     void setInputHook(ct::Function<void(int, ig::retained::IO &)> hook) { inputHook_ = std::move(hook); }
+    /// Called after the interface is drawn and before the swap (OpenGL path): the place to read the window.
+    void setAfterRenderCallback(ct::Function<void()> callback) { afterRenderCallback_ = std::move(callback); }
+    /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the after-render callback.
+    bool readWindowPixels(ct::Vector<uint32_t> &out, int &width, int &height);
     PlatformWindow *window() { return window_; }
 
 private:
@@ -86,6 +90,7 @@ private:
     int statsFrames_ = 0;
     int rasterFrames_ = 0;
     ct::Function<void(float)> frameCallback_;
+    ct::Function<void()> afterRenderCallback_;
     ct::Function<void(int, ig::retained::IO &)> inputHook_;
     int frameIndex_ = 0;
 };
