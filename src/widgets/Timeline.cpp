@@ -757,6 +757,7 @@ void Timeline::paint(PaintContext& ctx)
     ctx.pushClip({b.x, b.y + kRulerH, b.w, std::max(0.0f, b.h - kRulerH)});
     paintTracks(ctx, b);
     ctx.popClip();
+    paintMarkedRange(ctx, b);
     paintPlayhead(ctx, b);
 
     // Border (4 edges)
@@ -1015,6 +1016,22 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 // ─────────────────────────────────────────────────────────────────────────────
 //  Playhead — red vertical line + triangle marker
 // ─────────────────────────────────────────────────────────────────────────────
+
+void Timeline::paintMarkedRange(PaintContext& ctx, const Rect& b)
+{
+    if (rangeOut_ <= rangeIn_) return;
+    const float left = std::max(timeToX(rangeIn_), b.x + kHeaderW);
+    const float right = std::min(timeToX(rangeOut_), b.x + b.w);
+    if (right <= left) return;
+    const float bottom = std::min(b.y + b.h, b.y + kRulerH + static_cast<float>(tracks_.size()) * kTrackH);
+    ctx.fill.SetColor(90, 170, 255, 110);
+    ctx.fillRect(left, b.y + kRulerH - 6, right - left, 6);
+    ctx.fill.SetColor(90, 170, 255, 28);
+    ctx.fillRect(left, b.y + kRulerH, right - left, std::max(0.0f, bottom - b.y - kRulerH));
+    ctx.fill.SetColor(90, 170, 255, 200);
+    ctx.fillRect(left, b.y, 1, bottom - b.y);
+    ctx.fillRect(right - 1, b.y, 1, bottom - b.y);
+}
 
 void Timeline::paintPlayhead(PaintContext& ctx, const Rect& b)
 {
