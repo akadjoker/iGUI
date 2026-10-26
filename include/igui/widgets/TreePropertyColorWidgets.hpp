@@ -222,6 +222,8 @@ public:
     void setColor  (int row, const Color& c);
     /// @brief Set a combo-box selection by row.
     void setCombo  (int row, int idx);
+    /// @brief Replace the options of a combo-box row and select one of them.
+    void setComboOptions(int row, const ct::Vector<String>& options, int idx);
     /// @brief Set a Vec2 property value by row.
     void setVec2   (int row, float x, float y);
     /// @brief Set a Vec3 property value by row.

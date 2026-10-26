@@ -785,6 +785,14 @@ void PropertyGrid::setColor(int row, const Color& c)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Color) std::get<PropColor>(rows_[row].data).value=c; markDirty(); }
 void PropertyGrid::setCombo(int row, int idx)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Combo) { auto& d=std::get<PropCombo>(rows_[row].data); if (idx>=0&&idx<(int)d.options.size()) d.index=idx; markDirty(); } }
+void PropertyGrid::setComboOptions(int row, const ct::Vector<String>& options, int idx)
+{
+    if (row < 0 || row >= (int)rows_.size() || rows_[row].type != PropType::Combo) return;
+    auto& d = std::get<PropCombo>(rows_[row].data);
+    d.options = options;
+    d.index = idx >= 0 && idx < (int)options.size() ? idx : 0;
+    markDirty();
+}
 void PropertyGrid::setVec2(int row, float x, float y)
 { if (row>=0&&row<(int)rows_.size()&&rows_[row].type==PropType::Vec2) { auto& d=std::get<PropVec>(rows_[row].data); d.value[0]=clamp(x,d.min,d.max); d.value[1]=clamp(y,d.min,d.max); markDirty(); } }
 void PropertyGrid::setDragStep(int row, float perPixel)
