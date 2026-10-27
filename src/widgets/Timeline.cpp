@@ -368,6 +368,27 @@ void Timeline::selectedClips(ct::Vector<TimelineClipRef>& out) const
             }
 }
 
+void Timeline::selectedKeys(ct::Vector<TimelineKeyRef>& out) const
+{
+    out.clear();
+    for (int ti = 0; ti < trackCount(); ++ti)
+        for (int ki = 0; ki < static_cast<int>(tracks_[ti].keyframes.size()); ++ki)
+            if (tracks_[ti].keyframes[ki].selected) {
+                TimelineKeyRef ref;
+                ref.track = ti;
+                ref.key = ki;
+                out.push_back(ref);
+            }
+}
+
+int Timeline::selectedKeyCount() const
+{
+    int count = 0;
+    for (const auto& trk : tracks_)
+        for (const auto& kf : trk.keyframes) if (kf.selected) ++count;
+    return count;
+}
+
 int Timeline::selectedClipCount() const
 {
     int count = 0;
@@ -500,6 +521,7 @@ void Timeline::snapCandidates(int track, int clip, int keyTrack, int key, ct::Ve
         const auto& keys = tracks_[ti].keyframes;
         for (int ki = 0; ki < static_cast<int>(keys.size()); ++ki) {
             if (ti == keyTrack && ki == key) continue;
+            if (keyGroup_.size() > 1 && keys[ki].selected) continue; // they move with the key
             out.push_back(keys[ki].time);
         }
         const auto& clips = tracks_[ti].clips;
@@ -598,13 +620,44 @@ void Timeline::onMousePress(MouseEvent& e)
         float kx = timeToX(trk.keyframes[ki].time);
         float ky = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
         if (std::fabs(e.x - kx) + std::fabs(e.y - ky) < 8) {
-            clearSelection();
-            trk.keyframes[ki].selected = true;
+            // Ctrl+click toggles the key, Shift+click adds it, a plain click selects only it; a plain click on a key
+            // that is already selected keeps the other keys, so they can be dragged together (a click without a
+            // drag keeps only that key).
+            bool collapse = false;
+            if (e.ctrl) {
+                trk.keyframes[ki].selected = !trk.keyframes[ki].selected;
+                if (trk.keyframes[ki].selected) onKeyframeSelected.emit(ti, ki);
+                markDirty();
+                e.consumed = true;
+                return;
+            }
+            if (e.shift) {
+                trk.keyframes[ki].selected = true;
+            } else if (trk.keyframes[ki].selected) {
+                for (auto& other : tracks_) for (auto& clip : other.clips) clip.selected = false;
+                collapse = selectedKeyCount() > 1;
+            } else {
+                clearSelection();
+                trk.keyframes[ki].selected = true;
+            }
             dragMode_     = DragMode::MoveKey;
             dragTrack_    = ti;
             dragIndex_    = ki;
             dragOrigTime_ = trk.keyframes[ki].time;
             dragStartX_   = e.x;
+            dragMoved_    = false;
+            keyGroup_.clear();
+            ct::Vector<TimelineKeyRef> picked;
+            selectedKeys(picked);
+            if (picked.size() > 1)
+                for (size_t i = 0; i < picked.size(); ++i) {
+                    KeyMember member;
+                    member.track = picked[i].track;
+                    member.key   = picked[i].key;
+                    member.time  = tracks_[member.track].keyframes[member.key].time;
+                    keyGroup_.push_back(member);
+                }
+            collapseKeyOnRelease_ = collapse;
             onKeyframeSelected.emit(ti, ki);
             if (e.clickCount >= 2) onKeyframeDoubleClicked.emit(ti, ki);
             e.consumed = true;
@@ -626,7 +679,6 @@ void Timeline::onMousePress(MouseEvent& e)
             const bool edge = e.x < cx0 + 6 || e.x > cx1 - 6;
             bool collapse = false;
             if (!edge && e.ctrl) {
-                clearKeySelection();
                 trk.clips[ci].selected = !trk.clips[ci].selected;
                 if (trk.clips[ci].selected) onClipSelected.emit(ti, ci);
                 markDirty();
@@ -634,7 +686,6 @@ void Timeline::onMousePress(MouseEvent& e)
                 return;
             }
             if (!edge && e.shift) {
-                clearKeySelection();
                 trk.clips[ci].selected = true;
             } else if (!edge && trk.clips[ci].selected) {
                 clearKeySelection();
@@ -733,10 +784,10 @@ void Timeline::onMousePress(MouseEvent& e)
         return;
     }
     // Empty part of a track: a drag draws a rectangle that selects the clips inside it.
-    if (e.shift || e.ctrl) clearKeySelection();
-    else clearSelection();
+    if (!(e.shift || e.ctrl)) clearSelection();
     marqueeBase_.clear();
     selectedClips(marqueeBase_);
+    selectedKeys(marqueeKeyBase_);
     marqueeX0_ = marqueeX1_ = e.x;
     marqueeY0_ = marqueeY1_ = e.y;
     dragMode_ = DragMode::Marquee;
@@ -766,6 +817,19 @@ void Timeline::updateMarquee()
             }
             clip.selected = selected;
         }
+        const float ky = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
+        for (int ki = 0; ki < static_cast<int>(tracks_[ti].keyframes.size()); ++ki) {
+            auto& kf = tracks_[ti].keyframes[ki];
+            bool selected = false;
+            for (size_t i = 0; i < marqueeKeyBase_.size() && !selected; ++i)
+                selected = marqueeKeyBase_[i].track == ti && marqueeKeyBase_[i].key == ki;
+            if (shown) {
+                const float kx = timeToX(kf.time);
+                if (kx > b.x + kHeaderW && kx + 6 >= x0 && kx - 6 <= x1 && ky + 6 >= y0 && ky - 6 <= y1)
+                    selected = true;
+            }
+            kf.selected = selected;
+        }
     }
 }
 
@@ -779,6 +843,16 @@ void Timeline::onMouseRelease(MouseEvent& e)
         clearSelection();
         tracks_[dragTrack_].clips[dragIndex_].selected = true;
     }
+    const bool collapseKey = collapseKeyOnRelease_ && !dragMoved_ && dragMode_ == DragMode::MoveKey &&
+        dragTrack_ >= 0 && dragTrack_ < static_cast<int>(tracks_.size()) && dragIndex_ >= 0 &&
+        dragIndex_ < static_cast<int>(tracks_[dragTrack_].keyframes.size());
+    if (collapseKey) {
+        clearSelection();
+        tracks_[dragTrack_].keyframes[dragIndex_].selected = true;
+    }
+    collapseKeyOnRelease_ = false;
+    ct::Vector<KeyMember> keyGroup = keyGroup_;
+    keyGroup_.clear();
     collapseOnRelease_ = false;
     ct::Vector<DragMember> group = dragGroup_;
     dragGroup_.clear();
@@ -801,15 +875,24 @@ void Timeline::onMouseRelease(MouseEvent& e)
         markDirty();
         ct::Vector<TimelineClipRef> picked;
         selectedClips(picked);
+        ct::Vector<TimelineKeyRef> keys;
+        selectedKeys(keys);
         if (!picked.empty()) onClipSelected.emit(picked[0].track, picked[0].clip);
+        else if (!keys.empty()) onKeyframeSelected.emit(keys[0].track, keys[0].key);
     }
     if (edited && group.size() > 1) {
         for (size_t i = 0; i < group.size(); ++i) onClipEdited.emit(group[i].track, group[i].clip);
     } else if (edited) {
         onClipEdited.emit(editedTrack, editedClip);
     }
-    if (keyDragged && droppedTime != startTime)
+    if (keyDragged && keyGroup.size() > 1) {
+        for (size_t i = 0; i < keyGroup.size(); ++i) {
+            const float now = tracks_[keyGroup[i].track].keyframes[keyGroup[i].key].time;
+            if (now != keyGroup[i].time) onKeyframeDropped.emit(keyGroup[i].track, keyGroup[i].key, keyGroup[i].time, now);
+        }
+    } else if (keyDragged && droppedTime != startTime) {
         onKeyframeDropped.emit(editedTrack, editedClip, startTime, droppedTime);
+    }
 }
 
 bool Timeline::clipAtPoint(float x, float y, int& track, int& clip) const
@@ -868,6 +951,22 @@ void Timeline::onMouseMove(MouseEvent& e)
         float dt = xToTime(e.x) - xToTime(dragStartX_);
         const float snapped = snap(dragOrigTime_ + dt, -1, -1, dragTrack_, dragIndex_);
         const float time = std::clamp(snapped, viewStart_, viewEnd_);
+        dragMoved_ = true;
+        // Several selected keys move together by the same amount, each on its own track.
+        if (keyGroup_.size() > 1) {
+            float delta = time - dragOrigTime_;
+            float earliest = keyGroup_[0].time;
+            for (size_t i = 1; i < keyGroup_.size(); ++i) earliest = std::min(earliest, keyGroup_[i].time);
+            delta = std::max(delta, -earliest);
+            for (size_t i = 0; i < keyGroup_.size(); ++i) {
+                const float moved = keyGroup_[i].time + delta;
+                tracks_[keyGroup_[i].track].keyframes[keyGroup_[i].key].time = moved;
+                onKeyframeMoved.emit(keyGroup_[i].track, keyGroup_[i].key, moved);
+            }
+            markDirty();
+            e.consumed = true;
+            break;
+        }
         tracks_[dragTrack_].keyframes[dragIndex_].time = time;
         onKeyframeMoved.emit(dragTrack_, dragIndex_, time);
         markDirty();
