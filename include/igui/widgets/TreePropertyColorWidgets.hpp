@@ -124,6 +124,13 @@ public:
     /// @brief Get root-level nodes.
     const ct::Vector<TreeNode*>& roots()        const { return roots_; }
 
+    /// @brief Window-space rectangle of a node's row, scrolled into view first; false when the node is not shown.
+    bool rowRect(const TreeNode* node, Rect& out);
+    /// @brief Window-space point at the start of a node's text, for pointing at it.
+    bool labelPoint(const TreeNode* node, float& x, float& y);
+    /// @brief Window-space rectangle of one of a node's toggles, scrolled into view first.
+    bool toggleRect(const TreeNode* node, int index, Rect& out);
+
     /// @brief Emitted when the selection changes.
     Signal<TreeNode*> selectionChanged;
     /// @brief Emitted when a node is expanded.

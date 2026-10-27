@@ -162,6 +162,8 @@ public:
     void setSelectedIndex(int idx);
     /// @brief Deselect the current item.
     void clearSelection();
+    /// @brief Window-space rectangle of an item, scrolled into view first; false for a bad index.
+    bool itemRect(int index, Rect& out);
 
     void layout() override;
     void paint(PaintContext& ctx) override;

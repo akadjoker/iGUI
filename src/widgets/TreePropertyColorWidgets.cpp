@@ -707,6 +707,39 @@ void TreeView::scrollToRow(int row)
     scrollOffset_ = clamp(scrollOffset_, 0.f, maxScroll());
 }
 
+bool TreeView::rowRect(const TreeNode* node, Rect& out)
+{
+    rebuildFlat();
+    const int row = rowOf(node);
+    if (row < 0) return false;
+    scrollToRow(row);
+    const Rect abs = absoluteRect();
+    out = {abs.x, abs.y + row * rowHeight_ - scrollOffset_, abs.w, rowHeight_};
+    return true;
+}
+
+bool TreeView::labelPoint(const TreeNode* node, float& x, float& y)
+{
+    Rect row;
+    if (!rowRect(node, row)) return false;
+    const auto& t = Theme::instance();
+    float left = row.x + 4.f + flatRows_[rowOf(node)].depth * indent_ + 11.f;
+    if (node->iconId() != IconId::None) left += t.fontSize + 3.f;
+    x = left + 24.f;
+    y = row.y + row.h * 0.5f;
+    return true;
+}
+
+bool TreeView::toggleRect(const TreeNode* node, int index, Rect& out)
+{
+    Rect row;
+    if (!rowRect(node, row) || index < 0 || index >= node->toggleCount()) return false;
+    const float slot = toggleSlot();
+    const float left = toggleEdge(absoluteRect()) - slot * node->toggleCount();
+    out = {left + slot * index, row.y, slot, row.h};
+    return true;
+}
+
 void TreeView::onKeyPress(KeyEvent& e)
 {
     if (!focused_ || !isEnabledInTree()) return;

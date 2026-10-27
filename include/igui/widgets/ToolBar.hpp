@@ -101,6 +101,11 @@ public:
     /// @brief Set an item's tooltip text.
     void setItemTooltip(int id, const String& tip);
 
+    /// @brief Window-space rectangle of an item; false when the id is unknown or the item is hidden.
+    bool itemRect(int id, Rect& out) const;
+    /// @brief The id of the item whose tooltip is the text (ignoring case) or else starts with it; -1 if none.
+    int  itemByTooltip(const String& text) const;
+
     /// @brief Set whether an item can be reordered by drag.
     void setItemDraggable(int id, bool draggable);
     /// @brief Check if an item is draggable.
