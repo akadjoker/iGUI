@@ -1,6 +1,8 @@
 #include "Timeline.hpp"
 #include "Theme.hpp"
 #include "Retained.hpp"
+#include "TextInputWidgets.hpp"
+#include "WidgetApp.hpp"
 #include <cmath>
 #include <algorithm>
 #include <cstdio>
@@ -19,8 +21,76 @@ namespace {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Snapping
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace ig { namespace retained
+{
+
+bool findSnap(const ct::Vector<float>& candidates, float t, float threshold, float& out)
+{
+    bool found = false;
+    float bestDistance = 0.0f;
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        const float distance = std::fabs(candidates[i] - t);
+        if (distance > threshold) continue;
+        if (found && distance >= bestDistance) continue;
+        found = true;
+        bestDistance = distance;
+        out = candidates[i];
+    }
+    return found;
+}
+
+float snapTime(const ct::Vector<float>& candidates, float t, float threshold)
+{
+    float out = t;
+    return findSnap(candidates, t, threshold, out) ? out : t;
+}
+
+float snapFrame(float t, float fps)
+{
+    if (!(fps > 0.0f) || !std::isfinite(t)) return t;
+    return std::round(t * fps) / fps;
+}
+
+} // namespace retained
+} // namespace ig
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Timeline
 // ═════════════════════════════════════════════════════════════════════════════
+
+// The small text field that names a keyframe in place. Every key it gets is its own, so typing a name never
+// reaches the shortcuts of the timeline behind it.
+class Timeline::LabelInput : public TextInput
+{
+public:
+    explicit LabelInput(Timeline* owner) : owner_(owner) { setTabStop(false); }
+
+    void onKeyPress(KeyEvent& e) override
+    {
+        if (e.key == Key::Escape) {
+            owner_->finishLabelEdit(false, true);
+        } else if (e.key == Key::Return || e.key == Key::KPEnter) {
+            owner_->finishLabelEdit(true, true);
+        } else {
+            TextInput::onKeyPress(e);
+        }
+        e.consumed = true;
+    }
+
+    void onKeyRelease(KeyEvent& e) override { e.consumed = true; }
+
+    void onFocusLost() override
+    {
+        TextInput::onFocusLost();
+        owner_->finishLabelEdit(true, false);
+    }
+
+private:
+    Timeline* owner_;
+};
 
 Timeline::Timeline()
 {
@@ -389,35 +459,55 @@ int Timeline::envelopeKeyAt(const TimelineClip& clip, float mx, float my, float 
     return -1;
 }
 
-// Pulls t to the nearest edge of another clip, the playhead or zero when it is
-// within a few pixels. The clip being dragged and its linked partners are skipped.
-float Timeline::snap(float t, int track, int clip) const
+float Timeline::snapLimit() const
 {
-    if (!snapping_) return t;
     Rect b = absoluteRect();
     const float contentW = std::max(1.0f, b.w - kHeaderW - edgePadding_ * 2);
-    const float limit = 8.0f * (viewEnd_ - viewStart_) / contentW;
-    const int link = tracks_[track].clips[clip].link;
-    float best = t;
-    float bestDist = limit;
-    auto consider = [&](float c) {
-        const float d = std::fabs(c - t);
-        if (d < bestDist) { bestDist = d; best = c; }
-    };
-    consider(0.0f);
-    consider(playhead_);
+    return 8.0f * (viewEnd_ - viewStart_) / contentW;
+}
+
+// Every time worth snapping to: zero, the playhead, the application's targets, the keyframes of every track and the
+// edges of the clips. The clip being dragged and its linked partners are left out, and so is the keyframe being dragged.
+void Timeline::snapCandidates(int track, int clip, int keyTrack, int key, ct::Vector<float>& out) const
+{
+    out.clear();
+    const int link = track >= 0 && clip >= 0 ? tracks_[track].clips[clip].link : -1;
+    out.push_back(0.0f);
+    out.push_back(playhead_);
+    for (size_t i = 0; i < snapTargets_.size(); ++i) out.push_back(snapTargets_[i]);
     for (int ti = 0; ti < trackCount(); ++ti) {
-        for (const auto& kf : tracks_[ti].keyframes) consider(kf.time);
+        const auto& keys = tracks_[ti].keyframes;
+        for (int ki = 0; ki < static_cast<int>(keys.size()); ++ki) {
+            if (ti == keyTrack && ki == key) continue;
+            out.push_back(keys[ki].time);
+        }
         const auto& clips = tracks_[ti].clips;
         for (int ci = 0; ci < static_cast<int>(clips.size()); ++ci) {
             if (ti == track && ci == clip) continue;
             if (link >= 0 && clips[ci].link == link) continue;
             if (dragGroup_.size() > 1 && clips[ci].selected) continue; // they move with the clip
-            consider(clips[ci].start);
-            consider(clips[ci].end);
+            out.push_back(clips[ci].start);
+            out.push_back(clips[ci].end);
         }
     }
-    return best;
+}
+
+bool Timeline::snapToEdges(float t, int track, int clip, int keyTrack, int key, float& out) const
+{
+    if (!snapping_) return false;
+    ct::Vector<float> candidates;
+    snapCandidates(track, clip, keyTrack, key, candidates);
+    return findSnap(candidates, t, snapLimit(), out);
+}
+
+// Pulls t to the nearest edge, keyframe or the playhead when it is within a few pixels, and to a whole frame when
+// nothing is that close.
+float Timeline::snap(float t, int track, int clip, int keyTrack, int key) const
+{
+    if (!snapping_) return t;
+    float edge = t;
+    if (snapToEdges(t, track, clip, keyTrack, key, edge)) return edge;
+    return snapFrame(t, fps_);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -427,6 +517,7 @@ float Timeline::snap(float t, int track, int clip) const
 void Timeline::onMousePress(MouseEvent& e)
 {
     Rect b = absoluteRect();
+    if (!tooltip().empty()) setTooltip("");
 
     // Middle button → pan
     if (e.button == 2) {
@@ -494,6 +585,7 @@ void Timeline::onMousePress(MouseEvent& e)
             dragOrigTime_ = trk.keyframes[ki].time;
             dragStartX_   = e.x;
             onKeyframeSelected.emit(ti, ki);
+            if (e.clickCount >= 2) onKeyframeDoubleClicked.emit(ti, ki);
             e.consumed = true;
             return;
         }
@@ -699,8 +791,42 @@ void Timeline::onMouseRelease(MouseEvent& e)
         onKeyframeDropped.emit(editedTrack, editedClip, startTime, droppedTime);
 }
 
+bool Timeline::clipAtPoint(float x, float y, int& track, int& clip) const
+{
+    const Rect b = absoluteRect();
+    if (x < b.x + kHeaderW || y < b.y + kRulerH) return false;
+    const int ti = trackAtY(y);
+    if (ti < 0) return false;
+    const auto rows = visibleTracks();
+    int row = 0;
+    while (row < static_cast<int>(rows.size()) && rows[row] != ti) ++row;
+    const float cy = b.y + kRulerH + row * kTrackH - verticalScroll_ + 3;
+    const float ch = kTrackH - 6;
+    if (y < cy || y > cy + ch) return false;
+    const auto& clips = tracks_[ti].clips;
+    for (int ci = 0; ci < static_cast<int>(clips.size()); ++ci) {
+        if (x < timeToX(clips[ci].start) || x > timeToX(clips[ci].end)) continue;
+        track = ti;
+        clip = ci;
+        return true;
+    }
+    return false;
+}
+
+void Timeline::updateClipTooltip(float x, float y)
+{
+    int ti = 0, ci = 0;
+    if (!clipTooltip_ || !clipAtPoint(x, y, ti, ci)) {
+        if (!tooltip().empty()) setTooltip("");
+        return;
+    }
+    const String text = clipTooltip_(ti, ci);
+    if (text != tooltip()) setTooltip(text);
+}
+
 void Timeline::onMouseMove(MouseEvent& e)
 {
+    if (dragMode_ == DragMode::None) updateClipTooltip(e.x, e.y);
     switch (dragMode_) {
     case DragMode::Scrub:
         playhead_ = xToTime(e.x);
@@ -719,7 +845,8 @@ void Timeline::onMouseMove(MouseEvent& e)
     }
     case DragMode::MoveKey: {
         float dt = xToTime(e.x) - xToTime(dragStartX_);
-        const float time = std::clamp(dragOrigTime_ + dt, viewStart_, viewEnd_);
+        const float snapped = snap(dragOrigTime_ + dt, -1, -1, dragTrack_, dragIndex_);
+        const float time = std::clamp(snapped, viewStart_, viewEnd_);
         tracks_[dragTrack_].keyframes[dragIndex_].time = time;
         onKeyframeMoved.emit(dragTrack_, dragIndex_, time);
         markDirty();
@@ -738,9 +865,10 @@ void Timeline::onMouseMove(MouseEvent& e)
         const float dt = xToTime(e.x) - xToTime(dragStartX_);
         const float len = dragOrigEnd_ - dragOrigTime_;
         float start = dragOrigTime_ + dt;
-        const float snappedStart = snap(start, dragTrack_, dragIndex_);
-        if (snappedStart != start) start = snappedStart;
-        else start = snap(start + len, dragTrack_, dragIndex_) - len;
+        float edge = 0.0f;
+        if (snapToEdges(start, dragTrack_, dragIndex_, -1, -1, edge)) start = edge;
+        else if (snapToEdges(start + len, dragTrack_, dragIndex_, -1, -1, edge)) start = edge - len;
+        else if (snapping_) start = snapFrame(start, fps_);
         start = std::max(0.0f, start);
         // Several selected clips move together by the same amount, each on its own track.
         if (dragGroup_.size() > 1) {
@@ -876,7 +1004,8 @@ void Timeline::onMouseScroll(MouseEvent& e)
     if (e.scrollY == 0) return;
     const bool overHeader = e.x < absoluteRect().x + kHeaderW;
     const bool overBar = vbar_->isVisible() && vbar_->absoluteRect().contains(e.x, e.y);
-    if (overHeader || overBar || (wheelScrollsTracks_ && !e.ctrl)) {
+    if (labelTrack_ >= 0) finishLabelEdit(true, true);
+    if (overHeader || overBar || (wheelScrollsTracks_ && !e.ctrl && !e.shift)) {
         setVerticalScroll(verticalScroll_ - e.scrollY * kTrackH);
         e.consumed = true; return;
     }
@@ -889,6 +1018,56 @@ void Timeline::onMouseScroll(MouseEvent& e)
     viewEnd_   = tAtMouse + (viewEnd_   - tAtMouse) * factor;
     markDirty();
     e.consumed = true;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Naming a keyframe in place
+// ─────────────────────────────────────────────────────────────────────────────
+
+void Timeline::editKeyframeLabel(int trackId, int keyIdx)
+{
+    if (trackId < 0 || trackId >= trackCount() || tracks_[trackId].locked) return;
+    auto& keys = tracks_[trackId].keyframes;
+    if (keyIdx < 0 || keyIdx >= static_cast<int>(keys.size())) return;
+    if (labelTrack_ >= 0) finishLabelEdit(true, false);
+    const auto rows = visibleTracks();
+    int row = 0;
+    while (row < static_cast<int>(rows.size()) && rows[row] != trackId) ++row;
+    if (row >= static_cast<int>(rows.size())) return;
+    if (!labelInput_) {
+        labelInput_ = createChild<LabelInput>(this);
+        labelInput_->setVisible(false);
+    }
+    const Rect b = absoluteRect();
+    constexpr float width = 150.0f;
+    float x = timeToX(keys[keyIdx].time) - b.x + 8.0f;
+    x = std::min(x, std::max(kHeaderW, b.w - width - 2.0f));
+    const float y = kRulerH + row * kTrackH - verticalScroll_ + 2.0f;
+    labelInput_->setRect({x, y, width, kTrackH - 4.0f});
+    labelInput_->setText(keys[keyIdx].label);
+    labelInput_->setVisible(true);
+    labelTrack_ = trackId;
+    labelKey_ = keyIdx;
+    WidgetApp::instance().setFocused(labelInput_);
+    labelInput_->selectAll();
+    markDirty();
+}
+
+void Timeline::finishLabelEdit(bool keep, bool refocus)
+{
+    if (labelTrack_ < 0) return;
+    const int ti = labelTrack_;
+    const int ki = labelKey_;
+    labelTrack_ = -1;
+    labelKey_ = -1;
+    const String text = labelInput_ ? labelInput_->text() : String();
+    if (labelInput_) labelInput_->setVisible(false);
+    markDirty();
+    if (refocus) WidgetApp::instance().setFocused(this);
+    if (keep && ti < trackCount() && ki < static_cast<int>(tracks_[ti].keyframes.size())) {
+        tracks_[ti].keyframes[ki].label = text;
+        onKeyframeLabelEdited.emit(ti, ki, text);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -978,6 +1157,20 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
             float mx = timeToX(t + m * minor);
             if (mx < b.x + kHeaderW || mx > b.x + b.w) continue;
             ctx.fillRect(mx, b.y + kRulerH - 5, 1, 5);
+        }
+    }
+
+    // The markers: a flag with the name, wherever the tracks are scrolled to
+    for (const auto& trk : tracks_) {
+        if (!trk.rulerMarks) continue;
+        const float ascLabel = setupFont(ctx, trk.color, 9.0f);
+        for (const auto& kf : trk.keyframes) {
+            const float x = timeToX(kf.time);
+            if (x < b.x + kHeaderW || x > b.x + b.w) continue;
+            ctx.fill.SetColor(trk.color.r, trk.color.g, trk.color.b, 230);
+            ctx.fillRect(x, b.y + 1, 1, kRulerH - 2);
+            ctx.fillTriangle(x, b.y + 1, x + 6, b.y + 4, x, b.y + 7);
+            if (!kf.label.empty()) ctx.font.Print(kf.label.c_str(), x + 8, b.y + 1 + ascLabel);
         }
     }
 
@@ -1159,6 +1352,11 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             // Two triangles make a diamond
             ctx.fillTriangle(kx, ky - ds, kx + ds, ky, kx, ky + ds);
             ctx.fillTriangle(kx, ky - ds, kx, ky + ds, kx - ds, ky);
+
+            if (!kf.label.empty() && !(labelTrack_ == ti && labelKey_ == ki)) {
+                const float ascLabel = setupFont(ctx, Color(225, 228, 238, 235), 9.0f);
+                ctx.font.Print(kf.label.c_str(), kx + ds + 4.0f, ty + (kTrackH - 9.0f) * 0.5f + ascLabel);
+            }
         }
 
         ctx.popClip();

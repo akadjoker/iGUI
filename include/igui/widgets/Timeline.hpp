@@ -19,6 +19,8 @@
 //  - Several clips selected at once: Ctrl+click toggles one, Shift+click adds one, a drag on the empty
 //    part of a track selects the clips inside the rectangle, and dragging a selected clip moves all of them
 //  - Horizontal zoom (scroll) and pan (middle-drag)
+//  - Snapping while dragging: clip edges, keyframes, the playhead and zero within 8 pixels, whole frames otherwise
+//  - Keyframes can carry a label (a marker's name) and be renamed in place with a double-click
 //  - Track header area with labels
 //  - Time ruler with auto-scaled tick marks
 //
@@ -36,6 +38,7 @@ struct TimelineKeyframe {
     float time     = 0;
     bool  selected = false;
     int   user     = -1;   // the application's own id for the key; the widget only carries it
+    String label;          // drawn beside the diamond (a marker's name)
 };
 
 struct TimelineClip {
@@ -66,6 +69,13 @@ struct TimelineClip {
     ct::Vector<CurveKey> automation[12];
 };
 
+/// @brief The candidate nearest to t when it lies within threshold of it (false when none does).
+bool findSnap(const ct::Vector<float>& candidates, float t, float threshold, float& out);
+/// @brief t moved to the nearest candidate within threshold, or t itself when none is that close.
+float snapTime(const ct::Vector<float>& candidates, float t, float threshold);
+/// @brief t rounded to a whole frame at fps (t itself when fps is not positive).
+float snapFrame(float t, float fps);
+
 /// A clip by its track and its index in the track.
 struct TimelineClipRef {
     int track = 0;
@@ -85,6 +95,7 @@ struct TimelineTrack {
     int parent = -1;
     bool expanded = true;
     TrackKind kind = TrackKind::Generic;
+    bool rulerMarks = false; // the keyframes are markers: a flag with the label is also drawn on the ruler
 };
 
 class Timeline : public Widget
@@ -157,16 +168,28 @@ public:
     void clearSelection();
     /// @brief First clip on the track covering time t, or -1. Later clips win.
     int  clipAt(int trackId, float t) const;
-    /// @brief The mouse wheel scrolls the tracks up and down everywhere and Ctrl+wheel zooms the time
-    ///        (true), or the wheel zooms the time and only scrolls over the track names (false, the default).
+    /// @brief The mouse wheel scrolls the tracks up and down everywhere and Ctrl+wheel or Shift+wheel zooms the time
+    ///        under the pointer (true), or the wheel zooms the time and only scrolls over the track names (false,
+    ///        the default).
     void setWheelScrollsTracks(bool on) { wheelScrollsTracks_ = on; }
     bool wheelScrollsTracks() const { return wheelScrollsTracks_; }
     /// @brief How far the tracks are scrolled down, in pixels.
     float verticalScroll() const { return verticalScroll_; }
     void  setVerticalScroll(float pixels);
-    /// @brief Snap clip edges to other clips, the playhead and zero while dragging.
+    /// @brief Snap clips and keyframes while dragging: to the edges of the clips on every track, to keyframes, to
+    ///        the playhead, to zero and to the application's own targets when one is within 8 pixels, and to whole
+    ///        frames otherwise.
     void setSnapping(bool on) { snapping_ = on; }
     bool snapping() const { return snapping_; }
+    /// @brief Extra times to snap to (the end of the sequence); the application refreshes them when they change.
+    void setSnapTargets(const ct::Vector<float>& targets) { snapTargets_ = targets; }
+    const ct::Vector<float>& snapTargets() const { return snapTargets_; }
+    /// @brief The text shown after a moment of hovering over a clip (track, clip index); empty text shows nothing.
+    void setClipTooltip(ct::Function<String(int, int)> provider) { clipTooltip_ = std::move(provider); }
+    /// @brief Opens a small text field over a keyframe to type its label. Enter or leaving the field keeps the text
+    ///        (onKeyframeLabelEdited), Escape drops it.
+    void editKeyframeLabel(int trackId, int keyIdx);
+    bool editingKeyframeLabel() const { return labelTrack_ >= 0; }
 
     /// @brief Set the playhead position in seconds.
     void  setPlayhead(float t) { playhead_ = t; markDirty(); }
@@ -200,6 +223,10 @@ public:
     Signal<float>    onPlayheadChanged;
     /// @brief Emitted when a keyframe is selected.
     Signal<int, int> onKeyframeSelected;
+    /// @brief Emitted when a keyframe is double-clicked: track, key index.
+    Signal<int, int> onKeyframeDoubleClicked;
+    /// @brief Emitted when the label typed over a keyframe is kept: track, key index, text.
+    Signal<int, int, const String&> onKeyframeLabelEdited;
     /// @brief Emitted when a clip is selected.
     Signal<int, int> onClipSelected;
     /// @brief A clip moved or was trimmed. Emitted on every step of the drag.
@@ -276,7 +303,20 @@ private:
     ct::Vector<TimelineClipRef>  marqueeBase_;  // what was selected when the rectangle started (Shift or Ctrl)
 
     ct::Function<float(int, float, float)> peakProvider_;
-    float snap(float t, int track, int clip) const;
+    ct::Function<String(int, int)> clipTooltip_;
+    ct::Vector<float> snapTargets_;
+    // A clip (track, clip) or a keyframe (keyTrack, key) being dragged is left out of the candidates.
+    void  snapCandidates(int track, int clip, int keyTrack, int key, ct::Vector<float>& out) const;
+    float snapLimit() const;
+    bool  snapToEdges(float t, int track, int clip, int keyTrack, int key, float& out) const;
+    float snap(float t, int track, int clip, int keyTrack = -1, int key = -1) const;
+    bool  clipAtPoint(float x, float y, int& track, int& clip) const;
+    void  updateClipTooltip(float x, float y);
+    class LabelInput;
+    LabelInput* labelInput_ = nullptr;
+    int  labelTrack_ = -1;
+    int  labelKey_   = -1;
+    void finishLabelEdit(bool keep, bool refocus);
     // The curve of a clip is drawn inside its bar: where a point sits, and the reverse.
     float envelopeX(const TimelineClip& clip, const CurveKey& key) const;
     float envelopeY(const TimelineClip& clip, float value, float clipY, float clipH) const;
