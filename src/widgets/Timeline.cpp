@@ -287,8 +287,10 @@ bool Timeline::selectedClip(int& trackId, int& clipIdx) const
 
 void Timeline::clearSelection()
 {
-    for (auto& trk : tracks_)
+    for (auto& trk : tracks_) {
         for (auto& clip : trk.clips) clip.selected = false;
+        for (auto& kf : trk.keyframes) kf.selected = false;
+    }
     markDirty();
 }
 
