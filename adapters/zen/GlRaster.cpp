@@ -15,7 +15,7 @@ namespace zen
 namespace
 {
 
-const char *const kVertexShader = R"(#version 330 core
+const char *const kVertexShader = R"(
 layout(location = 0) in vec2 aPos;
 layout(location = 1) in vec2 aUv;
 layout(location = 2) in vec4 aColor;
@@ -33,7 +33,8 @@ void main()
 }
 )";
 
-const char *const kFragmentShader = R"(#version 330 core
+const char *const kFragmentShader = R"(
+precision mediump float;
 in vec2 vUv;
 in vec4 vColor;
 uniform sampler2D uTexture;
@@ -44,10 +45,13 @@ void main()
 }
 )";
 
-unsigned compile(unsigned type, const char *source)
+// The same GLSL body serves both profiles: desktop 3.3 core and ES 3.0 differ only in the version line
+// (the ES fragment shader also needs a default precision, which core ignores).
+unsigned compile(unsigned type, const char *source, bool es)
 {
+    const char *sources[2] = {es ? "#version 300 es\n" : "#version 330 core\n", source};
     const unsigned shader = glCreateShader(type);
-    glShaderSource(shader, 1, &source, nullptr);
+    glShaderSource(shader, 2, sources, nullptr);
     glCompileShader(shader);
     int ok = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
@@ -101,11 +105,13 @@ bool GlRaster::init(void *(*procAddress)(const char *name))
         return false;
     glGetIntegerv(GL_MAJOR_VERSION, &major_);
     glGetIntegerv(GL_MINOR_VERSION, &minor_);
-    if (major_ < 3 || (major_ == 3 && minor_ < 3))
+    const char *version = reinterpret_cast<const char *>(glGetString(GL_VERSION));
+    es_ = version && strncmp(version, "OpenGL ES", 9) == 0;
+    if (major_ < 3 || (!es_ && major_ == 3 && minor_ < 3))
         return false;
 
-    const unsigned vs = compile(GL_VERTEX_SHADER, kVertexShader);
-    const unsigned fs = compile(GL_FRAGMENT_SHADER, kFragmentShader);
+    const unsigned vs = compile(GL_VERTEX_SHADER, kVertexShader, es_);
+    const unsigned fs = compile(GL_FRAGMENT_SHADER, kFragmentShader, es_);
     if (!vs || !fs)
     {
         // One can compile while the other fails, and the context keeps it alive

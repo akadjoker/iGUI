@@ -30,6 +30,9 @@ public:
         bool preferOpenGL = true;
         int minGlMajor = 3; // the oldest OpenGL core the application accepts
         int minGlMinor = 3;
+        // Ask for an OpenGL ES 3.0 context instead of a core one: for an engine whose shaders are GLSL ES.
+        // Where the desktop driver has no ES profile the window falls back to the core versions above.
+        bool openGLES = false;
         int msaa = 4;    // OpenGL multisampling, 0 to disable
         bool vsync = true;
         bool showStats = true; // fps and size in the window title, once a second
