@@ -16,6 +16,8 @@
 //  - Keyframe markers (diamond) per track
 //  - Clip bars (time ranges) per track, draggable + resizable
 //  - Playhead with scrubbing
+//  - Several clips selected at once: Ctrl+click toggles one, Shift+click adds one, a drag on the empty
+//    part of a track selects the clips inside the rectangle, and dragging a selected clip moves all of them
 //  - Horizontal zoom (scroll) and pan (middle-drag)
 //  - Track header area with labels
 //  - Time ruler with auto-scaled tick marks
@@ -62,6 +64,12 @@ struct TimelineClip {
     float params[16]   = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // free for the application (effects, volume); copied when a clip is split
     // A curve per entry of params over the media's own time (seconds); when there is one it replaces the constant.
     ct::Vector<CurveKey> automation[12];
+};
+
+/// A clip by its track and its index in the track.
+struct TimelineClipRef {
+    int track = 0;
+    int clip  = 0;
 };
 
 /// What a track carries; the timeline draws the same, the application decides.
@@ -143,6 +151,9 @@ public:
     int  splitClip(int trackId, int clipIdx, float t);
     /// @brief The first selected clip. False when none is selected.
     bool selectedClip(int& trackId, int& clipIdx) const;
+    /// @brief Every selected clip, track by track, in the order of the clips.
+    void selectedClips(ct::Vector<TimelineClipRef>& out) const;
+    int  selectedClipCount() const;
     void clearSelection();
     /// @brief First clip on the track covering time t, or -1. Later clips win.
     int  clipAt(int trackId, float t) const;
@@ -237,7 +248,13 @@ private:
     static constexpr float kRulerH  = 24;
 
     // Interaction state
-    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR, StretchClipR, MoveEnvelopeKey };
+    enum class DragMode { None, Scrub, Pan, MoveKey, MoveClip, ResizeClipL, ResizeClipR, StretchClipR, MoveEnvelopeKey, Marquee };
+    struct DragMember {
+        int   track = 0;
+        int   clip  = 0;
+        float start = 0;
+        float end   = 0;
+    };
     DragMode dragMode_      = DragMode::None;
     float    dragStartX_    = 0;
     float    panStartView_  = 0;
@@ -253,6 +270,10 @@ private:
     bool     snapping_      = true;
     int      nextClipId_    = 0;
     int      selectedTrack_ = -1;
+    ct::Vector<DragMember>       dragGroup_;    // the selected clips a move drags together (more than one)
+    bool                         collapseOnRelease_ = false; // a click without a drag on a selected clip keeps only that clip
+    float                        marqueeX0_ = 0, marqueeY0_ = 0, marqueeX1_ = 0, marqueeY1_ = 0;
+    ct::Vector<TimelineClipRef>  marqueeBase_;  // what was selected when the rectangle started (Shift or Ctrl)
 
     ct::Function<float(int, float, float)> peakProvider_;
     float snap(float t, int track, int clip) const;
@@ -270,6 +291,9 @@ private:
     void paintTracks(PaintContext& ctx, const Rect& b);
     void paintMarkedRange(PaintContext& ctx, const Rect& b);
     void paintPlayhead(PaintContext& ctx, const Rect& b);
+    void paintMarquee(PaintContext& ctx, const Rect& b);
+    void clearKeySelection();
+    void updateMarquee();
 };
 
 } // namespace retained
