@@ -256,6 +256,27 @@ void TreeNode::clear()
     if (view_) view_->reportLostSelection();
 }
 
+int TreeNode::addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn,
+                        const String& tipOff)
+{
+    Toggle toggle;
+    toggle.iconOn  = iconOn;
+    toggle.iconOff = iconOff;
+    toggle.on      = on;
+    toggle.tipOn   = tipOn;
+    toggle.tipOff  = tipOff;
+    toggles_.push_back(toggle);
+    if (view_) view_->markDirty();
+    return static_cast<int>(toggles_.size()) - 1;
+}
+
+void TreeNode::setToggleState(int index, bool on)
+{
+    if (index < 0 || index >= toggleCount() || toggles_[index].on == on) return;
+    toggles_[index].on = on;
+    if (view_) view_->markDirty();
+}
+
 void TreeNode::setIcon(const String& name)
 {
     iconStr_ = name;
@@ -499,6 +520,30 @@ void TreeView::paint(PaintContext& ctx)
         ctx.font.SetColor(row.node == selected_ ? Color(255,255,255,255) : t.textColor);
         float ty = rowY + (rowHeight_ - t.fontSize) * 0.5f + asc;
         ctx.font.Print(row.node->text().c_str(), indX, ty);
+
+        const int toggles = row.node->toggleCount();
+        if (toggles > 0) {
+            const float slot = toggleSlot();
+            const float edge = toggleEdge(abs);
+            const float left = edge - slot * toggles;
+            if (row.node == selected_)
+                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
+                                  t.selectionColor.b, t.selectionColor.a);
+            else
+                ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
+            ctx.fillRect(left - 2.f, rowY, edge - left + 4.f, rowHeight_);
+            const float isz = t.fontSize;
+            for (int k = 0; k < toggles; ++k) {
+                const TreeNode::Toggle& toggle = row.node->toggles_[k];
+                const bool off = !toggle.on;
+                const IconId icon = off && toggle.iconOff != IconId::None ? toggle.iconOff
+                                                                           : toggle.iconOn;
+                const bool dim = off && toggle.iconOff == IconId::None;
+                ctx.drawIcon(icon, left + slot * k + (slot - isz) * 0.5f,
+                             rowY + (rowHeight_ - isz) * 0.5f, isz,
+                             dim ? Color(255, 255, 255, 80) : Color(255, 255, 255, 255));
+            }
+        }
     }
 
     Rect track, thumb;
@@ -512,6 +557,49 @@ void TreeView::paint(PaintContext& ctx)
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
     ctx.lineRect(abs.x, abs.y, abs.w, abs.h);
     ctx.popClip();
+}
+
+float TreeView::toggleSlot() const
+{
+    return Theme::instance().fontSize + 8.f;
+}
+
+float TreeView::toggleEdge(const Rect& abs) const
+{
+    Rect track, thumb;
+    const bool bar = scrollbar(track, thumb);
+    return abs.x + abs.w - (bar ? 12.f : 4.f);
+}
+
+int TreeView::toggleAt(const Rect& abs, const TreeNode* node, float x) const
+{
+    const int count = node->toggleCount();
+    if (count == 0) return -1;
+    const float slot = toggleSlot();
+    const float left = toggleEdge(abs) - slot * count;
+    if (x < left || x >= left + slot * count) return -1;
+    return static_cast<int>((x - left) / slot);
+}
+
+void TreeView::showToggleTip(MouseEvent& e)
+{
+    rebuildFlat();
+    const Rect abs = absoluteRect();
+    const int idx = static_cast<int>((e.y - abs.y + scrollOffset_) / rowHeight_);
+    String tip;
+    if (e.y >= abs.y && idx >= 0 && idx < static_cast<int>(flatRows_.size())) {
+        const TreeNode* node = flatRows_[idx].node;
+        const int hit = toggleAt(abs, node, e.x);
+        if (hit >= 0) tip = node->toggles_[hit].on ? node->toggles_[hit].tipOn
+                                                   : node->toggles_[hit].tipOff;
+    }
+    if (tip != tooltip()) setTooltip(tip);
+}
+
+void TreeView::onMouseLeave()
+{
+    Widget::onMouseLeave();
+    if (!tooltip().empty()) setTooltip("");
 }
 
 void TreeView::onMousePress(MouseEvent& e)
@@ -545,6 +633,16 @@ void TreeView::onMousePress(MouseEvent& e)
     auto& row = flatRows_[idx];
     float indX = 4.f + row.depth * indent_;
 
+    const int hit = toggleAt(abs, row.node, e.x);
+    if (hit >= 0) {
+        TreeNode* node = row.node;
+        const bool state = !node->toggles_[hit].on;
+        node->toggles_[hit].on = state;
+        markDirty();
+        toggleChanged.emit(node, hit, state);
+        return;
+    }
+
     if (row.node->hasChildren()) {
         float triEnd = indX + 11.f;
         if ((e.x - abs.x) < triEnd) {
@@ -561,7 +659,10 @@ void TreeView::onMousePress(MouseEvent& e)
 
 void TreeView::onMouseMove(MouseEvent& e)
 {
-    if (!draggingBar_) return;
+    if (!draggingBar_) {
+        showToggleTip(e);
+        return;
+    }
     Rect track, thumb;
     if (!scrollbar(track, thumb)) return;
     const Rect abs = absoluteRect();
