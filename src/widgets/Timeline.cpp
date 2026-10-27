@@ -438,6 +438,23 @@ int Timeline::trackAtY(float y) const
     return rows[idx];
 }
 
+bool Timeline::pointAt(int trackId, float time, float& x, float& y) const
+{
+    if (time < viewStart_ || time > viewEnd_) return false;
+    const Rect b = absoluteRect();
+    x = timeToX(time);
+    if (trackId < 0) {
+        y = b.y + kRulerH * 0.5f;
+        return true;
+    }
+    const auto rows = visibleTracks();
+    int row = 0;
+    while (row < static_cast<int>(rows.size()) && rows[row] != trackId) ++row;
+    if (row >= static_cast<int>(rows.size())) return false;
+    y = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
+    return y > b.y + kRulerH && y < b.bottom();
+}
+
 float Timeline::envelopeX(const TimelineClip& clip, const CurveKey& key) const
 {
     return timeToX(clip.start + (key.time - clip.offset) / clip.speed);

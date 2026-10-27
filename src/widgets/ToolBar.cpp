@@ -345,6 +345,33 @@ void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, flo
 
 // ── Hit test ─────────────────────────────────────────────────────────────────
 
+bool ToolBar::itemRect(int id, Rect& out) const
+{
+    const Item* it = findItem(id);
+    if (!it || !it->visible) return false;
+    const Rect abs = absoluteRect();
+    out = {abs.x + it->rect.x, abs.y + it->rect.y, it->rect.w, it->rect.h};
+    return true;
+}
+
+int ToolBar::itemByTooltip(const String& text) const
+{
+    auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c; };
+    const size_t n = text.size();
+    int prefix = -1;
+    for (const auto& it : items_) {
+        if (!it.visible || it.type == ItemType::Separator || it.type == ItemType::Spacer) continue;
+        if (it.tooltip.size() < n || n == 0) continue;
+        bool same = true;
+        for (size_t i = 0; same && i < n; ++i)
+            same = lower(it.tooltip[i]) == lower(text[i]);
+        if (!same) continue;
+        if (it.tooltip.size() == n) return it.id;
+        if (prefix < 0) prefix = it.id;
+    }
+    return prefix;
+}
+
 int ToolBar::hitItem(float absX, float absY) const
 {
     Rect abs = absoluteRect();

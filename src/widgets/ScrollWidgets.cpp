@@ -468,6 +468,17 @@ void ListBox::onMouseScroll(MouseEvent& e)
     markDirty();
 }
 
+bool ListBox::itemRect(int index, Rect& out)
+{
+    if (index < 0 || index >= static_cast<int>(items_.size())) return false;
+    scrollToItem(index);
+    const Rect abs = absoluteRect();
+    const float ih = itemHeight();
+    const float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
+    out = {abs.x, abs.y + static_cast<float>(index) * ih - scrollOffset_, abs.w - barW, ih};
+    return true;
+}
+
 void ListBox::scrollToItem(int idx)
 {
     const float ih = itemHeight();

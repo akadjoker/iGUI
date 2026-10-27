@@ -191,6 +191,11 @@ public:
     void editKeyframeLabel(int trackId, int keyIdx);
     bool editingKeyframeLabel() const { return labelTrack_ >= 0; }
 
+    /// @brief Window-space point of a time on a track's row (the centre of the row), or on the ruler when
+    ///        trackId is -1; false when the track is not shown (collapsed, scrolled out) or the time is outside the
+    ///        visible range.
+    bool pointAt(int trackId, float time, float& x, float& y) const;
+
     /// @brief Set the playhead position in seconds.
     void  setPlayhead(float t) { playhead_ = t; markDirty(); }
     /// @brief Get the playhead position in seconds.
