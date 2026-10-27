@@ -9,7 +9,7 @@ namespace ig
 namespace zen
 {
 
-// Draws the retained DrawData with OpenGL 3.3 core: one shader, one vertex and
+// Draws the retained DrawData with OpenGL 3.3 core or OpenGL ES 3.0: one shader, one vertex and
 // index buffer per pass, a draw call per command with its clip as a scissor.
 // Textures live on the GPU; a TextureHandle holds the GL texture name.
 // Every call needs the window's GL context to be current.
@@ -36,9 +36,10 @@ public:
     void readPixels(uint32_t *dst, int width, int height) const;
 
     const char *renderer() const;
-    // The context version that init() found.
+    // The context version that init() found, and whether it is an OpenGL ES context.
     int versionMajor() const { return major_; }
     int versionMinor() const { return minor_; }
+    bool es() const { return es_; }
 
 private:
     struct Size
@@ -49,6 +50,7 @@ private:
 
     int major_ = 0;
     int minor_ = 0;
+    bool es_ = false;
     unsigned program_ = 0;
     unsigned vao_ = 0;
     unsigned vbo_ = 0;

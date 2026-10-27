@@ -89,7 +89,29 @@ bool App::create(const Config &config)
     cfg.resizable = true;
     cfg.vsync = config.vsync;
     cfg.gl.msaa = config.msaa;
-    if (config.preferOpenGL)
+    if (config.preferOpenGL && config.openGLES)
+    {
+        cfg.render = RENDER_GL;
+        cfg.gl.profile = GL_PROFILE_ES;
+        cfg.gl.major = 3;
+        cfg.gl.minor = 0;
+        window_ = window_create(&cfg);
+        if (window_)
+        {
+            window_make_current(window_);
+            useGl_ = gl_.init(gl_proc_address);
+            if (!useGl_)
+            {
+                window_destroy(window_);
+                window_ = nullptr;
+            }
+        }
+        if (useGl_)
+            fprintf(stderr, "[ZenApp] OpenGL ES %d.%d: %s\n", gl_.versionMajor(), gl_.versionMinor(), gl_.renderer());
+        else
+            fprintf(stderr, "[ZenApp] OpenGL ES 3.0 not available, trying a core profile\n");
+    }
+    if (config.preferOpenGL && !useGl_)
     {
         // Core profile only: the newest version the driver gives, then 3.3 as the floor.
         static const int versions[][2] = {{4, 6}, {4, 5}, {4, 3}, {3, 3}};
