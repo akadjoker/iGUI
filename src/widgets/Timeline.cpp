@@ -438,7 +438,7 @@ int Timeline::trackAtY(float y) const
     return rows[idx];
 }
 
-bool Timeline::pointAt(int trackId, float time, float& x, float& y) const
+bool Timeline::pointAt(int trackId, float time, float& x, float& y)
 {
     if (time < viewStart_ || time > viewEnd_) return false;
     const Rect b = absoluteRect();
@@ -451,8 +451,12 @@ bool Timeline::pointAt(int trackId, float time, float& x, float& y) const
     int row = 0;
     while (row < static_cast<int>(rows.size()) && rows[row] != trackId) ++row;
     if (row >= static_cast<int>(rows.size())) return false;
-    y = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
-    return y > b.y + kRulerH && y < b.bottom();
+    const float top = row * kTrackH;
+    const float view = rect_.h - kRulerH;
+    if (top < verticalScroll_) setVerticalScroll(top);
+    else if (top + kTrackH > verticalScroll_ + view) setVerticalScroll(top + kTrackH - view);
+    y = b.y + kRulerH + top - verticalScroll_ + kTrackH * 0.5f;
+    return true;
 }
 
 float Timeline::envelopeX(const TimelineClip& clip, const CurveKey& key) const
