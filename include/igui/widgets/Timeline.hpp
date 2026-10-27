@@ -82,6 +82,12 @@ struct TimelineClipRef {
     int clip  = 0;
 };
 
+/// A keyframe by its track and its index in the track.
+struct TimelineKeyRef {
+    int track = 0;
+    int key   = 0;
+};
+
 /// What a track carries; the timeline draws the same, the application decides.
 enum class TrackKind { Generic, Video, Audio };
 
@@ -165,6 +171,11 @@ public:
     /// @brief Every selected clip, track by track, in the order of the clips.
     void selectedClips(ct::Vector<TimelineClipRef>& out) const;
     int  selectedClipCount() const;
+    /// @brief Every selected keyframe, track by track, in the order of the keyframes. Ctrl+click toggles a key,
+    ///        Shift+click adds one, a rectangle on an empty part of a track selects the keys (and clips) inside it,
+    ///        and dragging a selected key moves all the selected keys by the same amount.
+    void selectedKeys(ct::Vector<TimelineKeyRef>& out) const;
+    int  selectedKeyCount() const;
     void clearSelection();
     /// @brief First clip on the track covering time t, or -1. Later clips win.
     int  clipAt(int trackId, float t) const;
@@ -306,6 +317,14 @@ private:
     bool                         collapseOnRelease_ = false; // a click without a drag on a selected clip keeps only that clip
     float                        marqueeX0_ = 0, marqueeY0_ = 0, marqueeX1_ = 0, marqueeY1_ = 0;
     ct::Vector<TimelineClipRef>  marqueeBase_;  // what was selected when the rectangle started (Shift or Ctrl)
+    ct::Vector<TimelineKeyRef>   marqueeKeyBase_;
+    struct KeyMember {
+        int   track = 0;
+        int   key   = 0;
+        float time  = 0;
+    };
+    ct::Vector<KeyMember>        keyGroup_;     // the selected keyframes a drag moves together (more than one)
+    bool                         collapseKeyOnRelease_ = false; // a click without a drag on a selected key keeps only that key
 
     ct::Function<float(int, float, float)> peakProvider_;
     ct::Function<String(int, int)> clipTooltip_;
