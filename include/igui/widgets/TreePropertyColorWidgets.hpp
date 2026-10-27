@@ -60,10 +60,33 @@ public:
     /// @brief Get the parent node.
     TreeNode*                      parent()            { return parent_; }
 
+    /// @brief A clickable icon at the right edge of the row (an eye, a padlock).
+    struct Toggle
+    {
+        IconId iconOn  = IconId::None;
+        IconId iconOff = IconId::None;   // None: iconOn is drawn dimmed while off
+        bool   on      = false;
+        String tipOn;
+        String tipOff;
+    };
+    /// @brief Add a toggle to the row; returns its index. The first one is the leftmost.
+    int  addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn = "",
+                   const String& tipOff = "");
+    /// @brief Number of toggles on the row.
+    int  toggleCount() const { return static_cast<int>(toggles_.size()); }
+    /// @brief State of a toggle.
+    bool toggleState(int index) const
+    {
+        return index >= 0 && index < toggleCount() && toggles_[index].on;
+    }
+    /// @brief Set the state of a toggle without emitting TreeView::toggleChanged.
+    void setToggleState(int index, bool on);
+
 private:
     friend class TreeView;
 
     String           text_;
+    ct::Vector<Toggle> toggles_;
     String           iconStr_;
     IconId                iconId_   = IconId::None;
     TreeNode*             parent_   = nullptr;
@@ -107,6 +130,8 @@ public:
     Signal<TreeNode*> nodeExpanded;
     /// @brief Emitted when a node is collapsed.
     Signal<TreeNode*> nodeCollapsed;
+    /// @brief Emitted when the user clicks a toggle of a node: node, toggle index, new state.
+    Signal<TreeNode*, int, bool> toggleChanged;
 
     Vec2f sizeHint()                   const override;
     void  paint(PaintContext& ctx)           override;
@@ -114,11 +139,17 @@ public:
     void  onMouseScroll(MouseEvent& e)       override;
     void  onMouseMove(MouseEvent& e)         override;
     void  onMouseRelease(MouseEvent& e)      override;
+    void  onMouseLeave()                     override;
     void onKeyPress(KeyEvent& e) override;
 
 private:
     friend class TreeNode;
     struct FlatRow { TreeNode* node; int depth; };
+
+    float toggleSlot() const;
+    float toggleEdge(const Rect& abs) const;
+    int   toggleAt(const Rect& abs, const TreeNode* node, float x) const;
+    void  showToggleTip(MouseEvent& e);
 
     void  rebuildFlat();
     void forgetNode(TreeNode* n);
