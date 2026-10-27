@@ -33,6 +33,7 @@ namespace ig { namespace retained
 struct TimelineKeyframe {
     float time     = 0;
     bool  selected = false;
+    int   user     = -1;   // the application's own id for the key; the widget only carries it
 };
 
 struct TimelineClip {
