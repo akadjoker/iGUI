@@ -1469,9 +1469,22 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             float ds = kf.selected ? 6.0f : 5.0f;
             Color kc = kf.selected ? Color(255, 200, 60, 255) : trk.color;
             ctx.fill.SetColor(kc.r, kc.g, kc.b, kc.a);
-            // Two triangles make a diamond
-            ctx.fillTriangle(kx, ky - ds, kx + ds, ky, kx, ky + ds);
-            ctx.fillTriangle(kx, ky - ds, kx, ky + ds, kx - ds, ky);
+            if (kf.shape == KeyShape::Square) {
+                const float hs = ds * 0.8f;
+                ctx.fillRect(kx - hs, ky - hs, hs * 2.0f, hs * 2.0f);
+            } else if (kf.shape == KeyShape::Circle) {
+                const int segments = 12;
+                for (int s = 0; s < segments; ++s) {
+                    const float a0 = 6.2831853f * static_cast<float>(s) / segments;
+                    const float a1 = 6.2831853f * static_cast<float>(s + 1) / segments;
+                    ctx.fillTriangle(kx, ky, kx + std::cos(a0) * ds, ky + std::sin(a0) * ds,
+                                     kx + std::cos(a1) * ds, ky + std::sin(a1) * ds);
+                }
+            } else {
+                // Two triangles make a diamond
+                ctx.fillTriangle(kx, ky - ds, kx + ds, ky, kx, ky + ds);
+                ctx.fillTriangle(kx, ky - ds, kx, ky + ds, kx - ds, ky);
+            }
 
             if (!kf.label.empty() && !(labelTrack_ == ti && labelKey_ == ki)) {
                 const float ascLabel = setupFont(ctx, Color(225, 228, 238, 235), 9.0f);

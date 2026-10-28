@@ -34,11 +34,14 @@
 
 namespace ig { namespace retained
 {
+enum class KeyShape { Diamond, Square, Circle };
+
 struct TimelineKeyframe {
-    float time     = 0;
-    bool  selected = false;
-    int   user     = -1;   // the application's own id for the key; the widget only carries it
-    String label;          // drawn beside the diamond (a marker's name)
+    float    time     = 0;
+    bool     selected = false;
+    int      user     = -1;   // the application's own id for the key; the widget only carries it
+    String   label;           // drawn beside the diamond (a marker's name)
+    KeyShape shape    = KeyShape::Diamond;   // the application's meaning (e.g. its interpolation)
 };
 
 struct TimelineClip {
