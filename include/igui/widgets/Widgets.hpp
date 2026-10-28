@@ -5,6 +5,7 @@
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
+#include "SideTabBar.hpp"
 #include "InputWidgets.hpp"
 #include "TextInputWidgets.hpp"
 #include "ComboBox.hpp"

@@ -5,6 +5,7 @@
 #include <igui/widgets/DockPanel.hpp>
 #include <igui/widgets/FileDialog.hpp>
 #include <igui/widgets/GizmoWidgets.hpp>
+#include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/Theme.hpp>
 #include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/ToolBar.hpp>
@@ -6319,12 +6320,373 @@ static void test_serializer_round_trips_every_listed_type()
     delete root;
 }
 
+// O SideTabBar abre a página do botão carregado; carregar outra vez no botão
+// ativo dobra a zona de páginas (só a calha fica e o sizeHint encolhe para a
+// largura dela) e expand() reabre a última página.
+static void test_side_tab_bar_opens_pages_and_folds()
+{
+    using namespace ig::retained;
+    SideTabBar bar(SideTabBar::Side::Left);
+    bar.setRect({0.0f, 0.0f, 400.0f, 600.0f});
+    bar.setPageWidth(240.0f);
+    auto* character = bar.addPage<Label>(IconId::User, "Character", "character");
+    auto* camera = bar.addPage<Label>(IconId::Eye, "Camera", "camera");
+    auto* pose = bar.addPage<Label>(IconId::Edit, "Pose", "pose");
+    assert(bar.pageCount() == 3 && bar.children().size() == 3u);
+    assert(bar.currentIndex() == 0 && bar.currentWidget() == character);
+    assert(bar.indexOf(pose) == 2 && bar.indexOf(nullptr) == -1);
+    assert(bar.pageWidget(3) == nullptr && bar.pageLabel(3).empty());
+
+    const float rail = bar.effectiveRailWidth();
+    assert(rail >= 56.0f);
+    assert(std::fabs(bar.sizeHint().x - (rail + 240.0f)) < 0.001f);
+
+    bar.layout();
+    assert(character->isVisible() && !camera->isVisible() && !pose->isVisible());
+    assert(std::fabs(character->rect().x - rail) < 0.001f);
+    assert(std::fabs(character->rect().w - (400.0f - rail)) < 0.001f);
+    assert(character->rect().h == 600.0f);
+
+    ct::Vector<int> changed;
+    bar.currentChanged.connect([&changed](int index) { changed.push_back(index); });
+    ct::Vector<int> clicks;
+    bar.buttonClicked.connect([&clicks](int index) { clicks.push_back(index); });
+
+    auto click = [&bar](int index)
+    {
+        Rect r;
+        assert(bar.buttonRect(index, r));
+        MouseEvent press;
+        press.button = 0;
+        press.x = r.x + r.w * 0.5f;
+        press.y = r.y + r.h * 0.5f;
+        bar.onMouseMove(press);
+        bar.onMousePress(press);
+        assert(press.consumed);
+        MouseEvent release = press;
+        release.consumed = false;
+        bar.onMouseRelease(release);
+    };
+
+    // Os botões empilham-se de cima para baixo dentro da calha
+    Rect first, second;
+    assert(bar.buttonRect(0, first) && bar.buttonRect(1, second));
+    assert(first.x >= 0.0f && first.x + first.w <= rail + 0.001f);
+    assert(second.y >= first.y + first.h);
+    assert(bar.buttonAt(first.x + 1.0f, first.y + 1.0f) == 0);
+    assert(bar.buttonAt(rail + 10.0f, 10.0f) == -1);
+
+    click(1);
+    assert(bar.currentIndex() == 1);
+    assert(changed.size() == 1u && changed[0] == 1);
+    assert(clicks.size() == 1u && clicks[0] == 1);
+    bar.layout();
+    assert(camera->isVisible() && !character->isVisible());
+
+    // O botão ativo dobra a zona de páginas
+    click(1);
+    assert(bar.isCollapsed() && bar.currentIndex() == -1 && bar.currentWidget() == nullptr);
+    assert(changed.size() == 2u && changed[1] == -1);
+    assert(std::fabs(bar.sizeHint().x - rail) < 0.001f);
+    assert(bar.pageAreaRect().w == 0.0f);
+    bar.layout();
+    assert(!camera->isVisible() && !character->isVisible() && !pose->isVisible());
+
+    bar.expand();
+    assert(bar.currentIndex() == 1);
+    assert(changed.size() == 3u && changed[2] == 1);
+    bar.expand();
+    assert(changed.size() == 3u);
+
+    // Sem collapsible o botão ativo fica como está; setCurrentIndex(-1) dobra na mesma
+    bar.setCollapsible(false);
+    click(1);
+    assert(bar.currentIndex() == 1 && changed.size() == 3u && clicks.size() == 3u);
+    bar.setCurrentIndex(-1);
+    assert(bar.isCollapsed() && changed.size() == 4u);
+    bar.setCurrentIndex(7);
+    assert(bar.isCollapsed());
+    bar.setCurrentIndex(2);
+    assert(bar.currentWidget() == pose);
+
+    // Largar o rato fora do botão carregado não muda de página
+    {
+        Rect r;
+        assert(bar.buttonRect(0, r));
+        MouseEvent press;
+        press.button = 0;
+        press.x = r.x + 2.0f;
+        press.y = r.y + 2.0f;
+        bar.onMousePress(press);
+        MouseEvent release = press;
+        release.x = rail + 50.0f;
+        bar.onMouseRelease(release);
+        assert(bar.currentIndex() == 2 && clicks.size() == 3u);
+    }
+
+    // O botão direito não é um clique
+    {
+        Rect r;
+        assert(bar.buttonRect(0, r));
+        MouseEvent press;
+        press.button = 1;
+        press.x = r.x + 2.0f;
+        press.y = r.y + 2.0f;
+        bar.onMousePress(press);
+        assert(!press.consumed);
+        bar.onMouseRelease(press);
+        assert(bar.currentIndex() == 2);
+    }
+}
+
+// À direita a calha fica no bordo direito e a página à esquerda dela; uma
+// página escondida sai da calha (as seguintes sobem) e dobra a barra se
+// estava aberta; uma desativada não reage ao clique; com os rótulos
+// escondidos o rótulo passa a ser o tooltip do botão.
+static void test_side_tab_bar_right_side_hidden_and_disabled_pages()
+{
+    using namespace ig::retained;
+    SideTabBar bar(SideTabBar::Side::Right);
+    bar.setRect({100.0f, 50.0f, 400.0f, 600.0f});
+    bar.setRailWidth(64.0f);
+    auto* a = bar.addPage<Label>(IconId::Gear, "Settings", "a");
+    auto* b = bar.addPage<Label>(IconId::Info, "Log", "b");
+    auto* c = bar.addPage<Label>(IconId::None, "Help", "c");
+    assert(bar.effectiveRailWidth() == 64.0f);
+    bar.layout();
+    assert(std::fabs(a->rect().x) < 0.001f && std::fabs(a->rect().w - 336.0f) < 0.001f);
+    Rect r0, r1, r2;
+    assert(bar.buttonRect(0, r0) && bar.buttonRect(1, r1) && bar.buttonRect(2, r2));
+    assert(r0.x >= 100.0f + 336.0f && r0.x + r0.w <= 500.0f + 0.001f);
+    assert(r0.y >= 50.0f && r2.y > r1.y && r1.y > r0.y);
+    const Rect area = bar.pageAreaRect();
+    assert(area.x == 100.0f && area.y == 50.0f && std::fabs(area.w - 336.0f) < 0.001f);
+
+    // Esconder a página do meio: o terceiro botão sobe para o lugar dela
+    bar.setPageVisible(1, false);
+    Rect hidden;
+    assert(!bar.buttonRect(1, hidden));
+    Rect moved;
+    assert(bar.buttonRect(2, moved));
+    assert(std::fabs(moved.y - r1.y) < 0.001f);
+    assert(bar.buttonAt(r1.x + 2.0f, r1.y + 2.0f) == 2);
+    bar.setCurrentIndex(1);   // escondida: fica como estava
+    assert(bar.currentIndex() == 0);
+    bar.setPageVisible(0, false);   // a aberta: dobra
+    assert(bar.isCollapsed());
+    bar.expand();   // a última aberta está escondida: abre a primeira visível
+    assert(bar.currentIndex() == 2 && bar.currentWidget() == c);
+    bar.setPageVisible(0, true);
+    bar.setPageVisible(1, true);
+    assert(bar.isPageVisible(1) && !bar.isPageVisible(5));
+
+    // Desativada: o clique não abre nem dispara buttonClicked
+    bar.setPageEnabled(1, false);
+    assert(!bar.isPageEnabled(1));
+    int clicks = 0;
+    bar.buttonClicked.connect([&clicks](int) { ++clicks; });
+    Rect r;
+    assert(bar.buttonRect(1, r));
+    MouseEvent press;
+    press.button = 0;
+    press.x = r.x + 3.0f;
+    press.y = r.y + 3.0f;
+    bar.onMousePress(press);
+    assert(press.consumed);
+    MouseEvent release = press;
+    release.consumed = false;
+    bar.onMouseRelease(release);
+    assert(bar.currentIndex() == 2 && clicks == 0);
+    bar.setPageEnabled(1, true);
+    bar.onMousePress(press);
+    bar.onMouseRelease(release);
+    assert(bar.currentIndex() == 1 && bar.currentWidget() == b && clicks == 1);
+
+    // Tooltips e cursor
+    MouseEvent move;
+    move.x = r.x + 3.0f;
+    move.y = r.y + 3.0f;
+    MouseEvent away;
+    away.x = 10.0f;
+    away.y = 10.0f;
+    bar.onMouseMove(move);
+    assert(bar.tooltip().empty());   // com rótulos à vista o tooltip não os repete
+    assert(bar.cursor() == CursorType::Hand);
+    bar.setShowLabels(false);
+    bar.onMouseMove(away);
+    assert(bar.cursor() == CursorType::Arrow);
+    bar.onMouseMove(move);
+    assert(bar.tooltip() == "Log");
+    bar.setPageTooltip(1, "Messages from the rig");
+    bar.onMouseMove(away);
+    bar.onMouseMove(move);
+    assert(bar.tooltip() == "Messages from the rig");
+    bar.onMouseLeave();
+    assert(bar.cursor() == CursorType::Arrow);
+
+    // Trocar de lado move a calha para o bordo esquerdo
+    bar.setSide(SideTabBar::Side::Left);
+    Rect onLeft;
+    assert(bar.buttonRect(0, onLeft));
+    assert(onLeft.x >= 100.0f && onLeft.x + onLeft.w <= 164.0f + 0.001f);
+    bar.layout();
+    assert(std::fabs(b->rect().x - 64.0f) < 0.001f);
+}
+
+// Remover uma página à esquerda da aberta mantém a mesma página aberta (o
+// índice desce); remover a aberta avisa e abre a seguinte; sem páginas fica
+// dobrado e a primeira a chegar depois abre-se sozinha.
+static void test_side_tab_bar_remove_page_reports_the_current_one()
+{
+    using namespace ig::retained;
+    SideTabBar bar;
+    bar.addPage<Label>(IconId::None, "a", "a");
+    auto* b = bar.addPage<Label>(IconId::None, "b", "b");
+    auto* c = bar.addPage<Label>(IconId::None, "c", "c");
+    bar.setCurrentIndex(2);
+    ct::Vector<int> reported;
+    bar.currentChanged.connect([&reported](int index) { reported.push_back(index); });
+
+    bar.removePage(0);
+    assert(bar.currentIndex() == 1 && bar.currentWidget() == c && bar.children().size() == 2u);
+    assert(reported.size() == 1u && reported[0] == 1);
+
+    bar.setCurrentIndex(0);
+    assert(bar.currentWidget() == b && reported.size() == 2u);
+    bar.removePage(0);
+    assert(bar.currentIndex() == 0 && bar.currentWidget() == c);
+    assert(reported.size() == 3u && reported[2] == 0);
+
+    bar.removePage(0);
+    assert(bar.isCollapsed() && bar.pageCount() == 0 && bar.children().empty());
+    assert(reported.size() == 4u && reported[3] == -1);
+    bar.removePage(0);
+    assert(reported.size() == 4u);
+
+    auto* d = bar.addPage<Label>(IconId::None, "d", "d");
+    assert(bar.currentWidget() == d && reported.size() == 4u);
+}
+
+// O serializer guarda as páginas do SideTabBar com o conteúdo de cada uma e
+// volta a montá-las pela ordem, sem duplicar os filhos.
+static void test_serializer_round_trips_side_tab_bar_pages()
+{
+    using namespace ig::retained;
+    WidgetSerializer::registerBuiltinTypes();
+
+    auto* root = new BoxLayout(LayoutDir::Horizontal);
+    auto* bar = root->createChild<SideTabBar>(SideTabBar::Side::Right);
+    bar->setCollapsible(false);
+    bar->setShowLabels(false);
+    bar->setRailWidth(48.0f);
+    bar->setButtonHeight(40.0f);
+    bar->setIconSize(18.0f);
+    bar->setPageWidth(200.0f);
+    bar->addPage<Label>(IconId::Gear, "Settings", "settings");
+    bar->addPage<Button>(IconId::Info, "Log", "log");
+    bar->addPage<Label>(IconId::None, "Help", "help");
+    bar->setPageTooltip(1, "Messages");
+    bar->setPageBadge(1, true);
+    bar->setPageEnabled(2, false);
+    bar->setCurrentIndex(1);
+
+    const json saved = WidgetSerializer::save(root);
+    assert(String(saved["children"][0]["type"].str()) == "SideTabBar");
+    assert(!saved["children"][0].contains("children"));
+    assert(saved["children"][0]["pages"].size() == 3u);
+
+    BoxLayout destination(LayoutDir::Vertical);
+    Widget* loaded = WidgetSerializer::load(saved, &destination);
+    assert(loaded && loaded->children().size() == 1u);
+    auto* copy = widget_cast<SideTabBar>(loaded->children()[0]);
+    assert(copy != nullptr);
+    assert(copy->side() == SideTabBar::Side::Right && !copy->collapsible() && !copy->showLabels());
+    assert(copy->railWidth() == 48.0f && copy->buttonHeight() == 40.0f);
+    assert(copy->iconSize() == 18.0f && copy->pageWidth() == 200.0f);
+    assert(copy->pageCount() == 3 && copy->children().size() == 3u);
+    assert(copy->pageLabel(0) == "Settings" && copy->pageIcon(0) == IconId::Gear);
+    assert(copy->pageLabel(2) == "Help" && copy->pageIcon(2) == IconId::None);
+    assert(copy->pageTooltip(1) == "Messages" && copy->pageBadge(1) && !copy->pageBadge(0));
+    assert(!copy->isPageEnabled(2) && copy->isPageEnabled(0));
+    assert(copy->currentIndex() == 1);
+    assert(WidgetSerializer::typeName(copy->pageWidget(1)) == "Button");
+    assert(widget_cast<Label>(copy->pageWidget(0))->text() == "settings");
+    assert(copy->pageWidget(1)->parent() == copy);
+
+    // Dobrado também volta dobrado
+    bar->setCurrentIndex(-1);
+    const json folded = WidgetSerializer::save(bar);
+    BoxLayout other(LayoutDir::Vertical);
+    auto* foldedCopy = widget_cast<SideTabBar>(WidgetSerializer::load(folded, &other));
+    assert(foldedCopy && foldedCopy->isCollapsed() && foldedCopy->pageCount() == 3);
+
+    delete root;
+}
+
+// A pintura: a calha tem o fundo dela, a página o dela (só enquanto está
+// aberta), o botão ativo o contorno de destaque e o badge é o ponto no canto
+// do botão que o tem - e só nesse.
+static void test_side_tab_bar_paints_badge_and_active_frame()
+{
+    using namespace ig::retained;
+    SideTabBar bar;
+    bar.setRect({0.0f, 0.0f, 300.0f, 400.0f});
+    bar.setRailWidth(60.0f);
+    bar.addPage<Panel>(IconId::Gear, "A");
+    bar.addPage<Panel>(IconId::Info, "B");
+    bar.setPageBadge(1, true);
+    bar.layout();
+
+    auto count = [](const DrawList& list, const Color& color, const Rect& within)
+    {
+        int n = 0;
+        const ct::Vector<DrawVertex>& vertices = list.vertices();
+        for (size_t i = 0; i < vertices.size(); ++i)
+        {
+            const DrawVertex& v = vertices[i];
+            if (v.color.r != color.r || v.color.g != color.g || v.color.b != color.b) continue;
+            if (within.contains(v.x, v.y)) ++n;
+        }
+        return n;
+    };
+
+    const Theme& t = Theme::instance();
+    Rect r0, r1;
+    assert(bar.buttonRect(0, r0) && bar.buttonRect(1, r1));
+    const Rect rail{0.0f, 0.0f, 60.0f, 400.0f};
+    const Rect page{60.0f, 0.0f, 240.0f, 400.0f};
+
+    DrawList open;
+    PaintContext openCtx(open);
+    bar.paint(openCtx);
+    assert(count(open, t.sideTabRailBg, rail) > 0);
+    assert(count(open, t.sideTabPageBg, page) > 0);
+    assert(count(open, t.sideTabAccent, r0) > 0);
+    assert(count(open, t.sideTabAccent, r1) == 0);
+    assert(count(open, t.sideTabBadge, r1) > 0);
+    assert(count(open, t.sideTabBadge, r0) == 0);
+
+    bar.collapse();
+    DrawList folded;
+    PaintContext foldedCtx(folded);
+    bar.paint(foldedCtx);
+    assert(count(folded, t.sideTabRailBg, rail) > 0);
+    assert(count(folded, t.sideTabPageBg, page) == 0);
+    assert(count(folded, t.sideTabAccent, r0) == 0);
+    assert(count(folded, t.sideTabBadge, r1) > 0);
+}
+
 int main()
 {
     using namespace ig;
 
     using namespace ig::retained;
     test_round_rect_corner_is_a_curve();
+    test_side_tab_bar_opens_pages_and_folds();
+    test_side_tab_bar_right_side_hidden_and_disabled_pages();
+    test_side_tab_bar_remove_page_reports_the_current_one();
+    test_serializer_round_trips_side_tab_bar_pages();
+    test_side_tab_bar_paints_badge_and_active_frame();
     test_knob_arc_is_open_at_the_bottom();
     test_knob_accent_comes_from_the_caller();
     test_fader_takes_a_press_anywhere();

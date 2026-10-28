@@ -250,6 +250,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/NodeEditor.cpp
         src/widgets/Range.cpp
         src/widgets/ScrollWidgets.cpp
+        src/widgets/SideTabBar.cpp
         src/widgets/SpinSlider.cpp
         src/widgets/TextInputWidgets.cpp
         src/widgets/ThumbnailGrid.cpp
@@ -476,7 +477,8 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
             examples/sdl2_original_widgets/stages/stage_dialogs.cpp
             examples/sdl2_original_widgets/stages/stage_dock.cpp
             examples/sdl2_original_widgets/stages/stage_properties.cpp
-            examples/sdl2_original_widgets/stages/stage_video.cpp)
+            examples/sdl2_original_widgets/stages/stage_video.cpp
+            examples/sdl2_original_widgets/stages/stage_sidetabs.cpp)
         target_include_directories(igui_zen_widgets PRIVATE examples/sdl2_original_widgets)
         target_link_libraries(igui_zen_widgets PRIVATE igui_zen)
     endif()
@@ -554,7 +556,8 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
             examples/sdl2_original_widgets/stages/stage_dialogs.cpp
             examples/sdl2_original_widgets/stages/stage_dock.cpp
             examples/sdl2_original_widgets/stages/stage_properties.cpp
-            examples/sdl2_original_widgets/stages/stage_video.cpp)
+            examples/sdl2_original_widgets/stages/stage_video.cpp
+            examples/sdl2_original_widgets/stages/stage_sidetabs.cpp)
         target_compile_features(igui_sdl2_original_widgets_demo PRIVATE cxx_std_17)
         target_include_directories(igui_sdl2_original_widgets_demo PRIVATE
             examples/sdl2_original_widgets)
@@ -598,7 +601,8 @@ if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
                 examples/sdl2_original_widgets/stages/stage_dialogs.cpp
                 examples/sdl2_original_widgets/stages/stage_dock.cpp
                 examples/sdl2_original_widgets/stages/stage_properties.cpp
-                examples/sdl2_original_widgets/stages/stage_video.cpp)
+                examples/sdl2_original_widgets/stages/stage_video.cpp
+                examples/sdl2_original_widgets/stages/stage_sidetabs.cpp)
             target_compile_features(igui_web_retained PRIVATE cxx_std_17)
             target_include_directories(igui_web_retained PRIVATE examples/sdl2_original_widgets)
             target_link_libraries(igui_web_retained PRIVATE igui_widgets ${IGUI_SDL2_LIBS})

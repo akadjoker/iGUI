@@ -34,6 +34,7 @@ void registerMenuStage(WidgetApp& app)
         { "14 - Widget Gallery",   "gallery"    },
         { "15 - Specialty Widgets","specialty"  },
         { "16 - Video Monitor",    "video"      },
+        { "17 - Side Tab Bar",     "sidetabs"   },
     };
     for (auto& e : entries) {
         auto* btn = vbox->createChild<Button>(e.label);
