@@ -4228,6 +4228,76 @@ static void test_file_dialog_icon_names_fit_their_cell()
     std::remove(root.c_str());
 }
 
+// O ColorButton abre o ColorPicker num popup: um arrasto avisa a cada passo e
+// fecha com um só commit (um undo), um clique que não muda a cor não faz commit,
+// um segundo clique no botão fecha o popup, e apagar o botão com o popup aberto
+// não deixa o popup a apontar para ele.
+static void test_color_button_opens_a_picker_and_commits_once()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("colorbutton");
+    assert(app.setStage("colorbutton", TransitionType::None));
+    auto* button = stage->createChild<ColorButton>(Color(10, 20, 30, 255));
+    button->setRect({20.0f, 20.0f, 96.0f, 22.0f});
+    int changes = 0, commits = 0;
+    Color committed;
+    button->colorChanged.connect([&](Color) { ++changes; });
+    button->colorCommitted.connect([&](Color c) { ++commits; committed = c; });
+
+    button->setColor(Color(200, 40, 40, 255));
+    assert(changes == 0 && button->color().r == 200 && button->picker() == nullptr);
+
+    auto click = [&](float x, float y) {
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = y;
+        button->onMousePress(press);
+    };
+    click(30.0f, 30.0f);
+    ColorPicker* picker = button->picker();
+    assert(picker && app.popup() != nullptr);
+    // The picker keeps HSV: a channel may come back one off, the button's own color does not.
+    assert(std::abs(picker->color().r - 200) <= 2 && std::abs(picker->color().g - 40) <= 2);
+    assert(button->color().r == 200 && button->color().g == 40);
+
+    // A drag on the wheel: a change per step, one commit at the end.
+    const Rect area = picker->absoluteRect();
+    const float cx = area.x + area.h * 0.30f, cy = area.y + area.h * 0.30f;
+    MouseEvent e;
+    e.button = 0;
+    e.x = cx + 10.0f;
+    e.y = cy;
+    picker->onMousePress(e);
+    e.x = cx;
+    e.y = cy + 10.0f;
+    picker->onMouseMove(e);
+    picker->onMouseRelease(e);
+    assert(changes >= 2 && commits == 1);
+    assert(button->color().r == committed.r && button->color().g == committed.g && button->color().b == committed.b);
+
+    // The same point again changes nothing: no commit.
+    picker->onMousePress(e);
+    picker->onMouseRelease(e);
+    assert(commits == 1);
+
+    // A second click on the swatch closes it.
+    click(30.0f, 30.0f);
+    assert(button->picker() == nullptr && app.popup() == nullptr);
+
+    // Gone with the picker open: the popup lets go of it.
+    click(30.0f, 30.0f);
+    assert(button->picker() != nullptr);
+    stage->removeChild(button);
+    assert(app.popup() == nullptr);
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    app.update(io);
+    app.removeStage("colorbutton");
+}
+
 // A TreeView com o drag ligado larga um nó dentro de outro, antes, depois, ou
 // abaixo da última linha (sem alvo); nunca sobre si nem no próprio ramo, e
 // não começa um drag a partir dos toggles nem sem o drag ligado.
@@ -6991,6 +7061,7 @@ int main()
     test_file_dialog_icon_names_fit_their_cell();
     test_tree_view_moves_with_the_arrow_keys();
     test_tree_view_drops_a_dragged_node();
+    test_color_button_opens_a_picker_and_commits_once();
     test_list_box_moves_with_the_arrow_keys();
     test_list_widget_places_rows_added_after_layout();
     test_list_widget_moves_with_the_arrow_keys();

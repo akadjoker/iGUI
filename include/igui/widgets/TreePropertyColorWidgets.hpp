@@ -436,8 +436,10 @@ public:
     /// @brief Check if the alpha bar is shown.
     bool showAlpha() const { return showAlpha_; }
 
-    /// @brief Emitted when the color changes.
+    /// @brief Emitted when the color changes, on every step of a drag.
     Signal<Color> colorChanged;
+    /// @brief Emitted once when a drag that changed the color ends: one edit, for undo.
+    Signal<Color> colorCommitted;
 
     Vec2f sizeHint()              const override;
     void  paint(PaintContext& ctx)      override;
@@ -447,6 +449,7 @@ public:
 
 private:
     enum DragTarget { DragNone, DragWheel, DragValueBar, DragAlphaBar };
+    Color      dragStart_;   // the color when the drag began
 
     float wheelRadius (const Rect& abs) const;
     float wheelCenterX(const Rect& abs) const;
@@ -485,6 +488,53 @@ private:
     float         barTexVal_      = -1.f;
     int           barTexHeight_   = 0;
     ct::Vector<unsigned char> texPixels_;
+};
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  ColorButton — a swatch of a color that opens a ColorPicker
+//
+//    auto* tint = row->createChild<ColorButton>(Color(255, 128, 0, 255));
+//    tint->setShowAlpha(true);
+//    tint->colorChanged.connect([](Color c) { ... });     // live, while picking
+//    tint->colorCommitted.connect([](Color c) { ... });   // once per drag: undo
+//
+//  The swatch shows the color over a checkerboard, so its alpha reads, and its
+//  hex beside it when there is room. A click opens the picker in a popup below
+//  (above when there is no room), which closes with a click outside.
+// ═════════════════════════════════════════════════════════════════════════════
+class ColorButton : public Widget
+{
+public:
+    IG_WIDGET_CLASS(ColorButton, Widget);
+
+    explicit ColorButton(const Color& color = Color(255, 255, 255, 255));
+
+    /// @brief Set the color without emitting a signal.
+    void setColor(const Color& color);
+    /// @brief Get the color.
+    const Color& color() const { return color_; }
+    /// @brief Let the picker edit the alpha too (off by default).
+    void setShowAlpha(bool show) { showAlpha_ = show; markDirty(); }
+    bool showAlpha() const { return showAlpha_; }
+    /// @brief Open the picker.
+    void openPicker();
+    /// @brief The picker while it is open, nullptr otherwise.
+    ColorPicker* picker() const;
+
+    /// @brief Emitted on every change while picking.
+    Signal<Color> colorChanged;
+    /// @brief Emitted when a drag in the picker ends having changed the color.
+    Signal<Color> colorCommitted;
+
+    Vec2f sizeHint() const override { return {96.0f, 22.0f}; }
+    void  paint(PaintContext& ctx) override;
+    void  onMousePress(MouseEvent& e) override;
+
+private:
+    Color color_;
+    bool  showAlpha_ = false;
+    Widget* popup_ = nullptr;   // ours while WidgetApp shows it
 };
 
 } // namespace retained

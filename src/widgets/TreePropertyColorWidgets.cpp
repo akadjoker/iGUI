@@ -1837,13 +1837,148 @@ void ColorPicker::onMousePress(MouseEvent& e)
     float cx=wheelCenterX(abs), cy=wheelCenterY(abs), r=wheelRadius(abs);
     float dx=e.x-cx, dy=e.y-cy, dist=sqrtf(dx*dx+dy*dy);
 
+    dragStart_=color();
     Rect vb=valueBarRect(abs);
     if (vb.contains(e.x,e.y)) { dragTarget_=DragValueBar; updateFromValueBar(e.y,abs); colorChanged.emit(color()); markDirty(); return; }
     if (showAlpha_) { Rect ab2=alphaBarRect(abs); if (ab2.contains(e.x,e.y)) { dragTarget_=DragAlphaBar; updateFromAlphaBar(e.y,abs); colorChanged.emit(color()); markDirty(); return; } }
     if (dist<=r) { dragTarget_=DragWheel; updateFromWheel(e.x,e.y,abs); colorChanged.emit(color()); markDirty(); }
 }
 
-void ColorPicker::onMouseRelease(MouseEvent& e) { dragTarget_=DragNone; (void)e; }
+void ColorPicker::onMouseRelease(MouseEvent& e)
+{
+    (void)e;
+    if (dragTarget_==DragNone) return;
+    dragTarget_=DragNone;
+    const Color now=color();
+    if (now.r!=dragStart_.r || now.g!=dragStart_.g || now.b!=dragStart_.b || now.a!=dragStart_.a)
+        colorCommitted.emit(now);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ColorButton
+// ─────────────────────────────────────────────────────────────────────────────
+
+namespace {
+
+// The popup a ColorButton opens: a panel holding the picker.
+class ColorButtonPopup_ : public Widget
+{
+public:
+    ColorButtonPopup_() { acceptsFocus_ = true; picker = createChild<ColorPicker>(); }
+
+    void placePicker()
+    {
+        const float pad = 6.0f;
+        picker->setRect({pad, pad, rect_.w - pad * 2.0f, rect_.h - pad * 2.0f});
+    }
+
+    void paint(PaintContext& ctx) override
+    {
+        placePicker();
+        const Rect abs = absoluteRect();
+        const auto& t = Theme::instance();
+        ctx.fill.SetColor(0, 0, 0, 60);
+        ctx.fillRect(abs.x + 3, abs.y + 3, abs.w, abs.h);
+        ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, 250);
+        ctx.fillRoundedRect(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6);
+        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g, t.inputBorderHover.b, 200);
+        ctx.lineRoundedRect(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6);
+        Widget::paint(ctx);
+    }
+
+    ColorPicker* picker = nullptr;
+};
+
+} // namespace
+
+ColorButton::ColorButton(const Color& color) : color_(color) {}
+
+void ColorButton::setColor(const Color& color)
+{
+    color_ = color;
+    if (ColorPicker* open = picker()) open->setColor(color);
+    markDirty();
+}
+
+ColorPicker* ColorButton::picker() const
+{
+    WidgetApp& app = WidgetApp::instance();
+    if (!popup_ || app.popup() != popup_ || app.popupOwner() != this) return nullptr;
+    return static_cast<ColorButtonPopup_*>(popup_)->picker;
+}
+
+void ColorButton::openPicker()
+{
+    auto* popup = new ColorButtonPopup_();
+    ColorPicker* p = popup->picker;
+    p->setShowAlpha(showAlpha_);
+    p->setColor(color_);
+    // The popup goes before this button does: WidgetApp drops it when its owner
+    // is removed, so these never run on a button that is gone.
+    p->colorChanged.connect([this](Color c) { color_ = c; markDirty(); colorChanged.emit(c); });
+    p->colorCommitted.connect([this](Color c) { colorCommitted.emit(c); });
+
+    const Rect abs = absoluteRect();
+    const auto& io = GetIO();
+    const float w = showAlpha_ ? 230.0f : 200.0f, h = 200.0f;
+    float x = abs.x, y = abs.y + abs.h + 2.0f;
+    if (io.displayWidth > 0.0f && x + w > io.displayWidth) x = io.displayWidth - w;
+    if (io.displayHeight > 0.0f && y + h > io.displayHeight) y = abs.y - h - 2.0f;
+    if (x < 0.0f) x = 0.0f;
+    if (y < 0.0f) y = 0.0f;
+    popup->setRect({x, y, w, h});
+    popup->placePicker();
+    popup_ = popup;
+    WidgetApp::instance().showPopup(popup, this);
+}
+
+void ColorButton::onMousePress(MouseEvent& e)
+{
+    if (!visible_ || !isEnabledInTree() || e.button != 0) return;
+    e.consumed = true;
+    // A second click on the swatch closes the picker it opened.
+    if (picker()) { WidgetApp::instance().closePopup(); return; }
+    openPicker();
+}
+
+void ColorButton::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+    const Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+    const auto& t = Theme::instance();
+    const float sw = std::min(abs.w, 36.0f);
+    const Rect swatch{abs.x + 2.0f, abs.y + 3.0f, sw - 4.0f, abs.h - 6.0f};
+    // A checkerboard under the swatch, so the alpha shows.
+    ctx.pushClip(swatch);
+    const float cell = 5.0f;
+    ctx.fill.SetColor(200, 200, 200, 255);
+    ctx.fillRect(swatch.x, swatch.y, swatch.w, swatch.h);
+    ctx.fill.SetColor(140, 140, 140, 255);
+    for (int cy = 0; cy * cell < swatch.h; ++cy)
+        for (int cx = 0; cx * cell < swatch.w; ++cx)
+            if (((cx + cy) & 1) == 0) ctx.fillRect(swatch.x + cx * cell, swatch.y + cy * cell, cell, cell);
+    ctx.fill.SetColor(color_.r, color_.g, color_.b, color_.a);
+    ctx.fillRect(swatch.x, swatch.y, swatch.w, swatch.h);
+    ctx.popClip();
+    ctx.line.SetColor(isHovered() ? t.inputBorderHover : t.inputBorder);
+    ctx.lineRect(swatch.x, swatch.y, swatch.w, swatch.h);
+    // The hex beside it, when there is room.
+    if (abs.w > sw + 40.0f)
+    {
+        char hex[16];
+        if (showAlpha_)
+            std::snprintf(hex, sizeof hex, "#%02X%02X%02X%02X", color_.r, color_.g, color_.b, color_.a);
+        else
+            std::snprintf(hex, sizeof hex, "#%02X%02X%02X", color_.r, color_.g, color_.b);
+        ctx.font.SetFontSize(t.fontSize);
+        ctx.font.SetBatch(&ctx.text);
+        ctx.font.SetColor(t.textColor);
+        const float asc = ctx.font.GetAscender();
+        ctx.font.Print(ctx.fitText(hex, abs.w - sw - 6.0f).c_str(), abs.x + sw + 4.0f,
+                       abs.y + (abs.h - t.fontSize) * 0.5f + asc);
+    }
+}
 
 void ColorPicker::onMouseMove(MouseEvent& e)
 {
