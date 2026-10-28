@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-struct PlatformWindow;
+#include <platform.h>
 
 namespace ig
 {
@@ -61,6 +61,9 @@ public:
     // Runs every frame after the platform input is read into the IO and before the widgets update, with the
     // frame number: a test or a recorder can replace the mouse and add keys there.
     void setInputHook(ct::Function<void(int, ig::retained::IO &)> hook) { inputHook_ = std::move(hook); }
+    // Sees every platform event as it is read, before the widgets get it: an application running a game
+    // inside the interface feeds its own input from here.
+    void setEventHook(ct::Function<void(const Event &)> hook) { eventHook_ = std::move(hook); }
     /// Called after the interface is drawn and before the swap (OpenGL path): the place to read the window.
     void setAfterRenderCallback(ct::Function<void()> callback) { afterRenderCallback_ = std::move(callback); }
     /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the after-render callback.
@@ -95,6 +98,7 @@ private:
     ct::Function<void(float)> frameCallback_;
     ct::Function<void()> afterRenderCallback_;
     ct::Function<void(int, ig::retained::IO &)> inputHook_;
+    ct::Function<void(const Event &)> eventHook_;
     int frameIndex_ = 0;
 };
 
