@@ -1893,6 +1893,14 @@ public:
 
 ColorButton::ColorButton(const Color& color) : color_(color) {}
 
+Widget::Vec2f ColorButton::sizeHint() const
+{
+    const char* widest = showAlpha_ ? "#WWWWWWWW" : "#WWWWWW";
+    WidgetApp* app = WidgetApp::existing();
+    const float text = app ? app->textWidth(widest) : Theme::instance().fontSize * 0.62f * (showAlpha_ ? 9.0f : 7.0f);
+    return {36.0f + 6.0f + text, 22.0f};
+}
+
 void ColorButton::setColor(const Color& color)
 {
     color_ = color;

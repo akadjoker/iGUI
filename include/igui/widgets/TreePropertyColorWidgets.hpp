@@ -527,7 +527,8 @@ public:
     /// @brief Emitted when a drag in the picker ends having changed the color.
     Signal<Color> colorCommitted;
 
-    Vec2f sizeHint() const override { return {96.0f, 22.0f}; }
+    /// @brief Room for the swatch and the whole hex (#RRGGBB, or #RRGGBBAA with alpha).
+    Vec2f sizeHint() const override;
     void  paint(PaintContext& ctx) override;
     void  onMousePress(MouseEvent& e) override;
 
