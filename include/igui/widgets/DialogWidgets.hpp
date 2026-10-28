@@ -207,6 +207,46 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  ChoiceDialog - a question answered by buttons that say what they do
+//
+//    auto* ask = app.addFloat<ChoiceDialog>("Unsaved prefab", "Save it before leaving?");
+//    const int save    = ask->addChoice("Save", IconId::Check, ChoiceDialog::Role::Default);
+//    const int discard = ask->addChoice("Don't save", IconId::Trash, ChoiceDialog::Role::Destructive);
+//    ask->addChoice("Cancel", IconId::Cross, ChoiceDialog::Role::Cancel);
+//    ask->chosen.connect([=](int i) { if (i == save) ...; else if (i == discard) ...; });
+//
+//  Enter answers with the default choice, Escape and the window's close button
+//  with the cancel one (-1 when there is none). It answers once, then closes.
+// ═════════════════════════════════════════════════════════════════════════════
+class ChoiceDialog : public FloatWindow
+{
+public:
+    IG_WIDGET_CLASS(ChoiceDialog, FloatWindow);
+
+    enum class Role { Normal, Default, Destructive, Cancel };
+
+    ChoiceDialog(const String& title, const String& message);
+
+    /// @brief Add a button; returns its index. Buttons appear left to right in order.
+    int addChoice(const String& label, IconId icon = IconId::None, Role role = Role::Normal);
+    /// @brief Answer as if the choice's button were pressed (for keys and tests).
+    void choose(int index);
+
+    /// @brief Emitted once with the index of the choice made.
+    Signal<int> chosen;
+
+    void onKeyPress(KeyEvent& e) override;
+    Widget* focusOnOpen() override { return this; }
+
+private:
+    int firstWithRole(Role role) const;
+
+    ct::Vector<Role> roles_;
+    BoxLayout* buttons_ = nullptr;
+    bool answered_ = false;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  InputBox - simple text input dialog (FloatWindow)
 //
 //    auto* ib = app.addFloat<InputBox>("Rename", "Enter new name:");
