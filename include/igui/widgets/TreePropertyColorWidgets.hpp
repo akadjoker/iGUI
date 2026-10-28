@@ -140,6 +140,25 @@ public:
     /// @brief Emitted when the user clicks a toggle of a node: node, toggle index, new state.
     Signal<TreeNode*, int, bool> toggleChanged;
 
+    /// @brief Where a dragged node lands relative to the row under the pointer.
+    enum class DropZone { Before, Inside, After };
+
+    /// @brief Let rows be dragged onto other rows (off by default). It uses the
+    ///        WidgetApp drag and drop, as Outliner does; the view only reports the
+    ///        drop, moving the node is up to the handler of nodeDropped.
+    void setDragEnabled(bool enabled) { dragEnabled_ = enabled; }
+    bool dragEnabled() const          { return dragEnabled_; }
+    /// @brief Which nodes may be picked up. Unset allows all of them.
+    void setDragFilter(ct::Function<bool(TreeNode*)> filter) { dragFilter_ = std::move(filter); }
+    /// @brief Where a node may be dropped: dragged, target, zone. The target is null over the
+    ///        empty area below the last row. Unset allows every spot but the node's own branch.
+    void setDropFilter(ct::Function<bool(TreeNode*, TreeNode*, DropZone)> filter)
+    {
+        dropFilter_ = std::move(filter);
+    }
+    /// @brief Emitted when a dragged node is released on a spot the drop filter allows.
+    Signal<TreeNode*, TreeNode*, DropZone> nodeDropped;
+
     Vec2f sizeHint()                   const override;
     void  paint(PaintContext& ctx)           override;
     void  onMousePress(MouseEvent& e)        override;
@@ -149,8 +168,23 @@ public:
     void  onMouseLeave()                     override;
     void onKeyPress(KeyEvent& e) override;
 
+    bool        isDragSource() const override;
+    DragPayload onDragBegin() override;
+    void        onDragEnd(bool accepted) override;
+    bool        acceptsDrop(const DragPayload& p) override;
+    void        onDropReceive(const DragPayload& p) override;
+
 private:
     friend class TreeNode;
+    struct DropSpot
+    {
+        int       row    = -1;
+        DropZone  zone   = DropZone::Inside;
+        TreeNode* target = nullptr;
+        bool      valid  = false;
+    };
+    DropSpot dropSpotAt(float localY);
+    void     endDrag();
     struct FlatRow { TreeNode* node; int depth; };
 
     float toggleSlot() const;
@@ -182,6 +216,15 @@ private:
     bool                   flatDirty_     = true;
     bool                   draggingBar_   = false;
     float                  barGrab_       = 0.0f;
+
+    bool dragEnabled_ = false;
+    ct::Function<bool(TreeNode*)> dragFilter_;
+    ct::Function<bool(TreeNode*, TreeNode*, DropZone)> dropFilter_;
+    TreeNode* dragCandidate_ = nullptr;   // the row pressed, before the drag starts
+    TreeNode* dragNode_      = nullptr;
+    DropSpot  dropSpot_;
+    int       hoverRow_      = -1;
+    float     hoverX_        = 0.0f;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
