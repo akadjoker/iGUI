@@ -389,6 +389,7 @@ void TreeView::clear()
     for (auto* r : roots_) delete r;
     roots_.clear();
     selected_     = nullptr;
+    extra_.clear();
     selectionLost_ = false;
     scrollOffset_ = 0;
     flatDirty_ = true;
@@ -397,6 +398,10 @@ void TreeView::clear()
 
 void TreeView::setSelectedNode(TreeNode* n)
 {
+    if (!extra_.empty()) {
+        extra_.clear();
+        markDirty();
+    }
     if (selected_ != n) {
         selected_ = n;
         selectionChanged.emit(n);
@@ -407,9 +412,34 @@ void TreeView::setSelectedNode(TreeNode* n)
 void TreeView::forgetNode(TreeNode* n)
 {
     if (dragNode_ == n || dragCandidate_ == n || dropSpot_.target == n) endDrag();
+    for (int i = static_cast<int>(extra_.size()) - 1; i >= 0; --i)
+        if (extra_[i] == n) extra_.erase(extra_.begin() + i);
     if (selected_ != n) return;
     selected_ = nullptr;
     selectionLost_ = true;
+    markDirty();
+}
+
+bool TreeView::isNodeSelected(const TreeNode* n) const
+{
+    if (n && n == selected_) return true;
+    for (const TreeNode* e : extra_)
+        if (e == n) return true;
+    return false;
+}
+
+void TreeView::selectedNodes(ct::Vector<TreeNode*>& out) const
+{
+    out.clear();
+    if (selected_) out.push_back(selected_);
+    for (TreeNode* e : extra_) out.push_back(e);
+}
+
+void TreeView::setExtraSelection(const ct::Vector<TreeNode*>& nodes)
+{
+    extra_.clear();
+    for (TreeNode* n : nodes)
+        if (n && n != selected_ && !isNodeSelected(n)) extra_.push_back(n);
     markDirty();
 }
 
@@ -493,9 +523,9 @@ void TreeView::paint(PaintContext& ctx)
         float rowY  = abs.y + i * rowHeight_ - scrollOffset_;
         float indX  = abs.x + 4.f + row.depth * indent_;
 
-        if (row.node == selected_) {
+        if (isNodeSelected(row.node)) {
             ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                              t.selectionColor.b, t.selectionColor.a);
+                              t.selectionColor.b, static_cast<u8>(row.node == selected_ ? t.selectionColor.a : t.selectionColor.a * 2 / 3));
             ctx.fillRect(abs.x, rowY, abs.w, rowHeight_);
         }
 
@@ -684,7 +714,31 @@ void TreeView::onMousePress(MouseEvent& e)
         }
     }
     TreeNode* pressed = row.node;
+    if (multiSelect_ && selected_ && (e.ctrl || e.shift)) {
+        if (e.shift) {
+            // The rows between the selected one and this one, both ends in.
+            const int from = rowOf(selected_);
+            extra_.clear();
+            for (int i = from < idx ? from : idx; i <= (from < idx ? idx : from); ++i)
+                if (flatRows_[i].node != selected_) extra_.push_back(flatRows_[i].node);
+        } else if (pressed == selected_) {
+            TreeNode* next = extra_.empty() ? nullptr : extra_[0];
+            if (!extra_.empty()) extra_.erase(extra_.begin());
+            selected_ = next;
+            selectionChanged.emit(next);
+        } else {
+            bool removed = false;
+            for (int i = static_cast<int>(extra_.size()) - 1; i >= 0; --i)
+                if (extra_[i] == pressed) { extra_.erase(extra_.begin() + i); removed = true; }
+            if (!removed) extra_.push_back(pressed);
+        }
+        markDirty();
+        selectionSetChanged.emit();
+        return;
+    }
+    const bool hadExtra = !extra_.empty();
     setSelectedNode(pressed);
+    if (hadExtra) selectionSetChanged.emit();
     // The selection handler may have rebuilt the tree.
     if (selected_ == pressed) dragCandidate_ = pressed;
 }
