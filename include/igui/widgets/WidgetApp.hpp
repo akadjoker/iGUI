@@ -382,6 +382,10 @@ public:
     /// @brief Get the shared icon atlas.
     IconAtlas& iconAtlas();
 
+    /// @brief Key presses that no widget consumed, or that came while nothing had
+    ///        the focus: where an application puts its shortcuts (Ctrl+S, Delete...).
+    Signal<KeyEvent&> unhandledKey;
+
 private:
     WidgetApp() = default;
     void addFloatImpl(FloatWindow* fw);

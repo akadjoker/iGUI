@@ -582,14 +582,18 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
         return;
     }
 
-    if (!focused_) return;
     KeyEvent we;
     we.key      = ke.key;
     we.scancode = ke.scancode;
     we.shift    = ke.shift;
     we.ctrl     = ke.ctrl;
     we.alt      = ke.alt;
-    bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
+    // A key that made a widget go away was handled, consumed or not.
+    const uint32_t deletionsBefore = deletions_;
+    if (focused_)
+        bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
+    if (ke.down && !we.consumed && deletions_ == deletionsBefore)
+        unhandledKey.emit(we);
 }
 
 void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
