@@ -106,10 +106,27 @@ void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex)
     markDirty();
 }
 
+void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex, float width, float height)
+{
+    if (idx < 0 || idx >= static_cast<int>(items_.size())) return;
+    items_[idx].tex = tex;
+    items_[idx].texW = width;
+    items_[idx].texH = height;
+    markDirty();
+}
+
+void ThumbnailGrid::setItemIcon(int idx, IconId icon)
+{
+    if (idx < 0 || idx >= static_cast<int>(items_.size())) return;
+    items_[idx].icon = icon;
+    markDirty();
+}
+
 void ThumbnailGrid::removeItem(int idx)
 {
     if (idx < 0 || idx >= static_cast<int>(items_.size())) return;
     items_.erase(items_.begin() + idx);
+    hover_ = pressed_ = -1;
     if (selected_ == idx) selected_ = -1;
     else if (selected_ > idx) --selected_;
     syncScroll();
@@ -118,6 +135,7 @@ void ThumbnailGrid::removeItem(int idx)
 void ThumbnailGrid::clearItems()
 {
     items_.clear();
+    hover_ = pressed_ = -1;
     selected_ = -1;
     syncScroll();
 }
@@ -222,6 +240,16 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         // Thumbnail
         if (item.tex) {
             Rect dst = {x, y, thumbW_, thumbH_};
+            if (item.texW > 0.f && item.texH > 0.f) {
+                // Fit inside the cell, centred, keeping the aspect.
+                const float fit = std::min(thumbW_ / item.texW, thumbH_ / item.texH);
+                dst.w = item.texW * fit;
+                dst.h = item.texH * fit;
+                dst.x = x + (thumbW_ - dst.w) * 0.5f;
+                dst.y = y + (thumbH_ - dst.h) * 0.5f;
+                ctx.fill.SetColor(item.color.r, item.color.g, item.color.b, item.color.a);
+                ctx.fillRect(x, y, thumbW_, thumbH_);
+            }
             Rect uv  = {0.f, 0.f, 1.f, 1.f};
             ctx.drawImage(item.tex, dst, uv);
         } else {
@@ -236,6 +264,11 @@ void ThumbnailGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(0, 0, 0, a);
                 ctx.fillRect(x, y + thumbH_ - gradH + g, thumbW_, 1);
             }
+        }
+
+        if (!item.tex && item.icon != IconId::None) {
+            const float size = std::min(thumbW_, thumbH_) * 0.5f;
+            ctx.drawIcon(item.icon, x + (thumbW_ - size) * 0.5f, y + (thumbH_ - size) * 0.5f, size);
         }
 
         // Border
@@ -259,10 +292,29 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     Widget::paint(ctx);
 }
 
+void ThumbnailGrid::onMouseMove(MouseEvent& e)
+{
+    hover_ = hitTest(e.x, e.y);
+    Widget::onMouseMove(e);
+}
+
+bool ThumbnailGrid::isDragSource() const
+{
+    return dragPayload_ && hover_ >= 0 && hover_ < static_cast<int>(items_.size());
+}
+
+DragPayload ThumbnailGrid::onDragBegin()
+{
+    if (!dragPayload_ || pressed_ < 0 || pressed_ >= static_cast<int>(items_.size()))
+        return {};
+    return dragPayload_(pressed_);
+}
+
 void ThumbnailGrid::onMousePress(MouseEvent& e)
 {
     if (e.button != 0) return;
     int idx = hitTest(e.x, e.y);
+    pressed_ = idx;
     if (idx >= 0) {
         const bool again = e.clickCount == 2 && idx == selected_;
         setSelected(idx);

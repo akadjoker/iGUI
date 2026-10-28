@@ -3935,6 +3935,53 @@ static void test_thumbnail_grid_paints_and_hits_only_its_cells()
     assert(hit(210.0f, 250.0f) == -1);
 }
 
+// A ThumbnailGrid com fornecedor de payload arrasta o item premido: sem
+// fornecedor nada se arrasta, fora dos itens também não, e o payload é o que
+// o fornecedor dá para o item. O ícone e o tamanho da textura ficam no item.
+static void test_thumbnail_grid_drags_an_item()
+{
+    using namespace ig::retained;
+    ThumbnailGrid grid;
+    grid.setRect({ 20.0f, 30.0f, 300.0f, 300.0f });
+    for (int i = 0; i < 3; ++i) grid.addItem("t");
+    grid.setItemIcon(1, IconId::Folder);
+    TextureHandle handle;
+    handle.value = 7;
+    grid.setItemTexture(2, handle, 64.0f, 32.0f);
+    assert(grid.item(1).icon == IconId::Folder);
+    assert(grid.item(2).texW == 64.0f && grid.item(2).texH == 32.0f);
+
+    auto pointAt = [&grid](float x, float y)
+    {
+        MouseEvent move;
+        move.x = x;
+        move.y = y;
+        grid.onMouseMove(move);
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = y;
+        return grid.isDragSource() ? (grid.onMousePress(press), true) : false;
+    };
+
+    assert(!pointAt(28.0f, 38.0f));
+    int asked = -1;
+    grid.setDragPayload([&asked](int index)
+    {
+        asked = index;
+        DragPayload payload;
+        payload.type = "thumb";
+        payload.data = index;
+        return payload;
+    });
+    assert(!pointAt(210.0f, 250.0f));
+    assert(pointAt(116.0f, 38.0f));
+    const DragPayload payload = grid.onDragBegin();
+    assert(asked == 1 && payload.type == "thumb");
+    grid.clearItems();
+    assert(!grid.isDragSource());
+}
+
 // Uma grelha mais alta do que a vista rola: a roda anda uma fila por passo e
 // pára no fim, a barra salta para onde se clica, os cliques e a pintura seguem
 // o scroll, e as colunas deixam lugar à barra (272 de largura dá três colunas
@@ -6838,6 +6885,7 @@ int main()
     test_console_keeps_its_visible_lines_while_trimming();
     test_thumbnail_grid_paints_and_hits_only_its_cells();
     test_thumbnail_grid_scrolls_to_every_row();
+    test_thumbnail_grid_drags_an_item();
     test_thumbnail_grid_reports_double_clicks_on_one_item();
     test_paint_context_fits_text_at_a_character();
     test_thumbnail_grid_keeps_labels_inside_their_cell();
