@@ -28,6 +28,7 @@ void registerToolsStage(ig::retained::WidgetApp &app);
 void registerGalleryStage(ig::retained::WidgetApp &app);
 void registerSpecialtyStage(ig::retained::WidgetApp &app);
 void registerVideoStage(ig::retained::WidgetApp &app);
+void registerSideTabsStage(ig::retained::WidgetApp &app);
 
 namespace
 {
@@ -190,6 +191,7 @@ int main(int, char **)
     registerGalleryStage(app);
     registerSpecialtyStage(app);
     registerVideoStage(app);
+    registerSideTabsStage(app);
     app.setStage("menu");
     SDL_StartTextInput();
     g.previous = SDL_GetPerformanceCounter();
