@@ -2,6 +2,7 @@
 
 #include "Widget.hpp"
 #include "Signal.hpp"
+#include <ct/function.hpp>
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
@@ -29,6 +30,9 @@ struct ThumbnailItem {
     Color                color = Color(80, 90, 110, 255);
     ig::retained::TextureHandle tex   = {};
     bool                 selected = false;
+    float                texW  = 0.f;   // with a size, the image keeps its aspect in the cell
+    float                texH  = 0.f;
+    IconId               icon  = IconId::None;   // drawn over the colour when there is no image
 };
 
 class ThumbnailGrid : public Widget
@@ -47,6 +51,14 @@ public:
 
     /// @brief Set the texture for an existing item.
     void setItemTexture(int idx, ig::retained::TextureHandle tex);
+    /// @brief Set the texture with its size, so the image keeps its aspect in the cell.
+    void setItemTexture(int idx, ig::retained::TextureHandle tex, float width, float height);
+    /// @brief Set the icon drawn in the middle of an item without an image.
+    void setItemIcon(int idx, IconId icon);
+    /// @brief Let items be dragged: the provider gives the payload for an item. The
+    ///        drag goes through WidgetApp, so any widget whose acceptsDrop takes the
+    ///        payload's type can receive it. Unset (the default), nothing is dragged.
+    void setDragPayload(ct::Function<DragPayload(int)> provider) { dragPayload_ = std::move(provider); }
 
     /// @brief Get the number of items.
     int  itemCount() const { return static_cast<int>(items_.size()); }
@@ -101,8 +113,14 @@ public:
     void  onMousePress(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    bool        isDragSource() const override;
+    DragPayload onDragBegin() override;
 
 private:
+    ct::Function<DragPayload(int)> dragPayload_;
+    int hover_ = -1;
+    int pressed_ = -1;
     ct::Vector<ThumbnailItem> items_;
     int   selected_ = -1;
     float thumbW_   = 80.f;
