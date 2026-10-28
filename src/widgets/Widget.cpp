@@ -495,8 +495,22 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
     if (!glyphText) return;
 
     const float scale = size / buFont->lineHeight();
+    int len = 0;
+    const ig::retained::FontGlyph* glyph = buFont->findGlyph(utf8Decode(glyphText, len));
+    if (glyph && glyph->size.x > 0.0f && glyph->size.y > 0.0f)
+    {
+        const float inkW = glyph->size.x * scale;
+        const float inkH = glyph->size.y * scale;
+        drawList.addText(*buFont,
+                { x + (size - inkW) * 0.5f - glyph->offset.x * scale,
+                    y + (size - inkH) * 0.5f - glyph->offset.y * scale },
+                tint, glyphText, scale);
+        return;
+    }
     const ig::retained::Vec2 glyphSize = drawList.calcTextSize(*buFont, glyphText, scale);
-    drawList.addText(*buFont, { x + (size - glyphSize.x) * 0.5f, y + (size - glyphSize.y) * 0.5f },
+    drawList.addText(*buFont,
+            { x + (size - glyphSize.x) * 0.5f,
+                y + (size - glyphSize.y) * 0.5f + buFont->ascender() * scale },
             tint, glyphText, scale);
 }
 

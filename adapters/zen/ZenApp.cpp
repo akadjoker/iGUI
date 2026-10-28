@@ -593,7 +593,19 @@ bool App::readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height)
     width = 0;
     height = 0;
     window_get_framebuffer_size(main_->platform, &width, &height);
-    if (width <= 0 || height <= 0 || !usesOpenGL()) return false;
+    if (width <= 0 || height <= 0) return false;
+    if (!usesOpenGL())
+    {
+        if (!pixels_) return false;
+        width = pixelsWidth_;
+        height = pixelsHeight_;
+        out.resize(static_cast<size_t>(width) * height);
+        for (int y = 0; y < height; ++y)
+            memcpy(out.data() + static_cast<size_t>(y) * width,
+                    pixels_ + static_cast<size_t>(y) * pixelsStride_,
+                    static_cast<size_t>(width) * sizeof(uint32_t));
+        return true;
+    }
     out.resize(static_cast<size_t>(width) * height);
     gl_.readPixels(out.data(), width, height);
     return true;
@@ -610,6 +622,15 @@ void App::framePixels()
     {
         rasterMs_ += (time_seconds() - t0) * 1000.0;
         ++rasterFrames_;
+    }
+    if (afterRenderCallback_)
+    {
+        pixels_ = fb.pixels;
+        pixelsWidth_ = fb.width;
+        pixelsHeight_ = fb.height;
+        pixelsStride_ = fb.stride;
+        afterRenderCallback_();
+        pixels_ = nullptr;
     }
     window_present_pixels(pw);
     saveScreenshot(fb.pixels, fb.width, fb.height, fb.stride);

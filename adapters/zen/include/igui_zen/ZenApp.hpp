@@ -136,7 +136,7 @@ public:
     {
         eventHook_ = std::move(hook);
     }
-    /// Called after the interface is drawn and before the swap (OpenGL path): the place to read the
+    /// Called after the interface is drawn and before the swap or the present: the place to read the
     /// window.
     void setAfterRenderCallback(ct::Function<void()> callback)
     {
@@ -222,6 +222,11 @@ private:
     int rasterFrames_ = 0;
     ct::Function<void(float)> frameCallback_;
     ct::Function<void()> afterRenderCallback_;
+    // The software framebuffer while the after-render callback runs, for readWindowPixels.
+    const uint32_t* pixels_ = nullptr;
+    int pixelsWidth_ = 0;
+    int pixelsHeight_ = 0;
+    int pixelsStride_ = 0;
     ct::Function<void(int, ig::retained::IO&)> inputHook_;
     ct::Function<void(const Event&)> eventHook_;
     int frameIndex_ = 0;
