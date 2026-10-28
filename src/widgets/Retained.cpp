@@ -1088,6 +1088,74 @@ namespace ig { namespace retained
             break;
         }
 
+        case IconId::PaintBrush:
+        {
+            // a handle down to a ferrule, and the tuft below it
+            addLine({x1 - p * 0.9f, y0 + p * 0.9f}, {cx + s * 0.02f, cy - s * 0.02f}, color, thickness * 1.3f);
+            addLine({cx + s * 0.04f, cy - s * 0.04f}, {cx - s * 0.06f, cy + s * 0.06f}, color, thickness * 2.4f);
+            addTriangleFilled({cx - s * 0.13f, cy - s * 0.01f}, {cx + s * 0.01f, cy + s * 0.13f},
+                              {x0 + p * 0.7f, y1 - p * 0.7f}, color);
+            break;
+        }
+
+        case IconId::Eraser:
+        {
+            // a block lying at 45 degrees, its rubbing end marked, on a line
+            const Vec2 d{0.7071f, -0.7071f}, n{0.7071f, 0.7071f};
+            const float l = s * 0.30f, w = s * 0.14f;
+            const Vec2 c{cx, cy - s * 0.04f};
+            ct::Vector<Vec2> block;
+            block.push_back({c.x - d.x * l - n.x * w, c.y - d.y * l - n.y * w});
+            block.push_back({c.x + d.x * l - n.x * w, c.y + d.y * l - n.y * w});
+            block.push_back({c.x + d.x * l + n.x * w, c.y + d.y * l + n.y * w});
+            block.push_back({c.x - d.x * l + n.x * w, c.y - d.y * l + n.y * w});
+            addPolyline(block, color, thickness, true);
+            const float m = -l * 0.25f;
+            addLine({c.x + d.x * m - n.x * w, c.y + d.y * m - n.y * w}, {c.x + d.x * m + n.x * w, c.y + d.y * m + n.y * w},
+                    color, thickness);
+            addLine({x0 + p * 0.7f, y1 - p * 0.55f}, {x1 - p * 0.7f, y1 - p * 0.55f}, color, thickness);
+            break;
+        }
+
+        case IconId::PaintBucket:
+        {
+            // a tipped pail with a drop falling from its lip
+            ct::Vector<Vec2> pail;
+            pail.push_back({cx - s * 0.06f, y0 + p * 0.8f});
+            pail.push_back({x1 - p * 1.3f, cy - s * 0.04f});
+            pail.push_back({cx - s * 0.06f, y1 - p * 0.9f});
+            pail.push_back({x0 + p * 0.8f, cy - s * 0.04f});
+            addPolyline(pail, color, thickness, true);
+            addLine({x1 - p * 1.3f, cy - s * 0.04f}, {x1 - p * 0.75f, cy + s * 0.12f}, color, thickness);
+            addCircleFilled({x1 - p * 0.75f, y1 - p * 1.0f}, s * 0.075f, color, 12);
+            break;
+        }
+
+        case IconId::SelectRect:
+        {
+            // a dashed outline
+            const float l = x0 + p * 0.8f, t = y0 + p * 0.9f, r = x1 - p * 0.8f, b = y1 - p * 0.9f;
+            const int dashes = 3;
+            for (int i = 0; i < dashes; ++i) {
+                const float a = static_cast<float>(i * 2) / (dashes * 2 - 1);
+                const float e = static_cast<float>(i * 2 + 1) / (dashes * 2 - 1);
+                addLine({l + (r - l) * a, t}, {l + (r - l) * e, t}, color, thickness);
+                addLine({l + (r - l) * a, b}, {l + (r - l) * e, b}, color, thickness);
+                addLine({l, t + (b - t) * a}, {l, t + (b - t) * e}, color, thickness);
+                addLine({r, t + (b - t) * a}, {r, t + (b - t) * e}, color, thickness);
+            }
+            break;
+        }
+
+        case IconId::Eyedropper:
+        {
+            // a thin tube up to a collar and the bulb
+            addLine({x0 + p * 0.7f, y1 - p * 0.7f}, {cx + s * 0.06f, cy - s * 0.06f}, color, thickness * 1.2f);
+            addLine({cx - s * 0.04f, cy - s * 0.14f}, {cx + s * 0.14f, cy + s * 0.04f}, color, thickness * 1.6f);
+            addCircleFilled({x1 - p * 1.2f, y0 + p * 1.2f}, s * 0.13f, color, 16);
+            break;
+        }
+
         case IconId::Magnet:
         {
             float r = s * 0.27f, w = s * 0.14f, my = cy - s * 0.06f, bot = y1 - s * 0.14f;
@@ -1127,6 +1195,8 @@ namespace ig { namespace retained
         case IconId::Play: case IconId::Pause: case IconId::Stop: case IconId::StepForward: case IconId::StepBack:
         case IconId::Record: case IconId::Trash: case IconId::Lock: case IconId::Unlock:
         case IconId::Scissors: case IconId::Import: case IconId::Magnet: case IconId::MarkIn: case IconId::MarkOut:
+        case IconId::PaintBrush: case IconId::Eraser: case IconId::PaintBucket: case IconId::SelectRect:
+        case IconId::Eyedropper:
             return true;
         default:
             return false;
