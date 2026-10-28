@@ -217,6 +217,11 @@ namespace ig { namespace retained
     Magnet,     // snapping
     MarkIn,     // a bracket opening a range
     MarkOut,    // a bracket closing it
+    PaintBrush, // paint
+    Eraser,     // rub out
+    PaintBucket,// flood fill
+    SelectRect, // a dashed rectangle
+    Eyedropper, // pick a colour or a tile
         COUNT  // must be last
     };
 

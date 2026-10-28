@@ -310,6 +310,11 @@ const char* iconGlyph(IconId id)
     case IconId::Magnet:      return "\u2229"; // ∩
     case IconId::MarkIn:      return "[";
     case IconId::MarkOut:     return "]";
+    case IconId::PaintBrush:  return "\u270e"; // ✎
+    case IconId::Eraser:      return "\u232b"; // ⌫
+    case IconId::PaintBucket: return "\u25e9"; // ◩
+    case IconId::SelectRect:  return "\u2b1a"; // ⬚
+    case IconId::Eyedropper:  return "\u2295"; // ⊕
     case IconId::None:
     case IconId::COUNT:       return nullptr;
     }
