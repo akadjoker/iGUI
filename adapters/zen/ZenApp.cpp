@@ -217,6 +217,8 @@ void App::feedInput()
     Event e;
     while (poll_event(window_, &e))
     {
+        if (eventHook_)
+            eventHook_(e);
         if (e.type == EVENT_MOUSE_WHEEL)
         {
             io.mouseWheelX += e.data.wheel.x;
