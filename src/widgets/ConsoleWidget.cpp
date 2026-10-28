@@ -270,6 +270,8 @@ void ConsoleWidget::paint(PaintContext& ctx)
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
+namespace { constexpr float kClearWidth = 24.f; }
+
 void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
 {
     // Toolbar bg
@@ -322,15 +324,14 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         px += bw + 4.f;
     }
 
-    // Clear button
+    // Clear button: a bin, as the other icon-only buttons
     {
-        float bw = 40.f, bh = 18.f;
+        float bw = kClearWidth, bh = 18.f;
         float by = area.y + (area.h - bh) * 0.5f;
         ctx.fill.SetColor(50, 52, 60, 255);
         ctx.fillRoundedRect(px, by, bw, bh, 3.f);
-        setupFont(ctx, {160, 160, 170, 255}, 11.f);
-        float tw = ctx.font.GetTextWidth("Clear");
-        ctx.font.Print("Clear", px + (bw - tw) * 0.5f, by + (bh - 11.f) * 0.5f + ctx.font.GetAscender());
+        const float isz = 14.f;
+        ctx.drawIcon(IconId::Trash, px + (bw - isz) * 0.5f, by + (bh - isz) * 0.5f, isz, Color(170, 170, 180, 255));
         px += bw + 8.f;
     }
 
@@ -543,7 +544,7 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
 
         // Clear button
         {
-            float bw = 40.f;
+            float bw = kClearWidth;
             Rect btn = {px, by, bw, bh};
             if (btn.contains(e.x, e.y)) {
                 clear();
