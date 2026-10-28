@@ -4228,6 +4228,54 @@ static void test_file_dialog_icon_names_fit_their_cell()
     std::remove(root.c_str());
 }
 
+// O ChoiceDialog responde uma vez: Enter dá a escolha por omissão, Escape e o
+// fecho da janela dão a de cancelar (-1 sem ela), e o diálogo sai da app.
+static void test_choice_dialog_answers_once()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    int answer = -2, answers = 0;
+    auto make = [&]() {
+        auto* d = app.addFloat<ChoiceDialog>("Unsaved", "Save it?");
+        d->addChoice("Save", IconId::Check, ChoiceDialog::Role::Default);
+        d->addChoice("Don't save", IconId::Trash, ChoiceDialog::Role::Destructive);
+        d->addChoice("Cancel", IconId::Cross, ChoiceDialog::Role::Cancel);
+        d->chosen.connect([&](int i) { answer = i; ++answers; });
+        return d;
+    };
+    auto key = [](ChoiceDialog* d, int code) {
+        KeyEvent e;
+        e.key = code;
+        d->onKeyPress(e);
+    };
+    ChoiceDialog* d = make();
+    key(d, Key::Return);
+    assert(answer == 0 && answers == 1);
+    key(d, Key::Escape);   // already answered
+    assert(answers == 1);
+
+    d = make();
+    key(d, Key::Escape);
+    assert(answer == 2 && answers == 2);
+
+    d = make();
+    d->closed.emit();      // the window's close button
+    assert(answer == 2 && answers == 3);
+
+    d = make();
+    d->choose(1);
+    assert(answer == 1 && answers == 4);
+
+    auto* plain = app.addFloat<ChoiceDialog>("Note", "No cancel here");
+    plain->addChoice("Fine");
+    int none = 0;
+    plain->chosen.connect([&](int i) { none = i; });
+    key(plain, Key::Escape);
+    assert(none == -1);
+    IO io;
+    app.update(io);   // the closed dialogs are deleted here
+}
+
 // O ColorButton abre o ColorPicker num popup: um arrasto avisa a cada passo e
 // fecha com um só commit (um undo), um clique que não muda a cor não faz commit,
 // um segundo clique no botão fecha o popup, e apagar o botão com o popup aberto
@@ -7062,6 +7110,7 @@ int main()
     test_tree_view_moves_with_the_arrow_keys();
     test_tree_view_drops_a_dragged_node();
     test_color_button_opens_a_picker_and_commits_once();
+    test_choice_dialog_answers_once();
     test_list_box_moves_with_the_arrow_keys();
     test_list_widget_places_rows_added_after_layout();
     test_list_widget_moves_with_the_arrow_keys();

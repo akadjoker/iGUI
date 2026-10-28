@@ -561,6 +561,80 @@ void MessageBox::onKeyPress(KeyEvent& e)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  ChoiceDialog
+// ═════════════════════════════════════════════════════════════════════════════
+
+ChoiceDialog::ChoiceDialog(const String& title, const String& message) : FloatWindow(title)
+{
+    setResizable(false);
+    setMinimizable(false);
+    auto* layout = setContent<BoxLayout>(LayoutDir::Vertical);
+    layout->setSpacing(10);
+    layout->setPadding(14);
+    auto* text = layout->createChild<Label>(message);
+    text->setStretch(1);
+    buttons_ = layout->createChild<BoxLayout>(LayoutDir::Horizontal);
+    buttons_->setSpacing(8);
+    buttons_->setPadding(0);
+    buttons_->setMainAlign(MainAlign::End);
+    // The window's close button is a cancel.
+    closed.connect([this]() { choose(firstWithRole(Role::Cancel)); });
+
+    const float fw = 440, fh = 150;
+    setFloatSize(fw, fh);
+    auto& io = ig::retained::GetIO();
+    setFloatPos((io.displayWidth - fw) * 0.5f, (io.displayHeight - fh) * 0.5f);
+}
+
+int ChoiceDialog::addChoice(const String& label, IconId icon, Role role)
+{
+    const int index = static_cast<int>(roles_.size());
+    roles_.push_back(role);
+    auto* button = buttons_->createChild<Button>(label);
+    button->setIconId(icon);
+    button->clicked.connect([this, index]() { choose(index); });
+    return index;
+}
+
+int ChoiceDialog::firstWithRole(Role role) const
+{
+    for (int i = 0; i < static_cast<int>(roles_.size()); ++i)
+        if (roles_[i] == role)
+            return i;
+    return -1;
+}
+
+void ChoiceDialog::choose(int index)
+{
+    if (answered_)
+        return;
+    answered_ = true;
+    chosen.emit(index);
+    WidgetApp::instance().removeFloat(this);
+}
+
+void ChoiceDialog::onKeyPress(KeyEvent& e)
+{
+    if (e.key == ig::retained::Key::Escape)
+    {
+        e.consumed = true;
+        choose(firstWithRole(Role::Cancel));
+        return;
+    }
+    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter)
+    {
+        const int answer = firstWithRole(Role::Default);
+        if (answer >= 0)
+        {
+            e.consumed = true;
+            choose(answer);
+            return;
+        }
+    }
+    FloatWindow::onKeyPress(e);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  InputBox
 // ═════════════════════════════════════════════════════════════════════════════
 
