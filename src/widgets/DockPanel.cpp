@@ -1,4 +1,5 @@
 #include "DockPanel.hpp"
+#include "WidgetApp.hpp"
 
 #include <cstdlib>
 
@@ -196,6 +197,8 @@ void DockPanel::showPanel(const String& name)
     leaf->tabs[idx].content->setVisible(true);
     panelActivated.emit(name);
     markDirty();
+    // A tab hidden until now was never laid out: without this it stays 0x0.
+    WidgetApp::instance().requestLayout();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

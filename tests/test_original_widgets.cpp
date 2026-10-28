@@ -537,6 +537,37 @@ static void test_float_window_state_round_trips_through_ini()
     std::remove(path);
 }
 
+// A tab brought forward from code (showPanel) is laid out on the next frame,
+// as one clicked is: before, the panel stayed 0x0 until something else asked
+// for a layout.
+static void test_dock_tab_shown_from_code_gets_a_size()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("dockshow");
+    assert(app.setStage("dockshow", TransitionType::None));
+    auto* dock = stage->createChild<DockPanel>();
+    dock->setStretch(1.0f);
+    auto* first = new Panel();
+    auto* second = new Panel();
+    dock->addPanel("First", first);
+    dock->addPanel("Second", second);
+    dock->showPanel("First");
+    IO io;
+    io.displayWidth = 400.0f;
+    io.displayHeight = 300.0f;
+    DrawData data;
+    app.update(io);
+    app.paint(data);   // the layout pass runs here
+    assert(first->rect().w > 0.0f);
+
+    dock->showPanel("Second");
+    app.update(io);
+    app.paint(data);
+    assert(second->isVisible() && second->rect().w > 0.0f && second->rect().h > 0.0f);
+    app.removeStage("dockshow");
+}
+
 // Dock layouts ride along in the same file: a panel with a settings key is
 // remembered, and a panel built fresh comes back to that arrangement.
 static void test_dock_layout_is_remembered_in_the_state_file()
@@ -6885,6 +6916,7 @@ int main()
     test_gizmo3d_grabs_the_handle_under_the_pointer();
     test_float_window_state_round_trips_through_ini();
     test_dock_layout_is_remembered_in_the_state_file();
+    test_dock_tab_shown_from_code_gets_a_size();
     test_odd_window_titles_do_not_abort_the_state_file();
     test_closing_a_dock_panel_deletes_its_content_once();
     test_removing_a_float_twice_is_harmless();
