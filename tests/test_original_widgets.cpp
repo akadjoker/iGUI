@@ -1320,6 +1320,52 @@ static void test_key_handler_can_remove_its_widget()
     assert(stage->children().empty());
 }
 
+// As teclas que nenhum widget consome chegam a unhandledKey, também sem foco;
+// as que o widget com foco consome não chegam, e as largadas nunca.
+static void test_unhandled_keys_reach_the_application()
+{
+    using namespace ig::retained;
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("unhandledkeys");
+    assert(app.setStage("unhandledkeys", TransitionType::None));
+    int seen = 0;
+    int lastKey = 0;
+    bool lastCtrl = false;
+    const auto slot = app.unhandledKey.connect([&](KeyEvent& e)
+    {
+        ++seen;
+        lastKey = e.key;
+        lastCtrl = e.ctrl;
+    });
+    auto press = [&app](int key, bool ctrl, bool down = true)
+    {
+        IO io;
+        IO::KeyEvent event;
+        event.key = key;
+        event.ctrl = ctrl;
+        event.down = down;
+        io.keyEvents.push_back(event);
+        app.update(io);
+    };
+
+    app.setFocused(nullptr);
+    press(Key::S, true);
+    assert(seen == 1 && lastKey == Key::S && lastCtrl);
+    press(Key::S, true, false);
+    assert(seen == 1);
+
+    auto* first = stage->createChild<RemovesItselfOnKey>();
+    app.setFocused(first);
+    press(Key::Escape, false);   // consumed (it removes itself)
+    assert(seen == 1);
+    auto* input = stage->createChild<TextInput>();
+    app.setFocused(input);
+    press(Key::Z, true);
+    press(Key::F12, false);
+    assert(seen >= 2 && lastKey == Key::F12);
+    app.unhandledKey.disconnect(slot);
+}
+
 // Um handler pode ligar e desligar ligações do sinal que o está a chamar: a que
 // se desliga a si própria acaba de correr, a seguinte continua a ser chamada, e
 // as que se ligam durante o emit só contam no próximo.
@@ -6841,6 +6887,7 @@ int main()
     test_hidden_widgets_do_not_paint();
     test_widget_app_clock_keeps_short_frames();
     test_key_handler_can_remove_its_widget();
+    test_unhandled_keys_reach_the_application();
     test_signal_handlers_can_change_the_signal();
     test_scrolling_stays_in_the_view_that_scrolls();
     test_dialogs_take_the_keyboard_while_open();
