@@ -4346,6 +4346,54 @@ static void test_color_button_opens_a_picker_and_commits_once()
     app.removeStage("colorbutton");
 }
 
+// Com a seleção múltipla ligada, Ctrl+clique junta ou tira uma linha, Shift+clique
+// junta as linhas entre a selecionada e a clicada, e um clique simples volta a uma.
+static void test_tree_view_selects_several_rows()
+{
+    using namespace ig::retained;
+    TreeView tree;
+    tree.setRect({ 0.0f, 0.0f, 200.0f, 240.0f });
+    TreeNode* a = tree.addRoot("A");
+    TreeNode* b = tree.addRoot("B");
+    TreeNode* c = tree.addRoot("C");
+    TreeNode* d = tree.addRoot("D");
+    int changes = 0;
+    tree.selectionSetChanged.connect([&]() { ++changes; });
+    auto click = [&tree](float y, bool ctrl, bool shift)
+    {
+        MouseEvent press;
+        press.button = 0;
+        press.x = 60.0f;
+        press.y = y;
+        press.ctrl = ctrl;
+        press.shift = shift;
+        tree.onMousePress(press);
+    };
+    ct::Vector<TreeNode*> nodes;
+
+    click(12.0f, false, false);
+    click(60.0f, true, false);
+    tree.selectedNodes(nodes);
+    assert(nodes.size() == 1 && nodes[0] == c);   // sem a seleção múltipla, Ctrl+clique seleciona
+
+    tree.setMultiSelect(true);
+    click(12.0f, false, false);
+    click(60.0f, true, false);
+    tree.selectedNodes(nodes);
+    assert(nodes.size() == 2 && nodes[0] == a && nodes[1] == c && changes == 1);
+    click(60.0f, true, false);
+    tree.selectedNodes(nodes);
+    assert(nodes.size() == 1 && nodes[0] == a);
+    click(84.0f, false, true);
+    tree.selectedNodes(nodes);
+    assert(nodes.size() == 4 && tree.selectedNode() == a && tree.isNodeSelected(b) && tree.isNodeSelected(d));
+    click(12.0f, true, false);
+    assert(tree.selectedNode() == b && !tree.isNodeSelected(a));   // a seguinte passa a ser a selecionada
+    click(36.0f, false, false);
+    tree.selectedNodes(nodes);
+    assert(nodes.size() == 1 && nodes[0] == b);
+}
+
 // A TreeView com o drag ligado larga um nó dentro de outro, antes, depois, ou
 // abaixo da última linha (sem alvo); nunca sobre si nem no próprio ramo, e
 // não começa um drag a partir dos toggles nem sem o drag ligado.
@@ -7109,6 +7157,7 @@ int main()
     test_file_dialog_icon_names_fit_their_cell();
     test_tree_view_moves_with_the_arrow_keys();
     test_tree_view_drops_a_dragged_node();
+    test_tree_view_selects_several_rows();
     test_color_button_opens_a_picker_and_commits_once();
     test_choice_dialog_answers_once();
     test_list_box_moves_with_the_arrow_keys();

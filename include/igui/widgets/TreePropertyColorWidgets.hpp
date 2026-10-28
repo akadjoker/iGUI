@@ -121,6 +121,17 @@ public:
 
     /// @brief Get the selected node.
     TreeNode*                     selectedNode() const { return selected_; }
+    /// @brief Let Ctrl+click add or take away a row and Shift+click take the rows
+    ///        between the selected one and the clicked one (off by default).
+    ///        selectedNode() stays the row clicked first; a plain click goes back to one.
+    void setMultiSelect(bool on) { multiSelect_ = on; }
+    bool multiSelect() const     { return multiSelect_; }
+    /// @brief Whether the node is the selected one or one of the rows added to it.
+    bool isNodeSelected(const TreeNode* n) const;
+    /// @brief The selected node first, then the rows added to it.
+    void selectedNodes(ct::Vector<TreeNode*>& out) const;
+    /// @brief The rows selected besides selectedNode(), set from code without signals.
+    void setExtraSelection(const ct::Vector<TreeNode*>& nodes);
     /// @brief Get root-level nodes.
     const ct::Vector<TreeNode*>& roots()        const { return roots_; }
 
@@ -133,6 +144,8 @@ public:
 
     /// @brief Emitted when the selection changes.
     Signal<TreeNode*> selectionChanged;
+    /// @brief Emitted when Ctrl+click or Shift+click changed the rows selected with selectedNode().
+    Signal<> selectionSetChanged;
     /// @brief Emitted when a node is expanded.
     Signal<TreeNode*> nodeExpanded;
     /// @brief Emitted when a node is collapsed.
@@ -211,6 +224,8 @@ private:
     ct::Vector<TreeNode*> roots_;
     ct::Vector<FlatRow>   flatRows_;
     TreeNode*              selected_      = nullptr;
+    ct::Vector<TreeNode*>  extra_;
+    bool multiSelect_ = false;
     bool selectionLost_ = false;
     TreeModel*             model_         = nullptr;
     AbstractItemModel::Connections modelSlots_;
