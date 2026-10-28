@@ -73,6 +73,7 @@ String WidgetSerializer::typeName(const Widget* w)
         serializableType<BoxLayout>(),
         serializableType<TabLayout>(),
         serializableType<AnchorLayout>(),
+        serializableType<SideTabBar>(),
     };
     if (!w) return "Widget";
     for (const auto& type : types)
@@ -518,6 +519,34 @@ json WidgetSerializer::save(const Widget* root)
         if (p.top != 0 || p.right != 0 || p.bottom != 0 || p.left != 0)
             j["padding"] = edgesToJson(p);
     }
+    else if (type == "SideTabBar") {
+        auto* w = static_cast<const SideTabBar*>(root);
+        if (w->side() == SideTabBar::Side::Right) j["side"] = "Right";
+        if (!w->collapsible()) j["collapsible"] = false;
+        if (!w->showLabels()) j["showLabels"] = false;
+        if (w->railWidth() > 0.0f) j["railWidth"] = w->railWidth();
+        j["buttonHeight"] = w->buttonHeight();
+        j["iconSize"] = w->iconSize();
+        j["pageWidth"] = w->pageWidth();
+        j["currentIndex"] = w->currentIndex();
+        // The children are the pages' contents, saved with their page so the
+        // icon, label and state come back attached to the right widget.
+        json pages = json::array();
+        for (int i = 0; i < w->pageCount(); ++i) {
+            json pj = json::object();
+            pj["icon"] = static_cast<int>(w->pageIcon(i));
+            pj["label"] = w->pageLabel(i);
+            if (!w->pageTooltip(i).empty()) pj["tooltip"] = w->pageTooltip(i);
+            if (!w->isPageEnabled(i)) pj["enabled"] = false;
+            if (!w->isPageVisible(i)) pj["visible"] = false;
+            if (w->pageBadge(i)) pj["badge"] = true;
+            if (const Widget* content = w->pageWidget(i))
+                pj["content"] = save(content);
+            pages.push_back(pj);
+        }
+        j["pages"] = pages;
+        return j;
+    }
 
     if (!root->children().empty())
         j["children"] = serializeChildren(root);
@@ -867,6 +896,52 @@ void WidgetSerializer::registerBuiltinTypes()
             w->setTabsClosable(jsonValue<bool>(j["closable"]));
         if (j.contains("tabBarSize"))
             w->setTabBarSize(jsonValue<float>(j["tabBarSize"]));
+        return w;
+    });
+
+    registerType("SideTabBar", [](const json& j, Widget* parent) -> Widget* {
+        auto* w = parent->createChild<SideTabBar>();
+        if (j.contains("side") && jsonValue<String>(j["side"]) == "Right")
+            w->setSide(SideTabBar::Side::Right);
+        if (j.contains("collapsible"))
+            w->setCollapsible(jsonValue<bool>(j["collapsible"]));
+        if (j.contains("showLabels"))
+            w->setShowLabels(jsonValue<bool>(j["showLabels"]));
+        if (j.contains("railWidth"))
+            w->setRailWidth(jsonValue<float>(j["railWidth"]));
+        if (j.contains("buttonHeight"))
+            w->setButtonHeight(jsonValue<float>(j["buttonHeight"]));
+        if (j.contains("iconSize"))
+            w->setIconSize(jsonValue<float>(j["iconSize"]));
+        if (j.contains("pageWidth"))
+            w->setPageWidth(jsonValue<float>(j["pageWidth"]));
+        if (j.contains("pages") && j["pages"].is_array()) {
+            for (const auto& pj : j["pages"].items()) {
+                // The content is loaded under the bar first; addPageWidget
+                // then adopts it instead of adding it a second time.
+                Widget* content = pj.contains("content") ? load(pj["content"], w) : nullptr;
+                IconId icon = IconId::None;
+                if (pj.contains("icon")) {
+                    // Only the built-in icons survive a save: image icons
+                    // are textures registered at run time.
+                    const int raw = jsonValue<int>(pj["icon"]);
+                    if (raw > 0 && raw < static_cast<int>(IconId::COUNT)) icon = static_cast<IconId>(raw);
+                }
+                String label;
+                if (pj.contains("label")) label = jsonValue<String>(pj["label"]);
+                const int index = w->addPageWidget(icon, label, content);
+                if (pj.contains("tooltip"))
+                    w->setPageTooltip(index, jsonValue<String>(pj["tooltip"]));
+                if (pj.contains("enabled"))
+                    w->setPageEnabled(index, jsonValue<bool>(pj["enabled"]));
+                if (pj.contains("visible"))
+                    w->setPageVisible(index, jsonValue<bool>(pj["visible"]));
+                if (pj.contains("badge"))
+                    w->setPageBadge(index, jsonValue<bool>(pj["badge"]));
+            }
+        }
+        if (j.contains("currentIndex"))
+            w->setCurrentIndex(jsonValue<int>(j["currentIndex"]));
         return w;
     });
 
