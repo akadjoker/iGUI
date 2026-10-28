@@ -151,6 +151,7 @@ if(IGUI_BUILD_TESTS)
         igui_original_widgets_tests
         igui_font_tests
         igui_item_status_tests
+        igui_zen_sidetabs_tests
         igui_sdl2_tests)
     function(igui_test_keep_asserts target)
         if(NOT TARGET ${target})
@@ -462,6 +463,16 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     target_compile_features(igui_zen PUBLIC cxx_std_17)
     target_include_directories(igui_zen PUBLIC adapters/zen/include)
     target_link_libraries(igui_zen PUBLIC igui_widgets platform)
+
+    # The SideTabBar driven through a zen_plataform window, no SDL. With
+    # PLATFORM_USE_FAKE=ON it runs headless; on X11/Wayland it needs a display
+    # and is skipped (exit 77) without one.
+    if(IGUI_BUILD_TESTS)
+        add_executable(igui_zen_sidetabs_tests tests/test_zen_sidetabs.cpp)
+        target_link_libraries(igui_zen_sidetabs_tests PRIVATE igui_zen)
+        add_test(NAME igui_zen_sidetabs COMMAND igui_zen_sidetabs_tests)
+        set_tests_properties(igui_zen_sidetabs PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
 
     if(IGUI_BUILD_ZEN_DEMO)
         add_executable(igui_zen_widgets

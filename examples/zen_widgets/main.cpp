@@ -24,6 +24,7 @@ void registerToolsStage(ig::retained::WidgetApp &app);
 void registerGalleryStage(ig::retained::WidgetApp &app);
 void registerSpecialtyStage(ig::retained::WidgetApp &app);
 void registerVideoStage(ig::retained::WidgetApp &app);
+void registerSideTabsStage(ig::retained::WidgetApp &app);
 
 int main(int argc, char **argv)
 {
@@ -55,6 +56,7 @@ int main(int argc, char **argv)
     registerGalleryStage(app);
     registerSpecialtyStage(app);
     registerVideoStage(app);
+    registerSideTabsStage(app);
     app.setStage(argc > 1 ? argv[1] : "menu");
 
     zen.run();

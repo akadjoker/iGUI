@@ -19,8 +19,12 @@ void registerSideTabsStage(WidgetApp& app)
     outer->setSpacing(0);
     outer->setPadding(0);
 
+    // The header buttons act on the sidebars, which are built further down:
+    // their signals are connected at the end, with the pointers by value.
     SideTabBar* left  = nullptr;
     SideTabBar* right = nullptr;
+    Button*     swap  = nullptr;
+    Button*     badge = nullptr;
 
     // ── Top bar ───────────────────────────────────────────────────────────
     {
@@ -31,20 +35,8 @@ void registerSideTabsStage(WidgetApp& app)
         auto* back = hdr->createChild<Button>("← Menu");
         back->clicked.connect([&app]() { app.setStage("menu", TransitionType::CoverRight); });
 
-        auto* swap = hdr->createChild<Button>("Swap sides");
-        swap->clicked.connect([&left, &right]()
-        {
-            if (!left || !right) return;
-            const SideTabBar::Side a = left->side();
-            left->setSide(right->side());
-            right->setSide(a);
-        });
-
-        auto* badge = hdr->createChild<Button>("Toggle Pose badge");
-        badge->clicked.connect([&left]()
-        {
-            if (left) left->setPageBadge(2, !left->pageBadge(2));
-        });
+        swap  = hdr->createChild<Button>("Swap sides");
+        badge = hdr->createChild<Button>("Toggle Pose badge");
 
         hdr->createChild<Spacer>(0.0f)->setStretch(1.0f);
         hdr->createChild<Label>("SideTabBar — click a tab, click it again to fold")->setAlign(TextAlign::RIGHT);
@@ -177,4 +169,12 @@ void registerSideTabsStage(WidgetApp& app)
         help->createChild<Label>("Letting go keys them on this frame.");
     }
     right->collapse();   // starts folded; press an icon to open it
+
+    swap->clicked.connect([left, right]()
+    {
+        const SideTabBar::Side a = left->side();
+        left->setSide(right->side());
+        right->setSide(a);
+    });
+    badge->clicked.connect([left]() { left->setPageBadge(2, !left->pageBadge(2)); });
 }
