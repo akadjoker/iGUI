@@ -113,6 +113,16 @@ struct Theme
     Color menuCheckMark      = Color(100, 160, 220, 255);
     Color menuSubmenuArrow   = Color(180, 180, 185, 255);
 
+    // SideTabBar (the rail of icon buttons and the page beside it)
+    Color sideTabRailBg      = Color(28, 29, 33, 255);
+    Color sideTabPageBg      = Color(38, 40, 44, 255);
+    Color sideTabHoverBg     = Color(50, 52, 58, 255);
+    Color sideTabActiveBg    = Color(32, 48, 52, 255);
+    Color sideTabAccent      = Color(70, 200, 190, 255);
+    Color sideTabText        = Color(150, 152, 158, 255);
+    Color sideTabTextActive  = Color(220, 240, 238, 255);
+    Color sideTabBadge       = Color(255, 160, 40, 255);
+
     // Sizes
     float fontSize       = 16.0f;
     float padding        = 6.0f;
@@ -232,6 +242,15 @@ struct Theme
         t.menuShortcutHover  = Color(220, 220, 220, 255);
         t.menuCheckMark      = Color(0, 120, 215, 255);
         t.menuSubmenuArrow   = Color(60, 60, 65, 255);
+        // SideTabBar
+        t.sideTabRailBg      = Color(232, 232, 236, 255);
+        t.sideTabPageBg      = Color(248, 248, 250, 255);
+        t.sideTabHoverBg     = Color(218, 218, 224, 255);
+        t.sideTabActiveBg    = Color(210, 236, 234, 255);
+        t.sideTabAccent      = Color(0, 140, 130, 255);
+        t.sideTabText        = Color(90, 90, 95, 255);
+        t.sideTabTextActive  = Color(0, 100, 95, 255);
+        t.sideTabBadge       = Color(235, 130, 20, 255);
         return t;
     }
 

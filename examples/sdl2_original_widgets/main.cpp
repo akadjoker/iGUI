@@ -23,6 +23,7 @@ void registerToolsStage(ig::retained::WidgetApp &app);
 void registerGalleryStage(ig::retained::WidgetApp &app);
 void registerSpecialtyStage(ig::retained::WidgetApp &app);
 void registerVideoStage(ig::retained::WidgetApp &app);
+void registerSideTabsStage(ig::retained::WidgetApp &app);
 void showFileDialogDemo(ig::retained::WidgetApp &app);
 
 namespace
@@ -85,6 +86,7 @@ int main(int argc, char **argv)
     registerGalleryStage(app);
     registerSpecialtyStage(app);
     registerVideoStage(app);
+    registerSideTabsStage(app);
     const ig::retained::String initialStage = argc > 1 ? argv[1] : "menu";
     const bool testDockColor = initialStage == "--test-dock-color";
     const bool showFileDialog = initialStage == "filedialog";
