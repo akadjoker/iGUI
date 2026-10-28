@@ -4272,6 +4272,26 @@ static void test_tree_view_drops_a_dragged_node()
     tree.setDropFilter([](TreeNode*, TreeNode* t, TreeView::DropZone) { return t != nullptr; });
     assert(drag(60.0f, 200.0f));
     assert(drops == 4);
+
+    // Payloads from other widgets: only with a filter, and told the row under them.
+    Widget other;
+    DragPayload outside;
+    outside.type = "asset";
+    outside.source = &other;
+    outside.dropY = 52.0f;
+    assert(!tree.acceptsDrop(outside));
+    TreeNode* landed = a;
+    int outsideDrops = 0;
+    tree.setExternalDrop([](const DragPayload& p) { return p.type == "asset"; });
+    tree.externalDropped.connect([&](const DragPayload&, TreeNode* node) { landed = node; ++outsideDrops; });
+    assert(tree.acceptsDrop(outside));
+    tree.onDropReceive(outside);
+    assert(outsideDrops == 1 && landed == b);
+    outside.dropY = 220.0f;
+    tree.onDropReceive(outside);
+    assert(outsideDrops == 2 && landed == nullptr);
+    outside.type = "other";
+    assert(!tree.acceptsDrop(outside));
 }
 
 // A TreeView anda pelas teclas como a TreeGrid: Baixo sem seleção vai à

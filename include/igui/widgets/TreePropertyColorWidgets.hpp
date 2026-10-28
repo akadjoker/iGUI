@@ -158,6 +158,12 @@ public:
     }
     /// @brief Emitted when a dragged node is released on a spot the drop filter allows.
     Signal<TreeNode*, TreeNode*, DropZone> nodeDropped;
+    /// @brief Take payloads dragged from other widgets (assets onto objects, say):
+    ///        the filter says which. Unset, only the view's own nodes are dropped.
+    void setExternalDrop(ct::Function<bool(const DragPayload&)> accept) { externalAccept_ = std::move(accept); }
+    /// @brief Emitted when an outside payload is dropped: the payload and the node
+    ///        under the pointer (nullptr below the last row).
+    Signal<const DragPayload&, TreeNode*> externalDropped;
 
     Vec2f sizeHint()                   const override;
     void  paint(PaintContext& ctx)           override;
@@ -220,6 +226,7 @@ private:
     bool dragEnabled_ = false;
     ct::Function<bool(TreeNode*)> dragFilter_;
     ct::Function<bool(TreeNode*, TreeNode*, DropZone)> dropFilter_;
+    ct::Function<bool(const DragPayload&)> externalAccept_;
     TreeNode* dragCandidate_ = nullptr;   // the row pressed, before the drag starts
     TreeNode* dragNode_      = nullptr;
     DropSpot  dropSpot_;

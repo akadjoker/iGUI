@@ -779,11 +779,23 @@ void TreeView::onDragEnd(bool accepted)
 
 bool TreeView::acceptsDrop(const DragPayload& p)
 {
-    return dragEnabled_ && dragNode_ && p.source == this;
+    if (p.source == this)
+        return dragEnabled_ && dragNode_;
+    return externalAccept_ && externalAccept_(p);
 }
 
 void TreeView::onDropReceive(const DragPayload& p)
 {
+    if (p.source != this)
+    {
+        rebuildFlat();
+        const Rect abs = absoluteRect();
+        const int row = static_cast<int>((p.dropY - abs.y + scrollOffset_) / rowHeight_);
+        TreeNode* target = p.dropY >= abs.y && row >= 0 && row < static_cast<int>(flatRows_.size())
+                               ? flatRows_[row].node : nullptr;
+        externalDropped.emit(p, target);
+        return;
+    }
     if (!dragNode_)
         return;
     const DropSpot spot = dropSpotAt(p.dropY - absoluteRect().y);
