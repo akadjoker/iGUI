@@ -4104,6 +4104,83 @@ static void test_file_dialog_icon_names_fit_their_cell()
     std::remove(root.c_str());
 }
 
+// A TreeView com o drag ligado larga um nó dentro de outro, antes, depois, ou
+// abaixo da última linha (sem alvo); nunca sobre si nem no próprio ramo, e
+// não começa um drag a partir dos toggles nem sem o drag ligado.
+static void test_tree_view_drops_a_dragged_node()
+{
+    using namespace ig::retained;
+    TreeView tree;
+    tree.setRect({ 0.0f, 0.0f, 200.0f, 240.0f });
+    TreeNode* a = tree.addRoot("A");
+    TreeNode* a1 = a->addChild("a1");
+    TreeNode* b = tree.addRoot("B");
+    b->addToggle(IconId::Eye, IconId::EyeOff, true);
+    (void)a1;
+    TreeNode* dropped = nullptr;
+    TreeNode* onto = nullptr;
+    TreeView::DropZone zone = TreeView::DropZone::Before;
+    int drops = 0;
+    tree.nodeDropped.connect([&](TreeNode* n, TreeNode* t, TreeView::DropZone z)
+    {
+        dropped = n;
+        onto = t;
+        zone = z;
+        ++drops;
+    });
+    // Linhas de 24: A em 0, a1 em 24, B em 48.
+    auto hover = [&tree](float x, float y)
+    {
+        MouseEvent move;
+        move.x = x;
+        move.y = y;
+        tree.onMouseMove(move);
+    };
+    auto drag = [&](float fromY, float toY, float x = 60.0f)
+    {
+        hover(x, fromY);
+        if (!tree.isDragSource())
+            return false;
+        MouseEvent press;
+        press.button = 0;
+        press.x = x;
+        press.y = fromY;
+        tree.onMousePress(press);
+        DragPayload payload = tree.onDragBegin();
+        payload.source = &tree;
+        hover(x, toY);
+        payload.dropX = x;
+        payload.dropY = toY;
+        if (tree.acceptsDrop(payload))
+            tree.onDropReceive(payload);
+        tree.onDragEnd(true);
+        return true;
+    };
+
+    assert(!drag(60.0f, 12.0f));
+    tree.setDragEnabled(true);
+
+    assert(drag(60.0f, 12.0f));
+    assert(drops == 1 && dropped == b && onto == a && zone == TreeView::DropZone::Inside);
+    assert(drag(60.0f, 2.0f));
+    assert(drops == 2 && onto == a && zone == TreeView::DropZone::Before);
+    assert(drag(60.0f, 46.0f));
+    assert(drops == 3 && onto == a1 && zone == TreeView::DropZone::After);
+    assert(drag(60.0f, 200.0f));
+    assert(drops == 4 && onto == nullptr && zone == TreeView::DropZone::After);
+
+    // Sobre si e no próprio ramo: nada.
+    assert(drag(12.0f, 12.0f));
+    assert(drag(12.0f, 36.0f));
+    assert(drops == 4);
+    // O toggle de B não começa um drag.
+    assert(!drag(60.0f, 12.0f, 195.0f));
+
+    tree.setDropFilter([](TreeNode*, TreeNode* t, TreeView::DropZone) { return t != nullptr; });
+    assert(drag(60.0f, 200.0f));
+    assert(drops == 4);
+}
+
 // A TreeView anda pelas teclas como a TreeGrid: Baixo sem seleção vai à
 // primeira linha, Cima e Baixo mudam de linha (e nas pontas deixam a tecla ao
 // pai), Esquerda fecha o nó ou sobe ao pai, Direita abre o nó ou desce ao
@@ -6766,6 +6843,7 @@ int main()
     test_thumbnail_grid_keeps_labels_inside_their_cell();
     test_file_dialog_icon_names_fit_their_cell();
     test_tree_view_moves_with_the_arrow_keys();
+    test_tree_view_drops_a_dragged_node();
     test_list_box_moves_with_the_arrow_keys();
     test_list_widget_places_rows_added_after_layout();
     test_list_widget_moves_with_the_arrow_keys();

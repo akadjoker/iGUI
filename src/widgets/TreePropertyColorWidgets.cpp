@@ -385,6 +385,7 @@ TreeNode* TreeView::addRoot(const String& text)
 
 void TreeView::clear()
 {
+    endDrag();
     for (auto* r : roots_) delete r;
     roots_.clear();
     selected_     = nullptr;
@@ -405,6 +406,7 @@ void TreeView::setSelectedNode(TreeNode* n)
 
 void TreeView::forgetNode(TreeNode* n)
 {
+    if (dragNode_ == n || dragCandidate_ == n || dropSpot_.target == n) endDrag();
     if (selected_ != n) return;
     selected_ = nullptr;
     selectionLost_ = true;
@@ -546,6 +548,27 @@ void TreeView::paint(PaintContext& ctx)
         }
     }
 
+    if (dragNode_ && dropSpot_.valid) {
+        // Where the node would land: a box round the new parent, or a line between rows.
+        const Color accent(100, 170, 255, 255);
+        const float scrolled = abs.y - scrollOffset_;
+        if (dropSpot_.row >= 0 && dropSpot_.zone == DropZone::Inside) {
+            const float ry = scrolled + dropSpot_.row * rowHeight_;
+            ctx.fill.SetColor(Color(100, 170, 255, 40));
+            ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+            ctx.line.SetColor(accent);
+            ctx.lineRect(abs.x + 1.f, ry + 1.f, abs.w - 2.f, rowHeight_ - 2.f);
+        } else {
+            const int rows  = static_cast<int>(flatRows_.size());
+            const int below = dropSpot_.row < 0 ? rows
+                            : dropSpot_.row + (dropSpot_.zone == DropZone::After ? 1 : 0);
+            const int depth = dropSpot_.row < 0 ? 0 : flatRows_[dropSpot_.row].depth;
+            const float x = abs.x + 4.f + depth * indent_;
+            ctx.fill.SetColor(accent);
+            ctx.fillRect(x, scrolled + below * rowHeight_ - 1.f, abs.x + abs.w - x, 2.f);
+        }
+    }
+
     Rect track, thumb;
     if (scrollbar(track, thumb)) {
         ctx.fill.SetColor(25, 27, 32, 200);
@@ -598,6 +621,11 @@ void TreeView::showToggleTip(MouseEvent& e)
 
 void TreeView::onMouseLeave()
 {
+    hoverRow_ = -1;
+    if (dragNode_) {
+        dropSpot_ = DropSpot();
+        markDirty();
+    }
     Widget::onMouseLeave();
     if (!tooltip().empty()) setTooltip("");
 }
@@ -608,6 +636,7 @@ void TreeView::onMousePress(MouseEvent& e)
     Rect abs = absoluteRect();
     if (!abs.contains(e.x, e.y)) return;
     e.consumed = true;
+    dragCandidate_ = nullptr;
 
     rebuildFlat();
     Rect track, thumb;
@@ -654,18 +683,35 @@ void TreeView::onMousePress(MouseEvent& e)
             return;
         }
     }
-    setSelectedNode(row.node);
+    TreeNode* pressed = row.node;
+    setSelectedNode(pressed);
+    // The selection handler may have rebuilt the tree.
+    if (selected_ == pressed) dragCandidate_ = pressed;
 }
 
 void TreeView::onMouseMove(MouseEvent& e)
 {
+    const Rect abs = absoluteRect();
+    hoverX_ = e.x - abs.x;
+    const float localY = e.y - abs.y + scrollOffset_;
+    hoverRow_ = e.y >= abs.y ? static_cast<int>(localY / rowHeight_) : -1;
+    if (dragNode_) {
+        const float edge = 14.f;
+        if (e.y - abs.y < edge)
+            scrollOffset_ = std::max(0.f, scrollOffset_ - 6.f);
+        else if (e.y - abs.y > abs.h - edge)
+            scrollOffset_ = std::min(scrollOffset_ + 6.f, maxScroll());
+        dropSpot_ = dropSpotAt(e.y - abs.y);
+        e.consumed = true;
+        markDirty();
+        return;
+    }
     if (!draggingBar_) {
         showToggleTip(e);
         return;
     }
     Rect track, thumb;
     if (!scrollbar(track, thumb)) return;
-    const Rect abs = absoluteRect();
     const float travel = abs.h - thumb.h;
     const float range = maxScroll();
     scrollOffset_ = travel > 0.f ? clamp((e.y - barGrab_ - abs.y) / travel * range, 0.f, range) : 0.f;
@@ -689,6 +735,90 @@ void TreeView::onMouseScroll(MouseEvent& e)
     scrollOffset_ -= e.scrollY * rowHeight_ * 2.f;
     scrollOffset_ = clamp(scrollOffset_, 0.f, maxScroll());
     markDirty();
+}
+
+bool TreeView::isDragSource() const
+{
+    if (!dragEnabled_ || draggingBar_ || hoverRow_ < 0 || hoverRow_ >= static_cast<int>(flatRows_.size()))
+        return false;
+    const Rect abs = absoluteRect();
+    const FlatRow& fr = flatRows_[hoverRow_];
+    // Not from the toggles, the expand arrow or the scrollbar.
+    if (toggleAt(abs, fr.node, abs.x + hoverX_) >= 0) return false;
+    Rect track, thumb;
+    if (scrollbar(track, thumb) && abs.x + hoverX_ >= track.x) return false;
+    const float indX = 4.f + fr.depth * indent_;
+    if (fr.node->hasChildren() && hoverX_ < indX + 11.f) return false;
+    return !dragFilter_ || dragFilter_(fr.node);
+}
+
+DragPayload TreeView::onDragBegin()
+{
+    DragPayload payload;
+    if (!dragCandidate_)
+        return payload;
+    dragNode_ = dragCandidate_;
+    payload.type = "tree-node";
+    payload.data = dragNode_;
+    return payload;
+}
+
+void TreeView::endDrag()
+{
+    dragCandidate_ = nullptr;
+    dragNode_ = nullptr;
+    dropSpot_ = DropSpot();
+    markDirty();
+}
+
+void TreeView::onDragEnd(bool accepted)
+{
+    (void)accepted;
+    endDrag();
+}
+
+bool TreeView::acceptsDrop(const DragPayload& p)
+{
+    return dragEnabled_ && dragNode_ && p.source == this;
+}
+
+void TreeView::onDropReceive(const DragPayload& p)
+{
+    if (!dragNode_)
+        return;
+    const DropSpot spot = dropSpotAt(p.dropY - absoluteRect().y);
+    if (!spot.valid)
+        return;
+    TreeNode* node = dragNode_;
+    // Last: the handler may rebuild the tree and delete these nodes.
+    endDrag();
+    nodeDropped.emit(node, spot.target, spot.zone);
+}
+
+TreeView::DropSpot TreeView::dropSpotAt(float localY)
+{
+    DropSpot spot;
+    if (!dragNode_)
+        return spot;
+    rebuildFlat();
+    const float content = std::max(0.f, localY + scrollOffset_);
+    const int rows = static_cast<int>(flatRows_.size());
+    const int row = static_cast<int>(content / rowHeight_);
+    if (row >= rows) {
+        spot.zone = DropZone::After;
+    } else {
+        const float fraction = content / rowHeight_ - static_cast<float>(row);
+        spot.row = row;
+        spot.target = flatRows_[row].node;
+        spot.zone = fraction < 0.25f ? DropZone::Before
+                  : fraction > 0.75f ? DropZone::After
+                                     : DropZone::Inside;
+    }
+    // Never onto the node itself or into its own branch.
+    for (TreeNode* n = spot.target; n; n = n->parent())
+        if (n == dragNode_) return spot;
+    spot.valid = !dropFilter_ || dropFilter_(dragNode_, spot.target, spot.zone);
+    return spot;
 }
 
 int TreeView::rowOf(const TreeNode* n) const
