@@ -452,6 +452,8 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     target_link_libraries(igui_zen PUBLIC igui_widgets platform)
 
     if(IGUI_BUILD_ZEN_DEMO)
+        add_executable(igui_zen_windows examples/zen_windows/main.cpp)
+        target_link_libraries(igui_zen_windows PRIVATE igui_zen)
         add_executable(igui_zen_widgets
             examples/zen_widgets/main.cpp
             examples/sdl2_original_widgets/stage_advanced.cpp
