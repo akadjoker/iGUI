@@ -690,6 +690,25 @@ public:
         }
     }
 
+    // Which day a point of the grid is on, 0 for none.
+    int dayAt(float x, float y) const
+    {
+        if (mode_ == YearPick || y < gridY_ || gridCellW_ <= 0.f || gridCellH_ <= 0.f) return 0;
+        int col = static_cast<int>((x - gridStartX_) / gridCellW_);
+        int row = static_cast<int>((y - gridY_) / gridCellH_);
+        if (col < 0 || col >= 7 || x < gridStartX_) return 0;
+        int day = row * 7 + col - gridStartDow_ + 1;
+        return (day >= 1 && day <= daysInMonth(viewYear_, viewMonth_)) ? day : 0;
+    }
+    void onMouseMove(MouseEvent& e) override
+    {
+        int day = dayAt(e.x, e.y);
+        if (day != hoverDay_) { hoverDay_ = day; markDirty(); }
+    }
+    void onMouseLeave() override
+    {
+        if (hoverDay_) { hoverDay_ = 0; markDirty(); }
+    }
     void onMousePress(MouseEvent& e) override
     {
         if (mode_ == YearPick)
@@ -793,6 +812,7 @@ public:
 
 private:
     DatePicker* owner_;
+    int hoverDay_ = 0;
     int  viewYear_, viewMonth_;
     Date selected_;
 
@@ -863,13 +883,36 @@ void DatePicker::paint(PaintContext& ctx)
                                    t.borderRadius, 6, true);
     }
 
-    // Text
+    // Text, as three segments: the hovered one and the active one get a box.
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
-    String txt = formatDate();
     float asc = ctx.font.GetAscender();
-    ctx.font.SetColor(t.textColor);
-    ctx.font.Print(txt.c_str(), abs.x + t.padding, abs.y + (abs.h + asc) * 0.5f);
+    char part[3][8];
+    std::snprintf(part[0], sizeof part[0], "%04d", date_.year);
+    std::snprintf(part[1], sizeof part[1], "%02d", date_.month);
+    std::snprintf(part[2], sizeof part[2], "%02d", date_.day);
+    const float dashW = ctx.font.GetTextWidth("-");
+    const float segH = asc + 6.0f;
+    const float segY = abs.y + (abs.h - segH) * 0.5f;
+    float x = abs.x + t.padding;
+    for (int i = 0; i < 3; ++i) {
+        const float w = ctx.font.GetTextWidth(part[i]);
+        segRect_[i] = {x - 2.0f, segY, w + 4.0f, segH};
+        const bool active = focused_ && activeSeg_ == i + 1;
+        if (hoverSeg_ == i + 1 || active) {
+            Color c = active ? t.focusColor : t.buttonHover;
+            ctx.fill.SetColor(c.r, c.g, c.b, active ? 120 : 255);
+            ctx.fill.RoundedRectangle(static_cast<int>(segRect_[i].x), static_cast<int>(segRect_[i].y),
+                                       static_cast<int>(segRect_[i].w), static_cast<int>(segRect_[i].h), 3, 4, true);
+        }
+        ctx.font.SetColor(t.textColor);
+        ctx.font.Print(part[i], x, abs.y + (abs.h + asc) * 0.5f);
+        x += w;
+        if (i < 2) {
+            ctx.font.Print("-", x, abs.y + (abs.h + asc) * 0.5f);
+            x += dashW;
+        }
+    }
 
     // Calendar icon (small grid hint)
     float ix = abs.x + abs.w - 20;
@@ -889,11 +932,71 @@ void DatePicker::paint(PaintContext& ctx)
     }
 }
 
+int DatePicker::segmentAt(float x, float y) const
+{
+    for (int i = 0; i < 3; ++i)
+        if (segRect_[i].contains(x, y)) return i + 1;
+    return 0;
+}
+
+void DatePicker::adjust(int seg, int delta)
+{
+    Date d = date_;
+    if (seg == 1) d.year += delta;
+    else if (seg == 2) { d.month += delta; while (d.month < 1) { d.month += 12; d.year--; } while (d.month > 12) { d.month -= 12; d.year++; } }
+    else if (seg == 3) {
+        int n = daysInMonth(d.year, d.month);
+        d.day += delta;
+        while (d.day < 1) d.day += n;
+        while (d.day > n) d.day -= n;
+    }
+    else return;
+    int n = daysInMonth(d.year, d.month);
+    if (d.day > n) d.day = n;
+    setDate(d);
+}
+
 void DatePicker::onMousePress(MouseEvent& e)
 {
     if (!enabled_) return;
-    if (open_) closeCalendar(); else openCalendar();
     e.consumed = true;
+    const int seg = segmentAt(e.x, e.y);
+    if (seg) {
+        activeSeg_ = seg;
+        if (open_) closeCalendar();
+        markDirty();
+        return;
+    }
+    if (open_) closeCalendar(); else openCalendar();
+}
+
+void DatePicker::onMouseMove(MouseEvent& e)
+{
+    const int seg = segmentAt(e.x, e.y);
+    if (seg != hoverSeg_) { hoverSeg_ = seg; markDirty(); }
+}
+
+void DatePicker::onMouseLeave()
+{
+    Widget::onMouseLeave();
+    if (hoverSeg_) { hoverSeg_ = 0; markDirty(); }
+}
+
+void DatePicker::onMouseScroll(MouseEvent& e)
+{
+    const int seg = segmentAt(e.x, e.y) ? segmentAt(e.x, e.y) : activeSeg_;
+    if (!seg || e.scrollY == 0.f) return;
+    adjust(seg, e.scrollY > 0.f ? 1 : -1);
+    e.consumed = true;
+}
+
+void DatePicker::onKeyPress(KeyEvent& e)
+{
+    if (!activeSeg_) return;
+    if (e.key == ig::retained::Key::Up)        { adjust(activeSeg_, 1); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Down) { adjust(activeSeg_, -1); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Left && activeSeg_ > 1)  { activeSeg_--; markDirty(); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Right && activeSeg_ < 3) { activeSeg_++; markDirty(); e.consumed = true; }
 }
 
 void DatePicker::openCalendar()
