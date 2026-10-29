@@ -340,8 +340,15 @@ public:
     Signal<int, int, int> onDateChanged;
 
     Vec2f sizeHint() const override;
-    void paint(PaintContext& ctx) override;
-    void onMousePress(MouseEvent& e) override;
+    void  paint(PaintContext& ctx) override;
+    // The year, month and day are segments: the one under the pointer is
+    // highlighted, a click selects it, the wheel and Up/Down change it,
+    // Left/Right move between them. A click on the icon opens the calendar.
+    void  onMousePress(MouseEvent& e) override;
+    void  onMouseMove(MouseEvent& e) override;
+    void  onMouseLeave() override;
+    void  onMouseScroll(MouseEvent& e) override;
+    void  onKeyPress(KeyEvent& e) override;
 
     /// @brief Open the calendar popup.
     void openCalendar();
@@ -352,6 +359,11 @@ public:
 
 private:
     Date date_;
+    int hoverSeg_ = 0; // 0 none, 1 year, 2 month, 3 day
+    int activeSeg_ = 0;
+    Rect segRect_[3] = {};
+    int segmentAt(float x, float y) const;
+    void adjust(int seg, int delta);
 
     String formatDate() const;
 };
