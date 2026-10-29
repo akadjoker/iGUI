@@ -283,8 +283,9 @@ int Timeline::addKeyframe(int trackId, float time)
     TimelineKeyframe kf;
     kf.time = time;
     // Dragging preserves key indices, so the array need not remain sorted.
-    auto it = kfs.begin();
-    while (it != kfs.end() && it->time < time) ++it;
+    // Keys usually arrive in time order: look for the place from the end.
+    auto it = kfs.end();
+    while (it != kfs.begin() && (it - 1)->time >= time) --it;
     int idx = static_cast<int>(it - kfs.begin());
     kfs.insert(it, kf);
     markDirty();
@@ -1459,20 +1460,12 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         }
 
         // ── Keyframes (diamonds) ─────────────────────────────────────────
-        for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()); ++ki) {
-            const auto& kf = trk.keyframes[ki];
-            float kx = timeToX(kf.time);
-            float ky = ty + kTrackH * 0.5f;
-
-            if (kx < b.x + kHeaderW || kx > b.x + b.w) continue;
-
-            float ds = kf.selected ? 6.0f : 5.0f;
-            Color kc = kf.selected ? Color(255, 200, 60, 255) : trk.color;
-            ctx.fill.SetColor(kc.r, kc.g, kc.b, kc.a);
-            if (kf.shape == KeyShape::Square) {
+        const float ky = ty + kTrackH * 0.5f;
+        auto drawKey = [&](float kx, KeyShape shape, float ds) {
+            if (shape == KeyShape::Square) {
                 const float hs = ds * 0.8f;
                 ctx.fillRect(kx - hs, ky - hs, hs * 2.0f, hs * 2.0f);
-            } else if (kf.shape == KeyShape::Circle) {
+            } else if (shape == KeyShape::Circle) {
                 const int segments = 12;
                 for (int s = 0; s < segments; ++s) {
                     const float a0 = 6.2831853f * static_cast<float>(s) / segments;
@@ -1485,12 +1478,52 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 ctx.fillTriangle(kx, ky - ds, kx + ds, ky, kx, ky + ds);
                 ctx.fillTriangle(kx, ky - ds, kx, ky + ds, kx - ds, ky);
             }
+        };
+
+        // Plain keys less than 2 px apart overlap into a band: drawn as the first and last shapes joined by a bar.
+        bool inRun = false;
+        float runStart = 0.0f, runEnd = 0.0f;
+        KeyShape runShape = KeyShape::Diamond;
+        auto flushRun = [&]() {
+            if (!inRun) return;
+            inRun = false;
+            const float ds = 5.0f;
+            const float half = runShape == KeyShape::Square ? ds * 0.8f : ds;
+            ctx.fill.SetColor(trk.color.r, trk.color.g, trk.color.b, trk.color.a);
+            if (runEnd > runStart) ctx.fillRect(runStart, ky - half, runEnd - runStart, half * 2.0f);
+            drawKey(runStart, runShape, ds);
+            if (runEnd > runStart) drawKey(runEnd, runShape, ds);
+        };
+
+        for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()); ++ki) {
+            const auto& kf = trk.keyframes[ki];
+            float kx = timeToX(kf.time);
+
+            if (kx < b.x + kHeaderW || kx > b.x + b.w) continue;
+            const bool plain = !kf.selected && kf.label.empty();
+            if (plain && inRun && kf.shape == runShape && kx >= runEnd && kx - runEnd < 2.0f) {
+                runEnd = kx;
+                continue;
+            }
+            flushRun();
+            if (plain) {
+                inRun = true;
+                runStart = runEnd = kx;
+                runShape = kf.shape;
+                continue;
+            }
+
+            float ds = kf.selected ? 6.0f : 5.0f;
+            Color kc = kf.selected ? Color(255, 200, 60, 255) : trk.color;
+            ctx.fill.SetColor(kc.r, kc.g, kc.b, kc.a);
+            drawKey(kx, kf.shape, ds);
 
             if (!kf.label.empty() && !(labelTrack_ == ti && labelKey_ == ki)) {
                 const float ascLabel = setupFont(ctx, Color(225, 228, 238, 235), 9.0f);
                 ctx.font.Print(kf.label.c_str(), kx + ds + 4.0f, ty + (kTrackH - 9.0f) * 0.5f + ascLabel);
             }
         }
+        flushRun();
 
         ctx.popClip();
         // Track separator
