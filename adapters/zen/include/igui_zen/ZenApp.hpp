@@ -75,6 +75,9 @@ public:
     void run();
     // One frame of every window. False once the main window has closed.
     bool pump();
+    // Calls fn once with the main window's next rendered frame (0xAARRGGBB
+    // pixels, top row first), for screenshots and tests. OpenGL only.
+    void requestCapture(ct::Function<void(const uint32_t *pixels, int width, int height)> fn);
 
     ig::retained::WidgetApp& widgets()
     {
@@ -172,6 +175,7 @@ private:
     void feedInput(PlatformWindow *pw);
     void updateStats();
 
+    ct::Function<void(const uint32_t *, int, int)> capture_;
     ct::Vector<Window *> windows_;
     Window *main_ = nullptr;
     Window *current_ = nullptr;
