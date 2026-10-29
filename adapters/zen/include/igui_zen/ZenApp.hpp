@@ -31,11 +31,27 @@ namespace zen
 class App
 {
 public:
+    // Where and how a window appears; shared by the main window's Config and
+    // the WindowDesc of the others.
+    struct Placement
+    {
+        int x = -1;              // WINDOW_POS_CENTERED; -2 lets the system choose
+        int y = -1;
+        int monitor = -1;        // MONITOR_CURRENT; -2 the monitor under the mouse; else an index
+        int mode = 0;            // 0 windowed, 1 fullscreen, 2 borderless fullscreen
+        bool resizable = true;
+        bool decorated = true;
+        bool alwaysOnTop = false;
+        int state = 0;           // 0 normal, 1 maximized, 2 minimized
+        float opacity = 1.0f;
+    };
+
     struct Config
     {
         const char *title = "iGUI";
         int width = 1280;
         int height = 720;
+        Placement placement;
         // OpenGL when the machine has it, else the software rasteriser.
         bool preferOpenGL = true;
         int minGlMajor = 3; // the oldest OpenGL core the application accepts
@@ -54,7 +70,7 @@ public:
         const char *title = "iGUI";
         int width = 640;
         int height = 480;
-        bool resizable = true;
+        Placement placement;
         bool dialog = false;        // a dialog of `parent`: stays above it, no taskbar entry
         bool modal = false;         // with dialog: the parent chain gets no input until this closes
         Window *parent = nullptr;   // nullptr: the main window
@@ -90,6 +106,9 @@ public:
     Window *openWindow(const WindowDesc &desc);
     // Closes at the end of the frame; the main window ends run().
     void closeWindow(Window *w);
+    // Applies the parts of a placement a live window can change: position,
+    // mode, always-on-top, state, opacity.
+    void applyPlacement(Window *w, const Placement &p);
     // The window whose state widgets() holds. Switch to build or inspect
     // another window's tree; pump() switches as it goes through them.
     Window *current() { return current_; }

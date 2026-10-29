@@ -91,9 +91,12 @@ bool App::create(const Config &config)
     cfg.title = config.title;
     cfg.width = config.width;
     cfg.height = config.height;
-    cfg.x = WINDOW_POS_CENTERED;
-    cfg.y = WINDOW_POS_CENTERED;
-    cfg.resizable = true;
+    cfg.x = config.placement.x;
+    cfg.y = config.placement.y;
+    cfg.monitor = config.placement.monitor;
+    cfg.mode = static_cast<WindowMode>(config.placement.mode);
+    cfg.resizable = config.placement.resizable;
+    cfg.undecorated = !config.placement.decorated;
     cfg.vsync = config.vsync;
     cfg.gl.msaa = config.msaa;
     PlatformWindow *pw = nullptr;
@@ -168,7 +171,23 @@ bool App::create(const Config &config)
     app.setTextureDestroy([this](rt::TextureHandle t) { destroyTexture(t); });
 
     window_text_input_start(pw);
+    applyPlacement(main_, config.placement);
     return true;
+}
+
+void App::applyPlacement(Window *w, const Placement &p)
+{
+    if (!w || !w->platform)
+        return;
+    PlatformWindow *pw = w->platform;
+    if (p.alwaysOnTop)
+        window_set_always_on_top(pw, true);
+    if (p.opacity < 1.0f)
+        window_set_opacity(pw, p.opacity < 0.0f ? 0.0f : p.opacity);
+    if (p.state == 1)
+        window_maximize(pw);
+    else if (p.state == 2)
+        window_minimize(pw);
 }
 
 bool App::supportsWindows() const
@@ -189,9 +208,12 @@ App::Window *App::openWindow(const WindowDesc &desc)
     cfg.title = desc.title;
     cfg.width = desc.width;
     cfg.height = desc.height;
-    cfg.x = WINDOW_POS_CENTERED;
-    cfg.y = WINDOW_POS_CENTERED;
-    cfg.resizable = desc.resizable;
+    cfg.x = desc.placement.x;
+    cfg.y = desc.placement.y;
+    cfg.monitor = desc.placement.monitor;
+    cfg.mode = static_cast<WindowMode>(desc.placement.mode);
+    cfg.resizable = desc.placement.resizable;
+    cfg.undecorated = !desc.placement.decorated;
     cfg.vsync = false; // one vsync wait per frame, on the main window
     cfg.render = RENDER_GL;
     cfg.gl.profile = GL_PROFILE_CORE;
@@ -212,6 +234,7 @@ App::Window *App::openWindow(const WindowDesc &desc)
     w->background = desc.background;
     windows_.push_back(w);
     makeCurrent(w);
+    applyPlacement(w, desc.placement);
     return w;
 }
 
