@@ -368,7 +368,7 @@ void App::requestCapture(ct::Function<void(const uint32_t *, int, int)> fn)
     capture_ = static_cast<ct::Function<void(const uint32_t *, int, int)> &&>(fn);
 }
 
-bool App::pump()
+bool App::pump(bool skipBlocked)
 {
     if (!main_ || main_->closeRequested() || main_->closing)
         return false;
@@ -384,6 +384,8 @@ bool App::pump()
             w->closing = true;
             continue;
         }
+        if (skipBlocked && blockedByModal(w))
+            continue;
         window_begin_frame(w->platform);
         frameWindow(w, false);
         window_swap(w->platform);

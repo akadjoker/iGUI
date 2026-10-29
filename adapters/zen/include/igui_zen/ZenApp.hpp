@@ -92,7 +92,10 @@ public:
     // Returns when the main window closes.
     void run();
     // One frame of every window. False once the main window has closed.
-    bool pump();
+    // With skipBlocked, windows a modal child is blocking get no frame at
+    // all: a nested loop run from inside one of their handlers does not
+    // re-enter their widgets.
+    bool pump(bool skipBlocked = false);
     // Calls fn once with the main window's next rendered frame (0xAARRGGBB
     // pixels, top row first), for screenshots and tests. OpenGL only.
     void requestCapture(ct::Function<void(const uint32_t *pixels, int width, int height)> fn);
