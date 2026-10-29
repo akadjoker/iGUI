@@ -264,7 +264,7 @@ App::Window *App::openWindow(const WindowDesc &desc)
     cfg.gl.profile = GL_PROFILE_CORE;
     cfg.gl.major = gl_.versionMajor();
     cfg.gl.minor = gl_.versionMinor();
-    cfg.kind = desc.dialog ? WINDOW_KIND_DIALOG : WINDOW_KIND_NORMAL;
+    cfg.kind = !desc.dialog ? WINDOW_KIND_NORMAL : desc.placement.kind == 2 ? WINDOW_KIND_UTILITY : WINDOW_KIND_DIALOG;
     cfg.parent = desc.dialog ? parent->platform : nullptr;
     PlatformWindow *pw = window_create(&cfg);
     if (!pw)

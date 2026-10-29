@@ -44,6 +44,7 @@ public:
         bool alwaysOnTop = false;
         int state = 0;           // 0 normal, 1 maximized, 2 minimized
         float opacity = 1.0f;
+        int kind = 0;            // for a window with a parent: 0 normal, 1 dialog, 2 utility
     };
 
     struct Config
@@ -75,7 +76,7 @@ public:
         int width = 640;
         int height = 480;
         Placement placement;
-        bool dialog = false;        // a dialog of `parent`: stays above it, no taskbar entry
+        bool dialog = false;        // a child of `parent`: stays above it; placement.kind says dialog or utility
         bool modal = false;         // with dialog: the parent chain gets no input until this closes
         Window *parent = nullptr;   // nullptr: the main window
         uint32_t background = 0xff181a1eu;
