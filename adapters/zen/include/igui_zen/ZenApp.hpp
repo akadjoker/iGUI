@@ -45,6 +45,7 @@ public:
         int state = 0;           // 0 normal, 1 maximized, 2 minimized
         float opacity = 1.0f;
         int kind = 0;            // for a window with a parent: 0 normal, 1 dialog, 2 utility
+        float scale = 1.0f;      // the UI drawn this many times bigger (2 = HiDPI look); 1 = the screen's own units
     };
 
     struct Config
@@ -155,8 +156,10 @@ public:
     // Closes at the end of the frame; the main window ends run().
     void closeWindow(Window *w);
     // Applies the parts of a placement a live window can change: position,
-    // mode, always-on-top, state, opacity.
+    // mode, always-on-top, state, opacity, scale.
     void applyPlacement(Window *w, const Placement &p);
+    // The UI zoom of a window: 2 draws everything twice as big. OpenGL only.
+    void setScale(Window *w, float scale);
     // The window whose state widgets() holds. Switch to build or inspect
     // another window's tree; pump() switches as it goes through them.
     Window *current() { return current_; }
@@ -174,6 +177,7 @@ public:
         bool modal = false;
         bool closing = false;
         uint32_t background = 0;
+        float scale = 1.0f;   // UI zoom: widgets think the window is this many times smaller
         void *user = nullptr; // for the application
         // The state while this window is not the current one.
         ig::retained::WidgetApp::Surface surface;
@@ -193,6 +197,7 @@ private:
     bool updateTexture(ig::retained::TextureHandle t, const unsigned char *rgba, int w, int h);
     void saveScreenshot(const uint32_t *pixels, int width, int height, int stride);
     void feedInput(PlatformWindow *pw);
+    float scaleOf(PlatformWindow *pw) const;
     void updateStats();
 
     ct::Function<void(const uint32_t *, int, int)> capture_;

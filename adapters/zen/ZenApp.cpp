@@ -233,6 +233,15 @@ void App::applyPlacement(Window *w, const Placement &p)
         window_maximize(pw);
     else if (p.state == 2)
         window_minimize(pw);
+    setScale(w, p.scale);
+}
+
+void App::setScale(Window *w, float scale)
+{
+    if (!w)
+        return;
+    w->scale = scale > 0.25f ? (scale < 8.0f ? scale : 8.0f) : 1.0f;
+    widgets().requestLayout();
 }
 
 bool App::supportsWindows() const
@@ -397,6 +406,14 @@ bool App::pump()
     return !main_->closeRequested();
 }
 
+float App::scaleOf(PlatformWindow *pw) const
+{
+    for (const Window *w : windows_)
+        if (w->platform == pw)
+            return useGl_ && w->scale > 0 ? w->scale : 1.0f;
+    return 1.0f;
+}
+
 void App::feedInput(PlatformWindow *pw)
 {
     rt::IO &io = rt::GetIO();
@@ -421,7 +438,7 @@ void App::feedInput(PlatformWindow *pw)
                 paths.push_back(rt::String(e.data.drop.paths[i]));
             int dx = 0, dy = 0;
             mouse_position(pw, &dx, &dy);
-            io.addDropEvent(static_cast<float>(dx), static_cast<float>(dy), paths);
+            io.addDropEvent(static_cast<float>(dx) / scaleOf(pw), static_cast<float>(dy) / scaleOf(pw), paths);
         }
         else if (e.type == EVENT_CHAR)
         {
@@ -453,14 +470,17 @@ void App::frameWindow(Window *w, bool driven)
     window_get_size(pw, &sw, &sh);
     int mx = 0, my = 0;
     mouse_position(pw, &mx, &my);
+    // The UI works in units `scale` times bigger than the window's own: the
+    // rasteriser stretches the draw data to the framebuffer.
+    const float k = useGl_ && w->scale > 0 ? w->scale : 1.0f;
 
     const double now = time_seconds();
     double dt = now - lastFrame_;
     if (w == main_)
         lastFrame_ = now;
     io.deltaTime = static_cast<float>(dt > 0.1 ? 0.1 : dt);
-    io.displayWidth = static_cast<float>(sw);
-    io.displayHeight = static_cast<float>(sh);
+    io.displayWidth = static_cast<float>(sw) / k;
+    io.displayHeight = static_cast<float>(sh) / k;
     const bool blocked = blockedByModal(w);
     if (blocked)
     {
@@ -476,8 +496,8 @@ void App::frameWindow(Window *w, bool driven)
     }
     else
     {
-        io.mouseX = static_cast<float>(mx);
-        io.mouseY = static_cast<float>(my);
+        io.mouseX = static_cast<float>(mx) / k;
+        io.mouseY = static_cast<float>(my) / k;
         io.mouseDown[0] = mouse_button_down(pw, MOUSE_LEFT);
         io.mouseDown[1] = mouse_button_down(pw, MOUSE_RIGHT);
         io.mouseDown[2] = mouse_button_down(pw, MOUSE_MIDDLE);
