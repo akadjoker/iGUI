@@ -1,7 +1,7 @@
-#include "WidgetApp.hpp"
 #include "BasicWidgets.hpp"
-#include "LayoutWidgets.hpp"
 #include "DialogWidgets.hpp"
+#include "LayoutWidgets.hpp"
+#include "WidgetApp.hpp"
 #include <cstdio>
 using namespace ig::retained;
 
@@ -38,35 +38,74 @@ void registerDialogsStage(WidgetApp& app)
     auto* row1 = content->createChild<BoxLayout>(LayoutDir::Horizontal);
     row1->setSpacing(10.0f);
 
-    row1->createChild<Button>("Alert")->clicked.connect([]() {
-        AlertDialog::show("Information",
-            "The operation completed successfully.\nAll files were processed.",
-            []() { if (s_dlgStatus) s_dlgStatus->setText("Alert closed."); });
-    });
+    row1->createChild<Button>("Alert")->clicked.connect(
+            []()
+            {
+                AlertDialog::show("Information",
+                        "The operation completed successfully.\nAll files were processed.",
+                        []()
+                        {
+                            if (s_dlgStatus) s_dlgStatus->setText("Alert closed.");
+                        });
+            });
 
-    row1->createChild<Button>("Confirm")->clicked.connect([]() {
-        ConfirmDialog::show("Delete File",
-            "Are you sure you want to delete \"document.txt\"?\nThis cannot be undone.",
-            []() { if (s_dlgStatus) s_dlgStatus->setText("Confirmed: deleted."); },
-            []() { if (s_dlgStatus) s_dlgStatus->setText("Cancelled."); });
-    });
+    row1->createChild<Button>("Confirm")->clicked.connect(
+            []()
+            {
+                ConfirmDialog::show(
+                        "Delete File",
+                        "Are you sure you want to delete \"document.txt\"?\nThis cannot be undone.",
+                        []()
+                        {
+                            if (s_dlgStatus) s_dlgStatus->setText("Confirmed: deleted.");
+                        },
+                        []()
+                        {
+                            if (s_dlgStatus) s_dlgStatus->setText("Cancelled.");
+                        });
+            });
 
-    row1->createChild<Button>("Danger")->clicked.connect([]() {
-        auto* dlg = new Dialog("Format Drive",
-            "You are about to erase ALL data.\nThis CANNOT be undone.");
-        dlg->addButton("Cancel",  Dialog::Role::Cancel, []() { if (s_dlgStatus) s_dlgStatus->setText("Cancelled."); });
-        dlg->addButton("Format!", Dialog::Role::Danger, []() { if (s_dlgStatus) s_dlgStatus->setText("Drive formatted!"); });
-        dlg->show();
-    });
+    row1->createChild<Button>("Danger")->clicked.connect(
+            []()
+            {
+                auto* dlg = new Dialog("Format Drive",
+                        "You are about to erase ALL data.\nThis CANNOT be undone.");
+                dlg->addButton("Cancel", Dialog::Role::Cancel,
+                        []()
+                        {
+                            if (s_dlgStatus) s_dlgStatus->setText("Cancelled.");
+                        });
+                dlg->addButton("Format!", Dialog::Role::Danger,
+                        []()
+                        {
+                            if (s_dlgStatus) s_dlgStatus->setText("Drive formatted!");
+                        });
+                dlg->show();
+            });
 
-    row1->createChild<Button>("Save Changes?")->clicked.connect([]() {
-        auto* dlg = new Dialog("Unsaved Changes",
-            "You have unsaved changes.\nWhat would you like to do?");
-        dlg->addButton("Discard", Dialog::Role::Danger, []() { if (s_dlgStatus) s_dlgStatus->setText("Changes discarded."); });
-        dlg->addButton("Cancel",  Dialog::Role::Cancel, []() { if (s_dlgStatus) s_dlgStatus->setText("Cancelled."); });
-        dlg->addButton("Save",    Dialog::Role::Accept, []() { if (s_dlgStatus) s_dlgStatus->setText("Saved!"); });
-        dlg->show();
-    });
+    row1->createChild<Button>("Save Changes?")
+            ->clicked.connect(
+                    []()
+                    {
+                        auto* dlg = new Dialog("Unsaved Changes",
+                                "You have unsaved changes.\nWhat would you like to do?");
+                        dlg->addButton("Discard", Dialog::Role::Danger,
+                                []()
+                                {
+                                    if (s_dlgStatus) s_dlgStatus->setText("Changes discarded.");
+                                });
+                        dlg->addButton("Cancel", Dialog::Role::Cancel,
+                                []()
+                                {
+                                    if (s_dlgStatus) s_dlgStatus->setText("Cancelled.");
+                                });
+                        dlg->addButton("Save", Dialog::Role::Accept,
+                                []()
+                                {
+                                    if (s_dlgStatus) s_dlgStatus->setText("Saved!");
+                                });
+                        dlg->show();
+                    });
 
     content->createChild<Spacer>(8.0f);
 
@@ -77,22 +116,31 @@ void registerDialogsStage(WidgetApp& app)
     auto* row2 = content->createChild<BoxLayout>(LayoutDir::Horizontal);
     row2->setSpacing(10.0f);
 
-    row2->createChild<Button>("Info")->clicked.connect([]() {
-        Toast::show("Loading complete — 42 items imported.");
-        if (s_dlgStatus) s_dlgStatus->setText("Toast: Info shown.");
-    });
-    row2->createChild<Button>("Success")->clicked.connect([]() {
-        Toast::show("File saved successfully!", Toast::Type::Success);
-        if (s_dlgStatus) s_dlgStatus->setText("Toast: Success shown.");
-    });
-    row2->createChild<Button>("Warning")->clicked.connect([]() {
-        Toast::show("Disk space is running low.", Toast::Type::Warning, 4.0f);
-        if (s_dlgStatus) s_dlgStatus->setText("Toast: Warning shown.");
-    });
-    row2->createChild<Button>("Error")->clicked.connect([]() {
-        Toast::show("Connection failed. Please check your network.", Toast::Type::Error, 5.0f);
-        if (s_dlgStatus) s_dlgStatus->setText("Toast: Error shown.");
-    });
+    row2->createChild<Button>("Info")->clicked.connect(
+            []()
+            {
+                Toast::show("Loading complete — 42 items imported.");
+                if (s_dlgStatus) s_dlgStatus->setText("Toast: Info shown.");
+            });
+    row2->createChild<Button>("Success")->clicked.connect(
+            []()
+            {
+                Toast::show("File saved successfully!", Toast::Type::Success);
+                if (s_dlgStatus) s_dlgStatus->setText("Toast: Success shown.");
+            });
+    row2->createChild<Button>("Warning")->clicked.connect(
+            []()
+            {
+                Toast::show("Disk space is running low.", Toast::Type::Warning, 4.0f);
+                if (s_dlgStatus) s_dlgStatus->setText("Toast: Warning shown.");
+            });
+    row2->createChild<Button>("Error")->clicked.connect(
+            []()
+            {
+                Toast::show("Connection failed. Please check your network.", Toast::Type::Error,
+                        5.0f);
+                if (s_dlgStatus) s_dlgStatus->setText("Toast: Error shown.");
+            });
 
     content->createChild<Spacer>(0.0f)->setStretch(1.0f);
     vbox->createChild<Line>();

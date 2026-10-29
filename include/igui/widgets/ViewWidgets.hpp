@@ -1,10 +1,10 @@
 #pragma once
 
-#include "Widget.hpp"
-#include "Theme.hpp"
 #include "Signal.hpp"
-#include <igui/widgets/String.hpp>
+#include "Theme.hpp"
+#include "Widget.hpp"
 #include <ct/function.hpp>
+#include <igui/widgets/String.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  FloatWindow - draggable, resizable floating panel with title bar
@@ -19,7 +19,9 @@
 //  The FloatWindow lives in WidgetApp's float layer (above stages, below popups).
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 class FloatWindow : public Widget
 {
@@ -31,29 +33,58 @@ public:
 
     // ── Title bar ────────────────────────────────────────────────────────
     /// @brief Set the window title.
-    void setTitle(const String& t) { title_ = t; markDirty(); }
+    void setTitle(const String& t)
+    {
+        title_ = t;
+        markDirty();
+    }
     /// @brief Get the window title.
-    const String& title() const    { return title_; }
+    const String& title() const
+    {
+        return title_;
+    }
 
     // ── Floating position (absolute screen coords) ───────────────────────
     /// @brief Set absolute screen position.
-    void  setFloatPos(float x, float y) { floatX_ = x; floatY_ = y; markDirty(); }
+    void setFloatPos(float x, float y)
+    {
+        floatX_ = x;
+        floatY_ = y;
+        markDirty();
+    }
     /// @brief Get the X position.
-    float floatX() const { return floatX_; }
+    float floatX() const
+    {
+        return floatX_;
+    }
     /// @brief Get the Y position.
-    float floatY() const { return floatY_; }
+    float floatY() const
+    {
+        return floatY_;
+    }
 
     // ── Floating size ────────────────────────────────────────────────────
     /// @brief Set the floating window size.
-    void  setFloatSize(float w, float h) { floatW_ = w; floatH_ = h; markDirty(); }
+    void setFloatSize(float w, float h)
+    {
+        floatW_ = w;
+        floatH_ = h;
+        markDirty();
+    }
     /// @brief Get the width.
-    float floatW() const { return floatW_; }
+    float floatW() const
+    {
+        return floatW_;
+    }
     /// @brief Get the height.
-    float floatH() const { return floatH_; }
+    float floatH() const
+    {
+        return floatH_;
+    }
 
     // ── Content widget ───────────────────────────────────────────────────
     /// @brief Create and set a content widget of type T.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* setContent(Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
@@ -61,72 +92,97 @@ public:
         return w;
     }
     /// @brief Set the content widget (takes ownership).
-    void    setContentWidget(Widget* w);
+    void setContentWidget(Widget* w);
     /// @brief Get the content widget.
-    Widget* content() const { return content_; }
+    Widget* content() const
+    {
+        return content_;
+    }
 
     // ── Features ─────────────────────────────────────────────────────────
     /// @brief Enable the close button.
-    void setClosable(bool c)    { closable_    = c; }
+    void setClosable(bool c)
+    {
+        closable_ = c;
+    }
     /// @brief Enable the minimize button.
-    void setMinimizable(bool m) { minimizable_ = m; }
+    void setMinimizable(bool m)
+    {
+        minimizable_ = m;
+    }
     /// @brief Enable window resizing.
-    void setResizable(bool r)   { resizable_   = r; }
+    void setResizable(bool r)
+    {
+        resizable_ = r;
+    }
     /// @brief Check if the window is minimized.
-    bool isMinimized() const    { return minimized_; }
+    bool isMinimized() const
+    {
+        return minimized_;
+    }
     /// @brief Set the minimized state.
     void setMinimized(bool m);
 
     /// @brief Set the title bar height.
-    void  setTitleBarHeight(float h) { titleBarH_ = h; markDirty(); }
+    void setTitleBarHeight(float h)
+    {
+        titleBarH_ = h;
+        markDirty();
+    }
     /// @brief Get the title bar height.
-    float titleBarHeight() const     { return titleBarH_; }
+    float titleBarHeight() const
+    {
+        return titleBarH_;
+    }
 
     // ── Signals ──────────────────────────────────────────────────────────
-    Signal<>    closed;           ///< close button clicked
+    Signal<> closed;               ///< close button clicked
     Signal<bool> minimizedChanged; ///< minimized state changed
 
     // ── Widget overrides ─────────────────────────────────────────────────
-    void  layout() override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
+    void layout() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
     Vec2f sizeHint() const override;
 
     /// @brief The widget that gets the keyboard when the window is added.
-    virtual Widget* focusOnOpen() { return nullptr; }
+    virtual Widget* focusOnOpen()
+    {
+        return nullptr;
+    }
 
 private:
     String title_;
-    Widget*     content_    = nullptr;
-    float floatX_     = 50,  floatY_    = 50;
-    float floatW_     = 300, floatH_    = 200;
-    float titleBarH_  = 28.0f;
-    bool  closable_    = true;
-    bool  minimizable_ = true;
-    bool  resizable_   = true;
-    bool  minimized_   = false;
+    Widget* content_ = nullptr;
+    float floatX_ = 50, floatY_ = 50;
+    float floatW_ = 300, floatH_ = 200;
+    float titleBarH_ = 28.0f;
+    bool closable_ = true;
+    bool minimizable_ = true;
+    bool resizable_ = true;
+    bool minimized_ = false;
 
     // Drag state
-    bool  dragging_  = false;
-    float dragOffX_  = 0, dragOffY_ = 0;
+    bool dragging_ = false;
+    float dragOffX_ = 0, dragOffY_ = 0;
 
     // Resize state
-    bool  resizing_      = false;
-    float resizeOffX_    = 0, resizeOffY_    = 0;
-    float resizeStartW_  = 0, resizeStartH_  = 0;
+    bool resizing_ = false;
+    float resizeOffX_ = 0, resizeOffY_ = 0;
+    float resizeStartW_ = 0, resizeStartH_ = 0;
     static constexpr float kResizeGrip = 12.0f;
 
     // Button hover: 0=none, 1=close, 2=minimize
     int hoveredBtn_ = 0;
 
     // Geometry helpers
-    Rect titleBarRect()     const;
-    Rect contentRect()      const;
-    Rect closeButtonRect()  const;
+    Rect titleBarRect() const;
+    Rect contentRect() const;
+    Rect closeButtonRect() const;
     Rect minimizeButtonRect() const;
-    Rect resizeGripRect()   const;
+    Rect resizeGripRect() const;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -147,13 +203,23 @@ public:
     Canvas() = default;
 
     /// @brief Set the background color.
-    void setBgColor(const Color& c) { bgColor_ = c; markDirty(); }
+    void setBgColor(const Color& c)
+    {
+        bgColor_ = c;
+        markDirty();
+    }
     /// @brief Get the background color.
-    const Color& bgColor() const    { return bgColor_; }
+    const Color& bgColor() const
+    {
+        return bgColor_;
+    }
 
     /// @brief Set a custom paint callback.
     using PaintCallback = ct::Function<void(PaintContext& ctx, const Rect& bounds)>;
-    void setOnPaint(PaintCallback cb) { onPaint_ = std::move(cb); }
+    void setOnPaint(PaintCallback cb)
+    {
+        onPaint_ = std::move(cb);
+    }
 
     void layout() override;
     void paint(PaintContext& ctx) override;
@@ -181,23 +247,41 @@ public:
     /// @brief Set the texture, width and height.
     void setTexture(ig::retained::TextureHandle tex, int w, int h);
     /// @brief Get the texture handle.
-    ig::retained::TextureHandle texture() const { return texture_; }
+    ig::retained::TextureHandle texture() const
+    {
+        return texture_;
+    }
 
     /// @brief Set the image offset.
-    void setOffset(float ox, float oy) { offsetX_ = ox; offsetY_ = oy; markDirty(); }
+    void setOffset(float ox, float oy)
+    {
+        offsetX_ = ox;
+        offsetY_ = oy;
+        markDirty();
+    }
     /// @brief Get the horizontal offset.
-    float offsetX() const { return offsetX_; }
+    float offsetX() const
+    {
+        return offsetX_;
+    }
     /// @brief Get the vertical offset.
-    float offsetY() const { return offsetY_; }
+    float offsetY() const
+    {
+        return offsetY_;
+    }
 
     /// @brief Set a tint color.
-    void setTint(const Color& c) { tint_ = c; markDirty(); }
+    void setTint(const Color& c)
+    {
+        tint_ = c;
+        markDirty();
+    }
 
     void paint(PaintContext& ctx) override;
 
 private:
     ig::retained::TextureHandle texture_;
-    int   texW_ = 0, texH_ = 0;
+    int texW_ = 0, texH_ = 0;
     float offsetX_ = 0, offsetY_ = 0;
     Color tint_ = Color(255, 255, 255, 255);
 };
@@ -222,47 +306,102 @@ public:
     IG_WIDGET_CLASS(VideoCanvas, Widget);
 
     /// How the frame is sized at zoom 1.
-    enum class Fit { Contain, Cover, Actual };
+    enum class Fit
+    {
+        Contain,
+        Cover,
+        Actual
+    };
 
     VideoCanvas() = default;
 
     /// @brief Set the frame texture and its size in pixels.
     void setTexture(ig::retained::TextureHandle tex, int w, int h);
-    ig::retained::TextureHandle texture() const { return texture_; }
-    int frameWidth() const  { return texW_; }
-    int frameHeight() const { return texH_; }
+    ig::retained::TextureHandle texture() const
+    {
+        return texture_;
+    }
+    int frameWidth() const
+    {
+        return texW_;
+    }
+    int frameHeight() const
+    {
+        return texH_;
+    }
     /// @brief Repaint after the texture pixels changed.
-    void refresh() { markDirty(); }
+    void refresh()
+    {
+        markDirty();
+    }
 
     /// @brief Pixel aspect ratio (width / height of one pixel); 1 = square.
     void setPixelAspect(float par);
 
     /// @brief Empty space kept around the frame at zoom 1 (screen pixels), e.g. so box handles fit.
-    void setMargin(float pixels) { margin_ = pixels; markDirty(); }
+    void setMargin(float pixels)
+    {
+        margin_ = pixels;
+        markDirty();
+    }
 
     /// @brief Choose the base size and reset zoom and pan.
     void setFit(Fit fit);
-    Fit  fit() const { return fit_; }
+    Fit fit() const
+    {
+        return fit_;
+    }
     /// @brief Zoom as a multiplier over the base size (1 = unchanged).
-    void  setZoom(float zoom);
-    float zoom() const { return zoom_; }
-    float viewPanX() const { return panX_; }
-    float viewPanY() const { return panY_; }
-    void setViewTransform(float zoom, float panX, float panY) { setView(zoom, panX, panY); }
+    void setZoom(float zoom);
+    float zoom() const
+    {
+        return zoom_;
+    }
+    float viewPanX() const
+    {
+        return panX_;
+    }
+    float viewPanY() const
+    {
+        return panY_;
+    }
+    void setViewTransform(float zoom, float panX, float panY)
+    {
+        setView(zoom, panX, panY);
+    }
     /// @brief Screen pixels per frame pixel (1 = 100%).
-    float scale() const { return baseScale() * zoom_; }
+    float scale() const
+    {
+        return baseScale() * zoom_;
+    }
     /// @brief Contain, zoom 1, centred.
     void resetView();
     /// @brief 100%: one frame pixel per screen pixel, centred.
     void actualSize();
 
-    void setBackground(const Color& c)  { background_ = c; markDirty(); }
+    void setBackground(const Color& c)
+    {
+        background_ = c;
+        markDirty();
+    }
     /// @brief Checkerboard behind the frame, for frames with alpha.
-    void setCheckerboard(bool on)       { checker_ = on; markDirty(); }
+    void setCheckerboard(bool on)
+    {
+        checker_ = on;
+        markDirty();
+    }
     /// @brief Pixel grid, drawn once one frame pixel covers 8 screen pixels or more.
-    void setShowGrid(bool on)           { grid_ = on; markDirty(); }
+    void setShowGrid(bool on)
+    {
+        grid_ = on;
+        markDirty();
+    }
     /// @brief Action safe (90%), title safe (80%) and centre cross.
-    void setShowSafeAreas(bool on)      { safe_ = on; markDirty(); }
+    void setShowSafeAreas(bool on)
+    {
+        safe_ = on;
+        markDirty();
+    }
 
     /// @brief Absolute screen rect the frame is drawn in.
     Rect imageRect() const;
@@ -271,10 +410,13 @@ public:
     /// @brief Frame pixel coordinates to screen position.
     Vec2f imageToScreen(float px, float py) const;
 
-    /// @brief A red box with handles over the frame, to move, scale and crop what is shown (like OBS).
-    /// The corners are fractions of the frame (0 to 1, y down); it may go beyond it.
+    /// @brief A red box with handles over the frame, to move, scale and crop what is shown (like
+    /// OBS). The corners are fractions of the frame (0 to 1, y down); it may go beyond it.
     void setBox(bool show, float x0, float y0, float x1, float y1);
-    bool boxShown() const { return boxShown_; }
+    bool boxShown() const
+    {
+        return boxShown_;
+    }
     /// Handles: 0 inside (move), 1 left, 2 top, 3 right, 4 bottom, 5 top-left, 6 top-right,
     /// 7 bottom-right, 8 bottom-left.
     Signal<int> boxGrabbed;
@@ -297,26 +439,26 @@ public:
 
 private:
     float baseScale() const;
-    void  setView(float zoom, float panX, float panY);
+    void setView(float zoom, float panX, float panY);
 
     ig::retained::TextureHandle texture_;
-    int   texW_ = 0, texH_ = 0;
+    int texW_ = 0, texH_ = 0;
     float pixelAspect_ = 1.0f;
-    Fit   fit_ = Fit::Contain;
+    Fit fit_ = Fit::Contain;
     float zoom_ = 1.0f;
     float panX_ = 0.0f, panY_ = 0.0f;
     Color background_ = Color(14, 14, 16, 255);
-    bool  checker_ = false, grid_ = false, safe_ = false;
+    bool checker_ = false, grid_ = false, safe_ = false;
 
-    bool  dragging_ = false;
+    bool dragging_ = false;
     float dragX_ = 0, dragY_ = 0, dragPanX_ = 0, dragPanY_ = 0;
-    int   lastPixelX_ = -2, lastPixelY_ = -2;
+    int lastPixelX_ = -2, lastPixelY_ = -2;
 
-    int  boxHit(float x, float y) const;
+    int boxHit(float x, float y) const;
     float margin_ = 0.0f;
-    bool  boxShown_ = false;
-    float box_[4] = {0, 0, 1, 1};
-    int   boxHandle_ = -1; // the handle being dragged
+    bool boxShown_ = false;
+    float box_[4] = { 0, 0, 1, 1 };
+    int boxHandle_ = -1; // the handle being dragged
     float boxGrabX_ = 0, boxGrabY_ = 0;
 };
 
@@ -329,7 +471,14 @@ class PageView : public Widget
 public:
     IG_WIDGET_CLASS(PageView, Widget);
 
-    enum Transition { None, Fade, SlideLeft, SlideRight, SlideAuto };
+    enum Transition
+    {
+        None,
+        Fade,
+        SlideLeft,
+        SlideRight,
+        SlideAuto
+    };
 
     PageView() = default;
 
@@ -343,9 +492,15 @@ public:
     }
 
     /// @brief Get the number of pages.
-    int  pageCount() const { return static_cast<int>(pages_.size()); }
+    int pageCount() const
+    {
+        return static_cast<int>(pages_.size());
+    }
     /// @brief Get the index of the current page.
-    int  currentPage() const { return currentIdx_; }
+    int currentPage() const
+    {
+        return currentIdx_;
+    }
     /// @brief Get a page widget by index.
     Widget* page(int idx) const;
 
@@ -355,7 +510,10 @@ public:
     void setPage(Widget* pg, Transition tr = SlideAuto);
 
     /// @brief Set the transition animation duration in seconds.
-    void setTransitionDuration(float sec) { transDuration_ = sec; }
+    void setTransitionDuration(float sec)
+    {
+        transDuration_ = sec;
+    }
 
     /// @brief Emitted when the current page changes.
     Signal<int> pageChanged;
@@ -367,8 +525,8 @@ private:
     void addPageImpl(Widget* w);
 
     ct::Vector<Widget*> pages_;
-    int   currentIdx_   = -1;
-    int   prevIdx_      = -1;
+    int currentIdx_ = -1;
+    int prevIdx_ = -1;
     float transProgress_ = 1.0f;
     float transDuration_ = 0.25f;
     Transition transType_ = None;

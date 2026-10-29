@@ -1,22 +1,21 @@
-#include "WidgetApp.hpp"
-#include "BasicWidgets.hpp"
-#include "LayoutWidgets.hpp"
-#include "CodeEditor.hpp"
-#include "NodeEditor.hpp"
-#include "Timeline.hpp"
-#include "GizmoWidgets.hpp"
-#include "ConsoleWidget.hpp"
+#include "AppWidgets.hpp"
 #include "AssetBrowser.hpp"
-#include "ThumbnailGrid.hpp"
-#include "FileDialog.hpp"
-#include "ChartWidgets.hpp"
 #include "AudioWidgets.hpp"
 #include "AutomotiveWidgets.hpp"
+#include "BasicWidgets.hpp"
+#include "ChartWidgets.hpp"
+#include "CodeEditor.hpp"
+#include "ConsoleWidget.hpp"
 #include "DataWidgets.hpp"
+#include "FileDialog.hpp"
+#include "GizmoWidgets.hpp"
+#include "LayoutWidgets.hpp"
+#include "NodeEditor.hpp"
+#include "ThumbnailGrid.hpp"
+#include "Timeline.hpp"
 #include "ToolBar.hpp"
-#include "AppWidgets.hpp"
+#include "WidgetApp.hpp"
 
-#include <cmath>
 #include <cmath>
 #include <ct/vector.hpp>
 
@@ -52,19 +51,31 @@ BoxLayout* makeStage(WidgetApp& app, const char* name, const char* title)
 void lookAtOrigin(float* out, float ex, float ey, float ez)
 {
     const float length = std::sqrt(ex * ex + ey * ey + ez * ez);
-    const float f[3] = {ex / length, ey / length, ez / length};
-    float r[3] = {f[2], 0.0f, -f[0]};                 // (0,1,0) x f
+    const float f[3] = { ex / length, ey / length, ez / length };
+    float r[3] = { f[2], 0.0f, -f[0] }; // (0,1,0) x f
     const float rl = std::sqrt(r[0] * r[0] + r[2] * r[2]);
-    r[0] /= rl; r[2] /= rl;
-    const float u[3] = {f[1] * r[2] - f[2] * r[1],
-                        f[2] * r[0] - f[0] * r[2],
-                        f[0] * r[1] - f[1] * r[0]};   // f x r
-    out[0] = r[0]; out[4] = r[1]; out[8]  = r[2];  out[12] = -(r[0] * ex + r[1] * ey + r[2] * ez);
-    out[1] = u[0]; out[5] = u[1]; out[9]  = u[2];  out[13] = -(u[0] * ex + u[1] * ey + u[2] * ez);
-    out[2] = f[0]; out[6] = f[1]; out[10] = f[2];  out[14] = -(f[0] * ex + f[1] * ey + f[2] * ez);
-    out[3] = 0.0f; out[7] = 0.0f; out[11] = 0.0f;  out[15] = 1.0f;
+    r[0] /= rl;
+    r[2] /= rl;
+    const float u[3] = { f[1] * r[2] - f[2] * r[1], f[2] * r[0] - f[0] * r[2],
+        f[0] * r[1] - f[1] * r[0] }; // f x r
+    out[0] = r[0];
+    out[4] = r[1];
+    out[8] = r[2];
+    out[12] = -(r[0] * ex + r[1] * ey + r[2] * ez);
+    out[1] = u[0];
+    out[5] = u[1];
+    out[9] = u[2];
+    out[13] = -(u[0] * ex + u[1] * ey + u[2] * ez);
+    out[2] = f[0];
+    out[6] = f[1];
+    out[10] = f[2];
+    out[14] = -(f[0] * ex + f[1] * ey + f[2] * ez);
+    out[3] = 0.0f;
+    out[7] = 0.0f;
+    out[11] = 0.0f;
+    out[15] = 1.0f;
 }
-}
+} // namespace
 
 void showFileDialogDemo(WidgetApp& app)
 {
@@ -74,7 +85,7 @@ void showFileDialogDemo(WidgetApp& app)
     dialog->setPath(".");
     dialog->addBookmark("Project", ".");
     dialog->addBookmark("Widgets", "include/igui/widgets");
-    dialog->setRect({160.0f, 80.0f, 920.0f, 560.0f});
+    dialog->setRect({ 160.0f, 80.0f, 920.0f, 560.0f });
 }
 
 void registerEditorStage(WidgetApp& app)
@@ -89,29 +100,28 @@ void registerEditorStage(WidgetApp& app)
     editor->setShowScopeLines(true);
     editor->setShowBracketMatch(true);
     editor->setHighlightCurrentLine(true);
-    editor->setText(
-        "#include <WidgetApp.hpp>\n"
-        "#include <CodeEditor.hpp>\n\n"
-        "namespace demo\n"
-        "{\n"
-        "class EditorStage final\n"
-        "{\n"
-        "public:\n"
-        "    void build(ig::retained::WidgetApp& app)\n"
-        "    {\n"
-        "        auto* root = app.addStage(\"editor\");\n"
-        "        auto* editor = root->createChild<ig::retained::CodeEditor>();\n"
-        "        editor->setHighlighterForFile(\"main.cpp\");\n"
-        "        editor->setShowFolding(true);\n"
-        "        editor->setShowMinimap(true);\n"
-        "    }\n"
-        "};\n"
-        "}\n\n"
-        "int main()\n"
-        "{\n"
-        "    // Ctrl+F, Ctrl+H, undo/redo, multi-cursor and folding are active.\n"
-        "    return 0;\n"
-        "}\n");
+    editor->setText("#include <WidgetApp.hpp>\n"
+                    "#include <CodeEditor.hpp>\n\n"
+                    "namespace demo\n"
+                    "{\n"
+                    "class EditorStage final\n"
+                    "{\n"
+                    "public:\n"
+                    "    void build(ig::retained::WidgetApp& app)\n"
+                    "    {\n"
+                    "        auto* root = app.addStage(\"editor\");\n"
+                    "        auto* editor = root->createChild<ig::retained::CodeEditor>();\n"
+                    "        editor->setHighlighterForFile(\"main.cpp\");\n"
+                    "        editor->setShowFolding(true);\n"
+                    "        editor->setShowMinimap(true);\n"
+                    "    }\n"
+                    "};\n"
+                    "}\n\n"
+                    "int main()\n"
+                    "{\n"
+                    "    // Ctrl+F, Ctrl+H, undo/redo, multi-cursor and folding are active.\n"
+                    "    return 0;\n"
+                    "}\n");
 }
 
 void registerNodeStage(WidgetApp& app)
@@ -124,14 +134,14 @@ void registerNodeStage(WidgetApp& app)
     const int texture = editor->addNode("Texture Sample", 60.0f, 80.0f);
     const int textureUv = editor->addPin(texture, "UV", PinDir::Input, PinType::Vec2);
     const int textureOut = editor->addPin(texture, "RGBA", PinDir::Output, PinType::Color);
-    (void)textureUv;
+    (void) textureUv;
     editor->setNodeHeader(texture, Color(90, 70, 130, 255));
 
     const int tint = editor->addNode("Multiply", 300.0f, 125.0f);
     const int tintA = editor->addPin(tint, "A", PinDir::Input, PinType::Color);
     const int tintB = editor->addPin(tint, "B", PinDir::Input, PinType::Color);
     const int tintOut = editor->addPin(tint, "Result", PinDir::Output, PinType::Color);
-    (void)tintB;
+    (void) tintB;
     editor->setNodeHeader(tint, Color(70, 105, 145, 255));
 
     const int output = editor->addNode("Fragment Output", 545.0f, 170.0f);
@@ -155,7 +165,7 @@ void registerTimelineStage(WidgetApp& app)
     const int camera = timeline->addTrack("Camera", Color(90, 150, 220, 255));
     timeline->addClip(camera, 0.5f, 4.5f, "Intro shot", Color(65, 115, 180, 220));
     timeline->addClip(camera, 5.0f, 10.5f, "Tracking shot", Color(70, 135, 170, 220));
-    for (float t : {0.5f, 2.0f, 4.5f, 7.0f, 10.5f}) timeline->addKeyframe(camera, t);
+    for (float t: { 0.5f, 2.0f, 4.5f, 7.0f, 10.5f }) timeline->addKeyframe(camera, t);
 
     const int character = timeline->addTrack("Character", Color(220, 145, 75, 255));
     timeline->setHeaderWidth(180);
@@ -170,7 +180,7 @@ void registerTimelineStage(WidgetApp& app)
     timeline->addClip(character, 1.0f, 3.5f, "Idle");
     timeline->addClip(character, 3.5f, 8.0f, "Walk");
     timeline->addClip(character, 8.0f, 11.0f, "Jump");
-    for (float t : {1.0f, 3.5f, 5.0f, 8.0f, 9.5f, 11.0f}) timeline->addKeyframe(character, t);
+    for (float t: { 1.0f, 3.5f, 5.0f, 8.0f, 9.5f, 11.0f }) timeline->addKeyframe(character, t);
 
     const int audio = timeline->addTrack("Audio", Color(130, 190, 110, 255));
     timeline->addClip(audio, 0.0f, 12.0f, "music_master.wav", Color(70, 145, 95, 220));
@@ -186,23 +196,21 @@ class SquareGizmo3D : public Gizmo3D
 public:
     void setView(const float* view4x4)
     {
-        for (int index = 0; index < 16; ++index)
-            view_[index] = view4x4[index];
+        for (int index = 0; index < 16; ++index) view_[index] = view4x4[index];
     }
 
     void layout() override
     {
         Gizmo3D::layout();
-        float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-        if (rect_.w > 0.0f && rect_.h > 0.0f)
-            projection[0] = rect_.h / rect_.w;
+        float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+        if (rect_.w > 0.0f && rect_.h > 0.0f) projection[0] = rect_.h / rect_.w;
         setViewProjection(view_, projection, static_cast<int>(rect_.w), static_cast<int>(rect_.h));
     }
 
 private:
-    float view_[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
+    float view_[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
 };
-}
+} // namespace
 
 // One tab per gizmo: sharing the stage between six of them left each one with a
 // corner of the window, and a 3D gizmo squeezed into a letterbox reads as
@@ -213,12 +221,16 @@ void registerGizmosStage(WidgetApp& app)
     auto* tabs = outer->createChild<TabLayout>();
     tabs->setStretch(1.0f);
 
-    struct Entry { const char* label; GizmoMode mode; } entries[] = {
-        {"Translate 2D", GizmoMode::Translate},
-        {"Rotate 2D",    GizmoMode::Rotate},
-        {"Scale 2D",     GizmoMode::Scale},
+    struct Entry
+    {
+        const char* label;
+        GizmoMode mode;
+    } entries[] = {
+        { "Translate 2D", GizmoMode::Translate },
+        { "Rotate 2D", GizmoMode::Rotate },
+        { "Scale 2D", GizmoMode::Scale },
     };
-    for (const Entry& entry : entries)
+    for (const Entry& entry: entries)
     {
         auto* page = tabs->addTab<Panel>(entry.label);
         auto* gizmo = page->createChild<Gizmo2D>();
@@ -234,16 +246,20 @@ void registerGizmosStage(WidgetApp& app)
     // ways on screen and the handles are big enough to grab.
     float view[16];
     lookAtOrigin(view, 3.0f, 2.2f, 3.0f);
-    const float position[3] = {0.0f, 0.0f, 0.0f};
-    const float rotation[3] = {0.0f, 0.0f, 0.0f};
-    const float scale[3] = {1.0f, 1.0f, 1.0f};
+    const float position[3] = { 0.0f, 0.0f, 0.0f };
+    const float rotation[3] = { 0.0f, 0.0f, 0.0f };
+    const float scale[3] = { 1.0f, 1.0f, 1.0f };
 
-    struct Entry3D { const char* label; GizmoMode3D mode; } entries3D[] = {
-        {"Translate 3D", GizmoMode3D::Translate},
-        {"Rotate 3D",    GizmoMode3D::Rotate},
-        {"Scale 3D",     GizmoMode3D::Scale},
+    struct Entry3D
+    {
+        const char* label;
+        GizmoMode3D mode;
+    } entries3D[] = {
+        { "Translate 3D", GizmoMode3D::Translate },
+        { "Rotate 3D", GizmoMode3D::Rotate },
+        { "Scale 3D", GizmoMode3D::Scale },
     };
-    for (const Entry3D& entry : entries3D)
+    for (const Entry3D& entry: entries3D)
     {
         auto* page = tabs->addTab<Panel>(entry.label);
         auto* gizmo = page->createChild<SquareGizmo3D>();
@@ -278,12 +294,12 @@ void registerToolsStage(WidgetApp& app)
 
     auto* assets = tabs->addTab<AssetBrowser>("Assets");
     assets->setPath("Assets/Project");
-    assets->addItem({"Scenes", AssetType::Folder, Color(190, 145, 65, 255)});
-    assets->addItem({"player.cpp", AssetType::Script, Color(80, 135, 200, 255)});
-    assets->addItem({"albedo.png", AssetType::Image, Color(135, 85, 95, 255)});
-    assets->addItem({"theme.material", AssetType::Material, Color(125, 90, 155, 255)});
-    assets->addItem({"level.scene", AssetType::Scene, Color(75, 145, 110, 255)});
-    assets->addItem({"music.wav", AssetType::Audio, Color(100, 155, 115, 255)});
+    assets->addItem({ "Scenes", AssetType::Folder, Color(190, 145, 65, 255) });
+    assets->addItem({ "player.cpp", AssetType::Script, Color(80, 135, 200, 255) });
+    assets->addItem({ "albedo.png", AssetType::Image, Color(135, 85, 95, 255) });
+    assets->addItem({ "theme.material", AssetType::Material, Color(125, 90, 155, 255) });
+    assets->addItem({ "level.scene", AssetType::Scene, Color(75, 145, 110, 255) });
+    assets->addItem({ "music.wav", AssetType::Audio, Color(100, 155, 115, 255) });
 
     auto* thumbnails = tabs->addTab<ThumbnailGrid>("Thumbnails");
     thumbnails->setThumbSize(110.0f, 90.0f);
@@ -406,11 +422,11 @@ void registerGalleryStage(WidgetApp& app)
     grid->addColumn("Type", 130.0f);
     grid->addColumn("Size", 100.0f);
     grid->addColumn("Modified", 180.0f);
-    grid->addRow({"CodeEditor.cpp", "C++ source", "118 KB", "today"});
-    grid->addRow({"NodeEditor.cpp", "C++ source", "21 KB", "today"});
-    grid->addRow({"Timeline.cpp", "C++ source", "18 KB", "yesterday"});
-    grid->addRow({"theme.json", "JSON", "4 KB", "yesterday"});
-    grid->addRow({"Roboto-Regular.ttf", "Font", "164 KB", "last week"});
+    grid->addRow({ "CodeEditor.cpp", "C++ source", "118 KB", "today" });
+    grid->addRow({ "NodeEditor.cpp", "C++ source", "21 KB", "today" });
+    grid->addRow({ "Timeline.cpp", "C++ source", "18 KB", "yesterday" });
+    grid->addRow({ "theme.json", "JSON", "4 KB", "yesterday" });
+    grid->addRow({ "Roboto-Regular.ttf", "Font", "164 KB", "last week" });
     grid->setRowChecked(0, true);
     grid->setRowChecked(1, true);
 }
@@ -454,25 +470,25 @@ void registerSpecialtyStage(WidgetApp& app)
     tree->addColumn("Type", 150.0f);
     tree->addColumn("Visible", 110.0f);
     tree->setMultiSelect(true);
-    auto* scene = tree->addRoot({"Scene", "Root", "yes"});
+    auto* scene = tree->addRoot({ "Scene", "Root", "yes" });
     scene->iconId = IconId::Home;
-    auto* camera = scene->addChild({"Main Camera", "Camera", "yes"});
+    auto* camera = scene->addChild({ "Main Camera", "Camera", "yes" });
     camera->iconId = IconId::Eye;
-    auto* lights = scene->addChild({"Lights", "Group", "yes"});
+    auto* lights = scene->addChild({ "Lights", "Group", "yes" });
     lights->iconId = IconId::FolderOpen;
-    lights->addChild({"Sun", "Directional", "yes"})->iconId = IconId::Star;
-    lights->addChild({"Fill", "Point", "no"})->iconId = IconId::Star;
-    auto* objects = scene->addChild({"Objects", "Group", "yes"});
+    lights->addChild({ "Sun", "Directional", "yes" })->iconId = IconId::Star;
+    lights->addChild({ "Fill", "Point", "no" })->iconId = IconId::Star;
+    auto* objects = scene->addChild({ "Objects", "Group", "yes" });
     objects->iconId = IconId::FolderOpen;
-    objects->addChild({"Player", "Mesh", "yes"})->iconId = IconId::User;
-    objects->addChild({"Ground", "Mesh", "yes"})->iconId = IconId::File;
+    objects->addChild({ "Player", "Mesh", "yes" })->iconId = IconId::User;
+    objects->addChild({ "Ground", "Mesh", "yes" })->iconId = IconId::File;
     tree->rebuild();
 
     auto* appPage = tabs->addTab<BoxLayout>("App Widgets", LayoutDir::Vertical);
     appPage->setPadding(12.0f);
     appPage->setSpacing(10.0f);
     auto* breadcrumbs = appPage->createChild<Breadcrumbs>();
-    breadcrumbs->setPath({"Project", "Assets", "Scripts", "editor.cpp"});
+    breadcrumbs->setPath({ "Project", "Assets", "Scripts", "editor.cpp" });
     auto* appRow = appPage->createChild<BoxLayout>(LayoutDir::Horizontal);
     appRow->setSpacing(8.0f);
     auto* search = appRow->createChild<SearchBar>();
@@ -494,11 +510,10 @@ void registerSpecialtyStage(WidgetApp& app)
     toolbar->addButton(IconId::Gear, "Settings");
     auto* rich = appPage->createChild<RichText>();
     rich->setStretch(1.0f);
-    rich->setMarkdown(
-        "# Original AppWidgets\n\n"
-        "This page exercises **Breadcrumbs**, `SearchBar`, SplitButton, ToolBar and RichText.\n\n"
-        "- Toolbar icons use font glyphs\n"
-        "- Items are interactive\n"
-        "- [Links](https://example.invalid) expose the original signal API");
-
+    rich->setMarkdown("# Original AppWidgets\n\n"
+                      "This page exercises **Breadcrumbs**, `SearchBar`, SplitButton, ToolBar and "
+                      "RichText.\n\n"
+                      "- Toolbar icons use font glyphs\n"
+                      "- Items are interactive\n"
+                      "- [Links](https://example.invalid) expose the original signal API");
 }

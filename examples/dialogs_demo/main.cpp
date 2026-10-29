@@ -25,32 +25,30 @@ namespace
 class RaylibFileDialogProvider : public ig::FileDialogProvider
 {
 public:
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries,
-                       bool = true) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry>& entries,
+            bool = true) override
     {
         const ig::String nativePath(path.data(), path.size());
         const ::FilePathList files = LoadDirectoryFiles(nativePath.c_str());
         for (unsigned int i = 0u; i < files.count; ++i)
         {
-            const char *filePath = files.paths[i];
-            if (!filePath)
-                continue;
+            const char* filePath = files.paths[i];
+            if (!filePath) continue;
             ig::FileDialogEntry entry;
             entry.path = filePath;
             entry.name = GetFileName(filePath);
             entry.directory = DirectoryExists(filePath);
-            entry.size = entry.directory ? 0u
-                                         : static_cast<uint64_t>(GetFileLength(filePath));
+            entry.size = entry.directory ? 0u : static_cast<uint64_t>(GetFileLength(filePath));
 #if defined(_WIN32)
             ::WIN32_FILE_ATTRIBUTE_DATA metadata;
             if (GetFileAttributesExA(filePath, GetFileExInfoStandard, &metadata) != 0)
             {
                 const uint64_t ticks =
-                    (static_cast<uint64_t>(metadata.ftLastWriteTime.dwHighDateTime) << 32u) |
-                    static_cast<uint64_t>(metadata.ftLastWriteTime.dwLowDateTime);
+                        (static_cast<uint64_t>(metadata.ftLastWriteTime.dwHighDateTime) << 32u) |
+                        static_cast<uint64_t>(metadata.ftLastWriteTime.dwLowDateTime);
                 entry.modifiedTime = ticks > 116444736000000000ull
-                                        ? (ticks - 116444736000000000ull) / 10000000ull
-                                        : 0u;
+                                             ? (ticks - 116444736000000000ull) / 10000000ull
+                                             : 0u;
             }
 #else
             struct stat metadata;
@@ -67,21 +65,20 @@ public:
     ig::String parentDirectory(ig::StringView path) override
     {
         const ig::String nativePath(path.data(), path.size());
-        const char *parent = GetDirectoryPath(nativePath.c_str());
+        const char* parent = GetDirectoryPath(nativePath.c_str());
         return parent ? ig::String(parent) : ig::String();
     }
 
     ig::String homeDirectory() override
     {
-        const char *directory = GetWorkingDirectory();
+        const char* directory = GetWorkingDirectory();
         return directory ? ig::String(directory) : ig::String();
     }
 
     ig::String createDirectory(ig::StringView parent, ig::StringView name) override
     {
         ig::String path(parent.data(), parent.size());
-        if (!path.empty() && path[path.size() - 1u] != '/')
-            path += "/";
+        if (!path.empty() && path[path.size() - 1u] != '/') path += "/";
         path += ig::String(name.data(), name.size());
 #if defined(_WIN32)
         return CreateDirectoryA(path.c_str(), nullptr) != 0 ? path : ig::String();
@@ -141,7 +138,8 @@ int main()
 
         if (ui.beginMainWindow("Dialogs demo"))
         {
-            ui.label("Every dialog below is already in iGUI (igui/FileDialog.hpp, Context::messageBox, setModalWindow).");
+            ui.label("Every dialog below is already in iGUI (igui/FileDialog.hpp, "
+                     "Context::messageBox, setModalWindow).");
             ui.separator();
 
             if (ui.button("Open File..."))
@@ -162,8 +160,7 @@ int main()
                 chooseFolderVisible = true;
             }
             ui.sameLine();
-            if (ui.button("Settings..."))
-                settingsVisible = true;
+            if (ui.button("Settings...")) settingsVisible = true;
 
             ui.separator();
             if (!lastResultLabel.empty())
@@ -181,10 +178,8 @@ int main()
             char settingsLine[160];
             snprintf(settingsLine, sizeof(settingsLine),
                     "Project: %s  |  Volume: %d%%  |  Autosave: %s  |  Theme: %s",
-                    settings.projectName.c_str(),
-                    static_cast<int>(settings.volume * 100.0f + 0.5f),
-                    settings.autosave ? "on" : "off",
-                    settings.theme == 0 ? "dark" : "light");
+                    settings.projectName.c_str(), static_cast<int>(settings.volume * 100.0f + 0.5f),
+                    settings.autosave ? "on" : "off", settings.theme == 0 ? "dark" : "light");
             ui.label(settingsLine);
 
             ui.endWindow();
@@ -196,7 +191,7 @@ int main()
             options.title = "Open File";
             options.mode = ig::FileDialogMode::OpenFile;
             const ig::FileDialogResult result =
-                ui.fileDialog("open", openFileVisible, openFileState, options, provider);
+                    ui.fileDialog("open", openFileVisible, openFileState, options, provider);
             if (result.kind != ig::FileDialogResultKind::None)
             {
                 openFileVisible = false;
@@ -215,7 +210,7 @@ int main()
             options.mode = ig::FileDialogMode::SaveFile;
             options.initialFileName = "untitled.txt";
             const ig::FileDialogResult result =
-                ui.fileDialog("save", saveFileVisible, saveFileState, options, provider);
+                    ui.fileDialog("save", saveFileVisible, saveFileState, options, provider);
             if (result.kind != ig::FileDialogResultKind::None)
             {
                 saveFileVisible = false;
@@ -232,8 +227,8 @@ int main()
             ig::FileDialogOptions options;
             options.title = "Choose Folder";
             options.mode = ig::FileDialogMode::ChooseFolder;
-            const ig::FileDialogResult result = ui.fileDialog(
-                "folder", chooseFolderVisible, chooseFolderState, options, provider);
+            const ig::FileDialogResult result = ui.fileDialog("folder", chooseFolderVisible,
+                    chooseFolderState, options, provider);
             if (result.kind != ig::FileDialogResultKind::None)
             {
                 chooseFolderVisible = false;
@@ -260,23 +255,21 @@ int main()
             ui.checkbox("Autosave", settings.autosave);
             ui.spacing(8.0f);
 
-            const ig::StringView themeItems[] = {ig::StringView("Dark"),
-                                                 ig::StringView("Light")};
+            const ig::StringView themeItems[] = { ig::StringView("Dark"), ig::StringView("Light") };
             ui.label("Theme");
             ui.comboBox("settings.theme", settings.theme,
-                      ig::Span<const ig::StringView>(themeItems, 2));
+                    ig::Span<const ig::StringView>(themeItems, 2));
             ui.spacing(12.0f);
 
-            if (ui.button("Close"))
-                settingsVisible = false;
+            if (ui.button("Close")) settingsVisible = false;
 
             ui.endDialog();
         }
 
-        const ig::DrawData &drawData = ui.endFrame();
+        const ig::DrawData& drawData = ui.endFrame();
 
         BeginDrawing();
-        ClearBackground(::Color{13u, 17u, 28u, 255u});
+        ClearBackground(::Color{ 13u, 17u, 28u, 255u });
         backend.render(drawData);
         EndDrawing();
     }

@@ -1,13 +1,13 @@
-#include "WidgetApp.hpp"
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
 #include "ScrollWidgets.hpp"
 #include "TreePropertyColorWidgets.hpp"
+#include "WidgetApp.hpp"
 using namespace ig::retained;
 
 void registerPropertiesStage(WidgetApp& app)
 {
-    auto* root  = app.addStage("properties");
+    auto* root = app.addStage("properties");
     auto* outer = root->createChild<BoxLayout>(LayoutDir::Vertical);
     outer->setSpacing(0.0f);
     outer->setPadding(0.0f);
@@ -76,26 +76,26 @@ void registerPropertiesStage(WidgetApp& app)
     auto* pg = sv2->setContent<PropertyGrid>();
 
     pg->addSection("Transform");
-    pg->addVec3("Position",  0.f,  0.f,  0.f, -1000.f, 1000.f);
-    pg->addVec3("Rotation",  0.f,  0.f,  0.f,  -360.f,  360.f);
-    pg->addVec3("Scale",     1.f,  1.f,  1.f,     0.f,  100.f);
+    pg->addVec3("Position", 0.f, 0.f, 0.f, -1000.f, 1000.f);
+    pg->addVec3("Rotation", 0.f, 0.f, 0.f, -360.f, 360.f);
+    pg->addVec3("Scale", 1.f, 1.f, 1.f, 0.f, 100.f);
 
     pg->addSection("Mesh Renderer");
-    pg->addColor("Albedo",   Color(210, 210, 210, 255));
+    pg->addColor("Albedo", Color(210, 210, 210, 255));
     pg->addFloat("Roughness", 0.5f, 0.f, 1.f);
-    pg->addFloat("Metallic",  0.0f, 0.f, 1.f);
-    pg->addBool("Cast Shadow",   true);
+    pg->addFloat("Metallic", 0.0f, 0.f, 1.f);
+    pg->addBool("Cast Shadow", true);
     pg->addBool("Receive Shadow", true);
 
     pg->addSection("Rigidbody");
-    pg->addFloat("Mass",         1.0f, 0.f, 1000.f);
-    pg->addFloat("Drag",         0.0f, 0.f,   10.f);
-    pg->addFloat("Angular Drag", 0.05f,0.f,   10.f);
-    pg->addBool("Use Gravity",   true);
-    pg->addBool("Is Kinematic",  false);
+    pg->addFloat("Mass", 1.0f, 0.f, 1000.f);
+    pg->addFloat("Drag", 0.0f, 0.f, 10.f);
+    pg->addFloat("Angular Drag", 0.05f, 0.f, 10.f);
+    pg->addBool("Use Gravity", true);
+    pg->addBool("Is Kinematic", false);
 
     pg->addSection("Tags & Layers");
-    pg->addBool("Static",   false);
-    pg->addBool("Visible",  true);
+    pg->addBool("Static", false);
+    pg->addBool("Visible", true);
     pg->addBool("Pickable", true);
 }

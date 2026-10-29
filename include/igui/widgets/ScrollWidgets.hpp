@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Signal.hpp"
 #include "Theme.hpp"
-#include <igui/widgets/String.hpp>
-#include <ct/vector.hpp>
+#include "Widget.hpp"
 #include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ScrollBar
@@ -15,9 +15,15 @@
 //  Emits scrolled(value) when the user drags or clicks in the track.
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
 {
-enum class ScrollBarOrientation { Horizontal, Vertical };
+namespace retained
+{
+enum class ScrollBarOrientation
+{
+    Horizontal,
+    Vertical
+};
 
 class ScrollBar : public Widget
 {
@@ -27,15 +33,36 @@ public:
     explicit ScrollBar(ScrollBarOrientation orientation = ScrollBarOrientation::Vertical);
 
     /// @brief Set the total content size.
-    void setContentSize(float cs)  { contentSize_ = cs; clampScroll(); markDirty(); }
+    void setContentSize(float cs)
+    {
+        contentSize_ = cs;
+        clampScroll();
+        markDirty();
+    }
     /// @brief Set the visible viewport size.
-    void setViewSize(float vs)     { viewSize_    = vs; clampScroll(); markDirty(); }
+    void setViewSize(float vs)
+    {
+        viewSize_ = vs;
+        clampScroll();
+        markDirty();
+    }
     /// @brief Set the scroll position.
-    void setValue(float v)         { scrollValue_ = v; clampScroll(); markDirty(); }
+    void setValue(float v)
+    {
+        scrollValue_ = v;
+        clampScroll();
+        markDirty();
+    }
     /// @brief Get the current scroll position.
-    float value() const            { return scrollValue_; }
+    float value() const
+    {
+        return scrollValue_;
+    }
     /// @brief Get the maximum scroll value.
-    float maxValue() const         { return max2(0.0f, contentSize_ - viewSize_); }
+    float maxValue() const
+    {
+        return max2(0.0f, contentSize_ - viewSize_);
+    }
     /// @brief Check if scrolling is needed (content > view).
     bool needed() const
     {
@@ -57,7 +84,7 @@ public:
     Signal<float> scrolled;
 
     static constexpr float kBarThickness = 8.0f;
-    static constexpr float kMinThumbLen  = 20.0f;
+    static constexpr float kMinThumbLen = 20.0f;
 
 private:
     void clampScroll();
@@ -65,12 +92,12 @@ private:
 
     ScrollBarOrientation orientation_;
     float contentSize_ = 100.0f;
-    float viewSize_    = 50.0f;
+    float viewSize_ = 50.0f;
     float scrollValue_ = 0.0f;
 
-    bool  dragging_    = false;
-    float dragStart_   = 0.0f;
-    float dragOrigin_  = 0.0f;
+    bool dragging_ = false;
+    float dragStart_ = 0.0f;
+    float dragOrigin_ = 0.0f;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -91,7 +118,7 @@ public:
     ScrollView();
 
     // Set the single content widget (takes ownership). Returns it for chaining.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* setContent(Args&&... args)
     {
         auto* w = createChild<T>(std::forward<Args>(args)...);
@@ -104,26 +131,35 @@ public:
     /// @brief Set the vertical scroll offset.
     void setScrollY(float v);
     /// @brief Get the horizontal scroll offset.
-    float scrollX() const { return scrollX_; }
+    float scrollX() const
+    {
+        return scrollX_;
+    }
     /// @brief Get the vertical scroll offset.
-    float scrollY() const { return scrollY_; }
+    float scrollY() const
+    {
+        return scrollY_;
+    }
 
     // Widget overrides
-    Vec2f scrollOffset() const override { return {scrollX_, scrollY_}; }
-    void  layout() override;
-    void  paint(PaintContext& ctx) override;
-    void  onMouseScroll(MouseEvent& e) override;
+    Vec2f scrollOffset() const override
+    {
+        return { scrollX_, scrollY_ };
+    }
+    void layout() override;
+    void paint(PaintContext& ctx) override;
+    void onMouseScroll(MouseEvent& e) override;
 
 private:
     void updateBars();
 
-    Widget*    contentWidget_ = nullptr;
-    ScrollBar* vbar_          = nullptr;
-    ScrollBar* hbar_          = nullptr;
-    float      scrollX_       = 0.0f;
-    float      scrollY_       = 0.0f;
-    float      contentW_      = 0.0f;
-    float      contentH_      = 0.0f;
+    Widget* contentWidget_ = nullptr;
+    ScrollBar* vbar_ = nullptr;
+    ScrollBar* hbar_ = nullptr;
+    float scrollX_ = 0.0f;
+    float scrollY_ = 0.0f;
+    float contentW_ = 0.0f;
+    float contentH_ = 0.0f;
 
     static constexpr float kBarGap = 2.0f;
 };
@@ -152,12 +188,18 @@ public:
     /// @brief Remove all items.
     void clearItems();
     /// @brief Get the number of items.
-    int  itemCount() const { return static_cast<int>(items_.size()); }
+    int itemCount() const
+    {
+        return static_cast<int>(items_.size());
+    }
     /// @brief Get the text of an item.
     const String& itemText(int index) const;
 
     /// @brief Get the selected item index (-1 if none).
-    int  selectedIndex() const { return selectedIdx_; }
+    int selectedIndex() const
+    {
+        return selectedIdx_;
+    }
     /// @brief Set the selected item by index.
     void setSelectedIndex(int idx);
     /// @brief Deselect the current item.
@@ -172,19 +214,19 @@ public:
     void onKeyPress(KeyEvent& e) override;
 
     /// @brief Emitted when the selected item changes.
-    Signal<int> selectionChanged;  // -1 = deselected
+    Signal<int> selectionChanged; // -1 = deselected
 
 private:
     void clampScroll();
     void syncScrollBar();
     void scrollToItem(int idx);
     float itemHeight() const;
-    int   itemAtY(float absY) const;
+    int itemAtY(float absY) const;
 
     ct::Vector<String> items_;
-    int   selectedIdx_  = -1;
+    int selectedIdx_ = -1;
     float scrollOffset_ = 0.0f;
-    ScrollBar* vbar_    = nullptr;
+    ScrollBar* vbar_ = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -207,7 +249,7 @@ public:
 
     // Add a new row — creates a child widget of type T inside the list.
     // The widget is the "row root"; it will be sized to fill the row width.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* addRow(Args&&... args)
     {
         auto* w = createChild<T>(std::forward<Args>(args)...);
@@ -225,10 +267,16 @@ public:
     /// @brief Remove all rows.
     void clearRows();
     /// @brief Get the number of rows.
-    int  rowCount() const { return static_cast<int>(rows_.size()); }
+    int rowCount() const
+    {
+        return static_cast<int>(rows_.size());
+    }
 
     /// @brief Get the selected row index (-1 if none).
-    int  selectedIndex() const { return selectedIdx_; }
+    int selectedIndex() const
+    {
+        return selectedIdx_;
+    }
     /// @brief Set the selected row by index.
     void setSelectedIndex(int idx);
     /// @brief Deselect the current row.
@@ -240,7 +288,10 @@ public:
     void onMousePress(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
     // The rows scroll as children: hit testing and absoluteRect see the offset.
-    Vec2f scrollOffset() const override { return {0.0f, scrollOffset_}; }
+    Vec2f scrollOffset() const override
+    {
+        return { 0.0f, scrollOffset_ };
+    }
 
     Signal<int> selectionChanged;
 
@@ -250,13 +301,13 @@ private:
     void placeRow(int index);
     void scrollToRow(int index);
     void connectRowPress(Widget* target, Widget* row);
-    int  rowAtY(float absY) const;
+    int rowAtY(float absY) const;
     float rowH() const;
 
     ct::Vector<Widget*> rows_;
-    int         selectedIdx_  = -1;
-    float       scrollOffset_ = 0.0f;
-    ScrollBar*  vbar_         = nullptr;
+    int selectedIdx_ = -1;
+    float scrollOffset_ = 0.0f;
+    ScrollBar* vbar_ = nullptr;
 
     static constexpr float kRowPad = 4.0f;
 };

@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Widget.hpp"
+#include "MenuWidgets.hpp"
 #include "Signal.hpp"
 #include "Theme.hpp"
-#include "MenuWidgets.hpp"
-#include <igui/widgets/String.hpp>
-#include <ct/vector.hpp>
+#include "Widget.hpp"
 #include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Breadcrumbs — navigation path display
@@ -17,7 +17,9 @@
 //      bc->itemClicked.connect([](int index) { /* navigate */ });
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 class Breadcrumbs : public Widget
 {
@@ -29,18 +31,25 @@ public:
     /// @brief Set the path segments.
     void setPath(const ct::Vector<String>& segments);
     /// @brief Get the current path segments.
-    const ct::Vector<String>& path() const { return segments_; }
+    const ct::Vector<String>& path() const
+    {
+        return segments_;
+    }
     /// @brief Set the separator string (default ">").
-    void setSeparator(const String& sep) { separator_ = sep; markDirty(); }
+    void setSeparator(const String& sep)
+    {
+        separator_ = sep;
+        markDirty();
+    }
 
     /// @brief Emitted when a segment is clicked (index).
     Signal<int> itemClicked;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseLeave() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
     ct::Vector<String> segments_;
@@ -48,7 +57,10 @@ private:
     int hoveredIndex_ = -1;
 
     // Cached segment positions (rebuilt in paint)
-    struct SegmentRect { float x, w; };
+    struct SegmentRect
+    {
+        float x, w;
+    };
     mutable ct::Vector<SegmentRect> segRects_;
 
     int hitTestSegment(float localX, float localY) const;
@@ -71,13 +83,23 @@ public:
     SearchBar();
 
     /// @brief Set the placeholder text.
-    void setPlaceholder(const String& p) { placeholder_ = p; markDirty(); }
+    void setPlaceholder(const String& p)
+    {
+        placeholder_ = p;
+        markDirty();
+    }
     /// @brief Get the placeholder text.
-    const String& placeholder() const { return placeholder_; }
+    const String& placeholder() const
+    {
+        return placeholder_;
+    }
     /// @brief Set the current query text.
     void setText(const String& t);
     /// @brief Get the current query text.
-    const String& text() const { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
     /// @brief Clear the search text.
     void clear();
 
@@ -87,15 +109,15 @@ public:
     Signal<const String&> onSearch;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onKeyPress(KeyEvent& e) override;
-    void  onTextInput(KeyEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
+    void onTextInput(KeyEvent& e) override;
 
 private:
     String text_;
     String placeholder_ = "Search...";
-    int  cursorPos_ = 0;
+    int cursorPos_ = 0;
     float blinkTimer_ = 0;
     float scrollX_ = 0;
 
@@ -124,9 +146,16 @@ public:
     ~SplitButton() override;
 
     /// @brief Set the primary button text.
-    void setText(const String& t) { text_ = t; markDirty(); }
+    void setText(const String& t)
+    {
+        text_ = t;
+        markDirty();
+    }
     /// @brief Get the primary button text.
-    const String& text() const { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
 
     /// @brief Add a dropdown action with text and callback.
     void addAction(const String& text, ct::Function<void()> cb);
@@ -134,16 +163,16 @@ public:
     void addSeparator();
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseLeave() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
     String text_;
     Menu* dropMenu_ = nullptr;
-    bool  hoverMain_ = false;
-    bool  hoverDrop_ = false;
+    bool hoverMain_ = false;
+    bool hoverDrop_ = false;
 
     float dropArrowW() const; // width of the arrow area
 };
@@ -162,7 +191,7 @@ private:
 
 struct ContextMenuItem
 {
-    String text;                      // empty or "-" = separator
+    String text; // empty or "-" = separator
     ct::Function<void()> callback;
     String shortcut;
     bool enabled = true;
@@ -227,13 +256,27 @@ public:
     Signal<TreeNode*> nodeActivated;
 
     /// @brief Where a dragged node lands relative to the row under the pointer.
-    enum class DropZone { Before, Inside, After };
+    enum class DropZone
+    {
+        Before,
+        Inside,
+        After
+    };
 
     /// @brief Let rows be dragged onto other rows (off by default).
-    void setDragEnabled(bool enabled) { dragEnabled_ = enabled; }
-    bool dragEnabled() const          { return dragEnabled_; }
+    void setDragEnabled(bool enabled)
+    {
+        dragEnabled_ = enabled;
+    }
+    bool dragEnabled() const
+    {
+        return dragEnabled_;
+    }
     /// @brief Which nodes may be picked up. Unset allows all of them.
-    void setDragFilter(ct::Function<bool(TreeNode*)> filter) { dragFilter_ = std::move(filter); }
+    void setDragFilter(ct::Function<bool(TreeNode*)> filter)
+    {
+        dragFilter_ = std::move(filter);
+    }
     /// @brief Where a node may be dropped: dragged, target, zone. The target is null over the
     ///        empty area below the last row. Unset allows every spot.
     void setDropFilter(ct::Function<bool(TreeNode*, TreeNode*, DropZone)> filter)
@@ -250,20 +293,24 @@ public:
     void onMouseMove(MouseEvent& e) override;
     void onMouseLeave() override;
 
-    bool        isDragSource() const override;
+    bool isDragSource() const override;
     DragPayload onDragBegin() override;
-    void        onDragEnd(bool accepted) override;
-    bool        acceptsDrop(const DragPayload& p) override;
-    void        onDropReceive(const DragPayload& p) override;
+    void onDragEnd(bool accepted) override;
+    bool acceptsDrop(const DragPayload& p) override;
+    void onDropReceive(const DragPayload& p) override;
 
 private:
-    struct FlatRow { TreeNode* node; int depth; };
+    struct FlatRow
+    {
+        TreeNode* node;
+        int depth;
+    };
     struct DropSpot
     {
-        int        row    = -1;
-        DropZone   zone   = DropZone::Inside;
-        TreeNode*  target = nullptr;
-        bool       valid  = false;
+        int row = -1;
+        DropZone zone = DropZone::Inside;
+        TreeNode* target = nullptr;
+        bool valid = false;
     };
 
     DropSpot dropSpotAt(float localY);
@@ -271,24 +318,24 @@ private:
     void rebuildFlat();
     void flattenNode(TreeNode* n, int depth);
     float maxScroll() const;
-    int  hitTestRow(float localY) const;
+    int hitTestRow(float localY) const;
 
     ct::Vector<TreeNode*> roots_;
-    ct::Vector<FlatRow>   flatRows_;
+    ct::Vector<FlatRow> flatRows_;
     TreeNode* selected_ = nullptr;
     float scrollOffset_ = 0;
-    float rowHeight_    = 22.0f;
-    float indent_       = 16.0f;
-    bool  flatDirty_    = true;
-    int   hoveredRow_   = -1;
-    float hoverX_       = 0;
+    float rowHeight_ = 22.0f;
+    float indent_ = 16.0f;
+    bool flatDirty_ = true;
+    int hoveredRow_ = -1;
+    float hoverX_ = 0;
 
     bool dragEnabled_ = false;
     ct::Function<bool(TreeNode*)> dragFilter_;
     ct::Function<bool(TreeNode*, TreeNode*, DropZone)> dropFilter_;
     TreeNode* dragCandidate_ = nullptr;
-    TreeNode* dragNode_      = nullptr;
-    DropSpot  dropSpot_;
+    TreeNode* dragNode_ = nullptr;
+    DropSpot dropSpot_;
 
     // Per-node states (keyed by pointer)
     ct::HashMap<TreeNode*, bool> visMap_;
@@ -320,30 +367,50 @@ public:
     /// @brief Set content from a markdown string.
     void setMarkdown(const String& md);
     /// @brief Get the raw markdown string.
-    const String& markdown() const { return rawMd_; }
+    const String& markdown() const
+    {
+        return rawMd_;
+    }
 
     /// @brief Emitted when a link is clicked.
     Signal<const String&> linkClicked;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseLeave() override;
-    void  onMouseScroll(MouseEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
+    void onMouseScroll(MouseEvent& e) override;
 
 private:
     // Parsed inline span
-    enum class SpanStyle { Normal, Bold, Italic, Code, Link };
-    struct Span {
+    enum class SpanStyle
+    {
+        Normal,
+        Bold,
+        Italic,
+        Code,
+        Link
+    };
+    struct Span
+    {
         String text;
-        SpanStyle   style = SpanStyle::Normal;
-        String url;   // for Link spans
+        SpanStyle style = SpanStyle::Normal;
+        String url; // for Link spans
     };
 
     // Parsed block
-    enum class BlockType { Paragraph, Heading1, Heading2, Heading3, ListItem, CodeBlock };
-    struct Block {
+    enum class BlockType
+    {
+        Paragraph,
+        Heading1,
+        Heading2,
+        Heading3,
+        ListItem,
+        CodeBlock
+    };
+    struct Block
+    {
         BlockType type = BlockType::Paragraph;
         ct::Vector<Span> spans;
     };
@@ -353,10 +420,14 @@ private:
     String rawMd_;
     ct::Vector<Block> blocks_;
     float scrollY_ = 0;
-    int   hoveredLink_ = -1;
+    int hoveredLink_ = -1;
 
     // Link hit rects (rebuilt on paint)
-    struct LinkRect { float x, y, w, h; String url; };
+    struct LinkRect
+    {
+        float x, y, w, h;
+        String url;
+    };
     mutable ct::Vector<LinkRect> linkRects_;
 };
 
@@ -385,19 +456,37 @@ public:
     /// @brief Set the texture to display (FBO color attachment).
     void setTexture(ig::retained::TextureHandle tex, int w, int h);
     /// @brief Get the current texture handle.
-    ig::retained::TextureHandle texture() const { return tex_; }
+    ig::retained::TextureHandle texture() const
+    {
+        return tex_;
+    }
 
     /// @brief Set orbit speed (degrees per pixel).
-    void setOrbitSpeed(float s) { orbitSpeed_ = s; }
+    void setOrbitSpeed(float s)
+    {
+        orbitSpeed_ = s;
+    }
     /// @brief Set pan speed (units per pixel).
-    void setPanSpeed(float s)   { panSpeed_ = s; }
+    void setPanSpeed(float s)
+    {
+        panSpeed_ = s;
+    }
     /// @brief Set zoom speed (units per scroll tick).
-    void setZoomSpeed(float s)  { zoomSpeed_ = s; }
+    void setZoomSpeed(float s)
+    {
+        zoomSpeed_ = s;
+    }
 
     /// @brief Get the current yaw angle (degrees).
-    float yaw()   const { return yaw_; }
+    float yaw() const
+    {
+        return yaw_;
+    }
     /// @brief Get the current pitch angle (degrees).
-    float pitch() const { return pitch_; }
+    float pitch() const
+    {
+        return pitch_;
+    }
 
     /// @brief Set the camera angles programmatically.
     void setOrbit(float yaw, float pitch);
@@ -412,27 +501,32 @@ public:
     Signal<int, int> onResize;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseScroll(MouseEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
 
 private:
     ig::retained::TextureHandle tex_ = {};
     int texW_ = 0, texH_ = 0;
 
     float orbitSpeed_ = 0.3f;
-    float panSpeed_   = 1.0f;
-    float zoomSpeed_  = 1.0f;
+    float panSpeed_ = 1.0f;
+    float zoomSpeed_ = 1.0f;
 
-    float yaw_   = 0, pitch_ = 0;
+    float yaw_ = 0, pitch_ = 0;
 
     // Drag state
-    enum class DragMode { None, Orbit, Pan };
+    enum class DragMode
+    {
+        None,
+        Orbit,
+        Pan
+    };
     DragMode dragMode_ = DragMode::None;
-    float    dragStartX_ = 0, dragStartY_ = 0;
-    float    dragYaw_ = 0, dragPitch_ = 0;
+    float dragStartX_ = 0, dragStartY_ = 0;
+    float dragYaw_ = 0, dragPitch_ = 0;
 
     int lastW_ = 0, lastH_ = 0; // for resize detection
 };

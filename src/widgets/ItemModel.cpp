@@ -14,20 +14,25 @@ void ListModel::sort(int column, bool ascending)
     ct::Vector<int> idx(rows_.size());
     for (int i = 0; i < static_cast<int>(idx.size()); ++i) idx[i] = i;
 
-    std::sort(idx.begin(), idx.end(), [&](int a, int b) {
-        const auto& va = (column < static_cast<int>(rows_[a].size())) ? rows_[a][column] : "";
-        const auto& vb = (column < static_cast<int>(rows_[b].size())) ? rows_[b][column] : "";
-        return ascending ? (va < vb) : (va > vb);
-    });
+    std::sort(idx.begin(), idx.end(),
+            [&](int a, int b)
+            {
+                const auto& va =
+                        (column < static_cast<int>(rows_[a].size())) ? rows_[a][column] : "";
+                const auto& vb =
+                        (column < static_cast<int>(rows_[b].size())) ? rows_[b][column] : "";
+                return ascending ? (va < vb) : (va > vb);
+            });
 
     // Reorder rows and checked according to idx
     ct::Vector<ct::Vector<String>> newRows(rows_.size());
     ct::Vector<bool> newChecked(checked_.size());
-    for (int i = 0; i < static_cast<int>(idx.size()); ++i) {
-        newRows[i]    = std::move(rows_[idx[i]]);
+    for (int i = 0; i < static_cast<int>(idx.size()); ++i)
+    {
+        newRows[i] = std::move(rows_[idx[i]]);
         newChecked[i] = checked_[idx[i]];
     }
-    rows_    = std::move(newRows);
+    rows_ = std::move(newRows);
     checked_ = std::move(newChecked);
     layoutChanged.emit();
 }
@@ -37,18 +42,19 @@ void ListModel::sort(int column, bool ascending)
 // ═════════════════════════════════════════════════════════════════════════════
 
 SortFilterProxyModel::SortFilterProxyModel(AbstractItemModel* source)
-    : source_(source)
+        : source_(source)
 {
     // Re-invalidate when source changes
     sourceSlots_.reset = source_->modelReset.connect([this] { invalidate(); });
     sourceSlots_.inserted = source_->rowsInserted.connect([this] { invalidate(); });
     sourceSlots_.removed = source_->rowsRemoved.connect([this] { invalidate(); });
     sourceSlots_.layout = source_->layoutChanged.connect([this] { invalidate(); });
-    sourceSlots_.destroyed = source_->destroyed.connect([this]
-    {
-        source_ = nullptr;
-        sourceSlots_ = Connections();
-    });
+    sourceSlots_.destroyed = source_->destroyed.connect(
+            [this]
+            {
+                source_ = nullptr;
+                sourceSlots_ = Connections();
+            });
 }
 
 SortFilterProxyModel::~SortFilterProxyModel()
@@ -89,7 +95,7 @@ int SortFilterProxyModel::flags(const ModelIndex& idx) const
 
 void SortFilterProxyModel::sort(int column, bool ascending)
 {
-    sortCol_       = column;
+    sortCol_ = column;
     sortAscending_ = ascending;
     invalidate();
     layoutChanged.emit();
@@ -107,8 +113,7 @@ ModelIndex SortFilterProxyModel::mapFromSource(const ModelIndex& sourceIdx) cons
 {
     rebuild();
     for (int i = 0; i < static_cast<int>(mapping_.size()); ++i)
-        if (mapping_[i] == sourceIdx.row())
-            return ModelIndex(i, sourceIdx.column());
+        if (mapping_[i] == sourceIdx.row()) return ModelIndex(i, sourceIdx.column());
     return {};
 }
 
@@ -121,12 +126,12 @@ void SortFilterProxyModel::invalidate()
 static bool containsCI(const String& haystack, const String& needle)
 {
     if (needle.empty()) return true;
-    auto it = std::search(haystack.begin(), haystack.end(),
-                          needle.begin(), needle.end(),
-                          [](char a, char b) {
-                              return std::tolower(static_cast<unsigned char>(a))
-                                  == std::tolower(static_cast<unsigned char>(b));
-                          });
+    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+            [](char a, char b)
+            {
+                return std::tolower(static_cast<unsigned char>(a)) ==
+                       std::tolower(static_cast<unsigned char>(b));
+            });
     return it != haystack.end();
 }
 
@@ -139,11 +144,15 @@ void SortFilterProxyModel::rebuild() const
     int rows = source_->rowCount();
     for (int i = 0; i < rows; ++i)
     {
-        if (filterCol_ >= 0 && !filterText_.empty()) {
+        if (filterCol_ >= 0 && !filterText_.empty())
+        {
             auto cellVal = source_->data(source_->index(i, filterCol_));
-            if (caseSensitive_) {
+            if (caseSensitive_)
+            {
                 if (cellVal.find(filterText_) == String::npos) continue;
-            } else {
+            }
+            else
+            {
                 if (!containsCI(cellVal, filterText_)) continue;
             }
         }
@@ -151,11 +160,14 @@ void SortFilterProxyModel::rebuild() const
     }
 
     // Sort
-    if (sortCol_ >= 0) {
-        std::sort(mapping_.begin(), mapping_.end(), [&](int a, int b) {
-            auto va = source_->data(source_->index(a, sortCol_));
-            auto vb = source_->data(source_->index(b, sortCol_));
-            return sortAscending_ ? (va < vb) : (va > vb);
-        });
+    if (sortCol_ >= 0)
+    {
+        std::sort(mapping_.begin(), mapping_.end(),
+                [&](int a, int b)
+                {
+                    auto va = source_->data(source_->index(a, sortCol_));
+                    auto vb = source_->data(source_->index(b, sortCol_));
+                    return sortAscending_ ? (va < vb) : (va > vb);
+                });
     }
 }

@@ -30,7 +30,7 @@
 #include <igui/Gui.hpp>
 
 #if IGUI_BENCH_HAS_FONT
-#  include <igui/FontAtlas.hpp>
+#include <igui/FontAtlas.hpp>
 #endif
 
 #include <cmath>
@@ -40,7 +40,7 @@
 #include <vector>
 
 #if defined(__unix__) || defined(__APPLE__)
-#  include <sys/resource.h>
+#include <sys/resource.h>
 #endif
 
 namespace bench
@@ -57,18 +57,24 @@ namespace
 class CountingBackend : public ig::Backend
 {
 public:
-    ig::TextProvider *provider;
+    ig::TextProvider* provider;
     long long vertices;
     long long indices;
     long long commands;
 
-    CountingBackend() : provider(nullptr), vertices(0), indices(0), commands(0), textList_() {}
+    CountingBackend()
+            : provider(nullptr),
+              vertices(0),
+              indices(0),
+              commands(0),
+              textList_()
+    {
+    }
 
     ig::TextMetrics measureText(ig::FontId font, ig::StringView text, float logicalSize,
-                                float) override
+            float) override
     {
-        if (provider)
-            return provider->measureText(font, text, logicalSize);
+        if (provider) return provider->measureText(font, text, logicalSize);
         ig::TextMetrics metrics;
         metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f;
         metrics.height = logicalSize;
@@ -77,29 +83,27 @@ public:
         return metrics;
     }
 
-    bool render(const ig::DrawData &data) override
+    bool render(const ig::DrawData& data) override
     {
         vertices = static_cast<long long>(data.vertices.size());
         indices = static_cast<long long>(data.indices.size());
         // One draw call per command, which is what the SDL2 backend issues.
         commands = static_cast<long long>(data.commands.size());
 
-        if (!provider)
-            return true;
+        if (!provider) return true;
 
         textList_.clear();
         for (std::size_t i = 0; i < data.commands.size(); ++i)
         {
-            const ig::DrawCommand &command = data.commands[i];
-            if (command.type != ig::DrawCommandType::Text)
-                continue;
-            const ig::TextCommand &text = command.payload.text;
+            const ig::DrawCommand& command = data.commands[i];
+            if (command.type != ig::DrawCommandType::Text) continue;
+            const ig::TextCommand& text = command.payload.text;
             if (text.textOffset > data.textBytes.size() ||
-                text.textSize > data.textBytes.size() - text.textOffset)
+                    text.textSize > data.textBytes.size() - text.textOffset)
                 continue;
             const ig::StringView view(data.textBytes.data() + text.textOffset, text.textSize);
             provider->appendText(textList_, text.font, view, text.position, text.logicalSize,
-                                 text.color, text.clip);
+                    text.color, text.clip);
         }
         const ig::DrawData shaped = textList_.data(data.displaySize, data.dpiScale);
         vertices += static_cast<long long>(shaped.vertices.size());
@@ -117,22 +121,26 @@ private:
 class CountingTextProvider : public ig::TextProvider
 {
 public:
-    explicit CountingTextProvider(const ig::TextProvider &inner)
-        : measureCalls(0), measureChars(0), shapeCalls(0), shapeChars(0), inner_(inner)
+    explicit CountingTextProvider(const ig::TextProvider& inner)
+            : measureCalls(0),
+              measureChars(0),
+              shapeCalls(0),
+              shapeChars(0),
+              inner_(inner)
     {
     }
 
     ig::TextMetrics measureText(ig::FontId font, ig::StringView text,
-                                float logicalSize) const override
+            float logicalSize) const override
     {
         ++measureCalls;
         measureChars += static_cast<long long>(text.size());
         return inner_.measureText(font, text, logicalSize);
     }
 
-    bool appendText(ig::DrawList &drawList, ig::FontId font, ig::StringView text,
-                    const ig::Vec2 &position, float logicalSize, const ig::Color &color,
-                    const ig::Rect &clip) const override
+    bool appendText(ig::DrawList& drawList, ig::FontId font, ig::StringView text,
+            const ig::Vec2& position, float logicalSize, const ig::Color& color,
+            const ig::Rect& clip) const override
     {
         ++shapeCalls;
         shapeChars += static_cast<long long>(text.size());
@@ -142,7 +150,10 @@ public:
     // Forwarded, not defaulted: the counter is an instrument, so the frame has
     // to be built exactly as it would be without it - including the white texel
     // the atlas offers for solid geometry.
-    ig::TextProvider::SolidStyle solidStyle() const override { return inner_.solidStyle(); }
+    ig::TextProvider::SolidStyle solidStyle() const override
+    {
+        return inner_.solidStyle();
+    }
 
     mutable long long measureCalls;
     mutable long long measureChars;
@@ -150,7 +161,7 @@ public:
     mutable long long shapeChars;
 
 private:
-    const ig::TextProvider &inner_;
+    const ig::TextProvider& inner_;
 };
 
 struct State
@@ -165,20 +176,23 @@ struct State
     ig::String name;
 
     State()
-        : enabled(true), advancedOpen(true), nodeOpen(true), volume(0.35f), quality(1),
-          plotOffset(0), name("player")
+            : enabled(true),
+              advancedOpen(true),
+              nodeOpen(true),
+              volume(0.35f),
+              quality(1),
+              plotOffset(0),
+              name("player")
     {
     }
 };
 
-const ig::StringView kQualityItems[] = {
-    ig::StringView("low"), ig::StringView("medium"), ig::StringView("high"),
-    ig::StringView("very high"), ig::StringView("extreme")
-};
+const ig::StringView kQualityItems[] = { ig::StringView("low"), ig::StringView("medium"),
+    ig::StringView("high"), ig::StringView("very high"), ig::StringView("extreme") };
 
 // One repetition of the canonical block. Every widget call bumps `widgets` so
 // the two runners can be compared on workload, not only on time.
-void galleryBlock(ig::Context &ui, State &state, int index, long long &widgets)
+void galleryBlock(ig::Context& ui, State& state, int index, long long& widgets)
 {
     char row[32];
     std::snprintf(row, sizeof(row), "row %d", index);
@@ -215,7 +229,7 @@ void galleryBlock(ig::Context &ui, State &state, int index, long long &widgets)
     }
 }
 
-void textBlock(ig::Context &ui, int index, long long &widgets)
+void textBlock(ig::Context& ui, int index, long long& widgets)
 {
     char row[64];
     for (int i = 0; i < 10; ++i)
@@ -228,14 +242,13 @@ void textBlock(ig::Context &ui, int index, long long &widgets)
 
 // A mesma serie nos dois runners: um anel de 90 amostras preenchido uma vez, para
 // que o que se mede seja a widget e nao a geracao dos dados.
-const float *plotSamples()
+const float* plotSamples()
 {
     static float values[90];
     static bool filled = false;
     if (!filled)
     {
-        for (int i = 0; i < 90; ++i)
-            values[i] = std::cos(static_cast<float>(i) * 0.1f);
+        for (int i = 0; i < 90; ++i) values[i] = std::cos(static_cast<float>(i) * 0.1f);
         filled = true;
     }
     return values;
@@ -244,19 +257,19 @@ const float *plotSamples()
 // Um grafico de linha e um histograma sobre a mesma serie, com a largura e a
 // altura dadas (nos dois lados) para os dois desenharem o mesmo numero de
 // colunas e a legenda ser comparavel.
-void plotsBlock(ig::Context &ui, int index, int offset, long long &widgets)
+void plotsBlock(ig::Context& ui, int index, int offset, long long& widgets)
 {
     char label[32];
     std::snprintf(label, sizeof(label), "Lines %d", index);
-    ui.plotLines(label, plotSamples(), 90, 400.0f, 128.0f, offset,
-                 ig::StringView("avg 0.500000"), -1.0f, 1.0f);
+    ui.plotLines(label, plotSamples(), 90, 400.0f, 128.0f, offset, ig::StringView("avg 0.500000"),
+            -1.0f, 1.0f);
     ++widgets;
     std::snprintf(label, sizeof(label), "Bars %d", index);
     ui.plotHistogram(label, plotSamples(), 90, 400.0f, 80.0f, 0, ig::StringView(), -1.0f, 1.0f);
     ++widgets;
 }
 
-void smallBlock(ig::Context &ui, State &state, int index, long long &widgets)
+void smallBlock(ig::Context& ui, State& state, int index, long long& widgets)
 {
     char row[32];
     std::snprintf(row, sizeof(row), "panel %d", index);
@@ -271,17 +284,15 @@ void smallBlock(ig::Context &ui, State &state, int index, long long &widgets)
     ++widgets;
 }
 
-void gridPosition(int index, int columns, float width, float height, float gap,
-                  ig::Rect &out)
+void gridPosition(int index, int columns, float width, float height, float gap, ig::Rect& out)
 {
     const int column = columns > 0 ? index % columns : 0;
     const int row = columns > 0 ? index / columns : 0;
     out = ig::Rect(gap + static_cast<float>(column) * (width + gap),
-                   gap + static_cast<float>(row) * (height + gap), width, height);
+            gap + static_cast<float>(row) * (height + gap), width, height);
 }
 
-void buildScene(ig::Context &ui, State &state, const Config &config, int frame,
-                long long &widgets)
+void buildScene(ig::Context& ui, State& state, const Config& config, int frame, long long& widgets)
 {
     // Moving one value every frame keeps the submission honest: a scene that
     // never changes is the one case where a library may skip work, and real
@@ -292,8 +303,7 @@ void buildScene(ig::Context &ui, State &state, const Config &config, int frame,
     if (config.scene == "windows")
     {
         int columns = 1;
-        while (columns * columns < config.windows)
-            ++columns;
+        while (columns * columns < config.windows) ++columns;
         for (int i = 0; i < config.windows; ++i)
         {
             char title[32];
@@ -311,13 +321,11 @@ void buildScene(ig::Context &ui, State &state, const Config &config, int frame,
 
     const int blockCount = config.scene == "basic" ? 1 : config.blocks;
     const ig::Rect window(40.0f, 40.0f, 560.0f, config.height - 80.0f);
-    if (!ui.beginWindow("Gallery", window))
-        return;
+    if (!ui.beginWindow("Gallery", window)) return;
 
     for (int i = 0; i < blockCount; ++i)
     {
-        if (config.scene == "text")
-            textBlock(ui, i, widgets);
+        if (config.scene == "text") textBlock(ui, i, widgets);
         else if (config.scene == "plots")
             plotsBlock(ui, i, state.plotOffset, widgets);
         else
@@ -326,21 +334,21 @@ void buildScene(ig::Context &ui, State &state, const Config &config, int frame,
     ui.endWindow();
 }
 
-void dumpCommands(const ig::DrawData &data)
+void dumpCommands(const ig::DrawData& data)
 {
     std::printf("igui commands: %u\n", static_cast<unsigned>(data.commands.size()));
     for (std::size_t i = 0; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
+        const ig::DrawCommand& command = data.commands[i];
         if (command.type == ig::DrawCommandType::Geometry)
         {
-            const ig::GeometryCommand &g = command.payload.geometry;
+            const ig::GeometryCommand& g = command.payload.geometry;
             // Bounding box of what the command draws, next to its clip: when
             // the box pokes out of the clip the scissor is doing real work.
             float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
             for (uint32_t k = 0; k < g.indexCount; ++k)
             {
-                const ig::Vec2 &p = data.vertices[data.indices[g.firstIndex + k]].position;
+                const ig::Vec2& p = data.vertices[data.indices[g.firstIndex + k]].position;
                 minX = p.x < minX ? p.x : minX;
                 minY = p.y < minY ? p.y : minY;
                 maxX = p.x > maxX ? p.x : maxX;
@@ -348,19 +356,19 @@ void dumpCommands(const ig::DrawData &data)
             }
             std::printf("  %3u geom  clip=(%7.1f,%7.1f %7.1fx%7.1f) tex=%lu idx=%-5u "
                         "bbox=(%7.1f,%7.1f)-(%7.1f,%7.1f)\n",
-                        static_cast<unsigned>(i), static_cast<double>(g.clip.x),
-                        static_cast<double>(g.clip.y), static_cast<double>(g.clip.width),
-                        static_cast<double>(g.clip.height), static_cast<unsigned long>(g.texture.value), g.indexCount,
-                        static_cast<double>(minX), static_cast<double>(minY),
-                        static_cast<double>(maxX), static_cast<double>(maxY));
+                    static_cast<unsigned>(i), static_cast<double>(g.clip.x),
+                    static_cast<double>(g.clip.y), static_cast<double>(g.clip.width),
+                    static_cast<double>(g.clip.height), static_cast<unsigned long>(g.texture.value),
+                    g.indexCount, static_cast<double>(minX), static_cast<double>(minY),
+                    static_cast<double>(maxX), static_cast<double>(maxY));
         }
         else
         {
-            const ig::TextCommand &t = command.payload.text;
+            const ig::TextCommand& t = command.payload.text;
             std::printf("  %3u text  clip=(%7.1f,%7.1f %7.1fx%7.1f) bytes=%u\n",
-                        static_cast<unsigned>(i), static_cast<double>(t.clip.x),
-                        static_cast<double>(t.clip.y), static_cast<double>(t.clip.width),
-                        static_cast<double>(t.clip.height), t.textSize);
+                    static_cast<unsigned>(i), static_cast<double>(t.clip.x),
+                    static_cast<double>(t.clip.y), static_cast<double>(t.clip.width),
+                    static_cast<double>(t.clip.height), t.textSize);
         }
     }
 }
@@ -369,21 +377,20 @@ long long readPeakRssKb()
 {
 #if defined(__unix__) || defined(__APPLE__)
     struct rusage usage;
-    if (::getrusage(RUSAGE_SELF, &usage) == 0)
-        return static_cast<long long>(usage.ru_maxrss);
+    if (::getrusage(RUSAGE_SELF, &usage) == 0) return static_cast<long long>(usage.ru_maxrss);
 #endif
     return -1;
 }
 
 } // namespace
 
-Result runIgui(const Config &config)
+Result runIgui(const Config& config)
 {
     Result result;
     result.lib = "igui";
 
     CountingBackend backend;
-    CountingTextProvider *counter = nullptr;
+    CountingTextProvider* counter = nullptr;
 #if IGUI_BENCH_HAS_FONT
     ig::FontAtlas atlas;
     CountingTextProvider textProvider(atlas);
@@ -437,7 +444,7 @@ Result runIgui(const Config &config)
         const double start = cpuNowUs();
         ui.beginFrame(ig::FrameInfo(config.width, config.height, 1.0f, 1.0f / 60.0f));
         buildScene(ui, state, config, frame, widgets);
-        const ig::DrawData &data = ui.endFrame();
+        const ig::DrawData& data = ui.endFrame();
         const double submitted = cpuNowUs();
 
         backend.render(data);
@@ -448,8 +455,7 @@ Result runIgui(const Config &config)
             submit.push_back(submitted - start);
             render.push_back(rendered - submitted);
         }
-        if (config.dump && frame == config.warmup + config.frames - 1)
-            dumpCommands(data);
+        if (config.dump && frame == config.warmup + config.frames - 1) dumpCommands(data);
     }
 
     result.ran = true;

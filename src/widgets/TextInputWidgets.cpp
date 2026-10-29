@@ -1,17 +1,18 @@
-#include "pch.hpp"
 #include "TextInputWidgets.hpp"
-#include "WidgetApp.hpp"
 #include "Utf8.hpp"
+#include "WidgetApp.hpp"
+#include "pch.hpp"
 #include <algorithm>
-#include <cstring>
 #include <cmath>
+#include <cstring>
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  TextInput - single-line text input
 // ─────────────────────────────────────────────────────────────────────────────
 
 TextInput::TextInput(const String& text, Mode mode)
-    : text_(text), mode_(mode)
+        : text_(text),
+          mode_(mode)
 {
     acceptsFocus_ = true;
     setCursor(CursorType::IBeam);
@@ -34,8 +35,8 @@ void TextInput::setText(const String& t)
 void TextInput::selectAll()
 {
     selStart_ = 0;
-    selEnd_   = utf8Length(text_);
-    cursor_   = selEnd_;
+    selEnd_ = utf8Length(text_);
+    cursor_ = selEnd_;
     markDirty();
 }
 
@@ -64,7 +65,7 @@ void TextInput::setCursorPos(int pos)
 Widget::Vec2f TextInput::sizeHint() const
 {
     const auto& t = Theme::instance();
-    return {120.0f, t.inputHeight};
+    return { 120.0f, t.inputHeight };
 }
 
 String TextInput::displayText() const
@@ -74,8 +75,7 @@ String TextInput::displayText() const
         int len = utf8Length(text_);
         String result;
         result.reserve(static_cast<size_t>(len) * 3);
-        for (int i = 0; i < len; ++i)
-            result += "\xe2\x80\xa2";  // UTF-8 bullet •
+        for (int i = 0; i < len; ++i) result += "\xe2\x80\xa2"; // UTF-8 bullet •
         return result;
     }
     return text_;
@@ -112,9 +112,9 @@ void TextInput::deleteSelection()
     int lo = std::min(selStart_, selEnd_);
     int hi = std::max(selStart_, selEnd_);
     size_t byteStart = utf8ByteOffset(text_, lo);
-    size_t byteEnd   = utf8ByteOffset(text_, hi);
+    size_t byteEnd = utf8ByteOffset(text_, hi);
     text_.erase(byteStart, byteEnd - byteStart);
-    cursor_   = lo;
+    cursor_ = lo;
     selStart_ = selEnd_ = cursor_;
 }
 
@@ -122,7 +122,8 @@ void TextInput::insertText(const String& t)
 {
     if (mode_ == Mode::ReadOnly) return;
     if (mode_ == Mode::NumberOnly)
-        for (char c : t) if (!isNumberChar(c)) return;
+        for (char c: t)
+            if (!isNumberChar(c)) return;
 
     deleteSelection();
     size_t bytePos = utf8ByteOffset(text_, cursor_);
@@ -136,17 +137,18 @@ void TextInput::insertText(const String& t)
 void TextInput::ensureCursorVisible(const ig::retained::Font* font)
 {
     if (!font) return;
-    float pad    = Theme::instance().padding;
+    float pad = Theme::instance().padding;
     float fieldW = rect_.w - pad * 2;
-    float cx     = cursorXOffset(font, cursor_);
-    if (cx - scrollX_ < 0)        scrollX_ = cx;
-    else if (cx - scrollX_ > fieldW) scrollX_ = cx - fieldW;
+    float cx = cursorXOffset(font, cursor_);
+    if (cx - scrollX_ < 0) scrollX_ = cx;
+    else if (cx - scrollX_ > fieldW)
+        scrollX_ = cx - fieldW;
 }
 
 void TextInput::clampCursor()
 {
     int len = utf8Length(text_);
-    if (cursor_ < 0)   cursor_ = 0;
+    if (cursor_ < 0) cursor_ = 0;
     if (cursor_ > len) cursor_ = len;
 }
 
@@ -170,23 +172,23 @@ void TextInput::paint(PaintContext& ctx)
     const bool enabled = isEnabledInTree();
 
     // Background
-    Color bg = !enabled ? t.panelColor : ((isFocused() || isHovered()) ? t.inputBgHover : t.inputBg);
+    Color bg =
+            !enabled ? t.panelColor : ((isFocused() || isHovered()) ? t.inputBgHover : t.inputBg);
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
-                                   t.borderRadius, 6, true);
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, true);
     }
 
     // Border
-    Color bc = isFocused() ? t.focusColor : ((enabled && isHovered()) ? t.inputBorderHover : t.inputBorder);
+    Color bc = isFocused() ? t.focusColor
+                           : ((enabled && isHovered()) ? t.inputBorderHover : t.inputBorder);
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
         ctx.line.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
-                                   t.borderRadius, 6, false);
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, false);
     }
 
     ctx.font.SetFontSize(t.fontSize);
@@ -197,10 +199,10 @@ void TextInput::paint(PaintContext& ctx)
     const ig::retained::Font* font = ctx.buFont;
     ensureCursorVisible(font);
 
-    Rect textArea = {abs.x + pad, abs.y, abs.w - pad * 2, abs.h};
-    float textX   = textArea.x - scrollX_;
-    float asc     = ctx.font.GetAscender();
-    float textY   = abs.y + (abs.h + asc) * 0.5f;
+    Rect textArea = { abs.x + pad, abs.y, abs.w - pad * 2, abs.h };
+    float textX = textArea.x - scrollX_;
+    float asc = ctx.font.GetAscender();
+    float textY = abs.y + (abs.h + asc) * 0.5f;
 
     ctx.pushClip(textArea);
     if (text_.empty() && !isFocused() && !placeholder_.empty())
@@ -215,18 +217,18 @@ void TextInput::paint(PaintContext& ctx)
         // Selection highlight
         if (hasSelection() && isFocused() && font)
         {
-            int lo  = std::min(selStart_, selEnd_);
-            int hi  = std::max(selStart_, selEnd_);
+            int lo = std::min(selStart_, selEnd_);
+            int hi = std::max(selStart_, selEnd_);
             float sx1 = textArea.x + cursorXOffset(font, lo) - scrollX_;
             float sx2 = textArea.x + cursorXOffset(font, hi) - scrollX_;
             float cx1 = std::max(sx1, textArea.x);
             float cx2 = std::min(sx2, textArea.x + textArea.w);
             if (cx1 < cx2)
             {
-                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                                  t.selectionColor.b, t.selectionColor.a);
+                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
+                        t.selectionColor.a);
                 ctx.fill.Rectangle(static_cast<int>(cx1), static_cast<int>(abs.y + 2),
-                                    static_cast<int>(cx2 - cx1), static_cast<int>(abs.h - 4), true);
+                        static_cast<int>(cx2 - cx1), static_cast<int>(abs.h - 4), true);
             }
         }
 
@@ -242,7 +244,7 @@ void TextInput::paint(PaintContext& ctx)
             {
                 ctx.line.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
                 ctx.line.Line2D(static_cast<int>(cx), static_cast<int>(abs.y + 3),
-                                static_cast<int>(cx), static_cast<int>(abs.y + abs.h - 3));
+                        static_cast<int>(cx), static_cast<int>(abs.y + abs.h - 3));
             }
         }
     }
@@ -254,7 +256,7 @@ void TextInput::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
     const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
-    cursor_   = hitTestChar(font, e.localX);
+    cursor_ = hitTestChar(font, e.localX);
     selStart_ = selEnd_ = cursor_;
     dragging_ = true;
     blinkTimer_ = 0;
@@ -264,7 +266,11 @@ void TextInput::onMousePress(MouseEvent& e)
 
 void TextInput::onMouseRelease(MouseEvent& e)
 {
-    if (dragging_) { dragging_ = false; e.consumed = true; }
+    if (dragging_)
+    {
+        dragging_ = false;
+        e.consumed = true;
+    }
 }
 
 void TextInput::onMouseMove(MouseEvent& e)
@@ -294,99 +300,185 @@ void TextInput::onKeyPress(KeyEvent& e)
     {
         switch (e.key)
         {
-        case ig::retained::Key::A: selectAll(); e.consumed = true; return;
-        case ig::retained::Key::C:
-        {
-            String sel = selectedText();
-            if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
-            e.consumed = true; return;
-        }
-        case ig::retained::Key::X:
-        {
-            if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
-            String sel = selectedText();
-            if (!sel.empty()) { WidgetApp::instance().setClipboardText(sel.c_str()); deleteSelection(); markDirty(); textChanged.emit(text_); }
-            e.consumed = true; return;
-        }
-        case ig::retained::Key::V:
-        {
-            if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
-            String clip = WidgetApp::instance().getClipboardText();
-            if (!clip.empty()) {
-                clip.erase(std::remove(clip.begin(), clip.end(), '\n'), clip.end());
-                clip.erase(std::remove(clip.begin(), clip.end(), '\r'), clip.end());
-                insertText(clip);
+            case ig::retained::Key::A:
+                selectAll();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::C:
+            {
+                String sel = selectedText();
+                if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
+                e.consumed = true;
+                return;
             }
-            e.consumed = true; return;
-        }
-        default: break;
+            case ig::retained::Key::X:
+            {
+                if (mode_ == Mode::ReadOnly)
+                {
+                    e.consumed = true;
+                    return;
+                }
+                String sel = selectedText();
+                if (!sel.empty())
+                {
+                    WidgetApp::instance().setClipboardText(sel.c_str());
+                    deleteSelection();
+                    markDirty();
+                    textChanged.emit(text_);
+                }
+                e.consumed = true;
+                return;
+            }
+            case ig::retained::Key::V:
+            {
+                if (mode_ == Mode::ReadOnly)
+                {
+                    e.consumed = true;
+                    return;
+                }
+                String clip = WidgetApp::instance().getClipboardText();
+                if (!clip.empty())
+                {
+                    clip.erase(std::remove(clip.begin(), clip.end(), '\n'), clip.end());
+                    clip.erase(std::remove(clip.begin(), clip.end(), '\r'), clip.end());
+                    insertText(clip);
+                }
+                e.consumed = true;
+                return;
+            }
+            default:
+                break;
         }
     }
 
     switch (e.key)
     {
-    case ig::retained::Key::Left:
-        if (cursor_ > 0) {
-            if (e.shift) { cursor_--; selEnd_ = cursor_; }
-            else { cursor_ = hasSelection() ? std::min(selStart_, selEnd_) : cursor_ - 1; selStart_ = selEnd_ = cursor_; }
-        } else if (!e.shift) selStart_ = selEnd_ = cursor_;
-        markDirty(); e.consumed = true; break;
+        case ig::retained::Key::Left:
+            if (cursor_ > 0)
+            {
+                if (e.shift)
+                {
+                    cursor_--;
+                    selEnd_ = cursor_;
+                }
+                else
+                {
+                    cursor_ = hasSelection() ? std::min(selStart_, selEnd_) : cursor_ - 1;
+                    selStart_ = selEnd_ = cursor_;
+                }
+            }
+            else if (!e.shift)
+                selStart_ = selEnd_ = cursor_;
+            markDirty();
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Right:
-        if (cursor_ < len) {
-            if (e.shift) { cursor_++; selEnd_ = cursor_; }
-            else { cursor_ = hasSelection() ? std::max(selStart_, selEnd_) : cursor_ + 1; selStart_ = selEnd_ = cursor_; }
-        } else if (!e.shift) selStart_ = selEnd_ = cursor_;
-        markDirty(); e.consumed = true; break;
+        case ig::retained::Key::Right:
+            if (cursor_ < len)
+            {
+                if (e.shift)
+                {
+                    cursor_++;
+                    selEnd_ = cursor_;
+                }
+                else
+                {
+                    cursor_ = hasSelection() ? std::max(selStart_, selEnd_) : cursor_ + 1;
+                    selStart_ = selEnd_ = cursor_;
+                }
+            }
+            else if (!e.shift)
+                selStart_ = selEnd_ = cursor_;
+            markDirty();
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Home:
-        cursor_ = 0;
-        if (e.shift) selEnd_ = cursor_; else selStart_ = selEnd_ = cursor_;
-        markDirty(); e.consumed = true; break;
+        case ig::retained::Key::Home:
+            cursor_ = 0;
+            if (e.shift) selEnd_ = cursor_;
+            else
+                selStart_ = selEnd_ = cursor_;
+            markDirty();
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::End:
-        cursor_ = len;
-        if (e.shift) selEnd_ = cursor_; else selStart_ = selEnd_ = cursor_;
-        markDirty(); e.consumed = true; break;
+        case ig::retained::Key::End:
+            cursor_ = len;
+            if (e.shift) selEnd_ = cursor_;
+            else
+                selStart_ = selEnd_ = cursor_;
+            markDirty();
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Backspace:
-        if (mode_ == Mode::ReadOnly) { e.consumed = true; break; }
-        if (hasSelection()) { deleteSelection(); }
-        else if (cursor_ > 0) {
-            size_t byteEnd   = utf8ByteOffset(text_, cursor_);
-            cursor_--;
-            size_t byteStart = utf8ByteOffset(text_, cursor_);
-            text_.erase(byteStart, byteEnd - byteStart);
-            selStart_ = selEnd_ = cursor_;
-        }
-        markDirty(); textChanged.emit(text_); e.consumed = true; break;
+        case ig::retained::Key::Backspace:
+            if (mode_ == Mode::ReadOnly)
+            {
+                e.consumed = true;
+                break;
+            }
+            if (hasSelection())
+            {
+                deleteSelection();
+            }
+            else if (cursor_ > 0)
+            {
+                size_t byteEnd = utf8ByteOffset(text_, cursor_);
+                cursor_--;
+                size_t byteStart = utf8ByteOffset(text_, cursor_);
+                text_.erase(byteStart, byteEnd - byteStart);
+                selStart_ = selEnd_ = cursor_;
+            }
+            markDirty();
+            textChanged.emit(text_);
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Delete:
-        if (mode_ == Mode::ReadOnly) { e.consumed = true; break; }
-        if (hasSelection()) { deleteSelection(); }
-        else if (cursor_ < len) {
-            size_t byteStart = utf8ByteOffset(text_, cursor_);
-            size_t byteEnd   = utf8ByteOffset(text_, cursor_ + 1);
-            text_.erase(byteStart, byteEnd - byteStart);
-            selStart_ = selEnd_ = cursor_;
-        }
-        markDirty(); textChanged.emit(text_); e.consumed = true; break;
+        case ig::retained::Key::Delete:
+            if (mode_ == Mode::ReadOnly)
+            {
+                e.consumed = true;
+                break;
+            }
+            if (hasSelection())
+            {
+                deleteSelection();
+            }
+            else if (cursor_ < len)
+            {
+                size_t byteStart = utf8ByteOffset(text_, cursor_);
+                size_t byteEnd = utf8ByteOffset(text_, cursor_ + 1);
+                text_.erase(byteStart, byteEnd - byteStart);
+                selStart_ = selEnd_ = cursor_;
+            }
+            markDirty();
+            textChanged.emit(text_);
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Return:
-    case ig::retained::Key::KPEnter:
-        submitted.emit(text_); e.consumed = true; break;
+        case ig::retained::Key::Return:
+        case ig::retained::Key::KPEnter:
+            submitted.emit(text_);
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Escape:
-        clearSelection(); break;
+        case ig::retained::Key::Escape:
+            clearSelection();
+            break;
 
-    default: break;
+        default:
+            break;
     }
 }
 
 void TextInput::onTextInput(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
-    if (mode_ == Mode::ReadOnly) { e.consumed = true; return; }
+    if (mode_ == Mode::ReadOnly)
+    {
+        e.consumed = true;
+        return;
+    }
     String t(e.text);
     if (t.empty()) return;
     insertText(t);
@@ -424,14 +516,19 @@ void TextEdit::clearMarker(int line)
 void TextEdit::clearMarker(int line, MarkerType type)
 {
     ct::HashSet<int>* lineMarkers = markers_.find(line);
-    if (lineMarkers) {
+    if (lineMarkers)
+    {
         lineMarkers->erase(static_cast<int>(type));
         if (lineMarkers->empty()) markers_.erase(line);
     }
     markDirty();
 }
 
-void TextEdit::clearAllMarkers() { markers_.clear(); markDirty(); }
+void TextEdit::clearAllMarkers()
+{
+    markers_.clear();
+    markDirty();
+}
 
 bool TextEdit::hasMarker(int line) const
 {
@@ -449,13 +546,18 @@ void TextEdit::setText(const String& text)
     const int oldCount = static_cast<int>(lines_.size());
     lines_.clear();
     String line;
-    for (char c : text)
+    for (char c: text)
     {
-        if (c == '\n')   { lines_.push_back(std::move(line)); line.clear(); }
-        else if (c != '\r') line += c;
+        if (c == '\n')
+        {
+            lines_.push_back(std::move(line));
+            line.clear();
+        }
+        else if (c != '\r')
+            line += c;
     }
     lines_.push_back(std::move(line));
-    cursor_    = {0, 0};
+    cursor_ = { 0, 0 };
     selAnchor_ = cursor_;
     scrollX_ = scrollY_ = 0;
     wrapRows_.clear();
@@ -488,22 +590,32 @@ const String& TextEdit::lineAt(int n) const
     return lines_[n];
 }
 
-void TextEdit::setCursorPos(TextPos pos) { clampPos(pos); cursor_ = pos; selAnchor_ = cursor_; markDirty(); cursorMoved.emit(cursor_); }
-void TextEdit::setCursorPos(int line, int col) { setCursorPos({line, col}); }
+void TextEdit::setCursorPos(TextPos pos)
+{
+    clampPos(pos);
+    cursor_ = pos;
+    selAnchor_ = cursor_;
+    markDirty();
+    cursorMoved.emit(cursor_);
+}
+void TextEdit::setCursorPos(int line, int col)
+{
+    setCursorPos({ line, col });
+}
 
 void TextEdit::selectAll()
 {
-    selAnchor_ = {0, 0};
+    selAnchor_ = { 0, 0 };
     int last = static_cast<int>(lines_.size()) - 1;
-    cursor_ = {last, lineColCount(last)};
+    cursor_ = { last, lineColCount(last) };
     markDirty();
 }
 
 void TextEdit::selectLine(int n)
 {
     if (n < 0 || n >= static_cast<int>(lines_.size())) return;
-    selAnchor_ = {n, 0};
-    cursor_    = {n, lineColCount(n)};
+    selAnchor_ = { n, 0 };
+    cursor_ = { n, lineColCount(n) };
     markDirty();
 }
 
@@ -512,22 +624,22 @@ void TextEdit::setSelection(TextPos start, TextPos end)
     clampPos(start);
     clampPos(end);
     selAnchor_ = start;
-    cursor_    = end;
+    cursor_ = end;
     markDirty();
 }
 
 void TextEdit::copy()
 {
     String sel = selectedText();
-    if (!sel.empty())
-        WidgetApp::instance().setClipboardText(sel.c_str());
+    if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
 }
 
 void TextEdit::cut()
 {
     if (readOnly_) return;
     String sel = selectedText();
-    if (!sel.empty()) {
+    if (!sel.empty())
+    {
         WidgetApp::instance().setClipboardText(sel.c_str());
         deleteSelection();
         markDirty();
@@ -540,8 +652,7 @@ void TextEdit::paste()
 {
     if (readOnly_) return;
     String clip = WidgetApp::instance().getClipboardText();
-    if (!clip.empty())
-        insertTextAtCursor(clip);
+    if (!clip.empty()) insertTextAtCursor(clip);
 }
 
 void TextEdit::insertTextAt(TextPos pos, const String& text)
@@ -559,7 +670,8 @@ void TextEdit::insertTextAt(TextPos pos, const String& text)
     cursor_ = savedCursor;
     selAnchor_ = savedAnchor;
     // If original cursor was on or after insertion, shift it
-    if (savedCursor > pos || savedCursor == pos) {
+    if (savedCursor > pos || savedCursor == pos)
+    {
         // Simple case: if insert was single line and same line
         // For now, just leave cursor where it was — callers can adjust
     }
@@ -573,7 +685,11 @@ String TextEdit::selectedText() const
     if (s.line == e.line) return utf8Substr(lines_[s.line], s.col, e.col);
     String result = utf8Substr(lines_[s.line], s.col, lineColCount(s.line));
     result += '\n';
-    for (int i = s.line + 1; i < e.line; ++i) { result += lines_[i]; result += '\n'; }
+    for (int i = s.line + 1; i < e.line; ++i)
+    {
+        result += lines_[i];
+        result += '\n';
+    }
     result += utf8Substr(lines_[e.line], 0, e.col);
     return result;
 }
@@ -618,16 +734,19 @@ String TextEdit::expandTabs(const String& text, int startVisCol) const
     String out;
     out.reserve(text.size());
     int visCol = startVisCol;
-    for (size_t i = 0; i < text.size(); ) {
-        if (text[i] == '\t') {
+    for (size_t i = 0; i < text.size();)
+    {
+        if (text[i] == '\t')
+        {
             int spaces = tabSize_ - (visCol % tabSize_);
             out.append(spaces, ' ');
             visCol += spaces;
             i++;
-        } else {
+        }
+        else
+        {
             int seqLen = utf8CharLen(text.c_str() + i);
-            for (int k = 0; k < seqLen && i + k < text.size(); k++)
-                out += text[i + k];
+            for (int k = 0; k < seqLen && i + k < text.size(); k++) out += text[i + k];
             visCol++;
             i += seqLen;
         }
@@ -641,22 +760,27 @@ String TextEdit::expandTabsVisible(const String& text, int startVisCol) const
     String out;
     out.reserve(text.size() * 2);
     int visCol = startVisCol;
-    for (size_t i = 0; i < text.size(); ) {
-        if (text[i] == '\t') {
+    for (size_t i = 0; i < text.size();)
+    {
+        if (text[i] == '\t')
+        {
             int spaces = tabSize_ - (visCol % tabSize_);
             // First position: ·, rest: normal spaces
-            out += "\xC2\xB7";  // · U+00B7
+            out += "\xC2\xB7"; // · U+00B7
             if (spaces > 1) out.append(spaces - 1, ' ');
             visCol += spaces;
             i++;
-        } else if (text[i] == ' ') {
-            out += "\xC2\xB7";  // · U+00B7
+        }
+        else if (text[i] == ' ')
+        {
+            out += "\xC2\xB7"; // · U+00B7
             visCol++;
             i++;
-        } else {
+        }
+        else
+        {
             int seqLen = utf8CharLen(text.c_str() + i);
-            for (int k = 0; k < seqLen && i + k < text.size(); k++)
-                out += text[i + k];
+            for (int k = 0; k < seqLen && i + k < text.size(); k++) out += text[i + k];
             visCol++;
             i += seqLen;
         }
@@ -679,7 +803,8 @@ int TextEdit::visColAt(int line, int col) const
     {
         String ch = utf8Substr(lines_[line], i, i + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
-        else visCol++;
+        else
+            visCol++;
     }
     return visCol;
 }
@@ -688,7 +813,7 @@ void TextEdit::clampPos(TextPos& p) const
 {
     int lc = static_cast<int>(lines_.size());
     p.line = std::max(0, std::min(p.line, lc - 1));
-    p.col  = std::max(0, std::min(p.col, lineColCount(p.line)));
+    p.col = std::max(0, std::min(p.col, lineColCount(p.line)));
 }
 
 float TextEdit::colToX(PaintContext& ctx, int line, int col) const
@@ -708,11 +833,14 @@ int TextEdit::xToCol(PaintContext& ctx, int line, float x) const
     {
         String ch = utf8Substr(lines_[line], i, i + 1);
         float cw;
-        if (ch[0] == '\t') {
+        if (ch[0] == '\t')
+        {
             int spaces = tabSize_ - (visCol % tabSize_);
             cw = spaces * ctx.font.GetTextWidth(" ");
             visCol += spaces;
-        } else {
+        }
+        else
+        {
             cw = ctx.font.GetTextWidth(ch.c_str());
             visCol++;
         }
@@ -727,86 +855,96 @@ TextEdit::TextPos TextEdit::hitTestMouse(float localX, float localY) const
     auto& wa = WidgetApp::instance();
     if (lineHeight() <= 0) return { 0, 0 };
     int vRow = static_cast<int>((localY + scrollY_) / lineHeight());
-    int tvr  = totalVisualRows();
+    int tvr = totalVisualRows();
     vRow = std::max(0, std::min(vRow, tvr - 1));
-    if (vRow < 0) return {0, 0};
+    if (vRow < 0) return { 0, 0 };
 
-    auto vp     = visualToLogical(vRow);
-    int  line   = vp.line;
-    int  rowIdx = vp.row;
-    if (line < 0 || line >= static_cast<int>(lines_.size())) return {0, 0};
+    auto vp = visualToLogical(vRow);
+    int line = vp.line;
+    int rowIdx = vp.row;
+    if (line < 0 || line >= static_cast<int>(lines_.size())) return { 0, 0 };
     auto& rows = wrapRows_[line];
-    if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) return {line, 0};
+    if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) return { line, 0 };
 
     int startCol = rows[rowIdx].startCol;
-    int endCol   = rows[rowIdx].endCol;
-    float textX  = localX - gutterW_ + scrollX_ - Theme::instance().textEditPadding;
+    int endCol = rows[rowIdx].endCol;
+    float textX = localX - gutterW_ + scrollX_ - Theme::instance().textEditPadding;
     float cx = 0;
     int visCol = 0;
     // Compute visual col of startCol
-    for (int k = 0; k < startCol; k++) {
+    for (int k = 0; k < startCol; k++)
+    {
         String ch = utf8Substr(lines_[line], k, k + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
-        else visCol++;
+        else
+            visCol++;
     }
     for (int i = 0; i < endCol - startCol; ++i)
     {
         String ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
         float cw;
-        if (ch[0] == '\t') {
+        if (ch[0] == '\t')
+        {
             int spaces = tabSize_ - (visCol % tabSize_);
             cw = spaces * wa.textWidth(" ", overrideFont_, fontScale_);
             visCol += spaces;
-        } else {
+        }
+        else
+        {
             cw = wa.textWidth(ch.c_str(), overrideFont_, fontScale_);
             visCol++;
         }
-        if (textX < cx + cw * 0.5f) return {line, startCol + i};
+        if (textX < cx + cw * 0.5f) return { line, startCol + i };
         cx += cw;
     }
-    return {line, endCol};
+    return { line, endCol };
 }
 
 TextEdit::TextPos TextEdit::hitTest(PaintContext& ctx, float localX, float localY) const
 {
     int vRow = static_cast<int>((localY + scrollY_) / lineHeight());
-    int tvr  = totalVisualRows();
+    int tvr = totalVisualRows();
     vRow = std::max(0, std::min(vRow, tvr - 1));
-    if (vRow < 0) return {0, 0};
+    if (vRow < 0) return { 0, 0 };
 
-    auto vp     = visualToLogical(vRow);
-    int  line   = vp.line;
-    int  rowIdx = vp.row;
-    if (line < 0 || line >= static_cast<int>(lines_.size())) return {0, 0};
+    auto vp = visualToLogical(vRow);
+    int line = vp.line;
+    int rowIdx = vp.row;
+    if (line < 0 || line >= static_cast<int>(lines_.size())) return { 0, 0 };
     auto& rows = wrapRows_[line];
-    if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) return {line, 0};
+    if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) return { line, 0 };
 
     int startCol = rows[rowIdx].startCol;
-    int endCol   = rows[rowIdx].endCol;
-    float textX  = localX - gutterW_ + scrollX_ - Theme::instance().textEditPadding;
+    int endCol = rows[rowIdx].endCol;
+    float textX = localX - gutterW_ + scrollX_ - Theme::instance().textEditPadding;
     float cx = 0;
     int visCol = 0;
-    for (int k = 0; k < startCol; k++) {
+    for (int k = 0; k < startCol; k++)
+    {
         String ch = utf8Substr(lines_[line], k, k + 1);
         if (ch[0] == '\t') visCol += tabSize_ - (visCol % tabSize_);
-        else visCol++;
+        else
+            visCol++;
     }
     for (int i = 0; i < endCol - startCol; ++i)
     {
         String ch = utf8Substr(lines_[line], startCol + i, startCol + i + 1);
         float cw;
-        if (ch[0] == '\t') {
+        if (ch[0] == '\t')
+        {
             int spaces = tabSize_ - (visCol % tabSize_);
             cw = spaces * ctx.font.GetTextWidth(" ");
             visCol += spaces;
-        } else {
+        }
+        else
+        {
             cw = ctx.font.GetTextWidth(ch.c_str());
             visCol++;
         }
-        if (textX < cx + cw * 0.5f) return {line, startCol + i};
+        if (textX < cx + cw * 0.5f) return { line, startCol + i };
         cx += cw;
     }
-    return {line, endCol};
+    return { line, endCol };
 }
 
 void TextEdit::deleteSelection()
@@ -828,7 +966,8 @@ void TextEdit::deleteSelection()
         lines_[s.line] = head + tail;
         lines_.erase(lines_.begin() + s.line + 1, lines_.begin() + e.line + 1);
     }
-    cursor_ = s; selAnchor_ = cursor_;
+    cursor_ = s;
+    selAnchor_ = cursor_;
     if (s.line != e.line && wholeLines) linesChanged(s.line, e.line - s.line, 0);
     else if (s.line != e.line && afterLastCol)
         linesChanged(s.line + 1, e.line - s.line, 0);
@@ -842,9 +981,15 @@ void TextEdit::insertTextAtCursor(const String& t)
     deleteSelection();
     ct::Vector<String> insertLines;
     String line;
-    for (char c : t) {
-        if (c == '\n') { insertLines.push_back(std::move(line)); line.clear(); }
-        else if (c != '\r') line += c;
+    for (char c: t)
+    {
+        if (c == '\n')
+        {
+            insertLines.push_back(std::move(line));
+            line.clear();
+        }
+        else if (c != '\r')
+            line += c;
     }
     insertLines.push_back(std::move(line));
     const int firstLine = cursor_.line;
@@ -866,7 +1011,7 @@ void TextEdit::insertTextAtCursor(const String& t)
         int lastIdx = cursor_.line + static_cast<int>(insertLines.size()) - 1;
         lines_.insert(lines_.begin() + lastIdx, insertLines.back() + tail);
         cursor_.line = lastIdx;
-        cursor_.col  = utf8Length(insertLines.back());
+        cursor_.col = utf8Length(insertLines.back());
     }
     selAnchor_ = cursor_;
     if (added > 0 && beforeLine) linesChanged(firstLine, 0, added);
@@ -946,7 +1091,7 @@ float TextEdit::computeGutterWidth(const ig::retained::Font& font) const
 
 float TextEdit::computeLineHeight(const ig::retained::Font& font) const
 {
-    (void)font;
+    (void) font;
     return Theme::instance().fontSize + Theme::instance().lineSpacing;
 }
 
@@ -970,8 +1115,9 @@ TextEdit::WrapLine TextEdit::measureLine(PaintContext& ctx, const String& line, 
         b += static_cast<size_t>(n);
     }
     const int len = static_cast<int>(widths.size());
-    if (len == 0 || !wordWrap_ || textW <= 0) {
-        out.rows.push_back({0, len});
+    if (len == 0 || !wordWrap_ || textW <= 0)
+    {
+        out.rows.push_back({ 0, len });
         return out;
     }
 
@@ -984,10 +1130,11 @@ TextEdit::WrapLine TextEdit::measureLine(PaintContext& ctx, const String& line, 
         {
             if (w + widths[end] > textW && end > start) break;
             if (spaces[end]) lastSpace = end;
-            w += widths[end]; end++;
+            w += widths[end];
+            end++;
         }
         if (end < len && lastSpace > start) end = lastSpace + 1;
-        out.rows.push_back({start, end});
+        out.rows.push_back({ start, end });
         start = end;
     }
     return out;
@@ -997,12 +1144,13 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
 {
     float textW = rect_.w - gutterW_ - Theme::instance().textEditPadding * 2;
     WrapKey key;
-    key.width   = wordWrap_ ? textW : 0.0f;
-    key.font    = ctx.buFont;
-    key.scale   = ctx.font.scale;
+    key.width = wordWrap_ ? textW : 0.0f;
+    key.font = ctx.buFont;
+    key.scale = ctx.font.scale;
     key.tabSize = tabSize_;
-    key.wrap    = wordWrap_;
-    if (!(key == wrapKey_)) {
+    key.wrap = wordWrap_;
+    if (!(key == wrapKey_))
+    {
         wrapCache_.clear();
         wrapKey_ = key;
     }
@@ -1015,7 +1163,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
     lineWidths_.resize(lines_.size());
     staleWrapLines_.clear();
     widestLineGone_ = false;
-    wrapWidth_   = textW;
+    wrapWidth_ = textW;
     maxContentW_ = 0;
 
     for (int i = 0; i < static_cast<int>(lines_.size()); ++i)
@@ -1023,8 +1171,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
         const String& line = lines_[i];
         WrapLine reused;
         WrapLine* entry = nullptr;
-        if (wrapCache_.erase(line, reused))
-            entry = &cache.put(line, std::move(reused));
+        if (wrapCache_.erase(line, reused)) entry = &cache.put(line, std::move(reused));
         else if (!(entry = cache.find(line)))
             entry = &cache.put(line, measureLine(ctx, line, textW));
         lineWidths_[i] = entry->width;
@@ -1236,8 +1383,11 @@ void TextEdit::ensureCursorVisible()
         for (int r = 0; r < static_cast<int>(rows.size()); ++r)
         {
             if (cursor_.col >= rows[r].startCol &&
-                (cursor_.col <= rows[r].endCol || r == static_cast<int>(rows.size()) - 1))
-            { cursorRowInLine = r; break; }
+                    (cursor_.col <= rows[r].endCol || r == static_cast<int>(rows.size()) - 1))
+            {
+                cursorRowInLine = r;
+                break;
+            }
         }
     }
     int cursorVRow = logicalToVisualRow(cursor_.line, cursorRowInLine);
@@ -1250,21 +1400,20 @@ void TextEdit::ensureCursorVisible()
     float maxY = std::max(0.0f, totalVisualRows() * lineHeight() - rect_.h);
     scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
 
-    if (wordWrap_ || cursor_.line < 0 || cursor_.line >= static_cast<int>(lines_.size()))
-        return;
+    if (wordWrap_ || cursor_.line < 0 || cursor_.line >= static_cast<int>(lines_.size())) return;
     const String before = expandTabs(utf8Substr(lines_[cursor_.line], 0, cursor_.col));
     const float cx = WidgetApp::instance().textWidth(before.c_str(), overrideFont_, fontScale_);
     const float view = textViewWidth();
     const float margin = std::min(view * 0.25f, 20.0f);
     if (cx < scrollX_) scrollX_ = cx - margin;
-    else if (cx > scrollX_ + view) scrollX_ = cx - view + margin;
+    else if (cx > scrollX_ + view)
+        scrollX_ = cx - view + margin;
     scrollX_ = std::max(0.0f, scrollX_);
 }
 
 void TextEdit::updateGutterWidth(PaintContext& ctx)
 {
-    if (ctx.buFont)
-        gutterW_ = computeGutterWidth(*ctx.buFont) * fontScale_ + extraGutterW_;
+    if (ctx.buFont) gutterW_ = computeGutterWidth(*ctx.buFont) * fontScale_ + extraGutterW_;
     else
         gutterW_ = (showLineNumbers_ ? 36.0f * fontScale_ : 0.0f) + extraGutterW_;
 }
@@ -1303,8 +1452,8 @@ void TextEdit::paint(PaintContext& ctx)
     scrollX_ = std::max(0.0f, std::min(scrollX_, maxScrollX()));
 
     float pad = t.textEditPadding;
-    Rect textArea = {abs.x + gutterW_, abs.y, abs.w - gutterW_, abs.h};
-    Rect fullArea = {abs.x, abs.y, abs.w, abs.h};
+    Rect textArea = { abs.x + gutterW_, abs.y, abs.w - gutterW_, abs.h };
+    Rect fullArea = { abs.x, abs.y, abs.w, abs.h };
 
     int totalVRows = totalVisualRows();
     const bool enabled = isEnabledInTree();
@@ -1316,19 +1465,18 @@ void TextEdit::paint(PaintContext& ctx)
     {
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
-                                   t.borderRadius, 6, true);
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, true);
     }
 
     // Gutter
     if (showLineNumbers_ && gutterW_ > 0)
     {
-        Rect gutterRect = {abs.x, abs.y, gutterW_, abs.h};
+        Rect gutterRect = { abs.x, abs.y, gutterW_, abs.h };
         if (ctx.clipRectIntersect(gutterRect, clipped))
         {
             ctx.fill.SetColor(t.gutterBg.r, t.gutterBg.g, t.gutterBg.b, t.gutterBg.a);
             ctx.fill.Rectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                                static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
+                    static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
         }
     }
 
@@ -1345,8 +1493,11 @@ void TextEdit::paint(PaintContext& ctx)
         for (int r = 0; r < static_cast<int>(rows.size()); ++r)
         {
             if (cursor_.col >= rows[r].startCol &&
-                (cursor_.col <= rows[r].endCol || r == static_cast<int>(rows.size()) - 1))
-            { cursorRowInLine = r; break; }
+                    (cursor_.col <= rows[r].endCol || r == static_cast<int>(rows.size()) - 1))
+            {
+                cursorRowInLine = r;
+                break;
+            }
         }
         cursorVRow = logicalToVisualRow(cursor_.line, cursorRowInLine);
     }
@@ -1354,9 +1505,9 @@ void TextEdit::paint(PaintContext& ctx)
     ctx.pushClip(abs);
     for (int vr = firstVRow; showLineNumbers_ && vr <= lastVRow; ++vr)
     {
-        auto vp     = visualToLogical(vr);
-        int  i      = vp.line;
-        int  rowIdx = vp.row;
+        auto vp = visualToLogical(vr);
+        int i = vp.line;
+        int rowIdx = vp.row;
         if (i < 0 || i >= static_cast<int>(lines_.size())) continue;
         float ly = abs.y + vr * lineHeight() - scrollY_;
         float lty = ly + lineHeight() - t.lineSpacing;
@@ -1366,29 +1517,31 @@ void TextEdit::paint(PaintContext& ctx)
             char numBuf[16];
             snprintf(numBuf, sizeof(numBuf), "%d", i + 1);
             float numW = ctx.font.GetTextWidth(numBuf);
-            Color numColor = (i == cursor_.line && isFocused()) ? t.lineNumberActive : t.lineNumberColor;
+            Color numColor =
+                    (i == cursor_.line && isFocused()) ? t.lineNumberActive : t.lineNumberColor;
             ctx.font.SetColor(numColor);
             float numGutterW = gutterW_ - extraGutterW_;
             ctx.font.Print(numBuf, abs.x + numGutterW - numW - t.gutterPadding, lty);
 
             // Gutter markers (left of line numbers)
             ct::HashSet<int>* lineMarkers = markers_.find(i);
-            if (lineMarkers) {
+            if (lineMarkers)
+            {
                 float markerR = lineHeight() * 0.3f;
                 float mx = abs.x + markerR + 3.0f;
                 float my = ly + lineHeight() * 0.5f;
                 // Pick highest-priority marker color
-                Color mc = {100, 100, 100, 255}; // default grey
+                Color mc = { 100, 100, 100, 255 }; // default grey
                 if (lineMarkers->contains(static_cast<int>(MarkerType::Error)))
-                    mc = {220, 50, 50, 255};
+                    mc = { 220, 50, 50, 255 };
                 else if (lineMarkers->contains(static_cast<int>(MarkerType::Breakpoint)))
-                    mc = {200, 60, 60, 255};
+                    mc = { 200, 60, 60, 255 };
                 else if (lineMarkers->contains(static_cast<int>(MarkerType::Warning)))
-                    mc = {220, 180, 40, 255};
+                    mc = { 220, 180, 40, 255 };
                 else if (lineMarkers->contains(static_cast<int>(MarkerType::Bookmark)))
-                    mc = {60, 120, 220, 255};
+                    mc = { 60, 120, 220, 255 };
                 else if (lineMarkers->contains(static_cast<int>(MarkerType::Info)))
-                    mc = {80, 180, 80, 255};
+                    mc = { 80, 180, 80, 255 };
                 ctx.fill.SetColor(mc.r, mc.g, mc.b, mc.a);
                 ctx.fillCircle(mx, my, markerR);
             }
@@ -1400,15 +1553,15 @@ void TextEdit::paint(PaintContext& ctx)
 
     for (int vr = firstVRow; vr <= lastVRow; ++vr)
     {
-        auto vp     = visualToLogical(vr);
-        int  i      = vp.line;
-        int  rowIdx = vp.row;
+        auto vp = visualToLogical(vr);
+        int i = vp.line;
+        int rowIdx = vp.row;
         if (i < 0 || i >= static_cast<int>(lines_.size())) continue;
         auto& rows = wrapRows_[i];
         if (rowIdx < 0 || rowIdx >= static_cast<int>(rows.size())) continue;
 
         int startCol = rows[rowIdx].startCol;
-        int endCol   = rows[rowIdx].endCol;
+        int endCol = rows[rowIdx].endCol;
         int startVisCol = visColAt(i, startCol);
         String rowTextRaw = utf8Substr(lines_[i], startCol, endCol);
         String rowText = expandTabs(rowTextRaw, startVisCol);
@@ -1423,11 +1576,15 @@ void TextEdit::paint(PaintContext& ctx)
         {
             TextPos s = selectionStart(), e = selectionEnd();
             if ((i > s.line || (i == s.line && endCol > s.col)) &&
-                (i < e.line || (i == e.line && startCol < e.col)))
+                    (i < e.line || (i == e.line && startCol < e.col)))
             {
                 int selS = (i == s.line) ? std::max(startCol, s.col) : startCol;
                 int selE = (i == e.line) ? std::min(endCol, e.col) : endCol;
-                if (i > s.line && i < e.line) { selS = startCol; selE = endCol; }
+                if (i > s.line && i < e.line)
+                {
+                    selS = startCol;
+                    selE = endCol;
+                }
                 if (selS < selE)
                 {
                     String pre = expandTabs(utf8Substr(lines_[i], startCol, selS), startVisCol);
@@ -1440,7 +1597,7 @@ void TextEdit::paint(PaintContext& ctx)
                     if (cx1 < cx2)
                     {
                         ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                                          t.selectionColor.b, t.selectionColor.a);
+                                t.selectionColor.b, t.selectionColor.a);
                         ctx.fill.Rectangle(static_cast<int>(cx1), static_cast<int>(ly),
                                 static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight()), true);
                     }
@@ -1456,30 +1613,36 @@ void TextEdit::paint(PaintContext& ctx)
             if (ctx.clipRectIntersect(lineRect, lc2))
             {
                 ctx.fill.SetColor(t.currentLineHighlight.r, t.currentLineHighlight.g,
-                                  t.currentLineHighlight.b, t.currentLineHighlight.a);
+                        t.currentLineHighlight.b, t.currentLineHighlight.a);
                 ctx.fill.Rectangle(static_cast<int>(lc2.x), static_cast<int>(lc2.y),
-                                   static_cast<int>(lc2.w), static_cast<int>(lc2.h), true);
+                        static_cast<int>(lc2.w), static_cast<int>(lc2.h), true);
             }
         }
 
         // Row text (with optional syntax highlighting)
         float tx = textArea.x + pad - scrollX_;
-        if (syntaxCb_ && rowIdx == 0 && !lines_[i].empty()) {
+        if (syntaxCb_ && rowIdx == 0 && !lines_[i].empty())
+        {
             auto spans = syntaxCb_(i, lines_[i]);
-            if (spans.empty()) {
+            if (spans.empty())
+            {
                 ctx.font.SetColor(textColor);
                 ctx.font.Print(rowText.c_str(), tx, lty);
-            } else {
+            }
+            else
+            {
                 // Render text span by span, tracking visual column for correct tab expansion
                 float cx = tx;
                 int prevCol = startCol;
                 int curVisCol = 0;
-                for (const auto& sp : spans) {
+                for (const auto& sp: spans)
+                {
                     int s0 = std::max(sp.startCol, startCol);
                     int s1 = std::min(sp.endCol, endCol);
                     if (s0 >= s1) continue;
                     // Gap before span (default color)
-                    if (s0 > prevCol) {
+                    if (s0 > prevCol)
+                    {
                         String gap = expandTabs(utf8Substr(lines_[i], prevCol, s0), curVisCol);
                         ctx.font.SetColor(textColor);
                         ctx.font.Print(gap.c_str(), cx, lty);
@@ -1495,13 +1658,16 @@ void TextEdit::paint(PaintContext& ctx)
                     prevCol = s1;
                 }
                 // Trailing text after last span
-                if (prevCol < endCol) {
+                if (prevCol < endCol)
+                {
                     String tail = expandTabs(utf8Substr(lines_[i], prevCol, endCol), curVisCol);
                     ctx.font.SetColor(textColor);
                     ctx.font.Print(tail.c_str(), cx, lty);
                 }
             }
-        } else {
+        }
+        else
+        {
             ctx.font.SetColor(textColor);
             ctx.font.Print(rowText.c_str(), tx, lty);
         }
@@ -1513,11 +1679,12 @@ void TextEdit::paint(PaintContext& ctx)
         float cy = abs.y + cursorVRow * lineHeight() - scrollY_;
         int rowStart = 0;
         if (cursor_.line < static_cast<int>(wrapRows_.size()) &&
-            cursorRowInLine < static_cast<int>(wrapRows_[cursor_.line].size()))
+                cursorRowInLine < static_cast<int>(wrapRows_[cursor_.line].size()))
             rowStart = wrapRows_[cursor_.line][cursorRowInLine].startCol;
 
         int rowStartVisCol = visColAt(cursor_.line, rowStart);
-        String pre = expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
+        String pre =
+                expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
         float cx = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
 
         if (cx >= textArea.x && cx <= textArea.x + textArea.w && cy >= abs.y &&
@@ -1530,18 +1697,19 @@ void TextEdit::paint(PaintContext& ctx)
     }
 
     // Scrollbar — inside same clip so it merges
-    float barW   = t.scrollbarWidth;
+    float barW = t.scrollbarWidth;
     float totalH = totalVRows * lineHeight();
     bool needVBar = totalH > abs.h;
     if (needVBar)
     {
         float trackH = abs.h;
         float thumbH = std::max(t.scrollbarMinThumb, trackH * (trackH / totalH));
-        float maxSc  = totalH - trackH;
+        float maxSc = totalH - trackH;
         float thumbY = (maxSc > 0) ? abs.y + (scrollY_ / maxSc) * (trackH - thumbH) : abs.y;
-        ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b, t.scrollbarThumb.a);
+        ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b,
+                t.scrollbarThumb.a);
         ctx.fill.Rectangle(static_cast<int>(abs.x + abs.w - barW), static_cast<int>(thumbY),
-                           static_cast<int>(barW), static_cast<int>(thumbH), true);
+                static_cast<int>(barW), static_cast<int>(thumbH), true);
     }
     const float maxSx = maxScrollX();
     if (maxSx > 0.0f)
@@ -1549,9 +1717,10 @@ void TextEdit::paint(PaintContext& ctx)
         float trackW = textArea.w - (needVBar ? barW : 0.0f);
         float thumbW = std::max(t.scrollbarMinThumb, trackW * (trackW / (trackW + maxSx)));
         float thumbX = textArea.x + (scrollX_ / maxSx) * (trackW - thumbW);
-        ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b, t.scrollbarThumb.a);
+        ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b,
+                t.scrollbarThumb.a);
         ctx.fill.Rectangle(static_cast<int>(thumbX), static_cast<int>(abs.y + abs.h - barW),
-                           static_cast<int>(thumbW), static_cast<int>(barW), true);
+                static_cast<int>(thumbW), static_cast<int>(barW), true);
     }
 
     ctx.popClip();
@@ -1562,12 +1731,11 @@ void TextEdit::paint(PaintContext& ctx)
     {
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
         ctx.line.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
-                                   t.borderRadius, 6, false);
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, false);
     }
 
     if (overrideFont_) ctx.popFont();
-    ctx.font.scale = 1.0f;  // restore default scale
+    ctx.font.scale = 1.0f; // restore default scale
 }
 
 // ── Mouse events ──────────────────────────────────────────────────────────────
@@ -1576,15 +1744,20 @@ void TextEdit::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
     // Gutter click → toggle breakpoint / emit markerClicked
-    if (showLineNumbers_ && e.localX < gutterW_) {
+    if (showLineNumbers_ && e.localX < gutterW_)
+    {
         int clickedLine = static_cast<int>((e.localY + scrollY_) / lineHeight());
-        if (clickedLine >= 0 && clickedLine < static_cast<int>(lines_.size())) {
+        if (clickedLine >= 0 && clickedLine < static_cast<int>(lines_.size()))
+        {
             // Find the highest-priority marker on this line
             ct::HashSet<int>* lineMarkers = markers_.find(clickedLine);
-            if (lineMarkers && !lineMarkers->empty()) {
+            if (lineMarkers && !lineMarkers->empty())
+            {
                 MarkerType mt = static_cast<MarkerType>(*lineMarkers->begin());
                 markerClicked.emit(clickedLine, mt);
-            } else {
+            }
+            else
+            {
                 // No marker yet → emit as Breakpoint toggle
                 markerClicked.emit(clickedLine, MarkerType::Breakpoint);
             }
@@ -1593,15 +1766,18 @@ void TextEdit::onMousePress(MouseEvent& e)
         return;
     }
 
-    cursor_    = hitTestMouse(e.localX, e.localY);
+    cursor_ = hitTestMouse(e.localX, e.localY);
     clampPos(cursor_);
     selAnchor_ = cursor_;
 
     // Double-click → select word, triple-click → select line
-    if (e.button == 0 && e.clickCount >= 2) {
+    if (e.button == 0 && e.clickCount >= 2)
+    {
         int line = cursor_.line;
-        if (line >= 0 && line < static_cast<int>(lines_.size())) {
-            if (e.clickCount == 2) {
+        if (line >= 0 && line < static_cast<int>(lines_.size()))
+        {
+            if (e.clickCount == 2)
+            {
                 const auto& text = lines_[line];
                 ct::Vector<size_t> starts;
                 for (size_t b = 0; b < text.size(); b += utf8CharLen(text.c_str() + b))
@@ -1610,31 +1786,37 @@ void TextEdit::onMousePress(MouseEvent& e)
                 int col = cursor_.col;
                 if (col > len) col = len;
                 // Letters outside ASCII count as word characters.
-                auto isWord = [&text, &starts](int c) {
+                auto isWord = [&text, &starts](int c)
+                {
                     const unsigned char ch = static_cast<unsigned char>(text[starts[c]]);
                     return ch >= 0x80 || std::isalnum(ch) || ch == '_';
                 };
                 int start = col, end = col;
-                if (col < len && isWord(col)) {
-                    while (start > 0   && isWord(start - 1)) --start;
-                    while (end   < len && isWord(end))       ++end;
-                } else if (col > 0 && isWord(col - 1)) {
+                if (col < len && isWord(col))
+                {
+                    while (start > 0 && isWord(start - 1)) --start;
+                    while (end < len && isWord(end)) ++end;
+                }
+                else if (col > 0 && isWord(col - 1))
+                {
                     start = col - 1;
-                    end   = col;
-                    while (start > 0   && isWord(start - 1)) --start;
-                    while (end   < len && isWord(end))       ++end;
+                    end = col;
+                    while (start > 0 && isWord(start - 1)) --start;
+                    while (end < len && isWord(end)) ++end;
                 }
                 selAnchor_ = { line, start };
-                cursor_    = { line, end };
-            } else {
+                cursor_ = { line, end };
+            }
+            else
+            {
                 // Triple-click → select entire line
                 selAnchor_ = { line, 0 };
-                cursor_    = { line, lineColCount(line) };
+                cursor_ = { line, lineColCount(line) };
             }
         }
     }
 
-    dragging_  = true;
+    dragging_ = true;
     blinkTimer_ = 0;
     ensureCursorVisible();
     markDirty();
@@ -1643,7 +1825,11 @@ void TextEdit::onMousePress(MouseEvent& e)
 
 void TextEdit::onMouseRelease(MouseEvent& e)
 {
-    if (dragging_) { dragging_ = false; e.consumed = true; }
+    if (dragging_)
+    {
+        dragging_ = false;
+        e.consumed = true;
+    }
 }
 
 void TextEdit::onMouseMove(MouseEvent& e)
@@ -1688,112 +1874,228 @@ void TextEdit::onKeyPress(KeyEvent& e)
     {
         switch (e.key)
         {
-        case ig::retained::Key::A: selectAll(); e.consumed = true; return;
-        case ig::retained::Key::C: copy(); e.consumed = true; return;
-        case ig::retained::Key::X: cut(); e.consumed = true; return;
-        case ig::retained::Key::V: paste(); e.consumed = true; return;
-        case ig::retained::Key::Home: cursor_ = {0,0}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
-        case ig::retained::Key::End: cursor_ = {lc-1, lineColCount(lc-1)}; if (!e.shift) selAnchor_ = cursor_; ensureCursorVisible(); markDirty(); e.consumed = true; return;
-        default: break;
+            case ig::retained::Key::A:
+                selectAll();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::C:
+                copy();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::X:
+                cut();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::V:
+                paste();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::Home:
+                cursor_ = { 0, 0 };
+                if (!e.shift) selAnchor_ = cursor_;
+                ensureCursorVisible();
+                markDirty();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::End:
+                cursor_ = { lc - 1, lineColCount(lc - 1) };
+                if (!e.shift) selAnchor_ = cursor_;
+                ensureCursorVisible();
+                markDirty();
+                e.consumed = true;
+                return;
+            default:
+                break;
         }
     }
 
     switch (e.key)
     {
-    case ig::retained::Key::Left:
-        if (cursor_.col > 0) cursor_.col--;
-        else if (cursor_.line > 0) { cursor_.line--; cursor_.col = lineColCount(cursor_.line); }
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::Right:
-        if (cursor_.col < lineColCount(cursor_.line)) cursor_.col++;
-        else if (cursor_.line < lc - 1) { cursor_.line++; cursor_.col = 0; }
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::Up:
-        if (cursor_.line > 0) { cursor_.line--; cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line)); }
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::Down:
-        if (cursor_.line < lc - 1) { cursor_.line++; cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line)); }
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::Home:
-        cursor_.col = 0; if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::End:
-        cursor_.col = lineColCount(cursor_.line); if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); cursorMoved.emit(cursor_); e.consumed = true; break;
-
-    case ig::retained::Key::PageUp: {
-        int jump = std::max(1, visibleLineCount() - 1);
-        cursor_.line = std::max(0, cursor_.line - jump);
-        cursor_.col  = std::min(cursor_.col, lineColCount(cursor_.line));
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); e.consumed = true; break;
-    }
-    case ig::retained::Key::PageDown: {
-        int jump = std::max(1, visibleLineCount() - 1);
-        cursor_.line = std::min(lc - 1, cursor_.line + jump);
-        cursor_.col  = std::min(cursor_.col, lineColCount(cursor_.line));
-        if (!e.shift) selAnchor_ = cursor_;
-        ensureCursorVisible(); markDirty(); e.consumed = true; break;
-    }
-
-    case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
-        splitLine(); ensureCursorVisible(); e.consumed = true; break;
-
-    case ig::retained::Key::Tab: {
-        if (!readOnly_) { insertTextAtCursor("\t"); ensureCursorVisible(); }
-        e.consumed = true; break;
-    }
-
-    case ig::retained::Key::Backspace:
-        if (!readOnly_) {
-            if (hasSelection()) { deleteSelection(); }
-            else if (cursor_.col > 0) {
-                size_t byteEnd   = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
-                cursor_.col--;
-                size_t byteStart = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
-                lines_[cursor_.line].erase(byteStart, byteEnd - byteStart);
-                selAnchor_ = cursor_;
-                linesChanged(cursor_.line, 1, 1);
+        case ig::retained::Key::Left:
+            if (cursor_.col > 0) cursor_.col--;
+            else if (cursor_.line > 0)
+            {
+                cursor_.line--;
+                cursor_.col = lineColCount(cursor_.line);
             }
-            else { mergeWithPrevLine(); }
-            ensureCursorVisible(); markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);
-        }
-        e.consumed = true; break;
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
 
-    case ig::retained::Key::Delete:
-        if (!readOnly_) {
-            if (hasSelection()) { deleteSelection(); }
-            else if (cursor_.col < lineColCount(cursor_.line)) {
-                size_t bs = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
-                size_t be = utf8ByteOffset(lines_[cursor_.line], cursor_.col + 1);
-                lines_[cursor_.line].erase(bs, be - bs);
-                selAnchor_ = cursor_;
-                linesChanged(cursor_.line, 1, 1);
+        case ig::retained::Key::Right:
+            if (cursor_.col < lineColCount(cursor_.line)) cursor_.col++;
+            else if (cursor_.line < lc - 1)
+            {
+                cursor_.line++;
+                cursor_.col = 0;
             }
-            else { mergeWithNextLine(); }
-            markDirty(); textChanged.emit(); cursorMoved.emit(cursor_);
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::Up:
+            if (cursor_.line > 0)
+            {
+                cursor_.line--;
+                cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
+            }
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::Down:
+            if (cursor_.line < lc - 1)
+            {
+                cursor_.line++;
+                cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
+            }
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::Home:
+            cursor_.col = 0;
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::End:
+            cursor_.col = lineColCount(cursor_.line);
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            cursorMoved.emit(cursor_);
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::PageUp:
+        {
+            int jump = std::max(1, visibleLineCount() - 1);
+            cursor_.line = std::max(0, cursor_.line - jump);
+            cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            e.consumed = true;
+            break;
         }
-        e.consumed = true; break;
+        case ig::retained::Key::PageDown:
+        {
+            int jump = std::max(1, visibleLineCount() - 1);
+            cursor_.line = std::min(lc - 1, cursor_.line + jump);
+            cursor_.col = std::min(cursor_.col, lineColCount(cursor_.line));
+            if (!e.shift) selAnchor_ = cursor_;
+            ensureCursorVisible();
+            markDirty();
+            e.consumed = true;
+            break;
+        }
 
-    case ig::retained::Key::Escape: clearSelection(); e.consumed = true; break;
+        case ig::retained::Key::Return:
+        case ig::retained::Key::KPEnter:
+            splitLine();
+            ensureCursorVisible();
+            e.consumed = true;
+            break;
 
-    default: break;
+        case ig::retained::Key::Tab:
+        {
+            if (!readOnly_)
+            {
+                insertTextAtCursor("\t");
+                ensureCursorVisible();
+            }
+            e.consumed = true;
+            break;
+        }
+
+        case ig::retained::Key::Backspace:
+            if (!readOnly_)
+            {
+                if (hasSelection())
+                {
+                    deleteSelection();
+                }
+                else if (cursor_.col > 0)
+                {
+                    size_t byteEnd = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
+                    cursor_.col--;
+                    size_t byteStart = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
+                    lines_[cursor_.line].erase(byteStart, byteEnd - byteStart);
+                    selAnchor_ = cursor_;
+                    linesChanged(cursor_.line, 1, 1);
+                }
+                else
+                {
+                    mergeWithPrevLine();
+                }
+                ensureCursorVisible();
+                markDirty();
+                textChanged.emit();
+                cursorMoved.emit(cursor_);
+            }
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::Delete:
+            if (!readOnly_)
+            {
+                if (hasSelection())
+                {
+                    deleteSelection();
+                }
+                else if (cursor_.col < lineColCount(cursor_.line))
+                {
+                    size_t bs = utf8ByteOffset(lines_[cursor_.line], cursor_.col);
+                    size_t be = utf8ByteOffset(lines_[cursor_.line], cursor_.col + 1);
+                    lines_[cursor_.line].erase(bs, be - bs);
+                    selAnchor_ = cursor_;
+                    linesChanged(cursor_.line, 1, 1);
+                }
+                else
+                {
+                    mergeWithNextLine();
+                }
+                markDirty();
+                textChanged.emit();
+                cursorMoved.emit(cursor_);
+            }
+            e.consumed = true;
+            break;
+
+        case ig::retained::Key::Escape:
+            clearSelection();
+            e.consumed = true;
+            break;
+
+        default:
+            break;
     }
 }
 
 void TextEdit::onTextInput(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
-    if (readOnly_) { e.consumed = true; return; }
+    if (readOnly_)
+    {
+        e.consumed = true;
+        return;
+    }
     String t(e.text);
     if (t.empty()) return;
     insertTextAtCursor(t);
@@ -1802,4 +2104,7 @@ void TextEdit::onTextInput(KeyEvent& e)
     e.consumed = true;
 }
 
-Widget::Vec2f TextEdit::sizeHint() const { return {300.0f, 200.0f}; }
+Widget::Vec2f TextEdit::sizeHint() const
+{
+    return { 300.0f, 200.0f };
+}

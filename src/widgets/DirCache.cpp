@@ -35,14 +35,14 @@ int DirCache::DirNode::fileCount() const
 
 DirCache::DirNode* DirCache::allocNode()
 {
-    if (blockUsed_ >= kBlockSize) {
+    if (blockUsed_ >= kBlockSize)
+    {
         Block* b = static_cast<Block*>(std::malloc(sizeof(Block)));
         b->next = firstBlock_;
         firstBlock_ = b;
         blockUsed_ = 0;
         // Placement-construct all nodes in the block
-        for (int i = 0; i < kBlockSize; ++i)
-            new (&b->nodes[i]) DirNode();
+        for (int i = 0; i < kBlockSize; ++i) new (&b->nodes[i]) DirNode();
     }
     return &firstBlock_->nodes[blockUsed_++];
 }
@@ -57,10 +57,12 @@ void DirCache::freeArena()
 {
     // Destruct strings in all used nodes
     Block* b = firstBlock_;
-    while (b) {
+    while (b)
+    {
         Block* next = b->next;
         int used = (b == firstBlock_) ? blockUsed_ : kBlockSize;
-        for (int i = 0; i < used; ++i) {
+        for (int i = 0; i < used; ++i)
+        {
             b->nodes[i].name.~String();
             b->nodes[i].path.~String();
             b->nodes[i].ext.~String();
@@ -78,7 +80,9 @@ void DirCache::freeArena()
 //  DirCache
 // ═════════════════════════════════════════════════════════════════════════════
 
-DirCache::DirCache() {}
+DirCache::DirCache()
+{
+}
 
 DirCache::~DirCache()
 {
@@ -93,13 +97,13 @@ void DirCache::setRoot(const String& path)
 
 DirCache::DirNode* DirCache::root()
 {
-    if (!root_) {
-        if (rootPath_.empty() || !FileSystem::isDir(rootPath_))
-            return nullptr;
+    if (!root_)
+    {
+        if (rootPath_.empty() || !FileSystem::isDir(rootPath_)) return nullptr;
 
         root_ = allocNode();
-        root_->name  = FileSystem::fileName(rootPath_);
-        root_->path  = rootPath_;
+        root_->name = FileSystem::fileName(rootPath_);
+        root_->path = rootPath_;
         root_->isDir = true;
         indexNode(root_);
         ++nodeCount_;
@@ -123,16 +127,18 @@ void DirCache::doScan(DirNode* node)
 
     // Sort: directories first, then alphabetical
     std::sort(entries.begin(), entries.end(),
-        [](const FileSystem::Entry& a, const FileSystem::Entry& b) {
-            bool aDir = (a.type == FileSystem::EntryType::Directory);
-            bool bDir = (b.type == FileSystem::EntryType::Directory);
-            if (aDir != bDir) return aDir > bDir;
-            return a.name < b.name;
-        });
+            [](const FileSystem::Entry& a, const FileSystem::Entry& b)
+            {
+                bool aDir = (a.type == FileSystem::EntryType::Directory);
+                bool bDir = (b.type == FileSystem::EntryType::Directory);
+                if (aDir != bDir) return aDir > bDir;
+                return a.name < b.name;
+            });
 
     // Filter hidden if needed
     int count = 0;
-    for (auto& e : entries) {
+    for (auto& e: entries)
+    {
         if (!showHidden_ && e.hidden) continue;
         ++count;
     }
@@ -140,20 +146,20 @@ void DirCache::doScan(DirNode* node)
     node->kids = allocKids(count);
     node->kidCount = 0;
 
-    for (auto& e : entries) {
+    for (auto& e: entries)
+    {
         if (!showHidden_ && e.hidden) continue;
 
         DirNode* child = allocNode();
-        child->name   = e.name;
-        child->path   = e.path;
-        child->isDir  = (e.type == FileSystem::EntryType::Directory);
-        child->size   = e.size;
-        child->mtime  = e.mtime;
+        child->name = e.name;
+        child->path = e.path;
+        child->isDir = (e.type == FileSystem::EntryType::Directory);
+        child->size = e.size;
+        child->mtime = e.mtime;
         child->hidden = e.hidden;
         child->parent = node;
 
-        if (!child->isDir)
-            child->ext = toLower(FileSystem::extension(e.name));
+        if (!child->isDir) child->ext = toLower(FileSystem::extension(e.name));
 
         node->kids[node->kidCount++] = child;
         indexNode(child);
@@ -181,17 +187,22 @@ DirCache::DirNode* DirCache::navigate(const String& path)
     if (rel.empty()) return cur;
 
     size_t pos = 0;
-    while (pos < rel.size()) {
+    while (pos < rel.size())
+    {
         size_t slash = rel.find('/', pos);
-        String seg = (slash == String::npos)
-            ? rel.substr(pos) : rel.substr(pos, slash - pos);
+        String seg = (slash == String::npos) ? rel.substr(pos) : rel.substr(pos, slash - pos);
         pos = (slash == String::npos) ? rel.size() : slash + 1;
 
         if (!cur->scanned) doScan(cur);
 
         DirNode* found = nullptr;
-        for (int i = 0; i < cur->kidCount; ++i) {
-            if (cur->kids[i]->name == seg) { found = cur->kids[i]; break; }
+        for (int i = 0; i < cur->kidCount; ++i)
+        {
+            if (cur->kids[i]->name == seg)
+            {
+                found = cur->kids[i];
+                break;
+            }
         }
         if (!found) return nullptr;
         cur = found;
@@ -222,9 +233,9 @@ void DirCache::deepScan(DirNode* node, int maxDepth)
 {
     if (!node || !node->isDir || maxDepth <= 0) return;
     if (!node->scanned) doScan(node);
-    for (int i = 0; i < node->kidCount; ++i) {
-        if (node->kids[i]->isDir)
-            deepScan(node->kids[i], maxDepth - 1);
+    for (int i = 0; i < node->kidCount; ++i)
+    {
+        if (node->kids[i]->isDir) deepScan(node->kids[i], maxDepth - 1);
     }
 }
 
@@ -237,7 +248,8 @@ void DirCache::invalidate(const String& path)
     if (!indexed) return;
 
     DirNode* n = *indexed;
-    if (n->isDir && n->scanned) {
+    if (n->isDir && n->scanned)
+    {
         // Just mark as not scanned — nodes stay in arena, will be orphaned
         // (arena freed all at once on clearCache)
         n->scanned = false;
@@ -262,25 +274,28 @@ void DirCache::indexNode(DirNode* n)
     if (n) index_[n->path] = n;
 }
 
-void DirCache::collectSearch(DirNode* n, const String& pattern,
-                             bool isExtSearch, SearchResult& out, int maxResults) const
+void DirCache::collectSearch(DirNode* n, const String& pattern, bool isExtSearch, SearchResult& out,
+        int maxResults) const
 {
     if (static_cast<int>(out.size()) >= maxResults) return;
 
-    if (!n->isDir) {
-        if (isExtSearch) {
-            if (n->ext == pattern)
-                out.push_back(n);
-        } else {
-            if (globMatch(pattern, toLower(n->name)))
-                out.push_back(n);
+    if (!n->isDir)
+    {
+        if (isExtSearch)
+        {
+            if (n->ext == pattern) out.push_back(n);
+        }
+        else
+        {
+            if (globMatch(pattern, toLower(n->name))) out.push_back(n);
         }
         return;
     }
 
     if (!n->scanned) return;
 
-    for (int i = 0; i < n->kidCount; ++i) {
+    for (int i = 0; i < n->kidCount; ++i)
+    {
         collectSearch(n->kids[i], pattern, isExtSearch, out, maxResults);
         if (static_cast<int>(out.size()) >= maxResults) return;
     }
@@ -293,14 +308,25 @@ bool DirCache::globMatch(const String& pattern, const String& text)
     int tn = static_cast<int>(text.size());
     int starP = -1, starT = -1;
 
-    while (ti < tn) {
-        if (pi < pn && (pattern[pi] == '?' || pattern[pi] == text[ti])) {
-            ++pi; ++ti;
-        } else if (pi < pn && pattern[pi] == '*') {
-            starP = pi++; starT = ti;
-        } else if (starP >= 0) {
-            pi = starP + 1; ti = ++starT;
-        } else {
+    while (ti < tn)
+    {
+        if (pi < pn && (pattern[pi] == '?' || pattern[pi] == text[ti]))
+        {
+            ++pi;
+            ++ti;
+        }
+        else if (pi < pn && pattern[pi] == '*')
+        {
+            starP = pi++;
+            starT = ti;
+        }
+        else if (starP >= 0)
+        {
+            pi = starP + 1;
+            ti = ++starT;
+        }
+        else
+        {
             return false;
         }
     }
@@ -311,7 +337,6 @@ bool DirCache::globMatch(const String& pattern, const String& text)
 String DirCache::toLower(const String& s)
 {
     String r = s;
-    for (auto& c : r)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (auto& c: r) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return r;
 }

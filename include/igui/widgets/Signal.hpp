@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <ct/vector.hpp>
-#include <type_traits>  // ~6k lines — replaces <functional> (~28k) + <algorithm> (~17k)
+#include <type_traits> // ~6k lines — replaces <functional> (~28k) + <algorithm> (~17k)
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Signal<Args...>  — lightweight signal/slot, Qt-style type erasure.
@@ -16,10 +16,12 @@
 //      onValueChanged.disconnect(id);
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
-template <typename... Args>
+template<typename... Args>
 class Signal
 {
 public:
@@ -27,19 +29,15 @@ public:
 
     /// Connect any callable (lambda, function pointer, functor).
     /// Returns a unique ID for later disconnection.
-    template <typename F>
+    template<typename F>
     SlotId connect(F&& fn)
     {
         using FD = typename std::decay<F>::type;
         auto* copy = new FD(static_cast<F&&>(fn));
         // Captureless lambdas: FD is baked in at instantiation → valid fn ptr.
-        slots_.push_back({
-            nextId_++,
-            copy,
+        slots_.push_back({ nextId_++, copy,
             [](void* ctx, Args... args) { (*static_cast<FD*>(ctx))(static_cast<Args>(args)...); },
-            [](void* ctx)               { delete static_cast<FD*>(ctx); },
-            false
-        });
+            [](void* ctx) { delete static_cast<FD*>(ctx); }, false });
         return slots_.back().id;
     }
 
@@ -48,9 +46,12 @@ public:
     // emit is done, so the closure that is running is never freed under it.
     void disconnect(SlotId id)
     {
-        for (auto it = slots_.begin(); it != slots_.end(); ++it) {
-            if (it->id == id && !it->dead) {
-                if (emitting_ > 0) {
+        for (auto it = slots_.begin(); it != slots_.end(); ++it)
+        {
+            if (it->id == id && !it->dead)
+            {
+                if (emitting_ > 0)
+                {
                     it->dead = true;
                     pendingCleanup_ = true;
                     return;
@@ -64,12 +65,13 @@ public:
 
     void disconnectAll()
     {
-        if (emitting_ > 0) {
-            for (auto& s : slots_) s.dead = true;
+        if (emitting_ > 0)
+        {
+            for (auto& s: slots_) s.dead = true;
             pendingCleanup_ = true;
             return;
         }
-        for (auto& s : slots_) s.destroy(s.ctx);
+        for (auto& s: slots_) s.destroy(s.ctx);
         slots_.clear();
     }
 
@@ -85,83 +87,96 @@ public:
         frame_ = &frame;
         ++emitting_;
         const auto count = slots_.size();
-        for (decltype(slots_.size()) i = 0; i < count; ++i) {
+        for (decltype(slots_.size()) i = 0; i < count; ++i)
+        {
             if (slots_[i].dead) continue;
             const Slot slot = slots_[i];
             slot.call(slot.ctx, static_cast<Args>(args)...);
-            if (frame.destroyed) {
-                if (frame.outer) {
+            if (frame.destroyed)
+            {
+                if (frame.outer)
+                {
                     frame.outer->destroyed = true;
-                    for (auto& orphan : frame.orphans) frame.outer->orphans.push_back(orphan);
-                } else {
-                    for (auto& orphan : frame.orphans) orphan.destroy(orphan.ctx);
+                    for (auto& orphan: frame.orphans) frame.outer->orphans.push_back(orphan);
+                }
+                else
+                {
+                    for (auto& orphan: frame.orphans) orphan.destroy(orphan.ctx);
                 }
                 return;
             }
         }
         frame_ = frame.outer;
-        if (--emitting_ == 0 && pendingCleanup_)
-            removeDead();
+        if (--emitting_ == 0 && pendingCleanup_) removeDead();
     }
 
     bool empty() const
     {
-        for (const auto& s : slots_)
+        for (const auto& s: slots_)
             if (!s.dead) return false;
         return true;
     }
 
     ~Signal()
     {
-        if (frame_) {
+        if (frame_)
+        {
             frame_->destroyed = true;
-            for (auto& s : slots_) frame_->orphans.push_back(s);
-        } else {
-            for (auto& s : slots_) s.destroy(s.ctx);
+            for (auto& s: slots_) frame_->orphans.push_back(s);
+        }
+        else
+        {
+            for (auto& s: slots_) s.destroy(s.ctx);
         }
         slots_.clear();
     }
 
     // Non-copyable (owns heap allocations)
     Signal() = default;
-    Signal(const Signal&)            = delete;
+    Signal(const Signal&) = delete;
     Signal& operator=(const Signal&) = delete;
-    Signal(Signal&&)                 = default;
-    Signal& operator=(Signal&&)      = default;
+    Signal(Signal&&) = default;
+    Signal& operator=(Signal&&) = default;
 
 private:
-    struct Slot {
-        SlotId  id;
-        void*   ctx;
-        void  (*call)(void*, Args...);
-        void  (*destroy)(void*);
-        bool    dead;
+    struct Slot
+    {
+        SlotId id;
+        void* ctx;
+        void (*call)(void*, Args...);
+        void (*destroy)(void*);
+        bool dead;
     };
 
     void removeDead() const
     {
-        for (auto it = slots_.begin(); it != slots_.end();) {
-            if (it->dead) {
+        for (auto it = slots_.begin(); it != slots_.end();)
+        {
+            if (it->dead)
+            {
                 it->destroy(it->ctx);
                 it = slots_.erase(it);
-            } else {
+            }
+            else
+            {
                 ++it;
             }
         }
         pendingCleanup_ = false;
     }
 
-    struct EmitFrame {
-        bool             destroyed = false;
+    struct EmitFrame
+    {
+        bool destroyed = false;
         ct::Vector<Slot> orphans;
-        EmitFrame*       outer     = nullptr;
+        EmitFrame* outer = nullptr;
     };
 
     mutable ct::Vector<Slot> slots_;
     SlotId nextId_ = 1;
-    mutable int        emitting_       = 0;
-    mutable bool       pendingCleanup_ = false;
-    mutable EmitFrame* frame_          = nullptr;
+    mutable int emitting_ = 0;
+    mutable bool pendingCleanup_ = false;
+    mutable EmitFrame* frame_ = nullptr;
 };
 
 } // namespace retained

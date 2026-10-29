@@ -22,10 +22,9 @@ Readout g_readout;
 
 } // namespace
 
-void reportGap(const char *section, const char *widget)
+void reportGap(const char* section, const char* widget)
 {
-    if (!section || !widget || g_gapCount >= kMaxGaps)
-        return;
+    if (!section || !widget || g_gapCount >= kMaxGaps) return;
     for (int i = 0; i < g_gapCount; ++i)
     {
         if (strcmp(g_gaps[i].section, section) == 0 && strcmp(g_gaps[i].widget, widget) == 0)
@@ -41,11 +40,10 @@ int gapCount()
     return g_gapCount;
 }
 
-const Gap &gap(int index)
+const Gap& gap(int index)
 {
-    static const Gap empty = {"", ""};
-    if (index < 0 || index >= g_gapCount)
-        return empty;
+    static const Gap empty = { "", "" };
+    if (index < 0 || index >= g_gapCount) return empty;
     return g_gaps[index];
 }
 
@@ -54,12 +52,12 @@ void clearGaps()
     g_gapCount = 0;
 }
 
-void setReadout(const Readout &readout)
+void setReadout(const Readout& readout)
 {
     g_readout = readout;
 }
 
-const Readout &readout()
+const Readout& readout()
 {
     return g_readout;
 }

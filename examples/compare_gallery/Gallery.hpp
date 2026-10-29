@@ -35,57 +35,55 @@ extern char gHelloLine[96];
 enum class Section
 {
     // ── Topo do demo ─────────────────────────────────────────────────────────
-    Help,               // CollapsingHeader("Help")
-    Configuration,      // CollapsingHeader("Configuration")
-    WindowOptions,      // CollapsingHeader("Window options")
-    // ── Dentro de CollapsingHeader("Widgets") ────────────────────────────────
-    WidgetsBasic,               // TreeNode("Basic")
-    WidgetsBullets,             //   "Bullets"
-    WidgetsCollapsingHeaders,   //   "Collapsing Headers"
-    WidgetsColorAndPickers,     //   "Color/Picker Widgets"
-    WidgetsCombo,               //   "Combo"
-    WidgetsDataTypes,           //   "Data Types"
-    WidgetsDisableBlocks,       //   "Disable Blocks"
-    WidgetsDragAndDrop,         //   "Drag and Drop"
-    WidgetsDragAndSliderFlags,  //   "Drag/Slider Flags"
-    WidgetsFonts,               //   "Fonts"
-    WidgetsImages,              //   "Images"
-    WidgetsListBoxes,           //   "List Boxes"
-    WidgetsMultiComponents,     //   "Multi-component Widgets"
-    WidgetsPlotting,            //   "Plotting"
-    WidgetsProgressBars,        //   "Progress Bars"
-    WidgetsQueryingStatuses,    //   "Querying Item Status" / "Querying Window Status"
-    WidgetsSelectables,         //   "Selectables"
+    Help,          // CollapsingHeader("Help")
+    Configuration, // CollapsingHeader("Configuration")
+    WindowOptions, // CollapsingHeader("Window options")
+                   // ── Dentro de CollapsingHeader("Widgets") ────────────────────────────────
+    WidgetsBasic,                   // TreeNode("Basic")
+    WidgetsBullets,                 //   "Bullets"
+    WidgetsCollapsingHeaders,       //   "Collapsing Headers"
+    WidgetsColorAndPickers,         //   "Color/Picker Widgets"
+    WidgetsCombo,                   //   "Combo"
+    WidgetsDataTypes,               //   "Data Types"
+    WidgetsDisableBlocks,           //   "Disable Blocks"
+    WidgetsDragAndDrop,             //   "Drag and Drop"
+    WidgetsDragAndSliderFlags,      //   "Drag/Slider Flags"
+    WidgetsFonts,                   //   "Fonts"
+    WidgetsImages,                  //   "Images"
+    WidgetsListBoxes,               //   "List Boxes"
+    WidgetsMultiComponents,         //   "Multi-component Widgets"
+    WidgetsPlotting,                //   "Plotting"
+    WidgetsProgressBars,            //   "Progress Bars"
+    WidgetsQueryingStatuses,        //   "Querying Item Status" / "Querying Window Status"
+    WidgetsSelectables,             //   "Selectables"
     WidgetsSelectionAndMultiSelect, // "Selection State & Multi-Select"
-    WidgetsTabs,                //   "Tabs"
-    WidgetsTextInput,           //   "Text Input" / multi-line
-    WidgetsTrees,               //   "Trees"
-    WidgetsTooltips,            //   "Tooltips"
-    // ── Restantes CollapsingHeader de topo ───────────────────────────────────
-    LayoutAndScrolling,         // CollapsingHeader("Layout & Scrolling")
-    PopupsAndModalWindows,      // CollapsingHeader("Popups & Modal Windows")
-    TablesAndColumns,           // CollapsingHeader("Tables & Columns")
-    InputsNavigationAndFocus,   // CollapsingHeader("Inputs, Navigation & Focus")
+    WidgetsTabs,                    //   "Tabs"
+    WidgetsTextInput,               //   "Text Input" / multi-line
+    WidgetsTrees,                   //   "Trees"
+    WidgetsTooltips,                //   "Tooltips"
+                     // ── Restantes CollapsingHeader de topo ───────────────────────────────────
+    LayoutAndScrolling,       // CollapsingHeader("Layout & Scrolling")
+    PopupsAndModalWindows,    // CollapsingHeader("Popups & Modal Windows")
+    TablesAndColumns,         // CollapsingHeader("Tables & Columns")
+    InputsNavigationAndFocus, // CollapsingHeader("Inputs, Navigation & Focus")
     Count
 };
 
-inline const Section *sections()
+inline const Section* sections()
 {
-    static const Section list[] = {
-        Section::Help, Section::Configuration, Section::WindowOptions,
+    static const Section list[] = { Section::Help, Section::Configuration, Section::WindowOptions,
         Section::WidgetsBasic, Section::WidgetsBullets, Section::WidgetsCollapsingHeaders,
         Section::WidgetsColorAndPickers, Section::WidgetsCombo, Section::WidgetsDataTypes,
         Section::WidgetsDisableBlocks, Section::WidgetsDragAndDrop,
         Section::WidgetsDragAndSliderFlags, Section::WidgetsFonts, Section::WidgetsImages,
         Section::WidgetsListBoxes, Section::WidgetsMultiComponents, Section::WidgetsPlotting,
-        Section::WidgetsProgressBars, Section::WidgetsQueryingStatuses,
-        Section::WidgetsSelectables, Section::WidgetsSelectionAndMultiSelect, Section::WidgetsTabs,
-        Section::WidgetsTextInput, Section::WidgetsTrees, Section::WidgetsTooltips,
-        Section::LayoutAndScrolling, Section::PopupsAndModalWindows, Section::TablesAndColumns,
-        Section::InputsNavigationAndFocus
-    };
+        Section::WidgetsProgressBars, Section::WidgetsQueryingStatuses, Section::WidgetsSelectables,
+        Section::WidgetsSelectionAndMultiSelect, Section::WidgetsTabs, Section::WidgetsTextInput,
+        Section::WidgetsTrees, Section::WidgetsTooltips, Section::LayoutAndScrolling,
+        Section::PopupsAndModalWindows, Section::TablesAndColumns,
+        Section::InputsNavigationAndFocus };
     static_assert(sizeof(list) / sizeof(list[0]) == static_cast<unsigned>(Section::Count),
-                  "sections() tem de cobrir todas as secoes");
+            "sections() tem de cobrir todas as secoes");
     return list;
 }
 
@@ -101,40 +99,70 @@ inline bool insideWidgets(Section section)
     return section >= Section::WidgetsBasic && section <= Section::WidgetsTooltips;
 }
 
-inline const char *sectionName(Section section)
+inline const char* sectionName(Section section)
 {
     switch (section)
     {
-    case Section::Help: return "Help";
-    case Section::Configuration: return "Configuration";
-    case Section::WindowOptions: return "Window options";
-    case Section::WidgetsBasic: return "Basic";
-    case Section::WidgetsBullets: return "Bullets";
-    case Section::WidgetsCollapsingHeaders: return "Collapsing Headers";
-    case Section::WidgetsColorAndPickers: return "Color/Picker Widgets";
-    case Section::WidgetsCombo: return "Combo";
-    case Section::WidgetsDataTypes: return "Data Types";
-    case Section::WidgetsDisableBlocks: return "Disable Blocks";
-    case Section::WidgetsDragAndDrop: return "Drag and Drop";
-    case Section::WidgetsDragAndSliderFlags: return "Drag/Slider Flags";
-    case Section::WidgetsFonts: return "Fonts";
-    case Section::WidgetsImages: return "Images";
-    case Section::WidgetsListBoxes: return "List Boxes";
-    case Section::WidgetsMultiComponents: return "Multi-component Widgets";
-    case Section::WidgetsPlotting: return "Plotting";
-    case Section::WidgetsProgressBars: return "Progress Bars";
-    case Section::WidgetsQueryingStatuses: return "Querying Item Status";
-    case Section::WidgetsSelectables: return "Selectables";
-    case Section::WidgetsSelectionAndMultiSelect: return "Selection State & Multi-Select";
-    case Section::WidgetsTabs: return "Tabs";
-    case Section::WidgetsTextInput: return "Text Input";
-    case Section::WidgetsTrees: return "Trees";
-    case Section::WidgetsTooltips: return "Tooltips";
-    case Section::LayoutAndScrolling: return "Layout & Scrolling";
-    case Section::PopupsAndModalWindows: return "Popups & Modal Windows";
-    case Section::TablesAndColumns: return "Tables & Columns";
-    case Section::InputsNavigationAndFocus: return "Inputs, Navigation & Focus";
-    case Section::Count: break;
+        case Section::Help:
+            return "Help";
+        case Section::Configuration:
+            return "Configuration";
+        case Section::WindowOptions:
+            return "Window options";
+        case Section::WidgetsBasic:
+            return "Basic";
+        case Section::WidgetsBullets:
+            return "Bullets";
+        case Section::WidgetsCollapsingHeaders:
+            return "Collapsing Headers";
+        case Section::WidgetsColorAndPickers:
+            return "Color/Picker Widgets";
+        case Section::WidgetsCombo:
+            return "Combo";
+        case Section::WidgetsDataTypes:
+            return "Data Types";
+        case Section::WidgetsDisableBlocks:
+            return "Disable Blocks";
+        case Section::WidgetsDragAndDrop:
+            return "Drag and Drop";
+        case Section::WidgetsDragAndSliderFlags:
+            return "Drag/Slider Flags";
+        case Section::WidgetsFonts:
+            return "Fonts";
+        case Section::WidgetsImages:
+            return "Images";
+        case Section::WidgetsListBoxes:
+            return "List Boxes";
+        case Section::WidgetsMultiComponents:
+            return "Multi-component Widgets";
+        case Section::WidgetsPlotting:
+            return "Plotting";
+        case Section::WidgetsProgressBars:
+            return "Progress Bars";
+        case Section::WidgetsQueryingStatuses:
+            return "Querying Item Status";
+        case Section::WidgetsSelectables:
+            return "Selectables";
+        case Section::WidgetsSelectionAndMultiSelect:
+            return "Selection State & Multi-Select";
+        case Section::WidgetsTabs:
+            return "Tabs";
+        case Section::WidgetsTextInput:
+            return "Text Input";
+        case Section::WidgetsTrees:
+            return "Trees";
+        case Section::WidgetsTooltips:
+            return "Tooltips";
+        case Section::LayoutAndScrolling:
+            return "Layout & Scrolling";
+        case Section::PopupsAndModalWindows:
+            return "Popups & Modal Windows";
+        case Section::TablesAndColumns:
+            return "Tables & Columns";
+        case Section::InputsNavigationAndFocus:
+            return "Inputs, Navigation & Focus";
+        case Section::Count:
+            break;
     }
     return "?";
 }
@@ -214,26 +242,73 @@ struct State
     float queryFloat;
 
     State()
-        : flag(), radio(0), combo(1), comboItem(0), multiSelected(), listBox(0), tab(0),
-          steps(0), i1(1), i2(4), f1(0.5f), f2(1.0f),
-          scalarS8(0), scalarU8(0u), scalarS16(0), scalarU16(0u), scalarS32(0), scalarU32(0u),
-          scalarS64(0), scalarU64(0ull), scalarF64(0.0),
-          rangeMin(0.2f), rangeMax(0.8f), vSlider(0.4f), vSliders(), progress(0.5f),
-          progressDirection(1.0f), plotOffset(0), plotFunc(0), plotCount(70), plotPhase(0.0f),
-          plotAnimate(true), treeOpen(true),
-          headerOpen(true), headerWithClose(true), disableAll(false), option(),
-          queryType(3), queryDisabled(false), queryBool(false), queryTreeOpen(true),
-          queryCombo(1), queryFloat(0.5f)
+            : flag(),
+              radio(0),
+              combo(1),
+              comboItem(0),
+              multiSelected(),
+              listBox(0),
+              tab(0),
+              steps(0),
+              i1(1),
+              i2(4),
+              f1(0.5f),
+              f2(1.0f),
+              scalarS8(0),
+              scalarU8(0u),
+              scalarS16(0),
+              scalarU16(0u),
+              scalarS32(0),
+              scalarU32(0u),
+              scalarS64(0),
+              scalarU64(0ull),
+              scalarF64(0.0),
+              rangeMin(0.2f),
+              rangeMax(0.8f),
+              vSlider(0.4f),
+              vSliders(),
+              progress(0.5f),
+              progressDirection(1.0f),
+              plotOffset(0),
+              plotFunc(0),
+              plotCount(70),
+              plotPhase(0.0f),
+              plotAnimate(true),
+              treeOpen(true),
+              headerOpen(true),
+              headerWithClose(true),
+              disableAll(false),
+              option(),
+              queryType(3),
+              queryDisabled(false),
+              queryBool(false),
+              queryTreeOpen(true),
+              queryCombo(1),
+              queryFloat(0.5f)
     {
-        for (int i = 0; i < 8; ++i)
-            flag[i] = (i % 2) == 0;
-        vec2[0] = 0.10f; vec2[1] = 0.20f;
-        vec3[0] = 0.10f; vec3[1] = 0.20f; vec3[2] = 0.30f;
-        vec4[0] = 0.10f; vec4[1] = 0.20f; vec4[2] = 0.30f; vec4[3] = 0.40f;
-        col3[0] = 0.30f; col3[1] = 0.60f; col3[2] = 0.90f;
-        col4[0] = 0.30f; col4[1] = 0.60f; col4[2] = 0.90f; col4[3] = 1.0f;
-        colHdr[0] = 0.20f; colHdr[1] = 0.40f; colHdr[2] = 0.60f;
-        vSliders[0] = 0.60f; vSliders[1] = 0.35f; vSliders[2] = 0.90f;
+        for (int i = 0; i < 8; ++i) flag[i] = (i % 2) == 0;
+        vec2[0] = 0.10f;
+        vec2[1] = 0.20f;
+        vec3[0] = 0.10f;
+        vec3[1] = 0.20f;
+        vec3[2] = 0.30f;
+        vec4[0] = 0.10f;
+        vec4[1] = 0.20f;
+        vec4[2] = 0.30f;
+        vec4[3] = 0.40f;
+        col3[0] = 0.30f;
+        col3[1] = 0.60f;
+        col3[2] = 0.90f;
+        col4[0] = 0.30f;
+        col4[1] = 0.60f;
+        col4[2] = 0.90f;
+        col4[3] = 1.0f;
+        colHdr[0] = 0.20f;
+        colHdr[1] = 0.40f;
+        colHdr[2] = 0.60f;
+        vSliders[0] = 0.60f;
+        vSliders[1] = 0.35f;
+        vSliders[2] = 0.90f;
         // Os valores com que o demo abre a seccao "Data Types" (o s32 a 123, o u64
         // ao dobro do u32, o double a 1.2345).
         scalarS32 = 123;
@@ -245,21 +320,14 @@ struct State
         scalarS64 = 1234567890123ll;
         scalarU64 = 2469135780246ull;
         scalarF64 = 1.2345;
-        const float frames[7] = {0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f};
-        for (int i = 0; i < 7; ++i)
-            plotFrames[i] = frames[i];
-        for (int i = 0; i < 32; ++i)
-            plotLines[i] = cosf(static_cast<float>(i) * 0.35f);
-        for (int i = 0; i < 400; ++i)
-            plotFuncValues[i] = 0.0f;
-        for (int i = 0; i < 16; ++i)
-            plotBars[i] = 0.2f + 0.05f * static_cast<float>(i % 9);
-        for (int i = 0; i < 64; ++i)
-            text[i] = '\0';
-        for (int i = 0; i < 256; ++i)
-            textMultiline[i] = '\0';
-        for (int i = 0; i < 64; ++i)
-            textHint[i] = '\0';
+        const float frames[7] = { 0.6f, 0.1f, 1.0f, 0.5f, 0.92f, 0.1f, 0.2f };
+        for (int i = 0; i < 7; ++i) plotFrames[i] = frames[i];
+        for (int i = 0; i < 32; ++i) plotLines[i] = cosf(static_cast<float>(i) * 0.35f);
+        for (int i = 0; i < 400; ++i) plotFuncValues[i] = 0.0f;
+        for (int i = 0; i < 16; ++i) plotBars[i] = 0.2f + 0.05f * static_cast<float>(i % 9);
+        for (int i = 0; i < 64; ++i) text[i] = '\0';
+        for (int i = 0; i < 256; ++i) textMultiline[i] = '\0';
+        for (int i = 0; i < 64; ++i) textHint[i] = '\0';
     }
 };
 
@@ -273,19 +341,25 @@ struct FrameStats
     int drawCalls;
     int gaps;
 
-    FrameStats() : items(0), vertices(0), drawCalls(0), gaps(0) {}
+    FrameStats()
+            : items(0),
+              vertices(0),
+              drawCalls(0),
+              gaps(0)
+    {
+    }
 };
 
 // Uma coisa que o demo do ImGui tem nesta secção e o iGUI não sabe exprimir.
 struct Gap
 {
-    const char *section;
-    const char *widget;
+    const char* section;
+    const char* widget;
 };
 
-void reportGap(const char *section, const char *widget);
+void reportGap(const char* section, const char* widget);
 int gapCount();
-const Gap &gap(int index);
+const Gap& gap(int index);
 void clearGaps();
 
 // Os números do painel de topo, desenhados pela própria biblioteca de cada lado
@@ -294,7 +368,7 @@ void clearGaps();
 // o demo, não o relatório.
 struct Readout
 {
-    const float *history; // tempos de submit, em ms, mais antigo primeiro
+    const float* history; // tempos de submit, em ms, mais antigo primeiro
     int historyCount;
     float submitMs;
     float renderMs;
@@ -306,14 +380,22 @@ struct Readout
     int gaps;
 
     Readout()
-        : history(nullptr), historyCount(0), submitMs(0.0f), renderMs(0.0f), gpuMs(0.0f), hz(0.0f),
-          items(0), vertices(0), drawCalls(0), gaps(0)
+            : history(nullptr),
+              historyCount(0),
+              submitMs(0.0f),
+              renderMs(0.0f),
+              gpuMs(0.0f),
+              hz(0.0f),
+              items(0),
+              vertices(0),
+              drawCalls(0),
+              gaps(0)
     {
     }
 };
 
-void setReadout(const Readout &readout);
-const Readout &readout();
+void setReadout(const Readout& readout);
+const Readout& readout();
 
 // ── As faces extra do demo (secção "Fonts") ──────────────────────────────────
 // Ficheiros de misc/fonts do ImGui, com o tamanho com que cada um é cozido. Os
@@ -322,18 +404,16 @@ const Readout &readout();
 // combo "Font" do demo mostrar o mesmo de um lado e do outro.
 struct DemoFontFile
 {
-    const char *file;
+    const char* file;
     float size;
 };
 
-inline const DemoFontFile *demoFontFiles(int &count)
+inline const DemoFontFile* demoFontFiles(int& count)
 {
     static const DemoFontFile list[] = {
-        {"ProggyClean.ttf", 20.0f},     // a familia com que o ImGui desenha, cozida maior
-        {"Cousine-Regular.ttf", 13.0f},
-        {"Roboto-Medium.ttf", 13.0f},
-        {"DroidSans.ttf", 16.0f},
-        {"Karla-Regular.ttf", 13.0f}
+        { "ProggyClean.ttf", 20.0f }, // a familia com que o ImGui desenha, cozida maior
+        { "Cousine-Regular.ttf", 13.0f }, { "Roboto-Medium.ttf", 13.0f },
+        { "DroidSans.ttf", 16.0f }, { "Karla-Regular.ttf", 13.0f }
     };
     count = static_cast<int>(sizeof(list) / sizeof(list[0]));
     return list;

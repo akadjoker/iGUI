@@ -5,7 +5,9 @@
 
 using json = ct::Json;
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  WidgetSerializer - save / load widget trees to/from JSON

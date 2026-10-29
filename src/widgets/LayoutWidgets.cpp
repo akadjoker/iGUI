@@ -1,16 +1,19 @@
-#include "pch.hpp"
 #include "LayoutWidgets.hpp"
+#include "pch.hpp"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  GridLayout
 // ═════════════════════════════════════════════════════════════════════════════
 
-GridLayout::GridLayout(int cols) : cols_(cols > 0 ? cols : 1) {}
+GridLayout::GridLayout(int cols)
+        : cols_(cols > 0 ? cols : 1)
+{
+}
 
 int GridLayout::rows() const
 {
     int visible = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
         if (c->isVisible()) ++visible;
     return (visible + cols_ - 1) / cols_;
 }
@@ -18,11 +21,11 @@ int GridLayout::rows() const
 Widget::Vec2f GridLayout::sizeHint() const
 {
     int r = rows();
-    if (r == 0) return {0, 0};
+    if (r == 0) return { 0, 0 };
 
     // Find max child sizeHint for uniform cell sizing
     float maxW = 0, maxH = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto h = c->sizeHint();
@@ -32,14 +35,14 @@ Widget::Vec2f GridLayout::sizeHint() const
 
     float w = padding_.left + padding_.right + cols_ * maxW + (cols_ - 1) * spacingH_;
     float h = padding_.top + padding_.bottom + r * maxH + (r - 1) * spacingV_;
-    return {w, h};
+    return { w, h };
 }
 
 void GridLayout::layout()
 {
     // Collect visible children
     ct::Vector<Widget*> vis;
-    for (auto* c : children_)
+    for (auto* c: children_)
         if (c->isVisible()) vis.push_back(c);
 
     if (vis.empty()) return;
@@ -48,7 +51,7 @@ void GridLayout::layout()
 
     // Available space
     float availW = rect_.w - padding_.left - padding_.right;
-    float availH = rect_.h - padding_.top  - padding_.bottom;
+    float availH = rect_.h - padding_.top - padding_.bottom;
 
     float cellW = (availW - (cols_ - 1) * spacingH_) / cols_;
     float cellH = (availH - (r - 1) * spacingV_) / r;
@@ -62,9 +65,9 @@ void GridLayout::layout()
         int row = static_cast<int>(i) / cols_;
 
         float x = padding_.left + col * (cellW + spacingH_);
-        float y = padding_.top  + row * (cellH + spacingV_);
+        float y = padding_.top + row * (cellH + spacingV_);
 
-        vis[i]->setRect({x, y, cellW, cellH});
+        vis[i]->setRect({ x, y, cellW, cellH });
         vis[i]->layout();
     }
 }
@@ -76,8 +79,7 @@ void GridLayout::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -88,10 +90,9 @@ void BorderLayout::setWidget(BorderRegion region, Widget* w)
 {
     int idx = static_cast<int>(region);
     if (regions_[idx] == w) return;
-    for (Widget*& slot : regions_)
+    for (Widget*& slot: regions_)
         if (slot == w) slot = nullptr;
-    if (regions_[idx])
-        removeChild(regions_[idx]);
+    if (regions_[idx]) removeChild(regions_[idx]);
     regions_[idx] = w;
     if (w) addChild(w);
     markDirty();
@@ -116,66 +117,70 @@ float BorderLayout::regionSize(BorderRegion region) const
 float BorderLayout::resolveSize(BorderRegion region, float totalDim, float hint) const
 {
     float s = regionSizes_[static_cast<int>(region)];
-    if (s > 0)  return s;                       // fixed pixels
-    if (s < 0)  return totalDim * (-s);          // percentage (e.g. -0.2 = 20%)
-    return hint;                                  // 0 = use sizeHint
+    if (s > 0) return s;               // fixed pixels
+    if (s < 0) return totalDim * (-s); // percentage (e.g. -0.2 = 20%)
+    return hint;                       // 0 = use sizeHint
 }
 
 Widget::Vec2f BorderLayout::sizeHint() const
 {
     // If explicit size was set, honour it
-    if (rect_.w > 0 && rect_.h > 0)
-        return {rect_.w, rect_.h};
+    if (rect_.w > 0 && rect_.h > 0) return { rect_.w, rect_.h };
 
     // Use regionSizes_ (px) when available, otherwise child sizeHint
-    auto hintPx = [&](BorderRegion r, float childHint) -> float {
+    auto hintPx = [&](BorderRegion r, float childHint) -> float
+    {
         float s = regionSizes_[static_cast<int>(r)];
-        if (s > 0)  return s;           // fixed px
-        return childHint;                // % or auto → child hint
+        if (s > 0) return s; // fixed px
+        return childHint;    // % or auto → child hint
     };
 
-    auto* top    = regions_[static_cast<int>(BorderRegion::Top)];
+    auto* top = regions_[static_cast<int>(BorderRegion::Top)];
     auto* bottom = regions_[static_cast<int>(BorderRegion::Bottom)];
-    auto* left   = regions_[static_cast<int>(BorderRegion::Left)];
-    auto* right  = regions_[static_cast<int>(BorderRegion::Right)];
+    auto* left = regions_[static_cast<int>(BorderRegion::Left)];
+    auto* right = regions_[static_cast<int>(BorderRegion::Right)];
     auto* center = regions_[static_cast<int>(BorderRegion::Center)];
 
     float topH = 0, bottomH = 0, leftW = 0, rightW = 0;
     float centerW = 0, centerH = 0;
 
-    if (top    && top->isVisible())    topH    = hintPx(BorderRegion::Top,    top->sizeHint().y);
+    if (top && top->isVisible()) topH = hintPx(BorderRegion::Top, top->sizeHint().y);
     if (bottom && bottom->isVisible()) bottomH = hintPx(BorderRegion::Bottom, bottom->sizeHint().y);
-    if (left   && left->isVisible())   leftW   = hintPx(BorderRegion::Left,   left->sizeHint().x);
-    if (right  && right->isVisible())  rightW  = hintPx(BorderRegion::Right,  right->sizeHint().x);
-    if (center && center->isVisible()) { centerW = center->sizeHint().x; centerH = center->sizeHint().y; }
+    if (left && left->isVisible()) leftW = hintPx(BorderRegion::Left, left->sizeHint().x);
+    if (right && right->isVisible()) rightW = hintPx(BorderRegion::Right, right->sizeHint().x);
+    if (center && center->isVisible())
+    {
+        centerW = center->sizeHint().x;
+        centerH = center->sizeHint().y;
+    }
 
     int gapsH = (leftW > 0 ? 1 : 0) + (rightW > 0 ? 1 : 0);
     int gapsV = (topH > 0 ? 1 : 0) + (bottomH > 0 ? 1 : 0);
 
-    float midH = std::max({centerH, 0.f});  // middle row height
+    float midH = std::max({ centerH, 0.f }); // middle row height
     int midGap = (midH > 0 || leftW > 0 || rightW > 0) ? 1 : 0;
 
     float w = padding_.left + padding_.right + leftW + centerW + rightW + gapsH * spacing_;
-    float h = padding_.top + padding_.bottom + topH + bottomH + midH
-              + gapsV * spacing_ + midGap * spacing_;
+    float h = padding_.top + padding_.bottom + topH + bottomH + midH + gapsV * spacing_ +
+              midGap * spacing_;
 
     // Respect explicit dimensions as minimum
     if (rect_.w > 0) w = std::max(w, rect_.w);
     if (rect_.h > 0) h = std::max(h, rect_.h);
 
-    return {w, h};
+    return { w, h };
 }
 
 void BorderLayout::layout()
 {
-    auto* top    = regions_[static_cast<int>(BorderRegion::Top)];
+    auto* top = regions_[static_cast<int>(BorderRegion::Top)];
     auto* bottom = regions_[static_cast<int>(BorderRegion::Bottom)];
-    auto* left   = regions_[static_cast<int>(BorderRegion::Left)];
-    auto* right  = regions_[static_cast<int>(BorderRegion::Right)];
+    auto* left = regions_[static_cast<int>(BorderRegion::Left)];
+    auto* right = regions_[static_cast<int>(BorderRegion::Right)];
     auto* center = regions_[static_cast<int>(BorderRegion::Center)];
 
     float availW = rect_.w - padding_.left - padding_.right;
-    float availH = rect_.h - padding_.top  - padding_.bottom;
+    float availH = rect_.h - padding_.top - padding_.bottom;
     float x0 = padding_.left;
     float y0 = padding_.top;
 
@@ -185,7 +190,7 @@ void BorderLayout::layout()
     {
         float hint = top->sizeHint().y;
         topH = resolveSize(BorderRegion::Top, availH, hint);
-        top->setRect({x0, y0, availW, topH});
+        top->setRect({ x0, y0, availW, topH });
         top->layout();
         y0 += topH + spacing_;
         availH -= topH + spacing_;
@@ -199,7 +204,7 @@ void BorderLayout::layout()
         bottomH = resolveSize(BorderRegion::Bottom, rect_.h - padding_.top - padding_.bottom, hint);
         availH -= bottomH + spacing_;
         float by = y0 + availH + spacing_;
-        bottom->setRect({x0, by, availW, bottomH});
+        bottom->setRect({ x0, by, availW, bottomH });
         bottom->layout();
     }
 
@@ -211,7 +216,7 @@ void BorderLayout::layout()
     {
         float hint = left->sizeHint().x;
         leftW = resolveSize(BorderRegion::Left, rect_.w - padding_.left - padding_.right, hint);
-        left->setRect({midX, y0, leftW, availH});
+        left->setRect({ midX, y0, leftW, availH });
         left->layout();
         midX += leftW + spacing_;
         midW -= leftW + spacing_;
@@ -225,7 +230,7 @@ void BorderLayout::layout()
         rightW = resolveSize(BorderRegion::Right, rect_.w - padding_.left - padding_.right, hint);
         midW -= rightW + spacing_;
         float rx = midX + midW + spacing_;
-        right->setRect({rx, y0, rightW, availH});
+        right->setRect({ rx, y0, rightW, availH });
         right->layout();
     }
 
@@ -234,7 +239,7 @@ void BorderLayout::layout()
     {
         if (midW < 0) midW = 0;
         if (availH < 0) availH = 0;
-        center->setRect({midX, y0, midW, availH});
+        center->setRect({ midX, y0, midW, availH });
         center->layout();
     }
 }
@@ -246,8 +251,7 @@ void BorderLayout::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -255,7 +259,8 @@ void BorderLayout::paint(PaintContext& ctx)
 // ═════════════════════════════════════════════════════════════════════════════
 
 Collapsible::Collapsible(const String& title, bool expanded)
-    : title_(title), expanded_(expanded)
+        : title_(title),
+          expanded_(expanded)
 {
     acceptsFocus_ = true;
 }
@@ -286,7 +291,7 @@ Rect Collapsible::checkRect() const
     const auto& t = Theme::instance();
     const Rect abs = absoluteRect();
     const float size = t.fontSize;
-    return {abs.x + 8.0f + 8.0f + 6.0f, abs.y + (headerH_ - size) * 0.5f, size, size};
+    return { abs.x + 8.0f + 8.0f + 6.0f, abs.y + (headerH_ - size) * 0.5f, size, size };
 }
 
 void Collapsible::onMousePress(MouseEvent& e)
@@ -307,7 +312,7 @@ void Collapsible::onMousePress(MouseEvent& e)
 
     // Only toggle if click is in the header area
     Rect abs = absoluteRect();
-    Rect header = {abs.x, abs.y, abs.w, headerH_};
+    Rect header = { abs.x, abs.y, abs.w, headerH_ };
     if (header.contains(e.x, e.y))
     {
         setExpanded(!expanded_);
@@ -323,18 +328,18 @@ Widget::Vec2f Collapsible::sizeHint() const
 
     if (isOpen())
     {
-        for (auto* c : children_)
+        for (auto* c: children_)
         {
             if (!c->isVisible()) continue;
             auto hint = c->sizeHint();
             if (hint.x > w) w = hint.x;
             h += hint.y + contentSpacing_;
         }
-        h += contentPad_;  // bottom padding after content
+        h += contentPad_; // bottom padding after content
     }
 
     if (rect_.w > 0) w = std::max(w, rect_.w);
-    return {w, h};
+    return { w, h };
 }
 
 void Collapsible::layout()
@@ -346,12 +351,12 @@ void Collapsible::layout()
         float contentW = rect_.w - contentPad_ * 2;
         if (contentW < 0) contentW = 0;
 
-        for (auto* c : children_)
+        for (auto* c: children_)
         {
             if (!c->isVisible()) continue;
             auto hint = c->sizeHint();
             float h = hint.y;
-            c->setRect({contentPad_, y, contentW, h});
+            c->setRect({ contentPad_, y, contentW, h });
             c->layout();
             y += h + contentSpacing_;
         }
@@ -368,7 +373,7 @@ void Collapsible::paint(PaintContext& ctx)
     const auto& t = Theme::instance();
 
     // ── Header background ────────────────────────────────────────────────
-    Rect headerRect = {abs.x, abs.y, abs.w, headerH_};
+    Rect headerRect = { abs.x, abs.y, abs.w, headerH_ };
     Rect clippedHdr;
     if (ctx.clipRectIntersect(headerRect, clippedHdr))
     {
@@ -380,9 +385,8 @@ void Collapsible::paint(PaintContext& ctx)
             bg.b = std::min(255, bg.b + 15);
         }
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.Rectangle(
-            static_cast<int>(clippedHdr.x), static_cast<int>(clippedHdr.y),
-            static_cast<int>(clippedHdr.w), static_cast<int>(clippedHdr.h), true);
+        ctx.fill.Rectangle(static_cast<int>(clippedHdr.x), static_cast<int>(clippedHdr.y),
+                static_cast<int>(clippedHdr.w), static_cast<int>(clippedHdr.h), true);
     }
 
     // ── Triangle indicator ───────────────────────────────────────────────
@@ -424,8 +428,8 @@ void Collapsible::paint(PaintContext& ctx)
         Rect clippedBox;
         if (ctx.clipRectIntersect(box, clippedBox))
         {
-            const bool over = box.contains(WidgetApp::instance().mouseX(),
-                                           WidgetApp::instance().mouseY());
+            const bool over =
+                    box.contains(WidgetApp::instance().mouseX(), WidgetApp::instance().mouseY());
             Color bg = over ? t.inputBgHover : t.inputBg;
             ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
             ctx.fill.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, true);
@@ -443,14 +447,14 @@ void Collapsible::paint(PaintContext& ctx)
     }
 
     // ── Title text ───────────────────────────────────────────────────────
-    float asc   = ctx.font.GetAscender();
+    float asc = ctx.font.GetAscender();
     float textY = abs.y + (headerH_ + asc) * 0.5f;
 
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
     ctx.font.SetBatch(&ctx.text);
 
-    Rect textRect = {textX, textY - asc, abs.w, asc};
+    Rect textRect = { textX, textY - asc, abs.w, asc };
     if (!ctx.isClipped(textRect))
     {
         ctx.font.Print(title_.c_str(), textX, textY);
@@ -460,8 +464,7 @@ void Collapsible::paint(PaintContext& ctx)
     if (isOpen())
     {
         ctx.pushClip(abs);
-        for (auto* c : children_)
-            c->paint(ctx);
+        for (auto* c: children_) c->paint(ctx);
         ctx.popClip();
     }
 }
@@ -473,7 +476,7 @@ void Collapsible::paint(PaintContext& ctx)
 Widget::Vec2f StatusBar::sizeHint() const
 {
     const auto& t = Theme::instance();
-    return {200.0f, t.fontSize + 6.0f};
+    return { 200.0f, t.fontSize + 6.0f };
 }
 
 void StatusBar::layout()
@@ -490,11 +493,11 @@ void StatusBar::layout()
     }
 
     // Layout children horizontally
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
-        c->setRect({x, 0, hint.x, h});
+        c->setRect({ x, 0, hint.x, h });
         c->layout();
         x += hint.x + spacing_;
     }
@@ -514,15 +517,13 @@ void StatusBar::paint(PaintContext& ctx)
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
-        ctx.fill.Rectangle(
-            static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-            static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
+        ctx.fill.Rectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
 
         // Top border line
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
-        ctx.line.Line2D(
-            static_cast<int>(abs.x), static_cast<int>(abs.y),
-            static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y));
+        ctx.line.Line2D(static_cast<int>(abs.x), static_cast<int>(abs.y),
+                static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y));
     }
 
     // Status text
@@ -540,15 +541,14 @@ void StatusBar::paint(PaintContext& ctx)
         float gx = abs.x + abs.w - 2.0f;
         float gy = abs.y + abs.h - 2.0f;
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b,
-                          static_cast<uint8_t>(t.borderColor.a * 2 / 3));
+                static_cast<uint8_t>(t.borderColor.a * 2 / 3));
         ctx.drawLine(gx - 10.0f, gy, gx, gy - 10.0f);
-        ctx.drawLine(gx -  6.0f, gy, gx, gy -  6.0f);
-        ctx.drawLine(gx -  2.0f, gy, gx, gy -  2.0f);
+        ctx.drawLine(gx - 6.0f, gy, gx, gy - 6.0f);
+        ctx.drawLine(gx - 2.0f, gy, gx, gy - 2.0f);
     }
 
     // Children
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -582,7 +582,7 @@ void StackLayout::setCurrentIndex(int idx)
 Widget* StackLayout::currentWidget() const
 {
     int i = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (i == currentIndex_) return c;
         ++i;
@@ -594,24 +594,24 @@ Widget::Vec2f StackLayout::sizeHint() const
 {
     // Max of all children's hints
     float w = 0, h = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         auto hint = c->sizeHint();
         if (hint.x > w) w = hint.x;
         if (hint.y > h) h = hint.y;
     }
-    return {w, h};
+    return { w, h };
 }
 
 void StackLayout::layout()
 {
     int i = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (i == currentIndex_ || (animating_ && i == previousIndex_))
         {
             c->setVisible(true);
-            c->setRect({0, 0, rect_.w, rect_.h});
+            c->setRect({ 0, 0, rect_.w, rect_.h });
             c->layout();
         }
         else
@@ -648,7 +648,7 @@ void StackLayout::paint(PaintContext& ctx)
         Widget* prev = nullptr;
         Widget* cur = nullptr;
         int i = 0;
-        for (auto* c : children_)
+        for (auto* c: children_)
         {
             if (i == previousIndex_) prev = c;
             if (i == currentIndex_) cur = c;
@@ -664,7 +664,7 @@ void StackLayout::paint(PaintContext& ctx)
         {
             if (!w || !w->isVisible()) return;
             Rect saved = w->rect();
-            w->setRect({xOff, 0, rect_.w, rect_.h});
+            w->setRect({ xOff, 0, rect_.w, rect_.h });
             w->paint(ctx);
             w->setRect(saved);
         };
@@ -677,8 +677,7 @@ void StackLayout::paint(PaintContext& ctx)
 
     // Only paint the active child
     Widget* cur = currentWidget();
-    if (cur && cur->isVisible())
-        cur->paint(ctx);
+    if (cur && cur->isVisible()) cur->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -695,7 +694,7 @@ Widget::Vec2f FormLayout::sizeHint() const
     int count = 0;
     for (size_t i = 0; i + 1 < children_.size(); i += 2)
     {
-        auto* label  = children_[i];
+        auto* label = children_[i];
         auto* widget = children_[i + 1];
         if (!label->isVisible() && !widget->isVisible()) continue;
 
@@ -714,7 +713,7 @@ Widget::Vec2f FormLayout::sizeHint() const
     }
 
     float w = padding_.left + padding_.right + maxLabelW + spacingH_ + maxWidgetW;
-    return {w, totalH};
+    return { w, totalH };
 }
 
 void FormLayout::layout()
@@ -738,7 +737,7 @@ void FormLayout::layout()
     float y = padding_.top;
     for (size_t i = 0; i + 1 < children_.size(); i += 2)
     {
-        auto* label  = children_[i];
+        auto* label = children_[i];
         auto* widget = children_[i + 1];
         if (!label->isVisible() && !widget->isVisible()) continue;
 
@@ -746,12 +745,12 @@ void FormLayout::layout()
 
         // Label: right-aligned in its column, vertically centered
         float ly = y + (rh - label->sizeHint().y) * 0.5f;
-        label->setRect({padding_.left, ly, labelW, label->sizeHint().y});
+        label->setRect({ padding_.left, ly, labelW, label->sizeHint().y });
         label->layout();
 
         // Widget: fills remaining width
         float wy = y + (rh - widget->sizeHint().y) * 0.5f;
-        widget->setRect({padding_.left + labelW + spacingH_, wy, widgetW, rh});
+        widget->setRect({ padding_.left + labelW + spacingH_, wy, widgetW, rh });
         widget->layout();
 
         y += rh + spacingV_;
@@ -764,8 +763,7 @@ void FormLayout::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -777,7 +775,7 @@ Widget::Vec2f FlowLayout::sizeHint() const
     float availW = rect_.w > 0 ? rect_.w - padding_.left - padding_.right : 400.0f;
     float x = 0, y = 0, rowH = 0, maxW = 0;
 
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
@@ -798,8 +796,7 @@ Widget::Vec2f FlowLayout::sizeHint() const
     if (x > maxW) maxW = x - spacingH_;
     y += rowH;
 
-    return {padding_.left + padding_.right + maxW,
-            padding_.top + padding_.bottom + y};
+    return { padding_.left + padding_.right + maxW, padding_.top + padding_.bottom + y };
 }
 
 void FlowLayout::layout()
@@ -809,10 +806,10 @@ void FlowLayout::layout()
 
     // Two passes: first measure row heights, then position
     ct::Vector<Widget*> vis;
-    for (auto* c : children_)
+    for (auto* c: children_)
         if (c->isVisible()) vis.push_back(c);
 
-    for (auto* c : vis)
+    for (auto* c: vis)
     {
         auto hint = c->sizeHint();
 
@@ -824,7 +821,7 @@ void FlowLayout::layout()
             rowH = 0;
         }
 
-        c->setRect({padding_.left + x, padding_.top + y, hint.x, hint.y});
+        c->setRect({ padding_.left + x, padding_.top + y, hint.x, hint.y });
         c->layout();
 
         x += hint.x + spacingH_;
@@ -838,8 +835,7 @@ void FlowLayout::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -849,22 +845,22 @@ void FlowLayout::paint(PaintContext& ctx)
 Widget::Vec2f Overlay::sizeHint() const
 {
     float w = 0, h = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
         if (hint.x > w) w = hint.x;
         if (hint.y > h) h = hint.y;
     }
-    return {w, h};
+    return { w, h };
 }
 
 void Overlay::layout()
 {
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         // All layers fill the full overlay area
-        c->setRect({0, 0, rect_.w, rect_.h});
+        c->setRect({ 0, 0, rect_.w, rect_.h });
         c->layout();
     }
 }
@@ -876,15 +872,15 @@ void Overlay::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     // Paint in order: first child = bottom, last = top
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Splitter - two children with draggable divider
 // ═════════════════════════════════════════════════════════════════════════════
 
-Splitter::Splitter(LayoutDir dir) : dir_(dir)
+Splitter::Splitter(LayoutDir dir)
+        : dir_(dir)
 {
     // cursor_ stays Arrow; set to SizeH/SizeV only when hovering the handle
 }
@@ -904,7 +900,7 @@ void Splitter::setRatio(float r)
 Widget::Vec2f Splitter::sizeHint() const
 {
     float w = 0, h = 0;
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
@@ -920,41 +916,74 @@ Widget::Vec2f Splitter::sizeHint() const
         }
     }
     if (dir_ == LayoutDir::Horizontal) w += handleSize_;
-    else                                h += handleSize_;
-    return {w, h};
+    else
+        h += handleSize_;
+    return { w, h };
 }
 
 void Splitter::layout()
 {
     // We only handle the first two children
-    Widget* first  = children_.size() > 0 ? children_[0] : nullptr;
+    Widget* first = children_.size() > 0 ? children_[0] : nullptr;
     Widget* second = children_.size() > 1 ? children_[1] : nullptr;
     if (!first && !second) return;
 
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        float firstW  = total * ratio_;
+        float firstW = total * ratio_;
         float secondW = total - firstW;
 
         // Clamp to min sizes
-        if (firstW < minSize_)  { firstW = minSize_; secondW = total - firstW; }
-        if (secondW < minSize_) { secondW = minSize_; firstW = total - secondW; }
+        if (firstW < minSize_)
+        {
+            firstW = minSize_;
+            secondW = total - firstW;
+        }
+        if (secondW < minSize_)
+        {
+            secondW = minSize_;
+            firstW = total - secondW;
+        }
 
-        if (first)  { first->setRect({0, 0, firstW, rect_.h}); first->layout(); }
-        if (second) { second->setRect({firstW + handleSize_, 0, secondW, rect_.h}); second->layout(); }
+        if (first)
+        {
+            first->setRect({ 0, 0, firstW, rect_.h });
+            first->layout();
+        }
+        if (second)
+        {
+            second->setRect({ firstW + handleSize_, 0, secondW, rect_.h });
+            second->layout();
+        }
     }
     else
     {
         float total = rect_.h - handleSize_;
-        float firstH  = total * ratio_;
+        float firstH = total * ratio_;
         float secondH = total - firstH;
 
-        if (firstH < minSize_)  { firstH = minSize_; secondH = total - firstH; }
-        if (secondH < minSize_) { secondH = minSize_; firstH = total - secondH; }
+        if (firstH < minSize_)
+        {
+            firstH = minSize_;
+            secondH = total - firstH;
+        }
+        if (secondH < minSize_)
+        {
+            secondH = minSize_;
+            firstH = total - secondH;
+        }
 
-        if (first)  { first->setRect({0, 0, rect_.w, firstH}); first->layout(); }
-        if (second) { second->setRect({0, firstH + handleSize_, rect_.w, secondH}); second->layout(); }
+        if (first)
+        {
+            first->setRect({ 0, 0, rect_.w, firstH });
+            first->layout();
+        }
+        if (second)
+        {
+            second->setRect({ 0, firstH + handleSize_, rect_.w, secondH });
+            second->layout();
+        }
     }
 }
 
@@ -965,8 +994,7 @@ void Splitter::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     // Paint children
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 
     // Paint handle (divider bar)
     const auto& t = Theme::instance();
@@ -992,16 +1020,16 @@ void Splitter::paint(PaintContext& ctx)
     }
 
     // Handle background
-    Color hc = dragging_      ? Color(100, 100, 110, 255)
-             : handleHovered_ ? Color(80, 80, 90, 255)
-                              : Color(65, 65, 70, 255);
+    Color hc = dragging_        ? Color(100, 100, 110, 255)
+               : handleHovered_ ? Color(80, 80, 90, 255)
+                                : Color(65, 65, 70, 255);
     ctx.fill.SetColor(hc.r, hc.g, hc.b, hc.a);
-    ctx.fill.Rectangle(static_cast<int>(hx), static_cast<int>(hy),
-                        static_cast<int>(hw), static_cast<int>(hh), true);
+    ctx.fill.Rectangle(static_cast<int>(hx), static_cast<int>(hy), static_cast<int>(hw),
+            static_cast<int>(hh), true);
 
     // Center dots/line indicator on the handle
-    Color dc = (dragging_ || handleHovered_) ? Color(180, 180, 190, 230)
-                                             : Color(130, 130, 138, 200);
+    Color dc =
+            (dragging_ || handleHovered_) ? Color(180, 180, 190, 230) : Color(130, 130, 138, 200);
     ctx.line.SetColor(dc.r, dc.g, dc.b, dc.a);
     if (dir_ == LayoutDir::Horizontal)
     {
@@ -1043,7 +1071,7 @@ void Splitter::onMousePress(MouseEvent& e)
         if (localX >= handleX && localX <= handleX + handleSize_)
         {
             dragging_ = true;
-            cursor_   = CursorType::SizeH;
+            cursor_ = CursorType::SizeH;
             e.consumed = true;
         }
     }
@@ -1054,7 +1082,7 @@ void Splitter::onMousePress(MouseEvent& e)
         if (localY >= handleY && localY <= handleY + handleSize_)
         {
             dragging_ = true;
-            cursor_   = CursorType::SizeV;
+            cursor_ = CursorType::SizeV;
             e.consumed = true;
         }
     }
@@ -1065,10 +1093,10 @@ void Splitter::onMouseRelease(MouseEvent& e)
     if (dragging_)
     {
         dragging_ = false;
-        cursor_   = CursorType::Arrow;
+        cursor_ = CursorType::Arrow;
         e.consumed = true;
         markDirty();
-        return;  // don't fire clicked after drag
+        return; // don't fire clicked after drag
     }
     Widget::onMouseRelease(e);
 }
@@ -1094,9 +1122,8 @@ void Splitter::onMouseMove(MouseEvent& e)
     if (onHandle != handleHovered_)
     {
         handleHovered_ = onHandle;
-        cursor_ = onHandle
-            ? (dir_ == LayoutDir::Horizontal ? CursorType::SizeH : CursorType::SizeV)
-            : CursorType::Arrow;
+        cursor_ = onHandle ? (dir_ == LayoutDir::Horizontal ? CursorType::SizeH : CursorType::SizeV)
+                           : CursorType::Arrow;
         markDirty();
     }
 
@@ -1105,21 +1132,23 @@ void Splitter::onMouseMove(MouseEvent& e)
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        if (total > 0)
-            setRatio((e.x - abs.x) / total);
+        if (total > 0) setRatio((e.x - abs.x) / total);
     }
     else
     {
         float total = rect_.h - handleSize_;
-        if (total > 0)
-            setRatio((e.y - abs.y) / total);
+        if (total > 0) setRatio((e.y - abs.y) / total);
     }
     e.consumed = true;
 }
 
 void Splitter::onMouseLeave()
 {
-    if (handleHovered_) { handleHovered_ = false; markDirty(); }
+    if (handleHovered_)
+    {
+        handleHovered_ = false;
+        markDirty();
+    }
     cursor_ = CursorType::Arrow;
     Widget::onMouseLeave();
 }
@@ -1132,12 +1161,11 @@ static const String kEmptyTabLabel;
 
 void TabLayout::addTabWidget(const String& label, Widget* content)
 {
-    tabs_.push_back({label, content});
+    tabs_.push_back({ label, content });
     addChild(content);
 
     // First tab added → show it
-    if (tabs_.size() == 1)
-        currentIndex_ = 0;
+    if (tabs_.size() == 1) currentIndex_ = 0;
 
     markDirty();
     WidgetApp::instance().requestLayout();
@@ -1161,15 +1189,13 @@ void TabLayout::removeTab(int index)
     removeChild(tabs_[index].content);
     tabs_.erase(tabs_.begin() + index);
 
-    if (index < currentIndex_)
-        --currentIndex_;
+    if (index < currentIndex_) --currentIndex_;
     else if (currentIndex_ >= static_cast<int>(tabs_.size()))
         currentIndex_ = static_cast<int>(tabs_.size()) - 1;
 
     markDirty();
     WidgetApp::instance().requestLayout();
-    if (currentIndex_ != before || index == before)
-        currentChanged.emit(currentIndex_);
+    if (currentIndex_ != before || index == before) currentChanged.emit(currentIndex_);
 }
 
 void TabLayout::setCurrentIndex(int idx)
@@ -1202,8 +1228,7 @@ void TabLayout::setTabLabel(int index, const String& label)
 
 const String& TabLayout::tabLabel(int index) const
 {
-    if (index >= 0 && index < static_cast<int>(tabs_.size()))
-        return tabs_[index].label;
+    if (index >= 0 && index < static_cast<int>(tabs_.size())) return tabs_[index].label;
     return kEmptyTabLabel;
 }
 
@@ -1212,42 +1237,43 @@ void TabLayout::computeRects(Rect& barRect, Rect& contentRect) const
     float s = tabBarSize_;
 
     // For Left/Right, compute bar width from widest tab label
-    auto barWidth = [&]() -> float {
+    auto barWidth = [&]() -> float
+    {
         const auto& t = Theme::instance();
         float maxW = 60.0f;
-        for (auto& tab : tabs_)
+        for (auto& tab: tabs_)
         {
             float tw = tab.label.size() * t.fontSize * 0.55f + t.padding * 2;
             if (closable_) tw += 18.0f;
             if (tw > maxW) maxW = tw;
         }
-        return maxW + 4.0f;  // 2px margin each side
+        return maxW + 4.0f; // 2px margin each side
     };
 
     switch (tabPosition_)
     {
-    case TabPosition::Top:
-        barRect     = {0, 0, rect_.w, s};
-        contentRect = {0, s, rect_.w, rect_.h - s};
-        break;
-    case TabPosition::Bottom:
-        contentRect = {0, 0, rect_.w, rect_.h - s};
-        barRect     = {0, rect_.h - s, rect_.w, s};
-        break;
-    case TabPosition::Left:
-    {
-        float bw = barWidth();
-        barRect     = {0, 0, bw, rect_.h};
-        contentRect = {bw, 0, rect_.w - bw, rect_.h};
-        break;
-    }
-    case TabPosition::Right:
-    {
-        float bw = barWidth();
-        contentRect = {0, 0, rect_.w - bw, rect_.h};
-        barRect     = {rect_.w - bw, 0, bw, rect_.h};
-        break;
-    }
+        case TabPosition::Top:
+            barRect = { 0, 0, rect_.w, s };
+            contentRect = { 0, s, rect_.w, rect_.h - s };
+            break;
+        case TabPosition::Bottom:
+            contentRect = { 0, 0, rect_.w, rect_.h - s };
+            barRect = { 0, rect_.h - s, rect_.w, s };
+            break;
+        case TabPosition::Left:
+        {
+            float bw = barWidth();
+            barRect = { 0, 0, bw, rect_.h };
+            contentRect = { bw, 0, rect_.w - bw, rect_.h };
+            break;
+        }
+        case TabPosition::Right:
+        {
+            float bw = barWidth();
+            contentRect = { 0, 0, rect_.w - bw, rect_.h };
+            barRect = { rect_.w - bw, 0, bw, rect_.h };
+            break;
+        }
     }
 }
 
@@ -1263,11 +1289,10 @@ Rect TabLayout::tabRect(int index, const Rect& barRect) const
         for (int i = 0; i <= index && i < static_cast<int>(tabs_.size()); ++i)
         {
             float tw = tabs_[i].label.size() * t.fontSize * 0.55f + t.padding * 2;
-            if (closable_) tw += 18.0f;  // space for X button
+            if (closable_) tw += 18.0f; // space for X button
             if (tw < 60.0f) tw = 60.0f;
 
-            if (i == index)
-                return {x, barRect.y, tw, barRect.h};
+            if (i == index) return { x, barRect.y, tw, barRect.h };
             x += tw + 1.0f;
         }
     }
@@ -1278,8 +1303,7 @@ Rect TabLayout::tabRect(int index, const Rect& barRect) const
         float tabH = tabBarSize_;
         for (int i = 0; i <= index && i < static_cast<int>(tabs_.size()); ++i)
         {
-            if (i == index)
-                return {barRect.x, y, barRect.w, tabH};
+            if (i == index) return { barRect.x, y, barRect.w, tabH };
             y += tabH + 1.0f;
         }
     }
@@ -1290,16 +1314,15 @@ Rect TabLayout::closeRect(const Rect& tabR) const
 {
     float sz = 14.0f;
     bool horiz = (tabPosition_ == TabPosition::Top || tabPosition_ == TabPosition::Bottom);
-    if (horiz)
-        return {tabR.x + tabR.w - sz - 4.0f, tabR.y + (tabR.h - sz) * 0.5f, sz, sz};
+    if (horiz) return { tabR.x + tabR.w - sz - 4.0f, tabR.y + (tabR.h - sz) * 0.5f, sz, sz };
     else
-        return {tabR.x + (tabR.w - sz) * 0.5f, tabR.y + tabR.h - sz - 4.0f, sz, sz};
+        return { tabR.x + (tabR.w - sz) * 0.5f, tabR.y + tabR.h - sz - 4.0f, sz, sz };
 }
 
 Widget::Vec2f TabLayout::sizeHint() const
 {
     float w = 200, h = 200;
-    for (auto& tab : tabs_)
+    for (auto& tab: tabs_)
     {
         if (!tab.content) continue;
         auto hint = tab.content->sizeHint();
@@ -1308,14 +1331,13 @@ Widget::Vec2f TabLayout::sizeHint() const
     }
 
     bool horiz = (tabPosition_ == TabPosition::Top || tabPosition_ == TabPosition::Bottom);
-    if (horiz)
-        h += tabBarSize_;
+    if (horiz) h += tabBarSize_;
     else
     {
         // Compute bar width from labels
         float maxW = 60.0f;
         const auto& t = Theme::instance();
-        for (auto& tab : tabs_)
+        for (auto& tab: tabs_)
         {
             float tw = tab.label.size() * t.fontSize * 0.55f + t.padding * 2;
             if (closable_) tw += 18.0f;
@@ -1324,7 +1346,7 @@ Widget::Vec2f TabLayout::sizeHint() const
         w += maxW + 4.0f;
     }
 
-    return {w, h};
+    return { w, h };
 }
 
 void TabLayout::layout()
@@ -1363,14 +1385,13 @@ void TabLayout::paint(PaintContext& ctx)
     computeRects(barR, contentR);
 
     // Tab bar background
-    Rect absBar = {abs.x + barR.x, abs.y + barR.y, barR.w, barR.h};
+    Rect absBar = { abs.x + barR.x, abs.y + barR.y, barR.w, barR.h };
     Rect clippedBar;
     if (ctx.clipRectIntersect(absBar, clippedBar))
     {
         ctx.fill.SetColor(38, 40, 44, 255);
-        ctx.fill.Rectangle(
-            static_cast<int>(clippedBar.x), static_cast<int>(clippedBar.y),
-            static_cast<int>(clippedBar.w), static_cast<int>(clippedBar.h), true);
+        ctx.fill.Rectangle(static_cast<int>(clippedBar.x), static_cast<int>(clippedBar.y),
+                static_cast<int>(clippedBar.w), static_cast<int>(clippedBar.h), true);
     }
 
     // Draw each tab button
@@ -1379,7 +1400,7 @@ void TabLayout::paint(PaintContext& ctx)
     for (int i = 0; i < static_cast<int>(tabs_.size()); ++i)
     {
         Rect tr = tabRect(i, barR);
-        Rect absTr = {abs.x + tr.x, abs.y + tr.y, tr.w, tr.h};
+        Rect absTr = { abs.x + tr.x, abs.y + tr.y, tr.w, tr.h };
         Rect clippedTab;
         if (!ctx.clipRectIntersect(absTr, clippedTab)) continue;
 
@@ -1389,26 +1410,26 @@ void TabLayout::paint(PaintContext& ctx)
         Color bg = active ? Color(55, 58, 65, 255) : Color(42, 44, 50, 255);
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.Rectangle(
-            static_cast<int>(absTr.x), static_cast<int>(absTr.y),
-            static_cast<int>(absTr.w), static_cast<int>(absTr.h), true);
+        ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y),
+                static_cast<int>(absTr.w), static_cast<int>(absTr.h), true);
 
         // Active indicator line
         if (active)
         {
             ctx.fill.SetColor(100, 160, 220, 255);
             if (tabPosition_ == TabPosition::Top)
-                ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y + absTr.h - 2),
-                                    static_cast<int>(absTr.w), 2, true);
+                ctx.fill.Rectangle(static_cast<int>(absTr.x),
+                        static_cast<int>(absTr.y + absTr.h - 2), static_cast<int>(absTr.w), 2,
+                        true);
             else if (tabPosition_ == TabPosition::Bottom)
                 ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y),
-                                    static_cast<int>(absTr.w), 2, true);
+                        static_cast<int>(absTr.w), 2, true);
             else if (tabPosition_ == TabPosition::Left)
-                ctx.fill.Rectangle(static_cast<int>(absTr.x + absTr.w - 2), static_cast<int>(absTr.y),
-                                    2, static_cast<int>(absTr.h), true);
+                ctx.fill.Rectangle(static_cast<int>(absTr.x + absTr.w - 2),
+                        static_cast<int>(absTr.y), 2, static_cast<int>(absTr.h), true);
             else
-                ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y),
-                                    2, static_cast<int>(absTr.h), true);
+                ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y), 2,
+                        static_cast<int>(absTr.h), true);
         }
 
         // Tab label
@@ -1416,9 +1437,9 @@ void TabLayout::paint(PaintContext& ctx)
         ctx.font.SetColor(active ? t.textColor : t.textDisabled);
         ctx.font.SetBatch(&ctx.text);
 
-        float asc   = ctx.font.GetAscender();
+        float asc = ctx.font.GetAscender();
         float textX = horiz ? absTr.x + t.padding : absTr.x + 4.0f;
-        float textY = absTr.y + (absTr.h + asc) * 0.5f;  // baseline-correct centering
+        float textY = absTr.y + (absTr.h + asc) * 0.5f; // baseline-correct centering
 
         ctx.font.Print(tabs_[i].label.c_str(), textX, textY);
 
@@ -1426,42 +1447,40 @@ void TabLayout::paint(PaintContext& ctx)
         if (closable_)
         {
             Rect cr = closeRect(tr);
-            Rect absCr = {abs.x + cr.x, abs.y + cr.y, cr.w, cr.h};
+            Rect absCr = { abs.x + cr.x, abs.y + cr.y, cr.w, cr.h };
 
             // X lines
             Color xc = active ? Color(160, 160, 165, 200) : Color(100, 100, 105, 150);
             ctx.line.SetColor(xc.r, xc.g, xc.b, xc.a);
             float m = 3.0f;
-            ctx.line.Line2D(
-                static_cast<int>(absCr.x + m), static_cast<int>(absCr.y + m),
-                static_cast<int>(absCr.x + absCr.w - m), static_cast<int>(absCr.y + absCr.h - m));
-            ctx.line.Line2D(
-                static_cast<int>(absCr.x + absCr.w - m), static_cast<int>(absCr.y + m),
-                static_cast<int>(absCr.x + m), static_cast<int>(absCr.y + absCr.h - m));
+            ctx.line.Line2D(static_cast<int>(absCr.x + m), static_cast<int>(absCr.y + m),
+                    static_cast<int>(absCr.x + absCr.w - m),
+                    static_cast<int>(absCr.y + absCr.h - m));
+            ctx.line.Line2D(static_cast<int>(absCr.x + absCr.w - m), static_cast<int>(absCr.y + m),
+                    static_cast<int>(absCr.x + m), static_cast<int>(absCr.y + absCr.h - m));
         }
     }
 
     // Separator line between bar and content
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
-    Rect absContent = {abs.x + contentR.x, abs.y + contentR.y, contentR.w, contentR.h};
+    Rect absContent = { abs.x + contentR.x, abs.y + contentR.y, contentR.w, contentR.h };
     if (tabPosition_ == TabPosition::Top)
         ctx.line.Line2D(static_cast<int>(absBar.x), static_cast<int>(absBar.y + absBar.h),
-                         static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y + absBar.h));
+                static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y + absBar.h));
     else if (tabPosition_ == TabPosition::Bottom)
         ctx.line.Line2D(static_cast<int>(absBar.x), static_cast<int>(absBar.y),
-                         static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y));
+                static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y));
     else if (tabPosition_ == TabPosition::Left)
         ctx.line.Line2D(static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y),
-                         static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y + absBar.h));
+                static_cast<int>(absBar.x + absBar.w), static_cast<int>(absBar.y + absBar.h));
     else
         ctx.line.Line2D(static_cast<int>(absBar.x), static_cast<int>(absBar.y),
-                         static_cast<int>(absBar.x), static_cast<int>(absBar.y + absBar.h));
+                static_cast<int>(absBar.x), static_cast<int>(absBar.y + absBar.h));
 
     // Paint active content (clip to content area)
     ctx.pushClip(absContent);
     Widget* cur = currentWidget();
-    if (cur && cur->isVisible())
-        cur->paint(ctx);
+    if (cur && cur->isVisible()) cur->paint(ctx);
     ctx.popClip();
 }
 
@@ -1474,7 +1493,7 @@ void TabLayout::onMousePress(MouseEvent& e)
     computeRects(barR, contentR);
 
     // Check if click is in the tab bar
-    Rect absBar = {abs.x + barR.x, abs.y + barR.y, barR.w, barR.h};
+    Rect absBar = { abs.x + barR.x, abs.y + barR.y, barR.w, barR.h };
     if (!absBar.contains(e.x, e.y))
     {
         // Click in content area - let children handle it
@@ -1485,7 +1504,7 @@ void TabLayout::onMousePress(MouseEvent& e)
     for (int i = 0; i < static_cast<int>(tabs_.size()); ++i)
     {
         Rect tr = tabRect(i, barR);
-        Rect absTr = {abs.x + tr.x, abs.y + tr.y, tr.w, tr.h};
+        Rect absTr = { abs.x + tr.x, abs.y + tr.y, tr.w, tr.h };
 
         if (!absTr.contains(e.x, e.y)) continue;
 
@@ -1493,7 +1512,7 @@ void TabLayout::onMousePress(MouseEvent& e)
         if (closable_)
         {
             Rect cr = closeRect(tr);
-            Rect absCr = {abs.x + cr.x, abs.y + cr.y, cr.w, cr.h};
+            Rect absCr = { abs.x + cr.x, abs.y + cr.y, cr.w, cr.h };
             if (absCr.contains(e.x, e.y))
             {
                 tabClosed.emit(i);
@@ -1528,8 +1547,7 @@ void AnchorLayout::setAnchors(Widget* child, const AnchorRule& rule)
 
 AnchorRule AnchorLayout::anchors(const Widget* child)
 {
-    if (child->hasData(kAnchorKey))
-        return child->data<AnchorRule>(kAnchorKey);
+    if (child->hasData(kAnchorKey)) return child->data<AnchorRule>(kAnchorKey);
     return {};
 }
 
@@ -1543,35 +1561,34 @@ Widget::Vec2f AnchorLayout::sizeHint() const
     // AnchorLayout typically fills its parent; sizeHint = current rect or minimum
     float w = rect_.w > 0 ? rect_.w : 200.0f;
     float h = rect_.h > 0 ? rect_.h : 200.0f;
-    return {w, h};
+    return { w, h };
 }
 
 void AnchorLayout::layout()
 {
     float pw = rect_.w - padding_.left - padding_.right;
-    float ph = rect_.h - padding_.top  - padding_.bottom;
+    float ph = rect_.h - padding_.top - padding_.bottom;
     if (pw < 0) pw = 0;
     if (ph < 0) ph = 0;
 
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
 
         AnchorRule a;
-        if (hasAnchors(c))
-            a = anchors(c);
+        if (hasAnchors(c)) a = anchors(c);
         else
         {
             // No anchors set: default fill
-            c->setRect({padding_.left, padding_.top, pw, ph});
+            c->setRect({ padding_.left, padding_.top, pw, ph });
             c->layout();
             continue;
         }
 
-        float x0 = padding_.left + a.left  * pw + a.leftOff;
+        float x0 = padding_.left + a.left * pw + a.leftOff;
         float x1 = padding_.left + a.right * pw + a.rightOff;
-        float y0 = padding_.top  + a.top   * ph + a.topOff;
-        float y1 = padding_.top  + a.bottom * ph + a.bottomOff;
+        float y0 = padding_.top + a.top * ph + a.topOff;
+        float y1 = padding_.top + a.bottom * ph + a.bottomOff;
 
         float cx = x0;
         float cy = y0;
@@ -1580,7 +1597,7 @@ void AnchorLayout::layout()
         if (cw < 0) cw = 0;
         if (ch < 0) ch = 0;
 
-        c->setRect({cx, cy, cw, ch});
+        c->setRect({ cx, cy, cw, ch });
         c->layout();
     }
 }
@@ -1592,8 +1609,7 @@ void AnchorLayout::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     ctx.pushClip(abs);
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
     ctx.popClip();
 }
 
@@ -1640,7 +1656,7 @@ void Carousel::removePage(int index)
 Rect Carousel::contentRect() const
 {
     float dy = (showDots_ && !pages_.empty()) ? dotsHeight() : 0.0f;
-    return {0, 0, rect_.w, rect_.h - dy};
+    return { 0, 0, rect_.w, rect_.h - dy };
 }
 
 Rect Carousel::arrowRect(bool rightSide) const
@@ -1649,23 +1665,21 @@ Rect Carousel::arrowRect(bool rightSide) const
     float aw = 36.0f;
     float ah = 60.0f;
     float ay = (cr.h - ah) * 0.5f;
-    if (rightSide)
-        return {cr.w - aw - 4.0f, ay, aw, ah};
+    if (rightSide) return { cr.w - aw - 4.0f, ay, aw, ah };
     else
-        return {4.0f, ay, aw, ah};
+        return { 4.0f, ay, aw, ah };
 }
 
 void Carousel::startAnim(int from, int to, int dir)
 {
-    animFrom_     = from;
-    animDir_      = dir;
+    animFrom_ = from;
+    animDir_ = dir;
     animProgress_ = 0.0f;
-    animating_    = true;
-    currentPage_  = to;
+    animating_ = true;
+    currentPage_ = to;
     // The page sliding in has to be visible to be painted; the one it replaces
     // is hidden when the animation ends (both are painted while it runs).
-    if (to >= 0 && to < static_cast<int>(pages_.size()))
-        pages_[to]->setVisible(true);
+    if (to >= 0 && to < static_cast<int>(pages_.size())) pages_[to]->setVisible(true);
     markDirty();
 }
 
@@ -1710,16 +1724,15 @@ void Carousel::prev()
 
 Widget::Vec2f Carousel::sizeHint() const
 {
-    return {rect_.w > 0 ? rect_.w : 200.0f,
-            rect_.h > 0 ? rect_.h : 200.0f};
+    return { rect_.w > 0 ? rect_.w : 200.0f, rect_.h > 0 ? rect_.h : 200.0f };
 }
 
 void Carousel::layout()
 {
     Rect cr = contentRect();
-    for (auto* p : pages_)
+    for (auto* p: pages_)
     {
-        p->setRect({0, 0, cr.w, cr.h});
+        p->setRect({ 0, 0, cr.w, cr.h });
         p->layout();
     }
 }
@@ -1741,8 +1754,8 @@ void Carousel::paint(PaintContext& ctx)
         if (animProgress_ >= 1.0f)
         {
             animProgress_ = 1.0f;
-            animating_    = false;
-            animFrom_     = -1;
+            animating_ = false;
+            animFrom_ = -1;
             showOnlyCurrentPage();
         }
         markDirty();
@@ -1760,8 +1773,9 @@ void Carousel::paint(PaintContext& ctx)
         markDirty();
     }
 
-    Rect cr  = contentRect();
-    Rect cra = {abs.x, abs.y, cr.w, cr.h};    ctx.pushClip(cra);
+    Rect cr = contentRect();
+    Rect cra = { abs.x, abs.y, cr.w, cr.h };
+    ctx.pushClip(cra);
 
     // Draw current page (and sliding-out page during animation)
     if (!pages_.empty())
@@ -1770,9 +1784,9 @@ void Carousel::paint(PaintContext& ctx)
 
         if (animating_ && animFrom_ >= 0 && animFrom_ < static_cast<int>(pages_.size()))
         {
-            float t    = applyEasing(easeType_, animProgress_);
+            float t = applyEasing(easeType_, animProgress_);
             float curOff = -animDir_ * slideW * (1.0f - t);
-            float oldOff =  animDir_ * slideW * t;
+            float oldOff = animDir_ * slideW * t;
 
             Widget* oldPage = pages_[animFrom_];
             Widget* curPage = pages_[currentPage_];
@@ -1780,19 +1794,19 @@ void Carousel::paint(PaintContext& ctx)
             float savedOldX = oldPage->rect().x;
             float savedCurX = curPage->rect().x;
 
-            oldPage->setRect({oldOff, 0, cr.w, cr.h});
-            curPage->setRect({curOff, 0, cr.w, cr.h});
+            oldPage->setRect({ oldOff, 0, cr.w, cr.h });
+            curPage->setRect({ curOff, 0, cr.w, cr.h });
 
             oldPage->paint(ctx);
             curPage->paint(ctx);
 
-            oldPage->setRect({savedOldX, 0, cr.w, cr.h});
-            curPage->setRect({savedCurX, 0, cr.w, cr.h});
+            oldPage->setRect({ savedOldX, 0, cr.w, cr.h });
+            curPage->setRect({ savedCurX, 0, cr.w, cr.h });
         }
         else
         {
             Widget* p = pages_[currentPage_];
-            p->setRect({0, 0, cr.w, cr.h});
+            p->setRect({ 0, 0, cr.w, cr.h });
             p->paint(ctx);
         }
     }
@@ -1815,11 +1829,13 @@ void Carousel::paint(PaintContext& ctx)
             // Draw triangle arrow
             float cx_ = ar.x + ar.w * 0.5f;
             float cy_ = ar.y + ar.h * 0.5f;
-            float s   = 8.0f;
+            float s = 8.0f;
             if (right)
-                ctx.fillTriangle(cx_ - s * 0.5f, cy_ - s, cx_ + s * 0.5f, cy_, cx_ - s * 0.5f, cy_ + s);
+                ctx.fillTriangle(cx_ - s * 0.5f, cy_ - s, cx_ + s * 0.5f, cy_, cx_ - s * 0.5f,
+                        cy_ + s);
             else
-                ctx.fillTriangle(cx_ + s * 0.5f, cy_ - s, cx_ - s * 0.5f, cy_, cx_ + s * 0.5f, cy_ + s);
+                ctx.fillTriangle(cx_ + s * 0.5f, cy_ - s, cx_ - s * 0.5f, cy_, cx_ + s * 0.5f,
+                        cy_ + s);
         };
         paintArrow(false);
         paintArrow(true);
@@ -1828,12 +1844,12 @@ void Carousel::paint(PaintContext& ctx)
     // Dots
     if (showDots_ && !pages_.empty())
     {
-        int n         = static_cast<int>(pages_.size());
-        float dotR    = 5.0f;
-        float dotGap  = 14.0f;
-        float totalW  = n * dotGap - (dotGap - dotR * 2.0f);
-        float startX  = abs.x + (rect_.w - totalW) * 0.5f + dotR;
-        float dotY    = abs.y + cr.h + dotsHeight() * 0.5f;
+        int n = static_cast<int>(pages_.size());
+        float dotR = 5.0f;
+        float dotGap = 14.0f;
+        float totalW = n * dotGap - (dotGap - dotR * 2.0f);
+        float startX = abs.x + (rect_.w - totalW) * 0.5f + dotR;
+        float dotY = abs.y + cr.h + dotsHeight() * 0.5f;
 
         for (int i = 0; i < n; ++i)
         {
@@ -1881,12 +1897,12 @@ void Carousel::onMousePress(MouseEvent& e)
     if (showDots_)
     {
         Rect cr = contentRect();
-        int n        = static_cast<int>(pages_.size());
-        float dotR   = 5.0f;
+        int n = static_cast<int>(pages_.size());
+        float dotR = 5.0f;
         float dotGap = 14.0f;
         float totalW = n * dotGap - (dotGap - dotR * 2.0f);
         float startX = (rect_.w - totalW) * 0.5f + dotR;
-        float dotY   = cr.h + dotsHeight() * 0.5f;
+        float dotY = cr.h + dotsHeight() * 0.5f;
 
         for (int i = 0; i < n; ++i)
         {
@@ -1931,12 +1947,12 @@ void Carousel::onMouseMove(MouseEvent& e)
     if (!overInteractive && showDots_ && !pages_.empty())
     {
         Rect cr = contentRect();
-        int n        = static_cast<int>(pages_.size());
-        float dotR   = 5.0f;
+        int n = static_cast<int>(pages_.size());
+        float dotR = 5.0f;
         float dotGap = 14.0f;
         float totalW = n * dotGap - (dotGap - dotR * 2.0f);
         float startX = (rect_.w - totalW) * 0.5f + dotR;
-        float dotY   = cr.h + dotsHeight() * 0.5f;
+        float dotY = cr.h + dotsHeight() * 0.5f;
 
         for (int i = 0; i < n; ++i)
         {
@@ -1967,17 +1983,18 @@ void Carousel::onMouseLeave()
 // ═════════════════════════════════════════════════════════════════════════════
 
 SlidePanel::SlidePanel(Side side, float width)
-    : side_(side), panelWidth_(width)
+        : side_(side),
+          panelWidth_(width)
 {
-    visible_ = false;   // starts closed — hitTest skips it
+    visible_ = false; // starts closed — hitTest skips it
 }
 
 void SlidePanel::open()
 {
     if (open_ && !animating_) return;
-    open_      = true;
+    open_ = true;
     animating_ = true;
-    visible_   = true;   // make hittable
+    visible_ = true; // make hittable
     // animProgress_ keeps its current value so reverse is smooth
     openChanged.emit(true);
     WidgetApp::instance().requestLayout();
@@ -1987,7 +2004,7 @@ void SlidePanel::open()
 void SlidePanel::close()
 {
     if (!open_ && !animating_) return;
-    open_      = false;
+    open_ = false;
     animating_ = true;
     openChanged.emit(false);
     markDirty();
@@ -1995,13 +2012,14 @@ void SlidePanel::close()
 
 void SlidePanel::toggle()
 {
-    if (open_) close(); else open();
+    if (open_) close();
+    else
+        open();
 }
 
 Widget::Vec2f SlidePanel::sizeHint() const
 {
-    return {rect_.w > 0 ? rect_.w : 300.0f,
-            rect_.h > 0 ? rect_.h : 200.0f};
+    return { rect_.w > 0 ? rect_.w : 300.0f, rect_.h > 0 ? rect_.h : 200.0f };
 }
 
 void SlidePanel::layout()
@@ -2012,7 +2030,7 @@ void SlidePanel::layout()
 
     const float drawerW = std::max(1.0f, std::min(panelWidth_, rect_.w));
     Widget* content = children_[0];
-    content->setRect({0, 0, drawerW, rect_.h});
+    content->setRect({ 0, 0, drawerW, rect_.h });
     content->layout();
 }
 
@@ -2023,21 +2041,26 @@ void SlidePanel::paint(PaintContext& ctx)
     // Advance animation
     if (animating_)
     {
-        float dt   = WidgetApp::instance().deltaTime();
+        float dt = WidgetApp::instance().deltaTime();
         float step = (animDuration_ > 0.0f) ? (dt / animDuration_) : 1.0f;
 
         if (open_)
         {
             animProgress_ += step;
-            if (animProgress_ >= 1.0f) { animProgress_ = 1.0f; animating_ = false; }
+            if (animProgress_ >= 1.0f)
+            {
+                animProgress_ = 1.0f;
+                animating_ = false;
+            }
         }
         else
         {
             animProgress_ -= step;
-            if (animProgress_ <= 0.0f) {
+            if (animProgress_ <= 0.0f)
+            {
                 animProgress_ = 0.0f;
                 animating_ = false;
-                visible_ = false;   // fully closed — hitTest skips us
+                visible_ = false; // fully closed — hitTest skips us
             }
         }
         markDirty();
@@ -2060,12 +2083,11 @@ void SlidePanel::paint(PaintContext& ctx)
 
     // Drawer offset
     float drawerX;
-    if (side_ == Left)
-        drawerX = abs.x + (t - 1.0f) * drawerW;   // slides from left
+    if (side_ == Left) drawerX = abs.x + (t - 1.0f) * drawerW; // slides from left
     else
-        drawerX = abs.x + abs.w - t * drawerW;     // slides from right
+        drawerX = abs.x + abs.w - t * drawerW; // slides from right
 
-    Rect drawerRect = {drawerX, abs.y, drawerW, abs.h};
+    Rect drawerRect = { drawerX, abs.y, drawerW, abs.h };
     ctx.pushClip(drawerRect);
 
     // Draw panel background
@@ -2079,26 +2101,26 @@ void SlidePanel::paint(PaintContext& ctx)
         Widget* content = children_[0];
         // Temporarily shift child for painting
         float savedX = content->rect().x;
-        content->setRect({drawerX - abs.x, 0, drawerW, abs.h});
+        content->setRect({ drawerX - abs.x, 0, drawerW, abs.h });
         content->paint(ctx);
-        content->setRect({savedX, 0, drawerW, abs.h});
+        content->setRect({ savedX, 0, drawerW, abs.h });
     }
 
     // Right/left border line
-    ctx.line.SetColor(theme.drawerBorder.r, theme.drawerBorder.g, theme.drawerBorder.b, theme.drawerBorder.a);
+    ctx.line.SetColor(theme.drawerBorder.r, theme.drawerBorder.g, theme.drawerBorder.b,
+            theme.drawerBorder.a);
     if (side_ == Left)
-        ctx.line.Line2D(drawerRect.x + drawerRect.w, drawerRect.y,
-                        drawerRect.x + drawerRect.w, drawerRect.y + drawerRect.h);
+        ctx.line.Line2D(drawerRect.x + drawerRect.w, drawerRect.y, drawerRect.x + drawerRect.w,
+                drawerRect.y + drawerRect.h);
     else
-        ctx.line.Line2D(drawerRect.x, drawerRect.y,
-                        drawerRect.x, drawerRect.y + drawerRect.h);
+        ctx.line.Line2D(drawerRect.x, drawerRect.y, drawerRect.x, drawerRect.y + drawerRect.h);
 
     ctx.popClip();
 }
 
 void SlidePanel::onMousePress(MouseEvent& e)
 {
-    if (animProgress_ <= 0.0f) return;  // fully closed, ignore
+    if (animProgress_ <= 0.0f) return; // fully closed, ignore
 
     Rect abs = absoluteRect();
     const float drawerW = std::max(1.0f, std::min(panelWidth_, abs.w));
@@ -2106,16 +2128,15 @@ void SlidePanel::onMousePress(MouseEvent& e)
 
     // Compute drawer rect in screen coords
     float drawerX;
-    if (side_ == Left)
-        drawerX = abs.x + (t - 1.0f) * drawerW;
+    if (side_ == Left) drawerX = abs.x + (t - 1.0f) * drawerW;
     else
         drawerX = abs.x + abs.w - t * drawerW;
 
-    Rect drawerRect = {drawerX, abs.y, drawerW, abs.h};
+    Rect drawerRect = { drawerX, abs.y, drawerW, abs.h };
 
     // If click is outside drawer, close it
-    if (e.x < drawerRect.x || e.x > drawerRect.x + drawerRect.w ||
-        e.y < drawerRect.y || e.y > drawerRect.y + drawerRect.h)
+    if (e.x < drawerRect.x || e.x > drawerRect.x + drawerRect.w || e.y < drawerRect.y ||
+            e.y > drawerRect.y + drawerRect.h)
     {
         close();
         e.consumed = true;

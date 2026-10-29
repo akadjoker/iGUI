@@ -1,5 +1,5 @@
+#include "MenuWidgets.hpp" // Menu — complete type needed for delete contextMenu_
 #include "pch.hpp"
-#include "MenuWidgets.hpp"   // Menu — complete type needed for delete contextMenu_
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ColorProxy — bridges ctx.fill.* / ctx.line.* to ig::retained::DrawList
@@ -9,36 +9,38 @@
 void ColorProxy::Rectangle(float x, float y, float w, float h, bool doFill)
 {
     if (!ctx) return;
-    if (doFill) ctx->drawList.addRect({x, y, w, h}, current);
-    else        ctx->drawList.addRectOutline({x, y, w, h}, current);
+    if (doFill) ctx->drawList.addRect({ x, y, w, h }, current);
+    else
+        ctx->drawList.addRectOutline({ x, y, w, h }, current);
 }
 
-void ColorProxy::RoundedRectangle(float x, float y, float w, float h,
-                                  float r, int seg, bool doFill)
+void ColorProxy::RoundedRectangle(float x, float y, float w, float h, float r, int seg, bool doFill)
 {
     if (!ctx) return;
-    if (doFill) ctx->drawList.addRoundRectFilled({x, y, w, h}, r, current, seg);
-    else        ctx->drawList.addRoundRect({x, y, w, h}, r, current, 1.0f, seg);
+    if (doFill) ctx->drawList.addRoundRectFilled({ x, y, w, h }, r, current, seg);
+    else
+        ctx->drawList.addRoundRect({ x, y, w, h }, r, current, 1.0f, seg);
 }
 
 void ColorProxy::Circle(float cx, float cy, float radius, bool doFill)
 {
     if (!ctx) return;
-    if (doFill) ctx->drawList.addCircleFilled({cx, cy}, radius, current);
-    else        ctx->drawList.addCircle({cx, cy}, radius, current);
+    if (doFill) ctx->drawList.addCircleFilled({ cx, cy }, radius, current);
+    else
+        ctx->drawList.addCircle({ cx, cy }, radius, current);
 }
 
-void ColorProxy::Triangle(float x0, float y0, float x1, float y1,
-                          float x2, float y2, bool doFill)
+void ColorProxy::Triangle(float x0, float y0, float x1, float y1, float x2, float y2, bool doFill)
 {
     if (!ctx) return;
-    if (doFill) ctx->drawList.addTriangleFilled({x0, y0}, {x1, y1}, {x2, y2}, current);
-    else        ctx->drawList.addTriangle({x0, y0}, {x1, y1}, {x2, y2}, current);
+    if (doFill) ctx->drawList.addTriangleFilled({ x0, y0 }, { x1, y1 }, { x2, y2 }, current);
+    else
+        ctx->drawList.addTriangle({ x0, y0 }, { x1, y1 }, { x2, y2 }, current);
 }
 
 void ColorProxy::Line2D(float x1, float y1, float x2, float y2)
 {
-    if (ctx) ctx->drawList.addLine({x1, y1}, {x2, y2}, current);
+    if (ctx) ctx->drawList.addLine({ x1, y1 }, { x2, y2 }, current);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -52,7 +54,7 @@ void FontProxy::SetColor(const Color& c)
 
 void FontProxy::SetColor(u8 r, u8 g, u8 b, u8 a)
 {
-    if (ctx) ctx->textColor_ = {r, g, b, a};
+    if (ctx) ctx->textColor_ = { r, g, b, a };
 }
 
 float FontProxy::GetAscender() const
@@ -70,17 +72,17 @@ float FontProxy::GetTextWidth(const char* text) const
 void FontProxy::Print(const char* text, float x, float y, const void* /*clipHint*/)
 {
     if (!ctx || !ctx->buFont || !text) return;
-    ctx->drawList.addText(*ctx->buFont, {x, y}, ctx->textColor_, text, scale);
+    ctx->drawList.addText(*ctx->buFont, { x, y }, ctx->textColor_, text, scale);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  PaintContext — wraps ig::retained::DrawList, zero backend dependencies
 // ═════════════════════════════════════════════════════════════════════════════
 
-PaintContext::PaintContext(ig::retained::DrawList& dl,
-                           const ig::retained::Font* f,
-                           IconAtlas* ico)
-    : drawList(dl), buFont(f), icons(ico)
+PaintContext::PaintContext(ig::retained::DrawList& dl, const ig::retained::Font* f, IconAtlas* ico)
+        : drawList(dl),
+          buFont(f),
+          icons(ico)
 {
     fill.ctx = this;
     line.ctx = this;
@@ -98,7 +100,8 @@ void PaintContext::pushFont(const ig::retained::Font* f)
 
 void PaintContext::popFont()
 {
-    if (!fontStack_.empty()) {
+    if (!fontStack_.empty())
+    {
         buFont = fontStack_.back();
         fontStack_.pop_back();
     }
@@ -108,15 +111,14 @@ void PaintContext::popFont()
 
 void PaintContext::pushClip(const Rect& r)
 {
-    drawList.pushClip({r.x, r.y, r.w, r.h});
+    drawList.pushClip({ r.x, r.y, r.w, r.h });
     clipStack_.push_back(r);
 }
 
 void PaintContext::popClip()
 {
     drawList.popClip();
-    if (!clipStack_.empty())
-        clipStack_.pop_back();
+    if (!clipStack_.empty()) clipStack_.pop_back();
 }
 
 const Rect& PaintContext::clipRect() const
@@ -126,7 +128,7 @@ const Rect& PaintContext::clipRect() const
         cachedClip_ = clipStack_.back();
         return cachedClip_;
     }
-    cachedClip_ = {0.f, 0.f, 99999.f, 99999.f};
+    cachedClip_ = { 0.f, 0.f, 99999.f, 99999.f };
     return cachedClip_;
 }
 
@@ -139,8 +141,7 @@ bool PaintContext::isClipped(const Rect& r) const
 {
     if (clipStack_.empty()) return false;
     const Rect& c = clipStack_.back();
-    return (r.x >= c.x + c.w || r.x + r.w <= c.x ||
-            r.y >= c.y + c.h || r.y + r.h <= c.y);
+    return (r.x >= c.x + c.w || r.x + r.w <= c.x || r.y >= c.y + c.h || r.y + r.h <= c.y);
 }
 
 bool PaintContext::clipRectIntersect(const Rect& in, Rect& out) const
@@ -151,58 +152,61 @@ bool PaintContext::clipRectIntersect(const Rect& in, Rect& out) const
     float x1 = std::min(in.x + in.w, c.x + c.w);
     float y1 = std::min(in.y + in.h, c.y + c.h);
     if (x1 <= x0 || y1 <= y0) return false;
-    out = {x0, y0, x1 - x0, y1 - y0};
+    out = { x0, y0, x1 - x0, y1 - y0 };
     return true;
 }
 
 void PaintContext::fontClip(float out[4]) const
 {
     const Rect& c = clipRect();
-    out[0] = c.x; out[1] = c.y; out[2] = c.w; out[3] = c.h;
+    out[0] = c.x;
+    out[1] = c.y;
+    out[2] = c.w;
+    out[3] = c.h;
 }
 
 // ── Fill helpers ──────────────────────────────────────────────────────────
 
 void PaintContext::fillRect(float x, float y, float w, float h)
 {
-    drawList.addRect({x, y, w, h}, fill.current);
+    drawList.addRect({ x, y, w, h }, fill.current);
 }
 
 void PaintContext::fillRoundedRect(float x, float y, float w, float h, float r, int seg)
 {
-    drawList.addRoundRectFilled({x, y, w, h}, r, fill.current, seg);
+    drawList.addRoundRectFilled({ x, y, w, h }, r, fill.current, seg);
 }
 
 void PaintContext::fillCircle(float cx, float cy, float radius)
 {
-    drawList.addCircleFilled({cx, cy}, radius, fill.current);
+    drawList.addCircleFilled({ cx, cy }, radius, fill.current);
 }
 
 void PaintContext::fillTriangle(float x1, float y1, float x2, float y2, float x3, float y3)
 {
-    drawList.addTriangleFilled({x1, y1}, {x2, y2}, {x3, y3}, fill.current);
+    drawList.addTriangleFilled({ x1, y1 }, { x2, y2 }, { x3, y3 }, fill.current);
 }
 
 // ── Line helpers ──────────────────────────────────────────────────────────
 
 void PaintContext::lineRect(float x, float y, float w, float h)
 {
-    drawList.addRectOutline({x, y, w, h}, line.current);
+    drawList.addRectOutline({ x, y, w, h }, line.current);
 }
 
 void PaintContext::lineRoundedRect(float x, float y, float w, float h, float r, int seg)
 {
-    drawList.addRoundRect({x, y, w, h}, r, line.current, 1.0f, seg);
+    drawList.addRoundRect({ x, y, w, h }, r, line.current, 1.0f, seg);
 }
 
 void PaintContext::lineCircle(float cx, float cy, float radius)
 {
-    drawList.addCircle({cx, cy}, radius, line.current);
+    drawList.addCircle({ cx, cy }, radius, line.current);
 }
 
 void PaintContext::drawLine(float x1, float y1, float x2, float y2)
 {
-    drawList.addLine({x1, y1}, {x2, y2}, line.current);
+    drawList.addLine({ x1, y1 }, { x2, y2 }, line.current);
 }
 
 // ── Text helpers ──────────────────────────────────────────────────────────
@@ -210,16 +214,15 @@ void PaintContext::drawLine(float x1, float y1, float x2, float y2)
 void PaintContext::drawText(float x, float y, const char* text)
 {
     if (!buFont || !text) return;
-    drawList.addText(*buFont, {x, y}, textColor_, text);
+    drawList.addText(*buFont, { x, y }, textColor_, text);
 }
 
-void PaintContext::drawTextAligned(const Rect& bounds, const char* text,
-                                   ig::retained::AlignX ax, ig::retained::AlignY ay)
+void PaintContext::drawTextAligned(const Rect& bounds, const char* text, ig::retained::AlignX ax,
+        ig::retained::AlignY ay)
 {
     if (!buFont || !text) return;
-    drawList.addTextAligned(*buFont,
-                            {bounds.x, bounds.y, bounds.w, bounds.h},
-                            textColor_, text, ax, ay);
+    drawList.addTextAligned(*buFont, { bounds.x, bounds.y, bounds.w, bounds.h }, textColor_, text,
+            ax, ay);
 }
 
 float PaintContext::textWidth(const char* text) const
@@ -251,9 +254,9 @@ float PaintContext::textHeight() const
 // ── Image ─────────────────────────────────────────────────────────────────
 
 void PaintContext::drawImage(ig::retained::TextureHandle tex, const Rect& dst,
-                             ig::retained::Rect uv, Color tint)
+        ig::retained::Rect uv, Color tint)
 {
-    drawList.addImage(tex, {dst.x, dst.y, dst.w, dst.h}, uv, tint);
+    drawList.addImage(tex, { dst.x, dst.y, dst.w, dst.h }, uv, tint);
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────
@@ -264,65 +267,119 @@ const char* iconGlyph(IconId id)
 {
     switch (id)
     {
-    case IconId::Folder:      return "\u25b0"; // ▰
-    case IconId::FolderOpen:  return "\u25b1"; // ▱
-    case IconId::File:        return "\u25af"; // ▯
-    case IconId::FileCode:    return "\u2328"; // ⌨
-    case IconId::Book:        return "\u25a4"; // ▤
-    case IconId::Gear:        return "\u2699"; // ⚙
-    case IconId::Star:        return "\u2605"; // ★
-    case IconId::Heart:       return "\u2665"; // ♥
-    case IconId::Search:      return "\u2315"; // ⌕
-    case IconId::Plus:        return "+";
-    case IconId::Minus:       return "\u2212"; // −
-    case IconId::Check:       return "\u2713"; // ✓
-    case IconId::Cross:       return "\u00d7"; // ×
-    case IconId::ArrowRight:  return "\u25b6"; // ▶
-    case IconId::ArrowDown:   return "\u25bc"; // ▼
-    case IconId::ArrowUp:     return "\u25b2"; // ▲
-    case IconId::ArrowLeft:   return "\u25c0"; // ◀
-    case IconId::Eye:         return "\u25c9"; // ◉
-    case IconId::EyeOff:      return "\u2298"; // ⊘
-    case IconId::Lock:        return "\u2293"; // ⊓
-    case IconId::Unlock:      return "\u2294"; // ⊔
-    case IconId::Refresh:     return "\u21bb"; // ↻
-    case IconId::Trash:       return "\u2672"; // ♲
-    case IconId::Edit:        return "\u270e"; // ✎
-    case IconId::Home:        return "\u2302"; // ⌂
-    case IconId::User:        return "\u265f"; // ♟
-    case IconId::Warning:     return "\u26a0"; // ⚠
-    case IconId::Info:        return "\u2139"; // ℹ
-    case IconId::Error:       return "\u2297"; // ⊗
-    case IconId::FileImage:   return "\u25a3"; // ▣
-    case IconId::FileArchive: return "\u25a5"; // ▥
-    case IconId::ViewDetail:  return "\u25a4"; // ▤
-    case IconId::ViewList:    return "\u2261"; // ≡
-    case IconId::ViewGrid:    return "\u25a6"; // ▦
-    case IconId::Play:        return "\u25b6"; // ▶
-    case IconId::Pause:       return "\u2016"; // ‖
-    case IconId::Stop:        return "\u25a0"; // ■
-    case IconId::StepForward: return "\u25b7"; // ▷
-    case IconId::StepBack:    return "\u25c1"; // ◁
-    case IconId::Record:      return "\u25cf"; // ●
-    case IconId::FolderNew:   return "\u25b0"; // ▰
-    case IconId::Scissors:    return "\u2702"; // ✂
-    case IconId::Import:      return "\u21e9"; // ⇩
-    case IconId::Magnet:      return "\u2229"; // ∩
-    case IconId::MarkIn:      return "[";
-    case IconId::MarkOut:     return "]";
-    case IconId::PaintBrush:  return "\u270e"; // ✎
-    case IconId::Eraser:      return "\u232b"; // ⌫
-    case IconId::PaintBucket: return "\u25e9"; // ◩
-    case IconId::SelectRect:  return "\u2b1a"; // ⬚
-    case IconId::Eyedropper:  return "\u2295"; // ⊕
-    case IconId::None:
-    case IconId::COUNT:       return nullptr;
+        case IconId::Folder:
+            return "\u25b0"; // ▰
+        case IconId::FolderOpen:
+            return "\u25b1"; // ▱
+        case IconId::File:
+            return "\u25af"; // ▯
+        case IconId::FileCode:
+            return "\u2328"; // ⌨
+        case IconId::Book:
+            return "\u25a4"; // ▤
+        case IconId::Gear:
+            return "\u2699"; // ⚙
+        case IconId::Star:
+            return "\u2605"; // ★
+        case IconId::Heart:
+            return "\u2665"; // ♥
+        case IconId::Search:
+            return "\u2315"; // ⌕
+        case IconId::Plus:
+            return "+";
+        case IconId::Minus:
+            return "\u2212"; // −
+        case IconId::Check:
+            return "\u2713"; // ✓
+        case IconId::Cross:
+            return "\u00d7"; // ×
+        case IconId::ArrowRight:
+            return "\u25b6"; // ▶
+        case IconId::ArrowDown:
+            return "\u25bc"; // ▼
+        case IconId::ArrowUp:
+            return "\u25b2"; // ▲
+        case IconId::ArrowLeft:
+            return "\u25c0"; // ◀
+        case IconId::Eye:
+            return "\u25c9"; // ◉
+        case IconId::EyeOff:
+            return "\u2298"; // ⊘
+        case IconId::Lock:
+            return "\u2293"; // ⊓
+        case IconId::Unlock:
+            return "\u2294"; // ⊔
+        case IconId::Refresh:
+            return "\u21bb"; // ↻
+        case IconId::Trash:
+            return "\u2672"; // ♲
+        case IconId::Edit:
+            return "\u270e"; // ✎
+        case IconId::Home:
+            return "\u2302"; // ⌂
+        case IconId::User:
+            return "\u265f"; // ♟
+        case IconId::Warning:
+            return "\u26a0"; // ⚠
+        case IconId::Info:
+            return "\u2139"; // ℹ
+        case IconId::Error:
+            return "\u2297"; // ⊗
+        case IconId::FileImage:
+            return "\u25a3"; // ▣
+        case IconId::FileArchive:
+            return "\u25a5"; // ▥
+        case IconId::ViewDetail:
+            return "\u25a4"; // ▤
+        case IconId::ViewList:
+            return "\u2261"; // ≡
+        case IconId::ViewGrid:
+            return "\u25a6"; // ▦
+        case IconId::Play:
+            return "\u25b6"; // ▶
+        case IconId::Pause:
+            return "\u2016"; // ‖
+        case IconId::Stop:
+            return "\u25a0"; // ■
+        case IconId::StepForward:
+            return "\u25b7"; // ▷
+        case IconId::StepBack:
+            return "\u25c1"; // ◁
+        case IconId::Record:
+            return "\u25cf"; // ●
+        case IconId::FolderNew:
+            return "\u25b0"; // ▰
+        case IconId::Scissors:
+            return "\u2702"; // ✂
+        case IconId::Import:
+            return "\u21e9"; // ⇩
+        case IconId::Magnet:
+            return "\u2229"; // ∩
+        case IconId::MarkIn:
+            return "[";
+        case IconId::MarkOut:
+            return "]";
+        case IconId::PaintBrush:
+            return "\u270e"; // ✎
+        case IconId::Eraser:
+            return "\u232b"; // ⌫
+        case IconId::PaintBucket:
+            return "\u25e9"; // ◩
+        case IconId::SelectRect:
+            return "\u2b1a"; // ⬚
+        case IconId::Eyedropper:
+            return "\u2295"; // ⊕
+        case IconId::None:
+        case IconId::COUNT:
+            return nullptr;
     }
     return nullptr;
 }
-}
+} // namespace
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 namespace
 {
@@ -339,13 +396,14 @@ ct::Vector<ImageIcon>& imageIcons()
 }
 } // namespace
 
-IconId registerImageIcon(TextureHandle texture, const Rect &uv)
+IconId registerImageIcon(TextureHandle texture, const Rect& uv)
 {
-    imageIcons().push_back(ImageIcon{texture, uv});
-    return static_cast<IconId>(static_cast<int>(IconId::COUNT) + static_cast<int>(imageIcons().size()));
+    imageIcons().push_back(ImageIcon{ texture, uv });
+    return static_cast<IconId>(
+            static_cast<int>(IconId::COUNT) + static_cast<int>(imageIcons().size()));
 }
 
-bool imageIcon(IconId id, TextureHandle &texture, Rect &uv)
+bool imageIcon(IconId id, TextureHandle& texture, Rect& uv)
 {
     const int index = static_cast<int>(id) - static_cast<int>(IconId::COUNT) - 1;
     if (index < 0 || index >= static_cast<int>(imageIcons().size())) return false;
@@ -378,7 +436,8 @@ int listKeyTarget(int key, int current, int count, int page)
             return current;
     }
 }
-}} // namespace ig::retained
+} // namespace retained
+} // namespace ig
 
 void PaintContext::drawIcon(IconId id, float x, float y, float size)
 {
@@ -389,29 +448,33 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 {
     if (id == IconId::None || size <= 0.0f) return;
 
-    Rect bb{x, y, size, size};
+    Rect bb{ x, y, size, size };
     if (isClipped(bb)) return;
 
     ig::retained::TextureHandle imageTexture;
     ig::retained::Rect imageUv;
-    if (ig::retained::imageIcon(id, imageTexture, imageUv)) {
+    if (ig::retained::imageIcon(id, imageTexture, imageUv))
+    {
         drawImage(imageTexture, bb, imageUv, tint);
         return;
     }
 
     // Vector strokes when there is a drawing (sharp at any size), then the
     // procedural atlas when the backend built one, then the glyph font.
-    if (ig::retained::DrawList::hasVectorIcon(id)) {
+    if (ig::retained::DrawList::hasVectorIcon(id))
+    {
         const float thickness = std::max(1.0f, size * 0.065f);
         drawList.addIcon(id, bb, tint, thickness);
         return;
     }
-    if (icons && icons->ready()) {
+    if (icons && icons->ready())
+    {
         const FloatRect src = icons->srcRect(id);
         const float tw = static_cast<float>(icons->textureWidth());
         const float th = static_cast<float>(icons->textureHeight());
-        if (src.width > 0.0f && tw > 0.0f && th > 0.0f) {
-            const ig::retained::Rect uv{src.x / tw, src.y / th, src.width / tw, src.height / th};
+        if (src.width > 0.0f && tw > 0.0f && th > 0.0f)
+        {
+            const ig::retained::Rect uv{ src.x / tw, src.y / th, src.width / tw, src.height / th };
             drawImage(icons->texture(), bb, uv, tint);
             return;
         }
@@ -423,10 +486,8 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 
     const float scale = size / buFont->lineHeight();
     const ig::retained::Vec2 glyphSize = drawList.calcTextSize(*buFont, glyphText, scale);
-    drawList.addText(*buFont,
-                     {x + (size - glyphSize.x) * 0.5f,
-                      y + (size - glyphSize.y) * 0.5f},
-                     tint, glyphText, scale);
+    drawList.addText(*buFont, { x + (size - glyphSize.x) * 0.5f, y + (size - glyphSize.y) * 0.5f },
+            tint, glyphText, scale);
 }
 
 
@@ -440,21 +501,20 @@ Widget::~Widget()
     // pointers, the tooltip, a popup being painted - has to hear about it before
     // the memory goes away. A widget the manager is never told about leaves
     // those dangling.
-    if (WidgetApp* app = WidgetApp::existing())
-        app->notifyWidgetRemoved(this);
+    if (WidgetApp* app = WidgetApp::existing()) app->notifyWidgetRemoved(this);
 
     // Delete owned context menu (not in children_)
     delete contextMenu_;
     contextMenu_ = nullptr;
 
-    for (Widget* c : children_)
-        delete c;
+    for (Widget* c: children_) delete c;
     children_.clear();
 }
 
 void Widget::setContextMenu(Menu* m)
 {
-    if (m != contextMenu_) {
+    if (m != contextMenu_)
+    {
         delete contextMenu_;
         contextMenu_ = m;
     }
@@ -497,7 +557,8 @@ Rect Widget::absoluteRect() const
 Widget* Widget::findById(const String& searchId)
 {
     if (id_ == searchId) return this;
-    for (auto* c : children_) {
+    for (auto* c: children_)
+    {
         Widget* found = c->findById(searchId);
         if (found) return found;
     }
@@ -506,16 +567,13 @@ Widget* Widget::findById(const String& searchId)
 
 void Widget::findByTag(const String& tag, ct::Vector<Widget*>& result)
 {
-    if (hasTag(tag))
-        result.push_back(this);
-    for (auto* c : children_)
-        c->findByTag(tag, result);
+    if (hasTag(tag)) result.push_back(this);
+    for (auto* c: children_) c->findByTag(tag, result);
 }
 
 void Widget::layout()
 {
-    for (auto& c : children_)
-        c->layout();
+    for (auto& c: children_) c->layout();
 }
 
 void Widget::paint(PaintContext& ctx)
@@ -526,8 +584,7 @@ void Widget::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto& c : children_)
-        c->paint(ctx);
+    for (auto& c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -552,8 +609,7 @@ void Widget::setEnabled(bool e)
 bool Widget::isEnabledInTree() const
 {
     for (const Widget* w = this; w; w = w->parent())
-        if (!w->enabled_)
-            return false;
+        if (!w->enabled_) return false;
     return true;
 }
 
@@ -636,25 +692,26 @@ void BoxLayout::layout()
     float areaX = padding_.left;
     float areaY = padding_.top;
     float areaW = rect_.w - padding_.left - padding_.right;
-    float areaH = rect_.h - padding_.top  - padding_.bottom;
+    float areaH = rect_.h - padding_.top - padding_.bottom;
 
     // ── Pass 1: collect visible children, measure fixed + stretch ────────
-    struct Item {
+    struct Item
+    {
         Widget* w;
-        Vec2f   hint;
-        float   mainHint;   // size on main axis (from sizeHint)
-        float   mainMargin; // margin on main axis (before + after)
-        float   crossMargin;
+        Vec2f hint;
+        float mainHint;   // size on main axis (from sizeHint)
+        float mainMargin; // margin on main axis (before + after)
+        float crossMargin;
     };
 
     ct::Vector<Item> items;
     items.reserve(children_.size());
 
-    float totalFixed   = 0;
+    float totalFixed = 0;
     float totalStretch = 0;
-    int   count        = 0;
+    int count = 0;
 
-    for (auto* child : children_)
+    for (auto* child: children_)
     {
         if (!child->isVisible()) continue;
 
@@ -684,17 +741,17 @@ void BoxLayout::layout()
         }
 
         const Vec2f hint = child->sizeHint();
-        float mainMargin  = vert ? m.top + m.bottom : m.left + m.right;
+        float mainMargin = vert ? m.top + m.bottom : m.left + m.right;
         float crossMargin = vert ? m.left + m.right : m.top + m.bottom;
 
         float mainH = vert ? hint.y : hint.x;
 
-        items.push_back({child, hint, mainH, mainMargin, crossMargin});
+        items.push_back({ child, hint, mainH, mainMargin, crossMargin });
 
         if (child->stretch() > 0)
         {
             totalStretch += child->stretch();
-            totalFixed += mainMargin;   // margins still consume fixed space
+            totalFixed += mainMargin; // margins still consume fixed space
         }
         else
             totalFixed += mainH + mainMargin;
@@ -712,7 +769,11 @@ void BoxLayout::layout()
     if (mainAvail < 0) mainAvail = 0;
 
     // ── Pass 2: compute main-axis sizes ──────────────────────────────────
-    struct Placed { float pos; float size; };
+    struct Placed
+    {
+        float pos;
+        float size;
+    };
     ct::Vector<Placed> mainPlaced(count);
 
     float usedMain = 0;
@@ -731,26 +792,26 @@ void BoxLayout::layout()
     float extraMain = (vert ? areaH : areaW) - usedMain;
     if (extraMain < 0) extraMain = 0;
 
-    float gap     = 0;
+    float gap = 0;
     float startOff = 0;
 
     switch (mainAlign_)
     {
-    case MainAlign::Start:
-        break;
-    case MainAlign::Center:
-        startOff = extraMain * 0.5f;
-        break;
-    case MainAlign::End:
-        startOff = extraMain;
-        break;
-    case MainAlign::SpaceBetween:
-        if (count > 1) gap = extraMain / (count - 1);
-        break;
-    case MainAlign::SpaceEvenly:
-        gap = extraMain / (count + 1);
-        startOff = gap;
-        break;
+        case MainAlign::Start:
+            break;
+        case MainAlign::Center:
+            startOff = extraMain * 0.5f;
+            break;
+        case MainAlign::End:
+            startOff = extraMain;
+            break;
+        case MainAlign::SpaceBetween:
+            if (count > 1) gap = extraMain / (count - 1);
+            break;
+        case MainAlign::SpaceEvenly:
+            gap = extraMain / (count + 1);
+            startOff = gap;
+            break;
     }
 
     float cursor = (vert ? areaY : areaX) + startOff;
@@ -759,7 +820,7 @@ void BoxLayout::layout()
     {
         auto& it = items[i];
         const Edges& m = it.w->margins();
-        float mainBefore = vert ? m.top  : m.left;
+        float mainBefore = vert ? m.top : m.left;
         float crossBefore = vert ? m.left : m.top;
 
         cursor += mainBefore;
@@ -777,32 +838,32 @@ void BoxLayout::layout()
         Rect cr;
 
         float crossTotal = vert ? areaW : areaH;
-        float crossHint  = vert ? it.hint.x : it.hint.y;
+        float crossHint = vert ? it.hint.x : it.hint.y;
         float crossMBefore = vert ? m.left : m.top;
-        float crossMAfter  = vert ? m.right : m.bottom;
+        float crossMAfter = vert ? m.right : m.bottom;
         float crossAvail = crossTotal - crossMBefore - crossMAfter;
 
         float crossSize, crossPos;
         Align al = it.w->layoutAlign();
         switch (al)
         {
-        case Align::Start:
-            crossSize = std::min(crossHint, crossAvail);
-            crossPos  = (vert ? areaX : areaY) + crossMBefore;
-            break;
-        case Align::Center:
-            crossSize = std::min(crossHint, crossAvail);
-            crossPos  = (vert ? areaX : areaY) + crossMBefore + (crossAvail - crossSize) * 0.5f;
-            break;
-        case Align::End:
-            crossSize = std::min(crossHint, crossAvail);
-            crossPos  = (vert ? areaX : areaY) + crossMBefore + crossAvail - crossSize;
-            break;
-        case Align::Fill:
-        default:
-            crossSize = crossAvail;
-            crossPos  = (vert ? areaX : areaY) + crossMBefore;
-            break;
+            case Align::Start:
+                crossSize = std::min(crossHint, crossAvail);
+                crossPos = (vert ? areaX : areaY) + crossMBefore;
+                break;
+            case Align::Center:
+                crossSize = std::min(crossHint, crossAvail);
+                crossPos = (vert ? areaX : areaY) + crossMBefore + (crossAvail - crossSize) * 0.5f;
+                break;
+            case Align::End:
+                crossSize = std::min(crossHint, crossAvail);
+                crossPos = (vert ? areaX : areaY) + crossMBefore + crossAvail - crossSize;
+                break;
+            case Align::Fill:
+            default:
+                crossSize = crossAvail;
+                crossPos = (vert ? areaX : areaY) + crossMBefore;
+                break;
         }
 
         if (vert)
@@ -827,28 +888,27 @@ void BoxLayout::layout()
 
 Widget::Vec2f BoxLayout::sizeHint() const
 {
-    float mainAxis  = padding_.top + padding_.bottom;
+    float mainAxis = padding_.top + padding_.bottom;
     float crossAxis = 0;
     int count = 0;
 
-    if (dir_ == LayoutDir::Horizontal)
-        mainAxis = padding_.left + padding_.right;
+    if (dir_ == LayoutDir::Horizontal) mainAxis = padding_.left + padding_.right;
 
-    for (const auto& child : children_)
+    for (const auto& child: children_)
     {
         if (!child->isVisible()) continue;
         const Vec2f hint = child->sizeHint();
-        const Edges& m   = child->margins();
+        const Edges& m = child->margins();
 
         if (dir_ == LayoutDir::Vertical)
         {
-            mainAxis  += hint.y + m.top + m.bottom;
-            crossAxis  = std::max(crossAxis, hint.x + m.left + m.right);
+            mainAxis += hint.y + m.top + m.bottom;
+            crossAxis = std::max(crossAxis, hint.x + m.left + m.right);
         }
         else
         {
-            mainAxis  += hint.x + m.left + m.right;
-            crossAxis  = std::max(crossAxis, hint.y + m.top + m.bottom);
+            mainAxis += hint.x + m.left + m.right;
+            crossAxis = std::max(crossAxis, hint.y + m.top + m.bottom);
         }
         count++;
     }
@@ -858,11 +918,11 @@ Widget::Vec2f BoxLayout::sizeHint() const
     if (dir_ == LayoutDir::Vertical)
     {
         crossAxis += padding_.left + padding_.right;
-        return {crossAxis, mainAxis};
+        return { crossAxis, mainAxis };
     }
     else
     {
         crossAxis += padding_.top + padding_.bottom;
-        return {mainAxis, crossAxis};
+        return { mainAxis, crossAxis };
     }
 }

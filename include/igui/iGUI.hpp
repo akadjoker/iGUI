@@ -1,10 +1,10 @@
 #pragma once
 
-#include <igui/Backend.hpp>
-#include <igui/Events.hpp>
 #include <ct/hashmap.hpp>
 #include <ct/string.hpp>
 #include <ct/vector.hpp>
+#include <igui/Backend.hpp>
+#include <igui/Events.hpp>
 
 using u8 = uint8_t;
 using u32 = uint32_t;
@@ -17,13 +17,20 @@ struct Vec3
     float x;
     float y;
     float z;
-    Vec3() : x(0.0f), y(0.0f), z(0.0f) {}
+    Vec3()
+            : x(0.0f),
+              y(0.0f),
+              z(0.0f)
+    {
+    }
     Vec3(float xValue, float yValue, float zValue)
-        : x(xValue), y(yValue), z(zValue) {}
+            : x(xValue),
+              y(yValue),
+              z(zValue)
+    {
+    }
 };
 
- 
- 
 
 enum class Orientation
 {
@@ -153,71 +160,67 @@ public:
     ~GUI();
 
     // Init / Release
-    void Init(ig::Backend *backend, ig::FontId font = ig::FontId(1u),
-              float fontSize = 14.0f);
+    void Init(ig::Backend* backend, ig::FontId font = ig::FontId(1u), float fontSize = 14.0f);
     void Release();
 
     // Frame
-    void PushEvent(const ig::Event &event);
-    bool BeginFrame(const ig::FrameInfo &frame);
+    void PushEvent(const ig::Event& event);
+    bool BeginFrame(const ig::FrameInfo& frame);
     void EndFrame();
 
     bool IsFocused();
 
     // Windows
-    bool BeginWindow(const char *title, float x, float y, float width, float height, bool *open = nullptr);
-    bool BeginWindow(const char *title, const FloatRect &bounds, bool *open = nullptr);
+    bool BeginWindow(const char* title, float x, float y, float width, float height,
+            bool* open = nullptr);
+    bool BeginWindow(const char* title, const FloatRect& bounds, bool* open = nullptr);
     void EndWindow();
     void SetWindowFlags(bool canClose, bool canMinimize, bool canResize, bool canMove);
 
-    bool Button(const char *label, float x, float y, float w, float h);
-    bool Checkbox(const char *label, bool *value, float x, float y, float size);
+    bool Button(const char* label, float x, float y, float w, float h);
+    bool Checkbox(const char* label, bool* value, float x, float y, float size);
 
-    bool SliderFloat(const char *label, float *value, float min, float max,
-                     float x, float y, float w, float h);
-    bool SliderInt(const char *label, int *value, int min, int max,
-                   float x, float y, float w, float h);
+    bool SliderFloat(const char* label, float* value, float min, float max, float x, float y,
+            float w, float h);
+    bool SliderInt(const char* label, int* value, int min, int max, float x, float y, float w,
+            float h);
 
-    bool SliderFloatVertical(const char *label, float *value, float min, float max,
-                             float x, float y, float w, float h);
-    bool SliderIntVertical(const char *label, int *value, int min, int max,
-                           float x, float y, float w, float h);
+    bool SliderFloatVertical(const char* label, float* value, float min, float max, float x,
+            float y, float w, float h);
+    bool SliderIntVertical(const char* label, int* value, int min, int max, float x, float y,
+            float w, float h);
 
-    bool ColorPicker(const char *label, Color *color, float x, float y, float w = 200.0f);
+    bool ColorPicker(const char* label, Color* color, float x, float y, float w = 200.0f);
 
-    bool Dropdown(const char *label, int *selectedIndex, const char **items, int itemCount,
-                  float x, float y, float w, float h);
+    bool Dropdown(const char* label, int* selectedIndex, const char** items, int itemCount, float x,
+            float y, float w, float h);
 
-    bool ListBox(const char *label, int *selectedIndex, const char **items, int itemCount,
-                 float x, float y, float w, float h, int visibleItems = 5);
+    bool ListBox(const char* label, int* selectedIndex, const char** items, int itemCount, float x,
+            float y, float w, float h, int visibleItems = 5);
 
     void ProgressBar(float progress, float x, float y, float w, float h,
-                     Orientation orient = Orientation::Horizontal, const char *overlay = nullptr);
+            Orientation orient = Orientation::Horizontal, const char* overlay = nullptr);
 
-    bool TextInput(const char *label, char *buffer, size_t bufferSize,
-                   float x, float y, float w, float h = 0);
+    bool TextInput(const char* label, char* buffer, size_t bufferSize, float x, float y, float w,
+            float h = 0);
 
-    bool ToggleSwitch(const char *label, bool *value, float x, float y, float w = 0.0f, float h = 0.0f);
-    void SeparatorText(const char *text, float x, float y, float w);
+    bool ToggleSwitch(const char* label, bool* value, float x, float y, float w = 0.0f,
+            float h = 0.0f);
+    void SeparatorText(const char* text, float x, float y, float w);
     void Spinner(float x, float y, float radius);
 
-    bool DragFloat(const char *label, float *value,
-                   float speed,
-                   float min, float max,
-                   float x, float y, float w, float h);
+    bool DragFloat(const char* label, float* value, float speed, float min, float max, float x,
+            float y, float w, float h);
 
-    bool DragFloat(const char *label, float *value,
-                   float speed,
-                   float min, float max,
-                   float x, float y, float w, float h,
-                   const Color &accentColor);
+    bool DragFloat(const char* label, float* value, float speed, float min, float max, float x,
+            float y, float w, float h, const Color& accentColor);
 
     // RadioButton - retorna true se selecionado
-    bool RadioButton(const char *label, int *selected, int value, float x, float y, float size = 0);
+    bool RadioButton(const char* label, int* selected, int value, float x, float y, float size = 0);
 
-    void Label(const char *text, float x, float y);
-    void LabelColored(const char *text, const Color &color, float x, float y);
-    void Text(float x, float y, const char *fmt, ...);
+    void Label(const char* text, float x, float y);
+    void LabelColored(const char* text, const Color& color, float x, float y);
+    void Text(float x, float y, const char* fmt, ...);
     void Separator(float x, float y, float w);
 
     float GetWindowCenterX() const;
@@ -230,8 +233,8 @@ public:
     float AlignLeft(float margin = 8.0f) const;
 
     // Theme
-    void SetTheme(const GUITheme &theme);
-    GUITheme &GetTheme();
+    void SetTheme(const GUITheme& theme);
+    GUITheme& GetTheme();
     static GUITheme DarkTheme();
     static GUITheme LightTheme();
     static GUITheme BlueTheme();
@@ -245,31 +248,30 @@ public:
 
     FloatRect MakeContentRect(float x, float y, float w, float h) const;
     Vec2 MakeContentPos(float x, float y) const;
-    void DrawRectFilled(const FloatRect &rect, const Color &color);
-    void DrawRectOutline(const FloatRect &rect, const Color &color, float thickness = 1.0f);
-    void DrawText(const char *text, float x, float y, const Color &color);
+    void DrawRectFilled(const FloatRect& rect, const Color& color);
+    void DrawRectOutline(const FloatRect& rect, const Color& color, float thickness = 1.0f);
+    void DrawText(const char* text, float x, float y, const Color& color);
 
 private:
     // Windows
-    WindowData *GetOrCreateWindow(const ct::String &id);
-    WindowData *GetCurrentWindow();
-    void UpdateWindowInteraction(WindowData *window);
-    void RenderWindow(WindowData *window, const char *title);
+    WindowData* GetOrCreateWindow(const ct::String& id);
+    WindowData* GetCurrentWindow();
+    void UpdateWindowInteraction(WindowData* window);
+    void RenderWindow(WindowData* window, const char* title);
     void SortWindowsByZOrder();
     void BringCurrentWindowToFront();
 
     // Helpers
-    bool IsPointInRect(const Vec2 &point, const FloatRect &rect) const;
-    WidgetState GetWidgetState(const FloatRect &rect, const ct::String &widgetID);
+    bool IsPointInRect(const Vec2& point, const FloatRect& rect) const;
+    WidgetState GetWidgetState(const FloatRect& rect, const ct::String& widgetID);
 
-    float GetTextWidth(const char *text);
-    float GetTextHeight(const char *text);
-    void DrawLine(const Vec2 &from, const Vec2 &to, const Color &color,
-                  float thickness = 1.0f);
-    void DrawCircle(const Vec2 &center, float radius, const Color &color,
-                    bool filled, float thickness = 1.0f);
-    void DrawRoundedRect(const FloatRect &rect, float radius, const Color &color,
-                         bool filled, float thickness = 1.0f);
+    float GetTextWidth(const char* text);
+    float GetTextHeight(const char* text);
+    void DrawLine(const Vec2& from, const Vec2& to, const Color& color, float thickness = 1.0f);
+    void DrawCircle(const Vec2& center, float radius, const Color& color, bool filled,
+            float thickness = 1.0f);
+    void DrawRoundedRect(const FloatRect& rect, float radius, const Color& color, bool filled,
+            float thickness = 1.0f);
 
     // Ids
     // ct::String GenerateID(const char *label);
@@ -279,7 +281,7 @@ private:
     // ========================================
     // Member Variables
     // ========================================
-    ig::Backend *m_backend = nullptr;
+    ig::Backend* m_backend = nullptr;
     ig::FontId m_font = ig::FontId(1u);
     float m_fontSize = 14.0f;
     ig::DrawList m_drawList;
@@ -297,9 +299,18 @@ private:
     } m_input;
     ct::Vector<ig::Event> m_events;
 
-    bool IsMouseDown() const { return m_input.mouseDown; }
-    bool IsMousePressed() const { return m_input.mousePressed; }
-    bool IsMouseReleased() const { return m_input.mouseReleased; }
+    bool IsMouseDown() const
+    {
+        return m_input.mouseDown;
+    }
+    bool IsMousePressed() const
+    {
+        return m_input.mousePressed;
+    }
+    bool IsMouseReleased() const
+    {
+        return m_input.mouseReleased;
+    }
     bool IsKeyPressed(ig::KeyCode key) const
     {
         return m_input.keys[static_cast<unsigned>(key)];
@@ -316,10 +327,10 @@ private:
 
     // Windows
     ct::HashMap<ct::String, WindowData> m_windows;
-    ct::Vector<ct::String> m_windowOrder;   // ids, see GetOrCreateWindow
-    WindowData *m_currentWindow = nullptr;
-    WindowData *m_focusedWindow = nullptr;
-    WindowData *m_draggingWindow = nullptr;
+    ct::Vector<ct::String> m_windowOrder; // ids, see GetOrCreateWindow
+    WindowData* m_currentWindow = nullptr;
+    WindowData* m_focusedWindow = nullptr;
+    WindowData* m_draggingWindow = nullptr;
 
     // Widget state
     ct::String m_activeID;
@@ -367,7 +378,7 @@ private:
     int m_focusedControl = -1;
     // ct::Vector<Control> m_controls;
     ct::HashMap<u32, Control> m_controls;
-    Control *AddControl();
+    Control* AddControl();
     u32 m_nextControlID = 0;
     u32 GetNextControlID();
     u32 m_activeControl;

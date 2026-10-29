@@ -6,22 +6,25 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 #if defined(_WIN32)
-    #define WIN32_LEAN_AND_MEAN
-    #include <windows.h>
-    #include <shlobj.h>   // SHGetFolderPathA
-    #include <direct.h>   // _getcwd, _mkdir
+#define WIN32_LEAN_AND_MEAN
+#include <direct.h> // _getcwd, _mkdir
+#include <shlobj.h> // SHGetFolderPathA
+#include <windows.h>
 #else
-    #include <dirent.h>
-    #include <sys/stat.h>
-    #include <unistd.h>
-    #include <pwd.h>
+#include <dirent.h>
+#include <pwd.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
-namespace FileSystem {
+namespace FileSystem
+{
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Path manipulation (pure string, no I/O)
@@ -74,15 +77,15 @@ String normalizePath(const String& path)
     String result;
     result.reserve(path.size());
     char prev = 0;
-    for (char c : path) {
+    for (char c: path)
+    {
         char sep = (c == '\\') ? '/' : c;
         if (sep == '/' && prev == '/') continue; // collapse //
         result += sep;
         prev = sep;
     }
     // Remove trailing slash (but keep root "/")
-    if (result.size() > 1 && result.back() == '/')
-        result.pop_back();
+    if (result.size() > 1 && result.back() == '/') result.pop_back();
     return result;
 }
 
@@ -97,7 +100,7 @@ ct::Vector<PathCrumb> pathCrumbs(const String& path)
     if (p.size() >= 2 && p[1] == ':' && std::isalpha(static_cast<unsigned char>(p[0])))
     {
         accum = p.substr(0, 2);
-        crumbs.push_back({accum, accum + "/"});
+        crumbs.push_back({ accum, accum + "/" });
         start = 2;
     }
     else if (unc)
@@ -106,12 +109,12 @@ ct::Vector<PathCrumb> pathCrumbs(const String& path)
         if (end != String::npos) end = p.find('/', end + 1);
         if (end == String::npos) end = p.size();
         accum = "/" + p.substr(0, end);
-        crumbs.push_back({accum, accum});
+        crumbs.push_back({ accum, accum });
         start = end;
     }
     else if (!p.empty() && p[0] == '/')
     {
-        crumbs.push_back({"/", "/"});
+        crumbs.push_back({ "/", "/" });
         start = 1;
     }
     while (start < p.size())
@@ -122,7 +125,7 @@ ct::Vector<PathCrumb> pathCrumbs(const String& path)
         if (!segment.empty())
         {
             accum = (accum.empty() && crumbs.empty()) ? segment : accum + "/" + segment;
-            crumbs.push_back({segment, accum});
+            crumbs.push_back({ segment, accum });
         }
         start = end + 1;
     }
@@ -134,11 +137,9 @@ bool isAbsolute(const String& path)
     if (path.empty()) return false;
 #if defined(_WIN32)
     // C:\ or C:/
-    if (path.size() >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
-        return true;
+    if (path.size() >= 3 && path[1] == ':' && (path[2] == '\\' || path[2] == '/')) return true;
     // UNC path
-    if (path.size() >= 2 && path[0] == '\\' && path[1] == '\\')
-        return true;
+    if (path.size() >= 2 && path[0] == '\\' && path[1] == '\\') return true;
 #endif
     return path[0] == '/';
 }
@@ -150,8 +151,7 @@ bool isAbsolute(const String& path)
 String humanSize(uint64_t bytes)
 {
     char buf[32];
-    if (bytes < 1024)
-        snprintf(buf, sizeof(buf), "%u B", static_cast<unsigned>(bytes));
+    if (bytes < 1024) snprintf(buf, sizeof(buf), "%u B", static_cast<unsigned>(bytes));
     else if (bytes < 1024 * 1024)
         snprintf(buf, sizeof(buf), "%.1f KB", bytes / 1024.0);
     else if (bytes < 1024ULL * 1024 * 1024)
@@ -171,9 +171,8 @@ String humanDate(time_t t)
     localtime_r(&t, &tm);
 #endif
     char buf[64];
-    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d",
-             tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-             tm.tm_hour, tm.tm_min);
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1,
+            tm.tm_mday, tm.tm_hour, tm.tm_min);
     return buf;
 }
 
@@ -190,9 +189,9 @@ ct::Vector<Entry> listDir(const String& path)
     if (!dir) return entries;
 
     struct dirent* dp;
-    while ((dp = readdir(dir)) != nullptr) {
-        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0)
-            continue;
+    while ((dp = readdir(dir)) != nullptr)
+    {
+        if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) continue;
 
         Entry e;
         e.name = dp->d_name;
@@ -200,11 +199,15 @@ ct::Vector<Entry> listDir(const String& path)
         e.hidden = (e.name.size() > 0 && e.name[0] == '.');
 
         struct stat st;
-        if (stat(e.path.c_str(), &st) == 0) {
-            if (S_ISDIR(st.st_mode))      e.type = EntryType::Directory;
-            else if (S_ISLNK(st.st_mode)) e.type = EntryType::Symlink;
-            else if (S_ISREG(st.st_mode)) e.type = EntryType::File;
-            else                           e.type = EntryType::Other;
+        if (stat(e.path.c_str(), &st) == 0)
+        {
+            if (S_ISDIR(st.st_mode)) e.type = EntryType::Directory;
+            else if (S_ISLNK(st.st_mode))
+                e.type = EntryType::Symlink;
+            else if (S_ISREG(st.st_mode))
+                e.type = EntryType::File;
+            else
+                e.type = EntryType::Other;
             e.size = static_cast<uint64_t>(st.st_size);
             e.mtime = st.st_mtime;
         }
@@ -259,8 +262,7 @@ String homePath()
 String currentDir()
 {
     char buf[4096];
-    if (getcwd(buf, sizeof(buf)))
-        return buf;
+    if (getcwd(buf, sizeof(buf))) return buf;
     return ".";
 }
 
@@ -271,7 +273,8 @@ bool createDir(const String& path)
 
     // Recursive: ensure parent exists
     String parent = parentPath(path);
-    if (!parent.empty() && parent != path && !isDir(parent)) {
+    if (!parent.empty() && parent != path && !isDir(parent))
+    {
         if (!createDir(parent)) return false;
     }
     return mkdir(path.c_str(), 0755) == 0;
@@ -297,17 +300,16 @@ ct::Vector<Entry> listDir(const String& path)
     HANDLE hFind = FindFirstFileA(search.c_str(), &fd);
     if (hFind == INVALID_HANDLE_VALUE) return entries;
 
-    do {
-        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0)
-            continue;
+    do
+    {
+        if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0) continue;
 
         Entry e;
         e.name = fd.cFileName;
         e.path = joinPath(path, e.name);
         e.hidden = (fd.dwFileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0;
 
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
-            e.type = EntryType::Directory;
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) e.type = EntryType::Directory;
         else
             e.type = EntryType::File;
 
@@ -348,8 +350,7 @@ bool isFile(const String& path)
 uint64_t fileSize(const String& path)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad))
-        return 0;
+    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad)) return 0;
     ULARGE_INTEGER uli;
     uli.LowPart = fad.nFileSizeLow;
     uli.HighPart = fad.nFileSizeHigh;
@@ -359,8 +360,7 @@ uint64_t fileSize(const String& path)
 time_t modTime(const String& path)
 {
     WIN32_FILE_ATTRIBUTE_DATA fad;
-    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad))
-        return 0;
+    if (!GetFileAttributesExA(path.c_str(), GetFileExInfoStandard, &fad)) return 0;
     ULARGE_INTEGER ft;
     ft.LowPart = fad.ftLastWriteTime.dwLowDateTime;
     ft.HighPart = fad.ftLastWriteTime.dwHighDateTime;
@@ -370,8 +370,7 @@ time_t modTime(const String& path)
 String homePath()
 {
     char buf[MAX_PATH];
-    if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, buf) == S_OK)
-        return buf;
+    if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, buf) == S_OK) return buf;
     const char* h = getenv("USERPROFILE");
     return h ? h : "C:\\";
 }
@@ -379,8 +378,7 @@ String homePath()
 String currentDir()
 {
     char buf[4096];
-    if (_getcwd(buf, sizeof(buf)))
-        return buf;
+    if (_getcwd(buf, sizeof(buf))) return buf;
     return ".";
 }
 
@@ -389,7 +387,8 @@ bool createDir(const String& path)
     if (path.empty()) return false;
     if (isDir(path)) return true;
     String parent = parentPath(path);
-    if (!parent.empty() && parent != path && !isDir(parent)) {
+    if (!parent.empty() && parent != path && !isDir(parent))
+    {
         if (!createDir(parent)) return false;
     }
     return CreateDirectoryA(path.c_str(), NULL) != 0;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include <igui/widgets/Retained.hpp>
 #include <ct/hashmap.hpp>
+#include <igui/widgets/Retained.hpp>
 #include <stdint.h>
 
 namespace ig
@@ -22,24 +22,37 @@ public:
 
     // Loads the GL functions and builds the shader and buffers. False when the
     // context is too old.
-    bool init(void *(*procAddress)(const char *name));
-    bool ready() const { return program_ != 0; }
+    bool init(void* (*procAddress)(const char* name));
+    bool ready() const
+    {
+        return program_ != 0;
+    }
 
-    ig::retained::TextureHandle createTexture(int width, int height, const unsigned char *rgba);
+    ig::retained::TextureHandle createTexture(int width, int height, const unsigned char* rgba);
     void destroyTexture(ig::retained::TextureHandle texture);
-    bool updateTexture(ig::retained::TextureHandle texture, const unsigned char *rgba, int width, int height);
+    bool updateTexture(ig::retained::TextureHandle texture, const unsigned char* rgba, int width,
+            int height);
 
     // Clears the framebuffer to background (0xAARRGGBB) and draws every pass.
-    void render(ig::retained::DrawData &data, int width, int height, uint32_t background);
+    void render(ig::retained::DrawData& data, int width, int height, uint32_t background);
 
     // Reads the framebuffer back as 0xAARRGGBB, top row first.
-    void readPixels(uint32_t *dst, int width, int height) const;
+    void readPixels(uint32_t* dst, int width, int height) const;
 
-    const char *renderer() const;
+    const char* renderer() const;
     // The context version that init() found, and whether it is an OpenGL ES context.
-    int versionMajor() const { return major_; }
-    int versionMinor() const { return minor_; }
-    bool es() const { return es_; }
+    int versionMajor() const
+    {
+        return major_;
+    }
+    int versionMinor() const
+    {
+        return minor_;
+    }
+    bool es() const
+    {
+        return es_;
+    }
 
 private:
     struct Size

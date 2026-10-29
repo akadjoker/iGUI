@@ -1,18 +1,20 @@
 #pragma once
 
 #include "Signal.hpp"
-#include <cstdint>
-#include <ct/function.hpp>
-#include <ct/vector.hpp>
-#include <igui/widgets/String.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <ct/function.hpp>
 #include <ct/hashmap.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 
-namespace ig { namespace retained
+namespace ig
 {
-    
+namespace retained
+{
+
 class Widget;
 
 // Forward — EaseType & applyEasing live in WidgetApp.hpp
@@ -35,28 +37,61 @@ class Animation
 {
 public:
     /// @brief Animation lifecycle states.
-    enum class State { Pending, Running, Paused, Finished };
+    enum class State
+    {
+        Pending,
+        Running,
+        Paused,
+        Finished
+    };
     /// @brief Playback direction.
-    enum class Direction { Forward, Backward };
+    enum class Direction
+    {
+        Forward,
+        Backward
+    };
     /// @brief Loop behavior mode.
-    enum class LoopMode { Once, Loop, PingPong };
+    enum class LoopMode
+    {
+        Once,
+        Loop,
+        PingPong
+    };
 
     Animation(float from, float to, float durationSec, EaseType ease);
     ~Animation() = default;
 
     // ── Configuration ─────────────────────────────────────────────────────
     /// @brief Set the initial delay before the animation starts.
-    void setDelay(float sec)              { delay_ = sec; }
+    void setDelay(float sec)
+    {
+        delay_ = sec;
+    }
     /// @brief Set the loop mode (Once, Loop, or PingPong).
-    void setLoopMode(LoopMode m)          { loopMode_ = m; }
+    void setLoopMode(LoopMode m)
+    {
+        loopMode_ = m;
+    }
     /// @brief Set the number of loop iterations (0 = infinite).
-    void setLoopCount(int n)              { loopCount_ = n; }
+    void setLoopCount(int n)
+    {
+        loopCount_ = n;
+    }
     /// @brief Set whether the animation auto-deletes on finish.
-    void setAutoDelete(bool d)            { autoDelete_ = d; }
+    void setAutoDelete(bool d)
+    {
+        autoDelete_ = d;
+    }
     /// @brief Set a tag string for identification.
-    void setTag(const String& t)     { tag_ = t; }
+    void setTag(const String& t)
+    {
+        tag_ = t;
+    }
     /// @brief Get the tag string.
-    const String& tag() const        { return tag_; }
+    const String& tag() const
+    {
+        return tag_;
+    }
 
     // ── Control ───────────────────────────────────────────────────────────
     /// @brief Start the animation.
@@ -68,37 +103,67 @@ public:
     /// @brief Stop the animation and jump to the end value.
     void stop();
     /// @brief End the animation where it is, without onUpdate or onFinished.
-    void cancel() { state_ = State::Finished; }
+    void cancel()
+    {
+        state_ = State::Finished;
+    }
     /// @brief The widget the animation moves; it is cancelled when that widget goes away.
-    void setTarget(Widget* w) { target_ = w; }
+    void setTarget(Widget* w)
+    {
+        target_ = w;
+    }
     /// @brief Get the widget the animation moves.
-    Widget* target() const { return target_; }
+    Widget* target() const
+    {
+        return target_;
+    }
     /// @brief Reset and restart the animation from the beginning.
     void restart();
 
     // ── Query ─────────────────────────────────────────────────────────────
     /// @brief Get the current animation state.
-    State state()     const { return state_; }
+    State state() const
+    {
+        return state_;
+    }
     /// @brief Get the raw progress (0..1).
-    float progress()  const { return progress_; }
+    float progress() const
+    {
+        return progress_;
+    }
     /// @brief Get the current eased value (from..to).
-    float value()     const { return value_; }
+    float value() const
+    {
+        return value_;
+    }
     /// @brief Get the start value.
-    float from()      const { return from_; }
+    float from() const
+    {
+        return from_;
+    }
     /// @brief Get the end value.
-    float to()        const { return to_; }
+    float to() const
+    {
+        return to_;
+    }
     /// @brief Get the animation duration in seconds.
-    float duration()  const { return duration_; }
+    float duration() const
+    {
+        return duration_;
+    }
     /// @brief Get whether auto-delete is enabled.
-    bool  autoDelete()const { return autoDelete_; }
+    bool autoDelete() const
+    {
+        return autoDelete_;
+    }
 
     // ── Signals ───────────────────────────────────────────────────────────
     /// @brief Emitted with the current value each tick.
     Signal<float> onUpdate;
     /// @brief Emitted when fully done (all loops completed).
-    Signal<>      onFinished;
+    Signal<> onFinished;
     /// @brief Emitted with the loop index at each loop boundary.
-    Signal<int>   onLoopEnd;
+    Signal<int> onLoopEnd;
 
     /// @brief Advance the animation by the given timestep.
     void tick(float dt);
@@ -110,19 +175,19 @@ private:
     float duration_;
     EaseType ease_;
 
-    float delay_      = 0.0f;
-    float elapsed_    = 0.0f;
-    float progress_   = 0.0f;
+    float delay_ = 0.0f;
+    float elapsed_ = 0.0f;
+    float progress_ = 0.0f;
     float value_;
 
-    State     state_     = State::Pending;
-    Direction dir_       = Direction::Forward;
-    LoopMode  loopMode_  = LoopMode::Once;
-    int       loopCount_ = 1;    // 0 = infinite
-    int       loopIndex_ = 0;
-    bool      autoDelete_= true;
+    State state_ = State::Pending;
+    Direction dir_ = Direction::Forward;
+    LoopMode loopMode_ = LoopMode::Once;
+    int loopCount_ = 1; // 0 = infinite
+    int loopIndex_ = 0;
+    bool autoDelete_ = true;
     String tag_;
-    Widget*   target_    = nullptr;
+    Widget* target_ = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -133,7 +198,11 @@ class AnimationGroup
 {
 public:
     /// @brief Group execution mode.
-    enum class Mode { Parallel, Sequential };
+    enum class Mode
+    {
+        Parallel,
+        Sequential
+    };
 
     explicit AnimationGroup(Mode mode = Mode::Parallel);
     ~AnimationGroup();
@@ -148,11 +217,20 @@ public:
     void tick(float dt);
 
     /// @brief Check if all animations have completed.
-    bool isFinished() const { return finished_; }
+    bool isFinished() const
+    {
+        return finished_;
+    }
     /// @brief Get whether auto-delete is enabled.
-    bool autoDelete() const { return autoDelete_; }
+    bool autoDelete() const
+    {
+        return autoDelete_;
+    }
     /// @brief Set whether the group auto-deletes on finish.
-    void setAutoDelete(bool d) { autoDelete_ = d; }
+    void setAutoDelete(bool d)
+    {
+        autoDelete_ = d;
+    }
 
     /// @brief Emitted when all animations in the group complete.
     Signal<> onFinished;
@@ -160,18 +238,24 @@ public:
     /// @brief End the group where it is, without onFinished.
     void cancel();
     /// @brief The widget the group moves; it is cancelled when that widget goes away.
-    void setTarget(Widget* w) { target_ = w; }
+    void setTarget(Widget* w)
+    {
+        target_ = w;
+    }
     /// @brief Get the widget the group moves.
-    Widget* target() const { return target_; }
+    Widget* target() const
+    {
+        return target_;
+    }
 
 private:
     Mode mode_;
     ct::Vector<Animation*> anims_;
-    int  currentIndex_ = 0;
-    bool running_      = false;
-    bool finished_     = false;
-    bool autoDelete_   = true;
-    Widget* target_    = nullptr;
+    int currentIndex_ = 0;
+    bool running_ = false;
+    bool finished_ = false;
+    bool autoDelete_ = true;
+    Widget* target_ = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -210,16 +294,17 @@ public:
     void tick(float dt);
 
     /// @brief Get the number of active animations and groups.
-    int count() const { return static_cast<int>(anims_.size() + groups_.size()); }
+    int count() const
+    {
+        return static_cast<int>(anims_.size() + groups_.size());
+    }
 
     // ── Convenience factory methods ───────────────────────────────────────
     // These create, configure and register an Animation in one call.
 
     /// @brief Create and register a float tween animation.
-    static Animation* animate(float from, float to, float duration,
-                               EaseType ease,
-                               ct::Function<void(float)> onUpdate,
-                               ct::Function<void()> onDone = nullptr);
+    static Animation* animate(float from, float to, float duration, EaseType ease,
+            ct::Function<void(float)> onUpdate, ct::Function<void()> onDone = nullptr);
 
     /// @brief Fade a widget in (opacity 0 to 1).
     static Animation* fadeIn(Widget* w, float duration = 0.25f, EaseType ease = {});
@@ -227,20 +312,20 @@ public:
     static Animation* fadeOut(Widget* w, float duration = 0.25f, EaseType ease = {});
 
     /// @brief Slide a widget in from the given offset.
-    static Animation* slideIn(Widget* w, float fromX, float fromY,
-                               float duration = 0.3f, EaseType ease = {});
+    static Animation* slideIn(Widget* w, float fromX, float fromY, float duration = 0.3f,
+            EaseType ease = {});
 
 private:
     Animator() = default;
     Animator(const Animator&) = delete;
     Animator& operator=(const Animator&) = delete;
 
-    ct::Vector<Animation*>      anims_;
+    ct::Vector<Animation*> anims_;
     ct::Vector<AnimationGroup*> groups_;
 
     // Deferred additions during tick to avoid iterator invalidation
-    bool                         ticking_ = false;
-    ct::Vector<Animation*>      pendingAnims_;
+    bool ticking_ = false;
+    ct::Vector<Animation*> pendingAnims_;
     ct::Vector<AnimationGroup*> pendingGroups_;
 };
 

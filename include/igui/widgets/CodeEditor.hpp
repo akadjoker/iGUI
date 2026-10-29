@@ -1,13 +1,15 @@
 #pragma once
 
 #include "TextInputWidgets.hpp"
-#include <igui/widgets/String.hpp>
-#include <igui/Syntax.hpp>
-#include <ct/vector.hpp>
-#include <ct/hashset.hpp>
 #include <ct/function.hpp>
+#include <ct/hashset.hpp>
+#include <ct/vector.hpp>
+#include <igui/Syntax.hpp>
+#include <igui/widgets/String.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
 // The lexical highlighting layer (SyntaxHighlighter, SyntaxLanguage, and the
@@ -15,16 +17,16 @@ namespace ig { namespace retained
 // the immediate-mode Context::codeEditor() without depending on the retained
 // widget toolkit. Pull the names in here so existing retained code and users
 // of this header keep referring to them unqualified, as ig::retained::*.
-using ig::syntax::SyntaxHighlighter;
-using ig::syntax::SyntaxLanguage;
-using ig::syntax::DefinedHighlighter;
+using ig::syntax::BlitzHighlighter;
 using ig::syntax::CppHighlighter;
-using ig::syntax::PythonHighlighter;
-using ig::syntax::JsHighlighter;
-using ig::syntax::LuaHighlighter;
+using ig::syntax::DefinedHighlighter;
 using ig::syntax::GlslHighlighter;
 using ig::syntax::JavaHighlighter;
-using ig::syntax::BlitzHighlighter;
+using ig::syntax::JsHighlighter;
+using ig::syntax::LuaHighlighter;
+using ig::syntax::PythonHighlighter;
+using ig::syntax::SyntaxHighlighter;
+using ig::syntax::SyntaxLanguage;
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  CodeEditor — full-featured code editor widget
@@ -61,7 +63,7 @@ public:
 
     /// @brief Create and set a highlighter by type.
     /// @code editor->setHighlighter<CppHighlighter>(); @endcode
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* setHighlighter(Args&&... args)
     {
         auto* hl = new T(std::forward<Args>(args)...);
@@ -73,7 +75,10 @@ public:
     void setHighlighterRaw(SyntaxHighlighter* hl);
 
     /// @brief Get the current syntax highlighter (nullptr if none).
-    SyntaxHighlighter* highlighter() const { return highlighter_; }
+    SyntaxHighlighter* highlighter() const
+    {
+        return highlighter_;
+    }
 
     /// @brief Auto-detect and create highlighter from file extension.
     /// @param filename  File name or path (e.g. "main.cpp").
@@ -81,7 +86,9 @@ public:
     SyntaxHighlighter* setHighlighterForFile(const String& filename);
     /// Install a copied declarative language definition on this editor.
     DefinedHighlighter* setLanguage(const SyntaxLanguage& language)
-    { return setHighlighter<DefinedHighlighter>(language); }
+    {
+        return setHighlighter<DefinedHighlighter>(language);
+    }
     /// Register/replace a definition by name for automatic extension detection.
     /// Call on the UI thread; custom definitions take precedence over built-ins.
     static void registerLanguage(const SyntaxLanguage& language);
@@ -89,9 +96,16 @@ public:
     // ── Code folding ──────────────────────────────────────────────────────
 
     /// @brief Enable or disable fold gutter icons.
-    void setShowFolding(bool show) { showFolding_ = show; markDirty(); }
+    void setShowFolding(bool show)
+    {
+        showFolding_ = show;
+        markDirty();
+    }
     /// @brief Check if fold gutter is visible.
-    bool showFolding() const       { return showFolding_; }
+    bool showFolding() const
+    {
+        return showFolding_;
+    }
 
     /// @brief Collapse a fold region starting at the given line.
     void foldAt(int line);
@@ -123,58 +137,122 @@ public:
     // ── Auto-indent ───────────────────────────────────────────────────────
 
     /// @brief Enable or disable auto-indentation on Enter.
-    void setAutoIndent(bool ai) { autoIndent_ = ai; }
+    void setAutoIndent(bool ai)
+    {
+        autoIndent_ = ai;
+    }
     /// @brief Check if auto-indent is enabled.
-    bool autoIndent() const     { return autoIndent_; }
+    bool autoIndent() const
+    {
+        return autoIndent_;
+    }
 
     // ── Bracket matching ──────────────────────────────────────────────────
 
     /// @brief Enable or disable bracket matching highlight.
-    void setShowBracketMatch(bool s) { showBracketMatch_ = s; markDirty(); }
+    void setShowBracketMatch(bool s)
+    {
+        showBracketMatch_ = s;
+        markDirty();
+    }
     /// @brief Check if bracket matching is enabled.
-    bool showBracketMatch() const    { return showBracketMatch_; }
+    bool showBracketMatch() const
+    {
+        return showBracketMatch_;
+    }
 
     // ── Visual ────────────────────────────────────────────────────────────
 
     /// @brief Enable or disable current-line highlight.
-    void setHighlightCurrentLine(bool h) { highlightCurrentLine_ = h; markDirty(); }
+    void setHighlightCurrentLine(bool h)
+    {
+        highlightCurrentLine_ = h;
+        markDirty();
+    }
     /// @brief Check if current-line highlight is enabled.
-    bool highlightCurrentLine() const    { return highlightCurrentLine_; }
+    bool highlightCurrentLine() const
+    {
+        return highlightCurrentLine_;
+    }
 
     /// @brief Enable or disable indent guide lines.
-    void setShowIndentGuides(bool s) { showIndentGuides_ = s; markDirty(); }
+    void setShowIndentGuides(bool s)
+    {
+        showIndentGuides_ = s;
+        markDirty();
+    }
     /// @brief Check if indent guides are visible.
-    bool showIndentGuides() const    { return showIndentGuides_; }
+    bool showIndentGuides() const
+    {
+        return showIndentGuides_;
+    }
 
     /// @brief Enable or disable whitespace rendering (dots for spaces, arrows for tabs).
-    void setShowWhitespace(bool s) { showWhitespace_ = s; markDirty(); }
+    void setShowWhitespace(bool s)
+    {
+        showWhitespace_ = s;
+        markDirty();
+    }
     /// @brief Check if whitespace rendering is enabled.
-    bool showWhitespace() const    { return showWhitespace_; }
+    bool showWhitespace() const
+    {
+        return showWhitespace_;
+    }
 
     /// @brief Enable or disable fold scope lines (vertical lines from { to }).
-    void setShowScopeLines(bool s) { showScopeLines_ = s; markDirty(); }
+    void setShowScopeLines(bool s)
+    {
+        showScopeLines_ = s;
+        markDirty();
+    }
     /// @brief Check if fold scope lines are visible.
-    bool showScopeLines() const    { return showScopeLines_; }
+    bool showScopeLines() const
+    {
+        return showScopeLines_;
+    }
 
     // ── Minimap ───────────────────────────────────────────────────────────
 
     /// @brief Enable or disable the code minimap on the right side.
-    void setShowMinimap(bool s) { showMinimap_ = s; markDirty(); }
+    void setShowMinimap(bool s)
+    {
+        showMinimap_ = s;
+        markDirty();
+    }
     /// @brief Check if minimap is visible.
-    bool showMinimap() const    { return showMinimap_; }
+    bool showMinimap() const
+    {
+        return showMinimap_;
+    }
     /// @brief Set minimap width in pixels (default 80).
-    void setMinimapWidth(float w) { minimapWidth_ = w; markDirty(); }
+    void setMinimapWidth(float w)
+    {
+        minimapWidth_ = w;
+        markDirty();
+    }
     /// @brief Get minimap width.
-    float minimapWidth() const  { return minimapWidth_; }
+    float minimapWidth() const
+    {
+        return minimapWidth_;
+    }
 
     // ── Zoom ──────────────────────────────────────────────────────────────
 
     /// @brief Zoom in by one step (10%).
-    void zoomIn()    { setFontScale(fontScale() + 0.1f); }
+    void zoomIn()
+    {
+        setFontScale(fontScale() + 0.1f);
+    }
     /// @brief Zoom out by one step (10%).
-    void zoomOut()   { setFontScale(fontScale() - 0.1f); }
+    void zoomOut()
+    {
+        setFontScale(fontScale() - 0.1f);
+    }
     /// @brief Reset zoom to 100%.
-    void zoomReset() { setFontScale(1.0f); }
+    void zoomReset()
+    {
+        setFontScale(1.0f);
+    }
 
     // ── Search / Replace ──────────────────────────────────────────────────
 
@@ -185,7 +263,10 @@ public:
     /// @brief Close the search/replace bar.
     void hideSearchBar();
     /// @brief Check if the search bar is visible.
-    bool isSearchBarVisible() const { return searchVisible_; }
+    bool isSearchBarVisible() const
+    {
+        return searchVisible_;
+    }
 
     /// @brief Find and select the next occurrence of the search term.
     /// @param text       The text to search for, or a pattern when useRegex is set.
@@ -195,21 +276,21 @@ public:
     ///                   instead of a literal substring. An invalid pattern
     ///                   matches nothing rather than falling back to literal.
     /// @return true if a match was found.
-    bool findNext(const String& text, bool caseSensitive = false,
-                  bool wholeWord = false, bool useRegex = false);
+    bool findNext(const String& text, bool caseSensitive = false, bool wholeWord = false,
+            bool useRegex = false);
 
     /// @brief Find the previous occurrence.
-    bool findPrev(const String& text, bool caseSensitive = false,
-                  bool wholeWord = false, bool useRegex = false);
+    bool findPrev(const String& text, bool caseSensitive = false, bool wholeWord = false,
+            bool useRegex = false);
 
     /// @brief Replace the current selection (if it matches) and find next.
-    bool replaceNext(const String& find, const String& replace,
-                     bool caseSensitive = false, bool useRegex = false);
+    bool replaceNext(const String& find, const String& replace, bool caseSensitive = false,
+            bool useRegex = false);
 
     /// @brief Replace all occurrences. Returns the number of replacements.
     /// When useRegex is set, replace may reference capture groups as \1, \2, ...
-    int replaceAll(const String& find, const String& replace,
-                   bool caseSensitive = false, bool useRegex = false);
+    int replaceAll(const String& find, const String& replace, bool caseSensitive = false,
+            bool useRegex = false);
 
     // ── Movement ──────────────────────────────────────────────────────────
 
@@ -264,7 +345,10 @@ public:
     /// @brief Remove all extra cursors, keeping only the primary.
     void clearExtraCursors();
     /// @brief Get the total number of cursors (primary + extra).
-    int  cursorCount() const { return 1 + static_cast<int>(extraCursors_.size()); }
+    int cursorCount() const
+    {
+        return 1 + static_cast<int>(extraCursors_.size());
+    }
     /// @brief Get the position of cursor at index (0 = primary).
     TextPos cursorPosAt(int idx) const;
     /// @brief Check if any cursor has a selection.
@@ -282,10 +366,10 @@ public:
     // ── Signals ───────────────────────────────────────────────────────────
 
     /// @brief Emitted when undo/redo availability changes.
-    Signal<bool, bool> undoRedoChanged;   // (canUndo, canRedo)
+    Signal<bool, bool> undoRedoChanged; // (canUndo, canRedo)
 
     /// @brief Emitted when a fold region is toggled (line, isFolded).
-    Signal<int, bool>  foldToggled;
+    Signal<int, bool> foldToggled;
 
     // ── Overrides ─────────────────────────────────────────────────────────
     void paint(PaintContext& ctx) override;
@@ -297,12 +381,12 @@ public:
 
 private:
     // ── Highlighter ──────────────────────────────────────────────────────
-    SyntaxHighlighter* highlighter_ = nullptr;   // owned, deleted in dtor
+    SyntaxHighlighter* highlighter_ = nullptr; // owned, deleted in dtor
 
     // Cached highlight state per line (invalidated on edit)
-    mutable ct::Vector<int> lineStates_;     // lexer state after each line
-    mutable bool             hlDirty_ = true; // full re-highlight needed
-    mutable ct::Vector<int> hlStarts_;        // lines an edit changed: highlight again from there
+    mutable ct::Vector<int> lineStates_; // lexer state after each line
+    mutable bool hlDirty_ = true;        // full re-highlight needed
+    mutable ct::Vector<int> hlStarts_;   // lines an edit changed: highlight again from there
     void reHighlight() const;
     void reHighlightStale() const;
 
@@ -311,7 +395,11 @@ private:
 
     // ── Folding ──────────────────────────────────────────────────────────
     bool showFolding_ = true;
-    struct FoldRange { int startLine, endLine; bool collapsed; };
+    struct FoldRange
+    {
+        int startLine, endLine;
+        bool collapsed;
+    };
     ct::Vector<FoldRange> foldRanges_;
     ct::Vector<int> foldDeltas_; // what each line opens or closes, measured once
     bool foldsStale_ = false;
@@ -321,26 +409,30 @@ private:
     bool isLineHidden(int line) const;
     mutable ct::Vector<unsigned char> hiddenLines_; // per line, rebuilt when the folds change
     mutable bool hiddenDirty_ = true;
-    int  foldGutterWidth() const;
+    int foldGutterWidth() const;
     void paintFoldGutter(PaintContext& ctx, const Rect& abs);
 
     // ── Undo / Redo ──────────────────────────────────────────────────────
-    struct EditAction {
-        enum Type { Insert, Delete, Replace };
+    struct EditAction
+    {
+        enum Type
+        {
+            Insert,
+            Delete,
+            Replace
+        };
         Type type;
-        TextPos pos;               // start position of the edit
-        String oldText;       // text before (for undo)
-        String newText;       // text after (for redo)
-        TextPos oldCursor;         // cursor before
-        TextPos newCursor;         // cursor after
+        TextPos pos;       // start position of the edit
+        String oldText;    // text before (for undo)
+        String newText;    // text after (for redo)
+        TextPos oldCursor; // cursor before
+        TextPos newCursor; // cursor after
     };
     ct::Vector<EditAction> undoStack_;
     ct::Vector<EditAction> redoStack_;
-    bool   recording_ = false;     // prevents recursive recording
-    void recordInsert(TextPos pos, const String& text,
-                      TextPos oldCursor, TextPos newCursor);
-    void recordDelete(TextPos pos, const String& text,
-                      TextPos oldCursor, TextPos newCursor);
+    bool recording_ = false; // prevents recursive recording
+    void recordInsert(TextPos pos, const String& text, TextPos oldCursor, TextPos newCursor);
+    void recordDelete(TextPos pos, const String& text, TextPos oldCursor, TextPos newCursor);
     void applyAction(const EditAction& action, bool isUndo);
     // Drop extra cursors whose line the buffer no longer has.
     void dropStaleExtraCursors();
@@ -352,16 +444,19 @@ private:
 
     // ── Bracket matching ─────────────────────────────────────────────────
     bool showBracketMatch_ = true;
-    struct BracketPair { TextPos open, close; };
+    struct BracketPair
+    {
+        TextPos open, close;
+    };
     BracketPair findMatchingBracket(TextPos pos) const;
     void paintBracketMatch(PaintContext& ctx, const Rect& abs);
 
     // ── Visual ───────────────────────────────────────────────────────────
     bool highlightCurrentLine_ = true;
-    bool showIndentGuides_     = true;
-    bool showWhitespace_       = false;
-    bool showScopeLines_       = true;
-    const ig::retained::Font* lastPaintFont_ = nullptr;  // cached during paint
+    bool showIndentGuides_ = true;
+    bool showWhitespace_ = false;
+    bool showScopeLines_ = true;
+    const ig::retained::Font* lastPaintFont_ = nullptr; // cached during paint
     float colToPixelX(int line, int col) const;
     float colCharWidth(int line, int col) const;
     void paintCurrentLineHighlight(PaintContext& ctx, const Rect& abs);
@@ -370,26 +465,26 @@ private:
     void paintScopeLines(PaintContext& ctx, const Rect& abs);
 
     // ── Minimap ──────────────────────────────────────────────────────────
-    bool  showMinimap_    = false;
-    float minimapWidth_   = 80.0f;
-    bool  minimapDrag_    = false;   // mouse dragging the minimap slider
-    void  paintMinimap(PaintContext& ctx, const Rect& abs);
-    float minimapEffectiveWidth() const;  // 0 when hidden
+    bool showMinimap_ = false;
+    float minimapWidth_ = 80.0f;
+    bool minimapDrag_ = false; // mouse dragging the minimap slider
+    void paintMinimap(PaintContext& ctx, const Rect& abs);
+    float minimapEffectiveWidth() const; // 0 when hidden
 
     // ── Search ───────────────────────────────────────────────────────────
-    bool        searchVisible_ = false;
-    bool        replaceVisible_ = false;
+    bool searchVisible_ = false;
+    bool replaceVisible_ = false;
     String searchTerm_;
     String replaceTerm_;
-    bool        searchCaseSensitive_ = false;
-    bool        searchWholeWord_     = false;
-    bool        searchIsRegex_       = false;
+    bool searchCaseSensitive_ = false;
+    bool searchWholeWord_ = false;
+    bool searchIsRegex_ = false;
     ct::Vector<TextPos> searchMatches_;
     // Match byte length at searchMatches_[i], parallel array. Always
     // searchTerm_.size() for a literal search; varies per match for regex
     // (e.g. "a+" matches "a", "aa", ...).
     ct::Vector<int> searchMatchLengths_;
-    int                  searchMatchIdx_ = -1;
+    int searchMatchIdx_ = -1;
     void rebuildSearchMatches();
     void paintSearchHighlights(PaintContext& ctx, const Rect& abs);
     void paintSearchBar(PaintContext& ctx, const Rect& abs);

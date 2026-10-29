@@ -3,13 +3,22 @@
 #include "Widget.hpp"
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ─────────────────────────────────────────────────────────────────────────────
 //  DockSide - where to dock relative to a panel
 // ─────────────────────────────────────────────────────────────────────────────
 /// @brief Side to dock a panel relative to another.
-enum class DockSide { Left, Right, Top, Bottom, Center };
+enum class DockSide
+{
+    Left,
+    Right,
+    Top,
+    Bottom,
+    Center
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  DockNode - internal tree node (not a Widget)
@@ -21,16 +30,17 @@ struct DockNode
     bool isSplit = false;
 
     // ── Split ─────────────────────────────────────────────────────────────
-    LayoutDir  splitDir = LayoutDir::Horizontal;
-    float      ratio    = 0.5f;   // fraction for first child
-    DockNode*  first    = nullptr;
-    DockNode*  second   = nullptr;
+    LayoutDir splitDir = LayoutDir::Horizontal;
+    float ratio = 0.5f; // fraction for first child
+    DockNode* first = nullptr;
+    DockNode* second = nullptr;
 
     // ── Leaf ──────────────────────────────────────────────────────────────
-    struct Tab {
+    struct Tab
+    {
         String name;
-        Widget*     content      = nullptr;
-        float       cachedWidth  = 0.f;   // measured during paint
+        Widget* content = nullptr;
+        float cachedWidth = 0.f; // measured during paint
     };
     ct::Vector<Tab> tabs;
     int currentTab = 0;
@@ -39,7 +49,10 @@ struct DockNode
     Rect rect = {};
 
     /// @brief Check if the node has no content.
-    bool isEmpty() const { return !isSplit && tabs.empty(); }
+    bool isEmpty() const
+    {
+        return !isSplit && tabs.empty();
+    }
 
     /// @brief Find a tab by name, optionally returning its index.
     DockNode* findTab(const String& name, int* outIdx = nullptr);
@@ -74,7 +87,7 @@ public:
     void addPanel(const String& name, Widget* content);
 
     /// @brief Create and add a typed panel.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* addPanel(const String& name, Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
@@ -102,27 +115,53 @@ public:
     ///        WidgetApp::setWindowStatePath and its state file can restore it
     ///        on the next run. Empty - the default - means the panel is never
     ///        remembered.
-    void setSettingsKey(const String& key) { settingsKey_ = key; }
+    void setSettingsKey(const String& key)
+    {
+        settingsKey_ = key;
+    }
     /// @brief Get the settings key (empty when the panel is not remembered).
-    const String& settingsKey() const      { return settingsKey_; }
+    const String& settingsKey() const
+    {
+        return settingsKey_;
+    }
 
     /// @brief True once the state file has given this panel its layout (or was
     ///        asked for one and had none). The file is applied to a panel once,
     ///        so a stage built later cannot reset an arrangement the user has
     ///        changed since.
-    bool settingsApplied() const           { return settingsApplied_; }
+    bool settingsApplied() const
+    {
+        return settingsApplied_;
+    }
     /// @brief Mark the panel as having taken its layout from the state file.
-    void setSettingsApplied(bool applied)  { settingsApplied_ = applied; }
+    void setSettingsApplied(bool applied)
+    {
+        settingsApplied_ = applied;
+    }
 
     /// @brief Set the tab bar height.
-    void  setTabBarHeight(float h) { tabBarH_ = h; markDirty(); }
+    void setTabBarHeight(float h)
+    {
+        tabBarH_ = h;
+        markDirty();
+    }
     /// @brief Get the tab bar height.
-    float tabBarHeight()     const { return tabBarH_; }
+    float tabBarHeight() const
+    {
+        return tabBarH_;
+    }
 
     /// @brief Set the splitter handle thickness.
-    void  setHandleSize(float s)   { handleW_ = s;   markDirty(); }
+    void setHandleSize(float s)
+    {
+        handleW_ = s;
+        markDirty();
+    }
     /// @brief Get the splitter handle thickness.
-    float handleSize()       const { return handleW_; }
+    float handleSize() const
+    {
+        return handleW_;
+    }
 
     /// @brief Emitted when a panel tab is activated.
     Signal<String> panelActivated;
@@ -130,41 +169,46 @@ public:
     Signal<String> panelClosed;
 
     // ── Widget overrides ──────────────────────────────────────────────────
-    void  layout() override;
-    Vec2f sizeHint() const override { return {200, 200}; }
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseLeave() override;
+    void layout() override;
+    Vec2f sizeHint() const override
+    {
+        return { 200, 200 };
+    }
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
-    DockNode* root_    = nullptr;
-    float     tabBarH_ = 26.0f;
-    float     handleW_ =  5.0f;
-    String    settingsKey_;   // name the layout is remembered under ("" = never)
-    bool      settingsApplied_ = false;   // took its layout from the state file
+    DockNode* root_ = nullptr;
+    float tabBarH_ = 26.0f;
+    float handleW_ = 5.0f;
+    String settingsKey_;           // name the layout is remembered under ("" = never)
+    bool settingsApplied_ = false; // took its layout from the state file
 
     // ── Tab drag state ─────────────────────────────────────────────────────
-    struct DragState {
-        bool      active  = false;
+    struct DragState
+    {
+        bool active = false;
         DockNode* srcNode = nullptr;
-        int       srcIdx  = 0;
-        float     startX  = 0, startY = 0;
-        float     curX    = 0, curY   = 0;
+        int srcIdx = 0;
+        float startX = 0, startY = 0;
+        float curX = 0, curY = 0;
     } drag_;
 
     // ── Drop target ────────────────────────────────────────────────────────
-    DockNode* dropNode_  = nullptr;
-    DockSide  dropZone_  = DockSide::Center;
-    bool      dropValid_ = false;
+    DockNode* dropNode_ = nullptr;
+    DockSide dropZone_ = DockSide::Center;
+    bool dropValid_ = false;
 
     // ── Splitter drag ──────────────────────────────────────────────────────
-    struct SplitDrag {
-        bool      active     = false;
-        DockNode* node       = nullptr;
-        float     startRatio = 0;
-        float     startMouse = 0;
+    struct SplitDrag
+    {
+        bool active = false;
+        DockNode* node = nullptr;
+        float startRatio = 0;
+        float startMouse = 0;
     } splitDrag_;
 
     DockNode* hoveredSplit_ = nullptr;
@@ -182,23 +226,22 @@ private:
 
     Rect toScreen(const Rect& local) const;
 
-    DockNode* hitLeaf      (float sx, float sy) const;
-    DockNode* hitLeafImpl  (DockNode* n, float ox, float oy, float sx, float sy) const;
-    int       hitTab       (DockNode* leaf, float ox, float oy, float sx, float sy) const;
-    DockNode* hitSplitter  (float sx, float sy) const;
+    DockNode* hitLeaf(float sx, float sy) const;
+    DockNode* hitLeafImpl(DockNode* n, float ox, float oy, float sx, float sy) const;
+    int hitTab(DockNode* leaf, float ox, float oy, float sx, float sy) const;
+    DockNode* hitSplitter(float sx, float sy) const;
     DockNode* hitSplitterImpl(DockNode* n, float ox, float oy, float sx, float sy) const;
 
-    DockSide computeDropZone(DockNode* leaf, float ox, float oy,
-                             float sx, float sy) const;
+    DockSide computeDropZone(DockNode* leaf, float ox, float oy, float sx, float sy) const;
 
-    DockNode** findRef  (DockNode* searchFrom, DockNode* target);
+    DockNode** findRef(DockNode* searchFrom, DockNode* target);
     // True when @p target is still in the tree that starts at @p node. Only
     // pointers are compared: @p target may already have been freed.
     static bool nodeInTree(const DockNode* node, const DockNode* target);
     // Forget a drag whose node (or drop target) is no longer in the tree.
     void dropStaleDrag();
-    void       performDrop();
-    void       pruneNode (DockNode*& slot);
+    void performDrop();
+    void pruneNode(DockNode*& slot);
 };
 
 } // namespace retained

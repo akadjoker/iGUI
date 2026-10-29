@@ -23,13 +23,18 @@ namespace ig
 // autocomplete substitutes a partial identifier) stores both.
 struct CodeEditorEdit
 {
-    enum Kind : uint8_t { Insert, Delete, Replace };
+    enum Kind : uint8_t
+    {
+        Insert,
+        Delete,
+        Replace
+    };
 
     Kind kind = Insert;
-    int line = 0;               // start line of the edit
-    int column = 0;              // start column (byte offset) of the edit
-    String removedText;          // text that was there before (Delete/Replace)
-    String insertedText;         // text that is there after (Insert/Replace)
+    int line = 0;        // start line of the edit
+    int column = 0;      // start column (byte offset) of the edit
+    String removedText;  // text that was there before (Delete/Replace)
+    String insertedText; // text that is there after (Insert/Replace)
     int cursorLineBefore = 0, cursorColumnBefore = 0;
     int cursorLineAfter = 0, cursorColumnAfter = 0;
     // Coalescing key: consecutive plain single-character insertions (regular
@@ -89,9 +94,9 @@ struct CodeEditorCompletion
 {
     ct::Vector<String> items;
     int selected = 0;
-    int firstVisible = 0;                // first item the popup shows (it scrolls with selected)
-    int line = -1;                       // line the popup applies to
-    int wordStart = -1, wordEnd = -1;    // byte range of the identifier being completed
+    int firstVisible = 0;             // first item the popup shows (it scrolls with selected)
+    int line = -1;                    // line the popup applies to
+    int wordStart = -1, wordEnd = -1; // byte range of the identifier being completed
     bool visible = false;
     // True once the user has pressed Up/Down to browse this popup. Enter and
     // Tab only accept the highlighted item when this is set - otherwise they
@@ -122,8 +127,14 @@ public:
     // if calling this every frame.
     String text() const;
 
-    int lineCount() const { return static_cast<int>(lines_.size()); }
-    const String& lineAt(int line) const { return lines_[static_cast<size_t>(line)]; }
+    int lineCount() const
+    {
+        return static_cast<int>(lines_.size());
+    }
+    const String& lineAt(int line) const
+    {
+        return lines_[static_cast<size_t>(line)];
+    }
 
     // Installs a highlighter (buffer content and undo history are kept;
     // only cached highlight spans are invalidated). Passing nullptr to
@@ -131,11 +142,16 @@ public:
     void setHighlighter(syntax::SyntaxHighlighter* highlighter);
     void setLanguage(const syntax::SyntaxLanguage& language);
     syntax::SyntaxHighlighter* setHighlighterForFile(const String& filename);
-    syntax::SyntaxHighlighter* highlighter() const { return highlight_.highlighter(); }
+    syntax::SyntaxHighlighter* highlighter() const
+    {
+        return highlight_.highlighter();
+    }
     // Colored spans for one line, using the cached previous-line lexer
     // state. Empty (no spans) when there is no highlighter installed.
     syntax::SyntaxHighlighter::HighlightResult highlightSpans(int line) const
-    { return highlight_.highlightLine(line, lineAt(line)); }
+    {
+        return highlight_.highlightLine(line, lineAt(line));
+    }
 
     // ── Editing (all undo-tracked) ───────────────────────────────────────
     // Insert text at (line, column); moves the cursor to the end of it.
@@ -147,21 +163,37 @@ public:
     bool eraseSelection();
 
     // ── Undo / redo ──────────────────────────────────────────────────────
-    bool canUndo() const { return !undoStack_.empty(); }
-    bool canRedo() const { return !redoStack_.empty(); }
+    bool canUndo() const
+    {
+        return !undoStack_.empty();
+    }
+    bool canRedo() const
+    {
+        return !redoStack_.empty();
+    }
     void undo();
     void redo();
     void clearUndoHistory();
     // Ends coalescing so the next insertText starts a new undo group (call
     // after moving the cursor without typing, e.g. a mouse click).
-    void breakUndoCoalescing() { lastEditWasTyping_ = false; ++editGroup_; }
+    void breakUndoCoalescing()
+    {
+        lastEditWasTyping_ = false;
+        ++editGroup_;
+    }
 
     // ── Cursor / selection (line/column, both zero-based) ───────────────
     int cursorLine = 0, cursorColumn = 0;
     int selectionAnchorLine = 0, selectionAnchorColumn = 0;
     bool hasSelection() const
-    { return selectionAnchorLine != cursorLine || selectionAnchorColumn != cursorColumn; }
-    void clearSelection() { selectionAnchorLine = cursorLine; selectionAnchorColumn = cursorColumn; }
+    {
+        return selectionAnchorLine != cursorLine || selectionAnchorColumn != cursorColumn;
+    }
+    void clearSelection()
+    {
+        selectionAnchorLine = cursorLine;
+        selectionAnchorColumn = cursorColumn;
+    }
     // Selection endpoints in document order (a <= b).
     void orderedSelection(int& startLine, int& startColumn, int& endLine, int& endColumn) const;
     String selectedText() const;
@@ -169,9 +201,18 @@ public:
     // ── Multi-cursor (Ctrl+D "add selection to next find match") ───────────
     // Extra carets beyond the primary cursor/selection above. Empty in the
     // common single-cursor case - most call sites can ignore this entirely.
-    int extraCursorCount() const { return static_cast<int>(extraCursors_.size()); }
-    const CodeEditorCursor& extraCursorAt(int i) const { return extraCursors_[static_cast<size_t>(i)]; }
-    bool hasMultipleCursors() const { return !extraCursors_.empty(); }
+    int extraCursorCount() const
+    {
+        return static_cast<int>(extraCursors_.size());
+    }
+    const CodeEditorCursor& extraCursorAt(int i) const
+    {
+        return extraCursors_[static_cast<size_t>(i)];
+    }
+    bool hasMultipleCursors() const
+    {
+        return !extraCursors_.empty();
+    }
     // Ctrl+D: with no selection, selects the word under the primary cursor.
     // With a selection, adds a new cursor+selection at the next occurrence of
     // the selected text (wrapping around the document), skipping any
@@ -180,7 +221,10 @@ public:
     void addNextOccurrenceCursor();
     // Drops every extra cursor, keeping only the primary. Called on Escape or
     // any plain (non-extending) cursor movement.
-    void clearExtraCursors() { extraCursors_.clear(); }
+    void clearExtraCursors()
+    {
+        extraCursors_.clear();
+    }
 
     // Applies the same insert/erase every plain typing/Backspace/Delete/Enter
     // path already does, but at the primary cursor AND every extra cursor at
@@ -206,14 +250,17 @@ public:
     // Replaces every match with replacement (or, when useRegex, with a
     // template that may reference capture groups as \1, \2, ...). One undo
     // group per call. Returns the number of replacements made.
-    int replaceAll(const String& pattern, const String& replacement,
-                   bool caseSensitive = false, bool useRegex = false);
+    int replaceAll(const String& pattern, const String& replacement, bool caseSensitive = false,
+            bool useRegex = false);
 
     // ── Folding ────────────────────────────────────────────────────────────
     // Recomputed after every edit and highlighter change from the installed
     // highlighter's foldDelta (nesting-based: a stack of open regions).
     // Collapsed state persists across a rebuild by (startLine, endLine).
-    const ct::Vector<CodeEditorFoldRange>& foldRanges() const { return foldRanges_; }
+    const ct::Vector<CodeEditorFoldRange>& foldRanges() const
+    {
+        return foldRanges_;
+    }
     // True for the header line of a fold region (collapsed or not) - the
     // line the gutter chevron is drawn next to.
     bool isFoldHeader(int line) const;
@@ -230,11 +277,26 @@ public:
     // Multiplies CodeEditorOptions/theme font size for this editor only.
     // Persists in the state (like scrollLine), so it survives across frames
     // without the application tracking it separately.
-    float fontScale() const { return fontScale_; }
-    void setFontScale(float scale) { fontScale_ = scale < 0.25f ? 0.25f : (scale > 4.0f ? 4.0f : scale); }
-    void zoomIn() { setFontScale(fontScale_ + 0.1f); }
-    void zoomOut() { setFontScale(fontScale_ - 0.1f); }
-    void zoomReset() { fontScale_ = 1.0f; }
+    float fontScale() const
+    {
+        return fontScale_;
+    }
+    void setFontScale(float scale)
+    {
+        fontScale_ = scale < 0.25f ? 0.25f : (scale > 4.0f ? 4.0f : scale);
+    }
+    void zoomIn()
+    {
+        setFontScale(fontScale_ + 0.1f);
+    }
+    void zoomOut()
+    {
+        setFontScale(fontScale_ - 0.1f);
+    }
+    void zoomReset()
+    {
+        fontScale_ = 1.0f;
+    }
 
     // Autocomplete popup and first visible line: Context::codeEditor() drives
     // both, but they are kept as public state (rather than hidden behind
@@ -248,7 +310,7 @@ private:
     syntax::LineHighlightCache highlight_;
     ct::Vector<CodeEditorEdit> undoStack_;
     ct::Vector<CodeEditorEdit> redoStack_;
-    uint64_t editGroup_ = 0;      // bumped whenever typing stops being contiguous
+    uint64_t editGroup_ = 0; // bumped whenever typing stops being contiguous
     bool lastEditWasTyping_ = false;
     ct::Vector<CodeEditorFoldRange> foldRanges_;
     mutable ct::Vector<int> visibleLines_;
@@ -256,17 +318,18 @@ private:
     float fontScale_ = 1.0f;
     ct::Vector<CodeEditorCursor> extraCursors_;
 
-    void recordEdit(CodeEditorEdit::Kind kind, int line, int column,
-                    const String& removed, const String& inserted,
-                    int beforeLine, int beforeColumn, bool coalesce);
+    void recordEdit(CodeEditorEdit::Kind kind, int line, int column, const String& removed,
+            const String& inserted, int beforeLine, int beforeColumn, bool coalesce);
     void insertTextImpl(int line, int column, const String& text, bool bumpGroup);
-    String eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn, bool bumpGroup);
+    String eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn,
+            bool bumpGroup);
     // Writes each per-cursor post-edit (line, column) back to extraCursors_
     // (collapsing that cursor's selection) or, for the primary, to
     // cursorLine/cursorColumn. AllCursorsResult is defined in
     // CodeEditorImmediate.cpp; declared here only as an opaque template so
     // the type doesn't need a public home.
-    template <typename ResultVector> void applyMultiCursorResults(const ResultVector& results);
+    template<typename ResultVector>
+    void applyMultiCursorResults(const ResultVector& results);
     void applyEditForward(const CodeEditorEdit& edit);
     void applyEditBackward(const CodeEditorEdit& edit);
     void rehighlightFrom(int line);

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Theme.hpp"
-#include <igui/widgets/String.hpp>
+#include "Widget.hpp"
 #include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  ComboBox - dropdown selector
@@ -12,7 +12,9 @@
 //    cb->selectionChanged.connect([](int idx) { ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 class ComboBox : public Widget
 {
@@ -24,7 +26,11 @@ public:
     /// @brief Add an item to the dropdown list.
     void addItem(const String& text);
     /// @brief Replace all items with the given list.
-    void setItems(const ct::Vector<String>& texts) { clear(); for (auto& t : texts) addItem(t); }
+    void setItems(const ct::Vector<String>& texts)
+    {
+        clear();
+        for (auto& t: texts) addItem(t);
+    }
     /// @brief Insert an item at the given index.
     void insertItem(int index, const String& text);
     /// @brief Remove the item at the given index.
@@ -33,14 +39,20 @@ public:
     void clear();
 
     /// @brief Get the number of items.
-    int  itemCount() const { return static_cast<int>(items_.size()); }
+    int itemCount() const
+    {
+        return static_cast<int>(items_.size());
+    }
     /// @brief Get the text of the item at the given index.
     const String& itemText(int index) const;
     /// @brief Set the text of the item at the given index.
     void setItemText(int index, const String& text);
 
     /// @brief Get the currently selected index.
-    int  selectedIndex() const { return selectedIndex_; }
+    int selectedIndex() const
+    {
+        return selectedIndex_;
+    }
     /// @brief Set the selected item by index.
     void setSelectedIndex(int idx);
 
@@ -48,9 +60,15 @@ public:
     const String& currentText() const;
 
     /// @brief Set the maximum number of visible dropdown items.
-    void setMaxVisible(int n) { maxVisible_ = n; }
+    void setMaxVisible(int n)
+    {
+        maxVisible_ = n;
+    }
     /// @brief Get the maximum number of visible dropdown items.
-    int  maxVisible() const   { return maxVisible_; }
+    int maxVisible() const
+    {
+        return maxVisible_;
+    }
 
     /// @brief Emitted when the selected item changes.
     Signal<int> selectionChanged;
@@ -68,8 +86,8 @@ public:
 
 private:
     ct::Vector<String> items_;
-    int   selectedIndex_ = -1;
-    int   maxVisible_    = 8;
+    int selectedIndex_ = -1;
+    int maxVisible_ = 8;
 
     friend class ComboPopup_;
 };

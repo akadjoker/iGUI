@@ -1,18 +1,19 @@
 #pragma once
 
-#include "Widget.hpp"
-#include "RetainedBase.hpp"
 #include "Retained.hpp"
+#include "RetainedBase.hpp"
+#include "Widget.hpp"
 #include <cstdint>
 #include <ct/function.hpp>
+#include <ct/hashmap.hpp>
 #include <ct/vector.hpp>
 #include <igui/WindowStateIni.hpp>
 #include <igui/widgets/String.hpp>
-#include <ct/hashmap.hpp>
 
 
-
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -22,12 +23,24 @@ namespace ig { namespace retained
 enum class EaseType
 {
     Linear,
-    InQuad,     OutQuad,     InOutQuad,
-    InCubic,    OutCubic,    InOutCubic,
-    InExpo,     OutExpo,     InOutExpo,
-    InBack,     OutBack,     InOutBack,
-    InBounce,   OutBounce,   InOutBounce,
-    InElastic,  OutElastic,  InOutElastic,
+    InQuad,
+    OutQuad,
+    InOutQuad,
+    InCubic,
+    OutCubic,
+    InOutCubic,
+    InExpo,
+    OutExpo,
+    InOutExpo,
+    InBack,
+    OutBack,
+    InOutBack,
+    InBounce,
+    OutBounce,
+    InOutBounce,
+    InElastic,
+    OutElastic,
+    InOutElastic,
 };
 
 float applyEasing(EaseType type, float t);
@@ -38,28 +51,28 @@ float applyEasing(EaseType type, float t);
 
 enum class TransitionType
 {
-    None,          // instant swap (no animation)
-    SlideLeft,     // old exits left,  new enters from right
-    SlideRight,    // old exits right, new enters from left
-    SlideUp,       // old exits up,    new enters from bottom
-    SlideDown,     // old exits down,  new enters from top
-    CoverLeft,     // new slides in from right over stationary old
-    CoverRight,    // new slides in from left  over stationary old
-    CoverUp,       // new slides in from bottom over stationary old
-    CoverDown,     // new slides in from top    over stationary old
-    RevealLeft,    // old slides out left,  revealing stationary new
-    RevealRight,   // old slides out right, revealing stationary new
-    RevealUp,      // old slides out up,    revealing stationary new
-    RevealDown,    // old slides out down,  revealing stationary new
-    ZoomIn,        // new zooms in from center (small → full)
-    ZoomOut,       // old zooms out to center (full → small), new behind
+    None,        // instant swap (no animation)
+    SlideLeft,   // old exits left,  new enters from right
+    SlideRight,  // old exits right, new enters from left
+    SlideUp,     // old exits up,    new enters from bottom
+    SlideDown,   // old exits down,  new enters from top
+    CoverLeft,   // new slides in from right over stationary old
+    CoverRight,  // new slides in from left  over stationary old
+    CoverUp,     // new slides in from bottom over stationary old
+    CoverDown,   // new slides in from top    over stationary old
+    RevealLeft,  // old slides out left,  revealing stationary new
+    RevealRight, // old slides out right, revealing stationary new
+    RevealUp,    // old slides out up,    revealing stationary new
+    RevealDown,  // old slides out down,  revealing stationary new
+    ZoomIn,      // new zooms in from center (small → full)
+    ZoomOut,     // old zooms out to center (full → small), new behind
 };
 
 class FloatWindow;
 
 
 // ═════════════════════════════════════════════════════════════════════════════
-//  WidgetApp – pure widget manager 
+//  WidgetApp – pure widget manager
 //
 //  The application (backend) owns the window, GL context and main loop.
 //  WidgetApp manages the widget tree, layout, input dispatch and painting.
@@ -94,32 +107,52 @@ public:
     void update(const ig::retained::IO& io);
 
     /// @brief Layout and paint the widget tree into draw data.
-    void paint(ig::retained::DrawData& data,
-               const ig::retained::Font* font  = nullptr,
-               IconAtlas*         icons = nullptr);
+    void paint(ig::retained::DrawData& data, const ig::retained::Font* font = nullptr,
+            IconAtlas* icons = nullptr);
 
     /// @brief Get the cursor type the backend should apply.
-    CursorType wantedCursor() const { return wantedCursor_; }
+    CursorType wantedCursor() const
+    {
+        return wantedCursor_;
+    }
 
     /// @brief Get the background color.
-    const Color& bgColor() const    { return bgColor_; }
+    const Color& bgColor() const
+    {
+        return bgColor_;
+    }
     /// @brief Set the background color.
-    void setBgColor(const Color& c) { bgColor_ = c; }
+    void setBgColor(const Color& c)
+    {
+        bgColor_ = c;
+    }
 
     // ── Dimensions (read from IO each frame) ──────────────────────────────
     /// @brief Get the window width in pixels.
-    int   width()     const { return width_; }
+    int width() const
+    {
+        return width_;
+    }
     /// @brief Get the window height in pixels.
-    int   height()    const { return height_; }
+    int height() const
+    {
+        return height_;
+    }
     /// @brief Get the frame delta time in seconds.
-    float deltaTime() const { return dt_; }
+    float deltaTime() const
+    {
+        return dt_;
+    }
 
     /// @brief Get elapsed time in milliseconds since init.
-    uint32_t elapsedMs() const { return elapsedMs_; }
+    uint32_t elapsedMs() const
+    {
+        return elapsedMs_;
+    }
 
     // ── Platform-agnostic clipboard (set by backend via IO) ──────────────
     /// @brief Set clipboard text (platform-agnostic).
-    void        setClipboardText(const char* text);
+    void setClipboardText(const char* text);
     /// @brief Get clipboard text.
     String getClipboardText() const;
 
@@ -131,76 +164,135 @@ public:
     void warpMouse(float x, float y);
 
     /// @brief Get the cached font from the last paint() call.
-    const ig::retained::Font* font() const { return font_; }
+    const ig::retained::Font* font() const
+    {
+        return font_;
+    }
     /// @brief Measure text width using the cached font.
     float textWidth(const char* text) const;
     /// @brief Measure text width with a font (nullptr: the cached font) and a scale.
     float textWidth(const char* text, const ig::retained::Font* font, float scale = 1.0f) const;
     /// @brief Get approximate frames per second.
-    int   fps()       const { return dt_ > 0.0f ? static_cast<int>(1.0f / dt_) : 0; }
+    int fps() const
+    {
+        return dt_ > 0.0f ? static_cast<int>(1.0f / dt_) : 0;
+    }
     /// @brief Get the current mouse X position.
-    float mouseX()    const { return mouseX_; }
+    float mouseX() const
+    {
+        return mouseX_;
+    }
     /// @brief Get the current mouse Y position.
-    float mouseY()    const { return mouseY_; }
+    float mouseY() const
+    {
+        return mouseY_;
+    }
 
     /// @brief Toggle debug layout wireframe overlay.
-    bool debugLayout() const    { return debugLayout_; }
+    bool debugLayout() const
+    {
+        return debugLayout_;
+    }
     /// @brief Enable/disable debug layout wireframe.
-    void setDebugLayout(bool d) { debugLayout_ = d; }
+    void setDebugLayout(bool d)
+    {
+        debugLayout_ = d;
+    }
     /// @brief Scancode that toggles the debug layout (0, the default, for none).
     ///        While set, that key does not reach the widgets.
-    void setDebugLayoutKey(int scancode) { debugLayoutKey_ = scancode; }
+    void setDebugLayoutKey(int scancode)
+    {
+        debugLayoutKey_ = scancode;
+    }
 
     /// @brief Set per-frame overlay paint callback.
-    void setOverlayCallback(ct::Function<void(PaintContext&)> cb) { overlay_ = std::move(cb); }
+    void setOverlayCallback(ct::Function<void(PaintContext&)> cb)
+    {
+        overlay_ = std::move(cb);
+    }
 
     // ── Drag & Drop state (read by widgets/app during frame) ──────────────
     /// @brief Check if a widget drag is in progress.
-    bool isDragging() const { return dragPayload_ != nullptr; }
+    bool isDragging() const
+    {
+        return dragPayload_ != nullptr;
+    }
     /// @brief Get the current drag payload.
-    const DragPayload* dragPayload() const { return dragPayload_; }
+    const DragPayload* dragPayload() const
+    {
+        return dragPayload_;
+    }
     /// @brief Get the drag source widget.
-    Widget* dragSource() const { return dragSource_; }
+    Widget* dragSource() const
+    {
+        return dragSource_;
+    }
 
     /// @brief Set the drag threshold in pixels.
-    void  setDragThreshold(float px) { dragThreshold_ = px; }
+    void setDragThreshold(float px)
+    {
+        dragThreshold_ = px;
+    }
     /// @brief Get the drag threshold.
-    float dragThreshold() const      { return dragThreshold_; }
+    float dragThreshold() const
+    {
+        return dragThreshold_;
+    }
 
     // ── Texture services (set by backend at init) ─────────────────────────
     // The backend registers these so widgets can create/destroy GPU textures
     // without depending on any specific graphics API.
-    using UploadTextureFn  = ct::Function<ig::retained::TextureHandle(const unsigned char* rgba, int w, int h)>;
+    using UploadTextureFn =
+            ct::Function<ig::retained::TextureHandle(const unsigned char* rgba, int w, int h)>;
     using DestroyTextureFn = ct::Function<void(ig::retained::TextureHandle)>;
-    using UpdateTextureFn  = ct::Function<bool(ig::retained::TextureHandle, const unsigned char* rgba, int w, int h)>;
+    using UpdateTextureFn = ct::Function<bool(ig::retained::TextureHandle,
+            const unsigned char* rgba, int w, int h)>;
 
     /// @brief Register a texture upload function.
-    void setTextureUpload(UploadTextureFn fn)   { uploadTex_ = std::move(fn); }
+    void setTextureUpload(UploadTextureFn fn)
+    {
+        uploadTex_ = std::move(fn);
+    }
     /// @brief Register a texture destroy function.
-    void setTextureDestroy(DestroyTextureFn fn)  { destroyTex_ = std::move(fn); }
+    void setTextureDestroy(DestroyTextureFn fn)
+    {
+        destroyTex_ = std::move(fn);
+    }
 
     /// @brief Register a function that replaces the pixels of an existing texture.
-    void setTextureUpdate(UpdateTextureFn fn)    { updateTex_ = std::move(fn); }
+    void setTextureUpdate(UpdateTextureFn fn)
+    {
+        updateTex_ = std::move(fn);
+    }
 
     /// @brief Upload RGBA pixels to GPU texture.
     ig::retained::TextureHandle uploadTexture(const unsigned char* rgba, int w, int h)
-    { return uploadTex_ ? uploadTex_(rgba, w, h) : ig::retained::TextureHandle{0}; }
+    {
+        return uploadTex_ ? uploadTex_(rgba, w, h) : ig::retained::TextureHandle{ 0 };
+    }
 
     /// @brief Replace the pixels of a texture from uploadTexture; w and h must match its size.
     /// Meant for video: call it once per frame (glTexSubImage2D on a GL backend).
     bool updateTexture(ig::retained::TextureHandle tex, const unsigned char* rgba, int w, int h)
-    { return updateTex_ && tex ? updateTex_(tex, rgba, w, h) : false; }
+    {
+        return updateTex_ && tex ? updateTex_(tex, rgba, w, h) : false;
+    }
 
     /// @brief Free a previously uploaded texture.
     void destroyTexture(ig::retained::TextureHandle tex)
-    { if (destroyTex_ && tex) destroyTex_(tex); }
+    {
+        if (destroyTex_ && tex) destroyTex_(tex);
+    }
 
     /// @brief Load an image file to GPU texture.
     ig::retained::TextureHandle loadImageTexture(const char* path, int& outW, int& outH);
 
     // ── Root widget ───────────────────────────────────────────────────────
     /// @brief Get the root widget.
-    Widget* root() const { return root_; }
+    Widget* root() const
+    {
+        return root_;
+    }
 
     /// @brief Replace the root widget (takes ownership, deletes old).
     void setRoot(Widget* r);
@@ -227,21 +319,37 @@ public:
     bool setStage(const String& name, TransitionType transition, EaseType ease);
 
     /// @brief Set default transition type, easing and duration.
-    void setTransition(TransitionType type, float durationSec = 0.3f, EaseType ease = EaseType::InOutCubic);
+    void setTransition(TransitionType type, float durationSec = 0.3f,
+            EaseType ease = EaseType::InOutCubic);
     /// @brief Get the transition type.
-    TransitionType transitionType() const { return transType_; }
+    TransitionType transitionType() const
+    {
+        return transType_;
+    }
     /// @brief Get the transition easing.
-    EaseType       transitionEase() const { return transEase_; }
+    EaseType transitionEase() const
+    {
+        return transEase_;
+    }
     /// @brief Get the transition duration in seconds.
-    float transitionDuration() const { return transDuration_; }
+    float transitionDuration() const
+    {
+        return transDuration_;
+    }
     /// @brief Check if a stage transition is active.
-    bool  isTransitioning()   const { return transActive_; }
+    bool isTransitioning() const
+    {
+        return transActive_;
+    }
 
     /// @brief Get a stage's root widget by name.
     Widget* stage(const String& name) const;
 
     /// @brief Get the current stage name (empty if unused).
-    const String& currentStageName() const { return currentStage_; }
+    const String& currentStageName() const
+    {
+        return currentStage_;
+    }
 
     /// @brief Remove a stage and delete its widget tree.
     bool removeStage(const String& name);
@@ -257,7 +365,10 @@ public:
     Color stageBgColor(const String& name) const;
 
     /// @brief Request a layout pass on the next frame.
-    void requestLayout() { needsLayout_ = true; }
+    void requestLayout()
+    {
+        needsLayout_ = true;
+    }
 
     /// @brief Move the focus from @p from to the next widget Tab reaches, or with
     ///        @p backward to the previous one, as Tab and Shift+Tab do.
@@ -280,11 +391,14 @@ public:
     ///        A caller that runs application code (an event handler, a signal)
     ///        compares it before and after: when it changed, the widgets it was
     ///        holding may be gone, so it can drop them instead of touching them.
-    uint32_t deletions() const { return deletions_; }
+    uint32_t deletions() const
+    {
+        return deletions_;
+    }
 
     // ── Float windows ───────────────────────────────────────────────────
     // Floating windows always render on top of the stage (below popups).
-    template <typename T = FloatWindow, typename... Args>
+    template<typename T = FloatWindow, typename... Args>
     T* addFloat(Args&&... args)
     {
         auto* fw = new T(std::forward<Args>(args)...);
@@ -296,7 +410,10 @@ public:
     /// @brief Bring a float window to the top of the stack.
     void bringToFront(FloatWindow* fw);
     /// @brief Get the list of float windows.
-    const ct::Vector<FloatWindow*>& floats() const { return floats_; }
+    const ct::Vector<FloatWindow*>& floats() const
+    {
+        return floats_;
+    }
 
     // ── Window state (.ini, like ImGui's imgui.ini) ───────────────────────
     // Float windows keep a section named after their title holding their
@@ -313,7 +430,10 @@ public:
     ///        An empty path turns persistence off.
     void setWindowStatePath(const String& path);
     /// @brief Get the state file path (empty when persistence is off).
-    const String& windowStatePath() const { return windowState_.path(); }
+    const String& windowStatePath() const
+    {
+        return windowState_.path();
+    }
     /// @brief (Re)read the state file; existing floats and docks snap to it.
     /// @return true when the file was read.
     bool loadWindowState();
@@ -325,23 +445,32 @@ public:
     /// @brief Set the focused widget.
     void setFocused(Widget* w);
     /// @brief Get the currently focused widget.
-    Widget* focused() const { return focused_; }
+    Widget* focused() const
+    {
+        return focused_;
+    }
     /// @brief Focus @p target while @p holder is open; when @p holder closes
     ///        or goes away, the focus goes back to the widget that had it.
     void lendFocus(Widget* holder, Widget* target);
 
     // ── Widget lookup ─────────────────────────────────────────────────────
     /// @brief Find a widget by ID.
-    Widget* widget(const String& id) { return root_ ? root_->findById(id) : nullptr; }
+    Widget* widget(const String& id)
+    {
+        return root_ ? root_->findById(id) : nullptr;
+    }
 
     /// @brief Find a widget by ID and cast to type T.
-    template <typename T>
-    T* widget(const String& id) { return root_ ? root_->findById<T>(id) : nullptr; }
+    template<typename T>
+    T* widget(const String& id)
+    {
+        return root_ ? root_->findById<T>(id) : nullptr;
+    }
 
     /// @brief Find all widgets with a given tag.
     ct::Vector<Widget*> widgetsByTag(const String& tag);
 
-    template <typename T>
+    template<typename T>
     ct::Vector<T*> widgetsByTag(const String& tag)
     {
         return root_ ? root_->findByTag<T>(tag) : ct::Vector<T*>{};
@@ -375,9 +504,15 @@ public:
     /// @brief Close the current popup.
     void closePopup();
     /// @brief Get the active popup widget.
-    Widget* popup() const { return popup_; }
+    Widget* popup() const
+    {
+        return popup_;
+    }
     /// @brief Get the widget that opened the popup.
-    Widget* popupOwner() const { return popupOwner_; }
+    Widget* popupOwner() const
+    {
+        return popupOwner_;
+    }
 
     /// @brief Get the shared icon atlas.
     IconAtlas& iconAtlas();
@@ -410,7 +545,7 @@ private:
     Widget* topWidgetAt(float x, float y);
     void fillLocal(Widget* target, MouseEvent& e);
 
-    template <typename Func>
+    template<typename Func>
     void bubble(Widget* target, MouseEvent& e, Func handler);
 
     static ct::Vector<Widget*> buildChain(Widget* w);
@@ -423,9 +558,8 @@ private:
     void applyCursor(CursorType type);
 
     // Paint helpers
-    void paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
-                       const ig::retained::Font* font, IconAtlas* icons,
-                       float w, float h, const Color& bgColor = Color(30,30,30,255));
+    void paintTreeInto(Widget* tree, ig::retained::DrawList& dl, const ig::retained::Font* font,
+            IconAtlas* icons, float w, float h, const Color& bgColor = Color(30, 30, 30, 255));
     void paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int depth = 0);
     void paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font);
     // Bubbles a key or text event up from the focused widget, with the same
@@ -437,47 +571,47 @@ private:
     void flushPopupDeletes();
 
     // State
-    bool  inited_      = false;
-    bool  needsLayout_ = true;
-    int   width_       = 0;
-    int   height_      = 0;
-    float dt_          = 0.0f;
-    double   elapsedSeconds_ = 0.0;   // accumulated here: a short frame never rounds to 0
+    bool inited_ = false;
+    bool needsLayout_ = true;
+    int width_ = 0;
+    int height_ = 0;
+    float dt_ = 0.0f;
+    double elapsedSeconds_ = 0.0; // accumulated here: a short frame never rounds to 0
     uint32_t elapsedMs_ = 0;
-    Color bgColor_     = Color(30, 30, 30, 255);
-    bool  debugLayout_ = false;
-    int   debugLayoutKey_ = 0;
+    Color bgColor_ = Color(30, 30, 30, 255);
+    bool debugLayout_ = false;
+    int debugLayoutKey_ = 0;
 
     // Cursor hint (set by applyCursor, read by backend via wantedCursor())
     CursorType wantedCursor_ = CursorType::Arrow;
 
     // Previous-frame IO state for press/release delta detection
-    float prevMouseX_      = 0.0f;
-    float prevMouseY_      = 0.0f;
-    bool  prevMouseDown_[5] = {};
-    bool  ioKeyCtrl_  = false;
-    bool  ioKeyShift_ = false;
-    bool  ioKeyAlt_   = false;
+    float prevMouseX_ = 0.0f;
+    float prevMouseY_ = 0.0f;
+    bool prevMouseDown_[5] = {};
+    bool ioKeyCtrl_ = false;
+    bool ioKeyShift_ = false;
+    bool ioKeyAlt_ = false;
 
     // Double/triple-click detection
-    uint32_t lastClickMs_  = 0;
-    float    lastClickX_   = 0, lastClickY_ = 0;
-    int      lastClickBtn_ = -1;
-    int      clickSeq_     = 0;   // 0→1→2→3 then resets
+    uint32_t lastClickMs_ = 0;
+    float lastClickX_ = 0, lastClickY_ = 0;
+    int lastClickBtn_ = -1;
+    int clickSeq_ = 0; // 0→1→2→3 then resets
 
-    void        (*clipSet_)(const char*) = nullptr;
-    String (*clipGet_)()            = nullptr;
+    void (*clipSet_)(const char*) = nullptr;
+    String (*clipGet_)() = nullptr;
     void (*mouseCapture_)(bool) = nullptr;
     void (*mouseWarp_)(float, float) = nullptr;
 
     // Subsystems
     IconAtlas* iconAtlas_ = nullptr;
-    const ig::retained::Font*  font_      = nullptr;  // cached from last paint()
-    ig::retained::DrawList*    drawList_  = nullptr;  // cached from last paint()
+    const ig::retained::Font* font_ = nullptr;   // cached from last paint()
+    ig::retained::DrawList* drawList_ = nullptr; // cached from last paint()
 
     // Widget tree
-    uint32_t deletions_ = 0;   // bumped whenever a widget is reported gone
-    Widget* root_    = nullptr;
+    uint32_t deletions_ = 0; // bumped whenever a widget is reported gone
+    Widget* root_ = nullptr;
     Widget* focused_ = nullptr;
     struct FocusLoan
     {
@@ -487,7 +621,7 @@ private:
     ct::Vector<FocusLoan> focusLoans_;
     Widget* hovered_ = nullptr;
     Widget* pressed_ = nullptr;
-    int pressedButtons_ = 0;           // buttons held since a press went to pressed_
+    int pressedButtons_ = 0; // buttons held since a press went to pressed_
     bool focusFromTab_ = false;
     struct DeferredCall
     {
@@ -496,30 +630,30 @@ private:
     };
     ct::Vector<DeferredCall> deferredCalls_;
     void dropMouseFocus();
-    ct::Vector<Widget*> hoverChain_;   // root → ... → deepest hovered
-    float   mouseX_  = 0;
-    float   mouseY_  = 0;
+    ct::Vector<Widget*> hoverChain_; // root → ... → deepest hovered
+    float mouseX_ = 0;
+    float mouseY_ = 0;
 
     // Popup overlay
-    Widget* popup_              = nullptr;   // popup widget (may or may not be owned)
-    Widget* popupOwner_         = nullptr;   // widget that opened it (not owned)
-    ct::Vector<Widget*> pendingPopupDeletes_;   // deferred delete (safe after event loop)
-    bool    popupOwned_         = true;      // if true, popup is deleted on close
+    Widget* popup_ = nullptr;                 // popup widget (may or may not be owned)
+    Widget* popupOwner_ = nullptr;            // widget that opened it (not owned)
+    ct::Vector<Widget*> pendingPopupDeletes_; // deferred delete (safe after event loop)
+    bool popupOwned_ = true;                  // if true, popup is deleted on close
 
     // Popup animation
-    float   popupAnimProgress_  = 1.0f;     // 0→1 open, 1→0 close
-    float   popupAnimDuration_  = 0.12f;    // seconds
-    bool    popupAnimOpening_   = false;
-    bool    popupAnimClosing_   = false;
-    EaseType popupAnimEase_     = EaseType::OutCubic;
+    float popupAnimProgress_ = 1.0f;  // 0→1 open, 1→0 close
+    float popupAnimDuration_ = 0.12f; // seconds
+    bool popupAnimOpening_ = false;
+    bool popupAnimClosing_ = false;
+    EaseType popupAnimEase_ = EaseType::OutCubic;
     // Closing state: kept alive during close animation
-    Widget* popupClosing_       = nullptr;
-    Widget* popupClosingOwner_  = nullptr;
-    bool    popupClosingOwned_  = true;
+    Widget* popupClosing_ = nullptr;
+    Widget* popupClosingOwner_ = nullptr;
+    bool popupClosingOwned_ = true;
 
     // Float windows (painted above stage, below popup)
     ct::Vector<FloatWindow*> floats_;
-    ct::Vector<FloatWindow*> pendingFloatDeletes_;  // deferred delete (safe after event loop)
+    ct::Vector<FloatWindow*> pendingFloatDeletes_; // deferred delete (safe after event loop)
 
     // Float window state, kept in memory between loads and saves
     WindowStateIni windowState_;
@@ -532,34 +666,34 @@ private:
     void restoreDockLayouts();
 
     // Tooltip
-    float   tooltipTimer_   = 0.0f;
-    bool    tooltipVisible_ = false;
-    Widget* tooltipWidget_  = nullptr;
+    float tooltipTimer_ = 0.0f;
+    bool tooltipVisible_ = false;
+    Widget* tooltipWidget_ = nullptr;
 
     // Stage system
-    ct::HashMap<String, Widget*>          stages_;       // name → root widget
-    ct::HashMap<String, ig::retained::Camera2D>  stageCameras_; // per-stage camera
-    ct::HashMap<String, Color>            stageBgColors_;// per-stage background
+    ct::HashMap<String, Widget*> stages_;                      // name → root widget
+    ct::HashMap<String, ig::retained::Camera2D> stageCameras_; // per-stage camera
+    ct::HashMap<String, Color> stageBgColors_;                 // per-stage background
     String currentStage_;
 
     // Transition
-    TransitionType transType_     = TransitionType::SlideLeft;
-    EaseType       transEase_     = EaseType::InOutCubic;
-    float          transDuration_ = 0.3f;   // seconds
-    bool           transActive_   = false;
-    float          transProgress_ = 0.0f;   // 0..1
-    TransitionType transCurrent_  = TransitionType::None; // type of active transition
-    EaseType       transEaseCur_  = EaseType::InOutCubic; // ease of active transition
-    Widget*        transOldRoot_  = nullptr;
-    String    transOldStage_;
+    TransitionType transType_ = TransitionType::SlideLeft;
+    EaseType transEase_ = EaseType::InOutCubic;
+    float transDuration_ = 0.3f; // seconds
+    bool transActive_ = false;
+    float transProgress_ = 0.0f;                         // 0..1
+    TransitionType transCurrent_ = TransitionType::None; // type of active transition
+    EaseType transEaseCur_ = EaseType::InOutCubic;       // ease of active transition
+    Widget* transOldRoot_ = nullptr;
+    String transOldStage_;
 
     // Optional overlay callback
     ct::Function<void(PaintContext&)> overlay_;
 
     // Texture service callbacks (set by backend)
-    UploadTextureFn  uploadTex_;
+    UploadTextureFn uploadTex_;
     DestroyTextureFn destroyTex_;
-    UpdateTextureFn  updateTex_;
+    UpdateTextureFn updateTex_;
 
     // Global event dispatcher: per event, the handlers by widget id and the
     // catch-all ones.
@@ -571,11 +705,11 @@ private:
     ct::HashMap<String, EventHandlers> globalHandlers_;
 
     // ── Drag & Drop state ─────────────────────────────────────────────────
-    DragPayload* dragPayload_  = nullptr;   // active payload (owned)
-    Widget*      dragSource_   = nullptr;   // widget that started the drag
-    float        dragStartX_   = 0, dragStartY_ = 0;
-    bool         dragPending_  = false;     // mouse down on dragSource, waiting threshold
-    float        dragThreshold_= 5.0f;     // pixels before drag begins
+    DragPayload* dragPayload_ = nullptr; // active payload (owned)
+    Widget* dragSource_ = nullptr;       // widget that started the drag
+    float dragStartX_ = 0, dragStartY_ = 0;
+    bool dragPending_ = false;   // mouse down on dragSource, waiting threshold
+    float dragThreshold_ = 5.0f; // pixels before drag begins
 
     void dispatchDropEvents(const ct::Vector<ig::retained::IO::DropEvent>& drops);
     void cancelDrag();

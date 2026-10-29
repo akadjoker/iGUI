@@ -2,6 +2,7 @@
 
 #include "FileSystem.hpp"
 #include <ct/arena.hpp>
+#include <ct/hashmap.hpp>
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  DirCache — Cached directory tree for fast browsing & search
@@ -20,7 +21,9 @@
 //    cache.invalidate("/home/user/project/textures");
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 class DirCache
 {
@@ -30,15 +33,15 @@ public:
     {
         String name;
         String path;
-        String ext;        // lowercase, with dot: ".png"
-        uint64_t    size    = 0;
-        time_t      mtime   = 0;
-        DirNode*    parent  = nullptr;
-        DirNode**   kids    = nullptr;   // pointer into kidsArena_
-        int         kidCount = 0;
-        bool        isDir   = false;
-        bool        hidden  = false;
-        bool        scanned = false;
+        String ext; // lowercase, with dot: ".png"
+        uint64_t size = 0;
+        time_t mtime = 0;
+        DirNode* parent = nullptr;
+        DirNode** kids = nullptr; // pointer into kidsArena_
+        int kidCount = 0;
+        bool isDir = false;
+        bool hidden = false;
+        bool scanned = false;
 
         /// @brief Get children, expanding the directory on first call.
         DirNode** children(int& outCount);
@@ -59,7 +62,10 @@ public:
     /// @brief Set the root directory path and reset the cache.
     void setRoot(const String& path);
     /// @brief Get the root directory path.
-    const String& rootPath() const { return rootPath_; }
+    const String& rootPath() const
+    {
+        return rootPath_;
+    }
 
     /// @brief Get the root node of the cached tree.
     DirNode* root();
@@ -87,40 +93,53 @@ public:
     void clearCache();
 
     /// @brief Set whether hidden files are included.
-    void setShowHidden(bool s) { showHidden_ = s; }
+    void setShowHidden(bool s)
+    {
+        showHidden_ = s;
+    }
     /// @brief Get whether hidden files are included.
-    bool showHidden() const    { return showHidden_; }
+    bool showHidden() const
+    {
+        return showHidden_;
+    }
 
     /// @brief Get the total number of cached nodes.
-    int cachedNodeCount() const { return nodeCount_; }
+    int cachedNodeCount() const
+    {
+        return nodeCount_;
+    }
     /// @brief Get the number of cached directories.
-    int cachedDirCount() const  { return dirCount_; }
+    int cachedDirCount() const
+    {
+        return dirCount_;
+    }
 
 private:
     // ── Arena pool ───────────────────────────────────────────────────────
     static constexpr int kBlockSize = 256;
 
-    struct Block {
-        DirNode  nodes[kBlockSize];
-        Block*   next = nullptr;
+    struct Block
+    {
+        DirNode nodes[kBlockSize];
+        Block* next = nullptr;
     };
 
-    Block*   firstBlock_  = nullptr;
-    int      blockUsed_   = kBlockSize; // force alloc on first use
+    Block* firstBlock_ = nullptr;
+    int blockUsed_ = kBlockSize; // force alloc on first use
 
     DirNode* allocNode();
 
     // Kids arrays — blocks never move, so node->kids stays valid as it grows
-    ct::Arena kidsArena_{512 * sizeof(DirNode*)};
+    ct::Arena kidsArena_{ 512 * sizeof(DirNode*) };
 
     DirNode** allocKids(int count);
 
     // ── Tree data ────────────────────────────────────────────────────────
     String rootPath_;
-    DirNode*    root_       = nullptr;
-    bool        showHidden_ = false;
-    int         nodeCount_  = 0;
-    int         dirCount_   = 0;
+    DirNode* root_ = nullptr;
+    bool showHidden_ = false;
+    int nodeCount_ = 0;
+    int dirCount_ = 0;
 
     // Path → node index (fast lookup)
     ct::HashMap<String, DirNode*> index_;
@@ -128,8 +147,8 @@ private:
     void doScan(DirNode* node);
     void indexNode(DirNode* n);
 
-    void collectSearch(DirNode* n, const String& pattern,
-                       bool isExtSearch, SearchResult& out, int maxResults) const;
+    void collectSearch(DirNode* n, const String& pattern, bool isExtSearch, SearchResult& out,
+            int maxResults) const;
     static bool globMatch(const String& pattern, const String& text);
     static String toLower(const String& s);
 

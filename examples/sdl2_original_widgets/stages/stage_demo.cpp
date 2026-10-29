@@ -1,6 +1,6 @@
-#include "WidgetApp.hpp"
 #include "BasicWidgets.hpp"
 #include "LayoutWidgets.hpp"
+#include "WidgetApp.hpp"
 using namespace ig::retained;
 
 void registerDemoStage(WidgetApp& app)

@@ -1,6 +1,6 @@
-#include "pch.hpp"
 #include "ScrollWidgets.hpp"
 #include "Theme.hpp"
+#include "pch.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,14 +10,14 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 ScrollBar::ScrollBar(ScrollBarOrientation orientation)
-    : orientation_(orientation)
-{}
+        : orientation_(orientation)
+{
+}
 
 Widget::Vec2f ScrollBar::sizeHint() const
 {
-    if (orientation_ == ScrollBarOrientation::Vertical)
-        return {kBarThickness, 60.0f};
-    return {60.0f, kBarThickness};
+    if (orientation_ == ScrollBarOrientation::Vertical) return { kBarThickness, 60.0f };
+    return { 60.0f, kBarThickness };
 }
 
 void ScrollBar::clampScroll()
@@ -36,18 +36,18 @@ Rect ScrollBar::thumbRect() const
         float trackLen = abs.h;
         float thumbLen = std::max(kMinThumbLen, trackLen * viewSize_ / contentSize_);
         thumbLen = std::min(thumbLen, trackLen);
-        float travel  = trackLen - thumbLen;
-        float ty      = (maxV > 0.0f) ? (scrollValue_ / maxV) * travel : 0.0f;
-        return {abs.x, abs.y + ty, abs.w, thumbLen};
+        float travel = trackLen - thumbLen;
+        float ty = (maxV > 0.0f) ? (scrollValue_ / maxV) * travel : 0.0f;
+        return { abs.x, abs.y + ty, abs.w, thumbLen };
     }
     else
     {
         float trackLen = abs.w;
         float thumbLen = std::max(kMinThumbLen, trackLen * viewSize_ / contentSize_);
         thumbLen = std::min(thumbLen, trackLen);
-        float travel  = trackLen - thumbLen;
-        float tx      = (maxV > 0.0f) ? (scrollValue_ / maxV) * travel : 0.0f;
-        return {abs.x + tx, abs.y, thumbLen, abs.h};
+        float travel = trackLen - thumbLen;
+        float tx = (maxV > 0.0f) ? (scrollValue_ / maxV) * travel : 0.0f;
+        return { abs.x + tx, abs.y, thumbLen, abs.h };
     }
 }
 
@@ -55,7 +55,7 @@ void ScrollBar::paint(PaintContext& ctx)
 {
     if (!visible_ || !needed()) return;
 
-    Rect abs   = absoluteRect();
+    Rect abs = absoluteRect();
     Rect thumb = thumbRect();
     const auto& t = Theme::instance();
 
@@ -68,7 +68,7 @@ void ScrollBar::paint(PaintContext& ctx)
     Color tc = t.scrollbarThumb;
     if (hovered || dragging_)
     {
-        const int alpha = std::min(255, (int)tc.a + 80);
+        const int alpha = std::min(255, (int) tc.a + 80);
         tc = tc.Shifted(40);
         tc.a = static_cast<u8>(alpha);
     }
@@ -84,8 +84,8 @@ void ScrollBar::onMousePress(MouseEvent& e)
     Rect thumb = thumbRect();
     if (thumb.contains(e.x, e.y))
     {
-        dragging_   = true;
-        dragStart_  = (orientation_ == ScrollBarOrientation::Vertical) ? e.y : e.x;
+        dragging_ = true;
+        dragStart_ = (orientation_ == ScrollBarOrientation::Vertical) ? e.y : e.x;
         dragOrigin_ = scrollValue_;
     }
     else
@@ -111,33 +111,33 @@ void ScrollBar::onMousePress(MouseEvent& e)
 
 void ScrollBar::onMouseRelease(MouseEvent& e)
 {
-    (void)e;
+    (void) e;
     dragging_ = false;
 }
 
 void ScrollBar::onMouseMove(MouseEvent& e)
 {
     if (!dragging_) return;
-    Rect abs  = absoluteRect();
+    Rect abs = absoluteRect();
     float maxV = maxValue();
 
     if (orientation_ == ScrollBarOrientation::Vertical)
     {
         float trackLen = abs.h;
         float thumbLen = std::max(kMinThumbLen, trackLen * viewSize_ / contentSize_);
-        float travel   = trackLen - thumbLen;
+        float travel = trackLen - thumbLen;
         if (travel <= 0.0f) return;
-        float delta    = e.y - dragStart_;
-        scrollValue_   = dragOrigin_ + delta * maxV / travel;
+        float delta = e.y - dragStart_;
+        scrollValue_ = dragOrigin_ + delta * maxV / travel;
     }
     else
     {
         float trackLen = abs.w;
         float thumbLen = std::max(kMinThumbLen, trackLen * viewSize_ / contentSize_);
-        float travel   = trackLen - thumbLen;
+        float travel = trackLen - thumbLen;
         if (travel <= 0.0f) return;
-        float delta    = e.x - dragStart_;
-        scrollValue_   = dragOrigin_ + delta * maxV / travel;
+        float delta = e.x - dragStart_;
+        scrollValue_ = dragOrigin_ + delta * maxV / travel;
     }
     clampScroll();
     scrolled.emit(scrollValue_);
@@ -152,11 +152,11 @@ ScrollView::ScrollView()
 {
     vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
     vbar_->setScrollable(false);
-    vbar_->scrolled.connect([this](float v){ setScrollY(v); });
+    vbar_->scrolled.connect([this](float v) { setScrollY(v); });
 
     hbar_ = createChild<ScrollBar>(ScrollBarOrientation::Horizontal);
     hbar_->setScrollable(false);
-    hbar_->scrolled.connect([this](float v){ setScrollX(v); });
+    hbar_->scrolled.connect([this](float v) { setScrollX(v); });
 }
 
 void ScrollView::setScrollX(float v)
@@ -188,14 +188,14 @@ void ScrollView::updateBars()
     if (vbar_)
     {
         vbar_->setVisible(needV);
-        vbar_->setRect({viewW + kBarGap, 0, ScrollBar::kBarThickness, viewH});
+        vbar_->setRect({ viewW + kBarGap, 0, ScrollBar::kBarThickness, viewH });
         vbar_->setContentSize(contentH_);
         vbar_->setViewSize(viewH);
     }
     if (hbar_)
     {
         hbar_->setVisible(needH);
-        hbar_->setRect({0, viewH + kBarGap, viewW, ScrollBar::kBarThickness});
+        hbar_->setRect({ 0, viewH + kBarGap, viewW, ScrollBar::kBarThickness });
         hbar_->setContentSize(contentW_);
         hbar_->setViewSize(viewW);
     }
@@ -209,17 +209,19 @@ void ScrollView::updateBars()
 
 void ScrollView::layout()
 {
-    if (!contentWidget_) { Widget::layout(); return; }
+    if (!contentWidget_)
+    {
+        Widget::layout();
+        return;
+    }
 
     // First pass: measure content at full width
     contentWidget_->setScrollable(true);
-    contentWidget_->setRect({0, 0,
-                              std::max(rect_.w, contentW_),
-                              std::max(rect_.h, contentH_)});
+    contentWidget_->setRect({ 0, 0, std::max(rect_.w, contentW_), std::max(rect_.h, contentH_) });
     contentWidget_->layout();
 
     // Read the content's resulting size hint
-    auto sh   = contentWidget_->sizeHint();
+    auto sh = contentWidget_->sizeHint();
     contentW_ = std::max(sh.x, rect_.w);
     contentH_ = sh.y;
 
@@ -232,7 +234,7 @@ void ScrollView::layout()
     bool needH = hbar_ && hbar_->isVisible();
     float viewW = needV ? rect_.w - barThick : rect_.w;
     float viewH = needH ? rect_.h - barThick : rect_.h;
-    contentWidget_->setRect({0, 0, viewW, contentH_});
+    contentWidget_->setRect({ 0, 0, viewW, contentH_ });
     contentWidget_->layout();
 }
 
@@ -250,15 +252,14 @@ void ScrollView::paint(PaintContext& ctx)
     float viewW = needV ? abs.w - barThick : abs.w;
     float viewH = needH ? abs.h - barThick : abs.h;
 
-    Rect viewRect = {abs.x, abs.y, viewW, viewH};
+    Rect viewRect = { abs.x, abs.y, viewW, viewH };
 
     // Paint scrollbars first (same scissor as background, merges with it)
     if (needV) vbar_->paint(ctx);
     if (needH) hbar_->paint(ctx);
 
     ctx.pushClip(viewRect);
-    if (contentWidget_)
-        contentWidget_->paint(ctx);
+    if (contentWidget_) contentWidget_->paint(ctx);
     ctx.popClip();
 }
 
@@ -268,7 +269,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
     if (e.scrollY != 0.0f && vbar_->isVisible())
     {
         scrollY_ -= e.scrollY * step;
-        scrollY_  = std::max(0.0f, std::min(scrollY_, vbar_->maxValue()));
+        scrollY_ = std::max(0.0f, std::min(scrollY_, vbar_->maxValue()));
         vbar_->setValue(scrollY_);
         markDirty();
         e.consumed = true;
@@ -276,7 +277,7 @@ void ScrollView::onMouseScroll(MouseEvent& e)
     if (e.scrollX != 0.0f && hbar_->isVisible())
     {
         scrollX_ -= e.scrollX * step;
-        scrollX_  = std::max(0.0f, std::min(scrollX_, hbar_->maxValue()));
+        scrollX_ = std::max(0.0f, std::min(scrollX_, hbar_->maxValue()));
         hbar_->setValue(scrollX_);
         markDirty();
         e.consumed = true;
@@ -298,14 +299,15 @@ void ListBox::removeItem(int index)
     if (index < 0 || index >= static_cast<int>(items_.size())) return;
     items_.erase(items_.begin() + index);
     if (selectedIdx_ == index) selectedIdx_ = -1;
-    else if (selectedIdx_ > index) --selectedIdx_;
+    else if (selectedIdx_ > index)
+        --selectedIdx_;
     syncScrollBar();
 }
 
 void ListBox::clearItems()
 {
     items_.clear();
-    selectedIdx_  = -1;
+    selectedIdx_ = -1;
     scrollOffset_ = 0.0f;
     syncScrollBar();
 }
@@ -338,7 +340,7 @@ float ListBox::itemHeight() const
 
 void ListBox::clampScroll()
 {
-    float total  = static_cast<float>(items_.size()) * itemHeight();
+    float total = static_cast<float>(items_.size()) * itemHeight();
     float maxOff = std::max(0.0f, total - rect_.h);
     scrollOffset_ = std::max(0.0f, std::min(scrollOffset_, maxOff));
 }
@@ -369,17 +371,19 @@ void ListBox::layout()
     {
         vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
         vbar_->setScrollable(false);
-        vbar_->scrolled.connect([this](float v){
-            scrollOffset_ = v;
-            markDirty();
-        });
+        vbar_->scrolled.connect(
+                [this](float v)
+                {
+                    scrollOffset_ = v;
+                    markDirty();
+                });
     }
 
     float barThick = ScrollBar::kBarThickness + 2.0f;
     float viewW = rect_.w - barThick;
-    float total  = static_cast<float>(items_.size()) * itemHeight();
+    float total = static_cast<float>(items_.size()) * itemHeight();
 
-    vbar_->setRect({viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h});
+    vbar_->setRect({ viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h });
     vbar_->setContentSize(total);
     vbar_->setViewSize(rect_.h);
     clampScroll();
@@ -400,18 +404,17 @@ void ListBox::paint(PaintContext& ctx)
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
-    float ih  = itemHeight();
+    float ih = itemHeight();
     float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
     float viewW = abs.w - barW;
 
     // Paint scrollbar first — same scissor as background, merges without clip change
-    if (vbar_ && vbar_->needed())
-        vbar_->paint(ctx);
+    if (vbar_ && vbar_->needed()) vbar_->paint(ctx);
 
-    ctx.pushClip({abs.x, abs.y, viewW, abs.h});
+    ctx.pushClip({ abs.x, abs.y, viewW, abs.h });
 
     int first = static_cast<int>(scrollOffset_ / ih);
-    int last  = static_cast<int>((scrollOffset_ + abs.h) / ih) + 1;
+    int last = static_cast<int>((scrollOffset_ + abs.h) / ih) + 1;
     last = std::min(last, static_cast<int>(items_.size()));
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
@@ -424,8 +427,8 @@ void ListBox::paint(PaintContext& ctx)
 
         if (i == selectedIdx_)
         {
-            ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                              t.selectionColor.b, t.selectionColor.a);
+            ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
+                    t.selectionColor.a);
             ctx.fill.Rectangle(abs.x, iy, viewW, ih, true);
         }
         else if (isHovered())
@@ -434,8 +437,8 @@ void ListBox::paint(PaintContext& ctx)
         }
 
         float asc = ctx.font.GetAscender();
-        float ty  = iy + t.padding + asc;
-        float tx  = abs.x + t.padding;
+        float ty = iy + t.padding + asc;
+        float tx = abs.x + t.padding;
 
         ctx.font.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
         ctx.font.Print(items_[static_cast<size_t>(i)].c_str(), tx, ty);
@@ -475,7 +478,7 @@ bool ListBox::itemRect(int index, Rect& out)
     const Rect abs = absoluteRect();
     const float ih = itemHeight();
     const float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
-    out = {abs.x, abs.y + static_cast<float>(index) * ih - scrollOffset_, abs.w - barW, ih};
+    out = { abs.x, abs.y + static_cast<float>(index) * ih - scrollOffset_, abs.w - barW, ih };
     return true;
 }
 
@@ -514,7 +517,7 @@ float ListWidget::rowH() const
 
 void ListWidget::clampScroll()
 {
-    float total  = static_cast<float>(rows_.size()) * rowH();
+    float total = static_cast<float>(rows_.size()) * rowH();
     float maxOff = std::max(0.0f, total - rect_.h);
     scrollOffset_ = std::max(0.0f, std::min(scrollOffset_, maxOff));
 }
@@ -557,7 +560,10 @@ void ListWidget::setSelectedIndex(int idx)
     markDirty();
 }
 
-void ListWidget::clearSelection() { setSelectedIndex(-1); }
+void ListWidget::clearSelection()
+{
+    setSelectedIndex(-1);
+}
 
 void ListWidget::removeRow(int index)
 {
@@ -566,16 +572,17 @@ void ListWidget::removeRow(int index)
     rows_.erase(rows_.begin() + index);
     removeChild(w);
     if (selectedIdx_ == index) selectedIdx_ = -1;
-    else if (selectedIdx_ > index) --selectedIdx_;
+    else if (selectedIdx_ > index)
+        --selectedIdx_;
     for (int i = index; i < static_cast<int>(rows_.size()); ++i) placeRow(i);
     syncScrollBar();
 }
 
 void ListWidget::clearRows()
 {
-    for (auto* w : rows_) removeChild(w);
+    for (auto* w: rows_) removeChild(w);
     rows_.clear();
-    selectedIdx_  = -1;
+    selectedIdx_ = -1;
     scrollOffset_ = 0.0f;
     syncScrollBar();
 }
@@ -583,13 +590,18 @@ void ListWidget::clearRows()
 void ListWidget::connectRowPress(Widget* target, Widget* row)
 {
     // The row, not its index: a removeRow() above it changes the index.
-    target->pressed.connect([this, row](int btn){
-        if (btn != 0) return;
-        for (int i = 0; i < static_cast<int>(rows_.size()); ++i)
-            if (rows_[static_cast<size_t>(i)] == row) { setSelectedIndex(i); return; }
-    });
-    for (auto* c : target->children())
-        connectRowPress(c, row);
+    target->pressed.connect(
+            [this, row](int btn)
+            {
+                if (btn != 0) return;
+                for (int i = 0; i < static_cast<int>(rows_.size()); ++i)
+                    if (rows_[static_cast<size_t>(i)] == row)
+                    {
+                        setSelectedIndex(i);
+                        return;
+                    }
+            });
+    for (auto* c: target->children()) connectRowPress(c, row);
 }
 
 void ListWidget::layout()
@@ -598,18 +610,20 @@ void ListWidget::layout()
     {
         vbar_ = createChild<ScrollBar>(ScrollBarOrientation::Vertical);
         vbar_->setScrollable(false);
-        vbar_->scrolled.connect([this](float v){
-            scrollOffset_ = v;
-            markDirty();
-        });
+        vbar_->scrolled.connect(
+                [this](float v)
+                {
+                    scrollOffset_ = v;
+                    markDirty();
+                });
     }
 
     float barThick = ScrollBar::kBarThickness + 2.0f;
     float viewW = rect_.w - barThick;
-    float rh    = rowH();
+    float rh = rowH();
     float total = static_cast<float>(rows_.size()) * rh;
 
-    vbar_->setRect({viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h});
+    vbar_->setRect({ viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h });
     vbar_->setContentSize(total);
     vbar_->setViewSize(rect_.h);
     clampScroll();
@@ -632,18 +646,17 @@ void ListWidget::paint(PaintContext& ctx)
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
-    float rh    = rowH();
-    float barW  = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
+    float rh = rowH();
+    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
     float viewW = abs.w - barW;
 
     // Paint scrollbar first — same scissor as background, merges without clip change
-    if (vbar_ && vbar_->needed())
-        vbar_->paint(ctx);
+    if (vbar_ && vbar_->needed()) vbar_->paint(ctx);
 
-    ctx.pushClip({abs.x, abs.y, viewW, abs.h});
+    ctx.pushClip({ abs.x, abs.y, viewW, abs.h });
 
     int first = static_cast<int>(scrollOffset_ / rh);
-    int last  = static_cast<int>((scrollOffset_ + abs.h) / rh) + 1;
+    int last = static_cast<int>((scrollOffset_ + abs.h) / rh) + 1;
     last = std::min(last, static_cast<int>(rows_.size()));
 
     for (int i = first; i < last; ++i)
@@ -652,8 +665,8 @@ void ListWidget::paint(PaintContext& ctx)
 
         if (i == selectedIdx_)
         {
-            ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                              t.selectionColor.b, t.selectionColor.a);
+            ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
+                    t.selectionColor.a);
             ctx.fill.Rectangle(abs.x + 1, ry, viewW - 2, rh, true);
         }
 

@@ -28,12 +28,18 @@ struct Probe
     ig::WidgetId id;
 
     Probe()
-        : hovered(false), active(false), clicked(false), edited(false), focused(false),
-          disabled(false), rect(), id(ig::InvalidWidgetId)
+            : hovered(false),
+              active(false),
+              clicked(false),
+              edited(false),
+              focused(false),
+              disabled(false),
+              rect(),
+              id(ig::InvalidWidgetId)
     {
     }
 
-    void read(const ig::Context &context)
+    void read(const ig::Context& context)
     {
         hovered = context.isItemHovered();
         active = context.isItemActive();
@@ -53,20 +59,17 @@ class TwoFaceProvider : public ig::TextProvider
 public:
     float bakedSize(ig::FontId font) const override
     {
-        if (font.value == 1u)
-            return 13.0f;
-        if (font.value == 2u)
-            return 26.0f;
+        if (font.value == 1u) return 13.0f;
+        if (font.value == 2u) return 26.0f;
         return 0.0f;
     }
 
     ig::TextMetrics measureText(ig::FontId font, ig::StringView text,
-                                float logicalSize) const override
+            float logicalSize) const override
     {
         ig::TextMetrics metrics;
         // Sem face não há glifos, como no FontAtlas: o texto mede zero.
-        if (font.value != 1u && font.value != 2u)
-            return metrics;
+        if (font.value != 1u && font.value != 2u) return metrics;
         const float factor = font.value == 2u ? 2.0f : 1.0f;
         metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f * factor;
         metrics.height = logicalSize;
@@ -75,8 +78,8 @@ public:
         return metrics;
     }
 
-    bool appendText(ig::DrawList &, ig::FontId, ig::StringView, const ig::Vec2 &, float,
-                    const ig::Color &, const ig::Rect &) const override
+    bool appendText(ig::DrawList&, ig::FontId, ig::StringView, const ig::Vec2&, float,
+            const ig::Color&, const ig::Rect&) const override
     {
         return true;
     }
@@ -96,7 +99,8 @@ void test_slider_item_status()
     Probe neighbour;
     const ig::StringView dummyLabel("FPS: 60");
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("status", ig::Rect(0.0f, 0.0f, 320.0f, 200.0f)));
         c.sliderFloat("volume", volume, 0.0f, 1.0f, 200.0f);
         probe.read(c);
@@ -164,7 +168,8 @@ void test_click_without_drag_edits()
     float volume = 0.0f;
     Probe probe;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("click", ig::Rect(0.0f, 0.0f, 320.0f, 200.0f)));
         c.sliderFloat("volume", volume, 0.0f, 1.0f, 200.0f);
         probe.read(c);
@@ -204,7 +209,8 @@ void test_checkbox_item_status()
     bool enabled = false;
     Probe probe;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("check", ig::Rect(0.0f, 0.0f, 320.0f, 200.0f)));
         c.checkbox("enabled", enabled, ig::Rect(0.0f, 0.0f, 200.0f, 24.0f));
         probe.read(c);
@@ -242,7 +248,8 @@ void test_hover_follows_the_pointer_between_items()
     Probe first;
     Probe second;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("two", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
         c.button("first", ig::Rect(0.0f, 0.0f, 120.0f, 24.0f));
         first.read(c);
@@ -276,7 +283,8 @@ void test_disabled_item_status()
     Probe probe;
     Probe live;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("disabled", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
         c.button("live", ig::Rect(0.0f, 0.0f, 120.0f, 24.0f));
         live.read(c);
@@ -318,7 +326,8 @@ void test_disabled_slider_does_not_change()
     float volume = 0.5f;
     Probe probe;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("disabled slider", ig::Rect(0.0f, 0.0f, 320.0f, 200.0f)));
         c.beginDisabled();
         c.sliderFloat("volume", volume, 0.0f, 1.0f, 200.0f);
@@ -360,7 +369,8 @@ void test_item_rect_and_id_are_absolute()
     Probe probe;
     ig::Rect windowBounds;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         windowBounds = ig::Rect(40.0f, 60.0f, 320.0f, 200.0f);
         assert(c.beginWindow("absolute", windowBounds));
         c.button("go", ig::Rect(20.0f, 30.0f, 90.0f, 22.0f));
@@ -379,7 +389,8 @@ void test_item_rect_and_id_are_absolute()
     // O clique tem de bater com itemRect(), senão as consultas mentem sobre
     // onde o widget está.
     bool clicked = false;
-    auto clickBuild = [&](ig::Context &c) {
+    auto clickBuild = [&](ig::Context& c)
+    {
         assert(c.beginWindow("absolute", windowBounds));
         clicked = c.button("go", ig::Rect(20.0f, 30.0f, 90.0f, 22.0f));
         probe.read(c);
@@ -410,7 +421,8 @@ void test_vslider_uses_the_vertical_axis()
     int steps = 0;
     Probe probe;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("vertical", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.vSliderFloat("level", level, 0.0f, 1.0f, ig::Rect(10.0f, 10.0f, 40.0f, 160.0f));
         probe.read(c);
@@ -444,15 +456,16 @@ void test_vslider_uses_the_vertical_axis()
     harness.frame(build);
     assert(level > 0.7f && level < 0.8f);
 
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, x,
-                                            top + probe.rect.height * 0.25f));
+    context.pushEvent(
+            ig::Event::pointerUp(ig::PointerButton::Left, x, top + probe.rect.height * 0.25f));
     harness.frame(build);
     assert(probe.clicked);
 
     // O inteiro arredonda e fica dentro dos limites: um clique mesmo no topo dá
     // o máximo, não 10.4.
     Probe intProbe;
-    auto intBuild = [&](ig::Context &c) {
+    auto intBuild = [&](ig::Context& c)
+    {
         assert(c.beginWindow("vertical", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.vSliderInt("steps", steps, 0, 10, ig::Rect(10.0f, 10.0f, 30.0f, 160.0f));
         intProbe.read(c);
@@ -480,7 +493,8 @@ void test_disabled_vslider_does_not_change()
     float level = 0.25f;
     Probe probe;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("vertical", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.beginDisabled();
         c.vSliderFloat("level", level, 0.0f, 1.0f, ig::Rect(10.0f, 10.0f, 40.0f, 160.0f));
@@ -521,7 +535,8 @@ void test_label_hides_text_after_double_hash()
     bool one = false;
     bool two = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("labels", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         c.button("Gravar", ig::Rect(0.0f, 0.0f, 120.0f, 24.0f));
         first.read(c);
@@ -546,7 +561,8 @@ void test_label_hides_text_after_double_hash()
     // widget.
     bool clickedFirst = false;
     bool clickedSecond = false;
-    auto clickBuild = [&](ig::Context &c) {
+    auto clickBuild = [&](ig::Context& c)
+    {
         assert(c.beginWindow("labels", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         clickedFirst = c.button("Gravar", ig::Rect(0.0f, 0.0f, 120.0f, 24.0f));
         clickedSecond = c.button("Gravar##segundo", ig::Rect(0.0f, 40.0f, 120.0f, 24.0f));
@@ -577,24 +593,23 @@ void test_label_hides_text_after_double_hash()
     ig::Rect afterHidden;
     bool visibleState = false;
     bool hiddenState = false;
-    auto layoutRun = [&](ig::Context &c, bool hide) {
+    auto layoutRun = [&](ig::Context& c, bool hide)
+    {
         assert(c.beginWindow("layout", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
-        if (hide)
-            c.checkbox("##caixa", hiddenState);
+        if (hide) c.checkbox("##caixa", hiddenState);
         else
             c.checkbox("caixa com rotulo comprido", visibleState);
         c.sameLine();
         c.button("depois");
         ig::Rect bounds = c.itemRect();
-        if (hide)
-            afterHidden = bounds;
+        if (hide) afterHidden = bounds;
         else
             afterVisible = bounds;
         c.endWindow();
     };
 
-    harness2.frame([&](ig::Context &c) { layoutRun(c, false); });
-    harness2.frame([&](ig::Context &c) { layoutRun(c, true); });
+    harness2.frame([&](ig::Context& c) { layoutRun(c, false); });
+    harness2.frame([&](ig::Context& c) { layoutRun(c, true); });
     assert(afterHidden.x < afterVisible.x);
 }
 
@@ -616,7 +631,8 @@ void test_item_width_controls()
     ig::Rect afterPop;
     float computed = 0.0f;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("width", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         c.setNextItemWidth(120.0f);
         computed = c.calcItemWidth();
@@ -659,7 +675,8 @@ void test_item_width_stack()
     ig::Rect inherited;
     ig::Rect afterAll;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("pilha", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         c.pushItemWidth(100.0f);
         c.dragFloat("a", value, 0.0f, 1.0f, 0.01f);
@@ -700,7 +717,8 @@ void test_new_line_wraps_to_the_margin()
     ig::Rect wrapped;
     ig::Rect margin;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("lines", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         c.button("primeiro");
         margin = c.itemRect();
@@ -736,7 +754,8 @@ void test_group_is_one_item_outside()
     ig::Rect beside;
     bool groupHovered = true;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("groups", ig::Rect(0.0f, 0.0f, 500.0f, 400.0f)));
         c.beginGroup();
         c.button("um");
@@ -787,17 +806,17 @@ void test_group_columns_line_up()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    float values[3] = {0.6f, 0.35f, 0.9f};
+    float values[3] = { 0.6f, 0.35f, 0.9f };
     ig::Rect row[3][3];
     ig::Rect column[3];
     ig::Vec2 cursor[3][3];
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("columns", ig::Rect(0.0f, 0.0f, 400.0f, 400.0f)));
         for (int nx = 0; nx < 3; ++nx)
         {
-            if (nx > 0)
-                c.sameLine();
+            if (nx > 0) c.sameLine();
             c.beginGroup();
             for (int ny = 0; ny < 3; ++ny)
             {
@@ -805,7 +824,7 @@ void test_group_columns_line_up()
                 cursor[nx][ny] = here;
                 c.pushId(nx * 3 + ny);
                 c.vSliderFloat("##v", values[nx], 0.0f, 1.0f,
-                               ig::Rect(here.x, here.y, 18.0f, 37.0f));
+                        ig::Rect(here.x, here.y, 18.0f, 37.0f));
                 row[nx][ny] = c.itemRect();
                 c.popId();
                 c.dummy(18.0f, 37.0f);
@@ -822,8 +841,7 @@ void test_group_columns_line_up()
         // As três colunas têm a mesma altura e o mesmo topo...
         assert(column[nx].y == column[0].y);
         assert(column[nx].height == column[0].height);
-        if (nx > 0)
-            assert(column[nx].x > column[nx - 1].x);
+        if (nx > 0) assert(column[nx].x > column[nx - 1].x);
         // ...e as linhas de dentro caem nos mesmos y em todas.
         for (int ny = 0; ny < 3; ++ny)
         {
@@ -849,7 +867,8 @@ void test_group_nesting_and_imbalance()
     ig::Rect nextWindowItem;
     bool value = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("groups", ig::Rect(0.0f, 0.0f, 500.0f, 400.0f)));
         c.beginGroup();
         c.button("fora");
@@ -907,7 +926,8 @@ void test_open_menu_owns_the_pointer_over_it()
     bool contentHovered = true;
     bool contentClicked = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("menus", ig::Rect(0.0f, 0.0f, 320.0f, 260.0f)));
         const ig::Rect bar(0.0f, 0.0f, c.availableWidth(), 26.0f);
         if (c.beginMenuBar(bar))
@@ -984,7 +1004,8 @@ void test_menu_bar_reserves_its_strip()
     bool barHovered = false;
     bool firstHovered = true;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("bar", ig::Rect(0.0f, 0.0f, 320.0f, 220.0f)));
         if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
         {
@@ -1031,24 +1052,23 @@ void test_open_combo_owns_the_pointer_over_its_list()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres")
-    };
+    const ig::StringView items[] = { ig::StringView("um"), ig::StringView("dois"),
+        ig::StringView("tres") };
     int current = 0;
     ig::Rect comboRect;
     ig::Rect contentRect;
     bool contentHovered = true;
     bool contentClicked = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combos", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
-        const bool comboOpen = c.comboBox("escolha", current, ig::Span<const ig::StringView>(items, 3),
-                                          ig::Rect(0.0f, 0.0f, 160.0f, 24.0f));
-        (void)comboOpen;
+        const bool comboOpen = c.comboBox("escolha", current,
+                ig::Span<const ig::StringView>(items, 3), ig::Rect(0.0f, 0.0f, 160.0f, 24.0f));
+        (void) comboOpen;
         // Com a lista aberta o último item é um item da lista, por isso o rect do
         // cabeçalho só se apanha com ela fechada (é o primeiro frame).
-        if (comboRect.width <= 0.0f)
-            comboRect = c.itemRect();
+        if (comboRect.width <= 0.0f) comboRect = c.itemRect();
         // Por baixo da lista aberta.
         contentClicked = c.button("conteudo", ig::Rect(0.0f, 60.0f, 160.0f, 24.0f));
         contentRect = c.itemRect();
@@ -1099,7 +1119,8 @@ void test_hover_follows_the_window_that_is_raised()
     bool lowerHovered = false;
     bool upperHovered = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         // A janela de baixo, primeiro.
         assert(c.beginWindow("baixo", ig::Rect(0.0f, 0.0f, 260.0f, 200.0f)));
         c.button("em baixo", ig::Rect(0.0f, 0.0f, 120.0f, 40.0f));
@@ -1130,10 +1151,10 @@ void test_hover_follows_the_window_that_is_raised()
     // para a frente...
     context.pushEvent(ig::Event::pointerMove(lowerButton.x + 5.0f, lowerButton.y + 10.0f));
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, lowerButton.x + 5.0f,
-                                             lowerButton.y + 10.0f));
+            lowerButton.y + 10.0f));
     harness.frame(build);
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, lowerButton.x + 5.0f,
-                                           lowerButton.y + 10.0f));
+            lowerButton.y + 10.0f));
     harness.frame(build);
 
     // ...e no mesmo frame seguinte a sobreposição já é dela.
@@ -1158,7 +1179,8 @@ void test_menu_item_draws_its_shortcut()
     float withShortcut = 0.0f;
     float withoutShortcut = 0.0f;
 
-    auto build = [&](ig::Context &c, bool withShortcutItem) {
+    auto build = [&](ig::Context& c, bool withShortcutItem)
+    {
         assert(c.beginWindow("menus", ig::Rect(0.0f, 0.0f, 320.0f, 260.0f)));
         if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
         {
@@ -1173,8 +1195,8 @@ void test_menu_item_draws_its_shortcut()
                 plainItem = c.itemRect();
                 if (withShortcutItem)
                 {
-                    clickedShortcut = c.menuItem(
-                        "Redo", ig::StringView("Ctrl+Shift+Alt+Super+Q e mais teclas"));
+                    clickedShortcut = c.menuItem("Redo",
+                            ig::StringView("Ctrl+Shift+Alt+Super+Q e mais teclas"));
                     shortcutItem = c.itemRect();
                     // O rect do item é o da linha do menu, não o do atalho: os dois
                     // itens têm a mesma altura e o mesmo x.
@@ -1189,7 +1211,7 @@ void test_menu_item_draws_its_shortcut()
     };
 
     // Um frame fechado primeiro: é dele que sai o rect do botão da barra.
-    harness.frame([&](ig::Context &c) { build(c, false); });
+    harness.frame([&](ig::Context& c) { build(c, false); });
     assert(barButton.width > 0.0f);
 
     // Abrir o menu.
@@ -1197,20 +1219,17 @@ void test_menu_item_draws_its_shortcut()
     const float barY = barButton.y + barButton.height * 0.5f;
     context.pushEvent(ig::Event::pointerMove(barX, barY));
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, barX, barY));
-    harness.frame([&](ig::Context &c) { build(c, false); });
+    harness.frame([&](ig::Context& c) { build(c, false); });
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, barX, barY));
-    harness.frame([&](ig::Context &c) { build(c, false); });
+    harness.frame([&](ig::Context& c) { build(c, false); });
 
     // O atalho tem de caber: o popup mede a largura dos itens (com o atalho) e
     // usa-a no frame seguinte, por isso a largura do item cresce quando ele lá está.
-    for (int i = 0; i < 4; ++i)
-        harness.frame([&](ig::Context &c) { build(c, true); });
+    for (int i = 0; i < 4; ++i) harness.frame([&](ig::Context& c) { build(c, true); });
     withShortcut = shortcutItem.width;
-    for (int i = 0; i < 4; ++i)
-        harness.frame([&](ig::Context &c) { build(c, false); });
+    for (int i = 0; i < 4; ++i) harness.frame([&](ig::Context& c) { build(c, false); });
     withoutShortcut = plainItem.width;
     assert(withShortcut > withoutShortcut);
-
 }
 
 // O popup de um combo de conteúdo livre: os itens submetem-se lá dentro como em
@@ -1222,9 +1241,8 @@ void test_begin_combo_takes_free_content()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres")
-    };
+    const ig::StringView items[] = { ig::StringView("um"), ig::StringView("dois"),
+        ig::StringView("tres") };
     int current = 0;
     ig::Rect headerRect;
     ig::Rect itemRects[3];
@@ -1233,16 +1251,16 @@ void test_begin_combo_takes_free_content()
     float afterYOpen = 0.0f;
     bool open = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         open = c.beginCombo("escolha",
-                            items[static_cast<ig::Span<const ig::StringView>::size_type>(current)]);
+                items[static_cast<ig::Span<const ig::StringView>::size_type>(current)]);
         if (open)
         {
             for (int i = 0; i < 3; ++i)
             {
-                if (c.selectable(items[i], current == i))
-                    current = i;
+                if (c.selectable(items[i], current == i)) current = i;
                 itemRects[i] = c.itemRect();
             }
             c.endCombo();
@@ -1256,8 +1274,7 @@ void test_begin_combo_takes_free_content()
         // isso ele tem de cair no mesmo sítio com o popup aberto e fechado.
         c.smallButton("depois");
         afterRect = c.itemRect();
-        if (open)
-            afterYOpen = afterRect.y;
+        if (open) afterYOpen = afterRect.y;
         else
             afterYClosed = afterRect.y;
         c.endWindow();
@@ -1280,8 +1297,7 @@ void test_begin_combo_takes_free_content()
     // O primeiro item começa por baixo do cabeçalho e estica até à largura de
     // dentro do popup: como no ImGui, o popup tem a largura do cabeçalho e o
     // conteúdo fica com a margem da janela de fora do popup.
-    assert(itemRects[0].width ==
-           headerRect.width - context.theme().windowPadding * 2.0f);
+    assert(itemRects[0].width == headerRect.width - context.theme().windowPadding * 2.0f);
     assert(itemRects[0].height == headerRect.height);
     assert(itemRects[1].y > itemRects[0].y + itemRects[0].height - 0.5f);
     // O layout de fora fica no mesmo sítio: o popup não empurra o que vem depois.
@@ -1313,9 +1329,7 @@ void test_begin_combo_popup_owns_the_pointer_and_grows()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("um"), ig::StringView("dois")
-    };
+    const ig::StringView items[] = { ig::StringView("um"), ig::StringView("dois") };
     const ig::StringView wide("um rotulo bem mais comprido do que o cabecalho do combo");
     int current = 0;
     ig::Rect headerRect;
@@ -1325,19 +1339,18 @@ void test_begin_combo_popup_owns_the_pointer_and_grows()
     bool underClicked = false;
     bool wideItem = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         const bool open = c.beginCombo("escolha", items[0]);
         if (open)
         {
             for (int i = 0; i < 2; ++i)
             {
-                if (c.selectable(items[i], current == i))
-                    current = i;
+                if (c.selectable(items[i], current == i)) current = i;
                 itemRects[i] = c.itemRect();
             }
-            if (wideItem)
-                c.label(wide);
+            if (wideItem) c.label(wide);
             c.endCombo();
         }
         else if (headerRect.width <= 0.0f)
@@ -1387,8 +1400,7 @@ void test_begin_combo_popup_owns_the_pointer_and_grows()
     assert(itemRects[0].width == headerRect.width - context.theme().windowPadding * 2.0f);
     // Um item mais largo que o cabeçalho faz o popup crescer no frame seguinte, e os
     // itens esticam com ele.
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
     assert(itemRects[0].width > headerRect.width);
 }
 
@@ -1410,36 +1422,32 @@ void test_main_menu_bar()
     bool fileOpen = false;
     bool viewOpen = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         if (c.beginMainMenuBar())
         {
             fileOpen = c.beginMenu("File");
             if (fileOpen)
             {
-                if (c.menuItem("Open"))
-                    ++opened;
+                if (c.menuItem("Open")) ++opened;
                 itemRect = c.itemRect();
                 c.endMenu();
             }
             // Com o menu fechado o último item é o botão da barra.
-            if (fileRect.width <= 0.0f)
-                fileRect = c.itemRect();
+            if (fileRect.width <= 0.0f) fileRect = c.itemRect();
             viewOpen = c.beginMenu("View");
             if (viewOpen)
             {
-                if (c.menuItem("Zoom"))
-                    ++opened;
+                if (c.menuItem("Zoom")) ++opened;
                 viewItemRect = c.itemRect();
                 c.endMenu();
             }
-            if (viewRect.width <= 0.0f)
-                viewRect = c.itemRect();
+            if (viewRect.width <= 0.0f) viewRect = c.itemRect();
             c.endMainMenuBar();
         }
         assert(c.beginWindow("janela", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f)));
         c.button("na janela", ig::Rect(0.0f, 0.0f, 80.0f, 24.0f));
-        if (windowButtonRect.width <= 0.0f)
-            windowButtonRect = c.itemRect();
+        if (windowButtonRect.width <= 0.0f) windowButtonRect = c.itemRect();
         c.endWindow();
     };
 
@@ -1497,23 +1505,22 @@ void test_multi_select()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres"), ig::StringView("quatro")
-    };
-    bool selected[4] = {false, false, false, false};
+    const ig::StringView items[] = { ig::StringView("um"), ig::StringView("dois"),
+        ig::StringView("tres"), ig::StringView("quatro") };
+    bool selected[4] = { false, false, false, false };
     ig::Rect rects[4];
-    bool itemSelected[4] = {false, false, false, false};
-    bool itemToggled[4] = {false, false, false, false};
+    bool itemSelected[4] = { false, false, false, false };
+    bool itemToggled[4] = { false, false, false, false };
     unsigned flags = ig::Context::MultiSelectFlags::ClearOnEscape;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("lista", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)));
         assert(c.beginMultiSelect(ig::Span<bool>(selected, 4), flags));
         for (int i = 0; i < 4; ++i)
         {
             c.selectable(items[i], selected[i], 120.0f);
-            if (rects[i].width <= 0.0f)
-                rects[i] = c.itemRect();
+            if (rects[i].width <= 0.0f) rects[i] = c.itemRect();
             // As consultas são do item que acabou de passar.
             itemSelected[i] = c.isItemSelected();
             itemToggled[i] = c.isItemToggledSelection();
@@ -1522,7 +1529,8 @@ void test_multi_select()
         c.endWindow();
     };
 
-    auto clickItem = [&](int index, bool control, bool shift) {
+    auto clickItem = [&](int index, bool control, bool shift)
+    {
         const float x = rects[index].x + rects[index].width * 0.5f;
         const float y = rects[index].y + rects[index].height * 0.5f;
         context.pushEvent(ig::Event::pointerMove(x, y));
@@ -1533,8 +1541,7 @@ void test_multi_select()
     };
 
     harness.frame(build);
-    for (int i = 0; i < 4; ++i)
-        assert(rects[i].width > 0.0f);
+    for (int i = 0; i < 4; ++i) assert(rects[i].width > 0.0f);
     assert(!selected[0] && !selected[1] && !selected[2] && !selected[3]);
 
     // Um clique sem teclas: este e mais nenhum.
@@ -1609,20 +1616,18 @@ void test_item_activation_queries()
     bool visible = true;
     int clicks = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("ativacao", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
-        if (c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f)))
-            ++clicks;
-        if (buttonRect.width <= 0.0f)
-            buttonRect = c.itemRect();
+        if (c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f))) ++clicks;
+        if (buttonRect.width <= 0.0f) buttonRect = c.itemRect();
         activated = c.isItemActivated();
         deactivated = c.isItemDeactivated();
         afterEdit = c.isItemDeactivatedAfterEdit();
         visible = c.isItemVisible();
         // Um item bem para fora da janela: o rect dele não cai no clip.
         c.button("fora", ig::Rect(0.0f, 400.0f, 120.0f, 28.0f));
-        if (visible)
-            visible = c.isItemVisible();
+        if (visible) visible = c.isItemVisible();
         c.endWindow();
     };
 
@@ -1670,11 +1675,11 @@ void test_item_deactivated_after_edit()
     ig::Rect sliderRect;
     bool afterEdit = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("edicao", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
         c.sliderFloat("v", value, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
-        if (sliderRect.width <= 0.0f)
-            sliderRect = c.itemRect();
+        if (sliderRect.width <= 0.0f) sliderRect = c.itemRect();
         afterEdit = c.isItemDeactivatedAfterEdit();
         c.endWindow();
     };
@@ -1710,12 +1715,12 @@ void test_item_toggled_open()
     ig::Rect arrowRect;
     bool toggled = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("arvore", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
         c.treeNode("nodo", expanded, ig::Rect(0.0f, 0.0f, 140.0f, 24.0f));
         toggled = c.isItemToggledOpen();
-        if (arrowRect.width <= 0.0f)
-            arrowRect = c.itemRect();
+        if (arrowRect.width <= 0.0f) arrowRect = c.itemRect();
         c.endWindow();
     };
 
@@ -1747,29 +1752,27 @@ void test_combo_popup_scrolls()
     ig::Harness harness(context);
 
     // 14 itens, que é o "combo 1" do demo: cabem 8 (o HeightRegular do ImGui).
-    const ig::StringView items[] = {
-        ig::StringView("01"), ig::StringView("02"), ig::StringView("03"), ig::StringView("04"),
-        ig::StringView("05"), ig::StringView("06"), ig::StringView("07"), ig::StringView("08"),
-        ig::StringView("09"), ig::StringView("10"), ig::StringView("11"), ig::StringView("12"),
-        ig::StringView("13"), ig::StringView("14")
-    };
+    const ig::StringView items[] = { ig::StringView("01"), ig::StringView("02"),
+        ig::StringView("03"), ig::StringView("04"), ig::StringView("05"), ig::StringView("06"),
+        ig::StringView("07"), ig::StringView("08"), ig::StringView("09"), ig::StringView("10"),
+        ig::StringView("11"), ig::StringView("12"), ig::StringView("13"), ig::StringView("14") };
     const int count = 14;
     const int visibleItems = 8;
     int current = 0;
     ig::Rect headerRect;
     ig::Rect itemRects[14];
-    bool visible[14] = {false};
+    bool visible[14] = { false };
     bool open = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
         open = c.beginCombo("escolha", items[0], 0.0f, visibleItems);
         if (open)
         {
             for (int i = 0; i < count; ++i)
             {
-                if (c.selectable(items[i], current == i))
-                    current = i;
+                if (c.selectable(items[i], current == i)) current = i;
                 itemRects[i] = c.itemRect();
                 visible[i] = c.isItemVisible();
             }
@@ -1793,15 +1796,12 @@ void test_combo_popup_scrolls()
     assert(open);
 
     // Alguns frames para o popup medir o conteúdo (a medida é a do frame anterior).
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
 
     // Só os primeiros oito itens cabem; os últimos estão fora do clip (ou o clip
     // corta-os a zero, ou nem chegam a ser desenhados).
-    for (int i = 0; i < visibleItems; ++i)
-        assert(visible[i]);
-    for (int i = visibleItems; i < count; ++i)
-        assert(!visible[i]);
+    for (int i = 0; i < visibleItems; ++i) assert(visible[i]);
+    for (int i = visibleItems; i < count; ++i) assert(!visible[i]);
     const float firstY = itemRects[0].y;
     const float popupBottom = itemRects[visibleItems - 1].y + itemRects[visibleItems - 1].height;
 
@@ -1849,8 +1849,7 @@ void test_combo_popup_scrolls()
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
     harness.frame(build);
     assert(open);
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
     assert(itemRects[0].y == firstY);
 }
 
@@ -1862,33 +1861,31 @@ void test_combo_default_focus_opens_on_the_selection()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("01"), ig::StringView("02"), ig::StringView("03"), ig::StringView("04"),
-        ig::StringView("05"), ig::StringView("06"), ig::StringView("07"), ig::StringView("08"),
-        ig::StringView("09"), ig::StringView("10"), ig::StringView("11"), ig::StringView("12")
-    };
+    const ig::StringView items[] = { ig::StringView("01"), ig::StringView("02"),
+        ig::StringView("03"), ig::StringView("04"), ig::StringView("05"), ig::StringView("06"),
+        ig::StringView("07"), ig::StringView("08"), ig::StringView("09"), ig::StringView("10"),
+        ig::StringView("11"), ig::StringView("12") };
     const int count = 12;
     // A escolha está no fim: sem o default focus a lista abria no topo e ela ficava
     // fora de vista.
     int current = 10;
     ig::Rect headerRect;
     ig::Rect itemRects[12];
-    bool visible[12] = {false};
+    bool visible[12] = { false };
     bool open = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
         open = c.beginCombo("escolha", items[current], 0.0f, 8);
         if (open)
         {
             for (int i = 0; i < count; ++i)
             {
-                if (c.selectable(items[i], current == i))
-                    current = i;
+                if (c.selectable(items[i], current == i)) current = i;
                 itemRects[i] = c.itemRect();
                 visible[i] = c.isItemVisible();
-                if (current == i)
-                    c.setItemDefaultFocus();
+                if (current == i) c.setItemDefaultFocus();
             }
             c.endCombo();
         }
@@ -1910,8 +1907,7 @@ void test_combo_default_focus_opens_on_the_selection()
     assert(open);
 
     // A rolagem precisa de um frame com a medida do conteúdo.
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
     assert(visible[10]);
     assert(!visible[0]);
 
@@ -1920,7 +1916,7 @@ void test_combo_default_focus_opens_on_the_selection()
     // deixou.
     ig::Event wheel;
     wheel.type = ig::EventType::PointerWheel;
-    wheel.wheelY = 1.0f;   // para cima, até ao topo
+    wheel.wheelY = 1.0f; // para cima, até ao topo
     const float insideX = itemRects[10].x + itemRects[10].width * 0.5f;
     const float insideY = itemRects[10].y + itemRects[10].height * 0.5f;
     for (int i = 0; i < 20; ++i)
@@ -1932,8 +1928,7 @@ void test_combo_default_focus_opens_on_the_selection()
     assert(visible[0]);
     assert(!visible[10]);
     // E aí fica, mesmo com o setItemDefaultFocus a ser pedido outra vez.
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
     assert(visible[0]);
     assert(!visible[10]);
 }
@@ -1947,10 +1942,9 @@ void test_child_inside_a_combo_popup()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[] = {
-        ig::StringView("um"), ig::StringView("dois"), ig::StringView("tres"), ig::StringView("quatro"),
-        ig::StringView("cinco"), ig::StringView("seis"), ig::StringView("sete"), ig::StringView("oito")
-    };
+    const ig::StringView items[] = { ig::StringView("um"), ig::StringView("dois"),
+        ig::StringView("tres"), ig::StringView("quatro"), ig::StringView("cinco"),
+        ig::StringView("seis"), ig::StringView("sete"), ig::StringView("oito") };
     const int count = 8;
     int current = 0;
     int clicks = 0;
@@ -1959,7 +1953,8 @@ void test_child_inside_a_combo_popup()
     ig::Rect childRect;
     bool open = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("combo", ig::Rect(0.0f, 0.0f, 320.0f, 400.0f)));
         open = c.beginCombo("escolha", items[0]);
         if (open)
@@ -1996,8 +1991,7 @@ void test_child_inside_a_combo_popup()
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerX, headerY));
     harness.frame(build);
     assert(open);
-    for (int i = 0; i < 3; ++i)
-        harness.frame(build);
+    for (int i = 0; i < 3; ++i) harness.frame(build);
 
     // Os itens do child começam dentro do popup e descem como sempre: o child tem o
     // próprio cursor, mas é o popup que corta.
@@ -2044,17 +2038,16 @@ void test_item_hovered_flags()
     bool rectHovered = false;
     bool delayedInFirstFrame = true;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.beginChild("child", 40.0f);
         // Alto e no fim do child: metade de fora.
         c.button("dentro", ig::Rect(0.0f, 20.0f, 100.0f, 40.0f));
-        if (buttonRect.width <= 0.0f)
-            buttonRect = c.itemRect();
+        if (buttonRect.width <= 0.0f) buttonRect = c.itemRect();
         plainHovered = c.isItemHovered();
         rectHovered = c.isItemHovered(rectOnly);
-        if (c.isItemHovered(delay))
-            delayedInFirstFrame = false;
+        if (c.isItemHovered(delay)) delayedInFirstFrame = false;
         c.endChild();
         c.endWindow();
     };
@@ -2074,17 +2067,18 @@ void test_item_hovered_flags()
     // tempo responde.
     bool delayed = false;
     bool plain = false;
-    auto probeBuild = [&](ig::Context &c) {
+    auto probeBuild = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
-        if (buttonRect.width <= 0.0f)
-            buttonRect = c.itemRect();
+        if (buttonRect.width <= 0.0f) buttonRect = c.itemRect();
         plain = c.isItemHovered();
         delayed = c.isItemHovered(delay);
         c.endWindow();
     };
     ig::Rect targetRect;
-    auto findTarget = [&](ig::Context &c) {
+    auto findTarget = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
         targetRect = c.itemRect();
@@ -2092,7 +2086,8 @@ void test_item_hovered_flags()
     };
     // Os frames do harness não trazem delta: o relógio do hover é o que se lhe der
     // (é o deltaSeconds que o backend traz a sério).
-    auto frameWithDelta = [&](float delta) {
+    auto frameWithDelta = [&](float delta)
+    {
         context.beginFrame(ig::FrameInfo(1280.0f, 800.0f, 1.0f, delta));
         probeBuild(context);
         context.endFrame();
@@ -2105,14 +2100,14 @@ void test_item_hovered_flags()
     assert(plain);
     assert(!delayed);
     // Passado o atraso (0.45 s por omissão), o mesmo hover responde ao Delay.
-    for (int i = 0; i < 5; ++i)
-        frameWithDelta(0.1f);
+    for (int i = 0; i < 5; ++i) frameWithDelta(0.1f);
     assert(plain);
     assert(delayed);
     // Mexer o ponteiro dentro do item não reinicia o Delay (conta desde que entrou
     // nele), mas reinicia o Stationary (conta desde a última vez que se mexeu).
     bool stationary = false;
-    auto probeStationary = [&](ig::Context &c) {
+    auto probeStationary = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.button("alvo", ig::Rect(0.0f, 0.0f, 120.0f, 28.0f));
         stationary = c.isItemHovered(ig::Context::ItemHoverFlags::Stationary);
@@ -2137,7 +2132,8 @@ void test_item_hovered_flags()
     // por cima), o hover normal não responde mas o flag sim.
     bool blocked = true;
     bool allowed = false;
-    auto dragBuild = [&](ig::Context &c) {
+    auto dragBuild = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.sliderFloat("arrasto", dragged, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
         c.button("alvo", ig::Rect(0.0f, 60.0f, 120.0f, 28.0f));
@@ -2147,7 +2143,8 @@ void test_item_hovered_flags()
     };
     ig::Rect dragRect;
     ig::Rect hoverRect;
-    auto findBoth = [&](ig::Context &c) {
+    auto findBoth = [&](ig::Context& c)
+    {
         assert(c.beginWindow("hover", ig::Rect(0.0f, 0.0f, 320.0f, 300.0f)));
         c.sliderFloat("arrasto", dragged, 0.0f, 1.0f, ig::Rect(0.0f, 0.0f, 200.0f, 28.0f));
         dragRect = c.itemRect();
@@ -2165,7 +2162,7 @@ void test_item_hovered_flags()
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, dragX, dragY));
     harness.frame(dragBuild);
     context.pushEvent(ig::Event::pointerMove(hoverRect.x + hoverRect.width * 0.5f,
-                                            hoverRect.y + hoverRect.height * 0.5f));
+            hoverRect.y + hoverRect.height * 0.5f));
     harness.frame(dragBuild);
     assert(blocked == false);
     assert(allowed == true);
@@ -2189,13 +2186,13 @@ void test_widgets_inside_an_open_menu()
     bool sliderChanged = false;
     bool open = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("menu", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
         {
             open = c.beginMenu("F");
-            if (headerRect.width <= 0.0f)
-                headerRect = c.itemRect();
+            if (headerRect.width <= 0.0f) headerRect = c.itemRect();
             if (open)
             {
                 c.menuItem("New");
@@ -2268,10 +2265,10 @@ void test_widgets_inside_a_context_menu()
     ig::Rect sliderRect;
     bool changed = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("ctx", ig::Rect(0.0f, 0.0f, 320.0f, 240.0f)));
-        if (area.width <= 0.0f)
-            area = ig::Rect(0.0f, 0.0f, 200.0f, 120.0f);
+        if (area.width <= 0.0f) area = ig::Rect(0.0f, 0.0f, 200.0f, 120.0f);
         if (c.beginContextMenu("alvo", area))
         {
             c.menuItem("Duplicate");
@@ -2327,13 +2324,13 @@ void test_menu_content_scopes_widget_ids()
     ig::Rect fileSlider;
     ig::Rect editSlider;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("menu", ig::Rect(0.0f, 0.0f, 400.0f, 320.0f)));
         if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, c.availableWidth(), 26.0f)))
         {
             const bool fileOpen = c.beginMenu("File");
-            if (fileHeader.width <= 0.0f)
-                fileHeader = c.itemRect();
+            if (fileHeader.width <= 0.0f) fileHeader = c.itemRect();
             if (fileOpen)
             {
                 c.sliderFloat("Value", fileValue, 0.0f, 1.0f);
@@ -2341,8 +2338,7 @@ void test_menu_content_scopes_widget_ids()
                 c.endMenu();
             }
             const bool editOpen = c.beginMenu("Edit");
-            if (editHeader.width <= 0.0f)
-                editHeader = c.itemRect();
+            if (editHeader.width <= 0.0f) editHeader = c.itemRect();
             if (editOpen)
             {
                 c.sliderFloat("Value", editValue, 0.0f, 1.0f);
@@ -2390,9 +2386,8 @@ void test_own_popups()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView names[] = {
-        ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel")
-    };
+    const ig::StringView names[] = { ig::StringView("Bream"), ig::StringView("Haddock"),
+        ig::StringView("Mackerel") };
     int chosen = -1;
     int toggles = 0;
     float level = 0.5f;
@@ -2402,15 +2397,15 @@ void test_own_popups()
     bool open = false;
     bool reportedOpen = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.button("Select..", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
         {
             c.openPopup("escolha");
             ++toggles;
         }
-        if (buttonRect.width <= 0.0f)
-            buttonRect = c.itemRect();
+        if (buttonRect.width <= 0.0f) buttonRect = c.itemRect();
         reportedOpen = c.isPopupOpen("escolha");
         open = c.beginPopup("escolha");
         if (open)
@@ -2424,8 +2419,7 @@ void test_own_popups()
                     // Escolher fecha: é o que o demo faz com o selectable do popup.
                     c.closeCurrentPopup();
                 }
-                if (i == 0)
-                    firstItemRect = c.itemRect();
+                if (i == 0) firstItemRect = c.itemRect();
             }
             c.sliderFloat("Nivel", level, 0.0f, 1.0f);
             sliderRect = c.itemRect();
@@ -2521,12 +2515,11 @@ void test_unsubmitted_popup_is_dropped()
     float afterYWithPopup = 0.0f;
     float afterYWithout = 0.0f;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-        if (c.button("abrir", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
-            c.openPopup("caixa");
-        if (buttonRect.width <= 0.0f)
-            buttonRect = c.itemRect();
+        if (c.button("abrir", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f))) c.openPopup("caixa");
+        if (buttonRect.width <= 0.0f) buttonRect = c.itemRect();
         if (show && c.beginPopup("caixa"))
         {
             c.label("conteudo");
@@ -2536,8 +2529,7 @@ void test_unsubmitted_popup_is_dropped()
         // fica sempre no mesmo sítio.
         c.button("depois", ig::Rect(0.0f, 40.0f, 90.0f, 26.0f));
         afterRect = c.itemRect();
-        if (show)
-            afterYWithPopup = afterRect.y;
+        if (show) afterYWithPopup = afterRect.y;
         else
             afterYWithout = afterRect.y;
         c.endWindow();
@@ -2574,19 +2566,20 @@ void test_hidden_table_columns()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[3] = {1.0f, 1.0f, 1.0f};
-    bool visible[3] = {true, false, true};
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
+    bool visible[3] = { true, false, true };
     ig::Rect headerRects[3];
     ig::Rect cellRects[3];
-    bool columnSubmitted[3] = {false, false, false};
+    bool columnSubmitted[3] = { false, false, false };
     int rows = 0;
     int hoveredColumn = -1;
     int columnsSeen = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-        if (c.beginTable("t", ig::Span<const float>(weights, 3),
-                         ig::Span<const bool>(visible, 3), 300.0f))
+        if (c.beginTable("t", ig::Span<const float>(weights, 3), ig::Span<const bool>(visible, 3),
+                    300.0f))
         {
             columnsSeen = c.tableVisibleColumnCount();
             for (int i = 0; i < 3; ++i)
@@ -2604,8 +2597,7 @@ void test_hidden_table_columns()
             ++rows;
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 c.label("celula");
                 cellRects[i] = c.itemRect();
             }
@@ -2629,7 +2621,7 @@ void test_hidden_table_columns()
     // O ponteiro sobre o cabeçalho da segunda coluna visível: o tableHoveredColumn
     // diz qual é (2, que é o índice real da coluna).
     context.pushEvent(ig::Event::pointerMove(headerRects[2].x + 10.0f,
-                                            headerRects[2].y + headerRects[2].height * 0.5f));
+            headerRects[2].y + headerRects[2].height * 0.5f));
     harness.frame(build);
     assert(hoveredColumn == 2);
 
@@ -2664,20 +2656,20 @@ void test_reorderable_table_columns()
 
     // Pesos diferentes, para se ver a largura a seguir a coluna do modelo e não a
     // posição no écra.
-    const float weights[3] = {1.0f, 2.0f, 3.0f};
+    const float weights[3] = { 1.0f, 2.0f, 3.0f };
     ig::TableStyle style;
     style.reorderable = true;
     ig::Rect headerRects[3];
-    int seenOrder[3] = {-1, -1, -1};
+    int seenOrder[3] = { -1, -1, -1 };
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 3), style, 300.0f))
         {
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 seenOrder[i] = c.tableColumnIndex();
                 c.tableHeader(seenOrder[i] == 0 ? "A" : (seenOrder[i] == 1 ? "B" : "C"));
                 headerRects[i] = c.itemRect();
@@ -2719,15 +2711,15 @@ void test_reorderable_table_columns()
     // Uma tabela que não é reordenável mantém a identidade mesmo ao arrastar um
     // cabeçalho, e isso não mexe na ordem da outra.
     ig::TableStyle plain;
-    int plainOrder[3] = {-1, -1, -1};
-    auto buildPlain = [&](ig::Context &c) {
+    int plainOrder[3] = { -1, -1, -1 };
+    auto buildPlain = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 3), plain, 300.0f))
         {
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 plainOrder[i] = c.tableColumnIndex();
                 c.tableHeader("x");
                 headerRects[i] = c.itemRect();
@@ -2744,7 +2736,8 @@ void test_reorderable_table_columns()
     harness.frame(buildPlain);
     context.pushEvent(ig::Event::pointerMove(headerRects[2].x + 5.0f, plainY));
     harness.frame(buildPlain);
-    context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, headerRects[2].x + 5.0f, plainY));
+    context.pushEvent(
+            ig::Event::pointerUp(ig::PointerButton::Left, headerRects[2].x + 5.0f, plainY));
     harness.frame(buildPlain);
     assert(plainOrder[0] == 0 && plainOrder[1] == 1 && plainOrder[2] == 2);
 
@@ -2763,24 +2756,25 @@ void test_reordered_table_columns_are_model_columns()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    float weights[3] = {1.0f, 1.0f, 1.0f};
+    float weights[3] = { 1.0f, 1.0f, 1.0f };
     ig::TableStyle style;
     style.reorderable = true;
-    const ig::StringView names[3] = {ig::StringView("A"), ig::StringView("B"), ig::StringView("C")};
+    const ig::StringView names[3] = { ig::StringView("A"), ig::StringView("B"),
+        ig::StringView("C") };
     ig::Rect headerRects[3];
-    int seenOrder[3] = {-1, -1, -1};
+    int seenOrder[3] = { -1, -1, -1 };
     int hoveredColumn = -1;
     int sortColumn = -1;
     bool sortAscending = true;
 
-    auto submit = [&](ig::Context &c) {
+    auto submit = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<float>(weights, 3), style, 300.0f))
         {
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 seenOrder[i] = c.tableColumnIndex();
                 c.tableHeader(names[seenOrder[i]], sortColumn, sortAscending);
                 headerRects[i] = c.itemRect();
@@ -2809,12 +2803,12 @@ void test_reordered_table_columns_are_model_columns()
 
     // O ponteiro sobre a posição 2 (a coluna C) diz que é a coluna 2 do modelo.
     context.pushEvent(ig::Event::pointerMove(headerRects[2].x + headerRects[2].width * 0.5f,
-                                             headerRects[2].y + headerRects[2].height * 0.5f));
+            headerRects[2].y + headerRects[2].height * 0.5f));
     harness.frame(submit);
     assert(hoveredColumn == 2);
     // E sobre a posição 0 (que agora é a coluna B) diz 1.
     context.pushEvent(ig::Event::pointerMove(headerRects[0].x + headerRects[0].width * 0.5f,
-                                             headerRects[0].y + headerRects[0].height * 0.5f));
+            headerRects[0].y + headerRects[0].height * 0.5f));
     harness.frame(submit);
     assert(hoveredColumn == 1);
 
@@ -2838,7 +2832,7 @@ void test_reordered_table_columns_are_model_columns()
 
     // O grip do cabeçalho da posição 0 mexe no peso das duas colunas que ali estão
     // (a 1 e, à direita, a 0), não no peso das posições 0 e 1.
-    const float before[3] = {weights[0], weights[1], weights[2]};
+    const float before[3] = { weights[0], weights[1], weights[2] };
     const float gripX = headerRects[0].x + headerRects[0].width - 1.0f;
     context.pushEvent(ig::Event::pointerMove(gripX, clickY));
     context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, gripX, clickY));
@@ -2865,7 +2859,7 @@ void test_table_scrolls_its_own_rows()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[2] = {1.0f, 1.0f};
+    const float weights[2] = { 1.0f, 1.0f };
     ig::TableStyle style;
     style.borders = true;
     style.scrollY = true;
@@ -2875,10 +2869,11 @@ void test_table_scrolls_its_own_rows()
     ig::Rect headerRects[2];
     ig::Rect labelRects[kRows];
     bool labelVisible[kRows];
-    float labelX[2] = {0.0f, 0.0f};
+    float labelX[2] = { 0.0f, 0.0f };
     float labelY[kRows];
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 200.0f))
         {
@@ -2896,12 +2891,10 @@ void test_table_scrolls_its_own_rows()
             {
                 for (int column = 0; column < 2; ++column)
                 {
-                    if (!c.tableNextColumn())
-                        continue;
+                    if (!c.tableNextColumn()) continue;
                     c.label("celula");
                     labelRects[row] = c.itemRect();
-                    if (column == 0)
-                        labelY[row] = labelRects[row].y;
+                    if (column == 0) labelY[row] = labelRects[row].y;
                     labelX[column] = labelRects[row].x;
                     labelVisible[row] = c.isItemVisible();
                 }
@@ -2948,7 +2941,7 @@ void test_table_scrolls_its_own_rows()
     }
     assert(labelVisible[kRows - 1]);
     assert(labelRects[kRows - 1].y + labelRects[kRows - 1].height <
-           headerRects[0].y + style.height + 1.0f);
+            headerRects[0].y + style.height + 1.0f);
     assert(!labelVisible[0]);
     // A linha 1 ainda se vê em parte: está cortada por cima pela faixa presa.
     assert(labelY[1] < headerRects[0].y + headerRects[0].height + 6.0f);
@@ -2971,7 +2964,7 @@ void test_table_scrolls_its_own_rows()
 
     // A barra de rolagem está no lado direito da tabela, com a altura da área que
     // rola (os vértices com a cor do punho dizem onde ela foi desenhada).
-    const ig::DrawData &scrolled = harness.frame(build);
+    const ig::DrawData& scrolled = harness.frame(build);
     const ig::Color thumbColor = context.theme().scrollbarThumb;
     bool foundThumb = false;
     float thumbLeft = 0.0f;
@@ -2979,21 +2972,17 @@ void test_table_scrolls_its_own_rows()
     float thumbBottom = 0.0f;
     for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < scrolled.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = scrolled.vertices[i];
-        if (vertex.color != thumbColor)
-            continue;
+        const ig::DrawVertex& vertex = scrolled.vertices[i];
+        if (vertex.color != thumbColor) continue;
         if (!foundThumb)
         {
             thumbLeft = thumbRight = vertex.position.x;
             thumbBottom = vertex.position.y;
             foundThumb = true;
         }
-        if (vertex.position.x < thumbLeft)
-            thumbLeft = vertex.position.x;
-        if (vertex.position.x > thumbRight)
-            thumbRight = vertex.position.x;
-        if (vertex.position.y > thumbBottom)
-            thumbBottom = vertex.position.y;
+        if (vertex.position.x < thumbLeft) thumbLeft = vertex.position.x;
+        if (vertex.position.x > thumbRight) thumbRight = vertex.position.x;
+        if (vertex.position.y > thumbBottom) thumbBottom = vertex.position.y;
     }
     assert(foundThumb);
     assert(thumbLeft >= headerRects[1].x + headerRects[1].width);
@@ -3009,7 +2998,7 @@ void test_table_frozen_rows_stay_put()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[2] = {1.0f, 1.0f};
+    const float weights[2] = { 1.0f, 1.0f };
     ig::TableStyle style;
     style.scrollY = true;
     style.height = 160.0f;
@@ -3018,7 +3007,8 @@ void test_table_frozen_rows_stay_put()
     float rowY[kRows];
     float headerY = 0.0f;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 200.0f))
         {
@@ -3026,13 +3016,11 @@ void test_table_frozen_rows_stay_put()
             {
                 for (int column = 0; column < 2; ++column)
                 {
-                    if (!c.tableNextColumn())
-                        continue;
+                    if (!c.tableNextColumn()) continue;
                     c.label(row < 0 ? "cabecalho" : "linha");
                     if (row < 0)
                     {
-                        if (column == 0)
-                            headerY = c.itemRect().y;
+                        if (column == 0) headerY = c.itemRect().y;
                     }
                     else if (column == 0)
                         rowY[row] = c.itemRect().y;
@@ -3091,7 +3079,8 @@ void test_tree_style()
     // Estes rects são no espaço do conteúdo da janela (o mesmo do layoutCursor);
     // aqui são submetidos pelas coordenadas, um por linha, para o itemRect de cada
     // um ser o que a widget desenhou.
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("arvore", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)));
         c.treeNode("bullet", expanded, bullet, ig::Rect(0.0f, 0.0f, 120.0f, 20.0f));
         bulletRect = c.itemRect();
@@ -3105,12 +3094,13 @@ void test_tree_style()
         arrowToggled = c.isItemToggledOpen();
         c.collapsingHeader("escolhida", expanded, selected, ig::Rect(0.0f, 120.0f, 120.0f, 20.0f));
         selectedRect = c.itemRect();
-        c.collapsingHeader("cabecalho com bullet", expanded, bullet, ig::Rect(0.0f, 150.0f, 120.0f, 20.0f));
+        c.collapsingHeader("cabecalho com bullet", expanded, bullet,
+                ig::Rect(0.0f, 150.0f, 120.0f, 20.0f));
         bulletHeaderRect = c.itemRect();
         c.endWindow();
     };
 
-    const ig::DrawData &frame = harness.frame(build);
+    const ig::DrawData& frame = harness.frame(build);
     assert(bulletRect.width == 120.0f);
     assert(bulletHeaderRect.width == 120.0f);
     // O spanAvailWidth faz o item apanhar toda a largura que sobra, não só a que lhe
@@ -3124,14 +3114,17 @@ void test_tree_style()
     int plainVertices = 0;
     for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < frame.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = frame.vertices[i];
-        if (vertex.color != context.theme().selectableSelected)
-            continue;
-        if (vertex.position.x >= selectedRect.x && vertex.position.x <= selectedRect.x + selectedRect.width &&
-            vertex.position.y >= selectedRect.y && vertex.position.y <= selectedRect.y + selectedRect.height)
+        const ig::DrawVertex& vertex = frame.vertices[i];
+        if (vertex.color != context.theme().selectableSelected) continue;
+        if (vertex.position.x >= selectedRect.x &&
+                vertex.position.x <= selectedRect.x + selectedRect.width &&
+                vertex.position.y >= selectedRect.y &&
+                vertex.position.y <= selectedRect.y + selectedRect.height)
             ++selectedVertices;
-        if (vertex.position.x >= plainRect.x && vertex.position.x <= plainRect.x + plainRect.width &&
-            vertex.position.y >= plainRect.y && vertex.position.y <= plainRect.y + plainRect.height)
+        if (vertex.position.x >= plainRect.x &&
+                vertex.position.x <= plainRect.x + plainRect.width &&
+                vertex.position.y >= plainRect.y &&
+                vertex.position.y <= plainRect.y + plainRect.height)
             ++plainVertices;
     }
     assert(selectedVertices > 0);
@@ -3191,7 +3184,8 @@ void test_popup_modal()
     ig::Rect modalOk;
     int okClicks = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("modal", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.button("fundo", ig::Rect(0.0f, 0.0f, 90.0f, 26.0f)))
         {
@@ -3214,8 +3208,7 @@ void test_popup_modal()
             modalOk = c.itemRect();
             c.endPopup();
         }
-        if (!openModal)
-            showModal = false;
+        if (!openModal) showModal = false;
         c.endWindow();
     };
 
@@ -3235,7 +3228,7 @@ void test_popup_modal()
     assert(backgroundClicked);
     assert(context.isPopupOpen("Definicoes"));
     // O modal aparece no frame seguinte (a caixa é a medida do frame anterior).
-    const ig::DrawData &modalFrame = harness.frame(build);
+    const ig::DrawData& modalFrame = harness.frame(build);
     assert(modalLabel.width > 0.0f);
     assert(modalOk.width > 0.0f);
     // A caixa é o que está pintado com a cor do fundo do menu (é a única coisa no
@@ -3245,22 +3238,17 @@ void test_popup_modal()
     const ig::Color boxColor = context.theme().menuBg;
     for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < modalFrame.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = modalFrame.vertices[i];
-        if (vertex.color != boxColor)
-            continue;
+        const ig::DrawVertex& vertex = modalFrame.vertices[i];
+        if (vertex.color != boxColor) continue;
         if (!boxFound)
         {
             box = ig::Rect(vertex.position.x, vertex.position.y, 0.0f, 0.0f);
             boxFound = true;
         }
-        if (vertex.position.x < box.x)
-            box.x = vertex.position.x;
-        if (vertex.position.y < box.y)
-            box.y = vertex.position.y;
-        if (vertex.position.x > box.x + box.width)
-            box.width = vertex.position.x - box.x;
-        if (vertex.position.y > box.y + box.height)
-            box.height = vertex.position.y - box.y;
+        if (vertex.position.x < box.x) box.x = vertex.position.x;
+        if (vertex.position.y < box.y) box.y = vertex.position.y;
+        if (vertex.position.x > box.x + box.width) box.width = vertex.position.x - box.x;
+        if (vertex.position.y > box.y + box.height) box.height = vertex.position.y - box.y;
     }
     assert(boxFound);
     const ig::Vec2 display = context.displaySize();
@@ -3309,12 +3297,12 @@ void test_popup_modal()
     assert(context.isPopupOpen("Definicoes"));
     const ig::Rect okRect = modalOk;
     context.pushEvent(ig::Event::pointerMove(okRect.x + okRect.width * 0.5f,
-                                             okRect.y + okRect.height * 0.5f));
-    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, okRect.x + okRect.width * 0.5f,
-                                             okRect.y + okRect.height * 0.5f));
+            okRect.y + okRect.height * 0.5f));
+    context.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left,
+            okRect.x + okRect.width * 0.5f, okRect.y + okRect.height * 0.5f));
     harness.frame(build);
     context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, okRect.x + okRect.width * 0.5f,
-                                           okRect.y + okRect.height * 0.5f));
+            okRect.y + okRect.height * 0.5f));
     harness.frame(build);
     assert(okClicks == clicksBefore + 1);
     assert(!context.isPopupOpen("Definicoes"));
@@ -3356,14 +3344,13 @@ void test_popup_open_flags()
     bool tryFirst = false;
     bool trySecond = false;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("flags", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         c.button("ancora");
         anchor = c.itemRect();
-        if (tryFirst)
-            c.openPopup("um", ig::Context::PopupFlags::AtCursor);
-        if (trySecond)
-            c.openPopup("dois", ig::Context::PopupFlags::NoOpenOverExistingPopup);
+        if (tryFirst) c.openPopup("um", ig::Context::PopupFlags::AtCursor);
+        if (trySecond) c.openPopup("dois", ig::Context::PopupFlags::NoOpenOverExistingPopup);
         if (c.beginPopup("um"))
         {
             c.label("um");
@@ -3438,8 +3425,8 @@ void test_tabs_with_content()
     ig::Harness harness(context);
 
     bool closeSecond = true;
-    ig::Rect tabRects[3] = {ig::Rect(), ig::Rect(), ig::Rect()};
-    ig::Rect contentRects[3] = {ig::Rect(), ig::Rect(), ig::Rect()};
+    ig::Rect tabRects[3] = { ig::Rect(), ig::Rect(), ig::Rect() };
+    ig::Rect contentRects[3] = { ig::Rect(), ig::Rect(), ig::Rect() };
     int submitted = 0;
     ig::Rect afterRect;
     bool afterSeen = false;
@@ -3448,7 +3435,8 @@ void test_tabs_with_content()
     unsigned thirdFlags = ig::Context::TabItemFlags::None;
     bool thirdOpen = true;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         submitted = 0;
         if (c.beginTabBar("bar", barFlags))
@@ -3464,7 +3452,8 @@ void test_tabs_with_content()
                 contentRects[0] = c.itemRect();
                 c.endTabItem();
             }
-            const bool two = c.beginTabItem("dois", closeSecond ? &closeSecond : nullptr, itemFlags);
+            const bool two =
+                    c.beginTabItem("dois", closeSecond ? &closeSecond : nullptr, itemFlags);
             tabRects[1] = c.itemRect();
             if (two)
             {
@@ -3580,15 +3569,14 @@ void test_tab_bar_fitting()
     unsigned barFlags = ig::Context::TabBarFlags::None;
     ig::Rect rects[2];
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("fitting", ig::Rect(0.0f, 0.0f, 400.0f, 200.0f)));
         if (c.beginTabBar("largo", barFlags))
         {
-            if (c.beginTabItem("um nome de tab bastante comprido"))
-                c.endTabItem();
+            if (c.beginTabItem("um nome de tab bastante comprido")) c.endTabItem();
             rects[0] = c.itemRect();
-            if (c.beginTabItem("outro nome de tab igualmente comprido"))
-                c.endTabItem();
+            if (c.beginTabItem("outro nome de tab igualmente comprido")) c.endTabItem();
             rects[1] = c.itemRect();
             c.endTabBar();
         }
@@ -3621,7 +3609,7 @@ void test_table_scrolls_sideways()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[3] = {1.0f, 1.0f, 1.0f};
+    const float weights[3] = { 1.0f, 1.0f, 1.0f };
     ig::TableStyle style;
     style.borders = true;
     style.scrollX = true;
@@ -3629,24 +3617,23 @@ void test_table_scrolls_sideways()
     style.freezeCols = 1;
     ig::Rect headerRects[3];
     ig::Rect cellRects[3];
-    bool cellVisible[3] = {false, false, false};
+    bool cellVisible[3] = { false, false, false };
     const float tableWidth = 300.0f;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("lado", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 3), style, tableWidth))
         {
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 c.tableHeader(i == 0 ? "A" : (i == 1 ? "B" : "C"));
                 headerRects[i] = c.itemRect();
             }
             for (int i = 0; i < 3; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 // Um dummy da largura da coluna: o itemRect é o da célula (um
                 // label é só o texto) e o isItemVisible é o da coluna.
                 c.dummy(200.0f, 16.0f);
@@ -3658,12 +3645,12 @@ void test_table_scrolls_sideways()
         c.endWindow();
     };
 
-    const ig::DrawData &firstFrame = harness.frame(build);
+    const ig::DrawData& firstFrame = harness.frame(build);
     // As colunas são a largura pedida dividida pelos pesos (600/3 = 200), não a
     // largura da tabela: a terceira já sai para fora dela.
     const float columnWidth = 200.0f;
     const float firstHeaderX = headerRects[0].x;
-    const float scrolled = 28.0f;   // um entalhe anda o que mede uma widget
+    const float scrolled = 28.0f; // um entalhe anda o que mede uma widget
     // A largura da coluna lê-se do cabeçalho (a célula é o texto, que é mais
     // estreito): é a coluna que segue a innerWidth, não a tabela.
     assert(fabs(headerRects[0].width - columnWidth) < 1.0f);
@@ -3702,30 +3689,27 @@ void test_table_scrolls_sideways()
     assert(!cellVisible[1]);
     assert(cellVisible[2]);
     // A terceira coluna (natural em x + 2*largura) fica a rolagem máxima à frente.
-    assert(fabsf(headerRects[2].x -
-                 (firstHeaderX + columnWidth * 2.0f - (600.0f - tableWidth))) < 1.0f);
+    assert(fabsf(headerRects[2].x - (firstHeaderX + columnWidth * 2.0f - (600.0f - tableWidth))) <
+            1.0f);
 
     // A barra de baixo está no fundo da tabela, com o punho à cor do tema.
     const ig::Color thumbColor = context.theme().scrollbarThumb;
     bool foundThumb = false;
     float thumbY = 0.0f;
     float thumbRight = 0.0f;
-    const ig::DrawData &lastFrame = harness.frame(build);
+    const ig::DrawData& lastFrame = harness.frame(build);
     for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < lastFrame.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = lastFrame.vertices[i];
-        if (vertex.color != thumbColor)
-            continue;
+        const ig::DrawVertex& vertex = lastFrame.vertices[i];
+        if (vertex.color != thumbColor) continue;
         if (!foundThumb)
         {
             foundThumb = true;
             thumbY = vertex.position.y;
             thumbRight = vertex.position.x;
         }
-        if (vertex.position.y > thumbY)
-            thumbY = vertex.position.y;
-        if (vertex.position.x > thumbRight)
-            thumbRight = vertex.position.x;
+        if (vertex.position.y > thumbY) thumbY = vertex.position.y;
+        if (vertex.position.x > thumbRight) thumbRight = vertex.position.x;
     }
     assert(foundThumb);
     assert(thumbY > firstHeaderX + 40.0f);
@@ -3741,20 +3725,20 @@ void test_table_without_sideways_scroll_keeps_the_width()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[2] = {1.0f, 1.0f};
+    const float weights[2] = { 1.0f, 1.0f };
     ig::TableStyle style;
     style.scrollX = true;
-    style.innerWidth = 200.0f;   // menos do que a tabela (300)
+    style.innerWidth = 200.0f; // menos do que a tabela (300)
     ig::Rect rects[2];
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("lado2", ig::Rect(0.0f, 0.0f, 400.0f, 200.0f)));
         if (c.beginTable("t", ig::Span<const float>(weights, 2), style, 300.0f))
         {
             for (int i = 0; i < 2; ++i)
             {
-                if (!c.tableNextColumn())
-                    continue;
+                if (!c.tableNextColumn()) continue;
                 c.dummy(150.0f, 16.0f);
                 rects[i] = c.itemRect();
             }
@@ -3792,10 +3776,10 @@ void test_stacked_popups()
     ig::Rect childButton;
     int hits = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-        if (c.button("abrir o pai"))
-            wantParent = true;
+        if (c.button("abrir o pai")) wantParent = true;
         openButton = c.itemRect();
         if (wantParent)
         {
@@ -3805,8 +3789,7 @@ void test_stacked_popups()
         if (c.beginPopup("pai"))
         {
             c.label("conteudo do pai");
-            if (c.button("abrir o filho"))
-                wantChild = true;
+            if (c.button("abrir o filho")) wantChild = true;
             childButton = c.itemRect();
             if (wantChild)
             {
@@ -3815,8 +3798,7 @@ void test_stacked_popups()
             }
             if (c.beginPopup("filho"))
             {
-                if (c.selectable("escolher", false))
-                    ++hits;
+                if (c.selectable("escolher", false)) ++hits;
                 c.endPopup();
             }
             c.endPopup();
@@ -3828,15 +3810,15 @@ void test_stacked_popups()
 
     harness.frame(build);
     // Abre o pai pelo botão.
-    harness.click(openButton.x + openButton.width * 0.5f,
-                  openButton.y + openButton.height * 0.5f, build);
+    harness.click(openButton.x + openButton.width * 0.5f, openButton.y + openButton.height * 0.5f,
+            build);
     harness.frame(build);
     assert(parentOpen && !childOpen);
 
     // Abre o filho pelo botão de dentro do pai: os dois ficam abertos (antes disto o
     // filho substituía o pai).
     harness.click(childButton.x + childButton.width * 0.5f,
-                  childButton.y + childButton.height * 0.5f, build);
+            childButton.y + childButton.height * 0.5f, build);
     harness.frame(build);
     assert(parentOpen && childOpen);
     // O pai e o filho desenham-se os dois: as duas caixas estão no ecrã.
@@ -3857,7 +3839,7 @@ void test_stacked_popups()
     // Abre outra vez o filho e clica dentro do pai mas na margem dele (por cima do
     // conteúdo vazio): fecha só o filho.
     harness.click(childButton.x + childButton.width * 0.5f,
-                  childButton.y + childButton.height * 0.5f, build);
+            childButton.y + childButton.height * 0.5f, build);
     harness.frame(build);
     assert(parentOpen && childOpen);
     harness.click(parentPosition.x + 2.0f, parentPosition.y + 2.0f, build);
@@ -3887,10 +3869,10 @@ void test_menu_inside_a_popup()
     ig::Rect lastItem;
     int clicked = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("popup com menu", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-        if (c.button("abrir"))
-            wantPopup = true;
+        if (c.button("abrir")) wantPopup = true;
         openButton = c.itemRect();
         if (wantPopup)
         {
@@ -3907,14 +3889,10 @@ void test_menu_inside_a_popup()
                     // Quatro itens: a caixa do menu é mais alta que a do popup (que
                     // só tem a barra e um rótulo), por isso os últimos itens ficam
                     // fora da caixa do popup.
-                    if (c.menuItem("New"))
-                        ++clicked;
-                    if (c.menuItem("Open"))
-                        ++clicked;
-                    if (c.menuItem("Save"))
-                        ++clicked;
-                    if (c.menuItem("Quit"))
-                        ++clicked;
+                    if (c.menuItem("New")) ++clicked;
+                    if (c.menuItem("Open")) ++clicked;
+                    if (c.menuItem("Save")) ++clicked;
+                    if (c.menuItem("Quit")) ++clicked;
                     lastItem = c.itemRect();
                     fileItem = c.itemRect();
                     c.endMenu();
@@ -3929,13 +3907,12 @@ void test_menu_inside_a_popup()
     };
 
     harness.frame(build);
-    harness.click(openButton.x + openButton.width * 0.5f,
-                  openButton.y + openButton.height * 0.5f, build);
+    harness.click(openButton.x + openButton.width * 0.5f, openButton.y + openButton.height * 0.5f,
+            build);
     harness.frame(build);
     assert(popupOpen);
     // Abre o menu "File" (o primeiro item da barra, dentro do popup).
-    const float menuX = 40.0f + context.theme().windowPadding +
-                        context.theme().menuItemPadX + 4.0f;
+    const float menuX = 40.0f + context.theme().windowPadding + context.theme().menuItemPadX + 4.0f;
     const float menuY = 40.0f + context.theme().windowPadding + 13.0f;
     harness.click(menuX, menuY, build);
     harness.frame(build);
@@ -3974,10 +3951,10 @@ void test_submenu_inside_a_popup()
     bool submenuItemHovered = false;
     int clicked = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("submenu num popup", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-        if (c.button("abrir"))
-            wantPopup = true;
+        if (c.button("abrir")) wantPopup = true;
         openButton = c.itemRect();
         if (wantPopup)
         {
@@ -3993,8 +3970,7 @@ void test_submenu_inside_a_popup()
             submenuOpen = c.beginSubMenu("Sub-menu");
             if (submenuOpen)
             {
-                if (c.menuItem("Click me"))
-                    ++clicked;
+                if (c.menuItem("Click me")) ++clicked;
                 submenuItem = c.itemRect();
                 submenuItemHovered = c.isItemHovered();
                 c.endSubMenu();
@@ -4007,8 +3983,8 @@ void test_submenu_inside_a_popup()
 
     harness.frame(build);
     harness.frame(build);
-    harness.click(openButton.x + openButton.width * 0.5f,
-                  openButton.y + openButton.height * 0.5f, build);
+    harness.click(openButton.x + openButton.width * 0.5f, openButton.y + openButton.height * 0.5f,
+            build);
     harness.frame(build);
     assert(popupOpen && !submenuOpen);
 
@@ -4016,8 +3992,8 @@ void test_submenu_inside_a_popup()
     // com a altura de um item de menu.
     const float itemHeight = context.theme().menuItemHeight;
     const float columnX = 40.0f + context.theme().windowPadding + 20.0f;
-    const float rowY = 40.0f + context.theme().windowPadding + itemHeight * 2.0f + 8.0f +
-                       itemHeight * 0.5f;
+    const float rowY =
+            40.0f + context.theme().windowPadding + itemHeight * 2.0f + 8.0f + itemHeight * 0.5f;
     context.pushEvent(ig::Event::pointerMove(columnX, rowY));
     harness.frame(build);
     harness.frame(build);
@@ -7509,14 +7485,15 @@ void test_table_sizing_fixed_fit()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const float weights[] = {1.0f, 1.0f, 1.0f};
+    const float weights[] = { 1.0f, 1.0f, 1.0f };
     // Larguras diferentes por coluna: com os pesos iguais a divisão dava o mesmo
     // para as três, e com o FixedFit cada uma fica com a sua.
-    const float content[3] = {60.0f, 140.0f, 30.0f};
+    const float content[3] = { 60.0f, 140.0f, 30.0f };
     ig::Rect cellRects[3];
     bool useFixedFit = true;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabela fixed fit", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
         ig::TableStyle style;
         style.sizingFixedFit = useFixedFit;
@@ -7566,17 +7543,16 @@ void test_tab_item_button_and_bands()
     ig::Rect leadingButton, trailingButton, firstTab, secondTab, trailingTab;
     int clicks = 0;
     float barWidth = 0.0f;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
         if (c.beginTabBar("bandas", ig::Context::TabBarFlags::None))
         {
             // Os botões do demo: o "?" Leading (um menu) e o "+" Trailing (uma tab
             // nova), submetidos antes das tabs.
-            if (c.tabItemButton("?", ig::Context::TabItemFlags::Leading))
-                ++clicks;
+            if (c.tabItemButton("?", ig::Context::TabItemFlags::Leading)) ++clicks;
             leadingButton = c.itemRect();
-            if (c.tabItemButton("+", ig::Context::TabItemFlags::Trailing))
-                ++clicks;
+            if (c.tabItemButton("+", ig::Context::TabItemFlags::Trailing)) ++clicks;
             trailingButton = c.itemRect();
 
             const bool one = c.beginTabItem("um");
@@ -7653,7 +7629,8 @@ void test_tab_list_popup_button()
     ig::Rect listButton;
     int open = 0;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 480.0f, 300.0f)));
         if (c.beginTabBar("lista", ig::Context::TabBarFlags::TabListPopupButton))
         {
@@ -7690,7 +7667,7 @@ void test_tab_list_popup_button()
     // As tabs começam depois do botão da lista, que é a largura de um item, e o
     // botão fica no canto da barra (a margem da janela).
     assert(firstTab.x ==
-           context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
+            context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
     assert(listButton.x == context.theme().windowPadding);
     assert(secondTab.x >= firstTab.x + firstTab.width);
     const size_t closedVertices = harness.vertexCount();
@@ -7707,13 +7684,12 @@ void test_tab_list_popup_button()
     assert(harness.vertexCount() > closedVertices);
     assert(open == 1);
     assert(firstTab.x ==
-           context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
+            context.theme().windowPadding + context.theme().fontSize + context.theme().itemSpacing);
 
     // Escolher a segunda tab pela lista: o popup abre por baixo do botão e cada
     // linha é um item do tema, por isso a última (a "dois") é a segunda.
     const float itemX = listButton.x + listButton.width * 0.5f;
-    const float itemY = listButton.y + listButton.height +
-                        context.theme().widgetHeight * 1.5f;
+    const float itemY = listButton.y + listButton.height + context.theme().widgetHeight * 1.5f;
     harness.click(itemX, itemY, build);
     harness.frame(build);
     assert(open == 2);
@@ -7736,7 +7712,8 @@ void test_push_font()
     float afterUnknownWidth = 0.0f;
     const ig::StringView text("The quick brown fox");
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("fonts", ig::Rect(0.0f, 0.0f, 480.0f, 240.0f)));
         c.label(text);
         normalWidth = c.itemRect().width;
@@ -7778,7 +7755,8 @@ void test_push_font()
 
     // Um push sem pop não se cola ao frame seguinte: o fim do frame repõe a face
     // (e o tamanho) que estava em vigor.
-    auto leaking = [&](ig::Context &c) {
+    auto leaking = [&](ig::Context& c)
+    {
         assert(c.beginWindow("leak", ig::Rect(0.0f, 0.0f, 320.0f, 120.0f)));
         c.pushFont(other);
         c.label(text);
@@ -7803,7 +7781,8 @@ void test_hash_marker()
     ig::WidgetId renamed = ig::InvalidWidgetId;
     ig::WidgetId plain = ig::InvalidWidgetId;
     bool pressed = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("###doc-widgets", ig::Rect(0.0f, 0.0f, 300.0f, 160.0f)));
         c.button("Gravar como###gravar");
         first = c.itemId();
@@ -7825,10 +7804,11 @@ void test_hash_marker()
     // painel de documento, cujo título leva o nome do ficheiro.
     ig::Rect bounds;
     bool firstFrame = true;
-    auto window = [&](ig::Context &c) {
-        const char *title = firstFrame ? "Ficheiro: um###docwin" : "Ficheiro: dois###docwin";
-        const ig::Rect initial(firstFrame ? 40.0f : 600.0f, firstFrame ? 30.0f : 400.0f,
-                               240.0f, 140.0f);
+    auto window = [&](ig::Context& c)
+    {
+        const char* title = firstFrame ? "Ficheiro: um###docwin" : "Ficheiro: dois###docwin";
+        const ig::Rect initial(firstFrame ? 40.0f : 600.0f, firstFrame ? 30.0f : 400.0f, 240.0f,
+                140.0f);
         assert(c.beginWindow(title, initial));
         bounds = c.windowBounds("###docwin");
         firstFrame = false;
@@ -7845,7 +7825,8 @@ void test_hash_marker()
     // diferentes são duas janelas (o "###" não pode virar a regra geral).
     ig::Rect plainA;
     ig::Rect plainB;
-    auto two = [&](ig::Context &c) {
+    auto two = [&](ig::Context& c)
+    {
         assert(c.beginWindow("uma", ig::Rect(0.0f, 300.0f, 200.0f, 100.0f)));
         plainA = c.windowBounds("uma");
         c.endWindow();
@@ -7872,7 +7853,8 @@ void test_nested_popup_restores_the_window_layout()
     bool innerIsModal = false;
     ig::Rect after;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("popups", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         c.label("antes");
         if (openOuter)
@@ -7953,7 +7935,8 @@ void test_nested_tab_bars()
     bool innerOpen = false;
     bool innerContent = false;
     bool sameBarRefused = true;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("tabs", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         outerOpen = false;
         innerOpen = false;
@@ -7995,11 +7978,10 @@ void test_nested_tab_bars()
 class FolderProvider : public ig::FileDialogProvider
 {
 public:
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries,
-                       bool = true) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry>& entries,
+            bool = true) override
     {
-        if (ig::String(path.data(), path.size()) != "/root")
-            return true;
+        if (ig::String(path.data(), path.size()) != "/root") return true;
         ig::FileDialogEntry entry;
         entry.name = "sub";
         entry.path = "/root/sub";
@@ -8007,8 +7989,14 @@ public:
         entries.push_back(entry);
         return true;
     }
-    ig::String parentDirectory(ig::StringView) override { return "/"; }
-    ig::String homeDirectory() override { return "/root"; }
+    ig::String parentDirectory(ig::StringView) override
+    {
+        return "/";
+    }
+    ig::String homeDirectory() override
+    {
+        return "/root";
+    }
 };
 
 struct DialogRun
@@ -8019,7 +8007,14 @@ struct DialogRun
     ig::FileDialogState state;
     bool open;
 
-    DialogRun() : backend(), context(backend), provider(), state(), open(true) {}
+    DialogRun()
+            : backend(),
+              context(backend),
+              provider(),
+              state(),
+              open(true)
+    {
+    }
 
     void frame(float seconds)
     {
@@ -8050,11 +8045,9 @@ void test_file_dialog_double_click_is_timed()
         for (float y = 60.0f; y < 760.0f && rowY < 0.0f; y += 4.0f)
         {
             run.click(rowX, y, 0.016f);
-            if (run.state.selectedIndex == 0)
-                rowY = y;
+            if (run.state.selectedIndex == 0) rowY = y;
             // Os cliques do varrimento nunca fazem um duplo clique entre si.
-            for (int i = 0; i < 30; ++i)
-                run.frame(0.05f);
+            for (int i = 0; i < 30; ++i) run.frame(0.05f);
         }
     }
     assert(rowY >= 0.0f);
@@ -8063,8 +8056,7 @@ void test_file_dialog_double_click_is_timed()
         DialogRun run;
         run.frame(0.033f);
         run.click(rowX, rowY, 0.04f);
-        for (int i = 0; i < 18; ++i)
-            run.frame(0.04f);
+        for (int i = 0; i < 18; ++i) run.frame(0.04f);
         run.click(rowX, rowY, 0.04f);
         assert(run.state.path == "/root");
     }
@@ -8072,8 +8064,7 @@ void test_file_dialog_double_click_is_timed()
         DialogRun run;
         run.frame(0.001f);
         run.click(rowX, rowY, 0.001f);
-        for (int i = 0; i < 40; ++i)
-            run.frame(0.001f);
+        for (int i = 0; i < 40; ++i) run.frame(0.001f);
         run.click(rowX, rowY, 0.001f);
         assert(run.state.path == "/root/sub");
     }
@@ -8105,8 +8096,7 @@ void test_clock_keeps_running_in_long_sessions()
     };
     frame(1000000.0f);
     click();
-    for (int i = 0; i < 60; ++i)
-        frame(1.0f / 60.0f);
+    for (int i = 0; i < 60; ++i) frame(1.0f / 60.0f);
     click();
     assert(!doubleClicked);
 }
@@ -8123,7 +8113,8 @@ void test_shortcut_is_blocked_by_a_modal_popup()
     bool modalShown = true;
     bool fired = false;
     bool firedInside = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("main", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (openModal)
         {
@@ -8166,13 +8157,12 @@ void test_closed_submenus_do_not_block_the_pointer()
         ig::Rect subItem;
         int otherClicks = 0;
         bool submenuOpen = false;
-        auto build = [&](ig::Context &c) {
+        auto build = [&](ig::Context& c)
+        {
             assert(c.beginWindow("w", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
-            if (c.button("abrir"))
-                wantPopup = true;
+            if (c.button("abrir")) wantPopup = true;
             openButton = c.itemRect();
-            if (c.button("other"))
-                ++otherClicks;
+            if (c.button("other")) ++otherClicks;
             other = c.itemRect();
             if (wantPopup)
             {
@@ -8183,8 +8173,7 @@ void test_closed_submenus_do_not_block_the_pointer()
             {
                 c.menuItem("Bream");
                 submenuOpen = c.beginSubMenu("Sub-menu");
-                if (!submenuOpen)
-                    subItem = c.itemRect();
+                if (!submenuOpen) subItem = c.itemRect();
                 if (submenuOpen)
                 {
                     c.menuItem("Click me");
@@ -8197,7 +8186,8 @@ void test_closed_submenus_do_not_block_the_pointer()
         harness.frame(build);
         harness.click(openButton.x + 5.0f, openButton.y + 5.0f, build);
         harness.frame(build);
-        context.pushEvent(ig::Event::pointerMove(subItem.x + 10.0f, subItem.y + subItem.height * 0.5f));
+        context.pushEvent(
+                ig::Event::pointerMove(subItem.x + 10.0f, subItem.y + subItem.height * 0.5f));
         harness.frame(build);
         harness.frame(build);
         assert(submenuOpen);
@@ -8221,18 +8211,17 @@ void test_closed_submenus_do_not_block_the_pointer()
         ig::Rect recentRect;
         int under = 0;
         ig::Rect underRect;
-        auto build = [&](ig::Context &c) {
+        auto build = [&](ig::Context& c)
+        {
             if (c.beginMainMenuBar())
             {
                 fileOpen = c.beginMenu("File");
-                if (!fileOpen)
-                    fileRect = c.itemRect();
+                if (!fileOpen) fileRect = c.itemRect();
                 if (fileOpen)
                 {
                     c.menuItem("New");
                     subOpen = c.beginSubMenu("Recent");
-                    if (!subOpen)
-                        recentRect = c.itemRect();
+                    if (!subOpen) recentRect = c.itemRect();
                     if (subOpen)
                     {
                         c.menuItem("a.txt");
@@ -8245,8 +8234,7 @@ void test_closed_submenus_do_not_block_the_pointer()
                 c.endMainMenuBar();
             }
             assert(c.beginWindow("w", ig::Rect(0.0f, 26.0f, 600.0f, 400.0f)));
-            if (c.button("under", ig::Rect(180.0f, 0.0f, 120.0f, 30.0f)))
-                ++under;
+            if (c.button("under", ig::Rect(180.0f, 0.0f, 120.0f, 30.0f))) ++under;
             underRect = c.itemRect();
             c.endWindow();
         };
@@ -8283,7 +8271,8 @@ void test_keyboard_returns_after_a_modal_closes_with_escape()
     bool modalShown = true;
     bool shortcutFired = false;
     bool keyPressed = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         assert(c.beginWindow("main", ig::Rect(0.0f, 0.0f, 400.0f, 300.0f)));
         if (openModal)
         {
@@ -8332,11 +8321,11 @@ void test_unsubmitted_active_widget_is_released()
         ig::Rect button;
         ig::Rect slider;
         float value = 0.5f;
-        auto build = [&](ig::Context &c) {
+        auto build = [&](ig::Context& c)
+        {
             if (c.beginWindow("Main", ig::Rect(0.0f, 0.0f, 300.0f, 300.0f)))
             {
-                if (c.button("ok"))
-                    ++clicks;
+                if (c.button("ok")) ++clicks;
                 button = c.itemRect();
                 if (showSlider)
                 {
@@ -8359,12 +8348,12 @@ void test_unsubmitted_active_widget_is_released()
         harness.frame(build);
         context.pushEvent(ig::Event::pointerMove(grab.x + 10.0f, grab.y + 10.0f));
         harness.frame(build);
-        if (scenario == 0)
-            showTool = false;
+        if (scenario == 0) showTool = false;
         else
             showSlider = false;
         harness.frame(build);
-        context.pushEvent(ig::Event::pointerUp(ig::PointerButton::Left, grab.x + 10.0f, grab.y + 10.0f));
+        context.pushEvent(
+                ig::Event::pointerUp(ig::PointerButton::Left, grab.x + 10.0f, grab.y + 10.0f));
         harness.frame(build);
         for (int i = 0; i < 3; ++i)
         {
@@ -8385,10 +8374,9 @@ bool gDockClosedB = false;
 bool gDockShowA = true;
 bool gDockShowB = true;
 
-void dockPanelWithLocalOpen(ig::Context &c, const char *name, bool &show, bool &closed)
+void dockPanelWithLocalOpen(ig::Context& c, const char* name, bool& show, bool& closed)
 {
-    if (!show)
-        return;
+    if (!show) return;
     bool open = true;
     if (c.beginDockPanel(name, ig::DockSlot::Left, &open))
     {
@@ -8408,9 +8396,9 @@ void test_dock_tab_close_uses_its_own_open()
     ig::TestBackend backend;
     ig::Context context(backend);
     ig::Harness harness(context);
-    auto build = [&](ig::Context &c) {
-        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f)))
-            return;
+    auto build = [&](ig::Context& c)
+    {
+        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 800.0f, 600.0f))) return;
         if (c.beginDockSpace("editor"))
         {
             dockPanelWithLocalOpen(c, "Alpha", gDockShowA, gDockClosedA);

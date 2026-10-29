@@ -1,10 +1,12 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Theme.hpp"
+#include "Widget.hpp"
 #include <igui/widgets/String.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Slider — draggable value control (horizontal or vertical)
@@ -18,34 +20,50 @@ public:
     Slider(float minVal = 0.0f, float maxVal = 1.0f, float value = 0.5f);
 
     /// @brief Get the current value.
-    float value()    const { return value_; }
+    float value() const
+    {
+        return value_;
+    }
     /// @brief Get the minimum value.
-    float minValue() const { return min_; }
+    float minValue() const
+    {
+        return min_;
+    }
     /// @brief Get the maximum value.
-    float maxValue() const { return max_; }
+    float maxValue() const
+    {
+        return max_;
+    }
     /// @brief Set the current value (clamped to range).
-    void  setValue(float v);
+    void setValue(float v);
     /// @brief Set the min/max range.
-    void  setRange(float minVal, float maxVal);
+    void setRange(float minVal, float maxVal);
 
     /// @brief Set horizontal or vertical orientation.
-    void      setOrientation(LayoutDir dir) { orientation_ = dir; markDirty(); }
+    void setOrientation(LayoutDir dir)
+    {
+        orientation_ = dir;
+        markDirty();
+    }
     /// @brief Get the orientation.
-    LayoutDir orientation() const           { return orientation_; }
+    LayoutDir orientation() const
+    {
+        return orientation_;
+    }
 
     /// @brief Emitted when the value changes.
     Signal<float> onValueChanged;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
 
 private:
-    float     min_, max_, value_;
+    float min_, max_, value_;
     LayoutDir orientation_ = LayoutDir::Horizontal;
-    bool      dragging_    = false;
+    bool dragging_ = false;
 
     // The thumb's centre travels this far in from each end, so the whole thumb
     // and a small gap stay inside the slider (0 when the slider is too short).
@@ -65,51 +83,95 @@ public:
     ProgressBar(float minVal = 0.0f, float maxVal = 1.0f, float value = 0.0f);
 
     /// @brief Get the current progress value.
-    float value()    const { return value_; }
+    float value() const
+    {
+        return value_;
+    }
     /// @brief Get the minimum value.
-    float minValue() const { return min_; }
+    float minValue() const
+    {
+        return min_;
+    }
     /// @brief Get the maximum value.
-    float maxValue() const { return max_; }
+    float maxValue() const
+    {
+        return max_;
+    }
     /// @brief Set the progress value.
-    void  setValue(float v);
+    void setValue(float v);
     /// @brief Set the min/max range.
-    void  setRange(float minVal, float maxVal);
+    void setRange(float minVal, float maxVal);
 
     /// @brief Set horizontal or vertical orientation.
-    void      setOrientation(LayoutDir dir) { orientation_ = dir; markDirty(); }
+    void setOrientation(LayoutDir dir)
+    {
+        orientation_ = dir;
+        markDirty();
+    }
     /// @brief Get the orientation.
-    LayoutDir orientation() const           { return orientation_; }
+    LayoutDir orientation() const
+    {
+        return orientation_;
+    }
 
     /// @brief Set the overlay text.
-    void               setText(const String& t) { text_ = t; markDirty(); }
+    void setText(const String& t)
+    {
+        text_ = t;
+        markDirty();
+    }
     /// @brief Get the overlay text.
-    const String& text() const                  { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
 
     /// @brief Set text alignment within the bar.
-    void      setTextAlign(TextAlign a) { textAlign_ = a; markDirty(); }
+    void setTextAlign(TextAlign a)
+    {
+        textAlign_ = a;
+        markDirty();
+    }
     /// @brief Get the text alignment.
-    TextAlign textAlign() const         { return textAlign_; }
+    TextAlign textAlign() const
+    {
+        return textAlign_;
+    }
 
     /// @brief Set the filled bar color.
-    void         setBarColor(const Color& c)  { barColor_ = c; markDirty(); }
+    void setBarColor(const Color& c)
+    {
+        barColor_ = c;
+        markDirty();
+    }
     /// @brief Get the filled bar color.
-    const Color& barColor() const             { return barColor_; }
+    const Color& barColor() const
+    {
+        return barColor_;
+    }
     /// @brief Set the text color.
-    void         setTextColor(const Color& c) { textColor_ = c; markDirty(); }
+    void setTextColor(const Color& c)
+    {
+        textColor_ = c;
+        markDirty();
+    }
     /// @brief Get the text color.
-    const Color& textColor() const            { return textColor_; }
+    const Color& textColor() const
+    {
+        return textColor_;
+    }
 
     Signal<float> onValueChanged;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
+    void paint(PaintContext& ctx) override;
 
 private:
-    float     min_, max_, value_;
+    float min_, max_, value_;
     LayoutDir orientation_ = LayoutDir::Horizontal;
     String text_;
-    TextAlign   textAlign_ = TextAlign::CENTER;
-    Color barColor_  = Color(140, 140, 145, 255);
+    TextAlign textAlign_ = TextAlign::CENTER;
+    Color barColor_ = Color(140, 140, 145, 255);
     Color textColor_ = Color(220, 220, 220, 255);
 };
 
@@ -127,62 +189,110 @@ public:
     SpinBox(float minVal = 0.0f, float maxVal = 100.0f, float value = 0.0f, float step = 1.0f);
 
     /// @brief Get the current value.
-    float value()    const { return value_; }
+    float value() const
+    {
+        return value_;
+    }
     /// @brief Get the minimum value.
-    float minValue() const { return min_; }
+    float minValue() const
+    {
+        return min_;
+    }
     /// @brief Get the maximum value.
-    float maxValue() const { return max_; }
+    float maxValue() const
+    {
+        return max_;
+    }
     /// @brief Get the step increment.
-    float step()     const { return step_; }
+    float step() const
+    {
+        return step_;
+    }
     /// @brief Set the current value.
-    void  setValue(float v);
+    void setValue(float v);
     /// @brief Set the min/max range.
-    void  setRange(float minVal, float maxVal);
+    void setRange(float minVal, float maxVal);
     /// @brief Set the step increment.
-    void  setStep(float s) { step_ = s; }
+    void setStep(float s)
+    {
+        step_ = s;
+    }
 
     /// @brief Set number of decimal places shown.
-    void setDecimals(int d) { decimals_ = d; markDirty(); }
+    void setDecimals(int d)
+    {
+        decimals_ = d;
+        markDirty();
+    }
     /// @brief Get the decimal precision.
-    int  decimals() const   { return decimals_; }
+    int decimals() const
+    {
+        return decimals_;
+    }
 
     /// @brief Set a suffix string appended to the value.
-    void setSuffix(const String& s)  { suffix_ = s; markDirty(); }
+    void setSuffix(const String& s)
+    {
+        suffix_ = s;
+        markDirty();
+    }
     /// @brief Get the suffix.
-    const String& suffix() const     { return suffix_; }
+    const String& suffix() const
+    {
+        return suffix_;
+    }
 
     /// @brief Set a prefix string prepended to the value.
-    void setPrefix(const String& p)  { prefix_ = p; markDirty(); }
+    void setPrefix(const String& p)
+    {
+        prefix_ = p;
+        markDirty();
+    }
     /// @brief Get the prefix.
-    const String& prefix() const     { return prefix_; }
+    const String& prefix() const
+    {
+        return prefix_;
+    }
 
     /// @brief Set drag sensitivity for mouse-drag value adjustment.
-    void  setDragSensitivity(float s) { dragSens_ = s; }
+    void setDragSensitivity(float s)
+    {
+        dragSens_ = s;
+    }
     /// @brief Get the drag sensitivity.
-    float dragSensitivity() const     { return dragSens_; }
+    float dragSensitivity() const
+    {
+        return dragSens_;
+    }
 
     Signal<float> onValueChanged;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
-    void  onMouseScroll(MouseEvent& e) override;
-    void  onKeyPress(KeyEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
     float min_, max_, value_, step_;
-    int   decimals_ = 1;
+    int decimals_ = 1;
     String suffix_;
     String prefix_;
 
-    bool  dragging_   = false;
+    bool dragging_ = false;
     float dragStartY_ = 0;
     float dragStartV_ = 0;
-    float dragSens_   = 0.1f;
+    float dragSens_ = 0.1f;
 
-    enum HitZone { None, Minus, Plus, Value };
+    enum HitZone
+    {
+        None,
+        Minus,
+        Plus,
+        Value
+    };
     HitZone hitZone(float localX) const;
     String formatValue() const;
     float buttonWidth() const;
@@ -194,12 +304,19 @@ private:
 //    dp->onDateChanged.connect([](int y, int m, int d){ ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-struct Date {
-    int year  = 2026;
-    int month = 1;    // 1–12
-    int day   = 1;    // 1–31
-    bool operator==(const Date& o) const { return year == o.year && month == o.month && day == o.day; }
-    bool operator!=(const Date& o) const { return !(*this == o); }
+struct Date
+{
+    int year = 2026;
+    int month = 1; // 1–12
+    int day = 1;   // 1–31
+    bool operator==(const Date& o) const
+    {
+        return year == o.year && month == o.month && day == o.day;
+    }
+    bool operator!=(const Date& o) const
+    {
+        return !(*this == o);
+    }
 };
 
 class DatePicker : public Widget
@@ -210,7 +327,10 @@ public:
     DatePicker();
 
     /// @brief Get the selected date.
-    const Date& date() const { return date_; }
+    const Date& date() const
+    {
+        return date_;
+    }
     /// @brief Set the date.
     void setDate(const Date& d);
     /// @brief Set the date by year, month, day.
@@ -220,8 +340,8 @@ public:
     Signal<int, int, int> onDateChanged;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
 
     /// @brief Open the calendar popup.
     void openCalendar();
@@ -231,7 +351,7 @@ public:
     bool isOpen() const;
 
 private:
-    Date  date_;
+    Date date_;
 
     String formatDate() const;
 };
@@ -242,12 +362,19 @@ private:
 //    tp->onTimeChanged.connect([](int h, int m, int s){ ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-struct Time {
-    int hour   = 0;  // 0–23
-    int minute = 0;  // 0–59
-    int second = 0;  // 0–59
-    bool operator==(const Time& o) const { return hour == o.hour && minute == o.minute && second == o.second; }
-    bool operator!=(const Time& o) const { return !(*this == o); }
+struct Time
+{
+    int hour = 0;   // 0–23
+    int minute = 0; // 0–59
+    int second = 0; // 0–59
+    bool operator==(const Time& o) const
+    {
+        return hour == o.hour && minute == o.minute && second == o.second;
+    }
+    bool operator!=(const Time& o) const
+    {
+        return !(*this == o);
+    }
 };
 
 class TimePicker : public Widget
@@ -258,38 +385,53 @@ public:
     TimePicker();
 
     /// @brief Get the current time.
-    const Time& time() const       { return time_; }
+    const Time& time() const
+    {
+        return time_;
+    }
     /// @brief Set the time.
     void setTime(const Time& t);
     /// @brief Set the time by hours, minutes, seconds.
     void setTime(int h, int m, int s = 0);
 
     /// @brief Show or hide the seconds field.
-    void setShowSeconds(bool s)    { showSeconds_ = s; markDirty(); }
+    void setShowSeconds(bool s)
+    {
+        showSeconds_ = s;
+        markDirty();
+    }
     /// @brief Check if seconds are shown.
-    bool showSeconds() const       { return showSeconds_; }
+    bool showSeconds() const
+    {
+        return showSeconds_;
+    }
 
     /// @brief Emitted when the time changes (h, m, s).
     Signal<int, int, int> onTimeChanged;
 
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseScroll(MouseEvent& e) override;
-    void  onKeyPress(KeyEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
-    Time  time_;
-    bool  showSeconds_ = true;
+    Time time_;
+    bool showSeconds_ = true;
 
-    enum Field { Hour, Minute, Second };
-    Field  activeField_ = Hour;
+    enum Field
+    {
+        Hour,
+        Minute,
+        Second
+    };
+    Field activeField_ = Hour;
 
     // Layout helpers
     float fieldWidth() const;
     float separatorWidth() const;
     Field hitField(float localX) const;
-    void  adjustField(Field f, int delta);
+    void adjustField(Field f, int delta);
     String formatTime() const;
 };
 

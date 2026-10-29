@@ -24,7 +24,6 @@ bool g_open = true;
 bool g_geometrySet = false;
 
 
-
 // O demo do ImGui pede posição e tamanho por dentro, com ImGuiCond_FirstUseEver,
 // e esses pedidos sobrepõem-se aos nossos no mesmo frame. Como o FirstUseEver só
 // se aplica à primeira aparição da janela, a forma de a encostar à metade do
@@ -33,8 +32,7 @@ bool g_geometrySet = false;
 // e o demo ocupa o painel todo.
 void placeDemoWindow()
 {
-    if (g_geometrySet)
-        return;
+    if (g_geometrySet) return;
     g_geometrySet = true;
     const ImVec2 panel = ImGui::GetIO().DisplaySize;
     ImGui::SetNextWindowPos(ImVec2(0.0f, gallery::kReadoutHeight), ImGuiCond_Always);
@@ -47,25 +45,24 @@ void readout()
 {
     ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(ImGui::GetIO().DisplaySize.x, gallery::kReadoutHeight),
-                             ImGuiCond_Always);
-    const ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                                   ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                                   ImGuiWindowFlags_NoScrollWithMouse |
-                                   ImGuiWindowFlags_NoSavedSettings |
-                                   ImGuiWindowFlags_NoBringToFrontOnFocus;
+            ImGuiCond_Always);
+    const ImGuiWindowFlags flags =
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
     if (ImGui::Begin("##readout", nullptr, flags))
     {
-        const gallery::Readout &info = gallery::readout();
+        const gallery::Readout& info = gallery::readout();
         char line[192];
         snprintf(line, sizeof(line),
-                 "ImGui   submit %.2f ms   render %.2f ms   gpu %.2f ms   %d vtx   %d draw lists",
-                 static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
-                 static_cast<double>(info.gpuMs), info.vertices, info.drawCalls);
+                "ImGui   submit %.2f ms   render %.2f ms   gpu %.2f ms   %d vtx   %d draw lists",
+                static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
+                static_cast<double>(info.gpuMs), info.vertices, info.drawCalls);
         ImGui::SeparatorText(line);
         // O mesmo gráfico que o lado do iGUI desenha à mão, com a escala fixa nos
         // 4 ms, para os dois painéis se lerem um contra o outro.
         ImGui::PlotLines("##historico", info.history, info.historyCount, 0, nullptr, 0.0f, 4.0f,
-                         ImVec2(-FLT_MIN, 48.0f));
+                ImVec2(-FLT_MIN, 48.0f));
     }
     ImGui::End();
 }

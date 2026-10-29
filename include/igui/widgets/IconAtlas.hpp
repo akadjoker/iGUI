@@ -7,13 +7,15 @@
 // should use ig::retained::DrawList::addIcon() for vector icons or FontAtlas merged
 // icon glyphs for richer icon sets.
 
+#include "BuImage.hpp"  // ig::retained::BuImage
+#include "Retained.hpp" // ig::retained::TextureHandle
 #include "RetainedBase.hpp"
-#include "Retained.hpp"     // ig::retained::TextureHandle
-#include "BuImage.hpp"   // ig::retained::BuImage
 #include <ct/vector.hpp>
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -39,80 +41,100 @@ public:
     ig::retained::BuImage* buildImage(int cellSize = 24);
 
     /// @brief Check if the atlas has been initialized.
-    bool ready() const { return (bool)tex_; }
+    bool ready() const
+    {
+        return (bool) tex_;
+    }
 
     /// @brief Get the opaque GPU texture handle.
-    ig::retained::TextureHandle texture() const { return tex_; }
+    ig::retained::TextureHandle texture() const
+    {
+        return tex_;
+    }
 
     /// @brief Set the texture handle after GPU upload.
-    void setTexture(ig::retained::TextureHandle h, int w, int h_) { tex_ = h; atlasW_ = w; atlasH_ = h_; }
+    void setTexture(ig::retained::TextureHandle h, int w, int h_)
+    {
+        tex_ = h;
+        atlasW_ = w;
+        atlasH_ = h_;
+    }
 
     /// @brief Get the atlas texture width in pixels.
-    int textureWidth()  const { return atlasW_; }
+    int textureWidth() const
+    {
+        return atlasW_;
+    }
     /// @brief Get the atlas texture height in pixels.
-    int textureHeight() const { return atlasH_; }
+    int textureHeight() const
+    {
+        return atlasH_;
+    }
 
     /// @brief Get the source rect for an icon within the atlas.
     FloatRect srcRect(IconId id) const;
 
     /// @brief Get the icon cell size in pixels.
-    int cellSize() const { return cellSize_; }
+    int cellSize() const
+    {
+        return cellSize_;
+    }
 
 private:
     void drawAllIcons(BuImage& pm);
     void drawIcon(BuImage& pm, IconId id, int ox, int oy, int sz);
 
     // Per-icon drawing helpers (ox,oy = cell origin, sz = cell size)
-    void drawFolder     (BuImage& pm, int ox, int oy, int sz);
-    void drawFolderOpen (BuImage& pm, int ox, int oy, int sz);
-    void drawFile       (BuImage& pm, int ox, int oy, int sz);
-    void drawFileCode   (BuImage& pm, int ox, int oy, int sz);
-    void drawBook       (BuImage& pm, int ox, int oy, int sz);
-    void drawGear       (BuImage& pm, int ox, int oy, int sz);
-    void drawStar       (BuImage& pm, int ox, int oy, int sz);
-    void drawHeart      (BuImage& pm, int ox, int oy, int sz);
-    void drawSearch     (BuImage& pm, int ox, int oy, int sz);
-    void drawPlus       (BuImage& pm, int ox, int oy, int sz);
-    void drawMinus      (BuImage& pm, int ox, int oy, int sz);
-    void drawCheck      (BuImage& pm, int ox, int oy, int sz);
-    void drawCross      (BuImage& pm, int ox, int oy, int sz);
-    void drawArrowRight (BuImage& pm, int ox, int oy, int sz);
-    void drawArrowDown  (BuImage& pm, int ox, int oy, int sz);
-    void drawArrowUp    (BuImage& pm, int ox, int oy, int sz);
-    void drawArrowLeft  (BuImage& pm, int ox, int oy, int sz);
-    void drawEye        (BuImage& pm, int ox, int oy, int sz);
-    void drawEyeOff     (BuImage& pm, int ox, int oy, int sz);
-    void drawLock       (BuImage& pm, int ox, int oy, int sz);
-    void drawUnlock     (BuImage& pm, int ox, int oy, int sz);
-    void drawRefresh    (BuImage& pm, int ox, int oy, int sz);
-    void drawTrash      (BuImage& pm, int ox, int oy, int sz);
-    void drawEdit       (BuImage& pm, int ox, int oy, int sz);
-    void drawHome       (BuImage& pm, int ox, int oy, int sz);
-    void drawUser       (BuImage& pm, int ox, int oy, int sz);
-    void drawWarning    (BuImage& pm, int ox, int oy, int sz);
-    void drawInfo       (BuImage& pm, int ox, int oy, int sz);
-    void drawError      (BuImage& pm, int ox, int oy, int sz);
-    void drawFileImage  (BuImage& pm, int ox, int oy, int sz);
+    void drawFolder(BuImage& pm, int ox, int oy, int sz);
+    void drawFolderOpen(BuImage& pm, int ox, int oy, int sz);
+    void drawFile(BuImage& pm, int ox, int oy, int sz);
+    void drawFileCode(BuImage& pm, int ox, int oy, int sz);
+    void drawBook(BuImage& pm, int ox, int oy, int sz);
+    void drawGear(BuImage& pm, int ox, int oy, int sz);
+    void drawStar(BuImage& pm, int ox, int oy, int sz);
+    void drawHeart(BuImage& pm, int ox, int oy, int sz);
+    void drawSearch(BuImage& pm, int ox, int oy, int sz);
+    void drawPlus(BuImage& pm, int ox, int oy, int sz);
+    void drawMinus(BuImage& pm, int ox, int oy, int sz);
+    void drawCheck(BuImage& pm, int ox, int oy, int sz);
+    void drawCross(BuImage& pm, int ox, int oy, int sz);
+    void drawArrowRight(BuImage& pm, int ox, int oy, int sz);
+    void drawArrowDown(BuImage& pm, int ox, int oy, int sz);
+    void drawArrowUp(BuImage& pm, int ox, int oy, int sz);
+    void drawArrowLeft(BuImage& pm, int ox, int oy, int sz);
+    void drawEye(BuImage& pm, int ox, int oy, int sz);
+    void drawEyeOff(BuImage& pm, int ox, int oy, int sz);
+    void drawLock(BuImage& pm, int ox, int oy, int sz);
+    void drawUnlock(BuImage& pm, int ox, int oy, int sz);
+    void drawRefresh(BuImage& pm, int ox, int oy, int sz);
+    void drawTrash(BuImage& pm, int ox, int oy, int sz);
+    void drawEdit(BuImage& pm, int ox, int oy, int sz);
+    void drawHome(BuImage& pm, int ox, int oy, int sz);
+    void drawUser(BuImage& pm, int ox, int oy, int sz);
+    void drawWarning(BuImage& pm, int ox, int oy, int sz);
+    void drawInfo(BuImage& pm, int ox, int oy, int sz);
+    void drawError(BuImage& pm, int ox, int oy, int sz);
+    void drawFileImage(BuImage& pm, int ox, int oy, int sz);
     void drawFileArchive(BuImage& pm, int ox, int oy, int sz);
-    void drawViewDetail (BuImage& pm, int ox, int oy, int sz);
-    void drawViewList   (BuImage& pm, int ox, int oy, int sz);
-    void drawViewGrid   (BuImage& pm, int ox, int oy, int sz);
-    void drawPlay       (BuImage& pm, int ox, int oy, int sz);
-    void drawPause      (BuImage& pm, int ox, int oy, int sz);
-    void drawStop       (BuImage& pm, int ox, int oy, int sz);
+    void drawViewDetail(BuImage& pm, int ox, int oy, int sz);
+    void drawViewList(BuImage& pm, int ox, int oy, int sz);
+    void drawViewGrid(BuImage& pm, int ox, int oy, int sz);
+    void drawPlay(BuImage& pm, int ox, int oy, int sz);
+    void drawPause(BuImage& pm, int ox, int oy, int sz);
+    void drawStop(BuImage& pm, int ox, int oy, int sz);
     void drawStepForward(BuImage& pm, int ox, int oy, int sz);
-    void drawStepBack   (BuImage& pm, int ox, int oy, int sz);
-    void drawRecord     (BuImage& pm, int ox, int oy, int sz);
-    void drawFolderNew  (BuImage& pm, int ox, int oy, int sz);
-    void drawScissors   (BuImage& pm, int ox, int oy, int sz);
-    void drawImport     (BuImage& pm, int ox, int oy, int sz);
-    void drawMagnet     (BuImage& pm, int ox, int oy, int sz);
+    void drawStepBack(BuImage& pm, int ox, int oy, int sz);
+    void drawRecord(BuImage& pm, int ox, int oy, int sz);
+    void drawFolderNew(BuImage& pm, int ox, int oy, int sz);
+    void drawScissors(BuImage& pm, int ox, int oy, int sz);
+    void drawImport(BuImage& pm, int ox, int oy, int sz);
+    void drawMagnet(BuImage& pm, int ox, int oy, int sz);
 
     ig::retained::TextureHandle tex_;
-    int atlasW_    = 0;
-    int atlasH_    = 0;
-    int cellSize_  = 24;
-    int cols_      = 0;
+    int atlasW_ = 0;
+    int atlasH_ = 0;
+    int cellSize_ = 24;
+    int cols_ = 0;
 };
 
 } // namespace retained

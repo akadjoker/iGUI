@@ -1,21 +1,35 @@
-#include "pch.hpp"
 #include "BasicWidgets.hpp"
+#include "pch.hpp"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Label
 // ═════════════════════════════════════════════════════════════════════════════
 
-Label::Label(const String& text) : text_(text) {}
+Label::Label(const String& text)
+        : text_(text)
+{
+}
 
-void Label::setText(const String& t) { text_ = t; markDirty(); }
-void Label::setColor(const Color& c)      { color_ = c; }
-void Label::setAlign(TextAlign a)         { align_ = a; markDirty(); }
+void Label::setText(const String& t)
+{
+    text_ = t;
+    markDirty();
+}
+void Label::setColor(const Color& c)
+{
+    color_ = c;
+}
+void Label::setAlign(TextAlign a)
+{
+    align_ = a;
+    markDirty();
+}
 
 Widget::Vec2f Label::sizeHint() const
 {
     const auto& t = Theme::instance();
     float w = text_.size() * t.fontSize * 0.6f;
-    return {w + t.padding * 2, t.fontSize + t.padding * 2};
+    return { w + t.padding * 2, t.fontSize + t.padding * 2 };
 }
 
 void Label::paint(PaintContext& ctx)
@@ -37,42 +51,53 @@ void Label::paint(PaintContext& ctx)
     float tx;
     switch (align_)
     {
-    case TextAlign::CENTER: tx = abs.x + (abs.w - textW) * 0.5f; break;
-    case TextAlign::RIGHT:  tx = abs.x + abs.w - textW - t.padding; break;
-    default:                tx = abs.x + t.padding; break;
+        case TextAlign::CENTER:
+            tx = abs.x + (abs.w - textW) * 0.5f;
+            break;
+        case TextAlign::RIGHT:
+            tx = abs.x + abs.w - textW - t.padding;
+            break;
+        default:
+            tx = abs.x + t.padding;
+            break;
     }
     float asc = ctx.font.GetAscender();
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
-    Rect textRect = {tx, ty - asc, textW, asc};
-    if (!ctx.isClipped(textRect))
-        ctx.font.Print(text_.c_str(), tx, ty);
-    if (overrideFont_) ctx.popFont();    Widget::paint(ctx);
+    Rect textRect = { tx, ty - asc, textW, asc };
+    if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+    if (overrideFont_) ctx.popFont();
+    Widget::paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Spacer
 // ═════════════════════════════════════════════════════════════════════════════
 
-Spacer::Spacer(float size) : size_(size) {}
+Spacer::Spacer(float size)
+        : size_(size)
+{
+}
 
 Widget::Vec2f Spacer::sizeHint() const
 {
-    return {size_, size_};
+    return { size_, size_ };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Line (separator)
 // ═════════════════════════════════════════════════════════════════════════════
 
-Line::Line(float thickness) : thickness_(thickness) {}
+Line::Line(float thickness)
+        : thickness_(thickness)
+{
+}
 
 Widget::Vec2f Line::sizeHint() const
 {
     auto* p = widget_cast<BoxLayout>(parent());
-    if (p && p->dir() == LayoutDir::Horizontal)
-        return {thickness_, 0.0f};
-    return {0.0f, thickness_};
+    if (p && p->dir() == LayoutDir::Horizontal) return { thickness_, 0.0f };
+    return { 0.0f, thickness_ };
 }
 
 void Line::paint(PaintContext& ctx)
@@ -86,21 +111,19 @@ void Line::paint(PaintContext& ctx)
     bool vertical = p && p->dir() == LayoutDir::Horizontal;
 
     ctx.line.SetColor(color_.r, color_.g, color_.b, color_.a);
-    int t = std::max(1, (int)std::round(thickness_));
+    int t = std::max(1, (int) std::round(thickness_));
 
     if (vertical)
     {
         float cx = abs.x + abs.w * 0.5f;
         float x0 = cx - (t - 1) * 0.5f;
-        for (int i = 0; i < t; ++i)
-            ctx.drawLine(x0 + i, abs.y, x0 + i, abs.y + abs.h);
+        for (int i = 0; i < t; ++i) ctx.drawLine(x0 + i, abs.y, x0 + i, abs.y + abs.h);
     }
     else
     {
         float cy = abs.y + abs.h * 0.5f;
         float y0 = cy - (t - 1) * 0.5f;
-        for (int i = 0; i < t; ++i)
-            ctx.drawLine(abs.x, y0 + i, abs.x + abs.w, y0 + i);
+        for (int i = 0; i < t; ++i) ctx.drawLine(abs.x, y0 + i, abs.x + abs.w, y0 + i);
     }
 }
 
@@ -108,21 +131,30 @@ void Line::paint(PaintContext& ctx)
 //  Button
 // ═════════════════════════════════════════════════════════════════════════════
 
-Button::Button(const String& text) : text_(text)
+Button::Button(const String& text)
+        : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
 }
 
-void Button::setText(const String& t) { text_ = t; markDirty(); }
-void Button::setAlign(TextAlign a)         { align_ = a; markDirty(); }
+void Button::setText(const String& t)
+{
+    text_ = t;
+    markDirty();
+}
+void Button::setAlign(TextAlign a)
+{
+    align_ = a;
+    markDirty();
+}
 
 Widget::Vec2f Button::sizeHint() const
 {
     const auto& t = Theme::instance();
     float textW = text_.size() * t.fontSize * 0.6f;
     float iconW = (iconId_ != IconId::None) ? (t.fontSize + 2.f) : 0.f;
-    return {textW + iconW + t.padding * 4, t.buttonHeight};
+    return { textW + iconW + t.padding * 4, t.buttonHeight };
 }
 
 void Button::paint(PaintContext& ctx)
@@ -141,8 +173,18 @@ void Button::paint(PaintContext& ctx)
         if (bgColor_.a > 0)
         {
             bg = bgColor_;
-            if (pressed_)      { bg.r = bg.r * 3/4; bg.g = bg.g * 3/4; bg.b = bg.b * 3/4; }
-            else if (hovered_) { bg.r = std::min(255, bg.r + 20); bg.g = std::min(255, bg.g + 20); bg.b = std::min(255, bg.b + 20); }
+            if (pressed_)
+            {
+                bg.r = bg.r * 3 / 4;
+                bg.g = bg.g * 3 / 4;
+                bg.b = bg.b * 3 / 4;
+            }
+            else if (hovered_)
+            {
+                bg.r = std::min(255, bg.r + 20);
+                bg.g = std::min(255, bg.g + 20);
+                bg.b = std::min(255, bg.b + 20);
+            }
         }
         else
         {
@@ -151,15 +193,13 @@ void Button::paint(PaintContext& ctx)
         if (!isEnabledInTree()) bg = t.panelColor;
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, true);
+        ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                true);
 
         Color bc = focused_ ? t.focusColor : t.buttonBorder;
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
-        ctx.line.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, false);
+        ctx.line.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                false);
     }
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
@@ -170,7 +210,7 @@ void Button::paint(PaintContext& ctx)
 
     // an icon-only button gives the icon the button's height
     float iconSz = text_.empty() ? std::max(t.fontSize, std::min(abs.w, abs.h) - 6.f) : t.fontSize;
-    float iconW  = (iconId_ != IconId::None) ? (iconSz + (text_.empty() ? 0.f : 2.f)) : 0.f;
+    float iconW = (iconId_ != IconId::None) ? (iconSz + (text_.empty() ? 0.f : 2.f)) : 0.f;
 
     // a label wider than the button is cut with "..." instead of spilling over its neighbours
     String shown = text_;
@@ -186,13 +226,20 @@ void Button::paint(PaintContext& ctx)
     float tx;
     switch (cut ? TextAlign::LEFT : align_)
     {
-    case TextAlign::LEFT:   tx = abs.x + t.padding * 2; break;
-    case TextAlign::RIGHT:  tx = abs.x + abs.w - totalW - t.padding * 2; break;
-    default:                tx = abs.x + (abs.w - totalW) * 0.5f; break;
+        case TextAlign::LEFT:
+            tx = abs.x + t.padding * 2;
+            break;
+        case TextAlign::RIGHT:
+            tx = abs.x + abs.w - totalW - t.padding * 2;
+            break;
+        default:
+            tx = abs.x + (abs.w - totalW) * 0.5f;
+            break;
     }
 
     // Draw icon
-    if (iconId_ != IconId::None) {
+    if (iconId_ != IconId::None)
+    {
         float iy = abs.y + (abs.h - iconSz) * 0.5f;
         ctx.drawIcon(iconId_, tx, iy, iconSz);
         tx += iconW;
@@ -201,14 +248,12 @@ void Button::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
-    Rect textRect = {tx, ty - asc, textW, asc};
-    if (!ctx.isClipped(textRect))
-        ctx.font.Print(shown.c_str(), tx, ty);
+    Rect textRect = { tx, ty - asc, textW, asc };
+    if (!ctx.isClipped(textRect)) ctx.font.Print(shown.c_str(), tx, ty);
 
     if (overrideFont_) ctx.popFont();
     // paint children (no clip needed — button children are rare)
-    for (auto& c : children_)
-        c->paint(ctx);
+    for (auto& c: children_) c->paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -219,7 +264,7 @@ Widget::Vec2f ImageButton::sizeHint() const
 {
     float w = rect_.w > 0 ? rect_.w : (srcRect_.width + iconPad_ * 2);
     float h = rect_.h > 0 ? rect_.h : (srcRect_.height + iconPad_ * 2);
-    return {w, h};
+    return { w, h };
 }
 
 void ImageButton::paint(PaintContext& ctx)
@@ -238,8 +283,18 @@ void ImageButton::paint(PaintContext& ctx)
         if (bgColor_.a > 0)
         {
             bg = bgColor_;
-            if (pressed_)      { bg.r = bg.r * 3/4; bg.g = bg.g * 3/4; bg.b = bg.b * 3/4; }
-            else if (hovered_) { bg.r = std::min(255, bg.r + 20); bg.g = std::min(255, bg.g + 20); bg.b = std::min(255, bg.b + 20); }
+            if (pressed_)
+            {
+                bg.r = bg.r * 3 / 4;
+                bg.g = bg.g * 3 / 4;
+                bg.b = bg.b * 3 / 4;
+            }
+            else if (hovered_)
+            {
+                bg.r = std::min(255, bg.r + 20);
+                bg.g = std::min(255, bg.g + 20);
+                bg.b = std::min(255, bg.b + 20);
+            }
         }
         else
         {
@@ -248,15 +303,13 @@ void ImageButton::paint(PaintContext& ctx)
         if (!isEnabledInTree()) bg = t.panelColor;
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, true);
+        ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                true);
 
         Color bc = focused_ ? t.focusColor : t.buttonBorder;
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
-        ctx.line.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, false);
+        ctx.line.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                false);
     }
 
     if (tex_ && texW_ > 0 && texH_ > 0 && srcRect_.width > 0 && srcRect_.height > 0)
@@ -264,15 +317,15 @@ void ImageButton::paint(PaintContext& ctx)
         float dstW = abs.w - iconPad_ * 2;
         float dstH = abs.h - iconPad_ * 2;
         float scale = std::min(dstW / srcRect_.width, dstH / srcRect_.height);
-        float iw = srcRect_.width  * scale;
+        float iw = srcRect_.width * scale;
         float ih = srcRect_.height * scale;
         float ix = abs.x + (abs.w - iw) * 0.5f;
         float iy = abs.y + (abs.h - ih) * 0.5f;
 
         float tw = static_cast<float>(texW_);
         float th = static_cast<float>(texH_);
-        ig::retained::Rect uv = { srcRect_.x / tw, srcRect_.y / th,
-                           srcRect_.width / tw, srcRect_.height / th };
+        ig::retained::Rect uv = { srcRect_.x / tw, srcRect_.y / th, srcRect_.width / tw,
+            srcRect_.height / th };
         Rect dst = { ix, iy, iw, ih };
         ctx.drawImage(tex_, dst, uv, tint_);
     }
@@ -285,7 +338,8 @@ void ImageButton::paint(PaintContext& ctx)
 // ═════════════════════════════════════════════════════════════════════════════
 
 IconButton::IconButton(Icon icon)
-    : icon_(icon), targetIcon_(icon)
+        : icon_(icon),
+          targetIcon_(icon)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
@@ -311,7 +365,7 @@ void IconButton::setIcon(Icon icon)
 
 Widget::Vec2f IconButton::sizeHint() const
 {
-    return {32.0f, Theme::instance().buttonHeight};
+    return { 32.0f, Theme::instance().buttonHeight };
 }
 
 void IconButton::paint(PaintContext& ctx)
@@ -341,15 +395,13 @@ void IconButton::paint(PaintContext& ctx)
         Color bg = pressed_ ? t.buttonPressed : (hovered_ ? t.buttonHover : t.buttonNormal);
         if (!isEnabledInTree()) bg = t.panelColor;
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, true);
+        ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                true);
 
         Color bc = focused_ ? t.focusColor : t.buttonBorder;
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
-        ctx.line.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, false);
+        ctx.line.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                false);
     }
 
     float progress = animProgress_;
@@ -384,84 +436,84 @@ void IconButton::drawIcon(PaintContext& ctx, const Rect& abs, Icon icon, float t
 
     switch (icon)
     {
-    case Hamburger:
-    {
-        float left = cx - hs;
-        float y0 = cy - hs + 1;
-        float y1 = cy;
-        float y2 = cy + hs - 1;
-        ctx.fill.SetColor(iconColor_.r, iconColor_.g, iconColor_.b,
-                          static_cast<unsigned char>(iconColor_.a * t));
-        ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y0 - lw * 0.5f),
-                           static_cast<int>(iconSize), static_cast<int>(lw), true);
-        ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y1 - lw * 0.5f),
-                           static_cast<int>(iconSize), static_cast<int>(lw), true);
-        ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y2 - lw * 0.5f),
-                           static_cast<int>(iconSize), static_cast<int>(lw), true);
-        break;
-    }
-    case Close:
-    {
-        float left = cx - hs, right = cx + hs;
-        float top  = cy - hs, bot   = cy + hs;
-        ctx.line.Line2D(left, top, right, bot);
-        ctx.line.Line2D(right, top, left, bot);
-        break;
-    }
-    case ArrowLeft:
-    {
-        float left = cx - hs * 0.6f, right = cx + hs * 0.6f;
-        ctx.line.Line2D(right, cy - hs, left, cy);
-        ctx.line.Line2D(left, cy, right, cy + hs);
-        break;
-    }
-    case ArrowRight:
-    {
-        float left = cx - hs * 0.6f, right = cx + hs * 0.6f;
-        ctx.line.Line2D(left, cy - hs, right, cy);
-        ctx.line.Line2D(right, cy, left, cy + hs);
-        break;
-    }
-    case ArrowUp:
-    {
-        float top = cy - hs * 0.6f, bot = cy + hs * 0.6f;
-        ctx.line.Line2D(cx - hs, bot, cx, top);
-        ctx.line.Line2D(cx, top, cx + hs, bot);
-        break;
-    }
-    case ArrowDown:
-    {
-        float top = cy - hs * 0.6f, bot = cy + hs * 0.6f;
-        ctx.line.Line2D(cx - hs, top, cx, bot);
-        ctx.line.Line2D(cx, bot, cx + hs, top);
-        break;
-    }
-    case Plus:
-    {
-        ctx.line.Line2D(cx - hs, cy, cx + hs, cy);
-        ctx.line.Line2D(cx, cy - hs, cx, cy + hs);
-        break;
-    }
-    case Minus:
-    {
-        ctx.line.Line2D(cx - hs, cy, cx + hs, cy);
-        break;
-    }
-    case Check:
-    {
-        float x0 = cx - hs,       x1 = cx - hs * 0.3f, x2 = cx + hs;
-        float y0 = cy,            y1 = cy + hs * 0.6f,  y2 = cy - hs * 0.5f;
-        ctx.line.Line2D(x0, y0, x1, y1);
-        ctx.line.Line2D(x1, y1, x2, y2);
-        break;
-    }
-    case Chevron:
-    {
-        float left = cx - hs * 0.4f, right = cx + hs * 0.4f;
-        ctx.line.Line2D(left, cy - hs, right, cy);
-        ctx.line.Line2D(right, cy, left, cy + hs);
-        break;
-    }
+        case Hamburger:
+        {
+            float left = cx - hs;
+            float y0 = cy - hs + 1;
+            float y1 = cy;
+            float y2 = cy + hs - 1;
+            ctx.fill.SetColor(iconColor_.r, iconColor_.g, iconColor_.b,
+                    static_cast<unsigned char>(iconColor_.a * t));
+            ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y0 - lw * 0.5f),
+                    static_cast<int>(iconSize), static_cast<int>(lw), true);
+            ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y1 - lw * 0.5f),
+                    static_cast<int>(iconSize), static_cast<int>(lw), true);
+            ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y2 - lw * 0.5f),
+                    static_cast<int>(iconSize), static_cast<int>(lw), true);
+            break;
+        }
+        case Close:
+        {
+            float left = cx - hs, right = cx + hs;
+            float top = cy - hs, bot = cy + hs;
+            ctx.line.Line2D(left, top, right, bot);
+            ctx.line.Line2D(right, top, left, bot);
+            break;
+        }
+        case ArrowLeft:
+        {
+            float left = cx - hs * 0.6f, right = cx + hs * 0.6f;
+            ctx.line.Line2D(right, cy - hs, left, cy);
+            ctx.line.Line2D(left, cy, right, cy + hs);
+            break;
+        }
+        case ArrowRight:
+        {
+            float left = cx - hs * 0.6f, right = cx + hs * 0.6f;
+            ctx.line.Line2D(left, cy - hs, right, cy);
+            ctx.line.Line2D(right, cy, left, cy + hs);
+            break;
+        }
+        case ArrowUp:
+        {
+            float top = cy - hs * 0.6f, bot = cy + hs * 0.6f;
+            ctx.line.Line2D(cx - hs, bot, cx, top);
+            ctx.line.Line2D(cx, top, cx + hs, bot);
+            break;
+        }
+        case ArrowDown:
+        {
+            float top = cy - hs * 0.6f, bot = cy + hs * 0.6f;
+            ctx.line.Line2D(cx - hs, top, cx, bot);
+            ctx.line.Line2D(cx, bot, cx + hs, top);
+            break;
+        }
+        case Plus:
+        {
+            ctx.line.Line2D(cx - hs, cy, cx + hs, cy);
+            ctx.line.Line2D(cx, cy - hs, cx, cy + hs);
+            break;
+        }
+        case Minus:
+        {
+            ctx.line.Line2D(cx - hs, cy, cx + hs, cy);
+            break;
+        }
+        case Check:
+        {
+            float x0 = cx - hs, x1 = cx - hs * 0.3f, x2 = cx + hs;
+            float y0 = cy, y1 = cy + hs * 0.6f, y2 = cy - hs * 0.5f;
+            ctx.line.Line2D(x0, y0, x1, y1);
+            ctx.line.Line2D(x1, y1, x2, y2);
+            break;
+        }
+        case Chevron:
+        {
+            float left = cx - hs * 0.4f, right = cx + hs * 0.4f;
+            ctx.line.Line2D(left, cy - hs, right, cy);
+            ctx.line.Line2D(right, cy, left, cy + hs);
+            break;
+        }
     }
 }
 
@@ -469,13 +521,16 @@ void IconButton::drawIcon(PaintContext& ctx, const Rect& abs, Icon icon, float t
 //  Panel
 // ═════════════════════════════════════════════════════════════════════════════
 
-void Panel::setBgColor(const Color& c) { bgColor_ = c; }
+void Panel::setBgColor(const Color& c)
+{
+    bgColor_ = c;
+}
 
 void Panel::layout()
 {
-    for (auto* c : children_)
+    for (auto* c: children_)
     {
-        c->setRect({0, 0, rect_.w, rect_.h});
+        c->setRect({ 0, 0, rect_.w, rect_.h });
         c->layout();
     }
 }
@@ -493,19 +548,16 @@ void Panel::paint(PaintContext& ctx)
     if (ctx.clipRectIntersect(abs, clipped))
     {
         ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
-        ctx.fill.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, true);
+        ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                true);
 
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
-        ctx.line.RoundedRectangle(
-            clipped.x, clipped.y, clipped.w, clipped.h,
-            t.borderRadius, 6, false);
+        ctx.line.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                false);
     }
 
     ctx.pushClip(abs);
-    for (auto& c : children_)
-        c->paint(ctx);
+    for (auto& c: children_) c->paint(ctx);
     ctx.popClip();
 }
 
@@ -513,27 +565,38 @@ void Panel::paint(PaintContext& ctx)
 //  CheckBox
 // ═════════════════════════════════════════════════════════════════════════════
 
-CheckBox::CheckBox(const String& text) : text_(text)
+CheckBox::CheckBox(const String& text)
+        : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
-    clicked.connect([this]() {
-        checked_ = !checked_;
-        toggled.emit(checked_);
-        WidgetApp::instance().fireEvent("toggle", this);
-        markDirty();
-    });
+    clicked.connect(
+            [this]()
+            {
+                checked_ = !checked_;
+                toggled.emit(checked_);
+                WidgetApp::instance().fireEvent("toggle", this);
+                markDirty();
+            });
 }
 
-void CheckBox::setText(const String& t) { text_ = t; markDirty(); }
-void CheckBox::setChecked(bool c)            { checked_ = c; markDirty(); }
+void CheckBox::setText(const String& t)
+{
+    text_ = t;
+    markDirty();
+}
+void CheckBox::setChecked(bool c)
+{
+    checked_ = c;
+    markDirty();
+}
 
 Widget::Vec2f CheckBox::sizeHint() const
 {
     const auto& t = Theme::instance();
     float boxSize = t.fontSize;
     float textW = text_.size() * t.fontSize * 0.6f;
-    return {boxSize + t.padding * 2 + textW, t.fontSize + t.padding * 2};
+    return { boxSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 };
 }
 
 void CheckBox::paint(PaintContext& ctx)
@@ -548,30 +611,28 @@ void CheckBox::paint(PaintContext& ctx)
     float bx = abs.x + t.padding;
     float by = abs.y + (abs.h - boxSize) * 0.5f;
 
-    Rect boxRect = {bx, by, boxSize, boxSize};
+    Rect boxRect = { bx, by, boxSize, boxSize };
     Rect clippedBox;
     if (ctx.clipRectIntersect(boxRect, clippedBox))
     {
         Color bg = hovered_ ? t.inputBgHover : t.inputBg;
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.Rectangle(clippedBox.x, clippedBox.y,
-                            clippedBox.w, clippedBox.h, true);
+        ctx.fill.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, true);
 
         Color border = focused_ ? t.focusColor : (hovered_ ? t.inputBorderHover : t.inputBorder);
         ctx.line.SetColor(border.r, border.g, border.b, border.a);
-        ctx.line.Rectangle(clippedBox.x, clippedBox.y,
-                            clippedBox.w, clippedBox.h, false);
+        ctx.line.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, false);
 
         if (checked_)
         {
             float m = 3.0f;
-            Rect markRect = {bx + m, by + m, boxSize - m * 2, boxSize - m * 2};
+            Rect markRect = { bx + m, by + m, boxSize - m * 2, boxSize - m * 2 };
             Rect clippedMark;
             if (ctx.clipRectIntersect(markRect, clippedMark))
             {
                 ctx.fill.SetColor(t.checkMark.r, t.checkMark.g, t.checkMark.b, t.checkMark.a);
-                ctx.fill.Rectangle(clippedMark.x, clippedMark.y,
-                                    clippedMark.w, clippedMark.h, true);
+                ctx.fill.Rectangle(clippedMark.x, clippedMark.y, clippedMark.w, clippedMark.h,
+                        true);
             }
         }
     }
@@ -584,10 +645,10 @@ void CheckBox::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
-    Rect textRect = {tx, ty - asc, abs.w, asc};
-    if (!ctx.isClipped(textRect))
-        ctx.font.Print(text_.c_str(), tx, ty);
-    if (overrideFont_) ctx.popFont();    Widget::paint(ctx);
+    Rect textRect = { tx, ty - asc, abs.w, asc };
+    if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+    if (overrideFont_) ctx.popFont();
+    Widget::paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -596,8 +657,7 @@ void CheckBox::paint(PaintContext& ctx)
 
 RadioGroup::~RadioGroup()
 {
-    for (auto* rb : buttons_)
-        rb->group_ = nullptr;
+    for (auto* rb: buttons_) rb->group_ = nullptr;
 }
 
 void RadioGroup::add(RadioButton* rb)
@@ -644,23 +704,25 @@ void RadioGroup::select(RadioButton* rb)
 // ═════════════════════════════════════════════════════════════════════════════
 
 RadioButton::RadioButton(const String& text, RadioGroup* group)
-    : text_(text), group_(group)
+        : text_(text),
+          group_(group)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
 
     if (group_) group_->add(this);
 
-    clicked.connect([this]() {
-        if (group_)
-            group_->select(this);
-        else
-        {
-            selected_ = true;
-            toggled.emit(true);
-            markDirty();
-        }
-    });
+    clicked.connect(
+            [this]()
+            {
+                if (group_) group_->select(this);
+                else
+                {
+                    selected_ = true;
+                    toggled.emit(true);
+                    markDirty();
+                }
+            });
 }
 
 RadioButton::~RadioButton()
@@ -670,8 +732,7 @@ RadioButton::~RadioButton()
 
 void RadioButton::setSelected(bool s)
 {
-    if (s && group_)
-        group_->select(this);
+    if (s && group_) group_->select(this);
     else if (!s && selected_)
     {
         selected_ = false;
@@ -692,7 +753,7 @@ Widget::Vec2f RadioButton::sizeHint() const
     const auto& t = Theme::instance();
     float circSize = t.fontSize;
     float textW = text_.size() * t.fontSize * 0.6f;
-    return {circSize + t.padding * 2 + textW, t.fontSize + t.padding * 2};
+    return { circSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 };
 }
 
 void RadioButton::paint(PaintContext& ctx)
@@ -729,31 +790,39 @@ void RadioButton::paint(PaintContext& ctx)
     float asc2 = ctx.font.GetAscender();
     float rty = abs.y + (abs.h + asc2) * 0.5f;
 
-    Rect trRect = {rtx, rty - asc2, abs.w, asc2};
-    if (!ctx.isClipped(trRect))
-        ctx.font.Print(text_.c_str(), rtx, rty);
-    if (overrideFont_) ctx.popFont();    Widget::paint(ctx);
+    Rect trRect = { rtx, rty - asc2, abs.w, asc2 };
+    if (!ctx.isClipped(trRect)) ctx.font.Print(text_.c_str(), rtx, rty);
+    if (overrideFont_) ctx.popFont();
+    Widget::paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Switch
 // ═════════════════════════════════════════════════════════════════════════════
 
-Switch::Switch(const String& text) : text_(text)
+Switch::Switch(const String& text)
+        : text_(text)
 {
     acceptsFocus_ = true;
     cursor_ = CursorType::Hand;
 
-    clicked.connect([this]() {
-        on_ = !on_;
-        toggled.emit(on_);
-        markDirty();
-    });
+    clicked.connect(
+            [this]()
+            {
+                on_ = !on_;
+                toggled.emit(on_);
+                markDirty();
+            });
 }
 
 void Switch::setOn(bool v)
 {
-    if (on_ != v) { on_ = v; toggled.emit(on_); markDirty(); }
+    if (on_ != v)
+    {
+        on_ = v;
+        toggled.emit(on_);
+        markDirty();
+    }
 }
 
 Widget::Vec2f Switch::sizeHint() const
@@ -761,9 +830,9 @@ Widget::Vec2f Switch::sizeHint() const
     const auto& t = Theme::instance();
     float trackW = 36.0f;
     float trackH = 18.0f;
-    float textW  = text_.size() * t.fontSize * 0.6f;
+    float textW = text_.size() * t.fontSize * 0.6f;
     float w = trackW + (text_.empty() ? 0 : t.padding + textW);
-    return {w + t.padding * 2, std::max(trackH, t.fontSize) + t.padding * 2};
+    return { w + t.padding * 2, std::max(trackH, t.fontSize) + t.padding * 2 };
 }
 
 void Switch::paint(PaintContext& ctx)
@@ -809,11 +878,11 @@ void Switch::paint(PaintContext& ctx)
         float asc3 = ctx.font.GetAscender();
         float ly = abs.y + (abs.h + asc3) * 0.5f;
 
-        Rect textRect = {lx, ly - asc3, abs.w, asc3};
-        if (!ctx.isClipped(textRect))
-            ctx.font.Print(text_.c_str(), lx, ly);
+        Rect textRect = { lx, ly - asc3, abs.w, asc3 };
+        if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), lx, ly);
     }
-    if (overrideFont_) ctx.popFont();    Widget::paint(ctx);
+    if (overrideFont_) ctx.popFont();
+    Widget::paint(ctx);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -821,19 +890,17 @@ void Switch::paint(PaintContext& ctx)
 // ═════════════════════════════════════════════════════════════════════════════
 
 Toolbar::Toolbar(float height)
-    : height_(height)
+        : height_(height)
 {
 }
 
 IconButton* Toolbar::addButton(const String& tooltip, IconButton::Icon icon,
-                               ct::Function<void()> onClick)
+        ct::Function<void()> onClick)
 {
     auto* btn = createChild<IconButton>(icon);
     btn->setSize(height_ - 4, height_ - 4);
-    if (!tooltip.empty())
-        btn->setTooltip(tooltip);
-    if (onClick)
-        btn->clicked.connect([cb = std::move(onClick)](){ cb(); });
+    if (!tooltip.empty()) btn->setTooltip(tooltip);
+    if (onClick) btn->clicked.connect([cb = std::move(onClick)]() { cb(); });
     markDirty();
     return btn;
 }
@@ -855,7 +922,8 @@ void Toolbar::addSeparator()
 void Toolbar::layout()
 {
     float x = spacing_;
-    for (auto* c : children_) {
+    for (auto* c: children_)
+    {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
         float cw = hint.x > 0 ? hint.x : c->rect().w;
@@ -871,12 +939,13 @@ void Toolbar::layout()
 Widget::Vec2f Toolbar::sizeHint() const
 {
     float w = spacing_;
-    for (auto* c : children_) {
+    for (auto* c: children_)
+    {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
         w += (hint.x > 0 ? hint.x : c->rect().w) + spacing_;
     }
-    return {w, height_};
+    return { w, height_ };
 }
 
 void Toolbar::paint(PaintContext& ctx)
@@ -887,10 +956,11 @@ void Toolbar::paint(PaintContext& ctx)
 
     Color bg = bgColor_.a > 0 ? bgColor_ : Theme::instance().panelColor;
     Rect clipped;
-    if (ctx.clipRectIntersect(abs, clipped)) {
+    if (ctx.clipRectIntersect(abs, clipped))
+    {
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.Rectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                           static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
     }
 
     // Bottom border

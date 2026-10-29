@@ -51,7 +51,14 @@ struct FileDialogEntry
     bool hidden;
 
     FileDialogEntry()
-        : name(), path(), size(0u), modifiedTime(0u), directory(false), hidden(false) {}
+            : name(),
+              path(),
+              size(0u),
+              modifiedTime(0u),
+              directory(false),
+              hidden(false)
+    {
+    }
 };
 
 struct FileDialogPreview
@@ -60,13 +67,20 @@ struct FileDialogPreview
     float width;
     float height;
 
-    FileDialogPreview() : texture(), width(0.0f), height(0.0f) {}
+    FileDialogPreview()
+            : texture(),
+              width(0.0f),
+              height(0.0f)
+    {
+    }
 };
 
 class FileDialogProvider
 {
 public:
-    virtual ~FileDialogProvider() {}
+    virtual ~FileDialogProvider()
+    {
+    }
 
     // Fill entries with the direct children of path. Entry paths must be full
     // paths. Return false when path cannot be read.
@@ -81,17 +95,23 @@ public:
     // ignore this parameter entirely - it's an optimization hint, not a
     // contract change; entries.directory must always still be correct
     // either way, since navigation depends on it regardless of view.
-    virtual bool listDirectory(StringView path, ct::Vector<FileDialogEntry> &entries,
-                               bool needMetadata = true) = 0;
+    virtual bool listDirectory(StringView path, ct::Vector<FileDialogEntry>& entries,
+            bool needMetadata = true) = 0;
     virtual String parentDirectory(StringView path) = 0;
     virtual String homeDirectory() = 0;
     // Create one direct child directory and return its full path. The default
     // keeps read-only or sandboxed providers simple.
-    virtual String createDirectory(StringView, StringView) { return String(); }
+    virtual String createDirectory(StringView, StringView)
+    {
+        return String();
+    }
 
     // OpenImage asks this only for the selected image. The provider owns the
     // texture and may return an empty preview when it cannot decode the file.
-    virtual FileDialogPreview imagePreview(StringView) { return FileDialogPreview(); }
+    virtual FileDialogPreview imagePreview(StringView)
+    {
+        return FileDialogPreview();
+    }
 };
 
 struct FileDialogOptions
@@ -106,7 +126,14 @@ struct FileDialogOptions
     bool showHidden;
 
     FileDialogOptions()
-        : title("Open File"), initialPath(), filter(), initialFileName(), mode(FileDialogMode::OpenFile), showHidden(false) {}
+            : title("Open File"),
+              initialPath(),
+              filter(),
+              initialFileName(),
+              mode(FileDialogMode::OpenFile),
+              showHidden(false)
+    {
+    }
 };
 
 struct FileDialogState
@@ -155,12 +182,37 @@ struct FileDialogState
     bool sortAscending;
 
     FileDialogState()
-        : path(), selectedPath(), entries(), backHistory(), forwardHistory(), view(FileDialogView::Details),
-          sortField(FileDialogSortField::Name), position(), size(),
-          resizePointerStart(), resizeSizeStart(), previewPan(), previewPointerStart(), previewPanStart(),
-          newFolderName(), newFolderError(), previewPath(), scrollOffset(0.0f), previewZoom(1.0f),
-          selectedIndex(-3), lastClickedIndex(-3), lastClickedTime(0.0), newFolderCursor(0u),
-          initialized(false), resizing(false), creatingFolder(false), previewPanning(false), searchFocused(false), sortAscending(true) {}
+            : path(),
+              selectedPath(),
+              entries(),
+              backHistory(),
+              forwardHistory(),
+              view(FileDialogView::Details),
+              sortField(FileDialogSortField::Name),
+              position(),
+              size(),
+              resizePointerStart(),
+              resizeSizeStart(),
+              previewPan(),
+              previewPointerStart(),
+              previewPanStart(),
+              newFolderName(),
+              newFolderError(),
+              previewPath(),
+              scrollOffset(0.0f),
+              previewZoom(1.0f),
+              selectedIndex(-3),
+              lastClickedIndex(-3),
+              lastClickedTime(0.0),
+              newFolderCursor(0u),
+              initialized(false),
+              resizing(false),
+              creatingFolder(false),
+              previewPanning(false),
+              searchFocused(false),
+              sortAscending(true)
+    {
+    }
 
     // Call reset to discard navigation state manually. Context also resets it
     // after an accepted or cancelled dialog result.
@@ -212,7 +264,11 @@ struct FileDialogResult
     FileDialogResultKind kind;
     String path;
 
-    FileDialogResult() : kind(FileDialogResultKind::None), path() {}
+    FileDialogResult()
+            : kind(FileDialogResultKind::None),
+              path()
+    {
+    }
 };
 
 } // namespace ig

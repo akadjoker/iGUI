@@ -1,14 +1,16 @@
 #pragma once
 
+#include "BasicWidgets.hpp"
+#include "Theme.hpp"
 #include "Widget.hpp"
 #include "WidgetApp.hpp"
-#include "Theme.hpp"
-#include "BasicWidgets.hpp"
-#include <igui/widgets/String.hpp>
 #include <ct/function.hpp>
+#include <igui/widgets/String.hpp>
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -26,37 +28,72 @@ public:
     explicit GridLayout(int cols = 2);
 
     /// @brief Set the number of columns.
-    void setCols(int c) { cols_ = (c > 0) ? c : 1; markDirty(); }
+    void setCols(int c)
+    {
+        cols_ = (c > 0) ? c : 1;
+        markDirty();
+    }
     /// @brief Get the number of columns.
-    int  cols() const   { return cols_; }
+    int cols() const
+    {
+        return cols_;
+    }
 
     /// @brief Set uniform horizontal and vertical spacing.
-    void setSpacing(float s)  { spacingH_ = spacingV_ = s; }
+    void setSpacing(float s)
+    {
+        spacingH_ = spacingV_ = s;
+    }
     /// @brief Set horizontal and vertical spacing separately.
-    void setSpacing(float h, float v) { spacingH_ = h; spacingV_ = v; }
+    void setSpacing(float h, float v)
+    {
+        spacingH_ = h;
+        spacingV_ = v;
+    }
     /// @brief Get horizontal spacing.
-    float spacingH() const    { return spacingH_; }
+    float spacingH() const
+    {
+        return spacingH_;
+    }
     /// @brief Get vertical spacing.
-    float spacingV() const    { return spacingV_; }
+    float spacingV() const
+    {
+        return spacingV_;
+    }
 
-    void setPadding(const Edges& e)                      { padding_ = e; }
-    void setPadding(float all)                            { padding_ = Edges(all); }
-    void setPadding(float tb, float lr)                   { padding_ = Edges(tb, lr); }
-    void setPadding(float t, float r, float b, float l)   { padding_ = Edges(t, r, b, l); }
-    const Edges& padding() const { return padding_; }
+    void setPadding(const Edges& e)
+    {
+        padding_ = e;
+    }
+    void setPadding(float all)
+    {
+        padding_ = Edges(all);
+    }
+    void setPadding(float tb, float lr)
+    {
+        padding_ = Edges(tb, lr);
+    }
+    void setPadding(float t, float r, float b, float l)
+    {
+        padding_ = Edges(t, r, b, l);
+    }
+    const Edges& padding() const
+    {
+        return padding_;
+    }
 
     /// @brief Get the computed number of rows.
-    int rows() const;  // computed from child count
+    int rows() const; // computed from child count
 
     void layout() override;
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
 
 private:
-    int   cols_     = 2;
+    int cols_ = 2;
     float spacingH_ = 4.0f;
     float spacingV_ = 4.0f;
-    Edges padding_  = Edges(4.0f);
+    Edges padding_ = Edges(4.0f);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -72,7 +109,14 @@ private:
 //    Center region ignores size - always fills remaining space.
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class BorderRegion { Top, Bottom, Left, Right, Center };
+enum class BorderRegion
+{
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Center
+};
 
 class BorderLayout : public Widget
 {
@@ -82,7 +126,7 @@ public:
     BorderLayout() = default;
 
     // Place a widget in a region. Creates the widget and returns it.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* set(BorderRegion region, Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
@@ -102,25 +146,47 @@ public:
     float regionSize(BorderRegion region) const;
 
     /// @brief Set spacing between regions.
-    void setSpacing(float s) { spacing_ = s; markDirty(); }
+    void setSpacing(float s)
+    {
+        spacing_ = s;
+        markDirty();
+    }
     /// @brief Get spacing between regions.
-    float spacing() const    { return spacing_; }
+    float spacing() const
+    {
+        return spacing_;
+    }
 
-    void setPadding(const Edges& e)                      { padding_ = e; }
-    void setPadding(float all)                            { padding_ = Edges(all); }
-    void setPadding(float tb, float lr)                   { padding_ = Edges(tb, lr); }
-    void setPadding(float t, float r, float b, float l)   { padding_ = Edges(t, r, b, l); }
-    const Edges& padding() const { return padding_; }
+    void setPadding(const Edges& e)
+    {
+        padding_ = e;
+    }
+    void setPadding(float all)
+    {
+        padding_ = Edges(all);
+    }
+    void setPadding(float tb, float lr)
+    {
+        padding_ = Edges(tb, lr);
+    }
+    void setPadding(float t, float r, float b, float l)
+    {
+        padding_ = Edges(t, r, b, l);
+    }
+    const Edges& padding() const
+    {
+        return padding_;
+    }
 
     void layout() override;
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
 
 private:
-    Widget* regions_[5]     = {nullptr, nullptr, nullptr, nullptr, nullptr};
-    float   regionSizes_[5] = {0, 0, 0, 0, 0};  // per-region size config
-    float   spacing_        = 0.0f;
-    Edges   padding_        = Edges(0.0f);
+    Widget* regions_[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+    float regionSizes_[5] = { 0, 0, 0, 0, 0 }; // per-region size config
+    float spacing_ = 0.0f;
+    Edges padding_ = Edges(0.0f);
 
     // Resolve a region size: positive→px, negative→% of totalDim, zero→hint
     float resolveSize(BorderRegion region, float totalDim, float hint) const;
@@ -139,45 +205,95 @@ public:
     explicit Collapsible(const String& title = "", bool expanded = true);
 
     /// @brief Set the section title text.
-    void setTitle(const String& t) { title_ = t; markDirty(); }
+    void setTitle(const String& t)
+    {
+        title_ = t;
+        markDirty();
+    }
     /// @brief Get the section title.
-    const String& title() const    { return title_; }
+    const String& title() const
+    {
+        return title_;
+    }
 
     /// @brief Expand or collapse the content area.
     void setExpanded(bool e);
     /// @brief Check if the content area is expanded.
-    bool isExpanded() const { return expanded_; }
+    bool isExpanded() const
+    {
+        return expanded_;
+    }
 
     /// @brief Set the header bar height.
-    void setHeaderHeight(float h) { headerH_ = h; markDirty(); }
+    void setHeaderHeight(float h)
+    {
+        headerH_ = h;
+        markDirty();
+    }
     /// @brief Get the header bar height.
-    float headerHeight() const    { return headerH_; }
+    float headerHeight() const
+    {
+        return headerH_;
+    }
 
     /// @brief Set the header background color.
-    void setHeaderColor(const Color& c) { headerColor_ = c; }
+    void setHeaderColor(const Color& c)
+    {
+        headerColor_ = c;
+    }
     /// @brief Get the header background color.
-    const Color& headerColor() const    { return headerColor_; }
+    const Color& headerColor() const
+    {
+        return headerColor_;
+    }
 
     /// @brief Set padding around the content area.
-    void setContentPadding(float p) { contentPad_ = p; markDirty(); }
+    void setContentPadding(float p)
+    {
+        contentPad_ = p;
+        markDirty();
+    }
     /// @brief Get the content padding.
-    float contentPadding() const    { return contentPad_; }
+    float contentPadding() const
+    {
+        return contentPad_;
+    }
 
     /// @brief Set vertical spacing between content children.
-    void setContentSpacing(float s) { contentSpacing_ = s; markDirty(); }
+    void setContentSpacing(float s)
+    {
+        contentSpacing_ = s;
+        markDirty();
+    }
     /// @brief Get the content spacing.
-    float contentSpacing() const    { return contentSpacing_; }
+    float contentSpacing() const
+    {
+        return contentSpacing_;
+    }
 
     /// @brief Show a checkbox in the header (a group that can be switched on and off).
-    void setCheckable(bool c) { checkable_ = c; markDirty(); }
-    bool isCheckable() const  { return checkable_; }
+    void setCheckable(bool c)
+    {
+        checkable_ = c;
+        markDirty();
+    }
+    bool isCheckable() const
+    {
+        return checkable_;
+    }
     /// @brief Set the checkbox state without emitting checkedChanged.
     void setChecked(bool c);
-    bool isChecked() const    { return checked_; }
+    bool isChecked() const
+    {
+        return checked_;
+    }
     /// @brief True when the content is shown: expanded, and checked if the header has a checkbox.
     ///        A switched-off group draws no arrow and ignores header clicks; its expanded state
     ///        is kept for when it is switched on again.
-    bool isOpen() const       { return expanded_ && (!checkable_ || checked_); }
+    bool isOpen() const
+    {
+        return expanded_ && (!checkable_ || checked_);
+    }
     /// @brief Screen rectangle of the header checkbox.
     Rect checkRect() const;
 
@@ -188,19 +304,22 @@ public:
 
     void layout() override;
     Vec2f sizeHint() const override;
-    bool childrenShown() const override { return isOpen(); }
+    bool childrenShown() const override
+    {
+        return isOpen();
+    }
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
 
 private:
     String title_;
-    bool  expanded_       = true;
-    bool  checkable_      = false;
-    bool  checked_        = false;
-    float headerH_        = 26.0f;
-    float contentPad_     = 4.0f;
+    bool expanded_ = true;
+    bool checkable_ = false;
+    bool checked_ = false;
+    float headerH_ = 26.0f;
+    float contentPad_ = 4.0f;
     float contentSpacing_ = 2.0f;
-    Color headerColor_    = Color(0, 0, 0, 0);  // transparent = use theme
+    Color headerColor_ = Color(0, 0, 0, 0); // transparent = use theme
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -217,19 +336,39 @@ public:
     StatusBar() = default;
 
     /// @brief Set the status bar background color.
-    void setBgColor(const Color& c)  { bgColor_ = c; }
+    void setBgColor(const Color& c)
+    {
+        bgColor_ = c;
+    }
     /// @brief Get the background color.
-    const Color& bgColor() const     { return bgColor_; }
+    const Color& bgColor() const
+    {
+        return bgColor_;
+    }
 
     /// @brief Set spacing between children.
-    void setSpacing(float s) { spacing_ = s; markDirty(); }
+    void setSpacing(float s)
+    {
+        spacing_ = s;
+        markDirty();
+    }
     /// @brief Get the spacing.
-    float spacing() const    { return spacing_; }
+    float spacing() const
+    {
+        return spacing_;
+    }
 
     /// @brief Set a text label shown on the left.
-    void setText(const String& t) { text_ = t; markDirty(); }
+    void setText(const String& t)
+    {
+        text_ = t;
+        markDirty();
+    }
     /// @brief Get the status text.
-    const String& text() const    { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
 
     void layout() override;
     Vec2f sizeHint() const override;
@@ -237,7 +376,7 @@ public:
 
 private:
     Color bgColor_ = Color(35, 36, 40, 255);
-    float spacing_  = 6.0f;
+    float spacing_ = 6.0f;
     String text_;
 };
 
@@ -256,13 +395,25 @@ public:
     /// @brief Set the active child by index (0-based, -1 = none).
     void setCurrentIndex(int idx);
     /// @brief Get the active child index.
-    int  currentIndex() const { return currentIndex_; }
+    int currentIndex() const
+    {
+        return currentIndex_;
+    }
     /// @brief Enable animated transitions between children.
-    void setAnimated(bool on) { animated_ = on; }
+    void setAnimated(bool on)
+    {
+        animated_ = on;
+    }
     /// @brief Set transition duration in seconds.
-    void setAnimDuration(float seconds) { animDuration_ = seconds; }
+    void setAnimDuration(float seconds)
+    {
+        animDuration_ = seconds;
+    }
     /// @brief Set the easing function used by transitions.
-    void setEaseType(EaseType ease) { easeType_ = ease; }
+    void setEaseType(EaseType ease)
+    {
+        easeType_ = ease;
+    }
 
     /// @brief Get the currently visible widget (nullptr if none).
     Widget* currentWidget() const;
@@ -298,7 +449,7 @@ public:
     FormLayout() = default;
 
     // Add a row: creates a Label + places widget side by side
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* addRow(const String& label, Args&&... args)
     {
         createChild<Label>(label);
@@ -306,29 +457,67 @@ public:
     }
 
     /// @brief Label column width: positive = fixed px, 0 = auto.
-    void setLabelWidth(float w) { labelWidth_ = w; markDirty(); }
+    void setLabelWidth(float w)
+    {
+        labelWidth_ = w;
+        markDirty();
+    }
     /// @brief Get the label column width.
-    float labelWidth() const    { return labelWidth_; }
+    float labelWidth() const
+    {
+        return labelWidth_;
+    }
 
-    void setSpacing(float h, float v) { spacingH_ = h; spacingV_ = v; markDirty(); }
-    void setSpacing(float s)          { spacingH_ = s; spacingV_ = s; markDirty(); }
-    float spacingH() const { return spacingH_; }
-    float spacingV() const { return spacingV_; }
+    void setSpacing(float h, float v)
+    {
+        spacingH_ = h;
+        spacingV_ = v;
+        markDirty();
+    }
+    void setSpacing(float s)
+    {
+        spacingH_ = s;
+        spacingV_ = s;
+        markDirty();
+    }
+    float spacingH() const
+    {
+        return spacingH_;
+    }
+    float spacingV() const
+    {
+        return spacingV_;
+    }
 
-    void setPadding(const Edges& e)                      { padding_ = e; }
-    void setPadding(float all)                            { padding_ = Edges(all); }
-    void setPadding(float tb, float lr)                   { padding_ = Edges(tb, lr); }
-    void setPadding(float t, float r, float b, float l)   { padding_ = Edges(t, r, b, l); }
-    const Edges& padding() const { return padding_; }
+    void setPadding(const Edges& e)
+    {
+        padding_ = e;
+    }
+    void setPadding(float all)
+    {
+        padding_ = Edges(all);
+    }
+    void setPadding(float tb, float lr)
+    {
+        padding_ = Edges(tb, lr);
+    }
+    void setPadding(float t, float r, float b, float l)
+    {
+        padding_ = Edges(t, r, b, l);
+    }
+    const Edges& padding() const
+    {
+        return padding_;
+    }
 
     void layout() override;
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
 
 private:
-    float labelWidth_ = 0;     // 0 = auto
-    float spacingH_   = 8.0f;
-    float spacingV_   = 4.0f;
+    float labelWidth_ = 0; // 0 = auto
+    float spacingH_ = 8.0f;
+    float spacingV_ = 4.0f;
     Edges padding_;
 };
 
@@ -343,16 +532,47 @@ public:
 
     FlowLayout() = default;
 
-    void setSpacing(float h, float v) { spacingH_ = h; spacingV_ = v; markDirty(); }
-    void setSpacing(float s)          { spacingH_ = s; spacingV_ = s; markDirty(); }
-    float spacingH() const { return spacingH_; }
-    float spacingV() const { return spacingV_; }
+    void setSpacing(float h, float v)
+    {
+        spacingH_ = h;
+        spacingV_ = v;
+        markDirty();
+    }
+    void setSpacing(float s)
+    {
+        spacingH_ = s;
+        spacingV_ = s;
+        markDirty();
+    }
+    float spacingH() const
+    {
+        return spacingH_;
+    }
+    float spacingV() const
+    {
+        return spacingV_;
+    }
 
-    void setPadding(const Edges& e)                      { padding_ = e; }
-    void setPadding(float all)                            { padding_ = Edges(all); }
-    void setPadding(float tb, float lr)                   { padding_ = Edges(tb, lr); }
-    void setPadding(float t, float r, float b, float l)   { padding_ = Edges(t, r, b, l); }
-    const Edges& padding() const { return padding_; }
+    void setPadding(const Edges& e)
+    {
+        padding_ = e;
+    }
+    void setPadding(float all)
+    {
+        padding_ = Edges(all);
+    }
+    void setPadding(float tb, float lr)
+    {
+        padding_ = Edges(tb, lr);
+    }
+    void setPadding(float t, float r, float b, float l)
+    {
+        padding_ = Edges(t, r, b, l);
+    }
+    const Edges& padding() const
+    {
+        return padding_;
+    }
 
     void layout() override;
     Vec2f sizeHint() const override;
@@ -394,31 +614,64 @@ public:
     explicit Splitter(LayoutDir dir = LayoutDir::Horizontal);
 
     /// @brief Get the layout direction.
-    LayoutDir dir() const { return dir_; }
+    LayoutDir dir() const
+    {
+        return dir_;
+    }
 
     /// @brief Set the split ratio (0..1, fraction for first child).
-    void  setRatio(float r);
+    void setRatio(float r);
     /// @brief Get the current split ratio.
-    float ratio() const { return ratio_; }
+    float ratio() const
+    {
+        return ratio_;
+    }
 
     /// @brief Set minimum ratio (clamps on set).
-    void  setMinRatio(float r) { minRatio_ = r; setRatio(ratio_); }
+    void setMinRatio(float r)
+    {
+        minRatio_ = r;
+        setRatio(ratio_);
+    }
     /// @brief Set maximum ratio (clamps on set).
-    void  setMaxRatio(float r) { maxRatio_ = r; setRatio(ratio_); }
+    void setMaxRatio(float r)
+    {
+        maxRatio_ = r;
+        setRatio(ratio_);
+    }
     /// @brief Get minimum ratio.
-    float minRatio() const     { return minRatio_; }
+    float minRatio() const
+    {
+        return minRatio_;
+    }
     /// @brief Get maximum ratio.
-    float maxRatio() const     { return maxRatio_; }
+    float maxRatio() const
+    {
+        return maxRatio_;
+    }
 
     /// @brief Set divider thickness in pixels.
-    void  setHandleSize(float s) { handleSize_ = s; markDirty(); }
+    void setHandleSize(float s)
+    {
+        handleSize_ = s;
+        markDirty();
+    }
     /// @brief Get divider thickness.
-    float handleSize() const     { return handleSize_; }
+    float handleSize() const
+    {
+        return handleSize_;
+    }
 
     /// @brief Set minimum panel size to prevent collapse.
-    void  setMinSize(float s) { minSize_ = s; }
+    void setMinSize(float s)
+    {
+        minSize_ = s;
+    }
     /// @brief Get minimum panel size.
-    float minSize() const     { return minSize_; }
+    float minSize() const
+    {
+        return minSize_;
+    }
 
     /// @brief Emitted when the ratio changes.
     Signal<float> ratioChanged;
@@ -433,13 +686,13 @@ public:
 
 private:
     LayoutDir dir_;
-    float ratio_      = 0.5f;
-    float minRatio_   = 0.0f;
-    float maxRatio_   = 1.0f;
+    float ratio_ = 0.5f;
+    float minRatio_ = 0.0f;
+    float maxRatio_ = 1.0f;
     float handleSize_ = 5.0f;
-    float minSize_    = 30.0f;
-    bool  dragging_      = false;
-    bool  handleHovered_ = false;
+    float minSize_ = 30.0f;
+    bool dragging_ = false;
+    bool handleHovered_ = false;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -454,7 +707,13 @@ private:
 //    tabs->setTabPosition(TabPosition::Bottom);
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class TabPosition { Top, Bottom, Left, Right };
+enum class TabPosition
+{
+    Top,
+    Bottom,
+    Left,
+    Right
+};
 
 class TabLayout : public Widget
 {
@@ -464,7 +723,7 @@ public:
     TabLayout() = default;
 
     // Add a tab with a label. Creates widget of type T as content. Returns it.
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* addTab(const String& label, Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
@@ -479,12 +738,18 @@ public:
     void removeTab(int index);
 
     /// @brief Get the number of tabs.
-    int tabCount() const { return static_cast<int>(tabs_.size()); }
+    int tabCount() const
+    {
+        return static_cast<int>(tabs_.size());
+    }
 
     /// @brief Set the active tab by index.
     void setCurrentIndex(int idx);
     /// @brief Get the active tab index.
-    int  currentIndex() const { return currentIndex_; }
+    int currentIndex() const
+    {
+        return currentIndex_;
+    }
     /// @brief Get the content widget of the active tab.
     Widget* currentWidget() const;
 
@@ -496,17 +761,34 @@ public:
     /// @brief Set the tab bar position.
     void setTabPosition(TabPosition pos);
     /// @brief Get the tab bar position.
-    TabPosition tabPosition() const      { return tabPosition_; }
+    TabPosition tabPosition() const
+    {
+        return tabPosition_;
+    }
 
     /// @brief Enable close buttons on tabs.
-    void setTabsClosable(bool c) { closable_ = c; markDirty(); }
+    void setTabsClosable(bool c)
+    {
+        closable_ = c;
+        markDirty();
+    }
     /// @brief Check if tabs are closable.
-    bool tabsClosable() const    { return closable_; }
+    bool tabsClosable() const
+    {
+        return closable_;
+    }
 
     /// @brief Set the tab bar thickness.
-    void setTabBarSize(float s) { tabBarSize_ = s; markDirty(); }
+    void setTabBarSize(float s)
+    {
+        tabBarSize_ = s;
+        markDirty();
+    }
     /// @brief Get the tab bar thickness.
-    float tabBarSize() const    { return tabBarSize_; }
+    float tabBarSize() const
+    {
+        return tabBarSize_;
+    }
 
     /// @brief Emitted when the active tab changes.
     Signal<int> currentChanged;
@@ -519,16 +801,17 @@ public:
     void onMousePress(MouseEvent& e) override;
 
 private:
-    struct TabInfo {
+    struct TabInfo
+    {
         String label;
-        Widget*     content = nullptr;
+        Widget* content = nullptr;
     };
 
     ct::Vector<TabInfo> tabs_;
-    int currentIndex_     = 0;
+    int currentIndex_ = 0;
     TabPosition tabPosition_ = TabPosition::Top;
-    bool closable_        = false;
-    float tabBarSize_     = 28.0f;
+    bool closable_ = false;
+    float tabBarSize_ = 28.0f;
 
     // Compute tab bar rect and content rect from current geometry
     void computeRects(Rect& barRect, Rect& contentRect) const;
@@ -558,15 +841,15 @@ private:
 struct AnchorRule
 {
     // Anchor fractions (0.0 = parent left/top, 1.0 = parent right/bottom)
-    float left   = 0.0f;
-    float right  = 1.0f;
-    float top    = 0.0f;
+    float left = 0.0f;
+    float right = 1.0f;
+    float top = 0.0f;
     float bottom = 1.0f;
 
     // Pixel offsets added after anchor fraction
-    float leftOff   = 0.0f;
-    float rightOff  = 0.0f;
-    float topOff    = 0.0f;
+    float leftOff = 0.0f;
+    float rightOff = 0.0f;
+    float topOff = 0.0f;
     float bottomOff = 0.0f;
 };
 
@@ -584,11 +867,26 @@ public:
     /// @brief Check if a child has anchor rules set.
     static bool hasAnchors(const Widget* child);
 
-    void setPadding(const Edges& e)                      { padding_ = e; }
-    void setPadding(float all)                            { padding_ = Edges(all); }
-    void setPadding(float tb, float lr)                   { padding_ = Edges(tb, lr); }
-    void setPadding(float t, float r, float b, float l)   { padding_ = Edges(t, r, b, l); }
-    const Edges& padding() const { return padding_; }
+    void setPadding(const Edges& e)
+    {
+        padding_ = e;
+    }
+    void setPadding(float all)
+    {
+        padding_ = Edges(all);
+    }
+    void setPadding(float tb, float lr)
+    {
+        padding_ = Edges(tb, lr);
+    }
+    void setPadding(float t, float r, float b, float l)
+    {
+        padding_ = Edges(t, r, b, l);
+    }
+    const Edges& padding() const
+    {
+        return padding_;
+    }
 
     void layout() override;
     Vec2f sizeHint() const override;
@@ -616,7 +914,7 @@ public:
     Carousel();
 
     // Add a page (creates widget of type T as content, returns it)
-    template <typename T, typename... Args>
+    template<typename T, typename... Args>
     T* addPage(Args&&... args)
     {
         auto* w = new T(std::forward<Args>(args)...);
@@ -629,37 +927,88 @@ public:
     /// @brief Show the page on screen and hide the others, so that only it
     ///        accepts the pointer.
     void showOnlyCurrentPage();
-    int  pageCount() const { return static_cast<int>(pages_.size()); }
+    int pageCount() const
+    {
+        return static_cast<int>(pages_.size());
+    }
 
     // Navigation
     void setCurrentPage(int idx);
-    int  currentPage() const { return currentPage_; }
+    int currentPage() const
+    {
+        return currentPage_;
+    }
     void next();
     void prev();
 
     // Auto-play (advances automatically)
-    void setAutoPlay(bool on)            { autoPlay_ = on; autoTimer_ = 0; }
-    bool autoPlay() const                { return autoPlay_; }
-    void setAutoPlayInterval(float sec)  { autoInterval_ = sec; }
-    float autoPlayInterval() const       { return autoInterval_; }
+    void setAutoPlay(bool on)
+    {
+        autoPlay_ = on;
+        autoTimer_ = 0;
+    }
+    bool autoPlay() const
+    {
+        return autoPlay_;
+    }
+    void setAutoPlayInterval(float sec)
+    {
+        autoInterval_ = sec;
+    }
+    float autoPlayInterval() const
+    {
+        return autoInterval_;
+    }
 
     // Loop (wrap around at ends)
-    void setLoop(bool l)   { loop_ = l; }
-    bool loop() const      { return loop_; }
+    void setLoop(bool l)
+    {
+        loop_ = l;
+    }
+    bool loop() const
+    {
+        return loop_;
+    }
 
     // Show/hide controls
-    void setShowArrows(bool s) { showArrows_ = s; markDirty(); }
-    bool showArrows() const    { return showArrows_; }
-    void setShowDots(bool s)   { showDots_ = s; markDirty(); }
-    bool showDots() const      { return showDots_; }
+    void setShowArrows(bool s)
+    {
+        showArrows_ = s;
+        markDirty();
+    }
+    bool showArrows() const
+    {
+        return showArrows_;
+    }
+    void setShowDots(bool s)
+    {
+        showDots_ = s;
+        markDirty();
+    }
+    bool showDots() const
+    {
+        return showDots_;
+    }
 
     // Animation duration (seconds)
-    void  setAnimDuration(float sec) { animDuration_ = sec; }
-    float animDuration() const       { return animDuration_; }
+    void setAnimDuration(float sec)
+    {
+        animDuration_ = sec;
+    }
+    float animDuration() const
+    {
+        return animDuration_;
+    }
 
     // Easing curve for page transition
-    void     setEaseType(EaseType e) { easeType_ = e; }
-    EaseType easeType() const        { return easeType_; }
+    void setEaseType(EaseType e)
+    {
+        easeType_ = e;
+    }
+    EaseType easeType() const
+    {
+        return easeType_;
+    }
 
     Signal<int> pageChanged;
 
@@ -672,26 +1021,29 @@ public:
 
 private:
     ct::Vector<Widget*> pages_;
-    int   currentPage_   = 0;
+    int currentPage_ = 0;
 
-    bool  autoPlay_      = false;
-    float autoInterval_  = 3.0f;
-    float autoTimer_     = 0.0f;
+    bool autoPlay_ = false;
+    float autoInterval_ = 3.0f;
+    float autoTimer_ = 0.0f;
 
-    bool  loop_          = true;
-    bool  showArrows_    = true;
-    bool  showDots_      = true;
+    bool loop_ = true;
+    bool showArrows_ = true;
+    bool showDots_ = true;
 
-    float animDuration_  = 0.3f;
-    float animProgress_  = 0.0f;   // 0..1
-    EaseType easeType_   = EaseType::OutCubic;
-    int   animFrom_      = -1;     // page sliding out
-    int   animDir_       = 0;      // -1=slide right, +1=slide left
-    bool  animating_     = false;
+    float animDuration_ = 0.3f;
+    float animProgress_ = 0.0f; // 0..1
+    EaseType easeType_ = EaseType::OutCubic;
+    int animFrom_ = -1; // page sliding out
+    int animDir_ = 0;   // -1=slide right, +1=slide left
+    bool animating_ = false;
 
-    int   hoveredArrow_  = 0;      // 0=none, -1=left, +1=right
+    int hoveredArrow_ = 0; // 0=none, -1=left, +1=right
 
-    float dotsHeight() const { return 24.0f; }
+    float dotsHeight() const
+    {
+        return 24.0f;
+    }
     Rect contentRect() const;
     Rect arrowRect(bool rightSide) const;
     void startAnim(int from, int to, int dir);
@@ -713,7 +1065,11 @@ class SlidePanel : public Widget
 public:
     IG_WIDGET_CLASS(SlidePanel, Widget);
 
-    enum Side { Left, Right };
+    enum Side
+    {
+        Left,
+        Right
+    };
 
     explicit SlidePanel(Side side = Left, float width = 260.0f);
 
@@ -724,32 +1080,68 @@ public:
     /// @brief Toggle open/closed state.
     void toggle();
     /// @brief Check if the panel is open.
-    bool isOpen() const { return open_; }
+    bool isOpen() const
+    {
+        return open_;
+    }
 
     /// @brief Set the panel width.
-    void setWidth(float w)           { panelWidth_ = w; markDirty(); }
+    void setWidth(float w)
+    {
+        panelWidth_ = w;
+        markDirty();
+    }
     /// @brief Get the panel width.
-    float panelWidth() const         { return panelWidth_; }
+    float panelWidth() const
+    {
+        return panelWidth_;
+    }
 
     /// @brief Set which side the panel slides from.
-    void setSide(Side s)             { side_ = s; markDirty(); }
+    void setSide(Side s)
+    {
+        side_ = s;
+        markDirty();
+    }
     /// @brief Get the slide side.
-    Side side() const                { return side_; }
+    Side side() const
+    {
+        return side_;
+    }
 
     /// @brief Set animation duration in seconds.
-    void setAnimDuration(float sec)  { animDuration_ = sec; }
+    void setAnimDuration(float sec)
+    {
+        animDuration_ = sec;
+    }
     /// @brief Get animation duration.
-    float animDuration() const       { return animDuration_; }
+    float animDuration() const
+    {
+        return animDuration_;
+    }
 
     /// @brief Set the easing function for animation.
-    void setEaseType(EaseType e)     { easeType_ = e; }
+    void setEaseType(EaseType e)
+    {
+        easeType_ = e;
+    }
     /// @brief Get the easing function.
-    EaseType easeType() const        { return easeType_; }
+    EaseType easeType() const
+    {
+        return easeType_;
+    }
 
     /// @brief Enable/disable the dim scrim overlay.
-    void setShowScrim(bool s)        { showScrim_ = s; markDirty(); }
+    void setShowScrim(bool s)
+    {
+        showScrim_ = s;
+        markDirty();
+    }
     /// @brief Check if the scrim overlay is shown.
-    bool showScrim() const           { return showScrim_; }
+    bool showScrim() const
+    {
+        return showScrim_;
+    }
 
     /// @brief Emitted when the panel opens or closes.
     Signal<bool> openChanged;
@@ -760,14 +1152,14 @@ public:
     void onMousePress(MouseEvent& e) override;
 
 private:
-    Side     side_         = Left;
-    float    panelWidth_   = 260.0f;
-    bool     open_         = false;
-    bool     animating_    = false;
-    float    animProgress_ = 0.0f;   // 0=closed, 1=open
-    float    animDuration_ = 0.25f;
-    EaseType easeType_     = EaseType::OutCubic;
-    bool     showScrim_    = true;
+    Side side_ = Left;
+    float panelWidth_ = 260.0f;
+    bool open_ = false;
+    bool animating_ = false;
+    float animProgress_ = 0.0f; // 0=closed, 1=open
+    float animDuration_ = 0.25f;
+    EaseType easeType_ = EaseType::OutCubic;
+    bool showScrim_ = true;
 };
 
 

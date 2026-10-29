@@ -16,21 +16,25 @@ static_assert(IGUI_BOTH_MODES == 1, "both on");
 
 int main()
 {
-    ig::Theme immediateTheme;              // immediate ig::Theme
-    ig::retained::Theme retainedTheme;     // retained, explicit
+    ig::Theme immediateTheme;          // immediate ig::Theme
+    ig::retained::Theme retainedTheme; // retained, explicit
     ig::GradientStop immStop;
     ig::retained::GradientStop retStop;
     ig::TimelineTrack immTrack;
     ig::retained::TimelineTrack retTrack;
 
-    ig::retained::Widget w;                // retained widget
+    ig::retained::Widget w; // retained widget
 
     // Shared types must be the SAME type in both APIs, not two lookalikes.
     static_assert(sizeof(ig::Color) == sizeof(ig::retained::Color), "shared Color");
 
-    (void)immediateTheme; (void)retainedTheme;
-    (void)immStop; (void)retStop; (void)immTrack; (void)retTrack;
-    (void)w;
+    (void) immediateTheme;
+    (void) retainedTheme;
+    (void) immStop;
+    (void) retStop;
+    (void) immTrack;
+    (void) retTrack;
+    (void) w;
     printf("both modes OK\n");
     return 0;
 }

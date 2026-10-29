@@ -31,29 +31,38 @@ inline int64_t floorDiv(int64_t n, int64_t d) // d > 0
 }
 
 // Keeps the k in [kmin, kmax] where w + dw * k >= 0; false when none is left.
-inline bool narrow(int64_t w, int64_t dw, int64_t &kmin, int64_t &kmax)
+inline bool narrow(int64_t w, int64_t dw, int64_t& kmin, int64_t& kmax)
 {
-    if (dw == 0)
-        return w >= 0;
+    if (dw == 0) return w >= 0;
     if (dw > 0)
     {
         const int64_t lo = -floorDiv(w, dw); // ceil(-w / dw)
-        if (lo > kmin)
-            kmin = lo;
+        if (lo > kmin) kmin = lo;
     }
     else
     {
         const int64_t hi = floorDiv(w, -dw);
-        if (hi < kmax)
-            kmax = hi;
+        if (hi < kmax) kmax = hi;
     }
     return kmin <= kmax;
 }
 
-inline int minOf(int a, int b, int c) { return a < b ? (a < c ? a : c) : (b < c ? b : c); }
-inline int maxOf(int a, int b, int c) { return a > b ? (a > c ? a : c) : (b > c ? b : c); }
-inline int clampInt(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v); }
-inline uint8_t toByte(float v) { return v <= 0.0f ? 0 : (v >= 255.0f ? 255 : static_cast<uint8_t>(v + 0.5f)); }
+inline int minOf(int a, int b, int c)
+{
+    return a < b ? (a < c ? a : c) : (b < c ? b : c);
+}
+inline int maxOf(int a, int b, int c)
+{
+    return a > b ? (a > c ? a : c) : (b > c ? b : c);
+}
+inline int clampInt(int v, int lo, int hi)
+{
+    return v < lo ? lo : (v > hi ? hi : v);
+}
+inline uint8_t toByte(float v)
+{
+    return v <= 0.0f ? 0 : (v >= 255.0f ? 255 : static_cast<uint8_t>(v + 0.5f));
+}
 
 inline uint32_t blend(uint32_t dst, uint32_t r, uint32_t g, uint32_t b, uint32_t a)
 {
@@ -71,16 +80,17 @@ inline uint32_t blend(uint32_t dst, uint32_t r, uint32_t g, uint32_t b, uint32_t
 
 namespace
 {
-inline uint32_t packPixel(const unsigned char *p)
+inline uint32_t packPixel(const unsigned char* p)
 {
     return (static_cast<uint32_t>(p[3]) << 24) | (static_cast<uint32_t>(p[0]) << 16) |
            (static_cast<uint32_t>(p[1]) << 8) | p[2];
 }
 } // namespace
 
-ig::retained::TextureHandle SoftRaster::createTexture(int width, int height, const unsigned char *rgba)
+ig::retained::TextureHandle SoftRaster::createTexture(int width, int height,
+        const unsigned char* rgba)
 {
-    Texture *texture = new Texture();
+    Texture* texture = new Texture();
     texture->width = width;
     texture->height = height;
     texture->pixels.resize(static_cast<size_t>(width) * height);
@@ -91,11 +101,11 @@ ig::retained::TextureHandle SoftRaster::createTexture(int width, int height, con
     return handle;
 }
 
-bool SoftRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned char *rgba, int width, int height)
+bool SoftRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned char* rgba,
+        int width, int height)
 {
-    Texture *texture = reinterpret_cast<Texture *>(handle.value);
-    if (!texture || texture->width != width || texture->height != height)
-        return false;
+    Texture* texture = reinterpret_cast<Texture*>(handle.value);
+    if (!texture || texture->width != width || texture->height != height) return false;
     for (size_t i = 0; i < texture->pixels.size(); ++i)
         texture->pixels[i] = packPixel(rgba + i * 4u);
     ++texture->version;
@@ -104,7 +114,7 @@ bool SoftRaster::updateTexture(ig::retained::TextureHandle handle, const unsigne
 
 void SoftRaster::destroyTexture(ig::retained::TextureHandle texture)
 {
-    delete reinterpret_cast<Texture *>(texture.value);
+    delete reinterpret_cast<Texture*>(texture.value);
 }
 
 void SoftRaster::setSamples(int perAxis)
@@ -112,18 +122,17 @@ void SoftRaster::setSamples(int perAxis)
     samples_ = clampInt(perAxis, 1, 4);
 }
 
-void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &vc, const Texture *texture,
-                              int clipX0, int clipY0, int clipX1, int clipY1)
+void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& vc,
+        const Texture* texture, int clipX0, int clipY0, int clipX1, int clipY1)
 {
-    const Vertex *a = &va;
-    const Vertex *b = &vb;
-    const Vertex *c = &vc;
+    const Vertex* a = &va;
+    const Vertex* b = &vb;
+    const Vertex* c = &vc;
     int64_t area = edge(a->x, a->y, b->x, b->y, c->x, c->y);
-    if (area == 0)
-        return;
+    if (area == 0) return;
     if (area < 0)
     {
-        const Vertex *t = b;
+        const Vertex* t = b;
         b = c;
         c = t;
         area = -area;
@@ -137,16 +146,18 @@ void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &
     if (y0 < clipY0) y0 = clipY0;
     if (x1 > clipX1) x1 = clipX1;
     if (y1 > clipY1) y1 = clipY1;
-    if (x0 >= x1 || y0 >= y1)
-        return;
+    if (x0 >= x1 || y0 >= y1) return;
 
     // w0 weighs a, w1 weighs b, w2 weighs c; each steps linearly per sample.
     const int64_t bias0 = ownedBias(b->x, b->y, c->x, c->y);
     const int64_t bias1 = ownedBias(c->x, c->y, a->x, a->y);
     const int64_t bias2 = ownedBias(a->x, a->y, b->x, b->y);
-    const int64_t dw0x = -static_cast<int64_t>(c->y - b->y) * 16, dw0y = static_cast<int64_t>(c->x - b->x) * 16;
-    const int64_t dw1x = -static_cast<int64_t>(a->y - c->y) * 16, dw1y = static_cast<int64_t>(a->x - c->x) * 16;
-    const int64_t dw2x = -static_cast<int64_t>(b->y - a->y) * 16, dw2y = static_cast<int64_t>(b->x - a->x) * 16;
+    const int64_t dw0x = -static_cast<int64_t>(c->y - b->y) * 16,
+                  dw0y = static_cast<int64_t>(c->x - b->x) * 16;
+    const int64_t dw1x = -static_cast<int64_t>(a->y - c->y) * 16,
+                  dw1y = static_cast<int64_t>(a->x - c->x) * 16;
+    const int64_t dw2x = -static_cast<int64_t>(b->y - a->y) * 16,
+                  dw2y = static_cast<int64_t>(b->x - a->x) * 16;
 
     const int32_t startX = x0 * 16 + 8;
     const int32_t startY = y0 * 16 + 8;
@@ -160,9 +171,9 @@ void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &
     const bool flat = constantUv && constantColor;
 
     // Samples one texel; used once for the whole triangle when flat.
-    auto texel = [texture](float u, float v, float &r, float &g, float &bl, float &al) {
-        if (!texture)
-            return;
+    auto texel = [texture](float u, float v, float& r, float& g, float& bl, float& al)
+    {
+        if (!texture) return;
         const int tx = clampInt(static_cast<int>(u * texture->width), 0, texture->width - 1);
         const int ty = clampInt(static_cast<int>(v * texture->height), 0, texture->height - 1);
         const uint32_t t = texture->pixels[static_cast<size_t>(ty) * texture->width + tx];
@@ -181,8 +192,7 @@ void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &
         flatG = toByte(g);
         flatB = toByte(bl);
         flatA = toByte(al);
-        if (flatA == 0)
-            return;
+        if (flatA == 0) return;
     }
 
     const float invArea = 1.0f / static_cast<float>(area);
@@ -195,22 +205,20 @@ void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &
         // The covered samples of a row are one interval: intersect the three edges.
         int64_t kmin = 0, kmax = x1 - x0 - 1;
         if (!narrow(row0 + bias0, dw0x, kmin, kmax) || !narrow(row1 + bias1, dw1x, kmin, kmax) ||
-            !narrow(row2 + bias2, dw2x, kmin, kmax))
+                !narrow(row2 + bias2, dw2x, kmin, kmax))
             continue;
         const int xs = x0 + static_cast<int>(kmin);
         const int xe = x0 + static_cast<int>(kmax) + 1;
-        uint32_t *line = target_ + static_cast<size_t>(y) * targetStride_;
+        uint32_t* line = target_ + static_cast<size_t>(y) * targetStride_;
         if (flat)
         {
             if (flatA == 255u)
             {
-                for (int x = xs; x < xe; ++x)
-                    line[x] = flatPixel;
+                for (int x = xs; x < xe; ++x) line[x] = flatPixel;
             }
             else
             {
-                for (int x = xs; x < xe; ++x)
-                    line[x] = blend(line[x], flatR, flatG, flatB, flatA);
+                for (int x = xs; x < xe; ++x) line[x] = blend(line[x], flatR, flatG, flatB, flatA);
             }
             continue;
         }
@@ -226,44 +234,44 @@ void SoftRaster::drawTriangle(const Vertex &va, const Vertex &vb, const Vertex &
             float bl = l0 * a->b + l1 * b->b + l2 * c->b;
             float al = l0 * a->a + l1 * b->a + l2 * c->a;
             if (texture)
-                texel(l0 * a->u + l1 * b->u + l2 * c->u, l0 * a->v + l1 * b->v + l2 * c->v, r, g, bl, al);
+                texel(l0 * a->u + l1 * b->u + l2 * c->u, l0 * a->v + l1 * b->v + l2 * c->v, r, g,
+                        bl, al);
             const uint32_t alpha = toByte(al);
-            if (alpha == 0)
-                continue;
+            if (alpha == 0) continue;
             line[x] = alpha == 255u ? (0xff000000u | (static_cast<uint32_t>(toByte(r)) << 16) |
-                                       (static_cast<uint32_t>(toByte(g)) << 8) | toByte(bl))
+                                              (static_cast<uint32_t>(toByte(g)) << 8) | toByte(bl))
                                     : blend(line[x], toByte(r), toByte(g), toByte(bl), alpha);
         }
     }
 }
 
-uint64_t SoftRaster::signature(const ig::retained::DrawData &data, int width, int height,
-                               uint32_t background) const
+uint64_t SoftRaster::signature(const ig::retained::DrawData& data, int width, int height,
+        uint32_t background) const
 {
     uint64_t h = 1469598103934665603ull;
-    auto mix = [&h](const void *p, size_t n) {
-        const unsigned char *b = static_cast<const unsigned char *>(p);
-        for (size_t i = 0; i < n; ++i)
-            h = (h ^ b[i]) * 1099511628211ull;
+    auto mix = [&h](const void* p, size_t n)
+    {
+        const unsigned char* b = static_cast<const unsigned char*>(p);
+        for (size_t i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
-    const int header[4] = {width, height, samples_, static_cast<int>(background)};
+    const int header[4] = { width, height, samples_, static_cast<int>(background) };
     mix(header, sizeof header);
     mix(&data.displayWidth, sizeof data.displayWidth);
     mix(&data.displayHeight, sizeof data.displayHeight);
-    for (const ig::retained::DrawPass &pass : data.passes)
+    for (const ig::retained::DrawPass& pass: data.passes)
     {
-        if (!pass.list)
-            continue;
+        if (!pass.list) continue;
         mix(&pass.camera, sizeof pass.camera);
-        const auto &v = pass.list->vertices();
-        const auto &ix = pass.list->indices();
+        const auto& v = pass.list->vertices();
+        const auto& ix = pass.list->indices();
         mix(v.data(), v.size() * sizeof v[0]);
         mix(ix.data(), ix.size() * sizeof ix[0]);
-        for (const ig::retained::DrawCmd &cmd : pass.list->commands())
+        for (const ig::retained::DrawCmd& cmd: pass.list->commands())
         {
             mix(&cmd.texture.value, sizeof cmd.texture.value);
             if (cmd.texture)
-                mix(&reinterpret_cast<const Texture *>(cmd.texture.value)->version, sizeof(uint32_t));
+                mix(&reinterpret_cast<const Texture*>(cmd.texture.value)->version,
+                        sizeof(uint32_t));
             mix(&cmd.clip, sizeof cmd.clip);
             mix(&cmd.indexOffset, sizeof cmd.indexOffset);
             mix(&cmd.indexCount, sizeof cmd.indexCount);
@@ -272,19 +280,19 @@ uint64_t SoftRaster::signature(const ig::retained::DrawData &data, int width, in
     return h;
 }
 
-bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, int height,
-                        int stride, uint32_t background)
+bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, int height,
+        int stride, uint32_t background)
 {
     data.stats.reset();
-    if (width <= 0 || height <= 0 || data.displayWidth <= 0.0f)
-        return false;
+    if (width <= 0 || height <= 0 || data.displayWidth <= 0.0f) return false;
 
     const uint64_t sig = signature(data, width, height, background);
     if (sig == lastSignature_ && cacheWidth_ == width && cacheHeight_ == height)
     {
         for (int y = 0; y < height; ++y)
-            memcpy(dst + static_cast<size_t>(y) * stride, cache_.data() + static_cast<size_t>(y) * width,
-                   static_cast<size_t>(width) * sizeof(uint32_t));
+            memcpy(dst + static_cast<size_t>(y) * stride,
+                    cache_.data() + static_cast<size_t>(y) * width,
+                    static_cast<size_t>(width) * sizeof(uint32_t));
         return false;
     }
 
@@ -306,20 +314,18 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
     targetHeight_ = bufH;
     for (int y = 0; y < bufH; ++y)
     {
-        uint32_t *line = target_ + static_cast<size_t>(y) * targetStride_;
-        for (int x = 0; x < bufW; ++x)
-            line[x] = background;
+        uint32_t* line = target_ + static_cast<size_t>(y) * targetStride_;
+        for (int x = 0; x < bufW; ++x) line[x] = background;
     }
 
     // Logical units to samples: the window may have a content scale above 1.
     const float scale = static_cast<float>(width) / data.displayWidth * ss;
 
-    for (const ig::retained::DrawPass &pass : data.passes)
+    for (const ig::retained::DrawPass& pass: data.passes)
     {
-        if (!pass.list)
-            continue;
-        const auto &source = pass.list->vertices();
-        const auto &indices = pass.list->indices();
+        if (!pass.list) continue;
+        const auto& source = pass.list->vertices();
+        const auto& indices = pass.list->indices();
 
         const float cosine = cosf(pass.camera.angle) * pass.camera.scale;
         const float sine = sinf(pass.camera.angle) * pass.camera.scale;
@@ -333,10 +339,12 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
         vertices_.resize(source.size());
         for (size_t i = 0; i < source.size(); ++i)
         {
-            const ig::retained::DrawVertex &s = source[i];
-            Vertex &v = vertices_[i];
-            v.x = static_cast<int32_t>(lroundf((cosine * s.x - sine * s.y + translateX) * scale * 16.0f));
-            v.y = static_cast<int32_t>(lroundf((sine * s.x + cosine * s.y + translateY) * scale * 16.0f));
+            const ig::retained::DrawVertex& s = source[i];
+            Vertex& v = vertices_[i];
+            v.x = static_cast<int32_t>(
+                    lroundf((cosine * s.x - sine * s.y + translateX) * scale * 16.0f));
+            v.y = static_cast<int32_t>(
+                    lroundf((sine * s.x + cosine * s.y + translateY) * scale * 16.0f));
             v.u = s.u;
             v.v = s.v;
             v.r = s.color.r;
@@ -345,7 +353,7 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
             v.a = s.color.a;
         }
 
-        for (const ig::retained::DrawCmd &command : pass.list->commands())
+        for (const ig::retained::DrawCmd& command: pass.list->commands())
         {
             int cx0 = 0, cy0 = 0, cx1 = bufW, cy1 = bufH;
             if (pass.camera.angle == 0.0f)
@@ -354,16 +362,27 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
                 float fy0 = (cosine * command.clip.y + translateY) * scale;
                 float fx1 = (cosine * (command.clip.x + command.clip.w) + translateX) * scale;
                 float fy1 = (cosine * (command.clip.y + command.clip.h) + translateY) * scale;
-                if (fx0 > fx1) { const float t = fx0; fx0 = fx1; fx1 = t; }
-                if (fy0 > fy1) { const float t = fy0; fy0 = fy1; fy1 = t; }
+                if (fx0 > fx1)
+                {
+                    const float t = fx0;
+                    fx0 = fx1;
+                    fx1 = t;
+                }
+                if (fy0 > fy1)
+                {
+                    const float t = fy0;
+                    fy0 = fy1;
+                    fy1 = t;
+                }
                 cx0 = clampInt(static_cast<int>(floorf(fx0)), 0, bufW);
                 cy0 = clampInt(static_cast<int>(floorf(fy0)), 0, bufH);
                 cx1 = clampInt(static_cast<int>(ceilf(fx1)), 0, bufW);
                 cy1 = clampInt(static_cast<int>(ceilf(fy1)), 0, bufH);
             }
-            if (command.indexOffset + command.indexCount > indices.size())
-                continue;
-            const Texture *texture = command.texture ? reinterpret_cast<const Texture *>(command.texture.value) : nullptr;
+            if (command.indexOffset + command.indexCount > indices.size()) continue;
+            const Texture* texture =
+                    command.texture ? reinterpret_cast<const Texture*>(command.texture.value)
+                                    : nullptr;
             for (uint32_t i = 0; i + 2 < command.indexCount; i += 3)
             {
                 const uint32_t ia = indices[command.indexOffset + i];
@@ -371,7 +390,8 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
                 const uint32_t ic = indices[command.indexOffset + i + 2];
                 if (ia >= vertices_.size() || ib >= vertices_.size() || ic >= vertices_.size())
                     continue;
-                drawTriangle(vertices_[ia], vertices_[ib], vertices_[ic], texture, cx0, cy0, cx1, cy1);
+                drawTriangle(vertices_[ia], vertices_[ib], vertices_[ic], texture, cx0, cy0, cx1,
+                        cy1);
             }
             ++data.stats.drawCalls;
             data.stats.triangles += static_cast<int>(command.indexCount / 3u);
@@ -380,13 +400,12 @@ bool SoftRaster::render(ig::retained::DrawData &data, uint32_t *dst, int width, 
         data.stats.clipChanges += pass.list->pushClipCount();
     }
 
-    if (ss != 1)
-        resolve(dst, width, height, stride);
+    if (ss != 1) resolve(dst, width, height, stride);
     storeCache(sig, dst, width, height, stride);
     return true;
 }
 
-void SoftRaster::resolve(uint32_t *dst, int width, int height, int stride)
+void SoftRaster::resolve(uint32_t* dst, int width, int height, int stride)
 {
     const int ss = samples_;
     const int bufW = width * ss;
@@ -396,11 +415,12 @@ void SoftRaster::resolve(uint32_t *dst, int width, int height, int stride)
         auto avg = [](uint32_t a, uint32_t b) { return (a & b) + (((a ^ b) >> 1) & 0x7f7f7f7fu); };
         for (int y = 0; y < height; ++y)
         {
-            const uint32_t *top = scratch_.data() + static_cast<size_t>(y * 2) * bufW;
-            const uint32_t *bottom = top + bufW;
-            uint32_t *out = dst + static_cast<size_t>(y) * stride;
+            const uint32_t* top = scratch_.data() + static_cast<size_t>(y * 2) * bufW;
+            const uint32_t* bottom = top + bufW;
+            uint32_t* out = dst + static_cast<size_t>(y) * stride;
             for (int x = 0; x < width; ++x)
-                out[x] = 0xff000000u | avg(avg(top[x * 2], top[x * 2 + 1]), avg(bottom[x * 2], bottom[x * 2 + 1]));
+                out[x] = 0xff000000u | avg(avg(top[x * 2], top[x * 2 + 1]),
+                                               avg(bottom[x * 2], bottom[x * 2 + 1]));
         }
         return;
     }
@@ -408,13 +428,14 @@ void SoftRaster::resolve(uint32_t *dst, int width, int height, int stride)
     const uint32_t count = static_cast<uint32_t>(ss * ss);
     for (int y = 0; y < height; ++y)
     {
-        uint32_t *out = dst + static_cast<size_t>(y) * stride;
+        uint32_t* out = dst + static_cast<size_t>(y) * stride;
         for (int x = 0; x < width; ++x)
         {
             uint32_t r = 0, g = 0, b = 0;
             for (int sy = 0; sy < ss; ++sy)
             {
-                const uint32_t *in = scratch_.data() + static_cast<size_t>(y * ss + sy) * bufW + x * ss;
+                const uint32_t* in =
+                        scratch_.data() + static_cast<size_t>(y * ss + sy) * bufW + x * ss;
                 for (int sx = 0; sx < ss; ++sx)
                 {
                     r += (in[sx] >> 16) & 0xffu;
@@ -422,18 +443,19 @@ void SoftRaster::resolve(uint32_t *dst, int width, int height, int stride)
                     b += in[sx] & 0xffu;
                 }
             }
-            out[x] = 0xff000000u | (((r + count / 2) / count) << 16) | (((g + count / 2) / count) << 8) |
-                     ((b + count / 2) / count);
+            out[x] = 0xff000000u | (((r + count / 2) / count) << 16) |
+                     (((g + count / 2) / count) << 8) | ((b + count / 2) / count);
         }
     }
 }
 
-void SoftRaster::storeCache(uint64_t sig, const uint32_t *src, int width, int height, int stride)
+void SoftRaster::storeCache(uint64_t sig, const uint32_t* src, int width, int height, int stride)
 {
     cache_.resize(static_cast<size_t>(width) * height);
     for (int y = 0; y < height; ++y)
-        memcpy(cache_.data() + static_cast<size_t>(y) * width, src + static_cast<size_t>(y) * stride,
-               static_cast<size_t>(width) * sizeof(uint32_t));
+        memcpy(cache_.data() + static_cast<size_t>(y) * width,
+                src + static_cast<size_t>(y) * stride,
+                static_cast<size_t>(width) * sizeof(uint32_t));
     lastSignature_ = sig;
     cacheWidth_ = width;
     cacheHeight_ = height;

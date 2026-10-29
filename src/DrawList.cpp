@@ -9,7 +9,7 @@ namespace ig
 namespace
 {
 
-float cross(const Vec2 &a, const Vec2 &b, const Vec2 &c)
+float cross(const Vec2& a, const Vec2& b, const Vec2& c)
 {
     return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
@@ -28,21 +28,20 @@ float cross(const Vec2 &a, const Vec2 &b, const Vec2 &c)
 // culls everything.
 const float CullMargin = 2.0f;
 
-bool outsideClip(float minX, float minY, float maxX, float maxY, const Rect &clip)
+bool outsideClip(float minX, float minY, float maxX, float maxY, const Rect& clip)
 {
-    if (!(clip.width > 0.0f) || !(clip.height > 0.0f))
-        return true;
+    if (!(clip.width > 0.0f) || !(clip.height > 0.0f)) return true;
     return maxX < clip.x - CullMargin || maxY < clip.y - CullMargin ||
            minX > clip.x + clip.width + CullMargin || minY > clip.y + clip.height + CullMargin;
 }
 
-bool rectOutsideClip(const Rect &rect, float grow, const Rect &clip)
+bool rectOutsideClip(const Rect& rect, float grow, const Rect& clip)
 {
     return outsideClip(rect.x - grow, rect.y - grow, rect.x + rect.width + grow,
-                       rect.y + rect.height + grow, clip);
+            rect.y + rect.height + grow, clip);
 }
 
-bool pointInTriangle(const Vec2 &point, const Vec2 &a, const Vec2 &b, const Vec2 &c)
+bool pointInTriangle(const Vec2& point, const Vec2& a, const Vec2& b, const Vec2& c)
 {
     const float ab = cross(a, b, point);
     const float bc = cross(b, c, point);
@@ -52,10 +51,9 @@ bool pointInTriangle(const Vec2 &point, const Vec2 &a, const Vec2 &b, const Vec2
     return !hasNegative || !hasPositive;
 }
 
-bool sameRect(const Rect &a, const Rect &b)
+bool sameRect(const Rect& a, const Rect& b)
 {
-    return a.x == b.x && a.y == b.y &&
-           a.width == b.width && a.height == b.height;
+    return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height;
 }
 
 // The unit circle sampled once. Circles, rounded corners and the arcs they are
@@ -78,13 +76,13 @@ struct UnitCircle
     }
 };
 
-const UnitCircle &unitCircle()
+const UnitCircle& unitCircle()
 {
     static const UnitCircle table;
     return table;
 }
 
-bool rectContains(const Rect &outer, const Rect &inner)
+bool rectContains(const Rect& outer, const Rect& inner)
 {
     return inner.x >= outer.x && inner.y >= outer.y &&
            inner.x + inner.width <= outer.x + outer.width &&
@@ -93,14 +91,14 @@ bool rectContains(const Rect &outer, const Rect &inner)
 
 } // namespace
 
-void DrawList::emitGeometry(uint32_t firstIndex, uint32_t indexCount, const Rect &clip,
-                            TextureId texture, const Rect *bounds)
+void DrawList::emitGeometry(uint32_t firstIndex, uint32_t indexCount, const Rect& clip,
+        TextureId texture, const Rect* bounds)
 {
     if (!commands_.empty() && commands_.back().type == DrawCommandType::Geometry)
     {
-        GeometryCommand &previous = commands_.back().payload.geometry;
+        GeometryCommand& previous = commands_.back().payload.geometry;
         if (previous.texture == texture && previous.vertexOffset == 0 &&
-            previous.firstIndex + previous.indexCount == firstIndex)
+                previous.firstIndex + previous.indexCount == firstIndex)
         {
             // Same scissor: the run goes on. A tighter scissor that the new
             // geometry never reaches is no scissor at all, so the run goes on
@@ -108,9 +106,9 @@ void DrawList::emitGeometry(uint32_t firstIndex, uint32_t indexCount, const Rect
             // clipped label, or a whole window that fits its content area, from
             // starting a draw call of its own.
             if (sameRect(previous.clip, clip) ||
-                (rectContains(previous.clip, clip) &&
-                 (bounds ? rectContains(clip, *bounds)
-                         : indexedVerticesInside(firstIndex, indexCount, clip))))
+                    (rectContains(previous.clip, clip) &&
+                            (bounds ? rectContains(clip, *bounds)
+                                    : indexedVerticesInside(firstIndex, indexCount, clip))))
             {
                 previous.indexCount += indexCount;
                 return;
@@ -127,22 +125,21 @@ void DrawList::emitGeometry(uint32_t firstIndex, uint32_t indexCount, const Rect
 }
 
 bool DrawList::indexedVerticesInside(uint32_t firstIndex, uint32_t indexCount,
-                                     const Rect &clip) const
+        const Rect& clip) const
 {
     const float right = clip.x + clip.width;
     const float bottom = clip.y + clip.height;
-    const DrawIndex *index = geometry_->indices.data() + firstIndex;
-    const DrawIndex *const end = index + indexCount;
+    const DrawIndex* index = geometry_->indices.data() + firstIndex;
+    const DrawIndex* const end = index + indexCount;
     for (; index != end; ++index)
     {
-        const Vec2 &p = geometry_->vertices[*index].position;
-        if (p.x < clip.x || p.y < clip.y || p.x > right || p.y > bottom)
-            return false;
+        const Vec2& p = geometry_->vertices[*index].position;
+        if (p.x < clip.x || p.y < clip.y || p.x > right || p.y > bottom) return false;
     }
     return true;
 }
 
-DrawIndex *DrawList::allocIndices(uint32_t count)
+DrawIndex* DrawList::allocIndices(uint32_t count)
 {
     const ct::Vector<DrawIndex>::size_type first = geometry_->indices.size();
     geometry_->indices.resize(first + count);
@@ -151,7 +148,7 @@ DrawIndex *DrawList::allocIndices(uint32_t count)
 
 void DrawList::writeQuadIndices(uint32_t firstVertex)
 {
-    DrawIndex *out = allocIndices(6u);
+    DrawIndex* out = allocIndices(6u);
     out[0] = firstVertex;
     out[1] = firstVertex + 1u;
     out[2] = firstVertex + 2u;
@@ -161,22 +158,30 @@ void DrawList::writeQuadIndices(uint32_t firstVertex)
 }
 
 DrawList::DrawList()
-    : own_(), geometry_(&own_), commands_(), solidTexture_(), solidUv_(0.0f, 0.0f),
-      fadeBackground_(), disabledKeep_(1.0f)
+        : own_(),
+          geometry_(&own_),
+          commands_(),
+          solidTexture_(),
+          solidUv_(0.0f, 0.0f),
+          fadeBackground_(),
+          disabledKeep_(1.0f)
 {
 }
 
-DrawList::DrawList(const DrawList &other)
-    : own_(other.own_), geometry_(other.geometry_ == &other.own_ ? &own_ : other.geometry_),
-      commands_(other.commands_), solidTexture_(other.solidTexture_), solidUv_(other.solidUv_),
-      fadeBackground_(other.fadeBackground_), disabledKeep_(other.disabledKeep_)
+DrawList::DrawList(const DrawList& other)
+        : own_(other.own_),
+          geometry_(other.geometry_ == &other.own_ ? &own_ : other.geometry_),
+          commands_(other.commands_),
+          solidTexture_(other.solidTexture_),
+          solidUv_(other.solidUv_),
+          fadeBackground_(other.fadeBackground_),
+          disabledKeep_(other.disabledKeep_)
 {
 }
 
-DrawList &DrawList::operator=(const DrawList &other)
+DrawList& DrawList::operator=(const DrawList& other)
 {
-    if (this == &other)
-        return *this;
+    if (this == &other) return *this;
     own_ = other.own_;
     geometry_ = other.geometry_ == &other.own_ ? &own_ : other.geometry_;
     commands_ = other.commands_;
@@ -187,7 +192,7 @@ DrawList &DrawList::operator=(const DrawList &other)
     return *this;
 }
 
-void DrawList::shareGeometry(DrawList &store)
+void DrawList::shareGeometry(DrawList& store)
 {
     geometry_ = store.geometry_;
 }
@@ -214,13 +219,13 @@ void DrawList::clear()
     disabledKeep_ = 1.0f;
 }
 
-void DrawList::setSolidStyle(TextureId texture, const Vec2 &whiteUv)
+void DrawList::setSolidStyle(TextureId texture, const Vec2& whiteUv)
 {
     solidTexture_ = texture;
     solidUv_ = whiteUv;
 }
 
-void DrawList::setDisabledFade(bool enabled, const Color &background, float keep)
+void DrawList::setDisabledFade(bool enabled, const Color& background, float keep)
 {
     fadeBackground_ = background;
     if (!enabled || keep >= 1.0f || keep < 0.0f)
@@ -237,12 +242,11 @@ void DrawList::QuadBatch::reserve(uint32_t quadCount)
     drawList_.geometry_->indices.reserve(drawList_.geometry_->indices.size() + quadCount * 6u);
 }
 
-void DrawList::QuadBatch::add(const Rect &rect, const Vec2 &uvMin, const Vec2 &uvMax,
-                              const Color &color)
+void DrawList::QuadBatch::add(const Rect& rect, const Vec2& uvMin, const Vec2& uvMax,
+        const Color& color)
 {
     const Color drawn = drawList_.faded(color);
-    if (rect.width <= 0.0f || rect.height <= 0.0f || drawn.a == 0u)
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f || drawn.a == 0u) return;
     float x0 = rect.x;
     float y0 = rect.y;
     float x1 = rect.x + rect.width;
@@ -258,16 +262,30 @@ void DrawList::QuadBatch::add(const Rect &rect, const Vec2 &uvMin, const Vec2 &u
         // Trimmed to the clip here, texture coordinates with it, instead of
         // leaving the overhang to the scissor: the run then never needs a
         // scissor of its own and merges into the surrounding draw call.
-        if (x1 <= clip_.x || y1 <= clip_.y || x0 >= clipRight || y0 >= clipBottom)
-            return;
+        if (x1 <= clip_.x || y1 <= clip_.y || x0 >= clipRight || y0 >= clipBottom) return;
         const float uPerPixel = (u1 - u0) / (x1 - x0);
         const float vPerPixel = (v1 - v0) / (y1 - y0);
-        if (x0 < clip_.x) { u0 += (clip_.x - x0) * uPerPixel; x0 = clip_.x; }
-        if (y0 < clip_.y) { v0 += (clip_.y - y0) * vPerPixel; y0 = clip_.y; }
-        if (x1 > clipRight) { u1 -= (x1 - clipRight) * uPerPixel; x1 = clipRight; }
-        if (y1 > clipBottom) { v1 -= (y1 - clipBottom) * vPerPixel; y1 = clipBottom; }
-        if (x1 <= x0 || y1 <= y0)
-            return;
+        if (x0 < clip_.x)
+        {
+            u0 += (clip_.x - x0) * uPerPixel;
+            x0 = clip_.x;
+        }
+        if (y0 < clip_.y)
+        {
+            v0 += (clip_.y - y0) * vPerPixel;
+            y0 = clip_.y;
+        }
+        if (x1 > clipRight)
+        {
+            u1 -= (x1 - clipRight) * uPerPixel;
+            x1 = clipRight;
+        }
+        if (y1 > clipBottom)
+        {
+            v1 -= (y1 - clipBottom) * vPerPixel;
+            y1 = clipBottom;
+        }
+        if (x1 <= x0 || y1 <= y0) return;
     }
 
     if (!open_)
@@ -293,10 +311,10 @@ void DrawList::QuadBatch::flush()
         quadCount_ = 0u;
         return;
     }
-    ct::Vector<DrawIndex> &indices = drawList_.geometry_->indices;
+    ct::Vector<DrawIndex>& indices = drawList_.geometry_->indices;
     const uint32_t firstIndex = static_cast<uint32_t>(indices.size());
     indices.resize(firstIndex + quadCount_ * 6u);
-    DrawIndex *out = indices.data() + firstIndex;
+    DrawIndex* out = indices.data() + firstIndex;
     for (uint32_t quad = 0u; quad < quadCount_; ++quad, out += 6)
     {
         const DrawIndex base = firstVertex_ + quad * 4u;
@@ -314,7 +332,7 @@ void DrawList::QuadBatch::flush()
     quadCount_ = 0u;
 }
 
-void DrawList::append(const DrawList &other)
+void DrawList::append(const DrawList& other)
 {
     if (other.geometry_ == geometry_)
     {
@@ -323,12 +341,12 @@ void DrawList::append(const DrawList &other)
         // across the seam stays one draw call.
         for (ct::Vector<DrawCommand>::size_type i = 0; i < other.commands_.size(); ++i)
         {
-            const DrawCommand &command = other.commands_[i];
+            const DrawCommand& command = other.commands_[i];
             if (command.type == DrawCommandType::Geometry)
             {
-                const GeometryCommand &geometry = command.payload.geometry;
+                const GeometryCommand& geometry = command.payload.geometry;
                 emitGeometry(geometry.firstIndex, geometry.indexCount, geometry.clip,
-                             geometry.texture, nullptr);
+                        geometry.texture, nullptr);
             }
             else
                 commands_.push_back(command);
@@ -346,29 +364,29 @@ void DrawList::append(const DrawList &other)
     geometry_->vertices.resize(vertexOffset + other.geometry_->vertices.size());
     if (!other.geometry_->vertices.empty())
         memcpy(geometry_->vertices.data() + vertexOffset, other.geometry_->vertices.data(),
-               other.geometry_->vertices.size() * sizeof(DrawVertex));
+                other.geometry_->vertices.size() * sizeof(DrawVertex));
     geometry_->indices.resize(indexOffset + other.geometry_->indices.size());
     {
-        DrawIndex *out = geometry_->indices.data() + indexOffset;
-        const DrawIndex *in = other.geometry_->indices.data();
+        DrawIndex* out = geometry_->indices.data() + indexOffset;
+        const DrawIndex* in = other.geometry_->indices.data();
         const ct::Vector<DrawIndex>::size_type count = other.geometry_->indices.size();
-        for (ct::Vector<DrawIndex>::size_type i = 0; i < count; ++i)
-            out[i] = in[i] + vertexOffset;
+        for (ct::Vector<DrawIndex>::size_type i = 0; i < count; ++i) out[i] = in[i] + vertexOffset;
     }
     geometry_->textBytes.resize(textOffset + other.geometry_->textBytes.size());
     if (!other.geometry_->textBytes.empty())
-        memcpy(geometry_->textBytes.data() + textOffset, other.geometry_->textBytes.data(), other.geometry_->textBytes.size());
+        memcpy(geometry_->textBytes.data() + textOffset, other.geometry_->textBytes.data(),
+                other.geometry_->textBytes.size());
 
     for (ct::Vector<DrawCommand>::size_type i = 0; i < other.commands_.size(); ++i)
     {
-        const DrawCommand &command = other.commands_[i];
+        const DrawCommand& command = other.commands_[i];
         if (command.type == DrawCommandType::Geometry)
         {
             // Through the same merge as a fresh command, so two windows whose
             // chrome shares the viewport clip become one draw call at the seam.
-            const GeometryCommand &geometry = command.payload.geometry;
+            const GeometryCommand& geometry = command.payload.geometry;
             emitGeometry(geometry.firstIndex + indexOffset, geometry.indexCount, geometry.clip,
-                         geometry.texture, nullptr);
+                    geometry.texture, nullptr);
             continue;
         }
         DrawCommand text(command);
@@ -377,17 +395,16 @@ void DrawList::append(const DrawList &other)
     }
 }
 
-void DrawList::addLine(const Vec2 &from, const Vec2 &to,
-                       const Color &color, const Rect &clip, float thickness)
+void DrawList::addLine(const Vec2& from, const Vec2& to, const Color& color, const Rect& clip,
+        float thickness)
 {
-    if (thickness <= 0.0f || color.a == 0u)
-        return;
+    if (thickness <= 0.0f || color.a == 0u) return;
     // Half the (at least 1px) core plus the 1px fringe on each side.
     const float reach = (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f;
-    const Rect bounds((from.x < to.x ? from.x : to.x) - reach, (from.y < to.y ? from.y : to.y) - reach,
-                      fabsf(to.x - from.x) + reach * 2.0f, fabsf(to.y - from.y) + reach * 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    const Rect bounds((from.x < to.x ? from.x : to.x) - reach,
+            (from.y < to.y ? from.y : to.y) - reach, fabsf(to.x - from.x) + reach * 2.0f,
+            fabsf(to.y - from.y) + reach * 2.0f);
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     const float dx = to.x - from.x;
     const float dy = to.y - from.y;
@@ -395,8 +412,8 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     const float halfThickness = thickness * 0.5f;
     if (lengthSquared <= 0.0f)
     {
-        addRectFilled(Rect(from.x - halfThickness, from.y - halfThickness,
-                           thickness, thickness), color, clip);
+        addRectFilled(Rect(from.x - halfThickness, from.y - halfThickness, thickness, thickness),
+                color, clip);
         return;
     }
     const Color shade = faded(color);
@@ -425,16 +442,20 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     // diagonals and the short segments that arcs and curves are built from.
     const bool axisAligned = (from.x == to.x) || (from.y == to.y);
     if (axisAligned && thickness >= 1.0f &&
-        thickness == static_cast<float>(static_cast<int>(thickness)))
+            thickness == static_cast<float>(static_cast<int>(thickness)))
     {
         const Vec2 flatPerpendicular(-dy * inverseLength * halfThickness,
-                                     dx * inverseLength * halfThickness);
+                dx * inverseLength * halfThickness);
         const uint32_t flatFirst = static_cast<uint32_t>(geometry_->vertices.size());
         const uint32_t flatIndex = static_cast<uint32_t>(geometry_->indices.size());
-        geometry_->vertices.emplace_back(Vec2(from.x + flatPerpendicular.x, from.y + flatPerpendicular.y), uv, shade);
-        geometry_->vertices.emplace_back(Vec2(to.x + flatPerpendicular.x, to.y + flatPerpendicular.y), uv, shade);
-        geometry_->vertices.emplace_back(Vec2(to.x - flatPerpendicular.x, to.y - flatPerpendicular.y), uv, shade);
-        geometry_->vertices.emplace_back(Vec2(from.x - flatPerpendicular.x, from.y - flatPerpendicular.y), uv, shade);
+        geometry_->vertices.emplace_back(
+                Vec2(from.x + flatPerpendicular.x, from.y + flatPerpendicular.y), uv, shade);
+        geometry_->vertices.emplace_back(
+                Vec2(to.x + flatPerpendicular.x, to.y + flatPerpendicular.y), uv, shade);
+        geometry_->vertices.emplace_back(
+                Vec2(to.x - flatPerpendicular.x, to.y - flatPerpendicular.y), uv, shade);
+        geometry_->vertices.emplace_back(
+                Vec2(from.x - flatPerpendicular.x, from.y - flatPerpendicular.y), uv, shade);
         writeQuadIndices(flatFirst);
         emitGeometry(flatIndex, 6u, clip, solidTexture_, &bounds);
         return;
@@ -450,7 +471,7 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     }
     const Vec2 core(unitPerpendicular.x * coreHalf, unitPerpendicular.y * coreHalf);
     const Vec2 outer(unitPerpendicular.x * (coreHalf + fringe),
-                     unitPerpendicular.y * (coreHalf + fringe));
+            unitPerpendicular.y * (coreHalf + fringe));
     const Color transparentEdge(coreColor.r, coreColor.g, coreColor.b, 0u);
 
     // Six vertices per end: transparent outer, opaque core, opaque core,
@@ -465,8 +486,8 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     geometry_->vertices.emplace_back(Vec2(to.x - outer.x, to.y - outer.y), uv, transparentEdge);
 
     // Three strips: fringe, core, fringe.
-    static const uint32_t stripOffsets[3] = {0u, 2u, 4u};
-    DrawIndex *out = allocIndices(18u);
+    static const uint32_t stripOffsets[3] = { 0u, 2u, 4u };
+    DrawIndex* out = allocIndices(18u);
     for (uint32_t strip = 0; strip < 3u; ++strip, out += 6)
     {
         const uint32_t base = firstVertex + stripOffsets[strip];
@@ -480,13 +501,10 @@ void DrawList::addLine(const Vec2 &from, const Vec2 &to,
     emitGeometry(firstIndex, 18u, clip, solidTexture_, &bounds);
 }
 
-void DrawList::addRect(const Rect &rect,
-                       const Color &color, const Rect &clip, float thickness)
+void DrawList::addRect(const Rect& rect, const Color& color, const Rect& clip, float thickness)
 {
-    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip))
-        return;
-    if (rect.width <= 0.0f || rect.height <= 0.0f)
-        return;
+    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip)) return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f) return;
 
     const Vec2 topLeft(rect.x, rect.y);
     const Vec2 topRight(rect.x + rect.width, rect.y);
@@ -498,13 +516,11 @@ void DrawList::addRect(const Rect &rect,
     addLine(bottomLeft, topLeft, color, clip, thickness);
 }
 
-void DrawList::addRectFilled(const Rect &rect, const Color &color, const Rect &clip)
+void DrawList::addRectFilled(const Rect& rect, const Color& color, const Rect& clip)
 {
     const Color shade = faded(color);
-    if (rect.width <= 0.0f || rect.height <= 0.0f || shade.a == 0u)
-        return;
-    if (rectOutsideClip(rect, 0.0f, clip))
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f || shade.a == 0u) return;
+    if (rectOutsideClip(rect, 0.0f, clip)) return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
     const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
@@ -520,57 +536,53 @@ void DrawList::addRectFilled(const Rect &rect, const Color &color, const Rect &c
     emitGeometry(firstIndex, 6u, clip, solidTexture_, &rect);
 }
 
-void DrawList::addRectGradient(const Rect &rect, const Color &topLeft, const Color &topRight,
-                               const Color &bottomRight, const Color &bottomLeft, const Rect &clip)
+void DrawList::addRectGradient(const Rect& rect, const Color& topLeft, const Color& topRight,
+        const Color& bottomRight, const Color& bottomLeft, const Rect& clip)
 {
     const Color shadeTopLeft = faded(topLeft);
     const Color shadeTopRight = faded(topRight);
     const Color shadeBottomRight = faded(bottomRight);
     const Color shadeBottomLeft = faded(bottomLeft);
-    if (rect.width <= 0.0f || rect.height <= 0.0f)
-        return;
-    if (rectOutsideClip(rect, 0.0f, clip))
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f) return;
+    if (rectOutsideClip(rect, 0.0f, clip)) return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
     const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
     const Vec2 uv = solidUv_;
     geometry_->vertices.emplace_back(Vec2(rect.x, rect.y), uv, shadeTopLeft);
     geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y), uv, shadeTopRight);
-    geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y + rect.height), uv, shadeBottomRight);
+    geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y + rect.height), uv,
+            shadeBottomRight);
     geometry_->vertices.emplace_back(Vec2(rect.x, rect.y + rect.height), uv, shadeBottomLeft);
     writeQuadIndices(firstVertex);
     emitGeometry(firstIndex, 6u, clip, solidTexture_, &rect);
 }
 
-void DrawList::addImage(TextureId texture, const Rect &rect, const Vec2 &uvMin,
-                        const Vec2 &uvMax, const Color &color, const Rect &clip)
+void DrawList::addImage(TextureId texture, const Rect& rect, const Vec2& uvMin, const Vec2& uvMax,
+        const Color& color, const Rect& clip)
 {
     const Color shade = faded(color);
-    if (rect.width <= 0.0f || rect.height <= 0.0f || shade.a == 0u)
-        return;
-    if (rectOutsideClip(rect, 0.0f, clip))
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f || shade.a == 0u) return;
+    if (rectOutsideClip(rect, 0.0f, clip)) return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
     const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
     geometry_->vertices.emplace_back(Vec2(rect.x, rect.y), uvMin, shade);
-    geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y),
-                                   Vec2(uvMax.x, uvMin.y), shade);
+    geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y), Vec2(uvMax.x, uvMin.y),
+            shade);
     geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y + rect.height), uvMax, shade);
-    geometry_->vertices.emplace_back(Vec2(rect.x, rect.y + rect.height),
-                                   Vec2(uvMin.x, uvMax.y), shade);
+    geometry_->vertices.emplace_back(Vec2(rect.x, rect.y + rect.height), Vec2(uvMin.x, uvMax.y),
+            shade);
     writeQuadIndices(firstVertex);
 
     emitGeometry(firstIndex, 6u, clip, texture, &rect);
 }
 
 void DrawList::addImageQuad(TextureId texture, const Vec2 (&corners)[4], const Vec2 (&uvs)[4],
-                            const Color &color, const Rect &clip)
+        const Color& color, const Rect& clip)
 {
     const Color shade = faded(color);
-    if (shade.a == 0u)
-        return;
+    if (shade.a == 0u) return;
     float left = corners[0].x;
     float top = corners[0].y;
     float right = corners[0].x;
@@ -583,30 +595,25 @@ void DrawList::addImageQuad(TextureId texture, const Vec2 (&corners)[4], const V
         bottom = corners[i].y > bottom ? corners[i].y : bottom;
     }
     const Rect bounds(left, top, right - left, bottom - top);
-    if (bounds.width <= 0.0f || bounds.height <= 0.0f)
-        return;
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    if (bounds.width <= 0.0f || bounds.height <= 0.0f) return;
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
     const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
-    for (int i = 0; i < 4; ++i)
-        geometry_->vertices.emplace_back(corners[i], uvs[i], shade);
+    for (int i = 0; i < 4; ++i) geometry_->vertices.emplace_back(corners[i], uvs[i], shade);
     writeQuadIndices(firstVertex);
 
     emitGeometry(firstIndex, 6u, clip, texture, &bounds);
 }
 
-void DrawList::addCircleFilled(const Vec2 &center, float radius,
-                               const Color &color, const Rect &clip, uint32_t segments)
+void DrawList::addCircleFilled(const Vec2& center, float radius, const Color& color,
+        const Rect& clip, uint32_t segments)
 {
     const Color shade = faded(color);
-    if (radius <= 0.0f || shade.a == 0u)
-        return;
-    const Rect bounds(center.x - radius - 1.0f, center.y - radius - 1.0f,
-                      (radius + 1.0f) * 2.0f, (radius + 1.0f) * 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    if (radius <= 0.0f || shade.a == 0u) return;
+    const Rect bounds(center.x - radius - 1.0f, center.y - radius - 1.0f, (radius + 1.0f) * 2.0f,
+            (radius + 1.0f) * 2.0f);
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     // A count that divides the unit-circle table is read from it; the
     // automatic count is rounded to one that does. Another explicit count is
@@ -622,7 +629,9 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
         const float maxError = radius < 0.3f ? radius : 0.3f;
         const float angle = acosf(1.0f - maxError / radius);
         segments = static_cast<uint32_t>(3.14159265358979323846f / angle + 0.5f);
-        segments = segments < 8u ? 8u : (segments > UnitCircle::Samples ? UnitCircle::Samples : segments);
+        segments = segments < 8u
+                           ? 8u
+                           : (segments > UnitCircle::Samples ? UnitCircle::Samples : segments);
         stride = UnitCircle::Samples / segments;
         segments = UnitCircle::Samples / stride;
     }
@@ -642,7 +651,7 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     float unitY[256];
     if (stride != 0u)
     {
-        const UnitCircle &unit = unitCircle();
+        const UnitCircle& unit = unitCircle();
         for (uint32_t i = 0; i < segments; ++i)
         {
             unitX[i] = unit.points[i * stride].x;
@@ -660,14 +669,14 @@ void DrawList::addCircleFilled(const Vec2 &center, float radius,
     }
     geometry_->vertices.emplace_back(center, uv, shade);
     for (uint32_t i = 0; i < segments; ++i)
-        geometry_->vertices.emplace_back(Vec2(center.x + unitX[i] * radius, center.y + unitY[i] * radius),
-                               uv, shade);
+        geometry_->vertices.emplace_back(
+                Vec2(center.x + unitX[i] * radius, center.y + unitY[i] * radius), uv, shade);
     const float outerRadius = radius + fringe;
     for (uint32_t i = 0; i < segments; ++i)
-        geometry_->vertices.emplace_back(Vec2(center.x + unitX[i] * outerRadius,
-                                    center.y + unitY[i] * outerRadius),
-                               uv, transparentEdge);
-    DrawIndex *out = allocIndices(segments * 9u);
+        geometry_->vertices.emplace_back(
+                Vec2(center.x + unitX[i] * outerRadius, center.y + unitY[i] * outerRadius), uv,
+                transparentEdge);
+    DrawIndex* out = allocIndices(segments * 9u);
     for (uint32_t i = 0; i < segments; ++i, out += 9)
     {
         const uint32_t next = (i + 1u) % segments;
@@ -698,8 +707,8 @@ namespace
 // order. `inset` grows (or, when negative, shrinks) the outline away from the
 // rectangle - that is what produces the transparent fringe ring.
 // Returns the number of points written.
-uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegments,
-                             float inset, Vec2 *out)
+uint32_t buildRoundedOutline(const Rect& rect, float radius, uint32_t cornerSegments, float inset,
+        Vec2* out)
 {
     // The corner centres are fixed by the rectangle itself and must NOT move
     // with the inset: only the arc radius grows. Offsetting the edges as well
@@ -714,15 +723,15 @@ uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegm
     // of each corner must match the quadrant its arc is drawn in; pairing them
     // the wrong way round makes the outline jump straight across the rectangle
     // between corners, which shows up as a spur at each corner.
-    const float cx[4] = {right - radius, left + radius, left + radius, right - radius};
-    const float cy[4] = {bottom - radius, bottom - radius, top + radius, top + radius};
+    const float cx[4] = { right - radius, left + radius, left + radius, right - radius };
+    const float cy[4] = { bottom - radius, bottom - radius, top + radius, top + radius };
     static const float kQuarter = 1.57079632679489661923f;
     // A count that divides the table's quarter (what roundedCornerSegments
     // hands out) is read from the table; any other is computed.
     const bool tabulated = cornerSegments > 0u && cornerSegments <= UnitCircle::Quarter &&
                            UnitCircle::Quarter % cornerSegments == 0u;
     const uint32_t stride = tabulated ? UnitCircle::Quarter / cornerSegments : 0u;
-    const UnitCircle &unit = unitCircle();
+    const UnitCircle& unit = unitCircle();
     uint32_t count = 0;
     for (uint32_t corner = 0; corner < 4u; ++corner)
     {
@@ -731,14 +740,14 @@ uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegm
         {
             if (tabulated)
             {
-                const Vec2 &u = unit.points[corner * UnitCircle::Quarter + i * stride];
+                const Vec2& u = unit.points[corner * UnitCircle::Quarter + i * stride];
                 out[count].x = cx[corner] + u.x * cornerRadius;
                 out[count].y = cy[corner] + u.y * cornerRadius;
             }
             else
             {
-                const float angle =
-                    start + kQuarter * static_cast<float>(i) / static_cast<float>(cornerSegments);
+                const float angle = start + kQuarter * static_cast<float>(i) /
+                                                    static_cast<float>(cornerSegments);
                 out[count].x = cx[corner] + cosf(angle) * cornerRadius;
                 out[count].y = cy[corner] + sinf(angle) * cornerRadius;
             }
@@ -758,15 +767,12 @@ uint32_t buildRoundedOutline(const Rect &rect, float radius, uint32_t cornerSegm
 // slider (duas faixas em forma de pílula) ou num botão.
 uint32_t roundedCornerSegments(float radius, uint32_t requested)
 {
-    if (requested > 0u)
-        return requested > 16u ? 16u : requested;
-    if (radius <= 0.0f)
-        return 1u;
+    if (requested > 0u) return requested > 16u ? 16u : requested;
+    if (radius <= 0.0f) return 1u;
     const float maxError = radius < 0.3f ? radius : 0.3f;
     const float angle = acosf(1.0f - maxError / radius);
     uint32_t segments = static_cast<uint32_t>(3.14159265358979323846f / angle * 0.25f + 0.5f);
-    if (segments < 2u)
-        segments = 2u;
+    if (segments < 2u) segments = 2u;
     // Arredondado para um divisor do quarto da tabela do círculo unitário, para
     // o arco ser lido dela em vez de calculado com sinf/cosf (ver
     // buildRoundedOutline); para cima, para o arredondamento nunca piorar o erro.
@@ -775,18 +781,15 @@ uint32_t roundedCornerSegments(float radius, uint32_t requested)
 
 } // namespace
 
-void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color &color,
-                                    const Rect &clip, uint32_t cornerSegments)
+void DrawList::addRectFilledRounded(const Rect& rect, float radius, const Color& color,
+        const Rect& clip, uint32_t cornerSegments)
 {
-    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u)
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u) return;
     const Rect bounds(rect.x - 1.0f, rect.y - 1.0f, rect.width + 2.0f, rect.height + 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
-    if (radius > maxRadius)
-        radius = maxRadius;
+    if (radius > maxRadius) radius = maxRadius;
     if (radius <= 0.0f)
     {
         addRectFilled(rect, color, clip);
@@ -809,8 +812,7 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
     const Vec2 centre(rect.x + rect.width * 0.5f, rect.y + rect.height * 0.5f);
 
     geometry_->vertices.emplace_back(centre, uv, shade);
-    for (uint32_t i = 0; i < pointCount; ++i)
-        geometry_->vertices.emplace_back(inner[i], uv, shade);
+    for (uint32_t i = 0; i < pointCount; ++i) geometry_->vertices.emplace_back(inner[i], uv, shade);
     for (uint32_t i = 0; i < pointCount; ++i)
         geometry_->vertices.emplace_back(outer[i], uv, transparentEdge);
 
@@ -819,16 +821,16 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
     // A rectangle cut by its clip keeps only the triangles that can touch it.
     auto emit = [this, &clip](uint32_t a, uint32_t b, uint32_t c) -> uint32_t
     {
-        const Vec2 &pa = geometry_->vertices[a].position;
-        const Vec2 &pb = geometry_->vertices[b].position;
-        const Vec2 &pc = geometry_->vertices[c].position;
+        const Vec2& pa = geometry_->vertices[a].position;
+        const Vec2& pb = geometry_->vertices[b].position;
+        const Vec2& pc = geometry_->vertices[c].position;
         const float minX = pa.x < pb.x ? (pa.x < pc.x ? pa.x : pc.x) : (pb.x < pc.x ? pb.x : pc.x);
         const float maxX = pa.x > pb.x ? (pa.x > pc.x ? pa.x : pc.x) : (pb.x > pc.x ? pb.x : pc.x);
         const float minY = pa.y < pb.y ? (pa.y < pc.y ? pa.y : pc.y) : (pb.y < pc.y ? pb.y : pc.y);
         const float maxY = pa.y > pb.y ? (pa.y > pc.y ? pa.y : pc.y) : (pb.y > pc.y ? pb.y : pc.y);
-        if (outsideClip(minX, minY, maxX, maxY, clip) ||
-            minX >= clip.x + clip.width + CullMargin || minY >= clip.y + clip.height + CullMargin ||
-            maxX <= clip.x - CullMargin || maxY <= clip.y - CullMargin)
+        if (outsideClip(minX, minY, maxX, maxY, clip) || minX >= clip.x + clip.width + CullMargin ||
+                minY >= clip.y + clip.height + CullMargin || maxX <= clip.x - CullMargin ||
+                maxY <= clip.y - CullMargin)
             return 0u;
         geometry_->indices.push_back(static_cast<DrawIndex>(a));
         geometry_->indices.push_back(static_cast<DrawIndex>(b));
@@ -839,7 +841,7 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
     if (rectContains(clip, bounds))
     {
         // Nothing to cull: every triangle, written in one go.
-        DrawIndex *out = allocIndices(pointCount * 9u);
+        DrawIndex* out = allocIndices(pointCount * 9u);
         for (uint32_t i = 0; i < pointCount; ++i, out += 9)
         {
             const uint32_t next = (i + 1u) % pointCount;
@@ -860,18 +862,18 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
         emitted = pointCount * 9u;
     }
     else
-    for (uint32_t i = 0; i < pointCount; ++i)
-    {
-        const uint32_t next = (i + 1u) % pointCount;
-        const uint32_t innerIndex = firstVertex + 1u + i;
-        const uint32_t innerNext = firstVertex + 1u + next;
-        const uint32_t outerIndex = firstVertex + 1u + pointCount + i;
-        const uint32_t outerNext = firstVertex + 1u + pointCount + next;
+        for (uint32_t i = 0; i < pointCount; ++i)
+        {
+            const uint32_t next = (i + 1u) % pointCount;
+            const uint32_t innerIndex = firstVertex + 1u + i;
+            const uint32_t innerNext = firstVertex + 1u + next;
+            const uint32_t outerIndex = firstVertex + 1u + pointCount + i;
+            const uint32_t outerNext = firstVertex + 1u + pointCount + next;
 
-        emitted += emit(firstVertex, innerIndex, innerNext);
-        emitted += emit(innerIndex, outerIndex, outerNext);
-        emitted += emit(innerIndex, outerNext, innerNext);
-    }
+            emitted += emit(firstVertex, innerIndex, innerNext);
+            emitted += emit(innerIndex, outerIndex, outerNext);
+            emitted += emit(innerIndex, outerNext, innerNext);
+        }
     if (emitted == 0u)
     {
         geometry_->vertices.resize(firstVertex);
@@ -880,18 +882,15 @@ void DrawList::addRectFilledRounded(const Rect &rect, float radius, const Color 
     emitGeometry(firstIndex, emitted, clip, solidTexture_, &bounds);
 }
 
-void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
-                      const Color &color, const Rect &clip, float thickness,
-                      uint32_t segments)
+void DrawList::addArc(const Vec2& center, float radius, float from, float to, const Color& color,
+        const Rect& clip, float thickness, uint32_t segments)
 {
     const Color shade = faded(color);
-    if (radius <= 0.0f || thickness <= 0.0f || shade.a == 0u)
-        return;
+    if (radius <= 0.0f || thickness <= 0.0f || shade.a == 0u) return;
     // The whole circle's box: cheap, and never smaller than the arc's.
     const float reach = radius + thickness * 0.5f + 1.0f;
     const Rect bounds(center.x - reach, center.y - reach, reach * 2.0f, reach * 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
     if (to < from)
     {
         const float swap = from;
@@ -899,8 +898,7 @@ void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
         to = swap;
     }
     const float sweep = to - from;
-    if (sweep <= 0.0f)
-        return;
+    if (sweep <= 0.0f) return;
 
     if (segments == 0u)
     {
@@ -910,10 +908,8 @@ void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
         const float lengthSegments = radius * sweep * 0.5f;
         segments = static_cast<uint32_t>(lengthSegments) + 6u;
     }
-    if (segments < 3u)
-        segments = 3u;
-    if (segments > 256u)
-        segments = 256u;
+    if (segments < 3u) segments = 3u;
+    if (segments > 256u) segments = 256u;
 
     const float half = thickness * 0.5f;
     const float fringe = 1.0f;
@@ -942,22 +938,29 @@ void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
         Color ringColor = coreColor;
         switch (ring)
         {
-        case 0: offset = coreHalf + fringe; ringColor = transparentEdge; break;
-        case 1: offset = coreHalf; break;
-        case 2: offset = -coreHalf; break;
-        default: offset = -(coreHalf + fringe); ringColor = transparentEdge; break;
+            case 0:
+                offset = coreHalf + fringe;
+                ringColor = transparentEdge;
+                break;
+            case 1:
+                offset = coreHalf;
+                break;
+            case 2:
+                offset = -coreHalf;
+                break;
+            default:
+                offset = -(coreHalf + fringe);
+                ringColor = transparentEdge;
+                break;
         }
         float ringRadius = radius + offset;
-        if (ringRadius < 0.0f)
-            ringRadius = 0.0f;
+        if (ringRadius < 0.0f) ringRadius = 0.0f;
         for (uint32_t i = 0; i < ringPoints; ++i)
         {
-            const float angle =
-                from + sweep * static_cast<float>(i) / static_cast<float>(segments);
+            const float angle = from + sweep * static_cast<float>(i) / static_cast<float>(segments);
             geometry_->vertices.emplace_back(
-                Vec2(center.x + cosf(angle) * ringRadius,
-                     center.y + sinf(angle) * ringRadius),
-                uv, ringColor);
+                    Vec2(center.x + cosf(angle) * ringRadius, center.y + sinf(angle) * ringRadius),
+                    uv, ringColor);
         }
     }
 
@@ -978,12 +981,11 @@ void DrawList::addArc(const Vec2 &center, float radius, float from, float to,
     emitGeometry(firstIndex, segments * 18u, clip, solidTexture_, &bounds);
 }
 
-void DrawList::addPolyline(Span<const Vec2> points, const Color &color, const Rect &clip,
-                           float thickness)
+void DrawList::addPolyline(Span<const Vec2> points, const Color& color, const Rect& clip,
+        float thickness)
 {
     const Color shade = faded(color);
-    if (points.size() < 2u || thickness <= 0.0f || shade.a == 0u)
-        return;
+    if (points.size() < 2u || thickness <= 0.0f || shade.a == 0u) return;
 
     float minX = points[0].x, minY = points[0].y, maxX = points[0].x, maxY = points[0].y;
     for (Span<const Vec2>::size_type i = 1u; i < points.size(); ++i)
@@ -997,9 +999,8 @@ void DrawList::addPolyline(Span<const Vec2> points, const Color &color, const Re
     const float fringe = 1.0f;
     const float reach = half + fringe;
     const Rect bounds(minX - reach, minY - reach, (maxX - minX) + reach * 2.0f,
-                      (maxY - minY) + reach * 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+            (maxY - minY) + reach * 2.0f);
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     // A band thinner than a pixel keeps a one-pixel core and loses opacity
     // instead, the same rule addLine uses for hairlines.
@@ -1039,8 +1040,7 @@ void DrawList::addPolyline(Span<const Vec2> points, const Color &color, const Re
             {
                 const float inverse = 1.0f / sqrtf(lengthSquared);
                 const Vec2 forward(-dy * inverse, dx * inverse);
-                if (i == 0u)
-                    normal = forward;
+                if (i == 0u) normal = forward;
                 else
                 {
                     // A média das duas normais tem de ser normalizada: sem isso a
@@ -1068,17 +1068,17 @@ void DrawList::addPolyline(Span<const Vec2> points, const Color &color, const Re
         const float innerX = normal.x * coreHalf;
         const float innerY = normal.y * coreHalf;
         geometry_->vertices.emplace_back(Vec2(current.x + outerX, current.y + outerY), uv,
-                                         transparentEdge);
+                transparentEdge);
         geometry_->vertices.emplace_back(Vec2(current.x + innerX, current.y + innerY), uv,
-                                         coreColor);
+                coreColor);
         geometry_->vertices.emplace_back(Vec2(current.x - innerX, current.y - innerY), uv,
-                                         coreColor);
+                coreColor);
         geometry_->vertices.emplace_back(Vec2(current.x - outerX, current.y - outerY), uv,
-                                         transparentEdge);
+                transparentEdge);
     }
 
     const uint32_t indexCount = (pointCount - 1u) * 18u;
-    DrawIndex *out = allocIndices(indexCount);
+    DrawIndex* out = allocIndices(indexCount);
     for (uint32_t i = 0u; i + 1u < pointCount; ++i)
     {
         const uint32_t outer = firstVertex + i * 4u;
@@ -1097,13 +1097,11 @@ void DrawList::addPolyline(Span<const Vec2> points, const Color &color, const Re
     emitGeometry(firstIndex, indexCount, clip, solidTexture_, &bounds);
 }
 
-void DrawList::addRectFilledBatch(Span<const Rect> rects, const Color &color, const Rect &clip)
+void DrawList::addRectFilledBatch(Span<const Rect> rects, const Color& color, const Rect& clip)
 {
     const Color shade = faded(color);
-    if (rects.size() == 0u || shade.a == 0u)
-        return;
-    if (!(clip.width > 0.0f) || !(clip.height > 0.0f))
-        return;
+    if (rects.size() == 0u || shade.a == 0u) return;
+    if (!(clip.width > 0.0f) || !(clip.height > 0.0f)) return;
 
     // Two passes: the first finds what is visible and the box of what will be
     // written, the second writes. One index reservation and one bounding box for
@@ -1112,7 +1110,7 @@ void DrawList::addRectFilledBatch(Span<const Rect> rects, const Color &color, co
     Rect bounds;
     for (Span<const Rect>::size_type i = 0u; i < rects.size(); ++i)
     {
-        const Rect &rect = rects[i];
+        const Rect& rect = rects[i];
         if (rect.width <= 0.0f || rect.height <= 0.0f || rectOutsideClip(rect, 0.0f, clip))
             continue;
         if (visible == 0u)
@@ -1125,32 +1123,30 @@ void DrawList::addRectFilledBatch(Span<const Rect> rects, const Color &color, co
             const float top = bounds.y < rect.y ? bounds.y : rect.y;
             float right = bounds.x + bounds.width;
             float bottom = bounds.y + bounds.height;
-            if (rect.x + rect.width > right)
-                right = rect.x + rect.width;
-            if (rect.y + rect.height > bottom)
-                bottom = rect.y + rect.height;
+            if (rect.x + rect.width > right) right = rect.x + rect.width;
+            if (rect.y + rect.height > bottom) bottom = rect.y + rect.height;
             bounds = Rect(left, top, right - left, bottom - top);
         }
         ++visible;
     }
-    if (visible == 0u)
-        return;
+    if (visible == 0u) return;
 
     const uint32_t firstVertex = static_cast<uint32_t>(geometry_->vertices.size());
     const uint32_t firstIndex = static_cast<uint32_t>(geometry_->indices.size());
     const Vec2 uv = solidUv_;
-    DrawIndex *out = allocIndices(visible * 6u);
+    DrawIndex* out = allocIndices(visible * 6u);
 
     uint32_t written = 0u;
     for (Span<const Rect>::size_type i = 0u; i < rects.size(); ++i)
     {
-        const Rect &rect = rects[i];
+        const Rect& rect = rects[i];
         if (rect.width <= 0.0f || rect.height <= 0.0f || rectOutsideClip(rect, 0.0f, clip))
             continue;
         const uint32_t vertex = firstVertex + written * 4u;
         geometry_->vertices.emplace_back(Vec2(rect.x, rect.y), uv, shade);
         geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y), uv, shade);
-        geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y + rect.height), uv, shade);
+        geometry_->vertices.emplace_back(Vec2(rect.x + rect.width, rect.y + rect.height), uv,
+                shade);
         geometry_->vertices.emplace_back(Vec2(rect.x, rect.y + rect.height), uv, shade);
         out[0] = static_cast<DrawIndex>(vertex);
         out[1] = static_cast<DrawIndex>(vertex + 1u);
@@ -1164,17 +1160,14 @@ void DrawList::addRectFilledBatch(Span<const Rect> rects, const Color &color, co
     emitGeometry(firstIndex, written * 6u, clip, solidTexture_, &bounds);
 }
 
-void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color,
-                              const Rect &clip, float thickness, uint32_t cornerSegments)
+void DrawList::addRectRounded(const Rect& rect, float radius, const Color& color, const Rect& clip,
+        float thickness, uint32_t cornerSegments)
 {
-    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u || thickness <= 0.0f)
-        return;
-    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip))
-        return;
+    if (rect.width <= 0.0f || rect.height <= 0.0f || color.a == 0u || thickness <= 0.0f) return;
+    if (rectOutsideClip(rect, (thickness > 1.0f ? thickness : 1.0f) * 0.5f + 1.0f, clip)) return;
 
     const float maxRadius = (rect.width < rect.height ? rect.width : rect.height) * 0.5f;
-    if (radius > maxRadius)
-        radius = maxRadius;
+    if (radius > maxRadius) radius = maxRadius;
     if (radius <= 0.0f)
     {
         addRect(rect, color, clip, thickness);
@@ -1195,11 +1188,10 @@ void DrawList::addRectRounded(const Rect &rect, float radius, const Color &color
     }
 }
 
-void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, const Rect &clip)
+void DrawList::addPolygonFilled(Span<const Vec2> points, const Color& color, const Rect& clip)
 {
     const Color shade = faded(color);
-    if (points.size() < 3u || shade.a == 0u)
-        return;
+    if (points.size() < 3u || shade.a == 0u) return;
     float minX = points[0].x, minY = points[0].y, maxX = points[0].x, maxY = points[0].y;
     for (Span<const Vec2>::size_type i = 1; i < points.size(); ++i)
     {
@@ -1209,18 +1201,16 @@ void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, con
         maxY = points[i].y > maxY ? points[i].y : maxY;
     }
     const Rect bounds(minX - 1.0f, minY - 1.0f, maxX - minX + 2.0f, maxY - minY + 2.0f);
-    if (rectOutsideClip(bounds, 0.0f, clip))
-        return;
+    if (rectOutsideClip(bounds, 0.0f, clip)) return;
 
     float signedArea = 0.0f;
     for (Span<const Vec2>::size_type i = 0; i < points.size(); ++i)
     {
-        const Vec2 &current = points[i];
-        const Vec2 &next = points[(i + 1u) % points.size()];
+        const Vec2& current = points[i];
+        const Vec2& next = points[(i + 1u) % points.size()];
         signedArea += current.x * next.y - current.y * next.x;
     }
-    if (signedArea == 0.0f)
-        return;
+    if (signedArea == 0.0f) return;
 
     ct::Vector<uint32_t> remaining;
     ct::Vector<DrawIndex> triangleIndices;
@@ -1239,22 +1229,21 @@ void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, con
             const uint32_t current = remaining[i];
             const uint32_t next = remaining[(i + 1u) % remaining.size()];
             const float turn = cross(points[previous], points[current], points[next]);
-            if ((clockwise && turn >= 0.0f) || (!clockwise && turn <= 0.0f))
-                continue;
+            if ((clockwise && turn >= 0.0f) || (!clockwise && turn <= 0.0f)) continue;
 
             bool containsPoint = false;
             for (ct::Vector<uint32_t>::size_type other = 0; other < remaining.size(); ++other)
             {
                 const uint32_t candidate = remaining[other];
                 if (candidate != previous && candidate != current && candidate != next &&
-                    pointInTriangle(points[candidate], points[previous], points[current], points[next]))
+                        pointInTriangle(points[candidate], points[previous], points[current],
+                                points[next]))
                 {
                     containsPoint = true;
                     break;
                 }
             }
-            if (containsPoint)
-                continue;
+            if (containsPoint) continue;
 
             triangleIndices.push_back(previous);
             triangleIndices.push_back(current);
@@ -1263,8 +1252,7 @@ void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, con
             removedEar = true;
             break;
         }
-        if (!removedEar)
-            return;
+        if (!removedEar) return;
     }
 
     triangleIndices.push_back(remaining[0]);
@@ -1278,23 +1266,22 @@ void DrawList::addPolygonFilled(Span<const Vec2> points, const Color &color, con
         geometry_->vertices.emplace_back(points[i], uv, shade);
     for (ct::Vector<DrawIndex>::size_type i = 0; i < triangleIndices.size(); ++i)
         geometry_->indices.push_back(firstVertex + triangleIndices[i]);
-    emitGeometry(firstIndex,
-                       static_cast<uint32_t>(triangleIndices.size()), clip, solidTexture_, &bounds);
+    emitGeometry(firstIndex, static_cast<uint32_t>(triangleIndices.size()), clip, solidTexture_,
+            &bounds);
 }
 
-void DrawList::addText(StringView text, const Vec2 &position, FontId font,
-                       float logicalSize, const Color &color, const Rect &clip)
+void DrawList::addText(StringView text, const Vec2& position, FontId font, float logicalSize,
+        const Color& color, const Rect& clip)
 {
     // The backend shapes this text, so its width and line count are unknown
     // here: only cull what certainly starts past the clip's right or bottom
     // edge (text runs right and down from position).
     if (!(clip.width > 0.0f) || !(clip.height > 0.0f) ||
-        position.x > clip.x + clip.width + CullMargin ||
-        position.y > clip.y + clip.height + CullMargin)
+            position.x > clip.x + clip.width + CullMargin ||
+            position.y > clip.y + clip.height + CullMargin)
         return;
     const uint32_t offset = static_cast<uint32_t>(geometry_->textBytes.size());
-    for (StringView::size_type i = 0; i < text.size(); ++i)
-        geometry_->textBytes.push_back(text[i]);
+    for (StringView::size_type i = 0; i < text.size(); ++i) geometry_->textBytes.push_back(text[i]);
 
     TextCommand command;
     command.clip = clip;
@@ -1307,7 +1294,7 @@ void DrawList::addText(StringView text, const Vec2 &position, FontId font,
     commands_.push_back(DrawCommand(command));
 }
 
-DrawData DrawList::data(const Vec2 &displaySize, float dpiScale) const
+DrawData DrawList::data(const Vec2& displaySize, float dpiScale) const
 {
     DrawData result;
     result.displaySize = displaySize;

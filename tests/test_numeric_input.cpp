@@ -14,7 +14,7 @@ namespace
 
 int gFailures = 0;
 
-void check(bool condition, const char *what)
+void check(bool condition, const char* what)
 {
     if (!condition)
     {
@@ -25,38 +25,32 @@ void check(bool condition, const char *what)
 
 // O que a widget desenhou como texto neste frame (o valor do campo, com o formato
 // dele): é por aqui que se verifica o que o formato faz ao que se lê no ecrã.
-bool drewText(const ig::DrawData &data, const char *expected)
+bool drewText(const ig::DrawData& data, const char* expected)
 {
     for (size_t i = 0u; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
-        if (command.type != ig::DrawCommandType::Text)
-            continue;
-        const ig::TextCommand &text = command.payload.text;
-        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
-            continue;
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text) continue;
+        const ig::TextCommand& text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size()) continue;
         const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
-        if (drawn == ig::StringView(expected))
-            return true;
+        if (drawn == ig::StringView(expected)) return true;
     }
     return false;
 }
 
 // Quantas vezes a widget desenhou este texto no frame.
-int countText(const ig::DrawData &data, const char *expected)
+int countText(const ig::DrawData& data, const char* expected)
 {
     int count = 0;
     for (size_t i = 0u; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
-        if (command.type != ig::DrawCommandType::Text)
-            continue;
-        const ig::TextCommand &text = command.payload.text;
-        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
-            continue;
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text) continue;
+        const ig::TextCommand& text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size()) continue;
         const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
-        if (drawn == ig::StringView(expected))
-            ++count;
+        if (drawn == ig::StringView(expected)) ++count;
     }
     return count;
 }
@@ -72,36 +66,46 @@ struct Field
     bool otherShown;
     int changes;
     // O formato do valor (o "%04X" do demo): nulo é o de sempre.
-    const char *format;
+    const char* format;
 
-    Field(bool floating, float initial, const char *valueFormat = nullptr)
-        : backend(), context(backend), harness(context), isFloat(floating),
-          intValue(static_cast<int>(initial)), floatValue(initial), otherShown(true), changes(0),
-          format(valueFormat)
+    Field(bool floating, float initial, const char* valueFormat = nullptr)
+            : backend(),
+              context(backend),
+              harness(context),
+              isFloat(floating),
+              intValue(static_cast<int>(initial)),
+              floatValue(initial),
+              otherShown(true),
+              changes(0),
+              format(valueFormat)
     {
         frame();
         // Focus the field.
-        harness.click(150.0f, 24.0f, [this](ig::Context &c) { build(c); });
+        harness.click(150.0f, 24.0f, [this](ig::Context& c) { build(c); });
     }
 
-    void build(ig::Context &c)
+    void build(ig::Context& c)
     {
         c.beginMainWindow("main");
-        const bool changed =
-            isFloat ? c.inputFloat("value", floatValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), 3,
-                                   format)
-                    : c.inputInt("value", intValue, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), format);
-        if (changed)
-            ++changes;
-        if (otherShown)
-            c.button("other", ig::Rect(10.0f, 60.0f, 100.0f, 28.0f));
+        const bool changed = isFloat ? c.inputFloat("value", floatValue,
+                                               ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), 3, format)
+                                     : c.inputInt("value", intValue,
+                                               ig::Rect(10.0f, 10.0f, 300.0f, 28.0f), format);
+        if (changed) ++changes;
+        if (otherShown) c.button("other", ig::Rect(10.0f, 60.0f, 100.0f, 28.0f));
         c.endWindow();
     }
 
-    void frame() { harness.frame([this](ig::Context &c) { build(c); }); }
+    void frame()
+    {
+        harness.frame([this](ig::Context& c) { build(c); });
+    }
 
     // O frame desenhado, para os testes que olham para o que a widget escreveu.
-    const ig::DrawData &draw() { return harness.frame([this](ig::Context &c) { build(c); }); }
+    const ig::DrawData& draw()
+    {
+        return harness.frame([this](ig::Context& c) { build(c); });
+    }
 
     void key(ig::KeyCode code)
     {
@@ -109,11 +113,11 @@ struct Field
         frame();
     }
 
-    void type(const char *text)
+    void type(const char* text)
     {
-        for (const char *p = text; *p; ++p)
+        for (const char* p = text; *p; ++p)
         {
-            const char one[2] = {*p, 0};
+            const char one[2] = { *p, 0 };
             context.pushEvent(ig::Event::textInput(one));
             frame();
         }
@@ -121,8 +125,7 @@ struct Field
 
     void clear()
     {
-        for (int i = 0; i < 20; ++i)
-            key(ig::KeyCode::Backspace);
+        for (int i = 0; i < 20; ++i) key(ig::KeyCode::Backspace);
     }
 };
 
@@ -207,7 +210,8 @@ void test_float_typing()
         check(f.floatValue == 1e9f, "inputFloat: overflow to infinity is rejected");
         f.clear();
         f.type("0x10");
-        check(f.floatValue == 0.0f, "inputFloat: hex is not a float literal here (only the 0 counts)");
+        check(f.floatValue == 0.0f,
+                "inputFloat: hex is not a float literal here (only the 0 counts)");
     }
 }
 
@@ -220,9 +224,9 @@ void test_display_follows_value_when_not_editing()
         f.type("-");
         check(f.intValue == 0, "inputInt: a lone '-' keeps the value");
         f.key(ig::KeyCode::Escape); // focus leaves the field
-        f.intValue = 42;           // the application changes it
+        f.intValue = 42;            // the application changes it
         f.frame();
-        f.harness.click(150.0f, 24.0f, [&f](ig::Context &c) { f.build(c); });
+        f.harness.click(150.0f, 24.0f, [&f](ig::Context& c) { f.build(c); });
         f.type("1");
         check(f.intValue == 421, "inputInt: text restarts from the value after focus left");
     }
@@ -263,7 +267,7 @@ void test_format_drives_display_and_parse()
         f.key(ig::KeyCode::Escape);
         f.frame();
         check(drewText(f.draw(), "1.5 grams"),
-              "inputFloat with %.1f grams: the value keeps its legend");
+                "inputFloat with %.1f grams: the value keeps its legend");
     }
     {
         // Sem formato, o texto é o de sempre e o "1x" continua a não valer 1.
@@ -288,14 +292,14 @@ void test_int_widgets_write_the_integer()
     ig::Harness harness(context);
     int dragValue = 5;
     int sliderValue = 7;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.dragInt("i", dragValue, 0, 10, 1, ig::Rect(10.0f, 10.0f, 260.0f, 28.0f));
         c.sliderInt("s", sliderValue, 0, 10, ig::Rect(10.0f, 42.0f, 260.0f, 28.0f));
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "5"), "dragInt: o valor escreve-se como um inteiro");
     check(drewText(data, "7"), "sliderInt: o campo mostra o inteiro");
     check(!drewText(data, "5.000"), "dragInt: e não com três decimais");
@@ -321,20 +325,20 @@ void test_scalar_types()
     const int16_t s16Max = 1000;
     const float f32Min = 0.0f;
     const float f32Max = 1.0f;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderScalar("u8", ig::Context::ScalarType::U8, &u8, &u8Min, &u8Max, nullptr, 300.0f);
         c.dragScalar("s16", ig::Context::ScalarType::S16, &s16, 1.0f, &s16Min, &s16Max, nullptr,
-                     300.0f);
+                300.0f);
         c.inputScalar("u32", ig::Context::ScalarType::U32, &u32, "%04X", 300.0f);
         c.inputScalar("u64", ig::Context::ScalarType::U64, &u64, nullptr, 300.0f);
         c.inputScalar("f64", ig::Context::ScalarType::Double, &f64, "%.10f", 300.0f);
         c.sliderScalar("f32", ig::Context::ScalarType::Float, &f32, &f32Min, &f32Max, "%.2f",
-                       300.0f);
+                300.0f);
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     // O formato de cada tipo aparece no ecrã: o "%04X" do u32 e os dez decimais do
     // double.
     check(drewText(data, "0000"), "inputScalar u32: o valor sai no formato do chamador");
@@ -378,7 +382,7 @@ void test_scalar_types()
     u64 = 4294967296ull;
     harness.frame(build);
     check(drewText(harness.frame(build), "4294967296"),
-          "inputScalar u64: um valor acima de 2^32 escreve-se inteiro");
+            "inputScalar u64: um valor acima de 2^32 escreve-se inteiro");
 }
 
 void test_drag_range2()
@@ -388,13 +392,13 @@ void test_drag_range2()
     ig::Harness harness(context);
     float low = 2.0f;
     float high = 8.0f;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.01f, 300.0f);
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     // As duas caixas e os valores delas (o formato por omissão é o %g de três
     // dígitos, o mesmo dos drags).
     check(drewText(data, "2"), "dragFloatRange2: a caixa do mínimo mostra o mínimo");
@@ -425,7 +429,7 @@ void test_drag_range2()
     // gama: o mínimo sai para fora dela, mas continua a não passar o máximo.
     high = 3.0f;
     low = 3.0f;
-    auto unbounded = [&](ig::Context &c)
+    auto unbounded = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.dragFloatRange2("range", low, high, 1.0f, 0.0f, 1.0f, 300.0f);
@@ -443,13 +447,13 @@ void test_slider_angle()
     ig::Harness harness(context);
     float radians = 0.0f;
     const float half = 1.5707964f; // pi/2, o que vale um ângulo de 90 graus
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderAngle("angle", radians, -180.0f, 180.0f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "0 deg"), "sliderAngle: o valor é escrito em graus");
 
     // O valor em radianos que a aplicação põe é o que o texto mostra em graus.
@@ -499,8 +503,8 @@ void test_non_finite_values_draw_finite_geometry()
     ig::Harness harness(context);
     const float nan = 0.0f / 0.0f;
     const float infinity = 1.0f / 0.0f;
-    float values[] = {nan, infinity, -infinity, nan};
-    auto build = [&](ig::Context &c)
+    float values[] = { nan, infinity, -infinity, nan };
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderFloat("a", values[0], 0.0f, 1.0f);
@@ -513,16 +517,18 @@ void test_non_finite_values_draw_finite_geometry()
         c.endWindow();
     };
     harness.frame(build);
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     bool finite = true;
     for (size_t i = 0; i < data.vertices.size(); ++i)
     {
-        const ig::Vec2 &p = data.vertices[i].position;
-        finite = finite && p.x == p.x && p.y == p.y && p.x < 1e30f && p.x > -1e30f && p.y < 1e30f && p.y > -1e30f;
+        const ig::Vec2& p = data.vertices[i].position;
+        finite = finite && p.x == p.x && p.y == p.y && p.x < 1e30f && p.x > -1e30f && p.y < 1e30f &&
+                 p.y > -1e30f;
     }
     check(finite, "non-finite widget values produced non-finite vertices");
-    check(values[0] != values[0] && values[1] == infinity && values[2] == -infinity && values[3] != values[3],
-          "widgets rewrote non-finite values without user input");
+    check(values[0] != values[0] && values[1] == infinity && values[2] == -infinity &&
+                    values[3] != values[3],
+            "widgets rewrote non-finite values without user input");
 }
 
 // Os flags do slider/drag: a escala logarítmica, o WrapAround, o NoInput e o
@@ -550,7 +556,8 @@ void test_slider_flags()
     ig::Rect noInputRect;
     ig::Rect plainRect;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         c.beginMainWindow("main");
         c.sliderFloat("linear", linear, 1.0f, 100.0f, 0.0f, 0u);
         linearRect = c.itemRect();
@@ -571,7 +578,8 @@ void test_slider_flags()
     // O item de um slider é o widget todo (o rótulo, a pista e o campo do valor,
     // como no itemRect do iGUI), por isso o fim da pista só se apanha a arrastar:
     // um clique no canto direito cai no campo do valor.
-    auto dragPast = [&](const ig::Rect &rect) {
+    auto dragPast = [&](const ig::Rect& rect)
+    {
         const float y = rect.y + rect.height * 0.5f;
         const float x0 = rect.x + rect.width * 0.5f;
         const float x1 = rect.x + rect.width + 40.0f;
@@ -589,13 +597,12 @@ void test_slider_flags()
     // chegam ao máximo no fim da pista.
     const float quarterY = linearRect.y + linearRect.height * 0.5f;
     harness.click(linearRect.x + linearRect.width * 0.25f, quarterY,
-                  [&](ig::Context &c) { build(c); });
+            [&](ig::Context& c) { build(c); });
     const float linearQuarter = linear;
-    harness.click(logRect.x + logRect.width * 0.25f, quarterY,
-                  [&](ig::Context &c) { build(c); });
+    harness.click(logRect.x + logRect.width * 0.25f, quarterY, [&](ig::Context& c) { build(c); });
     check(linearQuarter > 20.0f, "a linear slider follows the position");
     check(logarithmic < linearQuarter * 0.5f,
-          "a logarithmic slider stays well below the linear one at the same position");
+            "a logarithmic slider stays well below the linear one at the same position");
     dragPast(logRect);
     check(logarithmic > 99.0f, "the end of the track is the maximum, logarithmic or not");
 
@@ -615,11 +622,11 @@ void test_slider_flags()
     harness.frame(build);
     const float rightY = noInputRect.y + noInputRect.height * 0.5f;
     harness.click(noInputRect.x + noInputRect.width - 4.0f, rightY,
-                  [&](ig::Context &c) { build(c); });
+            [&](ig::Context& c) { build(c); });
     check(plain > 95.0f, "a NoInput slider has the track all the way to the right");
-    for (const char *p = "7"; *p; ++p)
+    for (const char* p = "7"; *p; ++p)
     {
-        const char one[2] = {*p, 0};
+        const char one[2] = { *p, 0 };
         context.pushEvent(ig::Event::textInput(one));
         harness.frame(build);
     }
@@ -638,19 +645,20 @@ void test_drag_allow_out_of_range()
     ig::Rect clampedRect;
     ig::Rect freeRect;
 
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         c.beginMainWindow("main");
         c.dragFloat("clamped", clamped, 0.0f, 100.0f, 0.1f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f));
         clampedRect = c.itemRect();
-        c.dragFloat("free", free, 0.0f, 100.0f, 0.1f,
-                    ig::Rect(10.0f, 50.0f, 300.0f, 28.0f),
-                    ig::Context::SliderFlags::AllowOutOfRange);
+        c.dragFloat("free", free, 0.0f, 100.0f, 0.1f, ig::Rect(10.0f, 50.0f, 300.0f, 28.0f),
+                ig::Context::SliderFlags::AllowOutOfRange);
         freeRect = c.itemRect();
         c.endWindow();
     };
     harness.frame(build);
 
-    auto typeInto = [&](const ig::Rect &rect, const char *text) {
+    auto typeInto = [&](const ig::Rect& rect, const char* text)
+    {
         const float x = rect.x + rect.width * 0.5f;
         const float y = rect.y + rect.height * 0.5f;
         // Um clique sem arrasto abre o campo de texto (ver dragFloat).
@@ -665,9 +673,9 @@ void test_drag_allow_out_of_range()
             context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
             harness.frame(build);
         }
-        for (const char *p = text; *p; ++p)
+        for (const char* p = text; *p; ++p)
         {
-            const char one[2] = {*p, 0};
+            const char one[2] = { *p, 0 };
             context.pushEvent(ig::Event::textInput(one));
             harness.frame(build);
         }
@@ -697,9 +705,8 @@ void test_format_with_stray_percent_signs()
     float percent = 50.0f;
     int32_t pair = 7;
     int32_t longPrefix = 7;
-    const char *longFormat =
-        "123456789012345678901234567890123456789012345678901234567890%d";
-    auto build = [&](ig::Context &c)
+    const char* longFormat = "123456789012345678901234567890123456789012345678901234567890%d";
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.inputScalar("percent", ig::Context::ScalarType::Float, &percent, "%.0f%", 300.0f);
@@ -707,7 +714,7 @@ void test_format_with_stray_percent_signs()
         c.inputScalar("long", ig::Context::ScalarType::S32, &longPrefix, longFormat, 300.0f);
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "50%"), "format: a stray % after the value is a percent sign");
     check(drewText(data, "7/%d"), "format: a second conversion is printed as text");
     check(drewText(data, "7"), "format: a format that does not fit falls back to the plain value");
@@ -731,19 +738,19 @@ void test_scalar_values_stay_in_their_type()
     int8_t s8 = 0;
     uint64_t bigU64 = 13835058055282163712ull;
     int64_t bigS64 = INT64_MAX;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderScalar("u64", ig::Context::ScalarType::U64, &u64, &u64Min, &u64Max, nullptr,
-                       300.0f);
+                300.0f);
         c.sliderScalar("s64", ig::Context::ScalarType::S64, &s64, &s64Min, &s64Max, nullptr,
-                       300.0f);
+                300.0f);
         c.inputScalar("s8", ig::Context::ScalarType::S8, &s8, nullptr, 300.0f);
         c.inputScalar("big u64", ig::Context::ScalarType::U64, &bigU64, nullptr, 300.0f);
         c.inputScalar("big s64", ig::Context::ScalarType::S64, &bigS64, nullptr, 300.0f);
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "13835058055282163712"), "u64 above 2^63 is written unsigned");
     check(drewText(data, "9223372036854775807"), "INT64_MAX is written as itself");
 
@@ -762,7 +769,7 @@ void test_scalar_values_stay_in_their_type()
     harness.frame(build);
     check(s8 == 127, "inputScalar s8: 300 is limited to 127");
     check(bigU64 == 13835058055282163712ull && bigS64 == INT64_MAX,
-          "values that were not edited are not written back");
+            "values that were not edited are not written back");
 }
 
 // Os overloads de layout passam o formato ao widget: o "%.1f grams" do slider,
@@ -780,17 +787,16 @@ void test_layout_overloads_keep_the_format()
     float high = 8.0f;
     float px = 1.5f;
     float py = 2.5f;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderFloat("sf", grams, 0.0f, 1.0f, 300.0f, 0u, "%.1f grams");
         c.inputInt("ii", hex, 300.0f, "%04X");
-        c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.1f, 300.0f, "Min: %.1f",
-                          "Max: %.1f");
+        c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.1f, 300.0f, "Min: %.1f", "Max: %.1f");
         c.inputFloat2("pair", px, py, 300.0f, 3, "%.2f");
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "0.5 grams"), "sliderFloat (width): the format reaches the slider");
     check(drewText(data, "00FF"), "inputInt (width): the format reaches the field");
     check(drewText(data, "Min: 2.0"), "dragFloatRange2: the minimum format");
@@ -812,7 +818,7 @@ void test_default_format_has_no_exponent()
     float small = -0.0001f;
     int editable = 1234;
     ig::Rect editableRect;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.dragFloat("big", big, 0.0f, 100000.0f, 1.0f, 300.0f);
@@ -822,7 +828,7 @@ void test_default_format_has_no_exponent()
         editableRect = c.itemRect();
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "1234.5"), "dragFloat: 1234.5 without an exponent");
     check(drewText(data, "1500"), "dragInt: 1500 is written as an integer");
     check(drewText(data, "0"), "sliderFloat: a value that rounds to zero is 0, not -0");
@@ -875,21 +881,19 @@ void test_held_pointer_reports_one_change()
     int verticalChanges = 0;
     int intChanges = 0;
     int edited = 0;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         if (c.sliderFloat("sf", slider, 0.0f, 100.0f, ig::Rect(10.0f, 10.0f, 300.0f, 28.0f)))
             ++sliderChanges;
-        if (c.isItemEdited())
-            ++edited;
+        if (c.isItemEdited()) ++edited;
         if (c.dragFloat("df", drag, 0.0f, 100.0f, 0.37f, ig::Rect(10.0f, 50.0f, 300.0f, 28.0f)))
             ++dragChanges;
         if (c.vSliderFloat("vs", vertical, 0.0f, 100.0f, ig::Rect(10.0f, 90.0f, 30.0f, 150.0f)))
             ++verticalChanges;
         if (c.sliderInt("si", sliderInt, 0, 100, ig::Rect(10.0f, 250.0f, 300.0f, 28.0f)))
             ++intChanges;
-        if (c.isItemEdited())
-            ++edited;
+        if (c.isItemEdited()) ++edited;
         c.endWindow();
     };
     auto hold = [&](float x, float y, bool move)
@@ -902,8 +906,7 @@ void test_held_pointer_reports_one_change()
             context.pushEvent(ig::Event::pointerMove(x + 10.0f, y));
             harness.frame(build);
         }
-        for (int i = 0; i < 6; ++i)
-            harness.frame(build);
+        for (int i = 0; i < 6; ++i) harness.frame(build);
     };
     auto release = [&](float x, float y)
     {
@@ -947,16 +950,16 @@ void test_reversed_and_empty_ranges_still_draw()
     float low = 0.0f;
     float high = 0.0f;
     float stuck = 3.0f;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.sliderScalar("rev", ig::Context::ScalarType::S32, &reversed, &fifty, &zero, nullptr,
-                       300.0f);
+                300.0f);
         c.dragFloatRange2("range", low, high, 0.0f, 10.0f, 0.1f, 300.0f);
         c.sliderFloat("same", stuck, 5.0f, 5.0f, 300.0f);
         c.endWindow();
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "25"), "sliderScalar with a reversed range is drawn");
     check(countText(data, "0") >= 2, "dragFloatRange2 with both ends at 0 draws both boxes");
     check(drewText(data, "same"), "sliderFloat with an empty range is drawn");
@@ -984,14 +987,14 @@ void test_float_fields_keep_what_is_typed()
     ig::Harness harness(context);
     float scalar = 0.0f;
     float slider = 0.0f;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.inputScalar("scalar", ig::Context::ScalarType::Float, &scalar, nullptr, 300.0f);
         c.sliderFloat("slider", slider, 0.0f, 1.0f, ig::Rect(10.0f, 40.0f, 300.0f, 28.0f));
         c.endWindow();
     };
-    auto typeInto = [&](float x, float y, const char *text)
+    auto typeInto = [&](float x, float y, const char* text)
     {
         harness.click(x, y, build);
         for (int i = 0; i < 20; ++i)
@@ -999,9 +1002,9 @@ void test_float_fields_keep_what_is_typed()
             context.pushEvent(ig::Event::keyDown(ig::KeyCode::Backspace));
             harness.frame(build);
         }
-        for (const char *p = text; *p; ++p)
+        for (const char* p = text; *p; ++p)
         {
-            const char one[2] = {*p, 0};
+            const char one[2] = { *p, 0 };
             context.pushEvent(ig::Event::textInput(one));
             harness.frame(build);
         }
@@ -1025,17 +1028,17 @@ void test_input_scalar_flags()
     int32_t locked = 7;
     int32_t onEnter = 7;
     int returns = 0;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.inputScalar("locked", ig::Context::ScalarType::S32, &locked, nullptr, 300.0f,
-                      ig::Context::InputTextFlags::ReadOnly);
+                ig::Context::InputTextFlags::ReadOnly);
         if (c.inputScalar("enter", ig::Context::ScalarType::S32, &onEnter, nullptr, 300.0f,
-                          ig::Context::InputTextFlags::EnterReturnsTrue))
+                    ig::Context::InputTextFlags::EnterReturnsTrue))
             ++returns;
         c.endWindow();
     };
-    auto typeInto = [&](float x, float y, const char *text)
+    auto typeInto = [&](float x, float y, const char* text)
     {
         harness.click(x, y, build);
         for (int i = 0; i < 6; ++i)
@@ -1067,14 +1070,14 @@ void test_parse_saturates_in_every_base()
 
     uint64_t hex = 0u;
     uint64_t decimal = 0u;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.inputScalar("hex", ig::Context::ScalarType::U64, &hex, "%llX", 300.0f);
         c.inputScalar("decimal", ig::Context::ScalarType::U64, &decimal, nullptr, 300.0f);
         c.endWindow();
     };
-    auto typeInto = [&](float x, float y, const char *text)
+    auto typeInto = [&](float x, float y, const char* text)
     {
         harness.click(x, y, build);
         for (int i = 0; i < 6; ++i)
@@ -1105,7 +1108,7 @@ void test_negative_values_in_unsigned_formats()
     int8_t small = -1;
     int64_t wide = -1;
     uint32_t plain = 7u;
-    auto build = [&](ig::Context &c)
+    auto build = [&](ig::Context& c)
     {
         c.beginMainWindow("main");
         c.inputInt("int", value, 300.0f, "%08X");
@@ -1114,7 +1117,7 @@ void test_negative_values_in_unsigned_formats()
         c.inputScalar("u32", ig::Context::ScalarType::U32, &plain, "%X", 300.0f);
         c.endWindow();
     };
-    auto typeInto = [&](float x, float y, const char *text)
+    auto typeInto = [&](float x, float y, const char* text)
     {
         harness.click(x, y, build);
         for (int i = 0; i < 20; ++i)
@@ -1125,7 +1128,7 @@ void test_negative_values_in_unsigned_formats()
         context.pushEvent(ig::Event::textInput(text));
         harness.frame(build);
     };
-    const ig::DrawData &data = harness.frame(build);
+    const ig::DrawData& data = harness.frame(build);
     check(drewText(data, "FFFFFFFF"), "inputInt -1 with %08X is FFFFFFFF");
     check(drewText(data, "FF"), "s8 -1 with %02X is FF");
     check(drewText(data, "FFFFFFFFFFFFFFFF"), "s64 -1 with %llX is sixteen F");

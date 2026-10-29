@@ -5,14 +5,16 @@
 // (ig::Context::codeEditor). It depends only on ct:: containers and ig::Color
 // - nothing from ig::retained - so either mode can link it standalone.
 
-#include <ct/vector.hpp>
+#include <ct/function.hpp>
 #include <ct/hashset.hpp>
 #include <ct/string.hpp>
-#include <ct/function.hpp>
+#include <ct/vector.hpp>
 
 #include "Color.hpp"
 
-namespace ig { namespace syntax
+namespace ig
+{
+namespace syntax
 {
 
 using String = ct::String;
@@ -67,16 +69,16 @@ public:
     /// @brief A colored span within a single line of text.
     struct Span
     {
-        int       startCol;   ///< Start column (byte offset in line).
-        int       endCol;     ///< End column (exclusive).
-        TokenType type;       ///< Token category.
+        int startCol;   ///< Start column (byte offset in line).
+        int endCol;     ///< End column (exclusive).
+        TokenType type; ///< Token category.
     };
 
     /// @brief Result of highlighting a single line.
     struct HighlightResult
     {
-        ct::Vector<Span> spans;   ///< Colored spans for this line.
-        int               state;   ///< Lexer state to pass to the next line.
+        ct::Vector<Span> spans; ///< Colored spans for this line.
+        int state;              ///< Lexer state to pass to the next line.
     };
 
     // ── Core interface (override in subclasses) ───────────────────────────
@@ -86,9 +88,8 @@ public:
     /// @param text       The line text (no trailing newline).
     /// @param prevState  Lexer state from the previous line (0 = start of file).
     /// @return Colored spans and the new lexer state for the next line.
-    virtual HighlightResult highlightLine(int lineIndex,
-                                          const String& text,
-                                          int prevState) const = 0;
+    virtual HighlightResult highlightLine(int lineIndex, const String& text,
+            int prevState) const = 0;
 
     /// @brief Compute the fold level delta for a line.
     ///
@@ -115,11 +116,20 @@ public:
     virtual ct::Vector<String> extensions() const = 0;
 
     /// @brief Keywords known to this highlighter (used for autocomplete).
-    const ct::HashSet<String>& keywordSet() const { return keywords_; }
+    const ct::HashSet<String>& keywordSet() const
+    {
+        return keywords_;
+    }
     /// @brief Built-in types known to this highlighter (used for autocomplete).
-    const ct::HashSet<String>& typeSet() const { return types_; }
+    const ct::HashSet<String>& typeSet() const
+    {
+        return types_;
+    }
     /// @brief Named constants known to this highlighter (used for autocomplete).
-    const ct::HashSet<String>& constantSet() const { return constants_; }
+    const ct::HashSet<String>& constantSet() const
+    {
+        return constants_;
+    }
 
 protected:
     // ── Helpers for subclass lexers ───────────────────────────────────────
@@ -148,20 +158,20 @@ protected:
 
     /// @brief Default colors per token type (dark theme).
     Color colors_[TokenTypeCount] = {
-        {220, 220, 220, 255},   // Default      — light gray
-        {198, 120, 221, 255},   // Keyword       — purple
-        { 86, 182, 194, 255},   // Type          — cyan
-        {152, 195, 121, 255},   // String        — green
-        {209, 154, 102, 255},   // Number        — orange
-        {106, 115, 125, 255},   // Comment       — dim gray
-        {224, 108,  97, 255},   // Preprocessor  — red
-        {220, 220, 170, 255},   // Operator      — yellow-ish
-        { 97, 175, 239, 255},   // Function      — blue
-        {209, 154, 102, 255},   // Constant      — orange (like numbers)
-        {152, 195, 121, 255},   // Attribute     — green (like strings)
-        {220, 220, 220, 255},   // Bracket       — same as default
-        {255, 210,  80, 255},   // MatchedBracket — bright yellow
-        {244,  71,  71, 255},   // Error         — bright red
+        { 220, 220, 220, 255 }, // Default      — light gray
+        { 198, 120, 221, 255 }, // Keyword       — purple
+        { 86, 182, 194, 255 },  // Type          — cyan
+        { 152, 195, 121, 255 }, // String        — green
+        { 209, 154, 102, 255 }, // Number        — orange
+        { 106, 115, 125, 255 }, // Comment       — dim gray
+        { 224, 108, 97, 255 },  // Preprocessor  — red
+        { 220, 220, 170, 255 }, // Operator      — yellow-ish
+        { 97, 175, 239, 255 },  // Function      — blue
+        { 209, 154, 102, 255 }, // Constant      — orange (like numbers)
+        { 152, 195, 121, 255 }, // Attribute     — green (like strings)
+        { 220, 220, 220, 255 }, // Bracket       — same as default
+        { 255, 210, 80, 255 },  // MatchedBracket — bright yellow
+        { 244, 71, 71, 255 },   // Error         — bright red
     };
 };
 
@@ -194,8 +204,15 @@ public:
     explicit DefinedHighlighter(const SyntaxLanguage& language);
     HighlightResult highlightLine(int, const String&, int prevState) const override;
     int foldDelta(int, const String&) const override;
-    const char* languageName() const override { return language_.name.c_str(); }
-    ct::Vector<String> extensions() const override { return language_.extensions; }
+    const char* languageName() const override
+    {
+        return language_.name.c_str();
+    }
+    ct::Vector<String> extensions() const override
+    {
+        return language_.extensions;
+    }
+
 private:
     SyntaxLanguage language_;
 };
@@ -213,12 +230,16 @@ class CppHighlighter : public SyntaxHighlighter
 {
 public:
     CppHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "C++"; }
+    const char* languageName() const override
+    {
+        return "C++";
+    }
     ct::Vector<String> extensions() const override
-    { return {"c", "cpp", "cc", "cxx", "h", "hpp", "hxx", "inl"}; }
+    {
+        return { "c", "cpp", "cc", "cxx", "h", "hpp", "hxx", "inl" };
+    }
 };
 
 /// @brief Python syntax highlighter.
@@ -230,12 +251,16 @@ class PythonHighlighter : public SyntaxHighlighter
 {
 public:
     PythonHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "Python"; }
+    const char* languageName() const override
+    {
+        return "Python";
+    }
     ct::Vector<String> extensions() const override
-    { return {"py", "pyw", "pyi"}; }
+    {
+        return { "py", "pyw", "pyi" };
+    }
 };
 
 /// @brief JavaScript/TypeScript syntax highlighter.
@@ -247,12 +272,16 @@ class JsHighlighter : public SyntaxHighlighter
 {
 public:
     JsHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "JavaScript"; }
+    const char* languageName() const override
+    {
+        return "JavaScript";
+    }
     ct::Vector<String> extensions() const override
-    { return {"js", "jsx", "ts", "tsx", "mjs"}; }
+    {
+        return { "js", "jsx", "ts", "tsx", "mjs" };
+    }
 };
 
 /// @brief Lua syntax highlighter.
@@ -263,12 +292,16 @@ class LuaHighlighter : public SyntaxHighlighter
 {
 public:
     LuaHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "Lua"; }
+    const char* languageName() const override
+    {
+        return "Lua";
+    }
     ct::Vector<String> extensions() const override
-    { return {"lua"}; }
+    {
+        return { "lua" };
+    }
 };
 
 /// @brief GLSL shader syntax highlighter.
@@ -280,12 +313,16 @@ class GlslHighlighter : public SyntaxHighlighter
 {
 public:
     GlslHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "GLSL"; }
+    const char* languageName() const override
+    {
+        return "GLSL";
+    }
     ct::Vector<String> extensions() const override
-    { return {"glsl", "vert", "frag", "geom", "comp", "tesc", "tese"}; }
+    {
+        return { "glsl", "vert", "frag", "geom", "comp", "tesc", "tese" };
+    }
 };
 
 /// @brief Java syntax highlighter.
@@ -297,12 +334,16 @@ class JavaHighlighter : public SyntaxHighlighter
 {
 public:
     JavaHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "Java"; }
+    const char* languageName() const override
+    {
+        return "Java";
+    }
     ct::Vector<String> extensions() const override
-    { return {"java"}; }
+    {
+        return { "java" };
+    }
 };
 
 /// @brief Blitz(Max/3D) BASIC-dialect syntax highlighter.
@@ -317,12 +358,16 @@ class BlitzHighlighter : public SyntaxHighlighter
 {
 public:
     BlitzHighlighter();
-    HighlightResult highlightLine(int lineIndex, const String& text,
-                                  int prevState) const override;
+    HighlightResult highlightLine(int lineIndex, const String& text, int prevState) const override;
     int foldDelta(int lineIndex, const String& text) const override;
-    const char* languageName() const override { return "Blitz"; }
+    const char* languageName() const override
+    {
+        return "Blitz";
+    }
     ct::Vector<String> extensions() const override
-    { return {"blitz", "bb", "bmx", "decls"}; }
+    {
+        return { "blitz", "bb", "bmx", "decls" };
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -341,7 +386,10 @@ public:
     // Takes ownership of a highlighter created for a given language/file
     // (see makeHighlighterForExtension). Pass nullptr to disable highlighting.
     void setHighlighter(SyntaxHighlighter* hl);
-    SyntaxHighlighter* highlighter() const { return highlighter_; }
+    SyntaxHighlighter* highlighter() const
+    {
+        return highlighter_;
+    }
 
     // Auto-detect and install a highlighter from a file name's extension.
     // Returns the created highlighter, or nullptr if no match (and disables
@@ -349,11 +397,15 @@ public:
     SyntaxHighlighter* setHighlighterForFile(const String& filename);
 
     // Recompute every line from scratch (call after loading a new document).
-    template <typename LineAccessor>
+    template<typename LineAccessor>
     void rehighlightAll(int lineCount, LineAccessor&& lineAt)
     {
         lineStates_.clear();
-        if (!highlighter_) { dirty_ = false; return; }
+        if (!highlighter_)
+        {
+            dirty_ = false;
+            return;
+        }
         lineStates_.resize(lineCount, 0);
         int state = 0;
         for (int i = 0; i < lineCount; ++i)
@@ -369,13 +421,15 @@ public:
     // it, and stopping early once the lexer state stops changing relative to
     // what was cached (multi-line constructs like block comments propagate
     // correctly; a plain edit on one line only re-highlights that line).
-    template <typename LineAccessor>
+    template<typename LineAccessor>
     void rehighlightFrom(int line, int lineCount, LineAccessor&& lineAt)
     {
         if (!highlighter_) return;
         if (line < 0) line = 0;
         lineStates_.resize(lineCount, 0);
-        int state = (line > 0 && line - 1 < static_cast<int>(lineStates_.size())) ? lineStates_[line - 1] : 0;
+        int state = (line > 0 && line - 1 < static_cast<int>(lineStates_.size()))
+                            ? lineStates_[line - 1]
+                            : 0;
         for (int i = line; i < lineCount; ++i)
         {
             auto result = highlighter_->highlightLine(i, lineAt(i), state);
@@ -392,13 +446,24 @@ public:
     {
         if (!highlighter_) return SyntaxHighlighter::HighlightResult();
         int prevState = (line > 0 && line - 1 < static_cast<int>(lineStates_.size()))
-            ? lineStates_[line - 1] : 0;
+                                ? lineStates_[line - 1]
+                                : 0;
         return highlighter_->highlightLine(line, text, prevState);
     }
 
-    void markDirty() { dirty_ = true; }
-    bool dirty() const { return dirty_; }
-    void clear() { lineStates_.clear(); dirty_ = true; }
+    void markDirty()
+    {
+        dirty_ = true;
+    }
+    bool dirty() const
+    {
+        return dirty_;
+    }
+    void clear()
+    {
+        lineStates_.clear();
+        dirty_ = true;
+    }
 
 private:
     SyntaxHighlighter* highlighter_ = nullptr; // owned
@@ -406,7 +471,10 @@ private:
     bool dirty_ = true;
 
 public:
-    ~LineHighlightCache() { delete highlighter_; }
+    ~LineHighlightCache()
+    {
+        delete highlighter_;
+    }
 };
 
 // Registry of declarative languages (JSON, SQL, Go, plus anything the app

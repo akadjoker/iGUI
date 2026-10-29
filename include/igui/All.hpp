@@ -20,22 +20,22 @@
 #include "Modes.hpp"
 
 // Shared drawing engine (igui_core): present in every mode.
-#include "Color.hpp"
-#include "Math.hpp"
-#include "Types.hpp"
 #include "Backend.hpp"
+#include "Color.hpp"
 #include "DrawData.hpp"
 #include "Events.hpp"
+#include "Math.hpp"
 #include "Syntax.hpp"
+#include "Types.hpp"
 
 #if IGUI_IMMEDIATEMODE
 // Immediate mode: ig::Context and the per-frame widget calls. Gui.hpp pulls in
 // CodeEditor.hpp, FileDialog.hpp and the immediate ig::Theme itself.
-#  include "Gui.hpp"
+#include "Gui.hpp"
 #endif
 
 #if IGUI_RETAINEDMODE
 // Retained mode: the ig::retained widget tree. Hoisted into ig:: unless both
 // modes are on, in which case it stays explicit - see Widgets.hpp.
-#  include "Widgets.hpp"
+#include "Widgets.hpp"
 #endif

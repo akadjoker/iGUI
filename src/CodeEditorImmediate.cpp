@@ -13,8 +13,7 @@ namespace
 {
 inline bool isIdentChar(char c)
 {
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-           (c >= '0' && c <= '9') || c == '_';
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
 }
 
 // Columns are byte offsets into a line. Every caret move and single-step
@@ -122,7 +121,8 @@ syntax::SyntaxHighlighter* CodeEditorState::setHighlighterForFile(const String& 
 
 void CodeEditorState::rehighlightFrom(int line)
 {
-    highlight_.rehighlightFrom(line, lineCount(), [this](int i) -> const String& { return lineAt(i); });
+    highlight_.rehighlightFrom(line, lineCount(),
+            [this](int i) -> const String& { return lineAt(i); });
     rebuildFoldRanges();
 }
 
@@ -148,7 +148,7 @@ void CodeEditorState::rebuildFoldRanges()
             if (openStack.empty()) break;
             int startLine = openStack.back();
             openStack.pop_back();
-            foldRanges_.push_back({startLine, i, false});
+            foldRanges_.push_back({ startLine, i, false });
         }
     }
     // Any region still open at EOF (unbalanced source) closes at the last line.
@@ -156,11 +156,11 @@ void CodeEditorState::rebuildFoldRanges()
     {
         int startLine = openStack.back();
         openStack.pop_back();
-        foldRanges_.push_back({startLine, lc - 1, false});
+        foldRanges_.push_back({ startLine, lc - 1, false });
     }
 
-    for (auto& range : foldRanges_)
-        for (const auto& old : previous)
+    for (auto& range: foldRanges_)
+        for (const auto& old: previous)
             if (old.startLine == range.startLine && old.endLine == range.endLine)
             {
                 range.collapsed = old.collapsed;
@@ -174,17 +174,19 @@ const ct::Vector<int>& CodeEditorState::visibleLines() const
     const int count = lineCount();
     // Difference array merges nested/overlapping collapsed ranges in O(lines+folds).
     ct::Vector<int> changes;
-    changes.resize(static_cast<size_t>(count)+1);
-    for (size_t i=0; i<changes.size(); ++i) changes[i]=0;
-    for (const auto& range : foldRanges_) {
+    changes.resize(static_cast<size_t>(count) + 1);
+    for (size_t i = 0; i < changes.size(); ++i) changes[i] = 0;
+    for (const auto& range: foldRanges_)
+    {
         if (!range.collapsed || range.endLine <= range.startLine) continue;
-        ++changes[static_cast<size_t>(range.startLine+1)];
-        --changes[static_cast<size_t>(range.endLine+1)];
+        ++changes[static_cast<size_t>(range.startLine + 1)];
+        --changes[static_cast<size_t>(range.endLine + 1)];
     }
     visibleLines_.clear();
     visibleLines_.reserve(static_cast<size_t>(count));
-    int depth=0;
-    for (int line=0; line<count; ++line) {
+    int depth = 0;
+    for (int line = 0; line < count; ++line)
+    {
         depth += changes[static_cast<size_t>(line)];
         if (depth == 0) visibleLines_.push_back(line);
     }
@@ -194,35 +196,39 @@ const ct::Vector<int>& CodeEditorState::visibleLines() const
 
 bool CodeEditorState::isFoldHeader(int line) const
 {
-    for (const auto& range : foldRanges_)
+    for (const auto& range: foldRanges_)
         if (range.startLine == line) return true;
     return false;
 }
 
 bool CodeEditorState::isLineHidden(int line) const
 {
-    for (const auto& range : foldRanges_)
-        if (range.collapsed && line > range.startLine && line <= range.endLine)
-            return true;
+    for (const auto& range: foldRanges_)
+        if (range.collapsed && line > range.startLine && line <= range.endLine) return true;
     return false;
 }
 
 void CodeEditorState::toggleFoldAt(int line)
 {
-    for (auto& range : foldRanges_)
-        if (range.startLine == line) { range.collapsed = !range.collapsed; visibleLinesDirty_ = true; return; }
+    for (auto& range: foldRanges_)
+        if (range.startLine == line)
+        {
+            range.collapsed = !range.collapsed;
+            visibleLinesDirty_ = true;
+            return;
+        }
 }
 
 void CodeEditorState::foldAll()
 {
     visibleLinesDirty_ = true;
-    for (auto& range : foldRanges_) range.collapsed = true;
+    for (auto& range: foldRanges_) range.collapsed = true;
 }
 
 void CodeEditorState::unfoldAll()
 {
     visibleLinesDirty_ = true;
-    for (auto& range : foldRanges_) range.collapsed = false;
+    for (auto& range: foldRanges_) range.collapsed = false;
 }
 
 void CodeEditorState::clampCursor()
@@ -235,19 +241,24 @@ void CodeEditorState::clampCursor()
     cursorColumn = codePointStart(lineAt(cursorLine), cursorColumn);
 }
 
-void CodeEditorState::orderedSelection(int& startLine, int& startColumn, int& endLine, int& endColumn) const
+void CodeEditorState::orderedSelection(int& startLine, int& startColumn, int& endLine,
+        int& endColumn) const
 {
     int aLine = selectionAnchorLine, aCol = selectionAnchorColumn;
     int bLine = cursorLine, bCol = cursorColumn;
     if (aLine > bLine || (aLine == bLine && aCol > bCol))
     {
-        startLine = bLine; startColumn = bCol;
-        endLine = aLine; endColumn = aCol;
+        startLine = bLine;
+        startColumn = bCol;
+        endLine = aLine;
+        endColumn = aCol;
     }
     else
     {
-        startLine = aLine; startColumn = aCol;
-        endLine = bLine; endColumn = bCol;
+        startLine = aLine;
+        startColumn = aCol;
+        endLine = bLine;
+        endColumn = bCol;
     }
 }
 
@@ -255,7 +266,8 @@ namespace
 {
 String textBetween(const CodeEditorState& state, int sl, int sc, int el, int ec)
 {
-    if (sl == el) return state.lineAt(sl).substr(static_cast<size_t>(sc), static_cast<size_t>(ec - sc));
+    if (sl == el)
+        return state.lineAt(sl).substr(static_cast<size_t>(sc), static_cast<size_t>(ec - sc));
     String out = state.lineAt(sl).substr(static_cast<size_t>(sc));
     for (int i = sl + 1; i < el; ++i)
     {
@@ -280,13 +292,16 @@ String CodeEditorState::selectedText() const
 
 namespace
 {
-struct FindMatch { int line, column, length; };
+struct FindMatch
+{
+    int line, column, length;
+};
 
 // Collects every match across the whole document, line by line (a match
 // never spans a line break - see the CodeEditor.hpp contract note).
 // Returns an empty vector when pattern is empty, or (for useRegex) invalid.
 ct::Vector<FindMatch> collectMatches(const CodeEditorState& state, const String& pattern,
-                                     bool caseSensitive, bool useRegex)
+        bool caseSensitive, bool useRegex)
 {
     ct::Vector<FindMatch> matches;
     if (pattern.empty()) return matches;
@@ -307,7 +322,7 @@ ct::Vector<FindMatch> collectMatches(const CodeEditorState& state, const String&
             while (pos <= view.size() && re.search(view, &m, pos))
             {
                 size_t start = m.start(), end = m.end();
-                matches.push_back({line, static_cast<int>(start), static_cast<int>(end - start)});
+                matches.push_back({ line, static_cast<int>(start), static_cast<int>(end - start) });
                 pos = end;
                 if (start == end) ++pos; // never loop on a zero-width match
             }
@@ -322,13 +337,14 @@ ct::Vector<FindMatch> collectMatches(const CodeEditorState& state, const String&
         while (true)
         {
             size_t found = caseSensitive
-                ? text.find(pattern, pos)
-                : String::npos; // filled in below for the case-insensitive path
+                                   ? text.find(pattern, pos)
+                                   : String::npos; // filled in below for the case-insensitive path
             if (!caseSensitive)
             {
                 // Byte-wise ASCII-fold search; matches Syntax.cpp's own
                 // no-locale-<cctype> stance (see cmake/CheckNoStd.cmake).
-                auto foldChar = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
+                auto foldChar = [](char c)
+                { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c; };
                 found = String::npos;
                 if (pattern.size() <= text.size())
                 {
@@ -336,13 +352,21 @@ ct::Vector<FindMatch> collectMatches(const CodeEditorState& state, const String&
                     {
                         bool match = true;
                         for (size_t j = 0; j < pattern.size(); ++j)
-                            if (foldChar(text[i + j]) != foldChar(pattern[j])) { match = false; break; }
-                        if (match) { found = i; break; }
+                            if (foldChar(text[i + j]) != foldChar(pattern[j]))
+                            {
+                                match = false;
+                                break;
+                            }
+                        if (match)
+                        {
+                            found = i;
+                            break;
+                        }
                     }
                 }
             }
             if (found == String::npos) break;
-            matches.push_back({line, static_cast<int>(found), static_cast<int>(pattern.size())});
+            matches.push_back({ line, static_cast<int>(found), static_cast<int>(pattern.size()) });
             pos = found + pattern.size();
         }
     }
@@ -355,19 +379,23 @@ bool CodeEditorState::findNext(const String& pattern, bool caseSensitive, bool u
     ct::Vector<FindMatch> matches = collectMatches(*this, pattern, caseSensitive, useRegex);
     if (matches.empty()) return false;
 
-    for (const auto& m : matches)
+    for (const auto& m: matches)
     {
         if (m.line > cursorLine || (m.line == cursorLine && m.column >= cursorColumn))
         {
-            selectionAnchorLine = m.line; selectionAnchorColumn = m.column;
-            cursorLine = m.line; cursorColumn = m.column + m.length;
+            selectionAnchorLine = m.line;
+            selectionAnchorColumn = m.column;
+            cursorLine = m.line;
+            cursorColumn = m.column + m.length;
             breakUndoCoalescing();
             return true;
         }
     }
     // Wrap around to the first match in the document.
-    selectionAnchorLine = matches[0].line; selectionAnchorColumn = matches[0].column;
-    cursorLine = matches[0].line; cursorColumn = matches[0].column + matches[0].length;
+    selectionAnchorLine = matches[0].line;
+    selectionAnchorColumn = matches[0].column;
+    cursorLine = matches[0].line;
+    cursorColumn = matches[0].column + matches[0].length;
     breakUndoCoalescing();
     return true;
 }
@@ -377,27 +405,31 @@ bool CodeEditorState::findPrev(const String& pattern, bool caseSensitive, bool u
     ct::Vector<FindMatch> matches = collectMatches(*this, pattern, caseSensitive, useRegex);
     if (matches.empty()) return false;
 
-    for (size_t i = matches.size(); i-- > 0; )
+    for (size_t i = matches.size(); i-- > 0;)
     {
         const auto& m = matches[i];
         if (m.line < cursorLine || (m.line == cursorLine && m.column < cursorColumn))
         {
-            selectionAnchorLine = m.line; selectionAnchorColumn = m.column;
-            cursorLine = m.line; cursorColumn = m.column + m.length;
+            selectionAnchorLine = m.line;
+            selectionAnchorColumn = m.column;
+            cursorLine = m.line;
+            cursorColumn = m.column + m.length;
             breakUndoCoalescing();
             return true;
         }
     }
     // Wrap around to the last match in the document.
     const auto& last = matches.back();
-    selectionAnchorLine = last.line; selectionAnchorColumn = last.column;
-    cursorLine = last.line; cursorColumn = last.column + last.length;
+    selectionAnchorLine = last.line;
+    selectionAnchorColumn = last.column;
+    cursorLine = last.line;
+    cursorColumn = last.column + last.length;
     breakUndoCoalescing();
     return true;
 }
 
 int CodeEditorState::replaceAll(const String& pattern, const String& replacement,
-                                bool caseSensitive, bool useRegex)
+        bool caseSensitive, bool useRegex)
 {
     ct::Vector<FindMatch> matches = collectMatches(*this, pattern, caseSensitive, useRegex);
     if (matches.empty()) return 0;
@@ -414,14 +446,15 @@ int CodeEditorState::replaceAll(const String& pattern, const String& replacement
     // shift under matches still to be processed.
     ++editGroup_;
     lastEditWasTyping_ = false;
-    for (size_t i = matches.size(); i-- > 0; )
+    for (size_t i = matches.size(); i-- > 0;)
     {
         const auto& m = matches[i];
-        String matched = lineAt(m.line).substr(static_cast<size_t>(m.column), static_cast<size_t>(m.length));
-        String replaced = useRegex
-            ? re.sub(ct::StringView(matched.data(), matched.size()),
-                    ct::StringView(replacement.data(), replacement.size()), 1)
-            : replacement;
+        String matched =
+                lineAt(m.line).substr(static_cast<size_t>(m.column), static_cast<size_t>(m.length));
+        String replaced =
+                useRegex ? re.sub(ct::StringView(matched.data(), matched.size()),
+                                   ct::StringView(replacement.data(), replacement.size()), 1)
+                         : replacement;
         eraseRange(m.line, m.column, m.line, m.column + m.length);
         insertText(m.line, m.column, replaced);
     }
@@ -439,12 +472,20 @@ bool matchAlreadyCovered(const CodeEditorState& state, int line, int col, int le
 {
     int sl, sc, el, ec;
     state.orderedSelection(sl, sc, el, ec);
-    if (state.hasSelection() && sl == line && sc == col && el == line && ec == col + length) return true;
+    if (state.hasSelection() && sl == line && sc == col && el == line && ec == col + length)
+        return true;
     for (int i = 0; i < state.extraCursorCount(); ++i)
     {
         const CodeEditorCursor& c = state.extraCursorAt(i);
         int csl = c.line, csc = c.column, cel = c.anchorLine, cec = c.anchorColumn;
-        if (csl > cel || (csl == cel && csc > cec)) { int tl = csl, tc = csc; csl = cel; csc = cec; cel = tl; cec = tc; }
+        if (csl > cel || (csl == cel && csc > cec))
+        {
+            int tl = csl, tc = csc;
+            csl = cel;
+            csc = cec;
+            cel = tl;
+            cec = tc;
+        }
         if (csl == line && csc == col && cel == line && cec == col + length) return true;
     }
     return false;
@@ -458,8 +499,13 @@ void CodeEditorState::addNextOccurrenceCursor()
         const String& line = lineAt(cursorLine);
         int start = cursorColumn, end = cursorColumn;
         while (start > 0 && isIdentChar(line[static_cast<size_t>(start - 1)])) --start;
-        while (end < static_cast<int>(line.size()) && isIdentChar(line[static_cast<size_t>(end)])) ++end;
-        if (start == end) { breakUndoCoalescing(); return; }
+        while (end < static_cast<int>(line.size()) && isIdentChar(line[static_cast<size_t>(end)]))
+            ++end;
+        if (start == end)
+        {
+            breakUndoCoalescing();
+            return;
+        }
         selectionAnchorLine = cursorLine;
         selectionAnchorColumn = start;
         cursorColumn = end;
@@ -470,28 +516,46 @@ void CodeEditorState::addNextOccurrenceCursor()
     int sl, sc, el, ec;
     orderedSelection(sl, sc, el, ec);
     const String needle = textBetween(*this, sl, sc, el, ec);
-    if (needle.empty() || needle.find('\n') != String::npos) { breakUndoCoalescing(); return; }
+    if (needle.empty() || needle.find('\n') != String::npos)
+    {
+        breakUndoCoalescing();
+        return;
+    }
 
     ct::Vector<FindMatch> matches = collectMatches(*this, needle, true, false);
-    if (matches.empty()) { breakUndoCoalescing(); return; }
+    if (matches.empty())
+    {
+        breakUndoCoalescing();
+        return;
+    }
 
     // Search strictly after the end of the primary's selection (which always
     // holds the most-recently-added cursor); wrap to the first uncovered
     // match if nothing qualifies after it.
     const FindMatch* found = nullptr;
     const FindMatch* firstUncovered = nullptr;
-    for (const auto& m : matches)
+    for (const auto& m: matches)
     {
         if (matchAlreadyCovered(*this, m.line, m.column, m.length)) continue;
         if (!firstUncovered) firstUncovered = &m;
-        if (m.line > el || (m.line == el && m.column >= ec)) { found = &m; break; }
+        if (m.line > el || (m.line == el && m.column >= ec))
+        {
+            found = &m;
+            break;
+        }
     }
     if (!found) found = firstUncovered;
-    if (!found) { breakUndoCoalescing(); return; }
+    if (!found)
+    {
+        breakUndoCoalescing();
+        return;
+    }
 
     CodeEditorCursor preserved;
-    preserved.line = cursorLine; preserved.column = cursorColumn;
-    preserved.anchorLine = selectionAnchorLine; preserved.anchorColumn = selectionAnchorColumn;
+    preserved.line = cursorLine;
+    preserved.column = cursorColumn;
+    preserved.anchorLine = selectionAnchorLine;
+    preserved.anchorColumn = selectionAnchorColumn;
     extraCursors_.push_back(preserved);
 
     selectionAnchorLine = found->line;
@@ -509,8 +573,8 @@ namespace
 {
 // Splits text on '\n' and splices it into lines[] at (line, column),
 // leaving the cursor position (endLine, endColumn) just past the insertion.
-void spliceInsert(ct::Vector<String>& lines, int line, int column, const String& text,
-                   int& endLine, int& endColumn)
+void spliceInsert(ct::Vector<String>& lines, int line, int column, const String& text, int& endLine,
+        int& endColumn)
 {
     const String& original = lines[static_cast<size_t>(line)];
     String before = original.substr(0, static_cast<size_t>(column));
@@ -554,19 +618,24 @@ void textEndPosition(int line, int column, const String& text, int& endLine, int
     endColumn = column;
     for (String::size_type i = 0; i < text.size(); ++i)
     {
-        if (text[i] == '\n') { ++endLine; endColumn = 0; }
-        else ++endColumn;
+        if (text[i] == '\n')
+        {
+            ++endLine;
+            endColumn = 0;
+        }
+        else
+            ++endColumn;
     }
 }
 
-String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, int endLine, int endColumn)
+String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, int endLine,
+        int endColumn)
 {
     // A range can name text that is already gone: with several cursors one of
     // them can cover what another one selected. ct::String::substr aborts when
     // asked for a position past the end, so every index is clamped to the lines
     // as they are now, and a range with nothing left in it is not an edit.
-    if (lines.empty())
-        return String();
+    if (lines.empty()) return String();
     if (startLine < 0) startLine = 0;
     if (startLine >= static_cast<int>(lines.size())) startLine = static_cast<int>(lines.size()) - 1;
     if (endLine < startLine) endLine = startLine;
@@ -574,16 +643,16 @@ String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, in
     if (startColumn < 0) startColumn = 0;
     if (endColumn < 0) endColumn = 0;
     const int startLength = static_cast<int>(lines[static_cast<size_t>(startLine)].size());
-    const int endLength   = static_cast<int>(lines[static_cast<size_t>(endLine)].size());
+    const int endLength = static_cast<int>(lines[static_cast<size_t>(endLine)].size());
     if (startColumn > startLength) startColumn = startLength;
     if (endColumn > endLength) endColumn = endLength;
-    if (startLine == endLine && endColumn <= startColumn)
-        return String();
+    if (startLine == endLine && endColumn <= startColumn) return String();
 
     if (startLine == endLine)
     {
         String& ln = lines[static_cast<size_t>(startLine)];
-        String removed = ln.substr(static_cast<size_t>(startColumn), static_cast<size_t>(endColumn - startColumn));
+        String removed = ln.substr(static_cast<size_t>(startColumn),
+                static_cast<size_t>(endColumn - startColumn));
         ln.erase(static_cast<size_t>(startColumn), static_cast<size_t>(endColumn - startColumn));
         return removed;
     }
@@ -597,7 +666,8 @@ String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, in
     removed.push_back('\n');
     removed.append(lines[static_cast<size_t>(endLine)].substr(0, static_cast<size_t>(endColumn)));
 
-    String merged = lines[static_cast<size_t>(startLine)].substr(0, static_cast<size_t>(startColumn));
+    String merged =
+            lines[static_cast<size_t>(startLine)].substr(0, static_cast<size_t>(startColumn));
     merged.append(lines[static_cast<size_t>(endLine)].substr(static_cast<size_t>(endColumn)));
     lines[static_cast<size_t>(startLine)] = merged;
     lines.erase(lines.begin() + (startLine + 1), lines.begin() + (endLine + 1));
@@ -606,17 +676,18 @@ String spliceErase(ct::Vector<String>& lines, int startLine, int startColumn, in
 } // anonymous namespace
 
 void CodeEditorState::recordEdit(CodeEditorEdit::Kind kind, int line, int column,
-                                 const String& removed, const String& inserted,
-                                 int beforeLine, int beforeColumn, bool coalesce)
+        const String& removed, const String& inserted, int beforeLine, int beforeColumn,
+        bool coalesce)
 {
     redoStack_.clear();
 
     if (coalesce && lastEditWasTyping_ && !undoStack_.empty())
     {
         CodeEditorEdit& top = undoStack_.back();
-        if (top.kind == kind && top.group == editGroup_ &&
-            top.line == beforeLine && top.column + static_cast<int>(top.insertedText.size()) == column &&
-            kind == CodeEditorEdit::Insert && inserted.find('\n') == String::npos && inserted.size() == 1)
+        if (top.kind == kind && top.group == editGroup_ && top.line == beforeLine &&
+                top.column + static_cast<int>(top.insertedText.size()) == column &&
+                kind == CodeEditorEdit::Insert && inserted.find('\n') == String::npos &&
+                inserted.size() == 1)
         {
             top.insertedText.append(inserted);
             top.cursorLineAfter = cursorLine;
@@ -654,7 +725,8 @@ void CodeEditorState::insertTextImpl(int line, int column, const String& text, b
 
     const bool isPlainTyping = text.size() == 1 && text[0] != '\n';
     if (bumpGroup && !isPlainTyping) ++editGroup_;
-    recordEdit(CodeEditorEdit::Insert, line, column, String(), text, beforeLine, beforeColumn, isPlainTyping);
+    recordEdit(CodeEditorEdit::Insert, line, column, String(), text, beforeLine, beforeColumn,
+            isPlainTyping);
     lastEditWasTyping_ = isPlainTyping;
 
     rehighlightFrom(line);
@@ -665,13 +737,16 @@ void CodeEditorState::insertText(int line, int column, const String& text)
     insertTextImpl(line, column, text, true);
 }
 
-String CodeEditorState::eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn, bool bumpGroup)
+String CodeEditorState::eraseRangeImpl(int startLine, int startColumn, int endLine, int endColumn,
+        bool bumpGroup)
 {
     if (startLine > endLine || (startLine == endLine && startColumn > endColumn))
     {
         int tl = startLine, tc = startColumn;
-        startLine = endLine; startColumn = endColumn;
-        endLine = tl; endColumn = tc;
+        startLine = endLine;
+        startColumn = endColumn;
+        endLine = tl;
+        endColumn = tc;
     }
     if (startLine == endLine && startColumn == endColumn) return String();
 
@@ -682,7 +757,8 @@ String CodeEditorState::eraseRangeImpl(int startLine, int startColumn, int endLi
     clearSelection();
 
     if (bumpGroup) ++editGroup_;
-    recordEdit(CodeEditorEdit::Delete, startLine, startColumn, removed, String(), beforeLine, beforeColumn, false);
+    recordEdit(CodeEditorEdit::Delete, startLine, startColumn, removed, String(), beforeLine,
+            beforeColumn, false);
     lastEditWasTyping_ = false;
 
     rehighlightFrom(startLine);
@@ -718,24 +794,35 @@ namespace
 {
 // extraIndex is -1 for the primary, else the entry's slot in extraCursors_ -
 // kept so results can be written back to the right place after sorting.
-struct AllCursorsEntry { int line, column, anchorLine, anchorColumn; int extraIndex; };
+struct AllCursorsEntry
+{
+    int line, column, anchorLine, anchorColumn;
+    int extraIndex;
+};
 // Where each entry's cursor ended up after its own edit; adjusted in place
 // as later (further left/up) entries' edits shift it.
-struct AllCursorsResult { int line, column; int extraIndex; };
+struct AllCursorsResult
+{
+    int line, column;
+    int extraIndex;
+};
 
 ct::Vector<AllCursorsEntry> collectCursorsDescending(const CodeEditorState& state)
 {
     ct::Vector<AllCursorsEntry> entries;
-    entries.push_back({state.cursorLine, state.cursorColumn, state.selectionAnchorLine, state.selectionAnchorColumn, -1});
+    entries.push_back({ state.cursorLine, state.cursorColumn, state.selectionAnchorLine,
+        state.selectionAnchorColumn, -1 });
     for (int i = 0; i < state.extraCursorCount(); ++i)
     {
         const CodeEditorCursor& c = state.extraCursorAt(i);
-        entries.push_back({c.line, c.column, c.anchorLine, c.anchorColumn, i});
+        entries.push_back({ c.line, c.column, c.anchorLine, c.anchorColumn, i });
     }
-    ct::sort(entries.begin(), entries.end(), [](const AllCursorsEntry& a, const AllCursorsEntry& b) {
-        if (a.line != b.line) return a.line > b.line;
-        return a.column > b.column;
-    });
+    ct::sort(entries.begin(), entries.end(),
+            [](const AllCursorsEntry& a, const AllCursorsEntry& b)
+            {
+                if (a.line != b.line) return a.line > b.line;
+                return a.column > b.column;
+            });
     return entries;
 }
 
@@ -744,11 +831,11 @@ ct::Vector<AllCursorsEntry> collectCursorsDescending(const CodeEditorState& stat
 // was at or after the removed span's end by the same amount, so a
 // same-line cursor to the left processed afterward doesn't invalidate an
 // already-recorded result to its right.
-void shiftResultsAfterEdit(ct::Vector<AllCursorsResult>& results,
-                           int oldEndLine, int oldEndColumn, int newEndLine, int newEndColumn)
+void shiftResultsAfterEdit(ct::Vector<AllCursorsResult>& results, int oldEndLine, int oldEndColumn,
+        int newEndLine, int newEndColumn)
 {
     const int lineDelta = newEndLine - oldEndLine;
-    for (auto& r : results)
+    for (auto& r: results)
     {
         if (r.line < oldEndLine || (r.line == oldEndLine && r.column < oldEndColumn)) continue;
         if (r.line == oldEndLine) r.column = newEndColumn + (r.column - oldEndColumn);
@@ -757,20 +844,23 @@ void shiftResultsAfterEdit(ct::Vector<AllCursorsResult>& results,
 }
 } // anonymous namespace
 
-template <typename ResultVector>
+template<typename ResultVector>
 void CodeEditorState::applyMultiCursorResults(const ResultVector& results)
 {
-    for (const auto& r : results)
+    for (const auto& r: results)
     {
         if (r.extraIndex >= 0)
         {
             CodeEditorCursor& c = extraCursors_[static_cast<size_t>(r.extraIndex)];
-            c.line = r.line; c.column = r.column;
-            c.anchorLine = r.line; c.anchorColumn = r.column;
+            c.line = r.line;
+            c.column = r.column;
+            c.anchorLine = r.line;
+            c.anchorColumn = r.column;
         }
         else
         {
-            cursorLine = r.line; cursorColumn = r.column;
+            cursorLine = r.line;
+            cursorColumn = r.column;
         }
     }
     clearSelection();
@@ -778,7 +868,11 @@ void CodeEditorState::applyMultiCursorResults(const ResultVector& results)
 
 void CodeEditorState::insertTextAtAllCursors(const String& text)
 {
-    if (extraCursors_.empty()) { insertText(cursorLine, cursorColumn, text); return; }
+    if (extraCursors_.empty())
+    {
+        insertText(cursorLine, cursorColumn, text);
+        return;
+    }
 
     // Mirrors insertText()'s own rule (see insertTextImpl) so typing over a
     // multi-cursor selection - eraseSelectionsAtAllCursors() then this -
@@ -788,17 +882,21 @@ void CodeEditorState::insertTextAtAllCursors(const String& text)
     if (!isPlainTyping) ++editGroup_;
     ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
     ct::Vector<AllCursorsResult> results;
-    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+    for (const auto& entry: entries)
+        results.push_back({ entry.line, entry.column, entry.extraIndex });
 
     for (size_t i = 0; i < entries.size(); ++i)
     {
         AllCursorsResult& mine = results[i];
-        cursorLine = mine.line; cursorColumn = mine.column;
-        selectionAnchorLine = mine.line; selectionAnchorColumn = mine.column;
+        cursorLine = mine.line;
+        cursorColumn = mine.column;
+        selectionAnchorLine = mine.line;
+        selectionAnchorColumn = mine.column;
         insertTextImpl(mine.line, mine.column, text, false);
         // A plain insert removes nothing - its "old end" is its own start.
         shiftResultsAfterEdit(results, mine.line, mine.column, cursorLine, cursorColumn);
-        mine.line = cursorLine; mine.column = cursorColumn;
+        mine.line = cursorLine;
+        mine.column = cursorColumn;
     }
     applyMultiCursorResults(results);
 }
@@ -819,20 +917,30 @@ bool CodeEditorState::eraseSelectionsAtAllCursors()
     ++editGroup_;
     ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
     ct::Vector<AllCursorsResult> results;
-    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+    for (const auto& entry: entries)
+        results.push_back({ entry.line, entry.column, entry.extraIndex });
 
     for (size_t i = 0; i < entries.size(); ++i)
     {
         const auto& entry = entries[i];
         AllCursorsResult& mine = results[i];
-        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        const bool hadSelection =
+                entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
         if (!hadSelection) continue;
         int sl = entry.anchorLine, sc = entry.anchorColumn, el = entry.line, ec = entry.column;
-        if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+        if (sl > el || (sl == el && sc > ec))
+        {
+            int tl = sl, tc = sc;
+            sl = el;
+            sc = ec;
+            el = tl;
+            ec = tc;
+        }
         eraseRangeImpl(sl, sc, el, ec, false);
         erasedAny = true;
         shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
-        mine.line = cursorLine; mine.column = cursorColumn;
+        mine.line = cursorLine;
+        mine.column = cursorColumn;
     }
     applyMultiCursorResults(results);
     return erasedAny;
@@ -843,7 +951,9 @@ void CodeEditorState::backspaceAtAllCursors()
     if (extraCursors_.empty())
     {
         if (eraseSelection()) return;
-        if (cursorColumn > 0) eraseRange(cursorLine, previousCodePoint(lineAt(cursorLine), cursorColumn), cursorLine, cursorColumn);
+        if (cursorColumn > 0)
+            eraseRange(cursorLine, previousCodePoint(lineAt(cursorLine), cursorColumn), cursorLine,
+                    cursorColumn);
         else if (cursorLine > 0)
         {
             int previousLen = static_cast<int>(lineAt(cursorLine - 1).size());
@@ -855,32 +965,52 @@ void CodeEditorState::backspaceAtAllCursors()
     ++editGroup_;
     ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
     ct::Vector<AllCursorsResult> results;
-    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+    for (const auto& entry: entries)
+        results.push_back({ entry.line, entry.column, entry.extraIndex });
 
     for (size_t i = 0; i < entries.size(); ++i)
     {
         const auto& entry = entries[i];
         AllCursorsResult& mine = results[i];
-        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        const bool hadSelection =
+                entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
         int sl, sc, el, ec;
         if (hadSelection)
         {
-            sl = entry.anchorLine; sc = entry.anchorColumn; el = entry.line; ec = entry.column;
-            if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+            sl = entry.anchorLine;
+            sc = entry.anchorColumn;
+            el = entry.line;
+            ec = entry.column;
+            if (sl > el || (sl == el && sc > ec))
+            {
+                int tl = sl, tc = sc;
+                sl = el;
+                sc = ec;
+                el = tl;
+                ec = tc;
+            }
         }
         else if (mine.column > 0)
         {
-            sl = mine.line; sc = previousCodePoint(lineAt(mine.line), mine.column); el = mine.line; ec = mine.column;
+            sl = mine.line;
+            sc = previousCodePoint(lineAt(mine.line), mine.column);
+            el = mine.line;
+            ec = mine.column;
         }
         else if (mine.line > 0)
         {
-            sl = mine.line - 1; sc = static_cast<int>(lineAt(mine.line - 1).size()); el = mine.line; ec = 0;
+            sl = mine.line - 1;
+            sc = static_cast<int>(lineAt(mine.line - 1).size());
+            el = mine.line;
+            ec = 0;
         }
-        else continue;
+        else
+            continue;
 
         eraseRangeImpl(sl, sc, el, ec, false);
         shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
-        mine.line = cursorLine; mine.column = cursorColumn;
+        mine.line = cursorLine;
+        mine.column = cursorColumn;
     }
     applyMultiCursorResults(results);
 }
@@ -891,38 +1021,67 @@ void CodeEditorState::deleteAtAllCursors()
     {
         if (eraseSelection()) return;
         const int len = static_cast<int>(lineAt(cursorLine).size());
-        if (cursorColumn < len) eraseRange(cursorLine, cursorColumn, cursorLine, nextCodePoint(lineAt(cursorLine), cursorColumn));
-        else if (cursorLine + 1 < lineCount()) eraseRange(cursorLine, cursorColumn, cursorLine + 1, 0);
+        if (cursorColumn < len)
+            eraseRange(cursorLine, cursorColumn, cursorLine,
+                    nextCodePoint(lineAt(cursorLine), cursorColumn));
+        else if (cursorLine + 1 < lineCount())
+            eraseRange(cursorLine, cursorColumn, cursorLine + 1, 0);
         return;
     }
 
     ++editGroup_;
     ct::Vector<AllCursorsEntry> entries = collectCursorsDescending(*this);
     ct::Vector<AllCursorsResult> results;
-    for (const auto& entry : entries) results.push_back({entry.line, entry.column, entry.extraIndex});
+    for (const auto& entry: entries)
+        results.push_back({ entry.line, entry.column, entry.extraIndex });
 
     for (size_t i = 0; i < entries.size(); ++i)
     {
         const auto& entry = entries[i];
         AllCursorsResult& mine = results[i];
-        const bool hadSelection = entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
+        const bool hadSelection =
+                entry.line != entry.anchorLine || entry.column != entry.anchorColumn;
         int sl, sc, el, ec;
         if (hadSelection)
         {
-            sl = entry.anchorLine; sc = entry.anchorColumn; el = entry.line; ec = entry.column;
-            if (sl > el || (sl == el && sc > ec)) { int tl = sl, tc = sc; sl = el; sc = ec; el = tl; ec = tc; }
+            sl = entry.anchorLine;
+            sc = entry.anchorColumn;
+            el = entry.line;
+            ec = entry.column;
+            if (sl > el || (sl == el && sc > ec))
+            {
+                int tl = sl, tc = sc;
+                sl = el;
+                sc = ec;
+                el = tl;
+                ec = tc;
+            }
         }
         else
         {
             const int len = static_cast<int>(lineAt(mine.line).size());
-            if (mine.column < len) { sl = mine.line; sc = mine.column; el = mine.line; ec = nextCodePoint(lineAt(mine.line), mine.column); }
-            else if (mine.line + 1 < lineCount()) { sl = mine.line; sc = mine.column; el = mine.line + 1; ec = 0; }
-            else continue;
+            if (mine.column < len)
+            {
+                sl = mine.line;
+                sc = mine.column;
+                el = mine.line;
+                ec = nextCodePoint(lineAt(mine.line), mine.column);
+            }
+            else if (mine.line + 1 < lineCount())
+            {
+                sl = mine.line;
+                sc = mine.column;
+                el = mine.line + 1;
+                ec = 0;
+            }
+            else
+                continue;
         }
 
         eraseRangeImpl(sl, sc, el, ec, false);
         shiftResultsAfterEdit(results, el, ec, cursorLine, cursorColumn);
-        mine.line = cursorLine; mine.column = cursorColumn;
+        mine.line = cursorLine;
+        mine.column = cursorColumn;
     }
     applyMultiCursorResults(results);
 }
@@ -933,29 +1092,30 @@ void CodeEditorState::applyEditForward(const CodeEditorEdit& edit)
 {
     switch (edit.kind)
     {
-    case CodeEditorEdit::Insert:
-    {
-        int endLine, endColumn;
-        spliceInsert(lines_, edit.line, edit.column, edit.insertedText, endLine, endColumn);
-        break;
-    }
-    case CodeEditorEdit::Delete:
-    {
-        // Forward direction of a Delete edit reproduces the deletion.
-        int endLine, endColumn;
-        textEndPosition(edit.line, edit.column, edit.removedText, endLine, endColumn);
-        spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
-        break;
-    }
-    case CodeEditorEdit::Replace:
-    {
-        int endLine, endColumn;
-        textEndPosition(edit.line, edit.column, edit.removedText, endLine, endColumn);
-        spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
-        int ignoredLine, ignoredColumn;
-        spliceInsert(lines_, edit.line, edit.column, edit.insertedText, ignoredLine, ignoredColumn);
-        break;
-    }
+        case CodeEditorEdit::Insert:
+        {
+            int endLine, endColumn;
+            spliceInsert(lines_, edit.line, edit.column, edit.insertedText, endLine, endColumn);
+            break;
+        }
+        case CodeEditorEdit::Delete:
+        {
+            // Forward direction of a Delete edit reproduces the deletion.
+            int endLine, endColumn;
+            textEndPosition(edit.line, edit.column, edit.removedText, endLine, endColumn);
+            spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
+            break;
+        }
+        case CodeEditorEdit::Replace:
+        {
+            int endLine, endColumn;
+            textEndPosition(edit.line, edit.column, edit.removedText, endLine, endColumn);
+            spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
+            int ignoredLine, ignoredColumn;
+            spliceInsert(lines_, edit.line, edit.column, edit.insertedText, ignoredLine,
+                    ignoredColumn);
+            break;
+        }
     }
 }
 
@@ -963,28 +1123,29 @@ void CodeEditorState::applyEditBackward(const CodeEditorEdit& edit)
 {
     switch (edit.kind)
     {
-    case CodeEditorEdit::Insert:
-    {
-        int endLine, endColumn;
-        textEndPosition(edit.line, edit.column, edit.insertedText, endLine, endColumn);
-        spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
-        break;
-    }
-    case CodeEditorEdit::Delete:
-    {
-        int endLine, endColumn;
-        spliceInsert(lines_, edit.line, edit.column, edit.removedText, endLine, endColumn);
-        break;
-    }
-    case CodeEditorEdit::Replace:
-    {
-        int endLine, endColumn;
-        textEndPosition(edit.line, edit.column, edit.insertedText, endLine, endColumn);
-        spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
-        int ignoredLine, ignoredColumn;
-        spliceInsert(lines_, edit.line, edit.column, edit.removedText, ignoredLine, ignoredColumn);
-        break;
-    }
+        case CodeEditorEdit::Insert:
+        {
+            int endLine, endColumn;
+            textEndPosition(edit.line, edit.column, edit.insertedText, endLine, endColumn);
+            spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
+            break;
+        }
+        case CodeEditorEdit::Delete:
+        {
+            int endLine, endColumn;
+            spliceInsert(lines_, edit.line, edit.column, edit.removedText, endLine, endColumn);
+            break;
+        }
+        case CodeEditorEdit::Replace:
+        {
+            int endLine, endColumn;
+            textEndPosition(edit.line, edit.column, edit.insertedText, endLine, endColumn);
+            spliceErase(lines_, edit.line, edit.column, endLine, endColumn);
+            int ignoredLine, ignoredColumn;
+            spliceInsert(lines_, edit.line, edit.column, edit.removedText, ignoredLine,
+                    ignoredColumn);
+            break;
+        }
     }
 }
 
@@ -1086,7 +1247,8 @@ void Context::updateCodeCompletion(CodeEditorState& state, const CodeEditorOptio
 
     ct::HashSet<String> seen;
     ct::Vector<String> items;
-    auto tryAdd = [&](const String& word) {
+    auto tryAdd = [&](const String& word)
+    {
         if (word.size() <= prefix.size()) return;
         if (word.compare(0, prefix.size(), prefix.c_str()) != 0) return;
         if (seen.contains(word)) return;
@@ -1096,9 +1258,9 @@ void Context::updateCodeCompletion(CodeEditorState& state, const CodeEditorOptio
 
     if (syntax::SyntaxHighlighter* hl = state.highlighter())
     {
-        for (const auto& w : hl->keywordSet()) tryAdd(w);
-        for (const auto& w : hl->typeSet()) tryAdd(w);
-        for (const auto& w : hl->constantSet()) tryAdd(w);
+        for (const auto& w: hl->keywordSet()) tryAdd(w);
+        for (const auto& w: hl->typeSet()) tryAdd(w);
+        for (const auto& w: hl->constantSet()) tryAdd(w);
     }
 
     for (int i = 0; i < state.lineCount() && items.size() < 200; ++i)
@@ -1109,7 +1271,7 @@ void Context::updateCodeCompletion(CodeEditorState& state, const CodeEditorOptio
         while (j < n)
         {
             if (!isIdentChar(text[static_cast<size_t>(j)]) ||
-                (text[static_cast<size_t>(j)] >= '0' && text[static_cast<size_t>(j)] <= '9'))
+                    (text[static_cast<size_t>(j)] >= '0' && text[static_cast<size_t>(j)] <= '9'))
             {
                 ++j;
                 continue;
@@ -1152,7 +1314,7 @@ void Context::acceptCodeCompletion(CodeEditorState& state)
 // (a raw tab byte handed to drawText renders as the font's missing-glyph
 // placeholder, e.g. '?'). Returns the x position just past the run.
 float Context::drawCodeRun(DrawList& drawList, const StringView& run, const Vec2& position,
-                           const Color& color, const Rect& clip, int tabSize, int startVisCol, float fontSize)
+        const Color& color, const Rect& clip, int tabSize, int startVisCol, float fontSize)
 {
     if (tabSize <= 0) tabSize = 4;
     float x = position.x;
@@ -1168,7 +1330,8 @@ float Context::drawCodeRun(DrawList& drawList, const StringView& run, const Vec2
             if (i > segStart)
             {
                 const StringView segment(run.data() + segStart, i - segStart);
-                drawText(drawList, theme_.font, segment, Vec2(x, position.y), fontSize, color, clip);
+                drawText(drawList, theme_.font, segment, Vec2(x, position.y), fontSize, color,
+                        clip);
                 x += measureText(theme_.font, segment, fontSize).width;
                 visCol += static_cast<int>(segment.size());
             }
@@ -1187,14 +1350,14 @@ float Context::drawCodeRun(DrawList& drawList, const StringView& run, const Vec2
 // Draws one line, byte-slicing it into the highlighter's spans and drawing
 // each run in its token color; falls back to a single plain-colored run
 // when there is no highlighter (or the line produced no spans).
-void Context::drawHighlightedLine(DrawList& drawList, const CodeEditorState& state,
-                                  int line, const String& text, const Vec2& position,
-                                  const Rect& clip, int tabSize, float fontSize)
+void Context::drawHighlightedLine(DrawList& drawList, const CodeEditorState& state, int line,
+        const String& text, const Vec2& position, const Rect& clip, int tabSize, float fontSize)
 {
     syntax::SyntaxHighlighter* hl = state.highlighter();
     if (!hl || text.empty())
     {
-        drawCodeRun(drawList, StringView(text.data(), text.size()), position, theme_.buttonText, clip, tabSize, 0, fontSize);
+        drawCodeRun(drawList, StringView(text.data(), text.size()), position, theme_.buttonText,
+                clip, tabSize, 0, fontSize);
         return;
     }
 
@@ -1203,20 +1366,23 @@ void Context::drawHighlightedLine(DrawList& drawList, const CodeEditorState& sta
     int cursor = 0;
     float x = position.x;
     int visCol = 0;
-    for (const auto& span : result.spans)
+    for (const auto& span: result.spans)
     {
         if (span.startCol > cursor)
         {
             const StringView run(text.data() + cursor, static_cast<size_t>(span.startCol - cursor));
-            const float endX = drawCodeRun(drawList, run, Vec2(x, position.y), theme_.buttonText, clip, tabSize, visCol, fontSize);
+            const float endX = drawCodeRun(drawList, run, Vec2(x, position.y), theme_.buttonText,
+                    clip, tabSize, visCol, fontSize);
             visCol += static_cast<int>(run.size());
             x = endX;
         }
         const int end = span.endCol < n ? span.endCol : n;
         if (end > span.startCol)
         {
-            const StringView run(text.data() + span.startCol, static_cast<size_t>(end - span.startCol));
-            const float endX = drawCodeRun(drawList, run, Vec2(x, position.y), hl->colorFor(span.type), clip, tabSize, visCol, fontSize);
+            const StringView run(text.data() + span.startCol,
+                    static_cast<size_t>(end - span.startCol));
+            const float endX = drawCodeRun(drawList, run, Vec2(x, position.y),
+                    hl->colorFor(span.type), clip, tabSize, visCol, fontSize);
             visCol += static_cast<int>(run.size());
             x = endX;
         }
@@ -1225,11 +1391,13 @@ void Context::drawHighlightedLine(DrawList& drawList, const CodeEditorState& sta
     if (cursor < n)
     {
         const StringView run(text.data() + cursor, static_cast<size_t>(n - cursor));
-        drawCodeRun(drawList, run, Vec2(x, position.y), theme_.buttonText, clip, tabSize, visCol, fontSize);
+        drawCodeRun(drawList, run, Vec2(x, position.y), theme_.buttonText, clip, tabSize, visCol,
+                fontSize);
     }
 }
 
-float Context::codeEditorColumnX(const CodeEditorState& state, int line, int column, int tabSize, float fontSize) const
+float Context::codeEditorColumnX(const CodeEditorState& state, int line, int column, int tabSize,
+        float fontSize) const
 {
     const String& text = state.lineAt(line);
     if (column <= 0) return 0.0f;
@@ -1239,9 +1407,16 @@ float Context::codeEditorColumnX(const CodeEditorState& state, int line, int col
 
     // Fast path: no tabs before `column`, the common case, is one measurement.
     bool hasTab = false;
-    for (int i = 0; i < column; ++i) if (text[static_cast<size_t>(i)] == '\t') { hasTab = true; break; }
+    for (int i = 0; i < column; ++i)
+        if (text[static_cast<size_t>(i)] == '\t')
+        {
+            hasTab = true;
+            break;
+        }
     if (!hasTab)
-        return measureText(theme_.font, StringView(text.data(), static_cast<size_t>(column)), fontSize).width;
+        return measureText(theme_.font, StringView(text.data(), static_cast<size_t>(column)),
+                fontSize)
+                .width;
 
     // Walk run by run, snapping to the next tab stop (tabSize columns, in
     // space-widths) at each '\t' instead of measuring it as a glyph.
@@ -1258,7 +1433,8 @@ float Context::codeEditorColumnX(const CodeEditorState& state, int line, int col
                 const StringView run(text.data() + runStart, static_cast<size_t>(i - runStart));
                 float w = measureText(theme_.font, run, fontSize).width;
                 x += w;
-                visCol += static_cast<int>(run.size()); // approximation: 1 byte ~= 1 column for non-tab runs
+                visCol += static_cast<int>(
+                        run.size()); // approximation: 1 byte ~= 1 column for non-tab runs
             }
             if (i < column) // this iteration stopped on a '\t', not the target column
             {
@@ -1272,14 +1448,20 @@ float Context::codeEditorColumnX(const CodeEditorState& state, int line, int col
     return x;
 }
 
-int Context::codeEditorColumnAt(const CodeEditorState& state, int line, float localX, int tabSize, float fontSize) const
+int Context::codeEditorColumnAt(const CodeEditorState& state, int line, float localX, int tabSize,
+        float fontSize) const
 {
     const String& text = state.lineAt(line);
     const int n = static_cast<int>(text.size());
     if (localX <= 0.0f) return 0;
 
     bool hasTab = false;
-    for (int i = 0; i < n; ++i) if (text[static_cast<size_t>(i)] == '\t') { hasTab = true; break; }
+    for (int i = 0; i < n; ++i)
+        if (text[static_cast<size_t>(i)] == '\t')
+        {
+            hasTab = true;
+            break;
+        }
 
     if (!hasTab)
     {
@@ -1292,14 +1474,21 @@ int Context::codeEditorColumnAt(const CodeEditorState& state, int line, float lo
         while (lo < hi)
         {
             int mid = lo + (hi - lo) / 2;
-            float width = measureText(theme_.font, StringView(text.data(), static_cast<size_t>(mid)), fontSize).width;
+            float width = measureText(theme_.font,
+                    StringView(text.data(), static_cast<size_t>(mid)), fontSize)
+                                  .width;
             if (width < localX) lo = mid + 1;
-            else hi = mid;
+            else
+                hi = mid;
         }
         if (lo > 0)
         {
-            float widthAtLo = measureText(theme_.font, StringView(text.data(), static_cast<size_t>(lo)), fontSize).width;
-            float widthAtPrev = measureText(theme_.font, StringView(text.data(), static_cast<size_t>(lo - 1)), fontSize).width;
+            float widthAtLo = measureText(theme_.font,
+                    StringView(text.data(), static_cast<size_t>(lo)), fontSize)
+                                      .width;
+            float widthAtPrev = measureText(theme_.font,
+                    StringView(text.data(), static_cast<size_t>(lo - 1)), fontSize)
+                                        .width;
             if (localX - widthAtPrev < widthAtLo - localX) return lo - 1;
         }
         return lo;
@@ -1323,7 +1512,10 @@ namespace
 // Ctrl+X put on the clipboard when there are extra cursors.
 String selectedTextAtAllCursors(const CodeEditorState& state)
 {
-    struct Span { int sl, sc, el, ec; };
+    struct Span
+    {
+        int sl, sc, el, ec;
+    };
     ct::Vector<Span> spans;
     if (state.hasSelection())
     {
@@ -1335,13 +1527,16 @@ String selectedTextAtAllCursors(const CodeEditorState& state)
     {
         const CodeEditorCursor& c = state.extraCursorAt(i);
         if (c.line == c.anchorLine && c.column == c.anchorColumn) continue;
-        const bool anchorFirst = c.anchorLine < c.line || (c.anchorLine == c.line && c.anchorColumn < c.column);
-        spans.push_back(anchorFirst ? Span{c.anchorLine, c.anchorColumn, c.line, c.column}
-                                    : Span{c.line, c.column, c.anchorLine, c.anchorColumn});
+        const bool anchorFirst =
+                c.anchorLine < c.line || (c.anchorLine == c.line && c.anchorColumn < c.column);
+        spans.push_back(anchorFirst ? Span{ c.anchorLine, c.anchorColumn, c.line, c.column }
+                                    : Span{ c.line, c.column, c.anchorLine, c.anchorColumn });
     }
     for (size_t i = 1; i < spans.size(); ++i)
-        for (size_t j = i; j > 0 && (spans[j].sl < spans[j - 1].sl ||
-                                     (spans[j].sl == spans[j - 1].sl && spans[j].sc < spans[j - 1].sc)); --j)
+        for (size_t j = i;
+                j > 0 && (spans[j].sl < spans[j - 1].sl ||
+                                 (spans[j].sl == spans[j - 1].sl && spans[j].sc < spans[j - 1].sc));
+                --j)
         {
             const Span swapped = spans[j];
             spans[j] = spans[j - 1];
@@ -1357,24 +1552,24 @@ String selectedTextAtAllCursors(const CodeEditorState& state)
 }
 } // anonymous namespace
 
-bool Context::codeEditorCopy(CodeEditorState &state)
+bool Context::codeEditorCopy(CodeEditorState& state)
 {
-    const String selected = state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state)
-                                                          : state.selectedText();
+    const String selected =
+            state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state) : state.selectedText();
     if (!selected.empty()) backend_.setClipboardText(selected);
     return false; // Copy never changes the buffer
 }
 
-bool Context::codeEditorCut(CodeEditorState &state)
+bool Context::codeEditorCut(CodeEditorState& state)
 {
-    const String selected = state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state)
-                                                          : state.selectedText();
+    const String selected =
+            state.extraCursorCount() > 0 ? selectedTextAtAllCursors(state) : state.selectedText();
     if (selected.empty()) return false;
     backend_.setClipboardText(selected);
     return state.eraseSelectionsAtAllCursors();
 }
 
-bool Context::codeEditorPaste(CodeEditorState &state)
+bool Context::codeEditorPaste(CodeEditorState& state)
 {
     const String clipboard = backend_.clipboardText();
     if (clipboard.empty()) return false;
@@ -1384,22 +1579,21 @@ bool Context::codeEditorPaste(CodeEditorState &state)
     return true;
 }
 
-bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rect &bounds,
-                         const CodeEditorOptions &options)
+bool Context::codeEditor(StringView labelText, CodeEditorState& state, const Rect& bounds,
+        const CodeEditorOptions& options)
 {
-    WindowState *window = currentWindow();
-    if (!window)
-        return false;
+    WindowState* window = currentWindow();
+    if (!window) return false;
 
     if (!options.autoDetectFileName.empty() && !state.highlighter())
-        state.setHighlighterForFile(String(options.autoDetectFileName.data(), options.autoDetectFileName.size()));
+        state.setHighlighterForFile(
+                String(options.autoDetectFileName.data(), options.autoDetectFileName.size()));
 
     const WidgetId id = makeWidgetId(labelText);
     const Rect rect = contentRect(bounds);
     const Rect clip = contentClip();
-    DrawList *drawList = currentDrawList();
-    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f)
-        return false;
+    DrawList* drawList = currentDrawList();
+    if (!drawList || rect.width <= 0.0f || rect.height <= 0.0f) return false;
 
     // fontSize is this editor's effective size: the theme's size scaled by
     // this state's zoom (see CodeEditorState::zoomIn/Out/Reset). Every
@@ -1421,14 +1615,24 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // With folding disabled, visual and logical rows are identical. Avoid
     // allocating a map and scanning every fold region for every source line.
     const bool foldingAvailable = options.showFolding && state.highlighter() != nullptr;
-    auto rebuildVisibleLines = [&]() { if (foldingAvailable) state.visibleLines(); };
-    auto rowCount = [&]() { return foldingAvailable ? static_cast<int>(state.visibleLines().size()) : state.lineCount(); };
-    auto logicalLine = [&](int row) { return foldingAvailable ? state.visibleLines()[static_cast<size_t>(row)] : row; };
+    auto rebuildVisibleLines = [&]()
+    {
+        if (foldingAvailable) state.visibleLines();
+    };
+    auto rowCount = [&]() {
+        return foldingAvailable ? static_cast<int>(state.visibleLines().size()) : state.lineCount();
+    };
+    auto logicalLine = [&](int row)
+    { return foldingAvailable ? state.visibleLines()[static_cast<size_t>(row)] : row; };
     int visibleLineCount = rowCount();
     int cursorRow = state.cursorLine;
     if (foldingAvailable)
         for (int row = 0; row < visibleLineCount; ++row)
-            if (logicalLine(row) >= state.cursorLine) { cursorRow = row; break; }
+            if (logicalLine(row) >= state.cursorLine)
+            {
+                cursorRow = row;
+                break;
+            }
 
     float gutterWidth = 0.0f;
     if (options.showLineNumbers)
@@ -1443,22 +1647,27 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     gutterWidth += foldGutterWidth;
 
     const float innerHeight = rect.height - padding * 2.0f;
-    const int visibleRows = innerHeight >= lineHeight ? static_cast<int>(innerHeight / lineHeight) : 1;
-    const int maximumScroll = visibleLineCount - visibleRows > 0 ? visibleLineCount - visibleRows : 0;
+    const int visibleRows =
+            innerHeight >= lineHeight ? static_cast<int>(innerHeight / lineHeight) : 1;
+    const int maximumScroll =
+            visibleLineCount - visibleRows > 0 ? visibleLineCount - visibleRows : 0;
     const bool hasScrollbar = maximumScroll > 0;
     const float scrollbarWidth = hasScrollbar ? theme_.scrollbarWidth : 0.0f;
 
-    const Rect textArea(rect.x + gutterWidth, rect.y, rect.width - gutterWidth - scrollbarWidth, rect.height);
-    const Rect textClip = intersect(Rect(textArea.x + padding, textArea.y + padding,
-                                         textArea.width - padding * 2.0f,
-                                         textArea.height - padding * 2.0f), clip);
+    const Rect textArea(rect.x + gutterWidth, rect.y, rect.width - gutterWidth - scrollbarWidth,
+            rect.height);
+    const Rect textClip =
+            intersect(Rect(textArea.x + padding, textArea.y + padding,
+                              textArea.width - padding * 2.0f, textArea.height - padding * 2.0f),
+                    clip);
     const Rect scrollbar(rect.x + rect.width - scrollbarWidth, rect.y, scrollbarWidth, rect.height);
     const WidgetId scrollbarId = combineIds(id, 0x544558545343524Cull);
 
     if (state.scrollLine < 0) state.scrollLine = 0;
     if (state.scrollLine > maximumScroll) state.scrollLine = maximumScroll;
 
-    itemHovered(rect, clip, id); // registers hotWidget_/lastItemId_ for tooltips; no visual hover state here
+    itemHovered(rect, clip,
+            id); // registers hotWidget_/lastItemId_ for tooltips; no visual hover state here
     // The scrollbar is handled separately below and must not be claimed by
     // the text-area click. itemClicked() on the full rect used to set
     // activeWidget_ = id for a press anywhere inside it - including the
@@ -1476,7 +1685,9 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     {
         if (pointer_.wheelControl)
         {
-            if (pointer_.wheelY > 0.0f) state.zoomIn(); else state.zoomOut();
+            if (pointer_.wheelY > 0.0f) state.zoomIn();
+            else
+                state.zoomOut();
         }
         else if (hasScrollbar)
         {
@@ -1491,15 +1702,19 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     Rect thumb;
     if (hasScrollbar)
     {
-        const float requestedThumb = scrollbar.height * static_cast<float>(visibleRows) / static_cast<float>(visibleLineCount);
-        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb ? requestedThumb : theme_.scrollbarMinThumb;
+        const float requestedThumb = scrollbar.height * static_cast<float>(visibleRows) /
+                                     static_cast<float>(visibleLineCount);
+        const float thumbHeight = requestedThumb > theme_.scrollbarMinThumb
+                                          ? requestedThumb
+                                          : theme_.scrollbarMinThumb;
         const float travel = scrollbar.height - thumbHeight;
-        const float offset = maximumScroll > 0
-            ? travel * static_cast<float>(state.scrollLine) / static_cast<float>(maximumScroll) : 0.0f;
+        const float offset = maximumScroll > 0 ? travel * static_cast<float>(state.scrollLine) /
+                                                         static_cast<float>(maximumScroll)
+                                               : 0.0f;
         thumb = Rect(scrollbar.x, scrollbar.y + offset, scrollbar.width, thumbHeight);
         const uint32_t left = buttonIndex(PointerButton::Left);
-        const bool pressedThumb = pointerPressedIn(intersect(thumb, clip), left) &&
-                                  activeWidget_ == InvalidWidgetId;
+        const bool pressedThumb =
+                pointerPressedIn(intersect(thumb, clip), left) && activeWidget_ == InvalidWidgetId;
         if (pressedThumb)
         {
             activeWidget_ = scrollbarId;
@@ -1509,15 +1724,21 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         {
             if (pointer_.down[left] || pointer_.pressed[left] || pointer_.released[left])
             {
-                const float normalized = travel > 0.0f
-                    ? clamp((pointer_.position.y - scrollbar.y - thumb.height * 0.5f) / travel, 0.0f, 1.0f) : 0.0f;
-                state.scrollLine = static_cast<int>(normalized * static_cast<float>(maximumScroll) + 0.5f);
+                const float normalized =
+                        travel > 0.0f
+                                ? clamp((pointer_.position.y - scrollbar.y - thumb.height * 0.5f) /
+                                                  travel,
+                                          0.0f, 1.0f)
+                                : 0.0f;
+                state.scrollLine =
+                        static_cast<int>(normalized * static_cast<float>(maximumScroll) + 0.5f);
             }
-            if (pointer_.released[left])
-                activeWidget_ = InvalidWidgetId;
+            if (pointer_.released[left]) activeWidget_ = InvalidWidgetId;
         }
         const float updatedOffset = maximumScroll > 0
-            ? travel * static_cast<float>(state.scrollLine) / static_cast<float>(maximumScroll) : 0.0f;
+                                            ? travel * static_cast<float>(state.scrollLine) /
+                                                      static_cast<float>(maximumScroll)
+                                            : 0.0f;
         thumb.y = scrollbar.y + updatedOffset;
     }
 
@@ -1528,11 +1749,13 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // Clicking the fold gutter (immediately left of the text area) toggles
     // the region whose header is on that row, if any.
     const Rect foldGutterRect(textArea.x - foldGutterWidth, rect.y, foldGutterWidth, rect.height);
-    if (foldingAvailable && focused && pointerPressedIn(intersect(foldGutterRect, clip), leftButton))
+    if (foldingAvailable && focused &&
+            pointerPressedIn(intersect(foldGutterRect, clip), leftButton))
     {
         {
             const Vec2 local = pointer_.pressedPosition[leftButton];
-            int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
+            int row = state.scrollLine +
+                      static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
             if (row >= 0 && row < visibleLineCount)
             {
                 int line = logicalLine(row);
@@ -1550,10 +1773,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     // the text.
     const Rect numberGutterRect(rect.x, rect.y, gutterWidth - foldGutterWidth, rect.height);
     if (focused && numberGutterRect.width > 0.0f &&
-        pointerPressedIn(intersect(numberGutterRect, clip), leftButton))
+            pointerPressedIn(intersect(numberGutterRect, clip), leftButton))
     {
         const Vec2 local = pointer_.pressedPosition[leftButton];
-        int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
+        int row = state.scrollLine +
+                  static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
         if (row < 0) row = 0;
         if (row >= visibleLineCount) row = visibleLineCount - 1;
         state.cursorLine = logicalLine(row);
@@ -1576,13 +1800,16 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
     {
         activeWidget_ = id;
         const Vec2 local = pointer_.pressedPosition[leftButton];
-        int row = state.scrollLine + static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
+        int row = state.scrollLine +
+                  static_cast<int>((local.y - (textArea.y + padding)) / lineHeight);
         if (row < 0) row = 0;
         if (row >= visibleLineCount) row = visibleLineCount - 1;
         int line = logicalLine(row);
-        int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding), options.tabSize, fontSize);
+        int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding),
+                options.tabSize, fontSize);
         if (column < 0) column = 0;
-        if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
+        if (column > static_cast<int>(state.lineAt(line).size()))
+            column = static_cast<int>(state.lineAt(line).size());
         state.cursorLine = line;
         state.cursorColumn = codePointStart(state.lineAt(line), column);
         state.clearSelection(); // anchor starts here; drag (below) or shift-click would extend it
@@ -1597,19 +1824,23 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         // textArea, while leaving the anchor set by the press above alone.
         const Vec2 local = pointer_.position;
         const float clampedY = local.y < textArea.y ? textArea.y
-            : (local.y > textArea.y + textArea.height ? textArea.y + textArea.height : local.y);
-        int row = state.scrollLine + static_cast<int>((clampedY - (textArea.y + padding)) / lineHeight);
+                                                    : (local.y > textArea.y + textArea.height
+                                                                      ? textArea.y + textArea.height
+                                                                      : local.y);
+        int row = state.scrollLine +
+                  static_cast<int>((clampedY - (textArea.y + padding)) / lineHeight);
         if (row < 0) row = 0;
         if (row >= visibleLineCount) row = visibleLineCount - 1;
         int line = logicalLine(row);
-        int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding), options.tabSize, fontSize);
+        int column = codeEditorColumnAt(state, line, local.x - (textArea.x + padding),
+                options.tabSize, fontSize);
         if (column < 0) column = 0;
-        if (column > static_cast<int>(state.lineAt(line).size())) column = static_cast<int>(state.lineAt(line).size());
+        if (column > static_cast<int>(state.lineAt(line).size()))
+            column = static_cast<int>(state.lineAt(line).size());
         state.cursorLine = line;
         state.cursorColumn = codePointStart(state.lineAt(line), column);
     }
-    if (activeWidget_ == id && pointer_.released[leftButton])
-        activeWidget_ = InvalidWidgetId;
+    if (activeWidget_ == id && pointer_.released[leftButton]) activeWidget_ = InvalidWidgetId;
 
     if (focused)
     {
@@ -1630,10 +1861,9 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         // wordStart and at or before wordEnd. Any other cursor movement
         // (arrow keys, Home/End, a click handled above) closes it, so Enter
         // and Tab are never silently swallowed by a stale suggestion list.
-        if (state.completion.visible &&
-            (state.cursorLine != state.completion.line ||
-             state.cursorColumn < state.completion.wordStart ||
-             state.cursorColumn > state.completion.wordEnd))
+        if (state.completion.visible && (state.cursorLine != state.completion.line ||
+                                                state.cursorColumn < state.completion.wordStart ||
+                                                state.cursorColumn > state.completion.wordEnd))
         {
             state.completion.visible = false;
         }
@@ -1642,7 +1872,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         if (completionOpen && (upPressed_ || downPressed_))
         {
             int count = static_cast<int>(state.completion.items.size());
-            if (upPressed_) state.completion.selected = (state.completion.selected - 1 + count) % count;
+            if (upPressed_)
+                state.completion.selected = (state.completion.selected - 1 + count) % count;
             if (downPressed_) state.completion.selected = (state.completion.selected + 1) % count;
             state.completion.navigated = true;
         }
@@ -1654,7 +1885,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
             state.cursorColumn = codePointStart(state.lineAt(state.cursorLine), state.cursorColumn);
-            if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)]) { state.clearSelection(); state.clearExtraCursors(); }
+            if (!keyShift_[static_cast<uint32_t>(KeyCode::Up)])
+            {
+                state.clearSelection();
+                state.clearExtraCursors();
+            }
             state.breakUndoCoalescing();
         }
         else if (downPressed_)
@@ -1663,13 +1898,18 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (state.cursorColumn > static_cast<int>(state.lineAt(state.cursorLine).size()))
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
             state.cursorColumn = codePointStart(state.lineAt(state.cursorLine), state.cursorColumn);
-            if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)]) { state.clearSelection(); state.clearExtraCursors(); }
+            if (!keyShift_[static_cast<uint32_t>(KeyCode::Down)])
+            {
+                state.clearSelection();
+                state.clearExtraCursors();
+            }
             state.breakUndoCoalescing();
         }
 
         if (completionOpen && state.completion.navigated && (tabPressed_ || enterPressed_))
         {
-            if (tabPressed_) tabConsumedByWidget_ = true; // Tab accepted a suggestion; don't also move focus
+            if (tabPressed_)
+                tabConsumedByWidget_ = true; // Tab accepted a suggestion; don't also move focus
             acceptCodeCompletion(state);
             changed = true;
         }
@@ -1677,37 +1917,56 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         {
             if (leftPressed_)
             {
-                if (state.cursorColumn > 0) state.cursorColumn = previousCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
+                if (state.cursorColumn > 0)
+                    state.cursorColumn =
+                            previousCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
                 else if (cursorRow > 0)
                 {
                     state.cursorLine = logicalLine(cursorRow - 1);
                     state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
                 }
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Left)]) { state.clearSelection(); state.clearExtraCursors(); }
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Left)])
+                {
+                    state.clearSelection();
+                    state.clearExtraCursors();
+                }
                 state.breakUndoCoalescing();
             }
             if (rightPressed_)
             {
                 if (state.cursorColumn < static_cast<int>(state.lineAt(state.cursorLine).size()))
-                    state.cursorColumn = nextCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
+                    state.cursorColumn =
+                            nextCodePoint(state.lineAt(state.cursorLine), state.cursorColumn);
                 else if (cursorRow + 1 < visibleLineCount)
                 {
                     state.cursorLine = logicalLine(cursorRow + 1);
                     state.cursorColumn = 0;
                 }
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Right)]) { state.clearSelection(); state.clearExtraCursors(); }
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Right)])
+                {
+                    state.clearSelection();
+                    state.clearExtraCursors();
+                }
                 state.breakUndoCoalescing();
             }
             if (homePressed_)
             {
                 state.cursorColumn = 0;
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::Home)]) { state.clearSelection(); state.clearExtraCursors(); }
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::Home)])
+                {
+                    state.clearSelection();
+                    state.clearExtraCursors();
+                }
                 state.breakUndoCoalescing();
             }
             if (endPressed_)
             {
                 state.cursorColumn = static_cast<int>(state.lineAt(state.cursorLine).size());
-                if (!keyShift_[static_cast<uint32_t>(KeyCode::End)]) { state.clearSelection(); state.clearExtraCursors(); }
+                if (!keyShift_[static_cast<uint32_t>(KeyCode::End)])
+                {
+                    state.clearSelection();
+                    state.clearExtraCursors();
+                }
                 state.breakUndoCoalescing();
             }
 
@@ -1749,13 +2008,13 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             {
                 state.completion.visible = false; // an un-navigated popup never blocks Enter
                 state.eraseSelectionsAtAllCursors();
-                const String &currentLine = state.lineAt(state.cursorLine);
+                const String& currentLine = state.lineAt(state.cursorLine);
                 String currentIndent;
                 if (options.autoIndent)
                 {
                     String::size_type indentEnd = 0;
                     while (indentEnd < currentLine.size() &&
-                          (currentLine[indentEnd] == ' ' || currentLine[indentEnd] == '\t'))
+                            (currentLine[indentEnd] == ' ' || currentLine[indentEnd] == '\t'))
                         ++indentEnd;
                     currentIndent = currentLine.substr(0, indentEnd);
                 }
@@ -1769,7 +2028,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 // every cursor instead (see report).
                 bool splitBracketPair = false;
                 if (!state.hasMultipleCursors() && options.autoIndent && state.cursorColumn > 0 &&
-                    state.cursorColumn < static_cast<int>(currentLine.size()))
+                        state.cursorColumn < static_cast<int>(currentLine.size()))
                 {
                     char before = currentLine[static_cast<size_t>(state.cursorColumn - 1)];
                     char after = currentLine[static_cast<size_t>(state.cursorColumn)];
@@ -1808,7 +2067,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             }
             else if (tabPressed_ && !tabShiftPressed_)
             {
-                tabConsumedByWidget_ = true; // Tab indented; don't also move focus
+                tabConsumedByWidget_ = true;      // Tab indented; don't also move focus
                 state.completion.visible = false; // an un-navigated popup never blocks Tab
                 state.eraseSelectionsAtAllCursors();
                 String indent;
@@ -1835,7 +2094,7 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 state.eraseSelectionsAtAllCursors();
                 for (ct::Vector<Event>::size_type i = 0; i < textEvents_.size(); ++i)
                 {
-                    const Event &event = textEvents_[i];
+                    const Event& event = textEvents_[i];
                     if (event.textLength == 0u) continue;
                     state.insertTextAtAllCursors(String(event.text, event.textLength));
                     changed = true;
@@ -1855,24 +2114,33 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             visibleLineCount = rowCount();
             updateCodeCompletion(state, options);
         }
-        if (escapePressed_) { state.completion.visible = false; state.clearExtraCursors(); }
+        if (escapePressed_)
+        {
+            state.completion.visible = false;
+            state.clearExtraCursors();
+        }
 
         cursorRow = state.cursorLine;
         if (foldingAvailable)
             for (int row = 0; row < rowCount(); ++row)
-                if (logicalLine(row) >= state.cursorLine) { cursorRow = row; break; }
+                if (logicalLine(row) >= state.cursorLine)
+                {
+                    cursorRow = row;
+                    break;
+                }
 
         // Keep the cursor's row inside the visible window - but only when
         // the cursor moved this frame (typing, arrow keys, Home/End, ...).
         // If the view was scrolled by wheel or the scrollbar thumb instead,
         // the cursor may legitimately sit off-screen and must not pull the
         // view back to it.
-        const bool cursorMoved = state.cursorLine != focusedCursorLine ||
-                                 state.cursorColumn != focusedCursorColumn;
+        const bool cursorMoved =
+                state.cursorLine != focusedCursorLine || state.cursorColumn != focusedCursorColumn;
         if (cursorMoved)
         {
             if (cursorRow < state.scrollLine) state.scrollLine = cursorRow;
-            else if (cursorRow >= state.scrollLine + visibleRows) state.scrollLine = cursorRow - visibleRows + 1;
+            else if (cursorRow >= state.scrollLine + visibleRows)
+                state.scrollLine = cursorRow - visibleRows + 1;
         }
         if (state.scrollLine < 0) state.scrollLine = 0;
         const int updatedMaxScroll = rowCount() > visibleRows ? rowCount() - visibleRows : 0;
@@ -1898,49 +2166,57 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
 
     const int firstRow = state.scrollLine;
     const int lastRow = firstRow + visibleRows - 1 < visibleLineCount - 1
-        ? firstRow + visibleRows - 1 : visibleLineCount - 1;
+                                ? firstRow + visibleRows - 1
+                                : visibleLineCount - 1;
 
     int selStartLine = 0, selStartColumn = 0, selEndLine = 0, selEndColumn = 0;
     const bool hasSelection = state.hasSelection();
-    if (hasSelection) state.orderedSelection(selStartLine, selStartColumn, selEndLine, selEndColumn);
+    if (hasSelection)
+        state.orderedSelection(selStartLine, selStartColumn, selEndLine, selEndColumn);
 
     // Extra cursors' selections, ordered the same way orderedSelection()
     // orders the primary's (that method only sees the primary, so this
     // mirrors its logic per extra cursor).
-    struct OrderedExtraSelection { int startLine, startColumn, endLine, endColumn; };
+    struct OrderedExtraSelection
+    {
+        int startLine, startColumn, endLine, endColumn;
+    };
     ct::Vector<OrderedExtraSelection> extraSelections;
     for (int i = 0; i < state.extraCursorCount(); ++i)
     {
-        const CodeEditorCursor &c = state.extraCursorAt(i);
+        const CodeEditorCursor& c = state.extraCursorAt(i);
         if (c.line == c.anchorLine && c.column == c.anchorColumn) continue;
         if (c.anchorLine > c.line || (c.anchorLine == c.line && c.anchorColumn > c.column))
-            extraSelections.push_back({c.line, c.column, c.anchorLine, c.anchorColumn});
+            extraSelections.push_back({ c.line, c.column, c.anchorLine, c.anchorColumn });
         else
-            extraSelections.push_back({c.anchorLine, c.anchorColumn, c.line, c.column});
+            extraSelections.push_back({ c.anchorLine, c.anchorColumn, c.line, c.column });
     }
 
     for (int row = firstRow; row <= lastRow; ++row)
     {
         const int line = logicalLine(row);
         const float y = textArea.y + padding + static_cast<float>(row - firstRow) * lineHeight;
-        const String &text = state.lineAt(line);
+        const String& text = state.lineAt(line);
 
         if (options.showLineNumbers)
         {
             char buf[16];
             snprintf(buf, sizeof(buf), "%d", line + 1);
             const TextMetrics numMetrics = measureText(theme_.font, StringView(buf), fontSize);
-            const Color numberColor = focused && line == state.cursorLine
-                ? theme_.lineNumberActive : theme_.lineNumberColor;
+            const Color numberColor = focused && line == state.cursorLine ? theme_.lineNumberActive
+                                                                          : theme_.lineNumberColor;
             drawText(*drawList, theme_.font, StringView(buf),
-                    Vec2(rect.x + gutterWidth - foldGutterWidth - theme_.gutterPadding - numMetrics.width, y),
+                    Vec2(rect.x + gutterWidth - foldGutterWidth - theme_.gutterPadding -
+                                    numMetrics.width,
+                            y),
                     fontSize, numberColor, clip);
         }
 
         if (foldingAvailable && state.isFoldHeader(line))
         {
-            const bool collapsed = [&] {
-                for (const auto &range : state.foldRanges())
+            const bool collapsed = [&]
+            {
+                for (const auto& range: state.foldRanges())
                     if (range.startLine == line) return range.collapsed;
                 return false;
             }();
@@ -1950,11 +2226,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             if (collapsed)
                 // Right-pointing chevron (collapsed: fold starts here, hidden to the right/below).
                 drawList->addTriangleFilled(Vec2(cx - sz * 0.5f, cy - sz), Vec2(cx + sz * 0.5f, cy),
-                                            Vec2(cx - sz * 0.5f, cy + sz), theme_.textColor, clip);
+                        Vec2(cx - sz * 0.5f, cy + sz), theme_.textColor, clip);
             else
                 // Down-pointing chevron (expanded: contents shown below).
                 drawList->addTriangleFilled(Vec2(cx - sz, cy - sz * 0.5f), Vec2(cx, cy + sz * 0.5f),
-                                            Vec2(cx + sz, cy - sz * 0.5f), theme_.textColor, clip);
+                        Vec2(cx + sz, cy - sz * 0.5f), theme_.textColor, clip);
         }
 
         if (hasSelection && line >= selStartLine && line <= selEndLine)
@@ -1962,24 +2238,31 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             const int lineLen = static_cast<int>(text.size());
             const int fromCol = line == selStartLine ? selStartColumn : 0;
             const int toCol = line == selEndLine ? selEndColumn : lineLen;
-            const float fromX = textArea.x + padding + codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
-            float toX = textArea.x + padding + codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
+            const float fromX = textArea.x + padding +
+                                codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
+            float toX = textArea.x + padding +
+                        codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
             if (line != selEndLine) toX += fontSize * 0.25f; // visually mark the line break
-            drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor, textClip);
+            drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor,
+                    textClip);
         }
-        for (const auto &sel : extraSelections)
+        for (const auto& sel: extraSelections)
         {
             if (line < sel.startLine || line > sel.endLine) continue;
             const int lineLen = static_cast<int>(text.size());
             const int fromCol = line == sel.startLine ? sel.startColumn : 0;
             const int toCol = line == sel.endLine ? sel.endColumn : lineLen;
-            const float fromX = textArea.x + padding + codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
-            float toX = textArea.x + padding + codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
+            const float fromX = textArea.x + padding +
+                                codeEditorColumnX(state, line, fromCol, options.tabSize, fontSize);
+            float toX = textArea.x + padding +
+                        codeEditorColumnX(state, line, toCol, options.tabSize, fontSize);
             if (line != sel.endLine) toX += fontSize * 0.25f;
-            drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor, textClip);
+            drawList->addRectFilled(Rect(fromX, y, toX - fromX, lineHeight), theme_.selectionColor,
+                    textClip);
         }
 
-        drawHighlightedLine(*drawList, state, line, text, Vec2(textArea.x + padding, y), textClip, options.tabSize, fontSize);
+        drawHighlightedLine(*drawList, state, line, text, Vec2(textArea.x + padding, y), textClip,
+                options.tabSize, fontSize);
 
         if (options.showWhitespace)
         {
@@ -1991,24 +2274,35 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
                 const char c = text[static_cast<size_t>(column)];
                 if (c == ' ')
                 {
-                    const float cx = textArea.x + padding +
-                        (codeEditorColumnX(state, line, column, options.tabSize, fontSize) + codeEditorColumnX(state, line, column + 1, options.tabSize, fontSize)) * 0.5f;
+                    const float cx =
+                            textArea.x + padding +
+                            (codeEditorColumnX(state, line, column, options.tabSize, fontSize) +
+                                    codeEditorColumnX(state, line, column + 1, options.tabSize,
+                                            fontSize)) *
+                                    0.5f;
                     const float dotRadius = lineHeight * 0.06f > 1.0f ? lineHeight * 0.06f : 1.0f;
                     drawList->addCircleFilled(Vec2(cx, midY), dotRadius, whitespaceColor, textClip);
                     ++column;
                 }
                 else if (c == '\t')
                 {
-                    const float startX = textArea.x + padding + codeEditorColumnX(state, line, column, options.tabSize, fontSize);
-                    const float endX = textArea.x + padding + codeEditorColumnX(state, line, column + 1, options.tabSize, fontSize);
+                    const float startX =
+                            textArea.x + padding +
+                            codeEditorColumnX(state, line, column, options.tabSize, fontSize);
+                    const float endX =
+                            textArea.x + padding +
+                            codeEditorColumnX(state, line, column + 1, options.tabSize, fontSize);
                     const float inset = (endX - startX) * 0.2f;
                     const float x1 = startX + inset, x2 = endX - inset;
                     if (x2 > x1)
                     {
-                        drawList->addLine(Vec2(x1, midY), Vec2(x2, midY), whitespaceColor, textClip);
+                        drawList->addLine(Vec2(x1, midY), Vec2(x2, midY), whitespaceColor,
+                                textClip);
                         const float arrowSize = lineHeight * 0.12f;
-                        drawList->addLine(Vec2(x2, midY), Vec2(x2 - arrowSize, midY - arrowSize), whitespaceColor, textClip);
-                        drawList->addLine(Vec2(x2, midY), Vec2(x2 - arrowSize, midY + arrowSize), whitespaceColor, textClip);
+                        drawList->addLine(Vec2(x2, midY), Vec2(x2 - arrowSize, midY - arrowSize),
+                                whitespaceColor, textClip);
+                        drawList->addLine(Vec2(x2, midY), Vec2(x2 - arrowSize, midY + arrowSize),
+                                whitespaceColor, textClip);
                     }
                     ++column;
                 }
@@ -2022,10 +2316,11 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
         if (foldingAvailable && state.isLineHidden(line + 1) && state.isFoldHeader(line))
         {
             // Header of a collapsed region: mark that lines are hidden here.
-            const float endOfLineX = codeEditorColumnX(state, line, static_cast<int>(text.size()), options.tabSize, fontSize);
+            const float endOfLineX = codeEditorColumnX(state, line, static_cast<int>(text.size()),
+                    options.tabSize, fontSize);
             drawText(*drawList, theme_.font, StringView(" ... "),
-                    Vec2(textArea.x + padding + endOfLineX, y), fontSize,
-                    theme_.textColor, textClip);
+                    Vec2(textArea.x + padding + endOfLineX, y), fontSize, theme_.textColor,
+                    textClip);
         }
     }
 
@@ -2037,42 +2332,59 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
 
     if (focused)
     {
-        const float caretX = textArea.x + padding + codeEditorColumnX(state, state.cursorLine, state.cursorColumn, options.tabSize, fontSize);
-        const float caretY = textArea.y + padding + static_cast<float>(cursorRow - state.scrollLine) * lineHeight;
+        const float caretX = textArea.x + padding +
+                             codeEditorColumnX(state, state.cursorLine, state.cursorColumn,
+                                     options.tabSize, fontSize);
+        const float caretY = textArea.y + padding +
+                             static_cast<float>(cursorRow - state.scrollLine) * lineHeight;
         if (caretY >= textArea.y + padding && caretY < textArea.y + textArea.height - padding)
-            drawList->addRectFilled(Rect(caretX, caretY, 1.0f, lineHeight), theme_.buttonText, textClip);
+            drawList->addRectFilled(Rect(caretX, caretY, 1.0f, lineHeight), theme_.buttonText,
+                    textClip);
 
         for (int i = 0; i < state.extraCursorCount(); ++i)
         {
-            const CodeEditorCursor &c = state.extraCursorAt(i);
+            const CodeEditorCursor& c = state.extraCursorAt(i);
             int row = c.line;
             if (foldingAvailable)
                 for (int r = 0; r < rowCount(); ++r)
-                    if (logicalLine(r) >= c.line) { row = r; break; }
-            const float extraCaretX = textArea.x + padding + codeEditorColumnX(state, c.line, c.column, options.tabSize, fontSize);
-            const float extraCaretY = textArea.y + padding + static_cast<float>(row - state.scrollLine) * lineHeight;
-            if (extraCaretY >= textArea.y + padding && extraCaretY < textArea.y + textArea.height - padding)
-                drawList->addRectFilled(Rect(extraCaretX, extraCaretY, 1.0f, lineHeight), theme_.buttonText, textClip);
+                    if (logicalLine(r) >= c.line)
+                    {
+                        row = r;
+                        break;
+                    }
+            const float extraCaretX =
+                    textArea.x + padding +
+                    codeEditorColumnX(state, c.line, c.column, options.tabSize, fontSize);
+            const float extraCaretY =
+                    textArea.y + padding + static_cast<float>(row - state.scrollLine) * lineHeight;
+            if (extraCaretY >= textArea.y + padding &&
+                    extraCaretY < textArea.y + textArea.height - padding)
+                drawList->addRectFilled(Rect(extraCaretX, extraCaretY, 1.0f, lineHeight),
+                        theme_.buttonText, textClip);
         }
 
         if (state.completion.visible && !state.completion.items.empty())
         {
             const float popupX = textArea.x + padding +
-                codeEditorColumnX(state, state.completion.line, state.completion.wordStart, options.tabSize, fontSize);
-            const float popupY = textArea.y + padding + static_cast<float>(cursorRow - state.scrollLine + 1) * lineHeight;
+                                 codeEditorColumnX(state, state.completion.line,
+                                         state.completion.wordStart, options.tabSize, fontSize);
+            const float popupY = textArea.y + padding +
+                                 static_cast<float>(cursorRow - state.scrollLine + 1) * lineHeight;
             const int count = static_cast<int>(state.completion.items.size());
             const int shown = count < 8 ? count : 8;
             // The popup scrolls just enough to keep the selection in view.
             int& first = state.completion.firstVisible;
             if (state.completion.selected < first) first = state.completion.selected;
-            if (state.completion.selected >= first + shown) first = state.completion.selected - shown + 1;
+            if (state.completion.selected >= first + shown)
+                first = state.completion.selected - shown + 1;
             if (first > count - shown) first = count - shown;
             if (first < 0) first = 0;
             const float popupHeight = static_cast<float>(shown) * lineHeight + padding * 2.0f;
             float popupWidth = 0.0f;
             for (int i = first; i < first + shown; ++i)
             {
-                const TextMetrics itemMetrics = measureText(theme_.font, state.completion.items[static_cast<size_t>(i)], fontSize);
+                const TextMetrics itemMetrics = measureText(theme_.font,
+                        state.completion.items[static_cast<size_t>(i)], fontSize);
                 if (itemMetrics.width > popupWidth) popupWidth = itemMetrics.width;
             }
             popupWidth += padding * 2.0f;
@@ -2082,7 +2394,8 @@ bool Context::codeEditor(StringView labelText, CodeEditorState &state, const Rec
             {
                 const float itemY = popupY + padding + static_cast<float>(i - first) * lineHeight;
                 if (i == state.completion.selected)
-                    drawList->addRectFilled(Rect(popupX, itemY, popupWidth, lineHeight), theme_.buttonHovered, clip);
+                    drawList->addRectFilled(Rect(popupX, itemY, popupWidth, lineHeight),
+                            theme_.buttonHovered, clip);
                 drawText(*drawList, theme_.font, state.completion.items[static_cast<size_t>(i)],
                         Vec2(popupX + padding, itemY), fontSize, theme_.buttonText, clip);
             }

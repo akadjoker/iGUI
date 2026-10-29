@@ -1,14 +1,19 @@
-#include "pch.hpp"
-#include "ViewWidgets.hpp"   // FloatWindow (real implementation)
 #include "Animation.hpp"     // Animator
+#include "DialogWidgets.hpp" // Toast
 #include "DockPanel.hpp"     // DockPanel layout persistence
 #include "MenuWidgets.hpp"   // Menu::exec (for context menu)
-#include "DialogWidgets.hpp" // Toast
+#include "ViewWidgets.hpp"   // FloatWindow (real implementation)
+#include "pch.hpp"
 
-namespace ig { namespace retained {
+namespace ig
+{
+namespace retained
+{
 
-struct ContextMenu {
-    static void show(Menu* menu, float x, float y, Widget* /*owner*/) {
+struct ContextMenu
+{
+    static void show(Menu* menu, float x, float y, Widget* /*owner*/)
+    {
         if (menu) menu->exec(x, y);
     }
 };
@@ -31,13 +36,15 @@ static void collectFocusable(Widget* w, ct::Vector<Widget*>& out, const Widget* 
 //  Singleton
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace { WidgetApp* gWidgetApp = nullptr; }
+namespace
+{
+WidgetApp* gWidgetApp = nullptr;
+}
 
 WidgetApp& WidgetApp::instance()
 {
     static WidgetApp app;
-    if (!gWidgetApp)
-        gWidgetApp = &app;
+    if (!gWidgetApp) gWidgetApp = &app;
     return app;
 }
 
@@ -63,29 +70,33 @@ void WidgetApp::shutdown()
     saveWindowState();
 
     // Clean up popups BEFORE root
-    if (popupOwned_)
-        delete popup_;
-    popup_ = nullptr; popupOwner_ = nullptr; popupOwned_ = true;
+    if (popupOwned_) delete popup_;
+    popup_ = nullptr;
+    popupOwner_ = nullptr;
+    popupOwned_ = true;
 
-    if (popupClosingOwned_)
-        delete popupClosing_;
-    popupClosing_ = nullptr; popupClosingOwner_ = nullptr; popupClosingOwned_ = true;
+    if (popupClosingOwned_) delete popupClosing_;
+    popupClosing_ = nullptr;
+    popupClosingOwner_ = nullptr;
+    popupClosingOwned_ = true;
 
     flushPopupDeletes();
 
-    for (auto& [name, stageRoot] : stages_) {
-        if (stageRoot != root_)
-            delete stageRoot;
+    for (auto& [name, stageRoot]: stages_)
+    {
+        if (stageRoot != root_) delete stageRoot;
     }
     stages_.clear();
 
-    delete root_;    root_  = nullptr;
-    for (auto* fw : floats_) delete fw;
+    delete root_;
+    root_ = nullptr;
+    for (auto* fw: floats_) delete fw;
     floats_.clear();
     // Windows closed since the last frame were only queued for deletion.
-    for (auto* fw : pendingFloatDeletes_) delete fw;
+    for (auto* fw: pendingFloatDeletes_) delete fw;
     pendingFloatDeletes_.clear();
-    delete iconAtlas_; iconAtlas_ = nullptr;  // stub
+    delete iconAtlas_;
+    iconAtlas_ = nullptr; // stub
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -96,7 +107,7 @@ bool WidgetApp::init()
 {
     if (inited_) return true;
 
-    iconAtlas_ = nullptr;  // IconAtlas not yet compiled
+    iconAtlas_ = nullptr; // IconAtlas not yet compiled
 
     root_ = nullptr;
     // WidgetSerializer::registerBuiltinTypes();  // re-enable when migrated
@@ -111,29 +122,29 @@ bool WidgetApp::init()
 
 void WidgetApp::update(const ig::retained::IO& io)
 {
-    dt_     = io.deltaTime;
+    dt_ = io.deltaTime;
     elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;
     elapsedMs_ = static_cast<uint32_t>(fmod(elapsedSeconds_ * 1000.0, 4294967296.0));
 
     // Cache modifier keys & clipboard callbacks from IO
-    ioKeyCtrl_  = io.keyCtrl;
+    ioKeyCtrl_ = io.keyCtrl;
     ioKeyShift_ = io.keyShift;
-    ioKeyAlt_   = io.keyAlt;
-    clipSet_    = io.setClipboardText;
-    clipGet_    = io.getClipboardText;
+    ioKeyAlt_ = io.keyAlt;
+    clipSet_ = io.setClipboardText;
+    clipGet_ = io.getClipboardText;
     mouseCapture_ = io.setMouseCaptured;
     mouseWarp_ = io.warpMouse;
 
     int newW = static_cast<int>(io.displayWidth);
     int newH = static_cast<int>(io.displayHeight);
-    if (newW != width_ || newH != height_) {
-        width_  = newW;
+    if (newW != width_ || newH != height_)
+    {
+        width_ = newW;
         height_ = newH;
         if (width_ != 0 && height_ != 0)
         {
             needsLayout_ = true;
-            for (FloatWindow* fw : floats_)
-                keepOnScreen(fw);
+            for (FloatWindow* fw: floats_) keepOnScreen(fw);
         }
     }
 
@@ -141,14 +152,12 @@ void WidgetApp::update(const ig::retained::IO& io)
     float my = io.mouseY;
 
     // Mouse move
-    if (mx != prevMouseX_ || my != prevMouseY_)
-        dispatchMouseMove(mx, my);
+    if (mx != prevMouseX_ || my != prevMouseY_) dispatchMouseMove(mx, my);
 
     // Mouse buttons (delta detection)
     for (int i = 0; i < 5; ++i)
     {
-        if (io.mouseDown[i] && !prevMouseDown_[i])
-            dispatchMousePress(mx, my, i);
+        if (io.mouseDown[i] && !prevMouseDown_[i]) dispatchMousePress(mx, my, i);
         else if (!io.mouseDown[i] && prevMouseDown_[i])
             dispatchMouseRelease(mx, my, i);
     }
@@ -158,24 +167,21 @@ void WidgetApp::update(const ig::retained::IO& io)
         dispatchMouseScroll(mx, my, io.mouseWheelX, io.mouseWheelY);
 
     // Key press / release events
-    for (const auto& ke : io.keyEvents)
+    for (const auto& ke: io.keyEvents)
     {
         if (debugLayoutKey_ != 0 && ke.scancode == debugLayoutKey_)
         {
-            if (ke.down)
-                debugLayout_ = !debugLayout_;
+            if (ke.down) debugLayout_ = !debugLayout_;
         }
         else
             dispatchKeyEvent(ke);
     }
 
     // Text input
-    if (!io.inputChars.empty())
-        dispatchTextInput(io.inputChars);
+    if (!io.inputChars.empty()) dispatchTextInput(io.inputChars);
 
     // OS-level file drops
-    if (!io.dropEvents.empty())
-        dispatchDropEvents(io.dropEvents);
+    if (!io.dropEvents.empty()) dispatchDropEvents(io.dropEvents);
 
     // Calls deferred by the handlers above, in the order they were made; one
     // deferred while they run joins this same pass.
@@ -190,16 +196,17 @@ void WidgetApp::update(const ig::retained::IO& io)
     if (hovered_ && hovered_->hasTooltip())
     {
         tooltipTimer_ += dt_;
-        if (!tooltipVisible_ && tooltipTimer_ >= hovered_->tooltipDelay()) {
+        if (!tooltipVisible_ && tooltipTimer_ >= hovered_->tooltipDelay())
+        {
             tooltipVisible_ = true;
-            tooltipWidget_  = hovered_;
+            tooltipWidget_ = hovered_;
         }
     }
     else
     {
-        tooltipTimer_   = 0.0f;
+        tooltipTimer_ = 0.0f;
         tooltipVisible_ = false;
-        tooltipWidget_  = nullptr;
+        tooltipWidget_ = nullptr;
     }
 
     // Flush deferred deletes. A destructor running here can queue another window
@@ -215,31 +222,35 @@ void WidgetApp::update(const ig::retained::IO& io)
 
     // A window state file read before the stages existed: hand the dock
     // layouts over now that the panels they name are there.
-    if (dockLayoutPending_)
-        restoreDockLayouts();
+    if (dockLayoutPending_) restoreDockLayouts();
 
     // Tick animations
     Animator::instance().tick(dt_);
 
     // Tick popup animation
-    if (popupAnimOpening_) {
+    if (popupAnimOpening_)
+    {
         popupAnimProgress_ += dt_ / popupAnimDuration_;
-        if (popupAnimProgress_ >= 1.0f) {
+        if (popupAnimProgress_ >= 1.0f)
+        {
             popupAnimProgress_ = 1.0f;
-            popupAnimOpening_  = false;
+            popupAnimOpening_ = false;
         }
     }
-    if (popupAnimClosing_) {
+    if (popupAnimClosing_)
+    {
         popupAnimProgress_ -= dt_ / popupAnimDuration_;
-        if (popupAnimProgress_ <= 0.0f) {
+        if (popupAnimProgress_ <= 0.0f)
+        {
             popupAnimProgress_ = 0.0f;
-            popupAnimClosing_  = false;
+            popupAnimClosing_ = false;
             // Now actually destroy
-            if (popupClosing_) {
+            if (popupClosing_)
+            {
                 retirePopup(popupClosing_, popupClosingOwned_);
-                popupClosing_     = nullptr;
-                popupClosingOwner_= nullptr;
-                popupClosingOwned_= true;
+                popupClosing_ = nullptr;
+                popupClosingOwner_ = nullptr;
+                popupClosingOwned_ = true;
             }
         }
     }
@@ -247,8 +258,7 @@ void WidgetApp::update(const ig::retained::IO& io)
     // Store prev state
     prevMouseX_ = mx;
     prevMouseY_ = my;
-    for (int i = 0; i < 5; ++i)
-        prevMouseDown_[i] = io.mouseDown[i];
+    for (int i = 0; i < 5; ++i) prevMouseDown_[i] = io.mouseDown[i];
 
     // Write cursor hint into IO so backend can read it
     ig::retained::GetIO().wantedCursor = static_cast<int>(wantedCursor_);
@@ -268,10 +278,12 @@ void WidgetApp::dispatchMouseMove(float x, float y)
     if (pressed_)
     {
         // Check drag threshold
-        if (dragPending_ && !dragPayload_ && dragSource_) {
+        if (dragPending_ && !dragPayload_ && dragSource_)
+        {
             float dx = x - dragStartX_;
             float dy = y - dragStartY_;
-            if (dx * dx + dy * dy >= dragThreshold_ * dragThreshold_) {
+            if (dx * dx + dy * dy >= dragThreshold_ * dragThreshold_)
+            {
                 auto* p = new DragPayload(dragSource_->onDragBegin());
                 p->source = dragSource_;
                 dragPayload_ = p;
@@ -290,18 +302,20 @@ void WidgetApp::dispatchMouseMove(float x, float y)
     }
 
     Widget* hit = topWidgetAt(x, y);
-    if (hit != hovered_)
-        updateHover(hit);
+    if (hit != hovered_) updateHover(hit);
 
-    if (hovered_) {
+    if (hovered_)
+    {
         MouseEvent me = makeMouseEvent(x, y);
         me.relX = relX;
         me.relY = relY;
         bubble(hovered_, me, &Widget::onMouseMove);
         // Re-read cursor — walk chain leaf→root, pick first non-Arrow
         CursorType cur = CursorType::Arrow;
-        for (auto it = hoverChain_.rbegin(); it != hoverChain_.rend(); ++it) {
-            if ((*it)->cursor() != CursorType::Arrow) {
+        for (auto it = hoverChain_.rbegin(); it != hoverChain_.rend(); ++it)
+        {
+            if ((*it)->cursor() != CursorType::Arrow)
+            {
                 cur = (*it)->cursor();
                 break;
             }
@@ -316,19 +330,18 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
     mouseY_ = y;
 
     // ── Double/triple-click detection ────────────────────────────────────
-    constexpr uint32_t kDblClickMs  = 400;  // max ms between clicks
-    constexpr float    kDblClickDist = 5.0f; // max pixel drift
+    constexpr uint32_t kDblClickMs = 400; // max ms between clicks
+    constexpr float kDblClickDist = 5.0f; // max pixel drift
     float dx = x - lastClickX_, dy = y - lastClickY_;
-    bool  sameSpot = (dx*dx + dy*dy) < kDblClickDist * kDblClickDist;
-    bool  sameBtn  = (btn == lastClickBtn_);
-    bool  inTime   = (elapsedMs_ - lastClickMs_) < kDblClickMs;
-    if (sameBtn && sameSpot && inTime)
-        clickSeq_ = std::min(clickSeq_ + 1, 3);
+    bool sameSpot = (dx * dx + dy * dy) < kDblClickDist * kDblClickDist;
+    bool sameBtn = (btn == lastClickBtn_);
+    bool inTime = (elapsedMs_ - lastClickMs_) < kDblClickMs;
+    if (sameBtn && sameSpot && inTime) clickSeq_ = std::min(clickSeq_ + 1, 3);
     else
         clickSeq_ = 1;
-    lastClickMs_  = elapsedMs_;
-    lastClickX_   = x;
-    lastClickY_   = y;
+    lastClickMs_ = elapsedMs_;
+    lastClickX_ = x;
+    lastClickY_ = y;
     lastClickBtn_ = btn;
 
     // While a button is held, the other buttons go to the widget that took it.
@@ -347,26 +360,26 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
     if (popup_)
     {
         Widget* popupHit = hitTest(popup_, x, y);
-        if (!popupHit && popup_->popupContains(x, y))
-            popupHit = popup_;
-        if (popupHit) {
+        if (!popupHit && popup_->popupContains(x, y)) popupHit = popup_;
+        if (popupHit)
+        {
             MouseEvent me = makeMouseEvent(x, y, btn);
             bubble(popupHit, me, &Widget::onMousePress);
             if (popup_) pressed_ = popupHit;
             if (pressed_) pressedButtons_ = bit;
             return;
         }
-        bool ownerToggle = (btn == 0) && popupOwner_ &&
-                           hitTest(popupOwner_, x, y) != nullptr;
-        if (!ownerToggle)
-            closePopup();
+        bool ownerToggle = (btn == 0) && popupOwner_ && hitTest(popupOwner_, x, y) != nullptr;
+        if (!ownerToggle) closePopup();
     }
 
-    for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i) {
+    for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i)
+    {
         auto* fw = floats_[i];
         if (!fw->isVisible()) continue;
         Widget* fwHit = hitTest(fw, x, y);
-        if (fwHit) {
+        if (fwHit)
+        {
             bringToFront(fw);
             if (fwHit->acceptsFocus() && fwHit->isEnabledInTree() && fwHit != focused_)
                 setFocused(fwHit);
@@ -374,37 +387,42 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
             bubble(fwHit, me, &Widget::onMousePress);
             // fw may have been removed (and queued for deletion) during the event —
             // only keep pressed_ if the window is still alive in the float list.
-            if (std::find(floats_.begin(), floats_.end(), fw) != floats_.end())
-                pressed_ = fwHit;
+            if (std::find(floats_.begin(), floats_.end(), fw) != floats_.end()) pressed_ = fwHit;
             if (pressed_) pressedButtons_ = bit;
             return;
         }
     }
 
     Widget* hit = hitTest(root_, x, y);
-    if (hit) {
-        if (btn == 1) {
+    if (hit)
+    {
+        if (btn == 1)
+        {
             Widget* w = hit;
-            while (w) {
-                if (w->contextMenu()) {
+            while (w)
+            {
+                if (w->contextMenu())
+                {
                     ContextMenu::show(w->contextMenu(), x, y, w);
                     return;
                 }
                 w = w->parent();
             }
         }
-        if (hit->acceptsFocus() && hit->isEnabledInTree() && hit != focused_)
-            setFocused(hit);
+        if (hit->acceptsFocus() && hit->isEnabledInTree() && hit != focused_) setFocused(hit);
 
         // Check for drag source on left-button press
-        if (btn == 0 && !dragPending_) {
+        if (btn == 0 && !dragPending_)
+        {
             Widget* ds = hit;
-            while (ds) {
-                if (ds->isDragSource()) {
+            while (ds)
+            {
+                if (ds->isDragSource())
+                {
                     dragPending_ = true;
-                    dragSource_  = ds;
-                    dragStartX_  = x;
-                    dragStartY_  = y;
+                    dragSource_ = ds;
+                    dragStartX_ = x;
+                    dragStartY_ = y;
                     break;
                 }
                 ds = ds->parent();
@@ -416,7 +434,9 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
         // The handler may have removed the widget, or the window that holds it.
         pressed_ = isWidgetInTrees(hit) ? hit : nullptr;
         if (pressed_) pressedButtons_ = bit;
-    } else {
+    }
+    else
+    {
         setFocused(nullptr);
     }
 }
@@ -427,25 +447,29 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
     mouseY_ = y;
 
     // Complete widget-to-widget drag & drop on left-button release
-    if (btn == 0 && dragPayload_) {
+    if (btn == 0 && dragPayload_)
+    {
         Widget* target = nullptr;
-        for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i) {
+        for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i)
+        {
             auto* fw = floats_[i];
             if (!fw->isVisible()) continue;
             target = hitTest(fw, x, y);
             if (target) break;
         }
-        if (!target)
-            target = hitTest(root_, x, y);
+        if (!target) target = hitTest(root_, x, y);
 
         bool accepted = false;
         dragPayload_->dropX = x;
         dragPayload_->dropY = y;
-        if (target) {
+        if (target)
+        {
             // Walk up from target to find an acceptor
             Widget* w = target;
-            while (w) {
-                if (w->acceptsDrop(*dragPayload_)) {
+            while (w)
+            {
+                if (w->acceptsDrop(*dragPayload_))
+                {
                     w->onDropReceive(*dragPayload_);
                     accepted = true;
                     break;
@@ -453,20 +477,21 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
                 w = w->parent();
             }
         }
-        if (dragSource_)
-            dragSource_->onDragEnd(accepted);
+        if (dragSource_) dragSource_->onDragEnd(accepted);
         delete dragPayload_;
         dragPayload_ = nullptr;
-        dragSource_  = nullptr;
+        dragSource_ = nullptr;
         dragPending_ = false;
     }
-    if (btn == 0) {
+    if (btn == 0)
+    {
         dragPending_ = false;
-        dragSource_  = nullptr;
+        dragSource_ = nullptr;
     }
 
     pressedButtons_ &= ~(1 << btn);
-    if (pressed_) {
+    if (pressed_)
+    {
         MouseEvent me = makeMouseEvent(x, y, btn);
         bubble(pressed_, me, &Widget::onMouseRelease);
         if (pressedButtons_ == 0)
@@ -482,11 +507,13 @@ void WidgetApp::dispatchMouseRelease(float x, float y, int btn)
 MouseEvent WidgetApp::makeMouseEvent(float x, float y, int btn) const
 {
     MouseEvent me;
-    me.x = x; me.y = y; me.button = btn;
+    me.x = x;
+    me.y = y;
+    me.button = btn;
     me.clickCount = clickSeq_;
-    me.ctrl  = ioKeyCtrl_;
+    me.ctrl = ioKeyCtrl_;
     me.shift = ioKeyShift_;
-    me.alt   = ioKeyAlt_;
+    me.alt = ioKeyAlt_;
     return me;
 }
 
@@ -565,19 +592,25 @@ void WidgetApp::dispatchMouseScroll(float x, float y, float sx, float sy)
 {
     if (!hovered_) return;
     MouseEvent me = makeMouseEvent(x, y);
-    me.scrollX = sx; me.scrollY = sy;
+    me.scrollX = sx;
+    me.scrollY = sy;
     bubble(hovered_, me, &Widget::onMouseScroll);
 }
 
 void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
 {
     // ── Tab / Shift+Tab focus cycling ────────────────────────────────────
-    if (ke.down && ke.key == ig::retained::Key::Tab && !ke.ctrl && !ke.alt) {
+    if (ke.down && ke.key == ig::retained::Key::Tab && !ke.ctrl && !ke.alt)
+    {
         // First give the focused widget a chance to consume Tab
-        if (focused_) {
+        if (focused_)
+        {
             KeyEvent we;
-            we.key = ke.key; we.scancode = ke.scancode;
-            we.shift = ke.shift; we.ctrl = ke.ctrl; we.alt = ke.alt;
+            we.key = ke.key;
+            we.scancode = ke.scancode;
+            we.shift = ke.shift;
+            we.ctrl = ke.ctrl;
+            we.alt = ke.alt;
             focused_->onKeyPress(we);
             if (we.consumed) return;
         }
@@ -586,24 +619,21 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
     }
 
     KeyEvent we;
-    we.key      = ke.key;
+    we.key = ke.key;
     we.scancode = ke.scancode;
-    we.shift    = ke.shift;
-    we.ctrl     = ke.ctrl;
-    we.alt      = ke.alt;
+    we.shift = ke.shift;
+    we.ctrl = ke.ctrl;
+    we.alt = ke.alt;
     // A key that made a widget go away was handled, consumed or not.
     const uint32_t deletionsBefore = deletions_;
-    if (focused_)
-        bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
-    if (ke.down && !we.consumed && deletions_ == deletionsBefore)
-        unhandledKey.emit(we);
+    if (focused_) bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
+    if (ke.down && !we.consumed && deletions_ == deletionsBefore) unhandledKey.emit(we);
 }
 
 void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
 {
     ct::Vector<Widget*> chain;
-    for (Widget* w = focused_; w; w = w->parent())
-        chain.push_back(w);
+    for (Widget* w = focused_; w; w = w->parent()) chain.push_back(w);
 
     uint32_t seen = deletions_;
     for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
@@ -611,12 +641,10 @@ void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
         Widget* w = chain[i];
         if (seen != deletions_)
         {
-            if (!isWidgetInTrees(w))
-                return;
+            if (!isWidgetInTrees(w)) return;
             seen = deletions_;
         }
-        if (w->isEnabledInTree())
-            (w->*handler)(e);
+        if (w->isEnabledInTree()) (w->*handler)(e);
     }
 }
 
@@ -626,11 +654,34 @@ void WidgetApp::dispatchTextInput(const ct::Vector<uint32_t>& chars)
     KeyEvent ke;
     // Convert UTF-32 codepoints to UTF-8 text[]
     int off = 0;
-    for (uint32_t cp : chars) {
-        if (cp < 0x80)        { if (off+1>28) break; ke.text[off++] = static_cast<char>(cp); }
-        else if (cp < 0x800)  { if (off+2>28) break; ke.text[off++] = static_cast<char>(0xC0 | (cp >> 6)); ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F)); }
-        else if (cp < 0x10000){ if (off+3>28) break; ke.text[off++] = static_cast<char>(0xE0 | (cp >> 12)); ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F)); }
-        else if (cp<=0x10FFFF){ if (off+4>28) break; ke.text[off++] = static_cast<char>(0xF0 | (cp >> 18)); ke.text[off++] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F)); ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F)); ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F)); }
+    for (uint32_t cp: chars)
+    {
+        if (cp < 0x80)
+        {
+            if (off + 1 > 28) break;
+            ke.text[off++] = static_cast<char>(cp);
+        }
+        else if (cp < 0x800)
+        {
+            if (off + 2 > 28) break;
+            ke.text[off++] = static_cast<char>(0xC0 | (cp >> 6));
+            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else if (cp < 0x10000)
+        {
+            if (off + 3 > 28) break;
+            ke.text[off++] = static_cast<char>(0xE0 | (cp >> 12));
+            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else if (cp <= 0x10FFFF)
+        {
+            if (off + 4 > 28) break;
+            ke.text[off++] = static_cast<char>(0xF0 | (cp >> 18));
+            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+        }
     }
     ke.text[off] = 0;
     bubbleKey(ke, &Widget::onTextInput);
@@ -661,23 +712,21 @@ void WidgetApp::setRoot(Widget* r)
 Widget* WidgetApp::addStage(const String& name)
 {
     Widget* const* existing = stages_.find(name);
-    if (existing)
-        return *existing;
+    if (existing) return *existing;
 
     auto* stageRoot = new Widget();
     stages_[name] = stageRoot;
     // Stage built after the state file was read: its dock panels have not taken
     // their layout yet, so ask for another pass on the next frame.
-    if (!windowState_.empty())
-        dockLayoutPending_ = true;
+    if (!windowState_.empty()) dockLayoutPending_ = true;
     return stageRoot;
 }
 
 void WidgetApp::setTransition(TransitionType type, float durationSec, EaseType ease)
 {
-    transType_     = type;
+    transType_ = type;
     transDuration_ = durationSec;
-    transEase_     = ease;
+    transEase_ = ease;
 }
 
 bool WidgetApp::setStage(const String& name)
@@ -706,11 +755,11 @@ bool WidgetApp::setStage(const String& name, TransitionType transition, EaseType
     // Start transition or instant swap
     if (transition != TransitionType::None && root_)
     {
-        transActive_   = true;
+        transActive_ = true;
         transProgress_ = 0.0f;
-        transCurrent_  = transition;
-        transEaseCur_  = ease;
-        transOldRoot_  = root_;
+        transCurrent_ = transition;
+        transEaseCur_ = ease;
+        transOldRoot_ = root_;
         transOldStage_ = currentStage_;
     }
 
@@ -728,7 +777,7 @@ Widget* WidgetApp::stage(const String& name) const
 
 bool WidgetApp::removeStage(const String& name)
 {
-    if (name == currentStage_) return false;  // cannot remove active stage
+    if (name == currentStage_) return false; // cannot remove active stage
     Widget* const* stageRoot = stages_.find(name);
     if (!stageRoot) return false;
 
@@ -740,7 +789,10 @@ bool WidgetApp::removeStage(const String& name)
 
 IconAtlas& WidgetApp::iconAtlas()
 {
-    if (!iconAtlas_) { iconAtlas_ = new IconAtlas(); /* backend calls buildImage()+setTexture() */ }
+    if (!iconAtlas_)
+    {
+        iconAtlas_ = new IconAtlas(); /* backend calls buildImage()+setTexture() */
+    }
     return *iconAtlas_;
 }
 
@@ -781,13 +833,10 @@ void WidgetApp::fireEvent(const String& event, Widget* w)
     // another one (on()/onAny()), and inserting into the map can move its
     // storage out from under a pointer taken before the call.
     ct::Vector<EventCallback> callbacks;
-    if (targeted)
-        callbacks = *targeted;
-    for (auto& cb : handlers->any)
-        callbacks.push_back(cb);
+    if (targeted) callbacks = *targeted;
+    for (auto& cb: handlers->any) callbacks.push_back(cb);
 
-    for (auto& cb : callbacks)
-        cb(w);
+    for (auto& cb: callbacks) cb(w);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -797,7 +846,8 @@ void WidgetApp::fireEvent(const String& event, Widget* w)
 static bool isDescendantOf(Widget* candidate, Widget* root)
 {
     Widget* w = candidate;
-    while (w) {
+    while (w)
+    {
         if (w == root) return true;
         w = w->parent();
     }
@@ -810,9 +860,8 @@ static bool treeContains(const Widget* node, const Widget* target)
 {
     if (!node) return false;
     if (node == target) return true;
-    for (auto* child : node->children())
-        if (treeContains(child, target))
-            return true;
+    for (auto* child: node->children())
+        if (treeContains(child, target)) return true;
     return false;
 }
 
@@ -820,9 +869,8 @@ bool WidgetApp::isWidgetInTrees(const Widget* w) const
 {
     if (!w) return false;
     if (treeContains(root_, w)) return true;
-    for (auto* fw : floats_)
-        if (treeContains(fw, w))
-            return true;
+    for (auto* fw: floats_)
+        if (treeContains(fw, w)) return true;
     if (treeContains(popup_, w) || treeContains(popupClosing_, w)) return true;
     return false;
 }
@@ -831,48 +879,45 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
 {
     if (!w) return;
     ++deletions_;
-    if (Animator* animator = Animator::existing())
-        animator->forget(w);
+    if (Animator* animator = Animator::existing()) animator->forget(w);
     for (DeferredCall& call: deferredCalls_)
         if (call.owner && isDescendantOf(call.owner, w)) call.owner = nullptr;
     if (tooltipWidget_ && isDescendantOf(tooltipWidget_, w))
     {
-        tooltipWidget_  = nullptr;
+        tooltipWidget_ = nullptr;
         tooltipVisible_ = false;
-        tooltipTimer_   = 0.0f;
+        tooltipTimer_ = 0.0f;
     }
     // The widget that opened a popup going away closes it: the popup holds a
     // pointer back to its owner, which would be the memory just freed.
     if (popupOwner_ && isDescendantOf(popupOwner_, w))
     {
-        if (popup_)
-            returnFocus(popup_);
-        if (popup_ && popupOwned_ && !isDescendantOf(popup_, w))
-            queuePopupDelete(popup_);
+        if (popup_) returnFocus(popup_);
+        if (popup_ && popupOwned_ && !isDescendantOf(popup_, w)) queuePopupDelete(popup_);
         if (popupClosing_ && popupClosingOwned_ && !isDescendantOf(popupClosing_, w))
             queuePopupDelete(popupClosing_);
-        popup_             = nullptr;
-        popupOwner_        = nullptr;
-        popupClosing_      = nullptr;
+        popup_ = nullptr;
+        popupOwner_ = nullptr;
+        popupClosing_ = nullptr;
         popupClosingOwner_ = nullptr;
     }
     // A popup (or the window a popup was opened from) can go away while it is
     // still the one being painted: painting it after that reads freed memory.
     if (popup_ && isDescendantOf(popup_, w))
     {
-        popup_      = nullptr;
+        popup_ = nullptr;
         popupOwner_ = nullptr;
     }
     if (popupClosing_ && isDescendantOf(popupClosing_, w))
     {
-        popupClosing_        = nullptr;
-        popupClosingOwner_   = nullptr;
+        popupClosing_ = nullptr;
+        popupClosingOwner_ = nullptr;
     }
     if (transOldRoot_ && isDescendantOf(transOldRoot_, w))
     {
-        transActive_   = false;
+        transActive_ = false;
         transProgress_ = 1.0f;
-        transOldRoot_  = nullptr;
+        transOldRoot_ = nullptr;
         transOldStage_.clear();
     }
     if (pressed_ && isDescendantOf(pressed_, w))
@@ -881,13 +926,11 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         pressedButtons_ = 0;
     }
     const bool focusWentAway = focused_ && isDescendantOf(focused_, w);
-    if (focusWentAway)
-        focused_ = nullptr;
+    if (focusWentAway) focused_ = nullptr;
     for (ct::Vector<FocusLoan>::size_type i = 0; i < focusLoans_.size();)
     {
         FocusLoan& loan = focusLoans_[i];
-        if (loan.previous && isDescendantOf(loan.previous, w))
-            loan.previous = nullptr;
+        if (loan.previous && isDescendantOf(loan.previous, w)) loan.previous = nullptr;
         if (!isDescendantOf(loan.holder, w))
         {
             ++i;
@@ -895,11 +938,9 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         }
         Widget* previous = loan.previous;
         focusLoans_.erase(focusLoans_.begin() + i);
-        if (focusWentAway && !focused_ && previous)
-            setFocused(previous);
+        if (focusWentAway && !focused_ && previous) setFocused(previous);
     }
-    if (dragSource_ && isDescendantOf(dragSource_, w))
-        cancelDrag();
+    if (dragSource_ && isDescendantOf(dragSource_, w)) cancelDrag();
     if (hovered_ && isDescendantOf(hovered_, w))
     {
         hovered_ = nullptr;
@@ -908,10 +949,9 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     else
     {
         // Remove any entries in hover chain that point to the subtree
-        hoverChain_.erase(
-            std::remove_if(hoverChain_.begin(), hoverChain_.end(),
-                           [w](Widget* h) { return isDescendantOf(h, w); }),
-            hoverChain_.end());
+        hoverChain_.erase(std::remove_if(hoverChain_.begin(), hoverChain_.end(),
+                                  [w](Widget* h) { return isDescendantOf(h, w); }),
+                hoverChain_.end());
     }
 }
 
@@ -925,8 +965,7 @@ void WidgetApp::addFloatImpl(FloatWindow* fw)
     applyWindowState(fw);
     floats_.push_back(fw);
     fw->layout();
-    if (Widget* target = fw->focusOnOpen())
-        lendFocus(fw, target);
+    if (Widget* target = fw->focusOnOpen()) lendFocus(fw, target);
 }
 
 void WidgetApp::removeFloat(FloatWindow* fw)
@@ -936,7 +975,7 @@ void WidgetApp::removeFloat(FloatWindow* fw)
     // removing a dialog that closed itself, say - must not queue the same
     // pointer again, or the flush would delete it twice.
     if (std::find(pendingFloatDeletes_.begin(), pendingFloatDeletes_.end(), fw) !=
-        pendingFloatDeletes_.end())
+            pendingFloatDeletes_.end())
         return;
     // Keep the geometry of a window that goes away, so reopening it next run
     // (or in the same run) lands where it was left.
@@ -961,7 +1000,8 @@ void WidgetApp::bringToFront(FloatWindow* fw)
 //  Window state (.ini)
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
+namespace
+{
 
 // Dock panels are found by walking the stage trees: an application builds its
 // stages after setWindowStatePath(), so a layout in the file cannot be applied
@@ -969,10 +1009,8 @@ namespace {
 void collectDockPanels(Widget* widget, ct::Vector<DockPanel*>& out)
 {
     if (!widget) return;
-    if (auto* dock = widget_cast<DockPanel>(widget))
-        out.push_back(dock);
-    for (auto* child : widget->children())
-        collectDockPanels(child, out);
+    if (auto* dock = widget_cast<DockPanel>(widget)) out.push_back(dock);
+    for (auto* child: widget->children()) collectDockPanels(child, out);
 }
 
 } // namespace
@@ -980,8 +1018,7 @@ void collectDockPanels(Widget* widget, ct::Vector<DockPanel*>& out)
 void WidgetApp::setWindowStatePath(const String& path)
 {
     windowState_.setPath(path);
-    if (!windowState_.path().empty())
-        loadWindowState();
+    if (!windowState_.path().empty()) loadWindowState();
 }
 
 bool WidgetApp::loadWindowState()
@@ -990,20 +1027,16 @@ bool WidgetApp::loadWindowState()
     // A fresh read applies to every panel again, including one that already took
     // a layout from the file read before.
     ct::Vector<DockPanel*> panels;
-    for (auto& entry : stages_)
-        collectDockPanels(entry.value, panels);
-    for (auto* dock : panels)
-        dock->setSettingsApplied(false);
-    for (auto* fw : floats_)
-        applyWindowState(fw);
+    for (auto& entry: stages_) collectDockPanels(entry.value, panels);
+    for (auto* dock: panels) dock->setSettingsApplied(false);
+    for (auto* fw: floats_) applyWindowState(fw);
     restoreDockLayouts();
     return loaded;
 }
 
 bool WidgetApp::saveWindowState()
 {
-    for (auto* fw : floats_)
-        captureWindowState(fw);
+    for (auto* fw: floats_) captureWindowState(fw);
     captureDockLayouts();
     return windowState_.save();
 }
@@ -1030,8 +1063,7 @@ void WidgetApp::applyWindowState(FloatWindow* fw)
     geometry.w = fw->floatW();
     geometry.h = fw->floatH();
     geometry.minimized = fw->isMinimized();
-    if (!windowState_.getWindow(fw->title(), geometry))
-        return;
+    if (!windowState_.getWindow(fw->title(), geometry)) return;
     fw->setFloatPos(geometry.x, geometry.y);
     fw->setFloatSize(geometry.w, geometry.h);
     fw->setMinimized(geometry.minimized);
@@ -1050,22 +1082,18 @@ void WidgetApp::keepOnScreen(FloatWindow* fw)
     const float grip = std::min(w, 40.0f);
     const float x = std::max(grip - w, std::min(fw->floatX(), sw - grip));
     const float y = std::max(0.0f, std::min(fw->floatY(), sh - fw->titleBarHeight()));
-    if (w != fw->floatW() || h != fw->floatH())
-        fw->setFloatSize(w, h);
-    if (x != fw->floatX() || y != fw->floatY())
-        fw->setFloatPos(x, y);
+    if (w != fw->floatW() || h != fw->floatH()) fw->setFloatSize(w, h);
+    if (x != fw->floatX() || y != fw->floatY()) fw->setFloatPos(x, y);
 }
 
 void WidgetApp::captureDockLayouts()
 {
     ct::Vector<DockPanel*> panels;
-    for (auto& entry : stages_)
-        collectDockPanels(entry.value, panels);
-    for (auto* dock : panels)
+    for (auto& entry: stages_) collectDockPanels(entry.value, panels);
+    for (auto* dock: panels)
     {
         const String key = dock->settingsKey();
-        if (key.empty())
-            continue;
+        if (key.empty()) continue;
         windowState_.put(dockStateSection(key), "layout", dock->saveLayout());
     }
 }
@@ -1073,22 +1101,18 @@ void WidgetApp::captureDockLayouts()
 void WidgetApp::restoreDockLayouts()
 {
     ct::Vector<DockPanel*> panels;
-    for (auto& entry : stages_)
-        collectDockPanels(entry.value, panels);
+    for (auto& entry: stages_) collectDockPanels(entry.value, panels);
 
-    for (auto* dock : panels)
+    for (auto* dock: panels)
     {
         // A panel that already took its layout is left alone: a stage built
         // later must not throw away an arrangement the user has changed since.
-        if (dock->settingsApplied())
-            continue;
+        if (dock->settingsApplied()) continue;
         const String key = dock->settingsKey();
-        if (key.empty())
-            continue;   // the application may still set a key for it
+        if (key.empty()) continue; // the application may still set a key for it
         dock->setSettingsApplied(true);
         const String section = dockStateSection(key);
-        if (!windowState_.has(section, "layout"))
-            continue;
+        if (!windowState_.has(section, "layout")) continue;
         dock->restoreLayout(windowState_.get(section, "layout"));
     }
 
@@ -1104,40 +1128,47 @@ void WidgetApp::restoreDockLayouts()
 void WidgetApp::showPopup(Widget* popup, Widget* owner, bool owned)
 {
     // If a close animation is running, finish it immediately
-    if (popupClosing_) {
+    if (popupClosing_)
+    {
         retirePopup(popupClosing_, popupClosingOwned_);
-        popupClosing_     = nullptr;
+        popupClosing_ = nullptr;
         popupAnimClosing_ = false;
     }
 
     // Close previous popup instantly if any
-    if (popup_)
-        retirePopup(popup_, popupOwned_);
+    if (popup_) retirePopup(popup_, popupOwned_);
 
-    popup_      = popup;
+    popup_ = popup;
     popupOwner_ = owner;
     popupOwned_ = owned;
 
     // Start open animation
     popupAnimProgress_ = 0.0f;
-    popupAnimOpening_  = true;
-    popupAnimClosing_  = false;
-    popupAnimEase_     = EaseType::OutCubic;
+    popupAnimOpening_ = true;
+    popupAnimClosing_ = false;
+    popupAnimEase_ = EaseType::OutCubic;
 }
 
 void WidgetApp::forgetPopup(Widget* w)
 {
     if (!w) return;
-    if (popup_ == w) {
-        popup_ = nullptr; popupOwner_ = nullptr; popupOwned_ = true;
+    if (popup_ == w)
+    {
+        popup_ = nullptr;
+        popupOwner_ = nullptr;
+        popupOwned_ = true;
     }
-    if (popupClosing_ == w) {
-        popupClosing_ = nullptr; popupClosingOwner_ = nullptr; popupClosingOwned_ = true;
+    if (popupClosing_ == w)
+    {
+        popupClosing_ = nullptr;
+        popupClosingOwner_ = nullptr;
+        popupClosingOwned_ = true;
         popupAnimClosing_ = false;
     }
     if (popupOwner_ == w) popupOwner_ = nullptr;
     if (popupClosingOwner_ == w) popupClosingOwner_ = nullptr;
-    for (size_t i = 0; i < pendingPopupDeletes_.size(); ) {
+    for (size_t i = 0; i < pendingPopupDeletes_.size();)
+    {
         if (pendingPopupDeletes_[i] == w)
             pendingPopupDeletes_.erase(pendingPopupDeletes_.begin() + i);
         else
@@ -1150,18 +1181,18 @@ void WidgetApp::closePopup()
     if (popup_)
     {
         // Start close animation — keep popup alive during the tween
-        popupClosing_      = popup_;
+        popupClosing_ = popup_;
         popupClosingOwner_ = popupOwner_;
         popupClosingOwned_ = popupOwned_;
 
         popupAnimProgress_ = 1.0f;
-        popupAnimClosing_  = true;
-        popupAnimOpening_  = false;
-        popupAnimEase_     = EaseType::InCubic;
+        popupAnimClosing_ = true;
+        popupAnimOpening_ = false;
+        popupAnimEase_ = EaseType::InCubic;
 
         // Clear the active popup pointer so input goes through
         returnFocus(popup_);
-        popup_      = nullptr;
+        popup_ = nullptr;
         popupOwner_ = nullptr;
         popupOwned_ = true;
     }
@@ -1170,7 +1201,7 @@ void WidgetApp::closePopup()
 void WidgetApp::lendFocus(Widget* holder, Widget* target)
 {
     if (!holder) return;
-    focusLoans_.push_back({holder, focused_});
+    focusLoans_.push_back({ holder, focused_ });
     setFocused(target);
 }
 
@@ -1184,23 +1215,20 @@ void WidgetApp::returnFocus(Widget* holder)
         focusLoans_.erase(focusLoans_.begin() + i);
         break;
     }
-    if (focused_ && isDescendantOf(focused_, holder))
-        setFocused(previous);
+    if (focused_ && isDescendantOf(focused_, holder)) setFocused(previous);
 }
 
 void WidgetApp::retirePopup(Widget* popup, bool owned)
 {
     popup->resetPopupState();
     notifyWidgetRemoved(popup);
-    if (owned)
-        queuePopupDelete(popup);
+    if (owned) queuePopupDelete(popup);
 }
 
 void WidgetApp::queuePopupDelete(Widget* popup)
 {
-    for (Widget* queued : pendingPopupDeletes_)
-        if (queued == popup)
-            return;
+    for (Widget* queued: pendingPopupDeletes_)
+        if (queued == popup) return;
     pendingPopupDeletes_.push_back(popup);
 }
 
@@ -1220,14 +1248,11 @@ void WidgetApp::flushPopupDeletes()
 
 Widget* WidgetApp::hitTest(Widget* w, float x, float y)
 {
-    if (!w || !w->isVisible())
-        return nullptr;
+    if (!w || !w->isVisible()) return nullptr;
 
     Rect abs = w->absoluteRect();
-    if (!abs.contains(x, y))
-        return nullptr;
-    if (!w->childrenShown())
-        return w;
+    if (!abs.contains(x, y)) return nullptr;
+    if (!w->childrenShown()) return w;
 
     // Deepest child first (reverse order = topmost drawn last)
     const auto& ch = w->children();
@@ -1245,7 +1270,7 @@ Widget* WidgetApp::hitTest(Widget* w, float x, float y)
             Rect childAbs = ch[i]->absoluteRect();
             // Child must overlap the parent's visible area
             if (childAbs.right() <= abs.x || childAbs.x >= abs.right() ||
-                childAbs.bottom() <= abs.y || childAbs.y >= abs.bottom())
+                    childAbs.bottom() <= abs.y || childAbs.y >= abs.bottom())
                 continue;
         }
         Widget* hit = hitTest(ch[i], x, y);
@@ -1260,16 +1285,14 @@ Widget* WidgetApp::topWidgetAt(float x, float y)
     if (popup_)
     {
         Widget* hit = hitTest(popup_, x, y);
-        if (!hit && popup_->popupContains(x, y))
-            hit = popup_;
+        if (!hit && popup_->popupContains(x, y)) hit = popup_;
         return hit;
     }
     for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i)
     {
         FloatWindow* fw = floats_[i];
         if (!fw->isVisible()) continue;
-        if (Widget* hit = hitTest(fw, x, y))
-            return hit;
+        if (Widget* hit = hitTest(fw, x, y)) return hit;
     }
     return hitTest(root_, x, y);
 }
@@ -1286,14 +1309,13 @@ void WidgetApp::fillLocal(Widget* target, MouseEvent& e)
 //  Event bubbling - call handler on target, then walk up parents
 // ═════════════════════════════════════════════════════════════════════════════
 
-template <typename Func>
+template<typename Func>
 void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
 {
     // The parents are read before any handler runs: a handler may delete the
     // widget it was called with, and `w->parent()` would then read freed memory.
     ct::Vector<Widget*> chain;
-    for (Widget* w = target; w; w = w->parent())
-        chain.push_back(w);
+    for (Widget* w = target; w; w = w->parent()) chain.push_back(w);
 
     uint32_t seen = deletions_;
     for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
@@ -1303,12 +1325,10 @@ void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
         {
             // Something went away during a handler: the rest of the chain may
             // have gone with it, so it is looked up in the tree that is drawn.
-            if (!isWidgetInTrees(w))
-                return;
+            if (!isWidgetInTrees(w)) return;
             seen = deletions_;
         }
-        if (!w->isEnabledInTree())
-            continue;
+        if (!w->isEnabledInTree()) continue;
         fillLocal(w, e);
         (w->*handler)(e);
     }
@@ -1338,14 +1358,12 @@ void WidgetApp::applyCursor(CursorType type)
 
 void WidgetApp::updateHover(Widget* newLeaf)
 {
-    ct::Vector<Widget*> newChain = newLeaf ? buildChain(newLeaf)
-                                            : ct::Vector<Widget*>{};
+    ct::Vector<Widget*> newChain = newLeaf ? buildChain(newLeaf) : ct::Vector<Widget*>{};
 
     // Find common prefix length
     size_t common = 0;
     size_t minLen = std::min(hoverChain_.size(), newChain.size());
-    while (common < minLen && hoverChain_[common] == newChain[common])
-        ++common;
+    while (common < minLen && hoverChain_[common] == newChain[common]) ++common;
 
     // Leave: old widgets that are no longer in the chain (deepest first)
     for (size_t i = hoverChain_.size(); i > common; --i)
@@ -1372,9 +1390,9 @@ void WidgetApp::updateHover(Widget* newLeaf)
     applyCursor(hovered_ ? hovered_->cursor() : CursorType::Arrow);
 
     // Reset tooltip when hover target changes
-    tooltipTimer_   = 0.0f;
+    tooltipTimer_ = 0.0f;
     tooltipVisible_ = false;
-    tooltipWidget_  = nullptr;
+    tooltipWidget_ = nullptr;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1383,12 +1401,14 @@ void WidgetApp::updateHover(Widget* newLeaf)
 
 void WidgetApp::setFocused(Widget* w)
 {
-    if (focused_) {
+    if (focused_)
+    {
         focused_->setFocused(false);
         focused_->onFocusLost();
     }
     focused_ = w;
-    if (focused_) {
+    if (focused_)
+    {
         focused_->setFocused(true);
         focused_->onFocusGained();
     }
@@ -1398,19 +1418,20 @@ void WidgetApp::setFocused(Widget* w)
 //  Debug layout overlay
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
+namespace
+{
 
 // Cycle through distinct colors per depth level
 static Color debugColor(int depth)
 {
     static const Color colors[] = {
-        {255, 50,  50,  180},  // red
-        {50,  255, 50,  180},  // green
-        {80,  80,  255, 180},  // blue
-        {255, 255, 50,  180},  // yellow
-        {255, 50,  255, 180},  // magenta
-        {50,  255, 255, 180},  // cyan
-        {255, 160, 50,  180},  // orange
+        { 255, 50, 50, 180 },  // red
+        { 50, 255, 50, 180 },  // green
+        { 80, 80, 255, 180 },  // blue
+        { 255, 255, 50, 180 }, // yellow
+        { 255, 50, 255, 180 }, // magenta
+        { 50, 255, 255, 180 }, // cyan
+        { 255, 160, 50, 180 }, // orange
     };
     return colors[depth % 7];
 }
@@ -1419,22 +1440,21 @@ void debugPaintWidget(Widget* w, ig::retained::DrawList& dl, int depth)
 {
     if (!w || !w->isVisible()) return;
 
-    ig::retained::Rect abs = { w->absoluteRect().x, w->absoluteRect().y,
-                        w->absoluteRect().w, w->absoluteRect().h };
+    ig::retained::Rect abs = { w->absoluteRect().x, w->absoluteRect().y, w->absoluteRect().w,
+        w->absoluteRect().h };
     Color c = debugColor(depth);
     dl.addRectOutline(abs, c);
 
     const Edges& m = w->margins();
     if (m.top > 0 || m.right > 0 || m.bottom > 0 || m.left > 0)
     {
-        ig::retained::Rect outer = { abs.x - m.left, abs.y - m.top,
-                              abs.w + m.left + m.right, abs.h + m.top + m.bottom };
-        Color dim = {c.r, c.g, c.b, 80};
+        ig::retained::Rect outer = { abs.x - m.left, abs.y - m.top, abs.w + m.left + m.right,
+            abs.h + m.top + m.bottom };
+        Color dim = { c.r, c.g, c.b, 80 };
         dl.addRectOutline(outer, dim);
     }
 
-    for (auto* child : w->children())
-        debugPaintWidget(child, dl, depth + 1);
+    for (auto* child: w->children()) debugPaintWidget(child, dl, depth + 1);
 }
 
 } // namespace
@@ -1447,55 +1467,96 @@ static constexpr float PI = 3.14159265358979323846f;
 
 static float bounceOut(float t)
 {
-    if (t < 1.0f / 2.75f)       return 7.5625f * t * t;
-    if (t < 2.0f / 2.75f)     { t -= 1.5f   / 2.75f; return 7.5625f * t * t + 0.75f; }
-    if (t < 2.5f / 2.75f)     { t -= 2.25f  / 2.75f; return 7.5625f * t * t + 0.9375f; }
-    t -= 2.625f / 2.75f;        return 7.5625f * t * t + 0.984375f;
+    if (t < 1.0f / 2.75f) return 7.5625f * t * t;
+    if (t < 2.0f / 2.75f)
+    {
+        t -= 1.5f / 2.75f;
+        return 7.5625f * t * t + 0.75f;
+    }
+    if (t < 2.5f / 2.75f)
+    {
+        t -= 2.25f / 2.75f;
+        return 7.5625f * t * t + 0.9375f;
+    }
+    t -= 2.625f / 2.75f;
+    return 7.5625f * t * t + 0.984375f;
 }
 
 float applyEasing(EaseType type, float t)
 {
     switch (type)
     {
-    case EaseType::Linear:       return t;
-    case EaseType::InQuad:       return t * t;
-    case EaseType::OutQuad:      return t * (2.0f - t);
-    case EaseType::InOutQuad:    return t < 0.5f ? 2.0f * t * t : -1.0f + (4.0f - 2.0f * t) * t;
-    case EaseType::InCubic:      return t * t * t;
-    case EaseType::OutCubic:     { float u = t - 1.0f; return u * u * u + 1.0f; }
-    case EaseType::InOutCubic:   return t < 0.5f ? 4.0f * t * t * t
-                                     : 1.0f - 0.5f * ((-2.0f * t + 2.0f) * (-2.0f * t + 2.0f) * (-2.0f * t + 2.0f));
-    case EaseType::InExpo:       return t == 0.0f ? 0.0f : std::pow(2.0f, 10.0f * (t - 1.0f));
-    case EaseType::OutExpo:      return t == 1.0f ? 1.0f : 1.0f - std::pow(2.0f, -10.0f * t);
-    case EaseType::InOutExpo:
-        if (t == 0.0f || t == 1.0f) return t;
-        return t < 0.5f ? 0.5f * std::pow(2.0f, 20.0f * t - 10.0f)
-                        : 1.0f - 0.5f * std::pow(2.0f, -20.0f * t + 10.0f);
-    case EaseType::InBack:       { constexpr float s = 1.70158f; return t * t * ((s + 1.0f) * t - s); }
-    case EaseType::OutBack:      { constexpr float s = 1.70158f; float u = t - 1.0f; return u * u * ((s + 1.0f) * u + s) + 1.0f; }
-    case EaseType::InOutBack:
-    {
-        constexpr float s = 1.70158f * 1.525f;
-        float u = t * 2.0f;
-        if (u < 1.0f) return 0.5f * (u * u * ((s + 1.0f) * u - s));
-        u -= 2.0f;
-        return 0.5f * (u * u * ((s + 1.0f) * u + s) + 2.0f);
-    }
-    case EaseType::InBounce:     return 1.0f - bounceOut(1.0f - t);
-    case EaseType::OutBounce:    return bounceOut(t);
-    case EaseType::InOutBounce:  return t < 0.5f ? 0.5f * (1.0f - bounceOut(1.0f - 2.0f * t))
-                                                  : 0.5f * bounceOut(2.0f * t - 1.0f) + 0.5f;
-    case EaseType::InElastic:
-        return t == 0.0f || t == 1.0f ? t
-             : -std::pow(2.0f, 10.0f * t - 10.0f) * std::sin((t * 10.0f - 10.75f) * (2.0f * PI / 3.0f));
-    case EaseType::OutElastic:
-        return t == 0.0f || t == 1.0f ? t
-             : std::pow(2.0f, -10.0f * t) * std::sin((t * 10.0f - 0.75f) * (2.0f * PI / 3.0f)) + 1.0f;
-    case EaseType::InOutElastic:
-        if (t == 0.0f || t == 1.0f) return t;
-        return t < 0.5f
-            ? -0.5f * std::pow(2.0f, 20.0f * t - 10.0f) * std::sin((20.0f * t - 11.125f) * (2.0f * PI / 4.5f))
-            :  0.5f * std::pow(2.0f, -20.0f * t + 10.0f) * std::sin((20.0f * t - 11.125f) * (2.0f * PI / 4.5f)) + 1.0f;
+        case EaseType::Linear:
+            return t;
+        case EaseType::InQuad:
+            return t * t;
+        case EaseType::OutQuad:
+            return t * (2.0f - t);
+        case EaseType::InOutQuad:
+            return t < 0.5f ? 2.0f * t * t : -1.0f + (4.0f - 2.0f * t) * t;
+        case EaseType::InCubic:
+            return t * t * t;
+        case EaseType::OutCubic:
+        {
+            float u = t - 1.0f;
+            return u * u * u + 1.0f;
+        }
+        case EaseType::InOutCubic:
+            return t < 0.5f ? 4.0f * t * t * t
+                            : 1.0f - 0.5f * ((-2.0f * t + 2.0f) * (-2.0f * t + 2.0f) *
+                                                    (-2.0f * t + 2.0f));
+        case EaseType::InExpo:
+            return t == 0.0f ? 0.0f : std::pow(2.0f, 10.0f * (t - 1.0f));
+        case EaseType::OutExpo:
+            return t == 1.0f ? 1.0f : 1.0f - std::pow(2.0f, -10.0f * t);
+        case EaseType::InOutExpo:
+            if (t == 0.0f || t == 1.0f) return t;
+            return t < 0.5f ? 0.5f * std::pow(2.0f, 20.0f * t - 10.0f)
+                            : 1.0f - 0.5f * std::pow(2.0f, -20.0f * t + 10.0f);
+        case EaseType::InBack:
+        {
+            constexpr float s = 1.70158f;
+            return t * t * ((s + 1.0f) * t - s);
+        }
+        case EaseType::OutBack:
+        {
+            constexpr float s = 1.70158f;
+            float u = t - 1.0f;
+            return u * u * ((s + 1.0f) * u + s) + 1.0f;
+        }
+        case EaseType::InOutBack:
+        {
+            constexpr float s = 1.70158f * 1.525f;
+            float u = t * 2.0f;
+            if (u < 1.0f) return 0.5f * (u * u * ((s + 1.0f) * u - s));
+            u -= 2.0f;
+            return 0.5f * (u * u * ((s + 1.0f) * u + s) + 2.0f);
+        }
+        case EaseType::InBounce:
+            return 1.0f - bounceOut(1.0f - t);
+        case EaseType::OutBounce:
+            return bounceOut(t);
+        case EaseType::InOutBounce:
+            return t < 0.5f ? 0.5f * (1.0f - bounceOut(1.0f - 2.0f * t))
+                            : 0.5f * bounceOut(2.0f * t - 1.0f) + 0.5f;
+        case EaseType::InElastic:
+            return t == 0.0f || t == 1.0f
+                           ? t
+                           : -std::pow(2.0f, 10.0f * t - 10.0f) *
+                                     std::sin((t * 10.0f - 10.75f) * (2.0f * PI / 3.0f));
+        case EaseType::OutElastic:
+            return t == 0.0f || t == 1.0f
+                           ? t
+                           : std::pow(2.0f, -10.0f * t) *
+                                             std::sin((t * 10.0f - 0.75f) * (2.0f * PI / 3.0f)) +
+                                     1.0f;
+        case EaseType::InOutElastic:
+            if (t == 0.0f || t == 1.0f) return t;
+            return t < 0.5f ? -0.5f * std::pow(2.0f, 20.0f * t - 10.0f) *
+                                      std::sin((20.0f * t - 11.125f) * (2.0f * PI / 4.5f))
+                            : 0.5f * std::pow(2.0f, -20.0f * t + 10.0f) *
+                                              std::sin((20.0f * t - 11.125f) * (2.0f * PI / 4.5f)) +
+                                      1.0f;
     }
     return t;
 }
@@ -1536,20 +1597,18 @@ Color WidgetApp::stageBgColor(const String& name) const
 // ═════════════════════════════════════════════════════════════════════════════
 
 void WidgetApp::paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
-                               const ig::retained::Font* font, IconAtlas* icons,
-                               float w, float h, const Color& bgColor)
+        const ig::retained::Font* font, IconAtlas* icons, float w, float h, const Color& bgColor)
 {
     if (!tree) return;
 
-    tree->setRect({0, 0, w, h});
-    for (auto* c : tree->children())
-        c->setRect({0, 0, w, h});
+    tree->setRect({ 0, 0, w, h });
+    for (auto* c: tree->children()) c->setRect({ 0, 0, w, h });
     tree->layout();
 
     // Fill background so transitions have no holes between stages.
-    dl.addRect({0, 0, w, h}, bgColor);
+    dl.addRect({ 0, 0, w, h }, bgColor);
 
-    PaintContext ctx{dl, font, icons};
+    PaintContext ctx{ dl, font, icons };
     tree->paint(ctx);
 }
 
@@ -1557,29 +1616,26 @@ void WidgetApp::paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
 //  paint – layout + paint the full widget tree, pushing DrawPasses into data.
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::paint(ig::retained::DrawData& data,
-                      const ig::retained::Font* font,
-                      IconAtlas* icons)
+void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* font,
+        IconAtlas* icons)
 {
     float w = static_cast<float>(width_);
     float h = static_cast<float>(height_);
     if (w <= 0 || h <= 0) return;
-    font_  = font;  // cache for text measurement in mouse events
+    font_ = font; // cache for text measurement in mouse events
     drawList_ = &ig::retained::GetDrawList();
 
     // Layout pass
     if (needsLayout_ && root_)
     {
-        root_->setRect({0, 0, w, h});
-        for (auto* c : root_->children())
-            c->setRect({0, 0, w, h});
+        root_->setRect({ 0, 0, w, h });
+        for (auto* c: root_->children()) c->setRect({ 0, 0, w, h });
         root_->layout();
 
         if (transActive_ && transOldRoot_)
         {
-            transOldRoot_->setRect({0, 0, w, h});
-            for (auto* c : transOldRoot_->children())
-                c->setRect({0, 0, w, h});
+            transOldRoot_->setRect({ 0, 0, w, h });
+            for (auto* c: transOldRoot_->children()) c->setRect({ 0, 0, w, h });
             transOldRoot_->layout();
         }
         needsLayout_ = false;
@@ -1589,9 +1645,12 @@ void WidgetApp::paint(ig::retained::DrawData& data,
     if (transActive_)
     {
         transProgress_ += dt_ / transDuration_;
-        if (transProgress_ >= 1.0f) {
-            transProgress_ = 1.0f; transActive_ = false;
-            transOldRoot_ = nullptr; transOldStage_.clear();
+        if (transProgress_ >= 1.0f)
+        {
+            transProgress_ = 1.0f;
+            transActive_ = false;
+            transOldRoot_ = nullptr;
+            transOldStage_.clear();
         }
         float t = applyEasing(transEaseCur_, transProgress_);
 
@@ -1604,106 +1663,108 @@ void WidgetApp::paint(ig::retained::DrawData& data,
         ig::retained::Camera2D camOld = baseOld;
         ig::retained::Camera2D camNew = baseCur;
 
-        ig::retained::DrawList& dlNew  = ig::retained::GetDrawList();
-        ig::retained::DrawList& dlOld  = ig::retained::GetTransDrawList();
+        ig::retained::DrawList& dlNew = ig::retained::GetDrawList();
+        ig::retained::DrawList& dlOld = ig::retained::GetTransDrawList();
 
         switch (transCurrent_)
         {
-        case TransitionType::SlideLeft:
-            camOld.x = baseOld.x - t * w;
-            camNew.x = baseCur.x + w * (1.0f - t);
-            break;
-        case TransitionType::SlideRight:
-            camOld.x = baseOld.x + t * w;
-            camNew.x = baseCur.x - w * (1.0f - t);
-            break;
-        case TransitionType::SlideUp:
-            camOld.y = baseOld.y - t * h;
-            camNew.y = baseCur.y + h * (1.0f - t);
-            break;
-        case TransitionType::SlideDown:
-            camOld.y = baseOld.y + t * h;
-            camNew.y = baseCur.y - h * (1.0f - t);
-            break;
-        case TransitionType::CoverLeft:
-            // old stays, new slides in from right
-            camNew.x = baseCur.x + w * (1.0f - t);
-            break;
-        case TransitionType::CoverRight:
-            camNew.x = baseCur.x - w * (1.0f - t);
-            break;
-        case TransitionType::CoverUp:
-            camNew.y = baseCur.y + h * (1.0f - t);
-            break;
-        case TransitionType::CoverDown:
-            camNew.y = baseCur.y - h * (1.0f - t);
-            break;
-        case TransitionType::RevealLeft:
-            // new stays, old slides out left
-            camOld.x = baseOld.x - t * w;
-            break;
-        case TransitionType::RevealRight:
-            camOld.x = baseOld.x + t * w;
-            break;
-        case TransitionType::RevealUp:
-            camOld.y = baseOld.y - t * h;
-            break;
-        case TransitionType::RevealDown:
-            camOld.y = baseOld.y + t * h;
-            break;
-        case TransitionType::ZoomIn:
-            // new zooms in from 0.5 → 1.0 (pivot = screen centre)
-            camNew.scale = baseCur.scale * (0.5f + 0.5f * t);
-            camNew.pivotX = 0.5f; camNew.pivotY = 0.5f;
-            break;
-        case TransitionType::ZoomOut:
-            // old zooms out from 1.0 → 0.5, new behind
-            camOld.scale = baseOld.scale * (1.0f - 0.5f * t);
-            camOld.pivotX = 0.5f; camOld.pivotY = 0.5f;
-            break;
-        default:
-            break;
+            case TransitionType::SlideLeft:
+                camOld.x = baseOld.x - t * w;
+                camNew.x = baseCur.x + w * (1.0f - t);
+                break;
+            case TransitionType::SlideRight:
+                camOld.x = baseOld.x + t * w;
+                camNew.x = baseCur.x - w * (1.0f - t);
+                break;
+            case TransitionType::SlideUp:
+                camOld.y = baseOld.y - t * h;
+                camNew.y = baseCur.y + h * (1.0f - t);
+                break;
+            case TransitionType::SlideDown:
+                camOld.y = baseOld.y + t * h;
+                camNew.y = baseCur.y - h * (1.0f - t);
+                break;
+            case TransitionType::CoverLeft:
+                // old stays, new slides in from right
+                camNew.x = baseCur.x + w * (1.0f - t);
+                break;
+            case TransitionType::CoverRight:
+                camNew.x = baseCur.x - w * (1.0f - t);
+                break;
+            case TransitionType::CoverUp:
+                camNew.y = baseCur.y + h * (1.0f - t);
+                break;
+            case TransitionType::CoverDown:
+                camNew.y = baseCur.y - h * (1.0f - t);
+                break;
+            case TransitionType::RevealLeft:
+                // new stays, old slides out left
+                camOld.x = baseOld.x - t * w;
+                break;
+            case TransitionType::RevealRight:
+                camOld.x = baseOld.x + t * w;
+                break;
+            case TransitionType::RevealUp:
+                camOld.y = baseOld.y - t * h;
+                break;
+            case TransitionType::RevealDown:
+                camOld.y = baseOld.y + t * h;
+                break;
+            case TransitionType::ZoomIn:
+                // new zooms in from 0.5 → 1.0 (pivot = screen centre)
+                camNew.scale = baseCur.scale * (0.5f + 0.5f * t);
+                camNew.pivotX = 0.5f;
+                camNew.pivotY = 0.5f;
+                break;
+            case TransitionType::ZoomOut:
+                // old zooms out from 1.0 → 0.5, new behind
+                camOld.scale = baseOld.scale * (1.0f - 0.5f * t);
+                camOld.pivotX = 0.5f;
+                camOld.pivotY = 0.5f;
+                break;
+            default:
+                break;
         }
 
         // For Reveal: new is below old → push new first.
         // For Cover/Slide: new is above old → push old first, new second.
-        bool revealType = (transCurrent_ == TransitionType::RevealLeft  ||
+        bool revealType = (transCurrent_ == TransitionType::RevealLeft ||
                            transCurrent_ == TransitionType::RevealRight ||
-                           transCurrent_ == TransitionType::RevealUp    ||
-                           transCurrent_ == TransitionType::RevealDown  ||
+                           transCurrent_ == TransitionType::RevealUp ||
+                           transCurrent_ == TransitionType::RevealDown ||
                            transCurrent_ == TransitionType::ZoomOut);
 
         if (revealType)
         {
             // new (behind) first
             paintTreeInto(root_, dlNew, font, icons, w, h, stageBgColor(currentStage_));
-            data.passes.push_back({&dlNew, camNew});
+            data.passes.push_back({ &dlNew, camNew });
             paintTreeInto(transOldRoot_, dlOld, font, icons, w, h, stageBgColor(transOldStage_));
-            data.passes.push_back({&dlOld, camOld});
+            data.passes.push_back({ &dlOld, camOld });
         }
         else
         {
             // old (behind) first
             paintTreeInto(transOldRoot_, dlOld, font, icons, w, h, stageBgColor(transOldStage_));
-            data.passes.push_back({&dlOld, camOld});
+            data.passes.push_back({ &dlOld, camOld });
             paintTreeInto(root_, dlNew, font, icons, w, h, stageBgColor(currentStage_));
-            data.passes.push_back({&dlNew, camNew});
+            data.passes.push_back({ &dlNew, camNew });
         }
     }
     else
     {
         // Normal render: single pass with this stage's camera
         ig::retained::DrawList& dl = ig::retained::GetDrawList();
-        ig::retained::Camera2D  cam = stageCamera(currentStage_);
+        ig::retained::Camera2D cam = stageCamera(currentStage_);
 
         // Fill stage background first so there are no transparent holes.
-        dl.addRect({0, 0, w, h}, stageBgColor(currentStage_));
+        dl.addRect({ 0, 0, w, h }, stageBgColor(currentStage_));
 
-        PaintContext ctx{dl, font, icons};
+        PaintContext ctx{ dl, font, icons };
         if (root_) root_->paint(ctx);
 
         // Float windows (above stage, below popup)
-        for (auto* fw : floats_)
+        for (auto* fw: floats_)
         {
             if (!fw->isVisible()) continue;
             fw->layout();
@@ -1716,13 +1777,14 @@ void WidgetApp::paint(ig::retained::DrawData& data,
         {
             float rawT = popupAnimProgress_;
             bool animating = popupAnimOpening_ || popupAnimClosing_;
-            float animT = animating
-                          ? applyEasing(popupAnimEase_, std::max(0.0f, std::min(1.0f, rawT)))
-                          : rawT;
+            float animT =
+                    animating ? applyEasing(popupAnimEase_, std::max(0.0f, std::min(1.0f, rawT)))
+                              : rawT;
 
-            if (animating && animT < 0.99f) {
+            if (animating && animT < 0.99f)
+            {
                 // Scale from 0.92→1.0, slide from top by (1-t)*8px
-                float scale  = 0.92f + 0.08f * animT;
+                float scale = 0.92f + 0.08f * animT;
                 float slideY = (1.0f - animT) * -6.0f;
 
                 Rect pr = popupToPaint->rect();
@@ -1735,20 +1797,22 @@ void WidgetApp::paint(ig::retained::DrawData& data,
                 float newY = pivotY + slideY;
 
                 // Clip to the final rect so partially-scaled content doesn't overflow
-                Rect clipR = {newX, newY, newW, newH};
+                Rect clipR = { newX, newY, newW, newH };
                 ctx.pushClip(clipR);
 
-                popupToPaint->setRect({newX, newY, newW, newH});
+                popupToPaint->setRect({ newX, newY, newW, newH });
                 popupToPaint->paint(ctx);
                 popupToPaint->setRect(pr);
 
                 ctx.popClip();
-            } else {
+            }
+            else
+            {
                 popupToPaint->paint(ctx);
             }
         }
 
-        data.passes.push_back({&dl, cam});
+        data.passes.push_back({ &dl, cam });
     }
 
     // Debug layout overlay
@@ -1763,7 +1827,7 @@ void WidgetApp::paint(ig::retained::DrawData& data,
     if (overlay_)
     {
         ig::retained::DrawList& dlOv = ig::retained::GetDrawList();
-        PaintContext octx{dlOv, font, icons};
+        PaintContext octx{ dlOv, font, icons };
         overlay_(octx);
         // If not already in passes (transition case already pushed), ensure
         // the overlay is in the last pass (it shares the drawList).
@@ -1781,7 +1845,7 @@ void WidgetApp::paint(ig::retained::DrawData& data,
     if (Toast::hasActive())
     {
         ig::retained::DrawList& dlToast = ig::retained::GetDrawList();
-        PaintContext tctx{dlToast, font, icons};
+        PaintContext tctx{ dlToast, font, icons };
         Toast::paint(tctx, w, h);
     }
 }
@@ -1807,11 +1871,14 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
     const String& text = tooltipWidget_->tooltip();
     const TextureHandle image = tooltipWidget_->tooltipImage();
     float imageW = 0.0f, imageH = 0.0f;
-    if (image && tooltipWidget_->tooltipImageWidth() > 0.0f && tooltipWidget_->tooltipImageHeight() > 0.0f)
+    if (image && tooltipWidget_->tooltipImageWidth() > 0.0f &&
+            tooltipWidget_->tooltipImageHeight() > 0.0f)
     {
         const float side = 192.0f;
-        const float sw = tooltipWidget_->tooltipImageWidth(), sh = tooltipWidget_->tooltipImageHeight();
-        const float scale = sw > sh ? (sw > side ? side / sw : 1.0f) : (sh > side ? side / sh : 1.0f);
+        const float sw = tooltipWidget_->tooltipImageWidth(),
+                    sh = tooltipWidget_->tooltipImageHeight();
+        const float scale =
+                sw > sh ? (sw > side ? side / sw : 1.0f) : (sh > side ? side / sh : 1.0f);
         imageW = sw * scale;
         imageH = sh * scale;
     }
@@ -1819,7 +1886,7 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
     float w = static_cast<float>(width_);
     float h = static_cast<float>(height_);
 
-    PaintContext ctx{dl, font, nullptr};
+    PaintContext ctx{ dl, font, nullptr };
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     ctx.font.SetColor(t.tooltipText);
@@ -1850,12 +1917,13 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
         for (float cy = 0.0f; cy < imageH; cy += cell)
             for (float cx = 0.0f; cx < imageW; cx += cell)
             {
-                const bool dark = (static_cast<int>(cx / cell) + static_cast<int>(cy / cell)) % 2 == 0;
+                const bool dark =
+                        (static_cast<int>(cx / cell) + static_cast<int>(cy / cell)) % 2 == 0;
                 ctx.fill.SetColor(dark ? Color(70, 70, 76, 255) : Color(100, 100, 108, 255));
                 ctx.fillRect(ix + cx, iy + cy, cx + cell > imageW ? imageW - cx : cell,
-                             cy + cell > imageH ? imageH - cy : cell);
+                        cy + cell > imageH ? imageH - cy : cell);
             }
-        ctx.drawImage(image, Rect{ix, iy, imageW, imageH});
+        ctx.drawImage(image, Rect{ ix, iy, imageW, imageH });
     }
     if (!text.empty())
     {
@@ -1882,15 +1950,20 @@ float WidgetApp::textWidth(const char* text, const ig::retained::Font* font, flo
 ig::retained::TextureHandle WidgetApp::loadImageTexture(const char* path, int& outW, int& outH)
 {
     outW = outH = 0;
-    if (!uploadTex_ || !path) return ig::retained::TextureHandle{0};
+    if (!uploadTex_ || !path) return ig::retained::TextureHandle{ 0 };
 
     BuImage img;
-    if (!img.Load(path) || !img.IsValid()) return ig::retained::TextureHandle{0};
+    if (!img.Load(path) || !img.IsValid()) return ig::retained::TextureHandle{ 0 };
 
     // Ensure RGBA
-    if (img.components != 4) {
+    if (img.components != 4)
+    {
         BuImage* rgba = img.ConvertToRGBA();
-        if (!rgba || !rgba->IsValid()) { delete rgba; return ig::retained::TextureHandle{0}; }
+        if (!rgba || !rgba->IsValid())
+        {
+            delete rgba;
+            return ig::retained::TextureHandle{ 0 };
+        }
         outW = rgba->width;
         outH = rgba->height;
         auto tex = uploadTex_(rgba->pixels, rgba->width, rgba->height);
@@ -1909,38 +1982,41 @@ ig::retained::TextureHandle WidgetApp::loadImageTexture(const char* path, int& o
 
 void WidgetApp::cancelDrag()
 {
-    if (dragPayload_) {
-        if (dragSource_)
-            dragSource_->onDragEnd(false);
+    if (dragPayload_)
+    {
+        if (dragSource_) dragSource_->onDragEnd(false);
         delete dragPayload_;
         dragPayload_ = nullptr;
     }
-    dragSource_  = nullptr;
+    dragSource_ = nullptr;
     dragPending_ = false;
 }
 
 void WidgetApp::dispatchDropEvents(const ct::Vector<ig::retained::IO::DropEvent>& drops)
 {
-    for (const auto& drop : drops) {
+    for (const auto& drop: drops)
+    {
         // Find the widget under the drop position
         Widget* target = nullptr;
-        for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i) {
+        for (int i = static_cast<int>(floats_.size()) - 1; i >= 0; --i)
+        {
             auto* fw = floats_[i];
             if (!fw->isVisible()) continue;
             target = hitTest(fw, drop.x, drop.y);
             if (target) break;
         }
-        if (!target)
-            target = hitTest(root_, drop.x, drop.y);
+        if (!target) target = hitTest(root_, drop.x, drop.y);
 
-        if (target && !drop.filePaths.empty()) {
+        if (target && !drop.filePaths.empty())
+        {
             // Walk up from target to find a handler
             Widget* w = target;
-            while (w) {
+            while (w)
+            {
                 bool handled = !w->fileDrop.empty();
                 w->onFileDrop(drop.filePaths);
                 w->fileDrop.emit(drop.filePaths);
-                if (handled) break;  // stop bubbling once a handler is found
+                if (handled) break; // stop bubbling once a handler is found
                 w = w->parent();
             }
         }
