@@ -969,6 +969,14 @@ void DatePicker::paint(PaintContext& ctx)
                 static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, true);
     }
 
+    // The whole field lights its border under the pointer or with the focus.
+    if (ctx.clipRectIntersect(abs, clipped)) {
+        Color bc = focused_ ? t.focusColor : (hovered_ ? t.inputBorderHover : t.inputBorder);
+        ctx.line.SetColor(bc.r, bc.g, bc.b, 255);
+        ctx.line.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
+                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
+                                   t.borderRadius, 6, false);
+    }
     // Text, as three segments: the hovered one and the active one get a box.
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
