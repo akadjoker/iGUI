@@ -27,9 +27,7 @@ struct Sample
 };
 
 const Sample kSamples[] = {
-    {
-        "C++",
-        "sample.cpp",
+    { "C++", "sample.cpp",
         "#include <cstdio>\n"
         "\n"
         "// Computes the n-th Fibonacci number recursively.\n"
@@ -42,11 +40,8 @@ const Sample kSamples[] = {
         "    for (int i = 0; i < 10; ++i)\n"
         "        printf(\"fib(%d) = %d\\n\", i, fibonacci(i));\n"
         "    return 0;\n"
-        "}\n"
-    },
-    {
-        "Lua",
-        "sample.lua",
+        "}\n" },
+    { "Lua", "sample.lua",
         "-- Simple stack implemented with a Lua table.\n"
         "local Stack = {}\n"
         "Stack.__index = Stack\n"
@@ -66,11 +61,8 @@ const Sample kSamples[] = {
         "local s = Stack.new()\n"
         "s:push(1)\n"
         "s:push(2)\n"
-        "print(s:pop())\n"
-    },
-    {
-        "Java",
-        "Sample.java",
+        "print(s:pop())\n" },
+    { "Java", "Sample.java",
         "import java.util.List;\n"
         "import java.util.ArrayList;\n"
         "\n"
@@ -87,11 +79,8 @@ const Sample kSamples[] = {
         "        }\n"
         "        System.out.println(values);\n"
         "    }\n"
-        "}\n"
-    },
-    {
-        "Python",
-        "sample.py",
+        "}\n" },
+    { "Python", "sample.py",
         "\"\"\"Small utility module.\"\"\"\n"
         "\n"
         "def is_prime(n):\n"
@@ -103,11 +92,8 @@ const Sample kSamples[] = {
         "    return True\n"
         "\n"
         "primes = [n for n in range(2, 50) if is_prime(n)]\n"
-        "print(primes)\n"
-    },
-    {
-        "Blitz",
-        "sample.blitz",
+        "print(primes)\n" },
+    { "Blitz", "sample.blitz",
         "; Bounce a ball inside the screen bounds.\n"
         "Function Clamp#(value#, lo#, hi#)\n"
         "    If value# < lo# Then Return lo#\n"
@@ -122,8 +108,7 @@ const Sample kSamples[] = {
         "    x# = x# + speed#\n"
         "    If x# > 600 Or x# < 0 Then speed# = -speed#\n"
         "    x# = Clamp#(x#, 0, 600)\n"
-        "Wend\n"
-    },
+        "Wend\n" },
 };
 constexpr int kSampleCount = static_cast<int>(sizeof(kSamples) / sizeof(kSamples[0]));
 
@@ -157,8 +142,7 @@ void drawToolbar(ig::Context& ui, DemoState& state)
     {
         if (i > 0) ui.sameLine();
         // radioButton just renders the dot; treat the click as a button.
-        if (ui.button(kSamples[i].label))
-            state.loadSample(i);
+        if (ui.button(kSamples[i].label)) state.loadSample(i);
     }
 
     ui.separator();
@@ -198,18 +182,16 @@ void drawToolbar(ig::Context& ui, DemoState& state)
     ui.sameLine();
     if (ui.button("Replace all"))
     {
-        int n = state.editor.replaceAll(state.findText, state.replaceText,
-                                        state.caseSensitive, state.useRegex);
+        int n = state.editor.replaceAll(state.findText, state.replaceText, state.caseSensitive,
+                state.useRegex);
         char buf[64];
         snprintf(buf, sizeof(buf), "%d replacement(s)", n);
         state.statusMessage = buf;
     }
     ui.sameLine();
-    if (ui.button("Undo") && state.editor.canUndo())
-        state.editor.undo();
+    if (ui.button("Undo") && state.editor.canUndo()) state.editor.undo();
     ui.sameLine();
-    if (ui.button("Redo") && state.editor.canRedo())
-        state.editor.redo();
+    if (ui.button("Redo") && state.editor.canRedo()) state.editor.redo();
     ui.sameLine();
     if (ui.button("Zoom -")) state.editor.zoomOut();
     ui.sameLine();
@@ -218,7 +200,8 @@ void drawToolbar(ig::Context& ui, DemoState& state)
     if (ui.button("Zoom 100%")) state.editor.zoomReset();
 
     char zoomLabel[32];
-    snprintf(zoomLabel, sizeof(zoomLabel), "%d%%", static_cast<int>(state.editor.fontScale() * 100.0f + 0.5f));
+    snprintf(zoomLabel, sizeof(zoomLabel), "%d%%",
+            static_cast<int>(state.editor.fontScale() * 100.0f + 0.5f));
     ui.sameLine();
     ui.label(zoomLabel);
 
@@ -260,14 +243,14 @@ int main()
             ig::CodeEditorOptions options;
             options.showWhitespace = state.showWhitespace;
             options.insertSpacesForTab = state.insertSpacesForTab;
-            ui.codeEditor("editor", state.editor, ig::Rect(origin.x, origin.y, width, height), options);
+            ui.codeEditor("editor", state.editor, ig::Rect(origin.x, origin.y, width, height),
+                    options);
             ui.setCursor(ig::Vec2(origin.x, origin.y + height + 8.0f));
 
             char info[128];
             snprintf(info, sizeof(info), "Line %d, Col %d  |  %d lines  |  Undo:%s Redo:%s",
                     state.editor.cursorLine + 1, state.editor.cursorColumn + 1,
-                    state.editor.lineCount(),
-                    state.editor.canUndo() ? "yes" : "no",
+                    state.editor.lineCount(), state.editor.canUndo() ? "yes" : "no",
                     state.editor.canRedo() ? "yes" : "no");
             ui.label(info);
 
@@ -277,7 +260,7 @@ int main()
         const ig::DrawData& drawData = ui.endFrame();
 
         BeginDrawing();
-        ClearBackground(::Color{24u, 27u, 35u, 255u});
+        ClearBackground(::Color{ 24u, 27u, 35u, 255u });
         backend.render(drawData);
         EndDrawing();
     }

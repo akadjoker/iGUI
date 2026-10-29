@@ -1,8 +1,8 @@
 #include <assert.h>
 #include <math.h>
 
-#include <igui/iGUI.hpp>
 #include <igui/Gui.hpp>
+#include <igui/iGUI.hpp>
 
 class TestBackend : public ig::Backend
 {
@@ -10,10 +10,13 @@ public:
     ig::DrawData lastData;
     bool rendered;
 
-    TestBackend() : lastData(), rendered(false) {}
+    TestBackend()
+            : lastData(),
+              rendered(false)
+    {
+    }
 
-    ig::TextMetrics measureText(ig::FontId, ig::StringView text,
-                                float logicalSize, float) override
+    ig::TextMetrics measureText(ig::FontId, ig::StringView text, float logicalSize, float) override
     {
         ig::TextMetrics metrics;
         metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f;
@@ -23,7 +26,7 @@ public:
         return metrics;
     }
 
-    bool render(const ig::DrawData &data) override
+    bool render(const ig::DrawData& data) override
     {
         lastData = data;
         rendered = true;
@@ -39,7 +42,7 @@ static void test_draw_data_and_label()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.label("hello", ig::Vec2(10.0f, 10.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
     assert(data.displaySize.x == 640.0f);
     assert(data.commands.size() >= 3u);
     assert(data.textBytes.size() >= 9u);
@@ -61,10 +64,10 @@ static void test_legacy_gui_uses_backend()
     assert(backend.rendered);
     assert(backend.lastData.commands.size() > 0u);
     bool foundDefaultFontText = false;
-    for (ig::Span<const ig::DrawCommand>::size_type i = 0;
-         i < backend.lastData.commands.size(); ++i)
+    for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < backend.lastData.commands.size();
+            ++i)
     {
-        const ig::DrawCommand &command = backend.lastData.commands[i];
+        const ig::DrawCommand& command = backend.lastData.commands[i];
         if (command.type == ig::DrawCommandType::Text)
         {
             assert(command.payload.text.font == ig::FontId(1u));
@@ -124,7 +127,7 @@ static void test_legacy_gui_complete_widget_render()
     int selected = 0;
     Color color(80, 140, 220, 255);
     char text[32] = "text";
-    const char *items[] = {"one", "two", "three"};
+    const char* items[] = { "one", "two", "three" };
 
     gui.BeginFrame(ig::FrameInfo(1000.0f, 700.0f, 1.0f, 1.0f / 60.0f));
     assert(gui.BeginWindow("all", 10.0f, 10.0f, 960.0f, 650.0f));
@@ -140,8 +143,7 @@ static void test_legacy_gui_complete_widget_render()
     gui.TextInput("Text", text, sizeof(text), 55.0f, 260.0f, 195.0f, 24.0f);
     gui.Dropdown("Drop", &selected, items, 3, 410.0f, 45.0f, 180.0f, 26.0f);
     gui.ListBox("List", &selected, items, 3, 410.0f, 100.0f, 180.0f, 120.0f, 3);
-    gui.ProgressBar(value, 10.0f, 305.0f, 240.0f, 18.0f,
-                    Orientation::Horizontal, "50%");
+    gui.ProgressBar(value, 10.0f, 305.0f, 240.0f, 18.0f, Orientation::Horizontal, "50%");
     gui.ColorPicker("Color", &color, 650.0f, 45.0f, 180.0f);
     gui.SeparatorText("Section", 10.0f, 350.0f, 240.0f);
     gui.Spinner(130.0f, 395.0f, 18.0f);
@@ -215,18 +217,16 @@ static void test_draw_primitives()
     ig::DrawList drawList;
     const ig::Rect clip(0.0f, 0.0f, 100.0f, 100.0f);
     const ig::Color color(255u, 255u, 255u, 255u);
-    const ig::Vec2 polygon[] = {
-        ig::Vec2(0.0f, 0.0f), ig::Vec2(20.0f, 0.0f), ig::Vec2(20.0f, 20.0f),
-        ig::Vec2(10.0f, 10.0f), ig::Vec2(0.0f, 20.0f)
-    };
+    const ig::Vec2 polygon[] = { ig::Vec2(0.0f, 0.0f), ig::Vec2(20.0f, 0.0f),
+        ig::Vec2(20.0f, 20.0f), ig::Vec2(10.0f, 10.0f), ig::Vec2(0.0f, 20.0f) };
 
     drawList.addLine(ig::Vec2(0.0f, 0.0f), ig::Vec2(10.0f, 0.0f), color, clip, 2.0f);
     drawList.addRect(ig::Rect(10.0f, 10.0f, 20.0f, 10.0f), color, clip);
     drawList.addCircleFilled(ig::Vec2(40.0f, 40.0f), 8.0f, color, clip, 8u);
     drawList.addPolygonFilled(ig::Span<const ig::Vec2>(polygon), color, clip);
-    drawList.addRectGradient(ig::Rect(60.0f, 60.0f, 20.0f, 20.0f),
-                             ig::Color(255u, 0u, 0u, 255u), ig::Color(0u, 255u, 0u, 255u),
-                             ig::Color(0u, 0u, 255u, 255u), ig::Color(255u, 255u, 255u, 255u), clip);
+    drawList.addRectGradient(ig::Rect(60.0f, 60.0f, 20.0f, 20.0f), ig::Color(255u, 0u, 0u, 255u),
+            ig::Color(0u, 255u, 0u, 255u), ig::Color(0u, 0u, 255u, 255u),
+            ig::Color(255u, 255u, 255u, 255u), clip);
     const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
 
     assert(data.commands.size() == 1u);
@@ -237,18 +237,15 @@ static void test_draw_primitives()
     assert(data.vertices.size() > 40u);
     assert(data.indices.size() % 3u == 0u);
     assert(data.commands[0].payload.geometry.indexCount == data.indices.size());
-    for (size_t i = 0; i < data.indices.size(); ++i)
-        assert(data.indices[i] < data.vertices.size());
+    for (size_t i = 0; i < data.indices.size(); ++i) assert(data.indices[i] < data.vertices.size());
     // The gradient's two opposite corners keep their exact colours wherever
     // they land in the buffer.
     bool sawRed = false;
     bool sawBlue = false;
     for (size_t i = 0; i < data.vertices.size(); ++i)
     {
-        if (data.vertices[i].color == ig::Color(255u, 0u, 0u, 255u))
-            sawRed = true;
-        if (data.vertices[i].color == ig::Color(0u, 0u, 255u, 255u))
-            sawBlue = true;
+        if (data.vertices[i].color == ig::Color(255u, 0u, 0u, 255u)) sawRed = true;
+        if (data.vertices[i].color == ig::Color(0u, 0u, 255u, 255u)) sawBlue = true;
     }
     assert(sawRed && sawBlue);
 }
@@ -256,33 +253,31 @@ static void test_draw_primitives()
 // True when some vertex sits exactly at (x, y). The immediate-mode layout is
 // deterministic, so these are exact comparisons - the helper only removes the
 // dependency on *where in the buffer* a widget happens to land.
-static bool hasVertexAt(const ig::DrawData &data, float x, float y)
+static bool hasVertexAt(const ig::DrawData& data, float x, float y)
 {
     for (size_t i = 0; i < data.vertices.size(); ++i)
     {
-        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y)
-            return true;
+        if (data.vertices[i].position.x == x && data.vertices[i].position.y == y) return true;
     }
     return false;
 }
 
 // Buttons have rounded corners, so no vertex sits exactly on the top-left
 // corner; the outline starts within the corner radius of it.
-static bool hasVertexNear(const ig::DrawData &data, float x, float y, float radius)
+static bool hasVertexNear(const ig::DrawData& data, float x, float y, float radius)
 {
     for (size_t i = 0; i < data.vertices.size(); ++i)
     {
         const float dx = data.vertices[i].position.x - x;
         const float dy = data.vertices[i].position.y - y;
-        if (dx * dx + dy * dy <= radius * radius)
-            return true;
+        if (dx * dx + dy * dy <= radius * radius) return true;
     }
     return false;
 }
 
 // Colour of the last (topmost) vertex found at (x, y): a rounded frame draws its
 // border first and the fill over it, and both fans are centred on the box.
-static ig::Color colorAtTopVertex(const ig::DrawData &data, float x, float y)
+static ig::Color colorAtTopVertex(const ig::DrawData& data, float x, float y)
 {
     for (size_t i = data.vertices.size(); i-- > 0;)
     {
@@ -303,12 +298,12 @@ static void test_checkbox_tick_is_filled_inside_the_box()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
     context.endWindow();
-    const ig::DrawData &uncheckedData = context.endFrame();
+    const ig::DrawData& uncheckedData = context.endFrame();
     for (size_t i = 0u; i < uncheckedData.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = uncheckedData.vertices[i];
-        assert(!(vertex.color.r == mark.r && vertex.color.g == mark.g &&
-                 vertex.color.b == mark.b && vertex.color.a == mark.a));
+        const ig::DrawVertex& vertex = uncheckedData.vertices[i];
+        assert(!(vertex.color.r == mark.r && vertex.color.g == mark.g && vertex.color.b == mark.b &&
+                 vertex.color.a == mark.a));
     }
 
     // Checked: the box keeps the input colour and the tick is filled inside it,
@@ -318,7 +313,7 @@ static void test_checkbox_tick_is_filled_inside_the_box()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
     context.endWindow();
-    const ig::DrawData &checkedData = context.endFrame();
+    const ig::DrawData& checkedData = context.endFrame();
 
     bool foundMark = false;
     float minX = 1e9f;
@@ -327,9 +322,9 @@ static void test_checkbox_tick_is_filled_inside_the_box()
     float maxY = -1e9f;
     for (size_t i = 0u; i < checkedData.vertices.size(); ++i)
     {
-        const ig::DrawVertex &vertex = checkedData.vertices[i];
-        if (vertex.color.r == mark.r && vertex.color.g == mark.g &&
-            vertex.color.b == mark.b && vertex.color.a == mark.a)
+        const ig::DrawVertex& vertex = checkedData.vertices[i];
+        if (vertex.color.r == mark.r && vertex.color.g == mark.g && vertex.color.b == mark.b &&
+                vertex.color.a == mark.a)
         {
             foundMark = true;
             minX = vertex.position.x < minX ? vertex.position.x : minX;
@@ -347,7 +342,7 @@ static void test_checkbox_tick_is_filled_inside_the_box()
 // Colour of the first vertex found at (x, y), or a sentinel when none is there.
 // Same rationale as hasVertexAt: locate the widget by where it is drawn, not by
 // its index in the buffer.
-static ig::Color colorAtVertex(const ig::DrawData &data, float x, float y)
+static ig::Color colorAtVertex(const ig::DrawData& data, float x, float y)
 {
     for (size_t i = 0; i < data.vertices.size(); ++i)
     {
@@ -398,7 +393,7 @@ static void test_rounded_rect_geometry()
     const size_t outlineCount = (roundedData.vertices.size() - 1u) / 2u;
     for (size_t i = 0; i < outlineCount; ++i)
     {
-        const ig::Vec2 &point = roundedData.vertices[1u + i].position;
+        const ig::Vec2& point = roundedData.vertices[1u + i].position;
         // Distance to the nearest of the four edges of (10,10)-(110,50).
         const float toLeft = point.x - 10.0f;
         const float toRight = 110.0f - point.x;
@@ -453,15 +448,15 @@ static void test_automatic_layout()
     context.separator();
     context.label("three");
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     // The two buttons and the separator are located by their geometry, not by a
     // fixed vertex index: anything drawn earlier in the frame (the window chrome
     // grew a maximize glyph in e2d7d42, for example) shifts every later index
     // without moving a single widget, and this test is about the layout.
-    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // button "one", top-left
-    assert(hasVertexNear(data, 88.0f, 42.0f, 6.0f));   // button "two", after sameLine()
-    assert(hasVertexAt(data, 18.0f, 76.0f));   // separator, below both buttons
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f)); // button "one", top-left
+    assert(hasVertexNear(data, 88.0f, 42.0f, 6.0f)); // button "two", after sameLine()
+    assert(hasVertexAt(data, 18.0f, 76.0f));         // separator, below both buttons
 }
 
 static void test_slider_and_radio()
@@ -610,7 +605,7 @@ static void test_selectable()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     assert(!context.selectable("first", true, ig::Rect(8.0f, 8.0f, 120.0f, 28.0f)));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     bool foundSelectedBackground = false;
     const ig::Color selectedBackground = context.theme().selectableSelected;
@@ -633,17 +628,15 @@ static int filledVertexCountFor(bool withZeroMax)
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.progressBar(50.0f, 100.0f, ig::Rect(8.0f, 8.0f, 120.0f, 20.0f));
     context.progressBar(200.0f, 100.0f, ig::Rect(8.0f, 36.0f, 120.0f, 20.0f));
-    if (withZeroMax)
-        context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
+    if (withZeroMax) context.progressBar(10.0f, 0.0f, ig::Rect(8.0f, 64.0f, 120.0f, 20.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     int filledVertexCount = 0;
     const ig::Color filledColor = context.theme().progressFilled;
     for (ig::Span<const ig::DrawVertex>::size_type i = 0u; i < data.vertices.size(); ++i)
     {
-        if (data.vertices[i].color == filledColor)
-            ++filledVertexCount;
+        if (data.vertices[i].color == filledColor) ++filledVertexCount;
     }
     return filledVertexCount;
 }
@@ -669,12 +662,12 @@ static void test_automatic_selectable_and_progress_bar()
     assert(context.selectable("entry", false, 120.0f));
     context.progressBar(1.0f, 2.0f, 100.0f);
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     // Located by geometry rather than by fixed vertex index - see the note in
     // test_automatic_layout above.
-    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f));   // selectable, top-left
-    assert(hasVertexNear(data, 18.0f, 76.0f, 6.0f));   // progress bar, below it
+    assert(hasVertexNear(data, 18.0f, 42.0f, 6.0f)); // selectable, top-left
+    assert(hasVertexNear(data, 18.0f, 76.0f, 6.0f)); // progress bar, below it
     // The bar is filled to 1.0 of 2.0, so its fill ends halfway across its
     // 100-unit width: x == 18 + 50.
     assert(hasVertexNear(data, 68.0f, 76.0f, 6.0f));
@@ -701,14 +694,14 @@ static void test_slider_captures_pointer()
     assert(!context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f)));
     context.sliderFloat("volume", value, 0.0f, 1.0f, ig::Rect(8.0f, 50.0f, 160.0f, 28.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     assert(!checked);
     // While the slider holds the pointer capture, the checkbox must stay in its
     // normal colour even though the pointer moved over it. Its box is laid out
-    // at (26, 50), 18 wide, so its fill fan is centred on (35, 59) - the Rect passed to checkbox() is a size hint the automatic
-    // layout places, not an absolute offset. Located by that position rather
-    // than by a fixed vertex index (see test_automatic_layout).
+    // at (26, 50), 18 wide, so its fill fan is centred on (35, 59) - the Rect passed to checkbox()
+    // is a size hint the automatic layout places, not an absolute offset. Located by that position
+    // rather than by a fixed vertex index (see test_automatic_layout).
     const ig::Color checkboxColor = colorAtTopVertex(data, 35.0f, 59.0f);
     assert(checkboxColor.r == 55u);
     assert(checkboxColor.g == 55u);
@@ -737,14 +730,15 @@ static void test_input_text_focus_and_utf8_backspace()
     assert(context.wantsKeyboard());
     assert(context.wantsTextInput());
     context.endWindow();
-    const ig::DrawData &firstData = context.endFrame();
+    const ig::DrawData& firstData = context.endFrame();
     assert(value.size() == 4u);
     bool foundInputText = false;
     for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < firstData.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = firstData.commands[i];
-        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size() &&
-            command.payload.text.position.x == 30.0f)
+        const ig::DrawCommand& command = firstData.commands[i];
+        if (command.type == ig::DrawCommandType::Text &&
+                command.payload.text.textSize == value.size() &&
+                command.payload.text.position.x == 30.0f)
         {
             assert(command.payload.text.clip.x == 26.0f);
             assert(command.payload.text.clip.y == 50.0f);
@@ -766,7 +760,8 @@ static void test_input_text_focus_and_utf8_backspace()
     assert(value[1] == 'l');
 }
 
-static bool draw_keyboard_focus_controls(ig::Context &context, ig::String &first, ig::String &second)
+static bool draw_keyboard_focus_controls(ig::Context& context, ig::String& first,
+        ig::String& second)
 {
     assert(context.beginWindow("keyboard focus", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.inputText("first", first, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f));
@@ -845,13 +840,14 @@ static void test_input_text_scrolls_to_caret()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.inputText("name", value, ig::Rect(8.0f, 8.0f, 80.0f, 28.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     bool foundInputText = false;
     for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
-        if (command.type == ig::DrawCommandType::Text && command.payload.text.textSize == value.size())
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text &&
+                command.payload.text.textSize == value.size())
         {
             assert(command.payload.text.position.x < 30.0f);
             assert(command.payload.text.clip.x == 26.0f);
@@ -888,15 +884,15 @@ static void test_content_clip_applies_to_checkbox_label()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 300.0f, 180.0f)));
     context.checkbox("check", checked, ig::Rect(8.0f, 8.0f, 18.0f, 18.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     bool foundContentText = false;
     for (ig::Span<const ig::DrawCommand>::size_type i = 0u; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
-        if (command.type == ig::DrawCommandType::Text &&
-            command.payload.text.clip.x == 18.0f && command.payload.text.clip.y == 42.0f &&
-            command.payload.text.clip.width == 284.0f && command.payload.text.clip.height == 140.0f)
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type == ig::DrawCommandType::Text && command.payload.text.clip.x == 18.0f &&
+                command.payload.text.clip.y == 42.0f && command.payload.text.clip.width == 284.0f &&
+                command.payload.text.clip.height == 140.0f)
         {
             foundContentText = true;
             break;
@@ -936,7 +932,7 @@ static void test_clicked_window_is_composed_on_top()
     context.endWindow();
     assert(context.beginWindow("back", ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     assert(data.vertices[0].position.x == 20.0f);
     assert(data.vertices[0].position.y == 20.0f);
@@ -959,7 +955,7 @@ static void test_window_chrome_drag_minimize_and_close()
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("managed", initialBounds, &open));
     context.endWindow();
-    const ig::DrawData &movedData = context.endFrame();
+    const ig::DrawData& movedData = context.endFrame();
     assert(movedData.vertices[0].position.x == 100.0f);
     assert(movedData.vertices[0].position.y == 80.0f);
 
@@ -979,7 +975,7 @@ static void test_window_chrome_drag_minimize_and_close()
     context.beginFrame(ig::FrameInfo(640.0f, 480.0f));
     assert(context.beginWindow("managed", initialBounds, &open));
     context.endWindow();
-    const ig::DrawData &resizedData = context.endFrame();
+    const ig::DrawData& resizedData = context.endFrame();
     assert(resizedData.vertices[2].position.x == 350.0f);
     assert(resizedData.vertices[2].position.y == 240.0f);
 

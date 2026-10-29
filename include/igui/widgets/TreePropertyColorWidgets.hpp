@@ -1,14 +1,16 @@
- #pragma once
-#include "Widget.hpp"
+#pragma once
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
+#include "Widget.hpp"
 #include <ct/function.hpp>
+#include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 #include <variant>
-#include <ct/vector.hpp>
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ─────────────────────────────────────────────────────────────────────────────
 //  Forward declarations
@@ -27,53 +29,89 @@ public:
     ~TreeNode();
 
     /// @brief Add a child node with the given text.
-    TreeNode*  addChild(const String& text);
+    TreeNode* addChild(const String& text);
     /// @brief Remove a child by index.
-    void       removeChild(int index);
+    void removeChild(int index);
     /// @brief Remove all children.
-    void       clear();
+    void clear();
     /// @brief Set the icon by name.
-    void       setIcon(const String& name);
+    void setIcon(const String& name);
     /// @brief Set the icon by id (built-in or registerImageIcon).
-    void       setIconId(IconId id) { iconId_ = id; iconStr_.clear(); bumpRevision(); }
+    void setIconId(IconId id)
+    {
+        iconId_ = id;
+        iconStr_.clear();
+        bumpRevision();
+    }
 
     /// @brief Get the node's display text.
-    const String&             text()        const { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
     /// @brief Check if the node has children.
-    bool                           hasChildren() const { return !children_.empty(); }
+    bool hasChildren() const
+    {
+        return !children_.empty();
+    }
     /// @brief Get child nodes.
-    const ct::Vector<TreeNode*>&  children()    const { return children_; }
+    const ct::Vector<TreeNode*>& children() const
+    {
+        return children_;
+    }
     /// @brief Check if the node is expanded.
-    bool                           isExpanded()  const { return expanded_; }
+    bool isExpanded() const
+    {
+        return expanded_;
+    }
     /// @brief Set expanded state.
-    void                           setExpanded(bool e) { expanded_ = e; bumpRevision(); }
+    void setExpanded(bool e)
+    {
+        expanded_ = e;
+        bumpRevision();
+    }
 
     /// @brief Counter of every structural change to any tree node. A view that
     ///        caches a flattened list compares it to know when the cache it
     ///        holds no longer describes the tree (a node added or removed
     ///        directly does not tell the view about it).
-    static unsigned int revision() { return sRevision_; }
+    static unsigned int revision()
+    {
+        return sRevision_;
+    }
     /// @brief Note a structural change.
-    static void bumpRevision() { ++sRevision_; }
+    static void bumpRevision()
+    {
+        ++sRevision_;
+    }
     /// @brief Get the icon identifier.
-    IconId                         iconId()      const { return iconId_; }
+    IconId iconId() const
+    {
+        return iconId_;
+    }
     /// @brief Get the parent node.
-    TreeNode*                      parent()            { return parent_; }
+    TreeNode* parent()
+    {
+        return parent_;
+    }
 
     /// @brief A clickable icon at the right edge of the row (an eye, a padlock).
     struct Toggle
     {
-        IconId iconOn  = IconId::None;
-        IconId iconOff = IconId::None;   // None: iconOn is drawn dimmed while off
-        bool   on      = false;
+        IconId iconOn = IconId::None;
+        IconId iconOff = IconId::None; // None: iconOn is drawn dimmed while off
+        bool on = false;
         String tipOn;
         String tipOff;
     };
     /// @brief Add a toggle to the row; returns its index. The first one is the leftmost.
-    int  addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn = "",
-                   const String& tipOff = "");
+    int addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn = "",
+            const String& tipOff = "");
     /// @brief Number of toggles on the row.
-    int  toggleCount() const { return static_cast<int>(toggles_.size()); }
+    int toggleCount() const
+    {
+        return static_cast<int>(toggles_.size());
+    }
     /// @brief State of a toggle.
     bool toggleState(int index) const
     {
@@ -85,15 +123,15 @@ public:
 private:
     friend class TreeView;
 
-    String           text_;
+    String text_;
     ct::Vector<Toggle> toggles_;
-    String           iconStr_;
-    IconId                iconId_   = IconId::None;
-    TreeNode*             parent_   = nullptr;
+    String iconStr_;
+    IconId iconId_ = IconId::None;
+    TreeNode* parent_ = nullptr;
     TreeView* view_ = nullptr; // the view showing this node, told when it is deleted
     ct::Vector<TreeNode*> children_;
-    bool                  expanded_ = true;
-    static unsigned int   sRevision_;
+    bool expanded_ = true;
+    static unsigned int sRevision_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -110,22 +148,34 @@ public:
     /// @brief Add a root-level tree node.
     TreeNode* addRoot(const String& text);
     /// @brief Clear all tree nodes.
-    void      clear();
+    void clear();
     /// @brief Set the selected node.
-    void      setSelectedNode(TreeNode* n);
+    void setSelectedNode(TreeNode* n);
 
     /// @brief Set a tree data model.
     void setModel(TreeModel* model);
     /// @brief Get the tree data model.
-    TreeModel* model() const { return model_; }
+    TreeModel* model() const
+    {
+        return model_;
+    }
 
     /// @brief Get the selected node.
-    TreeNode*                     selectedNode() const { return selected_; }
+    TreeNode* selectedNode() const
+    {
+        return selected_;
+    }
     /// @brief Let Ctrl+click add or take away a row and Shift+click take the rows
     ///        between the selected one and the clicked one (off by default).
     ///        selectedNode() stays the row clicked first; a plain click goes back to one.
-    void setMultiSelect(bool on) { multiSelect_ = on; }
-    bool multiSelect() const     { return multiSelect_; }
+    void setMultiSelect(bool on)
+    {
+        multiSelect_ = on;
+    }
+    bool multiSelect() const
+    {
+        return multiSelect_;
+    }
     /// @brief Whether the node is the selected one or one of the rows added to it.
     bool isNodeSelected(const TreeNode* n) const;
     /// @brief The selected node first, then the rows added to it.
@@ -133,9 +183,13 @@ public:
     /// @brief The rows selected besides selectedNode(), set from code without signals.
     void setExtraSelection(const ct::Vector<TreeNode*>& nodes);
     /// @brief Get root-level nodes.
-    const ct::Vector<TreeNode*>& roots()        const { return roots_; }
+    const ct::Vector<TreeNode*>& roots() const
+    {
+        return roots_;
+    }
 
-    /// @brief Window-space rectangle of a node's row, scrolled into view first; false when the node is not shown.
+    /// @brief Window-space rectangle of a node's row, scrolled into view first; false when the node
+    /// is not shown.
     bool rowRect(const TreeNode* node, Rect& out);
     /// @brief Window-space point at the start of a node's text, for pointing at it.
     bool labelPoint(const TreeNode* node, float& x, float& y);
@@ -154,15 +208,29 @@ public:
     Signal<TreeNode*, int, bool> toggleChanged;
 
     /// @brief Where a dragged node lands relative to the row under the pointer.
-    enum class DropZone { Before, Inside, After };
+    enum class DropZone
+    {
+        Before,
+        Inside,
+        After
+    };
 
     /// @brief Let rows be dragged onto other rows (off by default). It uses the
     ///        WidgetApp drag and drop, as Outliner does; the view only reports the
     ///        drop, moving the node is up to the handler of nodeDropped.
-    void setDragEnabled(bool enabled) { dragEnabled_ = enabled; }
-    bool dragEnabled() const          { return dragEnabled_; }
+    void setDragEnabled(bool enabled)
+    {
+        dragEnabled_ = enabled;
+    }
+    bool dragEnabled() const
+    {
+        return dragEnabled_;
+    }
     /// @brief Which nodes may be picked up. Unset allows all of them.
-    void setDragFilter(ct::Function<bool(TreeNode*)> filter) { dragFilter_ = std::move(filter); }
+    void setDragFilter(ct::Function<bool(TreeNode*)> filter)
+    {
+        dragFilter_ = std::move(filter);
+    }
     /// @brief Where a node may be dropped: dragged, target, zone. The target is null over the
     ///        empty area below the last row. Unset allows every spot but the node's own branch.
     void setDropFilter(ct::Function<bool(TreeNode*, TreeNode*, DropZone)> filter)
@@ -173,80 +241,87 @@ public:
     Signal<TreeNode*, TreeNode*, DropZone> nodeDropped;
     /// @brief Take payloads dragged from other widgets (assets onto objects, say):
     ///        the filter says which. Unset, only the view's own nodes are dropped.
-    void setExternalDrop(ct::Function<bool(const DragPayload&)> accept) { externalAccept_ = std::move(accept); }
+    void setExternalDrop(ct::Function<bool(const DragPayload&)> accept)
+    {
+        externalAccept_ = std::move(accept);
+    }
     /// @brief Emitted when an outside payload is dropped: the payload and the node
     ///        under the pointer (nullptr below the last row).
     Signal<const DragPayload&, TreeNode*> externalDropped;
 
-    Vec2f sizeHint()                   const override;
-    void  paint(PaintContext& ctx)           override;
-    void  onMousePress(MouseEvent& e)        override;
-    void  onMouseScroll(MouseEvent& e)       override;
-    void  onMouseMove(MouseEvent& e)         override;
-    void  onMouseRelease(MouseEvent& e)      override;
-    void  onMouseLeave()                     override;
+    Vec2f sizeHint() const override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseLeave() override;
     void onKeyPress(KeyEvent& e) override;
 
-    bool        isDragSource() const override;
+    bool isDragSource() const override;
     DragPayload onDragBegin() override;
-    void        onDragEnd(bool accepted) override;
-    bool        acceptsDrop(const DragPayload& p) override;
-    void        onDropReceive(const DragPayload& p) override;
+    void onDragEnd(bool accepted) override;
+    bool acceptsDrop(const DragPayload& p) override;
+    void onDropReceive(const DragPayload& p) override;
 
 private:
     friend class TreeNode;
     struct DropSpot
     {
-        int       row    = -1;
-        DropZone  zone   = DropZone::Inside;
+        int row = -1;
+        DropZone zone = DropZone::Inside;
         TreeNode* target = nullptr;
-        bool      valid  = false;
+        bool valid = false;
     };
     DropSpot dropSpotAt(float localY);
-    void     endDrag();
-    struct FlatRow { TreeNode* node; int depth; };
+    void endDrag();
+    struct FlatRow
+    {
+        TreeNode* node;
+        int depth;
+    };
 
     float toggleSlot() const;
     float toggleEdge(const Rect& abs) const;
-    int   toggleAt(const Rect& abs, const TreeNode* node, float x) const;
-    void  showToggleTip(MouseEvent& e);
+    int toggleAt(const Rect& abs, const TreeNode* node, float x) const;
+    void showToggleTip(MouseEvent& e);
 
-    void  rebuildFlat();
+    void rebuildFlat();
     void forgetNode(TreeNode* n);
     void reportLostSelection();
     int rowOf(const TreeNode* n) const;
     void scrollToRow(int row);
-    void  flattenNode(TreeNode* n, int depth);
+    void flattenNode(TreeNode* n, int depth);
     float maxScroll() const;
     // Track and thumb of the vertical scrollbar; false when every row fits.
-    bool  scrollbar(Rect& track, Rect& thumb) const;
+    bool scrollbar(Rect& track, Rect& thumb) const;
 
     ct::Vector<TreeNode*> roots_;
-    ct::Vector<FlatRow>   flatRows_;
-    TreeNode*              selected_      = nullptr;
-    ct::Vector<TreeNode*>  extra_;
+    ct::Vector<FlatRow> flatRows_;
+    TreeNode* selected_ = nullptr;
+    ct::Vector<TreeNode*> extra_;
     bool multiSelect_ = false;
     bool selectionLost_ = false;
-    TreeModel*             model_         = nullptr;
+    TreeModel* model_ = nullptr;
     AbstractItemModel::Connections modelSlots_;
     void detachModel();
-    float                  scrollOffset_  = 0.0f;
-    float                  rowHeight_     = 24.0f;
-    float                  indent_        = 16.0f;
-    unsigned int          revisionSeen_  = 0;   // revision the rows were built from
-    bool                   flatDirty_     = true;
-    bool                   draggingBar_   = false;
-    float                  barGrab_       = 0.0f;
+    float scrollOffset_ = 0.0f;
+    float rowHeight_ = 24.0f;
+    float indent_ = 16.0f;
+    unsigned int revisionSeen_ = 0; // revision the rows were built from
+    bool flatDirty_ = true;
+    bool draggingBar_ = false;
+    float barGrab_ = 0.0f;
 
     bool dragEnabled_ = false;
     ct::Function<bool(TreeNode*)> dragFilter_;
     ct::Function<bool(TreeNode*, TreeNode*, DropZone)> dropFilter_;
     ct::Function<bool(const DragPayload&)> externalAccept_;
-    TreeNode* dragCandidate_ = nullptr;   // the row pressed, before the drag starts
-    TreeNode* dragNode_      = nullptr;
-    DropSpot  dropSpot_;
-    int       hoverRow_      = -1;
-    float     hoverX_        = 0.0f;
+    TreeNode* dragCandidate_ = nullptr; // the row pressed, before the drag starts
+    TreeNode* dragNode_ = nullptr;
+    DropSpot dropSpot_;
+    int hoverRow_ = -1;
+    float hoverX_ = 0.0f;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -260,174 +335,228 @@ public:
     PropertyGrid();
 
     /// @brief Add a section header.
-    int addSection  (const String& title);
+    int addSection(const String& title);
     /// @brief Add a string property.
-    int addString   (const String& name, const String& value,
-                     ct::Function<void(const String&)> onChange = nullptr,
-                     const String& desc = "");
+    int addString(const String& name, const String& value,
+            ct::Function<void(const String&)> onChange = nullptr, const String& desc = "");
     /// @brief Add a float property with range.
-    int addFloat    (const String& name, float value, float minVal, float maxVal,
-                     ct::Function<void(float)> onChange = nullptr,
-                     const String& desc = "");
+    int addFloat(const String& name, float value, float minVal, float maxVal,
+            ct::Function<void(float)> onChange = nullptr, const String& desc = "");
     /// @brief Add an integer property with range.
-    int addInt      (const String& name, int value, int minVal, int maxVal,
-                     ct::Function<void(int)> onChange = nullptr,
-                     const String& desc = "");
+    int addInt(const String& name, int value, int minVal, int maxVal,
+            ct::Function<void(int)> onChange = nullptr, const String& desc = "");
     /// @brief Add a boolean toggle property.
-    int addBool     (const String& name, bool value,
-                     ct::Function<void(bool)> onChange = nullptr,
-                     const String& desc = "");
+    int addBool(const String& name, bool value, ct::Function<void(bool)> onChange = nullptr,
+            const String& desc = "");
     /// @brief Add a color property with picker.
-    int addColor    (const String& name, const Color& value,
-                     ct::Function<void(const Color&)> onChange = nullptr,
-                     const String& desc = "");
+    int addColor(const String& name, const Color& value,
+            ct::Function<void(const Color&)> onChange = nullptr, const String& desc = "");
     /// @brief Add a combo-box property.
-    int addCombo    (const String& name, const ct::Vector<String>& options,
-                     int selected,
-                     ct::Function<void(int)> onChange = nullptr,
-                     const String& desc = "");
+    int addCombo(const String& name, const ct::Vector<String>& options, int selected,
+            ct::Function<void(int)> onChange = nullptr, const String& desc = "");
     /// @brief Add a 2D vector property with range.
-    int addVec2     (const String& name, float x, float y,
-                     float minVal, float maxVal,
-                     ct::Function<void(float,float)> onChange = nullptr,
-                     const String& desc = "");
+    int addVec2(const String& name, float x, float y, float minVal, float maxVal,
+            ct::Function<void(float, float)> onChange = nullptr, const String& desc = "");
     /// @brief Add a 3D vector property with range.
-    int addVec3     (const String& name, float x, float y, float z,
-                     float minVal, float maxVal,
-                     ct::Function<void(float,float,float)> onChange = nullptr,
-                     const String& desc = "");
+    int addVec3(const String& name, float x, float y, float z, float minVal, float maxVal,
+            ct::Function<void(float, float, float)> onChange = nullptr, const String& desc = "");
     /// @brief Add a 4D vector property with range.
-    int addVec4     (const String& name, float x, float y, float z, float w,
-                     float minVal, float maxVal,
-                     ct::Function<void(float,float,float,float)> onChange = nullptr,
-                     const String& desc = "");
+    int addVec4(const String& name, float x, float y, float z, float w, float minVal, float maxVal,
+            ct::Function<void(float, float, float, float)> onChange = nullptr,
+            const String& desc = "");
     /// @brief Add a clickable button property.
-    int addButton   (const String& name,
-                     ct::Function<void()> onClick = nullptr,
-                     const String& desc = "");
+    int addButton(const String& name, ct::Function<void()> onClick = nullptr,
+            const String& desc = "");
     /// @brief Add a visual separator row.
     int addSeparator();
     /// @brief Add a min/max range slider property.
-    int addRange    (const String& name, float lo, float hi,
-                     float minVal, float maxVal,
-                     ct::Function<void(float,float)> onChange = nullptr,
-                     const String& desc = "");
+    int addRange(const String& name, float lo, float hi, float minVal, float maxVal,
+            ct::Function<void(float, float)> onChange = nullptr, const String& desc = "");
 
     /// @brief Set a string property value by row.
-    void setString (int row, const String& v);
+    void setString(int row, const String& v);
     /// @brief Set a float property value by row.
-    void setFloat  (int row, float v);
+    void setFloat(int row, float v);
     /// @brief Set an integer property value by row.
-    void setInt    (int row, int v);
+    void setInt(int row, int v);
     /// @brief Set a boolean property value by row.
-    void setBool   (int row, bool v);
+    void setBool(int row, bool v);
     /// @brief Set a color property value by row.
-    void setColor  (int row, const Color& c);
+    void setColor(int row, const Color& c);
     /// @brief Set a combo-box selection by row.
-    void setCombo  (int row, int idx);
+    void setCombo(int row, int idx);
     /// @brief Replace the options of a combo-box row and select one of them.
     void setComboOptions(int row, const ct::Vector<String>& options, int idx);
     /// @brief Set a Vec2 property value by row.
-    void setVec2   (int row, float x, float y);
+    void setVec2(int row, float x, float y);
     /// @brief Set a Vec3 property value by row.
-    void setVec3   (int row, float x, float y, float z);
+    void setVec3(int row, float x, float y, float z);
     /// @brief Set a Vec4 property value by row.
-    void setVec4   (int row, float x, float y, float z, float w);
+    void setVec4(int row, float x, float y, float z, float w);
     /// @brief Set a range property value by row.
-    void setRange  (int row, float lo, float hi);
+    void setRange(int row, float lo, float hi);
 
     /// @brief How much a drag changes a number or vector row per pixel (0, the default, spreads the
     ///        whole range over the field). Shift drags ten times slower and Ctrl ten times faster.
     void setDragStep(int row, float perPixel);
     /// @brief True while a value is typed or dragged, so the application does not overwrite it.
-    bool isEditing() const { return editing_ || draggingSlider_; }
+    bool isEditing() const
+    {
+        return editing_ || draggingSlider_;
+    }
     /// @brief Emitted when any property value changes.
     Signal<int> propertyChanged;
 
-    Vec2f sizeHint()                    const override;
-    void  paint(PaintContext& ctx)            override;
-    void  onMousePress(MouseEvent& e)         override;
-    void  onMouseRelease(MouseEvent& e)       override;
-    void  onMouseMove(MouseEvent& e)          override;
-    void  onMouseScroll(MouseEvent& e)        override;
-    void  onKeyPress(KeyEvent& e)             override;
-    void  onTextInput(KeyEvent& e)            override;
+    Vec2f sizeHint() const override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
+    void onTextInput(KeyEvent& e) override;
 
     // Public for ColorPickerPopup_ internal access
-    enum class PropType {
-        Section, String, Float, Int, Bool, Color,
-        Combo, Vec2, Vec3, Vec4, Button, Separator, Range
+    enum class PropType
+    {
+        Section,
+        String,
+        Float,
+        Int,
+        Bool,
+        Color,
+        Combo,
+        Vec2,
+        Vec3,
+        Vec4,
+        Button,
+        Separator,
+        Range
     };
 
     // ── Per-type value structs ───────────────────────────────────────────
-    struct PropSection  { bool expanded = true; };
-    struct PropString   { String value; ct::Function<void(const String&)> onChange; };
-    struct PropFloat    { float value = 0.f, min = 0.f, max = 1.f; ct::Function<void(float)> onChange; };
-    struct PropInt      { int value = 0, min = 0, max = 100; ct::Function<void(int)> onChange; };
-    struct PropBool     { bool value = false; ct::Function<void(bool)> onChange; };
-    struct PropColor    { Color value = {255,255,255,255}; ct::Function<void(const Color&)> onChange; };
-    struct PropCombo    { ct::Vector<String> options; int index = 0; ct::Function<void(int)> onChange; };
-    struct PropVec      { float value[4] = {0,0,0,0}; int components = 2; float min = 0.f, max = 1.f;
-                          ct::Function<void(float,float)> onChange2;
-                          ct::Function<void(float,float,float)> onChange3;
-                          ct::Function<void(float,float,float,float)> onChange4; };
-    struct PropButton   { ct::Function<void()> onClick; };
-    struct PropSeparator{};
-    struct PropRange    { float lo = 0, hi = 1, min = 0, max = 1; ct::Function<void(float,float)> onChange; };
+    struct PropSection
+    {
+        bool expanded = true;
+    };
+    struct PropString
+    {
+        String value;
+        ct::Function<void(const String&)> onChange;
+    };
+    struct PropFloat
+    {
+        float value = 0.f, min = 0.f, max = 1.f;
+        ct::Function<void(float)> onChange;
+    };
+    struct PropInt
+    {
+        int value = 0, min = 0, max = 100;
+        ct::Function<void(int)> onChange;
+    };
+    struct PropBool
+    {
+        bool value = false;
+        ct::Function<void(bool)> onChange;
+    };
+    struct PropColor
+    {
+        Color value = { 255, 255, 255, 255 };
+        ct::Function<void(const Color&)> onChange;
+    };
+    struct PropCombo
+    {
+        ct::Vector<String> options;
+        int index = 0;
+        ct::Function<void(int)> onChange;
+    };
+    struct PropVec
+    {
+        float value[4] = { 0, 0, 0, 0 };
+        int components = 2;
+        float min = 0.f, max = 1.f;
+        ct::Function<void(float, float)> onChange2;
+        ct::Function<void(float, float, float)> onChange3;
+        ct::Function<void(float, float, float, float)> onChange4;
+    };
+    struct PropButton
+    {
+        ct::Function<void()> onClick;
+    };
+    struct PropSeparator
+    {
+    };
+    struct PropRange
+    {
+        float lo = 0, hi = 1, min = 0, max = 1;
+        ct::Function<void(float, float)> onChange;
+    };
 
-    using PropData = std::variant<PropSection, PropString, PropFloat, PropInt,
-                                  PropBool, PropColor, PropCombo, PropVec,
-                                  PropButton, PropSeparator, PropRange>;
+    using PropData = std::variant<PropSection, PropString, PropFloat, PropInt, PropBool, PropColor,
+            PropCombo, PropVec, PropButton, PropSeparator, PropRange>;
 
-    struct PropRow {
-        PropType    type;
+    struct PropRow
+    {
+        PropType type;
         String name;
         String description;
-        PropData    data;
-        float       dragStep = 0.0f;   // value per pixel when dragged; 0 = the range over the field width
+        PropData data;
+        float dragStep = 0.0f; // value per pixel when dragged; 0 = the range over the field width
     };
 
     // ── Typed accessors (convenience) ────────────────────────────────────
-    template<typename T> T&       propData(int row)       { return std::get<T>(rows_[row].data); }
-    template<typename T> const T& propData(int row) const { return std::get<T>(rows_[row].data); }
+    template<typename T>
+    T& propData(int row)
+    {
+        return std::get<T>(rows_[row].data);
+    }
+    template<typename T>
+    const T& propData(int row) const
+    {
+        return std::get<T>(rows_[row].data);
+    }
 
-    ct::Vector<PropRow> rows_;  // accessible by ColorPickerPopup_
+    ct::Vector<PropRow> rows_; // accessible by ColorPickerPopup_
     /// @brief Set the description panel height.
-    void setDescHeight(float h) { descHeight_ = h; markDirty(); }
+    void setDescHeight(float h)
+    {
+        descHeight_ = h;
+        markDirty();
+    }
 
 private:
-    void  spinStep(int row, int dir);
-    void  startEdit(int row);
-    void  commitEdit();
-    void  cancelEdit();
-    void  paintRow(PaintContext& ctx, const Rect& abs, int idx, float y);
-    void  paintDescPanel(PaintContext& ctx, const Rect& abs);
-    float gridHeight()           const;
-    float maxScroll()            const;
-    float visibleTotalHeight()   const;
-    float totalHeight()          const;
+    void spinStep(int row, int dir);
+    void startEdit(int row);
+    void commitEdit();
+    void cancelEdit();
+    void paintRow(PaintContext& ctx, const Rect& abs, int idx, float y);
+    void paintDescPanel(PaintContext& ctx, const Rect& abs);
+    float gridHeight() const;
+    float maxScroll() const;
+    float visibleTotalHeight() const;
+    float totalHeight() const;
     ct::Vector<int> visibleRows() const;
-    int   hitRow(float localY) const;
+    int hitRow(float localY) const;
 
     mutable ct::Vector<int> cachedVisibleRows_;
-    mutable bool             visDirty_ = true;
+    mutable bool visDirty_ = true;
 
-    int   selectedRow_   = -1;
-    int   hoveredRow_    = -1;
-    float scrollOffset_  = 0.f;
-    float rowHeight_     = 24.f;
-    float labelRatio_    = 0.4f;
-    float descHeight_    = 0.f;
+    int selectedRow_ = -1;
+    int hoveredRow_ = -1;
+    float scrollOffset_ = 0.f;
+    float rowHeight_ = 24.f;
+    float labelRatio_ = 0.4f;
+    float descHeight_ = 0.f;
 
-    bool  editing_       = false;
-    int   activeRow_     = -1;
+    bool editing_ = false;
+    int activeRow_ = -1;
     String editBuf_;
-    int   editCursor_    = 0;
+    int editCursor_ = 0;
 
-    bool  draggingSlider_ = false;
-    float dragStartX_     = 0.f;
-    float dragStartVal_   = 0.f;
-    int   dragComponent_  = 0;
+    bool draggingSlider_ = false;
+    float dragStartX_ = 0.f;
+    float dragStartVal_ = 0.f;
+    int dragComponent_ = 0;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -442,66 +571,79 @@ public:
     ~ColorPicker() override;
 
     /// @brief Set the picker color.
-    void  setColor(const Color& c);
+    void setColor(const Color& c);
     /// @brief Get the current color.
     Color color() const;
 
     /// @brief Show or hide the alpha channel bar.
-    void setShowAlpha(bool show) { showAlpha_ = show; markDirty(); }
+    void setShowAlpha(bool show)
+    {
+        showAlpha_ = show;
+        markDirty();
+    }
     /// @brief Check if the alpha bar is shown.
-    bool showAlpha() const { return showAlpha_; }
+    bool showAlpha() const
+    {
+        return showAlpha_;
+    }
 
     /// @brief Emitted when the color changes, on every step of a drag.
     Signal<Color> colorChanged;
     /// @brief Emitted once when a drag that changed the color ends: one edit, for undo.
     Signal<Color> colorCommitted;
 
-    Vec2f sizeHint()              const override;
-    void  paint(PaintContext& ctx)      override;
-    void  onMousePress(MouseEvent& e)   override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e)    override;
+    Vec2f sizeHint() const override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
 
 private:
-    enum DragTarget { DragNone, DragWheel, DragValueBar, DragAlphaBar };
-    Color      dragStart_;   // the color when the drag began
+    enum DragTarget
+    {
+        DragNone,
+        DragWheel,
+        DragValueBar,
+        DragAlphaBar
+    };
+    Color dragStart_; // the color when the drag began
 
-    float wheelRadius (const Rect& abs) const;
+    float wheelRadius(const Rect& abs) const;
     float wheelCenterX(const Rect& abs) const;
     float wheelCenterY(const Rect& abs) const;
-    Rect  valueBarRect(const Rect& abs) const;
-    Rect  alphaBarRect(const Rect& abs) const;
-    Rect  previewRect (const Rect& abs) const;
-    Rect  hexRect     (const Rect& abs) const;
+    Rect valueBarRect(const Rect& abs) const;
+    Rect alphaBarRect(const Rect& abs) const;
+    Rect previewRect(const Rect& abs) const;
+    Rect hexRect(const Rect& abs) const;
 
-    void updateFromWheel   (float mx, float my, const Rect& abs);
+    void updateFromWheel(float mx, float my, const Rect& abs);
     void updateFromValueBar(float my, const Rect& abs);
     void updateFromAlphaBar(float my, const Rect& abs);
 
     static Color hsvToRgb(float h, float s, float v, float a);
-    static void  rgbToHsv(const Color& c, float& h, float& s, float& v);
+    static void rgbToHsv(const Color& c, float& h, float& s, float& v);
 
-    float      hue_        = 0.f;
-    float      sat_        = 0.5f;
-    float      val_        = 1.f;
-    float      alpha_      = 1.f;
-    bool       showAlpha_  = false;
+    float hue_ = 0.f;
+    float sat_ = 0.5f;
+    float val_ = 1.f;
+    float alpha_ = 1.f;
+    bool showAlpha_ = false;
     DragTarget dragTarget_ = DragNone;
 
     // The wheel and the bars are rendered per pixel at twice the size into
     // textures, so their edges are anti-aliased and the gradients continuous.
-    void          releaseTextures();
+    void releaseTextures();
     TextureHandle buildWheelTexture(float radius);
     TextureHandle buildBarTexture(int height, bool alphaBar);
     TextureHandle wheelTex_{};
     TextureHandle valueTex_{};
     TextureHandle alphaTex_{};
-    float         wheelTexRadius_ = 0.f;
-    float         wheelTexVal_    = -1.f;
-    float         barTexHue_      = -1.f;
-    float         barTexSat_      = -1.f;
-    float         barTexVal_      = -1.f;
-    int           barTexHeight_   = 0;
+    float wheelTexRadius_ = 0.f;
+    float wheelTexVal_ = -1.f;
+    float barTexHue_ = -1.f;
+    float barTexSat_ = -1.f;
+    float barTexVal_ = -1.f;
+    int barTexHeight_ = 0;
     ct::Vector<unsigned char> texPixels_;
 };
 
@@ -528,10 +670,20 @@ public:
     /// @brief Set the color without emitting a signal.
     void setColor(const Color& color);
     /// @brief Get the color.
-    const Color& color() const { return color_; }
+    const Color& color() const
+    {
+        return color_;
+    }
     /// @brief Let the picker edit the alpha too (off by default).
-    void setShowAlpha(bool show) { showAlpha_ = show; markDirty(); }
-    bool showAlpha() const { return showAlpha_; }
+    void setShowAlpha(bool show)
+    {
+        showAlpha_ = show;
+        markDirty();
+    }
+    bool showAlpha() const
+    {
+        return showAlpha_;
+    }
     /// @brief Open the picker.
     void openPicker();
     /// @brief The picker while it is open, nullptr otherwise.
@@ -544,13 +696,13 @@ public:
 
     /// @brief Room for the swatch and the whole hex (#RRGGBB, or #RRGGBBAA with alpha).
     Vec2f sizeHint() const override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
 
 private:
     Color color_;
-    bool  showAlpha_ = false;
-    Widget* popup_ = nullptr;   // ours while WidgetApp shows it
+    bool showAlpha_ = false;
+    Widget* popup_ = nullptr; // ours while WidgetApp shows it
 };
 
 } // namespace retained

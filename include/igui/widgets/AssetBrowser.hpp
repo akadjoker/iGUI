@@ -1,9 +1,11 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "IconAtlas.hpp"
+#include "Widget.hpp"
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  AssetBrowser — thumbnail grid (or list) file/asset browser
@@ -20,14 +22,24 @@ namespace ig { namespace retained
 //    ab->onOpen.connect([](const AssetItem& it){ ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class AssetType { Folder, Image, Audio, Mesh, Script, Material, Scene, Generic };
+enum class AssetType
+{
+    Folder,
+    Image,
+    Audio,
+    Mesh,
+    Script,
+    Material,
+    Scene,
+    Generic
+};
 
 struct AssetItem
 {
     String name;
-    AssetType   type       = AssetType::Generic;
-    Color       thumbColor = Color(60, 64, 72, 255);
-    bool        selected   = false;
+    AssetType type = AssetType::Generic;
+    Color thumbColor = Color(60, 64, 72, 255);
+    bool selected = false;
 };
 
 class AssetBrowser : public Widget
@@ -42,23 +54,51 @@ public:
     /// @brief Remove all items.
     void clearItems();
     /// @brief Get the number of items.
-    int  itemCount() const { return static_cast<int>(items_.size()); }
+    int itemCount() const
+    {
+        return static_cast<int>(items_.size());
+    }
 
     /// @brief Set the displayed path.
-    void setPath(const String& path) { path_ = path; markDirty(); }
+    void setPath(const String& path)
+    {
+        path_ = path;
+        markDirty();
+    }
     /// @brief Get the current path.
-    const String& path() const       { return path_; }
+    const String& path() const
+    {
+        return path_;
+    }
 
-    enum class ViewMode { Grid, List };
+    enum class ViewMode
+    {
+        Grid,
+        List
+    };
     /// @brief Set the view mode (Grid or List).
-    void     setViewMode(ViewMode m) { viewMode_ = m; markDirty(); }
+    void setViewMode(ViewMode m)
+    {
+        viewMode_ = m;
+        markDirty();
+    }
     /// @brief Get the current view mode.
-    ViewMode viewMode() const        { return viewMode_; }
+    ViewMode viewMode() const
+    {
+        return viewMode_;
+    }
 
     /// @brief Set the thumbnail cell size.
-    void  setThumbSize(float s)  { thumbSize_ = max2(24.f, s); markDirty(); }
+    void setThumbSize(float s)
+    {
+        thumbSize_ = max2(24.f, s);
+        markDirty();
+    }
     /// @brief Get the thumbnail cell size.
-    float thumbSize() const      { return thumbSize_; }
+    float thumbSize() const
+    {
+        return thumbSize_;
+    }
 
     /// @brief Emitted when an item is selected.
     Signal<AssetItem> onSelect;
@@ -71,21 +111,22 @@ public:
 
 private:
     ct::Vector<AssetItem> items_;
-    String            path_        = "/";
-    ViewMode               viewMode_    = ViewMode::Grid;
-    float                  thumbSize_   = 64.f;
-    float                  scrollY_     = 0.f;
-    int                    selected_    = -1;
-    int                    lastClick_   = -1;
-    float                  lastClickT_  = 0.f;
-    float                  timeAcc_     = 0.f;
+    String path_ = "/";
+    ViewMode viewMode_ = ViewMode::Grid;
+    float thumbSize_ = 64.f;
+    float scrollY_ = 0.f;
+    int selected_ = -1;
+    int lastClick_ = -1;
+    float lastClickT_ = 0.f;
+    float timeAcc_ = 0.f;
 
     IconId typeToIcon(AssetType t) const;
-    Color  typeToColor(AssetType t) const;
-    int    hitItem(float mx, float my) const;
+    Color typeToColor(AssetType t) const;
+    int hitItem(float mx, float my) const;
 
-    struct GridLayout {
-        int   cols = 1;
+    struct GridLayout
+    {
+        int cols = 1;
         float cellW = 64, cellH = 80;
         float startX = 0, startY = 0;
         float totalH = 0;

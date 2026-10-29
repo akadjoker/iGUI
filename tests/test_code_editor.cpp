@@ -13,7 +13,7 @@ namespace
 
 int gFailures = 0;
 
-void check(bool condition, const char *what)
+void check(bool condition, const char* what)
 {
     if (!condition)
     {
@@ -22,37 +22,35 @@ void check(bool condition, const char *what)
     }
 }
 
-bool validUtf8(const ig::String &text)
+bool validUtf8(const ig::String& text)
 {
     size_t i = 0u;
     while (i < text.size())
     {
         const unsigned char first = static_cast<unsigned char>(text[i]);
-        size_t length = first < 0x80u ? 1u : (first >= 0xC2u && first <= 0xDFu) ? 2u
-                      : (first >= 0xE0u && first <= 0xEFu) ? 3u : (first >= 0xF0u && first <= 0xF4u) ? 4u : 0u;
-        if (length == 0u || i + length > text.size())
-            return false;
+        size_t length = first < 0x80u                        ? 1u
+                        : (first >= 0xC2u && first <= 0xDFu) ? 2u
+                        : (first >= 0xE0u && first <= 0xEFu) ? 3u
+                        : (first >= 0xF0u && first <= 0xF4u) ? 4u
+                                                             : 0u;
+        if (length == 0u || i + length > text.size()) return false;
         for (size_t k = 1u; k < length; ++k)
-            if ((static_cast<unsigned char>(text[i + k]) & 0xC0u) != 0x80u)
-                return false;
+            if ((static_cast<unsigned char>(text[i + k]) & 0xC0u) != 0x80u) return false;
         i += length;
     }
     return true;
 }
 
-bool drewText(const ig::DrawData &data, const char *expected)
+bool drewText(const ig::DrawData& data, const char* expected)
 {
     for (size_t i = 0u; i < data.commands.size(); ++i)
     {
-        const ig::DrawCommand &command = data.commands[i];
-        if (command.type != ig::DrawCommandType::Text)
-            continue;
-        const ig::TextCommand &text = command.payload.text;
-        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size())
-            continue;
+        const ig::DrawCommand& command = data.commands[i];
+        if (command.type != ig::DrawCommandType::Text) continue;
+        const ig::TextCommand& text = command.payload.text;
+        if (static_cast<size_t>(text.textOffset) + text.textSize > data.textBytes.size()) continue;
         const ig::StringView drawn(data.textBytes.data() + text.textOffset, text.textSize);
-        if (drawn == ig::StringView(expected))
-            return true;
+        if (drawn == ig::StringView(expected)) return true;
     }
     return false;
 }
@@ -66,7 +64,10 @@ public:
         clipboard = ig::String(text.data(), text.size());
         return true;
     }
-    ig::String clipboardText() override { return clipboard; }
+    ig::String clipboardText() override
+    {
+        return clipboard;
+    }
 };
 
 struct Editor
@@ -76,22 +77,29 @@ struct Editor
     ig::Harness harness;
     ig::CodeEditorState state;
 
-    explicit Editor(const char *text) : backend(), context(backend), harness(context), state()
+    explicit Editor(const char* text)
+            : backend(),
+              context(backend),
+              harness(context),
+              state()
     {
         state.setText(text);
         frame();
         // Click below the text: caret at the end of the last line.
-        harness.click(480.0f, 200.0f, [this](ig::Context &c) { build(c); });
+        harness.click(480.0f, 200.0f, [this](ig::Context& c) { build(c); });
     }
 
-    void build(ig::Context &c)
+    void build(ig::Context& c)
     {
         c.beginMainWindow("main");
         c.codeEditor("code", state, ig::Rect(10.0f, 10.0f, 500.0f, 200.0f));
         c.endWindow();
     }
 
-    void frame() { harness.frame([this](ig::Context &c) { build(c); }); }
+    void frame()
+    {
+        harness.frame([this](ig::Context& c) { build(c); });
+    }
 
     void key(ig::KeyCode code, bool control = false, bool shift = false)
     {
@@ -99,14 +107,14 @@ struct Editor
         frame();
     }
 
-    void type(const char *text)
+    void type(const char* text)
     {
         context.pushEvent(ig::Event::textInput(text));
         frame();
     }
 };
 
-void expectText(Editor &editor, const char *expected, const char *what)
+void expectText(Editor& editor, const char* expected, const char* what)
 {
     const ig::String text = editor.state.text();
     if (text != expected)
@@ -125,12 +133,16 @@ void test_caret_and_erase_by_code_point()
         expectText(e, "aX\xC3\xA9", "Left steps over a 2-byte character");
     }
     {
-        Editor e("a\xF0\x9F\x98\x80" "b");
+        Editor e("a\xF0\x9F\x98\x80"
+                 "b");
         e.key(ig::KeyCode::Home);
         e.key(ig::KeyCode::Right);
         e.key(ig::KeyCode::Right);
         e.type("X");
-        expectText(e, "a\xF0\x9F\x98\x80" "Xb", "Right steps over a 4-byte character");
+        expectText(e,
+                "a\xF0\x9F\x98\x80"
+                "Xb",
+                "Right steps over a 4-byte character");
     }
     {
         Editor e("a\xC3\xA9");
@@ -138,7 +150,8 @@ void test_caret_and_erase_by_code_point()
         expectText(e, "a", "Backspace erases a whole 2-byte character");
     }
     {
-        Editor e("\xE2\x82\xAC" "b");
+        Editor e("\xE2\x82\xAC"
+                 "b");
         e.key(ig::KeyCode::Home);
         e.key(ig::KeyCode::Delete);
         expectText(e, "b", "Delete erases a whole 3-byte character");
@@ -164,7 +177,8 @@ void test_caret_and_erase_by_code_point()
 // Random editing, multi-cursor included: the buffer must stay valid UTF-8.
 void test_random_editing_keeps_utf8_valid()
 {
-    const char *const texts[] = {"a", "\xC3\xA9", "\xE2\x82\xAC", "\xF0\x9F\x98\x80", " ", "\n", "x\xC3\xA7y"};
+    const char* const texts[] = { "a", "\xC3\xA9", "\xE2\x82\xAC", "\xF0\x9F\x98\x80", " ", "\n",
+        "x\xC3\xA7y" };
     struct Key
     {
         ig::KeyCode code;
@@ -172,35 +186,47 @@ void test_random_editing_keeps_utf8_valid()
         bool shift;
     };
     const Key keys[] = {
-        {ig::KeyCode::Left, false, false}, {ig::KeyCode::Right, false, false}, {ig::KeyCode::Up, false, false},
-        {ig::KeyCode::Down, false, false}, {ig::KeyCode::Left, false, true}, {ig::KeyCode::Right, false, true},
-        {ig::KeyCode::Home, false, false}, {ig::KeyCode::End, false, false}, {ig::KeyCode::Backspace, false, false},
-        {ig::KeyCode::Delete, false, false}, {ig::KeyCode::Enter, false, false}, {ig::KeyCode::D, true, false},
-        {ig::KeyCode::A, true, false}, {ig::KeyCode::Z, true, false}, {ig::KeyCode::Y, true, false},
-        {ig::KeyCode::Escape, false, false},
+        { ig::KeyCode::Left, false, false },
+        { ig::KeyCode::Right, false, false },
+        { ig::KeyCode::Up, false, false },
+        { ig::KeyCode::Down, false, false },
+        { ig::KeyCode::Left, false, true },
+        { ig::KeyCode::Right, false, true },
+        { ig::KeyCode::Home, false, false },
+        { ig::KeyCode::End, false, false },
+        { ig::KeyCode::Backspace, false, false },
+        { ig::KeyCode::Delete, false, false },
+        { ig::KeyCode::Enter, false, false },
+        { ig::KeyCode::D, true, false },
+        { ig::KeyCode::A, true, false },
+        { ig::KeyCode::Z, true, false },
+        { ig::KeyCode::Y, true, false },
+        { ig::KeyCode::Escape, false, false },
     };
     uint32_t seed = 7u;
     for (int run = 0; run < 20; ++run)
     {
-        Editor e("\xC3\xA9t\xC3\xA9 \xE2\x82\xAC\xE2\x82\xAC\n\xF0\x9F\x98\x80 \xC3\xA9t\xC3\xA9\nplain");
+        Editor e("\xC3\xA9t\xC3\xA9 \xE2\x82\xAC\xE2\x82\xAC\n\xF0\x9F\x98\x80 "
+                 "\xC3\xA9t\xC3\xA9\nplain");
         for (int step = 0; step < 300; ++step)
         {
             seed = seed * 1664525u + 1013904223u;
             const uint32_t r = seed >> 8;
-            if (r % 3u == 0u)
-                e.type(texts[(r / 3u) % (sizeof(texts) / sizeof(texts[0]))]);
+            if (r % 3u == 0u) e.type(texts[(r / 3u) % (sizeof(texts) / sizeof(texts[0]))]);
             else
             {
-                const Key &k = keys[(r / 3u) % (sizeof(keys) / sizeof(keys[0]))];
+                const Key& k = keys[(r / 3u) % (sizeof(keys) / sizeof(keys[0]))];
                 if (k.code == ig::KeyCode::Escape)
-                    e.harness.click(480.0f, 200.0f, [&e](ig::Context &c) { e.build(c); }); // refocus after Escape
+                    e.harness.click(480.0f, 200.0f,
+                            [&e](ig::Context& c) { e.build(c); }); // refocus after Escape
                 else
                     e.key(k.code, k.control, k.shift);
             }
             if (!validUtf8(e.state.text()))
             {
                 char message[96];
-                snprintf(message, sizeof(message), "random editing produced invalid UTF-8 (run %d, step %d)", run, step);
+                snprintf(message, sizeof(message),
+                        "random editing produced invalid UTF-8 (run %d, step %d)", run, step);
                 check(false, message);
                 return;
             }
@@ -220,8 +246,8 @@ static void test_overlapping_multi_cursor_erase_does_not_abort()
     state.cursorLine = 0;
     state.cursorColumn = 1;
     state.clearSelection();
-    state.addNextOccurrenceCursor();          // no selection yet: selects the word
-    state.addNextOccurrenceCursor();          // now adds a cursor on the next one
+    state.addNextOccurrenceCursor(); // no selection yet: selects the word
+    state.addNextOccurrenceCursor(); // now adds a cursor on the next one
     assert(state.extraCursorCount() == 1);
 
     // Select the whole line with the primary cursor, leaving the extra one on a
@@ -266,7 +292,7 @@ static void test_gutter_click_moves_the_cursor()
     editor.state.clearSelection();
     editor.frame();
 
-    editor.harness.click(14.0f, 60.0f, [&editor](ig::Context &c) { editor.build(c); });
+    editor.harness.click(14.0f, 60.0f, [&editor](ig::Context& c) { editor.build(c); });
     check(!editor.state.hasSelection(), "gutter click: no selection");
     check(editor.state.cursorColumn == 0, "gutter click: the cursor goes to the start of the line");
     check(editor.state.cursorLine > 0, "gutter click: the cursor goes to the clicked line");
@@ -287,7 +313,7 @@ static void test_gutter_click_moves_the_cursor()
         folded.state.clearSelection();
         for (float y = 20.0f; y < 120.0f; y += 9.0f)
         {
-            folded.harness.click(x, y, [&folded](ig::Context &c) { folded.build(c); });
+            folded.harness.click(x, y, [&folded](ig::Context& c) { folded.build(c); });
             selected = selected || folded.state.hasSelection();
         }
     }
@@ -342,12 +368,11 @@ static void test_completion_list_follows_the_selection()
     editor.type("wo");
     check(editor.state.completion.visible, "completion: the list opens");
     check(editor.state.completion.items.size() > 8u, "completion: more items than the list shows");
-    for (int i = 0; i < 12; ++i)
-        editor.key(ig::KeyCode::Down);
+    for (int i = 0; i < 12; ++i) editor.key(ig::KeyCode::Down);
     const int selected = editor.state.completion.selected;
     check(selected == 12, "completion: Down moves the selection");
     const ig::String item = editor.state.completion.items[static_cast<size_t>(selected)];
-    const ig::DrawData &data = editor.harness.frame([&editor](ig::Context &c) { editor.build(c); });
+    const ig::DrawData& data = editor.harness.frame([&editor](ig::Context& c) { editor.build(c); });
     check(drewText(data, item.c_str()), "completion: the selected item is drawn");
 }
 

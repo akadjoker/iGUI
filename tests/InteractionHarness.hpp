@@ -18,10 +18,13 @@ public:
     ct::Vector<DrawData> renderedFrames;
     bool captureFrames;
 
-    TestBackend() : renderedFrames(), captureFrames(false) {}
+    TestBackend()
+            : renderedFrames(),
+              captureFrames(false)
+    {
+    }
 
-    TextMetrics measureText(FontId, StringView text, float logicalSize,
-                            float) override
+    TextMetrics measureText(FontId, StringView text, float logicalSize, float) override
     {
         TextMetrics metrics;
         metrics.width = static_cast<float>(text.size()) * logicalSize * 0.5f;
@@ -31,10 +34,9 @@ public:
         return metrics;
     }
 
-    bool render(const DrawData &data) override
+    bool render(const DrawData& data) override
     {
-        if (captureFrames)
-            renderedFrames.push_back(data);
+        if (captureFrames) renderedFrames.push_back(data);
         return true;
     }
 };
@@ -42,8 +44,11 @@ public:
 class Harness
 {
 public:
-    explicit Harness(Context &context)
-        : context_(context), width_(1280.0f), height_(800.0f), lastData_(nullptr)
+    explicit Harness(Context& context)
+            : context_(context),
+              width_(1280.0f),
+              height_(800.0f),
+              lastData_(nullptr)
     {
     }
 
@@ -53,11 +58,14 @@ public:
         height_ = height;
     }
 
-    void queue(const Event &event) { context_.pushEvent(event); }
+    void queue(const Event& event)
+    {
+        context_.pushEvent(event);
+    }
 
     // Runs one frame with whatever events were queued.
-    template <typename Build>
-    const DrawData &frame(Build build)
+    template<typename Build>
+    const DrawData& frame(Build build)
     {
         context_.beginFrame(FrameInfo(width_, height_));
         build(context_);
@@ -66,9 +74,8 @@ public:
     }
 
     // Press then release at (x, y), one frame apart.
-    template <typename Build>
-    const DrawData &click(float x, float y, Build build,
-                          PointerButton button = PointerButton::Left)
+    template<typename Build>
+    const DrawData& click(float x, float y, Build build, PointerButton button = PointerButton::Left)
     {
         context_.pushEvent(Event::pointerDown(button, x, y));
         frame(build);
@@ -77,9 +84,9 @@ public:
     }
 
     // Press, `steps` move frames, release; build() runs once per frame.
-    template <typename Build>
-    void drag(float fromX, float fromY, float toX, float toY, Build build,
-             int steps = 3, PointerButton button = PointerButton::Left)
+    template<typename Build>
+    void drag(float fromX, float fromY, float toX, float toY, Build build, int steps = 3,
+            PointerButton button = PointerButton::Left)
     {
         assert(steps >= 2);
         context_.pushEvent(Event::pointerDown(button, fromX, fromY));
@@ -107,9 +114,8 @@ public:
         assert(lastData_ && "call frame()/click()/drag() before asserting");
         for (size_t i = 0; i < lastData_->vertices.size(); ++i)
         {
-            const Vec2 &p = lastData_->vertices[i].position;
-            if (p.x == x && p.y == y)
-                return true;
+            const Vec2& p = lastData_->vertices[i].position;
+            if (p.x == x && p.y == y) return true;
         }
         return false;
     }
@@ -120,11 +126,10 @@ public:
         const float radiusSquared = radius * radius;
         for (size_t i = 0; i < lastData_->vertices.size(); ++i)
         {
-            const Vec2 &p = lastData_->vertices[i].position;
+            const Vec2& p = lastData_->vertices[i].position;
             const float dx = p.x - x;
             const float dy = p.y - y;
-            if (dx * dx + dy * dy <= radiusSquared)
-                return true;
+            if (dx * dx + dy * dy <= radiusSquared) return true;
         }
         return false;
     }
@@ -135,8 +140,7 @@ public:
         assert(lastData_ && "call frame()/click()/drag() before asserting");
         for (size_t i = 0; i < lastData_->vertices.size(); ++i)
         {
-            if (lastData_->vertices[i].position.x == x &&
-                lastData_->vertices[i].position.y == y)
+            if (lastData_->vertices[i].position.x == x && lastData_->vertices[i].position.y == y)
                 return lastData_->vertices[i].color;
         }
         return Color(0u, 0u, 0u, 0u);
@@ -155,10 +159,10 @@ public:
     }
 
 private:
-    Context &context_;
+    Context& context_;
     float width_;
     float height_;
-    const DrawData *lastData_;
+    const DrawData* lastData_;
 };
 
 } // namespace ig

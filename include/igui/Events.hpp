@@ -66,9 +66,16 @@ struct FrameInfo
     Vec2 displaySize;
     float dpiScale;
 
-    FrameInfo() : deltaSeconds(0.0f), displaySize(), dpiScale(1.0f) {}
+    FrameInfo()
+            : deltaSeconds(0.0f),
+              displaySize(),
+              dpiScale(1.0f)
+    {
+    }
     FrameInfo(float width, float height, float scale = 1.0f, float delta = 0.0f)
-        : deltaSeconds(delta), displaySize(width, height), dpiScale(scale)
+            : deltaSeconds(delta),
+              displaySize(width, height),
+              dpiScale(scale)
     {
     }
 };
@@ -91,9 +98,17 @@ struct Event
     bool shift;
 
     Event()
-        : type(EventType::None), button(PointerButton::Left), key(KeyCode::None), position(),
-          wheelX(0.0f), wheelY(0.0f), viewportSize(), dpiScale(1.0f),
-          textLength(0), control(false), shift(false)
+            : type(EventType::None),
+              button(PointerButton::Left),
+              key(KeyCode::None),
+              position(),
+              wheelX(0.0f),
+              wheelY(0.0f),
+              viewportSize(),
+              dpiScale(1.0f),
+              textLength(0),
+              control(false),
+              shift(false)
     {
         text[0] = '\0';
     }
@@ -110,7 +125,7 @@ struct Event
     // escolha múltipla (Ctrl para ligar um item, Shift para o alcance) lê-os do
     // clique, não do estado do teclado no frame em que o clique termina.
     static Event pointerDown(PointerButton pointerButton, float x, float y,
-                             bool controlDown = false, bool shiftDown = false)
+            bool controlDown = false, bool shiftDown = false)
     {
         Event event;
         event.type = EventType::PointerDown;
@@ -121,8 +136,8 @@ struct Event
         return event;
     }
 
-    static Event pointerUp(PointerButton pointerButton, float x, float y,
-                           bool controlDown = false, bool shiftDown = false)
+    static Event pointerUp(PointerButton pointerButton, float x, float y, bool controlDown = false,
+            bool shiftDown = false)
     {
         Event event;
         event.type = EventType::PointerUp;
@@ -155,8 +170,7 @@ struct Event
         Event event;
         event.type = EventType::TextInput;
         const StringView::size_type count = utf8.size() < 63u ? utf8.size() : 63u;
-        for (StringView::size_type i = 0; i < count; ++i)
-            event.text[i] = utf8[i];
+        for (StringView::size_type i = 0; i < count; ++i) event.text[i] = utf8[i];
         event.text[count] = '\0';
         event.textLength = static_cast<uint32_t>(count);
         return event;

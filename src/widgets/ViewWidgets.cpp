@@ -1,13 +1,13 @@
-#include "pch.hpp"
 #include "ViewWidgets.hpp"
 #include "WidgetApp.hpp"
+#include "pch.hpp"
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  FloatWindow
 // ═════════════════════════════════════════════════════════════════════════════
 
 FloatWindow::FloatWindow(const String& title)
-    : title_(title)
+        : title_(title)
 {
 }
 
@@ -20,12 +20,10 @@ void FloatWindow::setContentWidget(Widget* w)
 {
     // Setting the widget that is already the content must not delete it first:
     // removeChild() deletes what it takes out.
-    if (w == content_)
-        return;
+    if (w == content_) return;
     Widget* previous = content_;
     content_ = nullptr;
-    if (previous)
-        removeChild(previous);
+    if (previous) removeChild(previous);
     content_ = w;
     if (content_) addChild(content_);
     markDirty();
@@ -46,37 +44,36 @@ void FloatWindow::setMinimized(bool m)
 
 Rect FloatWindow::titleBarRect() const
 {
-    return {floatX_, floatY_, floatW_, titleBarH_};
+    return { floatX_, floatY_, floatW_, titleBarH_ };
 }
 
 Rect FloatWindow::contentRect() const
 {
-    return {floatX_, floatY_ + titleBarH_, floatW_, floatH_ - titleBarH_};
+    return { floatX_, floatY_ + titleBarH_, floatW_, floatH_ - titleBarH_ };
 }
 
 Rect FloatWindow::closeButtonRect() const
 {
     float bw = titleBarH_;
-    return {floatX_ + floatW_ - bw, floatY_, bw, titleBarH_};
+    return { floatX_ + floatW_ - bw, floatY_, bw, titleBarH_ };
 }
 
 Rect FloatWindow::minimizeButtonRect() const
 {
     float bw = titleBarH_;
     float off = closable_ ? bw : 0.0f;
-    return {floatX_ + floatW_ - off - bw, floatY_, bw, titleBarH_};
+    return { floatX_ + floatW_ - off - bw, floatY_, bw, titleBarH_ };
 }
 
 Rect FloatWindow::resizeGripRect() const
 {
-    return {floatX_ + floatW_ - kResizeGrip,
-            floatY_ + floatH_ - kResizeGrip,
-            kResizeGrip, kResizeGrip};
+    return { floatX_ + floatW_ - kResizeGrip, floatY_ + floatH_ - kResizeGrip, kResizeGrip,
+        kResizeGrip };
 }
 
 Widget::Vec2f FloatWindow::sizeHint() const
 {
-    return {floatW_, floatH_};
+    return { floatW_, floatH_ };
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
@@ -84,14 +81,13 @@ Widget::Vec2f FloatWindow::sizeHint() const
 void FloatWindow::layout()
 {
     float fh = minimized_ ? titleBarH_ : floatH_;
-    setRect({floatX_, floatY_, floatW_, fh});
+    setRect({ floatX_, floatY_, floatW_, fh });
 
     if (content_ && !minimized_)
     {
         const float pad = 2.0f;
-        content_->setRect({pad, titleBarH_ + pad,
-                           floatW_ - pad * 2.0f,
-                           floatH_ - titleBarH_ - pad * 2.0f});
+        content_->setRect(
+                { pad, titleBarH_ + pad, floatW_ - pad * 2.0f, floatH_ - titleBarH_ - pad * 2.0f });
         content_->layout();
     }
 }
@@ -130,14 +126,14 @@ void FloatWindow::paint(PaintContext& ctx)
         Rect cb = closeButtonRect();
         if (hoveredBtn_ == 1)
         {
-            ctx.fill.SetColor(t.floatCloseHover.r, t.floatCloseHover.g,
-                              t.floatCloseHover.b, t.floatCloseHover.a);
+            ctx.fill.SetColor(t.floatCloseHover.r, t.floatCloseHover.g, t.floatCloseHover.b,
+                    t.floatCloseHover.a);
             ctx.fillRect(cb.x, cb.y, cb.w, cb.h);
         }
         float cx = cb.x + cb.w * 0.5f, cy = cb.y + cb.h * 0.5f;
         float s = 5.0f;
-        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g,
-                          t.floatTitleText.b, t.floatTitleText.a);
+        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g, t.floatTitleText.b,
+                t.floatTitleText.a);
         ctx.drawLine(cx - s, cy - s, cx + s, cy + s);
         ctx.drawLine(cx + s, cy - s, cx - s, cy + s);
     }
@@ -148,14 +144,14 @@ void FloatWindow::paint(PaintContext& ctx)
         Rect mb = minimizeButtonRect();
         if (hoveredBtn_ == 2)
         {
-            ctx.fill.SetColor(t.floatBtnHover.r, t.floatBtnHover.g,
-                              t.floatBtnHover.b, t.floatBtnHover.a);
+            ctx.fill.SetColor(t.floatBtnHover.r, t.floatBtnHover.g, t.floatBtnHover.b,
+                    t.floatBtnHover.a);
             ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
         }
         float mx = mb.x + mb.w * 0.5f, my = mb.y + mb.h * 0.5f;
         float s = 5.0f;
-        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g,
-                          t.floatTitleText.b, t.floatTitleText.a);
+        ctx.line.SetColor(t.floatTitleText.r, t.floatTitleText.g, t.floatTitleText.b,
+                t.floatTitleText.a);
         if (minimized_)
         {
             // □ restore icon
@@ -182,11 +178,11 @@ void FloatWindow::paint(PaintContext& ctx)
     {
         float gx = floatX_ + floatW_ - 2.0f;
         float gy = floatY_ + floatH_ - 2.0f;
-        ctx.line.SetColor(t.floatBorder.r, t.floatBorder.g,
-                          t.floatBorder.b, static_cast<uint8_t>(t.floatBorder.a * 2 / 3));
-        ctx.drawLine(gx - 10.0f, gy,       gx,       gy - 10.0f);
-        ctx.drawLine(gx -  6.0f, gy,       gx,       gy -  6.0f);
-        ctx.drawLine(gx -  2.0f, gy,       gx,       gy -  2.0f);
+        ctx.line.SetColor(t.floatBorder.r, t.floatBorder.g, t.floatBorder.b,
+                static_cast<uint8_t>(t.floatBorder.a * 2 / 3));
+        ctx.drawLine(gx - 10.0f, gy, gx, gy - 10.0f);
+        ctx.drawLine(gx - 6.0f, gy, gx, gy - 6.0f);
+        ctx.drawLine(gx - 2.0f, gy, gx, gy - 2.0f);
     }
 }
 
@@ -217,12 +213,12 @@ void FloatWindow::onMousePress(MouseEvent& e)
     // Resize grip (check before title bar)
     if (resizable_ && !minimized_ && resizeGripRect().contains(e.x, e.y))
     {
-        resizing_     = true;
-        resizeOffX_   = e.x;
-        resizeOffY_   = e.y;
+        resizing_ = true;
+        resizeOffX_ = e.x;
+        resizeOffY_ = e.y;
         resizeStartW_ = floatW_;
         resizeStartH_ = floatH_;
-        e.consumed    = true;
+        e.consumed = true;
         return;
     }
 
@@ -237,16 +233,24 @@ void FloatWindow::onMousePress(MouseEvent& e)
     }
 
     // Forward to content
-    if (content_ && !minimized_)
-        content_->onMousePress(e);
+    if (content_ && !minimized_) content_->onMousePress(e);
 }
 
 void FloatWindow::onMouseRelease(MouseEvent& e)
 {
-    if (dragging_) { dragging_ = false; e.consumed = true; return; }
-    if (resizing_) { resizing_ = false; e.consumed = true; return; }
-    if (content_ && !minimized_)
-        content_->onMouseRelease(e);
+    if (dragging_)
+    {
+        dragging_ = false;
+        e.consumed = true;
+        return;
+    }
+    if (resizing_)
+    {
+        resizing_ = false;
+        e.consumed = true;
+        return;
+    }
+    if (content_ && !minimized_) content_->onMouseRelease(e);
 }
 
 void FloatWindow::onMouseMove(MouseEvent& e)
@@ -274,12 +278,12 @@ void FloatWindow::onMouseMove(MouseEvent& e)
     // Button hover tracking
     int old = hoveredBtn_;
     hoveredBtn_ = 0;
-    if (closable_    && closeButtonRect().contains(e.x, e.y))   hoveredBtn_ = 1;
-    else if (minimizable_ && minimizeButtonRect().contains(e.x, e.y)) hoveredBtn_ = 2;
+    if (closable_ && closeButtonRect().contains(e.x, e.y)) hoveredBtn_ = 1;
+    else if (minimizable_ && minimizeButtonRect().contains(e.x, e.y))
+        hoveredBtn_ = 2;
     if (hoveredBtn_ != old) markDirty();
 
-    if (content_ && !minimized_)
-        content_->onMouseMove(e);
+    if (content_ && !minimized_) content_->onMouseMove(e);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -288,8 +292,7 @@ void FloatWindow::onMouseMove(MouseEvent& e)
 
 void Canvas::layout()
 {
-    for (auto* c : children_)
-        c->layout();
+    for (auto* c: children_) c->layout();
 }
 
 void Canvas::paint(PaintContext& ctx)
@@ -309,11 +312,9 @@ void Canvas::paint(PaintContext& ctx)
 
     ctx.pushClip(abs);
 
-    if (onPaint_)
-        onPaint_(ctx, abs);
+    if (onPaint_) onPaint_(ctx, abs);
 
-    for (auto* c : children_)
-        c->paint(ctx);
+    for (auto* c: children_) c->paint(ctx);
 
     ctx.popClip();
 }
@@ -327,8 +328,7 @@ void ImageView::setTexture(ig::retained::TextureHandle tex, int w, int h)
     texture_ = tex;
     texW_ = w;
     texH_ = h;
-    if (tex && rect_.w == 0 && rect_.h == 0)
-        setSize(static_cast<float>(w), static_cast<float>(h));
+    if (tex && rect_.w == 0 && rect_.h == 0) setSize(static_cast<float>(w), static_cast<float>(h));
     markDirty();
 }
 
@@ -342,9 +342,9 @@ void ImageView::paint(PaintContext& ctx)
 
     ctx.pushClip(abs);
 
-    Rect dst = { abs.x + offsetX_, abs.y + offsetY_,
-                 static_cast<float>(texW_), static_cast<float>(texH_) };
-    ctx.drawImage(texture_, dst, {0.f, 0.f, 1.f, 1.f}, tint_);
+    Rect dst = { abs.x + offsetX_, abs.y + offsetY_, static_cast<float>(texW_),
+        static_cast<float>(texH_) };
+    ctx.drawImage(texture_, dst, { 0.f, 0.f, 1.f, 1.f }, tint_);
 
     Widget::paint(ctx);
     ctx.popClip();
@@ -358,7 +358,7 @@ namespace
 {
 constexpr float kMinScale = 0.02f;
 constexpr float kMaxScale = 64.0f;
-}
+} // namespace
 
 void VideoCanvas::setTexture(ig::retained::TextureHandle tex, int w, int h)
 {
@@ -370,15 +370,13 @@ void VideoCanvas::setTexture(ig::retained::TextureHandle tex, int w, int h)
 
 void VideoCanvas::setPixelAspect(float par)
 {
-    if (par > 0.0f)
-        pixelAspect_ = par;
+    if (par > 0.0f) pixelAspect_ = par;
     markDirty();
 }
 
 float VideoCanvas::baseScale() const
 {
-    if (texW_ <= 0 || texH_ <= 0 || fit_ == Fit::Actual)
-        return 1.0f;
+    if (texW_ <= 0 || texH_ <= 0 || fit_ == Fit::Actual) return 1.0f;
     const Rect r = absoluteRect();
     const float sx = std::max(1.0f, r.w - 2.0f * margin_) / (texW_ * pixelAspect_);
     const float sy = std::max(1.0f, r.h - 2.0f * margin_) / texH_;
@@ -401,7 +399,8 @@ void VideoCanvas::setView(float zoom, float panX, float panY)
 
 void VideoCanvas::setBox(bool show, float x0, float y0, float x1, float y1)
 {
-    if (show == boxShown_ && x0 == box_[0] && y0 == box_[1] && x1 == box_[2] && y1 == box_[3]) return;
+    if (show == boxShown_ && x0 == box_[0] && y0 == box_[1] && x1 == box_[2] && y1 == box_[3])
+        return;
     boxShown_ = show;
     box_[0] = x0;
     box_[1] = y0;
@@ -410,7 +409,8 @@ void VideoCanvas::setBox(bool show, float x0, float y0, float x1, float y1)
     markDirty();
 }
 
-// Which handle of the box is at a screen position: the corners, the edges, the inside, or none (-1).
+// Which handle of the box is at a screen position: the corners, the edges, the inside, or none
+// (-1).
 int VideoCanvas::boxHit(float x, float y) const
 {
     if (!boxShown_ || texW_ <= 0 || texH_ <= 0) return -1;
@@ -419,7 +419,8 @@ int VideoCanvas::boxHit(float x, float y) const
     const float x1 = img.x + box_[2] * img.w, y1 = img.y + box_[3] * img.h;
     const float grab = 10.0f;
     const float mx = (x0 + x1) * 0.5f, my = (y0 + y1) * 0.5f;
-    auto closeTo = [&](float px, float py) { return std::fabs(x - px) <= grab && std::fabs(y - py) <= grab; };
+    auto closeTo = [&](float px, float py)
+    { return std::fabs(x - px) <= grab && std::fabs(y - py) <= grab; };
     if (closeTo(x0, y0)) return 5;
     if (closeTo(x1, y0)) return 6;
     if (closeTo(x1, y1)) return 7;
@@ -428,7 +429,8 @@ int VideoCanvas::boxHit(float x, float y) const
     if (closeTo(mx, y0)) return 2;
     if (closeTo(x1, my)) return 3;
     if (closeTo(mx, y1)) return 4;
-    const bool withinX = x >= x0 - grab && x <= x1 + grab, withinY = y >= y0 - grab && y <= y1 + grab;
+    const bool withinX = x >= x0 - grab && x <= x1 + grab,
+               withinY = y >= y0 - grab && y <= y1 + grab;
     if (withinY && std::fabs(x - x0) <= grab * 0.5f) return 1;
     if (withinX && std::fabs(y - y0) <= grab * 0.5f) return 2;
     if (withinY && std::fabs(x - x1) <= grab * 0.5f) return 3;
@@ -470,8 +472,7 @@ Rect VideoCanvas::imageRect() const
 Widget::Vec2f VideoCanvas::screenToImage(float x, float y) const
 {
     const Rect img = imageRect();
-    if (img.w <= 0.0f || img.h <= 0.0f)
-        return {-1.0f, -1.0f};
+    if (img.w <= 0.0f || img.h <= 0.0f) return { -1.0f, -1.0f };
     return { (x - img.x) / img.w * texW_, (y - img.y) / img.h * texH_ };
 }
 
@@ -495,7 +496,8 @@ void VideoCanvas::paint(PaintContext& ctx)
     {
         const Rect img = imageRect();
         const float x0 = std::max(img.x, abs.x), y0 = std::max(img.y, abs.y);
-        const float x1 = std::min(img.x + img.w, abs.x + abs.w), y1 = std::min(img.y + img.h, abs.y + abs.h);
+        const float x1 = std::min(img.x + img.w, abs.x + abs.w),
+                    y1 = std::min(img.y + img.h, abs.y + abs.h);
         if (x1 > x0 && y1 > y0)
         {
             // Only the visible part is drawn, so a deep zoom keeps small coordinates.
@@ -506,11 +508,12 @@ void VideoCanvas::paint(PaintContext& ctx)
                 ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
                 ctx.fill.SetColor(Color(104, 104, 108, 255));
                 for (float cy = y0, row = 0; cy < y1; cy += cell, row += 1.0f)
-                    for (float cx = x0 + (static_cast<int>(row) % 2 ? cell : 0.0f); cx < x1; cx += cell * 2.0f)
+                    for (float cx = x0 + (static_cast<int>(row) % 2 ? cell : 0.0f); cx < x1;
+                            cx += cell * 2.0f)
                         ctx.fillRect(cx, cy, std::min(cell, x1 - cx), std::min(cell, y1 - cy));
             }
             const ig::retained::Rect uv = { (x0 - img.x) / img.w, (y0 - img.y) / img.h,
-                                            (x1 - x0) / img.w, (y1 - y0) / img.h };
+                (x1 - x0) / img.w, (y1 - y0) / img.h };
             ctx.drawImage(texture_, { x0, y0, x1 - x0, y1 - y0 }, uv);
         }
 
@@ -546,10 +549,11 @@ void VideoCanvas::paint(PaintContext& ctx)
             const float bx1 = img.x + box_[2] * img.w, by1 = img.y + box_[3] * img.h;
             const Color red(235, 25, 25, 255);
             ctx.line.SetColor(red);
-            for (int k = 0; k < 3; ++k) ctx.lineRect(bx0 + k, by0 + k, bx1 - bx0 - 2 * k, by1 - by0 - 2 * k);
+            for (int k = 0; k < 3; ++k)
+                ctx.lineRect(bx0 + k, by0 + k, bx1 - bx0 - 2 * k, by1 - by0 - 2 * k);
             const float mx = (bx0 + bx1) * 0.5f, my = (by0 + by1) * 0.5f;
-            const float px[8] = {bx0, bx1, bx1, bx0, bx0, mx, bx1, mx};
-            const float py[8] = {by0, by0, by1, by1, my, by0, my, by1};
+            const float px[8] = { bx0, bx1, bx1, bx0, bx0, mx, bx1, mx };
+            const float py[8] = { by0, by0, by1, by1, my, by0, my, by1 };
             const float h = 7.0f; // half the side of a handle: 14 x 14 pixels
             for (int i = 0; i < 8; ++i)
             {
@@ -636,8 +640,7 @@ void VideoCanvas::onMouseMove(MouseEvent& e)
 
     const Vec2f p = screenToImage(e.x, e.y);
     int px = static_cast<int>(std::floor(p.x)), py = static_cast<int>(std::floor(p.y));
-    if (px < 0 || py < 0 || px >= texW_ || py >= texH_)
-        px = py = -1;
+    if (px < 0 || py < 0 || px >= texW_ || py >= texH_) px = py = -1;
     if (px != lastPixelX_ || py != lastPixelY_)
     {
         lastPixelX_ = px;
@@ -656,7 +659,11 @@ void VideoCanvas::onMouseScroll(MouseEvent& e)
     const float v = before.h > 0.0f ? (e.y - before.y) / before.h : 0.5f;
     const float oldZoom = zoom_;
     setView(zoom_ * (e.scrollY > 0.0f ? 1.1f : 1.0f / 1.1f), panX_, panY_);
-    if (zoom_ == oldZoom) { e.consumed = true; return; }
+    if (zoom_ == oldZoom)
+    {
+        e.consumed = true;
+        return;
+    }
 
     const Rect r = absoluteRect();
     const float w = texW_ * pixelAspect_ * scale();
@@ -687,7 +694,8 @@ void PageView::addPageImpl(Widget* w)
     w->setVisible(false);
     pages_.push_back(w);
 
-    if (pages_.size() == 1) {
+    if (pages_.size() == 1)
+    {
         currentIdx_ = 0;
         w->setVisible(true);
     }
@@ -705,9 +713,11 @@ void PageView::setPage(int idx, Transition tr)
     if (idx == currentIdx_ && transProgress_ >= 1.0f) return;
 
     const int from = currentIdx_;
-    if (tr == SlideAuto) {
+    if (tr == SlideAuto)
+    {
         if (from < 0) tr = None;
-        else tr = (idx > from) ? SlideLeft : SlideRight;
+        else
+            tr = (idx > from) ? SlideLeft : SlideRight;
     }
     prevIdx_ = (tr == None || from == idx) ? -1 : from;
     currentIdx_ = idx;
@@ -724,15 +734,21 @@ void PageView::setPage(int idx, Transition tr)
 
 void PageView::setPage(Widget* pg, Transition tr)
 {
-    for (int i = 0; i < static_cast<int>(pages_.size()); i++) {
-        if (pages_[i] == pg) { setPage(i, tr); return; }
+    for (int i = 0; i < static_cast<int>(pages_.size()); i++)
+    {
+        if (pages_[i] == pg)
+        {
+            setPage(i, tr);
+            return;
+        }
     }
 }
 
 void PageView::layout()
 {
-    for (auto* p : pages_) {
-        p->setRect({0, 0, rect_.w, rect_.h});
+    for (auto* p: pages_)
+    {
+        p->setRect({ 0, 0, rect_.w, rect_.h });
         if (p->isVisible()) p->layout();
     }
 }
@@ -746,12 +762,15 @@ void PageView::paint(PaintContext& ctx)
 
     float dt = WidgetApp::instance().deltaTime();
 
-    if (transProgress_ < 1.0f) {
+    if (transProgress_ < 1.0f)
+    {
         float speed = (transDuration_ > 0.0f) ? (1.0f / transDuration_) : 10.0f;
         transProgress_ += speed * dt;
-        if (transProgress_ >= 1.0f) {
+        if (transProgress_ >= 1.0f)
+        {
             transProgress_ = 1.0f;
-            if (prevIdx_ >= 0 && prevIdx_ < static_cast<int>(pages_.size()) && prevIdx_ != currentIdx_)
+            if (prevIdx_ >= 0 && prevIdx_ < static_cast<int>(pages_.size()) &&
+                    prevIdx_ != currentIdx_)
                 pages_[prevIdx_]->setVisible(false);
             prevIdx_ = -1;
         }
@@ -762,52 +781,59 @@ void PageView::paint(PaintContext& ctx)
 
     bool animating = (transProgress_ < 1.0f && prevIdx_ >= 0);
 
-    if (!animating) {
+    if (!animating)
+    {
         if (currentIdx_ >= 0 && currentIdx_ < static_cast<int>(pages_.size()))
             pages_[currentIdx_]->paint(ctx);
-    } else {
+    }
+    else
+    {
         float t = transProgress_;
         float eased = 1.0f - (1.0f - t) * (1.0f - t) * (1.0f - t);
 
         Widget* oldPage = pages_[prevIdx_];
         Widget* newPage = pages_[currentIdx_];
 
-        switch (transType_) {
-        case SlideLeft: {
-            float oldX = -abs.w * eased;
-            float newX = abs.w * (1.0f - eased);
-            Rect oldR = oldPage->rect(), newR = newPage->rect();
-            oldPage->setRect({oldR.x + oldX, oldR.y, oldR.w, oldR.h});
-            newPage->setRect({newR.x + newX, newR.y, newR.w, newR.h});
-            oldPage->paint(ctx);
-            newPage->paint(ctx);
-            oldPage->setRect(oldR);
-            newPage->setRect(newR);
-            break;
-        }
-        case SlideRight: {
-            float oldX = abs.w * eased;
-            float newX = -abs.w * (1.0f - eased);
-            Rect oldR = oldPage->rect(), newR = newPage->rect();
-            oldPage->setRect({oldR.x + oldX, oldR.y, oldR.w, oldR.h});
-            newPage->setRect({newR.x + newX, newR.y, newR.w, newR.h});
-            oldPage->paint(ctx);
-            newPage->paint(ctx);
-            oldPage->setRect(oldR);
-            newPage->setRect(newR);
-            break;
-        }
-        case Fade: {
-            oldPage->paint(ctx);
-            unsigned char alpha = static_cast<unsigned char>(eased * 180);
-            ctx.fill.SetColor(0, 0, 0, alpha);
-            ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
-            newPage->paint(ctx);
-            break;
-        }
-        default:
-            newPage->paint(ctx);
-            break;
+        switch (transType_)
+        {
+            case SlideLeft:
+            {
+                float oldX = -abs.w * eased;
+                float newX = abs.w * (1.0f - eased);
+                Rect oldR = oldPage->rect(), newR = newPage->rect();
+                oldPage->setRect({ oldR.x + oldX, oldR.y, oldR.w, oldR.h });
+                newPage->setRect({ newR.x + newX, newR.y, newR.w, newR.h });
+                oldPage->paint(ctx);
+                newPage->paint(ctx);
+                oldPage->setRect(oldR);
+                newPage->setRect(newR);
+                break;
+            }
+            case SlideRight:
+            {
+                float oldX = abs.w * eased;
+                float newX = -abs.w * (1.0f - eased);
+                Rect oldR = oldPage->rect(), newR = newPage->rect();
+                oldPage->setRect({ oldR.x + oldX, oldR.y, oldR.w, oldR.h });
+                newPage->setRect({ newR.x + newX, newR.y, newR.w, newR.h });
+                oldPage->paint(ctx);
+                newPage->paint(ctx);
+                oldPage->setRect(oldR);
+                newPage->setRect(newR);
+                break;
+            }
+            case Fade:
+            {
+                oldPage->paint(ctx);
+                unsigned char alpha = static_cast<unsigned char>(eased * 180);
+                ctx.fill.SetColor(0, 0, 0, alpha);
+                ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
+                newPage->paint(ctx);
+                break;
+            }
+            default:
+                newPage->paint(ctx);
+                break;
         }
     }
 

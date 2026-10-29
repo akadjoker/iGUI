@@ -1,6 +1,6 @@
-#include "pch.hpp"
 #include "AppWidgets.hpp"
 #include "TreePropertyColorWidgets.hpp"
+#include "pch.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -25,13 +25,13 @@ Widget::Vec2f Breadcrumbs::sizeHint() const
 {
     const auto& t = Theme::instance();
     float w = t.padding;
-    for (size_t i = 0; i < segments_.size(); ++i) {
+    for (size_t i = 0; i < segments_.size(); ++i)
+    {
         w += segments_[i].size() * t.fontSize * 0.6f;
-        if (i + 1 < segments_.size())
-            w += t.fontSize * 1.2f; // separator space
+        if (i + 1 < segments_.size()) w += t.fontSize * 1.2f; // separator space
     }
     w += t.padding;
-    return {w, t.fontSize + t.padding * 2};
+    return { w, t.fontSize + t.padding * 2 };
 }
 
 void Breadcrumbs::paint(PaintContext& ctx)
@@ -53,29 +53,36 @@ void Breadcrumbs::paint(PaintContext& ctx)
     segRects_.clear();
     segRects_.resize(segments_.size());
 
-    for (size_t i = 0; i < segments_.size(); ++i) {
+    for (size_t i = 0; i < segments_.size(); ++i)
+    {
         float tw = ctx.font.GetTextWidth(segments_[i].c_str());
-        segRects_[i] = {cx, tw};
+        segRects_[i] = { cx, tw };
 
         bool isLast = (i + 1 == segments_.size());
-        bool isHov  = (static_cast<int>(i) == hoveredIndex_);
+        bool isHov = (static_cast<int>(i) == hoveredIndex_);
 
         // Clickable segments (not last) are styled as links
-        if (!isLast && isHov) {
+        if (!isLast && isHov)
+        {
             ctx.font.SetColor(Color(120, 170, 220, 255));
             // Underline
             ctx.line.SetColor(Color(120, 170, 220, 255));
             ctx.line.Line2D(cx, ty + 2, cx + tw, ty + 2);
-        } else if (!isLast) {
+        }
+        else if (!isLast)
+        {
             ctx.font.SetColor(Color(150, 150, 155, 255));
-        } else {
+        }
+        else
+        {
             ctx.font.SetColor(t.textColor);
         }
         ctx.font.Print(segments_[i].c_str(), cx, ty);
         cx += tw;
 
         // Separator
-        if (!isLast) {
+        if (!isLast)
+        {
             float sepW = ctx.font.GetTextWidth(separator_.c_str());
             float sepPad = t.fontSize * 0.3f;
             cx += sepPad;
@@ -90,9 +97,10 @@ void Breadcrumbs::paint(PaintContext& ctx)
 
 int Breadcrumbs::hitTestSegment(float localX, float /*localY*/) const
 {
-    for (size_t i = 0; i + 1 < segRects_.size(); ++i) { // not last
+    for (size_t i = 0; i + 1 < segRects_.size(); ++i)
+    { // not last
         if (localX >= segRects_[i].x - absoluteRect().x &&
-            localX <  segRects_[i].x - absoluteRect().x + segRects_[i].w)
+                localX < segRects_[i].x - absoluteRect().x + segRects_[i].w)
             return static_cast<int>(i);
     }
     return -1;
@@ -101,7 +109,8 @@ int Breadcrumbs::hitTestSegment(float localX, float /*localY*/) const
 void Breadcrumbs::onMousePress(MouseEvent& e)
 {
     int idx = hitTestSegment(e.localX, e.localY);
-    if (idx >= 0) {
+    if (idx >= 0)
+    {
         itemClicked.emit(idx);
         e.consumed = true;
     }
@@ -110,7 +119,8 @@ void Breadcrumbs::onMousePress(MouseEvent& e)
 void Breadcrumbs::onMouseMove(MouseEvent& e)
 {
     int idx = hitTestSegment(e.localX, e.localY);
-    if (idx != hoveredIndex_) {
+    if (idx != hoveredIndex_)
+    {
         hoveredIndex_ = idx;
         markDirty();
     }
@@ -118,7 +128,8 @@ void Breadcrumbs::onMouseMove(MouseEvent& e)
 
 void Breadcrumbs::onMouseLeave()
 {
-    if (hoveredIndex_ >= 0) {
+    if (hoveredIndex_ >= 0)
+    {
         hoveredIndex_ = -1;
         markDirty();
     }
@@ -135,10 +146,22 @@ SearchBar::SearchBar()
     cursor_ = CursorType::IBeam;
 }
 
-float SearchBar::iconW() const    { return 24.0f; }
-float SearchBar::clearBtnW() const { return text_.empty() ? 0.0f : 20.0f; }
-float SearchBar::textAreaX() const { return iconW(); }
-float SearchBar::textAreaW() const { return rect_.w - iconW() - clearBtnW() - Theme::instance().padding; }
+float SearchBar::iconW() const
+{
+    return 24.0f;
+}
+float SearchBar::clearBtnW() const
+{
+    return text_.empty() ? 0.0f : 20.0f;
+}
+float SearchBar::textAreaX() const
+{
+    return iconW();
+}
+float SearchBar::textAreaW() const
+{
+    return rect_.w - iconW() - clearBtnW() - Theme::instance().padding;
+}
 
 void SearchBar::setText(const String& t)
 {
@@ -149,7 +172,8 @@ void SearchBar::setText(const String& t)
 
 void SearchBar::clear()
 {
-    if (!text_.empty()) {
+    if (!text_.empty())
+    {
         text_.clear();
         cursorPos_ = 0;
         scrollX_ = 0;
@@ -161,7 +185,7 @@ void SearchBar::clear()
 Widget::Vec2f SearchBar::sizeHint() const
 {
     const auto& t = Theme::instance();
-    return {200, t.inputHeight};
+    return { 200, t.inputHeight };
 }
 
 void SearchBar::paint(PaintContext& ctx)
@@ -195,22 +219,27 @@ void SearchBar::paint(PaintContext& ctx)
     // Text area clip
     float taX = abs.x + textAreaX();
     float taW = textAreaW();
-    Rect textClip = {taX, abs.y, taW, abs.h};
+    Rect textClip = { taX, abs.y, taW, abs.h };
     ctx.pushClip(textClip);
 
-    if (text_.empty() && !isFocused()) {
+    if (text_.empty() && !isFocused())
+    {
         // Placeholder
         ctx.font.SetColor(t.textDisabled);
         ctx.font.Print(placeholder_.c_str(), taX - scrollX_, ty);
-    } else {
+    }
+    else
+    {
         // Text
         ctx.font.SetColor(t.textColor);
         ctx.font.Print(text_.c_str(), taX - scrollX_, ty);
 
         // Cursor
-        if (isFocused()) {
+        if (isFocused())
+        {
             blinkTimer_ += WidgetApp::instance().deltaTime();
-            if (std::fmod(blinkTimer_, 1.0f) < 0.5f) {
+            if (std::fmod(blinkTimer_, 1.0f) < 0.5f)
+            {
                 String beforeCursor = text_.substr(0, cursorPos_);
                 float curX = taX - scrollX_ + ctx.font.GetTextWidth(beforeCursor.c_str());
                 ctx.fill.SetColor(t.textColor);
@@ -222,7 +251,8 @@ void SearchBar::paint(PaintContext& ctx)
     ctx.popClip();
 
     // Clear button (X)
-    if (!text_.empty()) {
+    if (!text_.empty())
+    {
         float cbX = abs.x + abs.w - clearBtnW() - 4;
         float cbY = abs.y + abs.h * 0.5f;
         Color xCol = Color(140, 140, 145, 255);
@@ -237,9 +267,11 @@ void SearchBar::paint(PaintContext& ctx)
 void SearchBar::onMousePress(MouseEvent& e)
 {
     // Check clear button
-    if (!text_.empty()) {
+    if (!text_.empty())
+    {
         float clearX = rect_.w - clearBtnW() - 4;
-        if (e.localX >= clearX) {
+        if (e.localX >= clearX)
+        {
             clear();
             e.consumed = true;
             return;
@@ -252,10 +284,15 @@ void SearchBar::onMousePress(MouseEvent& e)
     float clickX = e.localX - taX + scrollX_;
     int best = 0;
     float bestDist = 99999;
-    for (int i = 0; i <= static_cast<int>(text_.size()); ++i) {
+    for (int i = 0; i <= static_cast<int>(text_.size()); ++i)
+    {
         float tw = WidgetApp::instance().textWidth(text_.substr(0, i).c_str());
         float d = std::abs(tw - clickX);
-        if (d < bestDist) { bestDist = d; best = i; }
+        if (d < bestDist)
+        {
+            bestDist = d;
+            best = i;
+        }
     }
     cursorPos_ = best;
     blinkTimer_ = 0;
@@ -265,13 +302,16 @@ void SearchBar::onMousePress(MouseEvent& e)
 
 void SearchBar::onKeyPress(KeyEvent& e)
 {
-    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter) {
+    if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter)
+    {
         onSearch.emit(text_);
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Backspace) {
-        if (cursorPos_ > 0) {
+    if (e.key == ig::retained::Key::Backspace)
+    {
+        if (cursorPos_ > 0)
+        {
             text_.erase(cursorPos_ - 1, 1);
             cursorPos_--;
             blinkTimer_ = 0;
@@ -281,8 +321,10 @@ void SearchBar::onKeyPress(KeyEvent& e)
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Delete) {
-        if (cursorPos_ < static_cast<int>(text_.size())) {
+    if (e.key == ig::retained::Key::Delete)
+    {
+        if (cursorPos_ < static_cast<int>(text_.size()))
+        {
             text_.erase(cursorPos_, 1);
             blinkTimer_ = 0;
             markDirty();
@@ -291,41 +333,47 @@ void SearchBar::onKeyPress(KeyEvent& e)
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Left) {
+    if (e.key == ig::retained::Key::Left)
+    {
         if (cursorPos_ > 0) cursorPos_--;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Right) {
+    if (e.key == ig::retained::Key::Right)
+    {
         if (cursorPos_ < static_cast<int>(text_.size())) cursorPos_++;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Home) {
+    if (e.key == ig::retained::Key::Home)
+    {
         cursorPos_ = 0;
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::End) {
+    if (e.key == ig::retained::Key::End)
+    {
         cursorPos_ = static_cast<int>(text_.size());
         blinkTimer_ = 0;
         markDirty();
         e.consumed = true;
         return;
     }
-    if (e.key == ig::retained::Key::Escape) {
+    if (e.key == ig::retained::Key::Escape)
+    {
         clear();
         e.consumed = true;
         return;
     }
     // Ctrl+A select all (just move cursor to end for now)
-    if (e.ctrl && e.key == ig::retained::Key::A) {
+    if (e.ctrl && e.key == ig::retained::Key::A)
+    {
         cursorPos_ = static_cast<int>(text_.size());
         blinkTimer_ = 0;
         markDirty();
@@ -350,7 +398,8 @@ void SearchBar::onTextInput(KeyEvent& e)
 //  SplitButton
 // ═════════════════════════════════════════════════════════════════════════════
 
-SplitButton::SplitButton(const String& text) : text_(text)
+SplitButton::SplitButton(const String& text)
+        : text_(text)
 {
     dropMenu_ = new Menu();
 }
@@ -372,13 +421,16 @@ void SplitButton::addSeparator()
     dropMenu_->addSeparator();
 }
 
-float SplitButton::dropArrowW() const { return 22.0f; }
+float SplitButton::dropArrowW() const
+{
+    return 22.0f;
+}
 
 Widget::Vec2f SplitButton::sizeHint() const
 {
     const auto& t = Theme::instance();
     float tw = text_.size() * t.fontSize * 0.6f;
-    return {tw + t.padding * 3 + dropArrowW(), t.buttonHeight};
+    return { tw + t.padding * 3 + dropArrowW(), t.buttonHeight };
 }
 
 void SplitButton::paint(PaintContext& ctx)
@@ -433,10 +485,13 @@ void SplitButton::onMousePress(MouseEvent& e)
     float arrowW = dropArrowW();
     float mainW = abs.w - arrowW;
 
-    if (e.localX >= mainW) {
+    if (e.localX >= mainW)
+    {
         // Dropdown clicked
         dropMenu_->exec(abs.x, abs.y + abs.h);
-    } else {
+    }
+    else
+    {
         // Main button clicked
         clicked.emit();
     }
@@ -449,7 +504,8 @@ void SplitButton::onMouseMove(MouseEvent& e)
     float mainW = rect_.w - arrowW;
     bool hm = (e.localX < mainW);
     bool hd = (e.localX >= mainW);
-    if (hm != hoverMain_ || hd != hoverDrop_) {
+    if (hm != hoverMain_ || hd != hoverDrop_)
+    {
         hoverMain_ = hm;
         hoverDrop_ = hd;
         markDirty();
@@ -458,7 +514,8 @@ void SplitButton::onMouseMove(MouseEvent& e)
 
 void SplitButton::onMouseLeave()
 {
-    if (hoverMain_ || hoverDrop_) {
+    if (hoverMain_ || hoverDrop_)
+    {
         hoverMain_ = false;
         hoverDrop_ = false;
         markDirty();
@@ -473,30 +530,31 @@ void SplitButton::onMouseLeave()
 Menu* ContextMenuBuilder::build(Widget* target, const ct::Vector<ContextMenuItem>& items)
 {
     // Clean up previous context menu if one exists
-    if (target)
-        target->setContextMenu(nullptr);  // setter deletes old menu
+    if (target) target->setContextMenu(nullptr); // setter deletes old menu
 
     auto* menu = new Menu();
-    for (const auto& item : items) {
-        if (item.text.empty() || item.text == "-") {
+    for (const auto& item: items)
+    {
+        if (item.text.empty() || item.text == "-")
+        {
             menu->addSeparator();
             continue;
         }
         auto* act = menu->addAction(item.text);
-        if (!item.shortcut.empty())
-            act->setShortcut(item.shortcut);
+        if (!item.shortcut.empty()) act->setShortcut(item.shortcut);
         act->setEnabled(item.enabled);
-        if (item.checkable) {
+        if (item.checkable)
+        {
             act->setCheckable(true);
             act->setChecked(item.checked);
         }
-        if (item.callback) {
+        if (item.callback)
+        {
             auto cb = item.callback;
             act->triggered.connect([cb]() { cb(); });
         }
     }
-    if (target)
-        target->setContextMenu(menu);
+    if (target) target->setContextMenu(menu);
     return menu;
 }
 
@@ -511,7 +569,7 @@ Outliner::Outliner()
 
 Outliner::~Outliner()
 {
-    for (auto* r : roots_) delete r;
+    for (auto* r: roots_) delete r;
 }
 
 TreeNode* Outliner::addRoot(const String& text)
@@ -525,7 +583,7 @@ TreeNode* Outliner::addRoot(const String& text)
 
 void Outliner::clear()
 {
-    for (auto* r : roots_) delete r;
+    for (auto* r: roots_) delete r;
     roots_.clear();
     flatRows_.clear();
     selected_ = nullptr;
@@ -537,19 +595,32 @@ void Outliner::clear()
     markDirty();
 }
 
-void Outliner::setNodeVisible(TreeNode* node, bool vis) { visMap_[node] = vis; markDirty(); }
-bool Outliner::isNodeVisible(TreeNode* node) const {
+void Outliner::setNodeVisible(TreeNode* node, bool vis)
+{
+    visMap_[node] = vis;
+    markDirty();
+}
+bool Outliner::isNodeVisible(TreeNode* node) const
+{
     const bool* visible = visMap_.find(node);
     return visible ? *visible : true;
 }
 
-void Outliner::setNodeLocked(TreeNode* node, bool locked) { lockMap_[node] = locked; markDirty(); }
-bool Outliner::isNodeLocked(TreeNode* node) const {
+void Outliner::setNodeLocked(TreeNode* node, bool locked)
+{
+    lockMap_[node] = locked;
+    markDirty();
+}
+bool Outliner::isNodeLocked(TreeNode* node) const
+{
     const bool* locked = lockMap_.find(node);
     return locked ? *locked : false;
 }
 
-TreeNode* Outliner::selectedNode() const { return selected_; }
+TreeNode* Outliner::selectedNode() const
+{
+    return selected_;
+}
 
 namespace
 {
@@ -557,39 +628,35 @@ namespace
 // the ones that are gone: a new node allocated at a recycled address would
 // otherwise inherit the visibility and lock of the one it replaced.
 void carryNodeFlags(TreeNode* node, const ct::HashMap<TreeNode*, bool>& visible,
-                    const ct::HashMap<TreeNode*, bool>& locked,
-                    ct::HashMap<TreeNode*, bool>& outVisible,
-                    ct::HashMap<TreeNode*, bool>& outLocked)
+        const ct::HashMap<TreeNode*, bool>& locked, ct::HashMap<TreeNode*, bool>& outVisible,
+        ct::HashMap<TreeNode*, bool>& outLocked)
 {
-    if (const bool* v = visible.find(node))
-        outVisible[node] = *v;
-    if (const bool* l = locked.find(node))
-        outLocked[node] = *l;
-    for (auto* child : node->children())
+    if (const bool* v = visible.find(node)) outVisible[node] = *v;
+    if (const bool* l = locked.find(node)) outLocked[node] = *l;
+    for (auto* child: node->children())
         carryNodeFlags(child, visible, locked, outVisible, outLocked);
 }
-}
+} // namespace
 
 void Outliner::rebuildFlat()
 {
     ct::HashMap<TreeNode*, bool> visible;
     ct::HashMap<TreeNode*, bool> locked;
-    for (auto* r : roots_)
-        carryNodeFlags(r, visMap_, lockMap_, visible, locked);
-    visMap_  = visible;
+    for (auto* r: roots_) carryNodeFlags(r, visMap_, lockMap_, visible, locked);
+    visMap_ = visible;
     lockMap_ = locked;
 
     flatRows_.clear();
-    for (auto* r : roots_) flattenNode(r, 0);
+    for (auto* r: roots_) flattenNode(r, 0);
     flatDirty_ = false;
 }
 
 void Outliner::flattenNode(TreeNode* n, int depth)
 {
-    flatRows_.push_back({n, depth});
-    if (n->isExpanded()) {
-        for (auto* c : n->children())
-            flattenNode(c, depth + 1);
+    flatRows_.push_back({ n, depth });
+    if (n->isExpanded())
+    {
+        for (auto* c: n->children()) flattenNode(c, depth + 1);
     }
 }
 
@@ -606,9 +673,18 @@ int Outliner::hitTestRow(float localY) const
     return row;
 }
 
-float Outliner::eyeColX() const    { return rect_.w - 40; }
-float Outliner::lockColX() const   { return rect_.w - 20; }
-float Outliner::textColX(int depth) const { return 4 + indent_ * depth + 16; }
+float Outliner::eyeColX() const
+{
+    return rect_.w - 40;
+}
+float Outliner::lockColX() const
+{
+    return rect_.w - 20;
+}
+float Outliner::textColX(int depth) const
+{
+    return 4 + indent_ * depth + 16;
+}
 
 void Outliner::layout()
 {
@@ -633,19 +709,22 @@ void Outliner::paint(PaintContext& ctx)
 
     float asc = ctx.font.GetAscender();
     int firstRow = static_cast<int>(scrollOffset_ / rowHeight_);
-    int visRows  = static_cast<int>(abs.h / rowHeight_) + 2;
+    int visRows = static_cast<int>(abs.h / rowHeight_) + 2;
 
-    for (int i = firstRow; i < firstRow + visRows && i < static_cast<int>(flatRows_.size()); ++i) {
+    for (int i = firstRow; i < firstRow + visRows && i < static_cast<int>(flatRows_.size()); ++i)
+    {
         auto& fr = flatRows_[i];
         float ry = abs.y + i * rowHeight_ - scrollOffset_;
 
         // Selection highlight
-        if (fr.node == selected_) {
+        if (fr.node == selected_)
+        {
             ctx.fill.SetColor(t.selectionColor);
             ctx.fill.Rectangle(abs.x, ry, abs.w, rowHeight_, true);
         }
         // Hover highlight
-        if (i == hoveredRow_ && fr.node != selected_) {
+        if (i == hoveredRow_ && fr.node != selected_)
+        {
             ctx.fill.SetColor(Color(255, 255, 255, 15));
             ctx.fill.Rectangle(abs.x, ry, abs.w, rowHeight_, true);
         }
@@ -654,19 +733,24 @@ void Outliner::paint(PaintContext& ctx)
         float tty = ry + (rowHeight_ + asc) * 0.5f;
 
         // Expand triangle
-        if (fr.node->hasChildren()) {
+        if (fr.node->hasChildren())
+        {
             float triX = abs.x + 4 + indent_ * fr.depth;
             float triY = ry + rowHeight_ * 0.5f;
             ctx.fill.SetColor(Color(180, 180, 185, 255));
-            if (fr.node->isExpanded()) {
+            if (fr.node->isExpanded())
+            {
                 ctx.fill.Triangle(triX, triY - 3, triX + 7, triY - 3, triX + 3.5f, triY + 3, true);
-            } else {
+            }
+            else
+            {
                 ctx.fill.Triangle(triX, triY - 4, triX + 6, triY, triX, triY + 4, true);
             }
         }
 
         // Icon (if any)
-        if (fr.node->iconId() != IconId::None && ctx.icons) {
+        if (fr.node->iconId() != IconId::None && ctx.icons)
+        {
             ctx.drawIcon(fr.node->iconId(), tx - 16, ry + 3, 16);
         }
 
@@ -674,7 +758,7 @@ void Outliner::paint(PaintContext& ctx)
         bool vis = isNodeVisible(fr.node);
         float eyeX = abs.x + eyeColX();
         ctx.font.SetColor(vis ? t.textColor : t.textDisabled);
-        ctx.pushClip(Rect{tx, ry, std::max(0.0f, eyeX - 4.0f - tx), rowHeight_});
+        ctx.pushClip(Rect{ tx, ry, std::max(0.0f, eyeX - 4.0f - tx), rowHeight_ });
         ctx.font.Print(fr.node->text().c_str(), tx, tty);
         ctx.popClip();
 
@@ -684,8 +768,7 @@ void Outliner::paint(PaintContext& ctx)
         // Simple eye: circle + dot
         ctx.line.SetColor(eyeCol);
         ctx.line.Circle(eyeX + 8, ry + rowHeight_ * 0.5f, 5, false);
-        if (vis)
-            ctx.fill.Circle(eyeX + 8, ry + rowHeight_ * 0.5f, 2, true);
+        if (vis) ctx.fill.Circle(eyeX + 8, ry + rowHeight_ * 0.5f, 2, true);
 
         // Lock icon
         bool locked = isNodeLocked(fr.node);
@@ -694,22 +777,27 @@ void Outliner::paint(PaintContext& ctx)
         ctx.line.SetColor(lockCol);
         // Simple lock: rect + arc
         ctx.line.Rectangle(lockX + 3, ry + rowHeight_ * 0.5f - 4, 10, 8, false);
-        if (locked)
-            ctx.line.Circle(lockX + 8, ry + rowHeight_ * 0.5f - 6, 4, false);
+        if (locked) ctx.line.Circle(lockX + 8, ry + rowHeight_ * 0.5f - 6, 4, false);
     }
 
-    if (dragNode_ && dropSpot_.valid) {
+    if (dragNode_ && dropSpot_.valid)
+    {
         const Color accent(100, 170, 255, 255);
         const float scrolled = abs.y - scrollOffset_;
-        if (dropSpot_.row >= 0 && dropSpot_.zone == DropZone::Inside) {
+        if (dropSpot_.row >= 0 && dropSpot_.zone == DropZone::Inside)
+        {
             const float ry = scrolled + dropSpot_.row * rowHeight_;
             ctx.fill.SetColor(Color(100, 170, 255, 40));
             ctx.fill.Rectangle(abs.x, ry, abs.w, rowHeight_, true);
             ctx.line.SetColor(accent);
             ctx.line.Rectangle(abs.x + 1, ry + 1, abs.w - 2, rowHeight_ - 2, false);
-        } else {
+        }
+        else
+        {
             const int rows = static_cast<int>(flatRows_.size());
-            const int below = dropSpot_.row < 0 ? rows : dropSpot_.row + (dropSpot_.zone == DropZone::After ? 1 : 0);
+            const int below = dropSpot_.row < 0
+                                      ? rows
+                                      : dropSpot_.row + (dropSpot_.zone == DropZone::After ? 1 : 0);
             const int depth = dropSpot_.row < 0 ? 0 : flatRows_[dropSpot_.row].depth;
             const float x = abs.x + textColX(depth) - 16;
             ctx.fill.SetColor(accent);
@@ -728,7 +816,8 @@ void Outliner::onMousePress(MouseEvent& e)
 
     dragCandidate_ = nullptr;
     int row = hitTestRow(e.localY);
-    if (row < 0 || row >= static_cast<int>(flatRows_.size())) {
+    if (row < 0 || row >= static_cast<int>(flatRows_.size()))
+    {
         e.consumed = true;
         return;
     }
@@ -738,7 +827,8 @@ void Outliner::onMousePress(MouseEvent& e)
 
     // Eye toggle
     float eyeX = eyeColX();
-    if (e.localX >= eyeX && e.localX < eyeX + 16) {
+    if (e.localX >= eyeX && e.localX < eyeX + 16)
+    {
         bool vis = !isNodeVisible(fr.node);
         setNodeVisible(fr.node, vis);
         visibilityChanged.emit(fr.node, vis);
@@ -748,7 +838,8 @@ void Outliner::onMousePress(MouseEvent& e)
 
     // Lock toggle
     float lckX = lockColX();
-    if (e.localX >= lckX && e.localX < lckX + 16) {
+    if (e.localX >= lckX && e.localX < lckX + 16)
+    {
         bool lock = !isNodeLocked(fr.node);
         setNodeLocked(fr.node, lock);
         lockChanged.emit(fr.node, lock);
@@ -758,7 +849,8 @@ void Outliner::onMousePress(MouseEvent& e)
 
     // Triangle expand/collapse
     float triX = 4 + indent_ * fr.depth;
-    if (e.localX >= triX && e.localX < triX + 16 && fr.node->hasChildren()) {
+    if (e.localX >= triX && e.localX < triX + 16 && fr.node->hasChildren())
+    {
         fr.node->setExpanded(!fr.node->isExpanded());
         flatDirty_ = true;
         markDirty();
@@ -767,7 +859,8 @@ void Outliner::onMousePress(MouseEvent& e)
     }
 
     // Select
-    if (selected_ != fr.node) {
+    if (selected_ != fr.node)
+    {
         selected_ = fr.node;
         selectionChanged.emit(selected_);
         markDirty();
@@ -789,14 +882,15 @@ void Outliner::onMouseMove(MouseEvent& e)
 {
     hoverX_ = e.localX;
     int row = hitTestRow(e.localY);
-    if (row != hoveredRow_) {
+    if (row != hoveredRow_)
+    {
         hoveredRow_ = row;
         markDirty();
     }
-    if (dragNode_) {
+    if (dragNode_)
+    {
         const float edge = 14.0f;
-        if (e.localY < edge)
-            scrollOffset_ = std::max(0.0f, scrollOffset_ - 6.0f);
+        if (e.localY < edge) scrollOffset_ = std::max(0.0f, scrollOffset_ - 6.0f);
         else if (e.localY > rect_.h - edge)
             scrollOffset_ = std::min(scrollOffset_ + 6.0f, maxScroll());
         dropSpot_ = dropSpotAt(e.localY);
@@ -806,11 +900,13 @@ void Outliner::onMouseMove(MouseEvent& e)
 
 void Outliner::onMouseLeave()
 {
-    if (hoveredRow_ >= 0) {
+    if (hoveredRow_ >= 0)
+    {
         hoveredRow_ = -1;
         markDirty();
     }
-    if (dragNode_) {
+    if (dragNode_)
+    {
         dropSpot_ = DropSpot();
         markDirty();
     }
@@ -821,20 +917,17 @@ bool Outliner::isDragSource() const
 {
     if (!dragEnabled_ || hoveredRow_ < 0 || hoveredRow_ >= static_cast<int>(flatRows_.size()))
         return false;
-    if (hoverX_ >= rect_.w - 40)
-        return false;
+    if (hoverX_ >= rect_.w - 40) return false;
     const FlatRow& fr = flatRows_[hoveredRow_];
     const float triX = 4 + indent_ * fr.depth;
-    if (fr.node->hasChildren() && hoverX_ >= triX && hoverX_ < triX + 16)
-        return false;
+    if (fr.node->hasChildren() && hoverX_ >= triX && hoverX_ < triX + 16) return false;
     return !dragFilter_ || dragFilter_(fr.node);
 }
 
 DragPayload Outliner::onDragBegin()
 {
     DragPayload payload;
-    if (!dragCandidate_)
-        return payload;
+    if (!dragCandidate_) return payload;
     dragNode_ = dragCandidate_;
     payload.type = "outliner-node";
     payload.data = dragNode_;
@@ -843,7 +936,7 @@ DragPayload Outliner::onDragBegin()
 
 void Outliner::onDragEnd(bool accepted)
 {
-    (void)accepted;
+    (void) accepted;
     dragNode_ = nullptr;
     dragCandidate_ = nullptr;
     dropSpot_ = DropSpot();
@@ -857,32 +950,32 @@ bool Outliner::acceptsDrop(const DragPayload& p)
 
 void Outliner::onDropReceive(const DragPayload& p)
 {
-    if (!dragNode_)
-        return;
+    if (!dragNode_) return;
     const DropSpot spot = dropSpotAt(p.dropY - absoluteRect().y);
-    if (!spot.valid)
-        return;
+    if (!spot.valid) return;
     nodeDropped.emit(dragNode_, spot.target, spot.zone);
 }
 
 Outliner::DropSpot Outliner::dropSpotAt(float localY)
 {
     DropSpot spot;
-    if (!dragNode_)
-        return spot;
+    if (!dragNode_) return spot;
     if (flatDirty_) rebuildFlat();
     const float content = std::max(0.0f, localY + scrollOffset_);
     const int rows = static_cast<int>(flatRows_.size());
     const int row = static_cast<int>(content / rowHeight_);
-    if (row >= rows) {
+    if (row >= rows)
+    {
         spot.zone = DropZone::After;
-    } else {
+    }
+    else
+    {
         const float fraction = content / rowHeight_ - static_cast<float>(row);
         spot.row = row;
         spot.target = flatRows_[row].node;
-        spot.zone = fraction < 0.25f ? DropZone::Before
-                  : fraction > 0.75f ? DropZone::After
-                                     : DropZone::Inside;
+        spot.zone = fraction < 0.25f   ? DropZone::Before
+                    : fraction > 0.75f ? DropZone::After
+                                       : DropZone::Inside;
     }
     spot.valid = !dropFilter_ || dropFilter_(dragNode_, spot.target, spot.zone);
     return spot;
@@ -914,9 +1007,11 @@ void RichText::parse()
     // Split into lines
     ct::Vector<String> lines;
     size_t pos = 0;
-    while (pos < rawMd_.size()) {
+    while (pos < rawMd_.size())
+    {
         size_t nl = rawMd_.find('\n', pos);
-        if (nl == String::npos) {
+        if (nl == String::npos)
+        {
             lines.push_back(rawMd_.substr(pos));
             break;
         }
@@ -927,22 +1022,28 @@ void RichText::parse()
     bool inCodeBlock = false;
     String codeAccum;
 
-    for (const auto& line : lines) {
+    for (const auto& line: lines)
+    {
         // Code blocks (```)
-        if (line.size() >= 3 && line.substr(0, 3) == "```") {
-            if (inCodeBlock) {
+        if (line.size() >= 3 && line.substr(0, 3) == "```")
+        {
+            if (inCodeBlock)
+            {
                 Block b;
                 b.type = BlockType::CodeBlock;
-                b.spans.push_back({codeAccum, SpanStyle::Code, ""});
+                b.spans.push_back({ codeAccum, SpanStyle::Code, "" });
                 blocks_.push_back(std::move(b));
                 codeAccum.clear();
                 inCodeBlock = false;
-            } else {
+            }
+            else
+            {
                 inCodeBlock = true;
             }
             continue;
         }
-        if (inCodeBlock) {
+        if (inCodeBlock)
+        {
             if (!codeAccum.empty()) codeAccum += '\n';
             codeAccum += line;
             continue;
@@ -954,77 +1055,107 @@ void RichText::parse()
         Block b;
 
         // Headings
-        if (line.size() >= 4 && line.substr(0, 4) == "### ") {
+        if (line.size() >= 4 && line.substr(0, 4) == "### ")
+        {
             b.type = BlockType::Heading3;
-            b.spans.push_back({line.substr(4), SpanStyle::Bold, ""});
+            b.spans.push_back({ line.substr(4), SpanStyle::Bold, "" });
             blocks_.push_back(std::move(b));
             continue;
         }
-        if (line.size() >= 3 && line.substr(0, 3) == "## ") {
+        if (line.size() >= 3 && line.substr(0, 3) == "## ")
+        {
             b.type = BlockType::Heading2;
-            b.spans.push_back({line.substr(3), SpanStyle::Bold, ""});
+            b.spans.push_back({ line.substr(3), SpanStyle::Bold, "" });
             blocks_.push_back(std::move(b));
             continue;
         }
-        if (line.size() >= 2 && line.substr(0, 2) == "# ") {
+        if (line.size() >= 2 && line.substr(0, 2) == "# ")
+        {
             b.type = BlockType::Heading1;
-            b.spans.push_back({line.substr(2), SpanStyle::Bold, ""});
+            b.spans.push_back({ line.substr(2), SpanStyle::Bold, "" });
             blocks_.push_back(std::move(b));
             continue;
         }
 
         // List items
-        if (line.size() >= 2 && (line.substr(0, 2) == "- " || line.substr(0, 2) == "* ")) {
+        if (line.size() >= 2 && (line.substr(0, 2) == "- " || line.substr(0, 2) == "* "))
+        {
             b.type = BlockType::ListItem;
             // Parse inline spans from the rest
             String content = line.substr(2);
             // Simple inline parsing
             size_t i = 0;
             String accum;
-            while (i < content.size()) {
+            while (i < content.size())
+            {
                 // Bold **...**
-                if (i + 1 < content.size() && content[i] == '*' && content[i+1] == '*') {
-                    if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+                if (i + 1 < content.size() && content[i] == '*' && content[i + 1] == '*')
+                {
+                    if (!accum.empty())
+                    {
+                        b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                        accum.clear();
+                    }
                     i += 2;
                     size_t end = content.find("**", i);
-                    if (end != String::npos) {
-                        b.spans.push_back({content.substr(i, end - i), SpanStyle::Bold, ""});
+                    if (end != String::npos)
+                    {
+                        b.spans.push_back({ content.substr(i, end - i), SpanStyle::Bold, "" });
                         i = end + 2;
                     }
                     continue;
                 }
                 // Italic *...*
-                if (content[i] == '*') {
-                    if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+                if (content[i] == '*')
+                {
+                    if (!accum.empty())
+                    {
+                        b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                        accum.clear();
+                    }
                     i++;
                     size_t end = content.find('*', i);
-                    if (end != String::npos) {
-                        b.spans.push_back({content.substr(i, end - i), SpanStyle::Italic, ""});
+                    if (end != String::npos)
+                    {
+                        b.spans.push_back({ content.substr(i, end - i), SpanStyle::Italic, "" });
                         i = end + 1;
                     }
                     continue;
                 }
                 // Code `...`
-                if (content[i] == '`') {
-                    if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+                if (content[i] == '`')
+                {
+                    if (!accum.empty())
+                    {
+                        b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                        accum.clear();
+                    }
                     i++;
                     size_t end = content.find('`', i);
-                    if (end != String::npos) {
-                        b.spans.push_back({content.substr(i, end - i), SpanStyle::Code, ""});
+                    if (end != String::npos)
+                    {
+                        b.spans.push_back({ content.substr(i, end - i), SpanStyle::Code, "" });
                         i = end + 1;
                     }
                     continue;
                 }
                 // Link [text](url)
-                if (content[i] == '[') {
+                if (content[i] == '[')
+                {
                     size_t rb = content.find(']', i);
-                    if (rb != String::npos && rb + 1 < content.size() && content[rb+1] == '(') {
+                    if (rb != String::npos && rb + 1 < content.size() && content[rb + 1] == '(')
+                    {
                         size_t rp = content.find(')', rb + 2);
-                        if (rp != String::npos) {
-                            if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+                        if (rp != String::npos)
+                        {
+                            if (!accum.empty())
+                            {
+                                b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                                accum.clear();
+                            }
                             String text = content.substr(i + 1, rb - i - 1);
-                            String url  = content.substr(rb + 2, rp - rb - 2);
-                            b.spans.push_back({text, SpanStyle::Link, url});
+                            String url = content.substr(rb + 2, rp - rb - 2);
+                            b.spans.push_back({ text, SpanStyle::Link, url });
                             i = rp + 1;
                             continue;
                         }
@@ -1032,7 +1163,7 @@ void RichText::parse()
                 }
                 accum += content[i++];
             }
-            if (!accum.empty()) b.spans.push_back({accum, SpanStyle::Normal, ""});
+            if (!accum.empty()) b.spans.push_back({ accum, SpanStyle::Normal, "" });
             blocks_.push_back(std::move(b));
             continue;
         }
@@ -1041,44 +1172,71 @@ void RichText::parse()
         b.type = BlockType::Paragraph;
         size_t i = 0;
         String accum;
-        while (i < line.size()) {
-            if (i + 1 < line.size() && line[i] == '*' && line[i+1] == '*') {
-                if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+        while (i < line.size())
+        {
+            if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '*')
+            {
+                if (!accum.empty())
+                {
+                    b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                    accum.clear();
+                }
                 i += 2;
                 size_t end = line.find("**", i);
-                if (end != String::npos) {
-                    b.spans.push_back({line.substr(i, end - i), SpanStyle::Bold, ""});
+                if (end != String::npos)
+                {
+                    b.spans.push_back({ line.substr(i, end - i), SpanStyle::Bold, "" });
                     i = end + 2;
                 }
                 continue;
             }
-            if (line[i] == '*') {
-                if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+            if (line[i] == '*')
+            {
+                if (!accum.empty())
+                {
+                    b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                    accum.clear();
+                }
                 i++;
                 size_t end = line.find('*', i);
-                if (end != String::npos) {
-                    b.spans.push_back({line.substr(i, end - i), SpanStyle::Italic, ""});
+                if (end != String::npos)
+                {
+                    b.spans.push_back({ line.substr(i, end - i), SpanStyle::Italic, "" });
                     i = end + 1;
                 }
                 continue;
             }
-            if (line[i] == '`') {
-                if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
+            if (line[i] == '`')
+            {
+                if (!accum.empty())
+                {
+                    b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                    accum.clear();
+                }
                 i++;
                 size_t end = line.find('`', i);
-                if (end != String::npos) {
-                    b.spans.push_back({line.substr(i, end - i), SpanStyle::Code, ""});
+                if (end != String::npos)
+                {
+                    b.spans.push_back({ line.substr(i, end - i), SpanStyle::Code, "" });
                     i = end + 1;
                 }
                 continue;
             }
-            if (line[i] == '[') {
+            if (line[i] == '[')
+            {
                 size_t rb = line.find(']', i);
-                if (rb != String::npos && rb + 1 < line.size() && line[rb+1] == '(') {
+                if (rb != String::npos && rb + 1 < line.size() && line[rb + 1] == '(')
+                {
                     size_t rp = line.find(')', rb + 2);
-                    if (rp != String::npos) {
-                        if (!accum.empty()) { b.spans.push_back({accum, SpanStyle::Normal, ""}); accum.clear(); }
-                        b.spans.push_back({line.substr(i+1, rb-i-1), SpanStyle::Link, line.substr(rb+2, rp-rb-2)});
+                    if (rp != String::npos)
+                    {
+                        if (!accum.empty())
+                        {
+                            b.spans.push_back({ accum, SpanStyle::Normal, "" });
+                            accum.clear();
+                        }
+                        b.spans.push_back({ line.substr(i + 1, rb - i - 1), SpanStyle::Link,
+                            line.substr(rb + 2, rp - rb - 2) });
                         i = rp + 1;
                         continue;
                     }
@@ -1086,7 +1244,7 @@ void RichText::parse()
             }
             accum += line[i++];
         }
-        if (!accum.empty()) b.spans.push_back({accum, SpanStyle::Normal, ""});
+        if (!accum.empty()) b.spans.push_back({ accum, SpanStyle::Normal, "" });
         blocks_.push_back(std::move(b));
     }
 }
@@ -1095,16 +1253,28 @@ Widget::Vec2f RichText::sizeHint() const
 {
     const auto& t = Theme::instance();
     float h = t.padding * 2;
-    for (const auto& b : blocks_) {
-        switch (b.type) {
-            case BlockType::Heading1:  h += t.fontSize * 2.0f + 8; break;
-            case BlockType::Heading2:  h += t.fontSize * 1.6f + 6; break;
-            case BlockType::Heading3:  h += t.fontSize * 1.3f + 4; break;
-            case BlockType::CodeBlock: h += t.fontSize * 1.2f * 3 + 12; break;
-            default:                   h += t.fontSize + t.lineSpacing + 4; break;
+    for (const auto& b: blocks_)
+    {
+        switch (b.type)
+        {
+            case BlockType::Heading1:
+                h += t.fontSize * 2.0f + 8;
+                break;
+            case BlockType::Heading2:
+                h += t.fontSize * 1.6f + 6;
+                break;
+            case BlockType::Heading3:
+                h += t.fontSize * 1.3f + 4;
+                break;
+            case BlockType::CodeBlock:
+                h += t.fontSize * 1.2f * 3 + 12;
+                break;
+            default:
+                h += t.fontSize + t.lineSpacing + 4;
+                break;
         }
     }
-    return {300, h};
+    return { 300, h };
 }
 
 void RichText::paint(PaintContext& ctx)
@@ -1127,29 +1297,50 @@ void RichText::paint(PaintContext& ctx)
     float cy = abs.y + t.padding - scrollY_;
     float maxW = abs.w - t.padding * 2;
 
-    for (const auto& block : blocks_) {
+    for (const auto& block: blocks_)
+    {
         float lineH = t.fontSize + t.lineSpacing;
         float scale = 1.0f;
         float blockGap = 4.0f;
 
-        switch (block.type) {
-            case BlockType::Heading1: scale = 1.8f; lineH = t.fontSize * scale + 8; blockGap = 8; break;
-            case BlockType::Heading2: scale = 1.4f; lineH = t.fontSize * scale + 6; blockGap = 6; break;
-            case BlockType::Heading3: scale = 1.15f; lineH = t.fontSize * scale + 4; blockGap = 4; break;
-            case BlockType::ListItem: lineH = t.fontSize + 4; break;
-            case BlockType::CodeBlock: lineH = t.fontSize * 1.1f; break;
-            default: break;
+        switch (block.type)
+        {
+            case BlockType::Heading1:
+                scale = 1.8f;
+                lineH = t.fontSize * scale + 8;
+                blockGap = 8;
+                break;
+            case BlockType::Heading2:
+                scale = 1.4f;
+                lineH = t.fontSize * scale + 6;
+                blockGap = 6;
+                break;
+            case BlockType::Heading3:
+                scale = 1.15f;
+                lineH = t.fontSize * scale + 4;
+                blockGap = 4;
+                break;
+            case BlockType::ListItem:
+                lineH = t.fontSize + 4;
+                break;
+            case BlockType::CodeBlock:
+                lineH = t.fontSize * 1.1f;
+                break;
+            default:
+                break;
         }
 
         float asc = ctx.font.GetAscender() * scale;
         float ty = cy + asc;
 
         // Code block background
-        if (block.type == BlockType::CodeBlock) {
+        if (block.type == BlockType::CodeBlock)
+        {
             // Count lines in code
             int codeLines = 1;
-            for (auto& sp : block.spans)
-                for (char c : sp.text) if (c == '\n') codeLines++;
+            for (auto& sp: block.spans)
+                for (char c: sp.text)
+                    if (c == '\n') codeLines++;
             float codeH = codeLines * lineH + 8;
             ctx.fill.SetColor(Color(25, 25, 28, 255));
             ctx.fill.RoundedRectangle(cx - 4, cy, maxW + 8, codeH, 3, 4, true);
@@ -1158,10 +1349,13 @@ void RichText::paint(PaintContext& ctx)
             ctx.font.SetColor(Color(180, 210, 180, 255));
             float codeTy = cy + ctx.font.GetAscender() + 4;
             size_t pos = 0;
-            for (auto& sp : block.spans) {
-                while (pos < sp.text.size()) {
+            for (auto& sp: block.spans)
+            {
+                while (pos < sp.text.size())
+                {
                     size_t nl = sp.text.find('\n', pos);
-                    String ln = (nl == String::npos) ? sp.text.substr(pos) : sp.text.substr(pos, nl - pos);
+                    String ln = (nl == String::npos) ? sp.text.substr(pos)
+                                                     : sp.text.substr(pos, nl - pos);
                     ctx.font.Print(ln.c_str(), cx + 4, codeTy);
                     codeTy += lineH;
                     pos = (nl == String::npos) ? sp.text.size() : nl + 1;
@@ -1173,22 +1367,26 @@ void RichText::paint(PaintContext& ctx)
 
         // List bullet
         float spanX = cx;
-        if (block.type == BlockType::ListItem) {
+        if (block.type == BlockType::ListItem)
+        {
             ctx.fill.SetColor(t.textColor);
             ctx.fill.Circle(cx + 3, cy + lineH * 0.5f, 2, true);
             spanX += 14;
         }
 
         // Heading underline
-        if (block.type == BlockType::Heading1 || block.type == BlockType::Heading2) {
+        if (block.type == BlockType::Heading1 || block.type == BlockType::Heading2)
+        {
             ctx.line.SetColor(t.borderColor);
             ctx.line.Line2D(cx, cy + lineH - 2, cx + maxW, cy + lineH - 2);
         }
 
         // Render spans
-        for (const auto& span : block.spans) {
+        for (const auto& span: block.spans)
+        {
             Color col = t.textColor;
-            switch (span.style) {
+            switch (span.style)
+            {
                 case SpanStyle::Bold:
                     col = Color(255, 255, 255, 255);
                     break;
@@ -1208,7 +1406,7 @@ void RichText::paint(PaintContext& ctx)
                     col = Color(100, 170, 230, 255);
                     {
                         float lw = ctx.font.GetTextWidth(span.text.c_str()) * scale;
-                        linkRects_.push_back({spanX, cy, lw, lineH, span.url});
+                        linkRects_.push_back({ spanX, cy, lw, lineH, span.url });
                         // Underline
                         ctx.line.SetColor(col);
                         ctx.line.Line2D(spanX, ty + 2, spanX + lw, ty + 2);
@@ -1236,8 +1434,10 @@ void RichText::onMousePress(MouseEvent& e)
 {
     Rect abs = absoluteRect();
     float mx = e.x, my = e.y;
-    for (const auto& lr : linkRects_) {
-        if (mx >= lr.x && mx < lr.x + lr.w && my >= lr.y && my < lr.y + lr.h) {
+    for (const auto& lr: linkRects_)
+    {
+        if (mx >= lr.x && mx < lr.x + lr.w && my >= lr.y && my < lr.y + lr.h)
+        {
             linkClicked.emit(lr.url);
             e.consumed = true;
             return;
@@ -1251,9 +1451,11 @@ void RichText::onMouseMove(MouseEvent& e)
     float mx = e.x, my = e.y;
     int prev = hoveredLink_;
     hoveredLink_ = -1;
-    for (int i = 0; i < static_cast<int>(linkRects_.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(linkRects_.size()); ++i)
+    {
         auto& lr = linkRects_[i];
-        if (mx >= lr.x && mx < lr.x + lr.w && my >= lr.y && my < lr.y + lr.h) {
+        if (mx >= lr.x && mx < lr.x + lr.w && my >= lr.y && my < lr.y + lr.h)
+        {
             hoveredLink_ = i;
             break;
         }
@@ -1263,7 +1465,11 @@ void RichText::onMouseMove(MouseEvent& e)
 
 void RichText::onMouseLeave()
 {
-    if (hoveredLink_ >= 0) { hoveredLink_ = -1; markDirty(); }
+    if (hoveredLink_ >= 0)
+    {
+        hoveredLink_ = -1;
+        markDirty();
+    }
     Widget::onMouseLeave();
 }
 
@@ -1303,7 +1509,7 @@ void Viewport3D::setOrbit(float y, float p)
 
 Widget::Vec2f Viewport3D::sizeHint() const
 {
-    return {400, 300};
+    return { 400, 300 };
 }
 
 void Viewport3D::paint(PaintContext& ctx)
@@ -1315,16 +1521,20 @@ void Viewport3D::paint(PaintContext& ctx)
     // Detect resize
     int w = static_cast<int>(abs.w);
     int h = static_cast<int>(abs.h);
-    if (w != lastW_ || h != lastH_) {
+    if (w != lastW_ || h != lastH_)
+    {
         lastW_ = w;
         lastH_ = h;
         onResize.emit(w, h);
     }
 
-    if (tex_) {
+    if (tex_)
+    {
         // Draw the FBO texture filling the widget area
         ctx.drawImage(tex_, abs);
-    } else {
+    }
+    else
+    {
         // No texture → dark background with grid hint
         ctx.fill.SetColor(Color(20, 20, 22, 255));
         ctx.fill.Rectangle(abs.x, abs.y, abs.w, abs.h, true);
@@ -1354,7 +1564,8 @@ void Viewport3D::paint(PaintContext& ctx)
 
 void Viewport3D::onMousePress(MouseEvent& e)
 {
-    if (e.button == 1 || (e.button == 0 && e.alt)) {
+    if (e.button == 1 || (e.button == 0 && e.alt))
+    {
         // Middle button or Alt+Left → orbit
         dragMode_ = DragMode::Orbit;
         dragStartX_ = e.x;
@@ -1362,7 +1573,9 @@ void Viewport3D::onMousePress(MouseEvent& e)
         dragYaw_ = yaw_;
         dragPitch_ = pitch_;
         e.consumed = true;
-    } else if (e.button == 2 || (e.button == 0 && e.shift)) {
+    }
+    else if (e.button == 2 || (e.button == 0 && e.shift))
+    {
         // Right button or Shift+Left → pan
         dragMode_ = DragMode::Pan;
         dragStartX_ = e.x;
@@ -1373,7 +1586,8 @@ void Viewport3D::onMousePress(MouseEvent& e)
 
 void Viewport3D::onMouseRelease(MouseEvent& e)
 {
-    if (dragMode_ != DragMode::None) {
+    if (dragMode_ != DragMode::None)
+    {
         dragMode_ = DragMode::None;
         e.consumed = true;
     }
@@ -1381,16 +1595,19 @@ void Viewport3D::onMouseRelease(MouseEvent& e)
 
 void Viewport3D::onMouseMove(MouseEvent& e)
 {
-    if (dragMode_ == DragMode::Orbit) {
+    if (dragMode_ == DragMode::Orbit)
+    {
         float dx = e.x - dragStartX_;
         float dy = e.y - dragStartY_;
-        yaw_   = dragYaw_   + dx * orbitSpeed_;
+        yaw_ = dragYaw_ + dx * orbitSpeed_;
         pitch_ = dragPitch_ + dy * orbitSpeed_;
         pitch_ = std::max(-89.0f, std::min(89.0f, pitch_));
         onOrbit.emit(yaw_, pitch_);
         markDirty();
         e.consumed = true;
-    } else if (dragMode_ == DragMode::Pan) {
+    }
+    else if (dragMode_ == DragMode::Pan)
+    {
         float dx = e.x - dragStartX_;
         float dy = e.y - dragStartY_;
         dragStartX_ = e.x;
@@ -1403,7 +1620,8 @@ void Viewport3D::onMouseMove(MouseEvent& e)
 
 void Viewport3D::onMouseScroll(MouseEvent& e)
 {
-    if (e.scrollY != 0.0f) {
+    if (e.scrollY != 0.0f)
+    {
         onZoom.emit(e.scrollY * zoomSpeed_);
         markDirty();
         e.consumed = true;

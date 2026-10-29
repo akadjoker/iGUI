@@ -1,13 +1,15 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Theme.hpp"
-#include <igui/widgets/String.hpp>
-#include <ct/vector.hpp>
+#include "Widget.hpp"
 #include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  MenuAction — a single item in a Menu
@@ -22,32 +24,71 @@ class MenuAction
 {
 public:
     /// @brief Get the action display text.
-    const String& text()      const { return text_; }
+    const String& text() const
+    {
+        return text_;
+    }
     /// @brief Get the keyboard shortcut string.
-    const String& shortcut()  const { return shortcut_; }
+    const String& shortcut() const
+    {
+        return shortcut_;
+    }
     /// @brief Check if the action is enabled.
-    bool  isEnabled()   const { return enabled_; }
+    bool isEnabled() const
+    {
+        return enabled_;
+    }
     /// @brief Check if the action is checkable.
-    bool  isCheckable() const { return checkable_; }
+    bool isCheckable() const
+    {
+        return checkable_;
+    }
     /// @brief Check if the action is currently checked.
-    bool  isChecked()   const { return checked_; }
+    bool isChecked() const
+    {
+        return checked_;
+    }
     /// @brief Check if this is a separator item.
-    bool  isSeparator() const { return separator_; }
+    bool isSeparator() const
+    {
+        return separator_;
+    }
     /// @brief Get the attached submenu (nullptr if none).
-    Menu* submenu()     const { return submenu_; }
+    Menu* submenu() const
+    {
+        return submenu_;
+    }
 
     /// @brief Set the display text.
-    void  setText(const String& t)     { text_ = t; }
+    void setText(const String& t)
+    {
+        text_ = t;
+    }
     /// @brief Set the keyboard shortcut label.
-    void  setShortcut(const String& s) { shortcut_ = s; }
+    void setShortcut(const String& s)
+    {
+        shortcut_ = s;
+    }
     /// @brief Enable or disable the action.
-    void  setEnabled(bool e)                { enabled_ = e; }
+    void setEnabled(bool e)
+    {
+        enabled_ = e;
+    }
     /// @brief Set whether the action is checkable.
-    void  setCheckable(bool c)              { checkable_ = c; }
+    void setCheckable(bool c)
+    {
+        checkable_ = c;
+    }
     /// @brief Set the checked state.
-    void  setChecked(bool c)                { checked_ = c; }
+    void setChecked(bool c)
+    {
+        checked_ = c;
+    }
     /// @brief Attach a submenu (not owned).
-    void  setSubmenu(Menu* m)               { submenu_ = m; }
+    void setSubmenu(Menu* m)
+    {
+        submenu_ = m;
+    }
 
     /// @brief Emitted when the action is triggered.
     Signal<> triggered;
@@ -58,11 +99,11 @@ private:
 
     String text_;
     String shortcut_;
-    bool        enabled_   = true;
-    bool        checkable_ = false;
-    bool        checked_   = false;
-    bool        separator_ = false;
-    Menu*       submenu_   = nullptr;
+    bool enabled_ = true;
+    bool checkable_ = false;
+    bool checked_ = false;
+    bool separator_ = false;
+    Menu* submenu_ = nullptr;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -93,46 +134,55 @@ public:
     MenuAction* addSeparator();
 
     /// @brief Remove all actions.
-    void        clearActions();
+    void clearActions();
     /// @brief Get the number of actions.
-    int         actionCount()   const { return static_cast<int>(actions_.size()); }
+    int actionCount() const
+    {
+        return static_cast<int>(actions_.size());
+    }
     /// @brief Get an action by index.
     MenuAction* action(int idx) const;
 
     /// @brief Show the menu as a popup at screen coordinates.
     void exec(float x, float y, Widget* owner = nullptr);
     /// @brief Highlight an item as if the mouse were over it (-1 clears).
-    void highlight(int idx) { hoveredIdx_ = idx; markDirty(); }
+    void highlight(int idx)
+    {
+        hoveredIdx_ = idx;
+        markDirty();
+    }
     /// @brief Screen rectangle of an item while the menu is shown.
     Rect actionRect(int idx) const;
 
     // ── Widget overrides ──────────────────────────────────────────────────
-    void resetPopupState()                     override;
+    void resetPopupState() override;
     bool popupContains(float x, float y) const override;
 
     Vec2f sizeHint() const override;
-    void  layout()   override {}  // positioned by exec()
-    void  paint(PaintContext& ctx) override;
+    void layout() override
+    {
+    } // positioned by exec()
+    void paint(PaintContext& ctx) override;
 
-    void onMousePress(MouseEvent& e)  override;
-    void onMouseMove(MouseEvent& e)   override;
-    void onMouseLeave()               override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
-    static constexpr float kSepH   = 9.0f;
-    static constexpr float kIconW  = 22.0f;
-    static constexpr float kPadX   = 12.0f;
+    static constexpr float kSepH = 9.0f;
+    static constexpr float kIconW = 22.0f;
+    static constexpr float kPadX = 12.0f;
 
-    ct::Vector<MenuAction*> actions_;  // owned
-    int    hoveredIdx_       = -1;
-    Menu*  activeSubmenu_    = nullptr;  // not owned (belongs to MenuAction)
-    int    activeSubmenuIdx_ = -1;
+    ct::Vector<MenuAction*> actions_; // owned
+    int hoveredIdx_ = -1;
+    Menu* activeSubmenu_ = nullptr; // not owned (belongs to MenuAction)
+    int activeSubmenuIdx_ = -1;
 
-    float  rowY_(int idx) const;
-    int    hitItem_(float screenY) const;
-    float  computeWidth_() const;
-    void   showSubmenu_(int idx);
-    void   hideSubmenu_();
+    float rowY_(int idx) const;
+    int hitItem_(float screenY) const;
+    float computeWidth_() const;
+    void showSubmenu_(int idx);
+    void hideSubmenu_();
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -152,34 +202,44 @@ public:
     ~MenuBar() override;
 
     /// @brief Add a top-level menu with a title.
-    Menu*              addMenu(const String& title);
+    Menu* addMenu(const String& title);
     /// @brief Get the number of menus.
-    int                menuCount()      const { return static_cast<int>(entries_.size()); }
+    int menuCount() const
+    {
+        return static_cast<int>(entries_.size());
+    }
     /// @brief Get a menu by index.
-    Menu*              menu(int i)      const;
+    Menu* menu(int i) const;
     /// @brief Get a menu title by index.
     const String& menuTitle(int i) const;
     /// @brief Open a menu by index, as a click on its title does.
-    void openMenu(int i) { openMenu_(i); }
+    void openMenu(int i)
+    {
+        openMenu_(i);
+    }
     /// @brief Close the open menu, if any.
-    void closeMenu() { closeMenu_(); }
+    void closeMenu()
+    {
+        closeMenu_();
+    }
     /// @brief Screen rectangle of a menu title.
     Rect titleRect(int i) const;
 
     Vec2f sizeHint() const override;
-    void  layout()   override;
-    void  paint(PaintContext& ctx) override;
+    void layout() override;
+    void paint(PaintContext& ctx) override;
 
-    void onMousePress(MouseEvent& e)  override;
-    void onMouseMove(MouseEvent& e)   override;
-    void onMouseLeave()               override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
-    struct Entry {
+    struct Entry
+    {
         String title;
-        Menu*       menu  = nullptr;  // owned by MenuBar
-        float       x     = 0;
-        float       w     = 0;
+        Menu* menu = nullptr; // owned by MenuBar
+        float x = 0;
+        float w = 0;
     };
 
     static constexpr float kPadX = 14.0f;
@@ -187,8 +247,8 @@ private:
     ct::Vector<Entry> entries_;
     int hoveredIdx_ = -1;
 
-    int  hitEntry_(float localX) const;
-    int  openMenuIdx_()          const;  // index of currently open menu, or -1
+    int hitEntry_(float localX) const;
+    int openMenuIdx_() const; // index of currently open menu, or -1
     void openMenu_(int idx);
     void closeMenu_();
     void computeEntryWidths_();

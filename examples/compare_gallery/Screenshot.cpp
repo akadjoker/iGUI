@@ -10,10 +10,9 @@
 namespace compare
 {
 
-bool writePng(const char *path, int width, int height, const unsigned char *rgba)
+bool writePng(const char* path, int width, int height, const unsigned char* rgba)
 {
-    if (!path || width <= 0 || height <= 0 || !rgba)
-        return false;
+    if (!path || width <= 0 || height <= 0 || !rgba) return false;
     // O backend lê os pixels de cima para baixo, que é a ordem que o
     // stb_image_write espera.
     if (stbi_write_png(path, width, height, 4, rgba, width * 4) == 0)

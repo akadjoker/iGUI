@@ -1,7 +1,7 @@
-#include "pch.hpp"
 #include "DataWidgets.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
+#include "pch.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -37,9 +37,8 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
     columns_.push_back(std::move(c));
     // Rows added before this column have no cell for it, and the accessors
     // index cells up to columns_.size(): pad them the way addRow does.
-    for (auto& row : rows_)
-        while (row.cells.size() < columns_.size())
-            row.cells.push_back("");
+    for (auto& row: rows_)
+        while (row.cells.size() < columns_.size()) row.cells.push_back("");
     sortDirty_ = true;
     markDirty();
     return static_cast<int>(columns_.size()) - 1;
@@ -47,7 +46,8 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
 
 void DataGrid::setColumnWidth(int col, float w)
 {
-    if (col >= 0 && col < static_cast<int>(columns_.size())) {
+    if (col >= 0 && col < static_cast<int>(columns_.size()))
+    {
         columns_[col].width = std::max(w, columns_[col].minWidth);
         markDirty();
     }
@@ -61,8 +61,7 @@ int DataGrid::addRow(const ct::Vector<String>& cells)
 {
     Row r;
     r.cells = cells;
-    while (r.cells.size() < columns_.size())
-        r.cells.push_back("");
+    while (r.cells.size() < columns_.size()) r.cells.push_back("");
     rows_.push_back(std::move(r));
     sortDirty_ = true;
     markDirty();
@@ -71,8 +70,9 @@ int DataGrid::addRow(const ct::Vector<String>& cells)
 
 void DataGrid::setCell(int row, int col, const String& value)
 {
-    if (row >= 0 && row < static_cast<int>(rows_.size()) &&
-        col >= 0 && col < static_cast<int>(columns_.size())) {
+    if (row >= 0 && row < static_cast<int>(rows_.size()) && col >= 0 &&
+            col < static_cast<int>(columns_.size()))
+    {
         rows_[row].cells[col] = value;
         markDirty();
     }
@@ -80,19 +80,21 @@ void DataGrid::setCell(int row, int col, const String& value)
 
 String DataGrid::cell(int row, int col) const
 {
-    if (row >= 0 && row < static_cast<int>(rows_.size()) &&
-        col >= 0 && col < static_cast<int>(columns_.size()))
+    if (row >= 0 && row < static_cast<int>(rows_.size()) && col >= 0 &&
+            col < static_cast<int>(columns_.size()))
         return rows_[row].cells[col];
     return "";
 }
 
 void DataGrid::removeRow(int row)
 {
-    if (row >= 0 && row < static_cast<int>(rows_.size())) {
+    if (row >= 0 && row < static_cast<int>(rows_.size()))
+    {
         rows_.erase(rows_.begin() + row);
         sortDirty_ = true;
         if (selectedRow_ == row) selectedRow_ = -1;
-        else if (selectedRow_ > row) selectedRow_--;
+        else if (selectedRow_ > row)
+            selectedRow_--;
         markDirty();
     }
 }
@@ -114,14 +116,14 @@ void DataGrid::clearRows()
 
 bool DataGrid::isRowChecked(int row) const
 {
-    if (row >= 0 && row < static_cast<int>(rows_.size()))
-        return rows_[row].checked;
+    if (row >= 0 && row < static_cast<int>(rows_.size())) return rows_[row].checked;
     return false;
 }
 
 void DataGrid::setRowChecked(int row, bool checked)
 {
-    if (row >= 0 && row < static_cast<int>(rows_.size())) {
+    if (row >= 0 && row < static_cast<int>(rows_.size()))
+    {
         rows_[row].checked = checked;
         markDirty();
     }
@@ -144,7 +146,11 @@ void DataGrid::setSelectedRow(int row)
     selectedRow_ = row;
     selectedRows_.clear();
     selectedSet_.clear();
-    if (row >= 0) { selectedRows_.push_back(row); selectedSet_.insert(row); }
+    if (row >= 0)
+    {
+        selectedRows_.push_back(row);
+        selectedSet_.insert(row);
+    }
     markDirty();
 }
 
@@ -172,8 +178,7 @@ void DataGrid::rebuildSortOrder() const
     int nRows = modelRowCount();
     sortedIndices_.resize(nRows);
     std::iota(sortedIndices_.begin(), sortedIndices_.end(), 0);
-    if (sortCol_ >= 0 && sortOrder_ != SortOrder::None)
-        sortByColumn(sortCol_);
+    if (sortCol_ >= 0 && sortOrder_ != SortOrder::None) sortByColumn(sortCol_);
 }
 
 void DataGrid::sortByColumn(int col) const
@@ -181,39 +186,43 @@ void DataGrid::sortByColumn(int col) const
     if (col < 0 || col >= static_cast<int>(columns_.size())) return;
     bool asc = (sortOrder_ == SortOrder::Ascending);
 
-    if (model_) {
+    if (model_)
+    {
         // Sort via model data
         std::stable_sort(sortedIndices_.begin(), sortedIndices_.end(),
-            [&](int a, int b) {
-                auto sa = model_->data(model_->index(a, col));
-                auto sb = model_->data(model_->index(b, col));
-                char* endA; char* endB;
-                double da = strtod(sa.c_str(), &endA);
-                double db = strtod(sb.c_str(), &endB);
-                if (endA != sa.c_str() && endB != sb.c_str())
-                    return asc ? da < db : da > db;
-                return asc ? sa < sb : sa > sb;
-            });
-    } else {
+                [&](int a, int b)
+                {
+                    auto sa = model_->data(model_->index(a, col));
+                    auto sb = model_->data(model_->index(b, col));
+                    char* endA;
+                    char* endB;
+                    double da = strtod(sa.c_str(), &endA);
+                    double db = strtod(sb.c_str(), &endB);
+                    if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
+                    return asc ? sa < sb : sa > sb;
+                });
+    }
+    else
+    {
         std::stable_sort(sortedIndices_.begin(), sortedIndices_.end(),
-            [&](int a, int b) {
-                const String& sa = rows_[a].cells[col];
-                const String& sb = rows_[b].cells[col];
-                char* endA; char* endB;
-                double da = strtod(sa.c_str(), &endA);
-                double db = strtod(sb.c_str(), &endB);
-                if (endA != sa.c_str() && endB != sb.c_str())
-                    return asc ? da < db : da > db;
-                return asc ? sa < sb : sa > sb;
-            });
+                [&](int a, int b)
+                {
+                    const String& sa = rows_[a].cells[col];
+                    const String& sb = rows_[b].cells[col];
+                    char* endA;
+                    char* endB;
+                    double da = strtod(sa.c_str(), &endA);
+                    double db = strtod(sb.c_str(), &endB);
+                    if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
+                    return asc ? sa < sb : sa > sb;
+                });
     }
 }
 
 int DataGrid::displayRow(int idx) const
 {
     ensureSortOrder();
-    if (idx >= 0 && idx < static_cast<int>(sortedIndices_.size()))
-        return sortedIndices_[idx];
+    if (idx >= 0 && idx < static_cast<int>(sortedIndices_.size())) return sortedIndices_[idx];
     return idx;
 }
 
@@ -224,24 +233,23 @@ int DataGrid::displayRow(int idx) const
 float DataGrid::totalColumnsWidth() const
 {
     float w = contentX();
-    for (auto& c : columns_) w += c.width;
+    for (auto& c: columns_) w += c.width;
     return w;
 }
 
 float DataGrid::columnX(int col) const
 {
     float x = contentX();
-    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i)
-        x += columns_[i].width;
+    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i) x += columns_[i].width;
     return x;
 }
 
 int DataGrid::hitColumn(float localX) const
 {
     float x = contentX() - scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
-        if (localX >= x && localX < x + columns_[i].width)
-            return i;
+    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    {
+        if (localX >= x && localX < x + columns_[i].width) return i;
         x += columns_[i].width;
     }
     return -1;
@@ -253,18 +261,17 @@ int DataGrid::hitRow(float localY) const
     if (localY < headerHeight_) return -1;
     float y = localY - headerHeight_ + scrollY_;
     int idx = static_cast<int>(y / rowHeight_);
-    if (idx < 0 || idx >= static_cast<int>(sortedIndices_.size()))
-        return -1;
+    if (idx < 0 || idx >= static_cast<int>(sortedIndices_.size())) return -1;
     return idx;
 }
 
 int DataGrid::hitResizeEdge(float localX) const
 {
     float x = contentX() - scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    {
         x += columns_[i].width;
-        if (std::abs(localX - x) <= 4.0f)
-            return i;
+        if (std::abs(localX - x) <= 4.0f) return i;
     }
     return -1;
 }
@@ -273,7 +280,7 @@ Widget::Vec2f DataGrid::sizeHint() const
 {
     float w = totalColumnsWidth();
     float h = headerHeight_ + modelRowCount() * rowHeight_;
-    return {w, h};
+    return { w, h };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -282,8 +289,7 @@ Widget::Vec2f DataGrid::sizeHint() const
 
 void DataGrid::setColumnReadOnly(int col, bool ro)
 {
-    if (col >= 0 && col < static_cast<int>(columns_.size()))
-        columns_[col].readOnly = ro;
+    if (col >= 0 && col < static_cast<int>(columns_.size())) columns_[col].readOnly = ro;
 }
 
 void DataGrid::startEdit(int row, int col)
@@ -304,11 +310,15 @@ void DataGrid::commitEdit()
 {
     if (!editing_) return;
     editing_ = false;
-    if (editRow_ >= 0 && editRow_ < modelRowCount() &&
-        editCol_ >= 0 && editCol_ < static_cast<int>(columns_.size())) {
-        if (model_) {
+    if (editRow_ >= 0 && editRow_ < modelRowCount() && editCol_ >= 0 &&
+            editCol_ < static_cast<int>(columns_.size()))
+    {
+        if (model_)
+        {
             model_->setData(model_->index(editRow_, editCol_), editBuf_);
-        } else {
+        }
+        else
+        {
             rows_[editRow_].cells[editCol_] = editBuf_;
         }
         cellEdited.emit(editRow_, editCol_);
@@ -349,34 +359,37 @@ void DataGrid::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
 
     // ── Column headers ───────────────────────────────────────────────────
-    Rect headerClip = {abs.x, abs.y, abs.w, headerHeight_};
+    Rect headerClip = { abs.x, abs.y, abs.w, headerHeight_ };
     ctx.pushClip(headerClip);
     {
-        Color hdrBg(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 15)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 15)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
+        Color hdrBg(static_cast<uint8_t>(std::min(255, t.panelColor.r + 15)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 15)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
         ctx.fill.SetColor(hdrBg.r, hdrBg.g, hdrBg.b, hdrBg.a);
         ctx.fillRect(abs.x, abs.y, abs.w, headerHeight_);
 
         float hx = abs.x + contentX() - scrollX_;
         float hdrTextY = abs.y + (headerHeight_ - t.fontSize) * 0.5f + asc;
 
-        for (int i = 0; i < nCols; ++i) {
+        for (int i = 0; i < nCols; ++i)
+        {
             auto& col = columns_[i];
             float colR = hx + col.width;
 
             ctx.font.SetColor(t.textColor);
             ctx.font.Print(col.name.c_str(), hx + 4, hdrTextY);
 
-            if (sortCol_ == i && sortOrder_ != SortOrder::None) {
+            if (sortCol_ == i && sortOrder_ != SortOrder::None)
+            {
                 float arrowX = colR - 14.0f;
                 float arrowY = abs.y + headerHeight_ * 0.5f;
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
                 if (sortOrder_ == SortOrder::Ascending)
-                    ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3, arrowY - 3);
+                    ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
+                            arrowY - 3);
                 else
-                    ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3, arrowY + 3);
+                    ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3,
+                            arrowY + 3);
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 80);
@@ -384,9 +397,11 @@ void DataGrid::paint(PaintContext& ctx)
             hx = colR;
         }
 
-        if (showCheckboxes_) {
+        if (showCheckboxes_)
+        {
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 80);
-            ctx.drawLine(abs.x + checkboxColW_, abs.y + 2, abs.x + checkboxColW_, abs.y + headerHeight_ - 2);
+            ctx.drawLine(abs.x + checkboxColW_, abs.y + 2, abs.x + checkboxColW_,
+                    abs.y + headerHeight_ - 2);
         }
 
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
@@ -397,40 +412,44 @@ void DataGrid::paint(PaintContext& ctx)
     // ── Rows ─────────────────────────────────────────────────────────────
     float bodyY = abs.y + headerHeight_;
     float bodyH = abs.h - headerHeight_;
-    Rect bodyClip = {abs.x, bodyY, abs.w, bodyH};
+    Rect bodyClip = { abs.x, bodyY, abs.w, bodyH };
     ctx.pushClip(bodyClip);
     {
         int totalVis = static_cast<int>(sortedIndices_.size());
         int firstVis = static_cast<int>(scrollY_ / rowHeight_);
-        int lastVis  = firstVis + static_cast<int>(bodyH / rowHeight_) + 2;
+        int lastVis = firstVis + static_cast<int>(bodyH / rowHeight_) + 2;
         if (firstVis < 0) firstVis = 0;
         if (lastVis > totalVis) lastVis = totalVis;
 
-        for (int vi = firstVis; vi < lastVis; ++vi) {
+        for (int vi = firstVis; vi < lastVis; ++vi)
+        {
             int dataIdx = displayRow(vi);
             if (dataIdx < 0 || dataIdx >= nRows) continue;
 
             float ry = bodyY + vi * rowHeight_ - scrollY_;
-            Rect rowR = {abs.x, ry, abs.w, rowHeight_};
+            Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
             if (ctx.isClipped(rowR)) continue;
 
             // Zebra stripes
-            if (zebraStripes_ && (vi % 2 == 1)) {
-                ctx.fill.SetColor(
-                    static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
-                    static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
-                    static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
+            if (zebraStripes_ && (vi % 2 == 1))
+            {
+                ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
+                        static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
+                        static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
 
             // Selection highlight
-            if (isSelected(dataIdx)) {
-                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b, t.selectionColor.a);
+            if (isSelected(dataIdx))
+            {
+                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
+                        t.selectionColor.a);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
 
             // Hover highlight
-            if (hoveredRow_ == vi && !isSelected(dataIdx)) {
+            if (hoveredRow_ == vi && !isSelected(dataIdx))
+            {
                 ctx.fill.SetColor(t.buttonHover.r, t.buttonHover.g, t.buttonHover.b, 60);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
@@ -438,15 +457,18 @@ void DataGrid::paint(PaintContext& ctx)
             float textY = ry + (rowHeight_ - t.fontSize) * 0.5f + asc;
 
             // Checkbox
-            if (showCheckboxes_) {
+            if (showCheckboxes_)
+            {
                 float cbX = abs.x + 6.0f;
                 float cbY = ry + (rowHeight_ - 14.0f) * 0.5f;
                 float cbS = 14.0f;
                 ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, t.inputBg.a);
                 ctx.fillRect(cbX, cbY, cbS, cbS);
-                ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
+                ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b,
+                        t.inputBorder.a);
                 ctx.lineRect(cbX, cbY, cbS, cbS);
-                if (modelIsChecked(dataIdx)) {
+                if (modelIsChecked(dataIdx))
+                {
                     ctx.line.SetColor(t.checkMark.r, t.checkMark.g, t.checkMark.b, t.checkMark.a);
                     ctx.drawLine(cbX + 3, cbY + cbS * 0.5f, cbX + cbS * 0.4f, cbY + cbS - 3);
                     ctx.drawLine(cbX + cbS * 0.4f, cbY + cbS - 3, cbX + cbS - 3, cbY + 3);
@@ -455,13 +477,16 @@ void DataGrid::paint(PaintContext& ctx)
 
             // Cells
             float cx = abs.x + contentX() - scrollX_;
-            for (int ci = 0; ci < nCols; ++ci) {
+            for (int ci = 0; ci < nCols; ++ci)
+            {
                 float colW = columns_[ci].width;
 
-                if (editing_ && editRow_ == dataIdx && editCol_ == ci) {
+                if (editing_ && editRow_ == dataIdx && editCol_ == ci)
+                {
                     ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, 255);
                     ctx.fillRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
-                    ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g, t.inputBorderHover.b, 255);
+                    ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
+                            t.inputBorderHover.b, 255);
                     ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                     ctx.font.SetColor(Color(255, 255, 255, 255));
                     ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
@@ -469,10 +494,14 @@ void DataGrid::paint(PaintContext& ctx)
                     float cursorX = cx + 4 + ctx.font.GetTextWidth(beforeCursor.c_str());
                     ctx.line.SetColor(255, 255, 255, 200);
                     ctx.drawLine(cursorX, ry + 3, cursorX, ry + rowHeight_ - 3);
-                } else {
+                }
+                else
+                {
                     String cellText = modelCell(dataIdx, ci);
-                    if (!cellText.empty()) {
-                        ctx.font.SetColor(isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
+                    if (!cellText.empty())
+                    {
+                        ctx.font.SetColor(
+                                isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
                         ctx.font.Print(cellText.c_str(), cx + 4, textY);
                     }
                 }
@@ -492,33 +521,33 @@ void DataGrid::paint(PaintContext& ctx)
     float contentH = static_cast<float>(nRows) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (bodyH > 0.0f && contentH > bodyH) {
+    if (bodyH > 0.0f && contentH > bodyH)
+    {
         float sbW = 8.0f;
         float sbX = abs.x + abs.w - sbW;
         float trackH = bodyH;
         float thumbH = std::max(20.0f, (bodyH / contentH) * trackH);
         float maxSY = contentH - bodyH;
         float thumbY = bodyY + (scrollY_ / maxSY) * (trackH - thumbH);
-        ctx.fill.SetColor(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
+        ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
         ctx.fillRect(sbX, bodyY, sbW, trackH);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
         ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
     }
 
-    if (abs.w > 0.0f && contentW > abs.w) {
+    if (abs.w > 0.0f && contentW > abs.w)
+    {
         float sbH = 8.0f;
         float sbY = abs.y + abs.h - sbH;
         float trackW = abs.w;
         float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
         float maxSX = contentW - abs.w;
         float thumbX = abs.x + (scrollX_ / maxSX) * (trackW - thumbW);
-        ctx.fill.SetColor(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
+        ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
         ctx.fillRect(abs.x, sbY, trackW, sbH);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
         ctx.fillRect(thumbX, sbY + 1, thumbW, sbH - 2);
@@ -547,19 +576,19 @@ void DataGrid::onMousePress(MouseEvent& e)
     float contentW = totalColumnsWidth();
     if (contentW > abs.w)
     {
-        float sbH    = 8.0f;
-        float sbY    = abs.y + abs.h - sbH;
+        float sbH = 8.0f;
+        float sbY = abs.y + abs.h - sbH;
         float trackW = abs.w;
         float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX  = contentW - abs.w;
+        float maxSX = contentW - abs.w;
         float thumbX = (maxSX > 0.f ? (scrollX_ / maxSX) * (trackW - thumbW) : 0.f);
         if (e.y >= sbY && e.y <= sbY + sbH)
         {
             // Click on thumb → start drag; click on track → jump
             if (e.x >= abs.x + thumbX && e.x <= abs.x + thumbX + thumbW)
             {
-                hScrollDrag_      = true;
-                hScrollDragStartX_  = e.x;
+                hScrollDrag_ = true;
+                hScrollDragStartX_ = e.x;
                 hScrollDragStartSX_ = scrollX_;
             }
             else
@@ -573,23 +602,31 @@ void DataGrid::onMousePress(MouseEvent& e)
         }
     }
 
-    if (localY < headerHeight_) {
+    if (localY < headerHeight_)
+    {
         int resEdge = hitResizeEdge(localX);
-        if (resEdge >= 0) {
-            resizeCol_    = resEdge;
+        if (resEdge >= 0)
+        {
+            resizeCol_ = resEdge;
             resizeStartX_ = e.x;
             resizeStartW_ = columns_[resEdge].width;
             return;
         }
 
         int col = hitColumn(localX);
-        if (col >= 0 && columns_[col].sortable) {
-            if (sortCol_ == col) {
-                if (sortOrder_ == SortOrder::None)              sortOrder_ = SortOrder::Ascending;
-                else if (sortOrder_ == SortOrder::Ascending)   sortOrder_ = SortOrder::Descending;
-                else                                            sortOrder_ = SortOrder::None;
-            } else {
-                sortCol_   = col;
+        if (col >= 0 && columns_[col].sortable)
+        {
+            if (sortCol_ == col)
+            {
+                if (sortOrder_ == SortOrder::None) sortOrder_ = SortOrder::Ascending;
+                else if (sortOrder_ == SortOrder::Ascending)
+                    sortOrder_ = SortOrder::Descending;
+                else
+                    sortOrder_ = SortOrder::None;
+            }
+            else
+            {
+                sortCol_ = col;
                 sortOrder_ = SortOrder::Ascending;
             }
             sortDirty_ = true;
@@ -599,16 +636,20 @@ void DataGrid::onMousePress(MouseEvent& e)
         return;
     }
 
-    int visIdx  = hitRow(localY);
+    int visIdx = hitRow(localY);
     if (visIdx < 0) return;
     int dataIdx = displayRow(visIdx);
     if (dataIdx < 0 || dataIdx >= modelRowCount()) return;
 
-    if (showCheckboxes_ && localX < checkboxColW_) {
-        if (model_) {
+    if (showCheckboxes_ && localX < checkboxColW_)
+    {
+        if (model_)
+        {
             bool cur = model_->data(model_->index(dataIdx, 0), ItemRole::Check) == "1";
             model_->setData(model_->index(dataIdx, 0), cur ? "0" : "1", ItemRole::Check);
-        } else {
+        }
+        else
+        {
             rows_[dataIdx].checked = !rows_[dataIdx].checked;
         }
         rowCheckChanged.emit(dataIdx, modelIsChecked(dataIdx));
@@ -620,48 +661,61 @@ void DataGrid::onMousePress(MouseEvent& e)
     uint32_t now = WidgetApp::instance().elapsedMs();
     int col = hitColumn(localX);
 
-    if (dataIdx == lastClickRow_ && (now - lastClickTime_) < 400 && col >= 0) {
+    if (dataIdx == lastClickRow_ && (now - lastClickTime_) < 400 && col >= 0)
+    {
         startEdit(dataIdx, col);
         lastClickTime_ = 0;
-        lastClickRow_  = -1;
+        lastClickRow_ = -1;
         return;
     }
     lastClickTime_ = now;
-    lastClickRow_  = dataIdx;
+    lastClickRow_ = dataIdx;
 
     if (editing_) commitEdit();
 
-    if (multiSelect_) {
-        bool ctrl  = e.ctrl;
+    if (multiSelect_)
+    {
+        bool ctrl = e.ctrl;
         bool shift = e.shift;
-        if (ctrl) {
+        if (ctrl)
+        {
             auto it = std::find(selectedRows_.begin(), selectedRows_.end(), dataIdx);
-            if (it != selectedRows_.end()) {
+            if (it != selectedRows_.end())
+            {
                 selectedRows_.erase(it);
                 selectedSet_.erase(dataIdx);
-            } else {
+            }
+            else
+            {
                 selectedRows_.push_back(dataIdx);
                 selectedSet_.insert(dataIdx);
             }
             selectedRow_ = dataIdx;
-        } else if (shift && selectedRow_ >= 0) {
+        }
+        else if (shift && selectedRow_ >= 0)
+        {
             selectedRows_.clear();
             selectedSet_.clear();
             int lo = std::min(selectedRow_, dataIdx);
             int hi = std::max(selectedRow_, dataIdx);
-            for (int i = lo; i <= hi; ++i) {
+            for (int i = lo; i <= hi; ++i)
+            {
                 selectedRows_.push_back(i);
                 selectedSet_.insert(i);
             }
-        } else {
-            selectedRow_  = dataIdx;
-            selectedRows_ = {dataIdx};
+        }
+        else
+        {
+            selectedRow_ = dataIdx;
+            selectedRows_ = { dataIdx };
             selectedSet_.clear();
             selectedSet_.insert(dataIdx);
         }
-    } else {
-        selectedRow_  = dataIdx;
-        selectedRows_ = {dataIdx};
+    }
+    else
+    {
+        selectedRow_ = dataIdx;
+        selectedRows_ = { dataIdx };
         selectedSet_.clear();
         selectedSet_.insert(dataIdx);
     }
@@ -671,9 +725,12 @@ void DataGrid::onMousePress(MouseEvent& e)
 
 void DataGrid::onMouseRelease(MouseEvent& e)
 {
-    if (hScrollDrag_) { hScrollDrag_ = false; }
+    if (hScrollDrag_)
+    {
+        hScrollDrag_ = false;
+    }
     if (resizeCol_ >= 0) resizeCol_ = -1;
-    (void)e;
+    (void) e;
 }
 
 void DataGrid::onMouseMove(MouseEvent& e)
@@ -685,17 +742,18 @@ void DataGrid::onMouseMove(MouseEvent& e)
     {
         e.consumed = true;
         float contentW = totalColumnsWidth();
-        float trackW   = abs.w;
-        float thumbW   = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX    = contentW - abs.w;
-        float dx       = e.x - hScrollDragStartX_;
-        float ratio    = maxSX > 0.f ? maxSX / (trackW - thumbW) : 0.f;
+        float trackW = abs.w;
+        float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
+        float maxSX = contentW - abs.w;
+        float dx = e.x - hScrollDragStartX_;
+        float ratio = maxSX > 0.f ? maxSX / (trackW - thumbW) : 0.f;
         scrollX_ = std::max(0.f, std::min(maxSX, hScrollDragStartSX_ + dx * ratio));
         markDirty();
         return;
     }
 
-    if (resizeCol_ >= 0) {
+    if (resizeCol_ >= 0)
+    {
         float dx = e.x - resizeStartX_;
         float newW = std::max(columns_[resizeCol_].minWidth, resizeStartW_ + dx);
         columns_[resizeCol_].width = newW;
@@ -706,8 +764,9 @@ void DataGrid::onMouseMove(MouseEvent& e)
     float localX = e.x - abs.x;
     float localY = e.y - abs.y;
     int visIdx = hitRow(localY);
-    int col    = hitColumn(localX);
-    if (visIdx != hoveredRow_ || col != hoveredCol_) {
+    int col = hitColumn(localX);
+    if (visIdx != hoveredRow_ || col != hoveredCol_)
+    {
         hoveredRow_ = visIdx;
         hoveredCol_ = col;
         markDirty();
@@ -721,15 +780,18 @@ void DataGrid::onMouseScroll(MouseEvent& e)
     if (!abs.contains(e.x, e.y)) return;
 
     e.consumed = true;
-    bool shift    = e.shift;
-    float bodyH   = abs.h - headerHeight_;
+    bool shift = e.shift;
+    float bodyH = abs.h - headerHeight_;
     float contentH = static_cast<float>(modelRowCount()) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (shift) {
+    if (shift)
+    {
         scrollX_ -= e.scrollY * 40.0f;
         scrollX_ = clamp(scrollX_, 0.0f, std::max(0.0f, contentW - abs.w));
-    } else {
+    }
+    else
+    {
         scrollY_ -= e.scrollY * rowHeight_ * 2.0f;
         scrollY_ = clamp(scrollY_, 0.0f, std::max(0.0f, contentH - bodyH));
     }
@@ -745,77 +807,117 @@ void DataGrid::onKeyPress(KeyEvent& e)
     ensureSortOrder();
     if (!focused_ && !editing_) return;
 
-    if (editing_) {
+    if (editing_)
+    {
         e.consumed = true;
-        switch (e.key) {
-        case ig::retained::Key::Return:
-        case ig::retained::Key::KPEnter:
-            commitEdit(); return;
-        case ig::retained::Key::Escape:
-            cancelEdit(); return;
-        case ig::retained::Key::Backspace:
-            if (editCursor_ > 0) {
-                const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
-                editBuf_.erase(prev, editCursor_ - prev);
-                editCursor_ = prev;
-                markDirty();
-            } return;
-        case ig::retained::Key::Delete:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) {
-                const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
-                editBuf_.erase(editCursor_, next - editCursor_);
-                markDirty();
-            } return;
-        case ig::retained::Key::Left:
-            if (editCursor_ > 0) { editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_)); markDirty(); } return;
-        case ig::retained::Key::Right:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_)); markDirty(); } return;
-        case ig::retained::Key::Home:
-            editCursor_ = 0; markDirty(); return;
-        case ig::retained::Key::End:
-            editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
-        case ig::retained::Key::Tab: {
-            const int cols = static_cast<int>(columns_.size());
-            const int step = e.shift ? -1 : 1;
-            int visual = editRow_;
-            for (int v = 0; v < static_cast<int>(sortedIndices_.size()); ++v)
-                if (sortedIndices_[v] == editRow_) { visual = v; break; }
-            int cell = visual * cols + editCol_ + step;
-            commitEdit();
-            for (; cell >= 0 && cell < modelRowCount() * cols && !editing_; cell += step)
-                startEdit(displayRow(cell / cols), cell % cols);
-            return;
-        }
-        case ig::retained::Key::C:
-            if (e.ctrl) { WidgetApp::instance().setClipboardText(editBuf_.c_str()); return; }
-            break;
-        case ig::retained::Key::V:
-            if (e.ctrl) {
-                String clip = WidgetApp::instance().getClipboardText();
-                if (!clip.empty()) {
-                    editBuf_.insert(editCursor_, clip);
-                    editCursor_ += static_cast<int>(clip.size());
+        switch (e.key)
+        {
+            case ig::retained::Key::Return:
+            case ig::retained::Key::KPEnter:
+                commitEdit();
+                return;
+            case ig::retained::Key::Escape:
+                cancelEdit();
+                return;
+            case ig::retained::Key::Backspace:
+                if (editCursor_ > 0)
+                {
+                    const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                    editBuf_.erase(prev, editCursor_ - prev);
+                    editCursor_ = prev;
                     markDirty();
                 }
                 return;
-            } break;
-        default: break;
+            case ig::retained::Key::Delete:
+                if (editCursor_ < static_cast<int>(editBuf_.size()))
+                {
+                    const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                    editBuf_.erase(editCursor_, next - editCursor_);
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Left:
+                if (editCursor_ > 0)
+                {
+                    editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Right:
+                if (editCursor_ < static_cast<int>(editBuf_.size()))
+                {
+                    editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Home:
+                editCursor_ = 0;
+                markDirty();
+                return;
+            case ig::retained::Key::End:
+                editCursor_ = static_cast<int>(editBuf_.size());
+                markDirty();
+                return;
+            case ig::retained::Key::Tab:
+            {
+                const int cols = static_cast<int>(columns_.size());
+                const int step = e.shift ? -1 : 1;
+                int visual = editRow_;
+                for (int v = 0; v < static_cast<int>(sortedIndices_.size()); ++v)
+                    if (sortedIndices_[v] == editRow_)
+                    {
+                        visual = v;
+                        break;
+                    }
+                int cell = visual * cols + editCol_ + step;
+                commitEdit();
+                for (; cell >= 0 && cell < modelRowCount() * cols && !editing_; cell += step)
+                    startEdit(displayRow(cell / cols), cell % cols);
+                return;
+            }
+            case ig::retained::Key::C:
+                if (e.ctrl)
+                {
+                    WidgetApp::instance().setClipboardText(editBuf_.c_str());
+                    return;
+                }
+                break;
+            case ig::retained::Key::V:
+                if (e.ctrl)
+                {
+                    String clip = WidgetApp::instance().getClipboardText();
+                    if (!clip.empty())
+                    {
+                        editBuf_.insert(editCursor_, clip);
+                        editCursor_ += static_cast<int>(clip.size());
+                        markDirty();
+                    }
+                    return;
+                }
+                break;
+            default:
+                break;
         }
     }
 
-    if (!editing_ && e.ctrl) {
-        if (e.key == ig::retained::Key::C) {
+    if (!editing_ && e.ctrl)
+    {
+        if (e.key == ig::retained::Key::C)
+        {
             e.consumed = true;
             String text;
             int nc = static_cast<int>(columns_.size());
-            for (int c = 0; c < nc; ++c) {
+            for (int c = 0; c < nc; ++c)
+            {
                 if (c > 0) text += '\t';
                 text += columns_[c].name;
             }
             text += '\n';
-            for (int ri : selectedRows_) {
+            for (int ri: selectedRows_)
+            {
                 if (ri < 0 || ri >= modelRowCount()) continue;
-                for (int c = 0; c < nc; ++c) {
+                for (int c = 0; c < nc; ++c)
+                {
                     if (c > 0) text += '\t';
                     text += modelCell(ri, c);
                 }
@@ -824,12 +926,14 @@ void DataGrid::onKeyPress(KeyEvent& e)
             if (!text.empty()) WidgetApp::instance().setClipboardText(text.c_str());
             return;
         }
-        if (e.key == ig::retained::Key::A) {
+        if (e.key == ig::retained::Key::A)
+        {
             e.consumed = true;
             selectedRows_.clear();
             selectedSet_.clear();
             int nr = modelRowCount();
-            for (int i = 0; i < nr; ++i) {
+            for (int i = 0; i < nr; ++i)
+            {
                 selectedRows_.push_back(i);
                 selectedSet_.insert(i);
             }
@@ -839,7 +943,8 @@ void DataGrid::onKeyPress(KeyEvent& e)
         }
     }
 
-    if (!editing_) {
+    if (!editing_)
+    {
         if (e.key == ig::retained::Key::Up || e.key == ig::retained::Key::Down ||
                 e.key == ig::retained::Key::Home || e.key == ig::retained::Key::End ||
                 e.key == ig::retained::Key::PageUp || e.key == ig::retained::Key::PageDown)
@@ -870,11 +975,16 @@ void DataGrid::onKeyPress(KeyEvent& e)
         else if (e.key == ig::retained::Key::Space && showCheckboxes_)
         {
             e.consumed = true;
-            if (selectedRow_ >= 0 && selectedRow_ < modelRowCount()) {
-                if (model_) {
+            if (selectedRow_ >= 0 && selectedRow_ < modelRowCount())
+            {
+                if (model_)
+                {
                     bool cur = model_->data(model_->index(selectedRow_, 0), ItemRole::Check) == "1";
-                    model_->setData(model_->index(selectedRow_, 0), cur ? "0" : "1", ItemRole::Check);
-                } else {
+                    model_->setData(model_->index(selectedRow_, 0), cur ? "0" : "1",
+                            ItemRole::Check);
+                }
+                else
+                {
                     rows_[selectedRow_].checked = !rows_[selectedRow_].checked;
                 }
                 rowCheckChanged.emit(selectedRow_, modelIsChecked(selectedRow_));
@@ -910,9 +1020,11 @@ void DataGrid::setModel(AbstractItemModel* model)
     if (!model_) return;
 
     // Sync columns from model headers if we have no columns yet
-    if (columns_.empty()) {
+    if (columns_.empty())
+    {
         int nc = model_->columnCount();
-        for (int i = 0; i < nc; ++i) {
+        for (int i = 0; i < nc; ++i)
+        {
             Column c;
             c.name = model_->headerData(i);
             c.width = 120.0f;
@@ -922,12 +1034,16 @@ void DataGrid::setModel(AbstractItemModel* model)
     }
 
     // Connect model signals to refresh the view
-    modelSlots_.reset = model_->modelReset.connect([this] {
-        selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
-        scrollY_ = 0;
-        sortDirty_ = true;
-        markDirty();
-    });
+    modelSlots_.reset = model_->modelReset.connect(
+            [this]
+            {
+                selectedRow_ = -1;
+                selectedRows_.clear();
+                selectedSet_.clear();
+                scrollY_ = 0;
+                sortDirty_ = true;
+                markDirty();
+            });
     modelSlots_.inserted = model_->rowsInserted.connect(
             [this]
             {
@@ -942,15 +1058,18 @@ void DataGrid::setModel(AbstractItemModel* model)
             });
     modelSlots_.changed = model_->dataChanged.connect([this](ModelIndex) { markDirty(); });
     modelSlots_.layout = model_->layoutChanged.connect([this] { markDirty(); });
-    modelSlots_.destroyed = model_->destroyed.connect([this]
-    {
-        model_ = nullptr;
-        modelSlots_ = AbstractItemModel::Connections();
-        selectedRow_ = -1; selectedRows_.clear(); selectedSet_.clear();
-        scrollY_ = 0;
-        sortDirty_ = true;
-        markDirty();
-    });
+    modelSlots_.destroyed = model_->destroyed.connect(
+            [this]
+            {
+                model_ = nullptr;
+                modelSlots_ = AbstractItemModel::Connections();
+                selectedRow_ = -1;
+                selectedRows_.clear();
+                selectedSet_.clear();
+                scrollY_ = 0;
+                sortDirty_ = true;
+                markDirty();
+            });
 
     sortDirty_ = true;
     markDirty();
@@ -971,8 +1090,8 @@ int DataGrid::modelColCount() const
 String DataGrid::modelCell(int row, int col) const
 {
     if (model_) return model_->data(model_->index(row, col));
-    if (row >= 0 && row < static_cast<int>(rows_.size()) &&
-        col >= 0 && col < static_cast<int>(rows_[row].cells.size()))
+    if (row >= 0 && row < static_cast<int>(rows_.size()) && col >= 0 &&
+            col < static_cast<int>(rows_[row].cells.size()))
         return rows_[row].cells[col];
     return {};
 }
@@ -980,8 +1099,7 @@ String DataGrid::modelCell(int row, int col) const
 String DataGrid::modelHeader(int col) const
 {
     if (model_) return model_->headerData(col);
-    if (col >= 0 && col < static_cast<int>(columns_.size()))
-        return columns_[col].name;
+    if (col >= 0 && col < static_cast<int>(columns_.size())) return columns_[col].name;
     return {};
 }
 
@@ -1007,10 +1125,10 @@ bool DataGrid::modelIsEditable(int row, int col) const
 TreeGrid::Node* TreeGrid::Node::addChild(const ct::Vector<String>& cellData)
 {
     auto* child = new Node();
-    child->cells  = cellData;
+    child->cells = cellData;
     child->parent = this;
     child->owner_ = owner_;
-    child->depth  = depth + 1;
+    child->depth = depth + 1;
     children.push_back(child);
     if (owner_)
     {
@@ -1037,18 +1155,18 @@ TreeGrid::TreeGrid()
 
 TreeGrid::~TreeGrid()
 {
-    for (auto* r : roots_) deleteNodes(r);
+    for (auto* r: roots_) deleteNodes(r);
 }
 
 void TreeGrid::deleteNodes(Node* n)
 {
-    for (auto* c : n->children) deleteNodes(c);
+    for (auto* c: n->children) deleteNodes(c);
     delete n;
 }
 
 void TreeGrid::clearAll()
 {
-    for (auto* r : roots_) deleteNodes(r);
+    for (auto* r: roots_) deleteNodes(r);
     roots_.clear();
     flatList_.clear();
     selectedNode_ = nullptr;
@@ -1061,11 +1179,13 @@ int TreeGrid::nodeCount() const
 {
     int count = 0;
     ct::Vector<const Node*> stack;
-    for (auto* r : roots_) stack.push_back(r);
-    while (!stack.empty()) {
-        auto* n = stack.back(); stack.pop_back();
+    for (auto* r: roots_) stack.push_back(r);
+    while (!stack.empty())
+    {
+        auto* n = stack.back();
+        stack.pop_back();
         count++;
-        for (auto* c : n->children) stack.push_back(c);
+        for (auto* c: n->children) stack.push_back(c);
     }
     return count;
 }
@@ -1077,8 +1197,8 @@ int TreeGrid::nodeCount() const
 int TreeGrid::addColumn(const String& name, float width, bool sortable)
 {
     Column c;
-    c.name     = name;
-    c.width    = width;
+    c.name = name;
+    c.width = width;
     c.sortable = sortable;
     columns_.push_back(std::move(c));
     markDirty();
@@ -1092,8 +1212,8 @@ int TreeGrid::addColumn(const String& name, float width, bool sortable)
 TreeGrid::Node* TreeGrid::addRoot(const ct::Vector<String>& cells)
 {
     auto* n = new Node();
-    n->cells  = cells;
-    n->depth  = 0;
+    n->cells = cells;
+    n->depth = 0;
     n->owner_ = this;
     roots_.push_back(n);
     flatDirty_ = true;
@@ -1109,16 +1229,15 @@ void TreeGrid::rebuildFlatList() const
 {
     flatDirty_ = false;
     flatList_.clear();
-    for (auto* r : roots_)
-        flattenNode(r, 0);
+    for (auto* r: roots_) flattenNode(r, 0);
 }
 
 void TreeGrid::flattenNode(Node* n, int depth) const
 {
-    flatList_.push_back({n, depth});
-    if (n->expanded) {
-        for (auto* c : n->children)
-            flattenNode(c, depth + 1);
+    flatList_.push_back({ n, depth });
+    if (n->expanded)
+    {
+        for (auto* c: n->children) flattenNode(c, depth + 1);
     }
 }
 
@@ -1129,23 +1248,25 @@ void TreeGrid::flattenNode(Node* n, int depth) const
 void TreeGrid::sortChildren(Node* parent)
 {
     if (sortCol_ < 0 || sortOrder_ == DataGrid::SortOrder::None) return;
-    int col  = sortCol_;
+    int col = sortCol_;
     bool asc = (sortOrder_ == DataGrid::SortOrder::Ascending);
 
-    auto cmp = [col, asc](Node* a, Node* b) {
+    auto cmp = [col, asc](Node* a, Node* b)
+    {
         const String& sa = (col < static_cast<int>(a->cells.size())) ? a->cells[col] : "";
         const String& sb = (col < static_cast<int>(b->cells.size())) ? b->cells[col] : "";
-        char* endA; char* endB;
+        char* endA;
+        char* endB;
         double da = strtod(sa.c_str(), &endA);
         double db = strtod(sb.c_str(), &endB);
-        if (endA != sa.c_str() && endB != sb.c_str())
-            return asc ? da < db : da > db;
+        if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
         return asc ? sa < sb : sa > sb;
     };
 
-    if (parent) {
+    if (parent)
+    {
         std::stable_sort(parent->children.begin(), parent->children.end(), cmp);
-        for (auto* c : parent->children) sortChildren(c);
+        for (auto* c: parent->children) sortChildren(c);
     }
 }
 
@@ -1163,7 +1284,7 @@ void TreeGrid::clearSelection()
 bool TreeGrid::isSelected(Node* n) const
 {
     if (!multiSelect_) return n == selectedNode_;
-    for (auto* s : selectedNodes_)
+    for (auto* s: selectedNodes_)
         if (s == n) return true;
     return false;
 }
@@ -1175,24 +1296,23 @@ bool TreeGrid::isSelected(Node* n) const
 float TreeGrid::totalColumnsWidth() const
 {
     float w = 0;
-    for (auto& c : columns_) w += c.width;
+    for (auto& c: columns_) w += c.width;
     return w;
 }
 
 float TreeGrid::columnX(int col) const
 {
     float x = 0;
-    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i)
-        x += columns_[i].width;
+    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i) x += columns_[i].width;
     return x;
 }
 
 int TreeGrid::hitColumn(float localX) const
 {
     float x = -scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
-        if (localX >= x && localX < x + columns_[i].width)
-            return i;
+    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    {
+        if (localX >= x && localX < x + columns_[i].width) return i;
         x += columns_[i].width;
     }
     return -1;
@@ -1202,17 +1322,17 @@ int TreeGrid::hitRow(float localY) const
 {
     ensureFlatList();
     if (localY < headerHeight_) return -1;
-    float y  = localY - headerHeight_ + scrollY_;
-    int   idx = static_cast<int>(y / rowHeight_);
-    if (idx < 0 || idx >= static_cast<int>(flatList_.size()))
-        return -1;
+    float y = localY - headerHeight_ + scrollY_;
+    int idx = static_cast<int>(y / rowHeight_);
+    if (idx < 0 || idx >= static_cast<int>(flatList_.size())) return -1;
     return idx;
 }
 
 int TreeGrid::hitResizeEdge(float localX) const
 {
     float x = -scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
+    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    {
         x += columns_[i].width;
         if (std::abs(localX - x) <= 4.0f) return i;
     }
@@ -1222,7 +1342,7 @@ int TreeGrid::hitResizeEdge(float localX) const
 Widget::Vec2f TreeGrid::sizeHint() const
 {
     ensureFlatList();
-    return {totalColumnsWidth(), headerHeight_ + flatList_.size() * rowHeight_};
+    return { totalColumnsWidth(), headerHeight_ + flatList_.size() * rowHeight_ };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1231,18 +1351,17 @@ Widget::Vec2f TreeGrid::sizeHint() const
 
 void TreeGrid::setColumnReadOnly(int col, bool ro)
 {
-    if (col >= 0 && col < static_cast<int>(columns_.size()))
-        columns_[col].readOnly = ro;
+    if (col >= 0 && col < static_cast<int>(columns_.size())) columns_[col].readOnly = ro;
 }
 
 void TreeGrid::startEdit(Node* node, int col)
 {
     if (!node || col < 0 || col >= static_cast<int>(columns_.size())) return;
     if (readOnly_ || columns_[col].readOnly || node->readOnly) return;
-    editing_    = true;
-    editNode_   = node;
-    editCol_    = col;
-    editBuf_    = (col < static_cast<int>(node->cells.size())) ? node->cells[col] : "";
+    editing_ = true;
+    editNode_ = node;
+    editCol_ = col;
+    editBuf_ = (col < static_cast<int>(node->cells.size())) ? node->cells[col] : "";
     editCursor_ = static_cast<int>(editBuf_.size());
     markDirty();
 }
@@ -1251,20 +1370,21 @@ void TreeGrid::commitEdit()
 {
     if (!editing_ || !editNode_) return;
     editing_ = false;
-    if (editCol_ >= 0 && editCol_ < static_cast<int>(editNode_->cells.size())) {
+    if (editCol_ >= 0 && editCol_ < static_cast<int>(editNode_->cells.size()))
+    {
         editNode_->cells[editCol_] = editBuf_;
         cellEdited.emit(editNode_, editCol_);
     }
     editNode_ = nullptr;
-    editCol_  = -1;
+    editCol_ = -1;
     markDirty();
 }
 
 void TreeGrid::cancelEdit()
 {
-    editing_  = false;
+    editing_ = false;
     editNode_ = nullptr;
-    editCol_  = -1;
+    editCol_ = -1;
     markDirty();
 }
 
@@ -1289,34 +1409,37 @@ void TreeGrid::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
 
     // ── Column headers ───────────────────────────────────────────────────
-    Rect headerClip = {abs.x, abs.y, abs.w, headerHeight_};
+    Rect headerClip = { abs.x, abs.y, abs.w, headerHeight_ };
     ctx.pushClip(headerClip);
     {
-        Color hdrBg(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 15)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 15)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
+        Color hdrBg(static_cast<uint8_t>(std::min(255, t.panelColor.r + 15)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 15)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
         ctx.fill.SetColor(hdrBg.r, hdrBg.g, hdrBg.b, hdrBg.a);
         ctx.fillRect(abs.x, abs.y, abs.w, headerHeight_);
 
-        float hx       = abs.x - scrollX_;
+        float hx = abs.x - scrollX_;
         float hdrTextY = abs.y + (headerHeight_ - t.fontSize) * 0.5f + asc;
 
-        for (int i = 0; i < static_cast<int>(columns_.size()); ++i) {
+        for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+        {
             auto& col = columns_[i];
             float colR = hx + col.width;
 
             ctx.font.SetColor(t.textColor);
             ctx.font.Print(col.name.c_str(), hx + 4, hdrTextY);
 
-            if (sortCol_ == i && sortOrder_ != DataGrid::SortOrder::None) {
+            if (sortCol_ == i && sortOrder_ != DataGrid::SortOrder::None)
+            {
                 float arrowX = colR - 14.0f;
                 float arrowY = abs.y + headerHeight_ * 0.5f;
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
                 if (sortOrder_ == DataGrid::SortOrder::Ascending)
-                    ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3, arrowY - 3);
+                    ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
+                            arrowY - 3);
                 else
-                    ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3, arrowY + 3);
+                    ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3,
+                            arrowY + 3);
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 80);
@@ -1332,38 +1455,42 @@ void TreeGrid::paint(PaintContext& ctx)
     // ── Rows ─────────────────────────────────────────────────────────────
     float bodyY = abs.y + headerHeight_;
     float bodyH = abs.h - headerHeight_;
-    Rect bodyClip = {abs.x, bodyY, abs.w, bodyH};
+    Rect bodyClip = { abs.x, bodyY, abs.w, bodyH };
     ctx.pushClip(bodyClip);
     {
         int totalVis = static_cast<int>(flatList_.size());
         int firstVis = static_cast<int>(scrollY_ / rowHeight_);
-        int lastVis  = firstVis + static_cast<int>(bodyH / rowHeight_) + 2;
+        int lastVis = firstVis + static_cast<int>(bodyH / rowHeight_) + 2;
         if (firstVis < 0) firstVis = 0;
         if (lastVis > totalVis) lastVis = totalVis;
 
-        for (int vi = firstVis; vi < lastVis; ++vi) {
+        for (int vi = firstVis; vi < lastVis; ++vi)
+        {
             auto& entry = flatList_[vi];
-            Node* node  = entry.node;
-            int   depth = entry.depth;
+            Node* node = entry.node;
+            int depth = entry.depth;
 
-            float ry  = bodyY + vi * rowHeight_ - scrollY_;
-            Rect rowR = {abs.x, ry, abs.w, rowHeight_};
+            float ry = bodyY + vi * rowHeight_ - scrollY_;
+            Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
             if (ctx.isClipped(rowR)) continue;
 
-            if (zebraStripes_ && (vi % 2 == 1)) {
-                ctx.fill.SetColor(
-                    static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
-                    static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
-                    static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
+            if (zebraStripes_ && (vi % 2 == 1))
+            {
+                ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
+                        static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
+                        static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
 
-            if (isSelected(node)) {
-                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b, t.selectionColor.a);
+            if (isSelected(node))
+            {
+                ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
+                        t.selectionColor.a);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
 
-            if (hoveredRow_ == vi && !isSelected(node)) {
+            if (hoveredRow_ == vi && !isSelected(node))
+            {
                 ctx.fill.SetColor(t.buttonHover.r, t.buttonHover.g, t.buttonHover.b, 60);
                 ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
             }
@@ -1371,34 +1498,42 @@ void TreeGrid::paint(PaintContext& ctx)
             float textY = ry + (rowHeight_ - t.fontSize) * 0.5f + asc;
 
             float cx = abs.x - scrollX_;
-            for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci) {
+            for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci)
+            {
                 float colW = columns_[ci].width;
 
-                if (ci == 0) {
+                if (ci == 0)
+                {
                     float indent = depth * indentWidth_;
                     float arrowX = cx + indent + 2;
                     float arrowCY = ry + rowHeight_ * 0.5f;
 
-                    if (!node->children.empty()) {
+                    if (!node->children.empty())
+                    {
                         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 180);
                         if (node->expanded)
-                            ctx.fillTriangle(arrowX, arrowCY - 4, arrowX + 8, arrowCY - 4, arrowX + 4, arrowCY + 4);
+                            ctx.fillTriangle(arrowX, arrowCY - 4, arrowX + 8, arrowCY - 4,
+                                    arrowX + 4, arrowCY + 4);
                         else
-                            ctx.fillTriangle(arrowX, arrowCY - 4, arrowX + 8, arrowCY, arrowX, arrowCY + 4);
+                            ctx.fillTriangle(arrowX, arrowCY - 4, arrowX + 8, arrowCY, arrowX,
+                                    arrowCY + 4);
                     }
 
                     float textX = cx + indent + 14;
 
-                    if (node->iconId != IconId::None && ctx.icons) {
+                    if (node->iconId != IconId::None && ctx.icons)
+                    {
                         float iconS = rowHeight_ - 6;
                         ctx.drawIcon(node->iconId, textX, ry + 3, iconS);
                         textX += iconS + 2;
                     }
 
-                    if (editing_ && editNode_ == node && editCol_ == 0) {
+                    if (editing_ && editNode_ == node && editCol_ == 0)
+                    {
                         ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, 255);
                         ctx.fillRect(textX - 1, ry + 1, colW - indent - 16, rowHeight_ - 2);
-                        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g, t.inputBorderHover.b, 255);
+                        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
+                                t.inputBorderHover.b, 255);
                         ctx.lineRect(textX - 1, ry + 1, colW - indent - 16, rowHeight_ - 2);
                         ctx.font.SetColor(Color(255, 255, 255, 255));
                         ctx.font.Print(editBuf_.c_str(), textX + 2, textY);
@@ -1406,17 +1541,25 @@ void TreeGrid::paint(PaintContext& ctx)
                         float curX = textX + 2 + ctx.font.GetTextWidth(bc.c_str());
                         ctx.line.SetColor(255, 255, 255, 200);
                         ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
-                    } else {
-                        if (!node->cells.empty()) {
-                            ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255) : t.textColor);
+                    }
+                    else
+                    {
+                        if (!node->cells.empty())
+                        {
+                            ctx.font.SetColor(
+                                    isSelected(node) ? Color(255, 255, 255, 255) : t.textColor);
                             ctx.font.Print(node->cells[0].c_str(), textX + 2, textY);
                         }
                     }
-                } else {
-                    if (editing_ && editNode_ == node && editCol_ == ci) {
+                }
+                else
+                {
+                    if (editing_ && editNode_ == node && editCol_ == ci)
+                    {
                         ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, 255);
                         ctx.fillRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
-                        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g, t.inputBorderHover.b, 255);
+                        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
+                                t.inputBorderHover.b, 255);
                         ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                         ctx.font.SetColor(Color(255, 255, 255, 255));
                         ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
@@ -1424,9 +1567,13 @@ void TreeGrid::paint(PaintContext& ctx)
                         float curX = cx + 4 + ctx.font.GetTextWidth(bc.c_str());
                         ctx.line.SetColor(255, 255, 255, 200);
                         ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
-                    } else {
-                        if (ci < static_cast<int>(node->cells.size())) {
-                            ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255) : Color(170, 170, 175, 255));
+                    }
+                    else
+                    {
+                        if (ci < static_cast<int>(node->cells.size()))
+                        {
+                            ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255)
+                                                               : Color(170, 170, 175, 255));
                             ctx.font.Print(node->cells[ci].c_str(), cx + 4, textY);
                         }
                     }
@@ -1447,33 +1594,33 @@ void TreeGrid::paint(PaintContext& ctx)
     float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (bodyH > 0.0f && contentH > bodyH) {
-        float sbW  = 8.0f;
-        float sbX  = abs.x + abs.w - sbW;
+    if (bodyH > 0.0f && contentH > bodyH)
+    {
+        float sbW = 8.0f;
+        float sbX = abs.x + abs.w - sbW;
         float trackH = bodyH;
         float thumbH = std::max(20.0f, (bodyH / contentH) * trackH);
-        float maxSY  = contentH - bodyH;
+        float maxSY = contentH - bodyH;
         float thumbY = bodyY + (maxSY > 0 ? (scrollY_ / maxSY) * (trackH - thumbH) : 0);
-        ctx.fill.SetColor(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
+        ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
         ctx.fillRect(sbX, bodyY, sbW, trackH);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
         ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
     }
 
-    if (abs.w > 0.0f && contentW > abs.w) {
-        float sbH  = 8.0f;
-        float sbY  = abs.y + abs.h - sbH;
+    if (abs.w > 0.0f && contentW > abs.w)
+    {
+        float sbH = 8.0f;
+        float sbY = abs.y + abs.h - sbH;
         float trackW = abs.w;
         float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX  = contentW - abs.w;
+        float maxSX = contentW - abs.w;
         float thumbX = abs.x + (maxSX > 0 ? (scrollX_ / maxSX) * (trackW - thumbW) : 0);
-        ctx.fill.SetColor(
-            static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
-            static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
+        ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
+                static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
         ctx.fillRect(abs.x, sbY, trackW, sbH);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
         ctx.fillRect(thumbX, sbY + 1, thumbW, sbH - 2);
@@ -1498,26 +1645,35 @@ void TreeGrid::onMousePress(MouseEvent& e)
     float localX = e.x - abs.x;
     float localY = e.y - abs.y;
 
-    if (localY < headerHeight_) {
+    if (localY < headerHeight_)
+    {
         int resEdge = hitResizeEdge(localX);
-        if (resEdge >= 0) {
-            resizeCol_    = resEdge;
+        if (resEdge >= 0)
+        {
+            resizeCol_ = resEdge;
             resizeStartX_ = e.x;
             resizeStartW_ = columns_[resEdge].width;
             return;
         }
 
         int col = hitColumn(localX);
-        if (col >= 0 && columns_[col].sortable) {
-            if (sortCol_ == col) {
-                if (sortOrder_ == DataGrid::SortOrder::None)            sortOrder_ = DataGrid::SortOrder::Ascending;
-                else if (sortOrder_ == DataGrid::SortOrder::Ascending) sortOrder_ = DataGrid::SortOrder::Descending;
-                else                                                    sortOrder_ = DataGrid::SortOrder::None;
-            } else {
-                sortCol_   = col;
+        if (col >= 0 && columns_[col].sortable)
+        {
+            if (sortCol_ == col)
+            {
+                if (sortOrder_ == DataGrid::SortOrder::None)
+                    sortOrder_ = DataGrid::SortOrder::Ascending;
+                else if (sortOrder_ == DataGrid::SortOrder::Ascending)
+                    sortOrder_ = DataGrid::SortOrder::Descending;
+                else
+                    sortOrder_ = DataGrid::SortOrder::None;
+            }
+            else
+            {
+                sortCol_ = col;
                 sortOrder_ = DataGrid::SortOrder::Ascending;
             }
-            for (auto* r : roots_) sortChildren(r);
+            for (auto* r: roots_) sortChildren(r);
             rebuildFlatList();
             columnSorted.emit(col);
             markDirty();
@@ -1528,24 +1684,27 @@ void TreeGrid::onMousePress(MouseEvent& e)
     int visIdx = hitRow(localY);
     if (visIdx < 0 || visIdx >= static_cast<int>(flatList_.size())) return;
     Node* node = flatList_[visIdx].node;
-    int   dep  = flatList_[visIdx].depth;
+    int dep = flatList_[visIdx].depth;
 
     float arrowAreaEnd = dep * indentWidth_ + 14;
     int col = hitColumn(localX);
-    if (col == 0 && (localX + scrollX_) < arrowAreaEnd && !node->children.empty()) {
+    if (col == 0 && (localX + scrollX_) < arrowAreaEnd && !node->children.empty())
+    {
         node->expanded = !node->expanded;
         if (node->expanded) nodeExpanded.emit(node);
-        else                nodeCollapsed.emit(node);
+        else
+            nodeCollapsed.emit(node);
         rebuildFlatList();
         markDirty();
         return;
     }
 
     static uint32_t lastClickTime = 0;
-    static Node*  lastClickNode = nullptr;
+    static Node* lastClickNode = nullptr;
     uint32_t now = WidgetApp::instance().elapsedMs();
 
-    if (node == lastClickNode && (now - lastClickTime) < 400 && col >= 0) {
+    if (node == lastClickNode && (now - lastClickTime) < 400 && col >= 0)
+    {
         startEdit(node, col);
         lastClickTime = 0;
         lastClickNode = nullptr;
@@ -1556,22 +1715,27 @@ void TreeGrid::onMousePress(MouseEvent& e)
 
     if (editing_) commitEdit();
 
-    if (multiSelect_) {
+    if (multiSelect_)
+    {
         bool ctrl = e.ctrl;
-        if (ctrl) {
+        if (ctrl)
+        {
             auto it = std::find(selectedNodes_.begin(), selectedNodes_.end(), node);
-            if (it != selectedNodes_.end())
-                selectedNodes_.erase(it);
+            if (it != selectedNodes_.end()) selectedNodes_.erase(it);
             else
                 selectedNodes_.push_back(node);
             selectedNode_ = node;
-        } else {
-            selectedNode_  = node;
-            selectedNodes_ = {node};
         }
-    } else {
-        selectedNode_  = node;
-        selectedNodes_ = {node};
+        else
+        {
+            selectedNode_ = node;
+            selectedNodes_ = { node };
+        }
+    }
+    else
+    {
+        selectedNode_ = node;
+        selectedNodes_ = { node };
     }
     selectionChanged.emit(node);
     markDirty();
@@ -1580,7 +1744,7 @@ void TreeGrid::onMousePress(MouseEvent& e)
 void TreeGrid::onMouseRelease(MouseEvent& e)
 {
     if (resizeCol_ >= 0) resizeCol_ = -1;
-    (void)e;
+    (void) e;
 }
 
 void TreeGrid::onMouseMove(MouseEvent& e)
@@ -1588,7 +1752,8 @@ void TreeGrid::onMouseMove(MouseEvent& e)
     if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
 
-    if (resizeCol_ >= 0) {
+    if (resizeCol_ >= 0)
+    {
         float dx = e.x - resizeStartX_;
         columns_[resizeCol_].width = std::max(columns_[resizeCol_].minWidth, resizeStartW_ + dx);
         markDirty();
@@ -1597,7 +1762,8 @@ void TreeGrid::onMouseMove(MouseEvent& e)
 
     float localY = e.y - abs.y;
     int visIdx = hitRow(localY);
-    if (visIdx != hoveredRow_) {
+    if (visIdx != hoveredRow_)
+    {
         hoveredRow_ = visIdx;
         markDirty();
     }
@@ -1611,15 +1777,18 @@ void TreeGrid::onMouseScroll(MouseEvent& e)
     if (!abs.contains(e.x, e.y)) return;
 
     e.consumed = true;
-    bool shift    = e.shift;
-    float bodyH   = abs.h - headerHeight_;
+    bool shift = e.shift;
+    float bodyH = abs.h - headerHeight_;
     float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
     float contentW = totalColumnsWidth();
 
-    if (shift) {
+    if (shift)
+    {
         scrollX_ -= e.scrollY * 40.0f;
         scrollX_ = clamp(scrollX_, 0.0f, std::max(0.0f, contentW - abs.w));
-    } else {
+    }
+    else
+    {
         scrollY_ -= e.scrollY * rowHeight_ * 2.0f;
         scrollY_ = clamp(scrollY_, 0.0f, std::max(0.0f, contentH - bodyH));
     }
@@ -1635,50 +1804,92 @@ void TreeGrid::onKeyPress(KeyEvent& e)
     ensureFlatList();
     if (!focused_ && !editing_) return;
 
-    if (editing_) {
+    if (editing_)
+    {
         e.consumed = true;
-        switch (e.key) {
-        case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
-            commitEdit(); return;
-        case ig::retained::Key::Escape:
-            cancelEdit(); return;
-        case ig::retained::Key::Backspace:
-            if (editCursor_ > 0) {
-                const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
-                editBuf_.erase(prev, editCursor_ - prev);
-                editCursor_ = prev;
-                markDirty();
-            } return;
-        case ig::retained::Key::Delete:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) {
-                const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
-                editBuf_.erase(editCursor_, next - editCursor_);
-                markDirty();
-            } return;
-        case ig::retained::Key::Left:
-            if (editCursor_ > 0) { editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_)); markDirty(); } return;
-        case ig::retained::Key::Right:
-            if (editCursor_ < static_cast<int>(editBuf_.size())) { editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_)); markDirty(); } return;
-        case ig::retained::Key::Home: editCursor_ = 0; markDirty(); return;
-        case ig::retained::Key::End:  editCursor_ = static_cast<int>(editBuf_.size()); markDirty(); return;
-        case ig::retained::Key::C:
-            if (e.ctrl) { WidgetApp::instance().setClipboardText(editBuf_.c_str()); return; }
-            break;
-        case ig::retained::Key::V:
-            if (e.ctrl) {
-                String clip = WidgetApp::instance().getClipboardText();
-                if (!clip.empty()) { editBuf_.insert(editCursor_, clip); editCursor_ += static_cast<int>(clip.size()); markDirty(); }
+        switch (e.key)
+        {
+            case ig::retained::Key::Return:
+            case ig::retained::Key::KPEnter:
+                commitEdit();
                 return;
-            } break;
-        default: break;
+            case ig::retained::Key::Escape:
+                cancelEdit();
+                return;
+            case ig::retained::Key::Backspace:
+                if (editCursor_ > 0)
+                {
+                    const int prev = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                    editBuf_.erase(prev, editCursor_ - prev);
+                    editCursor_ = prev;
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Delete:
+                if (editCursor_ < static_cast<int>(editBuf_.size()))
+                {
+                    const int next = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                    editBuf_.erase(editCursor_, next - editCursor_);
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Left:
+                if (editCursor_ > 0)
+                {
+                    editCursor_ = static_cast<int>(utf8PrevOffset(editBuf_, editCursor_));
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Right:
+                if (editCursor_ < static_cast<int>(editBuf_.size()))
+                {
+                    editCursor_ = static_cast<int>(utf8NextOffset(editBuf_, editCursor_));
+                    markDirty();
+                }
+                return;
+            case ig::retained::Key::Home:
+                editCursor_ = 0;
+                markDirty();
+                return;
+            case ig::retained::Key::End:
+                editCursor_ = static_cast<int>(editBuf_.size());
+                markDirty();
+                return;
+            case ig::retained::Key::C:
+                if (e.ctrl)
+                {
+                    WidgetApp::instance().setClipboardText(editBuf_.c_str());
+                    return;
+                }
+                break;
+            case ig::retained::Key::V:
+                if (e.ctrl)
+                {
+                    String clip = WidgetApp::instance().getClipboardText();
+                    if (!clip.empty())
+                    {
+                        editBuf_.insert(editCursor_, clip);
+                        editCursor_ += static_cast<int>(clip.size());
+                        markDirty();
+                    }
+                    return;
+                }
+                break;
+            default:
+                break;
         }
     }
 
-    if (!editing_) {
+    if (!editing_)
+    {
         Node* before = selectedNode_;
         int curIdx = -1;
         for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
-            if (flatList_[i].node == selectedNode_) { curIdx = i; break; }
+            if (flatList_[i].node == selectedNode_)
+            {
+                curIdx = i;
+                break;
+            }
 
         const int page = static_cast<int>((rect_.h - headerHeight_) / rowHeight_);
         const int target = listKeyTarget(e.key, curIdx, static_cast<int>(flatList_.size()), page);
@@ -1686,20 +1897,23 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         {
             e.consumed = true;
             selectedNode_ = flatList_[target].node;
-            selectedNodes_ = {selectedNode_};
+            selectedNodes_ = { selectedNode_ };
             selectionChanged.emit(selectedNode_);
             markDirty();
         }
         else if (e.key == ig::retained::Key::Left && selectedNode_)
         {
             e.consumed = true;
-            if (selectedNode_->expanded && !selectedNode_->children.empty()) {
+            if (selectedNode_->expanded && !selectedNode_->children.empty())
+            {
                 selectedNode_->expanded = false;
                 nodeCollapsed.emit(selectedNode_);
                 rebuildFlatList();
-            } else if (selectedNode_->parent) {
-                selectedNode_  = selectedNode_->parent;
-                selectedNodes_ = {selectedNode_};
+            }
+            else if (selectedNode_->parent)
+            {
+                selectedNode_ = selectedNode_->parent;
+                selectedNodes_ = { selectedNode_ };
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
@@ -1707,13 +1921,16 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         else if (e.key == ig::retained::Key::Right && selectedNode_)
         {
             e.consumed = true;
-            if (!selectedNode_->expanded && !selectedNode_->children.empty()) {
+            if (!selectedNode_->expanded && !selectedNode_->children.empty())
+            {
                 selectedNode_->expanded = true;
                 nodeExpanded.emit(selectedNode_);
                 rebuildFlatList();
-            } else if (!selectedNode_->children.empty()) {
-                selectedNode_  = selectedNode_->children[0];
-                selectedNodes_ = {selectedNode_};
+            }
+            else if (!selectedNode_->children.empty())
+            {
+                selectedNode_ = selectedNode_->children[0];
+                selectedNodes_ = { selectedNode_ };
                 selectionChanged.emit(selectedNode_);
             }
             markDirty();
@@ -1727,7 +1944,8 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         {
             e.consumed = true;
             String text;
-            for (int c = 0; c < static_cast<int>(selectedNode_->cells.size()); ++c) {
+            for (int c = 0; c < static_cast<int>(selectedNode_->cells.size()); ++c)
+            {
                 if (c > 0) text += '\t';
                 text += selectedNode_->cells[c];
             }

@@ -64,12 +64,12 @@
 #include <vector>
 
 #if defined(CLOCK_PROCESS_CPUTIME_ID)
-#  include <time.h>
+#include <time.h>
 #endif
 
 namespace compare
 {
-bool writePng(const char *path, int width, int height, const unsigned char *rgba);
+bool writePng(const char* path, int width, int height, const unsigned char* rgba);
 }
 
 namespace
@@ -93,62 +93,72 @@ struct Samples
     std::vector<double> values;
     double last;
 
-    Samples() : values(), last(0.0) {}
+    Samples()
+            : values(),
+              last(0.0)
+    {
+    }
 
     void add(double value)
     {
         last = value;
         values.push_back(value);
-        if (values.size() > 600u)
-            values.erase(values.begin());
+        if (values.size() > 600u) values.erase(values.begin());
     }
 
     double mean() const
     {
-        if (values.empty())
-            return 0.0;
+        if (values.empty()) return 0.0;
         double total = 0.0;
-        for (size_t i = 0; i < values.size(); ++i)
-            total += values[i];
+        for (size_t i = 0; i < values.size(); ++i) total += values[i];
         return total / static_cast<double>(values.size());
     }
 
     double percentile(double fraction) const
     {
-        if (values.empty())
-            return 0.0;
+        if (values.empty()) return 0.0;
         std::vector<double> sorted(values);
         std::sort(sorted.begin(), sorted.end());
         const size_t rank =
-            static_cast<size_t>(std::ceil(fraction * static_cast<double>(sorted.size())));
+                static_cast<size_t>(std::ceil(fraction * static_cast<double>(sorted.size())));
         const size_t index = rank == 0 ? 0 : std::min(rank - 1, sorted.size() - 1);
         return sorted[index];
     }
 
-    void clear() { values.clear(); }
+    void clear()
+    {
+        values.clear();
+    }
 };
 
 struct PanelTiming
 {
-    Samples submit; // microssegundos
-    Samples render; // microssegundos
-    Samples gpu;    // microssegundos
+    Samples submit;             // microssegundos
+    Samples render;             // microssegundos
+    Samples gpu;                // microssegundos
     std::vector<float> history; // submit em ms, para o gráfico (64 amostras)
     int items;
     int vertices;
     int drawCalls;
 
-    PanelTiming() : submit(), render(), gpu(), history(), items(0), vertices(0), drawCalls(0) {}
+    PanelTiming()
+            : submit(),
+              render(),
+              gpu(),
+              history(),
+              items(0),
+              vertices(0),
+              drawCalls(0)
+    {
+    }
 
     void push(double submitUs, double renderUs, double gpuUs)
     {
         submit.add(submitUs);
         render.add(renderUs);
-        if (gpuUs > 0.0)
-            gpu.add(gpuUs);
+        if (gpuUs > 0.0) gpu.add(gpuUs);
         history.push_back(static_cast<float>(submitUs * 0.001));
-        if (history.size() > 64u)
-            history.erase(history.begin());
+        if (history.size() > 64u) history.erase(history.begin());
     }
 
     double hz() const
@@ -177,20 +187,18 @@ void usage()
 }
 
 // O --click=X,Y: onde carregar uma vez, no painel do iGUI.
-bool parsePoint(const char *arg, const char *prefix, float &x, float &y)
+bool parsePoint(const char* arg, const char* prefix, float& x, float& y)
 {
     const size_t length = strlen(prefix);
-    if (strncmp(arg, prefix, length) != 0)
-        return false;
-    const char *comma = strchr(arg + length, ',');
-    if (!comma)
-        return false;
+    if (strncmp(arg, prefix, length) != 0) return false;
+    const char* comma = strchr(arg + length, ',');
+    if (!comma) return false;
     x = static_cast<float>(atof(arg + length));
     y = static_cast<float>(atof(comma + 1));
     return true;
 }
 
-bool parseClick(const char *arg, float &x, float &y)
+bool parseClick(const char* arg, float& x, float& y)
 {
     return parsePoint(arg, "--click=", x, y);
 }
@@ -208,7 +216,7 @@ bool isKeyEvent(Uint32 type)
 
 } // namespace
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     // O demo do ImGui pede 550x680 e uma faixa de números de 92 px acima dele,
     // por isso 560 por painel e 800 de altura mostram os dois lados inteiros.
@@ -241,9 +249,8 @@ int main(int argc, char **argv)
 
     for (int i = 1; i < argc; ++i)
     {
-        const char *arg = argv[i];
-        if (strncmp(arg, "--width=", 8) == 0)
-            width = atoi(arg + 8);
+        const char* arg = argv[i];
+        if (strncmp(arg, "--width=", 8) == 0) width = atoi(arg + 8);
         else if (strncmp(arg, "--height=", 9) == 0)
             height = atoi(arg + 9);
         else if (strncmp(arg, "--frames=", 9) == 0)
@@ -305,10 +312,9 @@ int main(int argc, char **argv)
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
     Uint32 windowFlags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
-    if (hidden)
-        windowFlags |= SDL_WINDOW_HIDDEN;
-    SDL_Window *window = SDL_CreateWindow("iGUI vs ImGui  (demo window)", SDL_WINDOWPOS_CENTERED,
-                                          SDL_WINDOWPOS_CENTERED, width, height, windowFlags);
+    if (hidden) windowFlags |= SDL_WINDOW_HIDDEN;
+    SDL_Window* window = SDL_CreateWindow("iGUI vs ImGui  (demo window)", SDL_WINDOWPOS_CENTERED,
+            SDL_WINDOWPOS_CENTERED, width, height, windowFlags);
     if (!window)
     {
         fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
@@ -344,7 +350,7 @@ int main(int argc, char **argv)
     std::vector<unsigned char> fontBytes;
     if (!fontPath.empty())
     {
-        std::FILE *file = std::fopen(fontPath.c_str(), "rb");
+        std::FILE* file = std::fopen(fontPath.c_str(), "rb");
         if (file)
         {
             std::fseek(file, 0L, SEEK_END);
@@ -360,15 +366,13 @@ int main(int argc, char **argv)
         }
         if (fontBytes.empty())
             std::fprintf(stderr, "nao consegui ler a fonte '%s'; fica a de omissao\n",
-                         fontPath.c_str());
+                    fontPath.c_str());
     }
-    ig::FontAtlas atlas = fontBytes.empty()
-                              ? ig::FontAtlas(ig::defaultFontRanges(), 2048u, 1024u,
-                                              gallery::kFontSize)
-                              : ig::FontAtlas(ig::Span<const uint8_t>(
-                                                  fontBytes.data(), fontBytes.size()),
-                                              ig::defaultFontRanges(), 2048u, 1024u,
-                                              gallery::kFontSize);
+    ig::FontAtlas atlas =
+            fontBytes.empty()
+                    ? ig::FontAtlas(ig::defaultFontRanges(), 2048u, 1024u, gallery::kFontSize)
+                    : ig::FontAtlas(ig::Span<const uint8_t>(fontBytes.data(), fontBytes.size()),
+                              ig::defaultFontRanges(), 2048u, 1024u, gallery::kFontSize);
     if (!atlas.valid())
     {
         fprintf(stderr, "o atlas de fontes do iGUI nao foi construido\n");
@@ -382,16 +386,15 @@ int main(int argc, char **argv)
     ig::Context ui(backend, &atlas);
     igui_gallery::applyDemoStyle(ui);
     snprintf(gallery::gHelloLine, sizeof(gallery::gHelloLine), "dear imgui says hello! (%s) (%d)",
-             IMGUI_VERSION, IMGUI_VERSION_NUM);
+            IMGUI_VERSION, IMGUI_VERSION_NUM);
     igui_gallery::reset();
-    if (openAll)
-        igui_gallery::openAllSections();
+    if (openAll) igui_gallery::openAllSections();
     if (!tools.empty())
     {
         const bool all = tools == "all";
         igui_gallery::setTools(all || tools.find("style") != std::string::npos,
-                               all || tools.find("metrics") != std::string::npos,
-                               all || tools.find("about") != std::string::npos);
+                all || tools.find("metrics") != std::string::npos,
+                all || tools.find("about") != std::string::npos);
     }
     if (!onlySection.empty() && !igui_gallery::setOnlySection(onlySection.c_str()))
     {
@@ -404,15 +407,14 @@ int main(int argc, char **argv)
         return 2;
     }
     std::printf("iGUI   GL %d.%d em %s, atlas %ux%u, fonte %s, %d face(s)\n",
-                backend.versionMajor(), backend.versionMinor(), backend.renderer(),
-                atlas.width(), atlas.height(),
-                fontBytes.empty() ? "de omissao (Roboto)" : fontPath.c_str(),
-                static_cast<int>(atlas.faceCount()));
+            backend.versionMajor(), backend.versionMinor(), backend.renderer(), atlas.width(),
+            atlas.height(), fontBytes.empty() ? "de omissao (Roboto)" : fontPath.c_str(),
+            static_cast<int>(atlas.faceCount()));
 
     // ── ImGui ────────────────────────────────────────────────────────────────
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO &io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
     io.LogFilename = nullptr;
     ImGui_ImplSDL2_InitForOpenGL(window, context);
@@ -423,7 +425,7 @@ int main(int argc, char **argv)
     io.Fonts->AddFontDefault();
     {
         int fontCount = 0;
-        const gallery::DemoFontFile *demoFonts = gallery::demoFontFiles(fontCount);
+        const gallery::DemoFontFile* demoFonts = gallery::demoFontFiles(fontCount);
         for (int i = 0; i < fontCount; ++i)
         {
             char path[512];
@@ -434,7 +436,7 @@ int main(int argc, char **argv)
     }
     imgui_gallery::reset();
     std::printf("ImGui  %s (demo window a serio, via os backends de SDL2 e OpenGL3), %d face(s)\n",
-                IMGUI_VERSION, io.Fonts->Fonts.Size);
+            IMGUI_VERSION, io.Fonts->Fonts.Size);
 
     PanelTiming iguiTiming;
     PanelTiming imguiTiming;
@@ -442,10 +444,9 @@ int main(int argc, char **argv)
     int drawableWidth = 0;
     int drawableHeight = 0;
     SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
-    float pixelScale = width > 0 ? static_cast<float>(drawableWidth) / static_cast<float>(width)
-                                 : 1.0f;
-    if (pixelScale <= 0.0f)
-        pixelScale = 1.0f;
+    float pixelScale =
+            width > 0 ? static_cast<float>(drawableWidth) / static_cast<float>(width) : 1.0f;
+    if (pixelScale <= 0.0f) pixelScale = 1.0f;
 
     const ig::Color background(24u, 26u, 32u, 255u);
     const ig::Color panelBackground(32u, 34u, 40u, 255u);
@@ -464,16 +465,15 @@ int main(int argc, char **argv)
     while (running)
     {
         const Uint64 counter = SDL_GetPerformanceCounter();
-        const float deltaSeconds = static_cast<float>(counter - previousCounter) /
-                                   static_cast<float>(frequency);
+        const float deltaSeconds =
+                static_cast<float>(counter - previousCounter) / static_cast<float>(frequency);
         previousCounter = counter;
 
         const int panelLogical = (width - gap) / 2;
         const int panelPixels =
-            static_cast<int>(static_cast<float>(panelLogical) * pixelScale + 0.5f);
+                static_cast<int>(static_cast<float>(panelLogical) * pixelScale + 0.5f);
         const int imguiX = panelLogical + gap;
-        const int imguiXPixels =
-            static_cast<int>(static_cast<float>(imguiX) * pixelScale + 0.5f);
+        const int imguiXPixels = static_cast<int>(static_cast<float>(imguiX) * pixelScale + 0.5f);
 
         int pointerX = 0;
         int pointerY = 0;
@@ -488,22 +488,19 @@ int main(int argc, char **argv)
             // O ImGui só vê o teclado quando é ele o painel ativo, senão escrever
             // num lado escrevia nos dois. O rato vai sempre: cada painel decide
             // pelo lado em que está.
-            if (!(isKeyEvent(event.type) && activePanel != 1))
-                ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT)
-                running = false;
+            if (!(isKeyEvent(event.type) && activePanel != 1)) ImGui_ImplSDL2_ProcessEvent(&event);
+            if (event.type == SDL_QUIT) running = false;
             if (event.type == SDL_WINDOWEVENT &&
-                (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
-                 event.window.event == SDL_WINDOWEVENT_RESIZED))
+                    (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED ||
+                            event.window.event == SDL_WINDOWEVENT_RESIZED))
             {
                 width = event.window.data1;
                 height = event.window.data2;
                 SDL_GL_GetDrawableSize(window, &drawableWidth, &drawableHeight);
-                pixelScale = width > 0 ? static_cast<float>(drawableWidth) /
-                                             static_cast<float>(width)
-                                       : 1.0f;
-                if (pixelScale <= 0.0f)
-                    pixelScale = 1.0f;
+                pixelScale = width > 0
+                                     ? static_cast<float>(drawableWidth) / static_cast<float>(width)
+                                     : 1.0f;
+                if (pixelScale <= 0.0f) pixelScale = 1.0f;
             }
 
             // O iGUI leva o rato em coordenadas do seu painel, e só quando está
@@ -522,8 +519,7 @@ int main(int argc, char **argv)
             }
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT)
             {
-                if (pointerInIgui)
-                    activePanel = 0;
+                if (pointerInIgui) activePanel = 0;
                 else if (pointerInImgui)
                     activePanel = 1;
             }
@@ -534,8 +530,7 @@ int main(int argc, char **argv)
         // no mesmo ponto, como um clique a sério: o popup só abre na largada.
         if (click)
         {
-            if (frame == 1)
-                ui.pushEvent(ig::Event::pointerMove(clickX, clickY));
+            if (frame == 1) ui.pushEvent(ig::Event::pointerMove(clickX, clickY));
             else if (frame == 2)
                 ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, clickX, clickY));
             else if (frame == 3)
@@ -545,8 +540,7 @@ int main(int argc, char **argv)
         // (escolher um item de uma lista, abrir um popup de dentro de outro).
         if (click2)
         {
-            if (frame == 6)
-                ui.pushEvent(ig::Event::pointerMove(click2X, click2Y));
+            if (frame == 6) ui.pushEvent(ig::Event::pointerMove(click2X, click2Y));
             else if (frame == 7)
                 ui.pushEvent(ig::Event::pointerDown(ig::PointerButton::Left, click2X, click2Y));
             else if (frame == 8)
@@ -554,8 +548,7 @@ int main(int argc, char **argv)
         }
         // --hover=X,Y: põe o ponteiro nesse ponto a partir do frame 5 (sem clicar).
         // É o que abre um submenu, que abre por hover e não por clique.
-        if (hover && frame >= 5)
-            ui.pushEvent(ig::Event::pointerMove(hoverX, hoverY));
+        if (hover && frame >= 5) ui.pushEvent(ig::Event::pointerMove(hoverX, hoverY));
 
         // --wheel=N: N entalhes de roda, um por frame. O ponto é o do --click 70 px
         // abaixo, que é onde a lista de um popup começa (o clique fica no
@@ -579,7 +572,7 @@ int main(int argc, char **argv)
         // O ImGui trabalha dentro do seu painel: fora dele não há ponteiro.
         if (pointerInImgui && windowFocused)
             io.AddMousePosEvent(static_cast<float>(pointerX - imguiX),
-                                static_cast<float>(pointerY));
+                    static_cast<float>(pointerY));
         else
             io.AddMousePosEvent(-FLT_MAX, -FLT_MAX);
         io.DisplaySize = ImVec2(static_cast<float>(panelLogical), static_cast<float>(height));
@@ -615,7 +608,7 @@ int main(int argc, char **argv)
 
         // ── iGUI: o demo reescrito ──────────────────────────────────────────
         ui.beginFrame(ig::FrameInfo(static_cast<float>(panelLogical), static_cast<float>(height),
-                                    pixelScale, deltaSeconds));
+                pixelScale, deltaSeconds));
         // Os números ficam dentro do frame de cada lado, nos dois: se num lado
         // ficassem fora da medição e no outro dentro, os tempos já não seriam
         // comparáveis. O painel de números é uma linha de texto e um gráfico, e
@@ -624,7 +617,7 @@ int main(int argc, char **argv)
         const double iguiStart = cpuNowUs();
         const gallery::FrameStats iguiStats = igui_gallery::draw(ui, deltaSeconds);
         const double iguiSubmitted = cpuNowUs();
-        const ig::DrawData &iguiData = ui.endFrame();
+        const ig::DrawData& iguiData = ui.endFrame();
 
         // ── ImGui: o ShowDemoWindow() a sério ───────────────────────────────
         ImGui::NewFrame();
@@ -634,7 +627,7 @@ int main(int argc, char **argv)
         const double imguiSubmitted = cpuNowUs();
         ImGui::Render();
 
-        ImDrawData *imguiData = ImGui::GetDrawData();
+        ImDrawData* imguiData = ImGui::GetDrawData();
         if (imguiData)
         {
             imguiVtxLast = imguiData->TotalVtxCount;
@@ -664,20 +657,19 @@ int main(int argc, char **argv)
         iguiTiming.vertices = backend.uploadedVertices();
         iguiTiming.drawCalls = backend.drawCalls();
         iguiTiming.push(iguiSubmitted - iguiStart, iguiRendered - iguiSubmitted,
-                        backend.gpuSeconds(0) * 1e6);
+                backend.gpuSeconds(0) * 1e6);
         imguiTiming.items = imguiStats.items;
         imguiTiming.vertices = imguiVtxLast;
         imguiTiming.drawCalls = imguiDrawsLast;
         imguiTiming.push(imguiSubmitted - imguiStart, imguiRendered - imguiSubmitted,
-                         backend.gpuSeconds(1) * 1e6);
+                backend.gpuSeconds(1) * 1e6);
         iguiItemsLast = iguiStats.items;
 
         if (frame == 4)
         {
-            std::printf("painel: %d px logicos, %d px de framebuffer\n", panelLogical,
-                        panelPixels);
+            std::printf("painel: %d px logicos, %d px de framebuffer\n", panelLogical, panelPixels);
             std::printf("iGUI: %d itens, %d vtx, %d draw calls\n", iguiStats.items,
-                        backend.uploadedVertices(), backend.drawCalls());
+                    backend.uploadedVertices(), backend.drawCalls());
             std::printf("ImGui demo: %d vtx, %d draw lists\n", imguiVtxLast, imguiDrawsLast);
             if (dump)
             {
@@ -687,17 +679,18 @@ int main(int argc, char **argv)
                 std::printf("comandos do iGUI:\n");
                 for (size_t i = 0; i < iguiData.commands.size(); ++i)
                 {
-                    const ig::DrawCommand &command = iguiData.commands[i];
+                    const ig::DrawCommand& command = iguiData.commands[i];
                     if (command.type != ig::DrawCommandType::Geometry)
                     {
                         std::printf("  %zu text\n", i);
                         continue;
                     }
-                    const ig::GeometryCommand &g = command.payload.geometry;
+                    const ig::GeometryCommand& g = command.payload.geometry;
                     float minX = 1e30f, minY = 1e30f, maxX = -1e30f, maxY = -1e30f;
                     for (uint32_t k = 0; k < g.indexCount; ++k)
                     {
-                        const ig::Vec2 &p = iguiData.vertices[iguiData.indices[g.firstIndex + k]].position;
+                        const ig::Vec2& p =
+                                iguiData.vertices[iguiData.indices[g.firstIndex + k]].position;
                         minX = p.x < minX ? p.x : minX;
                         minY = p.y < minY ? p.y : minY;
                         maxX = p.x > maxX ? p.x : maxX;
@@ -705,10 +698,10 @@ int main(int argc, char **argv)
                     }
                     std::printf("  %zu geom clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%-5u "
                                 "bbox=(%7.1f,%7.1f)-(%7.1f,%7.1f)\n",
-                                i, static_cast<double>(g.clip.x), static_cast<double>(g.clip.y),
-                                static_cast<double>(g.clip.width), static_cast<double>(g.clip.height),
-                                g.indexCount, static_cast<double>(minX), static_cast<double>(minY),
-                                static_cast<double>(maxX), static_cast<double>(maxY));
+                            i, static_cast<double>(g.clip.x), static_cast<double>(g.clip.y),
+                            static_cast<double>(g.clip.width), static_cast<double>(g.clip.height),
+                            g.indexCount, static_cast<double>(minX), static_cast<double>(minY),
+                            static_cast<double>(maxX), static_cast<double>(maxY));
                 }
                 // De que cor são os vértices: com o texto todo da mesma cor, é
                 // isto que separa "muitos glifos" de "geometria a mais".
@@ -736,8 +729,7 @@ int main(int argc, char **argv)
                             buckets[found].color = color;
                             buckets[found].count = 0;
                         }
-                        if (found >= 0)
-                            ++buckets[found].count;
+                        if (found >= 0) ++buckets[found].count;
                     }
                     for (int a = 0; a < used; ++a)
                         for (int b = a + 1; b < used; ++b)
@@ -748,11 +740,11 @@ int main(int argc, char **argv)
                                 buckets[b] = swap;
                             }
                     std::printf("vertices do iGUI por cor (total %zu, %d cores):\n",
-                                iguiData.vertices.size(), used);
+                            iguiData.vertices.size(), used);
                     for (int a = 0; a < used; ++a)
                         std::printf("  #%02x%02x%02x%02x  %6d vtx\n", buckets[a].color.r,
-                                    buckets[a].color.g, buckets[a].color.b, buckets[a].color.a,
-                                    buckets[a].count);
+                                buckets[a].color.g, buckets[a].color.b, buckets[a].color.a,
+                                buckets[a].count);
                 }
                 if (imguiData)
                 {
@@ -767,7 +759,7 @@ int main(int argc, char **argv)
                     int used = 0;
                     for (int l = 0; l < imguiData->CmdListsCount; ++l)
                     {
-                        const ImDrawList *list = imguiData->CmdLists[l];
+                        const ImDrawList* list = imguiData->CmdLists[l];
                         for (int v = 0; v < list->VtxBuffer.Size; ++v)
                         {
                             const ImU32 color = list->VtxBuffer[v].col;
@@ -784,8 +776,7 @@ int main(int argc, char **argv)
                                 buckets[found].color = color;
                                 buckets[found].count = 0;
                             }
-                            if (found >= 0)
-                                ++buckets[found].count;
+                            if (found >= 0) ++buckets[found].count;
                         }
                     }
                     for (int a = 0; a < used; ++a)
@@ -797,23 +788,23 @@ int main(int argc, char **argv)
                                 buckets[b] = swap;
                             }
                     std::printf("vertices do ImGui por cor (total %d, %d cores):\n",
-                                imguiData->TotalVtxCount, used);
+                            imguiData->TotalVtxCount, used);
                     for (int a = 0; a < used; ++a)
                         std::printf("  #%08x  %6d vtx\n", buckets[a].color, buckets[a].count);
                     std::printf("comandos do ImGui:\n");
                     for (int l = 0; l < imguiData->CmdListsCount; ++l)
                     {
-                        const ImDrawList *list = imguiData->CmdLists[l];
+                        const ImDrawList* list = imguiData->CmdLists[l];
                         for (int c = 0; c < list->CmdBuffer.Size; ++c)
                         {
-                            const ImDrawCmd &cmd = list->CmdBuffer[c];
+                            const ImDrawCmd& cmd = list->CmdBuffer[c];
                             std::printf("  lista %d cmd %2d clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%u "
                                         "vtx=%d\n",
-                                        l, c, static_cast<double>(cmd.ClipRect.x),
-                                        static_cast<double>(cmd.ClipRect.y),
-                                        static_cast<double>(cmd.ClipRect.z - cmd.ClipRect.x),
-                                        static_cast<double>(cmd.ClipRect.w - cmd.ClipRect.y),
-                                        cmd.ElemCount, list->VtxBuffer.Size);
+                                    l, c, static_cast<double>(cmd.ClipRect.x),
+                                    static_cast<double>(cmd.ClipRect.y),
+                                    static_cast<double>(cmd.ClipRect.z - cmd.ClipRect.x),
+                                    static_cast<double>(cmd.ClipRect.w - cmd.ClipRect.y),
+                                    cmd.ElemCount, list->VtxBuffer.Size);
                         }
                     }
                 }
@@ -821,17 +812,15 @@ int main(int argc, char **argv)
             std::printf("lacunas do iGUI face ao demo: %d\n", gallery::gapCount());
         }
 
-        if (frames > 0 && frame + 1 >= frames)
-            running = false;
+        if (frames > 0 && frame + 1 >= frames) running = false;
 
         if (!running && !screenshot.empty())
         {
             pixels.assign(static_cast<size_t>(drawableWidth) * static_cast<size_t>(drawableHeight) *
-                              4u,
-                          0u);
+                                  4u,
+                    0u);
             if (backend.readPixels(0, 0, drawableWidth, drawableHeight, pixels.data()))
-                compare::writePng(screenshot.c_str(), drawableWidth, drawableHeight,
-                                  pixels.data());
+                compare::writePng(screenshot.c_str(), drawableWidth, drawableHeight, pixels.data());
         }
 
         SDL_GL_SwapWindow(window);
@@ -842,23 +831,23 @@ int main(int argc, char **argv)
     std::printf("\n%d frames\n", frame);
     std::printf("            submit medio   mediana      p95      render medio      gpu medio\n");
     std::printf("iGUI    %13.1f %9.1f %9.1f %14.1f %14.1f   us\n", iguiTiming.submit.mean(),
-                iguiTiming.submit.percentile(0.5), iguiTiming.submit.percentile(0.95),
-                iguiTiming.render.mean(), iguiTiming.gpu.mean());
+            iguiTiming.submit.percentile(0.5), iguiTiming.submit.percentile(0.95),
+            iguiTiming.render.mean(), iguiTiming.gpu.mean());
     std::printf("ImGui   %13.1f %9.1f %9.1f %14.1f %14.1f   us\n", imguiTiming.submit.mean(),
-                imguiTiming.submit.percentile(0.5), imguiTiming.submit.percentile(0.95),
-                imguiTiming.render.mean(), imguiTiming.gpu.mean());
+            imguiTiming.submit.percentile(0.5), imguiTiming.submit.percentile(0.95),
+            imguiTiming.render.mean(), imguiTiming.gpu.mean());
 
     const double iguiTotal = iguiTiming.submit.mean() + iguiTiming.render.mean();
     const double imguiTotal = imguiTiming.submit.mean() + imguiTiming.render.mean();
     std::printf("\nsubmit+render: iGUI %.1f us, ImGui %.1f us -> iGUI e %.2fx o ImGui\n", iguiTotal,
-                imguiTotal, imguiTotal > 0.0 ? iguiTotal / imguiTotal : 0.0);
+            imguiTotal, imguiTotal > 0.0 ? iguiTotal / imguiTotal : 0.0);
     std::printf("geometria: iGUI %d vtx / %d draw calls, ImGui %d vtx / %d draw lists\n",
-                iguiTiming.vertices, iguiTiming.drawCalls, imguiTiming.vertices,
-                imguiTiming.drawCalls);
+            iguiTiming.vertices, iguiTiming.drawCalls, imguiTiming.vertices, imguiTiming.drawCalls);
     std::printf("itens submetidos pelo espelho do iGUI: %d\n", iguiTiming.items);
 
     std::printf("\nO que o demo do ImGui tem e o iGUI nao exprime, nas seccoes desenhadas "
-                "neste frame (%d):\n", gallery::gapCount());
+                "neste frame (%d):\n",
+            gallery::gapCount());
     for (int i = 0; i < gallery::gapCount(); ++i)
         std::printf("  %-28s %s\n", gallery::gap(i).section, gallery::gap(i).widget);
 

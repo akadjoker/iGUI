@@ -30,8 +30,15 @@ struct Config
     bool dump;
 
     Config()
-        : scene("gallery"), blocks(10), windows(4), frames(300), warmup(30),
-          width(1280.0f), height(800.0f), useFont(true), dump(false)
+            : scene("gallery"),
+              blocks(10),
+              windows(4),
+              frames(300),
+              warmup(30),
+              width(1280.0f),
+              height(800.0f),
+              useFont(true),
+              dump(false)
     {
     }
 };
@@ -67,15 +74,28 @@ struct Result
     long long peakRssKb;
 
     Result()
-        : lib(), ran(false), error(), submitMeanUs(0.0), submitMedianUs(0.0),
-          submitP95Us(0.0), submitMinUs(0.0), renderMeanUs(0.0), totalMeanUs(0.0),
-          vertices(0), indices(0), commands(0), widgets(0), measureCalls(0), shapeCalls(0),
-          textChars(0), peakRssKb(-1)
+            : lib(),
+              ran(false),
+              error(),
+              submitMeanUs(0.0),
+              submitMedianUs(0.0),
+              submitP95Us(0.0),
+              submitMinUs(0.0),
+              renderMeanUs(0.0),
+              totalMeanUs(0.0),
+              vertices(0),
+              indices(0),
+              commands(0),
+              widgets(0),
+              measureCalls(0),
+              shapeCalls(0),
+              textChars(0),
+              peakRssKb(-1)
     {
     }
 };
 
-Result runIgui(const Config &config);
-Result runImgui(const Config &config);
+Result runIgui(const Config& config);
+Result runImgui(const Config& config);
 
 } // namespace bench

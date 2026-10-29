@@ -23,68 +23,98 @@ class App
 public:
     struct Config
     {
-        const char *title = "iGUI";
+        const char* title = "iGUI";
         int width = 1280;
         int height = 720;
         // OpenGL when the machine has it, else the software rasteriser.
         bool preferOpenGL = true;
         int minGlMajor = 3; // the oldest OpenGL core the application accepts
         int minGlMinor = 3;
-        // Ask for an OpenGL ES 3.0 context instead of a core one: for an engine whose shaders are GLSL ES.
-        // Where the desktop driver has no ES profile the window falls back to the core versions above.
+        // Ask for an OpenGL ES 3.0 context instead of a core one: for an engine whose shaders are
+        // GLSL ES. Where the desktop driver has no ES profile the window falls back to the core
+        // versions above.
         bool openGLES = false;
-        int msaa = 4;    // OpenGL multisampling, 0 to disable
+        int msaa = 4; // OpenGL multisampling, 0 to disable
         bool vsync = true;
         bool showStats = true; // fps and size in the window title, once a second
-        int samples = 2; // software only: anti-aliasing samples per axis, F2 cycles 1..4
+        int samples = 2;       // software only: anti-aliasing samples per axis, F2 cycles 1..4
         uint32_t background = 0xff181a1eu;
     };
 
     App() = default;
     ~App();
-    App(const App &) = delete;
-    App &operator=(const App &) = delete;
+    App(const App&) = delete;
+    App& operator=(const App&) = delete;
 
-    bool create(const Config &config);
+    bool create(const Config& config);
     // Returns when the window closes.
     void run();
 
-    ig::retained::WidgetApp &widgets() { return ig::retained::WidgetApp::instance(); }
-    SoftRaster &raster() { return raster_; }
+    ig::retained::WidgetApp& widgets()
+    {
+        return ig::retained::WidgetApp::instance();
+    }
+    SoftRaster& raster()
+    {
+        return raster_;
+    }
     // True when drawing with OpenGL. The GL context is current on the thread that runs the frame.
-    bool usesOpenGL() const { return useGl_; }
-    GlRaster &gl() { return gl_; }
-    // Runs every frame after the widgets update and before they paint, with the delta time. With OpenGL the
-    // context is current: the place to advance the application and draw into its own framebuffers and
-    // textures, which the widgets then show. It must leave framebuffer 0 bound.
-    void setFrameCallback(ct::Function<void(float)> callback) { frameCallback_ = std::move(callback); }
-    // Runs every frame after the platform input is read into the IO and before the widgets update, with the
-    // frame number: a test or a recorder can replace the mouse and add keys there.
-    void setInputHook(ct::Function<void(int, ig::retained::IO &)> hook) { inputHook_ = std::move(hook); }
-    // Sees every platform event as it is read, before the widgets get it: an application running a game
-    // inside the interface feeds its own input from here.
-    void setEventHook(ct::Function<void(const Event &)> hook) { eventHook_ = std::move(hook); }
-    /// Called after the interface is drawn and before the swap (OpenGL path): the place to read the window.
-    void setAfterRenderCallback(ct::Function<void()> callback) { afterRenderCallback_ = std::move(callback); }
-    /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the after-render callback.
-    bool readWindowPixels(ct::Vector<uint32_t> &out, int &width, int &height);
-    PlatformWindow *window() { return window_; }
+    bool usesOpenGL() const
+    {
+        return useGl_;
+    }
+    GlRaster& gl()
+    {
+        return gl_;
+    }
+    // Runs every frame after the widgets update and before they paint, with the delta time. With
+    // OpenGL the context is current: the place to advance the application and draw into its own
+    // framebuffers and textures, which the widgets then show. It must leave framebuffer 0 bound.
+    void setFrameCallback(ct::Function<void(float)> callback)
+    {
+        frameCallback_ = std::move(callback);
+    }
+    // Runs every frame after the platform input is read into the IO and before the widgets update,
+    // with the frame number: a test or a recorder can replace the mouse and add keys there.
+    void setInputHook(ct::Function<void(int, ig::retained::IO&)> hook)
+    {
+        inputHook_ = std::move(hook);
+    }
+    // Sees every platform event as it is read, before the widgets get it: an application running a
+    // game inside the interface feeds its own input from here.
+    void setEventHook(ct::Function<void(const Event&)> hook)
+    {
+        eventHook_ = std::move(hook);
+    }
+    /// Called after the interface is drawn and before the swap (OpenGL path): the place to read the
+    /// window.
+    void setAfterRenderCallback(ct::Function<void()> callback)
+    {
+        afterRenderCallback_ = std::move(callback);
+    }
+    /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the
+    /// after-render callback.
+    bool readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height);
+    PlatformWindow* window()
+    {
+        return window_;
+    }
 
 private:
-    static void frameThunk(PlatformWindow *w, void *user);
+    static void frameThunk(PlatformWindow* w, void* user);
     void frame();
     void frameGl();
     void framePixels();
-    ig::retained::TextureHandle createTexture(int w, int h, const unsigned char *rgba);
+    ig::retained::TextureHandle createTexture(int w, int h, const unsigned char* rgba);
     void destroyTexture(ig::retained::TextureHandle t);
-    bool updateTexture(ig::retained::TextureHandle t, const unsigned char *rgba, int w, int h);
-    void saveScreenshot(const uint32_t *pixels, int width, int height, int stride);
+    bool updateTexture(ig::retained::TextureHandle t, const unsigned char* rgba, int w, int h);
+    void saveScreenshot(const uint32_t* pixels, int width, int height, int stride);
     void feedInput();
 
-    PlatformWindow *window_ = nullptr;
-    ig::retained::Context *context_ = nullptr;
+    PlatformWindow* window_ = nullptr;
+    ig::retained::Context* context_ = nullptr;
     ig::retained::FontAtlas atlas_;
-    const ig::retained::Font *font_ = nullptr;
+    const ig::retained::Font* font_ = nullptr;
     SoftRaster raster_;
     GlRaster gl_;
     bool useGl_ = false;
@@ -97,8 +127,8 @@ private:
     int rasterFrames_ = 0;
     ct::Function<void(float)> frameCallback_;
     ct::Function<void()> afterRenderCallback_;
-    ct::Function<void(int, ig::retained::IO &)> inputHook_;
-    ct::Function<void(const Event &)> eventHook_;
+    ct::Function<void(int, ig::retained::IO&)> inputHook_;
+    ct::Function<void(const Event&)> eventHook_;
     int frameIndex_ = 0;
 };
 

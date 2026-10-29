@@ -1,12 +1,14 @@
 #pragma once
 
-#include "Widget.hpp"
-#include "Theme.hpp"
+#include "RetainedBase.hpp" // Vec3f, Mat4f
 #include "Signal.hpp"
-#include "RetainedBase.hpp"   // Vec3f, Mat4f
+#include "Theme.hpp"
+#include "Widget.hpp"
 
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Gizmo2D - interactive 2D transform handles (Translate / Rotate / Scale)
@@ -21,8 +23,19 @@ namespace ig { namespace retained
 //    gizmo->onTranslate.connect([](float dx, float dy) { ... });
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class GizmoMode  { Translate, Rotate, Scale };
-enum class GizmoAxis  { None, X, Y, XY };   // XY = center/free move
+enum class GizmoMode
+{
+    Translate,
+    Rotate,
+    Scale
+};
+enum class GizmoAxis
+{
+    None,
+    X,
+    Y,
+    XY
+}; // XY = center/free move
 
 class Gizmo2D : public Widget
 {
@@ -32,82 +45,141 @@ public:
     Gizmo2D();
 
     /// @brief Set the gizmo position in parent space.
-    void  setPosition(float x, float y) { posX_ = x; posY_ = y; markDirty(); }
+    void setPosition(float x, float y)
+    {
+        posX_ = x;
+        posY_ = y;
+        markDirty();
+    }
     /// @brief Get the X position.
-    float positionX() const { return posX_; }
+    float positionX() const
+    {
+        return posX_;
+    }
     /// @brief Get the Y position.
-    float positionY() const { return posY_; }
+    float positionY() const
+    {
+        return posY_;
+    }
 
     /// @brief Set the rotation angle in degrees.
-    void  setRotation(float deg) { rotation_ = deg; markDirty(); }
+    void setRotation(float deg)
+    {
+        rotation_ = deg;
+        markDirty();
+    }
     /// @brief Get the rotation angle in degrees.
-    float rotation() const       { return rotation_; }
+    float rotation() const
+    {
+        return rotation_;
+    }
 
     /// @brief Set the scale factors.
-    void  setScale(float sx, float sy) { scaleX_ = sx; scaleY_ = sy; markDirty(); }
+    void setScale(float sx, float sy)
+    {
+        scaleX_ = sx;
+        scaleY_ = sy;
+        markDirty();
+    }
     /// @brief Get the horizontal scale factor.
-    float scaleX() const { return scaleX_; }
+    float scaleX() const
+    {
+        return scaleX_;
+    }
     /// @brief Get the vertical scale factor.
-    float scaleY() const { return scaleY_; }
+    float scaleY() const
+    {
+        return scaleY_;
+    }
 
     /// @brief Set the transform mode.
-    void      setMode(GizmoMode m) { mode_ = m; markDirty(); }
+    void setMode(GizmoMode m)
+    {
+        mode_ = m;
+        markDirty();
+    }
     /// @brief Get the current transform mode.
-    GizmoMode mode() const         { return mode_; }
+    GizmoMode mode() const
+    {
+        return mode_;
+    }
 
     /// @brief Set the translation snap grid size.
-    void  setSnapTranslate(float grid) { snapTranslate_ = grid; }
+    void setSnapTranslate(float grid)
+    {
+        snapTranslate_ = grid;
+    }
     /// @brief Set the rotation snap in degrees.
-    void  setSnapRotate(float deg)     { snapRotate_    = deg;  }
+    void setSnapRotate(float deg)
+    {
+        snapRotate_ = deg;
+    }
     /// @brief Set the scale snap step size.
-    void  setSnapScale(float step)     { snapScale_     = step; }
+    void setSnapScale(float step)
+    {
+        snapScale_ = step;
+    }
 
     /// @brief Set the axis line length in pixels.
-    void  setAxisLength(float len) { axisLen_    = len; markDirty(); }
+    void setAxisLength(float len)
+    {
+        axisLen_ = len;
+        markDirty();
+    }
     /// @brief Set the handle square size in pixels.
-    void  setHandleSize(float s)   { handleSize_ = s;   markDirty(); }
+    void setHandleSize(float s)
+    {
+        handleSize_ = s;
+        markDirty();
+    }
 
     // ── Signals ──────────────────────────────────────────────────────────
-    Signal<float, float> onTranslate;   ///< delta dx, dy (parent pixels)
-    Signal<float>        onRotate;      ///< cumulative angle (degrees)
-    Signal<float, float> onScale;       ///< absolute scale x, y
+    Signal<float, float> onTranslate; ///< delta dx, dy (parent pixels)
+    Signal<float> onRotate;           ///< cumulative angle (degrees)
+    Signal<float, float> onScale;     ///< absolute scale x, y
     /// @brief Emitted when a drag operation begins.
-    Signal<>             onDragStart;
+    Signal<> onDragStart;
     /// @brief Emitted when a drag operation ends.
-    Signal<>             onDragEnd;
+    Signal<> onDragEnd;
 
     /// @brief Get which axis is currently active.
-    GizmoAxis activeAxis() const { return activeAxis_; }
+    GizmoAxis activeAxis() const
+    {
+        return activeAxis_;
+    }
     /// @brief Check if a drag operation is in progress.
-    bool      isDragging()  const { return dragging_; }
+    bool isDragging() const
+    {
+        return dragging_;
+    }
 
     // ── Overrides ────────────────────────────────────────────────────────
-    void  layout() override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
+    void layout() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
 
 private:
     float posX_ = 0, posY_ = 0;
     float rotation_ = 0.0f;
-    float scaleX_   = 1.0f, scaleY_ = 1.0f;
-    GizmoMode mode_  = GizmoMode::Translate;
+    float scaleX_ = 1.0f, scaleY_ = 1.0f;
+    GizmoMode mode_ = GizmoMode::Translate;
     GizmoAxis activeAxis_ = GizmoAxis::None;
-    GizmoAxis hoverAxis_  = GizmoAxis::None;
-    bool  dragging_       = false;
-    float dragStartX_     = 0, dragStartY_     = 0;
+    GizmoAxis hoverAxis_ = GizmoAxis::None;
+    bool dragging_ = false;
+    float dragStartX_ = 0, dragStartY_ = 0;
     float dragStartAngle_ = 0;
     float dragStartScaleX_ = 0, dragStartScaleY_ = 0;
 
     float snapTranslate_ = 0, snapRotate_ = 0, snapScale_ = 0;
-    float axisLen_    = 60.0f;
+    float axisLen_ = 60.0f;
     float handleSize_ = 8.0f;
 
-    static inline const Color kAxisX  {200,  60,  60, 255};
-    static inline const Color kAxisY  { 60, 200,  60, 255};
-    static inline const Color kCenter {220, 180,  60, 255};
-    static inline const Color kHover  {255, 128,  16, 220};
+    static inline const Color kAxisX{ 200, 60, 60, 255 };
+    static inline const Color kAxisY{ 60, 200, 60, 255 };
+    static inline const Color kCenter{ 220, 180, 60, 255 };
+    static inline const Color kHover{ 255, 128, 16, 220 };
 
     void toGizmoSpace(float mx, float my, float& gx, float& gy) const;
     GizmoAxis hitTest(float mx, float my) const;
@@ -136,8 +208,23 @@ private:
 //  Signals emit Vec3f (our lightweight type).
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class GizmoMode3D { Translate, Rotate, Scale };
-enum class GizmoAxis3D { None, X, Y, Z, XY, XZ, YZ, XYZ };
+enum class GizmoMode3D
+{
+    Translate,
+    Rotate,
+    Scale
+};
+enum class GizmoAxis3D
+{
+    None,
+    X,
+    Y,
+    Z,
+    XY,
+    XZ,
+    YZ,
+    XYZ
+};
 
 class Gizmo3D : public Widget
 {
@@ -147,81 +234,124 @@ public:
     Gizmo3D();
 
     /// @brief Set the view and projection matrices (column-major).
-    void setViewProjection(const float* view4x4, const float* proj4x4,
-                           int vpWidth, int vpHeight);
+    void setViewProjection(const float* view4x4, const float* proj4x4, int vpWidth, int vpHeight);
 
     /// @brief Set the transform target from float[3] arrays. The rotation is
     /// euler degrees in X, then Y, then Z order.
     void setTarget(const float* pos3, const float* rotDeg3, const float* scale3);
 
     /// @brief Get the target position.
-    const Vec3f& targetPosition() const { return targetPos_; }
+    const Vec3f& targetPosition() const
+    {
+        return targetPos_;
+    }
     /// @brief Get the target rotation in degrees.
-    const Vec3f& targetRotation() const { return targetRot_; }
+    const Vec3f& targetRotation() const
+    {
+        return targetRot_;
+    }
     /// @brief Get the target scale.
-    const Vec3f& targetScale()    const { return targetScale_; }
+    const Vec3f& targetScale() const
+    {
+        return targetScale_;
+    }
 
     /// @brief Set the 3D transform mode.
-    void        setMode(GizmoMode3D m) { mode_ = m; markDirty(); }
+    void setMode(GizmoMode3D m)
+    {
+        mode_ = m;
+        markDirty();
+    }
     /// @brief Get the current 3D transform mode.
-    GizmoMode3D mode() const           { return mode_; }
+    GizmoMode3D mode() const
+    {
+        return mode_;
+    }
 
     /// @brief Set the 3D translation snap grid.
-    void setSnapTranslate(float grid) { snapT_ = grid; }
+    void setSnapTranslate(float grid)
+    {
+        snapT_ = grid;
+    }
     /// @brief Set the 3D rotation snap in degrees.
-    void setSnapRotate(float deg)     { snapR_ = deg;  }
+    void setSnapRotate(float deg)
+    {
+        snapR_ = deg;
+    }
     /// @brief Set the 3D scale snap step.
-    void setSnapScale(float step)     { snapS_ = step; }
+    void setSnapScale(float step)
+    {
+        snapS_ = step;
+    }
 
     /// @brief Set the screen-space scale factor for the gizmo.
-    void  setScreenScale(float s) { screenScale_ = s; }
+    void setScreenScale(float s)
+    {
+        screenScale_ = s;
+    }
     /// @brief Get the screen-space scale factor.
-    float screenScale() const     { return screenScale_; }
+    float screenScale() const
+    {
+        return screenScale_;
+    }
 
     /// @brief Show or hide the box the handles move.
-    void setModelVisible(bool visible) { modelVisible_ = visible; markDirty(); }
+    void setModelVisible(bool visible)
+    {
+        modelVisible_ = visible;
+        markDirty();
+    }
     /// @brief Whether the box the handles move is drawn.
-    bool modelVisible() const          { return modelVisible_; }
+    bool modelVisible() const
+    {
+        return modelVisible_;
+    }
 
     // ── Signals ──
-    Signal<Vec3f> onTranslate3D;   ///< delta in world space
-    Signal<Vec3f> onRotate3D;      ///< cumulative euler (degrees)
-    Signal<Vec3f> onScale3D;       ///< absolute scale
+    Signal<Vec3f> onTranslate3D; ///< delta in world space
+    Signal<Vec3f> onRotate3D;    ///< cumulative euler (degrees)
+    Signal<Vec3f> onScale3D;     ///< absolute scale
     /// @brief Emitted when a 3D drag operation begins.
-    Signal<>      onDragStart;
+    Signal<> onDragStart;
     /// @brief Emitted when a 3D drag operation ends.
-    Signal<>      onDragEnd;
+    Signal<> onDragEnd;
 
     /// @brief Get which 3D axis is currently active.
-    GizmoAxis3D activeAxis() const { return activeAxis_; }
+    GizmoAxis3D activeAxis() const
+    {
+        return activeAxis_;
+    }
     /// @brief Check if a 3D drag operation is in progress.
-    bool        isDragging()  const { return dragging_; }
+    bool isDragging() const
+    {
+        return dragging_;
+    }
 
     // ── Overrides ────────────────────────────────────────────────────────
-    void  layout() override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onMouseMove(MouseEvent& e) override;
+    void layout() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onMouseMove(MouseEvent& e) override;
 
 private:
     // Camera (column-major Mat4f)
     Mat4f view_;
     Mat4f proj_;
-    int   vpW_ = 800;
-    int   vpH_ = 600;
+    int vpW_ = 800;
+    int vpH_ = 600;
 
     // Target transform
-    Vec3f targetPos_   = {};
-    Vec3f targetRot_   = {};   // euler degrees
-    Vec3f targetScale_ = {1,1,1};
+    Vec3f targetPos_ = {};
+    Vec3f targetRot_ = {}; // euler degrees
+    Vec3f targetScale_ = { 1, 1, 1 };
 
     // Mode & interaction
-    GizmoMode3D mode_       = GizmoMode3D::Translate;
+    GizmoMode3D mode_ = GizmoMode3D::Translate;
     GizmoAxis3D activeAxis_ = GizmoAxis3D::None;
-    GizmoAxis3D hoverAxis_  = GizmoAxis3D::None;
-    bool  dragging_     = false;
-    float dragStartX_   = 0, dragStartY_ = 0;
+    GizmoAxis3D hoverAxis_ = GizmoAxis3D::None;
+    bool dragging_ = false;
+    float dragStartX_ = 0, dragStartY_ = 0;
     Vec3f dragStartPos_;
     Vec3f dragStartRot_;
     Vec3f dragStartScale_;
@@ -237,21 +367,21 @@ private:
     float screenScale_ = 80.0f;
     // The box the transform is applied to: a turn of the rings is invisible
     // without something to turn.
-    bool  modelVisible_ = true;
+    bool modelVisible_ = true;
 
-    static inline const Color kRed    {170,  50,  50, 255};
-    static inline const Color kGreen  { 50, 170,  50, 255};
-    static inline const Color kBlue   { 50,  80, 180, 255};
-    static inline const Color kYellow {255, 255, 100, 255};
-    static inline const Color kHover  {255, 128,  16, 220};
+    static inline const Color kRed{ 170, 50, 50, 255 };
+    static inline const Color kGreen{ 50, 170, 50, 255 };
+    static inline const Color kBlue{ 50, 80, 180, 255 };
+    static inline const Color kYellow{ 255, 255, 100, 255 };
+    static inline const Color kHover{ 255, 128, 16, 220 };
 
     ig::retained::Vec2f project(const Vec3f& world) const;
-    void    unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const;
+    void unproject(float sx, float sy, Vec3f& rayOrig, Vec3f& rayDir) const;
     // The area the camera's viewport is laid over: this widget's own rect.
-    Rect    viewportRect() const;
+    Rect viewportRect() const;
     // Where the ray under a screen point crosses the plane through the target
     // with the given normal, measured from the target.
-    bool    ringPointOn(float sx, float sy, const Vec3f& normal, Vec3f& local) const;
+    bool ringPointOn(float sx, float sy, const Vec3f& normal, Vec3f& local) const;
     // The signed turn from one vector to the other around an axis, in radians.
     static float sweptAngle(const Vec3f& normal, const Vec3f& from, const Vec3f& to);
     float computeScale() const;
@@ -263,7 +393,7 @@ private:
     // then Y, then Z order, the order the handles write.
     Vec3f rotateEuler(const Vec3f& v) const;
     Vec3f modelPoint(const Vec3f& corner, float halfSize) const;
-    void  paintModel(PaintContext& ctx);
+    void paintModel(PaintContext& ctx);
 
     void paintTranslate3D(PaintContext& ctx);
     void paintRotate3D(PaintContext& ctx);

@@ -4,9 +4,9 @@
 #include "stb_image.h"
 
 #if defined(_WIN32)
-    #include <windows.h>
+#include <windows.h>
 #else
-    #include <sys/stat.h>
+#include <sys/stat.h>
 #endif
 
 #include <igui/Gui.hpp>
@@ -18,23 +18,26 @@ namespace
 class RaylibFileDialogProvider : public ig::FileDialogProvider
 {
 public:
-    RaylibFileDialogProvider() : preview_(), previewPath_() {}
+    RaylibFileDialogProvider()
+            : preview_(),
+              previewPath_()
+    {
+    }
 
     ~RaylibFileDialogProvider() override
     {
-        if (preview_.id != 0u)
-            UnloadTexture(preview_);
+        if (preview_.id != 0u) UnloadTexture(preview_);
     }
 
-    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry> &entries, bool = true) override
+    bool listDirectory(ig::StringView path, ct::Vector<ig::FileDialogEntry>& entries,
+            bool = true) override
     {
         const ig::String nativePath(path.data(), path.size());
         const ::FilePathList files = LoadDirectoryFiles(nativePath.c_str());
         for (unsigned int i = 0u; i < files.count; ++i)
         {
-            const char *filePath = files.paths[i];
-            if (!filePath)
-                continue;
+            const char* filePath = files.paths[i];
+            if (!filePath) continue;
             ig::FileDialogEntry entry;
             entry.path = filePath;
             entry.name = GetFileName(filePath);
@@ -44,10 +47,12 @@ public:
             ::WIN32_FILE_ATTRIBUTE_DATA metadata;
             if (GetFileAttributesExA(filePath, GetFileExInfoStandard, &metadata) != 0)
             {
-                const uint64_t ticks = (static_cast<uint64_t>(metadata.ftLastWriteTime.dwHighDateTime) << 32u) |
-                                       static_cast<uint64_t>(metadata.ftLastWriteTime.dwLowDateTime);
+                const uint64_t ticks =
+                        (static_cast<uint64_t>(metadata.ftLastWriteTime.dwHighDateTime) << 32u) |
+                        static_cast<uint64_t>(metadata.ftLastWriteTime.dwLowDateTime);
                 entry.modifiedTime = ticks > 116444736000000000ull
-                    ? (ticks - 116444736000000000ull) / 10000000ull : 0u;
+                                             ? (ticks - 116444736000000000ull) / 10000000ull
+                                             : 0u;
             }
 #else
             struct stat metadata;
@@ -64,21 +69,20 @@ public:
     ig::String parentDirectory(ig::StringView path) override
     {
         const ig::String nativePath(path.data(), path.size());
-        const char *parent = GetDirectoryPath(nativePath.c_str());
+        const char* parent = GetDirectoryPath(nativePath.c_str());
         return parent ? ig::String(parent) : ig::String();
     }
 
     ig::String homeDirectory() override
     {
-        const char *directory = GetWorkingDirectory();
+        const char* directory = GetWorkingDirectory();
         return directory ? ig::String(directory) : ig::String();
     }
 
     ig::String createDirectory(ig::StringView parent, ig::StringView name) override
     {
         ig::String path(parent.data(), parent.size());
-        if (!path.empty() && path[path.size() - 1u] != '/')
-            path += "/";
+        if (!path.empty() && path[path.size() - 1u] != '/') path += "/";
         path += ig::String(name.data(), name.size());
 #if defined(_WIN32)
         return CreateDirectoryA(path.c_str(), nullptr) != 0 ? path : ig::String();
@@ -92,15 +96,14 @@ public:
         const ig::String requested(path.data(), path.size());
         if (requested != previewPath_)
         {
-            if (preview_.id != 0u)
-                UnloadTexture(preview_);
+            if (preview_.id != 0u) UnloadTexture(preview_);
             // Decode independently of the system Raylib's optional format flags.
             int width = 0, height = 0, channels = 0;
             unsigned char* pixels = stbi_load(requested.c_str(), &width, &height, &channels, 4);
             preview_ = {};
             if (pixels)
             {
-                ::Image image = {pixels, width, height, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8};
+                ::Image image = { pixels, width, height, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
                 preview_ = LoadTextureFromImage(image);
                 if (preview_.id) SetTextureFilter(preview_, TEXTURE_FILTER_BILINEAR);
                 stbi_image_free(pixels);
@@ -143,10 +146,22 @@ struct StudioState
     ig::Transform2D transform;
 
     StudioState()
-        : theme(0), selectedAsset(1), viewportTool(1), grid(true), snap(false), hierarchyOpen(true), assetsOpen(true),
-          viewportOpen(true), inspectorOpen(true), outputOpen(true), profilerOpen(true),
-          fileDialogOpen(false), fileDialogKind(0),
-          zoom(100.0f), exposure(0.0f), transform()
+            : theme(0),
+              selectedAsset(1),
+              viewportTool(1),
+              grid(true),
+              snap(false),
+              hierarchyOpen(true),
+              assetsOpen(true),
+              viewportOpen(true),
+              inspectorOpen(true),
+              outputOpen(true),
+              profilerOpen(true),
+              fileDialogOpen(false),
+              fileDialogKind(0),
+              zoom(100.0f),
+              exposure(0.0f),
+              transform()
     {
         transform.position = ig::Vec2(210.0f, 128.0f);
     }
@@ -156,23 +171,28 @@ ig::ThemePreset themePreset(int index)
 {
     switch (index)
     {
-    case 1: return ig::ThemePreset::Light;
-    case 2: return ig::ThemePreset::Blender;
-    case 3: return ig::ThemePreset::VSCode;
-    default: return ig::ThemePreset::Dark;
+        case 1:
+            return ig::ThemePreset::Light;
+        case 2:
+            return ig::ThemePreset::Blender;
+        case 3:
+            return ig::ThemePreset::VSCode;
+        default:
+            return ig::ThemePreset::Dark;
     }
 }
 
-bool toolbarButton(ig::Context &ui, ig::StringView id, ig::StringView tooltip,
-                   const ig::Rect &bounds, int icon, bool selected)
+bool toolbarButton(ig::Context& ui, ig::StringView id, ig::StringView tooltip,
+        const ig::Rect& bounds, int icon, bool selected)
 {
     ui.pushId(id);
     const bool clicked = ui.invisibleButton("button", bounds);
     const bool hovered = ui.isHovered("button", bounds);
     ui.popId();
 
-    const ig::Color background = selected ? ui.theme().selectableSelected
-                              : (hovered ? ui.theme().buttonHovered : ui.theme().buttonBackground);
+    const ig::Color background =
+            selected ? ui.theme().selectableSelected
+                     : (hovered ? ui.theme().buttonHovered : ui.theme().buttonBackground);
     const ig::Color foreground = ui.theme().buttonText;
     ui.drawRectFilled(bounds, background);
     const float left = bounds.x + bounds.width * 0.25f;
@@ -198,7 +218,8 @@ bool toolbarButton(ig::Context &ui, ig::StringView id, ig::StringView tooltip,
         ui.drawLine(ig::Vec2(left, bottom), ig::Vec2(left, top), foreground, 2.0f);
         ui.drawLine(ig::Vec2(left, top), ig::Vec2(right, top), foreground, 2.0f);
         ui.drawLine(ig::Vec2(right, top), ig::Vec2(right, middleY), foreground, 2.0f);
-        ui.drawLine(ig::Vec2(right, middleY), ig::Vec2(right - 4.0f, middleY - 3.0f), foreground, 2.0f);
+        ui.drawLine(ig::Vec2(right, middleY), ig::Vec2(right - 4.0f, middleY - 3.0f), foreground,
+                2.0f);
     }
     else if (icon == 3)
     {
@@ -233,13 +254,14 @@ bool toolbarButton(ig::Context &ui, ig::StringView id, ig::StringView tooltip,
         ui.drawLine(ig::Vec2(left, top), ig::Vec2(right, top), foreground, 2.0f);
         ui.drawLine(ig::Vec2(right, top), ig::Vec2(right, bottom), foreground, 2.0f);
         ui.drawLine(ig::Vec2(right, bottom), ig::Vec2(left + 3.0f, bottom), foreground, 2.0f);
-        ui.drawLine(ig::Vec2(left + 3.0f, bottom), ig::Vec2(left + 7.0f, bottom - 4.0f), foreground, 2.0f);
+        ui.drawLine(ig::Vec2(left + 3.0f, bottom), ig::Vec2(left + 7.0f, bottom - 4.0f), foreground,
+                2.0f);
     }
     ui.tooltip(tooltip);
     return clicked;
 }
 
-void drawViewportToolbar(ig::Context &ui, StudioState &state)
+void drawViewportToolbar(ig::Context& ui, StudioState& state)
 {
     const ig::Vec2 position = ui.cursor();
     const float height = ui.theme().widgetHeight + 8.0f;
@@ -249,13 +271,15 @@ void drawViewportToolbar(ig::Context &ui, StudioState &state)
     const float size = ui.theme().widgetHeight - 4.0f;
     float x = toolbar.x + 4.0f;
     const float y = toolbar.y + 4.0f;
-    if (toolbarButton(ui, "select", "Select", ig::Rect(x, y, size, size), 0, state.viewportTool == 0))
+    if (toolbarButton(ui, "select", "Select", ig::Rect(x, y, size, size), 0,
+                state.viewportTool == 0))
         state.viewportTool = 0;
     x += size + 3.0f;
     if (toolbarButton(ui, "move", "Move", ig::Rect(x, y, size, size), 1, state.viewportTool == 1))
         state.viewportTool = 1;
     x += size + 3.0f;
-    if (toolbarButton(ui, "rotate", "Rotate", ig::Rect(x, y, size, size), 2, state.viewportTool == 2))
+    if (toolbarButton(ui, "rotate", "Rotate", ig::Rect(x, y, size, size), 2,
+                state.viewportTool == 2))
         state.viewportTool = 2;
     x += size + 3.0f;
     if (toolbarButton(ui, "scale", "Scale", ig::Rect(x, y, size, size), 3, state.viewportTool == 3))
@@ -282,24 +306,20 @@ void drawViewportToolbar(ig::Context &ui, StudioState &state)
     ui.setCursor(ig::Vec2(position.x, position.y + height + ui.theme().itemSpacing));
 }
 
-void openFileDialog(StudioState &state, int kind)
+void openFileDialog(StudioState& state, int kind)
 {
     state.fileDialogOpen = true;
     state.fileDialogKind = kind;
 }
 
-void drawStudio(ig::Context &ui, StudioState &state, ig::FileDialogProvider &files)
+void drawStudio(ig::Context& ui, StudioState& state, ig::FileDialogProvider& files)
 {
-    const ig::StringView themeNames[] = {
-        ig::StringView("Dark"), ig::StringView("Light"), ig::StringView("Blender"), ig::StringView("VS Code")
-    };
-    const ig::StringView assets[] = {
-        ig::StringView("skybox.hdr"), ig::StringView("robot.mesh"), ig::StringView("ground.mat"),
-        ig::StringView("postfx.shader"), ig::StringView("icon.png")
-    };
+    const ig::StringView themeNames[] = { ig::StringView("Dark"), ig::StringView("Light"),
+        ig::StringView("Blender"), ig::StringView("VS Code") };
+    const ig::StringView assets[] = { ig::StringView("skybox.hdr"), ig::StringView("robot.mesh"),
+        ig::StringView("ground.mat"), ig::StringView("postfx.shader"), ig::StringView("icon.png") };
 
-    if (!ui.beginMainWindow("iGUI Docking Studio"))
-        return;
+    if (!ui.beginMainWindow("iGUI Docking Studio")) return;
 
     const float menuHeight = ui.theme().menuBarHeight;
     if (ui.beginMenuBar(ig::Rect(0.0f, 0.0f, ui.availableWidth(), menuHeight)))
@@ -308,12 +328,9 @@ void drawStudio(ig::Context &ui, StudioState &state, ig::FileDialogProvider &fil
         {
             if (ui.menuItem("New scene"))
                 ui.showToast("new", "New scene created", ig::ToastPosition::BottomRight);
-            if (ui.menuItem("Open file"))
-                openFileDialog(state, 0);
-            if (ui.menuItem("Open image"))
-                openFileDialog(state, 1);
-            if (ui.menuItem("Choose folder"))
-                openFileDialog(state, 2);
+            if (ui.menuItem("Open file")) openFileDialog(state, 0);
+            if (ui.menuItem("Open image")) openFileDialog(state, 1);
+            if (ui.menuItem("Choose folder")) openFileDialog(state, 2);
             if (ui.menuItem("Save scene"))
                 ui.showToast("save", "Scene saved", ig::ToastPosition::BottomRight);
             ui.endMenu();
@@ -366,23 +383,26 @@ void drawStudio(ig::Context &ui, StudioState &state, ig::FileDialogProvider &fil
             {
                 for (float x = 0.0f; x < canvas.width; x += 24.0f)
                     ui.drawLine(ig::Vec2(canvas.x + x, canvas.y),
-                                ig::Vec2(canvas.x + x, canvas.y + canvas.height),
-                                ig::Color(55u, 64u, 82u, 255u));
+                            ig::Vec2(canvas.x + x, canvas.y + canvas.height),
+                            ig::Color(55u, 64u, 82u, 255u));
                 for (float y = 0.0f; y < canvas.height; y += 24.0f)
                     ui.drawLine(ig::Vec2(canvas.x, canvas.y + y),
-                                ig::Vec2(canvas.x + canvas.width, canvas.y + y),
-                                ig::Color(55u, 64u, 82u, 255u));
+                            ig::Vec2(canvas.x + canvas.width, canvas.y + y),
+                            ig::Color(55u, 64u, 82u, 255u));
             }
             const float x = canvas.x + state.transform.position.x;
             const float y = canvas.y + state.transform.position.y;
-            ui.drawRect(ig::Rect(x - 30.0f, y - 22.0f, 60.0f, 44.0f), ig::Color(95u, 177u, 242u, 255u), 2.0f);
+            ui.drawRect(ig::Rect(x - 30.0f, y - 22.0f, 60.0f, 44.0f),
+                    ig::Color(95u, 177u, 242u, 255u), 2.0f);
             ig::Gizmo2DOptions options;
             options.translateSnap = state.snap ? 8.0f : 0.0f;
             if (state.viewportTool != 0)
             {
-                const ig::Gizmo2DMode mode = state.viewportTool == 2 ? ig::Gizmo2DMode::Rotate
-                                         : (state.viewportTool == 3 ? ig::Gizmo2DMode::Scale
-                                                                    : ig::Gizmo2DMode::Translate);
+                const ig::Gizmo2DMode mode =
+                        state.viewportTool == 2
+                                ? ig::Gizmo2DMode::Rotate
+                                : (state.viewportTool == 3 ? ig::Gizmo2DMode::Scale
+                                                           : ig::Gizmo2DMode::Translate);
                 ui.gizmo2D("robot transform", state.transform, mode, canvas, options);
             }
             ui.setCursor(ig::Vec2(canvas.x, canvas.y + canvas.height + ui.theme().itemSpacing));
@@ -440,9 +460,10 @@ void drawStudio(ig::Context &ui, StudioState &state, ig::FileDialogProvider &fil
             options.title = "Open File";
 
         if (!state.fileDialog.initialized)
-            state.fileDialog.view = state.fileDialogKind == 1 ? ig::FileDialogView::Icons : ig::FileDialogView::Details;
+            state.fileDialog.view = state.fileDialogKind == 1 ? ig::FileDialogView::Icons
+                                                              : ig::FileDialogView::Details;
         const ig::FileDialogResult dialog = ui.fileDialog("project browser", state.fileDialogOpen,
-                                                           state.fileDialog, options, files);
+                state.fileDialog, options, files);
         if (dialog.kind == ig::FileDialogResultKind::Accepted)
         {
             ui.showToast("file dialog", dialog.path, ig::ToastPosition::BottomRight, 4.0f);
@@ -474,11 +495,11 @@ int main()
         ui.beginFrame(ig::raylib::frameInfo(GetFrameTime()));
         ui.setTheme(ig::makeTheme(themePreset(state.theme)));
         drawStudio(ui, state, files);
-        const ig::DrawData &drawData = ui.endFrame();
+        const ig::DrawData& drawData = ui.endFrame();
 
         BeginDrawing();
         const ig::Color background = ui.theme().bgColor;
-        ClearBackground(::Color{background.r, background.g, background.b, background.a});
+        ClearBackground(::Color{ background.r, background.g, background.b, background.a });
         backend.render(drawData);
         EndDrawing();
     }

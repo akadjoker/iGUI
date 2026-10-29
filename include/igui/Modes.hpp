@@ -63,36 +63,36 @@
 // empty value (`-DIGUI_IMMEDIATEMODE=`), because the preprocessor reads that as
 // 0 in an `#if` - silently meaning the opposite of what it looks like it says.
 #if defined(IGUI_IMMEDIATEMODE) && !defined(IGUI_RETAINEDMODE)
-#  define IGUI_RETAINEDMODE 0
+#define IGUI_RETAINEDMODE 0
 #elif defined(IGUI_RETAINEDMODE) && !defined(IGUI_IMMEDIATEMODE)
-#  define IGUI_IMMEDIATEMODE 0
+#define IGUI_IMMEDIATEMODE 0
 #elif !defined(IGUI_IMMEDIATEMODE) && !defined(IGUI_RETAINEDMODE)
 // Neither selected: expose everything that was built. The library targets
 // define these, so this path is for consumers building the sources directly.
-#  define IGUI_IMMEDIATEMODE 1
-#  define IGUI_RETAINEDMODE 1
+#define IGUI_IMMEDIATEMODE 1
+#define IGUI_RETAINEDMODE 1
 #endif
 
 // Catch a switch defined to an empty value: `IGUI_IMMEDIATEMODE + 0` is a
 // syntax error when the macro expands to nothing, whereas 0 and 1 both pass.
 // The check must come before the first `#if IGUI_IMMEDIATEMODE` below, where an
 // empty value would quietly read as 0.
-#if (IGUI_IMMEDIATEMODE + 0 == 0 || IGUI_IMMEDIATEMODE + 0 == 1) \
-    && (IGUI_RETAINEDMODE + 0 == 0 || IGUI_RETAINEDMODE + 0 == 1)
+#if (IGUI_IMMEDIATEMODE + 0 == 0 || IGUI_IMMEDIATEMODE + 0 == 1) &&                                \
+        (IGUI_RETAINEDMODE + 0 == 0 || IGUI_RETAINEDMODE + 0 == 1)
 // Both switches carry a usable 0/1 value.
 #else
-#  error "iGUI: define IGUI_IMMEDIATEMODE / IGUI_RETAINEDMODE to 0 or 1, not to an empty value (see igui/Modes.hpp)."
+#error "iGUI: define IGUI_IMMEDIATEMODE / IGUI_RETAINEDMODE to 0 or 1, not to an empty value (see igui/Modes.hpp)."
 #endif
 
 #if !IGUI_IMMEDIATEMODE && !IGUI_RETAINEDMODE
-#  error "iGUI: IGUI_IMMEDIATEMODE and IGUI_RETAINEDMODE are both 0 - select at least one widget API (see igui/Modes.hpp)."
+#error "iGUI: IGUI_IMMEDIATEMODE and IGUI_RETAINEDMODE are both 0 - select at least one widget API (see igui/Modes.hpp)."
 #endif
 
 // ── Derived: are both APIs visible at once? ──────────────────────────────────
 // Guards the `using namespace retained` hoist, and lets consumer code branch
 // on whether ig::Theme is the immediate or the retained one.
 #if IGUI_IMMEDIATEMODE && IGUI_RETAINEDMODE
-#  define IGUI_BOTH_MODES 1
+#define IGUI_BOTH_MODES 1
 #else
-#  define IGUI_BOTH_MODES 0
+#define IGUI_BOTH_MODES 0
 #endif

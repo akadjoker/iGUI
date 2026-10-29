@@ -1,14 +1,14 @@
-#include "WidgetApp.hpp"
-#include "BasicWidgets.hpp"
-#include "LayoutWidgets.hpp"
-#include "InputWidgets.hpp"
 #include "AudioWidgets.hpp"
-#include <cstdio>
+#include "BasicWidgets.hpp"
+#include "InputWidgets.hpp"
+#include "LayoutWidgets.hpp"
+#include "WidgetApp.hpp"
 #include <cmath>
+#include <cstdio>
 using namespace ig::retained;
 
 // The voices of the desk, matching the immediate-mode gallery's mixer strip.
-static const char* const kChannelNames[] = {"Kick", "Bass", "Lead", "Hats"};
+static const char* const kChannelNames[] = { "Kick", "Bass", "Lead", "Hats" };
 
 void registerControlsStage(WidgetApp& app)
 {
@@ -37,12 +37,15 @@ void registerControlsStage(WidgetApp& app)
     form->setPadding(4.0f);
 
     auto* speedLabel = form->addRow<Label>("Speed:", "0");
-    auto* slider     = form->addRow<Slider>("Value:", 0.0f, 100.0f, 40.0f);
+    auto* slider = form->addRow<Slider>("Value:", 0.0f, 100.0f, 40.0f);
     slider->setStretch(1.0f);
-    slider->onValueChanged.connect([speedLabel](float v) {
-        char buf[16]; std::snprintf(buf, sizeof(buf), "%.0f", v);
-        speedLabel->setText(buf);
-    });
+    slider->onValueChanged.connect(
+            [speedLabel](float v)
+            {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%.0f", v);
+                speedLabel->setText(buf);
+            });
     speedLabel->setText("40");
 
     form->addRow<CheckBox>("Enabled:", "Active");
@@ -62,23 +65,28 @@ void registerControlsStage(WidgetApp& app)
     auto* rb2 = radioBox->createChild<RadioButton>("Option B", &rg);
     auto* rb3 = radioBox->createChild<RadioButton>("Option C", &rg);
     rb1->setSelected(true);
-    (void)rb2; (void)rb3;
+    (void) rb2;
+    (void) rb3;
 
     auto* selLabel = flowPage->createChild<Label>("Selected: Option A");
-    rg.selectionChanged.connect([selLabel](int idx) {
-        const char* names[] = { "Option A", "Option B", "Option C" };
-        if (idx >= 0 && idx < 3) {
-            char buf[40]; std::snprintf(buf, sizeof(buf), "Selected: %s", names[idx]);
-            selLabel->setText(buf);
-        }
-    });
+    rg.selectionChanged.connect(
+            [selLabel](int idx)
+            {
+                const char* names[] = { "Option A", "Option B", "Option C" };
+                if (idx >= 0 && idx < 3)
+                {
+                    char buf[40];
+                    std::snprintf(buf, sizeof(buf), "Selected: %s", names[idx]);
+                    selLabel->setText(buf);
+                }
+            });
 
     flowPage->createChild<Spacer>(12.0f);
     flowPage->createChild<Label>("FlowLayout tags");
     auto* flow = flowPage->createChild<FlowLayout>();
     flow->setSpacing(6.0f, 6.0f);
-    for (const char* t : { "C++", "OpenGL", "Raylib", "ig::retained", "CMake",
-                            "Widgets", "Rendering", "Signals", "Layouts" })
+    for (const char* t: { "C++", "OpenGL", "Raylib", "ig::retained", "CMake", "Widgets",
+             "Rendering", "Signals", "Layouts" })
         flow->createChild<Button>(t);
 
     // ── Tab 3: Audio ─────────────────────────────────────────────────────────
@@ -100,10 +108,13 @@ void registerControlsStage(WidgetApp& app)
     auto* volume = voice->createChild<Knob>();
     volume->setLabel("Volume");
     volume->setArcColor(accent);
-    volume->onChanged.connect([volume](float v) {
-        char buf[16]; std::snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(v * 100.0f + 0.5f));
-        volume->setValueText(buf);
-    });
+    volume->onChanged.connect(
+            [volume](float v)
+            {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%d%%", static_cast<int>(v * 100.0f + 0.5f));
+                volume->setValueText(buf);
+            });
     volume->setRange(0.0f, 1.0f);
     volume->setDefault(0.9f);
     volume->setValue(0.9f);
@@ -111,13 +122,16 @@ void registerControlsStage(WidgetApp& app)
     auto* pan = voice->createChild<Knob>();
     pan->setLabel("Pan");
     pan->setArcColor(accent);
-    pan->onChanged.connect([pan](float v) {
-        char buf[16];
-        const int amount = static_cast<int>(std::fabs(v) * 100.0f + 0.5f);
-        if (amount == 0) std::snprintf(buf, sizeof(buf), "C");
-        else             std::snprintf(buf, sizeof(buf), "%s %d", v < 0.0f ? "L" : "R", amount);
-        pan->setValueText(buf);
-    });
+    pan->onChanged.connect(
+            [pan](float v)
+            {
+                char buf[16];
+                const int amount = static_cast<int>(std::fabs(v) * 100.0f + 0.5f);
+                if (amount == 0) std::snprintf(buf, sizeof(buf), "C");
+                else
+                    std::snprintf(buf, sizeof(buf), "%s %d", v < 0.0f ? "L" : "R", amount);
+                pan->setValueText(buf);
+            });
     pan->setRange(-1.0f, 1.0f);
     pan->setDefault(0.0f);
     pan->setValue(0.0f);
@@ -125,10 +139,13 @@ void registerControlsStage(WidgetApp& app)
     auto* tune = voice->createChild<Knob>();
     tune->setLabel("Tune");
     tune->setArcColor(accent);
-    tune->onChanged.connect([tune](float v) {
-        char buf[16]; std::snprintf(buf, sizeof(buf), "%d st", static_cast<int>(v));
-        tune->setValueText(buf);
-    });
+    tune->onChanged.connect(
+            [tune](float v)
+            {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%d st", static_cast<int>(v));
+                tune->setValueText(buf);
+            });
     tune->setRange(-24.0f, 24.0f);
     tune->setDefault(0.0f);
     tune->setValue(0.0f);
@@ -139,7 +156,7 @@ void registerControlsStage(WidgetApp& app)
     audioPage->createChild<Label>("Desk");
     auto* desk = audioPage->createChild<BoxLayout>(LayoutDir::Horizontal);
     desk->setSpacing(8.0f);
-    const float channelLevels[] = {0.82f, 0.64f, 0.48f, 0.30f};
+    const float channelLevels[] = { 0.82f, 0.64f, 0.48f, 0.30f };
     for (int i = 0; i < 4; ++i)
     {
         auto* channel = desk->createChild<Fader>();
@@ -147,11 +164,13 @@ void registerControlsStage(WidgetApp& app)
         channel->setLabel(kChannelNames[i]);
         channel->setRange(0.0f, 1.0f);
         channel->setValue(channelLevels[i]);
-        channel->onChanged.connect([channel](float v) {
-            char buf[16];
-            std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
-            channel->setValueText(buf);
-        });
+        channel->onChanged.connect(
+                [channel](float v)
+                {
+                    char buf[16];
+                    std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
+                    channel->setValueText(buf);
+                });
     }
 
     auto* master = audioPage->createChild<Fader>();
@@ -160,9 +179,11 @@ void registerControlsStage(WidgetApp& app)
     master->setLabel("master");
     master->setRange(0.0f, 1.0f);
     master->setValue(0.75f);
-    master->onChanged.connect([master](float v) {
-        char buf[16];
-        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
-        master->setValueText(buf);
-    });
+    master->onChanged.connect(
+            [master](float v)
+            {
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(v * 100.0f + 0.5f));
+                master->setValueText(buf);
+            });
 }

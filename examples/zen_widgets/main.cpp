@@ -6,37 +6,35 @@
 
 #include <stdlib.h>
 
-void registerDemoStage(ig::retained::WidgetApp &app);
-void registerMenuStage(ig::retained::WidgetApp &app);
-void registerBasicStage(ig::retained::WidgetApp &app);
-void registerControlsStage(ig::retained::WidgetApp &app);
-void registerScrollStage(ig::retained::WidgetApp &app);
-void registerInputsStage(ig::retained::WidgetApp &app);
-void registerMenusStage(ig::retained::WidgetApp &app);
-void registerDialogsStage(ig::retained::WidgetApp &app);
-void registerDockStage(ig::retained::WidgetApp &app);
-void registerPropertiesStage(ig::retained::WidgetApp &app);
-void registerEditorStage(ig::retained::WidgetApp &app);
-void registerNodeStage(ig::retained::WidgetApp &app);
-void registerTimelineStage(ig::retained::WidgetApp &app);
-void registerGizmosStage(ig::retained::WidgetApp &app);
-void registerToolsStage(ig::retained::WidgetApp &app);
-void registerGalleryStage(ig::retained::WidgetApp &app);
-void registerSpecialtyStage(ig::retained::WidgetApp &app);
-void registerVideoStage(ig::retained::WidgetApp &app);
+void registerDemoStage(ig::retained::WidgetApp& app);
+void registerMenuStage(ig::retained::WidgetApp& app);
+void registerBasicStage(ig::retained::WidgetApp& app);
+void registerControlsStage(ig::retained::WidgetApp& app);
+void registerScrollStage(ig::retained::WidgetApp& app);
+void registerInputsStage(ig::retained::WidgetApp& app);
+void registerMenusStage(ig::retained::WidgetApp& app);
+void registerDialogsStage(ig::retained::WidgetApp& app);
+void registerDockStage(ig::retained::WidgetApp& app);
+void registerPropertiesStage(ig::retained::WidgetApp& app);
+void registerEditorStage(ig::retained::WidgetApp& app);
+void registerNodeStage(ig::retained::WidgetApp& app);
+void registerTimelineStage(ig::retained::WidgetApp& app);
+void registerGizmosStage(ig::retained::WidgetApp& app);
+void registerToolsStage(ig::retained::WidgetApp& app);
+void registerGalleryStage(ig::retained::WidgetApp& app);
+void registerSpecialtyStage(ig::retained::WidgetApp& app);
+void registerVideoStage(ig::retained::WidgetApp& app);
 
-int main(int argc, char **argv)
+int main(int argc, char** argv)
 {
     ig::zen::App::Config config;
     config.title = "iGUI on zen_plataform";
-    if (argc > 2)
-        config.samples = atoi(argv[2]);
+    if (argc > 2) config.samples = atoi(argv[2]);
 
     ig::zen::App zen;
-    if (!zen.create(config))
-        return 1;
+    if (!zen.create(config)) return 1;
 
-    ig::retained::WidgetApp &app = zen.widgets();
+    ig::retained::WidgetApp& app = zen.widgets();
     registerDemoStage(app);
     registerMenuStage(app);
     registerBasicStage(app);

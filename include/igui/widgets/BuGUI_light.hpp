@@ -5,13 +5,13 @@
 //           ThumbnailGrid, AssetBrowser, DockPanel, DataWidgets (heavy/optional).
 // For the full widget set use <Widgets.hpp> instead.
 
-#include "WidgetApp.hpp"
-#include "BasicWidgets.hpp"
-#include "LayoutWidgets.hpp"
-#include "ScrollWidgets.hpp"
-#include "InputWidgets.hpp"
-#include "TextInputWidgets.hpp"
-#include "ComboBox.hpp"
-#include "MenuWidgets.hpp"
-#include "DialogWidgets.hpp"
 #include "AppWidgets.hpp"
+#include "BasicWidgets.hpp"
+#include "ComboBox.hpp"
+#include "DialogWidgets.hpp"
+#include "InputWidgets.hpp"
+#include "LayoutWidgets.hpp"
+#include "MenuWidgets.hpp"
+#include "ScrollWidgets.hpp"
+#include "TextInputWidgets.hpp"
+#include "WidgetApp.hpp"

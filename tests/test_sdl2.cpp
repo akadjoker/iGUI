@@ -90,18 +90,18 @@ static void test_window_and_wheel_translation()
 
 static void test_software_rendering()
 {
-    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(0, 160, 100, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, 160, 100, 32, SDL_PIXELFORMAT_RGBA32);
     assert(surface);
-    SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(surface);
+    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
     assert(renderer);
 
     ig::sdl2::Backend backend(renderer);
     ig::DrawList drawList;
     const ig::Rect clip(0.0f, 0.0f, 160.0f, 100.0f);
-    drawList.addRectFilled(ig::Rect(8.0f, 8.0f, 80.0f, 36.0f),
-                           ig::Color(20u, 40u, 60u, 255u), clip);
+    drawList.addRectFilled(ig::Rect(8.0f, 8.0f, 80.0f, 36.0f), ig::Color(20u, 40u, 60u, 255u),
+            clip);
     drawList.addText(u8"Olá SDL2", ig::Vec2(12.0f, 12.0f), ig::FontId(), 14.0f,
-                     ig::Color(255u, 255u, 255u, 255u), clip);
+            ig::Color(255u, 255u, 255u, 255u), clip);
     const ig::DrawData data = drawList.data(ig::Vec2(160.0f, 100.0f), 1.0f);
     assert(backend.render(data));
 
@@ -111,9 +111,9 @@ static void test_software_rendering()
 
 static void test_context_emits_textured_font_geometry()
 {
-    SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormat(0, 320, 160, 32, SDL_PIXELFORMAT_RGBA32);
+    SDL_Surface* surface = SDL_CreateRGBSurfaceWithFormat(0, 320, 160, 32, SDL_PIXELFORMAT_RGBA32);
     assert(surface);
-    SDL_Renderer *renderer = SDL_CreateSoftwareRenderer(surface);
+    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(surface);
     assert(renderer);
 
     ig::sdl2::Backend backend(renderer);
@@ -123,14 +123,13 @@ static void test_context_emits_textured_font_geometry()
     assert(context.beginWindow("main", ig::Rect(10.0f, 10.0f, 200.0f, 100.0f)));
     context.label(u8"Olá", ig::Vec2(8.0f, 8.0f));
     context.endWindow();
-    const ig::DrawData &data = context.endFrame();
+    const ig::DrawData& data = context.endFrame();
 
     bool hasFontGeometry = false;
     for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
     {
         assert(data.commands[i].type == ig::DrawCommandType::Geometry);
-        if (data.commands[i].payload.geometry.texture.value != 0u)
-            hasFontGeometry = true;
+        if (data.commands[i].payload.geometry.texture.value != 0u) hasFontGeometry = true;
     }
     assert(hasFontGeometry);
     assert(backend.render(data));

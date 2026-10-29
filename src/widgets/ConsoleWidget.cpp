@@ -6,7 +6,8 @@
 //  Helpers
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
+namespace
+{
 
 inline float setupFont(PaintContext& ctx, const Color& color, float size = 14.f)
 {
@@ -19,16 +20,13 @@ inline float setupFont(PaintContext& ctx, const Color& color, float size = 14.f)
 inline bool containsCI(const String& haystack, const String& needle)
 {
     if (needle.empty()) return true;
-    auto it = std::search(haystack.begin(), haystack.end(),
-                          needle.begin(), needle.end(),
-                          [](char a, char b) {
-                              return std::tolower((unsigned char)a) ==
-                                     std::tolower((unsigned char)b);
-                          });
+    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+            [](char a, char b)
+            { return std::tolower((unsigned char) a) == std::tolower((unsigned char) b); });
     return it != haystack.end();
 }
 
-} // anon
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  Constructor
@@ -47,9 +45,11 @@ void ConsoleWidget::log(LogLevel level, const String& message)
 {
     float ts = ig::retained::GetIO().deltaTime; // approximate — callers can set real ts
 
-    if (collapse_ && !entries_.empty()) {
+    if (collapse_ && !entries_.empty())
+    {
         auto& last = entries_.back();
-        if (last.level == level && last.message == message) {
+        if (last.level == level && last.message == message)
+        {
             last.count++;
             updateCount(level, 1);
             markDirty();
@@ -57,13 +57,14 @@ void ConsoleWidget::log(LogLevel level, const String& message)
         }
     }
 
-    entries_.push_back({level, message, ts, 1});
+    entries_.push_back({ level, message, ts, 1 });
     if (visibleValid_ && passesFilter(entries_.back()))
         shownLines_.push_back(firstSerial_ + entries_.size() - 1);
     updateCount(level, 1);
     trimEntries();
 
-    if (autoScroll_ && !scrollLocked_) {
+    if (autoScroll_ && !scrollLocked_)
+    {
         // Will snap to bottom in paint
     }
     markDirty();
@@ -97,22 +98,36 @@ void ConsoleWidget::clear()
 
 void ConsoleWidget::setFilter(LogLevel level, bool show)
 {
-    switch (level) {
-    case LogLevel::Trace: showTrace_ = show; break;
-    case LogLevel::Info:  showInfo_  = show; break;
-    case LogLevel::Warn:  showWarn_  = show; break;
-    case LogLevel::Error: showError_ = show; break;
+    switch (level)
+    {
+        case LogLevel::Trace:
+            showTrace_ = show;
+            break;
+        case LogLevel::Info:
+            showInfo_ = show;
+            break;
+        case LogLevel::Warn:
+            showWarn_ = show;
+            break;
+        case LogLevel::Error:
+            showError_ = show;
+            break;
     }
     markDirty();
 }
 
 bool ConsoleWidget::filter(LogLevel level) const
 {
-    switch (level) {
-    case LogLevel::Trace: return showTrace_;
-    case LogLevel::Info:  return showInfo_;
-    case LogLevel::Warn:  return showWarn_;
-    case LogLevel::Error: return showError_;
+    switch (level)
+    {
+        case LogLevel::Trace:
+            return showTrace_;
+        case LogLevel::Info:
+            return showInfo_;
+        case LogLevel::Warn:
+            return showWarn_;
+        case LogLevel::Error:
+            return showError_;
     }
     return true;
 }
@@ -148,14 +163,22 @@ const LogEntry& ConsoleWidget::visibleEntry(int line) const
 
 bool ConsoleWidget::passesFilter(const LogEntry& e) const
 {
-    switch (e.level) {
-    case LogLevel::Trace: if (!showTrace_) return false; break;
-    case LogLevel::Info:  if (!showInfo_)  return false; break;
-    case LogLevel::Warn:  if (!showWarn_)  return false; break;
-    case LogLevel::Error: if (!showError_) return false; break;
+    switch (e.level)
+    {
+        case LogLevel::Trace:
+            if (!showTrace_) return false;
+            break;
+        case LogLevel::Info:
+            if (!showInfo_) return false;
+            break;
+        case LogLevel::Warn:
+            if (!showWarn_) return false;
+            break;
+        case LogLevel::Error:
+            if (!showError_) return false;
+            break;
     }
-    if (!searchText_.empty() && !containsCI(e.message, searchText_))
-        return false;
+    if (!searchText_.empty() && !containsCI(e.message, searchText_)) return false;
     return true;
 }
 
@@ -165,7 +188,8 @@ bool ConsoleWidget::passesFilter(const LogEntry& e) const
 
 void ConsoleWidget::trimEntries()
 {
-    while ((int)entries_.size() > maxLines_) {
+    while ((int) entries_.size() > maxLines_)
+    {
         updateCount(entries_.front().level, -entries_.front().count);
         entries_.pop_front();
         ++firstSerial_;
@@ -175,22 +199,36 @@ void ConsoleWidget::trimEntries()
 
 int ConsoleWidget::messageCount(LogLevel level) const
 {
-    switch (level) {
-    case LogLevel::Trace: return countTrace_;
-    case LogLevel::Info:  return countInfo_;
-    case LogLevel::Warn:  return countWarn_;
-    case LogLevel::Error: return countError_;
+    switch (level)
+    {
+        case LogLevel::Trace:
+            return countTrace_;
+        case LogLevel::Info:
+            return countInfo_;
+        case LogLevel::Warn:
+            return countWarn_;
+        case LogLevel::Error:
+            return countError_;
     }
     return 0;
 }
 
 void ConsoleWidget::updateCount(LogLevel l, int delta)
 {
-    switch (l) {
-    case LogLevel::Trace: countTrace_ += delta; break;
-    case LogLevel::Info:  countInfo_  += delta; break;
-    case LogLevel::Warn:  countWarn_  += delta; break;
-    case LogLevel::Error: countError_ += delta; break;
+    switch (l)
+    {
+        case LogLevel::Trace:
+            countTrace_ += delta;
+            break;
+        case LogLevel::Info:
+            countInfo_ += delta;
+            break;
+        case LogLevel::Warn:
+            countWarn_ += delta;
+            break;
+        case LogLevel::Error:
+            countError_ += delta;
+            break;
     }
 }
 
@@ -200,33 +238,48 @@ void ConsoleWidget::updateCount(LogLevel l, int delta)
 
 Color ConsoleWidget::levelColor(LogLevel l) const
 {
-    switch (l) {
-    case LogLevel::Trace: return {140, 140, 150, 255};
-    case LogLevel::Info:  return {200, 210, 220, 255};
-    case LogLevel::Warn:  return {240, 200,  80, 255};
-    case LogLevel::Error: return {240,  80,  80, 255};
+    switch (l)
+    {
+        case LogLevel::Trace:
+            return { 140, 140, 150, 255 };
+        case LogLevel::Info:
+            return { 200, 210, 220, 255 };
+        case LogLevel::Warn:
+            return { 240, 200, 80, 255 };
+        case LogLevel::Error:
+            return { 240, 80, 80, 255 };
     }
-    return {200, 200, 200, 255};
+    return { 200, 200, 200, 255 };
 }
 
 Color ConsoleWidget::levelBgColor(LogLevel l) const
 {
-    switch (l) {
-    case LogLevel::Trace: return {0, 0, 0, 0};
-    case LogLevel::Info:  return {0, 0, 0, 0};
-    case LogLevel::Warn:  return {60, 50, 20, 40};
-    case LogLevel::Error: return {80, 25, 25, 50};
+    switch (l)
+    {
+        case LogLevel::Trace:
+            return { 0, 0, 0, 0 };
+        case LogLevel::Info:
+            return { 0, 0, 0, 0 };
+        case LogLevel::Warn:
+            return { 60, 50, 20, 40 };
+        case LogLevel::Error:
+            return { 80, 25, 25, 50 };
     }
-    return {0, 0, 0, 0};
+    return { 0, 0, 0, 0 };
 }
 
 const char* ConsoleWidget::levelTag(LogLevel l) const
 {
-    switch (l) {
-    case LogLevel::Trace: return "[TRC]";
-    case LogLevel::Info:  return "[INF]";
-    case LogLevel::Warn:  return "[WRN]";
-    case LogLevel::Error: return "[ERR]";
+    switch (l)
+    {
+        case LogLevel::Trace:
+            return "[TRC]";
+        case LogLevel::Info:
+            return "[INF]";
+        case LogLevel::Warn:
+            return "[WRN]";
+        case LogLevel::Error:
+            return "[ERR]";
     }
     return "[???]";
 }
@@ -255,9 +308,9 @@ void ConsoleWidget::paint(PaintContext& ctx)
     ctx.fillRect(r.x, r.y, r.w, r.h);
 
     // Sub-areas
-    Rect toolbar = {r.x, r.y, r.w, kToolbarH};
-    Rect input   = {r.x, r.bottom() - kInputH, r.w, kInputH};
-    Rect logArea = {r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH};
+    Rect toolbar = { r.x, r.y, r.w, kToolbarH };
+    Rect input = { r.x, r.bottom() - kInputH, r.w, kInputH };
+    Rect logArea = { r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH };
 
     paintToolbar(ctx, toolbar);
     paintLog(ctx, logArea);
@@ -270,7 +323,10 @@ void ConsoleWidget::paint(PaintContext& ctx)
 
 // ─── Toolbar ─────────────────────────────────────────────────────────────────
 
-namespace { constexpr float kClearWidth = 24.f; }
+namespace
+{
+constexpr float kClearWidth = 24.f;
+}
 
 void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
 {
@@ -282,33 +338,38 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
     ctx.line.SetColor(50, 52, 60, 255);
     ctx.drawLine(area.x, area.bottom(), area.right(), area.bottom());
 
-    float asc = setupFont(ctx, {180, 180, 190, 255}, 12.f);
+    float asc = setupFont(ctx, { 180, 180, 190, 255 }, 12.f);
     float px = area.x + 6.f;
     float cy = area.y + (area.h - 12.f) * 0.5f;
 
     // Filter toggle buttons: [T] [I] [W] [E]
-    struct FilterBtn {
+    struct FilterBtn
+    {
         const char* label;
-        bool*       active;
-        Color       onColor;
-        int         count;
+        bool* active;
+        Color onColor;
+        int count;
     };
     FilterBtn btns[] = {
-        {"T", &showTrace_, {140, 140, 150, 255}, countTrace_},
-        {"I", &showInfo_,  {120, 180, 255, 255}, countInfo_},
-        {"W", &showWarn_,  {240, 200,  80, 255}, countWarn_},
-        {"E", &showError_, {240,  80,  80, 255}, countError_},
+        { "T", &showTrace_, { 140, 140, 150, 255 }, countTrace_ },
+        { "I", &showInfo_, { 120, 180, 255, 255 }, countInfo_ },
+        { "W", &showWarn_, { 240, 200, 80, 255 }, countWarn_ },
+        { "E", &showError_, { 240, 80, 80, 255 }, countError_ },
     };
 
-    for (auto& b : btns) {
+    for (auto& b: btns)
+    {
         float bw = 32.f;
         float bh = 18.f;
         float by = area.y + (area.h - bh) * 0.5f;
 
         // Button bg
-        if (*b.active) {
+        if (*b.active)
+        {
             ctx.fill.SetColor(b.onColor.r, b.onColor.g, b.onColor.b, 40);
-        } else {
+        }
+        else
+        {
             ctx.fill.SetColor(40, 42, 48, 255);
         }
         ctx.fillRoundedRect(px, by, bw, bh, 3.f);
@@ -319,7 +380,8 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         Color tc = *b.active ? b.onColor : Color(80, 80, 90, 255);
         setupFont(ctx, tc, 11.f);
         float tw = ctx.font.GetTextWidth(buf);
-        ctx.font.Print(buf, px + (bw - tw) * 0.5f, by + (bh - 11.f) * 0.5f + ctx.font.GetAscender());
+        ctx.font.Print(buf, px + (bw - tw) * 0.5f,
+                by + (bh - 11.f) * 0.5f + ctx.font.GetAscender());
 
         px += bw + 4.f;
     }
@@ -331,14 +393,17 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         ctx.fill.SetColor(50, 52, 60, 255);
         ctx.fillRoundedRect(px, by, bw, bh, 3.f);
         const float isz = 14.f;
-        ctx.drawIcon(IconId::Trash, px + (bw - isz) * 0.5f, by + (bh - isz) * 0.5f, isz, Color(170, 170, 180, 255));
+        ctx.drawIcon(IconId::Trash, px + (bw - isz) * 0.5f, by + (bh - isz) * 0.5f, isz,
+                Color(170, 170, 180, 255));
         px += bw + 8.f;
     }
 
     // Search box
-    if (searchMode_) {
+    if (searchMode_)
+    {
         float sw = area.right() - px - 6.f;
-        if (sw > 40.f) {
+        if (sw > 40.f)
+        {
             float bh = 18.f;
             float by = area.y + (area.h - bh) * 0.5f;
             ctx.fill.SetColor(20, 22, 26, 255);
@@ -346,14 +411,16 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
             ctx.line.SetColor(70, 120, 200, 255);
             ctx.lineRoundedRect(px, by, sw, bh, 3.f);
 
-            setupFont(ctx, {200, 210, 220, 255}, 12.f);
+            setupFont(ctx, { 200, 210, 220, 255 }, 12.f);
             String disp = searchBuf_;
-            if (disp.empty()) {
-                setupFont(ctx, {80, 80, 90, 255}, 12.f);
+            if (disp.empty())
+            {
+                setupFont(ctx, { 80, 80, 90, 255 }, 12.f);
                 disp = "Search...";
             }
-            ctx.pushClip({px + 4.f, by, sw - 8.f, bh});
-            ctx.font.Print(disp.c_str(), px + 4.f, by + (bh - 12.f) * 0.5f + ctx.font.GetAscender());
+            ctx.pushClip({ px + 4.f, by, sw - 8.f, bh });
+            ctx.font.Print(disp.c_str(), px + 4.f,
+                    by + (bh - 12.f) * 0.5f + ctx.font.GetAscender());
             ctx.popClip();
         }
     }
@@ -370,7 +437,8 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
     float totalH = visCount * kLineH;
 
     // Auto-scroll: snap to bottom when not locked
-    if (autoScroll_ && !scrollLocked_) {
+    if (autoScroll_ && !scrollLocked_)
+    {
         float maxScroll = std::max(0.f, totalH - area.h);
         scrollY_ = maxScroll;
     }
@@ -396,7 +464,8 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
 
         // Row bg for warn/error levels
         Color bg = levelBgColor(e.level);
-        if (bg.a > 0) {
+        if (bg.a > 0)
+        {
             ctx.fill.SetColor(bg);
             ctx.fillRect(area.x, lineY, area.w, kLineH);
         }
@@ -412,10 +481,11 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         float textY = lineY + (kLineH - 12.f) * 0.5f;
 
         // Timestamp
-        if (showTimestamp_) {
+        if (showTimestamp_)
+        {
             char ts[16];
             snprintf(ts, sizeof(ts), "%.2f", e.timestamp);
-            setupFont(ctx, {90, 90, 100, 255}, 11.f);
+            setupFont(ctx, { 90, 90, 100, 255 }, 11.f);
             ctx.font.Print(ts, px, textY + ctx.font.GetAscender());
             px += 50.f;
         }
@@ -430,12 +500,13 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         ctx.font.Print(e.message.c_str(), px, textY + ctx.font.GetAscender());
 
         // Collapse badge
-        if (e.count > 1) {
+        if (e.count > 1)
+        {
             char badge[16];
             snprintf(badge, sizeof(badge), "x%d", e.count);
             float msgW = ctx.font.GetTextWidth(e.message.c_str());
             float bx = px + msgW + 8.f;
-            setupFont(ctx, {100, 140, 200, 255}, 10.f);
+            setupFont(ctx, { 100, 140, 200, 255 }, 10.f);
             float bw = ctx.font.GetTextWidth(badge) + 8.f;
             float bh = 14.f;
             float by = lineY + (kLineH - bh) * 0.5f;
@@ -446,7 +517,8 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
     }
 
     // Scrollbar
-    if (totalH > area.h) {
+    if (totalH > area.h)
+    {
         paintScrollbar(ctx, area, totalH);
     }
 
@@ -489,20 +561,22 @@ void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
     // Prompt
     float px = area.x + 6.f;
     float textY = area.y + (area.h - 13.f) * 0.5f;
-    setupFont(ctx, {100, 160, 240, 255}, 13.f);
+    setupFont(ctx, { 100, 160, 240, 255 }, 13.f);
     ctx.font.Print(">", px, textY + ctx.font.GetAscender());
     px += 14.f;
 
     // Input text
-    setupFont(ctx, {200, 210, 220, 255}, 13.f);
+    setupFont(ctx, { 200, 210, 220, 255 }, 13.f);
     float asc = ctx.font.GetAscender();
-    ctx.pushClip({px, area.y, area.w - 20.f, area.h});
+    ctx.pushClip({ px, area.y, area.w - 20.f, area.h });
     ctx.font.Print(inputBuf_.c_str(), px, textY + asc);
 
     // Cursor blink
-    if (inputFocused_) {
+    if (inputFocused_)
+    {
         float cw = 0;
-        if (cursorPos_ > 0 && cursorPos_ <= (int)inputBuf_.size()) {
+        if (cursorPos_ > 0 && cursorPos_ <= (int) inputBuf_.size())
+        {
             String sub = inputBuf_.substr(0, cursorPos_);
             cw = ctx.font.GetTextWidth(sub.c_str());
         }
@@ -519,21 +593,24 @@ void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
 void ConsoleWidget::onMousePress(MouseEvent& e)
 {
     Rect r = absoluteRect();
-    Rect toolbar = {r.x, r.y, r.w, kToolbarH};
-    Rect input   = {r.x, r.bottom() - kInputH, r.w, kInputH};
-    Rect logArea = {r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH};
+    Rect toolbar = { r.x, r.y, r.w, kToolbarH };
+    Rect input = { r.x, r.bottom() - kInputH, r.w, kInputH };
+    Rect logArea = { r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH };
 
     // Click in toolbar — check filter buttons & clear
-    if (toolbar.contains(e.x, e.y)) {
+    if (toolbar.contains(e.x, e.y))
+    {
         float px = r.x + 6.f;
         float bh = 18.f;
         float by = toolbar.y + (toolbar.h - bh) * 0.5f;
 
-        bool* filters[] = {&showTrace_, &showInfo_, &showWarn_, &showError_};
-        for (int i = 0; i < 4; i++) {
+        bool* filters[] = { &showTrace_, &showInfo_, &showWarn_, &showError_ };
+        for (int i = 0; i < 4; i++)
+        {
             float bw = 32.f;
-            Rect btn = {px, by, bw, bh};
-            if (btn.contains(e.x, e.y)) {
+            Rect btn = { px, by, bw, bh };
+            if (btn.contains(e.x, e.y))
+            {
                 *filters[i] = !*filters[i];
                 markDirty();
                 e.consumed = true;
@@ -545,8 +622,9 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
         // Clear button
         {
             float bw = kClearWidth;
-            Rect btn = {px, by, bw, bh};
-            if (btn.contains(e.x, e.y)) {
+            Rect btn = { px, by, bw, bh };
+            if (btn.contains(e.x, e.y))
+            {
                 clear();
                 e.consumed = true;
                 return;
@@ -557,15 +635,15 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
     }
 
     // Click in log area — select line
-    if (logArea.contains(e.x, e.y)) {
+    if (logArea.contains(e.x, e.y))
+    {
         float relY = e.y - logArea.y + scrollY_;
-        int line = (int)(relY / kLineH);
+        int line = (int) (relY / kLineH);
 
         // Map to visible index
         const int visCount = static_cast<int>(visibleLines().size());
 
-        if (line >= 0 && line < visCount)
-            selectedLine_ = line;
+        if (line >= 0 && line < visCount) selectedLine_ = line;
         else
             selectedLine_ = -1;
 
@@ -577,7 +655,8 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
     }
 
     // Click in input area — focus input
-    if (input.contains(e.x, e.y)) {
+    if (input.contains(e.x, e.y))
+    {
         inputFocused_ = true;
         setFocused(true);
 
@@ -587,8 +666,9 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
         if (clickX < 0) clickX = 0;
 
         // Binary-ish search for cursor pos
-        int best = (int)inputBuf_.size();
-        for (int i = 0; i <= (int)inputBuf_.size(); i++) {
+        int best = (int) inputBuf_.size();
+        for (int i = 0; i <= (int) inputBuf_.size(); i++)
+        {
             String sub = inputBuf_.substr(0, i);
             // Need a temp context but we don't have one — just set to end
         }
@@ -608,7 +688,7 @@ void ConsoleWidget::onMouseRelease(MouseEvent& e)
 void ConsoleWidget::onMouseScroll(MouseEvent& e)
 {
     Rect r = absoluteRect();
-    Rect logArea = {r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH};
+    Rect logArea = { r.x, r.y + kToolbarH, r.w, r.h - kToolbarH - kInputH };
 
     if (!logArea.contains(e.x, e.y)) return;
 
@@ -635,9 +715,11 @@ void ConsoleWidget::onMouseScroll(MouseEvent& e)
 void ConsoleWidget::onKeyPress(KeyEvent& e)
 {
     // Ctrl+F — toggle search
-    if (e.ctrl && e.key == ig::retained::Key::F) {
+    if (e.ctrl && e.key == ig::retained::Key::F)
+    {
         searchMode_ = !searchMode_;
-        if (!searchMode_) {
+        if (!searchMode_)
+        {
             searchBuf_.clear();
             searchText_.clear();
         }
@@ -648,7 +730,8 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // Ctrl+C — copy selected line
-    if (e.ctrl && e.key == ig::retained::Key::C) {
+    if (e.ctrl && e.key == ig::retained::Key::C)
+    {
         if (selectedLine_ >= 0 && selectedLine_ < static_cast<int>(visibleLines().size()))
         {
             auto& io = ig::retained::GetIO();
@@ -660,19 +743,24 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // Ctrl+L — clear
-    if (e.ctrl && e.key == ig::retained::Key::L) {
+    if (e.ctrl && e.key == ig::retained::Key::L)
+    {
         clear();
         e.consumed = true;
         return;
     }
 
     // Escape — clear search or deselect
-    if (e.key == ig::retained::Key::Escape) {
-        if (searchMode_) {
+    if (e.key == ig::retained::Key::Escape)
+    {
+        if (searchMode_)
+        {
             searchMode_ = false;
             searchBuf_.clear();
             searchText_.clear();
-        } else {
+        }
+        else
+        {
             selectedLine_ = -1;
         }
         markDirty();
@@ -681,8 +769,10 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // If search mode, route keys to search buffer
-    if (searchMode_ && !inputFocused_) {
-        if (e.key == ig::retained::Key::Backspace) {
+    if (searchMode_ && !inputFocused_)
+    {
+        if (e.key == ig::retained::Key::Backspace)
+        {
             const size_t prev = utf8PrevOffset(searchBuf_, searchBuf_.size());
             searchBuf_.erase(prev, searchBuf_.size() - prev);
             searchText_ = searchBuf_;
@@ -690,7 +780,8 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             e.consumed = true;
             return;
         }
-        if (e.key == ig::retained::Key::Return) {
+        if (e.key == ig::retained::Key::Return)
+        {
             searchMode_ = false;
             inputFocused_ = true;
             markDirty();
@@ -703,73 +794,90 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     }
 
     // Input focused — command line keys
-    if (inputFocused_) {
-        switch (e.key) {
-        case ig::retained::Key::Return: case ig::retained::Key::KPEnter:
-            submitCommand();
-            e.consumed = true;
-            return;
+    if (inputFocused_)
+    {
+        switch (e.key)
+        {
+            case ig::retained::Key::Return:
+            case ig::retained::Key::KPEnter:
+                submitCommand();
+                e.consumed = true;
+                return;
 
-        case ig::retained::Key::Backspace:
-            if (cursorPos_ > 0) {
-                const int prev = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_));
-                inputBuf_.erase(prev, cursorPos_ - prev);
-                cursorPos_ = prev;
+            case ig::retained::Key::Backspace:
+                if (cursorPos_ > 0)
+                {
+                    const int prev = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_));
+                    inputBuf_.erase(prev, cursorPos_ - prev);
+                    cursorPos_ = prev;
+                    markDirty();
+                }
+                e.consumed = true;
+                return;
+
+            case ig::retained::Key::Delete:
+                if (cursorPos_ < (int) inputBuf_.size())
+                {
+                    const int next = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_));
+                    inputBuf_.erase(cursorPos_, next - cursorPos_);
+                    markDirty();
+                }
+                e.consumed = true;
+                return;
+
+            case ig::retained::Key::Left:
+                if (cursorPos_ > 0)
+                {
+                    cursorPos_ = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_));
+                    markDirty();
+                }
+                e.consumed = true;
+                return;
+
+            case ig::retained::Key::Right:
+                if (cursorPos_ < (int) inputBuf_.size())
+                {
+                    cursorPos_ = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_));
+                    markDirty();
+                }
+                e.consumed = true;
+                return;
+
+            case ig::retained::Key::Home:
+                cursorPos_ = 0;
                 markDirty();
-            }
-            e.consumed = true;
-            return;
+                e.consumed = true;
+                return;
 
-        case ig::retained::Key::Delete:
-            if (cursorPos_ < (int)inputBuf_.size()) {
-                const int next = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_));
-                inputBuf_.erase(cursorPos_, next - cursorPos_);
+            case ig::retained::Key::End:
+                cursorPos_ = (int) inputBuf_.size();
                 markDirty();
-            }
-            e.consumed = true;
-            return;
+                e.consumed = true;
+                return;
 
-        case ig::retained::Key::Left:
-            if (cursorPos_ > 0) { cursorPos_ = static_cast<int>(utf8PrevOffset(inputBuf_, cursorPos_)); markDirty(); }
-            e.consumed = true;
-            return;
+            case ig::retained::Key::Up:
+                historyUp();
+                e.consumed = true;
+                return;
 
-        case ig::retained::Key::Right:
-            if (cursorPos_ < (int)inputBuf_.size()) { cursorPos_ = static_cast<int>(utf8NextOffset(inputBuf_, cursorPos_)); markDirty(); }
-            e.consumed = true;
-            return;
-
-        case ig::retained::Key::Home:
-            cursorPos_ = 0;
-            markDirty();
-            e.consumed = true;
-            return;
-
-        case ig::retained::Key::End:
-            cursorPos_ = (int)inputBuf_.size();
-            markDirty();
-            e.consumed = true;
-            return;
-
-        case ig::retained::Key::Up:
-            historyUp();
-            e.consumed = true;
-            return;
-
-        case ig::retained::Key::Down:
-            historyDown();
-            e.consumed = true;
-            return;
+            case ig::retained::Key::Down:
+                historyDown();
+                e.consumed = true;
+                return;
         }
-    } else {
+    }
+    else
+    {
         // Not in input — arrow keys scroll log / move selection
-        if (e.key == ig::retained::Key::Up) {
+        if (e.key == ig::retained::Key::Up)
+        {
             if (selectedLine_ > 0) selectedLine_--;
             markDirty();
             e.consumed = true;
             return;
         }
-        if (e.key == ig::retained::Key::Down) {
+        if (e.key == ig::retained::Key::Down)
+        {
             const int visCount = static_cast<int>(visibleLines().size());
             if (selectedLine_ < visCount - 1) selectedLine_++;
             markDirty();
@@ -777,7 +885,8 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
             return;
         }
         // Tab to focus input
-        if (e.key == ig::retained::Key::Tab) {
+        if (e.key == ig::retained::Key::Tab)
+        {
             inputFocused_ = true;
             markDirty();
             e.consumed = true;
@@ -790,7 +899,8 @@ void ConsoleWidget::onTextInput(KeyEvent& e)
 {
     if (e.text[0] == '\0') return;
 
-    if (searchMode_ && !inputFocused_) {
+    if (searchMode_ && !inputFocused_)
+    {
         searchBuf_ += e.text;
         searchText_ = searchBuf_;
         markDirty();
@@ -798,10 +908,11 @@ void ConsoleWidget::onTextInput(KeyEvent& e)
         return;
     }
 
-    if (inputFocused_) {
+    if (inputFocused_)
+    {
         String ins(e.text);
         inputBuf_.insert(cursorPos_, ins);
-        cursorPos_ += (int)ins.size();
+        cursorPos_ += (int) ins.size();
         markDirty();
         e.consumed = true;
     }
@@ -816,8 +927,7 @@ void ConsoleWidget::submitCommand()
     if (inputBuf_.empty()) return;
 
     // Add to history
-    if (history_.empty() || history_.back() != inputBuf_)
-        history_.push_back(inputBuf_);
+    if (history_.empty() || history_.back() != inputBuf_) history_.push_back(inputBuf_);
     historyIdx_ = -1;
 
     // Log it as Info
@@ -835,13 +945,12 @@ void ConsoleWidget::submitCommand()
 void ConsoleWidget::historyUp()
 {
     if (history_.empty()) return;
-    if (historyIdx_ < 0)
-        historyIdx_ = (int)history_.size() - 1;
+    if (historyIdx_ < 0) historyIdx_ = (int) history_.size() - 1;
     else if (historyIdx_ > 0)
         historyIdx_--;
 
     inputBuf_ = history_[historyIdx_];
-    cursorPos_ = (int)inputBuf_.size();
+    cursorPos_ = (int) inputBuf_.size();
     markDirty();
 }
 
@@ -849,12 +958,15 @@ void ConsoleWidget::historyDown()
 {
     if (history_.empty() || historyIdx_ < 0) return;
     historyIdx_++;
-    if (historyIdx_ >= (int)history_.size()) {
+    if (historyIdx_ >= (int) history_.size())
+    {
         historyIdx_ = -1;
         inputBuf_.clear();
-    } else {
+    }
+    else
+    {
         inputBuf_ = history_[historyIdx_];
     }
-    cursorPos_ = (int)inputBuf_.size();
+    cursorPos_ = (int) inputBuf_.size();
     markDirty();
 }

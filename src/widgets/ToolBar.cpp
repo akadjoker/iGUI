@@ -1,6 +1,6 @@
-#include "pch.hpp"
 #include "ToolBar.hpp"
 #include "WidgetApp.hpp"
+#include "pch.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -15,8 +15,7 @@ ToolBar::ToolBar()
 
 ToolBar::~ToolBar()
 {
-    if (gridTex_)
-        WidgetApp::instance().destroyTexture(gridTex_);
+    if (gridTex_) WidgetApp::instance().destroyTexture(gridTex_);
     delete gridImg_;
 }
 
@@ -25,9 +24,9 @@ ToolBar::~ToolBar()
 void ToolBar::setImageGrid(ig::retained::BuImage* img, int cellW, int cellH)
 {
     delete gridImg_;
-    gridImg_  = img;
-    cellW_    = cellW;
-    cellH_    = cellH;
+    gridImg_ = img;
+    cellW_ = cellW;
+    cellH_ = cellH;
     gridCols_ = img ? (img->width / cellW) : 0;
     texDirty_ = true;
     markDirty();
@@ -36,7 +35,8 @@ void ToolBar::setImageGrid(ig::retained::BuImage* img, int cellW, int cellH)
 bool ToolBar::loadImageGrid(const String& path, int cellW, int cellH)
 {
     auto* img = new ig::retained::BuImage();
-    if (!img->Load(path.c_str())) {
+    if (!img->Load(path.c_str()))
+    {
         delete img;
         return false;
     }
@@ -46,11 +46,11 @@ bool ToolBar::loadImageGrid(const String& path, int cellW, int cellH)
 
 void ToolBar::setTexture(ig::retained::TextureHandle tex, int texW, int texH, int cellW, int cellH)
 {
-    gridTex_  = tex;
+    gridTex_ = tex;
     gridTexW_ = texW;
     gridTexH_ = texH;
-    cellW_    = cellW;
-    cellH_    = cellH;
+    cellW_ = cellW;
+    cellH_ = cellH;
     gridCols_ = (texW > 0 && cellW > 0) ? (texW / cellW) : 0;
     texDirty_ = false;
     markDirty();
@@ -59,7 +59,7 @@ void ToolBar::setTexture(ig::retained::TextureHandle tex, int texW, int texH, in
 int ToolBar::cellCount() const
 {
     if (!gridImg_ || cellW_ <= 0 || cellH_ <= 0) return 0;
-    int cols = gridImg_->width  / cellW_;
+    int cols = gridImg_->width / cellW_;
     int rows = gridImg_->height / cellH_;
     return cols * rows;
 }
@@ -69,10 +69,10 @@ int ToolBar::cellCount() const
 int ToolBar::addButton(int iconIndex, const String& tooltip)
 {
     Item it;
-    it.id        = nextId_++;
-    it.type      = ItemType::Button;
+    it.id = nextId_++;
+    it.type = ItemType::Button;
     it.iconIndex = iconIndex;
-    it.tooltip   = tooltip;
+    it.tooltip = tooltip;
     items_.push_back(std::move(it));
     markDirty();
     return items_.back().id;
@@ -81,9 +81,9 @@ int ToolBar::addButton(int iconIndex, const String& tooltip)
 int ToolBar::addButton(IconId icon, const String& tooltip)
 {
     Item it;
-    it.id      = nextId_++;
-    it.type    = ItemType::Button;
-    it.iconId  = icon;
+    it.id = nextId_++;
+    it.type = ItemType::Button;
+    it.iconId = icon;
     it.tooltip = tooltip;
     items_.push_back(std::move(it));
     markDirty();
@@ -93,11 +93,11 @@ int ToolBar::addButton(IconId icon, const String& tooltip)
 int ToolBar::addToggle(int iconIndex, const String& tooltip, bool checked)
 {
     Item it;
-    it.id        = nextId_++;
-    it.type      = ItemType::Toggle;
+    it.id = nextId_++;
+    it.type = ItemType::Toggle;
     it.iconIndex = iconIndex;
-    it.tooltip   = tooltip;
-    it.checked   = checked;
+    it.tooltip = tooltip;
+    it.checked = checked;
     items_.push_back(std::move(it));
     markDirty();
     return items_.back().id;
@@ -106,9 +106,9 @@ int ToolBar::addToggle(int iconIndex, const String& tooltip, bool checked)
 int ToolBar::addToggle(IconId icon, const String& tooltip, bool checked)
 {
     Item it;
-    it.id      = nextId_++;
-    it.type    = ItemType::Toggle;
-    it.iconId  = icon;
+    it.id = nextId_++;
+    it.type = ItemType::Toggle;
+    it.iconId = icon;
     it.tooltip = tooltip;
     it.checked = checked;
     items_.push_back(std::move(it));
@@ -119,7 +119,7 @@ int ToolBar::addToggle(IconId icon, const String& tooltip, bool checked)
 int ToolBar::addSeparator()
 {
     Item it;
-    it.id   = nextId_++;
+    it.id = nextId_++;
     it.type = ItemType::Separator;
     items_.push_back(std::move(it));
     markDirty();
@@ -129,7 +129,7 @@ int ToolBar::addSeparator()
 int ToolBar::addSpacer()
 {
     Item it;
-    it.id   = nextId_++;
+    it.id = nextId_++;
     it.type = ItemType::Spacer;
     items_.push_back(std::move(it));
     markDirty();
@@ -138,10 +138,9 @@ int ToolBar::addSpacer()
 
 void ToolBar::removeItem(int id)
 {
-    items_.erase(
-        std::remove_if(items_.begin(), items_.end(),
-                        [id](const Item& it) { return it.id == id; }),
-        items_.end());
+    items_.erase(std::remove_if(items_.begin(), items_.end(),
+                         [id](const Item& it) { return it.id == id; }),
+            items_.end());
     markDirty();
 }
 
@@ -149,21 +148,25 @@ void ToolBar::removeItem(int id)
 
 ToolBar::Item* ToolBar::findItem(int id)
 {
-    for (auto& it : items_)
+    for (auto& it: items_)
         if (it.id == id) return &it;
     return nullptr;
 }
 
 const ToolBar::Item* ToolBar::findItem(int id) const
 {
-    for (auto& it : items_)
+    for (auto& it: items_)
         if (it.id == id) return &it;
     return nullptr;
 }
 
 void ToolBar::setItemEnabled(int id, bool enabled)
 {
-    if (auto* it = findItem(id)) { it->enabled = enabled; markDirty(); }
+    if (auto* it = findItem(id))
+    {
+        it->enabled = enabled;
+        markDirty();
+    }
 }
 bool ToolBar::isItemEnabled(int id) const
 {
@@ -173,7 +176,11 @@ bool ToolBar::isItemEnabled(int id) const
 
 void ToolBar::setItemChecked(int id, bool checked)
 {
-    if (auto* it = findItem(id)) { it->checked = checked; markDirty(); }
+    if (auto* it = findItem(id))
+    {
+        it->checked = checked;
+        markDirty();
+    }
 }
 bool ToolBar::isItemChecked(int id) const
 {
@@ -183,7 +190,11 @@ bool ToolBar::isItemChecked(int id) const
 
 void ToolBar::setItemVisible(int id, bool visible)
 {
-    if (auto* it = findItem(id)) { it->visible = visible; markDirty(); }
+    if (auto* it = findItem(id))
+    {
+        it->visible = visible;
+        markDirty();
+    }
 }
 bool ToolBar::isItemVisible(int id) const
 {
@@ -193,7 +204,12 @@ bool ToolBar::isItemVisible(int id) const
 
 void ToolBar::setItemIcon(int id, IconId icon)
 {
-    if (auto* it = findItem(id)) { it->iconId = icon; it->iconIndex = -1; markDirty(); }
+    if (auto* it = findItem(id))
+    {
+        it->iconId = icon;
+        it->iconIndex = -1;
+        markDirty();
+    }
 }
 
 void ToolBar::setItemTooltip(int id, const String& tip)
@@ -217,22 +233,24 @@ bool ToolBar::isItemDraggable(int id) const
 Widget::Vec2f ToolBar::sizeHint() const
 {
     float w = 0;
-    for (const auto& it : items_) {
+    for (const auto& it: items_)
+    {
         if (!it.visible) continue;
-        switch (it.type) {
-        case ItemType::Button:
-        case ItemType::Toggle:
-            w += btnSize_ + spacing_;
-            break;
-        case ItemType::Separator:
-            w += 8.f + spacing_;
-            break;
-        case ItemType::Spacer:
-            w += 16.f;  // minimum spacer width
-            break;
+        switch (it.type)
+        {
+            case ItemType::Button:
+            case ItemType::Toggle:
+                w += btnSize_ + spacing_;
+                break;
+            case ItemType::Separator:
+                w += 8.f + spacing_;
+                break;
+            case ItemType::Spacer:
+                w += 16.f; // minimum spacer width
+                break;
         }
     }
-    return {w, btnSize_ + 4.f};
+    return { w, btnSize_ + 4.f };
 }
 
 void ToolBar::layout()
@@ -246,45 +264,50 @@ void ToolBar::layout()
     // Count spacers for flex distribution
     int spacerCount = 0;
     float fixedW = 0;
-    for (const auto& it : items_) {
+    for (const auto& it: items_)
+    {
         if (!it.visible) continue;
-        switch (it.type) {
-        case ItemType::Button:
-        case ItemType::Toggle:
-            fixedW += btnSize_ + spacing_;
-            break;
-        case ItemType::Separator:
-            fixedW += 8.f + spacing_;
-            break;
-        case ItemType::Spacer:
-            spacerCount++;
-            break;
+        switch (it.type)
+        {
+            case ItemType::Button:
+            case ItemType::Toggle:
+                fixedW += btnSize_ + spacing_;
+                break;
+            case ItemType::Separator:
+                fixedW += 8.f + spacing_;
+                break;
+            case ItemType::Spacer:
+                spacerCount++;
+                break;
         }
     }
 
     float totalSpace = rect_.w - 4.f;
     float spacerW = (spacerCount > 0) ? std::max(4.f, (totalSpace - fixedW) / spacerCount) : 0.f;
 
-    for (auto& it : items_) {
-        if (!it.visible) {
-            it.rect = {0, 0, 0, 0};
+    for (auto& it: items_)
+    {
+        if (!it.visible)
+        {
+            it.rect = { 0, 0, 0, 0 };
             continue;
         }
         float iy = y + (h - itemH) * 0.5f;
-        switch (it.type) {
-        case ItemType::Button:
-        case ItemType::Toggle:
-            it.rect = {x, iy, btnSize_, itemH};
-            x += btnSize_ + spacing_;
-            break;
-        case ItemType::Separator:
-            it.rect = {x, iy, 8.f, itemH};
-            x += 8.f + spacing_;
-            break;
-        case ItemType::Spacer:
-            it.rect = {x, iy, spacerW, itemH};
-            x += spacerW;
-            break;
+        switch (it.type)
+        {
+            case ItemType::Button:
+            case ItemType::Toggle:
+                it.rect = { x, iy, btnSize_, itemH };
+                x += btnSize_ + spacing_;
+                break;
+            case ItemType::Separator:
+                it.rect = { x, iy, 8.f, itemH };
+                x += 8.f + spacing_;
+                break;
+            case ItemType::Spacer:
+                it.rect = { x, iy, spacerW, itemH };
+                x += spacerW;
+                break;
         }
     }
 
@@ -301,20 +324,22 @@ void ToolBar::ensureTexture(PaintContext& /*ctx*/)
     // Ensure the image is RGBA (4 components) for GPU upload
     ig::retained::BuImage* rgba = gridImg_;
     bool ownsRgba = false;
-    if (gridImg_->components != 4) {
+    if (gridImg_->components != 4)
+    {
         rgba = gridImg_->ConvertToRGBA();
         if (!rgba) return;
         ownsRgba = true;
     }
 
     // Destroy old texture if any
-    if (gridTex_) {
+    if (gridTex_)
+    {
         WidgetApp::instance().destroyTexture(gridTex_);
         gridTex_ = {};
     }
 
     // Upload via WidgetApp's backend-registered texture service
-    gridTex_  = WidgetApp::instance().uploadTexture(rgba->pixels, rgba->width, rgba->height);
+    gridTex_ = WidgetApp::instance().uploadTexture(rgba->pixels, rgba->width, rgba->height);
     gridTexW_ = rgba->width;
     gridTexH_ = rgba->height;
 
@@ -334,13 +359,9 @@ void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, flo
     float th = static_cast<float>(gridTexH_);
     if (tw <= 0 || th <= 0) return;
 
-    ig::retained::Rect uv{
-        srcX / tw,
-        srcY / th,
-        static_cast<float>(cellW_) / tw,
-        static_cast<float>(cellH_) / th
-    };
-    ctx.drawImage(gridTex_, {x, y, sz, sz}, uv);
+    ig::retained::Rect uv{ srcX / tw, srcY / th, static_cast<float>(cellW_) / tw,
+        static_cast<float>(cellH_) / th };
+    ctx.drawImage(gridTex_, { x, y, sz, sz }, uv);
 }
 
 // ── Hit test ─────────────────────────────────────────────────────────────────
@@ -350,7 +371,7 @@ bool ToolBar::itemRect(int id, Rect& out) const
     const Item* it = findItem(id);
     if (!it || !it->visible) return false;
     const Rect abs = absoluteRect();
-    out = {abs.x + it->rect.x, abs.y + it->rect.y, it->rect.w, it->rect.h};
+    out = { abs.x + it->rect.x, abs.y + it->rect.y, it->rect.w, it->rect.h };
     return true;
 }
 
@@ -359,12 +380,12 @@ int ToolBar::itemByTooltip(const String& text) const
     auto lower = [](char c) { return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + 32) : c; };
     const size_t n = text.size();
     int prefix = -1;
-    for (const auto& it : items_) {
+    for (const auto& it: items_)
+    {
         if (!it.visible || it.type == ItemType::Separator || it.type == ItemType::Spacer) continue;
         if (it.tooltip.size() < n || n == 0) continue;
         bool same = true;
-        for (size_t i = 0; same && i < n; ++i)
-            same = lower(it.tooltip[i]) == lower(text[i]);
+        for (size_t i = 0; same && i < n; ++i) same = lower(it.tooltip[i]) == lower(text[i]);
         if (!same) continue;
         if (it.tooltip.size() == n) return it.id;
         if (prefix < 0) prefix = it.id;
@@ -377,11 +398,12 @@ int ToolBar::hitItem(float absX, float absY) const
     Rect abs = absoluteRect();
     float lx = absX - abs.x;
     float ly = absY - abs.y;
-    for (const auto& it : items_) {
+    for (const auto& it: items_)
+    {
         if (!it.visible) continue;
         if (it.type == ItemType::Spacer) continue;
-        if (lx >= it.rect.x && lx <= it.rect.x + it.rect.w &&
-            ly >= it.rect.y && ly <= it.rect.y + it.rect.h)
+        if (lx >= it.rect.x && lx <= it.rect.x + it.rect.w && ly >= it.rect.y &&
+                ly <= it.rect.y + it.rect.h)
             return it.id;
     }
     return -1;
@@ -402,111 +424,115 @@ void ToolBar::paint(PaintContext& ctx)
 
     // Toolbar background
     Rect clipped;
-    if (ctx.clipRectIntersect(abs, clipped)) {
+    if (ctx.clipRectIntersect(abs, clipped))
+    {
         ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
-        ctx.fill.Rectangle(
-            static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-            static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
+        ctx.fill.Rectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
+                static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
     }
 
     // Draw items
-    for (int idx = 0; idx < static_cast<int>(items_.size()); ++idx) {
+    for (int idx = 0; idx < static_cast<int>(items_.size()); ++idx)
+    {
         const auto& it = items_[idx];
         if (!it.visible) continue;
 
-        Rect ir = {abs.x + it.rect.x, abs.y + it.rect.y, it.rect.w, it.rect.h};
+        Rect ir = { abs.x + it.rect.x, abs.y + it.rect.y, it.rect.w, it.rect.h };
 
         // Skip if being dragged (we'll draw it at the drag position)
         if (drag_.active && it.id == drag_.itemId) continue;
 
-        switch (it.type) {
-        case ItemType::Button:
-        case ItemType::Toggle:
+        switch (it.type)
         {
-            Rect cr;
-            if (!ctx.clipRectIntersect(ir, cr)) break;
+            case ItemType::Button:
+            case ItemType::Toggle:
+            {
+                Rect cr;
+                if (!ctx.clipRectIntersect(ir, cr)) break;
 
-            // Background
-            Color bg;
-            if (it.type == ItemType::Toggle && it.checked)
-                bg = Color(60, 100, 160, 255);
-            else if (it.pressed)
-                bg = t.buttonPressed;
-            else if (it.hovered)
-                bg = t.buttonHover;
-            else
-                bg = Color(0, 0, 0, 0);  // transparent when idle
+                // Background
+                Color bg;
+                if (it.type == ItemType::Toggle && it.checked) bg = Color(60, 100, 160, 255);
+                else if (it.pressed)
+                    bg = t.buttonPressed;
+                else if (it.hovered)
+                    bg = t.buttonHover;
+                else
+                    bg = Color(0, 0, 0, 0); // transparent when idle
 
-            if (!it.enabled) bg = Color(0, 0, 0, 0);
+                if (!it.enabled) bg = Color(0, 0, 0, 0);
 
-            if (bg.a > 0) {
-                ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-                ctx.fill.RoundedRectangle(ir.x, ir.y, ir.w, ir.h,
-                                          t.borderRadius, 6, true);
+                if (bg.a > 0)
+                {
+                    ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
+                    ctx.fill.RoundedRectangle(ir.x, ir.y, ir.w, ir.h, t.borderRadius, 6, true);
+                }
+
+                // Hover border
+                if (it.hovered && it.enabled)
+                {
+                    ctx.line.SetColor(t.buttonBorder.r, t.buttonBorder.g, t.buttonBorder.b, 120);
+                    ctx.line.RoundedRectangle(ir.x, ir.y, ir.w, ir.h, t.borderRadius, 6, false);
+                }
+
+                // Icon
+                float iconSz = btnSize_ - iconPad_ * 2;
+                float ix = ir.x + (ir.w - iconSz) * 0.5f;
+                float iy = ir.y + (ir.h - iconSz) * 0.5f;
+
+                Color iconTint = it.enabled ? Color(220, 220, 225, 255) : Color(100, 100, 110, 255);
+
+                if (it.iconIndex >= 0 && gridTex_)
+                {
+                    drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz);
+                }
+                else if (it.iconId != IconId::None)
+                {
+                    ctx.drawIcon(it.iconId, ix, iy, iconSz, iconTint);
+                }
+
+                // Toggle check indicator (small dot in bottom-right)
+                if (it.type == ItemType::Toggle && it.checked)
+                {
+                    ctx.fill.SetColor(100, 200, 255, 255);
+                    float dotR = 2.5f;
+                    ctx.fill.Circle(ir.x + ir.w - 5.f, ir.y + ir.h - 5.f, dotR, true);
+                }
+                break;
             }
-
-            // Hover border
-            if (it.hovered && it.enabled) {
-                ctx.line.SetColor(t.buttonBorder.r, t.buttonBorder.g, t.buttonBorder.b, 120);
-                ctx.line.RoundedRectangle(ir.x, ir.y, ir.w, ir.h,
-                                          t.borderRadius, 6, false);
+            case ItemType::Separator:
+            {
+                float sx = ir.x + ir.w * 0.5f;
+                float sy1 = ir.y + 3.f;
+                float sy2 = ir.y + ir.h - 3.f;
+                ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 150);
+                ctx.line.Line2D(static_cast<int>(sx), static_cast<int>(sy1), static_cast<int>(sx),
+                        static_cast<int>(sy2));
+                break;
             }
-
-            // Icon
-            float iconSz = btnSize_ - iconPad_ * 2;
-            float ix = ir.x + (ir.w - iconSz) * 0.5f;
-            float iy = ir.y + (ir.h - iconSz) * 0.5f;
-
-            Color iconTint = it.enabled ? Color(220, 220, 225, 255) : Color(100, 100, 110, 255);
-
-            if (it.iconIndex >= 0 && gridTex_) {
-                drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz);
-            } else if (it.iconId != IconId::None) {
-                ctx.drawIcon(it.iconId, ix, iy, iconSz, iconTint);
-            }
-
-            // Toggle check indicator (small dot in bottom-right)
-            if (it.type == ItemType::Toggle && it.checked) {
-                ctx.fill.SetColor(100, 200, 255, 255);
-                float dotR = 2.5f;
-                ctx.fill.Circle(ir.x + ir.w - 5.f, ir.y + ir.h - 5.f, dotR, true);
-            }
-            break;
-        }
-        case ItemType::Separator:
-        {
-            float sx = ir.x + ir.w * 0.5f;
-            float sy1 = ir.y + 3.f;
-            float sy2 = ir.y + ir.h - 3.f;
-            ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 150);
-            ctx.line.Line2D(static_cast<int>(sx), static_cast<int>(sy1),
-                            static_cast<int>(sx), static_cast<int>(sy2));
-            break;
-        }
-        case ItemType::Spacer:
-            break;
+            case ItemType::Spacer:
+                break;
         }
     }
 
     // Draw drag ghost
-    if (drag_.active) {
+    if (drag_.active)
+    {
         auto* it = findItem(drag_.itemId);
-        if (it) {
+        if (it)
+        {
             float dx = drag_.curX - drag_.startX;
-            Rect ir = {abs.x + it->rect.x + dx, abs.y + it->rect.y,
-                       it->rect.w, it->rect.h};
+            Rect ir = { abs.x + it->rect.x + dx, abs.y + it->rect.y, it->rect.w, it->rect.h };
 
             // Semi-transparent background
             ctx.fill.SetColor(80, 120, 180, 150);
-            ctx.fill.RoundedRectangle(ir.x, ir.y, ir.w, ir.h,
-                                      t.borderRadius, 6, true);
+            ctx.fill.RoundedRectangle(ir.x, ir.y, ir.w, ir.h, t.borderRadius, 6, true);
 
             // Icon
             float iconSz = btnSize_ - iconPad_ * 2;
             float ix = ir.x + (ir.w - iconSz) * 0.5f;
             float iy = ir.y + (ir.h - iconSz) * 0.5f;
-            if (it->iconIndex >= 0 && gridTex_)
-                drawGridIcon(ctx, it->iconIndex, ix, iy, iconSz);
+            if (it->iconIndex >= 0 && gridTex_) drawGridIcon(ctx, it->iconIndex, ix, iy, iconSz);
             else if (it->iconId != IconId::None)
                 ctx.drawIcon(it->iconId, ix, iy, iconSz);
         }
@@ -515,7 +541,7 @@ void ToolBar::paint(PaintContext& ctx)
     // Bottom border line
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
     ctx.line.Line2D(static_cast<int>(abs.x), static_cast<int>(abs.y + abs.h - 1),
-                    static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y + abs.h - 1));
+            static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y + abs.h - 1));
 }
 
 // ── Mouse events ─────────────────────────────────────────────────────────────
@@ -530,7 +556,8 @@ void ToolBar::onMousePress(MouseEvent& e)
     auto* it = findItem(id);
     if (!it || !it->enabled) return;
 
-    if (it->type == ItemType::Separator) {
+    if (it->type == ItemType::Separator)
+    {
         // Separators are not clickable, but they're drag handles
         // for reordering adjacent items
         return;
@@ -540,14 +567,21 @@ void ToolBar::onMousePress(MouseEvent& e)
     markDirty();
 
     // Start drag for reorder
-    if (draggable_ && it->draggable && (it->type == ItemType::Button || it->type == ItemType::Toggle)) {
-        drag_.active  = false;  // will activate on move
-        drag_.itemId  = id;
-        drag_.startX  = e.x;
-        drag_.curX    = e.x;
+    if (draggable_ && it->draggable &&
+            (it->type == ItemType::Button || it->type == ItemType::Toggle))
+    {
+        drag_.active = false; // will activate on move
+        drag_.itemId = id;
+        drag_.startX = e.x;
+        drag_.curX = e.x;
         // Find original index
-        for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
-            if (items_[i].id == id) { drag_.origIdx = i; break; }
+        for (int i = 0; i < static_cast<int>(items_.size()); ++i)
+        {
+            if (items_[i].id == id)
+            {
+                drag_.origIdx = i;
+                break;
+            }
         }
     }
 
@@ -562,14 +596,16 @@ void ToolBar::onMouseRelease(MouseEvent& e)
     // and re-checks the size: a handler may add or remove items (a toolbar built
     // at runtime), which moves the vector, and nothing is read from it after the
     // handler ran.
-    for (ct::Vector<Item>::size_type i = 0; i < items_.size(); ++i) {
+    for (ct::Vector<Item>::size_type i = 0; i < items_.size(); ++i)
+    {
         if (!items_[i].pressed) continue;
         items_[i].pressed = false;
 
         // Only fire click if not dragging
         if (drag_.active || !items_[i].enabled) continue;
         Rect abs = absoluteRect();
-        Rect ir = {abs.x + items_[i].rect.x, abs.y + items_[i].rect.y, items_[i].rect.w, items_[i].rect.h};
+        Rect ir = { abs.x + items_[i].rect.x, abs.y + items_[i].rect.y, items_[i].rect.w,
+            items_[i].rect.h };
         if (!ir.contains(e.x, e.y)) continue;
 
         const int id = items_[i].id;
@@ -591,7 +627,8 @@ void ToolBar::onMouseRelease(MouseEvent& e)
     }
 
     // Finish drag
-    if (drag_.active || drag_.itemId >= 0) {
+    if (drag_.active || drag_.itemId >= 0)
+    {
         drag_.active = false;
         drag_.itemId = -1;
         markDirty();
@@ -606,12 +643,14 @@ void ToolBar::onMouseMove(MouseEvent& e)
     Rect abs = absoluteRect();
 
     // Update hover state
-    for (auto& it : items_) {
-        if (!it.visible || it.type == ItemType::Spacer) {
+    for (auto& it: items_)
+    {
+        if (!it.visible || it.type == ItemType::Spacer)
+        {
             it.hovered = false;
             continue;
         }
-        Rect ir = {abs.x + it.rect.x, abs.y + it.rect.y, it.rect.w, it.rect.h};
+        Rect ir = { abs.x + it.rect.x, abs.y + it.rect.y, it.rect.w, it.rect.h };
         bool wasHovered = it.hovered;
         it.hovered = ir.contains(e.x, e.y) && it.enabled;
         if (wasHovered != it.hovered) markDirty();
@@ -619,43 +658,54 @@ void ToolBar::onMouseMove(MouseEvent& e)
     // The tooltip is the one of the button under the cursor.
     {
         String tip;
-        for (const auto& it : items_)
-            if (it.hovered) { tip = it.tooltip; break; }
+        for (const auto& it: items_)
+            if (it.hovered)
+            {
+                tip = it.tooltip;
+                break;
+            }
         if (tip != tooltip()) setTooltip(tip);
     }
 
     // Drag reorder
-    if (drag_.itemId >= 0) {
+    if (drag_.itemId >= 0)
+    {
         float dx = e.x - drag_.startX;
-        if (!drag_.active && std::abs(dx) > 4.f)
-            drag_.active = true;
+        if (!drag_.active && std::abs(dx) > 4.f) drag_.active = true;
 
-        if (drag_.active) {
+        if (drag_.active)
+        {
             drag_.curX = e.x;
             markDirty();
 
             // Check if we should swap with neighbour
             auto* dragIt = findItem(drag_.itemId);
-            if (dragIt) {
+            if (dragIt)
+            {
                 // dragCenterX: where the dragged item's center currently appears (local coords)
                 float dragCenterX = dragIt->rect.x + dragIt->rect.w * 0.5f + dx;
 
                 // Find current index
                 int curIdx = -1;
-                for (int i = 0; i < static_cast<int>(items_.size()); ++i) {
-                    if (items_[i].id == drag_.itemId) { curIdx = i; break; }
+                for (int i = 0; i < static_cast<int>(items_.size()); ++i)
+                {
+                    if (items_[i].id == drag_.itemId)
+                    {
+                        curIdx = i;
+                        break;
+                    }
                 }
 
                 bool swapped = false;
                 float oldRectX = dragIt->rect.x;
 
                 // Try swap left
-                if (curIdx > 0) {
+                if (curIdx > 0)
+                {
                     auto& left = items_[curIdx - 1];
-                    if (left.visible && left.draggable &&
-                        left.type != ItemType::Separator &&
-                        left.type != ItemType::Spacer &&
-                        dragCenterX < left.rect.x + left.rect.w * 0.5f)
+                    if (left.visible && left.draggable && left.type != ItemType::Separator &&
+                            left.type != ItemType::Spacer &&
+                            dragCenterX < left.rect.x + left.rect.w * 0.5f)
                     {
                         std::swap(items_[curIdx], items_[curIdx - 1]);
                         swapped = true;
@@ -663,23 +713,25 @@ void ToolBar::onMouseMove(MouseEvent& e)
                 }
 
                 // Try swap right (re-find index after possible left swap)
-                if (!swapped && curIdx >= 0 && curIdx < static_cast<int>(items_.size()) - 1) {
+                if (!swapped && curIdx >= 0 && curIdx < static_cast<int>(items_.size()) - 1)
+                {
                     auto& right = items_[curIdx + 1];
-                    if (right.visible && right.draggable &&
-                        right.type != ItemType::Separator &&
-                        right.type != ItemType::Spacer &&
-                        dragCenterX > right.rect.x + right.rect.w * 0.5f)
+                    if (right.visible && right.draggable && right.type != ItemType::Separator &&
+                            right.type != ItemType::Spacer &&
+                            dragCenterX > right.rect.x + right.rect.w * 0.5f)
                     {
                         std::swap(items_[curIdx], items_[curIdx + 1]);
                         swapped = true;
                     }
                 }
 
-                if (swapped) {
+                if (swapped)
+                {
                     layout();
                     // Adjust startX so ghost doesn't jump after layout changes rect.x
                     auto* movedIt = findItem(drag_.itemId);
-                    if (movedIt) {
+                    if (movedIt)
+                    {
                         drag_.startX += (movedIt->rect.x - oldRectX);
                     }
                 }

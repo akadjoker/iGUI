@@ -33,8 +33,8 @@ static void test_default_font()
 
     atlas.setTexture(ig::TextureId(1u));
     ig::DrawList drawList;
-    assert(atlas.appendText(drawList, atlas.defaultFont(), u8"Olá", ig::Vec2(0.0f, 0.0f),
-                            14.0f, ig::Color(), ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+    assert(atlas.appendText(drawList, atlas.defaultFont(), u8"Olá", ig::Vec2(0.0f, 0.0f), 14.0f,
+            ig::Color(), ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
     const ig::DrawData data = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
     assert(data.commands.size() > 0u);
     for (ig::Span<const ig::DrawCommand>::size_type i = 0; i < data.commands.size(); ++i)
@@ -50,22 +50,19 @@ static void test_default_font()
 static void test_atlas_from_font_bytes()
 {
     // Sem bytes não há atlas, e não se lê nada fora do buffer.
-    const ig::FontRange ranges[] = {ig::FontRange(0x20u, 0x7Eu)};
-    const uint8_t notAFont[64] = {0u};
+    const ig::FontRange ranges[] = { ig::FontRange(0x20u, 0x7Eu) };
+    const uint8_t notAFont[64] = { 0u };
     ig::FontAtlas garbage(ig::Span<const uint8_t>(notAFont, sizeof(notAFont)),
-                          ig::Span<const ig::FontRange>(ranges, 1u), 512u, 256u, 16.0f);
+            ig::Span<const ig::FontRange>(ranges, 1u), 512u, 256u, 16.0f);
     assert(!garbage.valid());
-    ig::FontAtlas empty(ig::Span<const uint8_t>(), ig::Span<const ig::FontRange>(ranges, 1u),
-                        512u, 256u, 16.0f);
+    ig::FontAtlas empty(ig::Span<const uint8_t>(), ig::Span<const ig::FontRange>(ranges, 1u), 512u,
+            256u, 16.0f);
     assert(!empty.valid());
 }
 
 static void test_custom_ranges_and_atlas_size()
 {
-    const ig::FontRange ranges[] = {
-        ig::FontRange(0x20u, 0x7Eu),
-        ig::FontRange(0x00C0u, 0x00FFu)
-    };
+    const ig::FontRange ranges[] = { ig::FontRange(0x20u, 0x7Eu), ig::FontRange(0x00C0u, 0x00FFu) };
     ig::FontAtlas atlas(ig::Span<const ig::FontRange>(ranges, 2u), 512u, 256u, 18.0f);
     assert(atlas.valid());
     assert(atlas.width() == 512u);
@@ -89,16 +86,17 @@ static void test_glyph_cache()
 {
     ig::FontAtlas atlas;
     const auto font = atlas.defaultFont();
-    const uint32_t points[] = {'A', 'A'+256u, 'A', 0x10ffffu, '?', 0xE1u};
-    for (uint32_t point : points) {
-        const auto* first = atlas.glyph(font,point);
-        assert(first == atlas.glyph(font,point));
+    const uint32_t points[] = { 'A', 'A' + 256u, 'A', 0x10ffffu, '?', 0xE1u };
+    for (uint32_t point: points)
+    {
+        const auto* first = atlas.glyph(font, point);
+        assert(first == atlas.glyph(font, point));
     }
-    assert(atlas.glyph(font,0x10ffffu) == atlas.glyph(font,'?'));
-    assert(atlas.glyph(ig::FontId(9999),'A') == nullptr);
+    assert(atlas.glyph(font, 0x10ffffu) == atlas.glyph(font, '?'));
+    assert(atlas.glyph(ig::FontId(9999), 'A') == nullptr);
     ig::FontAtlas copied = atlas;
-    assert(copied.glyph(font,'A')->codepoint == 'A');
-    assert(copied.glyph(font,'A') != atlas.glyph(font,'A'));
+    assert(copied.glyph(font, 'A')->codepoint == 'A');
+    assert(copied.glyph(font, 'A') != atlas.glyph(font, 'A'));
 }
 
 // A fonte embutida, para uma segunda face sair dos mesmos bytes (a API pública
@@ -125,7 +123,7 @@ static void test_multiple_faces()
     const float smallLine = atlas.lineHeight(small);
 
     const ig::Span<const uint8_t> bytes(ig::detail::DefaultFontData,
-                                        ig::detail::DefaultFontDataSize);
+            ig::detail::DefaultFontDataSize);
     const ig::FontId big = atlas.loadFont(bytes, 32.0f);
     assert(big == ig::FontId(2u));
     assert(atlas.faceCount() == 2u);
@@ -142,8 +140,8 @@ static void test_multiple_faces()
 
     // Os glifos das duas estão no mesmo atlas (a mesma textura) e são maiores na
     // face cozida maior.
-    const ig::FontGlyph *smallA = atlas.glyph(small, static_cast<uint32_t>('A'));
-    const ig::FontGlyph *bigA = atlas.glyph(big, static_cast<uint32_t>('A'));
+    const ig::FontGlyph* smallA = atlas.glyph(small, static_cast<uint32_t>('A'));
+    const ig::FontGlyph* bigA = atlas.glyph(big, static_cast<uint32_t>('A'));
     assert(smallA && bigA);
     assert(bigA->width > smallA->width && bigA->height > smallA->height);
     assert(bigA->advance > smallA->advance);
@@ -164,9 +162,9 @@ static void test_multiple_faces()
     assert(atlas.bakedSize(ig::FontId(0u)) == 0.0f);
 
     // Bytes que não são uma fonte não entram no atlas.
-    const uint8_t notAFont[64] = {0u};
+    const uint8_t notAFont[64] = { 0u };
     assert(atlas.loadFont(ig::Span<const uint8_t>(notAFont, sizeof(notAFont)), 20.0f) ==
-           ig::FontId(0u));
+            ig::FontId(0u));
     assert(atlas.faceCount() == 2u);
     assert(atlas.valid());
 
@@ -174,10 +172,9 @@ static void test_multiple_faces()
     // face sem glifos: o id que ela teria não pode apontar para nada, e o que já
     // lá estava fica como estava (as uvs das outras foram calculadas sobre a
     // imagem que esta podia ter mexido).
-    const ig::FontRange missingRanges[] = {ig::FontRange(0x1F300u, 0x1F5FFu)};
-    assert(atlas.loadFont(bytes, 20.0f,
-                          ig::Span<const ig::FontRange>(missingRanges, 1u)) ==
-           ig::FontId(0u));
+    const ig::FontRange missingRanges[] = { ig::FontRange(0x1F300u, 0x1F5FFu) };
+    assert(atlas.loadFont(bytes, 20.0f, ig::Span<const ig::FontRange>(missingRanges, 1u)) ==
+            ig::FontId(0u));
     assert(atlas.faceCount() == 2u);
     assert(atlas.valid());
     assert(atlas.glyph(big, static_cast<uint32_t>('A')));
@@ -186,7 +183,7 @@ static void test_multiple_faces()
     // Um ficheiro que só tem a assinatura e uma tabela 'glyf' (sem cmap, head nem
     // hhea) não chega ao stb, que lê essas tabelas sem as validar: era o que dava
     // o segfault, e é isto que o loadFont peneira antes de lhe tocar.
-    uint8_t fakeFont[32] = {0u};
+    uint8_t fakeFont[32] = { 0u };
     fakeFont[1] = 0x01u; // sfnt: TrueType
     fakeFont[5] = 0x01u; // uma tabela
     fakeFont[12] = 'g';
@@ -196,7 +193,7 @@ static void test_multiple_faces()
     fakeFont[23] = 28u; // offset da tabela (20-23, big endian) e
     fakeFont[27] = 4u;  // comprimento (24-27): 28+4 = 32, cabe nos bytes
     assert(atlas.loadFont(ig::Span<const uint8_t>(fakeFont, sizeof(fakeFont)), 20.0f) ==
-           ig::FontId(0u));
+            ig::FontId(0u));
     assert(atlas.faceCount() == 2u);
     assert(atlas.valid());
 
@@ -204,11 +201,11 @@ static void test_multiple_faces()
     atlas.setTexture(ig::TextureId(3u));
     ig::DrawList drawList;
     assert(atlas.appendText(drawList, small, "A", ig::Vec2(0.0f, 0.0f), 13.0f, ig::Color(),
-                            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
     const ig::DrawData smallData = drawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
     ig::DrawList bigDrawList;
     assert(atlas.appendText(bigDrawList, big, "A", ig::Vec2(0.0f, 0.0f), 32.0f, ig::Color(),
-                            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
+            ig::Rect(0.0f, 0.0f, 100.0f, 100.0f)));
     const ig::DrawData bigData = bigDrawList.data(ig::Vec2(100.0f, 100.0f), 1.0f);
     assert(smallData.vertices.size() == bigData.vertices.size());
     assert(bigData.vertices.size() > 0u);
@@ -220,14 +217,10 @@ static void test_multiple_faces()
     {
         const float smallY = smallData.vertices[i].position.y;
         const float bigY = bigData.vertices[i].position.y;
-        if (i == 0u || smallY < smallTop)
-            smallTop = smallY;
-        if (i == 0u || smallY > smallBottom)
-            smallBottom = smallY;
-        if (i == 0u || bigY < bigTop)
-            bigTop = bigY;
-        if (i == 0u || bigY > bigBottom)
-            bigBottom = bigY;
+        if (i == 0u || smallY < smallTop) smallTop = smallY;
+        if (i == 0u || smallY > smallBottom) smallBottom = smallY;
+        if (i == 0u || bigY < bigTop) bigTop = bigY;
+        if (i == 0u || bigY > bigBottom) bigBottom = bigY;
     }
     // O mesmo glifo desenhado ao tamanho de cada face: a face grande sai mais alta.
     assert(bigBottom - bigTop > smallBottom - smallTop);
@@ -244,8 +237,7 @@ static void test_append_text_skips_only_invisible_lines()
     for (int line = 0; line < 400; ++line)
     {
         text += u8"linha ção € ";
-        for (int word = 0; word < (line % 7) * 6; ++word)
-            text += u8"palavra ";
+        for (int word = 0; word < (line % 7) * 6; ++word) text += u8"palavra ";
         text += "\n";
     }
     const ig::Rect unbounded(-1e6f, -1e6f, 2e6f, 2e6f);
@@ -264,14 +256,14 @@ static void test_append_text_skips_only_invisible_lines()
     }
     ig::DrawList reference;
     assert(atlas.appendText(reference, atlas.defaultFont(), text, ig::Vec2(10.0f, 5.0f), 16.0f,
-                            ig::Color(), unbounded));
+            ig::Color(), unbounded));
     const ig::DrawData full = reference.data(ig::Vec2(1.0f, 1.0f), 1.0f);
     for (size_t c = 0; c < clips.size(); ++c)
     {
-        const ig::Rect &clip = clips[c];
+        const ig::Rect& clip = clips[c];
         ig::DrawList list;
         assert(atlas.appendText(list, atlas.defaultFont(), text, ig::Vec2(10.0f, 5.0f), 16.0f,
-                                ig::Color(), clip));
+                ig::Color(), clip));
         const ig::DrawData kept = list.data(ig::Vec2(1.0f, 1.0f), 1.0f);
         const float clipRight = clip.x + clip.width;
         const float clipBottom = clip.y + clip.height;
@@ -283,8 +275,8 @@ static void test_append_text_skips_only_invisible_lines()
         // intersection with the clip and not the whole glyph.
         for (size_t v = 0; v + 3u < full.vertices.size(); v += 4u)
         {
-            const ig::Vec2 &a = full.vertices[v].position;
-            const ig::Vec2 &b = full.vertices[v + 2u].position;
+            const ig::Vec2& a = full.vertices[v].position;
+            const ig::Vec2& b = full.vertices[v + 2u].position;
             const float expectedLeft = a.x > clip.x ? a.x : clip.x;
             const float expectedTop = a.y > clip.y ? a.y : clip.y;
             const float expectedRight = b.x < clipRight ? b.x : clipRight;
@@ -302,8 +294,7 @@ static void test_append_text_skips_only_invisible_lines()
         }
         // Nothing far outside is emitted: at most a margin of extra glyphs.
         assert(kept.vertices.size() <= (visible + 64u) * 4u);
-        if (c == 0u)
-            assert(visible > 50u); // the check above actually saw glyphs
+        if (c == 0u) assert(visible > 50u); // the check above actually saw glyphs
     }
 }
 

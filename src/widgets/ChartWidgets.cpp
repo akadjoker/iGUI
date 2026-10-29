@@ -1,54 +1,58 @@
 #include "ChartWidgets.hpp"
 #include "Theme.hpp"
-#include <cmath>
 #include <algorithm>
-#include <numeric>
+#include <cmath>
 #include <cstdio>
+#include <numeric>
 
-namespace {
-    // Font setup helper — call before any ctx.font.Print sequence
-    // Returns the ascender (offset from top to baseline)
-    inline float setupFont(PaintContext& ctx, const Color& color) {
-        auto& t = Theme::instance();
-        ctx.font.SetFontSize(t.fontSize);
-        ctx.font.SetBatch(&ctx.text);
-        ctx.font.SetColor(color);
-        return ctx.font.GetAscender();
-    }
-    inline float setupFont(PaintContext& ctx, const Color& color, float size) {
-        ctx.font.SetFontSize(size);
-        ctx.font.SetBatch(&ctx.text);
-        ctx.font.SetColor(color);
-        return ctx.font.GetAscender();
-    }
+namespace
+{
+// Font setup helper — call before any ctx.font.Print sequence
+// Returns the ascender (offset from top to baseline)
+inline float setupFont(PaintContext& ctx, const Color& color)
+{
+    auto& t = Theme::instance();
+    ctx.font.SetFontSize(t.fontSize);
+    ctx.font.SetBatch(&ctx.text);
+    ctx.font.SetColor(color);
+    return ctx.font.GetAscender();
 }
+inline float setupFont(PaintContext& ctx, const Color& color, float size)
+{
+    ctx.font.SetFontSize(size);
+    ctx.font.SetBatch(&ctx.text);
+    ctx.font.SetColor(color);
+    return ctx.font.GetAscender();
+}
+} // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  GradientEditor
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
-    inline uint8_t lerpU8(uint8_t a, uint8_t b, float t)
-    {
-        float r = a + (float(b) - float(a)) * t + 0.5f;
-        return static_cast<uint8_t>(r < 0.f ? 0 : r > 255.f ? 255 : r);
-    }
-
-    static constexpr float kHandleH = 10.0f;
-    static constexpr float kHandleW =  8.0f;
-    static constexpr int   kMinStops = 2;
+namespace
+{
+inline uint8_t lerpU8(uint8_t a, uint8_t b, float t)
+{
+    float r = a + (float(b) - float(a)) * t + 0.5f;
+    return static_cast<uint8_t>(r < 0.f ? 0 : r > 255.f ? 255 : r);
 }
+
+static constexpr float kHandleH = 10.0f;
+static constexpr float kHandleW = 8.0f;
+static constexpr int kMinStops = 2;
+} // namespace
 
 GradientEditor::GradientEditor()
 {
-    stops_.push_back({0.0f, Color(0,   0,   0,   255)});
-    stops_.push_back({1.0f, Color(255, 255, 255, 255)});
+    stops_.push_back({ 0.0f, Color(0, 0, 0, 255) });
+    stops_.push_back({ 1.0f, Color(255, 255, 255, 255) });
 }
 
 void GradientEditor::addStop(float pos, const Color& color)
 {
     pos = std::clamp(pos, 0.0f, 1.0f);
-    stops_.push_back({pos, color});
+    stops_.push_back({ pos, color });
     sortStops();
     markDirty();
     emit();
@@ -56,17 +60,17 @@ void GradientEditor::addStop(float pos, const Color& color)
 
 void GradientEditor::removeStop(int idx)
 {
-    if ((int)stops_.size() <= kMinStops) return;
-    if (idx < 0 || idx >= (int)stops_.size()) return;
+    if ((int) stops_.size() <= kMinStops) return;
+    if (idx < 0 || idx >= (int) stops_.size()) return;
     stops_.erase(stops_.begin() + idx);
-    if (selected_ >= (int)stops_.size()) selected_ = (int)stops_.size() - 1;
+    if (selected_ >= (int) stops_.size()) selected_ = (int) stops_.size() - 1;
     markDirty();
     emit();
 }
 
 void GradientEditor::setStopColor(int idx, const Color& color)
 {
-    if (idx < 0 || idx >= (int)stops_.size()) return;
+    if (idx < 0 || idx >= (int) stops_.size()) return;
     stops_[idx].color = color;
     markDirty();
     emit();
@@ -74,7 +78,7 @@ void GradientEditor::setStopColor(int idx, const Color& color)
 
 void GradientEditor::setStopPos(int idx, float pos)
 {
-    if (idx < 0 || idx >= (int)stops_.size()) return;
+    if (idx < 0 || idx >= (int) stops_.size()) return;
     stops_[idx].pos = std::clamp(pos, 0.0f, 1.0f);
     sortStops();
     markDirty();
@@ -90,26 +94,24 @@ void GradientEditor::clearStops()
 
 Color GradientEditor::sample(float t) const
 {
-    if (stops_.empty()) return Color(0,0,0,255);
+    if (stops_.empty()) return Color(0, 0, 0, 255);
     if (stops_.size() == 1) return stops_[0].color;
     t = std::clamp(t, 0.0f, 1.0f);
 
     if (t <= stops_.front().pos) return stops_.front().color;
-    if (t >= stops_.back().pos)  return stops_.back().color;
+    if (t >= stops_.back().pos) return stops_.back().color;
 
-    for (int i = 0; i < (int)stops_.size() - 1; ++i) {
+    for (int i = 0; i < (int) stops_.size() - 1; ++i)
+    {
         const auto& a = stops_[i];
-        const auto& b = stops_[i+1];
-        if (t <= b.pos) {
+        const auto& b = stops_[i + 1];
+        if (t <= b.pos)
+        {
             float span = b.pos - a.pos;
             float f = (span < 1e-6f) ? 0.0f : (t - a.pos) / span;
             f = std::clamp(f, 0.0f, 1.0f);
-            return Color(
-                lerpU8(a.color.r, b.color.r, f),
-                lerpU8(a.color.g, b.color.g, f),
-                lerpU8(a.color.b, b.color.b, f),
-                lerpU8(a.color.a, b.color.a, f)
-            );
+            return Color(lerpU8(a.color.r, b.color.r, f), lerpU8(a.color.g, b.color.g, f),
+                    lerpU8(a.color.b, b.color.b, f), lerpU8(a.color.a, b.color.a, f));
         }
     }
     return stops_.back().color;
@@ -130,10 +132,10 @@ Rect GradientEditor::handleRect(int idx) const
 
 int GradientEditor::hitStop(float mx, float my) const
 {
-    for (int i = 0; i < (int)stops_.size(); ++i) {
+    for (int i = 0; i < (int) stops_.size(); ++i)
+    {
         const Rect hr = handleRect(i);
-        if (mx >= hr.x - 4 && mx <= hr.x + hr.w + 4 &&
-            my >= hr.y - 4 && my <= hr.y + hr.h + 4)
+        if (mx >= hr.x - 4 && mx <= hr.x + hr.w + 4 && my >= hr.y - 4 && my <= hr.y + hr.h + 4)
             return i;
     }
     return -1;
@@ -142,7 +144,7 @@ int GradientEditor::hitStop(float mx, float my) const
 void GradientEditor::sortStops()
 {
     std::sort(stops_.begin(), stops_.end(),
-              [](const GradientStop& a, const GradientStop& b){ return a.pos < b.pos; });
+            [](const GradientStop& a, const GradientStop& b) { return a.pos < b.pos; });
 }
 
 void GradientEditor::emit()
@@ -153,7 +155,7 @@ void GradientEditor::emit()
 void GradientEditor::paint(PaintContext& ctx)
 {
     if (!visible_) return;
-    const Rect b  = absoluteRect();
+    const Rect b = absoluteRect();
     const Rect br = barRect();
 
     ctx.pushClip(b);
@@ -163,50 +165,55 @@ void GradientEditor::paint(PaintContext& ctx)
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     // Checkerboard (alpha preview) behind bar
-    if (showAlpha_) {
+    if (showAlpha_)
+    {
         int csize = 6;
-        int bx = (int)br.x, by = (int)br.y;
-        int bw = (int)br.w, bh = (int)br.h;
+        int bx = (int) br.x, by = (int) br.y;
+        int bw = (int) br.w, bh = (int) br.h;
         int cols = bw / csize + 1;
         int rows = bh / csize + 1;
-        for (int row = 0; row < rows; ++row) {
-            for (int col = 0; col < cols; ++col) {
+        for (int row = 0; row < rows; ++row)
+        {
+            for (int col = 0; col < cols; ++col)
+            {
                 uint8_t v = ((row + col) % 2 == 0) ? 200 : 140;
                 ctx.fill.SetColor(v, v, v, 255);
                 float cx = bx + col * csize;
                 float cy = by + row * csize;
-                float cw = std::min((float)csize, (float)bx + bw - cx);
-                float ch = std::min((float)csize, (float)by + bh - cy);
-                if (cw > 0 && ch > 0)
-                    ctx.fillRect(cx, cy, cw, ch);
+                float cw = std::min((float) csize, (float) bx + bw - cx);
+                float ch = std::min((float) csize, (float) by + bh - cy);
+                if (cw > 0 && ch > 0) ctx.fillRect(cx, cy, cw, ch);
             }
         }
     }
 
     // Gradient bar
-    if (stops_.size() >= 2) {
-        for (int i = 0; i < (int)stops_.size() - 1; ++i) {
+    if (stops_.size() >= 2)
+    {
+        for (int i = 0; i < (int) stops_.size() - 1; ++i)
+        {
             const Color& ca = stops_[i].color;
-            const Color& cb = stops_[i+1].color;
-            float x0 = br.x + stops_[i].pos   * br.w;
-            float x1 = br.x + stops_[i+1].pos * br.w;
+            const Color& cb = stops_[i + 1].color;
+            float x0 = br.x + stops_[i].pos * br.w;
+            float x1 = br.x + stops_[i + 1].pos * br.w;
             float span = x1 - x0;
             if (span < 0.5f) continue;
 
-            int segs = std::max(1, (int)(span / 2));
-            for (int s = 0; s < segs; ++s) {
-                float f0 = std::clamp((float)s       / segs, 0.0f, 1.0f);
-                float f1 = std::clamp((float)(s + 1) / segs, 0.0f, 1.0f);
+            int segs = std::max(1, (int) (span / 2));
+            for (int s = 0; s < segs; ++s)
+            {
+                float f0 = std::clamp((float) s / segs, 0.0f, 1.0f);
+                float f1 = std::clamp((float) (s + 1) / segs, 0.0f, 1.0f);
                 float fc = (f0 + f1) * 0.5f;
-                Color c(lerpU8(ca.r, cb.r, fc),
-                        lerpU8(ca.g, cb.g, fc),
-                        lerpU8(ca.b, cb.b, fc),
+                Color c(lerpU8(ca.r, cb.r, fc), lerpU8(ca.g, cb.g, fc), lerpU8(ca.b, cb.b, fc),
                         lerpU8(ca.a, cb.a, fc));
                 ctx.fill.SetColor(c.r, c.g, c.b, c.a);
                 ctx.fillRect(x0 + f0 * span, br.y, f1 * span - f0 * span + 1.0f, br.h);
             }
         }
-    } else if (!stops_.empty()) {
+    }
+    else if (!stops_.empty())
+    {
         const Color& c = stops_[0].color;
         ctx.fill.SetColor(c.r, c.g, c.b, c.a);
         ctx.fillRect(br.x, br.y, br.w, br.h);
@@ -214,20 +221,21 @@ void GradientEditor::paint(PaintContext& ctx)
 
     // Bar border
     ctx.fill.SetColor(80, 80, 80, 255);
-    ctx.fillRect(br.x,          br.y,         br.w, 1);
-    ctx.fillRect(br.x,          br.y+br.h-1,  br.w, 1);
-    ctx.fillRect(br.x,          br.y,         1,    br.h);
-    ctx.fillRect(br.x+br.w-1,   br.y,         1,    br.h);
+    ctx.fillRect(br.x, br.y, br.w, 1);
+    ctx.fillRect(br.x, br.y + br.h - 1, br.w, 1);
+    ctx.fillRect(br.x, br.y, 1, br.h);
+    ctx.fillRect(br.x + br.w - 1, br.y, 1, br.h);
 
     // Stop handles (triangles)
-    for (int i = 0; i < (int)stops_.size(); ++i) {
+    for (int i = 0; i < (int) stops_.size(); ++i)
+    {
         const Rect hr = handleRect(i);
-        float cx   = hr.x + hr.w * 0.5f;
+        float cx = hr.x + hr.w * 0.5f;
         float tipY = hr.y;
         float baseY = hr.y + hr.h;
         bool sel = (i == selected_);
 
-        Color border = sel ? Color(255,255,255,255) : Color(60,60,60,255);
+        Color border = sel ? Color(255, 255, 255, 255) : Color(60, 60, 60, 255);
         ctx.fill.SetColor(border.r, border.g, border.b, 255);
         ctx.fillTriangle(cx, tipY - 1, cx - kHandleW - 1, baseY + 1, cx + kHandleW + 1, baseY + 1);
 
@@ -237,7 +245,8 @@ void GradientEditor::paint(PaintContext& ctx)
     }
 
     // Selected stop info
-    if (selected_ >= 0 && selected_ < (int)stops_.size()) {
+    if (selected_ >= 0 && selected_ < (int) stops_.size())
+    {
         const auto& s = stops_[selected_];
         char buf[32];
         snprintf(buf, sizeof(buf), "%.2f  #%02X%02X%02X", s.pos, s.color.r, s.color.g, s.color.b);
@@ -250,14 +259,16 @@ void GradientEditor::paint(PaintContext& ctx)
 
 void GradientEditor::onMousePress(MouseEvent& e)
 {
-    if (e.button != 0) {
+    if (e.button != 0)
+    {
         int hit = hitStop(e.x, e.y);
         if (hit >= 0) removeStop(hit);
         return;
     }
 
     int hit = hitStop(e.x, e.y);
-    if (hit >= 0) {
+    if (hit >= 0)
+    {
         selected_ = hit;
         dragging_ = hit;
         dragOffX_ = e.x - handleRect(hit).x - kHandleW;
@@ -266,12 +277,18 @@ void GradientEditor::onMousePress(MouseEvent& e)
     }
 
     const Rect br = barRect();
-    if (e.x >= br.x && e.x <= br.x + br.w && e.y >= br.y && e.y <= br.y + br.h) {
+    if (e.x >= br.x && e.x <= br.x + br.w && e.y >= br.y && e.y <= br.y + br.h)
+    {
         float t = (e.x - br.x) / br.w;
         Color c = sample(t);
         addStop(t, c);
-        for (int i = 0; i < (int)stops_.size(); ++i) {
-            if (std::fabs(stops_[i].pos - t) < 0.002f) { selected_ = i; break; }
+        for (int i = 0; i < (int) stops_.size(); ++i)
+        {
+            if (std::fabs(stops_[i].pos - t) < 0.002f)
+            {
+                selected_ = i;
+                break;
+            }
         }
         markDirty();
     }
@@ -279,21 +296,27 @@ void GradientEditor::onMousePress(MouseEvent& e)
 
 void GradientEditor::onMouseRelease(MouseEvent& e)
 {
-    (void)e;
+    (void) e;
     dragging_ = -1;
 }
 
 void GradientEditor::onMouseMove(MouseEvent& e)
 {
-    if (dragging_ < 0 || dragging_ >= (int)stops_.size()) return;
+    if (dragging_ < 0 || dragging_ >= (int) stops_.size()) return;
     const Rect br = barRect();
     float t = (e.x - dragOffX_ - br.x) / br.w;
     t = std::clamp(t, 0.0f, 1.0f);
 
     stops_[dragging_].pos = t;
     sortStops();
-    for (int i = 0; i < (int)stops_.size(); ++i) {
-        if (std::fabs(stops_[i].pos - t) < 1e-5f) { dragging_ = i; selected_ = i; break; }
+    for (int i = 0; i < (int) stops_.size(); ++i)
+    {
+        if (std::fabs(stops_[i].pos - t) < 1e-5f)
+        {
+            dragging_ = i;
+            selected_ = i;
+            break;
+        }
     }
     markDirty();
     emit();
@@ -311,7 +334,8 @@ HistogramWidget::HistogramWidget()
 void HistogramWidget::setData(const ct::Vector<float>& values)
 {
     rawData_ = values;
-    if (autoRange_ && !values.empty()) {
+    if (autoRange_ && !values.empty())
+    {
         rangeMin_ = *std::min_element(values.begin(), values.end());
         rangeMax_ = *std::max_element(values.begin(), values.end());
         if (rangeMax_ <= rangeMin_) rangeMax_ = rangeMin_ + 1.0f;
@@ -323,7 +347,7 @@ void HistogramWidget::setData(const ct::Vector<float>& values)
 
 void HistogramWidget::setBins(const ct::Vector<float>& bins, float rangeMin, float rangeMax)
 {
-    bins_     = bins;
+    bins_ = bins;
     rangeMin_ = rangeMin;
     rangeMax_ = rangeMax;
     rawData_.clear();
@@ -346,11 +370,16 @@ void HistogramWidget::setBinCount(int n)
 
 void HistogramWidget::computeStats()
 {
-    if (rawData_.empty()) { mean_ = 0; stddev_ = 0; return; }
+    if (rawData_.empty())
+    {
+        mean_ = 0;
+        stddev_ = 0;
+        return;
+    }
     double sum = std::accumulate(rawData_.begin(), rawData_.end(), 0.0);
     mean_ = static_cast<float>(sum / rawData_.size());
     double sq = 0;
-    for (float v : rawData_) sq += (v - mean_) * (v - mean_);
+    for (float v: rawData_) sq += (v - mean_) * (v - mean_);
     stddev_ = static_cast<float>(std::sqrt(sq / rawData_.size()));
 }
 
@@ -360,7 +389,8 @@ void HistogramWidget::recomputeBins()
     if (rawData_.empty() || binCount_ <= 0) return;
     float span = rangeMax_ - rangeMin_;
     if (span < 1e-9f) return;
-    for (float v : rawData_) {
+    for (float v: rawData_)
+    {
         int idx = static_cast<int>((v - rangeMin_) / span * binCount_);
         idx = std::clamp(idx, 0, binCount_ - 1);
         bins_[idx] += 1.0f;
@@ -382,7 +412,8 @@ void HistogramWidget::paint(PaintContext& ctx)
     ctx.fillRect(pa.x, pa.y, pa.w, pa.h);
 
     // Title
-    if (!title_.empty()) {
+    if (!title_.empty())
+    {
         float asc = setupFont(ctx, Color(200, 200, 200, 255));
         float tw = ctx.font.GetTextWidth(title_.c_str());
         ctx.font.Print(title_.c_str(), b.x + (b.w - tw) * 0.5f, b.y + 4 + asc);
@@ -395,23 +426,28 @@ void HistogramWidget::paint(PaintContext& ctx)
 
     ctx.pushClip(pa);
 
-    float barW = pa.w / (float)bins_.size();
-    for (int i = 0; i < (int)bins_.size(); ++i) {
+    float barW = pa.w / (float) bins_.size();
+    for (int i = 0; i < (int) bins_.size(); ++i)
+    {
         float val = bins_[i];
         float norm;
-        if (logScale_) {
+        if (logScale_)
+        {
             norm = (val > 0) ? std::log1p(val) / std::log1p(maxBin) : 0.0f;
-        } else {
+        }
+        else
+        {
             norm = val / maxBin;
         }
-        float bh  = norm * pa.h;
-        float bx  = pa.x + i * barW;
-        float by  = pa.y + pa.h - bh;
+        float bh = norm * pa.h;
+        float bx = pa.x + i * barW;
+        float by = pa.y + pa.h - bh;
 
         ctx.fill.SetColor(barColor_.r, barColor_.g, barColor_.b, barColor_.a);
         ctx.fillRect(bx + 0.5f, by, barW - 1.0f, bh);
 
-        if (showValues_ && val > 0) {
+        if (showValues_ && val > 0)
+        {
             char buf[32];
             snprintf(buf, sizeof(buf), "%g", val);
             float asc = setupFont(ctx, Color(220, 220, 220, 200));
@@ -420,9 +456,11 @@ void HistogramWidget::paint(PaintContext& ctx)
     }
 
     // Mean line
-    if (showMean_ && !rawData_.empty()) {
+    if (showMean_ && !rawData_.empty())
+    {
         float span = rangeMax_ - rangeMin_;
-        if (span > 1e-9f) {
+        if (span > 1e-9f)
+        {
             float mx = pa.x + (mean_ - rangeMin_) / span * pa.w;
             ctx.fill.SetColor(255, 200, 80, 220);
             ctx.fillRect(mx, pa.y, 1, pa.h);
@@ -433,10 +471,10 @@ void HistogramWidget::paint(PaintContext& ctx)
 
     // Border
     ctx.fill.SetColor(70, 70, 75, 255);
-    ctx.fillRect(pa.x,          pa.y,          pa.w, 1);
-    ctx.fillRect(pa.x,          pa.y+pa.h-1,   pa.w, 1);
-    ctx.fillRect(pa.x,          pa.y,          1,    pa.h);
-    ctx.fillRect(pa.x+pa.w-1,   pa.y,          1,    pa.h);
+    ctx.fillRect(pa.x, pa.y, pa.w, 1);
+    ctx.fillRect(pa.x, pa.y + pa.h - 1, pa.w, 1);
+    ctx.fillRect(pa.x, pa.y, 1, pa.h);
+    ctx.fillRect(pa.x + pa.w - 1, pa.y, 1, pa.h);
 
     // X axis labels
     float ascX = setupFont(ctx, Color(130, 130, 130, 255));
@@ -444,10 +482,11 @@ void HistogramWidget::paint(PaintContext& ctx)
     snprintf(bufMin, sizeof(bufMin), "%.4g", rangeMin_);
     snprintf(bufMax, sizeof(bufMax), "%.4g", rangeMax_);
     float maxW = ctx.font.GetTextWidth(bufMax);
-    ctx.font.Print(bufMin, pa.x,                   pa.y + pa.h + 4 + ascX);
-    ctx.font.Print(bufMax, pa.x + pa.w - maxW,     pa.y + pa.h + 4 + ascX);
+    ctx.font.Print(bufMin, pa.x, pa.y + pa.h + 4 + ascX);
+    ctx.font.Print(bufMax, pa.x + pa.w - maxW, pa.y + pa.h + 4 + ascX);
 
-    if (!rawData_.empty()) {
+    if (!rawData_.empty())
+    {
         char statBuf[48];
         snprintf(statBuf, sizeof(statBuf), "u=%.3g  s=%.3g", mean_, stddev_);
         float ascS = setupFont(ctx, Color(180, 180, 120, 255));
@@ -459,25 +498,28 @@ void HistogramWidget::paint(PaintContext& ctx)
 //  PlotWidget
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace {
-    static constexpr float kPlotPadL = 46.0f;
-    static constexpr float kPlotPadR = 10.0f;
-    static constexpr float kPlotPadT = 24.0f;
-    static constexpr float kPlotPadB = 28.0f;
-}
+namespace
+{
+static constexpr float kPlotPadL = 46.0f;
+static constexpr float kPlotPadR = 10.0f;
+static constexpr float kPlotPadT = 24.0f;
+static constexpr float kPlotPadB = 28.0f;
+} // namespace
 
 PlotWidget::PlotWidget()
 {
-    viewXMin_ = 0; viewXMax_ = 10;
-    viewYMin_ = 0; viewYMax_ = 1;
+    viewXMin_ = 0;
+    viewXMax_ = 10;
+    viewYMin_ = 0;
+    viewYMax_ = 1;
 }
 
 int PlotWidget::addSeries(const String& name, const Color& color, PlotType type)
 {
     PlotSeries s;
-    s.name  = name;
+    s.name = name;
     s.color = color;
-    s.type  = type;
+    s.type = type;
     series_.push_back(std::move(s));
     markDirty();
     return static_cast<int>(series_.size()) - 1;
@@ -485,7 +527,8 @@ int PlotWidget::addSeries(const String& name, const Color& color, PlotType type)
 
 void PlotWidget::removeSeries(int idx)
 {
-    if (idx >= 0 && idx < (int)series_.size()) {
+    if (idx >= 0 && idx < (int) series_.size())
+    {
         series_.erase(series_.begin() + idx);
         markDirty();
     }
@@ -499,23 +542,23 @@ void PlotWidget::clearSeries()
 
 void PlotWidget::addPoint(int idx, float y)
 {
-    if (idx < 0 || idx >= (int)series_.size()) return;
+    if (idx < 0 || idx >= (int) series_.size()) return;
     series_[idx].values.push_back(y);
-    if (maxPoints_ > 0 && (int)series_[idx].values.size() > maxPoints_)
+    if (maxPoints_ > 0 && (int) series_[idx].values.size() > maxPoints_)
         series_[idx].values.erase(series_[idx].values.begin());
     markDirty();
 }
 
 void PlotWidget::setPoints(int idx, const ct::Vector<float>& ys)
 {
-    if (idx < 0 || idx >= (int)series_.size()) return;
+    if (idx < 0 || idx >= (int) series_.size()) return;
     series_[idx].values = ys;
     markDirty();
 }
 
 void PlotWidget::clearPoints(int idx)
 {
-    if (idx < 0 || idx >= (int)series_.size()) return;
+    if (idx < 0 || idx >= (int) series_.size()) return;
     series_[idx].values.clear();
     markDirty();
 }
@@ -525,14 +568,28 @@ void PlotWidget::computeAutoRange()
     if (!autoY_) return;
     bool first = true;
     float lo = 0, hi = 1;
-    for (auto& s : series_) {
+    for (auto& s: series_)
+    {
         if (!s.visible) continue;
-        for (float v : s.values) {
-            if (first) { lo = hi = v; first = false; }
-            else { lo = std::min(lo, v); hi = std::max(hi, v); }
+        for (float v: s.values)
+        {
+            if (first)
+            {
+                lo = hi = v;
+                first = false;
+            }
+            else
+            {
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+            }
         }
     }
-    if (first) { lo = 0; hi = 1; }
+    if (first)
+    {
+        lo = 0;
+        hi = 1;
+    }
     float span = hi - lo;
     if (span < 1e-6f) span = 1.0f;
     viewYMin_ = lo - span * 0.05f;
@@ -541,7 +598,8 @@ void PlotWidget::computeAutoRange()
 
 Rect PlotWidget::plotArea(const Rect& b) const
 {
-    return { b.x + kPlotPadL, b.y + kPlotPadT, b.w - kPlotPadL - kPlotPadR, b.h - kPlotPadT - kPlotPadB };
+    return { b.x + kPlotPadL, b.y + kPlotPadT, b.w - kPlotPadL - kPlotPadR,
+        b.h - kPlotPadT - kPlotPadB };
 }
 
 float PlotWidget::dataToScreenX(float x, const Rect& pa) const
@@ -571,8 +629,9 @@ float PlotWidget::screenToDataY(float sy, const Rect& pa) const
 void PlotWidget::resetView()
 {
     int maxN = 10;
-    for (auto& s : series_) maxN = std::max(maxN, (int)s.values.size());
-    viewXMin_ = 0; viewXMax_ = (float)maxN;
+    for (auto& s: series_) maxN = std::max(maxN, (int) s.values.size());
+    viewXMin_ = 0;
+    viewXMax_ = (float) maxN;
     computeAutoRange();
     markDirty();
 }
@@ -584,7 +643,8 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
     float yStep = std::pow(10.0f, std::floor(std::log10(ySpan / 5.0f)));
     float yFirst = std::ceil(viewYMin_ / yStep) * yStep;
 
-    for (float y = yFirst; y <= viewYMax_ + yStep * 0.01f; y += yStep) {
+    for (float y = yFirst; y <= viewYMax_ + yStep * 0.01f; y += yStep)
+    {
         float sy = dataToScreenY(y, pa);
         if (sy < pa.y || sy > pa.y + pa.h) continue;
 
@@ -592,8 +652,7 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
         ctx.fillRect(pa.x, sy, pa.w, 1);
 
         char buf[16];
-        if (std::fabs(y) < 1e4f && std::fabs(y) >= 0.01f)
-            snprintf(buf, sizeof(buf), "%.4g", y);
+        if (std::fabs(y) < 1e4f && std::fabs(y) >= 0.01f) snprintf(buf, sizeof(buf), "%.4g", y);
         else
             snprintf(buf, sizeof(buf), "%.2e", y);
         float ascY = setupFont(ctx, Color(140, 140, 140, 255));
@@ -605,7 +664,8 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
     float xStep = std::pow(10.0f, std::floor(std::log10(xSpan / 5.0f)));
     float xFirst = std::ceil(viewXMin_ / xStep) * xStep;
 
-    for (float x = xFirst; x <= viewXMax_ + xStep * 0.01f; x += xStep) {
+    for (float x = xFirst; x <= viewXMax_ + xStep * 0.01f; x += xStep)
+    {
         float sx = dataToScreenX(x, pa);
         if (sx < pa.x || sx > pa.x + pa.w) continue;
 
@@ -621,51 +681,60 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
 
 void PlotWidget::paintSeries(PaintContext& ctx, const Rect& pa)
 {
-    for (auto& s : series_) {
+    for (auto& s: series_)
+    {
         if (!s.visible || s.values.empty()) continue;
-        int n = (int)s.values.size();
+        int n = (int) s.values.size();
 
-        if (s.type == PlotType::Bar) {
-            float barW = std::max(1.0f, pa.w / (float)n - 1.0f);
-            for (int i = 0; i < n; ++i) {
-                float xi = (float)i;
+        if (s.type == PlotType::Bar)
+        {
+            float barW = std::max(1.0f, pa.w / (float) n - 1.0f);
+            for (int i = 0; i < n; ++i)
+            {
+                float xi = (float) i;
                 float sx = dataToScreenX(xi, pa);
                 float sy = dataToScreenY(s.values[i], pa);
                 float sy0 = dataToScreenY(0.0f, pa);
                 sy0 = std::clamp(sy0, pa.y, pa.y + pa.h);
-                float top  = std::min(sy, sy0);
-                float h    = std::fabs(sy0 - sy);
+                float top = std::min(sy, sy0);
+                float h = std::fabs(sy0 - sy);
                 if (sx < pa.x || sx > pa.x + pa.w) continue;
                 ctx.fill.SetColor(s.color.r, s.color.g, s.color.b, 180);
                 ctx.fillRect(sx - barW * 0.5f, top, barW, h);
             }
-        } else if (s.type == PlotType::Scatter) {
-            for (int i = 0; i < n; ++i) {
-                float sx = dataToScreenX((float)i, pa);
+        }
+        else if (s.type == PlotType::Scatter)
+        {
+            for (int i = 0; i < n; ++i)
+            {
+                float sx = dataToScreenX((float) i, pa);
                 float sy = dataToScreenY(s.values[i], pa);
                 if (sx < pa.x || sx > pa.x + pa.w) continue;
                 ctx.fill.SetColor(s.color.r, s.color.g, s.color.b, 220);
                 ctx.fillCircle(sx, sy, 3);
             }
-        } else {
+        }
+        else
+        {
             // Line
-            for (int i = 0; i < n - 1; ++i) {
-                float sx0 = dataToScreenX((float)i,   pa);
+            for (int i = 0; i < n - 1; ++i)
+            {
+                float sx0 = dataToScreenX((float) i, pa);
                 float sy0 = dataToScreenY(s.values[i], pa);
-                float sx1 = dataToScreenX((float)(i+1), pa);
-                float sy1 = dataToScreenY(s.values[i+1], pa);
+                float sx1 = dataToScreenX((float) (i + 1), pa);
+                float sy1 = dataToScreenY(s.values[i + 1], pa);
 
                 if (sx1 < pa.x || sx0 > pa.x + pa.w) continue;
 
                 float dx = sx1 - sx0, dy = sy1 - sy0;
-                float len = std::sqrt(dx*dx + dy*dy);
+                float len = std::sqrt(dx * dx + dy * dy);
                 if (len < 0.5f) continue;
                 float nx = -dy / len * 1.5f;
-                float ny =  dx / len * 1.5f;
+                float ny = dx / len * 1.5f;
 
                 ctx.fill.SetColor(s.color.r, s.color.g, s.color.b, s.color.a);
-                ctx.fillTriangle(sx0+nx, sy0+ny, sx0-nx, sy0-ny, sx1+nx, sy1+ny);
-                ctx.fillTriangle(sx0-nx, sy0-ny, sx1-nx, sy1-ny, sx1+nx, sy1+ny);
+                ctx.fillTriangle(sx0 + nx, sy0 + ny, sx0 - nx, sy0 - ny, sx1 + nx, sy1 + ny);
+                ctx.fillTriangle(sx0 - nx, sy0 - ny, sx1 - nx, sy1 - ny, sx1 + nx, sy1 + ny);
             }
         }
     }
@@ -676,7 +745,8 @@ void PlotWidget::paintLegend(PaintContext& ctx, const Rect& b)
     float lx = b.x + kPlotPadL + 6;
     float ly = b.y + kPlotPadT + 6;
 
-    for (auto& s : series_) {
+    for (auto& s: series_)
+    {
         if (s.name.empty()) continue;
         ctx.fill.SetColor(s.color.r, s.color.g, s.color.b, 200);
         ctx.fillRect(lx, ly + 3, 12, 3);
@@ -690,20 +760,22 @@ void PlotWidget::paintAxes(PaintContext& ctx, const Rect& b, const Rect& pa)
 {
     // Border around plot area
     ctx.fill.SetColor(70, 70, 75, 255);
-    ctx.fillRect(pa.x,          pa.y,          pa.w, 1);
-    ctx.fillRect(pa.x,          pa.y+pa.h-1,   pa.w, 1);
-    ctx.fillRect(pa.x,          pa.y,          1,    pa.h);
-    ctx.fillRect(pa.x+pa.w-1,   pa.y,          1,    pa.h);
+    ctx.fillRect(pa.x, pa.y, pa.w, 1);
+    ctx.fillRect(pa.x, pa.y + pa.h - 1, pa.w, 1);
+    ctx.fillRect(pa.x, pa.y, 1, pa.h);
+    ctx.fillRect(pa.x + pa.w - 1, pa.y, 1, pa.h);
 
     // Title
-    if (!title_.empty()) {
+    if (!title_.empty())
+    {
         float ascT = setupFont(ctx, Color(210, 210, 210, 255));
         float tw = ctx.font.GetTextWidth(title_.c_str());
         ctx.font.Print(title_.c_str(), b.x + (b.w - tw) * 0.5f, b.y + 4 + ascT);
     }
 
     // X label
-    if (!xLabel_.empty()) {
+    if (!xLabel_.empty())
+    {
         float ascXL = setupFont(ctx, Color(160, 160, 160, 255));
         float xlW = ctx.font.GetTextWidth(xLabel_.c_str());
         ctx.font.Print(xLabel_.c_str(), pa.x + (pa.w - xlW) * 0.5f, b.y + b.h - 14 + ascXL);
@@ -713,7 +785,7 @@ void PlotWidget::paintAxes(PaintContext& ctx, const Rect& b, const Rect& pa)
 void PlotWidget::paint(PaintContext& ctx)
 {
     if (!visible_) return;
-    const Rect b  = absoluteRect();
+    const Rect b = absoluteRect();
     const Rect pa = plotArea(b);
     plotArea_ = pa;
 
@@ -728,7 +800,7 @@ void PlotWidget::paint(PaintContext& ctx)
     ctx.fillRect(pa.x, pa.y, pa.w, pa.h);
 
     ctx.pushClip(pa);
-    if (showGrid_)  paintGrid(ctx, pa);
+    if (showGrid_) paintGrid(ctx, pa);
     paintSeries(ctx, pa);
     ctx.popClip();
 
@@ -738,16 +810,19 @@ void PlotWidget::paint(PaintContext& ctx)
 
 void PlotWidget::onMousePress(MouseEvent& e)
 {
-    if (e.button == 1) {
-        panning_   = true;
-        panStartX_ = e.x; panStartY_ = e.y;
-        panViewX0_ = viewXMin_; panViewY0_ = viewYMin_;
+    if (e.button == 1)
+    {
+        panning_ = true;
+        panStartX_ = e.x;
+        panStartY_ = e.y;
+        panViewX0_ = viewXMin_;
+        panViewY0_ = viewYMin_;
     }
 }
 
 void PlotWidget::onMouseRelease(MouseEvent& e)
 {
-    (void)e;
+    (void) e;
     panning_ = false;
 }
 
@@ -758,7 +833,7 @@ void PlotWidget::onMouseMove(MouseEvent& e)
     if (pa.w < 1 || pa.h < 1) return;
 
     float dxData = -(e.x - panStartX_) / pa.w * (viewXMax_ - viewXMin_);
-    float dyData =  (e.y - panStartY_) / pa.h * (viewYMax_ - viewYMin_);
+    float dyData = (e.y - panStartY_) / pa.h * (viewYMax_ - viewYMin_);
 
     float spanX = viewXMax_ - viewXMin_;
     float spanY = viewYMax_ - viewYMin_;
@@ -766,7 +841,7 @@ void PlotWidget::onMouseMove(MouseEvent& e)
     viewXMax_ = viewXMin_ + spanX;
     viewYMin_ = panViewY0_ + dyData;
     viewYMax_ = viewYMin_ + spanY;
-    autoY_    = false;
+    autoY_ = false;
     markDirty();
 }
 
@@ -784,7 +859,7 @@ void PlotWidget::onMouseScroll(MouseEvent& e)
     viewXMax_ = mx + (viewXMax_ - mx) * factor;
     viewYMin_ = my + (viewYMin_ - my) * factor;
     viewYMax_ = my + (viewYMax_ - my) * factor;
-    autoY_    = false;
+    autoY_ = false;
     markDirty();
 }
 
@@ -798,14 +873,15 @@ CurveEditor::CurveEditor()
 
 int CurveEditor::addCurve(const String& name, const Color& color)
 {
-    curves_.push_back({name, color, {}, true});
+    curves_.push_back({ name, color, {}, true });
     markDirty();
     return static_cast<int>(curves_.size()) - 1;
 }
 
 void CurveEditor::removeCurve(int curveId)
 {
-    if (curveId >= 0 && curveId < (int)curves_.size()) {
+    if (curveId >= 0 && curveId < (int) curves_.size())
+    {
         curves_.erase(curves_.begin() + curveId);
         markDirty();
     }
@@ -819,7 +895,7 @@ void CurveEditor::clearCurves()
 
 int CurveEditor::addKey(int curveId, float time, float value)
 {
-    if (curveId < 0 || curveId >= (int)curves_.size()) return -1;
+    if (curveId < 0 || curveId >= (int) curves_.size()) return -1;
 
     auto& keys = curves_[curveId].keys;
     CurveKey k;
@@ -827,13 +903,13 @@ int CurveEditor::addKey(int curveId, float time, float value)
     k.value = value;
 
     auto it = std::lower_bound(keys.begin(), keys.end(), k,
-        [](const CurveKey& a, const CurveKey& b) { return a.time < b.time; });
+            [](const CurveKey& a, const CurveKey& b) { return a.time < b.time; });
     int idx = static_cast<int>(it - keys.begin());
     keys.insert(it, k);
 
     autoTangents(curves_[curveId], idx);
     if (idx > 0) autoTangents(curves_[curveId], idx - 1);
-    if (idx + 1 < (int)keys.size()) autoTangents(curves_[curveId], idx + 1);
+    if (idx + 1 < (int) keys.size()) autoTangents(curves_[curveId], idx + 1);
 
     markDirty();
     onKeyAdded.emit(curveId, idx);
@@ -842,9 +918,9 @@ int CurveEditor::addKey(int curveId, float time, float value)
 
 void CurveEditor::removeKey(int curveId, int keyIdx)
 {
-    if (curveId < 0 || curveId >= (int)curves_.size()) return;
+    if (curveId < 0 || curveId >= (int) curves_.size()) return;
     auto& keys = curves_[curveId].keys;
-    if (keyIdx < 0 || keyIdx >= (int)keys.size()) return;
+    if (keyIdx < 0 || keyIdx >= (int) keys.size()) return;
     keys.erase(keys.begin() + keyIdx);
     markDirty();
     onKeyRemoved.emit(curveId, keyIdx);
@@ -852,9 +928,9 @@ void CurveEditor::removeKey(int curveId, int keyIdx)
 
 void CurveEditor::setKey(int curveId, int keyIdx, float time, float value)
 {
-    if (curveId < 0 || curveId >= (int)curves_.size()) return;
+    if (curveId < 0 || curveId >= (int) curves_.size()) return;
     auto& keys = curves_[curveId].keys;
-    if (keyIdx < 0 || keyIdx >= (int)keys.size()) return;
+    if (keyIdx < 0 || keyIdx >= (int) keys.size()) return;
     keys[keyIdx].time = time;
     keys[keyIdx].value = value;
     autoTangents(curves_[curveId], keyIdx);
@@ -864,8 +940,10 @@ void CurveEditor::setKey(int curveId, int keyIdx, float time, float value)
 
 void CurveEditor::setViewRange(float minT, float maxT, float minV, float maxV)
 {
-    viewMinT_ = minT; viewMaxT_ = maxT;
-    viewMinV_ = minV; viewMaxV_ = maxV;
+    viewMinT_ = minT;
+    viewMaxT_ = maxT;
+    viewMinV_ = minV;
+    viewMaxV_ = maxV;
     markDirty();
 }
 
@@ -873,8 +951,10 @@ void CurveEditor::fitView()
 {
     if (curves_.empty()) return;
     float tMin = 1e9f, tMax = -1e9f, vMin = 1e9f, vMax = -1e9f;
-    for (auto& c : curves_) {
-        for (auto& k : c.keys) {
+    for (auto& c: curves_)
+    {
+        for (auto& k: c.keys)
+        {
             tMin = std::min(tMin, k.time);
             tMax = std::max(tMax, k.time);
             vMin = std::min(vMin, k.value);
@@ -928,50 +1008,65 @@ void CurveEditor::autoTangents(CurveData& c, int idx)
 void CurveEditor::setKeyLimits(float minT, float maxT, float minV, float maxV)
 {
     limited_ = true;
-    limMinT_ = minT; limMaxT_ = maxT;
-    limMinV_ = minV; limMaxV_ = maxV;
+    limMinT_ = minT;
+    limMaxT_ = maxT;
+    limMinV_ = minV;
+    limMaxV_ = maxV;
 }
 
 void CurveEditor::autoTangentsAt(ct::Vector<CurveKey>& keys, int idx, bool monotone)
 {
-    if (idx < 0 || idx >= (int)keys.size()) return;
+    if (idx < 0 || idx >= (int) keys.size()) return;
     auto& k = keys[idx];
     if (k.tangentMode != TangentMode::Auto) return;
 
-    if (keys.size() <= 1) {
-        k.tanInX = -0.1f; k.tanInY = 0;
-        k.tanOutX = 0.1f; k.tanOutY = 0;
+    if (keys.size() <= 1)
+    {
+        k.tanInX = -0.1f;
+        k.tanInY = 0;
+        k.tanOutX = 0.1f;
+        k.tanOutY = 0;
         return;
     }
 
     float dtPrev = 0, dvPrev = 0, dtNext = 0, dvNext = 0;
-    if (idx > 0) {
+    if (idx > 0)
+    {
         dtPrev = k.time - keys[idx - 1].time;
         dvPrev = k.value - keys[idx - 1].value;
     }
-    if (idx + 1 < (int)keys.size()) {
+    if (idx + 1 < (int) keys.size())
+    {
         dtNext = keys[idx + 1].time - k.time;
         dvNext = keys[idx + 1].value - k.value;
     }
 
     float slope = 0;
-    if (idx > 0 && idx + 1 < (int)keys.size()) {
+    if (idx > 0 && idx + 1 < (int) keys.size())
+    {
         float dt = keys[idx + 1].time - keys[idx - 1].time;
         float dv = keys[idx + 1].value - keys[idx - 1].value;
         if (std::fabs(dt) > 1e-6f) slope = dv / dt;
-    } else if (idx > 0) {
+    }
+    else if (idx > 0)
+    {
         if (std::fabs(dtPrev) > 1e-6f) slope = dvPrev / dtPrev;
-    } else if (idx + 1 < (int)keys.size()) {
+    }
+    else if (idx + 1 < (int) keys.size())
+    {
         if (std::fabs(dtNext) > 1e-6f) slope = dvNext / dtNext;
     }
 
-    if (monotone) {
+    if (monotone)
+    {
         // Fritsch-Carlson: flat at a peak or a valley, otherwise a weighted mean of the two
         // slopes, so the curve stays between its points.
         slope = 0;
-        if (idx > 0 && idx + 1 < (int)keys.size() && dtPrev > 1e-6f && dtNext > 1e-6f) {
+        if (idx > 0 && idx + 1 < (int) keys.size() && dtPrev > 1e-6f && dtNext > 1e-6f)
+        {
             const float sPrev = dvPrev / dtPrev, sNext = dvNext / dtNext;
-            if (sPrev * sNext > 0) {
+            if (sPrev * sNext > 0)
+            {
                 const float w1 = 2 * dtNext + dtPrev, w2 = dtNext + 2 * dtPrev;
                 slope = (w1 + w2) / (w1 / sPrev + w2 / sNext);
             }
@@ -979,9 +1074,9 @@ void CurveEditor::autoTangentsAt(ct::Vector<CurveKey>& keys, int idx, bool monot
     }
 
     float tanLen = 0.33f;
-    k.tanInX  = -(dtPrev > 0 ? dtPrev : 0.1f) * tanLen;
-    k.tanInY  = k.tanInX * slope;
-    k.tanOutX =  (dtNext > 0 ? dtNext : 0.1f) * tanLen;
+    k.tanInX = -(dtPrev > 0 ? dtPrev : 0.1f) * tanLen;
+    k.tanInY = k.tanInX * slope;
+    k.tanOutX = (dtNext > 0 ? dtNext : 0.1f) * tanLen;
     k.tanOutY = k.tanOutX * slope;
 }
 
@@ -999,7 +1094,7 @@ static float evalSegmentKeys(const CurveKey& k0, const CurveKey& k1, float t)
     float p3 = k1.value;
 
     float iu = 1.0f - u;
-    return iu*iu*iu*p0 + 3*iu*iu*u*p1 + 3*iu*u*u*p2 + u*u*u*p3;
+    return iu * iu * iu * p0 + 3 * iu * iu * u * p1 + 3 * iu * u * u * p2 + u * u * u * p3;
 }
 
 float CurveEditor::evalSegment(const CurveKey& k0, const CurveKey& k1, float t) const
@@ -1009,7 +1104,7 @@ float CurveEditor::evalSegment(const CurveKey& k0, const CurveKey& k1, float t) 
 
 float CurveEditor::evaluate(int curveId, float time) const
 {
-    if (curveId < 0 || curveId >= (int)curves_.size()) return 0;
+    if (curveId < 0 || curveId >= (int) curves_.size()) return 0;
     return evaluateKeys(curves_[curveId].keys, time);
 }
 
@@ -1019,9 +1114,10 @@ float CurveEditor::evaluateKeys(const ct::Vector<CurveKey>& keys, float time)
     if (keys.size() == 1) return keys[0].value;
 
     if (time <= keys.front().time) return keys.front().value;
-    if (time >= keys.back().time)  return keys.back().value;
+    if (time >= keys.back().time) return keys.back().value;
 
-    for (int i = 0; i + 1 < (int)keys.size(); ++i) {
+    for (int i = 0; i + 1 < (int) keys.size(); ++i)
+    {
         if (time >= keys[i].time && time <= keys[i + 1].time)
             return evalSegmentKeys(keys[i], keys[i + 1], time);
     }
@@ -1033,28 +1129,30 @@ CurveEditor::HitResult CurveEditor::hitTest(float mx, float my) const
     float hitR = 8.0f;
     float tanHitR = 6.0f;
 
-    for (int ci = 0; ci < (int)curves_.size(); ++ci) {
+    for (int ci = 0; ci < (int) curves_.size(); ++ci)
+    {
         auto& c = curves_[ci];
         if (!c.visible) continue;
-        for (int ki = 0; ki < (int)c.keys.size(); ++ki) {
+        for (int ki = 0; ki < (int) c.keys.size(); ++ki)
+        {
             auto& k = c.keys[ki];
             float kx = timeToX(k.time);
             float ky = valueToY(k.value);
 
-            if (k.selected) {
+            if (k.selected)
+            {
                 float tix = timeToX(k.time + k.tanInX);
                 float tiy = valueToY(k.value + k.tanInY);
                 if ((mx - tix) * (mx - tix) + (my - tiy) * (my - tiy) < tanHitR * tanHitR)
-                    return {ci, ki, true, true};
+                    return { ci, ki, true, true };
 
                 float tox = timeToX(k.time + k.tanOutX);
                 float toy = valueToY(k.value + k.tanOutY);
                 if ((mx - tox) * (mx - tox) + (my - toy) * (my - toy) < tanHitR * tanHitR)
-                    return {ci, ki, true, false};
+                    return { ci, ki, true, false };
             }
 
-            if (std::fabs(mx - kx) + std::fabs(my - ky) < hitR)
-                return {ci, ki, false, false};
+            if (std::fabs(mx - kx) + std::fabs(my - ky) < hitR) return { ci, ki, false, false };
         }
     }
     return {};
@@ -1062,7 +1160,8 @@ CurveEditor::HitResult CurveEditor::hitTest(float mx, float my) const
 
 void CurveEditor::onMousePress(MouseEvent& e)
 {
-    if (e.button == 1) {
+    if (e.button == 1)
+    {
         panning_ = true;
         dragStartX_ = e.x;
         dragStartY_ = e.y;
@@ -1078,12 +1177,17 @@ void CurveEditor::onMousePress(MouseEvent& e)
 
     auto hit = hitTest(e.x, e.y);
 
-    if (doubleClickEdit_ && e.clickCount >= 2 && !curves_.empty()) {
-        if (hit.curve >= 0 && !hit.tangent) {
+    if (doubleClickEdit_ && e.clickCount >= 2 && !curves_.empty())
+    {
+        if (hit.curve >= 0 && !hit.tangent)
+        {
             removeKey(hit.curve, hit.key);
-        } else if (hit.curve < 0) {
+        }
+        else if (hit.curve < 0)
+        {
             float t = xToTime(e.x), v = yToValue(e.y);
-            if (limited_) {
+            if (limited_)
+            {
                 t = std::max(limMinT_, std::min(limMaxT_, t));
                 v = std::max(limMinV_, std::min(limMaxV_, v));
             }
@@ -1093,42 +1197,48 @@ void CurveEditor::onMousePress(MouseEvent& e)
         return;
     }
 
-    if (hit.curve >= 0) {
+    if (hit.curve >= 0)
+    {
         auto& keys = curves_[hit.curve].keys;
-        for (auto& c : curves_)
-            for (auto& k : c.keys)
-                k.selected = false;
+        for (auto& c: curves_)
+            for (auto& k: c.keys) k.selected = false;
         keys[hit.key].selected = true;
 
-        if (hit.tangent) {
+        if (hit.tangent)
+        {
             dragTangent_ = true;
-            dragTanIn_   = hit.tanIn;
-        } else {
+            dragTanIn_ = hit.tanIn;
+        }
+        else
+        {
             dragTangent_ = false;
         }
 
-        dragging_   = true;
-        dragCurve_  = hit.curve;
-        dragKey_    = hit.key;
+        dragging_ = true;
+        dragCurve_ = hit.curve;
+        dragKey_ = hit.key;
         dragStartX_ = e.x;
         dragStartY_ = e.y;
-        e.consumed  = true;
-    } else {
-        for (auto& c : curves_)
-            for (auto& k : c.keys)
-                k.selected = false;
+        e.consumed = true;
+    }
+    else
+    {
+        for (auto& c: curves_)
+            for (auto& k: c.keys) k.selected = false;
         markDirty();
     }
 }
 
 void CurveEditor::onMouseRelease(MouseEvent& e)
 {
-    if (panning_) {
+    if (panning_)
+    {
         panning_ = false;
         e.consumed = true;
         return;
     }
-    if (dragging_) {
+    if (dragging_)
+    {
         dragging_ = false;
         dragCurve_ = -1;
         dragKey_ = -1;
@@ -1138,7 +1248,8 @@ void CurveEditor::onMouseRelease(MouseEvent& e)
 
 void CurveEditor::onMouseMove(MouseEvent& e)
 {
-    if (panning_) {
+    if (panning_)
+    {
         float dx = e.x - dragStartX_;
         float dy = e.y - dragStartY_;
 
@@ -1162,52 +1273,63 @@ void CurveEditor::onMouseMove(MouseEvent& e)
     float t = xToTime(e.x);
     float v = yToValue(e.y);
 
-    if (snapTime_ > 0)  t = snap(t, snapTime_);
+    if (snapTime_ > 0) t = snap(t, snapTime_);
     if (snapValue_ > 0) v = snap(v, snapValue_);
 
     auto& k = curves_[dragCurve_].keys[dragKey_];
 
-    if (dragTangent_) {
+    if (dragTangent_)
+    {
         float dt = t - k.time;
         float dv = v - k.value;
-        if (dragTanIn_) {
+        if (dragTanIn_)
+        {
             k.tanInX = dt;
             k.tanInY = dv;
-            if (k.tangentMode == TangentMode::Aligned) {
+            if (k.tangentMode == TangentMode::Aligned)
+            {
                 float len = std::sqrt(k.tanOutX * k.tanOutX + k.tanOutY * k.tanOutY);
                 float inLen = std::sqrt(dt * dt + dv * dv);
-                if (inLen > 1e-6f) {
+                if (inLen > 1e-6f)
+                {
                     k.tanOutX = -dt / inLen * len;
                     k.tanOutY = -dv / inLen * len;
                 }
             }
-        } else {
+        }
+        else
+        {
             k.tanOutX = dt;
             k.tanOutY = dv;
-            if (k.tangentMode == TangentMode::Aligned) {
+            if (k.tangentMode == TangentMode::Aligned)
+            {
                 float len = std::sqrt(k.tanInX * k.tanInX + k.tanInY * k.tanInY);
                 float outLen = std::sqrt(dt * dt + dv * dv);
-                if (outLen > 1e-6f) {
+                if (outLen > 1e-6f)
+                {
                     k.tanInX = -dt / outLen * len;
                     k.tanInY = -dv / outLen * len;
                 }
             }
         }
         k.tangentMode = (k.tangentMode == TangentMode::Auto) ? TangentMode::Free : k.tangentMode;
-    } else {
+    }
+    else
+    {
         auto& all = curves_[dragCurve_].keys;
-        if (limited_) {
+        if (limited_)
+        {
             t = std::max(limMinT_, std::min(limMaxT_, t));
             v = std::max(limMinV_, std::min(limMaxV_, v));
         }
         // Keys stay in time order, the curve is evaluated between neighbours.
         if (dragKey_ > 0) t = std::max(t, all[dragKey_ - 1].time + 0.001f);
-        if (dragKey_ + 1 < (int)all.size()) t = std::min(t, all[dragKey_ + 1].time - 0.001f);
+        if (dragKey_ + 1 < (int) all.size()) t = std::min(t, all[dragKey_ + 1].time - 0.001f);
         k.time = t;
         k.value = v;
         autoTangents(curves_[dragCurve_], dragKey_);
         if (dragKey_ > 0) autoTangents(curves_[dragCurve_], dragKey_ - 1);
-        if (dragKey_ + 1 < (int)all.size()) autoTangents(curves_[dragCurve_], dragKey_ + 1);
+        if (dragKey_ + 1 < (int) all.size()) autoTangents(curves_[dragCurve_], dragKey_ + 1);
     }
 
     markDirty();
@@ -1249,10 +1371,10 @@ void CurveEditor::paint(PaintContext& ctx)
 
     // Border
     ctx.fill.SetColor(50, 52, 58, 255);
-    ctx.fillRect(b.x,           b.y,            b.w, 1);
-    ctx.fillRect(b.x,           b.y + b.h - 1,  b.w, 1);
-    ctx.fillRect(b.x,           b.y,            1,   b.h);
-    ctx.fillRect(b.x + b.w - 1, b.y,            1,   b.h);
+    ctx.fillRect(b.x, b.y, b.w, 1);
+    ctx.fillRect(b.x, b.y + b.h - 1, b.w, 1);
+    ctx.fillRect(b.x, b.y, 1, b.h);
+    ctx.fillRect(b.x + b.w - 1, b.y, 1, b.h);
 
     ctx.popClip();
 
@@ -1261,7 +1383,8 @@ void CurveEditor::paint(PaintContext& ctx)
 
 void CurveEditor::paintGrid(PaintContext& ctx, const Rect& b)
 {
-    auto niceStep = [](float range, int maxLines) -> float {
+    auto niceStep = [](float range, int maxLines) -> float
+    {
         float rough = range / maxLines;
         float mag = std::pow(10.0f, std::floor(std::log10(rough)));
         float norm = rough / mag;
@@ -1276,7 +1399,8 @@ void CurveEditor::paintGrid(PaintContext& ctx, const Rect& b)
 
     // Time grid (vertical lines)
     float tStart = std::floor(viewMinT_ / tStep) * tStep;
-    for (float t = tStart; t <= viewMaxT_; t += tStep) {
+    for (float t = tStart; t <= viewMaxT_; t += tStep)
+    {
         float x = timeToX(t);
         if (x < b.x + 40 || x > b.x + b.w - 40) continue;
 
@@ -1292,7 +1416,8 @@ void CurveEditor::paintGrid(PaintContext& ctx, const Rect& b)
 
     // Value grid (horizontal lines)
     float vStart = std::floor(viewMinV_ / vStep) * vStep;
-    for (float v = vStart; v <= viewMaxV_; v += vStep) {
+    for (float v = vStart; v <= viewMaxV_; v += vStep)
+    {
         float y = valueToY(v);
         if (y < b.y || y > b.y + b.h - 24) continue;
 
@@ -1311,7 +1436,8 @@ void CurveEditor::paintCurves(PaintContext& ctx, const Rect& b)
 {
     int segments = std::max(60, static_cast<int>(b.w / 3));
 
-    for (int ci = 0; ci < (int)curves_.size(); ++ci) {
+    for (int ci = 0; ci < (int) curves_.size(); ++ci)
+    {
         auto& c = curves_[ci];
         if (!c.visible || c.keys.size() < 2) continue;
 
@@ -1319,42 +1445,51 @@ void CurveEditor::paintCurves(PaintContext& ctx, const Rect& b)
         float prevX = 0, prevY = 0;
         bool first = true;
 
-        for (int s = 0; s <= segments; ++s) {
+        for (int s = 0; s <= segments; ++s)
+        {
             float t = viewMinT_ + (viewMaxT_ - viewMinT_) * (float(s) / segments);
             float v = evaluate(ci, t);
             float x = timeToX(t);
             float y = valueToY(v);
 
-            if (!first) {
+            if (!first)
+            {
                 float dx = x - prevX, dy = y - prevY;
                 float len = std::sqrt(dx * dx + dy * dy);
-                if (len > 0.5f) {
+                if (len > 0.5f)
+                {
                     float thick = 1.5f;
                     float nx = -dy / len * thick * 0.5f;
-                    float ny =  dx / len * thick * 0.5f;
+                    float ny = dx / len * thick * 0.5f;
                     ctx.fill.SetColor(col.r, col.g, col.b, col.a);
-                    ctx.fillTriangle(prevX+nx, prevY+ny, prevX-nx, prevY-ny, x-nx, y-ny);
-                    ctx.fillTriangle(prevX+nx, prevY+ny, x-nx, y-ny, x+nx, y+ny);
+                    ctx.fillTriangle(prevX + nx, prevY + ny, prevX - nx, prevY - ny, x - nx,
+                            y - ny);
+                    ctx.fillTriangle(prevX + nx, prevY + ny, x - nx, y - ny, x + nx, y + ny);
                 }
             }
-            prevX = x; prevY = y; first = false;
+            prevX = x;
+            prevY = y;
+            first = false;
         }
     }
 }
 
 void CurveEditor::paintKeys(PaintContext& ctx, const Rect& b)
 {
-    for (int ci = 0; ci < (int)curves_.size(); ++ci) {
+    for (int ci = 0; ci < (int) curves_.size(); ++ci)
+    {
         auto& c = curves_[ci];
         if (!c.visible) continue;
 
-        for (int ki = 0; ki < (int)c.keys.size(); ++ki) {
+        for (int ki = 0; ki < (int) c.keys.size(); ++ki)
+        {
             auto& k = c.keys[ki];
             float kx = timeToX(k.time);
             float ky = valueToY(k.value);
 
             // Tangent handles (only for selected keys)
-            if (k.selected) {
+            if (k.selected)
+            {
                 float tix = timeToX(k.time + k.tanInX);
                 float tiy = valueToY(k.value + k.tanInY);
                 float tox = timeToX(k.time + k.tanOutX);
@@ -1362,7 +1497,7 @@ void CurveEditor::paintKeys(PaintContext& ctx, const Rect& b)
 
                 ctx.fill.SetColor(c.color.r, c.color.g, c.color.b, 120);
                 ctx.fillTriangle(tix - 0.5f, tiy, tix + 0.5f, tiy, kx + 0.5f, ky);
-                ctx.fillTriangle(tix - 0.5f, tiy, kx - 0.5f,  ky,  kx + 0.5f, ky);
+                ctx.fillTriangle(tix - 0.5f, tiy, kx - 0.5f, ky, kx + 0.5f, ky);
                 ctx.fillTriangle(kx - 0.5f, ky, kx + 0.5f, ky, tox + 0.5f, toy);
                 ctx.fillTriangle(kx - 0.5f, ky, tox - 0.5f, toy, tox + 0.5f, toy);
 

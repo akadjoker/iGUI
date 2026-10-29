@@ -6,7 +6,9 @@ using BuImage = ig::retained::BuImage;
 //  IconAtlas
 // ─────────────────────────────────────────────────────────────────────────────
 
-IconAtlas::~IconAtlas() {}
+IconAtlas::~IconAtlas()
+{
+}
 
 ig::retained::BuImage* IconAtlas::buildImage(int cellSize)
 {
@@ -28,11 +30,8 @@ FloatRect IconAtlas::srcRect(IconId id) const
     if (idx < 0 || !tex_ || cols_ <= 0) return {};
     int col = idx % cols_;
     int row = idx / cols_;
-    return FloatRect(
-        static_cast<float>(col * cellSize_),
-        static_cast<float>(row * cellSize_),
-        static_cast<float>(cellSize_),
-        static_cast<float>(cellSize_));
+    return FloatRect(static_cast<float>(col * cellSize_), static_cast<float>(row * cellSize_),
+            static_cast<float>(cellSize_), static_cast<float>(cellSize_));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +41,8 @@ FloatRect IconAtlas::srcRect(IconId id) const
 void IconAtlas::drawAllIcons(BuImage& pm)
 {
     int count = static_cast<int>(IconId::COUNT) - 1;
-    for (int i = 0; i < count; ++i) {
+    for (int i = 0; i < count; ++i)
+    {
         int col = i % cols_;
         int row = i / cols_;
         int ox = col * cellSize_;
@@ -54,52 +54,142 @@ void IconAtlas::drawAllIcons(BuImage& pm)
 
 void IconAtlas::drawIcon(BuImage& pm, IconId id, int ox, int oy, int sz)
 {
-    switch (id) {
-    case IconId::Folder:      drawFolder(pm, ox, oy, sz);      break;
-    case IconId::FolderOpen:  drawFolderOpen(pm, ox, oy, sz);  break;
-    case IconId::File:        drawFile(pm, ox, oy, sz);        break;
-    case IconId::FileCode:    drawFileCode(pm, ox, oy, sz);    break;
-    case IconId::Book:        drawBook(pm, ox, oy, sz);        break;
-    case IconId::Gear:        drawGear(pm, ox, oy, sz);        break;
-    case IconId::Star:        drawStar(pm, ox, oy, sz);        break;
-    case IconId::Heart:       drawHeart(pm, ox, oy, sz);       break;
-    case IconId::Search:      drawSearch(pm, ox, oy, sz);      break;
-    case IconId::Plus:        drawPlus(pm, ox, oy, sz);        break;
-    case IconId::Minus:       drawMinus(pm, ox, oy, sz);       break;
-    case IconId::Check:       drawCheck(pm, ox, oy, sz);       break;
-    case IconId::Cross:       drawCross(pm, ox, oy, sz);       break;
-    case IconId::ArrowRight:  drawArrowRight(pm, ox, oy, sz);  break;
-    case IconId::ArrowDown:   drawArrowDown(pm, ox, oy, sz);   break;
-    case IconId::ArrowUp:     drawArrowUp(pm, ox, oy, sz);     break;
-    case IconId::ArrowLeft:   drawArrowLeft(pm, ox, oy, sz);   break;
-    case IconId::Eye:         drawEye(pm, ox, oy, sz);         break;
-    case IconId::EyeOff:      drawEyeOff(pm, ox, oy, sz);     break;
-    case IconId::Lock:        drawLock(pm, ox, oy, sz);        break;
-    case IconId::Unlock:      drawUnlock(pm, ox, oy, sz);      break;
-    case IconId::Refresh:     drawRefresh(pm, ox, oy, sz);     break;
-    case IconId::Trash:       drawTrash(pm, ox, oy, sz);       break;
-    case IconId::Edit:        drawEdit(pm, ox, oy, sz);        break;
-    case IconId::Home:        drawHome(pm, ox, oy, sz);        break;
-    case IconId::User:        drawUser(pm, ox, oy, sz);        break;
-    case IconId::Warning:     drawWarning(pm, ox, oy, sz);     break;
-    case IconId::Info:        drawInfo(pm, ox, oy, sz);        break;
-    case IconId::Error:       drawError(pm, ox, oy, sz);       break;
-    case IconId::FileImage:   drawFileImage(pm, ox, oy, sz);   break;
-    case IconId::FileArchive: drawFileArchive(pm, ox, oy, sz); break;
-    case IconId::ViewDetail:  drawViewDetail(pm, ox, oy, sz);  break;
-    case IconId::ViewList:    drawViewList(pm, ox, oy, sz);    break;
-    case IconId::ViewGrid:    drawViewGrid(pm, ox, oy, sz);    break;
-    case IconId::Play:        drawPlay(pm, ox, oy, sz);        break;
-    case IconId::Pause:       drawPause(pm, ox, oy, sz);       break;
-    case IconId::Stop:        drawStop(pm, ox, oy, sz);        break;
-    case IconId::StepForward: drawStepForward(pm, ox, oy, sz); break;
-    case IconId::StepBack:    drawStepBack(pm, ox, oy, sz);    break;
-    case IconId::Record:      drawRecord(pm, ox, oy, sz);      break;
-    case IconId::FolderNew:   drawFolderNew(pm, ox, oy, sz);   break;
-    case IconId::Scissors:    drawScissors(pm, ox, oy, sz);    break;
-    case IconId::Import:      drawImport(pm, ox, oy, sz);      break;
-    case IconId::Magnet:      drawMagnet(pm, ox, oy, sz);      break;
-    default: break;
+    switch (id)
+    {
+        case IconId::Folder:
+            drawFolder(pm, ox, oy, sz);
+            break;
+        case IconId::FolderOpen:
+            drawFolderOpen(pm, ox, oy, sz);
+            break;
+        case IconId::File:
+            drawFile(pm, ox, oy, sz);
+            break;
+        case IconId::FileCode:
+            drawFileCode(pm, ox, oy, sz);
+            break;
+        case IconId::Book:
+            drawBook(pm, ox, oy, sz);
+            break;
+        case IconId::Gear:
+            drawGear(pm, ox, oy, sz);
+            break;
+        case IconId::Star:
+            drawStar(pm, ox, oy, sz);
+            break;
+        case IconId::Heart:
+            drawHeart(pm, ox, oy, sz);
+            break;
+        case IconId::Search:
+            drawSearch(pm, ox, oy, sz);
+            break;
+        case IconId::Plus:
+            drawPlus(pm, ox, oy, sz);
+            break;
+        case IconId::Minus:
+            drawMinus(pm, ox, oy, sz);
+            break;
+        case IconId::Check:
+            drawCheck(pm, ox, oy, sz);
+            break;
+        case IconId::Cross:
+            drawCross(pm, ox, oy, sz);
+            break;
+        case IconId::ArrowRight:
+            drawArrowRight(pm, ox, oy, sz);
+            break;
+        case IconId::ArrowDown:
+            drawArrowDown(pm, ox, oy, sz);
+            break;
+        case IconId::ArrowUp:
+            drawArrowUp(pm, ox, oy, sz);
+            break;
+        case IconId::ArrowLeft:
+            drawArrowLeft(pm, ox, oy, sz);
+            break;
+        case IconId::Eye:
+            drawEye(pm, ox, oy, sz);
+            break;
+        case IconId::EyeOff:
+            drawEyeOff(pm, ox, oy, sz);
+            break;
+        case IconId::Lock:
+            drawLock(pm, ox, oy, sz);
+            break;
+        case IconId::Unlock:
+            drawUnlock(pm, ox, oy, sz);
+            break;
+        case IconId::Refresh:
+            drawRefresh(pm, ox, oy, sz);
+            break;
+        case IconId::Trash:
+            drawTrash(pm, ox, oy, sz);
+            break;
+        case IconId::Edit:
+            drawEdit(pm, ox, oy, sz);
+            break;
+        case IconId::Home:
+            drawHome(pm, ox, oy, sz);
+            break;
+        case IconId::User:
+            drawUser(pm, ox, oy, sz);
+            break;
+        case IconId::Warning:
+            drawWarning(pm, ox, oy, sz);
+            break;
+        case IconId::Info:
+            drawInfo(pm, ox, oy, sz);
+            break;
+        case IconId::Error:
+            drawError(pm, ox, oy, sz);
+            break;
+        case IconId::FileImage:
+            drawFileImage(pm, ox, oy, sz);
+            break;
+        case IconId::FileArchive:
+            drawFileArchive(pm, ox, oy, sz);
+            break;
+        case IconId::ViewDetail:
+            drawViewDetail(pm, ox, oy, sz);
+            break;
+        case IconId::ViewList:
+            drawViewList(pm, ox, oy, sz);
+            break;
+        case IconId::ViewGrid:
+            drawViewGrid(pm, ox, oy, sz);
+            break;
+        case IconId::Play:
+            drawPlay(pm, ox, oy, sz);
+            break;
+        case IconId::Pause:
+            drawPause(pm, ox, oy, sz);
+            break;
+        case IconId::Stop:
+            drawStop(pm, ox, oy, sz);
+            break;
+        case IconId::StepForward:
+            drawStepForward(pm, ox, oy, sz);
+            break;
+        case IconId::StepBack:
+            drawStepBack(pm, ox, oy, sz);
+            break;
+        case IconId::Record:
+            drawRecord(pm, ox, oy, sz);
+            break;
+        case IconId::FolderNew:
+            drawFolderNew(pm, ox, oy, sz);
+            break;
+        case IconId::Scissors:
+            drawScissors(pm, ox, oy, sz);
+            break;
+        case IconId::Import:
+            drawImport(pm, ox, oy, sz);
+            break;
+        case IconId::Magnet:
+            drawMagnet(pm, ox, oy, sz);
+            break;
+        default:
+            break;
     }
 }
 
@@ -110,19 +200,19 @@ void IconAtlas::drawIcon(BuImage& pm, IconId id, int ox, int oy, int sz)
 //  Icon color: light grey (200,200,210,255) for visibility on dark backgrounds.
 // ═════════════════════════════════════════════════════════════════════════════
 
-static const Color IC(200, 200, 210, 255);   // icon color
-static const Color IC2(160, 180, 220, 255);  // accent (folders, links)
-static const Color IC3(180, 210, 140, 255);  // secondary accent (code)
+static const Color IC(200, 200, 210, 255);  // icon color
+static const Color IC2(160, 180, 220, 255); // accent (folders, links)
+static const Color IC3(180, 210, 140, 255); // secondary accent (code)
 
 // ── Folder ───────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawFolder(BuImage& pm, int ox, int oy, int sz)
 {
-    int m = sz / 6;  // margin
-    int x = ox + m, y = oy + m + sz/6;
-    int w = sz - 2*m, h = sz - 2*m - sz/6;
+    int m = sz / 6; // margin
+    int x = ox + m, y = oy + m + sz / 6;
+    int w = sz - 2 * m, h = sz - 2 * m - sz / 6;
     // Tab
-    pm.DrawRect(x, y - h/5, w/3, h/5 + 1, IC2, true);
+    pm.DrawRect(x, y - h / 5, w / 3, h / 5 + 1, IC2, true);
     // Body
     pm.DrawRect(x, y, w, h, IC2, true);
 }
@@ -130,14 +220,14 @@ void IconAtlas::drawFolder(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawFolderOpen(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 6;
-    int x = ox + m, y = oy + m + sz/6;
-    int w = sz - 2*m, h = sz - 2*m - sz/6;
+    int x = ox + m, y = oy + m + sz / 6;
+    int w = sz - 2 * m, h = sz - 2 * m - sz / 6;
     // Tab
-    pm.DrawRect(x, y - h/5, w/3, h/5 + 1, IC2, true);
+    pm.DrawRect(x, y - h / 5, w / 3, h / 5 + 1, IC2, true);
     // Body (slightly shifted)
     pm.DrawRect(x, y, w, h, IC2, false);
     // Open front
-    pm.DrawRect(x + 2, y + h/3, w - 2, h - h/3, IC2, true);
+    pm.DrawRect(x + 2, y + h / 3, w - 2, h - h / 3, IC2, true);
 }
 
 // ── File ─────────────────────────────────────────────────────────────────────
@@ -145,8 +235,8 @@ void IconAtlas::drawFolderOpen(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawFile(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
-    int x = ox + m, y = oy + m/2;
-    int w = sz - 2*m, h = sz - m;
+    int x = ox + m, y = oy + m / 2;
+    int w = sz - 2 * m, h = sz - m;
     // Dark fill so the icon is visible on dark backgrounds
     static const Color ICBg(50, 55, 65, 255);
     pm.DrawRect(x, y, w, h, ICBg, true);
@@ -163,23 +253,23 @@ void IconAtlas::drawFileCode(BuImage& pm, int ox, int oy, int sz)
 {
     drawFile(pm, ox, oy, sz);
     // < > brackets
-    int cx = ox + sz/2, cy = oy + sz/2 + sz/8;
-    int d = sz/7;
-    pm.DrawLine(cx - d, cy, cx - d*2, cy - d, IC3);
-    pm.DrawLine(cx - d, cy, cx - d*2, cy + d, IC3);
-    pm.DrawLine(cx + d, cy, cx + d*2, cy - d, IC3);
-    pm.DrawLine(cx + d, cy, cx + d*2, cy + d, IC3);
+    int cx = ox + sz / 2, cy = oy + sz / 2 + sz / 8;
+    int d = sz / 7;
+    pm.DrawLine(cx - d, cy, cx - d * 2, cy - d, IC3);
+    pm.DrawLine(cx - d, cy, cx - d * 2, cy + d, IC3);
+    pm.DrawLine(cx + d, cy, cx + d * 2, cy - d, IC3);
+    pm.DrawLine(cx + d, cy, cx + d * 2, cy + d, IC3);
 }
 
 void IconAtlas::drawFileImage(BuImage& pm, int ox, int oy, int sz)
 {
     drawFile(pm, ox, oy, sz);
     // Small mountain/sun
-    int cx = ox + sz/2, cy = oy + sz*2/3;
-    int r = sz/8;
-    pm.DrawCircle(cx - r, cy - r, r/2, IC2, true);
-    pm.DrawLine(cx - r*2, cy + r, cx, cy - r/2, IC2);
-    pm.DrawLine(cx, cy - r/2, cx + r*2, cy + r, IC2);
+    int cx = ox + sz / 2, cy = oy + sz * 2 / 3;
+    int r = sz / 8;
+    pm.DrawCircle(cx - r, cy - r, r / 2, IC2, true);
+    pm.DrawLine(cx - r * 2, cy + r, cx, cy - r / 2, IC2);
+    pm.DrawLine(cx, cy - r / 2, cx + r * 2, cy + r, IC2);
 }
 
 void IconAtlas::drawFileArchive(BuImage& pm, int ox, int oy, int sz)
@@ -188,9 +278,10 @@ void IconAtlas::drawFileArchive(BuImage& pm, int ox, int oy, int sz)
     // Zip pattern (horizontal stripes)
     int m = sz / 5;
     int x = ox + m + 1;
-    for (int i = 0; i < 3; ++i) {
-        int y = oy + sz/3 + i * (sz/7);
-        pm.DrawRect(x, y, sz/5, 1, IC2, true);
+    for (int i = 0; i < 3; ++i)
+    {
+        int y = oy + sz / 3 + i * (sz / 7);
+        pm.DrawRect(x, y, sz / 5, 1, IC2, true);
     }
 }
 
@@ -200,24 +291,25 @@ void IconAtlas::drawBook(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
     int x = ox + m, y = oy + m;
-    int w = sz - 2*m, h = sz - 2*m;
+    int w = sz - 2 * m, h = sz - 2 * m;
     pm.DrawRect(x, y, w, h, IC, false);
     // Spine
-    pm.DrawLine(x + w/4, y, x + w/4, y + h, IC);
+    pm.DrawLine(x + w / 4, y, x + w / 4, y + h, IC);
     // Lines on cover
-    pm.DrawLine(x + w/4 + 3, y + h/4, x + w - 2, y + h/4, Color(150,150,160,200));
-    pm.DrawLine(x + w/4 + 3, y + h/2, x + w - 2, y + h/2, Color(150,150,160,200));
+    pm.DrawLine(x + w / 4 + 3, y + h / 4, x + w - 2, y + h / 4, Color(150, 150, 160, 200));
+    pm.DrawLine(x + w / 4 + 3, y + h / 2, x + w - 2, y + h / 2, Color(150, 150, 160, 200));
 }
 
 // ── Gear ─────────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawGear(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
-    int r1 = sz/4, r2 = sz/3;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
+    int r1 = sz / 4, r2 = sz / 3;
     pm.DrawCircle(cx, cy, r1, IC, false);
     // Teeth (8 lines radiating out)
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 8; ++i)
+    {
         float a = i * 3.14159f / 4.0f;
         int x1 = cx + static_cast<int>(r1 * std::cos(a));
         int y1 = cy + static_cast<int>(r1 * std::sin(a));
@@ -231,16 +323,16 @@ void IconAtlas::drawGear(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawStar(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int r = sz * 2 / 5;
     // 5-point star using lines
-    for (int i = 0; i < 5; ++i) {
-        float a1 = (i * 2) * 3.14159f * 2.0f / 5.0f - 3.14159f/2.0f;
-        float a2 = ((i * 2 + 2) % 5) * 3.14159f * 2.0f / 5.0f - 3.14159f/2.0f;
+    for (int i = 0; i < 5; ++i)
+    {
+        float a1 = (i * 2) * 3.14159f * 2.0f / 5.0f - 3.14159f / 2.0f;
+        float a2 = ((i * 2 + 2) % 5) * 3.14159f * 2.0f / 5.0f - 3.14159f / 2.0f;
         pm.DrawLine(cx + static_cast<int>(r * std::cos(a1)),
-                    cy + static_cast<int>(r * std::sin(a1)),
-                    cx + static_cast<int>(r * std::cos(a2)),
-                    cy + static_cast<int>(r * std::sin(a2)), Color(240, 200, 80, 255));
+                cy + static_cast<int>(r * std::sin(a1)), cx + static_cast<int>(r * std::cos(a2)),
+                cy + static_cast<int>(r * std::sin(a2)), Color(240, 200, 80, 255));
     }
 }
 
@@ -248,13 +340,14 @@ void IconAtlas::drawStar(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawHeart(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int r = sz / 6;
-    pm.DrawCircle(cx - r, cy - r/2, r, Color(220, 80, 80, 255), true);
-    pm.DrawCircle(cx + r, cy - r/2, r, Color(220, 80, 80, 255), true);
+    pm.DrawCircle(cx - r, cy - r / 2, r, Color(220, 80, 80, 255), true);
+    pm.DrawCircle(cx + r, cy - r / 2, r, Color(220, 80, 80, 255), true);
     // Bottom triangle approx
-    for (int dy = 0; dy < r*2; ++dy) {
-        int hw = r*2 - dy;
+    for (int dy = 0; dy < r * 2; ++dy)
+    {
+        int hw = r * 2 - dy;
         pm.DrawLine(cx - hw, cy + dy, cx + hw, cy + dy, Color(220, 80, 80, 255));
     }
 }
@@ -263,20 +356,20 @@ void IconAtlas::drawHeart(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawSearch(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz*2/5, cy = oy + sz*2/5;
+    int cx = ox + sz * 2 / 5, cy = oy + sz * 2 / 5;
     int r = sz / 4;
     pm.DrawCircle(cx, cy, r, IC, false);
     // Handle
     int hx = cx + static_cast<int>(r * 0.7f);
     int hy = cy + static_cast<int>(r * 0.7f);
-    pm.DrawLine(hx, hy, hx + sz/5, hy + sz/5, IC);
+    pm.DrawLine(hx, hy, hx + sz / 5, hy + sz / 5, IC);
 }
 
 // ── Plus ─────────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawPlus(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx, cy - d, cx, cy + d, IC);
     pm.DrawLine(cx - d, cy, cx + d, cy, IC);
@@ -286,7 +379,7 @@ void IconAtlas::drawPlus(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawMinus(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx - d, cy, cx + d, cy, IC);
 }
@@ -296,8 +389,8 @@ void IconAtlas::drawMinus(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawCheck(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 4;
-    pm.DrawLine(ox + m, oy + sz/2, ox + sz*2/5, oy + sz - m, Color(100, 220, 100, 255));
-    pm.DrawLine(ox + sz*2/5, oy + sz - m, ox + sz - m, oy + m, Color(100, 220, 100, 255));
+    pm.DrawLine(ox + m, oy + sz / 2, ox + sz * 2 / 5, oy + sz - m, Color(100, 220, 100, 255));
+    pm.DrawLine(ox + sz * 2 / 5, oy + sz - m, ox + sz - m, oy + m, Color(100, 220, 100, 255));
 }
 
 // ── Cross ────────────────────────────────────────────────────────────────────
@@ -313,7 +406,7 @@ void IconAtlas::drawCross(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawArrowRight(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx - d, cy, cx + d, cy, IC);
     pm.DrawLine(cx + d, cy, cx, cy - d, IC);
@@ -322,7 +415,7 @@ void IconAtlas::drawArrowRight(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawArrowLeft(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx + d, cy, cx - d, cy, IC);
     pm.DrawLine(cx - d, cy, cx, cy - d, IC);
@@ -331,7 +424,7 @@ void IconAtlas::drawArrowLeft(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawArrowUp(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx, cy + d, cx, cy - d, IC);
     pm.DrawLine(cx, cy - d, cx - d, cy, IC);
@@ -340,7 +433,7 @@ void IconAtlas::drawArrowUp(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawArrowDown(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int d = sz / 4;
     pm.DrawLine(cx, cy - d, cx, cy + d, IC);
     pm.DrawLine(cx, cy + d, cx - d, cy, IC);
@@ -351,17 +444,18 @@ void IconAtlas::drawArrowDown(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawEye(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int rx = sz * 2 / 5, ry = sz / 5;
     // Eye shape (two arcs approximated by lines)
-    for (int i = -rx; i <= rx; ++i) {
+    for (int i = -rx; i <= rx; ++i)
+    {
         float t = static_cast<float>(i) / rx;
         int dy = static_cast<int>(ry * (1.0f - t * t));
         pm.SetPixel(cx + i, cy - dy, IC.r, IC.g, IC.b, IC.a);
         pm.SetPixel(cx + i, cy + dy, IC.r, IC.g, IC.b, IC.a);
     }
     // Pupil
-    pm.DrawCircle(cx, cy, sz/8, IC, true);
+    pm.DrawCircle(cx, cy, sz / 8, IC, true);
 }
 
 void IconAtlas::drawEyeOff(BuImage& pm, int ox, int oy, int sz)
@@ -377,23 +471,24 @@ void IconAtlas::drawEyeOff(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawLock(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
-    int bx = ox + m, by = oy + sz/2;
-    int bw = sz - 2*m, bh = sz/2 - m;
+    int bx = ox + m, by = oy + sz / 2;
+    int bw = sz - 2 * m, bh = sz / 2 - m;
     pm.DrawRect(bx, by, bw, bh, IC, true);
     // Shackle
-    int sx = ox + sz/2, sr = bw/3;
+    int sx = ox + sz / 2, sr = bw / 3;
     pm.DrawCircle(sx, by, sr, IC, false);
-    pm.DrawRect(sx - sr, by - sr/2, sr*2, sr/2 + 1, Color(0,0,0,0), true); // clear bottom of circle
+    pm.DrawRect(sx - sr, by - sr / 2, sr * 2, sr / 2 + 1, Color(0, 0, 0, 0),
+            true); // clear bottom of circle
 }
 
 void IconAtlas::drawUnlock(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
-    int bx = ox + m, by = oy + sz/2;
-    int bw = sz - 2*m, bh = sz/2 - m;
+    int bx = ox + m, by = oy + sz / 2;
+    int bw = sz - 2 * m, bh = sz / 2 - m;
     pm.DrawRect(bx, by, bw, bh, IC, true);
     // Shackle shifted right
-    int sx = ox + sz/2 + sz/8, sr = bw/3;
+    int sx = ox + sz / 2 + sz / 8, sr = bw / 3;
     pm.DrawCircle(sx, by, sr, IC, false);
 }
 
@@ -401,13 +496,13 @@ void IconAtlas::drawUnlock(BuImage& pm, int ox, int oy, int sz)
 
 void IconAtlas::drawRefresh(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int r = sz / 3;
     pm.DrawCircle(cx, cy, r, IC, false);
     // Arrow head at top-right
     int ax = cx + r, ay = cy;
-    pm.DrawLine(ax, ay, ax - sz/8, ay - sz/8, IC);
-    pm.DrawLine(ax, ay, ax + sz/8, ay - sz/8, IC);
+    pm.DrawLine(ax, ay, ax - sz / 8, ay - sz / 8, IC);
+    pm.DrawLine(ax, ay, ax + sz / 8, ay - sz / 8, IC);
 }
 
 // ── Trash ────────────────────────────────────────────────────────────────────
@@ -415,15 +510,18 @@ void IconAtlas::drawRefresh(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawTrash(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
-    int x = ox + m, y = oy + m + sz/8;
-    int w = sz - 2*m, h = sz - 2*m - sz/8;
+    int x = ox + m, y = oy + m + sz / 8;
+    int w = sz - 2 * m, h = sz - 2 * m - sz / 8;
     pm.DrawRect(x, y, w, h, Color(200, 100, 100, 255), false);
     // Lid
     pm.DrawLine(ox + m - 1, y, ox + sz - m + 1, y, Color(200, 100, 100, 255));
     // Handle
-    pm.DrawLine(ox + sz/2 - sz/8, y, ox + sz/2 - sz/8, y - sz/8, Color(200, 100, 100, 255));
-    pm.DrawLine(ox + sz/2 + sz/8, y, ox + sz/2 + sz/8, y - sz/8, Color(200, 100, 100, 255));
-    pm.DrawLine(ox + sz/2 - sz/8, y - sz/8, ox + sz/2 + sz/8, y - sz/8, Color(200, 100, 100, 255));
+    pm.DrawLine(ox + sz / 2 - sz / 8, y, ox + sz / 2 - sz / 8, y - sz / 8,
+            Color(200, 100, 100, 255));
+    pm.DrawLine(ox + sz / 2 + sz / 8, y, ox + sz / 2 + sz / 8, y - sz / 8,
+            Color(200, 100, 100, 255));
+    pm.DrawLine(ox + sz / 2 - sz / 8, y - sz / 8, ox + sz / 2 + sz / 8, y - sz / 8,
+            Color(200, 100, 100, 255));
 }
 
 // ── Edit (pencil) ────────────────────────────────────────────────────────────
@@ -432,37 +530,37 @@ void IconAtlas::drawEdit(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
     pm.DrawLine(ox + sz - m, oy + m, ox + m, oy + sz - m, IC);
-    pm.DrawLine(ox + m, oy + sz - m, ox + m + sz/8, oy + sz - m, IC);
-    pm.DrawLine(ox + sz - m, oy + m, ox + sz - m - sz/8, oy + m, IC);
+    pm.DrawLine(ox + m, oy + sz - m, ox + m + sz / 8, oy + sz - m, IC);
+    pm.DrawLine(ox + sz - m, oy + m, ox + sz - m - sz / 8, oy + m, IC);
 }
 
 // ── Home ─────────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawHome(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2;
+    int cx = ox + sz / 2;
     int m = sz / 5;
     // Roof
-    pm.DrawLine(cx, oy + m, ox + m, oy + sz/2, IC);
-    pm.DrawLine(cx, oy + m, ox + sz - m, oy + sz/2, IC);
+    pm.DrawLine(cx, oy + m, ox + m, oy + sz / 2, IC);
+    pm.DrawLine(cx, oy + m, ox + sz - m, oy + sz / 2, IC);
     // Walls
-    int wx = ox + m + 2, wy = oy + sz/2;
-    int ww = sz - 2*m - 4, wh = sz/2 - m - 1;
+    int wx = ox + m + 2, wy = oy + sz / 2;
+    int ww = sz - 2 * m - 4, wh = sz / 2 - m - 1;
     pm.DrawRect(wx, wy, ww, wh, IC, false);
     // Door
-    pm.DrawRect(cx - sz/10, wy + wh/3, sz/5, wh - wh/3, IC, true);
+    pm.DrawRect(cx - sz / 10, wy + wh / 3, sz / 5, wh - wh / 3, IC, true);
 }
 
 // ── User ─────────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawUser(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/3;
+    int cx = ox + sz / 2, cy = oy + sz / 3;
     int r = sz / 6;
     pm.DrawCircle(cx, cy, r, IC, true);
     // Body
-    int bx = ox + sz/4, by = oy + sz/2 + sz/8;
-    int bw = sz/2, bh = sz/4;
+    int bx = ox + sz / 4, by = oy + sz / 2 + sz / 8;
+    int bw = sz / 2, bh = sz / 4;
     pm.DrawRect(bx, by, bw, bh, IC, true);
 }
 
@@ -471,27 +569,27 @@ void IconAtlas::drawUser(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawWarning(BuImage& pm, int ox, int oy, int sz)
 {
     Color yel(240, 200, 60, 255);
-    int cx = ox + sz/2;
+    int cx = ox + sz / 2;
     int m = sz / 6;
     // Triangle outline
     pm.DrawLine(cx, oy + m, ox + m, oy + sz - m, yel);
     pm.DrawLine(ox + m, oy + sz - m, ox + sz - m, oy + sz - m, yel);
     pm.DrawLine(ox + sz - m, oy + sz - m, cx, oy + m, yel);
     // Exclamation mark
-    pm.DrawLine(cx, oy + sz/3, cx, oy + sz*2/3 - 1, yel);
-    pm.SetPixel(cx, oy + sz*2/3 + 1, yel.r, yel.g, yel.b, yel.a);
+    pm.DrawLine(cx, oy + sz / 3, cx, oy + sz * 2 / 3 - 1, yel);
+    pm.SetPixel(cx, oy + sz * 2 / 3 + 1, yel.r, yel.g, yel.b, yel.a);
 }
 
 // ── Info ─────────────────────────────────────────────────────────────────────
 
 void IconAtlas::drawInfo(BuImage& pm, int ox, int oy, int sz)
 {
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int r = sz / 3;
     pm.DrawCircle(cx, cy, r, IC2, false);
     // "i"
-    pm.SetPixel(cx, cy - r/2, IC2.r, IC2.g, IC2.b, IC2.a);
-    pm.DrawLine(cx, cy - r/4, cx, cy + r/2, IC2);
+    pm.SetPixel(cx, cy - r / 2, IC2.r, IC2.g, IC2.b, IC2.a);
+    pm.DrawLine(cx, cy - r / 4, cx, cy + r / 2, IC2);
 }
 
 // ── Error ────────────────────────────────────────────────────────────────────
@@ -499,7 +597,7 @@ void IconAtlas::drawInfo(BuImage& pm, int ox, int oy, int sz)
 void IconAtlas::drawError(BuImage& pm, int ox, int oy, int sz)
 {
     Color red(220, 80, 80, 255);
-    int cx = ox + sz/2, cy = oy + sz/2;
+    int cx = ox + sz / 2, cy = oy + sz / 2;
     int r = sz / 3;
     pm.DrawCircle(cx, cy, r, red, false);
     int d = r * 2 / 3;
@@ -513,8 +611,9 @@ void IconAtlas::drawViewDetail(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
     int y = oy + m;
-    int lineH = (sz - 2*m) / 4;
-    for (int i = 0; i < 4; ++i) {
+    int lineH = (sz - 2 * m) / 4;
+    for (int i = 0; i < 4; ++i)
+    {
         int ly = y + i * lineH + lineH / 2;
         // Small square (icon placeholder)
         pm.DrawRect(ox + m, ly - 1, 3, 3, IC2, true);
@@ -529,8 +628,9 @@ void IconAtlas::drawViewList(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
     int y = oy + m;
-    int lineH = (sz - 2*m) / 4;
-    for (int i = 0; i < 4; ++i) {
+    int lineH = (sz - 2 * m) / 4;
+    for (int i = 0; i < 4; ++i)
+    {
         int ly = y + i * lineH + lineH / 2;
         pm.DrawLine(ox + m, ly, ox + sz - m, ly, IC);
     }
@@ -542,11 +642,11 @@ void IconAtlas::drawViewGrid(BuImage& pm, int ox, int oy, int sz)
 {
     int m = sz / 5;
     int gap = 2;
-    int cellW = (sz - 2*m - gap) / 2;
-    int cellH = (sz - 2*m - gap) / 2;
-    pm.DrawRect(ox + m,              oy + m,               cellW, cellH, IC, false);
-    pm.DrawRect(ox + m + cellW + gap, oy + m,               cellW, cellH, IC, false);
-    pm.DrawRect(ox + m,              oy + m + cellH + gap, cellW, cellH, IC, false);
+    int cellW = (sz - 2 * m - gap) / 2;
+    int cellH = (sz - 2 * m - gap) / 2;
+    pm.DrawRect(ox + m, oy + m, cellW, cellH, IC, false);
+    pm.DrawRect(ox + m + cellW + gap, oy + m, cellW, cellH, IC, false);
+    pm.DrawRect(ox + m, oy + m + cellH + gap, cellW, cellH, IC, false);
     pm.DrawRect(ox + m + cellW + gap, oy + m + cellH + gap, cellW, cellH, IC, false);
 }
 
@@ -561,7 +661,8 @@ void IconAtlas::drawPlay(BuImage& pm, int ox, int oy, int sz)
     int cy = oy + sz / 2;
     // Fill triangle with horizontal scan lines
     int h = sz - 2 * m;
-    for (int row = 0; row < h; ++row) {
+    for (int row = 0; row < h; ++row)
+    {
         float t = static_cast<float>(row) / static_cast<float>(h - 1);
         // top-to-bottom: x goes from x0 to x1 (widest at cy) then back
         float frac = (t <= 0.5f) ? (t * 2.f) : (2.f - t * 2.f);
@@ -579,7 +680,7 @@ void IconAtlas::drawPause(BuImage& pm, int ox, int oy, int sz)
     int gap = std::max(2, sz / 6);
     int totalW = barW * 2 + gap;
     int x0 = ox + (sz - totalW) / 2;
-    pm.DrawRect(x0,              oy + m, barW, sz - 2 * m, IC, true);
+    pm.DrawRect(x0, oy + m, barW, sz - 2 * m, IC, true);
     pm.DrawRect(x0 + barW + gap, oy + m, barW, sz - 2 * m, IC, true);
 }
 
@@ -599,9 +700,10 @@ void IconAtlas::drawStepForward(BuImage& pm, int ox, int oy, int sz)
     int barW = std::max(2, sz / 8);
     // Triangle (left part)
     int triRight = ox + sz - m - barW - 1;
-    int triLeft  = ox + m;
+    int triLeft = ox + m;
     int h = sz - 2 * m;
-    for (int row = 0; row < h; ++row) {
+    for (int row = 0; row < h; ++row)
+    {
         float t = static_cast<float>(row) / static_cast<float>(h - 1);
         float frac = (t <= 0.5f) ? (t * 2.f) : (2.f - t * 2.f);
         int xe = triLeft + static_cast<int>(frac * (triRight - triLeft));
@@ -621,9 +723,10 @@ void IconAtlas::drawStepBack(BuImage& pm, int ox, int oy, int sz)
     // Vertical bar (left)
     pm.DrawRect(ox + m, oy + m, barW, h, IC, true);
     // Triangle (right part, pointing left)
-    int triLeft  = ox + m + barW + 1;
+    int triLeft = ox + m + barW + 1;
     int triRight = ox + sz - m;
-    for (int row = 0; row < h; ++row) {
+    for (int row = 0; row < h; ++row)
+    {
         float t = static_cast<float>(row) / static_cast<float>(h - 1);
         float frac = (t <= 0.5f) ? (t * 2.f) : (2.f - t * 2.f);
         int xs = triRight - static_cast<int>(frac * (triRight - triLeft));
@@ -638,7 +741,7 @@ void IconAtlas::drawRecord(BuImage& pm, int ox, int oy, int sz)
     static const Color red(220, 60, 60, 255);
     int cx = ox + sz / 2;
     int cy = oy + sz / 2;
-    int r  = sz / 3;
+    int r = sz / 3;
     pm.DrawCircle(cx, cy, r, red, true);
 }
 
@@ -663,7 +766,8 @@ void IconAtlas::drawScissors(BuImage& pm, int ox, int oy, int sz)
     auto X = [&](float f) { return ox + static_cast<int>(f * sz); };
     auto Y = [&](float f) { return oy + static_cast<int>(f * sz); };
     // Two blades crossing at the pivot, drawn twice for weight.
-    for (int d = 0; d < 2; ++d) {
+    for (int d = 0; d < 2; ++d)
+    {
         pm.DrawLine(X(0.30f) + d, Y(0.10f), X(0.70f) + d, Y(0.70f), IC);
         pm.DrawLine(X(0.70f) + d, Y(0.10f), X(0.30f) + d, Y(0.70f), IC);
     }
@@ -679,7 +783,8 @@ void IconAtlas::drawImport(BuImage& pm, int ox, int oy, int sz)
 {
     auto X = [&](float f) { return ox + static_cast<int>(f * sz); };
     auto Y = [&](float f) { return oy + static_cast<int>(f * sz); };
-    for (int d = 0; d < 2; ++d) {
+    for (int d = 0; d < 2; ++d)
+    {
         pm.DrawLine(X(0.50f) + d, Y(0.12f), X(0.50f) + d, Y(0.56f), IC);
         pm.DrawLine(X(0.50f) + d, Y(0.60f), X(0.30f) + d, Y(0.40f), IC);
         pm.DrawLine(X(0.50f) + d, Y(0.60f), X(0.70f) + d, Y(0.40f), IC);
@@ -697,13 +802,18 @@ void IconAtlas::drawMagnet(BuImage& pm, int ox, int oy, int sz)
     const float cx = ox + sz * 0.5f, cy = oy + sz * 0.46f;
     const float outer = sz * 0.34f, inner = sz * 0.17f;
     const int steps = 14;
-    for (int i = 0; i < steps; ++i) {
+    for (int i = 0; i < steps; ++i)
+    {
         const float a0 = 3.14159265f + 3.14159265f * i / steps;
         const float a1 = 3.14159265f + 3.14159265f * (i + 1) / steps;
-        pm.DrawLine(static_cast<int>(cx + outer * std::cos(a0)), static_cast<int>(cy + outer * std::sin(a0)),
-                    static_cast<int>(cx + outer * std::cos(a1)), static_cast<int>(cy + outer * std::sin(a1)), IC);
-        pm.DrawLine(static_cast<int>(cx + inner * std::cos(a0)), static_cast<int>(cy + inner * std::sin(a0)),
-                    static_cast<int>(cx + inner * std::cos(a1)), static_cast<int>(cy + inner * std::sin(a1)), IC);
+        pm.DrawLine(static_cast<int>(cx + outer * std::cos(a0)),
+                static_cast<int>(cy + outer * std::sin(a0)),
+                static_cast<int>(cx + outer * std::cos(a1)),
+                static_cast<int>(cy + outer * std::sin(a1)), IC);
+        pm.DrawLine(static_cast<int>(cx + inner * std::cos(a0)),
+                static_cast<int>(cy + inner * std::sin(a0)),
+                static_cast<int>(cx + inner * std::cos(a1)),
+                static_cast<int>(cy + inner * std::sin(a1)), IC);
     }
     const int legTop = static_cast<int>(cy), legBottom = oy + static_cast<int>(sz * 0.82f);
     const int leftOuter = static_cast<int>(cx - outer), leftInner = static_cast<int>(cx - inner);
@@ -714,6 +824,8 @@ void IconAtlas::drawMagnet(BuImage& pm, int ox, int oy, int sz)
     pm.DrawLine(rightInner, legTop, rightInner, legBottom, IC);
     // Poles
     const int tip = std::max(2, sz / 7);
-    pm.DrawRect(leftOuter, legBottom - tip, leftInner - leftOuter + 1, tip, Color(220, 70, 70, 255), true);
-    pm.DrawRect(rightInner, legBottom - tip, rightOuter - rightInner + 1, tip, Color(90, 140, 230, 255), true);
+    pm.DrawRect(leftOuter, legBottom - tip, leftInner - leftOuter + 1, tip, Color(220, 70, 70, 255),
+            true);
+    pm.DrawRect(rightInner, legBottom - tip, rightOuter - rightInner + 1, tip,
+            Color(90, 140, 230, 255), true);
 }

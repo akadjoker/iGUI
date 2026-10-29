@@ -23,16 +23,15 @@ void test_click_hits_only_its_own_button()
 
     bool clickedA = false;
     bool clickedB = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         clickedA = false;
         clickedB = false;
         c.beginWindow("w", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f));
-        if (c.button("A", ig::Rect(0.0f, 0.0f, 80.0f, 24.0f)))
-            clickedA = true;
+        if (c.button("A", ig::Rect(0.0f, 0.0f, 80.0f, 24.0f))) clickedA = true;
         // button(label, Rect) is manual placement, not auto-layout - it
         // doesn't feed sameLine(), so B needs its own explicit x.
-        if (c.button("B", ig::Rect(90.0f, 0.0f, 80.0f, 24.0f)))
-            clickedB = true;
+        if (c.button("B", ig::Rect(90.0f, 0.0f, 80.0f, 24.0f))) clickedB = true;
         c.endWindow();
     };
 
@@ -65,14 +64,13 @@ void test_first_button_at_a_point_wins_the_overlap()
 
     bool clickedBase = false;
     bool clickedOverlay = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         clickedBase = false;
         clickedOverlay = false;
         c.beginWindow("w", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f));
-        if (c.button("base", ig::Rect(10.0f, 10.0f, 100.0f, 40.0f)))
-            clickedBase = true;
-        if (c.button("overlay", ig::Rect(60.0f, 10.0f, 50.0f, 40.0f)))
-            clickedOverlay = true;
+        if (c.button("base", ig::Rect(10.0f, 10.0f, 100.0f, 40.0f))) clickedBase = true;
+        if (c.button("overlay", ig::Rect(60.0f, 10.0f, 50.0f, 40.0f))) clickedOverlay = true;
         c.endWindow();
     };
 
@@ -97,7 +95,8 @@ void test_drag_reports_intermediate_state()
     float value = 0.0f;
 
     int frameCount = 0;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         ++frameCount;
         c.beginWindow("w", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f));
         c.sliderFloat("v", value, 0.0f, 1.0f, ig::Rect(8.0f, 8.0f, 160.0f, 28.0f));
@@ -119,12 +118,14 @@ void test_vertex_and_color_queries()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    harness.frame([](ig::Context &c) {
-        c.beginWindow("w", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f));
-        c.drawRectFilledRounded(ig::Rect(20.0f, 20.0f, 40.0f, 40.0f), 0.0f,
-                                ig::Color(255u, 0u, 0u, 255u));
-        c.endWindow();
-    });
+    harness.frame(
+            [](ig::Context& c)
+            {
+                c.beginWindow("w", ig::Rect(0.0f, 0.0f, 300.0f, 200.0f));
+                c.drawRectFilledRounded(ig::Rect(20.0f, 20.0f, 40.0f, 40.0f), 0.0f,
+                        ig::Color(255u, 0u, 0u, 255u));
+                c.endWindow();
+            });
 
     assert(harness.hasVertexNear(28.0f, 52.0f, 6.0f));
     assert(!harness.hasVertexNear(999.0f, 999.0f, 6.0f));
@@ -145,17 +146,16 @@ void test_dialog_blocks_and_closes()
     bool open = true;
     bool clickedBehind = false;
     bool clickedInside = false;
-    auto build = [&](ig::Context &c) {
+    auto build = [&](ig::Context& c)
+    {
         clickedBehind = false;
         clickedInside = false;
         c.beginMainWindow("main");
-        if (c.button("behind", ig::Rect(0.0f, 0.0f, 200.0f, 40.0f)))
-            clickedBehind = true;
+        if (c.button("behind", ig::Rect(0.0f, 0.0f, 200.0f, 40.0f))) clickedBehind = true;
         c.endWindow();
         if (c.beginDialog("Settings", open, ig::Vec2(380.0f, 280.0f)))
         {
-            if (c.button("inside", ig::Rect(0.0f, 0.0f, 120.0f, 30.0f)))
-                clickedInside = true;
+            if (c.button("inside", ig::Rect(0.0f, 0.0f, 120.0f, 30.0f))) clickedInside = true;
             c.endDialog();
         }
     };

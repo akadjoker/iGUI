@@ -1,6 +1,6 @@
-#include "pch.hpp"
 #include "MenuWidgets.hpp"
 #include "WidgetApp.hpp"
+#include "pch.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -11,12 +11,12 @@
 Menu::Menu()
 {
     acceptsFocus_ = true;
-    scrollable_   = false;
+    scrollable_ = false;
 }
 
 Menu::~Menu()
 {
-    for (auto* a : actions_) delete a;
+    for (auto* a: actions_) delete a;
 }
 
 MenuAction* Menu::addAction(const String& text)
@@ -38,7 +38,7 @@ MenuAction* Menu::addCheckable(const String& text, bool checked)
 {
     auto* a = addAction(text);
     a->checkable_ = true;
-    a->checked_   = checked;
+    a->checked_ = checked;
     return a;
 }
 
@@ -52,7 +52,7 @@ MenuAction* Menu::addSeparator()
 
 void Menu::clearActions()
 {
-    for (auto* a : actions_) delete a;
+    for (auto* a: actions_) delete a;
     actions_.clear();
 }
 
@@ -68,8 +68,7 @@ float Menu::rowY_(int idx) const
 {
     const auto& t = Theme::instance();
     float y = rect_.y + 4.0f;
-    for (int i = 0; i < idx; ++i)
-        y += actions_[i]->isSeparator() ? kSepH : t.menuItemHeight;
+    for (int i = 0; i < idx; ++i) y += actions_[i]->isSeparator() ? kSepH : t.menuItemHeight;
     return y;
 }
 
@@ -98,12 +97,13 @@ float Menu::computeWidth_() const
 {
     const auto& t = Theme::instance();
     float maxW = t.menuMinWidth;
-    for (auto* a : actions_)
+    for (auto* a: actions_)
     {
         if (a->isSeparator()) continue;
         float tw = WidgetApp::instance().textWidth(a->text().c_str());
-        float sw = a->shortcut().empty() ? 0.0f
-                 : WidgetApp::instance().textWidth(a->shortcut().c_str()) + kPadX * 2;
+        float sw = a->shortcut().empty()
+                           ? 0.0f
+                           : WidgetApp::instance().textWidth(a->shortcut().c_str()) + kPadX * 2;
         float w = kIconW + kPadX + tw + sw + kPadX;
         if (a->submenu()) w += 16.0f;
         maxW = std::max(maxW, w);
@@ -117,9 +117,8 @@ Widget::Vec2f Menu::sizeHint() const
 {
     const auto& t = Theme::instance();
     float h = 8.0f;
-    for (auto* a : actions_)
-        h += a->isSeparator() ? kSepH : t.menuItemHeight;
-    return {computeWidth_(), h};
+    for (auto* a: actions_) h += a->isSeparator() ? kSepH : t.menuItemHeight;
+    return { computeWidth_(), h };
 }
 
 void Menu::exec(float x, float y, Widget* owner)
@@ -166,15 +165,15 @@ void Menu::showSubmenu_(int idx)
 
     float sx = abs.x + abs.w;
     float sy = rowY_(idx);
-    if (sx + sz.x > sw) sx = abs.x - sz.x;  // flip left
-    if (sy + sz.y > sh) sy = sh - sz.y;      // flip up
+    if (sx + sz.x > sw) sx = abs.x - sz.x; // flip left
+    if (sy + sz.y > sh) sy = sh - sz.y;    // flip up
     if (sx < 0) sx = 0;
     if (sy < 0) sy = 0;
 
     sub->setPosition(sx, sy);
     sub->setSize(sz.x, sz.y);
     sub->resetPopupState();
-    activeSubmenu_    = sub;
+    activeSubmenu_ = sub;
     activeSubmenuIdx_ = idx;
     markDirty();
 }
@@ -184,7 +183,7 @@ void Menu::hideSubmenu_()
     if (!activeSubmenu_) return;
     activeSubmenu_->hideSubmenu_();
     activeSubmenu_->resetPopupState();
-    activeSubmenu_    = nullptr;
+    activeSubmenu_ = nullptr;
     activeSubmenuIdx_ = -1;
     markDirty();
 }
@@ -210,14 +209,14 @@ void Menu::paint(PaintContext& ctx)
     float y = abs.y + 4.0f;
     for (int i = 0; i < static_cast<int>(actions_.size()); ++i)
     {
-        MenuAction* a   = actions_[i];
-        float       itemH = a->isSeparator() ? kSepH : t.menuItemHeight;
+        MenuAction* a = actions_[i];
+        float itemH = a->isSeparator() ? kSepH : t.menuItemHeight;
 
         if (a->isSeparator())
         {
             float sy = y + kSepH * 0.5f;
-            ctx.line.SetColor(t.menuSeparator.r, t.menuSeparator.g,
-                              t.menuSeparator.b, t.menuSeparator.a);
+            ctx.line.SetColor(t.menuSeparator.r, t.menuSeparator.g, t.menuSeparator.b,
+                    t.menuSeparator.a);
             ctx.line.Line2D(abs.x + 4, sy, abs.x + abs.w - 4, sy);
         }
         else
@@ -227,10 +226,8 @@ void Menu::paint(PaintContext& ctx)
             // Hover highlight
             if (hov)
             {
-                ctx.fill.SetColor(t.menuItemHover.r, t.menuItemHover.g,
-                                  t.menuItemHover.b, 255);
-                ctx.fill.RoundedRectangle(abs.x + 2, y, abs.w - 4, itemH,
-                                          t.borderRadius, 6, true);
+                ctx.fill.SetColor(t.menuItemHover.r, t.menuItemHover.g, t.menuItemHover.b, 255);
+                ctx.fill.RoundedRectangle(abs.x + 2, y, abs.w - 4, itemH, t.borderRadius, 6, true);
             }
 
             // Checkmark
@@ -238,16 +235,15 @@ void Menu::paint(PaintContext& ctx)
             {
                 float cx = abs.x + kIconW * 0.5f;
                 float cy = y + itemH * 0.5f;
-                ctx.line.SetColor(t.menuCheckMark.r, t.menuCheckMark.g,
-                                  t.menuCheckMark.b, 255);
-                ctx.line.Line2D(cx - 5, cy,     cx - 1, cy + 4);
+                ctx.line.SetColor(t.menuCheckMark.r, t.menuCheckMark.g, t.menuCheckMark.b, 255);
+                ctx.line.Line2D(cx - 5, cy, cx - 1, cy + 4);
                 ctx.line.Line2D(cx - 1, cy + 4, cx + 5, cy - 4);
             }
 
             // Item text
-            Color tc = !a->isEnabled()   ? t.menuItemDisabled
-                     : hov               ? t.menuItemTextHover
-                                         : t.menuItemText;
+            Color tc = !a->isEnabled() ? t.menuItemDisabled
+                       : hov           ? t.menuItemTextHover
+                                       : t.menuItemText;
             ctx.font.SetColor(tc);
             float ty = y + (itemH + asc) * 0.5f;
             ctx.font.Print(a->text().c_str(), abs.x + kIconW + kPadX, ty);
@@ -258,8 +254,7 @@ void Menu::paint(PaintContext& ctx)
                 Color sc = hov ? t.menuShortcutHover : t.menuShortcutText;
                 ctx.font.SetColor(sc);
                 float shw = ctx.font.GetTextWidth(a->shortcut().c_str());
-                ctx.font.Print(a->shortcut().c_str(),
-                               abs.x + abs.w - shw - kPadX, ty);
+                ctx.font.Print(a->shortcut().c_str(), abs.x + abs.w - shw - kPadX, ty);
             }
 
             // Submenu arrow
@@ -267,10 +262,10 @@ void Menu::paint(PaintContext& ctx)
             {
                 float ax = abs.x + abs.w - 10;
                 float ay = y + itemH * 0.5f;
-                ctx.line.SetColor(t.menuSubmenuArrow.r, t.menuSubmenuArrow.g,
-                                  t.menuSubmenuArrow.b, 255);
+                ctx.line.SetColor(t.menuSubmenuArrow.r, t.menuSubmenuArrow.g, t.menuSubmenuArrow.b,
+                        255);
                 ctx.line.Line2D(ax - 4, ay - 4, ax, ay);
-                ctx.line.Line2D(ax,     ay,      ax - 4, ay + 4);
+                ctx.line.Line2D(ax, ay, ax - 4, ay + 4);
             }
         }
 
@@ -280,13 +275,11 @@ void Menu::paint(PaintContext& ctx)
     ctx.popClip();
 
     // Border — outside clip so it draws cleanly over the content
-    ctx.line.SetColor(t.menuBorder.r, t.menuBorder.g,
-                      t.menuBorder.b, t.menuBorder.a);
+    ctx.line.SetColor(t.menuBorder.r, t.menuBorder.g, t.menuBorder.b, t.menuBorder.a);
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
     // Recursively paint any open submenu on top
-    if (activeSubmenu_)
-        activeSubmenu_->paint(ctx);
+    if (activeSubmenu_) activeSubmenu_->paint(ctx);
 }
 
 // ── Events ────────────────────────────────────────────────────────────────────
@@ -307,7 +300,11 @@ void Menu::onMousePress(MouseEvent& e)
         return;
     }
     MenuAction* a = actions_[idx];
-    if (a->isSeparator() || !a->isEnabled()) { e.consumed = true; return; }
+    if (a->isSeparator() || !a->isEnabled())
+    {
+        e.consumed = true;
+        return;
+    }
 
     // Submenu item: open on click (don't trigger or close)
     if (a->submenu())
@@ -333,15 +330,18 @@ void Menu::onMouseMove(MouseEvent& e)
     }
 
     int idx = hitItem_(e.y);
-    if (idx != hoveredIdx_) { hoveredIdx_ = idx; markDirty(); }
+    if (idx != hoveredIdx_)
+    {
+        hoveredIdx_ = idx;
+        markDirty();
+    }
 
     if (idx >= 0 && idx < static_cast<int>(actions_.size()))
     {
         MenuAction* a = actions_[idx];
-        if (a->submenu())
-            showSubmenu_(idx);       // open/switch submenu on hover
+        if (a->submenu()) showSubmenu_(idx); // open/switch submenu on hover
         else if (idx != activeSubmenuIdx_)
-            hideSubmenu_();          // close submenu when on a non-submenu item
+            hideSubmenu_(); // close submenu when on a non-submenu item
     }
 }
 
@@ -362,14 +362,14 @@ MenuBar::MenuBar()
 
 MenuBar::~MenuBar()
 {
-    for (auto& e : entries_) delete e.menu;
+    for (auto& e: entries_) delete e.menu;
 }
 
 Menu* MenuBar::addMenu(const String& title)
 {
     Entry e;
     e.title = title;
-    e.menu  = new Menu();
+    e.menu = new Menu();
     entries_.push_back(std::move(e));
     return entries_.back().menu;
 }
@@ -392,20 +392,19 @@ const String& MenuBar::menuTitle(int i) const
 void MenuBar::computeEntryWidths_()
 {
     float x = 0;
-    for (auto& e : entries_)
+    for (auto& e: entries_)
     {
         float tw = WidgetApp::instance().textWidth(e.title.c_str());
         e.w = tw + kPadX * 2;
         e.x = x;
-        x  += e.w;
+        x += e.w;
     }
 }
 
 int MenuBar::hitEntry_(float localX) const
 {
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i)
-        if (localX >= entries_[i].x && localX < entries_[i].x + entries_[i].w)
-            return i;
+        if (localX >= entries_[i].x && localX < entries_[i].x + entries_[i].w) return i;
     return -1;
 }
 
@@ -443,7 +442,7 @@ void MenuBar::closeMenu_()
 
 Widget::Vec2f MenuBar::sizeHint() const
 {
-    return {rect_.w, Theme::instance().menuBarHeight};
+    return { rect_.w, Theme::instance().menuBarHeight };
 }
 
 void MenuBar::layout()
@@ -469,21 +468,21 @@ void MenuBar::paint(PaintContext& ctx)
 
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
-    float asc  = ctx.font.GetAscender();
-    int   open = openMenuIdx_();
+    float asc = ctx.font.GetAscender();
+    int open = openMenuIdx_();
 
     for (int i = 0; i < static_cast<int>(entries_.size()); ++i)
     {
-        auto&  e  = entries_[i];
-        float  ix = abs.x + e.x;
-        bool   hov = (i == hoveredIdx_) || (i == open);
+        auto& e = entries_[i];
+        float ix = abs.x + e.x;
+        bool hov = (i == hoveredIdx_) || (i == open);
 
         if (hov)
         {
-            ctx.fill.SetColor(t.menuBarItemHover.r, t.menuBarItemHover.g,
-                              t.menuBarItemHover.b, 255);
-            ctx.fill.RoundedRectangle(ix + 2, abs.y + 2, e.w - 4,
-                                      abs.h - 4, t.borderRadius, 6, true);
+            ctx.fill.SetColor(t.menuBarItemHover.r, t.menuBarItemHover.g, t.menuBarItemHover.b,
+                    255);
+            ctx.fill.RoundedRectangle(ix + 2, abs.y + 2, e.w - 4, abs.h - 4, t.borderRadius, 6,
+                    true);
         }
 
         Color tc = hov ? t.menuItemTextHover : t.menuItemText;
@@ -497,23 +496,21 @@ void MenuBar::paint(PaintContext& ctx)
     ctx.popClip();
 
     // Bottom border line
-    ctx.line.SetColor(t.menuBorder.r, t.menuBorder.g,
-                      t.menuBorder.b, t.menuBorder.a);
+    ctx.line.SetColor(t.menuBorder.r, t.menuBorder.g, t.menuBorder.b, t.menuBorder.a);
     ctx.line.Line2D(abs.x, abs.y + abs.h - 1, abs.x + abs.w, abs.y + abs.h - 1);
 }
 
 void MenuBar::onMousePress(MouseEvent& e)
 {
-    Rect abs    = absoluteRect();
-    int  idx    = hitEntry_(e.x - abs.x);
-    int  open   = openMenuIdx_();
+    Rect abs = absoluteRect();
+    int idx = hitEntry_(e.x - abs.x);
+    int open = openMenuIdx_();
     if (idx < 0)
     {
         if (open >= 0) closeMenu_();
         return;
     }
-    if (open == idx)
-        closeMenu_();
+    if (open == idx) closeMenu_();
     else
         openMenu_(idx);
     e.consumed = true;
@@ -522,14 +519,17 @@ void MenuBar::onMousePress(MouseEvent& e)
 void MenuBar::onMouseMove(MouseEvent& e)
 {
     Rect abs = absoluteRect();
-    int  idx = hitEntry_(e.x - abs.x);
+    int idx = hitEntry_(e.x - abs.x);
 
-    if (idx != hoveredIdx_) { hoveredIdx_ = idx; markDirty(); }
+    if (idx != hoveredIdx_)
+    {
+        hoveredIdx_ = idx;
+        markDirty();
+    }
 
     // If a menu is already open, hover to switch
     int open = openMenuIdx_();
-    if (open >= 0 && idx >= 0 && idx != open)
-        openMenu_(idx);
+    if (open >= 0 && idx >= 0 && idx != open) openMenu_(idx);
 }
 
 void MenuBar::onMouseLeave()

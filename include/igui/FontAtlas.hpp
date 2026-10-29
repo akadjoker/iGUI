@@ -35,7 +35,10 @@ struct FontRange
     uint32_t last;
 
     FontRange(uint32_t firstCodepoint, uint32_t lastCodepoint)
-        : first(firstCodepoint), last(lastCodepoint) {}
+            : first(firstCodepoint),
+              last(lastCodepoint)
+    {
+    }
 };
 
 // Defaults úteis, não um limite: a aplicação pode fornecer quaisquer ranges.
@@ -46,7 +49,7 @@ class FontAtlas : public TextProvider
 public:
     FontAtlas();
     FontAtlas(Span<const FontRange> ranges, uint32_t width, uint32_t height,
-              float bakedSize = 16.0f);
+            float bakedSize = 16.0f);
     // Same atlas, built from the application's own TTF/OTF bytes instead of the
     // embedded default (see IGUI_FONT_INPUT): what an application needs to pick a
     // font at run time, or to load one from a file it was given. The bytes are
@@ -56,7 +59,7 @@ public:
     // square: a font whose ascent+descent is wider than its em (Roboto, most text
     // fonts) bakes a little smaller than the number suggests.
     FontAtlas(Span<const uint8_t> fontData, Span<const FontRange> ranges, uint32_t width,
-              uint32_t height, float bakedSize = 16.0f);
+            uint32_t height, float bakedSize = 16.0f);
 
     bool valid() const;
     FontId defaultFont() const;
@@ -78,7 +81,7 @@ public:
     // tem a textura tem de a voltar a subir com pixels() depois disto - é o que a
     // aplicação faz uma vez, ao carregar as fontes, antes de criar a textura.
     FontId loadFont(Span<const uint8_t> fontData, float bakedSize = 0.0f,
-                    Span<const FontRange> ranges = Span<const FontRange>());
+            Span<const FontRange> ranges = Span<const FontRange>());
     uint32_t faceCount() const;
     // As métricas de uma face (as sem argumento são as da primeira).
     float bakedSize(FontId font) const override;
@@ -96,14 +99,14 @@ public:
     TextProvider::SolidStyle solidStyle() const override;
 
     TextMetrics measureText(FontId font, StringView text, float logicalSize) const override;
-    const FontGlyph *glyph(FontId font, uint32_t codepoint) const;
-    bool appendText(DrawList &drawList, FontId font, StringView text,
-                    const Vec2 &position, float logicalSize,
-                    const Color &color, const Rect &clip) const override;
+    const FontGlyph* glyph(FontId font, uint32_t codepoint) const;
+    bool appendText(DrawList& drawList, FontId font, StringView text, const Vec2& position,
+            float logicalSize, const Color& color, const Rect& clip) const override;
 
 private:
     // Fixed-size, per-face lookup cache. Indices remain valid when copied.
-    struct GlyphCacheEntry {
+    struct GlyphCacheEntry
+    {
         uint32_t codepoint = 0;
         int index = -1;
         bool occupied = false;
@@ -131,8 +134,18 @@ private:
         mutable GlyphCacheEntry glyphCache[256];
 
         Face()
-            : data(), ranges(), glyphs(), ascent(0.0f), descent(0.0f), lineHeight(0.0f),
-              bakedSize(0.0f), lookup(), lookupLimit(0u), glyphCache() {}
+                : data(),
+                  ranges(),
+                  glyphs(),
+                  ascent(0.0f),
+                  descent(0.0f),
+                  lineHeight(0.0f),
+                  bakedSize(0.0f),
+                  lookup(),
+                  lookupLimit(0u),
+                  glyphCache()
+        {
+        }
     };
 
     ct::Vector<uint8_t> pixels_;
@@ -144,17 +157,17 @@ private:
     bool valid_;
     // O índice da face de um FontId (0 se o id não for de nenhuma).
     uint32_t faceIndex(FontId font) const;
-    const FontGlyph *lookupGlyph(const Face &face, uint32_t codepoint) const;
+    const FontGlyph* lookupGlyph(const Face& face, uint32_t codepoint) const;
     // Common body of the constructors and of loadFont: packs every face into the
     // atlas the members describe (the pixels are cleared first).
     void rebuild();
     // Empacota uma face no contexto que o rebuild abriu (é o mesmo contexto para
     // todas: os glifos de uma ficam ao lado dos da outra). Devolve false se a face
     // não deu glifos nenhuns.
-    bool packFace(Face &face, stbtt_pack_context &pack);
+    bool packFace(Face& face, stbtt_pack_context& pack);
 };
 
 // Lê um codepoint UTF-8. Para uma sequência inválida devolve U+FFFD e avança um byte.
-bool decodeUtf8(StringView text, StringView::size_type &offset, uint32_t &codepoint);
+bool decodeUtf8(StringView text, StringView::size_type& offset, uint32_t& codepoint);
 
 } // namespace ig

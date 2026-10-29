@@ -1,13 +1,15 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Theme.hpp"
 #include "ViewWidgets.hpp"
-#include <igui/widgets/String.hpp>
+#include "Widget.hpp"
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Dialog — modal overlay with scrim, title, message, action buttons
@@ -28,23 +30,32 @@ class Dialog : public Widget
 public:
     IG_WIDGET_CLASS(Dialog, Widget);
 
-    enum class Role { Normal, Cancel, Accept, Danger };
+    enum class Role
+    {
+        Normal,
+        Cancel,
+        Accept,
+        Danger
+    };
 
-    struct ButtonDef {
-        String          label;
-        Role                 role     = Role::Normal;
+    struct ButtonDef
+    {
+        String label;
+        Role role = Role::Normal;
         ct::Function<void()> action;
     };
 
     Dialog(const String& title, const String& message);
 
     /// @brief Add an action button to the dialog.
-    Dialog& addButton(const String& label,
-                      Role role = Role::Normal,
-                      ct::Function<void()> action = nullptr);
+    Dialog& addButton(const String& label, Role role = Role::Normal,
+            ct::Function<void()> action = nullptr);
 
     /// @brief Set a callback invoked on close.
-    void setOnClose(ct::Function<void()> cb) { onClose_ = std::move(cb); }
+    void setOnClose(ct::Function<void()> cb)
+    {
+        onClose_ = std::move(cb);
+    }
 
     /// @brief Show the dialog as a modal popup.
     void show();
@@ -53,35 +64,37 @@ public:
 
     // ── Widget overrides ──────────────────────────────────────────────────
     bool popupContains(float x, float y) const override;
-    void resetPopupState() override {}
+    void resetPopupState() override
+    {
+    }
 
     Vec2f sizeHint() const override;
-    void  layout()   override;
-    void  paint(PaintContext& ctx) override;
-    void  onMousePress(MouseEvent& e) override;
-    void  onMouseRelease(MouseEvent& e) override;
-    void  onKeyPress(KeyEvent& e)     override;
+    void layout() override;
+    void paint(PaintContext& ctx) override;
+    void onMousePress(MouseEvent& e) override;
+    void onMouseRelease(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
-    static constexpr float kWidth    = 360.0f;
-    static constexpr float kBtnH     = 32.0f;
-    static constexpr float kBtnW     = 90.0f;
-    static constexpr float kPad      = 20.0f;
-    static constexpr float kTitleH   = 44.0f;
-    static constexpr float kMsgPad   = 16.0f;
+    static constexpr float kWidth = 360.0f;
+    static constexpr float kBtnH = 32.0f;
+    static constexpr float kBtnW = 90.0f;
+    static constexpr float kPad = 20.0f;
+    static constexpr float kTitleH = 44.0f;
+    static constexpr float kMsgPad = 16.0f;
 
-    String              title_;
-    String              message_;
-    String              wrapped_;
-    ct::Vector<ButtonDef>   buttons_;
-    ct::Function<void()>    onClose_;
+    String title_;
+    String message_;
+    String wrapped_;
+    ct::Vector<ButtonDef> buttons_;
+    ct::Function<void()> onClose_;
 
     int hoveredBtn_ = -1;
     int pressedBtn_ = -1;
 
     float dialogH_() const;
-    Rect  btnRect_(int idx) const;
-    Rect  dialogRect_() const;
-    int   hitButton_(float x, float y) const;
+    Rect btnRect_(int idx) const;
+    Rect dialogRect_() const;
+    int hitButton_(float x, float y) const;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -98,7 +111,7 @@ public:
 
     /// @brief Show a simple alert with a single OK button.
     static void show(const String& title, const String& message,
-                     ct::Function<void()> onClose = nullptr);
+            ct::Function<void()> onClose = nullptr);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -113,13 +126,11 @@ public:
     IG_WIDGET_CLASS(ConfirmDialog, Dialog);
 
     ConfirmDialog(const String& title, const String& message,
-                  ct::Function<void()> onConfirm = nullptr,
-                  ct::Function<void()> onCancel  = nullptr);
+            ct::Function<void()> onConfirm = nullptr, ct::Function<void()> onCancel = nullptr);
 
     /// @brief Show a confirmation dialog with Cancel and Confirm.
-    static void show(const String& title, const String& message,
-                     ct::Function<void()> onConfirm,
-                     ct::Function<void()> onCancel = nullptr);
+    static void show(const String& title, const String& message, ct::Function<void()> onConfirm,
+            ct::Function<void()> onCancel = nullptr);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -134,16 +145,21 @@ public:
 class Toast
 {
 public:
-    enum class Type { Info, Success, Warning, Error };
+    enum class Type
+    {
+        Info,
+        Success,
+        Warning,
+        Error
+    };
 
     static constexpr float kDefaultDuration = 3.0f;
-    static constexpr float kFadeIn          = 0.25f;
-    static constexpr float kFadeOut         = 0.35f;
+    static constexpr float kFadeIn = 0.25f;
+    static constexpr float kFadeOut = 0.35f;
 
     /// @brief Show a brief notification message.
-    static void show(const String& message,
-                     Type               type     = Type::Info,
-                     float              duration = kDefaultDuration);
+    static void show(const String& message, Type type = Type::Info,
+            float duration = kDefaultDuration);
 
     /// @brief Check if any toast is visible.
     static bool hasActive();
@@ -152,12 +168,13 @@ public:
     /// @brief Render all active toasts.
     static void paint(PaintContext& ctx, float screenW, float screenH);
 
-    struct Entry {
+    struct Entry
+    {
         String message;
-        Type        type;
-        float       lifetime = kDefaultDuration;
-        float       elapsed  = 0.0f;
-        float       alpha    = 0.0f;
+        Type type;
+        float lifetime = kDefaultDuration;
+        float elapsed = 0.0f;
+        float alpha = 0.0f;
     };
 
 private:
@@ -182,28 +199,48 @@ class MessageBox : public FloatWindow
 public:
     IG_WIDGET_CLASS(MessageBox, FloatWindow);
 
-    enum Type     { Info, Warning, Error, Question };
-    enum Buttons  { Ok, OkCancel, YesNo, YesNoCancel };
-    enum Result   { ResultOk, ResultCancel, ResultYes, ResultNo };
+    enum Type
+    {
+        Info,
+        Warning,
+        Error,
+        Question
+    };
+    enum Buttons
+    {
+        Ok,
+        OkCancel,
+        YesNo,
+        YesNoCancel
+    };
+    enum Result
+    {
+        ResultOk,
+        ResultCancel,
+        ResultYes,
+        ResultNo
+    };
 
-    MessageBox(const String& title, const String& message,
-               Buttons buttons = Ok, Type type = Info);
+    MessageBox(const String& title, const String& message, Buttons buttons = Ok, Type type = Info);
 
     /// @brief Emitted with the user's chosen result.
     Signal<Result> result;
 
 private:
-    Type     type_;
-    Buttons  buttons_;
+    Type type_;
+    Buttons buttons_;
     String message_;
 
     BoxLayout* mainLayout_ = nullptr;
-    Label*     msgLabel_   = nullptr;
+    Label* msgLabel_ = nullptr;
 
     void buildUI();
     void close(Result r);
     void onKeyPress(KeyEvent& e) override;
-    Widget* focusOnOpen() override { return this; }
+    Widget* focusOnOpen() override
+    {
+        return this;
+    }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -211,9 +248,10 @@ private:
 //
 //    auto* ask = app.addFloat<ChoiceDialog>("Unsaved prefab", "Save it before leaving?");
 //    const int save    = ask->addChoice("Save", IconId::Check, ChoiceDialog::Role::Default);
-//    const int discard = ask->addChoice("Don't save", IconId::Trash, ChoiceDialog::Role::Destructive);
-//    ask->addChoice("Cancel", IconId::Cross, ChoiceDialog::Role::Cancel);
-//    ask->chosen.connect([=](int i) { if (i == save) ...; else if (i == discard) ...; });
+//    const int discard = ask->addChoice("Don't save", IconId::Trash,
+//    ChoiceDialog::Role::Destructive); ask->addChoice("Cancel", IconId::Cross,
+//    ChoiceDialog::Role::Cancel); ask->chosen.connect([=](int i) { if (i == save) ...; else if (i
+//    == discard) ...; });
 //
 //  Enter answers with the default choice, Escape and the window's close button
 //  with the cancel one (-1 when there is none). It answers once, then closes.
@@ -223,7 +261,13 @@ class ChoiceDialog : public FloatWindow
 public:
     IG_WIDGET_CLASS(ChoiceDialog, FloatWindow);
 
-    enum class Role { Normal, Default, Destructive, Cancel };
+    enum class Role
+    {
+        Normal,
+        Default,
+        Destructive,
+        Cancel
+    };
 
     ChoiceDialog(const String& title, const String& message);
 
@@ -236,7 +280,10 @@ public:
     Signal<int> chosen;
 
     void onKeyPress(KeyEvent& e) override;
-    Widget* focusOnOpen() override { return this; }
+    Widget* focusOnOpen() override
+    {
+        return this;
+    }
 
 private:
     int firstWithRole(Role role) const;
@@ -269,19 +316,22 @@ public:
     void setPlaceholder(const String& p);
     void setAcceptLabel(const String& label);
     // Return an empty string to accept; otherwise display the validation error.
-    void setValidator(ct::Function<String(const String&)> validator) { validator_ = std::move(validator); }
+    void setValidator(ct::Function<String(const String&)> validator)
+    {
+        validator_ = std::move(validator);
+    }
 
     /// @brief Emitted with the text when OK is pressed.
     Signal<String> accepted;
     /// @brief Emitted when Cancel is pressed.
-    Signal<>            cancelled;
+    Signal<> cancelled;
 
 private:
     String prompt_;
 
-    BoxLayout* mainLayout_  = nullptr;
-    Label*     promptLabel_ = nullptr;
-    TextInput* textInput_   = nullptr;
+    BoxLayout* mainLayout_ = nullptr;
+    Label* promptLabel_ = nullptr;
+    TextInput* textInput_ = nullptr;
     Button* acceptButton_ = nullptr;
     Label* errorLabel_ = nullptr;
     ct::Function<String(const String&)> validator_;

@@ -1,11 +1,13 @@
 #pragma once
 
-#include "Widget.hpp"
 #include "Signal.hpp"
+#include "Widget.hpp"
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  NodeEditor — Visual node graph (shaders, AI, scripting)
@@ -27,26 +29,44 @@ namespace ig { namespace retained
 //    ed->addLink(n1, 2, n2, 0);
 // ═════════════════════════════════════════════════════════════════════════════
 
-enum class PinDir  { Input, Output };
-enum class PinType { Float, Vec2, Vec3, Vec4, Color, Bool, Int, String, Any };
+enum class PinDir
+{
+    Input,
+    Output
+};
+enum class PinType
+{
+    Float,
+    Vec2,
+    Vec3,
+    Vec4,
+    Color,
+    Bool,
+    Int,
+    String,
+    Any
+};
 
-struct Pin {
+struct Pin
+{
     String name;
-    PinDir      dir;
-    PinType     type;
+    PinDir dir;
+    PinType type;
 };
 
-struct Node {
-    String      title;
-    float            x = 0, y = 0;     // position in graph space
-    float            w = 140, h = 0;   // width fixed, height computed
+struct Node
+{
+    String title;
+    float x = 0, y = 0;   // position in graph space
+    float w = 140, h = 0; // width fixed, height computed
     ct::Vector<Pin> pins;
-    Color            headerColor = Color(70, 90, 130, 255);
-    bool             selected    = false;
-    bool             collapsed   = false;
+    Color headerColor = Color(70, 90, 130, 255);
+    bool selected = false;
+    bool collapsed = false;
 };
 
-struct Link {
+struct Link
+{
     int srcNode = -1, srcPin = -1;
     int dstNode = -1, dstPin = -1;
 };
@@ -59,18 +79,27 @@ public:
     NodeEditor();
 
     /// @brief Add a node at position (x, y).
-    int  addNode(const String& title, float x, float y);
+    int addNode(const String& title, float x, float y);
     /// @brief Remove a node by ID.
     void removeNode(int nodeId);
     /// @brief Remove all nodes and links.
     void clearAll();
 
     /// @brief Get the number of nodes.
-    int         nodeCount() const { return static_cast<int>(nodes_.size()); }
+    int nodeCount() const
+    {
+        return static_cast<int>(nodes_.size());
+    }
     /// @brief Get a mutable node reference.
-    Node&       node(int id)       { return nodes_[id]; }
+    Node& node(int id)
+    {
+        return nodes_[id];
+    }
     /// @brief Get a const node reference.
-    const Node& node(int id) const { return nodes_[id]; }
+    const Node& node(int id) const
+    {
+        return nodes_[id];
+    }
 
     /// @brief Set a node's header color.
     void setNodeHeader(int nodeId, const Color& c);
@@ -79,34 +108,53 @@ public:
     int addPin(int nodeId, const String& name, PinDir dir, PinType type);
 
     /// @brief Add a link between two pins.
-    int  addLink(int srcNode, int srcPin, int dstNode, int dstPin);
+    int addLink(int srcNode, int srcPin, int dstNode, int dstPin);
     /// @brief Remove a link by ID.
     void removeLink(int linkId);
     /// @brief Check if two pins can be linked.
     bool canLink(int srcNode, int srcPin, int dstNode, int dstPin) const;
     /// @brief Get the number of links.
-    int  linkCount() const { return static_cast<int>(links_.size()); }
+    int linkCount() const
+    {
+        return static_cast<int>(links_.size());
+    }
 
     /// @brief Set the snap-to-grid spacing.
-    void  setGridSnap(float s) { gridSnap_ = s; }
+    void setGridSnap(float s)
+    {
+        gridSnap_ = s;
+    }
     /// @brief Fit all nodes into the view.
-    void  fitView();
+    void fitView();
     /// @brief Get the horizontal pan offset.
-    float panX() const { return panX_; }
+    float panX() const
+    {
+        return panX_;
+    }
     /// @brief Get the vertical pan offset.
-    float panY() const { return panY_; }
+    float panY() const
+    {
+        return panY_;
+    }
     /// @brief Get the current zoom level.
-    float zoom() const { return zoom_; }
+    float zoom() const
+    {
+        return zoom_;
+    }
 
     /// @brief Set the background color.
-    void setBgColor(const Color& c) { bgColor_ = c; markDirty(); }
+    void setBgColor(const Color& c)
+    {
+        bgColor_ = c;
+        markDirty();
+    }
 
     /// @brief Emitted when a node is selected.
-    Signal<int>      onNodeSelected;
+    Signal<int> onNodeSelected;
     /// @brief Emitted when a link is created.
     Signal<int, int> onLinkCreated;
     /// @brief Emitted when a link is removed.
-    Signal<int>      onLinkRemoved;
+    Signal<int> onLinkRemoved;
 
     // ── Overrides ────────────────────────────────────────────────────────
     void paint(PaintContext& ctx) override;
@@ -126,31 +174,42 @@ private:
     float gridSnap_ = 16.0f;
 
     // Interaction state
-    enum class DragMode { None, Pan, MoveNode, ConnectPin };
-    DragMode dragMode_   = DragMode::None;
-    float    dragStartX_ = 0, dragStartY_ = 0;
-    float    panStartX_  = 0, panStartY_ = 0;
-    int      dragNode_   = -1;
-    float    nodeStartX_ = 0, nodeStartY_ = 0;
-    int      connSrcNode_ = -1, connSrcPin_ = -1;
-    float    connEndX_ = 0, connEndY_ = 0;
+    enum class DragMode
+    {
+        None,
+        Pan,
+        MoveNode,
+        ConnectPin
+    };
+    DragMode dragMode_ = DragMode::None;
+    float dragStartX_ = 0, dragStartY_ = 0;
+    float panStartX_ = 0, panStartY_ = 0;
+    int dragNode_ = -1;
+    float nodeStartX_ = 0, nodeStartY_ = 0;
+    int connSrcNode_ = -1, connSrcPin_ = -1;
+    float connEndX_ = 0, connEndY_ = 0;
 
     // Layout constants
     static constexpr float kNodeHeaderH = 24;
-    static constexpr float kPinH        = 20;
-    static constexpr float kPinRadius   = 5;
+    static constexpr float kPinH = 20;
+    static constexpr float kPinRadius = 5;
 
     // ── Helpers ──────────────────────────────────────────────────────────
-    float gx(float x) const;   // graph → screen
+    float gx(float x) const; // graph → screen
     float gy(float y) const;
-    float sx(float x) const;   // screen → graph
+    float sx(float x) const; // screen → graph
     float sy(float y) const;
 
     float nodeHeight(const Node& n) const;
-    void  getPinPos(int nodeId, int pinIdx, float& px, float& py) const;
+    void getPinPos(int nodeId, int pinIdx, float& px, float& py) const;
     Color pinColor(PinType t) const;
 
-    struct NodeHit { int node = -1; int pin = -1; bool onHeader = false; };
+    struct NodeHit
+    {
+        int node = -1;
+        int pin = -1;
+        bool onHeader = false;
+    };
     NodeHit hitTest(float mx, float my) const;
 
     void paintGrid(PaintContext& ctx, const Rect& b);

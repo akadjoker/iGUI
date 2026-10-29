@@ -2,7 +2,9 @@
 
 #include <ct/string.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 
 using String = ct::String;

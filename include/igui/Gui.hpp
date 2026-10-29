@@ -3,7 +3,7 @@
 #include "Modes.hpp"
 
 #if !IGUI_IMMEDIATEMODE
-#  error "iGUI: <igui/Gui.hpp> is the immediate-mode API, but IGUI_IMMEDIATEMODE is 0 (see igui/Modes.hpp)."
+#error "iGUI: <igui/Gui.hpp> is the immediate-mode API, but IGUI_IMMEDIATEMODE is 0 (see igui/Modes.hpp)."
 #endif
 
 #include <stdint.h>
@@ -63,10 +63,23 @@ struct WindowState
     DrawList overlayDrawList;
 
     WindowState()
-        : id(InvalidWidgetId), title(), bounds(), open(true), minimized(false), focused(false),
-          showWindowControls(true), showMinimizeButton(true), showMaximizeButton(true),
-          showTitleBar(true), useClientArea(false), allowMove(true), allowResize(true),
-          saveSettings(true), zOrder(0), drawList(), overlayDrawList()
+            : id(InvalidWidgetId),
+              title(),
+              bounds(),
+              open(true),
+              minimized(false),
+              focused(false),
+              showWindowControls(true),
+              showMinimizeButton(true),
+              showMaximizeButton(true),
+              showTitleBar(true),
+              useClientArea(false),
+              allowMove(true),
+              allowResize(true),
+              saveSettings(true),
+              zOrder(0),
+              drawList(),
+              overlayDrawList()
     {
     }
 };
@@ -84,8 +97,13 @@ struct TreeItemStyle
     bool acceptsChildren;
 
     TreeItemStyle()
-        : typeColor(120u, 170u, 230u, 255u), selected(false), leaf(false), disabled(false),
-          acceptsChildren(false) {}
+            : typeColor(120u, 170u, 230u, 255u),
+              selected(false),
+              leaf(false),
+              disabled(false),
+              acceptsChildren(false)
+    {
+    }
 };
 
 // Looks of an expandable row (treeNode and collapsingHeader). Every option is off by
@@ -105,7 +123,12 @@ struct TreeStyle
     bool spanAvailWidth;
 
     TreeStyle()
-        : bullet(false), selected(false), openOnArrow(false), spanAvailWidth(false) {}
+            : bullet(false),
+              selected(false),
+              openOnArrow(false),
+              spanAvailWidth(false)
+    {
+    }
 };
 
 // Looks of an immediate table. Every option is off by default, which draws no
@@ -155,9 +178,20 @@ struct TableStyle
     bool sizingFixedFit;
 
     TableStyle()
-        : alternateRows(false), borders(false), rowHeight(0.0f), rowSpacing(-1.0f),
-          reorderable(false), scrollY(false), freezeRows(0), height(0.0f), scrollX(false),
-          innerWidth(0.0f), freezeCols(0), sizingFixedFit(false) {}
+            : alternateRows(false),
+              borders(false),
+              rowHeight(0.0f),
+              rowSpacing(-1.0f),
+              reorderable(false),
+              scrollY(false),
+              freezeRows(0),
+              height(0.0f),
+              scrollX(false),
+              innerWidth(0.0f),
+              freezeCols(0),
+              sizingFixedFit(false)
+    {
+    }
 };
 
 // The relation selected when a tree item is dropped over another item.
@@ -177,7 +211,11 @@ struct TreeDrop
     TreeDropPosition position;
 
     TreeDrop()
-        : source(InvalidWidgetId), target(InvalidWidgetId), position(TreeDropPosition::Inside) {}
+            : source(InvalidWidgetId),
+              target(InvalidWidgetId),
+              position(TreeDropPosition::Inside)
+    {
+    }
 };
 
 enum class MessageBoxResult : uint8_t
@@ -203,17 +241,27 @@ struct MessageBoxOptions
     bool showDiscard = false;
     MessageBoxKind kind;
     bool showCancel;
-    String *inputValue;
+    String* inputValue;
 
     MessageBoxOptions()
-        : kind(MessageBoxKind::Information), showCancel(false), inputValue(nullptr) {}
+            : kind(MessageBoxKind::Information),
+              showCancel(false),
+              inputValue(nullptr)
+    {
+    }
 };
 
 enum class ToastPosition : uint8_t
 {
-    TopLeft, TopCenter, TopRight,
-    MiddleLeft, Center, MiddleRight,
-    BottomLeft, BottomCenter, BottomRight
+    TopLeft,
+    TopCenter,
+    TopRight,
+    MiddleLeft,
+    Center,
+    MiddleRight,
+    BottomLeft,
+    BottomCenter,
+    BottomRight
 };
 
 struct DragDropPayload
@@ -222,7 +270,12 @@ struct DragDropPayload
     WidgetId source;
     uint64_t data;
 
-    DragDropPayload() : type(InvalidWidgetId), source(InvalidWidgetId), data(0u) {}
+    DragDropPayload()
+            : type(InvalidWidgetId),
+              source(InvalidWidgetId),
+              data(0u)
+    {
+    }
 };
 
 enum class SplitterAxis : uint8_t
@@ -262,7 +315,12 @@ struct Transform2D
     float rotation;
     Vec2 scale;
 
-    Transform2D() : position(), rotation(0.0f), scale(1.0f, 1.0f) {}
+    Transform2D()
+            : position(),
+              rotation(0.0f),
+              scale(1.0f, 1.0f)
+    {
+    }
 };
 
 struct Gizmo2DOptions
@@ -273,7 +331,12 @@ struct Gizmo2DOptions
     float scaleSnap;
 
     Gizmo2DOptions()
-        : axisLength(60.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f) {}
+            : axisLength(60.0f),
+              translateSnap(0.0f),
+              rotateSnap(0.0f),
+              scaleSnap(0.0f)
+    {
+    }
 };
 
 struct Transform3D
@@ -282,7 +345,12 @@ struct Transform3D
     Vec3 rotation;
     Vec3 scale;
 
-    Transform3D() : position(), rotation(), scale(1.0f, 1.0f, 1.0f) {}
+    Transform3D()
+            : position(),
+              rotation(),
+              scale(1.0f, 1.0f, 1.0f)
+    {
+    }
 };
 
 struct Gizmo3DOptions
@@ -297,8 +365,13 @@ struct Gizmo3DOptions
     bool showModel;
 
     Gizmo3DOptions()
-        : axisLength(1.0f), translateSnap(0.0f), rotateSnap(0.0f), scaleSnap(0.0f),
-          showModel(true) {}
+            : axisLength(1.0f),
+              translateSnap(0.0f),
+              rotateSnap(0.0f),
+              scaleSnap(0.0f),
+              showModel(true)
+    {
+    }
 };
 
 // Application-owned stop for gradientEditor(). Positions are normalized to
@@ -308,8 +381,16 @@ struct GradientStop
     float position;
     Color color;
 
-    GradientStop() : position(0.0f), color() {}
-    GradientStop(float value, const Color &stopColor) : position(value), color(stopColor) {}
+    GradientStop()
+            : position(0.0f),
+              color()
+    {
+    }
+    GradientStop(float value, const Color& stopColor)
+            : position(value),
+              color(stopColor)
+    {
+    }
 };
 
 // Application-owned point for curveEditor(). Coordinates use the supplied
@@ -319,17 +400,43 @@ struct CurvePoint
     float x;
     float y;
 
-    CurvePoint() : x(0.0f), y(0.0f) {}
-    CurvePoint(float pointX, float pointY) : x(pointX), y(pointY) {}
+    CurvePoint()
+            : x(0.0f),
+              y(0.0f)
+    {
+    }
+    CurvePoint(float pointX, float pointY)
+            : x(pointX),
+              y(pointY)
+    {
+    }
 };
 struct TimelineTrack
 {
     String label;
     ct::Vector<int> keys;
 };
-struct SequencerTrack { String label; int startFrame; int endFrame; Color color;
-    SequencerTrack() : label(), startFrame(0), endFrame(0), color(90,160,230) {}
-    SequencerTrack(StringView n, int s, int e, const Color& c) : label(n.data(),n.size()), startFrame(s), endFrame(e), color(c) {} };
+struct SequencerTrack
+{
+    String label;
+    int startFrame;
+    int endFrame;
+    Color color;
+    SequencerTrack()
+            : label(),
+              startFrame(0),
+              endFrame(0),
+              color(90, 160, 230)
+    {
+    }
+    SequencerTrack(StringView n, int s, int e, const Color& c)
+            : label(n.data(), n.size()),
+              startFrame(s),
+              endFrame(e),
+              color(c)
+    {
+    }
+};
 
 // Which way a mixer fader travels. A vertical one reads upwards, like the ones
 // on a desk: the maximum sits at the top.
@@ -365,29 +472,35 @@ struct FaderStyle
     bool ticks;
 
     FaderStyle()
-        : fill(0u, 0u, 0u, 0u), groove(0u, 0u, 0u, 0u), cap(0u, 0u, 0u, 0u),
-          capLine(0u, 0u, 0u, 0u), hasFill(false), hasGroove(false), hasCap(false),
-          hasCapLine(false), ticks(true)
+            : fill(0u, 0u, 0u, 0u),
+              groove(0u, 0u, 0u, 0u),
+              cap(0u, 0u, 0u, 0u),
+              capLine(0u, 0u, 0u, 0u),
+              hasFill(false),
+              hasGroove(false),
+              hasCap(false),
+              hasCapLine(false),
+              ticks(true)
     {
     }
 
     // Only the accent changes; the groove and the cap stay as the theme draws
     // them.
-    static FaderStyle accent(const Color &color);
+    static FaderStyle accent(const Color& color);
 };
 
 class Context
 {
 public:
-    explicit Context(Backend &backend, TextProvider *textProvider = nullptr);
+    explicit Context(Backend& backend, TextProvider* textProvider = nullptr);
 
     /// @brief Destroy the context, writing the window state file first (see
     ///        setWindowStatePath).
     ~Context();
 
-    void pushEvent(const Event &event);
-    void beginFrame(const FrameInfo &frame);
-    const DrawData &endFrame();
+    void pushEvent(const Event& event);
+    void beginFrame(const FrameInfo& frame);
+    const DrawData& endFrame();
 
     // Chrome and interaction for beginWindow(): the switches the demo's "Window
     // options" section is about. The default is a normal window - a title bar
@@ -405,11 +518,11 @@ public:
         bool fixedBounds = false;
     };
 
-    bool beginWindow(StringView title, const Rect &initialBounds, bool *open = nullptr);
-    bool beginWindow(StringView title, const Rect &initialBounds, const WindowOptions &options,
-                     bool *open = nullptr);
+    bool beginWindow(StringView title, const Rect& initialBounds, bool* open = nullptr);
+    bool beginWindow(StringView title, const Rect& initialBounds, const WindowOptions& options,
+            bool* open = nullptr);
     // A root window that follows the current viewport every frame.
-    bool beginMainWindow(StringView title, bool *open = nullptr);
+    bool beginMainWindow(StringView title, bool* open = nullptr);
     void endWindow();
     // A barra de menu da aplicação: uma faixa no topo do ecrã que não pertence a
     // nenhuma janela, como o BeginMainMenuBar do ImGui. Devolve false quando não
@@ -439,9 +552,12 @@ public:
     //
     // Desktop only: neither a browser tab nor an Android app can keep the file,
     // so there the state stays in memory and the disk is never touched.
-    void setWindowStatePath(const String &path);
+    void setWindowStatePath(const String& path);
     /// @brief Get the state file path ("" when persistence is off).
-    const String &windowStatePath() const { return windowState_.path(); }
+    const String& windowStatePath() const
+    {
+        return windowState_.path();
+    }
     /// @brief (Re)read the state file and move the windows that exist to what it
     ///        says.
     /// @return true when the file was read.
@@ -502,7 +618,7 @@ public:
     void pushId(StringView id);
     void popId();
 
-    void setTheme(const Theme &theme);
+    void setTheme(const Theme& theme);
     // ── Style vars ───────────────────────────────────────────────────────────
     // Muda um campo do tema dentro de um bloco, sem tocar no tema global. O campo é
     // um ponteiro para membro, por isso vale para qualquer um deles (cor ou medida)
@@ -517,7 +633,7 @@ public:
     // Um push sem pop vale só para o frame dele: no fim do frame o que ficou na
     // pilha é reposto (não se cola ao frame seguinte). A pilha é de 16 níveis; a
     // partir daí o push é ignorado. O setTheme() esvazia-a.
-    void pushStyleColor(Color Theme::*field, const Color &color);
+    void pushStyleColor(Color Theme::*field, const Color& color);
     void popStyleColor(int count = 1);
     void pushStyleVar(float Theme::*field, float value);
     void popStyleVar(int count = 1);
@@ -537,7 +653,7 @@ public:
     // ao pop, mas o push é feito na mesma, para o pop tirar o que lá está.
     void pushFont(FontId font);
     void popFont(int count = 1);
-    const Theme &theme() const;
+    const Theme& theme() const;
     // O tema em vigor, para ser editado (é o GetStyle() do ImGui). O que o editor
     // escrever vale para o que for submetido a seguir neste frame - e como o tema é
     // também o "valor de antes" dos pushStyleVar/pushStyleColor, um campo que esteja
@@ -545,7 +661,7 @@ public:
     // por isso depois do que ele mostra (a galeria submete a janela do Style Editor
     // depois da janela do demo, como o demo do ImGui: um campo mexido aparece no
     // frame seguinte, e o que se vê a ser mexido é o valor antigo).
-    Theme &theme();
+    Theme& theme();
     // Turns the whole interface off: beginWindow() and messageBox() show
     // nothing, pushEvent() drops its events, and the widget state that was
     // under the pointer is released. Windows and their positions are kept, so
@@ -572,7 +688,10 @@ public:
     // textDisabled() does not disappear inside a block.
     void beginDisabled();
     void endDisabled();
-    bool isDisabled() const { return disabledDepth_ > 0; }
+    bool isDisabled() const
+    {
+        return disabledDepth_ > 0;
+    }
 
     // Application-owned history entries. The callbacks must remain valid for
     // as long as the entry stays in this Context's history.
@@ -583,45 +702,43 @@ public:
     bool canRedo() const;
     void clearUndoHistory();
 
-    bool button(StringView label, const Rect &bounds);
+    bool button(StringView label, const Rect& bounds);
     // Compact text action for inspectors and toolbars.
-    bool smallButton(StringView label, const Rect &bounds);
+    bool smallButton(StringView label, const Rect& bounds);
     // A square button with an arrow in it (the ArrowButton of ImGui). The label is
     // an id: use "##left" when there is no text to show.
-    bool arrowButton(StringView label, ArrowDirection direction, const Rect &bounds);
-    bool checkbox(StringView label, bool &value, const Rect &bounds);
+    bool arrowButton(StringView label, ArrowDirection direction, const Rect& bounds);
+    bool checkbox(StringView label, bool& value, const Rect& bounds);
     // The CheckboxFlags of ImGui: a checkbox that toggles the bits in flagValue
     // instead of a bool of its own. Returns true when they changed.
-    bool checkboxFlags(StringView label, unsigned &flags, unsigned flagValue,
-                       const Rect &bounds);
-    bool toggleSwitch(StringView label, bool &value, const Rect &bounds);
-    bool radioButton(StringView label, bool selected, const Rect &bounds);
-    bool selectable(StringView label, bool selected, const Rect &bounds);
+    bool checkboxFlags(StringView label, unsigned& flags, unsigned flagValue, const Rect& bounds);
+    bool toggleSwitch(StringView label, bool& value, const Rect& bounds);
+    bool radioButton(StringView label, bool selected, const Rect& bounds);
+    bool selectable(StringView label, bool selected, const Rect& bounds);
     // Returns whether the section is expanded. The bool stores its persistent state.
-    bool collapsingHeader(StringView label, bool &expanded, const Rect &bounds);
+    bool collapsingHeader(StringView label, bool& expanded, const Rect& bounds);
     // O mesmo, com um botão de fecho no canto: clicar nele põe `open` a false, e a
     // partir daí o header não é desenhado (como o p_open do ImGui).
-    bool collapsingHeader(StringView label, bool &expanded, bool &open, const Rect &bounds);
+    bool collapsingHeader(StringView label, bool& expanded, bool& open, const Rect& bounds);
     // The same with a bullet instead of the arrow, or drawn as chosen: see TreeStyle.
-    bool collapsingHeader(StringView label, bool &expanded, const TreeStyle &style,
-                          const Rect &bounds);
+    bool collapsingHeader(StringView label, bool& expanded, const TreeStyle& style,
+            const Rect& bounds);
     // A compact expandable row for hierarchies. Use indent()/unindent() for its children.
-    bool treeNode(StringView label, bool &expanded, const Rect &bounds);
+    bool treeNode(StringView label, bool& expanded, const Rect& bounds);
     // The TreeStyle version: a bullet (the demo's bullet nodes), a row drawn as
     // chosen, only the arrow opening it, or a row that fills the width.
-    bool treeNode(StringView label, bool &expanded, const TreeStyle &style, const Rect &bounds);
+    bool treeNode(StringView label, bool& expanded, const TreeStyle& style, const Rect& bounds);
     // Scene-oriented tree row. Returns true when the row is selected; expansion
     // is changed only by pressing its disclosure arrow.
-    bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
-                  const Rect &bounds);
+    bool treeItem(StringView label, bool& expanded, const TreeItemStyle& style, const Rect& bounds);
     // Draggable scene-tree item. nodeId must be stable in the application's tree
     // model. Drop over the upper, middle or lower area for Before, Inside or After.
     // The source item cannot be its own target.
-    bool treeItem(WidgetId nodeId, StringView label, bool &expanded, const TreeItemStyle &style,
-                  const Rect &bounds, TreeDrop *drop = nullptr);
+    bool treeItem(WidgetId nodeId, StringView label, bool& expanded, const TreeItemStyle& style,
+            const Rect& bounds, TreeDrop* drop = nullptr);
     // Renders a tab strip and returns true when the selected tab changes.
-    bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
-                const Rect &bounds);
+    bool tabBar(StringView label, int& currentItem, Span<const StringView> items,
+            const Rect& bounds);
     // ── Tabs a sério (o BeginTabBar/BeginTabItem do ImGui) ───────────────────
     // A barra é um contentor: cada beginTabItem desenha a tab e, só a escolhida,
     // abre o conteúdo dela (que vai até ao endTabItem). O que está escolhido é do
@@ -687,8 +804,7 @@ public:
     ///        caller submits the content between this and endTabItem(). With @p open
     ///        the tab carries an X that closes it (setting *open to false), and the
     ///        middle mouse button closes it too unless the bar says otherwise.
-    bool beginTabItem(StringView label, bool *open = nullptr,
-                      unsigned flags = TabItemFlags::None);
+    bool beginTabItem(StringView label, bool* open = nullptr, unsigned flags = TabItemFlags::None);
     void endTabItem();
     /// @brief A tab que é um botão (o TabItemButton do ImGui): ocupa o lugar de uma
     ///        tab na barra, com o aspecto de um botão, e devolve true quando é
@@ -697,10 +813,10 @@ public:
     ///        clique é o chamador. Leva as bandas (Leading/Trailing) como uma tab.
     bool tabItemButton(StringView label, unsigned flags = TabItemFlags::None);
     // A scrollable list. The label is an identifier; render a separate label when needed.
-    bool listBox(StringView label, int &currentItem, Span<const StringView> items,
-                 const Rect &bounds);
-    bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
-                  const Rect &bounds);
+    bool listBox(StringView label, int& currentItem, Span<const StringView> items,
+            const Rect& bounds);
+    bool comboBox(StringView label, int& currentItem, Span<const StringView> items,
+            const Rect& bounds);
     // ── Escolha múltipla ─────────────────────────────────────────────────────
     // O BeginMultiSelect do ImGui sem o modelo de seleção dele: quem sabe o que
     // está escolhido é a aplicação (um bool por item, o span), e o bloco só lhe
@@ -741,8 +857,7 @@ public:
     // sítio (selectable, button, slider). O popup tem a largura do cabeçalho e no
     // máximo visibleItems linhas, como o HeightRegular do ImGui (8); o que não
     // couber é cortado (não há scroll).
-    bool beginCombo(StringView label, StringView preview, const Rect &bounds,
-                    int visibleItems = 8);
+    bool beginCombo(StringView label, StringView preview, const Rect& bounds, int visibleItems = 8);
     void endCombo();
     // O SetItemDefaultFocus do ImGui: o último item submetido é o que deve ficar à
     // vista quando a lista de um combo abre. É o que um combo faz com o item
@@ -751,7 +866,7 @@ public:
     // quando a lista está aberta e tem o que rolar; rolar à mão desiste dele.
     void setItemDefaultFocus();
     // A horizontal menu strip. Call beginMenu()/endMenu() between these calls.
-    bool beginMenuBar(const Rect &bounds);
+    bool beginMenuBar(const Rect& bounds);
     void endMenuBar();
     // Opens a popup menu from the current menu bar.
     bool beginMenu(StringView label);
@@ -761,16 +876,16 @@ public:
     // do ImGui ("Undo", "Ctrl+Z"). O atalho é texto: quem o trata é a aplicação.
     // selected desenha a marca de escolhido, para os itens que fazem de caixa.
     bool menuItem(StringView label, StringView shortcut, bool enabled = true,
-                  bool selected = false);
+            bool selected = false);
     // Checkable menu entry. Returns true when its value changed.
-    bool menuCheckbox(StringView label, bool &checked, bool enabled = true);
+    bool menuCheckbox(StringView label, bool& checked, bool enabled = true);
     // One-level submenu, opened by hover or click. End it before ending its parent menu.
     bool beginSubMenu(StringView label, bool enabled = true);
     void endSubMenu();
     void menuSeparator();
     // Opens a popup at the pointer on a right click over bounds. Use menuItem()
     // and menuSeparator(), then close it with endContextMenu().
-    bool beginContextMenu(StringView id, const Rect &bounds);
+    bool beginContextMenu(StringView id, const Rect& bounds);
     void endContextMenu();
     // ── Popups ───────────────────────────────────────────────────────────────
     // Um popup de conteúdo livre, preso a um id (o OpenPopup/BeginPopup do ImGui):
@@ -797,13 +912,13 @@ public:
     // parar de o submeter deixa de o ter (ver releaseUnsubmittedBlockers).
     void openPopup(StringView id);
     /// @brief Abre no @p position (absoluto) em vez de no ponteiro.
-    void openPopup(StringView id, const Vec2 &position);
+    void openPopup(StringView id, const Vec2& position);
     /// @brief Abre com um tamanho pedido (@p size.x é a largura da caixa, 0 = a do
     ///        tema; @p size.y é a altura mínima, 0 = a que o conteúdo pedir).
     ///        A largura é sempre pedida e nunca medida: os itens de um popup
     ///        esticam-se à largura da caixa (é o que o ImGui faz com um Selectable),
     ///        por isso medi-la faria a caixa crescer a cada frame.
-    void openPopup(StringView id, const Vec2 &position, const Vec2 &size);
+    void openPopup(StringView id, const Vec2& position, const Vec2& size);
     // Flags do openPopup/isPopupOpen.
     struct PopupFlags
     {
@@ -845,7 +960,7 @@ public:
     ///                if (ui.button("OK")) ui.closeCurrentPopup();
     ///                ui.endPopup();
     ///            }
-    bool beginPopupModal(StringView title, bool *open = nullptr);
+    bool beginPopupModal(StringView title, bool* open = nullptr);
     // Flags de slider/drag. Vão depois do width (o width é 0 para "a largura que
     // sobra", como em tudo neste ficheiro): um slider logarítmico é
     // sliderFloat("Log", v, 0.001f, 100.0f, 0.0f, SliderFlags::Logarithmic).
@@ -867,53 +982,47 @@ public:
             AllowOutOfRange = 1u << 3
         };
     };
-    bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     const Rect &bounds, unsigned flags = SliderFlags::None,
-                     const char *format = nullptr);
-    bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   const Rect &bounds, unsigned flags = SliderFlags::None,
-                   const char *format = nullptr);
+    bool sliderFloat(StringView label, float& value, float minimum, float maximum,
+            const Rect& bounds, unsigned flags = SliderFlags::None, const char* format = nullptr);
+    bool sliderInt(StringView label, int& value, int minimum, int maximum, const Rect& bounds,
+            unsigned flags = SliderFlags::None, const char* format = nullptr);
     // O SliderAngle do ImGui: o valor é em radianos, o intervalo e o texto em
     // graus ("%.0f deg" por omissão).
-    bool sliderAngle(StringView label, float &radians, float degreesMinimum,
-                     float degreesMaximum, const Rect &bounds,
-                     unsigned flags = SliderFlags::None, const char *format = nullptr);
+    bool sliderAngle(StringView label, float& radians, float degreesMinimum, float degreesMaximum,
+            const Rect& bounds, unsigned flags = SliderFlags::None, const char* format = nullptr);
     // A mixer fader: a recessed groove with a cap that travels along it. The
     // whole bounds take the press and the cap follows the pointer from there,
     // so it is pushed with a finger rather than grabbed by its handle; a press
     // that lands on the cap keeps the gap between the two instead of jumping.
     // Returns true when value changed.
-    bool fader(StringView id, float &value, float minimum, float maximum, const Rect &bounds,
-               FaderOrientation orientation = FaderOrientation::Vertical,
-               const FaderStyle &style = FaderStyle());
+    bool fader(StringView id, float& value, float minimum, float maximum, const Rect& bounds,
+            FaderOrientation orientation = FaderOrientation::Vertical,
+            const FaderStyle& style = FaderStyle());
     // Horizontal relative drag. The value changes by speed for each moved pixel;
     // click its value field to enter a precise number.
-    bool dragFloat(StringView label, float &value, float minimum, float maximum,
-                   float speed, const Rect &bounds, unsigned flags = SliderFlags::None,
-                   const char *format = nullptr);
-    bool dragInt(StringView label, int &value, int minimum, int maximum, int speed,
-                 const Rect &bounds, unsigned flags = SliderFlags::None,
-                 const char *format = nullptr);
+    bool dragFloat(StringView label, float& value, float minimum, float maximum, float speed,
+            const Rect& bounds, unsigned flags = SliderFlags::None, const char* format = nullptr);
+    bool dragInt(StringView label, int& value, int minimum, int maximum, int speed,
+            const Rect& bounds, unsigned flags = SliderFlags::None, const char* format = nullptr);
     // Slider vertical, o VSliderFloat/VSliderInt do ImGui: o valor cresce para
     // cima numa faixa estreita, ao contrário do fader, que é um controle de
     // mistura.
-    bool vSliderFloat(StringView label, float &value, float minimum, float maximum,
-                      const Rect &bounds);
-    bool vSliderInt(StringView label, int &value, int minimum, int maximum, const Rect &bounds);
+    bool vSliderFloat(StringView label, float& value, float minimum, float maximum,
+            const Rect& bounds);
+    bool vSliderInt(StringView label, int& value, int minimum, int maximum, const Rect& bounds);
     // Draggable divider. value is the local x/y coordinate inside bounds.
-    bool splitter(StringView id, float &value, float minimum, float maximum,
-                  SplitterAxis axis, const Rect &bounds, float thickness = 5.0f);
+    bool splitter(StringView id, float& value, float minimum, float maximum, SplitterAxis axis,
+            const Rect& bounds, float thickness = 5.0f);
     // Transparent editor overlay for a 2D transform inside bounds.
-    bool gizmo2D(StringView id, Transform2D &transform, Gizmo2DMode mode, const Rect &bounds,
-                 const Gizmo2DOptions &options = Gizmo2DOptions());
+    bool gizmo2D(StringView id, Transform2D& transform, Gizmo2DMode mode, const Rect& bounds,
+            const Gizmo2DOptions& options = Gizmo2DOptions());
     // Projected 3D transform handles. view and projection are column-major 4x4
     // matrices. The transform's rotation is euler degrees in X, then Y, then Z
     // order, and gizmo3DOptions::showModel draws the box it moves.
-    bool gizmo3D(StringView id, Transform3D &transform, Gizmo3DMode mode, const Rect &bounds,
-                 const float *view, const float *projection,
-                 const Gizmo3DOptions &options = Gizmo3DOptions());
-    bool stepperInt(StringView label, int &value, int minimum, int maximum,
-                    const Rect &bounds);
+    bool gizmo3D(StringView id, Transform3D& transform, Gizmo3DMode mode, const Rect& bounds,
+            const float* view, const float* projection,
+            const Gizmo3DOptions& options = Gizmo3DOptions());
+    bool stepperInt(StringView label, int& value, int minimum, int maximum, const Rect& bounds);
     // O que a caixa de texto aceita e o que ela mostra (o ImGuiInputTextFlags do
     // ImGui, por outro nome). Os Chars* filtram o que se escreve e o que se cola -
     // o texto que a aplicação já lá tinha não se mexe -, o ReadOnly tranca a
@@ -967,84 +1076,81 @@ public:
     // O SliderScalar/DragScalar/InputScalar do ImGui: o slider e o drag com o
     // intervalo por ponteiros do tipo do valor (no drag podem ser nulos, que é
     // "sem limites") e um formato do valor por tipo quando não se dá nenhum.
-    bool sliderScalar(StringView label, ScalarType type, void *data, const void *minimum,
-                      const void *maximum, const char *format = nullptr, float width = 0.0f,
-                      unsigned flags = SliderFlags::None);
-    bool dragScalar(StringView label, ScalarType type, void *data, float speed,
-                    const void *minimum = nullptr, const void *maximum = nullptr,
-                    const char *format = nullptr, float width = 0.0f,
-                    unsigned flags = SliderFlags::None);
+    bool sliderScalar(StringView label, ScalarType type, void* data, const void* minimum,
+            const void* maximum, const char* format = nullptr, float width = 0.0f,
+            unsigned flags = SliderFlags::None);
+    bool dragScalar(StringView label, ScalarType type, void* data, float speed,
+            const void* minimum = nullptr, const void* maximum = nullptr,
+            const char* format = nullptr, float width = 0.0f, unsigned flags = SliderFlags::None);
     // O campo de texto de um tipo qualquer. O passo (+/- ao lado do campo) ainda
     // não existe: ver o GAPS.
-    bool inputScalar(StringView label, ScalarType type, void *data, const char *format = nullptr,
-                     float width = 0.0f, unsigned flags = InputTextFlags::None);
-    bool inputText(StringView label, String &value, const Rect &bounds,
-                   unsigned flags = InputTextFlags::None);
+    bool inputScalar(StringView label, ScalarType type, void* data, const char* format = nullptr,
+            float width = 0.0f, unsigned flags = InputTextFlags::None);
+    bool inputText(StringView label, String& value, const Rect& bounds,
+            unsigned flags = InputTextFlags::None);
     // Igual ao inputText, mas desenha `hint` enquanto o campo está vazio.
-    bool inputTextWithHint(StringView label, StringView hint, String &value, const Rect &bounds,
-                           unsigned flags = InputTextFlags::None);
+    bool inputTextWithHint(StringView label, StringView hint, String& value, const Rect& bounds,
+            unsigned flags = InputTextFlags::None);
     // followTail keeps the view pinned to the last line as value grows (a
     // console/log), unless the user scrolled up to read back.
-    bool inputTextMultiline(StringView label, String &value, const Rect &bounds,
-                            bool followTail = false);
+    bool inputTextMultiline(StringView label, String& value, const Rect& bounds,
+            bool followTail = false);
     // Syntax-highlighted source editor: line buffer, (line, column) cursor
     // with selection, full undo/redo, and keyword/identifier autocomplete.
     // state is application-owned and persists across frames (see
     // CodeEditorState); use state.setText/setHighlighterForFile to load a
     // document and pick a language. Returns true the frame the buffer changed.
-    bool codeEditor(StringView id, CodeEditorState &state, const Rect &bounds,
-                    const CodeEditorOptions &options = CodeEditorOptions());
+    bool codeEditor(StringView id, CodeEditorState& state, const Rect& bounds,
+            const CodeEditorOptions& options = CodeEditorOptions());
     // Programmatic equivalents of the Ctrl+C/X/V shortcuts codeEditor()
     // already handles internally - for a context menu's Copy/Cut/Paste
     // items, or any other caller that wants to trigger them without
     // synthesizing key events. Safe to call with no selection (Copy/Cut
     // become no-ops) or an empty clipboard (Paste becomes a no-op).
     // Each returns true if it changed the buffer (Cut/Paste; Copy never does).
-    bool codeEditorCopy(CodeEditorState &state);
-    bool codeEditorCut(CodeEditorState &state);
-    bool codeEditorPaste(CodeEditorState &state);
+    bool codeEditorCopy(CodeEditorState& state);
+    bool codeEditorCut(CodeEditorState& state);
+    bool codeEditorPaste(CodeEditorState& state);
     // O `format` é o do printf e vale para o valor desenhado E para o que se
     // escreve no campo: "%.10f grams" mostra e lê o número com a legenda, "%04X"
     // mostra e lê em hexadecimal. Sem ele, o inteiro sai como sempre saiu e o
     // real com a precisão pedida.
-    bool inputInt(StringView label, int &value, const Rect &bounds,
-                  const char *format = nullptr);
-    bool inputFloat(StringView label, float &value, const Rect &bounds, int precision = 6,
-                    const char *format = nullptr);
-    bool inputDouble(StringView label, double &value, const Rect &bounds, int precision = 6,
-                     const char *format = nullptr);
+    bool inputInt(StringView label, int& value, const Rect& bounds, const char* format = nullptr);
+    bool inputFloat(StringView label, float& value, const Rect& bounds, int precision = 6,
+            const char* format = nullptr);
+    bool inputDouble(StringView label, double& value, const Rect& bounds, int precision = 6,
+            const char* format = nullptr);
     // Inline RGBA editor with a preview swatch and four draggable channels.
-    bool colorEdit(StringView label, Color &value, const Rect &bounds);
+    bool colorEdit(StringView label, Color& value, const Rect& bounds);
     // A colour swatch with the label next to it, for a widget that opens the
     // picker (colorEdit) somewhere else. Returns true when the swatch is clicked.
-    bool colorButton(StringView label, const Color &value, const Rect &bounds);
+    bool colorButton(StringView label, const Color& value, const Rect& bounds);
     // Editable multi-stop gradient. Left-click an empty part of the bar to
     // add an interpolated stop, drag a handle to move it, and right-click a
     // non-endpoint handle to remove it. selectedStop is -1 when none is set.
-    bool gradientEditor(StringView id, ct::Vector<GradientStop> &stops, int &selectedStop,
-                        const Rect &bounds);
+    bool gradientEditor(StringView id, ct::Vector<GradientStop>& stops, int& selectedStop,
+            const Rect& bounds);
     // Linear curve editor. Click empty canvas space to add a point, drag a
     // point to edit it, and right-click a non-endpoint point to remove it.
-    bool curveEditor(StringView id, ct::Vector<CurvePoint> &points, int &selectedPoint,
-                     const Rect &bounds, const Vec2 &minimum = Vec2(),
-                     const Vec2 &maximum = Vec2(1.0f, 1.0f));
+    bool curveEditor(StringView id, ct::Vector<CurvePoint>& points, int& selectedPoint,
+            const Rect& bounds, const Vec2& minimum = Vec2(),
+            const Vec2& maximum = Vec2(1.0f, 1.0f));
     bool sequencer(StringView id, ct::Vector<SequencerTrack>& tracks, int firstFrame, int lastFrame,
-                   int& currentFrame, int& selectedTrack, const Rect& bounds);
+            int& currentFrame, int& selectedTrack, const Rect& bounds);
     // Click empty track space to add a key, drag diamonds, right-click to delete.
     bool timeline(StringView id, ct::Vector<TimelineTrack>& tracks, int firstFrame, int lastFrame,
-                  int& currentFrame, int& selectedTrack, int& selectedKey, const Rect& bounds);
+            int& currentFrame, int& selectedTrack, int& selectedKey, const Rect& bounds);
     // Draw an already-owned backend texture. TextureId remains backend-neutral.
-    void image(TextureId texture, const Rect &bounds,
-               const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-               const Color &tint = Color());
+    void image(TextureId texture, const Rect& bounds, const Vec2& uvMin = Vec2(0.0f, 0.0f),
+            const Vec2& uvMax = Vec2(1.0f, 1.0f), const Color& tint = Color());
     // The label is an identifier only; the texture is the button's visual.
-    bool imageButton(StringView label, TextureId texture, const Rect &bounds,
-                     const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-                     const Color &tint = Color());
+    bool imageButton(StringView label, TextureId texture, const Rect& bounds,
+            const Vec2& uvMin = Vec2(0.0f, 0.0f), const Vec2& uvMax = Vec2(1.0f, 1.0f),
+            const Color& tint = Color());
     // Compact icon-only button. label is an identifier, not rendered text.
-    bool smallImageButton(StringView label, TextureId texture, const Rect &bounds,
-                          const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-                          const Color &tint = Color());
+    bool smallImageButton(StringView label, TextureId texture, const Rect& bounds,
+            const Vec2& uvMin = Vec2(0.0f, 0.0f), const Vec2& uvMax = Vec2(1.0f, 1.0f),
+            const Color& tint = Color());
     // ── Rótulos ─────────────────────────────────────────────────────────────
     // A convenção do ImGui vale em todos os widgets que levam rótulo: o que vem
     // depois de "##" não se desenha mas faz parte do id, e "##so-id" não desenha
@@ -1067,10 +1173,10 @@ public:
     void popItemWidth();
     float calcItemWidth() const;
     // Minimal building blocks for application-defined immediate widgets.
-    bool invisibleButton(StringView id, const Rect &bounds);
-    bool isHovered(StringView id, const Rect &bounds);
+    bool invisibleButton(StringView id, const Rect& bounds);
+    bool isHovered(StringView id, const Rect& bounds);
     // Equivalent to invisibleButton, named for custom widget interaction code.
-    bool isClicked(StringView id, const Rect &bounds);
+    bool isClicked(StringView id, const Rect& bounds);
     // ── O que se passou com o último item (o LastItemData do ImGui) ──────────
     // Logo a seguir a submeter um widget, estas dizem o que o ponteiro e o
     // teclado fizeram com ele. Valem para o último item que passou por um teste
@@ -1104,22 +1210,22 @@ public:
             RectOnly = 1u << 4
         };
     };
-    bool isItemHovered() const { return item_.hovered; }
+    bool isItemHovered() const
+    {
+        return item_.hovered;
+    }
     bool isItemHovered(unsigned flags) const
     {
         // Sem flags não há nada a responder além do que o item já disse.
-        if (flags == 0u)
-            return item_.hovered;
+        if (flags == 0u) return item_.hovered;
         // Cada flag tem o seu bit no que o item mediu (ver ItemStatus).
         const bool wantsDelay = (flags & ItemHoverFlags::Delay) != 0u;
         const bool wantsStationary = (flags & ItemHoverFlags::Stationary) != 0u;
         const bool wantsActive = (flags & ItemHoverFlags::AllowWhenBlockedByActiveItem) != 0u;
         const bool wantsPopup = (flags & ItemHoverFlags::AllowWhenBlockedByPopup) != 0u;
         const bool wantsRectOnly = (flags & ItemHoverFlags::RectOnly) != 0u;
-        if (wantsDelay && !item_.hoveredDelayed)
-            return false;
-        if (wantsStationary && !item_.hoveredStationary)
-            return false;
+        if (wantsDelay && !item_.hoveredDelayed) return false;
+        if (wantsStationary && !item_.hoveredStationary) return false;
         if (!item_.hovered)
         {
             // Uma condição bloqueada pode ser dispensada por um flag: é para isso
@@ -1127,8 +1233,7 @@ public:
             const bool okActive = !item_.hoveredBlockedByActive || wantsActive;
             const bool okPopup = !item_.hoveredBlockedByPopup || wantsPopup;
             const bool okRect = item_.hoveredInRect && (wantsRectOnly || item_.hoveredInClip);
-            if (!(okActive && okPopup && okRect))
-                return false;
+            if (!(okActive && okPopup && okRect)) return false;
             // Sem clip e sem bloqueio, o que sobra é o rect: Delay/Stationary já
             // foram testados acima.
         }
@@ -1154,30 +1259,69 @@ public:
     /// @brief The last item was double clicked (the same second press, seen from
     ///        the item): the PressedOnDoubleClick of a selectable that a file list
     ///        renames with.
-    bool isItemDoubleClicked() const { return item_.doubleClicked; }
+    bool isItemDoubleClicked() const
+    {
+        return item_.doubleClicked;
+    }
     // Segundos e pixels entre duas carregadas para serem um duplo clique (por
     // omissão 0.30s e 6px, como as definições de IO do ImGui).
     void setDoubleClickInterval(float seconds);
-    float doubleClickInterval() const { return doubleClickInterval_; }
+    float doubleClickInterval() const
+    {
+        return doubleClickInterval_;
+    }
     void setDoubleClickDistance(float pixels);
-    float doubleClickDistance() const { return doubleClickDistance_; }
+    float doubleClickDistance() const
+    {
+        return doubleClickDistance_;
+    }
     // Segundos que o ponteiro tem de estar parado sobre o item para o flag Delay
     // (o style.HoverDelay do ImGui; o tooltip tem o seu, este é para consultas).
     void setHoverDelay(float seconds);
-    float hoverDelay() const { return hoverDelay_; }
-    bool isItemActive() const { return item_.active; }
-    bool isItemClicked() const { return item_.clicked; }
-    bool isItemEdited() const { return item_.edited; }
-    bool isItemFocused() const { return item_.focused; }
-    bool isItemDisabled() const { return item_.disabled; }
+    float hoverDelay() const
+    {
+        return hoverDelay_;
+    }
+    bool isItemActive() const
+    {
+        return item_.active;
+    }
+    bool isItemClicked() const
+    {
+        return item_.clicked;
+    }
+    bool isItemEdited() const
+    {
+        return item_.edited;
+    }
+    bool isItemFocused() const
+    {
+        return item_.focused;
+    }
+    bool isItemDisabled() const
+    {
+        return item_.disabled;
+    }
     // O item ficou ativo neste frame (a carregada que o começou) e deixou de o
     // estar neste frame (a largada que o acabou). O deactivatedAfterEdit diz que
     // ele foi editado enquanto esteve ativo - é o que um editor usa para gravar.
-    bool isItemActivated() const { return item_.activated; }
-    bool isItemDeactivated() const { return item_.deactivated; }
-    bool isItemDeactivatedAfterEdit() const { return item_.deactivatedAfterEdit; }
+    bool isItemActivated() const
+    {
+        return item_.activated;
+    }
+    bool isItemDeactivated() const
+    {
+        return item_.deactivated;
+    }
+    bool isItemDeactivatedAfterEdit() const
+    {
+        return item_.deactivatedAfterEdit;
+    }
     // Um treeNode/collapsingHeader abriu ou fechou neste frame.
-    bool isItemToggledOpen() const { return item_.toggledOpen; }
+    bool isItemToggledOpen() const
+    {
+        return item_.toggledOpen;
+    }
     // O item ainda cai dentro do que se vê: um item rolado para fora de um child
     // não é visível.
     bool isItemVisible() const
@@ -1189,37 +1333,47 @@ public:
     // draw* e do windowBounds), e o id com que foi submetido. Como no ImGui, um
     // label ou um dummy não identifica item nenhum: ficam com o id do último
     // widget que se identificou.
-    Rect itemRect() const { return item_.bounds; }
+    Rect itemRect() const
+    {
+        return item_.bounds;
+    }
     /// @brief How many scroll areas the mouse wheel remembers (diagnostics).
-    size_t wheelAreaCount() const { return wheelAreas_.size(); }
-    WidgetId itemId() const { return item_.id; }
-    void drawRectFilled(const Rect &bounds, const Color &color);
-    void drawRect(const Rect &bounds, const Color &color, float thickness = 1.0f);
-    void drawLine(const Vec2 &from, const Vec2 &to, const Color &color, float thickness = 1.0f);
-    void drawCircleFilled(const Vec2 &center, float radius, const Color &color);
-    // A filled simple polygon (convex or not), points in the same content space as the other draw* calls.
-    void drawPolygonFilled(Span<const Vec2> points, const Color &color);
+    size_t wheelAreaCount() const
+    {
+        return wheelAreas_.size();
+    }
+    WidgetId itemId() const
+    {
+        return item_.id;
+    }
+    void drawRectFilled(const Rect& bounds, const Color& color);
+    void drawRect(const Rect& bounds, const Color& color, float thickness = 1.0f);
+    void drawLine(const Vec2& from, const Vec2& to, const Color& color, float thickness = 1.0f);
+    void drawCircleFilled(const Vec2& center, float radius, const Color& color);
+    // A filled simple polygon (convex or not), points in the same content space as the other draw*
+    // calls.
+    void drawPolygonFilled(Span<const Vec2> points, const Color& color);
     // Rounded rectangles, filled and outline. A large radius on a square gives
     // a circle, so one call covers pills, cards and step-sequencer cells.
-    void drawRectFilledRounded(const Rect &bounds, float radius, const Color &color);
-    void drawRectRounded(const Rect &bounds, float radius, const Color &color,
-                         float thickness = 1.0f);
+    void drawRectFilledRounded(const Rect& bounds, float radius, const Color& color);
+    void drawRectRounded(const Rect& bounds, float radius, const Color& color,
+            float thickness = 1.0f);
     // Arc as one continuous band. Prefer this over stroking an arc with
     // drawLine per segment: every joint there overlaps its neighbour's soft
     // edge and the alpha adds up, which makes a ring look notched.
-    void drawArc(const Vec2 &center, float radius, float fromRadians,
-                 float toRadians, const Color &color, float thickness = 1.0f);
+    void drawArc(const Vec2& center, float radius, float fromRadians, float toRadians,
+            const Color& color, float thickness = 1.0f);
     // Text in an explicit colour, and the width the theme font would need for
     // it. A custom widget that centres its own caption needs both: label()
     // always uses the theme's label colour and reports no width.
-    void drawText(StringView text, const Vec2 &position, const Color &color);
+    void drawText(StringView text, const Vec2& position, const Color& color);
     float textWidth(StringView text) const;
     // A list drawn above every window and below the popups, in display
     // coordinates: where a game HUD or an overlay that belongs to no window goes.
     // The text calls take the theme font; a logicalSize of 0 means the theme size.
-    DrawList &foregroundDrawList();
-    void drawText(DrawList &drawList, StringView text, const Vec2 &position, float logicalSize,
-                  const Color &color, const Rect &clip);
+    DrawList& foregroundDrawList();
+    void drawText(DrawList& drawList, StringView text, const Vec2& position, float logicalSize,
+            const Color& color, const Rect& clip);
     TextMetrics textMetrics(StringView text, float logicalSize) const;
     bool isKeyPressed(KeyCode key) const;
     bool shortcut(KeyCode key, bool control = true, bool shift = false) const;
@@ -1248,26 +1402,26 @@ public:
     // A barra preenche-se até value/maximum. Com value negativo é indeterminada:
     // uma faixa atravessa-a com o tempo do contexto. O overlay, quando dado, sai
     // centrado por cima da barra.
-    void progressBar(float value, float maximum, const Rect &bounds,
-                     StringView overlay = StringView());
+    void progressBar(float value, float maximum, const Rect& bounds,
+            StringView overlay = StringView());
     // Grafico de uma serie. values aponta para count amostras lidas em anel a
     // partir de offset, por isso um buffer circular entrega sempre a mais antiga
     // e o desenho sai na ordem certa. Com scaleMax <= scaleMin a escala vertical
     // vem dos dados (amostras NaN sao ignoradas). A serie e reduzida a uma
     // coluna por pixel quando tem mais amostras do que isso. Devolve o indice
     // logico da amostra sob o ponteiro (0 = a primeira desenhada), ou -1.
-    int plotLines(StringView label, const float *values, int count, const Rect &bounds,
-                  int offset = 0, StringView overlay = StringView(),
-                  float scaleMin = 0.0f, float scaleMax = 0.0f);
+    int plotLines(StringView label, const float* values, int count, const Rect& bounds,
+            int offset = 0, StringView overlay = StringView(), float scaleMin = 0.0f,
+            float scaleMax = 0.0f);
     // As barras nascem na linha do zero (no fundo quando a escala nao e negativa).
-    int plotHistogram(StringView label, const float *values, int count, const Rect &bounds,
-                      int offset = 0, StringView overlay = StringView(),
-                      float scaleMin = 0.0f, float scaleMax = 0.0f);
+    int plotHistogram(StringView label, const float* values, int count, const Rect& bounds,
+            int offset = 0, StringView overlay = StringView(), float scaleMin = 0.0f,
+            float scaleMax = 0.0f);
     // Draws an application-modal OK or OK/Cancel message box above all windows.
-    MessageBoxResult messageBox(StringView title, StringView message, bool &open,
-                                bool showCancel = false);
-    MessageBoxResult messageBox(StringView title, StringView message, bool &open,
-                                const MessageBoxOptions &options);
+    MessageBoxResult messageBox(StringView title, StringView message, bool& open,
+            bool showCancel = false);
+    MessageBoxResult messageBox(StringView title, StringView message, bool& open,
+            const MessageBoxOptions& options);
     // Modal dialog with arbitrary content: centred, scrim behind it, Escape
     // closes it, and every other window is blocked while it is open. Call
     // endDialog() when it returns true.
@@ -1278,21 +1432,21 @@ public:
     //         if (ui.button("Close")) open = false;
     //         ui.endDialog();
     //     }
-    bool beginDialog(StringView title, bool &open, const Vec2 &size);
+    bool beginDialog(StringView title, bool& open, const Vec2& size);
     void endDialog();
     // Application-modal filesystem browser. Its provider performs OS or
     // sandbox access; this Context owns only interaction and rendering.
-    FileDialogResult fileDialog(StringView id, bool &open, FileDialogState &state,
-                                const FileDialogOptions &options, FileDialogProvider &provider);
+    FileDialogResult fileDialog(StringView id, bool& open, FileDialogState& state,
+            const FileDialogOptions& options, FileDialogProvider& provider);
     // Starts or refreshes a short notification. The id differentiates concurrent toasts.
-    void showToast(StringView id, StringView text, ToastPosition position = ToastPosition::BottomRight,
-                   float duration = 3.0f);
+    void showToast(StringView id, StringView text,
+            ToastPosition position = ToastPosition::BottomRight, float duration = 3.0f);
     // Call after drawing a local item. The item becomes draggable after a short mouse move.
     bool beginDragSource(WidgetId source, WidgetId type, uint64_t data, StringView preview,
-                         const Rect &bounds);
+            const Rect& bounds);
     // Call over a local drop zone. On release, returns the compatible payload.
-    bool acceptDragDropTarget(WidgetId acceptedType, const Rect &bounds, DragDropPayload &payload);
-    void label(StringView text, const Vec2 &position);
+    bool acceptDragDropTarget(WidgetId acceptedType, const Rect& bounds, DragDropPayload& payload);
+    void label(StringView text, const Vec2& position);
     // Call immediately after the widget that owns this help text.
     void tooltip(StringView text);
     // A tooltip the application fills with widgets, for anything the single line
@@ -1320,128 +1474,116 @@ public:
     bool button(StringView label);
     bool smallButton(StringView label);
     bool arrowButton(StringView label, ArrowDirection direction, float size = 0.0f);
-    bool checkbox(StringView label, bool &value);
-    bool checkboxFlags(StringView label, unsigned &flags, unsigned flagValue);
-    bool toggleSwitch(StringView label, bool &value);
+    bool checkbox(StringView label, bool& value);
+    bool checkboxFlags(StringView label, unsigned& flags, unsigned flagValue);
+    bool toggleSwitch(StringView label, bool& value);
     bool radioButton(StringView label, bool selected);
     bool selectable(StringView label, bool selected, float width = 0.0f);
-    bool collapsingHeader(StringView label, bool &expanded, float width = 0.0f);
-    bool collapsingHeader(StringView label, bool &expanded, const TreeStyle &style,
-                          float width = 0.0f);
-    bool collapsingHeader(StringView label, bool &expanded, bool &open, float width = 0.0f);
-    bool treeNode(StringView label, bool &expanded, float width = 0.0f);
-    bool treeNode(StringView label, bool &expanded, const TreeStyle &style, float width = 0.0f);
-    bool treeItem(StringView label, bool &expanded, const TreeItemStyle &style,
-                  float width = 0.0f);
-    bool treeItem(WidgetId nodeId, StringView label, bool &expanded, const TreeItemStyle &style,
-                  TreeDrop *drop = nullptr, float width = 0.0f);
-    bool tabBar(StringView label, int &currentItem, Span<const StringView> items,
-                float width = 0.0f);
-    bool listBox(StringView label, int &currentItem, Span<const StringView> items,
-                 float width = 0.0f, int visibleItems = 4);
-    bool comboBox(StringView label, int &currentItem, Span<const StringView> items,
-                  float width = 0.0f);
+    bool collapsingHeader(StringView label, bool& expanded, float width = 0.0f);
+    bool collapsingHeader(StringView label, bool& expanded, const TreeStyle& style,
+            float width = 0.0f);
+    bool collapsingHeader(StringView label, bool& expanded, bool& open, float width = 0.0f);
+    bool treeNode(StringView label, bool& expanded, float width = 0.0f);
+    bool treeNode(StringView label, bool& expanded, const TreeStyle& style, float width = 0.0f);
+    bool treeItem(StringView label, bool& expanded, const TreeItemStyle& style, float width = 0.0f);
+    bool treeItem(WidgetId nodeId, StringView label, bool& expanded, const TreeItemStyle& style,
+            TreeDrop* drop = nullptr, float width = 0.0f);
+    bool tabBar(StringView label, int& currentItem, Span<const StringView> items,
+            float width = 0.0f);
+    bool listBox(StringView label, int& currentItem, Span<const StringView> items,
+            float width = 0.0f, int visibleItems = 4);
+    bool comboBox(StringView label, int& currentItem, Span<const StringView> items,
+            float width = 0.0f);
     // O beginCombo do layout: o cabeçalho é o item, o popup é do popup. O cursor
     // de fora só avança quando o endCombo repõe o layout.
-    bool beginCombo(StringView label, StringView preview, float width = 0.0f,
-                    int visibleItems = 8);
-    bool sliderFloat(StringView label, float &value, float minimum, float maximum,
-                     float width = 0.0f, unsigned flags = SliderFlags::None,
-                     const char *format = nullptr);
-    bool sliderInt(StringView label, int &value, int minimum, int maximum,
-                   float width = 0.0f, unsigned flags = SliderFlags::None,
-                   const char *format = nullptr);
-    bool sliderAngle(StringView label, float &radians, float degreesMinimum = -360.0f,
-                     float degreesMaximum = 360.0f, float width = 0.0f,
-                     unsigned flags = SliderFlags::None, const char *format = nullptr);
-    bool dragFloat(StringView label, float &value, float minimum, float maximum,
-                   float speed = 0.01f, float width = 0.0f,
-                   unsigned flags = SliderFlags::None, const char *format = nullptr);
-    bool dragInt(StringView label, int &value, int minimum, int maximum, int speed = 1,
-                 float width = 0.0f, unsigned flags = SliderFlags::None,
-                 const char *format = nullptr);
-    bool inputFloat2(StringView label, float &x, float &y, float width = 0.0f, int precision = 3,
-                     const char *format = nullptr);
-    bool inputFloat3(StringView label, float &x, float &y, float &z, float width = 0.0f,
-                     int precision = 3, const char *format = nullptr);
-    bool inputFloat4(StringView label, float &x, float &y, float &z, float &w,
-                     float width = 0.0f, int precision = 3, const char *format = nullptr);
+    bool beginCombo(StringView label, StringView preview, float width = 0.0f, int visibleItems = 8);
+    bool sliderFloat(StringView label, float& value, float minimum, float maximum,
+            float width = 0.0f, unsigned flags = SliderFlags::None, const char* format = nullptr);
+    bool sliderInt(StringView label, int& value, int minimum, int maximum, float width = 0.0f,
+            unsigned flags = SliderFlags::None, const char* format = nullptr);
+    bool sliderAngle(StringView label, float& radians, float degreesMinimum = -360.0f,
+            float degreesMaximum = 360.0f, float width = 0.0f, unsigned flags = SliderFlags::None,
+            const char* format = nullptr);
+    bool dragFloat(StringView label, float& value, float minimum, float maximum,
+            float speed = 0.01f, float width = 0.0f, unsigned flags = SliderFlags::None,
+            const char* format = nullptr);
+    bool dragInt(StringView label, int& value, int minimum, int maximum, int speed = 1,
+            float width = 0.0f, unsigned flags = SliderFlags::None, const char* format = nullptr);
+    bool inputFloat2(StringView label, float& x, float& y, float width = 0.0f, int precision = 3,
+            const char* format = nullptr);
+    bool inputFloat3(StringView label, float& x, float& y, float& z, float width = 0.0f,
+            int precision = 3, const char* format = nullptr);
+    bool inputFloat4(StringView label, float& x, float& y, float& z, float& w, float width = 0.0f,
+            int precision = 3, const char* format = nullptr);
     // As variantes de N componentes são N widgets lado a lado, com uma largura
     // igual para todos: é o mesmo que o ImGui faz, e assim cada componente
     // mantém tudo o que o de um componente já faz (arrasto, edição por teclado,
     // clamps, foco).
-    bool sliderFloat2(StringView label, float &x, float &y, float minimum, float maximum,
-                      float width = 0.0f);
-    bool sliderFloat3(StringView label, float &x, float &y, float &z, float minimum,
-                      float maximum, float width = 0.0f);
-    bool sliderFloat4(StringView label, float &x, float &y, float &z, float &w, float minimum,
-                      float maximum, float width = 0.0f);
-    bool sliderInt2(StringView label, int &x, int &y, int minimum, int maximum,
-                    float width = 0.0f);
-    bool sliderInt3(StringView label, int &x, int &y, int &z, int minimum, int maximum,
-                    float width = 0.0f);
-    bool sliderInt4(StringView label, int &x, int &y, int &z, int &w, int minimum, int maximum,
-                    float width = 0.0f);
-    bool dragInt2(StringView label, int &x, int &y, int minimum, int maximum, int speed = 1,
-                  float width = 0.0f);
-    bool dragInt3(StringView label, int &x, int &y, int &z, int minimum, int maximum,
-                  int speed = 1, float width = 0.0f);
-    bool dragInt4(StringView label, int &x, int &y, int &z, int &w, int minimum, int maximum,
-                  int speed = 1, float width = 0.0f);
-    bool inputInt2(StringView label, int &x, int &y, float width = 0.0f,
-                   const char *format = nullptr);
-    bool inputInt3(StringView label, int &x, int &y, int &z, float width = 0.0f,
-                   const char *format = nullptr);
-    bool inputInt4(StringView label, int &x, int &y, int &z, int &w, float width = 0.0f,
-                   const char *format = nullptr);
+    bool sliderFloat2(StringView label, float& x, float& y, float minimum, float maximum,
+            float width = 0.0f);
+    bool sliderFloat3(StringView label, float& x, float& y, float& z, float minimum, float maximum,
+            float width = 0.0f);
+    bool sliderFloat4(StringView label, float& x, float& y, float& z, float& w, float minimum,
+            float maximum, float width = 0.0f);
+    bool sliderInt2(StringView label, int& x, int& y, int minimum, int maximum, float width = 0.0f);
+    bool sliderInt3(StringView label, int& x, int& y, int& z, int minimum, int maximum,
+            float width = 0.0f);
+    bool sliderInt4(StringView label, int& x, int& y, int& z, int& w, int minimum, int maximum,
+            float width = 0.0f);
+    bool dragInt2(StringView label, int& x, int& y, int minimum, int maximum, int speed = 1,
+            float width = 0.0f);
+    bool dragInt3(StringView label, int& x, int& y, int& z, int minimum, int maximum, int speed = 1,
+            float width = 0.0f);
+    bool dragInt4(StringView label, int& x, int& y, int& z, int& w, int minimum, int maximum,
+            int speed = 1, float width = 0.0f);
+    bool inputInt2(StringView label, int& x, int& y, float width = 0.0f,
+            const char* format = nullptr);
+    bool inputInt3(StringView label, int& x, int& y, int& z, float width = 0.0f,
+            const char* format = nullptr);
+    bool inputInt4(StringView label, int& x, int& y, int& z, int& w, float width = 0.0f,
+            const char* format = nullptr);
     // Dupla precisão, para um campo que não se pode dar ao luxo de arredondar a
     // um float (o do ImGui é um campo de texto que faz o parse a double).
-    bool inputDouble(StringView label, double &value, float width = 0.0f, int precision = 6,
-                     const char *format = nullptr);
+    bool inputDouble(StringView label, double& value, float width = 0.0f, int precision = 6,
+            const char* format = nullptr);
     // O DragFloatRange2 do ImGui: o mínimo e o máximo numa só widget, duas caixas
     // lado a lado (como os drags de N componentes) com o rótulo no fim. Cada caixa
     // fica limitada pela outra - o que se arrasta não passa para o lado do outro -
     // e o `format`/`formatMaximum` escrevem cada valor (o segundo, se nulo, usa o
     // primeiro).
-    bool dragFloatRange2(StringView label, float &minimumValue, float &maximumValue,
-                         float minimumRange, float maximumRange, float speed = 0.01f,
-                         float width = 0.0f, const char *format = nullptr,
-                         const char *formatMaximum = nullptr,
-                         unsigned flags = SliderFlags::None);
-    bool dragIntRange2(StringView label, int &minimumValue, int &maximumValue, int minimumRange,
-                       int maximumRange, int speed = 1, float width = 0.0f,
-                       const char *format = nullptr, const char *formatMaximum = nullptr,
-                       unsigned flags = SliderFlags::None);
-    bool dragFloat2(StringView label, float &x, float &y, float minimum, float maximum,
-                    float speed = 0.01f, float width = 0.0f);
-    bool dragFloat3(StringView label, float &x, float &y, float &z, float minimum, float maximum,
-                    float speed = 0.01f, float width = 0.0f);
-    bool dragFloat4(StringView label, float &x, float &y, float &z, float &w,
-                    float minimum, float maximum, float speed = 0.01f, float width = 0.0f);
-    bool stepperInt(StringView label, int &value, int minimum, int maximum,
-                    float width = 0.0f);
-    bool inputText(StringView label, String &value, float width = 0.0f,
-                   unsigned flags = InputTextFlags::None);
-    bool inputTextWithHint(StringView label, StringView hint, String &value, float width = 0.0f,
-                           unsigned flags = InputTextFlags::None);
-    bool inputTextMultiline(StringView label, String &value, float width = 0.0f,
-                            float height = 120.0f, bool followTail = false);
-    bool inputInt(StringView label, int &value, float width = 0.0f,
-                  const char *format = nullptr);
-    bool inputFloat(StringView label, float &value, float width = 0.0f, int precision = 6,
-                    const char *format = nullptr);
-    bool colorEdit(StringView label, Color &value, float width = 0.0f, float height = 128.0f);
-    bool colorButton(StringView label, const Color &value, float width = 0.0f,
-                     float height = 0.0f);
-    void image(TextureId texture, float width, float height,
-               const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-               const Color &tint = Color());
+    bool dragFloatRange2(StringView label, float& minimumValue, float& maximumValue,
+            float minimumRange, float maximumRange, float speed = 0.01f, float width = 0.0f,
+            const char* format = nullptr, const char* formatMaximum = nullptr,
+            unsigned flags = SliderFlags::None);
+    bool dragIntRange2(StringView label, int& minimumValue, int& maximumValue, int minimumRange,
+            int maximumRange, int speed = 1, float width = 0.0f, const char* format = nullptr,
+            const char* formatMaximum = nullptr, unsigned flags = SliderFlags::None);
+    bool dragFloat2(StringView label, float& x, float& y, float minimum, float maximum,
+            float speed = 0.01f, float width = 0.0f);
+    bool dragFloat3(StringView label, float& x, float& y, float& z, float minimum, float maximum,
+            float speed = 0.01f, float width = 0.0f);
+    bool dragFloat4(StringView label, float& x, float& y, float& z, float& w, float minimum,
+            float maximum, float speed = 0.01f, float width = 0.0f);
+    bool stepperInt(StringView label, int& value, int minimum, int maximum, float width = 0.0f);
+    bool inputText(StringView label, String& value, float width = 0.0f,
+            unsigned flags = InputTextFlags::None);
+    bool inputTextWithHint(StringView label, StringView hint, String& value, float width = 0.0f,
+            unsigned flags = InputTextFlags::None);
+    bool inputTextMultiline(StringView label, String& value, float width = 0.0f,
+            float height = 120.0f, bool followTail = false);
+    bool inputInt(StringView label, int& value, float width = 0.0f, const char* format = nullptr);
+    bool inputFloat(StringView label, float& value, float width = 0.0f, int precision = 6,
+            const char* format = nullptr);
+    bool colorEdit(StringView label, Color& value, float width = 0.0f, float height = 128.0f);
+    bool colorButton(StringView label, const Color& value, float width = 0.0f, float height = 0.0f);
+    void image(TextureId texture, float width, float height, const Vec2& uvMin = Vec2(0.0f, 0.0f),
+            const Vec2& uvMax = Vec2(1.0f, 1.0f), const Color& tint = Color());
     bool imageButton(StringView label, TextureId texture, float width, float height,
-                     const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-                     const Color &tint = Color());
+            const Vec2& uvMin = Vec2(0.0f, 0.0f), const Vec2& uvMax = Vec2(1.0f, 1.0f),
+            const Color& tint = Color());
     bool smallImageButton(StringView label, TextureId texture, float size = 0.0f,
-                          const Vec2 &uvMin = Vec2(0.0f, 0.0f), const Vec2 &uvMax = Vec2(1.0f, 1.0f),
-                          const Color &tint = Color());
+            const Vec2& uvMin = Vec2(0.0f, 0.0f), const Vec2& uvMax = Vec2(1.0f, 1.0f),
+            const Color& tint = Color());
     // Clipped, vertically scrollable content region. height is required; width
     // defaults to the remaining window width.
     bool beginChild(StringView id, float height, bool border = true, float width = 0.0f);
@@ -1452,40 +1594,37 @@ public:
     bool beginDockSpace(StringView id);
     // Reserves topInset logical pixels for a menu bar or toolbar in the current window.
     bool beginDockSpace(StringView id, float topInset);
-    bool beginDockSpace(StringView id, const Rect &bounds);
+    bool beginDockSpace(StringView id, const Rect& bounds);
     void endDockSpace();
-    // Sets the size of the side regions of the dock space being built (left and right width, bottom height); a value
-    // of 0 or less keeps the current one. Call it once, on the first frame: the user can drag the splitters after.
+    // Sets the size of the side regions of the dock space being built (left and right width, bottom
+    // height); a value of 0 or less keeps the current one. Call it once, on the first frame: the
+    // user can drag the splitters after.
     void setDockSizes(float leftWidth, float rightWidth, float bottomHeight);
     // Pass open to render a close button in the tab; closing it sets *open to false.
-    bool beginDockPanel(StringView title, DockSlot slot = DockSlot::Center, bool *open = nullptr);
+    bool beginDockPanel(StringView title, DockSlot slot = DockSlot::Center, bool* open = nullptr);
     void endDockPanel();
     // Virtualized child content. Only render rows in [firstVisible, lastVisible)
     // and use virtualListItemRect() with the bounds-based widget overloads.
     bool beginVirtualList(StringView id, int itemCount, float itemHeight, float height,
-                          int &firstVisible, int &lastVisible,
-                          bool border = true, float width = 0.0f);
+            int& firstVisible, int& lastVisible, bool border = true, float width = 0.0f);
     Rect virtualListItemRect(int itemIndex) const;
     void endVirtualList();
     // Virtualized table rows. Render only [firstVisibleRow, lastVisibleRow) and
     // use virtualTableCellRect() for bounds-based widgets in each cell.
     bool beginVirtualTable(StringView id, int rowCount, int columns, float rowHeight, float height,
-                           int &firstVisibleRow, int &lastVisibleRow,
-                           bool border = true, float width = 0.0f);
+            int& firstVisibleRow, int& lastVisibleRow, bool border = true, float width = 0.0f);
     // Virtualized rows with weighted columns. Use the same weights as a
     // preceding beginTable()/tableHeader() row to create a fixed, resizable
     // header aligned with the scrolling cells.
     bool beginVirtualTable(StringView id, int rowCount, Span<const float> columnWeights,
-                           float rowHeight, float height,
-                           int &firstVisibleRow, int &lastVisibleRow,
-                           bool border = true, float width = 0.0f);
+            float rowHeight, float height, int& firstVisibleRow, int& lastVisibleRow,
+            bool border = true, float width = 0.0f);
     Rect virtualTableCellRect(int row, int column) const;
     void endVirtualTable();
     // Virtualized rows for an application-owned, flattened tree. depth controls
     // indentation; use the bounds with treeItem() to keep its existing behavior.
     bool beginVirtualTree(StringView id, int rowCount, float rowHeight, float height,
-                          int &firstVisibleRow, int &lastVisibleRow,
-                          bool border = true, float width = 0.0f);
+            int& firstVisibleRow, int& lastVisibleRow, bool border = true, float width = 0.0f);
     Rect virtualTreeItemRect(int row, int depth, float indentWidth = 16.0f) const;
     void endVirtualTree();
     // Lightweight immediate table. Call tableNextColumn() before each cell.
@@ -1511,9 +1650,9 @@ public:
     // The usual way to drive those flags is a context menu on the header (see
     // tableHoveredColumn()).
     bool beginTable(StringView id, Span<const float> columnWeights, Span<const bool> columnVisible,
-                    float width = 0.0f);
+            float width = 0.0f);
     bool beginTable(StringView id, Span<const float> columnWeights, Span<const bool> columnVisible,
-                    const TableStyle &style, float width = 0.0f);
+            const TableStyle& style, float width = 0.0f);
     /// @brief How many columns of the table being built are visible.
     int tableVisibleColumnCount() const;
     /// @brief The application's column behind the cell being submitted, when the
@@ -1535,11 +1674,11 @@ public:
     int tableHoveredColumn() const;
     // Styled tables. The stripes and lines of a row use the minimum row height,
     // so a row taller than that keeps the stripe of one row.
-    bool beginTable(StringView id, int columns, const TableStyle &style, float width = 0.0f);
-    bool beginTable(StringView id, Span<const float> columnWeights, const TableStyle &style,
-                    float width = 0.0f);
-    bool beginTable(StringView id, Span<float> columnWeights, const TableStyle &style,
-                    float width = 0.0f);
+    bool beginTable(StringView id, int columns, const TableStyle& style, float width = 0.0f);
+    bool beginTable(StringView id, Span<const float> columnWeights, const TableStyle& style,
+            float width = 0.0f);
+    bool beginTable(StringView id, Span<float> columnWeights, const TableStyle& style,
+            float width = 0.0f);
     bool tableNextColumn();
     // Header cell without sorting: the label on the panel color with a border.
     // It resizes with the grip like the sortable one when the table owns
@@ -1550,25 +1689,25 @@ public:
     // level (0 for roots). Returns true on the frame the arrow was pressed;
     // expanded is toggled then and the caller skips the rows of a collapsed
     // node. Call tableNextColumn() before it.
-    bool tableTreeCell(StringView label, int depth, bool hasChildren, bool &expanded);
+    bool tableTreeCell(StringView label, int depth, bool hasChildren, bool& expanded);
     // Draw a clickable header in the current table cell. sortColumn starts at
     // -1; clicking a new column selects ascending order and clicking the
     // selected column toggles sortAscending. Returns true when the sort state
     // changes. Call tableNextColumn() before every header and cell.
-    bool tableHeader(StringView label, int &sortColumn, bool &sortAscending);
+    bool tableHeader(StringView label, int& sortColumn, bool& sortAscending);
     void endTable();
     // Aligned label/value row for inspectors. Render the value widgets between
     // beginPropertyRow() and endPropertyRow().
     bool beginPropertyRow(StringView label, float labelWidth = 0.0f);
     void endPropertyRow();
     void progressBar(float value, float maximum, float width = 0.0f,
-                     StringView overlay = StringView());
-    int plotLines(StringView label, const float *values, int count, float width = 0.0f,
-                  float height = 0.0f, int offset = 0, StringView overlay = StringView(),
-                  float scaleMin = 0.0f, float scaleMax = 0.0f);
-    int plotHistogram(StringView label, const float *values, int count, float width = 0.0f,
-                      float height = 0.0f, int offset = 0, StringView overlay = StringView(),
-                      float scaleMin = 0.0f, float scaleMax = 0.0f);
+            StringView overlay = StringView());
+    int plotLines(StringView label, const float* values, int count, float width = 0.0f,
+            float height = 0.0f, int offset = 0, StringView overlay = StringView(),
+            float scaleMin = 0.0f, float scaleMax = 0.0f);
+    int plotHistogram(StringView label, const float* values, int count, float width = 0.0f,
+            float height = 0.0f, int offset = 0, StringView overlay = StringView(),
+            float scaleMin = 0.0f, float scaleMax = 0.0f);
     void label(StringView text);
     // Text items: each draws at the layout cursor and advances it, so the widget
     // after it lands below. textDisabled() uses the theme's disabled colour, and
@@ -1578,7 +1717,7 @@ public:
     // ImGui). Mexe só no texto: o cursor e os itens não se deslocam.
     void alignTextToFramePadding();
     void textDisabled(StringView text);
-    void textColored(StringView text, const Color &color);
+    void textColored(StringView text, const Color& color);
     // Wraps at wrapWidth (0 is the remaining width of the enclosing region), at
     // spaces, and inside a word when a single word is wider than the line.
     void textWrapped(StringView text, float wrapWidth = 0.0f);
@@ -1612,7 +1751,7 @@ public:
     // content drawn with the draw* primitives still reports its extent to the
     // enclosing beginChild()/window (which measure from the last laid-out item).
     void dummy(float width, float height);
-    void setCursor(const Vec2 &localPosition);
+    void setCursor(const Vec2& localPosition);
     Vec2 cursor() const;
     // Remaining horizontal content space at the current layout cursor.
     float availableWidth() const;
@@ -1621,7 +1760,10 @@ public:
     // Size of the display this frame was started with (FrameInfo::displaySize),
     // in logical units: what a window or an overlay needs to place itself against
     // the screen instead of against whatever encloses it.
-    Vec2 displaySize() const { return frame_.displaySize; }
+    Vec2 displaySize() const
+    {
+        return frame_.displaySize;
+    }
 
 private:
     struct PointerState
@@ -1681,9 +1823,20 @@ private:
         float lineHeight;
 
         LayoutState()
-            : origin(), cursor(), baseOriginX(0.0f), lastItem(), hasLastItem(false),
-              contentExtent(), hasExtent(false), fitRight(0.0f), nextItemWidth(0.0f), itemWidthStack(), itemWidthDepth(0),
-              groupDepth(0), lineTop(0.0f), lineHeight(0.0f)
+                : origin(),
+                  cursor(),
+                  baseOriginX(0.0f),
+                  lastItem(),
+                  hasLastItem(false),
+                  contentExtent(),
+                  hasExtent(false),
+                  fitRight(0.0f),
+                  nextItemWidth(0.0f),
+                  itemWidthStack(),
+                  itemWidthDepth(0),
+                  groupDepth(0),
+                  lineTop(0.0f),
+                  lineHeight(0.0f)
         {
         }
     };
@@ -1720,12 +1873,25 @@ private:
         bool hoveredBlockedByPopup;
 
         ItemStatus()
-            : id(InvalidWidgetId), bounds(), hovered(false), active(false), clicked(false),
-              doubleClicked(false), edited(false), focused(false), disabled(false), activated(false),
-              deactivated(false), deactivatedAfterEdit(false), toggledOpen(false),
-              hoveredInRect(false), hoveredInClip(false), hoveredDelayed(false),
-              hoveredStationary(false), hoveredBlockedByActive(false),
-              hoveredBlockedByPopup(false)
+                : id(InvalidWidgetId),
+                  bounds(),
+                  hovered(false),
+                  active(false),
+                  clicked(false),
+                  doubleClicked(false),
+                  edited(false),
+                  focused(false),
+                  disabled(false),
+                  activated(false),
+                  deactivated(false),
+                  deactivatedAfterEdit(false),
+                  toggledOpen(false),
+                  hoveredInRect(false),
+                  hoveredInClip(false),
+                  hoveredDelayed(false),
+                  hoveredStationary(false),
+                  hoveredBlockedByActive(false),
+                  hoveredBlockedByPopup(false)
         {
         }
     };
@@ -1739,7 +1905,13 @@ private:
         bool initialized;
 
         ColorPickerState()
-            : hue(0.0f), saturation(0.0f), brightness(0.0f), lastColor(), initialized(false) {}
+                : hue(0.0f),
+                  saturation(0.0f),
+                  brightness(0.0f),
+                  lastColor(),
+                  initialized(false)
+        {
+        }
     };
 
     struct ChildScrollState
@@ -1747,7 +1919,11 @@ private:
         float offset;
         float contentHeight;
 
-        ChildScrollState() : offset(0.0f), contentHeight(0.0f) {}
+        ChildScrollState()
+                : offset(0.0f),
+                  contentHeight(0.0f)
+        {
+        }
     };
 
     struct Gizmo2DState
@@ -1760,7 +1936,14 @@ private:
         float swept;
         float sweptRaw;
 
-        Gizmo2DState() : axis(0u), pointerStart(), transformStart(), swept(0.0f), sweptRaw(0.0f) {}
+        Gizmo2DState()
+                : axis(0u),
+                  pointerStart(),
+                  transformStart(),
+                  swept(0.0f),
+                  sweptRaw(0.0f)
+        {
+        }
     };
 
     struct Gizmo3DState
@@ -1777,7 +1960,12 @@ private:
         float sweptRaw;
 
         Gizmo3DState()
-            : axis(0u), pointerStart(), transformStart(), ringStart(), swept(0.0f), sweptRaw(0.0f)
+                : axis(0u),
+                  pointerStart(),
+                  transformStart(),
+                  ringStart(),
+                  swept(0.0f),
+                  sweptRaw(0.0f)
         {
         }
     };
@@ -1795,8 +1983,13 @@ private:
         uint32_t dockDepth;
 
         ChildState()
-            : parentLayout(), outer(), content(), parentClip(), id(InvalidWidgetId), border(true),
-              dockDepth(0u)
+                : parentLayout(),
+                  outer(),
+                  content(),
+                  parentClip(),
+                  id(InvalidWidgetId),
+                  border(true),
+                  dockDepth(0u)
         {
         }
     };
@@ -1832,9 +2025,20 @@ private:
         uint64_t frame;
 
         TabBarState()
-            : selected(InvalidWidgetId), frameSelected(InvalidWidgetId), order(), seenThisFrame(),
-              bands(), names(), widths(), positions(),
-              lastCount(0), dragTab(InvalidWidgetId), dragStartX(0.0f), frame(0u) {}
+                : selected(InvalidWidgetId),
+                  frameSelected(InvalidWidgetId),
+                  order(),
+                  seenThisFrame(),
+                  bands(),
+                  names(),
+                  widths(),
+                  positions(),
+                  lastCount(0),
+                  dragTab(InvalidWidgetId),
+                  dragStartX(0.0f),
+                  frame(0u)
+        {
+        }
     };
     // A barra que está a ser submetida agora (uma pilha: um tab bar dentro do
     // conteúdo de outro).
@@ -1860,9 +2064,20 @@ private:
         float trailingButtonWidth;
 
         TabBarSubmitState()
-            : id(InvalidWidgetId), parentLayout(), row(), flags(0u), cursorX(0.0f),
-              contentHeight(0.0f), tabsX(0.0f), tabsWidth(0.0f), leadingTabWidth(0.0f),
-              leadingButtonWidth(0.0f), trailingTabWidth(0.0f), trailingButtonWidth(0.0f) {}
+                : id(InvalidWidgetId),
+                  parentLayout(),
+                  row(),
+                  flags(0u),
+                  cursorX(0.0f),
+                  contentHeight(0.0f),
+                  tabsX(0.0f),
+                  tabsWidth(0.0f),
+                  leadingTabWidth(0.0f),
+                  leadingButtonWidth(0.0f),
+                  trailingTabWidth(0.0f),
+                  trailingButtonWidth(0.0f)
+        {
+        }
     };
     // O conteúdo da tab escolhida: o layout de fora e o clip que os itens de dentro
     // apanham (ver contentClip/availableWidth).
@@ -1875,7 +2090,13 @@ private:
         // conteúdo tem as suas tabs, a mesma barra não abre outra antes do fim.
         int barDepth;
 
-        TabContentState() : parentLayout(), rect(), active(false), barDepth(0) {}
+        TabContentState()
+                : parentLayout(),
+                  rect(),
+                  active(false),
+                  barDepth(0)
+        {
+        }
     };
     struct UndoState
     {
@@ -1901,15 +2122,21 @@ private:
         bool closed;
 
         DockTabState()
-            : id(InvalidWidgetId), title(), key(), slot(DockSlot::Center), lastSeenFrame(0u),
-              closable(false), closeRequested(false), closed(false)
+                : id(InvalidWidgetId),
+                  title(),
+                  key(),
+                  slot(DockSlot::Center),
+                  lastSeenFrame(0u),
+                  closable(false),
+                  closeRequested(false),
+                  closed(false)
         {
         }
     };
 
     struct DockSpaceState
     {
-        String name;   // id the dock space was opened with, for the state file
+        String name; // id the dock space was opened with, for the state file
         Rect bounds;
         Rect clip;
         // The sizes asked for (dragged, read from the state file or set with
@@ -1928,7 +2155,8 @@ private:
         bool tabListOpen[4];
         bool tabBarHidden[4];
         uint64_t tabBarFrame[4];
-        // Frame in which the region of each slot was last drawn (every tab of a slot calls beginDockPanel).
+        // Frame in which the region of each slot was last drawn (every tab of a slot calls
+        // beginDockPanel).
         uint64_t regionFrame[4];
         // Frame in which a panel of each slot drew its content: one per frame, even
         // when the tab on top changes halfway through it.
@@ -1936,8 +2164,16 @@ private:
         ct::Vector<DockTabState> tabs;
 
         DockSpaceState()
-            : bounds(), clip(), leftWidth(180.0f), rightWidth(240.0f), bottomHeight(180.0f),
-              usedLeft(180.0f), usedRight(240.0f), usedBottom(180.0f), sizeFromState(), tabs()
+                : bounds(),
+                  clip(),
+                  leftWidth(180.0f),
+                  rightWidth(240.0f),
+                  bottomHeight(180.0f),
+                  usedLeft(180.0f),
+                  usedRight(240.0f),
+                  usedBottom(180.0f),
+                  sizeFromState(),
+                  tabs()
         {
             for (uint32_t i = 0u; i < 4u; ++i)
             {
@@ -1957,7 +2193,12 @@ private:
         Rect content;
         WidgetId id;
 
-        DockPanelState() : parentLayout(), content(), id(InvalidWidgetId) {}
+        DockPanelState()
+                : parentLayout(),
+                  content(),
+                  id(InvalidWidgetId)
+        {
+        }
     };
 
     // Um bloco de beginGroup (ver a declaração pública): guarda o layout de fora
@@ -1985,8 +2226,16 @@ private:
         uint32_t nesting;
 
         GroupState()
-            : originX(0.0f), baseOriginX(0.0f), nextItemWidth(0.0f), hasLastItem(false),
-              lineTop(0.0f), lineHeight(0.0f), start(), extent(), active(false), nesting(0u)
+                : originX(0.0f),
+                  baseOriginX(0.0f),
+                  nextItemWidth(0.0f),
+                  hasLastItem(false),
+                  lineTop(0.0f),
+                  lineHeight(0.0f),
+                  start(),
+                  extent(),
+                  active(false),
+                  nesting(0u)
         {
         }
     };
@@ -2000,7 +2249,13 @@ private:
         float scrollOffset;
 
         VirtualListState()
-            : childId(InvalidWidgetId), content(), itemCount(0), itemHeight(0.0f), scrollOffset(0.0f) {}
+                : childId(InvalidWidgetId),
+                  content(),
+                  itemCount(0),
+                  itemHeight(0.0f),
+                  scrollOffset(0.0f)
+        {
+        }
     };
 
     struct VirtualTableState
@@ -2011,14 +2266,22 @@ private:
         float totalColumnWeight;
 
         VirtualTableState()
-            : childId(InvalidWidgetId), columns(0), columnWeights(), totalColumnWeight(0.0f) {}
+                : childId(InvalidWidgetId),
+                  columns(0),
+                  columnWeights(),
+                  totalColumnWeight(0.0f)
+        {
+        }
     };
 
     struct VirtualTreeState
     {
         WidgetId childId;
 
-        VirtualTreeState() : childId(InvalidWidgetId) {}
+        VirtualTreeState()
+                : childId(InvalidWidgetId)
+        {
+        }
     };
 
     // A ordem das colunas de uma tabela reordenável, por id (ver TableStyle).
@@ -2044,9 +2307,18 @@ private:
         int dropTo;
 
         TableOrderState()
-            : order(), count(0), reordering(false), reorderFrom(-1), reorderTo(-1),
-              reorderStartX(0.0f), reorderWidget(InvalidWidgetId), reorderFrame(0),
-              dropFrom(-1), dropTo(-1) {}
+                : order(),
+                  count(0),
+                  reordering(false),
+                  reorderFrom(-1),
+                  reorderTo(-1),
+                  reorderStartX(0.0f),
+                  reorderWidget(InvalidWidgetId),
+                  reorderFrame(0),
+                  dropFrom(-1),
+                  dropTo(-1)
+        {
+        }
     };
     // Onde está a rolagem de cada tabela (TableStyle::scrollY), em pixels do
     // conteúdo e pelo id da tabela: a altura do que rola e das linhas presas só se
@@ -2063,8 +2335,13 @@ private:
         float rowsHeight;
 
         TableScrollState()
-            : offsetY(0.0f), contentHeight(0.0f), frozenHeight(0.0f), offsetX(0.0f),
-              rowsHeight(0.0f) {}
+                : offsetY(0.0f),
+                  contentHeight(0.0f),
+                  frozenHeight(0.0f),
+                  offsetX(0.0f),
+                  rowsHeight(0.0f)
+        {
+        }
     };
     struct TableState
     {
@@ -2076,7 +2353,7 @@ private:
         float rowY;
         float rowHeight;
         ct::Vector<float> columnWeights;
-        float *resizableColumnWeights;
+        float* resizableColumnWeights;
         float totalColumnWeight;
         // Uma entrada por coluna (vazio = todas visíveis). Uma coluna escondida não
         // ocupa largura e o tableNextColumn dela devolve false.
@@ -2113,13 +2390,36 @@ private:
         int row;
 
         TableState()
-            : parentLayout(), bounds(), id(InvalidWidgetId), columns(0), column(-1), rowY(0.0f),
-              rowHeight(0.0f), columnWeights(), resizableColumnWeights(nullptr),
-              totalColumnWeight(0.0f), columnVisible(), headerHoveredColumn(-1), contentY(0.0f),
-              frozenHeight(0.0f), offsetY(0.0f), barStrip(0.0f), contentWidths(), freezeRows(0),
-              viewHeight(0.0f),
-              scrollY(false), contentWidth(0.0f), offsetX(0.0f), pinWidth(0.0f), barStripH(0.0f),
-              freezeCols(0), scrollX(false), style(), row(0) {}
+                : parentLayout(),
+                  bounds(),
+                  id(InvalidWidgetId),
+                  columns(0),
+                  column(-1),
+                  rowY(0.0f),
+                  rowHeight(0.0f),
+                  columnWeights(),
+                  resizableColumnWeights(nullptr),
+                  totalColumnWeight(0.0f),
+                  columnVisible(),
+                  headerHoveredColumn(-1),
+                  contentY(0.0f),
+                  frozenHeight(0.0f),
+                  offsetY(0.0f),
+                  barStrip(0.0f),
+                  contentWidths(),
+                  freezeRows(0),
+                  viewHeight(0.0f),
+                  scrollY(false),
+                  contentWidth(0.0f),
+                  offsetX(0.0f),
+                  pinWidth(0.0f),
+                  barStripH(0.0f),
+                  freezeCols(0),
+                  scrollX(false),
+                  style(),
+                  row(0)
+        {
+        }
     };
 
     struct TableResizeState
@@ -2128,7 +2428,12 @@ private:
         int column;
         float lastPointerX;
 
-        TableResizeState() : tableId(InvalidWidgetId), column(-1), lastPointerX(0.0f) {}
+        TableResizeState()
+                : tableId(InvalidWidgetId),
+                  column(-1),
+                  lastPointerX(0.0f)
+        {
+        }
     };
 
     struct PropertyRowState
@@ -2136,7 +2441,11 @@ private:
         LayoutState parentLayout;
         Rect bounds;
 
-        PropertyRowState() : parentLayout(), bounds() {}
+        PropertyRowState()
+                : parentLayout(),
+                  bounds()
+        {
+        }
     };
 
     struct ToastState
@@ -2147,7 +2456,13 @@ private:
         float remaining;
         float duration = 0.0f;
 
-        ToastState() : id(InvalidWidgetId), text(), position(ToastPosition::BottomRight), remaining(0.0f) {}
+        ToastState()
+                : id(InvalidWidgetId),
+                  text(),
+                  position(ToastPosition::BottomRight),
+                  remaining(0.0f)
+        {
+        }
     };
 
     struct DragDropState
@@ -2161,11 +2476,19 @@ private:
         bool accepted;
 
         DragDropState()
-            : widget(InvalidWidgetId), payload(), preview(), pressedPosition(), armed(false), active(false), accepted(false) {}
+                : widget(InvalidWidgetId),
+                  payload(),
+                  preview(),
+                  pressedPosition(),
+                  armed(false),
+                  active(false),
+                  accepted(false)
+        {
+        }
     };
 
-    Backend &backend_;
-    TextProvider *textProvider_;
+    Backend& backend_;
+    TextProvider* textProvider_;
     Theme theme_;
     FrameInfo frame_;
     PointerState pointer_;
@@ -2211,7 +2534,8 @@ private:
     ct::HashMap<WidgetId, TimeView> timeViews_;
     void updateTimeView(WidgetId id, const Rect& area, const Rect& ruler, TimeView& view);
     void drawTimeView(const Rect& area, const Rect& ruler, const TimeView& view);
-    void drawTimeRuler(const Rect& area, const Rect& ruler, const TimeView& view, int first, double count);
+    void drawTimeRuler(const Rect& area, const Rect& ruler, const TimeView& view, int first,
+            double count);
     struct NumericEditState
     {
         String text;
@@ -2225,7 +2549,7 @@ private:
     ct::HashMap<WidgetId, TabBarState> tabBars_;
     // O botão da lista de tabs (ver TabBarFlags::TabListPopupButton): o combo sem
     // pré-visualização que abre a lista das tabs da barra.
-    void tabListPopupButton(float width, TabBarState &state);
+    void tabListPopupButton(float width, TabBarState& state);
     // As larguras que cada coluna pediu, por tabela (ver TableStyle::sizingFixedFit):
     // o que o conteúdo de uma coluna mede vale para o frame seguinte.
     ct::HashMap<WidgetId, ct::Vector<float>> tableFitWidths_;
@@ -2234,7 +2558,7 @@ private:
     // guarda-a na coluna dela do modelo.
     void measureTableCellWidth();
     // Põe a tab em x e devolve onde a próxima da mesma banda começa.
-    float tabPlacePosition(TabBarState &state, WidgetId tab, float x);
+    float tabPlacePosition(TabBarState& state, WidgetId tab, float x);
     // Há uma tab da barra de cima aberta (o seu conteúdo ainda não fechou).
     bool tabItemOpenInCurrentBar() const;
     static const int kTabBarStackSize = 4;
@@ -2299,14 +2623,22 @@ private:
         Color Theme::*field;
         Color previous;
 
-        StyleColorPush() : field(nullptr), previous() {}
+        StyleColorPush()
+                : field(nullptr),
+                  previous()
+        {
+        }
     };
     struct StyleVarPush
     {
         float Theme::*field;
         float previous;
 
-        StyleVarPush() : field(nullptr), previous(0.0f) {}
+        StyleVarPush()
+                : field(nullptr),
+                  previous(0.0f)
+        {
+        }
     };
     static const int kStyleStackSize = 16;
     StyleColorPush styleColors_[kStyleStackSize];
@@ -2319,7 +2651,11 @@ private:
         FontId font;
         float size;
 
-        FontPush() : font(), size(0.0f) {}
+        FontPush()
+                : font(),
+                  size(0.0f)
+        {
+        }
     };
     static const int kFontStackSize = 8;
     FontPush fonts_[kFontStackSize];
@@ -2399,13 +2735,19 @@ private:
         // O item do último clique sem Shift, e de que lista ele é: o alcance do
         // Shift não pode atravessar duas listas.
         int anchor;
-        const bool *anchorOwner;
+        const bool* anchorOwner;
         bool lastSelected;
         bool lastToggled;
 
         MultiSelectState()
-            : active(false), flags(0u), selected(), nextIndex(0), anchor(-1),
-              anchorOwner(nullptr), lastSelected(false), lastToggled(false)
+                : active(false),
+                  flags(0u),
+                  selected(),
+                  nextIndex(0),
+                  anchor(-1),
+                  anchorOwner(nullptr),
+                  lastSelected(false),
+                  lastToggled(false)
         {
         }
     };
@@ -2440,9 +2782,19 @@ private:
         WindowHandle window;
 
         PopupEntry()
-            : id(InvalidWidgetId), position(), width(0.0f), frame(0u), bounds(),
-              boundsAtFrameStart(), measured(), measuredWidth(0.0f), measuredThisFrame(false),
-              wasOpenAtFrameStart(false), modal(false), open(true), window()
+                : id(InvalidWidgetId),
+                  position(),
+                  width(0.0f),
+                  frame(0u),
+                  bounds(),
+                  boundsAtFrameStart(),
+                  measured(),
+                  measuredWidth(0.0f),
+                  measuredThisFrame(false),
+                  wasOpenAtFrameStart(false),
+                  modal(false),
+                  open(true),
+                  window()
         {
         }
     };
@@ -2456,7 +2808,7 @@ private:
     // é o que o ponteiro tem de respeitar (ver pointerBlockedByOpenPopup) e o que o
     // endPopup fecha.
     int popupContentIndex_;
-    void openPopupSized(StringView id, const Vec2 &position, const Vec2 &size);
+    void openPopupSized(StringView id, const Vec2& position, const Vec2& size);
     // O índice do popup na pilha (-1 quando não está lá, ou já está fechado).
     int findPopup(WidgetId id) const;
     // Tira da pilha o popup e os que estão por cima dele (um filho sem pai não é
@@ -2476,7 +2828,11 @@ private:
         int outerPopupIndex;
 
         PopupContentState()
-            : layout(), clip(), width(0.0f), isPopup(false), outerPopupIndex(-1)
+                : layout(),
+                  clip(),
+                  width(0.0f),
+                  isPopup(false),
+                  outerPopupIndex(-1)
         {
         }
     };
@@ -2676,60 +3032,61 @@ private:
     WidgetId makeWidgetId(StringView label) const;
 
     void consumeEvents();
-    WindowState *currentWindow();
-    const WindowState *currentWindow() const;
-    DrawList *currentDrawList();
+    WindowState* currentWindow();
+    const WindowState* currentWindow() const;
+    DrawList* currentDrawList();
     // Points a list at the text provider's white texel, so shapes and glyphs
     // share one texture (see DrawList::setSolidStyle).
-    void applySolidStyle(DrawList &drawList);
+    void applySolidStyle(DrawList& drawList);
     // Turns the disabled fade on or off on every list this frame can draw into,
     // per the current disabled depth (see beginDisabled).
     void applyDisabledFade();
     TextMetrics measureText(FontId font, StringView text, float logicalSize) const;
-    void drawText(DrawList &drawList, FontId font, StringView text, const Vec2 &position,
-                  float logicalSize, const Color &color, const Rect &clip);
+    void drawText(DrawList& drawList, FontId font, StringView text, const Vec2& position,
+            float logicalSize, const Color& color, const Rect& clip);
     void drawDragDropPreview();
     void drawToasts();
-    void beginLayout(const WindowState &window);
-    void advanceLayout(const Rect &item);
+    void beginLayout(const WindowState& window);
+    void advanceLayout(const Rect& item);
     // A largura mínima de um botão de layout a partir do rótulo já medido (o
     // autoButtonWidth mede-o por dentro; quem já tem as medidas passa-as, para
     // não medir o mesmo texto duas vezes no mesmo frame - ver buttonImpl).
-    float autoButtonWidth(const TextMetrics &metrics) const;
+    float autoButtonWidth(const TextMetrics& metrics) const;
     // O corpo do botão, com as medidas do rótulo já feitas: é o que evita a
     // segunda medida no caminho do layout (que mede para se dimensionar e depois
     // mede outra vez para centrar o texto).
-    bool buttonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics);
-    bool smallButtonImpl(StringView label, const Rect &bounds, const TextMetrics &metrics, float fontSize);
+    bool buttonImpl(StringView label, const Rect& bounds, const TextMetrics& metrics);
+    bool smallButtonImpl(StringView label, const Rect& bounds, const TextMetrics& metrics,
+            float fontSize);
     // hitBounds é a área que responde ao ponteiro: a do desenho por omissão (as
     // versões por bounds), ou a linha toda - a caixa e o rótulo à frente, como o
     // ImGui - nas versões de layout, onde o rótulo é do widget.
-    bool checkboxImpl(StringView label, bool &value, const Rect &bounds,
-                      const TextMetrics &metrics, const Rect &hitBounds = Rect());
-    bool toggleSwitchImpl(StringView label, bool &value, const Rect &bounds,
-                          const TextMetrics &metrics, const Rect &hitBounds = Rect());
-    bool radioButtonImpl(StringView label, bool selected, const Rect &bounds,
-                         const TextMetrics &metrics, const Rect &hitBounds = Rect());
-    bool colorButtonImpl(StringView label, const Color &value, const Rect &bounds,
-                         const TextMetrics &metrics);
-    WindowState *getOrCreateWindow(WidgetId id, StringView title, const Rect &bounds);
+    bool checkboxImpl(StringView label, bool& value, const Rect& bounds, const TextMetrics& metrics,
+            const Rect& hitBounds = Rect());
+    bool toggleSwitchImpl(StringView label, bool& value, const Rect& bounds,
+            const TextMetrics& metrics, const Rect& hitBounds = Rect());
+    bool radioButtonImpl(StringView label, bool selected, const Rect& bounds,
+            const TextMetrics& metrics, const Rect& hitBounds = Rect());
+    bool colorButtonImpl(StringView label, const Color& value, const Rect& bounds,
+            const TextMetrics& metrics);
+    WindowState* getOrCreateWindow(WidgetId id, StringView title, const Rect& bounds);
     // Move a window onto a stored geometry, and remember it the way
     // restoreWindow would put it back.
-    void applyWindowGeometry(WindowState &window, const WindowGeometry &geometry);
+    void applyWindowGeometry(WindowState& window, const WindowGeometry& geometry);
     // Keep the title bar where it can be grabbed: the same rule a drag applies,
     // so a file written on a bigger screen cannot open a window nothing of which
     // is reachable.
-    void clampWindowToViewport(WindowState &window);
+    void clampWindowToViewport(WindowState& window);
     // Whether the wheel over a scroll area belongs to this area (the innermost
     // one under the pointer last frame); an area that cannot scroll leaves it to
     // the one around it.
-    bool ownWheelArea(WidgetId id, const Rect &area, uint32_t depth, bool canScroll);
-    bool movingTowardSubMenu(const Rect &parent) const;
+    bool ownWheelArea(WidgetId id, const Rect& area, uint32_t depth, bool canScroll);
+    bool movingTowardSubMenu(const Rect& parent) const;
     // True when @p point is inside an open popup (menu, combo list) that belongs
     // to the window being drawn: the window receives the pointer there even when
     // the popup reaches outside its bounds.
-    bool pointerInsideOwnPopup(const Vec2 &point) const;
-    WindowHandle popupOwnerAt(const Vec2 &point) const;
+    bool pointerInsideOwnPopup(const Vec2& point) const;
+    WindowHandle popupOwnerAt(const Vec2& point) const;
     bool outsideModalPopup() const;
     uint32_t layoutNesting() const;
     // What a popup is clipped to: the screen, not the content of the window it
@@ -2738,40 +3095,39 @@ private:
     Rect popupClipRect() const;
     // Geometry a window is remembered by: a maximized one fills the viewport
     // every frame, so what is worth keeping is the bounds it was maximized from.
-    static void windowGeometryOf(const WindowState &window, WindowGeometry &out);
-    Rect contentRect(const Rect &local) const;
-    Vec2 toContentSpace(const Vec2 &absolute) const;
+    static void windowGeometryOf(const WindowState& window, WindowGeometry& out);
+    Rect contentRect(const Rect& local) const;
+    Vec2 toContentSpace(const Vec2& absolute) const;
     Rect contentClip() const;
     // Corpo do collapsingHeader: `open` é nulo quando não há botão de fecho.
-    bool collapsingHeaderImpl(StringView label, bool &expanded, bool *open, const Rect &bounds,
-                              const TreeStyle &style);
+    bool collapsingHeaderImpl(StringView label, bool& expanded, bool* open, const Rect& bounds,
+            const TreeStyle& style);
     // Texto como item de layout, na cor pedida, na posição local dada.
-    void textItem(StringView text, const Color &color, const Vec2 &localPosition);
+    void textItem(StringView text, const Color& color, const Vec2& localPosition);
     // Parte `text` nas linhas que cabem em wrapWidth; `lines` fica com as vistas
     // para o texto original, que tem de continuar vivo.
-    void wrapText(StringView text, float wrapWidth, ct::Vector<StringView> &lines) const;
+    void wrapText(StringView text, float wrapWidth, ct::Vector<StringView>& lines) const;
     // Palavra mais larga que a linha: enche o que couber a partir de `from` (um
     // início de linha), deixa a linha em `lines` e devolve onde ela acabou.
     StringView::size_type wrapLongWord(StringView text, StringView::size_type wordEnd,
-                                       StringView::size_type from, float wrapWidth,
-                                       ct::Vector<StringView> &lines) const;
-    bool itemHovered(const Rect &rect, const Rect &clip, WidgetId id);
-    bool itemClicked(const Rect &rect, const Rect &clip, WidgetId id, bool focusable = true);
-    bool subItemHovered(const Rect &rect, const Rect &clip, WidgetId id);
+            StringView::size_type from, float wrapWidth, ct::Vector<StringView>& lines) const;
+    bool itemHovered(const Rect& rect, const Rect& clip, WidgetId id);
+    bool itemClicked(const Rect& rect, const Rect& clip, WidgetId id, bool focusable = true);
+    bool subItemHovered(const Rect& rect, const Rect& clip, WidgetId id);
     // Um widget composto (o slider com o editor de valor ao lado, o drag com o
     // campo que abre no clique) submete mais do que um sub-item: sem isto, as
     // consultas do item (isItemHovered e companhia) devolviam o último deles - o
     // editor - em vez do widget que quem chama submeteu. `primary` é o estado
     // guardado logo a seguir ao sub-item principal; `bounds` é o rect do widget
     // inteiro.
-    void keepItemStatus(const ItemStatus &primary, const Rect &bounds);
+    void keepItemStatus(const ItemStatus& primary, const Rect& bounds);
     void registerFocusable(WidgetId id);
     void advanceFocus();
     // O teste do ponteiro de um slider, numa vertical ou numa horizontal: é o
     // que o vSlider e o slider (e o fader, por dentro) têm em comum.
     // Um rect sem id como item (o grupo, a barra de menus): o rect e o hover são
     // dele, mas clique/edição/foco não - isso é sempre de um widget lá dentro.
-    void setItemHoverRect(const Rect &bounds);
+    void setItemHoverRect(const Rect& bounds);
     // `inset` keeps the value's ends that far in from each end of the rect, where
     // the centre of a handle stops; the rect stays whole for the press.
     bool sliderValue(const Rect& rect, const Rect& clip, WidgetId id, double& value, double minimum,
@@ -2787,36 +3143,43 @@ private:
         int bits;
         bool isSigned;
     };
-    static NumericKind realKind(bool singlePrecision) { return {false, singlePrecision, 0, true}; }
-    static NumericKind intKind() { return {true, false, 32, true}; }
+    static NumericKind realKind(bool singlePrecision)
+    {
+        return { false, singlePrecision, 0, true };
+    }
+    static NumericKind intKind()
+    {
+        return { true, false, 32, true };
+    }
     static NumericKind scalarKind(ScalarType type);
     // O slider e o drag com o tipo por dentro (ver o comentário em Gui.cpp).
-    bool sliderCore(StringView label, double &value, double minimum, double maximum,
-                    const NumericKind &kind, const Rect &bounds, unsigned flags,
-                    const char *format);
-    bool dragCore(StringView label, double &value, double minimum, double maximum, double speed,
-                  const NumericKind &kind, const Rect &bounds, unsigned flags,
-                  const char *format);
+    bool sliderCore(StringView label, double& value, double minimum, double maximum,
+            const NumericKind& kind, const Rect& bounds, unsigned flags, const char* format);
+    bool dragCore(StringView label, double& value, double minimum, double maximum, double speed,
+            const NumericKind& kind, const Rect& bounds, unsigned flags, const char* format);
     // Põe o valor que veio do ponteiro ou do campo de texto: arredonda quando o
     // tipo é inteiro e limita ao intervalo quando lhe dizem para limitar.
-    bool setScalarValue(double &value, double next, double minimum, double maximum, bool integer,
-                        bool clampToRange = true, bool singlePrecision = false);
+    bool setScalarValue(double& value, double next, double minimum, double maximum, bool integer,
+            bool clampToRange = true, bool singlePrecision = false);
     // O trabalho dos dois vSlider: precision < 0 escreve o valor como inteiro.
-    bool vSliderImpl(StringView label, float &value, float minimum, float maximum,
-                     const Rect &bounds, int precision);
-    WindowHandle topWindowAt(const Vec2 &position) const;
+    bool vSliderImpl(StringView label, float& value, float minimum, float maximum,
+            const Rect& bounds, int precision);
+    WindowHandle topWindowAt(const Vec2& position) const;
     // O topWindowAt() do ponteiro, respondido uma vez por frame: por widget era
     // uma passagem por todas as janelas (o currentWindowReceivesPointer pergunta
     // isto a cada widget), e a resposta só muda quando uma janela nasce, muda de
     // sítio ou de ordem - quem faz isso invalida (ver invalidatePointerWindow).
     WindowHandle windowAtPointer() const;
-    void invalidatePointerWindow() { pointerWindowValid_ = false; }
+    void invalidatePointerWindow()
+    {
+        pointerWindowValid_ = false;
+    }
     void focusWindow(WindowHandle handle);
     bool currentWindowReceivesPointer() const;
     bool windowBlockedByModal() const;
-    bool pointerBlockedByOpenPopup(const Vec2 &point) const;
+    bool pointerBlockedByOpenPopup(const Vec2& point) const;
     void releaseUnsubmittedBlockers();
-    bool windowSubmittedRecently(const WindowState &window) const;
+    bool windowSubmittedRecently(const WindowState& window) const;
     // Widgets of the current window may not take pointer or keyboard input:
     // a messageBox/fileDialog is up, or another window is the modal one.
     bool inputBlockedByModal() const;
@@ -2824,23 +3187,23 @@ private:
     // pressed this frame inside visible, in the focused window, with no modal
     // or open popup owning that point. Use it instead of reading
     // pointer_.pressed directly.
-    bool pointerPressedIn(const Rect &visible, uint32_t button) const;
-    bool itemPressedIn(const Rect &visible, uint32_t button) const;
+    bool pointerPressedIn(const Rect& visible, uint32_t button) const;
+    bool itemPressedIn(const Rect& visible, uint32_t button) const;
     // The pointer is over visible and nothing (modal, popup, another window)
     // sits on top of it - for hover and the wheel.
-    bool pointerOver(const Rect &visible) const;
+    bool pointerOver(const Rect& visible) const;
     // focusedWidget_ == id, unless a modal owns the keyboard.
     bool hasKeyboardFocus(WidgetId id) const;
     // inputText for a numeric field: keeps the typed text across frames while
     // the field is focused (see numericEditId_). Returns whether the text was
     // edited this frame; text holds what to parse.
-    bool editNumericText(StringView label, String &text, double value, const Rect &bounds,
-                         unsigned flags = 0u);
+    bool editNumericText(StringView label, String& text, double value, const Rect& bounds,
+            unsigned flags = 0u);
     // O campo de texto de um número: o texto sai do formato (formatNumericValue) e
     // volta a número por ele (parseNumericValue). É o que faz um campo "%.10f
     // grams" ter a legenda à frente e um "%04X" aceitar hexadecimal à entrada.
-    bool numericField(StringView label, double &value, const NumericKind &kind,
-                      const Rect &bounds, const char *format, unsigned flags = 0u);
+    bool numericField(StringView label, double& value, const NumericKind& kind, const Rect& bounds,
+            const char* format, unsigned flags = 0u);
     // This frame's editing keys and typed text applied to the focused text
     // field's buffer at cursor (a byte offset kept on a UTF-8 code point
     // boundary). Every text field (inputText, inputTextMultiline, the
@@ -2848,14 +3211,13 @@ private:
     // all get the same keys. Returns whether value changed.
     // Os flags são os do inputText (o filtro do que se escreve e o ReadOnly); o
     // inputTextMultiline e o campo do combo não os usam.
-    bool editTextBuffer(String &value, String::size_type &cursor, bool multiline,
-                        unsigned flags = 0u);
+    bool editTextBuffer(String& value, String::size_type& cursor, bool multiline,
+            unsigned flags = 0u);
     // Corpo comum de plotLines/plotHistogram: histogram escolhe barras em vez de
     // segmentos de linha. Recebe um rect local, como os outros widgets de bounds.
-    int plotImpl(bool histogram, StringView label, const float *values, int count,
-                 const Rect &bounds, int offset, StringView overlay, float scaleMin,
-                 float scaleMax);
-    Rect dockSlotBounds(const DockSpaceState &dockSpace, DockSlot slot) const;
+    int plotImpl(bool histogram, StringView label, const float* values, int count,
+            const Rect& bounds, int offset, StringView overlay, float scaleMin, float scaleMax);
+    Rect dockSlotBounds(const DockSpaceState& dockSpace, DockSlot slot) const;
     struct DockLimits
     {
         float minimumCenter;
@@ -2864,14 +3226,14 @@ private:
         float bottomMaximum;
     };
     // Fits the sizes asked for to the dock space's bounds (the used* sizes).
-    DockLimits fitDockSizes(DockSpaceState &dockSpace) const;
-    bool beginDockSpaceInternal(StringView id, const Rect &outer, const Rect &clip);
+    DockLimits fitDockSizes(DockSpaceState& dockSpace) const;
+    bool beginDockSpaceInternal(StringView id, const Rect& outer, const Rect& clip);
     static uint32_t dockSlotIndex(DockSlot slot);
     // Dock arrangement in the state file: the slot a panel was left in, the tab
     // on top of a slot's group, and how the arrangement is written back.
     DockSlot storedDockSlot(StringView spaceName, StringView title, DockSlot fallback) const;
-    bool     storedDockTabOnTop(StringView spaceName, DockSlot slot, StringView title) const;
-    void     captureDockArrangement(const DockSpaceState &space);
+    bool storedDockTabOnTop(StringView spaceName, DockSlot slot, StringView title) const;
+    void captureDockArrangement(const DockSpaceState& space);
     float tableColumnX(int column) const;
     // Onde a coluna ficaria sem a rolagem horizontal (é o que dá as larguras e o
     // sítio das colunas presas).
@@ -2886,11 +3248,11 @@ private:
     int tableModelColumn(int display) const;
     // Carrega a ordem guardada das colunas da tabela que acabou de abrir (e larga o
     // arrasto que já não é submetido): ver TableStyle::reorderable.
-    void configureTable(const TableStyle &style);
-    void loadTableOrder(const TableStyle &style);
+    void configureTable(const TableStyle& style);
+    void loadTableOrder(const TableStyle& style);
     // Monta a rolagem da tabela que acabou de abrir (as barras, a roda e o arrasto
     // da barra), a partir da medida do frame anterior: ver TableStyle::scrollY.
-    void beginTableScroll(const TableStyle &style);
+    void beginTableScroll(const TableStyle& style);
     // Onde é que a linha atual pode desenhar: com uma tabela que rola, o que rola
     // está cortado pelas linhas presas por cima e pelo fundo da tabela.
     Rect tableRowClip() const;
@@ -2898,76 +3260,78 @@ private:
     // A ordem das colunas da tabela aberta (colunas reordenáveis), ou nullptr quando
     // ela não é reordenável. Aponta para a entrada guardada por id, por isso o
     // arrasto que ocupa vários frames vive lá.
-    TableOrderState *tableOrder_;
+    TableOrderState* tableOrder_;
     // A posição no écra cuja faixa contém o @p x (-1 fora da tabela).
     int tableColumnAtX(float x) const;
     void drawTableRowStyle();
-    bool tableHeaderCell(StringView label, int *sortColumn, bool *sortAscending);
-    bool menuItemInternal(StringView label, bool enabled, bool *checked,
-                          StringView shortcut = StringView());
-    bool beginComboImpl(StringView label, StringView preview, const Rect &bounds,
-                        int visibleItems, bool advanceHeader);
+    bool tableHeaderCell(StringView label, int* sortColumn, bool* sortAscending);
+    bool menuItemInternal(StringView label, bool enabled, bool* checked,
+            StringView shortcut = StringView());
+    bool beginComboImpl(StringView label, StringView preview, const Rect& bounds, int visibleItems,
+            bool advanceHeader);
     static StringView mainMenuBarTitle();
     // O conteúdo de um menu aberto é um contentor de layout, como a janela de um
     // popup do ImGui: um widget de layout submetido lá dentro (slider, child,
     // input, combo) fica dentro do popup em vez de aterrar na janela. Guarda o
     // layout de fora, põe o cursor no popup e empurra o id do menu para o idStack
     // (dois menus não podem partilhar os ids dos widgets).
-    void beginPopupContent(const Rect &popupBounds, float insetTop = 0.0f, float padding = 0.0f);
+    void beginPopupContent(const Rect& popupBounds, float insetTop = 0.0f, float padding = 0.0f);
     void endPopupContent();
-    bool beginPopupBody(int index, int outer, const Rect &bounds, float insetTop, float padding);
-    void measurePopup(PopupEntry &entry);
+    bool beginPopupBody(int index, int outer, const Rect& bounds, float insetTop, float padding);
+    void measurePopup(PopupEntry& entry);
     // O clip/o largo do contentor do menu em vigor (o do topo da pilha).
-    Rect &popupContentClip();
-    const Rect &popupContentClip() const;
-    float &popupContentWidth();
+    Rect& popupContentClip();
+    const Rect& popupContentClip() const;
+    float& popupContentWidth();
     float popupContentWidth() const;
-    void setPopupContentBounds(const Rect &clip, float width);
+    void setPopupContentBounds(const Rect& clip, float width);
     // Um item de menu é um item do layout também: é o que faz o que vem a seguir
     // cair por baixo dele, dentro do popup.
-    void syncMenuLayoutItem(const Rect &item);
+    void syncMenuLayoutItem(const Rect& item);
     // O item de um bloco de escolha múltipla: aplica o que o clique pediu à seleção
     // da aplicação e devolve se o item fica escolhido (ver selectable).
     bool applyMultiSelectClick(bool clicked);
-    void drawComboHeader(DrawList &drawList, const Rect &rect, StringView preview,
-                         bool highlighted, const Rect &clip);
+    void drawComboHeader(DrawList& drawList, const Rect& rect, StringView preview, bool highlighted,
+            const Rect& clip);
     // Um triângulo virado para onde o direction pede, centrado em `area` e com o
     // lado menor de um quarto dela (é o que o arrowButton e as setas desenhadas
     // à mão partilham).
-    static void drawArrowGlyph(DrawList &drawList, const Rect &area, ArrowDirection direction,
-                               const Color &color, const Rect &clip);
+    static void drawArrowGlyph(DrawList& drawList, const Rect& area, ArrowDirection direction,
+            const Color& color, const Rect& clip);
     // O deslocamento vertical que o alignTextToFramePadding() pediu para o próximo
     // texto (0 quando ninguém o pediu). Consome o pedido.
-    float textFrameOffset(const TextMetrics &metrics);
+    float textFrameOffset(const TextMetrics& metrics);
     float comboPopupMaxHeight(int visibleItems) const;
-    void drawWindow(WindowState &window);
+    void drawWindow(WindowState& window);
     static uint32_t buttonIndex(PointerButton button);
     // fontSize is the editor's effective size (theme_.fontSize * the
     // CodeEditorState's zoom), never the theme's own fontSize directly - a
     // zoomed editor must scale every one of these consistently or the
     // caret/selection/click math drifts away from what is drawn.
-    void drawHighlightedLine(DrawList &drawList, const CodeEditorState &state,
-                             int line, const String &text, const Vec2 &position, const Rect &clip,
-                             int tabSize, float fontSize);
+    void drawHighlightedLine(DrawList& drawList, const CodeEditorState& state, int line,
+            const String& text, const Vec2& position, const Rect& clip, int tabSize,
+            float fontSize);
     // Draws one run of plain text, honoring embedded '\t' bytes by advancing
     // to the next tab stop (tabSize columns, in space-widths) instead of
     // asking the font for a glyph it doesn't have. startVisCol is the
     // column the run starts at, needed to land on the correct tab stop when
     // a run doesn't start at column 0. Returns the x position past the run.
-    float drawCodeRun(DrawList &drawList, const StringView &run, const Vec2 &position,
-                      const Color &color, const Rect &clip, int tabSize, int startVisCol, float fontSize);
+    float drawCodeRun(DrawList& drawList, const StringView& run, const Vec2& position,
+            const Color& color, const Rect& clip, int tabSize, int startVisCol, float fontSize);
     // Pixel X offset of a column on a line, measuring the real glyph widths
     // of the prefix up to it - never assume a fixed per-character width,
     // the font is not guaranteed to be monospaced. A '\t' byte advances to
     // the next tab stop (tabSize columns, in space-widths) rather than
     // being measured as a glyph.
-    float codeEditorColumnX(const CodeEditorState &state, int line, int column, int tabSize, float fontSize) const;
+    float codeEditorColumnX(const CodeEditorState& state, int line, int column, int tabSize,
+            float fontSize) const;
     // Inverse of codeEditorColumnX: the column whose prefix width is closest
     // to localX (measured from the start of the line, i.e. already relative
     // to the text area's left edge + padding).
-    int codeEditorColumnAt(const CodeEditorState &state, int line, float localX, int tabSize, float fontSize) const;
-    void updateCodeCompletion(CodeEditorState &state, const CodeEditorOptions &options);
-    void acceptCodeCompletion(CodeEditorState &state);
+    int codeEditorColumnAt(const CodeEditorState& state, int line, float localX, int tabSize,
+            float fontSize) const;
+    void updateCodeCompletion(CodeEditorState& state, const CodeEditorOptions& options);
+    void acceptCodeCompletion(CodeEditorState& state);
 };
 
 } // namespace ig

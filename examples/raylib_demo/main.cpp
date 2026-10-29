@@ -87,28 +87,67 @@ struct DemoState
     float assetTableWeights[3];
 
     DemoState()
-        : enabled(true), notifications(false), liveUpdates(true), advanced(false), experimental(false), showInspector(true),
-          profileOpen(true), numericOpen(true), selectionOpen(true), imagesOpen(true), dataTableOpen(true),
-          workspaceOpen(true), windowManagerOpen(true), sceneExpanded(true), selectedPreset(false), deleteNodeDialog(false), renameNodeDialog(false),
-          volume(0.62f), progress(0.38f), quality(1), samples(8), retries(2),
-          sampleOffset(4), dragIterations(12), workspaceTab(0), selectedAsset(1), selectedSceneNode(0), virtualTreeSelected(-1),
-          assetSortColumn(0), assetSortAscending(true), droppedImageAsset(0u),
-          gamma(2.2f), dragExposure(0.25f),
-          positionX(0.0f), positionY(1.25f), positionZ(-3.5f),
-          scaleX(1.0f), scaleY(1.0f), scaleZ(1.0f),
-          uvX(0.0f), uvY(0.0f), uvWidth(1.0f), uvHeight(1.0f),
-          gizmoTransform(), gizmoMode(ig::Gizmo2DMode::Translate),
-          gizmo3DTransform(), gizmo3DMode(ig::Gizmo3DMode::Translate),
-          name("Raylib user"),
-          nodeName("DirectionalLight3D"),
-          assetFilter(),
-          notes("A multiline text editor now has a real scrollbar.\n"
-                "Use the wheel over this area.\n"
-                "You can also drag the scrollbar thumb.\n"
-                "New lines keep the caret visible.\n"
-                "Clipboard, Home and End are supported too.\n"
-                "This final line demonstrates vertical scrolling."),
-          accent(90u, 160u, 230u, 255u), selectedGradientStop(-1), selectedCurvePoint(-1), currentSequenceFrame(24), selectedSequencerTrack(-1)
+            : enabled(true),
+              notifications(false),
+              liveUpdates(true),
+              advanced(false),
+              experimental(false),
+              showInspector(true),
+              profileOpen(true),
+              numericOpen(true),
+              selectionOpen(true),
+              imagesOpen(true),
+              dataTableOpen(true),
+              workspaceOpen(true),
+              windowManagerOpen(true),
+              sceneExpanded(true),
+              selectedPreset(false),
+              deleteNodeDialog(false),
+              renameNodeDialog(false),
+              volume(0.62f),
+              progress(0.38f),
+              quality(1),
+              samples(8),
+              retries(2),
+              sampleOffset(4),
+              dragIterations(12),
+              workspaceTab(0),
+              selectedAsset(1),
+              selectedSceneNode(0),
+              virtualTreeSelected(-1),
+              assetSortColumn(0),
+              assetSortAscending(true),
+              droppedImageAsset(0u),
+              gamma(2.2f),
+              dragExposure(0.25f),
+              positionX(0.0f),
+              positionY(1.25f),
+              positionZ(-3.5f),
+              scaleX(1.0f),
+              scaleY(1.0f),
+              scaleZ(1.0f),
+              uvX(0.0f),
+              uvY(0.0f),
+              uvWidth(1.0f),
+              uvHeight(1.0f),
+              gizmoTransform(),
+              gizmoMode(ig::Gizmo2DMode::Translate),
+              gizmo3DTransform(),
+              gizmo3DMode(ig::Gizmo3DMode::Translate),
+              name("Raylib user"),
+              nodeName("DirectionalLight3D"),
+              assetFilter(),
+              notes("A multiline text editor now has a real scrollbar.\n"
+                    "Use the wheel over this area.\n"
+                    "You can also drag the scrollbar thumb.\n"
+                    "New lines keep the caret visible.\n"
+                    "Clipboard, Home and End are supported too.\n"
+                    "This final line demonstrates vertical scrolling."),
+              accent(90u, 160u, 230u, 255u),
+              selectedGradientStop(-1),
+              selectedCurvePoint(-1),
+              currentSequenceFrame(24),
+              selectedSequencerTrack(-1)
     {
         gradientStops.push_back(ig::GradientStop(0.0f, ig::Color(70u, 125u, 245u, 255u)));
         gradientStops.push_back(ig::GradientStop(0.45f, ig::Color(190u, 90u, 245u, 255u)));
@@ -117,9 +156,9 @@ struct DemoState
         curvePoints.push_back(ig::CurvePoint(0.28f, 0.72f));
         curvePoints.push_back(ig::CurvePoint(0.65f, 0.35f));
         curvePoints.push_back(ig::CurvePoint(1.0f, 0.82f));
-        sequencerTracks.push_back(ig::SequencerTrack("Camera",4,42,ig::Color(80,160,245)));
-        sequencerTracks.push_back(ig::SequencerTrack("Light",18,67,ig::Color(245,185,75)));
-        sequencerTracks.push_back(ig::SequencerTrack("Post FX",48,92,ig::Color(185,100,240)));
+        sequencerTracks.push_back(ig::SequencerTrack("Camera", 4, 42, ig::Color(80, 160, 245)));
+        sequencerTracks.push_back(ig::SequencerTrack("Light", 18, 67, ig::Color(245, 185, 75)));
+        sequencerTracks.push_back(ig::SequencerTrack("Post FX", 48, 92, ig::Color(185, 100, 240)));
         assetTableWeights[0] = 2.2f;
         assetTableWeights[1] = 1.1f;
         assetTableWeights[2] = 0.8f;
@@ -139,45 +178,38 @@ struct DemoState
         sceneOrder[2] = 3;
         sceneOrder[3] = 4;
         gizmo3DTransform.position = ig::Vec3(0.0f, 0.0f, 0.0f);
-        for (int group = 0; group < 100; ++group)
-            virtualTreeExpanded[group] = true;
+        for (int group = 0; group < 100; ++group) virtualTreeExpanded[group] = true;
     }
 };
 
 struct DemoAssetRow
 {
-    const char *name;
-    const char *kind;
+    const char* name;
+    const char* kind;
     int sizeKiB;
 };
 
-int compareText(const char *left, const char *right)
+int compareText(const char* left, const char* right)
 {
     for (int i = 0; left[i] != '\0' || right[i] != '\0'; ++i)
     {
-        if (left[i] < right[i])
-            return -1;
-        if (left[i] > right[i])
-            return 1;
+        if (left[i] < right[i]) return -1;
+        if (left[i] > right[i]) return 1;
     }
     return 0;
 }
 
-int compareAssets(const DemoAssetRow &left, const DemoAssetRow &right, int column)
+int compareAssets(const DemoAssetRow& left, const DemoAssetRow& right, int column)
 {
-    if (column == 0)
-        return compareText(left.name, right.name);
-    if (column == 1)
-        return compareText(left.kind, right.kind);
+    if (column == 0) return compareText(left.name, right.name);
+    if (column == 1) return compareText(left.kind, right.kind);
     return left.sizeKiB < right.sizeKiB ? -1 : (left.sizeKiB > right.sizeKiB ? 1 : 0);
 }
 
 bool containsAsciiIgnoreCase(ig::StringView text, ig::StringView query)
 {
-    if (query.empty())
-        return true;
-    if (query.size() > text.size())
-        return false;
+    if (query.empty()) return true;
+    if (query.size() > text.size()) return false;
     for (ig::StringView::size_type start = 0u; start + query.size() <= text.size(); ++start)
     {
         bool match = true;
@@ -193,8 +225,7 @@ bool containsAsciiIgnoreCase(ig::StringView text, ig::StringView query)
                 break;
             }
         }
-        if (match)
-            return true;
+        if (match) return true;
     }
     return false;
 }
@@ -203,11 +234,16 @@ ig::WidgetId sceneNodeId(int node)
 {
     switch (node)
     {
-    case 1: return CameraNode;
-    case 2: return LightNode;
-    case 3: return EnvironmentNode;
-    case 4: return WorldEnvironmentNode;
-    default: return ig::InvalidWidgetId;
+        case 1:
+            return CameraNode;
+        case 2:
+            return LightNode;
+        case 3:
+            return EnvironmentNode;
+        case 4:
+            return WorldEnvironmentNode;
+        default:
+            return ig::InvalidWidgetId;
     }
 }
 
@@ -215,33 +251,30 @@ int sceneNodeIndex(ig::WidgetId id)
 {
     for (int node = 1; node <= 4; ++node)
     {
-        if (sceneNodeId(node) == id)
-            return node;
+        if (sceneNodeId(node) == id) return node;
     }
     return -1;
 }
 
-bool sceneNodeHasChildren(const DemoState &state, int parent)
+bool sceneNodeHasChildren(const DemoState& state, int parent)
 {
     for (int node = 1; node <= 4; ++node)
     {
-        if (state.sceneParent[node] == parent)
-            return true;
+        if (state.sceneParent[node] == parent) return true;
     }
     return false;
 }
 
-bool sceneNodeIsDescendant(const DemoState &state, int node, int ancestor)
+bool sceneNodeIsDescendant(const DemoState& state, int node, int ancestor)
 {
     for (int parent = state.sceneParent[node]; parent > 0; parent = state.sceneParent[parent])
     {
-        if (parent == ancestor)
-            return true;
+        if (parent == ancestor) return true;
     }
     return false;
 }
 
-void moveSceneOrder(DemoState &state, int source, int insertion)
+void moveSceneOrder(DemoState& state, int source, int insertion)
 {
     int sourceIndex = -1;
     for (int i = 0; i < 4; ++i)
@@ -252,22 +285,19 @@ void moveSceneOrder(DemoState &state, int source, int insertion)
             break;
         }
     }
-    if (sourceIndex < 0)
-        return;
-    for (int i = sourceIndex; i < 3; ++i)
-        state.sceneOrder[i] = state.sceneOrder[i + 1];
-    if (sourceIndex < insertion)
-        --insertion;
-    for (int i = 3; i > insertion; --i)
-        state.sceneOrder[i] = state.sceneOrder[i - 1];
+    if (sourceIndex < 0) return;
+    for (int i = sourceIndex; i < 3; ++i) state.sceneOrder[i] = state.sceneOrder[i + 1];
+    if (sourceIndex < insertion) --insertion;
+    for (int i = 3; i > insertion; --i) state.sceneOrder[i] = state.sceneOrder[i - 1];
     state.sceneOrder[insertion] = source;
 }
 
-bool applySceneTreeDrop(DemoState &state, const ig::TreeDrop &drop)
+bool applySceneTreeDrop(DemoState& state, const ig::TreeDrop& drop)
 {
     const int source = sceneNodeIndex(drop.source);
     const int target = sceneNodeIndex(drop.target);
-    if (source < 0 || target < 0 || source == target || sceneNodeIsDescendant(state, target, source))
+    if (source < 0 || target < 0 || source == target ||
+            sceneNodeIsDescendant(state, target, source))
         return false;
 
     int targetIndex = -1;
@@ -279,8 +309,7 @@ bool applySceneTreeDrop(DemoState &state, const ig::TreeDrop &drop)
             break;
         }
     }
-    if (targetIndex < 0)
-        return false;
+    if (targetIndex < 0) return false;
 
     if (drop.position == ig::TreeDropPosition::Inside)
     {
@@ -294,19 +323,18 @@ bool applySceneTreeDrop(DemoState &state, const ig::TreeDrop &drop)
     else
     {
         state.sceneParent[source] = state.sceneParent[target];
-        moveSceneOrder(state, source, targetIndex +
-                       (drop.position == ig::TreeDropPosition::After ? 1 : 0));
+        moveSceneOrder(state, source,
+                targetIndex + (drop.position == ig::TreeDropPosition::After ? 1 : 0));
     }
     return true;
 }
 
-void drawSceneChildren(ig::Context &ui, DemoState &state, int parent, ig::TreeDrop &drop)
+void drawSceneChildren(ig::Context& ui, DemoState& state, int parent, ig::TreeDrop& drop)
 {
     for (int i = 0; i < 4; ++i)
     {
         const int node = state.sceneOrder[i];
-        if (state.sceneParent[node] != parent)
-            continue;
+        if (state.sceneParent[node] != parent) continue;
 
         ig::TreeItemStyle style;
         ig::StringView label;
@@ -344,9 +372,10 @@ void drawSceneChildren(ig::Context &ui, DemoState &state, int parent, ig::TreeDr
     }
 }
 
-void drawProfileWindow(ig::Context &ui, DemoState &state)
+void drawProfileWindow(ig::Context& ui, DemoState& state)
 {
-    if (!ui.beginWindow("Profile and toggles", ig::Rect(42.0f, 72.0f, 390.0f, 330.0f), &state.profileOpen))
+    if (!ui.beginWindow("Profile and toggles", ig::Rect(42.0f, 72.0f, 390.0f, 330.0f),
+                &state.profileOpen))
         return;
 
     ui.label("Text input and binary controls");
@@ -361,7 +390,7 @@ void drawProfileWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTexture)
+void drawImageWindow(ig::Context& ui, DemoState& state, ig::TextureId previewTexture)
 {
     if (!ui.beginWindow("Images", ig::Rect(926.0f, 566.0f, 410.0f, 240.0f), &state.imagesOpen))
         return;
@@ -372,34 +401,35 @@ void drawImageWindow(ig::Context &ui, DemoState &state, ig::TextureId previewTex
     ui.image(previewTexture, 128.0f, 128.0f);
     ig::DragDropPayload payload;
     if (ui.acceptDragDropTarget(ImageAssetPayload,
-                                ig::Rect(previewPosition.x, previewPosition.y, 128.0f, 128.0f), payload))
+                ig::Rect(previewPosition.x, previewPosition.y, 128.0f, 128.0f), payload))
     {
         state.droppedImageAsset = payload.data;
-        ui.showToast("asset assigned", "Image asset assigned to preview", ig::ToastPosition::BottomRight);
+        ui.showToast("asset assigned", "Image asset assigned to preview",
+                ig::ToastPosition::BottomRight);
     }
     ui.sameLine(14.0f);
     ui.imageButton("texture preview action", previewTexture, 92.0f, 92.0f);
     ui.tooltip("Use this texture preview as an action button");
     ui.sameLine(8.0f);
     if (ui.smallImageButton("small texture action", previewTexture))
-        ui.showToast("small texture action", "Compact image action", ig::ToastPosition::BottomRight);
+        ui.showToast("small texture action", "Compact image action",
+                ig::ToastPosition::BottomRight);
     ui.tooltip("Compact icon button");
     ui.endWindow();
 }
 
-int virtualTreeRowCount(const DemoState &state)
+int virtualTreeRowCount(const DemoState& state)
 {
     int rowCount = 0;
     for (int group = 0; group < 100; ++group)
     {
         ++rowCount;
-        if (state.virtualTreeExpanded[group])
-            rowCount += 9;
+        if (state.virtualTreeExpanded[group]) rowCount += 9;
     }
     return rowCount;
 }
 
-bool virtualTreeNodeAt(const DemoState &state, int row, int &group, int &child)
+bool virtualTreeNodeAt(const DemoState& state, int row, int& group, int& child)
 {
     for (group = 0; group < 100; ++group)
     {
@@ -423,24 +453,26 @@ bool virtualTreeNodeAt(const DemoState &state, int row, int &group, int &child)
     return false;
 }
 
-bool projectDemo3D(const ::Matrix &view, const ::Matrix &projection, const ig::Rect &viewport,
-                   const ig::Vec3 &world, ig::Vec2 &screen)
+bool projectDemo3D(const ::Matrix& view, const ::Matrix& projection, const ig::Rect& viewport,
+        const ig::Vec3& world, ig::Vec2& screen)
 {
     const float viewX = view.m0 * world.x + view.m4 * world.y + view.m8 * world.z + view.m12;
     const float viewY = view.m1 * world.x + view.m5 * world.y + view.m9 * world.z + view.m13;
     const float viewZ = view.m2 * world.x + view.m6 * world.y + view.m10 * world.z + view.m14;
     const float viewW = view.m3 * world.x + view.m7 * world.y + view.m11 * world.z + view.m15;
-    const float clipX = projection.m0 * viewX + projection.m4 * viewY + projection.m8 * viewZ + projection.m12 * viewW;
-    const float clipY = projection.m1 * viewX + projection.m5 * viewY + projection.m9 * viewZ + projection.m13 * viewW;
-    const float clipW = projection.m3 * viewX + projection.m7 * viewY + projection.m11 * viewZ + projection.m15 * viewW;
-    if (clipW < 0.00001f && clipW > -0.00001f)
-        return false;
+    const float clipX = projection.m0 * viewX + projection.m4 * viewY + projection.m8 * viewZ +
+                        projection.m12 * viewW;
+    const float clipY = projection.m1 * viewX + projection.m5 * viewY + projection.m9 * viewZ +
+                        projection.m13 * viewW;
+    const float clipW = projection.m3 * viewX + projection.m7 * viewY + projection.m11 * viewZ +
+                        projection.m15 * viewW;
+    if (clipW < 0.00001f && clipW > -0.00001f) return false;
     screen.x = viewport.x + (clipX / clipW * 0.5f + 0.5f) * viewport.width;
     screen.y = viewport.y + (0.5f - clipY / clipW * 0.5f) * viewport.height;
     return true;
 }
 
-ig::Vec3 rotateDemo3D(const ig::Vec3 &value, const ig::Vec3 &rotation)
+ig::Vec3 rotateDemo3D(const ig::Vec3& value, const ig::Vec3& rotation)
 {
     const float radians = DEG2RAD;
     const float cosX = cosf(rotation.x * radians);
@@ -456,18 +488,17 @@ ig::Vec3 rotateDemo3D(const ig::Vec3 &value, const ig::Vec3 &rotation)
     return ig::Vec3(x * cosZ - y * sinZ, x * sinZ + y * cosZ, rotatedZ);
 }
 
-void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
+void drawWorkspaceWindow(ig::Context& ui, DemoState& state)
 {
-    const ig::StringView tabs[] = {
-        ig::StringView("Scene"), ig::StringView("Assets"), ig::StringView("Settings"),
-        ig::StringView("Hierarchy"), ig::StringView("Gizmo3D"), ig::StringView("Editors"), ig::StringView("Docking")
-    };
-    const ig::StringView assets[] = {
-        ig::StringView("skybox.hdr"), ig::StringView("albedo.png"), ig::StringView("normal.png"),
-        ig::StringView("wood.mat"), ig::StringView("character.mesh"), ig::StringView("postfx.shader")
-    };
+    const ig::StringView tabs[] = { ig::StringView("Scene"), ig::StringView("Assets"),
+        ig::StringView("Settings"), ig::StringView("Hierarchy"), ig::StringView("Gizmo3D"),
+        ig::StringView("Editors"), ig::StringView("Docking") };
+    const ig::StringView assets[] = { ig::StringView("skybox.hdr"), ig::StringView("albedo.png"),
+        ig::StringView("normal.png"), ig::StringView("wood.mat"), ig::StringView("character.mesh"),
+        ig::StringView("postfx.shader") };
 
-    if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 492.0f, 420.0f, 310.0f), &state.workspaceOpen))
+    if (!ui.beginWindow("Workspace", ig::Rect(462.0f, 492.0f, 420.0f, 310.0f),
+                &state.workspaceOpen))
         return;
 
     if (ui.beginMenuBar(ig::Rect(0.0f, 0.0f, ui.availableWidth(), ui.theme().menuBarHeight)))
@@ -477,21 +508,20 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
             if (ui.menuItem("New scene"))
                 ui.showToast("new scene", "New scene created", ig::ToastPosition::BottomRight);
             ui.menuSeparator();
-            if (ui.menuItem("Close workspace"))
-                state.workspaceOpen = false;
+            if (ui.menuItem("Close workspace")) state.workspaceOpen = false;
             ui.endMenu();
         }
         if (ui.beginMenu("Edit"))
         {
-            if (ui.menuItem("Rename selected"))
-                state.renameNodeDialog = true;
+            if (ui.menuItem("Rename selected")) state.renameNodeDialog = true;
             ui.menuItem("Paste", false);
             ui.endMenu();
         }
         if (ui.beginMenu("Scene"))
         {
             if (ui.menuItem("Refresh hierarchy"))
-                ui.showToast("scene refresh", "Scene hierarchy refreshed", ig::ToastPosition::BottomRight);
+                ui.showToast("scene refresh", "Scene hierarchy refreshed",
+                        ig::ToastPosition::BottomRight);
             ui.endMenu();
         }
         if (ui.beginMenu("View"))
@@ -533,27 +563,26 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         {
             if (applySceneTreeDrop(state, sceneDrop))
                 ui.showToast("scene tree move",
-                             sceneDrop.position == ig::TreeDropPosition::Inside
-                                 ? "Scene node reparented" : "Scene node reordered",
-                             ig::ToastPosition::BottomRight);
+                        sceneDrop.position == ig::TreeDropPosition::Inside ? "Scene node reparented"
+                                                                           : "Scene node reordered",
+                        ig::ToastPosition::BottomRight);
             else
-                ui.showToast("scene tree invalid move", "Cannot move a node inside one of its children", ig::ToastPosition::BottomRight);
+                ui.showToast("scene tree invalid move",
+                        "Cannot move a node inside one of its children",
+                        ig::ToastPosition::BottomRight);
         }
-        if (ui.button("Delete selected node"))
-            state.deleteNodeDialog = true;
+        if (ui.button("Delete selected node")) state.deleteNodeDialog = true;
         ui.sameLine(6.0f);
-        if (ui.button("Rename node"))
-            state.renameNodeDialog = true;
-        if (ui.beginContextMenu("scene context", ig::Rect(sceneArea.x, sceneArea.y,
-                                ui.availableWidth(), 176.0f)))
+        if (ui.button("Rename node")) state.renameNodeDialog = true;
+        if (ui.beginContextMenu("scene context",
+                    ig::Rect(sceneArea.x, sceneArea.y, ui.availableWidth(), 176.0f)))
         {
             if (ui.menuItem("Duplicate selected"))
-                ui.showToast("duplicate node", "Selected node duplicated", ig::ToastPosition::BottomRight);
-            if (ui.menuItem("Rename"))
-                state.renameNodeDialog = true;
+                ui.showToast("duplicate node", "Selected node duplicated",
+                        ig::ToastPosition::BottomRight);
+            if (ui.menuItem("Rename")) state.renameNodeDialog = true;
             ui.menuSeparator();
-            if (ui.menuItem("Delete selected"))
-                state.deleteNodeDialog = true;
+            if (ui.menuItem("Delete selected")) state.deleteNodeDialog = true;
             ui.endContextMenu();
         }
     }
@@ -563,26 +592,27 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         int firstVisible = 0;
         int lastVisible = 0;
         if (ui.beginVirtualTable("asset table", 1000, 2, ui.theme().widgetHeight, 190.0f,
-                                 firstVisible, lastVisible))
+                    firstVisible, lastVisible))
         {
             for (int item = firstVisible; item < lastVisible; ++item)
             {
                 char generatedAsset[32];
-                const ig::StringView asset = item < 6
-                    ? assets[item]
-                    : (snprintf(generatedAsset, sizeof(generatedAsset), "texture_%04d.png", item),
-                       ig::StringView(generatedAsset));
-                const ig::StringView type = item < 3 ? ig::StringView("image")
-                                                      : ig::StringView("texture");
+                const ig::StringView asset =
+                        item < 6 ? assets[item]
+                                 : (snprintf(generatedAsset, sizeof(generatedAsset),
+                                            "texture_%04d.png", item),
+                                           ig::StringView(generatedAsset));
+                const ig::StringView type =
+                        item < 3 ? ig::StringView("image") : ig::StringView("texture");
                 const ig::Rect assetCell = ui.virtualTableCellRect(item, 0);
                 const ig::Rect typeCell = ui.virtualTableCellRect(item, 1);
-                const ig::Rect row(assetCell.x, assetCell.y,
-                                   assetCell.width + typeCell.width, assetCell.height);
+                const ig::Rect row(assetCell.x, assetCell.y, assetCell.width + typeCell.width,
+                        assetCell.height);
                 ui.pushId(static_cast<uint64_t>(item));
                 ui.beginDragSource(static_cast<ig::WidgetId>(item + 1), ImageAssetPayload,
-                                   static_cast<uint64_t>(item + 1), asset, row);
+                        static_cast<uint64_t>(item + 1), asset, row);
                 if (ui.selectable(asset, state.selectedAsset == item, assetCell) ||
-                    ui.selectable(type, state.selectedAsset == item, typeCell))
+                        ui.selectable(type, state.selectedAsset == item, typeCell))
                     state.selectedAsset = item;
                 ui.popId();
             }
@@ -592,26 +622,23 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     else if (state.workspaceTab == 2)
     {
         ui.label("2D viewport gizmo");
-        if (ui.smallButton("Translate"))
-            state.gizmoMode = ig::Gizmo2DMode::Translate;
+        if (ui.smallButton("Translate")) state.gizmoMode = ig::Gizmo2DMode::Translate;
         ui.sameLine();
-        if (ui.smallButton("Rotate"))
-            state.gizmoMode = ig::Gizmo2DMode::Rotate;
+        if (ui.smallButton("Rotate")) state.gizmoMode = ig::Gizmo2DMode::Rotate;
         ui.sameLine();
-        if (ui.smallButton("Scale"))
-            state.gizmoMode = ig::Gizmo2DMode::Scale;
+        if (ui.smallButton("Scale")) state.gizmoMode = ig::Gizmo2DMode::Scale;
         const ig::Vec2 canvasPosition = ui.cursor();
         const float canvasWidth = ui.availableWidth();
         const ig::Rect canvas(canvasPosition.x, canvasPosition.y, canvasWidth, 152.0f);
         ui.drawRectFilled(canvas, ig::Color(28u, 32u, 42u, 255u));
         for (float x = 0.0f; x < canvas.width; x += 24.0f)
             ui.drawLine(ig::Vec2(canvas.x + x, canvas.y),
-                        ig::Vec2(canvas.x + x, canvas.y + canvas.height),
-                        ig::Color(45u, 51u, 66u, 255u));
+                    ig::Vec2(canvas.x + x, canvas.y + canvas.height),
+                    ig::Color(45u, 51u, 66u, 255u));
         for (float y = 0.0f; y < canvas.height; y += 24.0f)
             ui.drawLine(ig::Vec2(canvas.x, canvas.y + y),
-                        ig::Vec2(canvas.x + canvas.width, canvas.y + y),
-                        ig::Color(45u, 51u, 66u, 255u));
+                    ig::Vec2(canvas.x + canvas.width, canvas.y + y),
+                    ig::Color(45u, 51u, 66u, 255u));
         const float objectHalfWidth = 21.0f * state.gizmoTransform.scale.x;
         const float objectHalfHeight = 15.0f * state.gizmoTransform.scale.y;
         const float rotation = state.gizmoTransform.rotation * 3.14159265358979323846f / 180.0f;
@@ -620,13 +647,13 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         const float centerX = canvas.x + state.gizmoTransform.position.x;
         const float centerY = canvas.y + state.gizmoTransform.position.y;
         const ig::Vec2 corner0(centerX - objectHalfWidth * cosine + objectHalfHeight * sine,
-                               centerY - objectHalfWidth * sine - objectHalfHeight * cosine);
+                centerY - objectHalfWidth * sine - objectHalfHeight * cosine);
         const ig::Vec2 corner1(centerX + objectHalfWidth * cosine + objectHalfHeight * sine,
-                               centerY + objectHalfWidth * sine - objectHalfHeight * cosine);
+                centerY + objectHalfWidth * sine - objectHalfHeight * cosine);
         const ig::Vec2 corner2(centerX + objectHalfWidth * cosine - objectHalfHeight * sine,
-                               centerY + objectHalfWidth * sine + objectHalfHeight * cosine);
+                centerY + objectHalfWidth * sine + objectHalfHeight * cosine);
         const ig::Vec2 corner3(centerX - objectHalfWidth * cosine - objectHalfHeight * sine,
-                               centerY - objectHalfWidth * sine + objectHalfHeight * cosine);
+                centerY - objectHalfWidth * sine + objectHalfHeight * cosine);
         ui.drawLine(corner0, corner1, state.accent, 2.0f);
         ui.drawLine(corner1, corner2, state.accent, 2.0f);
         ui.drawLine(corner2, corner3, state.accent, 2.0f);
@@ -637,7 +664,8 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         gizmoOptions.scaleSnap = 0.1f;
         ui.gizmo2D("viewport sprite", state.gizmoTransform, state.gizmoMode, canvas, gizmoOptions);
         ui.setCursor(ig::Vec2(canvas.x, canvas.y + canvas.height + ui.theme().itemSpacing));
-        ui.inputFloat2("gizmo position", state.gizmoTransform.position.x, state.gizmoTransform.position.y);
+        ui.inputFloat2("gizmo position", state.gizmoTransform.position.x,
+                state.gizmoTransform.position.y);
         ui.dragFloat("gizmo rotation", state.gizmoTransform.rotation, -180.0f, 180.0f, 0.5f);
     }
     else if (state.workspaceTab == 3)
@@ -649,14 +677,13 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         int toggledGroup = -1;
         bool toggledValue = false;
         if (ui.beginVirtualTree("large hierarchy", rowCount, ui.theme().widgetHeight, 190.0f,
-                                firstVisible, lastVisible))
+                    firstVisible, lastVisible))
         {
             for (int row = firstVisible; row < lastVisible; ++row)
             {
                 int group = 0;
                 int child = -1;
-                if (!virtualTreeNodeAt(state, row, group, child))
-                    continue;
+                if (!virtualTreeNodeAt(state, row, group, child)) continue;
 
                 char label[40];
                 ig::TreeItemStyle style;
@@ -677,12 +704,14 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
                     style.leaf = true;
                 }
                 style.selected = state.virtualTreeSelected == node;
-                const ig::WidgetId nodeId = isGroup
-                    ? static_cast<ig::WidgetId>(0x5647524f55500000ull + static_cast<uint64_t>(group))
-                    : static_cast<ig::WidgetId>(0x56474348494c4400ull +
-                                                 static_cast<uint64_t>(group * 9 + child));
+                const ig::WidgetId nodeId =
+                        isGroup ? static_cast<ig::WidgetId>(
+                                          0x5647524f55500000ull + static_cast<uint64_t>(group))
+                                : static_cast<ig::WidgetId>(
+                                          0x56474348494c4400ull +
+                                          static_cast<uint64_t>(group * 9 + child));
                 if (ui.treeItem(nodeId, ig::StringView(label), expanded, style,
-                                ui.virtualTreeItemRect(row, isGroup ? 0 : 1)))
+                            ui.virtualTreeItemRect(row, isGroup ? 0 : 1)))
                     state.virtualTreeSelected = node;
                 if (isGroup && expanded != state.virtualTreeExpanded[group])
                 {
@@ -692,76 +721,69 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
             }
             ui.endVirtualTree();
         }
-        if (toggledGroup >= 0)
-            state.virtualTreeExpanded[toggledGroup] = toggledValue;
+        if (toggledGroup >= 0) state.virtualTreeExpanded[toggledGroup] = toggledValue;
     }
     else if (state.workspaceTab == 4)
     {
         ui.label("Perspective 3D gizmo");
-        if (ui.smallButton("Translate 3D"))
-            state.gizmo3DMode = ig::Gizmo3DMode::Translate;
+        if (ui.smallButton("Translate 3D")) state.gizmo3DMode = ig::Gizmo3DMode::Translate;
         ui.sameLine();
-        if (ui.smallButton("Rotate 3D"))
-            state.gizmo3DMode = ig::Gizmo3DMode::Rotate;
+        if (ui.smallButton("Rotate 3D")) state.gizmo3DMode = ig::Gizmo3DMode::Rotate;
         ui.sameLine();
-        if (ui.smallButton("Scale 3D"))
-            state.gizmo3DMode = ig::Gizmo3DMode::Scale;
+        if (ui.smallButton("Scale 3D")) state.gizmo3DMode = ig::Gizmo3DMode::Scale;
         const ig::Vec2 canvasPosition = ui.cursor();
         const ig::Rect canvas(canvasPosition.x, canvasPosition.y, ui.availableWidth(), 152.0f);
         ui.drawRectFilled(canvas, ig::Color(28u, 32u, 42u, 255u));
-        const ::Matrix view = ::MatrixLookAt(::Vector3{1.8f, 1.35f, 2.6f},
-                                              ::Vector3{0.0f, 0.0f, 0.0f},
-                                              ::Vector3{0.0f, 1.0f, 0.0f});
-        const ::Matrix projection = ::MatrixPerspective(55.0f * DEG2RAD,
-                                                         canvas.width / canvas.height,
-                                                         0.1f, 20.0f);
-        const float viewData[16] = {
-            view.m0, view.m1, view.m2, view.m3, view.m4, view.m5, view.m6, view.m7,
-            view.m8, view.m9, view.m10, view.m11, view.m12, view.m13, view.m14, view.m15
-        };
-        const float projectionData[16] = {
-            projection.m0, projection.m1, projection.m2, projection.m3,
-            projection.m4, projection.m5, projection.m6, projection.m7,
-            projection.m8, projection.m9, projection.m10, projection.m11,
-            projection.m12, projection.m13, projection.m14, projection.m15
-        };
+        const ::Matrix view = ::MatrixLookAt(::Vector3{ 1.8f, 1.35f, 2.6f },
+                ::Vector3{ 0.0f, 0.0f, 0.0f }, ::Vector3{ 0.0f, 1.0f, 0.0f });
+        const ::Matrix projection =
+                ::MatrixPerspective(55.0f * DEG2RAD, canvas.width / canvas.height, 0.1f, 20.0f);
+        const float viewData[16] = { view.m0, view.m1, view.m2, view.m3, view.m4, view.m5, view.m6,
+            view.m7, view.m8, view.m9, view.m10, view.m11, view.m12, view.m13, view.m14, view.m15 };
+        const float projectionData[16] = { projection.m0, projection.m1, projection.m2,
+            projection.m3, projection.m4, projection.m5, projection.m6, projection.m7,
+            projection.m8, projection.m9, projection.m10, projection.m11, projection.m12,
+            projection.m13, projection.m14, projection.m15 };
         for (int line = -3; line <= 3; ++line)
         {
             ig::Vec2 from;
             ig::Vec2 to;
-            if (projectDemo3D(view, projection, canvas, ig::Vec3(-1.5f, -0.45f, line * 0.5f), from) &&
-                projectDemo3D(view, projection, canvas, ig::Vec3(1.5f, -0.45f, line * 0.5f), to))
+            if (projectDemo3D(view, projection, canvas, ig::Vec3(-1.5f, -0.45f, line * 0.5f),
+                        from) &&
+                    projectDemo3D(view, projection, canvas, ig::Vec3(1.5f, -0.45f, line * 0.5f),
+                            to))
                 ui.drawLine(from, to, ig::Color(47u, 59u, 76u, 255u));
-            if (projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, -1.5f), from) &&
-                projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, 1.5f), to))
+            if (projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, -1.5f),
+                        from) &&
+                    projectDemo3D(view, projection, canvas, ig::Vec3(line * 0.5f, -0.45f, 1.5f),
+                            to))
                 ui.drawLine(from, to, ig::Color(47u, 59u, 76u, 255u));
         }
         const float halfX = 0.2f * state.gizmo3DTransform.scale.x;
         const float halfY = 0.2f * state.gizmo3DTransform.scale.y;
         const float halfZ = 0.2f * state.gizmo3DTransform.scale.z;
         const ig::Vec3 position = state.gizmo3DTransform.position;
-        const ig::Vec3 localCorners[] = {
-            ig::Vec3(-halfX, -halfY, -halfZ), ig::Vec3(halfX, -halfY, -halfZ),
-            ig::Vec3(halfX, halfY, -halfZ), ig::Vec3(-halfX, halfY, -halfZ),
-            ig::Vec3(-halfX, -halfY, halfZ), ig::Vec3(halfX, -halfY, halfZ),
-            ig::Vec3(halfX, halfY, halfZ), ig::Vec3(-halfX, halfY, halfZ)
-        };
+        const ig::Vec3 localCorners[] = { ig::Vec3(-halfX, -halfY, -halfZ),
+            ig::Vec3(halfX, -halfY, -halfZ), ig::Vec3(halfX, halfY, -halfZ),
+            ig::Vec3(-halfX, halfY, -halfZ), ig::Vec3(-halfX, -halfY, halfZ),
+            ig::Vec3(halfX, -halfY, halfZ), ig::Vec3(halfX, halfY, halfZ),
+            ig::Vec3(-halfX, halfY, halfZ) };
         ig::Vec3 corners[8];
         for (int corner = 0; corner < 8; ++corner)
         {
-            const ig::Vec3 rotated = rotateDemo3D(localCorners[corner], state.gizmo3DTransform.rotation);
-            corners[corner] = ig::Vec3(position.x + rotated.x, position.y + rotated.y, position.z + rotated.z);
+            const ig::Vec3 rotated =
+                    rotateDemo3D(localCorners[corner], state.gizmo3DTransform.rotation);
+            corners[corner] = ig::Vec3(position.x + rotated.x, position.y + rotated.y,
+                    position.z + rotated.z);
         }
-        const int edges[][2] = {
-            {0, 1}, {1, 2}, {2, 3}, {3, 0}, {4, 5}, {5, 6}, {6, 7}, {7, 4},
-            {0, 4}, {1, 5}, {2, 6}, {3, 7}
-        };
+        const int edges[][2] = { { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 0 }, { 4, 5 }, { 5, 6 },
+            { 6, 7 }, { 7, 4 }, { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } };
         for (int edge = 0; edge < 12; ++edge)
         {
             ig::Vec2 from;
             ig::Vec2 to;
             if (projectDemo3D(view, projection, canvas, corners[edges[edge][0]], from) &&
-                projectDemo3D(view, projection, canvas, corners[edges[edge][1]], to))
+                    projectDemo3D(view, projection, canvas, corners[edges[edge][1]], to))
                 ui.drawLine(from, to, state.accent, 2.0f);
         }
         ig::Gizmo3DOptions gizmo3DOptions;
@@ -769,11 +791,11 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
         gizmo3DOptions.translateSnap = 0.1f;
         gizmo3DOptions.rotateSnap = 15.0f;
         gizmo3DOptions.scaleSnap = 0.1f;
-        ui.gizmo3D("viewport object", state.gizmo3DTransform, state.gizmo3DMode, canvas,
-                   viewData, projectionData, gizmo3DOptions);
+        ui.gizmo3D("viewport object", state.gizmo3DTransform, state.gizmo3DMode, canvas, viewData,
+                projectionData, gizmo3DOptions);
         ui.setCursor(ig::Vec2(canvas.x, canvas.y + canvas.height + ui.theme().itemSpacing));
         ui.inputFloat3("gizmo 3d position", state.gizmo3DTransform.position.x,
-                       state.gizmo3DTransform.position.y, state.gizmo3DTransform.position.z);
+                state.gizmo3DTransform.position.y, state.gizmo3DTransform.position.z);
     }
     else if (state.workspaceTab == 5)
     {
@@ -786,19 +808,21 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
             ui.label("Gradient: left-click to add/drag; right-click an interior stop to remove.");
             const ig::Vec2 gradientPosition = ui.cursor();
             ui.gradientEditor("demo gradient", state.gradientStops, state.selectedGradientStop,
-                              ig::Rect(gradientPosition.x, gradientPosition.y, ui.availableWidth(), 48.0f));
+                    ig::Rect(gradientPosition.x, gradientPosition.y, ui.availableWidth(), 48.0f));
             // Explicit-rectangle widgets deliberately do not participate in
             // automatic layout, so advance the cursor ourselves.
             ui.setCursor(ig::Vec2(gradientPosition.x, gradientPosition.y + 60.0f));
             ui.label("Curve: left-click to add/drag; right-click an interior point to remove.");
             const ig::Vec2 curvePosition = ui.cursor();
             ui.curveEditor("demo curve", state.curvePoints, state.selectedCurvePoint,
-                           ig::Rect(curvePosition.x, curvePosition.y, ui.availableWidth(), 82.0f));
+                    ig::Rect(curvePosition.x, curvePosition.y, ui.availableWidth(), 82.0f));
             ui.setCursor(ig::Vec2(curvePosition.x, curvePosition.y + 90.0f));
             ui.label("Sequencer: click the ruler to seek.");
             const ig::Vec2 sequencerPosition = ui.cursor();
-            ui.sequencer("demo sequencer", state.sequencerTracks, 0, 100, state.currentSequenceFrame,
-                         state.selectedSequencerTrack, ig::Rect(sequencerPosition.x, sequencerPosition.y, ui.availableWidth(), 102.0f));
+            ui.sequencer("demo sequencer", state.sequencerTracks, 0, 100,
+                    state.currentSequenceFrame, state.selectedSequencerTrack,
+                    ig::Rect(sequencerPosition.x, sequencerPosition.y, ui.availableWidth(),
+                            102.0f));
             ui.setCursor(ig::Vec2(curvePosition.x, curvePosition.y + 90.0f));
             ui.endChild();
         }
@@ -806,8 +830,8 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     else
     {
         const ig::Vec2 dockPosition = ui.cursor();
-        if (ui.beginDockSpace("workspace dock", ig::Rect(dockPosition.x, dockPosition.y,
-                                                           ui.availableWidth(), 184.0f)))
+        if (ui.beginDockSpace("workspace dock",
+                    ig::Rect(dockPosition.x, dockPosition.y, ui.availableWidth(), 184.0f)))
         {
             if (ui.beginDockPanel("Hierarchy", ig::DockSlot::Left))
             {
@@ -842,9 +866,10 @@ void drawWorkspaceWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawWindowManager(ig::Context &ui, DemoState &state)
+void drawWindowManager(ig::Context& ui, DemoState& state)
 {
-    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 270.0f), &state.windowManagerOpen))
+    if (!ui.beginWindow("Windows", ig::Rect(926.0f, 72.0f, 410.0f, 270.0f),
+                &state.windowManagerOpen))
         return;
 
     ui.checkbox("Profile", state.profileOpen);
@@ -857,7 +882,7 @@ void drawWindowManager(ig::Context &ui, DemoState &state)
     ui.checkbox("Workspace", state.workspaceOpen);
     ui.sameLine();
     ui.checkbox("Images", state.imagesOpen);
-    if (ui.button("Unsaved changes dialog")) state.unsavedDialog=true;
+    if (ui.button("Unsaved changes dialog")) state.unsavedDialog = true;
     if (ui.button("Tile all")) ui.tileAllWindows();
     ui.sameLine();
     if (ui.button("Cascade")) ui.cascadeWindows();
@@ -876,9 +901,10 @@ void drawWindowManager(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawNumericWindow(ig::Context &ui, DemoState &state)
+void drawNumericWindow(ig::Context& ui, DemoState& state)
 {
-    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 410.0f), &state.numericOpen))
+    if (!ui.beginWindow("Numeric controls", ig::Rect(462.0f, 72.0f, 420.0f, 410.0f),
+                &state.numericOpen))
         return;
 
     ui.label("Continuous and discrete values");
@@ -888,15 +914,17 @@ void drawNumericWindow(ig::Context &ui, DemoState &state)
     if (ui.sliderFloat("Volume", state.volume, 0.0f, 1.0f))
     {
         const float nextVolume = state.volume;
-        ui.pushUndo("Volume", [&state, previousVolume]() { state.volume = previousVolume; },
-                    [&state, nextVolume]() { state.volume = nextVolume; });
+        ui.pushUndo(
+                "Volume", [&state, previousVolume]() { state.volume = previousVolume; },
+                [&state, nextVolume]() { state.volume = nextVolume; });
     }
     const int previousSamples = state.samples;
     if (ui.sliderInt("Samples", state.samples, 1, 16))
     {
         const int nextSamples = state.samples;
-        ui.pushUndo("Samples", [&state, previousSamples]() { state.samples = previousSamples; },
-                    [&state, nextSamples]() { state.samples = nextSamples; });
+        ui.pushUndo(
+                "Samples", [&state, previousSamples]() { state.samples = previousSamples; },
+                [&state, nextSamples]() { state.samples = nextSamples; });
     }
     ui.separatorText("Relative drag controls");
     ui.dragFloat("Exposure", state.dragExposure, -2.0f, 2.0f);
@@ -910,25 +938,22 @@ void drawNumericWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawSelectionWindow(ig::Context &ui, DemoState &state)
+void drawSelectionWindow(ig::Context& ui, DemoState& state)
 {
-    const ig::StringView qualityItems[] = {
-        ig::StringView("Low"), ig::StringView("Balanced"), ig::StringView("Ultra")
-    };
+    const ig::StringView qualityItems[] = { ig::StringView("Low"), ig::StringView("Balanced"),
+        ig::StringView("Ultra") };
 
-    if (!ui.beginWindow("Selection widgets", ig::Rect(42.0f, 440.0f, 390.0f, 350.0f), &state.selectionOpen))
+    if (!ui.beginWindow("Selection widgets", ig::Rect(42.0f, 440.0f, 390.0f, 350.0f),
+                &state.selectionOpen))
         return;
 
     ui.label("Lists, radio buttons and selection");
     ui.separator();
-    ui.comboBox("Quality", state.quality,
-                ig::Span<const ig::StringView>(qualityItems));
+    ui.comboBox("Quality", state.quality, ig::Span<const ig::StringView>(qualityItems));
     ui.spacing(6.0f);
     ui.label("Preset");
-    if (ui.radioButton("Safe defaults", !state.selectedPreset))
-        state.selectedPreset = false;
-    if (ui.radioButton("Performance", state.selectedPreset))
-        state.selectedPreset = true;
+    if (ui.radioButton("Safe defaults", !state.selectedPreset)) state.selectedPreset = false;
+    if (ui.radioButton("Performance", state.selectedPreset)) state.selectedPreset = true;
     if (ui.collapsingHeader("Advanced options", state.advanced))
     {
         ui.checkbox("Use experimental pipeline", state.experimental);
@@ -937,17 +962,16 @@ void drawSelectionWindow(ig::Context &ui, DemoState &state)
     ui.endWindow();
 }
 
-void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
+void drawInspector(ig::Context& ui, DemoState& state, float deltaSeconds)
 {
-    if (!state.showInspector)
-        return;
+    if (!state.showInspector) return;
 
-    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 252.0f, 410.0f, 300.0f), &state.showInspector))
+    if (!ui.beginWindow("Live inspector", ig::Rect(926.0f, 252.0f, 410.0f, 300.0f),
+                &state.showInspector))
         return;
 
     state.progress += deltaSeconds * (state.enabled ? 0.18f : 0.04f);
-    if (state.progress > 1.0f)
-        state.progress = 0.0f;
+    if (state.progress > 1.0f) state.progress = 0.0f;
 
     if (ui.beginChild("inspector properties", 174.0f))
     {
@@ -968,8 +992,7 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
         }
         if (ui.beginPropertyRow("Scale"))
         {
-            ui.dragFloat3("scale", state.scaleX, state.scaleY, state.scaleZ,
-                          0.01f, 100.0f, 0.02f);
+            ui.dragFloat3("scale", state.scaleX, state.scaleY, state.scaleZ, 0.01f, 100.0f, 0.02f);
             ui.endPropertyRow();
         }
         if (ui.beginPropertyRow("UV rect"))
@@ -978,7 +1001,7 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
             ui.endPropertyRow();
         }
         ui.separator();
-        const float runtimeSummaryWeights[] = {1.0f, 2.0f};
+        const float runtimeSummaryWeights[] = { 1.0f, 2.0f };
         if (ui.beginTable("runtime summary", ig::Span<const float>(runtimeSummaryWeights)))
         {
             ui.tableNextColumn();
@@ -999,41 +1022,39 @@ void drawInspector(ig::Context &ui, DemoState &state, float deltaSeconds)
     if (ui.smallButton("Refresh"))
         ui.showToast("inspector refresh", "Inspector refreshed", ig::ToastPosition::BottomRight);
     ui.sameLine(5.0f);
-    if (ui.smallButton("Reset"))
-        state.progress = 0.0f;
+    if (ui.smallButton("Reset")) state.progress = 0.0f;
     ui.selectable("Click to focus this window", true);
     ui.endWindow();
 }
 
-void drawDataTableWindow(ig::Context &ui, DemoState &state)
+void drawDataTableWindow(ig::Context& ui, DemoState& state)
 {
-    static const DemoAssetRow assets[] = {
-        {"albedo.png", "Texture", 2048},
-        {"environment.hdr", "Texture", 8192},
-        {"player.mesh", "Mesh", 1536},
-        {"scene.json", "Data", 96},
-        {"theme.igui", "Theme", 12}
-    };
+    static const DemoAssetRow assets[] = { { "albedo.png", "Texture", 2048 },
+        { "environment.hdr", "Texture", 8192 }, { "player.mesh", "Mesh", 1536 },
+        { "scene.json", "Data", 96 }, { "theme.igui", "Theme", 12 } };
     const int baseAssetCount = static_cast<int>(sizeof(assets) / sizeof(assets[0]));
     const int assetCount = 120;
 
-    if (!ui.beginWindow("Data table", ig::Rect(458.0f, 560.0f, 420.0f, 258.0f), &state.dataTableOpen))
+    if (!ui.beginWindow("Data table", ig::Rect(458.0f, 560.0f, 420.0f, 258.0f),
+                &state.dataTableOpen))
         return;
 
     ui.label("Click a header to sort. Drag its separator to resize columns.");
     ui.separator();
     ui.inputText("Filter assets", state.assetFilter);
-    if (ui.smallButton("Clear filter"))
-        state.assetFilter.clear();
+    if (ui.smallButton("Clear filter")) state.assetFilter.clear();
     bool sortChanged = false;
     if (ui.beginTable("asset browser header", ig::Span<float>(state.assetTableWeights, 3u)))
     {
         assert(ui.tableNextColumn());
-        sortChanged = ui.tableHeader("Name", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        sortChanged = ui.tableHeader("Name", state.assetSortColumn, state.assetSortAscending) ||
+                      sortChanged;
         assert(ui.tableNextColumn());
-        sortChanged = ui.tableHeader("Type", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        sortChanged = ui.tableHeader("Type", state.assetSortColumn, state.assetSortAscending) ||
+                      sortChanged;
         assert(ui.tableNextColumn());
-        sortChanged = ui.tableHeader("Size", state.assetSortColumn, state.assetSortAscending) || sortChanged;
+        sortChanged = ui.tableHeader("Size", state.assetSortColumn, state.assetSortAscending) ||
+                      sortChanged;
         ui.endTable();
     }
     if (sortChanged)
@@ -1043,19 +1064,19 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
     int filteredCount = 0;
     for (int i = 0; i < assetCount; ++i)
     {
-        const DemoAssetRow &asset = assets[i % baseAssetCount];
+        const DemoAssetRow& asset = assets[i % baseAssetCount];
         char name[64];
         snprintf(name, sizeof(name), "%s #%03d", asset.name, i + 1);
         if (containsAsciiIgnoreCase(name, state.assetFilter) ||
-            containsAsciiIgnoreCase(asset.kind, state.assetFilter))
+                containsAsciiIgnoreCase(asset.kind, state.assetFilter))
             order[filteredCount++] = i;
     }
     for (int i = 0; i < filteredCount - 1; ++i)
     {
         for (int j = i + 1; j < filteredCount; ++j)
         {
-            const DemoAssetRow &left = assets[order[i] % baseAssetCount];
-            const DemoAssetRow &right = assets[order[j] % baseAssetCount];
+            const DemoAssetRow& left = assets[order[i] % baseAssetCount];
+            const DemoAssetRow& right = assets[order[j] % baseAssetCount];
             int comparison = compareAssets(left, right, state.assetSortColumn);
             if (state.assetSortColumn == 2)
             {
@@ -1078,26 +1099,25 @@ void drawDataTableWindow(ig::Context &ui, DemoState &state)
     int firstVisible = 0;
     int lastVisible = 0;
     if (ui.beginVirtualTable("asset browser rows", filteredCount,
-                             ig::Span<const float>(state.assetTableWeights, 3u),
-                             ui.theme().widgetHeight, 108.0f,
-                             firstVisible, lastVisible, false))
+                ig::Span<const float>(state.assetTableWeights, 3u), ui.theme().widgetHeight, 108.0f,
+                firstVisible, lastVisible, false))
     {
         for (int row = firstVisible; row < lastVisible; ++row)
         {
             const int assetIndex = order[row];
-            const DemoAssetRow &asset = assets[assetIndex % baseAssetCount];
+            const DemoAssetRow& asset = assets[assetIndex % baseAssetCount];
             char name[64];
             char size[32];
             snprintf(name, sizeof(name), "%s #%03d", asset.name, assetIndex + 1);
-            snprintf(size, sizeof(size), "%d KiB", asset.sizeKiB + (assetIndex / baseAssetCount) * 64);
+            snprintf(size, sizeof(size), "%d KiB",
+                    asset.sizeKiB + (assetIndex / baseAssetCount) * 64);
             ui.pushId(static_cast<uint64_t>(assetIndex + 1));
             if (ui.selectable(name, state.selectedAsset == assetIndex,
-                              ui.virtualTableCellRect(row, 0)))
+                        ui.virtualTableCellRect(row, 0)))
                 state.selectedAsset = assetIndex;
             ui.selectable(asset.kind, state.selectedAsset == assetIndex,
-                          ui.virtualTableCellRect(row, 1));
-            ui.selectable(size, state.selectedAsset == assetIndex,
-                          ui.virtualTableCellRect(row, 2));
+                    ui.virtualTableCellRect(row, 1));
+            ui.selectable(size, state.selectedAsset == assetIndex, ui.virtualTableCellRect(row, 2));
             ui.popId();
         }
         ui.endVirtualTable();
@@ -1121,9 +1141,8 @@ int main()
 
     ig::Context ui(backend, &backend.fontAtlas());
     DemoState state;
-    const ::Image previewImage = ::GenImageChecked(96, 96, 12, 12,
-                                                    ::Color{59u, 94u, 138u, 255u},
-                                                    ::Color{87u, 162u, 226u, 255u});
+    const ::Image previewImage = ::GenImageChecked(96, 96, 12, 12, ::Color{ 59u, 94u, 138u, 255u },
+            ::Color{ 87u, 162u, 226u, 255u });
     const ::Texture2D previewTexture = ::LoadTextureFromImage(previewImage);
     ::UnloadImage(previewImage);
     if (previewTexture.id == 0u)
@@ -1138,11 +1157,16 @@ int main()
         ui.beginFrame(ig::raylib::frameInfo(GetFrameTime()));
         static ct::Vector<ig::TimelineTrack> animationTracks;
         static int animationFrame = 0, animationTrack = -1, animationKey = -1;
-        if (animationTracks.empty()) {
-            const char* names[] = {"Position X", "Position Y", "Rotation"};
-            for (int i=0;i<3;++i) {
-                ig::TimelineTrack track; track.label=names[i];
-                track.keys.push_back(0); track.keys.push_back(30+i*10); track.keys.push_back(100);
+        if (animationTracks.empty())
+        {
+            const char* names[] = { "Position X", "Position Y", "Rotation" };
+            for (int i = 0; i < 3; ++i)
+            {
+                ig::TimelineTrack track;
+                track.label = names[i];
+                track.keys.push_back(0);
+                track.keys.push_back(30 + i * 10);
+                track.keys.push_back(100);
                 animationTracks.push_back(track);
             }
         }
@@ -1150,7 +1174,8 @@ int main()
             ui.showToast("save shortcut", "Ctrl+S: scene saved", ig::ToastPosition::BottomRight);
         if (ui.shortcut(ig::KeyCode::Z) && ui.canRedo())
             ui.showToast("undo shortcut", "Undo applied", ig::ToastPosition::BottomRight);
-        if ((ui.shortcut(ig::KeyCode::Y) || ui.shortcut(ig::KeyCode::Z, true, true)) && ui.canUndo())
+        if ((ui.shortcut(ig::KeyCode::Y) || ui.shortcut(ig::KeyCode::Z, true, true)) &&
+                ui.canUndo())
             ui.showToast("redo shortcut", "Redo applied", ig::ToastPosition::BottomRight);
         drawProfileWindow(ui, state);
         drawNumericWindow(ui, state);
@@ -1160,38 +1185,45 @@ int main()
         drawInspector(ui, state, GetFrameTime());
         drawDataTableWindow(ui, state);
         drawImageWindow(ui, state, ig::raylib::textureId(previewTexture));
-        if (ui.beginWindow("Animation timeline", ig::Rect(240,240,740,360))) {
+        if (ui.beginWindow("Animation timeline", ig::Rect(240, 240, 740, 360)))
+        {
             ui.label("Keys: click to add, drag to move, right-click to delete");
-            ui.timeline("animation keys", animationTracks, 0, 100, animationFrame, animationTrack, animationKey,
-                        ig::Rect(8,32,ui.availableWidth()-8,106));
-            ui.label("Clips: drag body to move; drag left/right edges to resize", ig::Vec2(8,150));
-            ui.sequencer("animation clips",state.sequencerTracks,0,100,state.currentSequenceFrame,
-                         state.selectedSequencerTrack,ig::Rect(8,178,ui.availableWidth()-8,106));
+            ui.timeline("animation keys", animationTracks, 0, 100, animationFrame, animationTrack,
+                    animationKey, ig::Rect(8, 32, ui.availableWidth() - 8, 106));
+            ui.label("Clips: drag body to move; drag left/right edges to resize", ig::Vec2(8, 150));
+            ui.sequencer("animation clips", state.sequencerTracks, 0, 100,
+                    state.currentSequenceFrame, state.selectedSequencerTrack,
+                    ig::Rect(8, 178, ui.availableWidth() - 8, 106));
             ui.endWindow();
         }
         ig::MessageBoxOptions deleteOptions;
         ig::MessageBoxOptions saveOptions;
-        saveOptions.acceptLabel="Save";
-        saveOptions.showCancel=true;
-        saveOptions.showDiscard=true;
-        const auto saveResult=ui.messageBox("Unsaved changes","Save changes before closing?",state.unsavedDialog,saveOptions);
+        saveOptions.acceptLabel = "Save";
+        saveOptions.showCancel = true;
+        saveOptions.showDiscard = true;
+        const auto saveResult = ui.messageBox("Unsaved changes", "Save changes before closing?",
+                state.unsavedDialog, saveOptions);
         if (saveResult != ig::MessageBoxResult::None)
-            ui.showToast("save decision",saveResult==ig::MessageBoxResult::Accepted ? "Save requested (demo)" :
-                         saveResult==ig::MessageBoxResult::Discarded ? "Discard requested (demo)" : "Cancelled");
+            ui.showToast("save decision",
+                    saveResult == ig::MessageBoxResult::Accepted    ? "Save requested (demo)"
+                    : saveResult == ig::MessageBoxResult::Discarded ? "Discard requested (demo)"
+                                                                    : "Cancelled");
         deleteOptions.kind = ig::MessageBoxKind::Error;
         deleteOptions.showCancel = true;
-        ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog, deleteOptions);
+        ui.messageBox("Delete scene node", "This action cannot be undone.", state.deleteNodeDialog,
+                deleteOptions);
         ig::MessageBoxOptions renameOptions;
         renameOptions.kind = ig::MessageBoxKind::Input;
         renameOptions.showCancel = true;
         renameOptions.inputValue = &state.nodeName;
-        ui.messageBox("Rename scene node", "Enter the new node name.", state.renameNodeDialog, renameOptions);
-        const ig::DrawData &drawData = ui.endFrame();
+        ui.messageBox("Rename scene node", "Enter the new node name.", state.renameNodeDialog,
+                renameOptions);
+        const ig::DrawData& drawData = ui.endFrame();
 
         BeginDrawing();
-        ClearBackground(::Color{24u, 27u, 35u, 255u});
-        DrawCircleGradient(1290, 74, 320.0f, ::Color{42u, 86u, 130u, 90u},
-                           ::Color{24u, 27u, 35u, 0u});
+        ClearBackground(::Color{ 24u, 27u, 35u, 255u });
+        DrawCircleGradient(1290, 74, 320.0f, ::Color{ 42u, 86u, 130u, 90u },
+                ::Color{ 24u, 27u, 35u, 0u });
         backend.render(drawData);
         EndDrawing();
     }

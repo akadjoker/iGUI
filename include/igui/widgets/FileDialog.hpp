@@ -1,11 +1,13 @@
 #pragma once
 
-#include "ViewWidgets.hpp"
 #include "DirCache.hpp"
-#include "Signal.hpp"
 #include "IconAtlas.hpp"
+#include "Signal.hpp"
+#include "ViewWidgets.hpp"
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 class BoxLayout;
 class Label;
@@ -38,8 +40,19 @@ class FileDialog : public FloatWindow
 public:
     IG_WIDGET_CLASS(FileDialog, FloatWindow);
 
-    enum class Mode { Open, Save, SelectFolder, OpenImage };
-    enum class ViewMode { Detail, List, Icon };
+    enum class Mode
+    {
+        Open,
+        Save,
+        SelectFolder,
+        OpenImage
+    };
+    enum class ViewMode
+    {
+        Detail,
+        List,
+        Icon
+    };
 
     explicit FileDialog(const String& title = "Open File");
     ~FileDialog() override;
@@ -47,17 +60,26 @@ public:
     /// @brief Set the dialog mode (Open, Save, SelectFolder, OpenImage).
     void setMode(Mode m);
     /// @brief Get the dialog mode.
-    Mode mode() const { return mode_; }
+    Mode mode() const
+    {
+        return mode_;
+    }
 
     /// @brief Set the file listing view mode.
     void setViewMode(ViewMode vm);
     /// @brief Get the view mode.
-    ViewMode viewMode() const { return viewMode_; }
+    ViewMode viewMode() const
+    {
+        return viewMode_;
+    }
 
     /// @brief Navigate to a directory path.
     void setPath(const String& path);
     /// @brief Get the current directory path.
-    const String& path() const { return currentPath_; }
+    const String& path() const
+    {
+        return currentPath_;
+    }
 
     /// @brief Prefill the file name field (what Save proposes).
     void setFileName(const String& name);
@@ -65,28 +87,43 @@ public:
     /// @brief Set extension filter (e.g. "*.cpp;*.hpp").
     void setFilter(const String& filter);
     /// @brief Get the extension filter.
-    const String& filter() const { return filter_; }
+    const String& filter() const
+    {
+        return filter_;
+    }
 
     /// @brief Show or hide hidden files.
     void setShowHidden(bool show);
     /// @brief Check if hidden files are shown.
-    bool showHidden() const { return showHidden_; }
+    bool showHidden() const
+    {
+        return showHidden_;
+    }
 
     /// @brief Enable multi-file selection.
-    void setMultiSelect(bool ms) { multiSelect_ = ms; }
+    void setMultiSelect(bool ms)
+    {
+        multiSelect_ = ms;
+    }
     /// @brief Check if multi-select is enabled.
-    bool multiSelect() const     { return multiSelect_; }
+    bool multiSelect() const
+    {
+        return multiSelect_;
+    }
 
     /// @brief Add a sidebar bookmark entry.
     void addBookmark(const String& name, const String& path);
 
     /// @brief Get the selected file/folder path.
-    const String& selectedPath() const { return selectedPath_; }
+    const String& selectedPath() const
+    {
+        return selectedPath_;
+    }
 
     /// @brief Emitted when a file is accepted.
     Signal<String> accepted;
     /// @brief Emitted when the dialog is cancelled.
-    Signal<>            cancelled;
+    Signal<> cancelled;
 
     // ── Widget overrides ─────────────────────────────────────────────────
     void layout() override;
@@ -99,24 +136,33 @@ public:
     Widget* focusOnOpen() override;
 
 private:
-    Mode     mode_     = Mode::Open;
+    Mode mode_ = Mode::Open;
     ViewMode viewMode_ = ViewMode::Detail;
 
     String currentPath_;
     String selectedPath_;
     String overwritePath_; // Save mode: the existing file the user was asked about
     String filter_;
-    bool showHidden_  = false;
+    bool showHidden_ = false;
     bool multiSelect_ = false;
 
     // Bookmarks
-    struct Bookmark { String name; String path; };
+    struct Bookmark
+    {
+        String name;
+        String path;
+    };
     ct::Vector<Bookmark> bookmarks_;
 
     // Sort
-    enum class SortField { Name, Size, Date };
-    SortField sortField_    = SortField::Name;
-    bool      sortAscending_ = true;
+    enum class SortField
+    {
+        Name,
+        Size,
+        Date
+    };
+    SortField sortField_ = SortField::Name;
+    bool sortAscending_ = true;
 
     // Filter
     ct::Vector<String> filterExts_;
@@ -125,13 +171,14 @@ private:
     static bool isImageExt(const String& ext);
 
     // Directory listing (flat, sorted, filtered)
-    struct FileEntry {
+    struct FileEntry
+    {
         String name;
         String path;
-        uint64_t    size  = 0;
-        time_t      mtime = 0;
-        IconId      icon  = IconId::None;
-        bool        isDir = false;
+        uint64_t size = 0;
+        time_t mtime = 0;
+        IconId icon = IconId::None;
+        bool isDir = false;
     };
     ct::Vector<FileEntry> entries_;
     DirCache dirCache_;
@@ -141,50 +188,50 @@ private:
     void navigateTo(const String& path);
 
     // Selection
-    int  selectedIndex_ = -1;
-    int  hoveredIndex_  = -1;
-    ct::Vector<bool> multiSel_;   // parallel to entries_
-    int  lastClickIdx_  = -1;
+    int selectedIndex_ = -1;
+    int hoveredIndex_ = -1;
+    ct::Vector<bool> multiSel_; // parallel to entries_
+    int lastClickIdx_ = -1;
 
     // Preview (image mode)
-    ig::retained::TextureHandle previewTex_ = {0};
-    int                  previewW_   = 0;
-    int                  previewH_   = 0;
-    String          previewPath_;
+    ig::retained::TextureHandle previewTex_ = { 0 };
+    int previewW_ = 0;
+    int previewH_ = 0;
+    String previewPath_;
     void loadPreview(const String& path);
     void clearPreview();
 
     // ── UI child widgets (not owned — children_ owns them) ──────────────
-    BoxLayout* mainLayout_      = nullptr;
-    BoxLayout* toolBar_         = nullptr;
-    BoxLayout* breadcrumbBar_   = nullptr;
-    BoxLayout* bodyLayout_      = nullptr;
-    BoxLayout* sidebarLayout_   = nullptr;
-    BoxLayout* fileListLayout_  = nullptr;
-    Widget*    previewPanel_    = nullptr;
-    BoxLayout* bottomBar_       = nullptr;
-    TextInput* fileNameInput_   = nullptr;
-    Label*     statusLabel_     = nullptr;
+    BoxLayout* mainLayout_ = nullptr;
+    BoxLayout* toolBar_ = nullptr;
+    BoxLayout* breadcrumbBar_ = nullptr;
+    BoxLayout* bodyLayout_ = nullptr;
+    BoxLayout* sidebarLayout_ = nullptr;
+    BoxLayout* fileListLayout_ = nullptr;
+    Widget* previewPanel_ = nullptr;
+    BoxLayout* bottomBar_ = nullptr;
+    TextInput* fileNameInput_ = nullptr;
+    Label* statusLabel_ = nullptr;
     // The "new folder" prompt, when one is open: it holds an accepted handler
     // that comes back into this dialog, so it is closed with it.
-    InputBox*  newFolderBox_    = nullptr;
-    Button*    okButton_        = nullptr;
-    Button*    cancelButton_    = nullptr;
+    InputBox* newFolderBox_ = nullptr;
+    Button* okButton_ = nullptr;
+    Button* cancelButton_ = nullptr;
 
     // Toolbar buttons render IconId through the active font.
     Button* btnViewDetail_ = nullptr;
-    Button* btnViewList_   = nullptr;
-    Button* btnViewGrid_   = nullptr;
-    Button* btnHidden_     = nullptr;
-    Button* btnNewFolder_  = nullptr;
-    Button* btnUp_         = nullptr;
-    void         updateViewModeButtons();
+    Button* btnViewList_ = nullptr;
+    Button* btnViewGrid_ = nullptr;
+    Button* btnHidden_ = nullptr;
+    Button* btnNewFolder_ = nullptr;
+    Button* btnUp_ = nullptr;
+    void updateViewModeButtons();
     /// Asks for a name and creates that folder in the current one, then enters it.
-    void         newFolderPrompt();
+    void newFolderPrompt();
 
     // File list state
-    float scrollY_      = 0.f;
-    float rowHeight_    = 22.f;
+    float scrollY_ = 0.f;
+    float rowHeight_ = 22.f;
     float iconCellSize_ = 80.f;
     int resizingColumn_ = -1;
     float resizeStartX_ = 0.f;
@@ -194,12 +241,17 @@ private:
     String pendingNav_;
 
     // Column widths (detail view)
-    struct Column { const char* name; float width; SortField field; };
+    struct Column
+    {
+        const char* name;
+        float width;
+        SortField field;
+    };
     static constexpr int kColCount = 3;
     Column columns_[kColCount] = {
-        {"Name", 300, SortField::Name},
-        {"Size",  90, SortField::Size},
-        {"Date", 150, SortField::Date},
+        { "Name", 300, SortField::Name },
+        { "Size", 90, SortField::Size },
+        { "Date", 150, SortField::Date },
     };
 
     // Build

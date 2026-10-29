@@ -1,8 +1,11 @@
 #pragma once
-#include <ct/vector.hpp>
 #include "RetainedBase.hpp"
+#include <ct/vector.hpp>
 
-namespace ig { namespace retained {
+namespace ig
+{
+namespace retained
+{
 
 class BuImage
 {
@@ -19,10 +22,10 @@ public:
     BuImage();
     ~BuImage();
     BuImage(int w, int h, int components);
-    BuImage(int w, int h, int components, unsigned char *data);
-    BuImage(const BuImage &image, const IntRect &crop);
-    BuImage(const BuImage &other) = delete;
-    BuImage &operator=(const BuImage &other) = delete;
+    BuImage(int w, int h, int components, unsigned char* data);
+    BuImage(const BuImage& image, const IntRect& crop);
+    BuImage(const BuImage& other) = delete;
+    BuImage& operator=(const BuImage& other) = delete;
 
     // Pixel operations
     /// @brief Set a pixel using individual RGBA components.
@@ -42,12 +45,12 @@ public:
     /// @brief Create a resized copy of the image.
     BuImage* Resize(int newWidth, int newHeight) const;
     /// @brief Create a cropped copy from the given rectangle.
-     BuImage* Crop(const IntRect &rect) const;
+    BuImage* Crop(const IntRect& rect) const;
     /// @brief Create a cropped copy from position and size.
     BuImage* Crop(int x, int y, int w, int h) const;
     /// @brief Create a cropped copy with optional transparent fill.
-    BuImage* CropExtended(const IntRect &rect, bool fillTransparent = true) const;
-  
+    BuImage* CropExtended(const IntRect& rect, bool fillTransparent = true) const;
+
 
     // Fill operations
     /// @brief Fill the entire image with an RGBA color.
@@ -59,11 +62,11 @@ public:
 
     // File operations
     /// @brief Save the image to a file.
-    bool Save(const char *file_name);
+    bool Save(const char* file_name);
     /// @brief Load an image from a file.
-    bool Load(const char *file_name);
+    bool Load(const char* file_name);
     /// @brief Load an image from a memory buffer.
-    bool LoadFromMemory(const unsigned char *buffer, unsigned int bytesRead);
+    bool LoadFromMemory(const unsigned char* buffer, unsigned int bytesRead);
 
     // Transform operations
     /// @brief Flip the image vertically.
@@ -71,54 +74,66 @@ public:
     /// @brief Flip the image horizontally.
     void FlipHorizontal();
 
- 
+
     /// @brief Draw a line between two points.
-    void DrawLine(int x1, int y1, int x2, int y2, const Color &color);
+    void DrawLine(int x1, int y1, int x2, int y2, const Color& color);
     /// @brief Draw a rectangle, optionally filled.
-    void DrawRect(int x, int y, int w, int h, const Color &color, bool fill = false);
+    void DrawRect(int x, int y, int w, int h, const Color& color, bool fill = false);
     /// @brief Draw a circle, optionally filled.
-    void DrawCircle(int cx, int cy, int radius, const Color &color, bool fill = false);
+    void DrawCircle(int cx, int cy, int radius, const Color& color, bool fill = false);
     /// @brief Draw another image onto this one at the given position.
-    void DrawPixmap(const BuImage &source, int x, int y);
+    void DrawPixmap(const BuImage& source, int x, int y);
     /// @brief Draw a region of another image onto this one.
-    void DrawPixmap(const BuImage &source, int x, int y, const IntRect &srcRect);
+    void DrawPixmap(const BuImage& source, int x, int y, const IntRect& srcRect);
     /// @brief Blend a color onto a single pixel.
-    void BlendPixel(u32 x, u32 y, const Color &color, float opacity = 1.0f, BlendMode mode = BlendMode::Alpha);
+    void BlendPixel(u32 x, u32 y, const Color& color, float opacity = 1.0f,
+            BlendMode mode = BlendMode::Alpha);
     /// @brief Draw another image with blending.
-    void DrawPixmapBlended(const BuImage &source, int x, int y, float opacity = 1.0f, BlendMode mode = BlendMode::Alpha);
+    void DrawPixmapBlended(const BuImage& source, int x, int y, float opacity = 1.0f,
+            BlendMode mode = BlendMode::Alpha);
     /// @brief Draw a region of another image with blending.
-    void DrawPixmapBlended(const BuImage &source, int x, int y, const IntRect &srcRect, float opacity = 1.0f, BlendMode mode = BlendMode::Alpha);
+    void DrawPixmapBlended(const BuImage& source, int x, int y, const IntRect& srcRect,
+            float opacity = 1.0f, BlendMode mode = BlendMode::Alpha);
 
- 
+
     /// @brief Copy a rectangular region from another image.
-    void CopyRegion(const BuImage &source, const IntRect &srcRect, int dstX, int dstY);
+    void CopyRegion(const BuImage& source, const IntRect& srcRect, int dstX, int dstY);
 
- 
+
     /// @brief Replace one color with another within a threshold.
-    void ReplaceColor(const Color &from, const Color &to, float threshold = 0.0f);
+    void ReplaceColor(const Color& from, const Color& to, float threshold = 0.0f);
     /// @brief Make a color fully transparent (color keying).
-    void SetColorKey(const Color &key, float threshold = 0.0f);
+    void SetColorKey(const Color& key, float threshold = 0.0f);
 
-   
+
     /// @brief Create a box-blurred copy of the image.
-    BuImage *ApplyBlur(int radius) const;
+    BuImage* ApplyBlur(int radius) const;
     /// @brief Create a Gaussian-blurred copy of the image.
-    BuImage *ApplyGaussianBlur(int radius) const;
+    BuImage* ApplyGaussianBlur(int radius) const;
     /// @brief Create a sharpened copy of the image.
-    BuImage *ApplySharpen() const;
+    BuImage* ApplySharpen() const;
     /// @brief Create an edge-detected copy of the image.
-    BuImage *ApplyEdgeDetection() const;
+    BuImage* ApplyEdgeDetection() const;
     /// @brief Create an embossed copy of the image.
-    BuImage *ApplyEmboss() const;
+    BuImage* ApplyEmboss() const;
 
     /// @brief Check if the image has valid pixel data.
-    bool IsValid() const { return pixels != nullptr; }
+    bool IsValid() const
+    {
+        return pixels != nullptr;
+    }
     /// @brief Get the total pixel data size in bytes.
-    int GetSize() const { return width * height * components; }
+    int GetSize() const
+    {
+        return width * height * components;
+    }
     /// @brief Check if the image has an alpha channel.
-    bool HasAlpha() const { return components == 2 || components == 4; }
+    bool HasAlpha() const
+    {
+        return components == 2 || components == 4;
+    }
 
-    unsigned char *pixels;
+    unsigned char* pixels;
     int components;
     int width;
     int height;
@@ -130,4 +145,3 @@ using ig::retained::BuImage;
 
 } // namespace retained
 } // namespace ig
- 

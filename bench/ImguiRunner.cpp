@@ -34,7 +34,7 @@
 #include <vector>
 
 #if defined(__unix__) || defined(__APPLE__)
-#  include <sys/resource.h>
+#include <sys/resource.h>
 #endif
 
 namespace bench
@@ -50,15 +50,19 @@ struct State
     int plotOffset;
     char name[64];
 
-    State() : enabled(true), volume(0.35f), quality(1), plotOffset(0)
+    State()
+            : enabled(true),
+              volume(0.35f),
+              quality(1),
+              plotOffset(0)
     {
         std::snprintf(name, sizeof(name), "%s", "player");
     }
 };
 
-const char *const kQualityItems[] = { "low", "medium", "high", "very high", "extreme" };
+const char* const kQualityItems[] = { "low", "medium", "high", "very high", "extreme" };
 
-void galleryBlock(State &state, int index, long long &widgets)
+void galleryBlock(State& state, int index, long long& widgets)
 {
     ImGui::Text("row %d", index);
     ++widgets;
@@ -94,7 +98,7 @@ void galleryBlock(State &state, int index, long long &widgets)
     }
 }
 
-void textBlock(int index, long long &widgets)
+void textBlock(int index, long long& widgets)
 {
     for (int i = 0; i < 10; ++i)
     {
@@ -105,32 +109,31 @@ void textBlock(int index, long long &widgets)
 
 // A mesma serie do lado do iGUI (ver IguiRunner.cpp), para os dois desenharem
 // exatamente os mesmos dados.
-const float *plotSamples()
+const float* plotSamples()
 {
     static float values[90];
     static bool filled = false;
     if (!filled)
     {
-        for (int i = 0; i < 90; ++i)
-            values[i] = std::cos(static_cast<float>(i) * 0.1f);
+        for (int i = 0; i < 90; ++i) values[i] = std::cos(static_cast<float>(i) * 0.1f);
         filled = true;
     }
     return values;
 }
 
-void plotsBlock(int index, int offset, long long &widgets)
+void plotsBlock(int index, int offset, long long& widgets)
 {
     char label[32];
     std::snprintf(label, sizeof(label), "Lines %d", index);
     ImGui::PlotLines(label, plotSamples(), 90, offset, "avg 0.500000", -1.0f, 1.0f,
-                     ImVec2(400.0f, 128.0f));
+            ImVec2(400.0f, 128.0f));
     ++widgets;
     std::snprintf(label, sizeof(label), "Bars %d", index);
     ImGui::PlotHistogram(label, plotSamples(), 90, 0, NULL, -1.0f, 1.0f, ImVec2(400.0f, 80.0f));
     ++widgets;
 }
 
-void smallBlock(State &state, int index, long long &widgets)
+void smallBlock(State& state, int index, long long& widgets)
 {
     ImGui::Text("panel %d", index);
     ++widgets;
@@ -142,16 +145,15 @@ void smallBlock(State &state, int index, long long &widgets)
     ++widgets;
 }
 
-void gridPosition(int index, int columns, float width, float height, float gap,
-                  ImVec2 &out)
+void gridPosition(int index, int columns, float width, float height, float gap, ImVec2& out)
 {
     const int column = columns > 0 ? index % columns : 0;
     const int row = columns > 0 ? index / columns : 0;
     out = ImVec2(gap + static_cast<float>(column) * (width + gap),
-                 gap + static_cast<float>(row) * (height + gap));
+            gap + static_cast<float>(row) * (height + gap));
 }
 
-void buildScene(State &state, const Config &config, int frame, long long &widgets)
+void buildScene(State& state, const Config& config, int frame, long long& widgets)
 {
     state.volume = 0.5f + 0.4f * std::sin(static_cast<float>(frame) * 0.1f);
     state.plotOffset = frame % 90;
@@ -159,8 +161,7 @@ void buildScene(State &state, const Config &config, int frame, long long &widget
     if (config.scene == "windows")
     {
         int columns = 1;
-        while (columns * columns < config.windows)
-            ++columns;
+        while (columns * columns < config.windows) ++columns;
         for (int i = 0; i < config.windows; ++i)
         {
             char title[32];
@@ -182,8 +183,7 @@ void buildScene(State &state, const Config &config, int frame, long long &widget
     ImGui::Begin("Gallery");
     for (int i = 0; i < blockCount; ++i)
     {
-        if (config.scene == "text")
-            textBlock(i, widgets);
+        if (config.scene == "text") textBlock(i, widgets);
         else if (config.scene == "plots")
             plotsBlock(i, state.plotOffset, widgets);
         else
@@ -196,22 +196,21 @@ long long readPeakRssKb()
 {
 #if defined(__unix__) || defined(__APPLE__)
     struct rusage usage;
-    if (::getrusage(RUSAGE_SELF, &usage) == 0)
-        return static_cast<long long>(usage.ru_maxrss);
+    if (::getrusage(RUSAGE_SELF, &usage) == 0) return static_cast<long long>(usage.ru_maxrss);
 #endif
     return -1;
 }
 
 } // namespace
 
-Result runImgui(const Config &config)
+Result runImgui(const Config& config)
 {
     Result result;
     result.lib = "imgui";
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGuiIO &io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
     io.DisplaySize = ImVec2(config.width, config.height);
     io.DeltaTime = 1.0f / 60.0f;
     io.IniFilename = nullptr;
@@ -224,7 +223,7 @@ Result runImgui(const Config &config)
     // rather than one library's taste in decoration (iGUI's default theme rounds
     // and anti-aliases every frame; its geometry cost is reported separately in
     // bench/README.md).
-    ImGuiStyle &style = ImGui::GetStyle();
+    ImGuiStyle& style = ImGui::GetStyle();
     style.FrameRounding = 0.0f;
     style.GrabRounding = 0.0f;
     style.WindowRounding = 0.0f;
@@ -258,12 +257,12 @@ Result runImgui(const Config &config)
         vertices = 0;
         indices = 0;
         commands = 0;
-        ImDrawData *draw = ImGui::GetDrawData();
+        ImDrawData* draw = ImGui::GetDrawData();
         if (draw)
         {
             for (int list = 0; list < draw->CmdListsCount; ++list)
             {
-                const ImDrawList *drawList = draw->CmdLists[list];
+                const ImDrawList* drawList = draw->CmdLists[list];
                 vertices += drawList->VtxBuffer.Size;
                 indices += drawList->IdxBuffer.Size;
                 commands += drawList->CmdBuffer.Size;
@@ -281,16 +280,15 @@ Result runImgui(const Config &config)
             std::printf("imgui commands: %lld\n", commands);
             for (int list = 0; list < draw->CmdListsCount; ++list)
             {
-                const ImDrawList *drawList = draw->CmdLists[list];
+                const ImDrawList* drawList = draw->CmdLists[list];
                 for (int c = 0; c < drawList->CmdBuffer.Size; ++c)
                 {
-                    const ImDrawCmd &cmd = drawList->CmdBuffer[c];
-                    std::printf("  list %d cmd %2d clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%u\n",
-                                list, c, static_cast<double>(cmd.ClipRect.x),
-                                static_cast<double>(cmd.ClipRect.y),
-                                static_cast<double>(cmd.ClipRect.z - cmd.ClipRect.x),
-                                static_cast<double>(cmd.ClipRect.w - cmd.ClipRect.y),
-                                cmd.ElemCount);
+                    const ImDrawCmd& cmd = drawList->CmdBuffer[c];
+                    std::printf("  list %d cmd %2d clip=(%7.1f,%7.1f %7.1fx%7.1f) idx=%u\n", list,
+                            c, static_cast<double>(cmd.ClipRect.x),
+                            static_cast<double>(cmd.ClipRect.y),
+                            static_cast<double>(cmd.ClipRect.z - cmd.ClipRect.x),
+                            static_cast<double>(cmd.ClipRect.w - cmd.ClipRect.y), cmd.ElemCount);
                 }
             }
         }

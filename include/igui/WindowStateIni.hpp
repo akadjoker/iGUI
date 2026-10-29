@@ -26,11 +26,11 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 #ifndef IGUI_WINDOW_STATE_INI
-#  if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
-#    define IGUI_WINDOW_STATE_INI 0
-#  else
-#    define IGUI_WINDOW_STATE_INI 1
-#  endif
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+#define IGUI_WINDOW_STATE_INI 0
+#else
+#define IGUI_WINDOW_STATE_INI 1
+#endif
 #endif
 
 namespace ig
@@ -53,12 +53,9 @@ inline String windowStateSection(StringView title)
         const char c = title[i];
         section.push_back(c == ']' || c == '\n' || c == '\r' ? '_' : c);
     }
-    if (section.empty() || section.find_first_not_of(" \t") == String::npos)
-        return String();
-    if (section.front() == ' ' || section.front() == '\t')
-        section[0] = '_';
-    if (section.back() == ' ' || section.back() == '\t')
-        section[section.size() - 1] = '_';
+    if (section.empty() || section.find_first_not_of(" \t") == String::npos) return String();
+    if (section.front() == ' ' || section.front() == '\t') section[0] = '_';
+    if (section.back() == ' ' || section.back() == '\t') section[section.size() - 1] = '_';
     return section;
 }
 
@@ -68,14 +65,13 @@ inline String windowStateSection(StringView title)
 ///        through here, so a stray name can never abort the application.
 inline bool windowStateSectionUsable(StringView name)
 {
-    if (name.empty() || name.front() == ' ' || name.front() == '\t' ||
-        name.back() == ' ' || name.back() == '\t')
+    if (name.empty() || name.front() == ' ' || name.front() == '\t' || name.back() == ' ' ||
+            name.back() == '\t')
         return false;
     for (StringView::size_type i = 0; i < name.size(); ++i)
     {
         const char c = name[i];
-        if (c == ']' || c == '\n' || c == '\r' || c == '\0')
-            return false;
+        if (c == ']' || c == '\n' || c == '\r' || c == '\0') return false;
     }
     return true;
 }
@@ -83,8 +79,7 @@ inline bool windowStateSectionUsable(StringView name)
 /// @brief Section name a dock layout is stored under, "" when it has no key.
 inline String dockStateSection(StringView key)
 {
-    if (key.empty())
-        return String();
+    if (key.empty()) return String();
     String section = "dock:";
     section.append(key.data(), key.size());
     return windowStateSection(section);
@@ -100,8 +95,8 @@ struct WindowGeometry
     float y = 0.0f;
     float w = 0.0f;
     float h = 0.0f;
-    bool  minimized = false;
-    bool  maximized = false;
+    bool minimized = false;
+    bool maximized = false;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -119,14 +114,16 @@ public:
     }
 
     /// @brief Path set by setPath() ("" when persistence is off).
-    const String& path() const { return path_; }
+    const String& path() const
+    {
+        return path_;
+    }
 
     /// @brief Read the file. False when persistence is off or the file is
     ///        missing - there is then simply nothing to apply.
     bool load()
     {
-        if (path_.empty())
-            return false;
+        if (path_.empty()) return false;
         ini_.clear();
 #if IGUI_WINDOW_STATE_INI
         return ini_.load(path_);
@@ -140,8 +137,7 @@ public:
     ///        existing one is not truncated.
     bool save() const
     {
-        if (path_.empty() || ini_.empty())
-            return false;
+        if (path_.empty() || ini_.empty()) return false;
 #if IGUI_WINDOW_STATE_INI
         return ini_.save(path_);
 #else
@@ -150,17 +146,22 @@ public:
     }
 
     /// @brief True when nothing is known about any window.
-    bool empty() const { return ini_.empty(); }
+    bool empty() const
+    {
+        return ini_.empty();
+    }
     /// @brief Number of stored sections (windows and dock layouts).
-    ct::Ini::size_type size() const { return ini_.size(); }
+    ct::Ini::size_type size() const
+    {
+        return ini_.size();
+    }
 
     // ── Windows ──────────────────────────────────────────────────────────
     /// @brief Store @p geometry under a window @p title.
     void putWindow(StringView title, const WindowGeometry& geometry)
     {
         const String section = windowStateSection(title);
-        if (section.empty())
-            return;
+        if (section.empty()) return;
         ini_.set(section.c_str(), "pos_x", static_cast<double>(geometry.x));
         ini_.set(section.c_str(), "pos_y", static_cast<double>(geometry.y));
         ini_.set(section.c_str(), "size_w", static_cast<double>(geometry.w));
@@ -174,8 +175,7 @@ public:
     void removeWindow(StringView title)
     {
         const String section = windowStateSection(title);
-        if (!section.empty())
-            ini_.erase_section(section.c_str());
+        if (!section.empty()) ini_.erase_section(section.c_str());
     }
 
     /// @brief Read what putWindow() stored for a window @p title.
@@ -184,8 +184,7 @@ public:
     bool getWindow(StringView title, WindowGeometry& out) const
     {
         const String section = windowStateSection(title);
-        if (section.empty() || !ini_.has_section(section))
-            return false;
+        if (section.empty() || !ini_.has_section(section)) return false;
         out.x = static_cast<float>(ini_.get_double(section, "pos_x", out.x));
         out.y = static_cast<float>(ini_.get_double(section, "pos_y", out.y));
         out.w = static_cast<float>(ini_.get_double(section, "size_w", out.w));
@@ -199,45 +198,40 @@ public:
     /// @brief Store a value. An empty section is ignored (ct::Ini aborts on it).
     void put(const String& section, const char* key, const String& value)
     {
-        if (!windowStateSectionUsable(section) || !key || !*key)
-            return;
+        if (!windowStateSectionUsable(section) || !key || !*key) return;
         ini_.set(section.c_str(), key, value);
     }
 
     /// @brief Read a value, or @p fallback when the section or key is absent.
     String get(const String& section, const char* key, const char* fallback = "") const
     {
-        if (!windowStateSectionUsable(section) || !key || !*key)
-            return String(fallback);
+        if (!windowStateSectionUsable(section) || !key || !*key) return String(fallback);
         return ini_.get(section, key, fallback);
     }
 
     /// @brief Read a number, or @p fallback when the section or key is absent.
     double getNumber(const String& section, const char* key, double fallback) const
     {
-        if (!windowStateSectionUsable(section) || !key || !*key)
-            return fallback;
+        if (!windowStateSectionUsable(section) || !key || !*key) return fallback;
         return ini_.get_double(section, key, fallback);
     }
 
     /// @brief Store a number. An empty section is ignored (ct::Ini aborts on it).
     void putNumber(const String& section, const char* key, double value)
     {
-        if (!windowStateSectionUsable(section) || !key || !*key)
-            return;
+        if (!windowStateSectionUsable(section) || !key || !*key) return;
         ini_.set(section.c_str(), key, value);
     }
 
     /// @brief True when @p section holds @p key.
     bool has(const String& section, const char* key) const
     {
-        if (!windowStateSectionUsable(section) || !key || !*key)
-            return false;
+        if (!windowStateSectionUsable(section) || !key || !*key) return false;
         return ini_.has(section, key);
     }
 
 private:
-    String  path_;
+    String path_;
     ct::Ini ini_;
 };
 

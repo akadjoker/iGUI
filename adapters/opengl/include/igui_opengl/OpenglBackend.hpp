@@ -37,19 +37,22 @@ public:
 
     // Resolve as funções e prepara shader, buffers e a textura branca de
     // recurso. O contexto tem de estar current.
-    bool init(void *(*procAddress)(const char *name));
+    bool init(void* (*procAddress)(const char* name));
     void shutdown();
-    bool ready() const { return program_ != 0u; }
+    bool ready() const
+    {
+        return program_ != 0u;
+    }
 
     // Fonte do texto e textura da geometria sólida. O conteúdo do atlas é
     // enviado para a GPU uma vez; chamar outra vez volta a enviá-lo.
-    void setFontAtlas(ig::FontAtlas *atlas);
+    void setFontAtlas(ig::FontAtlas* atlas);
 
     // Desenhar por cima do próprio framebuffer, sem beginTarget(): só precisa
     // disto para o tamanho da janela.
     void setWindowSize(int width, int height);
     // Limpa o alvo ligado nesse momento (a janela ou o target de beginTarget()).
-    void clear(const ig::Color &color);
+    void clear(const ig::Color& color);
 
     // Dois alvos fora do ecrã, um por painel: beginTarget() liga o alvo, aponta
     // o viewport ao tamanho pedido e é nele que render() desenha; endTarget()
@@ -66,40 +69,55 @@ public:
     bool beginTarget(int target, int width, int height);
     void endTarget(int target, int x, int y, int width, int height);
 
-    ig::TextMetrics measureText(ig::FontId font, ig::StringView text,
-                                float logicalSize, float dpiScale) override;
-    bool render(const ig::DrawData &data) override;
+    ig::TextMetrics measureText(ig::FontId font, ig::StringView text, float logicalSize,
+            float dpiScale) override;
+    bool render(const ig::DrawData& data) override;
 
     // Texturas de imagem, para as widgets que recebem um TextureId.
-    ig::TextureId createTexture(int width, int height, const unsigned char *rgba);
-    bool updateTexture(ig::TextureId texture, int width, int height, const unsigned char *rgba);
+    ig::TextureId createTexture(int width, int height, const unsigned char* rgba);
+    bool updateTexture(ig::TextureId texture, int width, int height, const unsigned char* rgba);
     void destroyTexture(ig::TextureId texture);
 
     // Lê de volta como RGBA, de cima para baixo, do alvo ligado nesse momento.
     // Para guardar uma imagem do resultado. A memória é do chamador.
-    bool readPixels(int x, int y, int width, int height, unsigned char *rgba);
+    bool readPixels(int x, int y, int width, int height, unsigned char* rgba);
 
-    const char *renderer() const;
-    int versionMajor() const { return major_; }
-    int versionMinor() const { return minor_; }
+    const char* renderer() const;
+    int versionMajor() const
+    {
+        return major_;
+    }
+    int versionMinor() const
+    {
+        return minor_;
+    }
 
     // Tempo de GPU dos draw calls, com queries GL_TIME_ELAPSED: gpuTimerBegin()
     // e gpuTimerEnd() à volta do render(), e gpuSeconds() devolve a última medição
     // pronta - 0 enquanto não houver nenhuma. Cada slot tem o seu par de queries
     // em ping-pong (um slot por painel), por isso ler nunca espera pela GPU e
     // duas medições no mesmo frame não se sobrepõem.
-    bool gpuTimerSupported() const { return query_[0][0] != 0u; }
+    bool gpuTimerSupported() const
+    {
+        return query_[0][0] != 0u;
+    }
     void gpuTimerBegin(int slot);
     void gpuTimerEnd(int slot);
     double gpuSeconds(int slot);
 
     // Últimos totais de um render(), para o relatório.
-    int drawCalls() const { return drawCalls_; }
-    int uploadedVertices() const { return uploadedVertices_; }
+    int drawCalls() const
+    {
+        return drawCalls_;
+    }
+    int uploadedVertices() const
+    {
+        return uploadedVertices_;
+    }
 
 private:
-    Backend(const Backend &);
-    Backend &operator=(const Backend &);
+    Backend(const Backend&);
+    Backend& operator=(const Backend&);
 
     bool uploadAtlas();
     bool ensureTarget(int target, int width, int height);
@@ -115,11 +133,11 @@ private:
     {
         return currentTarget_ >= 0 ? targetHeight_[currentTarget_] : windowHeight_;
     }
-    void drawCommand(uint32_t firstIndex, uint32_t indexCount, const ig::Rect &clip,
-                     ig::TextureId texture, float scaleX, float scaleY);
+    void drawCommand(uint32_t firstIndex, uint32_t indexCount, const ig::Rect& clip,
+            ig::TextureId texture, float scaleX, float scaleY);
 
     struct Impl;
-    Impl *impl_;
+    Impl* impl_;
     uint32_t program_;
     uint32_t vao_;
     uint32_t vbo_;
@@ -146,7 +164,7 @@ private:
     int uploadedVertices_;
     int windowWidth_;
     int windowHeight_;
-    ig::FontAtlas *atlas_;
+    ig::FontAtlas* atlas_;
     bool atlasUploaded_;
     // O atlas em RGBA, composto a partir da máscara de 8 bits (ver uploadAtlas).
     ct::Vector<uint8_t> rgba_;

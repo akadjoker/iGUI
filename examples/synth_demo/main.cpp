@@ -28,30 +28,32 @@ namespace
 const float kTwoPi = 6.28318530717958647692f;
 
 // Panel behind a group of controls, with its title along the top.
-void panel(ig::Context& ui, const ig::Rect& bounds, const char* title,
-           const ig::Color& accent)
+void panel(ig::Context& ui, const ig::Rect& bounds, const char* title, const ig::Color& accent)
 {
     ui.drawRectFilledRounded(bounds, 10.0f, ig::Color(23u, 28u, 40u, 255u));
     ui.drawRectRounded(bounds, 10.0f, ig::Color(46u, 54u, 72u, 255u), 1.0f);
     ui.drawCircleFilled(ig::Vec2(bounds.x + 14.0f, bounds.y + 15.0f), 4.0f, accent);
     ui.drawText(ig::StringView(title), ig::Vec2(bounds.x + 24.0f, bounds.y + 9.0f),
-                ig::Color(226u, 232u, 244u, 255u));
+            ig::Color(226u, 232u, 244u, 255u));
 }
 
-const char* kWaveNames[4] = {"Sine", "Saw", "Square", "Triangle"};
+const char* kWaveNames[4] = { "Sine", "Saw", "Square", "Triangle" };
 
 float waveSample(int wave, float phase)
 {
     switch (wave)
     {
-    case 1: return 2.0f * (phase - floorf(phase + 0.5f));                 // saw
-    case 2: return (phase - floorf(phase)) < 0.5f ? 1.0f : -1.0f;         // square
-    case 3:                                                               // triangle
-    {
-        const float t = phase - floorf(phase);
-        return t < 0.5f ? (4.0f * t - 1.0f) : (3.0f - 4.0f * t);
-    }
-    default: return sinf(phase * kTwoPi);                                 // sine
+        case 1:
+            return 2.0f * (phase - floorf(phase + 0.5f)); // saw
+        case 2:
+            return (phase - floorf(phase)) < 0.5f ? 1.0f : -1.0f; // square
+        case 3:                                                   // triangle
+        {
+            const float t = phase - floorf(phase);
+            return t < 0.5f ? (4.0f * t - 1.0f) : (3.0f - 4.0f * t);
+        }
+        default:
+            return sinf(phase * kTwoPi); // sine
     }
 }
 
@@ -73,7 +75,7 @@ int main()
 
     // Oscillator.
     int waveform = 1;
-    float tune = 0.0f;         // semitones
+    float tune = 0.0f; // semitones
     float detune = 0.12f;
     float oscLevel = 0.85f;
 
@@ -130,8 +132,7 @@ int main()
 
         // Envelope-driven level, retriggered when a key is pressed.
         float envLevel = 0.0f;
-        if (noteAge < envelope.attack)
-            envLevel = noteAge / (envelope.attack + 0.0001f);
+        if (noteAge < envelope.attack) envLevel = noteAge / (envelope.attack + 0.0001f);
         else if (noteAge < envelope.attack + envelope.decay)
         {
             const float t = (noteAge - envelope.attack) / (envelope.decay + 0.0001f);
@@ -145,11 +146,9 @@ int main()
             envLevel = envelope.sustain * (t > 1.0f ? 0.0f : (1.0f - t));
         }
         meterLevel = envLevel * masterLevel * (0.75f + drive * 0.5f);
-        if (meterLevel > 1.0f)
-            meterLevel = 1.0f;
+        if (meterLevel > 1.0f) meterLevel = 1.0f;
         meterPeak = meterLevel > meterPeak ? meterLevel : meterPeak - dt * 0.35f;
-        if (meterPeak < 0.0f)
-            meterPeak = 0.0f;
+        if (meterPeak < 0.0f) meterPeak = 0.0f;
 
         if (ui.beginMainWindow("Synth"))
         {
@@ -171,79 +170,68 @@ int main()
 
                 snprintf(text, sizeof(text), "%+.0f st", static_cast<double>(tune));
                 synth::knob(ui, "osc.tune", "Tune", text, tune, -24.0f, 24.0f,
-                            ig::Vec2(oscPanel.x + 18.0f, oscPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(oscPanel.x + 18.0f, oscPanel.y + 30.0f), knobSize, style);
 
-                snprintf(text, sizeof(text), "%.0f c",
-                         static_cast<double>(detune * 100.0f));
+                snprintf(text, sizeof(text), "%.0f c", static_cast<double>(detune * 100.0f));
                 synth::knob(ui, "osc.detune", "Detune", text, detune, 0.0f, 1.0f,
-                            ig::Vec2(oscPanel.x + 96.0f, oscPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(oscPanel.x + 96.0f, oscPanel.y + 30.0f), knobSize, style);
 
-                snprintf(text, sizeof(text), "%d%%",
-                         static_cast<int>(oscLevel * 100.0f + 0.5f));
+                snprintf(text, sizeof(text), "%d%%", static_cast<int>(oscLevel * 100.0f + 0.5f));
                 synth::knob(ui, "osc.level", "Level", text, oscLevel, 0.0f, 1.0f,
-                            ig::Vec2(oscPanel.x + 174.0f, oscPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(oscPanel.x + 174.0f, oscPanel.y + 30.0f), knobSize, style);
             }
 
             // ── Filter ──────────────────────────────────────────────────
-            const ig::Rect filterPanel(oscPanel.x + oscPanel.width + 12.0f, rowY,
-                                       268.0f, panelHeight);
+            const ig::Rect filterPanel(oscPanel.x + oscPanel.width + 12.0f, rowY, 268.0f,
+                    panelHeight);
             panel(ui, filterPanel, "Filter", ig::Color(232u, 188u, 64u, 255u));
             {
                 synth::KnobStyle style;
                 style.fill = ig::Color(232u, 188u, 64u, 255u);
 
                 snprintf(text, sizeof(text), "%d Hz",
-                         static_cast<int>(60.0f + cutoff * cutoff * 11000.0f));
+                        static_cast<int>(60.0f + cutoff * cutoff * 11000.0f));
                 synth::knob(ui, "flt.cutoff", "Cutoff", text, cutoff, 0.0f, 1.0f,
-                            ig::Vec2(filterPanel.x + 18.0f, filterPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(filterPanel.x + 18.0f, filterPanel.y + 30.0f), knobSize, style);
 
                 snprintf(text, sizeof(text), "%.1f", static_cast<double>(resonance));
                 synth::knob(ui, "flt.res", "Res", text, resonance, 0.0f, 4.0f,
-                            ig::Vec2(filterPanel.x + 96.0f, filterPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(filterPanel.x + 96.0f, filterPanel.y + 30.0f), knobSize, style);
 
-                snprintf(text, sizeof(text), "%d%%",
-                         static_cast<int>(envAmount * 100.0f + 0.5f));
+                snprintf(text, sizeof(text), "%d%%", static_cast<int>(envAmount * 100.0f + 0.5f));
                 synth::knob(ui, "flt.env", "Env amt", text, envAmount, 0.0f, 1.0f,
-                            ig::Vec2(filterPanel.x + 174.0f, filterPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(filterPanel.x + 174.0f, filterPanel.y + 30.0f), knobSize, style);
             }
 
             // ── Amp ─────────────────────────────────────────────────────
-            const ig::Rect ampPanel(filterPanel.x + filterPanel.width + 12.0f, rowY,
-                                    190.0f, panelHeight);
+            const ig::Rect ampPanel(filterPanel.x + filterPanel.width + 12.0f, rowY, 190.0f,
+                    panelHeight);
             panel(ui, ampPanel, "Amp", ig::Color(236u, 86u, 158u, 255u));
             {
                 synth::KnobStyle style;
                 style.fill = ig::Color(236u, 86u, 158u, 255u);
 
-                snprintf(text, sizeof(text), "%d%%",
-                         static_cast<int>(drive * 100.0f + 0.5f));
+                snprintf(text, sizeof(text), "%d%%", static_cast<int>(drive * 100.0f + 0.5f));
                 synth::knob(ui, "amp.drive", "Drive", text, drive, 0.0f, 1.0f,
-                            ig::Vec2(ampPanel.x + 18.0f, ampPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(ampPanel.x + 18.0f, ampPanel.y + 30.0f), knobSize, style);
 
-                snprintf(text, sizeof(text), "%d%%",
-                         static_cast<int>(masterLevel * 100.0f + 0.5f));
+                snprintf(text, sizeof(text), "%d%%", static_cast<int>(masterLevel * 100.0f + 0.5f));
                 synth::knob(ui, "amp.master", "Master", text, masterLevel, 0.0f, 1.0f,
-                            ig::Vec2(ampPanel.x + 96.0f, ampPanel.y + 30.0f),
-                            knobSize, style);
+                        ig::Vec2(ampPanel.x + 96.0f, ampPanel.y + 30.0f), knobSize, style);
             }
 
             // ── Output meter ────────────────────────────────────────────
-            const ig::Rect meterPanel(ampPanel.x + ampPanel.width + 12.0f, rowY,
-                                      104.0f, panelHeight);
+            const ig::Rect meterPanel(ampPanel.x + ampPanel.width + 12.0f, rowY, 104.0f,
+                    panelHeight);
             panel(ui, meterPanel, "Out", ig::Color(78u, 214u, 150u, 255u));
-            synth::vuMeter(ui, ig::Rect(meterPanel.x + 24.0f, meterPanel.y + 30.0f,
-                                        22.0f, panelHeight - 44.0f),
-                           meterLevel, meterPeak);
-            synth::vuMeter(ui, ig::Rect(meterPanel.x + 58.0f, meterPanel.y + 30.0f,
-                                        22.0f, panelHeight - 44.0f),
-                           meterLevel * 0.92f, meterPeak * 0.92f);
+            synth::vuMeter(ui,
+                    ig::Rect(meterPanel.x + 24.0f, meterPanel.y + 30.0f, 22.0f,
+                            panelHeight - 44.0f),
+                    meterLevel, meterPeak);
+            synth::vuMeter(ui,
+                    ig::Rect(meterPanel.x + 58.0f, meterPanel.y + 30.0f, 22.0f,
+                            panelHeight - 44.0f),
+                    meterLevel * 0.92f, meterPeak * 0.92f);
 
             // ── Waveform, spectrum, envelope ────────────────────────────
             const float viewY = rowY + panelHeight + 14.0f;
@@ -252,46 +240,44 @@ int main()
             const ig::Rect wavePanel(origin.x + 4.0f, viewY, 380.0f, viewHeight);
             panel(ui, wavePanel, kWaveNames[waveform], ig::Color(96u, 212u, 255u, 255u));
             synth::waveformView(ui,
-                                ig::Rect(wavePanel.x + 10.0f, wavePanel.y + 30.0f,
-                                         wavePanel.width - 20.0f, viewHeight - 44.0f),
-                                waveSamples, 220, ig::Color(96u, 212u, 255u, 255u));
+                    ig::Rect(wavePanel.x + 10.0f, wavePanel.y + 30.0f, wavePanel.width - 20.0f,
+                            viewHeight - 44.0f),
+                    waveSamples, 220, ig::Color(96u, 212u, 255u, 255u));
             // Waveform selector under the title.
             for (int i = 0; i < 4; ++i)
             {
                 const ig::Rect tab(wavePanel.x + 120.0f + static_cast<float>(i) * 62.0f,
-                                   wavePanel.y + 6.0f, 58.0f, 20.0f);
+                        wavePanel.y + 6.0f, 58.0f, 20.0f);
                 char tabId[32];
                 snprintf(tabId, sizeof(tabId), "wave.%d", i);
                 const ig::StringView tabIdView(tabId);
                 const bool selected = (i == waveform);
                 ui.drawRectFilledRounded(tab, 5.0f,
-                                         selected ? ig::Color(50u, 110u, 150u, 255u)
-                                                  : ig::Color(32u, 38u, 52u, 255u));
+                        selected ? ig::Color(50u, 110u, 150u, 255u)
+                                 : ig::Color(32u, 38u, 52u, 255u));
                 const float w = ui.textWidth(ig::StringView(kWaveNames[i]));
                 ui.drawText(ig::StringView(kWaveNames[i]),
-                            ig::Vec2(tab.x + (tab.width - w) * 0.5f, tab.y + 3.0f),
-                            selected ? ig::Color(226u, 240u, 252u, 255u)
-                                     : ig::Color(150u, 160u, 178u, 255u));
-                if (ui.isClicked(tabIdView, tab))
-                    waveform = i;
+                        ig::Vec2(tab.x + (tab.width - w) * 0.5f, tab.y + 3.0f),
+                        selected ? ig::Color(226u, 240u, 252u, 255u)
+                                 : ig::Color(150u, 160u, 178u, 255u));
+                if (ui.isClicked(tabIdView, tab)) waveform = i;
             }
 
-            const ig::Rect spectrumPanel(wavePanel.x + wavePanel.width + 12.0f, viewY,
-                                         380.0f, viewHeight);
+            const ig::Rect spectrumPanel(wavePanel.x + wavePanel.width + 12.0f, viewY, 380.0f,
+                    viewHeight);
             panel(ui, spectrumPanel, "Spectrum", ig::Color(232u, 188u, 64u, 255u));
             synth::spectrumView(ui,
-                                ig::Rect(spectrumPanel.x + 10.0f, spectrumPanel.y + 30.0f,
-                                         spectrumPanel.width - 20.0f, viewHeight - 44.0f),
-                                spectrumBins, 36, ig::Color(232u, 188u, 64u, 255u));
+                    ig::Rect(spectrumPanel.x + 10.0f, spectrumPanel.y + 30.0f,
+                            spectrumPanel.width - 20.0f, viewHeight - 44.0f),
+                    spectrumBins, 36, ig::Color(232u, 188u, 64u, 255u));
 
-            const ig::Rect envPanel(spectrumPanel.x + spectrumPanel.width + 12.0f,
-                                    viewY, 290.0f, viewHeight);
+            const ig::Rect envPanel(spectrumPanel.x + spectrumPanel.width + 12.0f, viewY, 290.0f,
+                    viewHeight);
             panel(ui, envPanel, "Envelope", ig::Color(236u, 86u, 158u, 255u));
             synth::envelopeView(ui,
-                                ig::Rect(envPanel.x + 10.0f, envPanel.y + 30.0f,
-                                         envPanel.width - 20.0f, viewHeight - 44.0f),
-                                envelope, ig::Color(236u, 86u, 158u, 255u),
-                                ig::Color(236u, 86u, 158u, 46u));
+                    ig::Rect(envPanel.x + 10.0f, envPanel.y + 30.0f, envPanel.width - 20.0f,
+                            viewHeight - 44.0f),
+                    envelope, ig::Color(236u, 86u, 158u, 255u), ig::Color(236u, 86u, 158u, 46u));
 
             // ── ADSR knobs ──────────────────────────────────────────────
             const float adsrY = viewY + viewHeight + 14.0f;
@@ -304,35 +290,32 @@ int main()
                 const float small = 44.0f;
 
                 snprintf(text, sizeof(text), "%.0f ms",
-                         static_cast<double>(envelope.attack * 1000.0f));
+                        static_cast<double>(envelope.attack * 1000.0f));
                 synth::knob(ui, "env.a", "Attack", text, envelope.attack, 0.001f, 2.0f,
-                            ig::Vec2(adsrPanel.x + 22.0f, y), small, style);
+                        ig::Vec2(adsrPanel.x + 22.0f, y), small, style);
 
                 snprintf(text, sizeof(text), "%.0f ms",
-                         static_cast<double>(envelope.decay * 1000.0f));
+                        static_cast<double>(envelope.decay * 1000.0f));
                 synth::knob(ui, "env.d", "Decay", text, envelope.decay, 0.001f, 2.0f,
-                            ig::Vec2(adsrPanel.x + 112.0f, y), small, style);
+                        ig::Vec2(adsrPanel.x + 112.0f, y), small, style);
 
                 snprintf(text, sizeof(text), "%d%%",
-                         static_cast<int>(envelope.sustain * 100.0f + 0.5f));
+                        static_cast<int>(envelope.sustain * 100.0f + 0.5f));
                 synth::knob(ui, "env.s", "Sustain", text, envelope.sustain, 0.0f, 1.0f,
-                            ig::Vec2(adsrPanel.x + 202.0f, y), small, style);
+                        ig::Vec2(adsrPanel.x + 202.0f, y), small, style);
 
                 snprintf(text, sizeof(text), "%.0f ms",
-                         static_cast<double>(envelope.release * 1000.0f));
+                        static_cast<double>(envelope.release * 1000.0f));
                 synth::knob(ui, "env.r", "Release", text, envelope.release, 0.001f, 3.0f,
-                            ig::Vec2(adsrPanel.x + 292.0f, y), small, style);
+                        ig::Vec2(adsrPanel.x + 292.0f, y), small, style);
             }
 
             // ── Keyboard ────────────────────────────────────────────────
-            const ig::Rect keyPanel(adsrPanel.x + adsrPanel.width + 12.0f, adsrY,
-                                    684.0f, 112.0f);
+            const ig::Rect keyPanel(adsrPanel.x + adsrPanel.width + 12.0f, adsrY, 684.0f, 112.0f);
             panel(ui, keyPanel, "Keyboard", ig::Color(78u, 214u, 150u, 255u));
-            const int note = synth::keyboard(
-                ui,
-                ig::Rect(keyPanel.x + 10.0f, keyPanel.y + 28.0f,
-                         keyPanel.width - 20.0f, 74.0f),
-                48, 21, lastNote);
+            const int note = synth::keyboard(ui,
+                    ig::Rect(keyPanel.x + 10.0f, keyPanel.y + 28.0f, keyPanel.width - 20.0f, 74.0f),
+                    48, 21, lastNote);
             if (note >= 0)
             {
                 lastNote = note;
@@ -342,13 +325,12 @@ int main()
             ui.setCursor(ig::Vec2(origin.x, adsrY + 112.0f + 12.0f));
             if (lastNote >= 0)
             {
-                static const char* kNames[12] = {"C", "C#", "D", "D#", "E", "F",
-                                                 "F#", "G", "G#", "A", "A#", "B"};
-                snprintf(text, sizeof(text), "%s%d", kNames[lastNote % 12],
-                         lastNote / 12 - 1);
+                static const char* kNames[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#",
+                    "A", "A#", "B" };
+                snprintf(text, sizeof(text), "%s%d", kNames[lastNote % 12], lastNote / 12 - 1);
                 char line[96];
                 snprintf(line, sizeof(line), "Note %s   |   out %d%%", text,
-                         static_cast<int>(meterLevel * 100.0f + 0.5f));
+                        static_cast<int>(meterLevel * 100.0f + 0.5f));
                 ui.label(ig::StringView(line));
             }
             else
@@ -362,7 +344,7 @@ int main()
         const ig::DrawData& drawData = ui.endFrame();
 
         BeginDrawing();
-        ClearBackground(::Color{13u, 17u, 28u, 255u});
+        ClearBackground(::Color{ 13u, 17u, 28u, 255u });
         backend.render(drawData);
         EndDrawing();
     }

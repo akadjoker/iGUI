@@ -1,13 +1,15 @@
 #pragma once
 
 #include "Signal.hpp"
-#include <igui/widgets/String.hpp>
-#include <ct/vector.hpp>
-#include <ct/function.hpp>
-#include <cstdint>
 #include <any>
+#include <cstdint>
+#include <ct/function.hpp>
+#include <ct/vector.hpp>
+#include <igui/widgets/String.hpp>
 
-namespace ig { namespace retained
+namespace ig
+{
+namespace retained
 {
 // ═════════════════════════════════════════════════════════════════════════════
 //  Model/View Architecture  (Qt-inspired)
@@ -30,27 +32,48 @@ class ModelIndex
 public:
     ModelIndex() = default;
     ModelIndex(int row, int col, void* internal = nullptr)
-        : row_(row), col_(col), internal_(internal) {}
+            : row_(row),
+              col_(col),
+              internal_(internal)
+    {
+    }
 
     /// @brief Get the row index.
-    int   row()      const { return row_; }
+    int row() const
+    {
+        return row_;
+    }
     /// @brief Get the column index.
-    int   column()   const { return col_; }
+    int column() const
+    {
+        return col_;
+    }
     /// @brief Get the internal data pointer.
-    void* internal() const { return internal_; }
+    void* internal() const
+    {
+        return internal_;
+    }
 
     /// @brief Check if the index points to a valid cell.
-    bool isValid() const { return row_ >= 0 && col_ >= 0; }
+    bool isValid() const
+    {
+        return row_ >= 0 && col_ >= 0;
+    }
 
     bool operator==(const ModelIndex& o) const
-    { return row_ == o.row_ && col_ == o.col_ && internal_ == o.internal_; }
+    {
+        return row_ == o.row_ && col_ == o.col_ && internal_ == o.internal_;
+    }
 
-    bool operator!=(const ModelIndex& o) const { return !(*this == o); }
+    bool operator!=(const ModelIndex& o) const
+    {
+        return !(*this == o);
+    }
 
 private:
-    int   row_      = -1;
-    int   col_      = -1;
-    void* internal_ = nullptr;  // opaque node pointer for trees
+    int row_ = -1;
+    int col_ = -1;
+    void* internal_ = nullptr; // opaque node pointer for trees
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -58,12 +81,12 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 enum class ItemRole
 {
-    Display  = 0,    // string shown in the cell
-    Edit     = 1,    // editable string (defaults to Display)
-    ToolTip  = 2,
-    Icon     = 3,    // icon name (string)
-    Check    = 4,    // "0" / "1"
-    UserRole = 256,  // start of custom roles
+    Display = 0, // string shown in the cell
+    Edit = 1,    // editable string (defaults to Display)
+    ToolTip = 2,
+    Icon = 3,       // icon name (string)
+    Check = 4,      // "0" / "1"
+    UserRole = 256, // start of custom roles
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -72,80 +95,129 @@ enum class ItemRole
 class AbstractItemModel
 {
 public:
-    virtual ~AbstractItemModel() { destroyed.emit(); }
+    virtual ~AbstractItemModel()
+    {
+        destroyed.emit();
+    }
 
     /// @brief Get the row count under a parent index.
-    virtual int  rowCount(const ModelIndex& parent = {})    const = 0;
+    virtual int rowCount(const ModelIndex& parent = {}) const = 0;
     /// @brief Get the column count under a parent index.
-    virtual int  columnCount(const ModelIndex& parent = {}) const = 0;
+    virtual int columnCount(const ModelIndex& parent = {}) const = 0;
 
     /// @brief Retrieve cell data for a given role.
-    virtual String data(const ModelIndex& index,
-                              ItemRole role = ItemRole::Display) const = 0;
+    virtual String data(const ModelIndex& index, ItemRole role = ItemRole::Display) const = 0;
 
     /// @brief Set cell data (returns true on success).
     virtual bool setData(const ModelIndex& index, const String& value,
-                          ItemRole role = ItemRole::Edit)
-    { (void)index; (void)value; (void)role; return false; }
+            ItemRole role = ItemRole::Edit)
+    {
+        (void) index;
+        (void) value;
+        (void) role;
+        return false;
+    }
 
     /// @brief Get the header label for a section.
     virtual String headerData(int section, bool horizontal = true) const
-    { (void)horizontal; return String::number(section); }
+    {
+        (void) horizontal;
+        return String::number(section);
+    }
 
     /// @brief Get item flags for a cell index.
-    enum Flag { None = 0, Selectable = 1, Editable = 2, Checkable = 4, Enabled = 8 };
+    enum Flag
+    {
+        None = 0,
+        Selectable = 1,
+        Editable = 2,
+        Checkable = 4,
+        Enabled = 8
+    };
     virtual int flags(const ModelIndex& index) const
-    { (void)index; return Selectable | Enabled; }
+    {
+        (void) index;
+        return Selectable | Enabled;
+    }
 
     /// @brief Get the parent index for a child.
-    virtual ModelIndex parent(const ModelIndex& index)  const
-    { (void)index; return {}; }
+    virtual ModelIndex parent(const ModelIndex& index) const
+    {
+        (void) index;
+        return {};
+    }
 
-    virtual ModelIndex index(int row, int col,
-                              const ModelIndex& parent = {}) const
-    { (void)parent; return ModelIndex(row, col); }
+    virtual ModelIndex index(int row, int col, const ModelIndex& parent = {}) const
+    {
+        (void) parent;
+        return ModelIndex(row, col);
+    }
 
     virtual bool hasChildren(const ModelIndex& parent) const
-    { return rowCount(parent) > 0; }
+    {
+        return rowCount(parent) > 0;
+    }
 
     /// @brief Sort the model by a column.
     virtual void sort(int column, bool ascending = true)
-    { (void)column; (void)ascending; }
+    {
+        (void) column;
+        (void) ascending;
+    }
 
     /// @brief Notify that a full model reset is about to happen.
-    void beginResetModel() {}
+    void beginResetModel()
+    {
+    }
     /// @brief Emit the modelReset signal after a full reset.
-    void endResetModel()   { modelReset.emit(); }
+    void endResetModel()
+    {
+        modelReset.emit();
+    }
 
     void beginInsertRows(const ModelIndex& parent, int first, int last)
-    { (void)parent; (void)first; (void)last; }
-    void endInsertRows() { rowsInserted.emit(); }
+    {
+        (void) parent;
+        (void) first;
+        (void) last;
+    }
+    void endInsertRows()
+    {
+        rowsInserted.emit();
+    }
 
     void beginRemoveRows(const ModelIndex& parent, int first, int last)
-    { (void)parent; (void)first; (void)last; }
-    void endRemoveRows() { rowsRemoved.emit(); }
+    {
+        (void) parent;
+        (void) first;
+        (void) last;
+    }
+    void endRemoveRows()
+    {
+        rowsRemoved.emit();
+    }
 
     /// @brief Emitted after a full model reset.
-    Signal<>                   modelReset;
+    Signal<> modelReset;
     /// @brief Emitted after rows are inserted.
-    Signal<>                   rowsInserted;
+    Signal<> rowsInserted;
     /// @brief Emitted after rows are removed.
-    Signal<>                   rowsRemoved;
+    Signal<> rowsRemoved;
     /// @brief Emitted when a single cell changes.
-    Signal<ModelIndex>         dataChanged;
+    Signal<ModelIndex> dataChanged;
     /// @brief Emitted when sort/reorder occurs.
-    Signal<>                   layoutChanged;
+    Signal<> layoutChanged;
     /// @brief Emitted when the model is destroyed.
-    Signal<>                   destroyed;
+    Signal<> destroyed;
 
     /// @brief Slot ids a view holds on this model, to disconnect it later.
     struct Connections
     {
-        Signal<>::SlotId reset     = 0;
-        Signal<>::SlotId inserted  = 0;
-        Signal<>::SlotId removed   = 0;
-        Signal<>::SlotId changed   = 0;
-        Signal<>::SlotId layout    = 0;
+        Signal<>::SlotId reset = 0;
+        Signal<>::SlotId inserted = 0;
+        Signal<>::SlotId removed = 0;
+        Signal<>::SlotId changed = 0;
+        Signal<>::SlotId layout = 0;
         Signal<>::SlotId destroyed = 0;
     };
 
@@ -169,27 +241,40 @@ class ListModel : public AbstractItemModel
 {
 public:
     ListModel() = default;
-    explicit ListModel(int columns) : numCols_(columns) {}
+    explicit ListModel(int columns)
+            : numCols_(columns)
+    {
+    }
 
     // ── Structure ─────────────────────────────────────────────────────────
-    int rowCount(const ModelIndex& = {})    const override { return static_cast<int>(rows_.size()); }
-    int columnCount(const ModelIndex& = {}) const override { return numCols_; }
+    int rowCount(const ModelIndex& = {}) const override
+    {
+        return static_cast<int>(rows_.size());
+    }
+    int columnCount(const ModelIndex& = {}) const override
+    {
+        return numCols_;
+    }
 
     // ── Data ──────────────────────────────────────────────────────────────
     String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
     {
-        if (role == ItemRole::Check && idx.row() >= 0 && idx.row() < static_cast<int>(checked_.size()))
+        if (role == ItemRole::Check && idx.row() >= 0 &&
+                idx.row() < static_cast<int>(checked_.size()))
             return checked_[idx.row()] ? "1" : "0";
         if (idx.row() < 0 || idx.row() >= static_cast<int>(rows_.size())) return {};
-        if (idx.column() < 0 || idx.column() >= static_cast<int>(rows_[idx.row()].size())) return {};
+        if (idx.column() < 0 || idx.column() >= static_cast<int>(rows_[idx.row()].size()))
+            return {};
         return rows_[idx.row()][idx.column()];
     }
 
     bool setData(const ModelIndex& idx, const String& value,
-                  ItemRole role = ItemRole::Edit) override
+            ItemRole role = ItemRole::Edit) override
     {
-        if (role == ItemRole::Check) {
-            if (idx.row() >= 0 && idx.row() < static_cast<int>(checked_.size())) {
+        if (role == ItemRole::Check)
+        {
+            if (idx.row() >= 0 && idx.row() < static_cast<int>(checked_.size()))
+            {
                 checked_[idx.row()] = (value == "1");
                 dataChanged.emit(idx);
                 return true;
@@ -197,7 +282,8 @@ public:
             return false;
         }
         if (idx.row() < 0 || idx.row() >= static_cast<int>(rows_.size())) return false;
-        if (idx.column() < 0 || idx.column() >= static_cast<int>(rows_[idx.row()].size())) return false;
+        if (idx.column() < 0 || idx.column() >= static_cast<int>(rows_[idx.row()].size()))
+            return false;
         rows_[idx.row()][idx.column()] = value;
         dataChanged.emit(idx);
         return true;
@@ -211,14 +297,17 @@ public:
         return AbstractItemModel::headerData(section, horizontal);
     }
 
-    void setHeaders(const ct::Vector<String>& h) { headers_ = h; }
+    void setHeaders(const ct::Vector<String>& h)
+    {
+        headers_ = h;
+    }
 
     // ── Flags ─────────────────────────────────────────────────────────────
     int flags(const ModelIndex& idx) const override
     {
         int f = Selectable | Enabled;
         if (!readOnly_.empty() && idx.column() >= 0 &&
-            idx.column() < static_cast<int>(readOnly_.size()) && !readOnly_[idx.column()])
+                idx.column() < static_cast<int>(readOnly_.size()) && !readOnly_[idx.column()])
             f |= Editable;
         else if (readOnly_.empty())
             f |= Editable;
@@ -257,26 +346,31 @@ public:
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro)
     {
-        if (static_cast<int>(readOnly_.size()) <= col)
-            readOnly_.resize(col + 1, false);
+        if (static_cast<int>(readOnly_.size()) <= col) readOnly_.resize(col + 1, false);
         readOnly_[col] = ro;
     }
 
     /// @brief Enable checkboxes for all rows.
-    void setCheckable(bool c) { checkable_ = c; }
+    void setCheckable(bool c)
+    {
+        checkable_ = c;
+    }
 
     // ── Sorting ───────────────────────────────────────────────────────────
     void sort(int column, bool ascending = true) override;
 
     /// @brief Get all rows as string vectors.
-    const ct::Vector<ct::Vector<String>>& rows() const { return rows_; }
+    const ct::Vector<ct::Vector<String>>& rows() const
+    {
+        return rows_;
+    }
 
 private:
     int numCols_ = 0;
-    ct::Vector<String>              headers_;
+    ct::Vector<String> headers_;
     ct::Vector<ct::Vector<String>> rows_;
-    ct::Vector<bool>                     checked_;
-    ct::Vector<bool>                     readOnly_;
+    ct::Vector<bool> checked_;
+    ct::Vector<bool> readOnly_;
     bool checkable_ = false;
 };
 
@@ -286,19 +380,23 @@ private:
 class TreeModel : public AbstractItemModel
 {
 public:
-    struct Node {
+    struct Node
+    {
         ct::Vector<String> cells;
-        ct::Vector<Node*>       children;
-        Node*                    parent  = nullptr;
-        bool                     expanded = true;
-        String              iconName;
+        ct::Vector<Node*> children;
+        Node* parent = nullptr;
+        bool expanded = true;
+        String iconName;
 
-        ~Node() { for (auto* c : children) delete c; }
+        ~Node()
+        {
+            for (auto* c: children) delete c;
+        }
 
         Node* addChild(const ct::Vector<String>& data)
         {
             auto* n = new Node();
-            n->cells  = data;
+            n->cells = data;
             n->parent = this;
             children.push_back(n);
             return n;
@@ -306,8 +404,14 @@ public:
     };
 
     TreeModel() = default;
-    explicit TreeModel(int columns) : numCols_(columns) {}
-    ~TreeModel() override { clear(); }
+    explicit TreeModel(int columns)
+            : numCols_(columns)
+    {
+    }
+    ~TreeModel() override
+    {
+        clear();
+    }
 
     // ── Structure ─────────────────────────────────────────────────────────
     int rowCount(const ModelIndex& parent = {}) const override
@@ -317,12 +421,15 @@ public:
         return pn ? static_cast<int>(pn->children.size()) : 0;
     }
 
-    int columnCount(const ModelIndex& = {}) const override { return numCols_; }
+    int columnCount(const ModelIndex& = {}) const override
+    {
+        return numCols_;
+    }
 
     // ── Data ──────────────────────────────────────────────────────────────
     String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override
     {
-        (void)role;
+        (void) role;
         auto* n = nodeFromIndex(idx);
         if (!n || idx.column() < 0 || idx.column() >= static_cast<int>(n->cells.size())) return {};
         return n->cells[idx.column()];
@@ -331,7 +438,8 @@ public:
     bool setData(const ModelIndex& idx, const String& value, ItemRole = ItemRole::Edit) override
     {
         auto* n = nodeFromIndex(idx);
-        if (!n || idx.column() < 0 || idx.column() >= static_cast<int>(n->cells.size())) return false;
+        if (!n || idx.column() < 0 || idx.column() >= static_cast<int>(n->cells.size()))
+            return false;
         n->cells[idx.column()] = value;
         dataChanged.emit(idx);
         return true;
@@ -345,7 +453,10 @@ public:
         return AbstractItemModel::headerData(section, horizontal);
     }
 
-    void setHeaders(const ct::Vector<String>& h) { headers_ = h; }
+    void setHeaders(const ct::Vector<String>& h)
+    {
+        headers_ = h;
+    }
 
     // ── Hierarchy ─────────────────────────────────────────────────────────
     ModelIndex parent(const ModelIndex& idx) const override
@@ -361,8 +472,7 @@ public:
 
     ModelIndex index(int row, int col, const ModelIndex& parent = {}) const override
     {
-        const auto& children = parent.isValid()
-            ? nodeFromIndex(parent)->children : roots_;
+        const auto& children = parent.isValid() ? nodeFromIndex(parent)->children : roots_;
         if (row < 0 || row >= static_cast<int>(children.size())) return {};
         return ModelIndex(row, col, children[row]);
     }
@@ -388,7 +498,7 @@ public:
     void clear()
     {
         beginResetModel();
-        for (auto* r : roots_) delete r;
+        for (auto* r: roots_) delete r;
         roots_.clear();
         endResetModel();
     }
@@ -402,20 +512,28 @@ public:
     ModelIndex indexFromNode(Node* n, int row = -1) const
     {
         if (!n) return {};
-        if (row < 0) {
+        if (row < 0)
+        {
             const auto& siblings = n->parent ? n->parent->children : roots_;
             for (int i = 0; i < static_cast<int>(siblings.size()); ++i)
-                if (siblings[i] == n) { row = i; break; }
+                if (siblings[i] == n)
+                {
+                    row = i;
+                    break;
+                }
         }
         return ModelIndex(row, 0, n);
     }
 
-    const ct::Vector<Node*>& roots() const { return roots_; }
+    const ct::Vector<Node*>& roots() const
+    {
+        return roots_;
+    }
 
 private:
     int numCols_ = 0;
     ct::Vector<String> headers_;
-    ct::Vector<Node*>       roots_;
+    ct::Vector<Node*> roots_;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -427,17 +545,30 @@ public:
     explicit SortFilterProxyModel(AbstractItemModel* source);
     ~SortFilterProxyModel() override;
 
-    void setFilterColumn(int col)           { filterCol_ = col; invalidate(); }
-    void setFilterText(const String& t){ filterText_ = t; invalidate(); }
-    void setFilterCaseSensitive(bool cs)    { caseSensitive_ = cs; invalidate(); }
+    void setFilterColumn(int col)
+    {
+        filterCol_ = col;
+        invalidate();
+    }
+    void setFilterText(const String& t)
+    {
+        filterText_ = t;
+        invalidate();
+    }
+    void setFilterCaseSensitive(bool cs)
+    {
+        caseSensitive_ = cs;
+        invalidate();
+    }
 
     // ── AbstractItemModel interface ───────────────────────────────────────
-    int  rowCount(const ModelIndex& parent = {})    const override;
-    int  columnCount(const ModelIndex& parent = {}) const override;
+    int rowCount(const ModelIndex& parent = {}) const override;
+    int columnCount(const ModelIndex& parent = {}) const override;
     String data(const ModelIndex& idx, ItemRole role = ItemRole::Display) const override;
-    bool setData(const ModelIndex& idx, const String& value, ItemRole role = ItemRole::Edit) override;
+    bool setData(const ModelIndex& idx, const String& value,
+            ItemRole role = ItemRole::Edit) override;
     String headerData(int section, bool horizontal = true) const override;
-    int  flags(const ModelIndex& idx) const override;
+    int flags(const ModelIndex& idx) const override;
 
     void sort(int column, bool ascending = true) override;
 
@@ -445,21 +576,24 @@ public:
     ModelIndex mapToSource(const ModelIndex& proxyIdx) const;
     ModelIndex mapFromSource(const ModelIndex& sourceIdx) const;
 
-    AbstractItemModel* sourceModel() const { return source_; }
+    AbstractItemModel* sourceModel() const
+    {
+        return source_;
+    }
 
 private:
     void invalidate();
     void rebuild() const;
 
-    AbstractItemModel*    source_;
-    Connections           sourceSlots_;
-    int                   filterCol_      = -1;
-    String           filterText_;
-    bool                  caseSensitive_  = false;
-    int                   sortCol_        = -1;
-    bool                  sortAscending_  = true;
-    mutable bool          dirty_          = true;
-    mutable ct::Vector<int> mapping_;  // proxy row → source row
+    AbstractItemModel* source_;
+    Connections sourceSlots_;
+    int filterCol_ = -1;
+    String filterText_;
+    bool caseSensitive_ = false;
+    int sortCol_ = -1;
+    bool sortAscending_ = true;
+    mutable bool dirty_ = true;
+    mutable ct::Vector<int> mapping_; // proxy row → source row
 };
 
 } // namespace retained

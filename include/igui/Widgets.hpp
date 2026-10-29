@@ -6,7 +6,7 @@
 #include "Modes.hpp"
 
 #if !IGUI_RETAINEDMODE
-#  error "iGUI: <igui/Widgets.hpp> is the retained API, but IGUI_RETAINEDMODE is 0 (see igui/Modes.hpp)."
+#error "iGUI: <igui/Widgets.hpp> is the retained API, but IGUI_RETAINEDMODE is 0 (see igui/Modes.hpp)."
 #endif
 
 #include "widgets/Widgets.hpp"
@@ -24,4 +24,4 @@ namespace ig
 #if !IGUI_BOTH_MODES
 using namespace retained;
 #endif
-}
+} // namespace ig

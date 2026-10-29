@@ -3,7 +3,7 @@
 #include <chrono>
 
 #if defined(CLOCK_PROCESS_CPUTIME_ID)
-#  include <time.h>
+#include <time.h>
 #endif
 
 namespace bench
@@ -26,7 +26,7 @@ inline double cpuNowUs()
 #endif
     using namespace std::chrono;
     return static_cast<double>(
-        duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());
+            duration_cast<microseconds>(steady_clock::now().time_since_epoch()).count());
 }
 
 } // namespace bench

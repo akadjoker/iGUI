@@ -1,6 +1,6 @@
 #include "Animation.hpp"
-#include "WidgetApp.hpp"  // for EaseType, applyEasing
 #include "Widget.hpp"
+#include "WidgetApp.hpp" // for EaseType, applyEasing
 #include <algorithm>
 #include <cmath>
 
@@ -9,17 +9,21 @@
 // ═════════════════════════════════════════════════════════════════════════════
 
 Animation::Animation(float from, float to, float durationSec, EaseType ease)
-    : from_(from), to_(to), duration_(durationSec), ease_(ease), value_(from)
+        : from_(from),
+          to_(to),
+          duration_(durationSec),
+          ease_(ease),
+          value_(from)
 {
 }
 
 void Animation::start()
 {
-    state_     = State::Running;
-    elapsed_   = -delay_;
-    progress_  = 0.0f;
-    value_     = from_;
-    dir_       = Direction::Forward;
+    state_ = State::Running;
+    elapsed_ = -delay_;
+    progress_ = 0.0f;
+    value_ = from_;
+    dir_ = Direction::Forward;
     loopIndex_ = 0;
 }
 
@@ -35,19 +39,19 @@ void Animation::resume()
 
 void Animation::stop()
 {
-    state_    = State::Finished;
+    state_ = State::Finished;
     progress_ = 1.0f;
-    value_    = to_;
+    value_ = to_;
     onUpdate.emit(value_);
     onFinished.emit();
 }
 
 void Animation::restart()
 {
-    state_     = State::Pending;
-    elapsed_   = 0.0f;
-    progress_  = 0.0f;
-    value_     = from_;
+    state_ = State::Pending;
+    elapsed_ = 0.0f;
+    progress_ = 0.0f;
+    value_ = from_;
     loopIndex_ = 0;
     start();
 }
@@ -98,8 +102,7 @@ void Animation::tick(float dt)
 void Animation::applyValue()
 {
     float easedT = applyEasing(ease_, progress_);
-    if (dir_ == Direction::Backward)
-        easedT = 1.0f - easedT;
+    if (dir_ == Direction::Backward) easedT = 1.0f - easedT;
     value_ = from_ + (to_ - from_) * easedT;
 }
 
@@ -107,44 +110,49 @@ void Animation::applyValue()
 //  AnimationGroup
 // ═════════════════════════════════════════════════════════════════════════════
 
-AnimationGroup::AnimationGroup(Mode mode) : mode_(mode) {}
+AnimationGroup::AnimationGroup(Mode mode)
+        : mode_(mode)
+{
+}
 
 AnimationGroup::~AnimationGroup()
 {
-    for (auto* a : anims_) delete a;
+    for (auto* a: anims_) delete a;
 }
 
 void AnimationGroup::add(Animation* a)
 {
-    a->setAutoDelete(false);  // group manages lifetime
+    a->setAutoDelete(false); // group manages lifetime
     anims_.push_back(a);
 }
 
 void AnimationGroup::cancel()
 {
-    for (Animation* a : anims_)
-        a->cancel();
-    running_  = false;
+    for (Animation* a: anims_) a->cancel();
+    running_ = false;
     finished_ = true;
 }
 
 void AnimationGroup::start()
 {
-    running_      = true;
-    finished_     = false;
+    running_ = true;
+    finished_ = false;
     currentIndex_ = 0;
 
-    if (mode_ == Mode::Parallel) {
-        for (auto* a : anims_) a->start();
-    } else if (!anims_.empty()) {
+    if (mode_ == Mode::Parallel)
+    {
+        for (auto* a: anims_) a->start();
+    }
+    else if (!anims_.empty())
+    {
         anims_[0]->start();
     }
 }
 
 void AnimationGroup::stop()
 {
-    for (auto* a : anims_) a->stop();
-    running_  = false;
+    for (auto* a: anims_) a->stop();
+    running_ = false;
     finished_ = true;
     onFinished.emit();
 }
@@ -156,14 +164,15 @@ void AnimationGroup::tick(float dt)
     if (mode_ == Mode::Parallel)
     {
         bool allDone = true;
-        for (auto* a : anims_) {
+        for (auto* a: anims_)
+        {
             a->tick(dt);
-            if (a->state() != Animation::State::Finished)
-                allDone = false;
+            if (a->state() != Animation::State::Finished) allDone = false;
         }
-        if (allDone) {
+        if (allDone)
+        {
             finished_ = true;
-            running_  = false;
+            running_ = false;
             onFinished.emit();
         }
     }
@@ -173,15 +182,16 @@ void AnimationGroup::tick(float dt)
         {
             auto* cur = anims_[currentIndex_];
             cur->tick(dt);
-            if (cur->state() == Animation::State::Finished) {
+            if (cur->state() == Animation::State::Finished)
+            {
                 currentIndex_++;
-                if (currentIndex_ < static_cast<int>(anims_.size()))
-                    anims_[currentIndex_]->start();
+                if (currentIndex_ < static_cast<int>(anims_.size())) anims_[currentIndex_]->start();
             }
         }
-        if (currentIndex_ >= static_cast<int>(anims_.size())) {
+        if (currentIndex_ >= static_cast<int>(anims_.size()))
+        {
             finished_ = true;
-            running_  = false;
+            running_ = false;
             onFinished.emit();
         }
     }
@@ -191,7 +201,10 @@ void AnimationGroup::tick(float dt)
 //  Animator (singleton)
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace { Animator* gAnimator = nullptr; }
+namespace
+{
+Animator* gAnimator = nullptr;
+}
 
 Animator& Animator::instance()
 {
@@ -213,15 +226,14 @@ Animator::~Animator()
 static bool insideWidget(Widget* candidate, Widget* root)
 {
     for (Widget* w = candidate; w; w = w->parent())
-        if (w == root)
-            return true;
+        if (w == root) return true;
     return false;
 }
 
-template <typename T>
+template<typename T>
 static void forgetIn(ct::Vector<T*>& list, Widget* w)
 {
-    for (T* item : list)
+    for (T* item: list)
     {
         if (!item->target() || !insideWidget(item->target(), w)) continue;
         item->cancel();
@@ -239,13 +251,13 @@ void Animator::forget(Widget* w)
 
 void Animator::add(Animation* a)
 {
-    if (ticking_) {
+    if (ticking_)
+    {
         pendingAnims_.push_back(a);
         return;
     }
     anims_.push_back(a);
-    if (a->state() == Animation::State::Pending)
-        a->start();
+    if (a->state() == Animation::State::Pending) a->start();
 }
 
 void Animator::add(AnimationGroup* g)
@@ -265,19 +277,30 @@ void Animator::remove(AnimationGroup* g)
 
 void Animator::cancelAll(const String& tag)
 {
-    if (tag.empty()) {
+    if (tag.empty())
+    {
         // No tag: clear everything
-        for (auto* a : anims_) if (a->autoDelete()) delete a;
+        for (auto* a: anims_)
+            if (a->autoDelete()) delete a;
         anims_.clear();
-        for (auto* g : groups_) if (g->autoDelete()) delete g;
+        for (auto* g: groups_)
+            if (g->autoDelete()) delete g;
         groups_.clear();
-    } else {
+    }
+    else
+    {
         // Filter by tag
-        for (auto it = anims_.begin(); it != anims_.end();) {
-            if ((*it)->tag() == tag) {
+        for (auto it = anims_.begin(); it != anims_.end();)
+        {
+            if ((*it)->tag() == tag)
+            {
                 if ((*it)->autoDelete()) delete *it;
                 it = anims_.erase(it);
-            } else { ++it; }
+            }
+            else
+            {
+                ++it;
+            }
         }
     }
 }
@@ -287,28 +310,34 @@ void Animator::tick(float dt)
     ticking_ = true;
 
     // Tick animations (by index — callbacks may add new ones via pendingAnims_)
-    for (size_t i = 0; i < anims_.size(); ++i)
-        anims_[i]->tick(dt);
+    for (size_t i = 0; i < anims_.size(); ++i) anims_[i]->tick(dt);
 
     // Clean up finished
-    for (auto it = anims_.begin(); it != anims_.end();) {
-        if ((*it)->state() == Animation::State::Finished) {
+    for (auto it = anims_.begin(); it != anims_.end();)
+    {
+        if ((*it)->state() == Animation::State::Finished)
+        {
             if ((*it)->autoDelete()) delete *it;
             it = anims_.erase(it);
-        } else {
+        }
+        else
+        {
             ++it;
         }
     }
 
     // Tick groups (by index)
-    for (size_t i = 0; i < groups_.size(); ++i)
-        groups_[i]->tick(dt);
+    for (size_t i = 0; i < groups_.size(); ++i) groups_[i]->tick(dt);
 
-    for (auto it = groups_.begin(); it != groups_.end();) {
-        if ((*it)->isFinished()) {
+    for (auto it = groups_.begin(); it != groups_.end();)
+    {
+        if ((*it)->isFinished())
+        {
             if ((*it)->autoDelete()) delete *it;
             it = groups_.erase(it);
-        } else {
+        }
+        else
+        {
             ++it;
         }
     }
@@ -316,25 +345,24 @@ void Animator::tick(float dt)
     ticking_ = false;
 
     // Flush deferred additions
-    for (auto* a : pendingAnims_) {
+    for (auto* a: pendingAnims_)
+    {
         anims_.push_back(a);
         if (a->state() == Animation::State::Pending) a->start();
     }
     pendingAnims_.clear();
-    for (auto* g : pendingGroups_) groups_.push_back(g);
+    for (auto* g: pendingGroups_) groups_.push_back(g);
     pendingGroups_.clear();
 }
 
 // ── Convenience factory ──────────────────────────────────────────────────────
 
-Animation* Animator::animate(float from, float to, float duration,
-                              EaseType ease,
-                              ct::Function<void(float)> onUpdate,
-                              ct::Function<void()> onDone)
+Animation* Animator::animate(float from, float to, float duration, EaseType ease,
+        ct::Function<void(float)> onUpdate, ct::Function<void()> onDone)
 {
     auto* a = new Animation(from, to, duration, ease);
     if (onUpdate) a->onUpdate.connect(std::move(onUpdate));
-    if (onDone)   a->onFinished.connect(std::move(onDone));
+    if (onDone) a->onFinished.connect(std::move(onDone));
     instance().add(a);
     return a;
 }
@@ -343,42 +371,50 @@ Animation* Animator::fadeIn(Widget* w, float duration, EaseType ease)
 {
     // Animate by toggling visible at end; no opacity on Widget yet
     if (w) w->setVisible(true);
-    return animate(0.0f, 1.0f, duration,
-                   ease == EaseType{} ? EaseType::OutCubic : ease,
-                   nullptr, nullptr);
+    return animate(0.0f, 1.0f, duration, ease == EaseType{} ? EaseType::OutCubic : ease, nullptr,
+            nullptr);
 }
 
 Animation* Animator::fadeOut(Widget* w, float duration, EaseType ease)
 {
-    Animation* a = animate(1.0f, 0.0f, duration,
-                           ease == EaseType{} ? EaseType::OutCubic : ease,
-                           nullptr,
-                           [w] { if (w) w->setVisible(false); });
+    Animation* a =
+            animate(1.0f, 0.0f, duration, ease == EaseType{} ? EaseType::OutCubic : ease, nullptr,
+                    [w]
+                    {
+                        if (w) w->setVisible(false);
+                    });
     a->setTarget(w);
     return a;
 }
 
-Animation* Animator::slideIn(Widget* w, float fromX, float fromY,
-                              float duration, EaseType ease)
+Animation* Animator::slideIn(Widget* w, float fromX, float fromY, float duration, EaseType ease)
 {
     if (!w) return nullptr;
     Rect target = w->rect();
     float startX = target.x + fromX;
     float startY = target.y + fromY;
-    float endX   = target.x;
-    float endY   = target.y;
+    float endX = target.x;
+    float endY = target.y;
 
-    auto* gx = new Animation(startX, endX, duration,
-                              ease == EaseType{} ? EaseType::OutCubic : ease);
-    auto* gy = new Animation(startY, endY, duration,
-                              ease == EaseType{} ? EaseType::OutCubic : ease);
+    auto* gx =
+            new Animation(startX, endX, duration, ease == EaseType{} ? EaseType::OutCubic : ease);
+    auto* gy =
+            new Animation(startY, endY, duration, ease == EaseType{} ? EaseType::OutCubic : ease);
 
-    gx->onUpdate.connect([w](float v) {
-        Rect r = w->rect(); r.x = v; w->setRect(r);
-    });
-    gy->onUpdate.connect([w](float v) {
-        Rect r = w->rect(); r.y = v; w->setRect(r);
-    });
+    gx->onUpdate.connect(
+            [w](float v)
+            {
+                Rect r = w->rect();
+                r.x = v;
+                w->setRect(r);
+            });
+    gy->onUpdate.connect(
+            [w](float v)
+            {
+                Rect r = w->rect();
+                r.y = v;
+                w->setRect(r);
+            });
 
     auto* group = new AnimationGroup(AnimationGroup::Mode::Parallel);
     group->setTarget(w);
@@ -386,5 +422,5 @@ Animation* Animator::slideIn(Widget* w, float fromX, float fromY,
     group->add(gy);
     group->start();
     instance().add(group);
-    return nullptr;  // group manages the animations
+    return nullptr; // group manages the animations
 }

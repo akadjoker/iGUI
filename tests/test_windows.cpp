@@ -12,7 +12,7 @@ namespace
 
 int gFailures = 0;
 
-void check(bool condition, const char *what)
+void check(bool condition, const char* what)
 {
     if (!condition)
     {
@@ -23,7 +23,7 @@ void check(bool condition, const char *what)
 
 struct Window
 {
-    const char *title;
+    const char* title;
     ig::Rect initial;
     bool shown;
     ig::Rect content; // available content size, read back each frame
@@ -36,20 +36,23 @@ struct Scene
     ig::Harness harness;
     Window windows[3];
 
-    Scene() : backend(), context(backend), harness(context)
+    Scene()
+            : backend(),
+              context(backend),
+              harness(context)
     {
-        windows[0] = Window{"A", ig::Rect(50.0f, 50.0f, 300.0f, 200.0f), true, ig::Rect()};
-        windows[1] = Window{"B", ig::Rect(400.0f, 50.0f, 300.0f, 200.0f), true, ig::Rect()};
-        windows[2] = Window{"Gone", ig::Rect(100.0f, 400.0f, 300.0f, 200.0f), true, ig::Rect()};
+        windows[0] = Window{ "A", ig::Rect(50.0f, 50.0f, 300.0f, 200.0f), true, ig::Rect() };
+        windows[1] = Window{ "B", ig::Rect(400.0f, 50.0f, 300.0f, 200.0f), true, ig::Rect() };
+        windows[2] = Window{ "Gone", ig::Rect(100.0f, 400.0f, 300.0f, 200.0f), true, ig::Rect() };
         frame();
         frame();
     }
 
-    void build(ig::Context &c)
+    void build(ig::Context& c)
     {
         for (int i = 0; i < 3; ++i)
         {
-            Window &w = windows[i];
+            Window& w = windows[i];
             if (w.shown && c.beginWindow(w.title, w.initial))
             {
                 w.content = ig::Rect(0.0f, 0.0f, c.availableWidth(), c.availableHeight());
@@ -58,7 +61,10 @@ struct Scene
         }
     }
 
-    void frame() { last = &harness.frame([this](ig::Context &c) { build(c); }); }
+    void frame()
+    {
+        last = &harness.frame([this](ig::Context& c) { build(c); });
+    }
 
     // Top-left of the first window background drawn: with one window shown,
     // that window's position on screen.
@@ -66,15 +72,14 @@ struct Scene
     {
         const ig::Color background = context.theme().windowBackground;
         for (size_t i = 0; i < last->vertices.size(); ++i)
-            if (last->vertices[i].color == background)
-                return last->vertices[i].position;
+            if (last->vertices[i].color == background) return last->vertices[i].position;
         return ig::Vec2(-1e9f, -1e9f);
     }
 
-    const ig::DrawData *last = nullptr;
+    const ig::DrawData* last = nullptr;
     void drag(float x0, float y0, float x1, float y1)
     {
-        harness.drag(x0, y0, x1, y1, [this](ig::Context &c) { build(c); }, 4);
+        harness.drag(x0, y0, x1, y1, [this](ig::Context& c) { build(c); }, 4);
     }
 };
 
@@ -89,12 +94,13 @@ void test_tile_ignores_windows_no_longer_submitted()
     // Two visible windows on 1280x800: two 640x800 columns, not a 2x2 grid
     // with a slot kept for the window that is gone.
     check(s.windows[0].content.height > 600.0f && s.windows[1].content.height > 600.0f,
-          "tileAllWindows gave a slot to a window that is no longer drawn");
+            "tileAllWindows gave a slot to a window that is no longer drawn");
 }
 
 void test_drag_keeps_title_bar_reachable()
 {
-    const float far[][2] = {{5000.0f, 5000.0f}, {-5000.0f, -5000.0f}, {5000.0f, -5000.0f}, {-5000.0f, 300.0f}};
+    const float far[][2] = { { 5000.0f, 5000.0f }, { -5000.0f, -5000.0f }, { 5000.0f, -5000.0f },
+        { -5000.0f, 300.0f } };
     for (int i = 0; i < 4; ++i)
     {
         Scene s;
@@ -120,8 +126,8 @@ void test_drag_keeps_title_bar_reachable()
             }
         }
         char message[96];
-        snprintf(message, sizeof(message), "window dragged to (%g, %g) can no longer be grabbed", far[i][0],
-                 far[i][1]);
+        snprintf(message, sizeof(message), "window dragged to (%g, %g) can no longer be grabbed",
+                far[i][0], far[i][1]);
         check(recovered, message);
     }
 }
@@ -136,7 +142,7 @@ void test_drag_inside_screen_is_unchanged()
     s.frame();
     // Moved by exactly (100, 100): no clamping when nothing leaves the screen.
     check(s.origin().x == 150.0f && s.origin().y == 150.0f,
-          "a drag inside the screen did not follow the pointer exactly");
+            "a drag inside the screen did not follow the pointer exactly");
 }
 
 void test_maximized_window_follows_viewport()
@@ -148,12 +154,12 @@ void test_maximized_window_follows_viewport()
     s.frame();
     s.frame();
     check(s.windows[0].content.width <= 800.0f && s.windows[0].content.height <= 600.0f,
-          "maximized window larger than the viewport after a resize");
+            "maximized window larger than the viewport after a resize");
 }
 
 void test_window_state_round_trips_through_ini()
 {
-    const char *path = "igui_window_state_test.ini";
+    const char* path = "igui_window_state_test.ini";
     remove(path);
 
     // What an earlier run of the application left behind: the window was moved
@@ -173,36 +179,42 @@ void test_window_state_round_trips_through_ini()
 
     // The window is asked for at (10, 10, 100, 100): the file wins.
     bool submitted = false;
-    harness.frame([&](ig::Context &c) {
-        submitted = c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f));
-        if (submitted) c.endWindow();
-    });
+    harness.frame(
+            [&](ig::Context& c)
+            {
+                submitted = c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f));
+                if (submitted) c.endWindow();
+            });
     check(submitted, "the window was not submitted");
     const ig::Rect stored = context.windowBounds("A");
     check(stored.x == 240.0f && stored.y == 120.0f,
-          "a window the state file knows did not open where it was left");
+            "a window the state file knows did not open where it was left");
     check(stored.width == 420.0f && stored.height == 260.0f,
-          "a window the state file knows did not open at its stored size");
+            "a window the state file knows did not open at its stored size");
 
     // A title the file does not know keeps the bounds the application asks for.
-    harness.frame([&](ig::Context &c) {
-        if (c.beginWindow("Fresh", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
-    });
+    harness.frame(
+            [&](ig::Context& c)
+            {
+                if (c.beginWindow("Fresh", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+            });
     const ig::Rect fresh = context.windowBounds("Fresh");
     check(fresh.x == 10.0f && fresh.width == 100.0f,
-          "a window the file does not know did not open where the application asked");
+            "a window the file does not know did not open where the application asked");
 
     // A maximized window fills the viewport every frame, so what is worth
     // storing is the geometry it would come back to.
     context.maximizeWindow("A");
-    harness.frame([&](ig::Context &c) {
-        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
-    });
+    harness.frame(
+            [&](ig::Context& c)
+            {
+                if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+            });
     check(context.saveWindowState(), "the state file was not written");
     ct::Ini saved;
     check(saved.load(path), "the written state file could not be read back");
     check(saved.get_double("A", "pos_x") == 240.0 && saved.get_double("A", "size_w") == 420.0,
-          "a maximized window was stored at the viewport instead of its restore bounds");
+            "a maximized window was stored at the viewport instead of its restore bounds");
     check(saved.get_bool("A", "maximized"), "the maximized state was not stored");
 
     // Next run: a new context, the same file. The window opens maximized and
@@ -211,17 +223,21 @@ void test_window_state_round_trips_through_ini()
     ig::Context next(nextBackend);
     ig::Harness nextHarness(next);
     next.setWindowStatePath(path);
-    nextHarness.frame([&](ig::Context &c) {
-        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
-    });
+    nextHarness.frame(
+            [&](ig::Context& c)
+            {
+                if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+            });
     check(next.windowBounds("A").width == 1280.0f, "a maximized window did not reopen maximized");
     next.restoreWindow("A");
-    nextHarness.frame([&](ig::Context &c) {
-        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
-    });
+    nextHarness.frame(
+            [&](ig::Context& c)
+            {
+                if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+            });
     const ig::Rect restored = next.windowBounds("A");
     check(restored.x == 240.0f && restored.y == 120.0f && restored.width == 420.0f,
-          "restoring did not come back to the geometry the file remembered");
+            "restoring did not come back to the geometry the file remembered");
 
     // Persistence off writes nothing, destructor included - which is why both
     // contexts are switched off before they go out of scope.
@@ -235,7 +251,7 @@ void test_window_state_round_trips_through_ini()
 // comes back there, and the region size the user dragged comes back with it.
 void test_dock_arrangement_round_trips_through_ini()
 {
-    const char *path = "igui_dock_state_test.ini";
+    const char* path = "igui_dock_state_test.ini";
     remove(path);
 
     // What an earlier run left behind: Hierarchy was dragged to the left region
@@ -252,20 +268,21 @@ void test_dock_arrangement_round_trips_through_ini()
     context.setWindowStatePath(path);
 
     // The application asks for the center region every frame: the file wins.
-    harness.frame([](ig::Context &c) {
-        if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
-            return;
-        if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
-        {
-            if (c.beginDockPanel("Hierarchy", ig::DockSlot::Center))
+    harness.frame(
+            [](ig::Context& c)
             {
-                c.label("scene");
-                c.endDockPanel();
-            }
-            c.endDockSpace();
-        }
-        c.endWindow();
-    });
+                if (!c.beginWindow("host", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f))) return;
+                if (c.beginDockSpace("editor", ig::Rect(0.0f, 0.0f, 640.0f, 480.0f)))
+                {
+                    if (c.beginDockPanel("Hierarchy", ig::DockSlot::Center))
+                    {
+                        c.label("scene");
+                        c.endDockPanel();
+                    }
+                    c.endDockSpace();
+                }
+                c.endWindow();
+            });
     check(context.saveWindowState(), "the state file was not written after the dock frame");
 
     ct::Ini saved;
@@ -748,7 +765,7 @@ void test_dock_tab_bar_is_drawn_once_per_region()
 // be fitted to the viewport it is opened in.
 void test_a_window_restored_off_screen_is_fitted_to_the_viewport()
 {
-    const char *path = "igui_offscreen_test.ini";
+    const char* path = "igui_offscreen_test.ini";
     remove(path);
 
     ct::Ini previous;
@@ -761,20 +778,21 @@ void test_a_window_restored_off_screen_is_fitted_to_the_viewport()
     ig::TestBackend backend;
     ig::Context context(backend);
     ig::Harness harness(context);
-    context.setWindowStatePath(path);      // before any frame: the viewport is unknown
+    context.setWindowStatePath(path); // before any frame: the viewport is unknown
 
-    harness.frame([](ig::Context &c) {
-        if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f)))
-            c.endWindow();
-    });
+    harness.frame(
+            [](ig::Context& c)
+            {
+                if (c.beginWindow("A", ig::Rect(10.0f, 10.0f, 100.0f, 100.0f))) c.endWindow();
+            });
 
     const ig::Rect bounds = context.windowBounds("A");
     check(bounds.x < 1280.0f && bounds.y < 800.0f,
-          "a window restored outside the screen was left outside it");
+            "a window restored outside the screen was left outside it");
     check(bounds.x + bounds.width > 0.0f && bounds.y + bounds.height > 0.0f,
-          "no part of the restored window is on screen");
+            "no part of the restored window is on screen");
     check(bounds.width == 420.0f && bounds.height == 260.0f,
-          "the restored window did not take the size from the state file");
+            "the restored window did not take the size from the state file");
 
     context.setWindowStatePath(ig::String());
     remove(path);
@@ -791,27 +809,29 @@ void test_a_child_that_cannot_scroll_leaves_the_wheel_to_the_list_inside_it()
 
     int firstVisible = -1;
     int lastVisible = -1;
-    auto frame = [&]() {
-        harness.frame([&](ig::Context &c) {
-            if (!c.beginWindow("Wheel", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f)))
-                return;
-            if (c.beginChild("panel", 300.0f))   // 300 tall, holds 200: no scrollbar
-            {
-                c.beginVirtualList("rows", 200, 20.0f, 200.0f, firstVisible, lastVisible);
-                c.endVirtualList();
-                c.endChild();
-            }
-            c.endWindow();
-        });
+    auto frame = [&]()
+    {
+        harness.frame(
+                [&](ig::Context& c)
+                {
+                    if (!c.beginWindow("Wheel", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f))) return;
+                    if (c.beginChild("panel", 300.0f)) // 300 tall, holds 200: no scrollbar
+                    {
+                        c.beginVirtualList("rows", 200, 20.0f, 200.0f, firstVisible, lastVisible);
+                        c.endVirtualList();
+                        c.endChild();
+                    }
+                    c.endWindow();
+                });
     };
     frame();
-    frame();                                    // the child knows its content by now
+    frame(); // the child knows its content by now
     check(firstVisible == 0, "the list started scrolled");
 
     ig::Event wheel;
     wheel.type = ig::EventType::PointerWheel;
     wheel.position = ig::Vec2(120.0f, 150.0f);
-    wheel.wheelY = -4.0f;                       // wheel down
+    wheel.wheelY = -4.0f; // wheel down
     harness.queue(ig::Event::pointerMove(120.0f, 150.0f));
     harness.queue(wheel);
     frame();
@@ -829,19 +849,21 @@ void test_the_wheel_goes_to_the_innermost_scroll_area()
 
     int firstVisible = -1;
     int lastVisible = -1;
-    auto frame = [&]() {
-        harness.frame([&](ig::Context &c) {
-            if (!c.beginWindow("Nested", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f)))
-                return;
-            if (c.beginChild("panel", 200.0f))   // the filler overflows it: it can scroll
-            {
-                c.beginVirtualList("rows", 200, 20.0f, 150.0f, firstVisible, lastVisible);
-                c.endVirtualList();
-                c.dummy(20.0f, 120.0f);
-                c.endChild();
-            }
-            c.endWindow();
-        });
+    auto frame = [&]()
+    {
+        harness.frame(
+                [&](ig::Context& c)
+                {
+                    if (!c.beginWindow("Nested", ig::Rect(40.0f, 40.0f, 400.0f, 360.0f))) return;
+                    if (c.beginChild("panel", 200.0f)) // the filler overflows it: it can scroll
+                    {
+                        c.beginVirtualList("rows", 200, 20.0f, 150.0f, firstVisible, lastVisible);
+                        c.endVirtualList();
+                        c.dummy(20.0f, 120.0f);
+                        c.endChild();
+                    }
+                    c.endWindow();
+                });
     };
     frame();
     frame();
@@ -865,7 +887,7 @@ void test_the_wheel_goes_to_the_innermost_scroll_area()
 // document would grow forever: removeWindow gets rid of one for good.
 void test_remove_window_forgets_it_everywhere()
 {
-    const char *path = "igui_remove_window_test.ini";
+    const char* path = "igui_remove_window_test.ini";
     remove(path);
 
     ig::TestBackend backend;
@@ -873,16 +895,19 @@ void test_remove_window_forgets_it_everywhere()
     ig::Harness harness(context);
     context.setWindowStatePath(path);
 
-    auto frame = [&](ig::Rect initial) {
-        harness.frame([&](ig::Context &c) {
-            if (c.beginWindow("Doc", initial))
-                c.endWindow();
-        });
+    auto frame = [&](ig::Rect initial)
+    {
+        harness.frame(
+                [&](ig::Context& c)
+                {
+                    if (c.beginWindow("Doc", initial)) c.endWindow();
+                });
     };
     frame(ig::Rect(50.0f, 60.0f, 300.0f, 200.0f));
     context.saveWindowState();
     check(context.windowBounds("Doc").x == 50.0f, "the window was not created where asked");
-    check(!context.removeWindow("Nothing"), "removeWindow claimed to remove a window that never existed");
+    check(!context.removeWindow("Nothing"),
+            "removeWindow claimed to remove a window that never existed");
 
     check(context.removeWindow("Doc"), "removeWindow did not find the window it was given");
     check(context.windowBounds("Doc").width == 0.0f, "the removed window is still known");
@@ -892,7 +917,7 @@ void test_remove_window_forgets_it_everywhere()
     frame(ig::Rect(10.0f, 20.0f, 120.0f, 90.0f));
     const ig::Rect reopened = context.windowBounds("Doc");
     check(reopened.x == 10.0f && reopened.y == 20.0f && reopened.width == 120.0f,
-          "a reopened window came back where the removed one was");
+            "a reopened window came back where the removed one was");
 
     context.setWindowStatePath(ig::String());
     remove(path);
@@ -906,13 +931,17 @@ void test_an_undo_callback_that_records_an_action_takes_over_redo()
     ig::Context context(backend);
     int undone = 0;
     int redone = 0;
-    auto counter = [](int &value) { return [&value]() { ++value; }; };
+    auto counter = [](int& value) { return [&value]() { ++value; }; };
 
     context.pushUndo("first", counter(undone), counter(redone));
-    context.pushUndo("second", [&]() {
-        ++undone;
-        context.pushUndo("third", counter(undone), counter(redone));
-    }, counter(redone));
+    context.pushUndo(
+            "second",
+            [&]()
+            {
+                ++undone;
+                context.pushUndo("third", counter(undone), counter(redone));
+            },
+            counter(redone));
 
     check(context.canUndo(), "the history stopped offering the undo");
     check(context.undo(), "undo() refused the entry it had");
@@ -932,46 +961,49 @@ void test_an_open_menu_is_painted_above_the_windows_drawn_after_it()
     ig::Context context(backend);
     ig::Harness harness(context);
     const ig::Color menuColor = context.theme().menuBg;
-    const ig::Color marker(1u, 2u, 3u, 255u);      // nothing else uses this colour
+    const ig::Color marker(1u, 2u, 3u, 255u); // nothing else uses this colour
 
-    auto frame = [&]() {
-        return harness.frame([&](ig::Context &c) {
-            if (c.beginWindow("A", ig::Rect(40.0f, 40.0f, 420.0f, 320.0f)))
-            {
-                if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, 200.0f, 24.0f)))
+    auto frame = [&]()
+    {
+        return harness.frame(
+                [&](ig::Context& c)
                 {
-                    if (c.beginMenu("File"))
+                    if (c.beginWindow("A", ig::Rect(40.0f, 40.0f, 420.0f, 320.0f)))
                     {
-                        c.menuItem("Open");
-                        c.menuItem("Save");
+                        if (c.beginMenuBar(ig::Rect(0.0f, 0.0f, 200.0f, 24.0f)))
+                        {
+                            if (c.beginMenu("File"))
+                            {
+                                c.menuItem("Open");
+                                c.menuItem("Save");
+                            }
+                            c.endMenu();
+                            c.endMenuBar();
+                        }
+                        c.endWindow();
                     }
-                    c.endMenu();
-                    c.endMenuBar();
-                }
-                c.endWindow();
-            }
-            // Drawn after A, so above it, and covering where the menu opens.
-            if (c.beginWindow("B", ig::Rect(100.0f, 100.0f, 320.0f, 260.0f)))
-            {
-                c.drawRectFilled(ig::Rect(0.0f, 0.0f, 260.0f, 180.0f), marker);
-                c.endWindow();
-            }
-        });
+                    // Drawn after A, so above it, and covering where the menu opens.
+                    if (c.beginWindow("B", ig::Rect(100.0f, 100.0f, 320.0f, 260.0f)))
+                    {
+                        c.drawRectFilled(ig::Rect(0.0f, 0.0f, 260.0f, 180.0f), marker);
+                        c.endWindow();
+                    }
+                });
     };
     frame();
     const ig::Rect window = context.windowBounds("A");
     // The first menu bar entry: the menu bar starts at the content origin.
     const ig::Vec2 entry(window.x + context.theme().windowPadding + 10.0f,
-                         window.y + context.theme().titleBarHeight + context.theme().windowPadding + 12.0f);
+            window.y + context.theme().titleBarHeight + context.theme().windowPadding + 12.0f);
 
     harness.queue(ig::Event::pointerMove(entry.x, entry.y));
     harness.queue(ig::Event::pointerDown(ig::PointerButton::Left, entry.x, entry.y));
     harness.queue(ig::Event::pointerUp(ig::PointerButton::Left, entry.x, entry.y));
-    frame();                       // the click opens the menu and raises A
+    frame(); // the click opens the menu and raises A
     // A must not stay on top: the click raised it, and with A above B the order
     // the overlay is appended in makes no difference at all.
     context.raiseWindow("B", false);
-    const ig::DrawData &draw = frame();
+    const ig::DrawData& draw = frame();
 
     size_t lastMenuVertex = 0;
     size_t lastMarkerVertex = 0;
@@ -985,21 +1017,27 @@ void test_an_open_menu_is_painted_above_the_windows_drawn_after_it()
     size_t drawn = 0;
     for (size_t c = 0; c < draw.commands.size(); ++c)
     {
-        const ig::DrawCommand &command = draw.commands[c];
-        if (command.type != ig::DrawCommandType::Geometry)
-            continue;
-        const ig::GeometryCommand &geometry = command.payload.geometry;
+        const ig::DrawCommand& command = draw.commands[c];
+        if (command.type != ig::DrawCommandType::Geometry) continue;
+        const ig::GeometryCommand& geometry = command.payload.geometry;
         for (uint32_t k = 0; k < geometry.indexCount; ++k, ++drawn)
         {
-            const ig::DrawVertex &vertex = draw.vertices[draw.indices[geometry.firstIndex + k]];
-            if (vertex.color == menuColor) { lastMenuVertex = drawn; sawMenu = true; }
-            if (vertex.color == marker) { lastMarkerVertex = drawn; sawMarker = true; }
+            const ig::DrawVertex& vertex = draw.vertices[draw.indices[geometry.firstIndex + k]];
+            if (vertex.color == menuColor)
+            {
+                lastMenuVertex = drawn;
+                sawMenu = true;
+            }
+            if (vertex.color == marker)
+            {
+                lastMarkerVertex = drawn;
+                sawMarker = true;
+            }
         }
     }
     check(sawMenu, "the open menu was never drawn");
     check(sawMarker, "the window drawn last was never drawn");
-    check(lastMenuVertex > lastMarkerVertex,
-          "a window painted over the open menu of another one");
+    check(lastMenuVertex > lastMarkerVertex, "a window painted over the open menu of another one");
 }
 
 // A popup hangs from its window, it does not live inside it: the list of a combo
@@ -1013,27 +1051,31 @@ void test_a_combo_popup_escapes_the_window_it_hangs_from()
     ig::Context context(backend);
     ig::Harness harness(context);
 
-    const ig::StringView items[4] = {"one", "two", "three", "four"};
+    const ig::StringView items[4] = { "one", "two", "three", "four" };
     int selected = 0;
     const ig::Rect comboBounds(10.0f, 150.0f, 140.0f, 24.0f);
-    auto frame = [&]() {
-        return harness.frame([&](ig::Context &c) {
-            if (c.beginWindow("Combo", ig::Rect(40.0f, 40.0f, 320.0f, 220.0f)))
-            {
-                c.comboBox("pick", selected, ig::Span<const ig::StringView>(items, 4), comboBounds);
-                c.endWindow();
-            }
-        });
+    auto frame = [&]()
+    {
+        return harness.frame(
+                [&](ig::Context& c)
+                {
+                    if (c.beginWindow("Combo", ig::Rect(40.0f, 40.0f, 320.0f, 220.0f)))
+                    {
+                        c.comboBox("pick", selected, ig::Span<const ig::StringView>(items, 4),
+                                comboBounds);
+                        c.endWindow();
+                    }
+                });
     };
     frame();
     const ig::Rect window = context.windowBounds("Combo");
     const ig::Rect header(window.x + context.theme().windowPadding + comboBounds.x,
-                          window.y + context.theme().titleBarHeight + context.theme().windowPadding +
-                              comboBounds.y,
-                          comboBounds.width, comboBounds.height);
-    const ig::Rect popup(header.x, header.y + header.height, header.width,
-                         header.height * 4.0f);
-    check(header.bottom() <= window.bottom(), "setup: the combo header itself must be inside the window");
+            window.y + context.theme().titleBarHeight + context.theme().windowPadding +
+                    comboBounds.y,
+            comboBounds.width, comboBounds.height);
+    const ig::Rect popup(header.x, header.y + header.height, header.width, header.height * 4.0f);
+    check(header.bottom() <= window.bottom(),
+            "setup: the combo header itself must be inside the window");
     check(popup.bottom() > window.bottom(), "setup: the list must reach past the window's bottom");
 
     const ig::Vec2 headerPoint(header.x + 8.0f, header.y + 8.0f);
@@ -1043,17 +1085,22 @@ void test_a_combo_popup_escapes_the_window_it_hangs_from()
     frame();
 
     // The last row: below the window's bottom edge.
-    const ig::Vec2 lastRow(popup.x + 8.0f, popup.y + comboBounds.height * 3.0f + comboBounds.height * 0.5f);
+    const ig::Vec2 lastRow(popup.x + 8.0f,
+            popup.y + comboBounds.height * 3.0f + comboBounds.height * 0.5f);
     check(lastRow.y > window.bottom(), "setup: the row must be outside the window");
     harness.queue(ig::Event::pointerMove(lastRow.x, lastRow.y));
     harness.queue(ig::Event::pointerDown(ig::PointerButton::Left, lastRow.x, lastRow.y));
     harness.queue(ig::Event::pointerUp(ig::PointerButton::Left, lastRow.x, lastRow.y));
-    const ig::DrawData &draw = frame();
+    const ig::DrawData& draw = frame();
     check(selected == 3, "a row of a combo list outside its window could not be clicked");
 
     bool drawnOutside = false;
     for (size_t i = 0; i < draw.vertices.size(); ++i)
-        if (draw.vertices[i].position.y > window.bottom() + 1.0f) { drawnOutside = true; break; }
+        if (draw.vertices[i].position.y > window.bottom() + 1.0f)
+        {
+            drawnOutside = true;
+            break;
+        }
     check(drawnOutside, "the list was cut off at the window's edge");
 }
 

@@ -21,21 +21,18 @@ namespace igui_gallery
 namespace
 {
 
-const ig::StringView kItems5[] = {
-    ig::StringView("AAAA"), ig::StringView("BBBB"), ig::StringView("CCCC"),
-    ig::StringView("DDDD"), ig::StringView("EEEE")
-};
+const ig::StringView kItems5[] = { ig::StringView("AAAA"), ig::StringView("BBBB"),
+    ig::StringView("CCCC"), ig::StringView("DDDD"), ig::StringView("EEEE") };
 
-const char *const kItems5Text[] = {"AAAA", "BBBB", "CCCC", "DDDD", "EEEE"};
+const char* const kItems5Text[] = { "AAAA", "BBBB", "CCCC", "DDDD", "EEEE" };
 
-const ig::StringView kPlotFunctions[] = {ig::StringView("Sin"), ig::StringView("Saw")};
+const ig::StringView kPlotFunctions[] = { ig::StringView("Sin"), ig::StringView("Saw") };
 
 // O mesmo que o ImGuiTextFilter do demo: uma linha de texto, e um item passa se
 // a linha for um pedaço dele, sem olhar a maiúsculas.
-bool passesFilter(ig::StringView item, const ig::String &filter)
+bool passesFilter(ig::StringView item, const ig::String& filter)
 {
-    if (filter.empty())
-        return true;
+    if (filter.empty()) return true;
     const char lower = 'a' - 'A';
     for (ig::StringView::size_type i = 0u; i + filter.size() <= item.size(); ++i)
     {
@@ -44,16 +41,12 @@ bool passesFilter(ig::StringView item, const ig::String &filter)
         {
             char a = item[i + j];
             char b = filter[j];
-            if (a >= 'A' && a <= 'Z')
-                a = static_cast<char>(a + lower);
-            if (b >= 'A' && b <= 'Z')
-                b = static_cast<char>(b + lower);
-            if (a != b)
-                break;
+            if (a >= 'A' && a <= 'Z') a = static_cast<char>(a + lower);
+            if (b >= 'A' && b <= 'Z') b = static_cast<char>(b + lower);
+            if (a != b) break;
             ++j;
         }
-        if (j == filter.size())
-            return true;
+        if (j == filter.size()) return true;
     }
     return false;
 }
@@ -124,30 +117,51 @@ struct Panel
     bool subOpen[static_cast<int>(gallery::Section::Count)];
 
     Panel()
-        : shared(), name("texto editavel"), multiline("linha um\nlinha dois"), hint(),
-          queryText("texto"), comboFilter(), dialogOpen(false), modalOpen(false),
-          messageBoxOpen(false),
-          tabFlagReorderable(true), tabFlagAutoSelect(false), tabFlagListPopup(false),
-          tabFlagNoCloseMiddle(false), tabFlagOverline(false), tabFlagFitting(false),
-          openedTabs(), popupToggles(), activeTabs(), activeTabCount(0), nextTabId(0),
-          showLeadingTabButton(true), showTrailingTabButton(true), showMetrics(false),
-          showStyleEditor(false), showAbout(false), styleBackup(), styleBackupTaken(false),
-          styleColorEdit(-1),
-          selectAppearance(false),
-          headerCloseExpanded(true), headerBulletOpen(false),
-          selection(0),
-          sortColumn(0), sortAscending(true), widgets(0), deltaSeconds(0.0f), topOpen(),
-          subOpen()
+            : shared(),
+              name("texto editavel"),
+              multiline("linha um\nlinha dois"),
+              hint(),
+              queryText("texto"),
+              comboFilter(),
+              dialogOpen(false),
+              modalOpen(false),
+              messageBoxOpen(false),
+              tabFlagReorderable(true),
+              tabFlagAutoSelect(false),
+              tabFlagListPopup(false),
+              tabFlagNoCloseMiddle(false),
+              tabFlagOverline(false),
+              tabFlagFitting(false),
+              openedTabs(),
+              popupToggles(),
+              activeTabs(),
+              activeTabCount(0),
+              nextTabId(0),
+              showLeadingTabButton(true),
+              showTrailingTabButton(true),
+              showMetrics(false),
+              showStyleEditor(false),
+              showAbout(false),
+              styleBackup(),
+              styleBackupTaken(false),
+              styleColorEdit(-1),
+              selectAppearance(false),
+              headerCloseExpanded(true),
+              headerBulletOpen(false),
+              selection(0),
+              sortColumn(0),
+              sortAscending(true),
+              widgets(0),
+              deltaSeconds(0.0f),
+              topOpen(),
+              subOpen()
     {
         // As quatro tabs do "Opened:" do demo nascem abertas, e as numeradas começam
         // com três (é o que o demo faz na primeira vez).
-        for (int i = 0; i < 4; ++i)
-            openedTabs[i] = true;
+        for (int i = 0; i < 4; ++i) openedTabs[i] = true;
         // O primeiro toggle do "Toggle.." nasce ligado, como no demo.
-        for (int i = 0; i < 5; ++i)
-            popupToggles[i] = i == 0;
-        for (int i = 0; i < 3; ++i)
-            activeTabs[i] = nextTabId++;
+        for (int i = 0; i < 5; ++i) popupToggles[i] = i == 0;
+        for (int i = 0; i < 3; ++i) activeTabs[i] = nextTabId++;
         activeTabCount = 3;
         // Tudo fechado, como o demo do ImGui abre por omissão: enquanto o
         // espelho abria o "Help" e o demo não, os dois painéis desenhavam textos
@@ -173,7 +187,7 @@ void item()
 
 // Uma widget do demo que o iGUI não tem: nota no sítio dela e lacuna no relatório.
 // Continua a contar como item, porque no demo ela está lá.
-void gap(ig::Context &ui, gallery::Section section, const char *missing)
+void gap(ig::Context& ui, gallery::Section section, const char* missing)
 {
     gallery::reportGap(gallery::sectionName(section), missing);
     ui.label("[iGUI: nao existe]");
@@ -185,9 +199,9 @@ void gap(ig::Context &ui, gallery::Section section, const char *missing)
 // omissão, é a que se lê nos dois painéis ao mesmo tempo, e enquanto tinha prosa
 // em português a contagem de vértices deste lado comparava dois textos
 // diferentes em vez de duas bibliotecas.
-void sectionHelp(ig::Context &ui, gallery::State &s)
+void sectionHelp(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     ui.separatorText("ABOUT THIS DEMO:");
     item();
     ui.bulletText("Sections below are demonstrating many aspects of the library.");
@@ -217,16 +231,17 @@ void sectionHelp(ig::Context &ui, gallery::State &s)
     item();
     ui.separatorText("USER GUIDE:");
     item();
-    gap(ui, gallery::Section::Help, "ShowUserGuide() (as tabelas de ajuda do demo, "
-                                    "e o TextLinkOpenURL)");
+    gap(ui, gallery::Section::Help,
+            "ShowUserGuide() (as tabelas de ajuda do demo, "
+            "e o TextLinkOpenURL)");
 }
 
 // ── Configuration ────────────────────────────────────────────────────────────
-void sectionConfiguration(ig::Context &ui, gallery::State &s)
+void sectionConfiguration(ig::Context& ui, gallery::State& s)
 {
     gap(ui, gallery::Section::Configuration,
-        "os flags do ImGuiIO (ConfigFlags, BackendFlags, DPI, config de janelas, "
-        "tratamento de erros e debug) - o iGUI nao tem um objeto de configuracao global");
+            "os flags do ImGuiIO (ConfigFlags, BackendFlags, DPI, config de janelas, "
+            "tratamento de erros e debug) - o iGUI nao tem um objeto de configuracao global");
     ui.separatorText("General");
     ui.checkbox("O teu primeiro checkbox", s.flag[0]);
     item();
@@ -238,15 +253,15 @@ void sectionConfiguration(ig::Context &ui, gallery::State &s)
     // demo abre-as por fora da janela do demo, e a galeria tambem); o que falta e o
     // Debug log e o ID stack tool.
     gap(ui, gallery::Section::Configuration,
-        "o Debug log (ShowDebugLogWindow) e o ID stack tool (ShowIDStackToolWindow)");
+            "o Debug log (ShowDebugLogWindow) e o ID stack tool (ShowIDStackToolWindow)");
 }
 
 // ── Window options ───────────────────────────────────────────────────────────
-void sectionWindowOptions(ig::Context &ui, gallery::State &s)
+void sectionWindowOptions(ig::Context& ui, gallery::State& s)
 {
     gap(ui, gallery::Section::WindowOptions,
-        "os controlos de janela do demo (posicao, tamanho, collapsed, focus, bg alpha, "
-        "scroll, limites) - o iGUI gere a janela pelo beginWindow");
+            "os controlos de janela do demo (posicao, tamanho, collapsed, focus, bg alpha, "
+            "scroll, limites) - o iGUI gere a janela pelo beginWindow");
     ui.checkbox("Flag da janela 1", s.flag[2]);
     item();
     ui.checkbox("Flag da janela 2", s.flag[3]);
@@ -256,7 +271,7 @@ void sectionWindowOptions(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Basic ───────────────────────────────────────────────────────────
-void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
+void sectionWidgetsBasic(ig::Context& ui, gallery::State& s)
 {
     ui.separatorText("General");
     ui.label("This is a text");
@@ -266,9 +281,9 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     ui.textDisabled(ig::StringView("This is a disabled text"));
     item();
     ui.textWrapped(ig::StringView(
-        "The ImGui::TextWrapped() function is used to write long text that wraps around the "
-        "window. The text wraps at the right edge of the content area, without a newline in "
-        "the source."));
+            "The ImGui::TextWrapped() function is used to write long text that wraps around the "
+            "window. The text wraps at the right edge of the content area, without a newline in "
+            "the source."));
     item();
     ui.label("LabelText:");
     ui.sameLine();
@@ -276,11 +291,9 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     item();
     ui.bulletText(ig::StringView("BulletText"));
     item();
-    if (ui.button("Button"))
-        s.f1 = 1.0f;
+    if (ui.button("Button")) s.f1 = 1.0f;
     item();
-    if (ui.smallButton("SmallButton"))
-        s.f1 = 0.0f;
+    if (ui.smallButton("SmallButton")) s.f1 = 0.0f;
     item();
     {
         const ig::Vec2 cursor = ui.cursor();
@@ -296,12 +309,10 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     ui.alignTextToFramePadding();
     ui.label("Hold to repeat:");
     ui.sameLine();
-    if (ui.arrowButton("##left", ig::ArrowDirection::Left))
-        --s.steps;
+    if (ui.arrowButton("##left", ig::ArrowDirection::Left)) --s.steps;
     item();
     ui.sameLine();
-    if (ui.arrowButton("##right", ig::ArrowDirection::Right))
-        ++s.steps;
+    if (ui.arrowButton("##right", ig::ArrowDirection::Right)) ++s.steps;
     item();
     ui.sameLine();
     {
@@ -312,11 +323,9 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     item();
     ui.checkbox("Checkbox", s.flag[0]);
     item();
-    if (ui.radioButton("RadioButton a", s.radio == 0))
-        s.radio = 0;
+    if (ui.radioButton("RadioButton a", s.radio == 0)) s.radio = 0;
     item();
-    if (ui.radioButton("RadioButton b", s.radio == 1))
-        s.radio = 1;
+    if (ui.radioButton("RadioButton b", s.radio == 1)) s.radio = 1;
     item();
     ui.progressBar(s.progress, 1.0f);
     item();
@@ -364,15 +373,15 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
         ui.vSliderInt("##int", s.i2, 0, 10, ig::Rect(cursor.x, cursor.y, width, height));
         ui.pushId(0);
         ui.vSliderFloat("##v", s.vSliders[0], 0.0f, 1.0f,
-                        ig::Rect(cursor.x + stride, cursor.y, width, height));
+                ig::Rect(cursor.x + stride, cursor.y, width, height));
         ui.popId();
         ui.pushId(1);
         ui.vSliderFloat("##v", s.vSliders[1], 0.0f, 1.0f,
-                        ig::Rect(cursor.x + stride * 2.0f, cursor.y, width, height));
+                ig::Rect(cursor.x + stride * 2.0f, cursor.y, width, height));
         ui.popId();
         ui.pushId(2);
         ui.vSliderFloat("##v", s.vSliders[2], 0.0f, 1.0f,
-                        ig::Rect(cursor.x + stride * 3.0f, cursor.y, width, height));
+                ig::Rect(cursor.x + stride * 3.0f, cursor.y, width, height));
         ui.popId();
         ui.popId();
         // Os quatro sliders de cima são de bounds: sem este dummy o sameLine()
@@ -387,14 +396,13 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
         ui.pushId("set2");
         for (int nx = 0; nx < 4; ++nx)
         {
-            if (nx > 0)
-                ui.sameLine();
+            if (nx > 0) ui.sameLine();
             ui.beginGroup();
             for (int ny = 0; ny < 3; ++ny)
             {
                 ui.pushId(nx * 3 + ny);
                 ui.vSliderFloat("##v", s.vSliders[nx % 3], 0.0f, 1.0f,
-                                ig::Rect(ui.cursor().x, ui.cursor().y, width, smallHeight));
+                        ig::Rect(ui.cursor().x, ui.cursor().y, width, smallHeight));
                 item();
                 ui.dummy(width, smallHeight);
                 ui.popId();
@@ -408,8 +416,8 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     item();
     item();
     gap(ui, gallery::Section::WidgetsBasic,
-        "SliderAngle / SliderScalar, o formato do valor do VSliderFloat (\"%.2f\\nsec\") "
-        "e o GrabMinSize que muda a altura do grab");
+            "SliderAngle / SliderScalar, o formato do valor do VSliderFloat (\"%.2f\\nsec\") "
+            "e o GrabMinSize que muda a altura do grab");
 
     ui.separatorText("Selectors/Pickers");
     ig::Color color = ig::Color::FromFloat(s.col4[0], s.col4[1], s.col4[2], s.col4[3]);
@@ -423,8 +431,7 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
     item();
     ui.colorButton("MyColor 1", color);
     item();
-    if (ui.colorButton("MyColor 2", color, 90.0f, 40.0f))
-        s.f1 = 0.5f;
+    if (ui.colorButton("MyColor 2", color, 90.0f, 40.0f)) s.f1 = 0.5f;
     item();
     gap(ui, gallery::Section::WidgetsBasic, "ColorEdit flags (RGB, HSV, Alpha bar)");
     ui.comboBox("Combo", s.combo, ig::Span<const ig::StringView>(kItems5, 5));
@@ -432,9 +439,9 @@ void sectionWidgetsBasic(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Bullets ─────────────────────────────────────────────────────────
-void sectionWidgetsBullets(ig::Context &ui, gallery::State &s)
+void sectionWidgetsBullets(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     ui.bulletText(ig::StringView("Bullet point 1"));
     item();
     ui.bulletText(ig::StringView("Bullet point 2"));
@@ -459,17 +466,16 @@ void sectionWidgetsBullets(ig::Context &ui, gallery::State &s)
         item();
     }
     gap(ui, gallery::Section::WidgetsBullets,
-        "o BulletText sem bullet (o TextColored a imitar a marca do demo)");
+            "o BulletText sem bullet (o TextColored a imitar a marca do demo)");
 }
 
 // ── Widgets: Collapsing Headers ──────────────────────────────────────────────
-void sectionWidgetsCollapsingHeaders(ig::Context &ui, gallery::State &s)
+void sectionWidgetsCollapsingHeaders(ig::Context& ui, gallery::State& s)
 {
-    if (ui.collapsingHeader("Header", s.headerOpen))
-        ui.label("conteudo do header");
+    if (ui.collapsingHeader("Header", s.headerOpen)) ui.label("conteudo do header");
     item();
     if (ui.collapsingHeader("Header with a close button", g_panel.headerCloseExpanded,
-                            s.headerWithClose))
+                s.headerWithClose))
     {
         ui.label("fecha pelo x ao lado");
         item();
@@ -484,17 +490,17 @@ void sectionWidgetsCollapsingHeaders(ig::Context &ui, gallery::State &s)
         item();
     }
     gap(ui, gallery::Section::WidgetsCollapsingHeaders,
-        "CollapsingHeader com o estado do botao de fecho devolvido por ImGuiTreeNodeFlags e "
-        "os flags que faltam (ImGuiTreeNodeFlags_DefaultOpen/FramePadding/NoTreePushOnOpen)");
+            "CollapsingHeader com o estado do botao de fecho devolvido por ImGuiTreeNodeFlags e "
+            "os flags que faltam (ImGuiTreeNodeFlags_DefaultOpen/FramePadding/NoTreePushOnOpen)");
 }
 
 // ── Widgets: Color/Picker ────────────────────────────────────────────────────
-void sectionWidgetsColorAndPickers(ig::Context &ui, gallery::State &s)
+void sectionWidgetsColorAndPickers(ig::Context& ui, gallery::State& s)
 {
     ui.separatorText("Options");
     gap(ui, gallery::Section::WidgetsColorAndPickers,
-        "os checkboxes de ColorEditFlags do demo (Alpha, Sub, Input RGB/HSV/HEX, "
-        "Picker HueWheel/Bar, etc.)");
+            "os checkboxes de ColorEditFlags do demo (Alpha, Sub, Input RGB/HSV/HEX, "
+            "Picker HueWheel/Bar, etc.)");
     ui.checkbox("ColorEdit option 1", s.option[0]);
     item();
     ui.checkbox("ColorEdit option 2", s.option[1]);
@@ -517,34 +523,30 @@ void sectionWidgetsColorAndPickers(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Combo ───────────────────────────────────────────────────────────
-void sectionWidgetsCombo(ig::Context &ui, gallery::State &s)
+void sectionWidgetsCombo(ig::Context& ui, gallery::State& s)
 {
-    gap(ui, gallery::Section::WidgetsCombo, "ImGuiComboFlags_* (PopupAlignLeft, "
-                                            "NoArrowButton, NoPreview, WidthFitPreview, Height*)");
+    gap(ui, gallery::Section::WidgetsCombo,
+            "ImGuiComboFlags_* (PopupAlignLeft, "
+            "NoArrowButton, NoPreview, WidthFitPreview, Height*)");
     // Os 14 itens do demo, e o mesmo desenho: o cabeçalho é o beginCombo, o popup é
     // do chamador, que submete um selectable por item.
-    static const ig::StringView kComboItems[] = {
-        ig::StringView("AAAA"), ig::StringView("BBBB"), ig::StringView("CCCC"),
-        ig::StringView("DDDD"), ig::StringView("EEEE"), ig::StringView("FFFF"),
-        ig::StringView("GGGG"), ig::StringView("HHHH"), ig::StringView("IIII"),
-        ig::StringView("JJJJ"), ig::StringView("KKKK"), ig::StringView("LLLLLLL"),
-        ig::StringView("MMMM"), ig::StringView("OOOOOOO")
-    };
+    static const ig::StringView kComboItems[] = { ig::StringView("AAAA"), ig::StringView("BBBB"),
+        ig::StringView("CCCC"), ig::StringView("DDDD"), ig::StringView("EEEE"),
+        ig::StringView("FFFF"), ig::StringView("GGGG"), ig::StringView("HHHH"),
+        ig::StringView("IIII"), ig::StringView("JJJJ"), ig::StringView("KKKK"),
+        ig::StringView("LLLLLLL"), ig::StringView("MMMM"), ig::StringView("OOOOOOO") };
     const int comboCount = static_cast<int>(sizeof(kComboItems) / sizeof(kComboItems[0]));
-    if (s.comboItem < 0 || s.comboItem >= comboCount)
-        s.comboItem = 0;
+    if (s.comboItem < 0 || s.comboItem >= comboCount) s.comboItem = 0;
     // O HeightRegular do ImGui, que é o que vem por omissão: 8 linhas, e a lista
     // rola por dentro.
     if (ui.beginCombo("combo 1", kComboItems[s.comboItem], 240.0f))
     {
         for (int n = 0; n < comboCount; ++n)
         {
-            if (ui.selectable(kComboItems[n], s.comboItem == n))
-                s.comboItem = n;
+            if (ui.selectable(kComboItems[n], s.comboItem == n)) s.comboItem = n;
             item();
             // Como no demo: o item escolhido é o que a lista mostra ao abrir.
-            if (s.comboItem == n)
-                ui.setItemDefaultFocus();
+            if (s.comboItem == n) ui.setItemDefaultFocus();
         }
         ui.endCombo();
     }
@@ -557,10 +559,8 @@ void sectionWidgetsCombo(ig::Context &ui, gallery::State &s)
         item();
         for (int n = 0; n < comboCount; ++n)
         {
-            if (!passesFilter(kComboItems[n], g_panel.comboFilter))
-                continue;
-            if (ui.selectable(kComboItems[n], s.comboItem == n))
-                s.comboItem = n;
+            if (!passesFilter(kComboItems[n], g_panel.comboFilter)) continue;
+            if (ui.selectable(kComboItems[n], s.comboItem == n)) s.comboItem = n;
             item();
         }
         ui.endCombo();
@@ -578,7 +578,7 @@ void sectionWidgetsCombo(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Data Types ──────────────────────────────────────────────────────
-void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
+void sectionWidgetsDataTypes(ig::Context& ui, gallery::State& s)
 {
     ui.separatorText("Drags");
     ui.dragInt("int", s.i1, 0, 10, 1);
@@ -647,7 +647,7 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     ui.dragScalar("drag s32", ig::Context::ScalarType::S32, &s.scalarS32, 1.0f, &s32Min, &s32Max);
     item();
     ui.dragScalar("drag s32 hex", ig::Context::ScalarType::S32, &s.scalarS32, 1.0f, &s32Zero,
-                  &s32Fifty, "%04X");
+            &s32Fifty, "%04X");
     item();
     ui.dragScalar("drag u32", ig::Context::ScalarType::U32, &s.scalarU32, 1.0f, &u32Min, &u32Max);
     item();
@@ -656,27 +656,27 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     ui.dragScalar("drag u64", ig::Context::ScalarType::U64, &s.scalarU64, 1.0f, &u64Min, &u64Max);
     item();
     ui.dragScalar("drag double", ig::Context::ScalarType::Double, &s.scalarF64, 0.0005f, &f64Zero,
-                  nullptr, "%.10f grams");
+            nullptr, "%.10f grams");
     item();
     ui.separatorText("Sliders (scalar)");
     ui.sliderScalar("slider s32 low", ig::Context::ScalarType::S32, &s.scalarS32, &s32Zero,
-                    &s32Fifty, "%d");
+            &s32Fifty, "%d");
     item();
     ui.sliderScalar("slider s32 hex", ig::Context::ScalarType::S32, &s.scalarS32, &s32Zero,
-                    &s32Fifty, "0x%04X");
+            &s32Fifty, "0x%04X");
     item();
     ui.sliderScalar("slider u8 full", ig::Context::ScalarType::U8, &s.scalarU8, &u8Min, &u8Max,
-                    "%u");
+            "%u");
     item();
-    ui.sliderScalar("slider u64 full", ig::Context::ScalarType::U64, &s.scalarU64, &u64Min,
-                    &u64Max, "%llu ms");
+    ui.sliderScalar("slider u64 full", ig::Context::ScalarType::U64, &s.scalarU64, &u64Min, &u64Max,
+            "%llu ms");
     item();
     ui.sliderScalar("slider double low", ig::Context::ScalarType::Double, &s.scalarF64, &f64Zero,
-                    &f64One, "%.10f");
+            &f64One, "%.10f");
     item();
     // O slider invertido (min>max) do demo: a pista anda ao contrario.
     ui.sliderScalar("slider s32 reverse", ig::Context::ScalarType::S32, &s.scalarS32, &s32Fifty,
-                    &s32Zero, "%d");
+            &s32Zero, "%d");
     item();
     // E o angulo, que e o unico widget que o iGUI tem a mais nesta seccao (o
     // SliderAngle do demo).
@@ -690,18 +690,17 @@ void sectionWidgetsDataTypes(ig::Context &ui, gallery::State &s)
     ui.inputScalar("input double", ig::Context::ScalarType::Double, &s.scalarF64, "%.10f grams");
     item();
     gap(ui, gallery::Section::WidgetsDataTypes,
-        "os botoes de passo (+/-) ao lado do campo de um InputScalar (o 'Show step "
-        "buttons' do demo) e o ParseEmptyRefVal/DisplayEmptyRefVal");
+            "os botoes de passo (+/-) ao lado do campo de um InputScalar (o 'Show step "
+            "buttons' do demo) e o ParseEmptyRefVal/DisplayEmptyRefVal");
 }
 
 // ── Widgets: Disable Blocks ──────────────────────────────────────────────────
-void sectionWidgetsDisableBlocks(ig::Context &ui, gallery::State &s)
+void sectionWidgetsDisableBlocks(ig::Context& ui, gallery::State& s)
 {
     ui.beginDisabled();
     ui.checkbox("Checkbox inside a disable block", s.flag[0]);
     item();
-    if (ui.button("Button inside a disable block"))
-        s.f1 = 0.0f;
+    if (ui.button("Button inside a disable block")) s.f1 = 0.0f;
     item();
     ui.dragFloat("DragFloat inside a disable block", s.f1, 0.0f, 1.0f, 0.01f);
     item();
@@ -718,13 +717,13 @@ void sectionWidgetsDisableBlocks(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Drag and Drop ───────────────────────────────────────────────────
-void sectionWidgetsDragAndDrop(ig::Context &ui, gallery::State &s)
+void sectionWidgetsDragAndDrop(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     gap(ui, gallery::Section::WidgetsDragAndDrop,
-        "os exemplos do demo (arrastar entre itens, copiar/trocar, reordenar) usam "
-        "BeginDragDropSource/Target; o iGUI tem beginDragSource/acceptDragDropTarget "
-        "mas nao tem preview nem payload tipado com flags");
+            "os exemplos do demo (arrastar entre itens, copiar/trocar, reordenar) usam "
+            "BeginDragDropSource/Target; o iGUI tem beginDragSource/acceptDragDropTarget "
+            "mas nao tem preview nem payload tipado com flags");
     {
         const ig::Vec2 cursor = ui.cursor();
         const ig::Rect source(cursor.x, cursor.y, 110.0f, 22.0f);
@@ -747,13 +746,13 @@ void sectionWidgetsDragAndDrop(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Drag/Slider Flags ───────────────────────────────────────────────
-void sectionWidgetsDragAndSliderFlags(ig::Context &ui, gallery::State &s)
+void sectionWidgetsDragAndSliderFlags(ig::Context& ui, gallery::State& s)
 {
     gap(ui, gallery::Section::WidgetsDragAndSliderFlags,
-        "CheckboxFlags (o bitfield do demo: os flags do ImGuiSliderFlags_* sao um "
-        "checkbox cada) e os flags ClampOnInput/ClampZeroRange/NoRoundToFormat/"
-        "NoSpeedTweaks - o iGUI tem Logarithmic, WrapAround, NoInput e "
-        "AllowOutOfRange");
+            "CheckboxFlags (o bitfield do demo: os flags do ImGuiSliderFlags_* sao um "
+            "checkbox cada) e os flags ClampOnInput/ClampZeroRange/NoRoundToFormat/"
+            "NoSpeedTweaks - o iGUI tem Logarithmic, WrapAround, NoInput e "
+            "AllowOutOfRange");
     // Os drags/sliders do demo, com os flags que o iGUI tem. No demo os flags sao
     // os mesmos para todos (estao nos checkboxes de cima); aqui cada linha mostra
     // um deles, que é o que se vê de qualquer maneira.
@@ -762,42 +761,40 @@ void sectionWidgetsDragAndSliderFlags(ig::Context &ui, gallery::State &s)
     ui.dragFloat("DragFloat (0 -> 1)", s.f1, 0.0f, 1.0f, 0.005f);
     item();
     ui.dragFloat("DragFloat (0 -> 1) WrapAround", s.f1, 0.0f, 1.0f, 0.005f, 0.0f,
-                 ig::Context::SliderFlags::WrapAround);
+            ig::Context::SliderFlags::WrapAround);
     item();
     ui.dragInt("DragInt (0 -> 100)", s.i2, 0, 100, 1);
     item();
     ui.sliderFloat("SliderFloat (0 -> 1)", s.f1, 0.0f, 1.0f);
     item();
     ui.sliderFloat("SliderFloat (0.001 -> 100) Logarithmic", s.f1, 0.001f, 100.0f, 0.0f,
-                   ig::Context::SliderFlags::Logarithmic);
+            ig::Context::SliderFlags::Logarithmic);
     item();
     ui.sliderFloat("SliderFloat (0 -> 1) NoInput", s.f1, 0.0f, 1.0f, 0.0f,
-                   ig::Context::SliderFlags::NoInput);
+            ig::Context::SliderFlags::NoInput);
     item();
     ui.sliderInt("SliderInt (0 -> 100)", s.i2, 0, 100);
     item();
 }
 
 // ── Widgets: Fonts ───────────────────────────────────────────────────────────
-void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
+void sectionWidgetsFonts(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     gap(ui, gallery::Section::WidgetsFonts,
-        "o inspector do atlas do demo (o loader, compactar/esticar o atlas, as rects "
-        "empacotadas, os glifos com zoom e o realce de cada rect) - o iGUI mostra as "
-        "faces, as metricas e o combo, mas nao tem o inspetor");
+            "o inspector do atlas do demo (o loader, compactar/esticar o atlas, as rects "
+            "empacotadas, os glifos com zoom e o realce de cada rect) - o iGUI mostra as "
+            "faces, as metricas e o combo, mas nao tem o inspetor");
 
     // O ShowFontSelector: escolhe a face de que o painel inteiro é desenhado (o
     // io.FontDefault do ImGui), a partir do frame seguinte.
     int selected = 0;
     for (int i = 0; i < gDemoFontCount; ++i)
-        if (gDemoFonts[i].id == gFontDefault)
-            selected = i;
+        if (gDemoFonts[i].id == gFontDefault) selected = i;
     ig::StringView names[kMaxDemoFonts];
-    for (int i = 0; i < gDemoFontCount; ++i)
-        names[i] = ig::StringView(gDemoFonts[i].name);
+    for (int i = 0; i < gDemoFontCount; ++i) names[i] = ig::StringView(gDemoFonts[i].name);
     if (gDemoFontCount > 0 &&
-        ui.comboBox("Font", selected, ig::Span<const ig::StringView>(names, gDemoFontCount)))
+            ui.comboBox("Font", selected, ig::Span<const ig::StringView>(names, gDemoFontCount)))
     {
         gFontDefault = gDemoFonts[selected].id;
     }
@@ -806,8 +803,7 @@ void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
     // O FontSizeBase do demo: um tamanho para o texto todo, sem tocar no tema.
     // Aqui é o pushStyleVar do fontSize, que o atlas desenha escalado.
     float size = g_fontSize;
-    if (ui.dragFloat("Font size", size, 5.0f, 100.0f, 0.2f))
-        g_fontSize = size;
+    if (ui.dragFloat("Font size", size, 5.0f, 100.0f, 0.2f)) g_fontSize = size;
     ui.sameLine();
     {
         char out[32];
@@ -832,7 +828,7 @@ void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
     ui.separatorText("Font List");
     for (int i = 0; i < gDemoFontCount; ++i)
     {
-        const DemoFont &face = gDemoFonts[i];
+        const DemoFont& face = gDemoFonts[i];
         char line[96];
         snprintf(line, sizeof(line), "%s - size %.0f px", face.name, face.size);
         ui.label(line);
@@ -856,20 +852,20 @@ void sectionWidgetsFonts(ig::Context &ui, gallery::State &s)
     if (gDemoFontCount > 0)
     {
         char line[64];
-        snprintf(line, sizeof(line), "atlas %ux%u, %d face(s)",
-                 g_atlasWidth, g_atlasHeight, gDemoFontCount);
+        snprintf(line, sizeof(line), "atlas %ux%u, %d face(s)", g_atlasWidth, g_atlasHeight,
+                gDemoFontCount);
         ui.label(line);
         item();
     }
 }
 
 // ── Widgets: Images ──────────────────────────────────────────────────────────
-void sectionWidgetsImages(ig::Context &ui, gallery::State &s)
+void sectionWidgetsImages(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     gap(ui, gallery::Section::WidgetsImages,
-        "a imagem de teste do demo com tabuleiro, border e tint - o iGUI tem image() "
-        "e imageButton(), mas aqui nao ha uma textura para lhe dar");
+            "a imagem de teste do demo com tabuleiro, border e tint - o iGUI tem image() "
+            "e imageButton(), mas aqui nao ha uma textura para lhe dar");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.drawRectFilled(ig::Rect(cursor.x, cursor.y, 100.0f, 100.0f), ig::Color(60u, 64u, 72u));
@@ -878,32 +874,31 @@ void sectionWidgetsImages(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::WidgetsImages,
-        "ImageButton com tint e o exemplo de textura carregada do disco");
+            "ImageButton com tint e o exemplo de textura carregada do disco");
 }
 
 // ── Widgets: List Boxes ──────────────────────────────────────────────────────
-void sectionWidgetsListBoxes(ig::Context &ui, gallery::State &s)
+void sectionWidgetsListBoxes(ig::Context& ui, gallery::State& s)
 {
     ui.listBox("ListBox", s.listBox, ig::Span<const ig::StringView>(kItems5, 5), 0.0f, 4);
     item();
     gallery::reportGap(gallery::sectionName(gallery::Section::WidgetsListBoxes),
-                       "ListBox com selecao multipla (ImGuiSelectionBasicStorage)");
+            "ListBox com selecao multipla (ImGuiSelectionBasicStorage)");
     if (ui.beginChild("listbox multi", 76.0f))
     {
-        for (int i = 0; i < 3; ++i)
-            ui.selectable(kItems5[i], s.listBox == i + 1, 160.0f);
+        for (int i = 0; i < 3; ++i) ui.selectable(kItems5[i], s.listBox == i + 1, 160.0f);
         ui.endChild();
     }
     item();
 }
 
 // ── Widgets: Multi-component ─────────────────────────────────────────────────
-void sectionWidgetsMultiComponents(ig::Context &ui, gallery::State &s)
+void sectionWidgetsMultiComponents(ig::Context& ui, gallery::State& s)
 {
     ui.separatorText("2-wide");
     ui.sliderFloat("float2", s.vec2[0], 0.0f, 1.0f);
     ui.sameLine();
-    ui.sliderFloat("float2b", s.vec2[1], 0.0f, 1.0f);  // o iGUI desenha sempre o rotulo
+    ui.sliderFloat("float2b", s.vec2[1], 0.0f, 1.0f); // o iGUI desenha sempre o rotulo
     item();
     ui.dragFloat2("drag float2", s.vec2[0], s.vec2[1], 0.0f, 1.0f, 0.01f);
     item();
@@ -923,7 +918,7 @@ void sectionWidgetsMultiComponents(ig::Context &ui, gallery::State &s)
     item();
     ui.separatorText("Ranges");
     gallery::reportGap(gallery::sectionName(gallery::Section::WidgetsMultiComponents),
-                       "DragFloatRange2 / DragIntRange2 (min e max numa so widget)");
+            "DragFloatRange2 / DragIntRange2 (min e max numa so widget)");
     ui.dragFloat("Min", s.rangeMin, 0.0f, 1.0f, 0.01f);
     item();
     ui.dragFloat("Max", s.rangeMax, 0.0f, 1.0f, 0.01f);
@@ -931,7 +926,7 @@ void sectionWidgetsMultiComponents(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Plotting ────────────────────────────────────────────────────────
-void sectionWidgetsPlotting(ig::Context &ui, gallery::State &s)
+void sectionWidgetsPlotting(ig::Context& ui, gallery::State& s)
 {
     ui.checkbox("Animate", s.plotAnimate);
     item();
@@ -953,12 +948,11 @@ void sectionWidgetsPlotting(ig::Context &ui, gallery::State &s)
     }
     {
         float average = 0.0f;
-        for (int i = 0; i < 32; ++i)
-            average += s.plotLines[i];
+        for (int i = 0; i < 32; ++i) average += s.plotLines[i];
         char overlay[32];
         snprintf(overlay, sizeof(overlay), "avg %f", static_cast<double>(average / 32.0f));
-        ui.plotLines("Lines", s.plotLines, 32, 0.0f, 80.0f, s.plotOffset,
-                     ig::StringView(overlay), -1.0f, 1.0f);
+        ui.plotLines("Lines", s.plotLines, 32, 0.0f, 80.0f, s.plotOffset, ig::StringView(overlay),
+                -1.0f, 1.0f);
         item();
     }
 
@@ -972,19 +966,19 @@ void sectionWidgetsPlotting(ig::Context &ui, gallery::State &s)
         const int count = s.plotCount < 1 ? 1 : (s.plotCount > 400 ? 400 : s.plotCount);
         for (int i = 0; i < count; ++i)
             s.plotFuncValues[i] = s.plotFunc == 0
-                                      ? static_cast<float>(sinf(static_cast<float>(i) * 0.1f))
-                                      : ((i & 1) ? 1.0f : -1.0f);
+                                          ? static_cast<float>(sinf(static_cast<float>(i) * 0.1f))
+                                          : ((i & 1) ? 1.0f : -1.0f);
         ui.plotLines("Sin/Saw lines", s.plotFuncValues, count, 0.0f, 80.0f, 0, ig::StringView(),
-                     -1.0f, 1.0f);
+                -1.0f, 1.0f);
         item();
         ui.plotHistogram("Sin/Saw histogram", s.plotFuncValues, count, 0.0f, 80.0f, 0,
-                         ig::StringView(), -1.0f, 1.0f);
+                ig::StringView(), -1.0f, 1.0f);
         item();
     }
 }
 
 // ── Widgets: Progress Bars ───────────────────────────────────────────────────
-void sectionWidgetsProgressBars(ig::Context &ui, gallery::State &s)
+void sectionWidgetsProgressBars(ig::Context& ui, gallery::State& s)
 {
     // O demo anima a barra entre -0.1 e 1.1 para mostrar o clamp das pontas.
     s.progress += s.progressDirection * 0.4f * g_panel.deltaSeconds;
@@ -1020,18 +1014,14 @@ void sectionWidgetsProgressBars(ig::Context &ui, gallery::State &s)
 // um item do tipo escolhido e pergunta-lhe logo a seguir pelo estado. O demo
 // faz isto com um BulletText só, para não submeter nada entre as consultas e o
 // texto; aqui é a mesma ordem (tirar tudo para variáveis e só depois escrever).
-void sectionWidgetsQueryingStatuses(ig::Context &ui, gallery::State &s)
+void sectionWidgetsQueryingStatuses(ig::Context& ui, gallery::State& s)
 {
-    static const ig::StringView kItemNames[] = {
-        ig::StringView("Text"), ig::StringView("Button"), ig::StringView("Checkbox"),
-        ig::StringView("SliderFloat"), ig::StringView("InputText"),
+    static const ig::StringView kItemNames[] = { ig::StringView("Text"), ig::StringView("Button"),
+        ig::StringView("Checkbox"), ig::StringView("SliderFloat"), ig::StringView("InputText"),
         ig::StringView("InputTextMultiline"), ig::StringView("Selectable"),
-        ig::StringView("TreeNode"), ig::StringView("Combo"), ig::StringView("ListBox")
-    };
-    static const ig::StringView kComboItems[] = {
-        ig::StringView("Apple"), ig::StringView("Banana"), ig::StringView("Cherry"),
-        ig::StringView("Kiwi")
-    };
+        ig::StringView("TreeNode"), ig::StringView("Combo"), ig::StringView("ListBox") };
+    static const ig::StringView kComboItems[] = { ig::StringView("Apple"), ig::StringView("Banana"),
+        ig::StringView("Cherry"), ig::StringView("Kiwi") };
     ui.comboBox("Item Type", s.queryType, ig::Span<const ig::StringView>(kItemNames, 10), 240.0f);
     item();
     ui.sameLine();
@@ -1040,35 +1030,44 @@ void sectionWidgetsQueryingStatuses(ig::Context &ui, gallery::State &s)
 
     // Submete o item escolhido.
     bool ret = false;
-    if (s.queryDisabled)
-        ui.beginDisabled();
+    if (s.queryDisabled) ui.beginDisabled();
     switch (s.queryType)
     {
-    case 0: ui.label("ITEM: Text"); break;
-    case 1: ret = ui.button("ITEM: Button"); break;
-    case 2: ret = ui.checkbox("ITEM: Checkbox", s.queryBool); break;
-    case 3: ret = ui.sliderFloat("ITEM: SliderFloat", s.queryFloat, 0.0f, 1.0f, 240.0f); break;
-    case 4: ret = ui.inputText("ITEM: InputText", g_panel.queryText); break;
-    case 5:
-        ret = ui.inputTextMultiline("ITEM: InputTextMultiline", g_panel.queryText, 0.0f, 60.0f);
-        break;
-    case 6: ret = ui.selectable("ITEM: Selectable", s.queryBool, 240.0f); break;
-    case 7:
-        ret = ui.treeNode("ITEM: TreeNode", s.queryTreeOpen, 240.0f);
-        if (ret)
-            ui.label("child");
-        break;
-    case 8:
-        ret = ui.comboBox("ITEM: Combo", s.queryCombo,
-                          ig::Span<const ig::StringView>(kComboItems, 4), 240.0f);
-        break;
-    default:
-        ret = ui.listBox("ITEM: ListBox", s.queryCombo,
-                         ig::Span<const ig::StringView>(kComboItems, 4), 240.0f, 4);
-        break;
+        case 0:
+            ui.label("ITEM: Text");
+            break;
+        case 1:
+            ret = ui.button("ITEM: Button");
+            break;
+        case 2:
+            ret = ui.checkbox("ITEM: Checkbox", s.queryBool);
+            break;
+        case 3:
+            ret = ui.sliderFloat("ITEM: SliderFloat", s.queryFloat, 0.0f, 1.0f, 240.0f);
+            break;
+        case 4:
+            ret = ui.inputText("ITEM: InputText", g_panel.queryText);
+            break;
+        case 5:
+            ret = ui.inputTextMultiline("ITEM: InputTextMultiline", g_panel.queryText, 0.0f, 60.0f);
+            break;
+        case 6:
+            ret = ui.selectable("ITEM: Selectable", s.queryBool, 240.0f);
+            break;
+        case 7:
+            ret = ui.treeNode("ITEM: TreeNode", s.queryTreeOpen, 240.0f);
+            if (ret) ui.label("child");
+            break;
+        case 8:
+            ret = ui.comboBox("ITEM: Combo", s.queryCombo,
+                    ig::Span<const ig::StringView>(kComboItems, 4), 240.0f);
+            break;
+        default:
+            ret = ui.listBox("ITEM: ListBox", s.queryCombo,
+                    ig::Span<const ig::StringView>(kComboItems, 4), 240.0f, 4);
+            break;
     }
-    if (s.queryDisabled)
-        ui.endDisabled();
+    if (s.queryDisabled) ui.endDisabled();
     item();
 
     const bool itemHovered = ui.isItemHovered();
@@ -1080,41 +1079,40 @@ void sectionWidgetsQueryingStatuses(ig::Context &ui, gallery::State &s)
     const ig::Rect itemRect = ui.itemRect();
     char report[512];
     snprintf(report, sizeof(report),
-             "Return value = %d\nIsItemHovered() = %d\nIsItemActive() = %d\n"
-             "IsItemEdited() = %d\nIsItemClicked() = %d\nIsItemFocused() = %d\n"
-             "IsItemDisabled() = %d\nGetItemRectMin() = (%.1f, %.1f)\n"
-             "GetItemRectSize() = (%.1f, %.1f)",
-             ret ? 1 : 0, itemHovered ? 1 : 0, itemActive ? 1 : 0, itemEdited ? 1 : 0,
-             itemClicked ? 1 : 0, itemFocused ? 1 : 0, itemDisabledNow ? 1 : 0,
-             static_cast<double>(itemRect.x), static_cast<double>(itemRect.y),
-             static_cast<double>(itemRect.width), static_cast<double>(itemRect.height));
+            "Return value = %d\nIsItemHovered() = %d\nIsItemActive() = %d\n"
+            "IsItemEdited() = %d\nIsItemClicked() = %d\nIsItemFocused() = %d\n"
+            "IsItemDisabled() = %d\nGetItemRectMin() = (%.1f, %.1f)\n"
+            "GetItemRectSize() = (%.1f, %.1f)",
+            ret ? 1 : 0, itemHovered ? 1 : 0, itemActive ? 1 : 0, itemEdited ? 1 : 0,
+            itemClicked ? 1 : 0, itemFocused ? 1 : 0, itemDisabledNow ? 1 : 0,
+            static_cast<double>(itemRect.x), static_cast<double>(itemRect.y),
+            static_cast<double>(itemRect.width), static_cast<double>(itemRect.height));
     ui.bulletText(ig::StringView(report));
     item();
 
     gap(ui, gallery::Section::WidgetsQueryingStatuses,
-        "IsItemActivated/Deactivated/DeactivatedAfterEdit/Visible/ToggledOpen, "
-        "IsItemHovered com flags (Delay/Stationary/AllowWhenBlocked...) e "
-        "SetItemAllowOverlap/ItemHoverable");
+            "IsItemActivated/Deactivated/DeactivatedAfterEdit/Visible/ToggledOpen, "
+            "IsItemHovered com flags (Delay/Stationary/AllowWhenBlocked...) e "
+            "SetItemAllowOverlap/ItemHoverable");
     // O estado da janela (o demo mostra-os na linha de baixo): as consultas são as
     // do iGUI, e respondem pela janela que está a ser submetida - esta.
     snprintf(report, sizeof(report),
-             "Window focused = %d\nWindow hovered = %d\nWindow appearing = %d",
-             ui.isWindowFocused() ? 1 : 0, ui.isWindowHovered() ? 1 : 0,
-             ui.isWindowAppearing() ? 1 : 0);
+            "Window focused = %d\nWindow hovered = %d\nWindow appearing = %d",
+            ui.isWindowFocused() ? 1 : 0, ui.isWindowHovered() ? 1 : 0,
+            ui.isWindowAppearing() ? 1 : 0);
     ui.bulletText(ig::StringView(report));
     item();
     gap(ui, gallery::Section::WidgetsQueryingStatuses,
-        "o estado de janela 'collapsed' (o iGUI nao tem janelas recolhidas - tem "
-        "minimizadas, que sao outra coisa) e o resto das consultas de item");
+            "o estado de janela 'collapsed' (o iGUI nao tem janelas recolhidas - tem "
+            "minimizadas, que sao outra coisa) e o resto das consultas de item");
 }
 
 // ── Widgets: Selectables ─────────────────────────────────────────────────────
-void sectionWidgetsSelectables(ig::Context &ui, gallery::State &s)
+void sectionWidgetsSelectables(ig::Context& ui, gallery::State& s)
 {
     for (int i = 0; i < 3; ++i)
     {
-        if (ui.selectable(kItems5[i], s.combo == i, 180.0f))
-            s.combo = i;
+        if (ui.selectable(kItems5[i], s.combo == i, 180.0f)) s.combo = i;
         item();
     }
     // O duplo clique num item (é o AllowDoubleClick do demo): a linha cai num
@@ -1124,26 +1122,22 @@ void sectionWidgetsSelectables(ig::Context &ui, gallery::State &s)
     static bool renaming = false;
     if (renaming)
     {
-        if (ui.inputText("##rename", renameText))
-            item();
+        if (ui.inputText("##rename", renameText)) item();
         if (ui.isItemDeactivatedAfterEdit() || ui.isKeyPressed(ig::KeyCode::Enter))
             renaming = false;
         item();
     }
     else
     {
-        if (ui.selectable(renameText, false, 180.0f))
-            item();
-        if (ui.isItemDoubleClicked())
-            renaming = true;
+        if (ui.selectable(renameText, false, 180.0f)) item();
+        if (ui.isItemDoubleClicked()) renaming = true;
     }
     gap(ui, gallery::Section::WidgetsSelectables,
-        "Selectable com os flags que faltam (SpanAllColumns, Disabled, AllowOverlap) e o "
-        "alinhamento a direita - o AllowDoubleClick e o isItemDoubleClicked existem");
+            "Selectable com os flags que faltam (SpanAllColumns, Disabled, AllowOverlap) e o "
+            "alinhamento a direita - o AllowDoubleClick e o isItemDoubleClicked existem");
     ui.label("Selection state:");
     ui.sameLine();
-    if (s.combo == 0)
-        ui.label("AAAA");
+    if (s.combo == 0) ui.label("AAAA");
     else if (s.combo == 1)
         ui.label("BBBB");
     else
@@ -1152,12 +1146,12 @@ void sectionWidgetsSelectables(ig::Context &ui, gallery::State &s)
 }
 
 // ── Widgets: Selection & Multi-Select ────────────────────────────────────────
-void sectionWidgetsSelectionAndMultiSelect(ig::Context &ui, gallery::State &s)
+void sectionWidgetsSelectionAndMultiSelect(ig::Context& ui, gallery::State& s)
 {
     gap(ui, gallery::Section::WidgetsSelectionAndMultiSelect,
-        "os ~12 exemplos do demo (clipper, delecao, dual list box, tabela, "
-        "checkboxes, multiplos escopos, tiled assets browser, arvores, avancado) e "
-        "os flags do BeginMultiSelect (box select, NoAutoSelect, ...)");
+            "os ~12 exemplos do demo (clipper, delecao, dual list box, tabela, "
+            "checkboxes, multiplos escopos, tiled assets browser, arvores, avancado) e "
+            "os flags do BeginMultiSelect (box select, NoAutoSelect, ...)");
     ui.label("Uma lista com escolha multipla (Ctrl liga/desliga, Shift alcance):");
     item();
     // A seleção é do espelho (um bool por item) e o bloco do iGUI só lhe aplica o
@@ -1175,7 +1169,7 @@ void sectionWidgetsSelectionAndMultiSelect(ig::Context &ui, gallery::State &s)
     ui.label("Uma lista de um item de cada vez:");
     item();
     if (ui.beginMultiSelect(ig::Span<bool>(s.multiSelected, 5),
-                            ig::Context::MultiSelectFlags::SingleSelect))
+                ig::Context::MultiSelectFlags::SingleSelect))
     {
         for (int i = 0; i < 5; ++i)
         {
@@ -1184,16 +1178,15 @@ void sectionWidgetsSelectionAndMultiSelect(ig::Context &ui, gallery::State &s)
         }
         ui.endMultiSelect();
     }
-    (void)s;
+    (void) s;
 }
 
 // ── Widgets: Tabs ────────────────────────────────────────────────────────────
-void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
+void sectionWidgetsTabs(ig::Context& ui, gallery::State& s)
 {
     ui.tabBar("Tabs", s.tab, ig::Span<const ig::StringView>(kItems5, 3));
     item();
-    if (s.tab == 0)
-        ui.label("tab A: conteudo");
+    if (s.tab == 0) ui.label("tab A: conteudo");
     else if (s.tab == 1)
         ui.label("tab B: conteudo");
     else
@@ -1204,7 +1197,7 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     // fecha a tab (o p_open do chamador) e o ponto assinala o documento por gravar.
     static bool documentOpen = true;
     if (ui.beginTabBar("##Tabs", ig::Context::TabBarFlags::Reorderable |
-                                  ig::Context::TabBarFlags::AutoSelectNewTabs))
+                                         ig::Context::TabBarFlags::AutoSelectNewTabs))
     {
         if (ui.beginTabItem("Skeleton"))
         {
@@ -1235,8 +1228,7 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     item();
     if (!documentOpen)
     {
-        if (ui.button("Abrir outra vez a tab fechada"))
-            documentOpen = true;
+        if (ui.button("Abrir outra vez a tab fechada")) documentOpen = true;
         item();
     }
     // O segundo nó do "Tabs" do demo ("Advanced & Close Button"): os flags da barra
@@ -1269,20 +1261,14 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
         g_panel.tabFlagFitting = fitting;
 
         unsigned barFlags = ig::Context::TabBarFlags::None;
-        if (reorderable)
-            barFlags |= ig::Context::TabBarFlags::Reorderable;
-        if (autoSelect)
-            barFlags |= ig::Context::TabBarFlags::AutoSelectNewTabs;
-        if (listPopup)
-            barFlags |= ig::Context::TabBarFlags::TabListPopupButton;
-        if (noCloseMiddle)
-            barFlags |= ig::Context::TabBarFlags::NoCloseWithMiddleMouseButton;
-        if (overline)
-            barFlags |= ig::Context::TabBarFlags::DrawSelectedOverline;
-        if (fitting)
-            barFlags |= ig::Context::TabBarFlags::Fitting;
+        if (reorderable) barFlags |= ig::Context::TabBarFlags::Reorderable;
+        if (autoSelect) barFlags |= ig::Context::TabBarFlags::AutoSelectNewTabs;
+        if (listPopup) barFlags |= ig::Context::TabBarFlags::TabListPopupButton;
+        if (noCloseMiddle) barFlags |= ig::Context::TabBarFlags::NoCloseWithMiddleMouseButton;
+        if (overline) barFlags |= ig::Context::TabBarFlags::DrawSelectedOverline;
+        if (fitting) barFlags |= ig::Context::TabBarFlags::Fitting;
 
-        static const char *const kOpenedNames[4] = {"Artichoke", "Beetroot", "Celery", "Daikon"};
+        static const char* const kOpenedNames[4] = { "Artichoke", "Beetroot", "Celery", "Daikon" };
         ui.label("Opened:");
         for (int i = 0; i < 4; ++i)
         {
@@ -1294,8 +1280,7 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
         {
             for (int i = 0; i < 4; ++i)
             {
-                if (!g_panel.openedTabs[i])
-                    continue;
+                if (!g_panel.openedTabs[i]) continue;
                 bool open = true;
                 if (ui.beginTabItem(kOpenedNames[i], &open))
                 {
@@ -1310,8 +1295,7 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
                     }
                     ui.endTabItem();
                 }
-                if (!open)
-                    g_panel.openedTabs[i] = false;
+                if (!open) g_panel.openedTabs[i] = false;
             }
             ui.endTabBar();
         }
@@ -1327,11 +1311,11 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
         ui.checkbox("Show Trailing TabItemButton()", g_panel.showTrailingTabButton);
         item();
         if (ui.beginTabBar("MyTabBar2", ig::Context::TabBarFlags::AutoSelectNewTabs |
-                                           ig::Context::TabBarFlags::Reorderable |
-                                           ig::Context::TabBarFlags::Fitting))
+                                                ig::Context::TabBarFlags::Reorderable |
+                                                ig::Context::TabBarFlags::Fitting))
         {
             if (g_panel.showLeadingTabButton &&
-                ui.tabItemButton("?", ig::Context::TabItemFlags::Leading))
+                    ui.tabItemButton("?", ig::Context::TabItemFlags::Leading))
                 ui.openPopup("MyHelpMenu");
             item();
             if (ui.beginPopup("MyHelpMenu"))
@@ -1342,8 +1326,8 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
             }
             // O "+" acrescenta uma tab: o estado é do chamador, como no demo.
             if (g_panel.showTrailingTabButton &&
-                ui.tabItemButton("+", ig::Context::TabItemFlags::Trailing) &&
-                g_panel.activeTabCount < 8)
+                    ui.tabItemButton("+", ig::Context::TabItemFlags::Trailing) &&
+                    g_panel.activeTabCount < 8)
                 g_panel.activeTabs[g_panel.activeTabCount++] = g_panel.nextTabId++;
             item();
             for (int i = 0; i < g_panel.activeTabCount;)
@@ -1374,8 +1358,7 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     }
 
     // O "SetSelected" do demo: um botao que escolhe uma tab da barra.
-    if (ui.button("Escolher a tab 'Appearance'"))
-        g_panel.selectAppearance = true;
+    if (ui.button("Escolher a tab 'Appearance'")) g_panel.selectAppearance = true;
     item();
     if (ui.beginTabBar("##tabs_forced", ig::Context::TabBarFlags::Fitting))
     {
@@ -1398,12 +1381,12 @@ void sectionWidgetsTabs(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::WidgetsTabs,
-        "os CheckboxFlags do demo (os flags da barra são um checkbox cada), o "
-        "TabItemFlags_NoTooltip e as tabs de um dock space");
+            "os CheckboxFlags do demo (os flags da barra são um checkbox cada), o "
+            "TabItemFlags_NoTooltip e as tabs de um dock space");
 }
 
 // ── Widgets: Text Input ──────────────────────────────────────────────────────
-void sectionWidgetsTextInput(ig::Context &ui, gallery::State &s)
+void sectionWidgetsTextInput(ig::Context& ui, gallery::State& s)
 {
     ui.inputText("InputText", g_panel.name);
     item();
@@ -1412,13 +1395,13 @@ void sectionWidgetsTextInput(ig::Context &ui, gallery::State &s)
     ui.inputTextMultiline("InputTextMultiline", g_panel.multiline, 0.0f, 60.0f);
     item();
     gap(ui, gallery::Section::WidgetsTextInput,
-        "InputText com CallbackCharFilter / CallbackCompletion e o exemplo de historico");
+            "InputText com CallbackCharFilter / CallbackCompletion e o exemplo de historico");
     g_panel.shared.i1 = g_panel.shared.i1;
-    (void)s;
+    (void) s;
 }
 
 // ── Widgets: Trees ───────────────────────────────────────────────────────────
-void sectionWidgetsTrees(ig::Context &ui, gallery::State &s)
+void sectionWidgetsTrees(ig::Context& ui, gallery::State& s)
 {
     if (ui.treeNode("Basic tree node", s.treeOpen))
     {
@@ -1441,14 +1424,14 @@ void sectionWidgetsTrees(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::WidgetsTrees,
-        "TreeNodeEx com flags (Selected, DefaultOpen, OpenOnArrow, SpanAvailWidth, "
-        "SpanFullWidth, Framed, Leaf, Bullet, NavLeftJumpsToParent)");
+            "TreeNodeEx com flags (Selected, DefaultOpen, OpenOnArrow, SpanAvailWidth, "
+            "SpanFullWidth, Framed, Leaf, Bullet, NavLeftJumpsToParent)");
 }
 
 // ── Widgets: Tooltips ────────────────────────────────────────────────────────
-void sectionWidgetsTooltips(ig::Context &ui, gallery::State &s)
+void sectionWidgetsTooltips(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     if (ui.button("Hover me"))
     {
     }
@@ -1473,11 +1456,11 @@ void sectionWidgetsTooltips(ig::Context &ui, gallery::State &s)
     ui.tooltip("Tooltip so com texto");
     item();
     gap(ui, gallery::Section::WidgetsTooltips,
-        "tooltips com atraso configuravel por item e o exemplo de tooltip em item desativado");
+            "tooltips com atraso configuravel por item e o exemplo de tooltip em item desativado");
 }
 
 // ── Layout & Scrolling ───────────────────────────────────────────────────────
-void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
+void sectionLayoutAndScrolling(ig::Context& ui, gallery::State& s)
 {
     ui.label("SameLine:");
     ui.sameLine();
@@ -1488,8 +1471,8 @@ void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
     ui.label("c");
     item();
     gap(ui, gallery::Section::LayoutAndScrolling,
-        "BeginChild com ImGuiChildFlags (Borders, ResizeX/Y, AutoResize) e as variacoes de "
-        "tamanho; o iGUI tem beginChild(id, altura, border, largura)");
+            "BeginChild com ImGuiChildFlags (Borders, ResizeX/Y, AutoResize) e as variacoes de "
+            "tamanho; o iGUI tem beginChild(id, altura, border, largura)");
     if (ui.beginChild("child region", 80.0f))
     {
         ui.label("Child region");
@@ -1500,15 +1483,14 @@ void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::LayoutAndScrolling,
-        "BeginGroup/EndGroup (mais perto: beginPropertyRow) e o exemplo de mesmo tamanho");
+            "BeginGroup/EndGroup (mais perto: beginPropertyRow) e o exemplo de mesmo tamanho");
     if (ui.beginPropertyRow("Group"))
     {
         ui.sliderFloat("valor", s.f1, 0.0f, 1.0f);
         ui.endPropertyRow();
     }
     item();
-    gap(ui, gallery::Section::LayoutAndScrolling,
-        "as colunas antigas (Columns/BeginColumns)");
+    gap(ui, gallery::Section::LayoutAndScrolling, "as colunas antigas (Columns/BeginColumns)");
     // "Widgets Width" do demo: a largura fixa por item. Os rótulos vão
     // escondidos com "##" como lá, senão o texto muda a largura que se mede.
     ui.separatorText("largura do item");
@@ -1540,7 +1522,7 @@ void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::LayoutAndScrolling,
-        "ImGuiListClipper (virtualizacao de linhas) - o iGUI tem beginVirtualList");
+            "ImGuiListClipper (virtualizacao de linhas) - o iGUI tem beginVirtualList");
     {
         int firstVisible = 0;
         int lastVisible = 0;
@@ -1558,26 +1540,24 @@ void sectionLayoutAndScrolling(ig::Context &ui, gallery::State &s)
     }
     item();
     gap(ui, gallery::Section::LayoutAndScrolling,
-        "os exemplos de scroll horizontal, scrollbar customizada e clipping com DrawList");
+            "os exemplos de scroll horizontal, scrollbar customizada e clipping com DrawList");
 }
 
 // ── Popups & Modal Windows ───────────────────────────────────────────────────
-void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
+void sectionPopupsAndModalWindows(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     // Uma caixa com conteudo livre: o beginDialog do iGUI. É um modal (tem um véu
     // por trás), por isso tem o nome do que é - um popup é o "Select.." e os "Popup
     // 1/2" aqui em baixo, que não escurecem nada.
-    if (ui.button("Open dialog"))
-        g_panel.dialogOpen = true;
+    if (ui.button("Open dialog")) g_panel.dialogOpen = true;
     item();
     if (g_panel.dialogOpen)
     {
         if (ui.beginDialog("Popup do iGUI", g_panel.dialogOpen, ig::Vec2(240.0f, 110.0f)))
         {
             ui.label("conteudo do popup");
-            if (ui.button("Close"))
-                g_panel.dialogOpen = false;
+            if (ui.button("Close")) g_panel.dialogOpen = false;
             ui.endDialog();
         }
     }
@@ -1596,8 +1576,7 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
     ui.sameLine();
     // A caixa de OK/Cancelar do iGUI (o demo do ImGui já não tem uma): um clique e
     // ela aparece enquanto o open for verdadeiro.
-    if (ui.button("Open message box"))
-        g_panel.messageBoxOpen = true;
+    if (ui.button("Open message box")) g_panel.messageBoxOpen = true;
     item();
     if (g_panel.modalOpen && ui.beginPopupModal("Modal Window", &g_panel.modalOpen))
     {
@@ -1606,29 +1585,24 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         ui.label("with the X and by pressing Esc.");
         item();
         ui.separator();
-        if (ui.button("Button"))
-            ui.closeCurrentPopup();
-        if (!g_panel.modalOpen)
-            ui.closeCurrentPopup();
+        if (ui.button("Button")) ui.closeCurrentPopup();
+        if (!g_panel.modalOpen) ui.closeCurrentPopup();
         ui.endPopup();
     }
     if (g_panel.messageBoxOpen)
     {
         if (ui.messageBox("Modal", "Continuar?", g_panel.messageBoxOpen) !=
-            ig::MessageBoxResult::None)
+                ig::MessageBoxResult::None)
             g_panel.messageBoxOpen = false;
     }
     // O "Select.." do demo, com o popup de escolha dele: abre no ponteiro, o corpo é
     // conteúdo livre (um separador e os itens) e escolher fecha-o.
-    if (ui.button("Select.."))
-        ui.openPopup("my_select_popup");
+    if (ui.button("Select..")) ui.openPopup("my_select_popup");
     item();
     ui.sameLine();
     {
-        static const ig::StringView kFish[] = {
-            ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
-            ig::StringView("Pollock"), ig::StringView("Tilefish")
-        };
+        static const ig::StringView kFish[] = { ig::StringView("Bream"), ig::StringView("Haddock"),
+            ig::StringView("Mackerel"), ig::StringView("Pollock"), ig::StringView("Tilefish") };
         ui.label(s.comboItem < 0 ? ig::StringView("<None>") : kFish[s.comboItem]);
     }
     item();
@@ -1637,10 +1611,9 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         ui.separatorText("Aquarium");
         for (int i = 0; i < 5; ++i)
         {
-            static const ig::StringView kFish[] = {
-                ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
-                ig::StringView("Pollock"), ig::StringView("Tilefish")
-            };
+            static const ig::StringView kFish[] = { ig::StringView("Bream"),
+                ig::StringView("Haddock"), ig::StringView("Mackerel"), ig::StringView("Pollock"),
+                ig::StringView("Tilefish") };
             if (ui.selectable(kFish[i], s.comboItem == i))
             {
                 s.comboItem = i;
@@ -1653,17 +1626,14 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
     // O "Toggle.." do demo: itens que ligam e desligam, um submenu, um separador e um
     // botão que abre OUTRO popup de dentro deste - é a pilha de popups, e é o que faz
     // o popup do filho ficar por cima do pai sem o fechar.
-    if (ui.button("Toggle.."))
-        ui.openPopup("my_toggle_popup");
+    if (ui.button("Toggle..")) ui.openPopup("my_toggle_popup");
     item();
     if (ui.beginPopup("my_toggle_popup"))
     {
-        static const ig::StringView kFishNames[] = {
-            ig::StringView("Bream"), ig::StringView("Haddock"), ig::StringView("Mackerel"),
-            ig::StringView("Pollock"), ig::StringView("Tilefish")
-        };
-        for (int i = 0; i < 5; ++i)
-            ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
+        static const ig::StringView kFishNames[] = { ig::StringView("Bream"),
+            ig::StringView("Haddock"), ig::StringView("Mackerel"), ig::StringView("Pollock"),
+            ig::StringView("Tilefish") };
+        for (int i = 0; i < 5; ++i) ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
         if (ui.beginSubMenu("Sub-menu"))
         {
             ui.menuItem("Click me");
@@ -1671,17 +1641,14 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
         }
         ui.separator();
         ui.label("Tooltip here");
-        if (ui.button("Stacked Popup"))
-            ui.openPopup("another popup");
+        if (ui.button("Stacked Popup")) ui.openPopup("another popup");
         if (ui.beginPopup("another popup"))
         {
-            for (int i = 0; i < 5; ++i)
-                ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
+            for (int i = 0; i < 5; ++i) ui.menuCheckbox(kFishNames[i], g_panel.popupToggles[i]);
             if (ui.beginSubMenu("Sub-menu"))
             {
                 ui.menuItem("Click me");
-                if (ui.button("Stacked Popup"))
-                    ui.openPopup("another popup");
+                if (ui.button("Stacked Popup")) ui.openPopup("another popup");
                 if (ui.beginPopup("another popup"))
                 {
                     ui.label("I am the last one here.");
@@ -1695,8 +1662,7 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
     }
     item();
     // O "With a menu.." do demo: um popup com uma barra de menus dentro.
-    if (ui.button("With a menu.."))
-        ui.openPopup("my_file_popup");
+    if (ui.button("With a menu..")) ui.openPopup("my_file_popup");
     item();
     if (ui.beginPopup("my_file_popup"))
     {
@@ -1739,31 +1705,28 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
     {
         ui.label("Current stack: 'Window/1'");
         item();
-        if (ui.button("Close"))
-            ui.closeCurrentPopup();
+        if (ui.button("Close")) ui.closeCurrentPopup();
         ui.endPopup();
     }
     if (ui.beginPopup("popup 2"))
     {
         ui.label("Current stack: 'Window/2'");
         item();
-        if (ui.button("Close"))
-            ui.closeCurrentPopup();
+        if (ui.button("Close")) ui.closeCurrentPopup();
         ui.endPopup();
     }
     // Um popup por documento (o ShowExampleAppDocuments) faz-se com um id por
     // documento - o "##" é o que deixa dois popups partilharem o rótulo.
     gap(ui, gallery::Section::PopupsAndModalWindows,
-        "o SetNextWindowPos do demo para o popup de um modal, o menu de contexto com o "
-        "clique do meio e a janelinha do TabListButton");
+            "o SetNextWindowPos do demo para o popup de um modal, o menu de contexto com o "
+            "clique do meio e a janelinha do TabListButton");
     {
         const ig::Vec2 cursor = ui.cursor();
         ui.label("Right-click this line for a context menu");
         const ig::Rect bounds(cursor.x, cursor.y, 260.0f, 20.0f);
         if (ui.beginContextMenu("demo ctx", bounds))
         {
-            if (ui.menuItem("Copy"))
-                gallery::readout();
+            if (ui.menuItem("Copy")) gallery::readout();
             ui.menuSeparator();
             ui.menuItem("Paste", false);
             ui.endContextMenu();
@@ -1774,22 +1737,21 @@ void sectionPopupsAndModalWindows(ig::Context &ui, gallery::State &s)
 }
 
 // ── Tables & Columns ─────────────────────────────────────────────────────────
-void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
+void sectionTablesAndColumns(ig::Context& ui, gallery::State& s)
 {
     gap(ui, gallery::Section::TablesAndColumns,
-        "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/ContextMenuInBody e "
-        "as tabelas aninhadas (uma tabela dentro de uma celula) - o iGUI tem beginTable/"
-        "tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo grip do "
-        "cabecalho), ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, "
-        "rolagem propria nos dois eixos (ScrollX/ScrollY) com linhas e colunas presas, e "
-        "as colunas do tamanho do conteudo (SizingFixedFit)");
+            "BeginTable com TableSetupColumn/TableHeadersRow/SortableFlags/ContextMenuInBody e "
+            "as tabelas aninhadas (uma tabela dentro de uma celula) - o iGUI tem beginTable/"
+            "tableHeader/tableNextColumn com pesos mutaveis (redimensionamento pelo grip do "
+            "cabecalho), ordenacao pelo cabecalho, colunas escondidas, colunas reordenaveis, "
+            "rolagem propria nos dois eixos (ScrollX/ScrollY) com linhas e colunas presas, e "
+            "as colunas do tamanho do conteudo (SizingFixedFit)");
     // A tabela do demo ("Hideable"): o cabeçalho tem um menu de contexto com um
     // checkbox por coluna, e a coluna escondida não ocupa largura (as seguintes
     // fecham o espaço dela). O menu é do chamador, com o openPopup.
-    static const ig::StringView kColumnNames[] = {
-        ig::StringView("Name"), ig::StringView("Value"), ig::StringView("Notes")
-    };
-    const float weights[3] = {2.0f, 1.0f, 2.0f};
+    static const ig::StringView kColumnNames[] = { ig::StringView("Name"), ig::StringView("Value"),
+        ig::StringView("Notes") };
+    const float weights[3] = { 2.0f, 1.0f, 2.0f };
     const ig::Rect tableBounds(0.0f, 0.0f, ui.availableWidth(), 0.0f);
     ig::TableStyle style;
     style.alternateRows = true;
@@ -1799,14 +1761,13 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
     // células têm de escolher o dado).
     style.reorderable = true;
     if (ui.beginTable("table", ig::Span<const float>(weights, 3),
-                      ig::Span<const bool>(g_panel.tableColumns, 3), style, tableBounds.width))
+                ig::Span<const bool>(g_panel.tableColumns, 3), style, tableBounds.width))
     {
         item();
         for (int column = 0; column < 3; ++column)
         {
             // A coluna escondida devolve false: a célula dela não é submetida.
-            if (!ui.tableNextColumn())
-                continue;
+            if (!ui.tableNextColumn()) continue;
             const int model = ui.tableColumnIndex();
             ui.tableHeader(kColumnNames[model], g_panel.sortColumn, g_panel.sortAscending);
         }
@@ -1824,12 +1785,10 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             char label[24];
             for (int column = 0; column < 3; ++column)
             {
-                if (!ui.tableNextColumn())
-                    continue;
+                if (!ui.tableNextColumn()) continue;
                 // O dado segue a coluna do modelo, não a posição no écra.
                 const int model = ui.tableColumnIndex();
-                if (model == 1)
-                    snprintf(label, sizeof(label), "%d", row * 7);
+                if (model == 1) snprintf(label, sizeof(label), "%d", row * 7);
                 else if (model == 0)
                     snprintf(label, sizeof(label), "row %d", row);
                 else
@@ -1846,8 +1805,7 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
         for (int column = 0; column < 3; ++column)
         {
             bool shown = g_panel.tableColumns[column];
-            if (ui.menuCheckbox(kColumnNames[column], shown))
-                g_panel.tableColumns[column] = shown;
+            if (ui.menuCheckbox(kColumnNames[column], shown)) g_panel.tableColumns[column] = shown;
             item();
         }
         ui.endPopup();
@@ -1857,21 +1815,20 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
     // pede (innerWidth) e o que não couber rola dentro da tabela.
     ui.label("Tabela larga com as duas primeiras colunas presas (rola com a roda horizontal):");
     item();
-    const float wideWeights[8] = {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
+    const float wideWeights[8] = { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f };
     ig::TableStyle wideStyle;
     wideStyle.alternateRows = true;
     wideStyle.borders = true;
     wideStyle.scrollX = true;
-    wideStyle.innerWidth = 920.0f;   // 8 colunas de 115 px numa tabela de ~530
+    wideStyle.innerWidth = 920.0f; // 8 colunas de 115 px numa tabela de ~530
     wideStyle.freezeCols = 2;
     if (ui.beginTable("wide table", ig::Span<const float>(wideWeights, 8), wideStyle,
-                      ui.availableWidth()))
+                ui.availableWidth()))
     {
         item();
         for (int column = 0; column < 8; ++column)
         {
-            if (!ui.tableNextColumn())
-                continue;
+            if (!ui.tableNextColumn()) continue;
             char label[16];
             snprintf(label, sizeof(label), "Col %d", ui.tableColumnIndex());
             ui.tableHeader(ig::StringView(label, strlen(label)));
@@ -1882,8 +1839,7 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             char label[16];
             for (int column = 0; column < 8; ++column)
             {
-                if (!ui.tableNextColumn())
-                    continue;
+                if (!ui.tableNextColumn()) continue;
                 snprintf(label, sizeof(label), "%d,%d", row, ui.tableColumnIndex());
                 ui.label(ig::StringView(label, strlen(label)));
             }
@@ -1896,21 +1852,20 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
     // no topo. Sem scrollY o que rola é a janela, e o cabeçalho vai com ela.
     ui.label("Tabela com rolagem propria (3 linhas presas):");
     item();
-    const float scrollWeights[2] = {1.0f, 1.0f};
+    const float scrollWeights[2] = { 1.0f, 1.0f };
     ig::TableStyle scrollStyle;
     scrollStyle.alternateRows = true;
     scrollStyle.borders = true;
     scrollStyle.scrollY = true;
     scrollStyle.height = 150.0f;
-    scrollStyle.freezeRows = 4;   // a linha 0 é o cabecalho, 1 a 3 ficam presas
+    scrollStyle.freezeRows = 4; // a linha 0 é o cabecalho, 1 a 3 ficam presas
     if (ui.beginTable("scroll table", ig::Span<const float>(scrollWeights, 2), scrollStyle,
-                      ui.availableWidth()))
+                ui.availableWidth()))
     {
         item();
         for (int column = 0; column < 2; ++column)
         {
-            if (!ui.tableNextColumn())
-                continue;
+            if (!ui.tableNextColumn()) continue;
             ui.tableHeader(column == 0 ? "Nome" : "Valor");
         }
         item();
@@ -1919,10 +1874,8 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             char label[32];
             for (int column = 0; column < 2; ++column)
             {
-                if (!ui.tableNextColumn())
-                    continue;
-                if (column == 0)
-                    snprintf(label, sizeof(label), "linha %d", row);
+                if (!ui.tableNextColumn()) continue;
+                if (column == 0) snprintf(label, sizeof(label), "linha %d", row);
                 else
                     snprintf(label, sizeof(label), "%d", row * 3);
                 ui.label(ig::StringView(label, strlen(label)));
@@ -1936,7 +1889,7 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
     // deste no e o redimensionamento pelo grip (o grip mexe nos pesos, e com o
     // FixedFit nao ha pesos a mexer) - esta no relatorio.
     {
-        const float fitWeights[3] = {1.0f, 1.0f, 1.0f};
+        const float fitWeights[3] = { 1.0f, 1.0f, 1.0f };
         ig::TableStyle fitStyle;
         fitStyle.sizingFixedFit = true;
         fitStyle.borders = true;
@@ -1948,8 +1901,7 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
                 char label[32];
                 for (int column = 0; column < 3; ++column)
                 {
-                    if (!ui.tableNextColumn())
-                        continue;
+                    if (!ui.tableNextColumn()) continue;
                     snprintf(label, sizeof(label), "Hello %d,%d", column, row);
                     ui.label(ig::StringView(label, strlen(label)));
                 }
@@ -1958,17 +1910,17 @@ void sectionTablesAndColumns(ig::Context &ui, gallery::State &s)
             ui.endTable();
         }
     }
-    (void)s;
+    (void) s;
 }
 
 // ── Inputs, Navigation & Focus ───────────────────────────────────────────────
-void sectionInputsNavigationAndFocus(ig::Context &ui, gallery::State &s)
+void sectionInputsNavigationAndFocus(ig::Context& ui, gallery::State& s)
 {
-    (void)s;
+    (void) s;
     gap(ui, gallery::Section::InputsNavigationAndFocus,
-        "a navegacao por teclado/gamepad (NavEnable*), o foco programatico, IsKeyPressed/"
-        "IsKeyDown/GetKeyPressedAmount, os atalhos por scancode e a captura de teclado/rato - "
-        "o iGUI tem isKeyPressed/shortcut/isPointerButtonDown e a captura por janela");
+            "a navegacao por teclado/gamepad (NavEnable*), o foco programatico, IsKeyPressed/"
+            "IsKeyDown/GetKeyPressedAmount, os atalhos por scancode e a captura de teclado/rato - "
+            "o iGUI tem isKeyPressed/shortcut/isPointerButtonDown e a captura por janela");
     ui.label("Aqui o demo mostra as teclas e o rato em tempo real:");
     item();
     ui.label(ui.isKeyPressed(ig::KeyCode::Enter) ? "Enter: premido" : "Enter: (carrega nele)");
@@ -1978,44 +1930,99 @@ void sectionInputsNavigationAndFocus(ig::Context &ui, gallery::State &s)
     item();
 }
 
-void section(ig::Context &ui, gallery::Section section, gallery::State &s)
+void section(ig::Context& ui, gallery::Section section, gallery::State& s)
 {
     switch (section)
     {
-    case gallery::Section::Help: sectionHelp(ui, s); break;
-    case gallery::Section::Configuration: sectionConfiguration(ui, s); break;
-    case gallery::Section::WindowOptions: sectionWindowOptions(ui, s); break;
-    case gallery::Section::WidgetsBasic: sectionWidgetsBasic(ui, s); break;
-    case gallery::Section::WidgetsBullets: sectionWidgetsBullets(ui, s); break;
-    case gallery::Section::WidgetsCollapsingHeaders: sectionWidgetsCollapsingHeaders(ui, s); break;
-    case gallery::Section::WidgetsColorAndPickers: sectionWidgetsColorAndPickers(ui, s); break;
-    case gallery::Section::WidgetsCombo: sectionWidgetsCombo(ui, s); break;
-    case gallery::Section::WidgetsDataTypes: sectionWidgetsDataTypes(ui, s); break;
-    case gallery::Section::WidgetsDisableBlocks: sectionWidgetsDisableBlocks(ui, s); break;
-    case gallery::Section::WidgetsDragAndDrop: sectionWidgetsDragAndDrop(ui, s); break;
-    case gallery::Section::WidgetsDragAndSliderFlags: sectionWidgetsDragAndSliderFlags(ui, s); break;
-    case gallery::Section::WidgetsFonts: sectionWidgetsFonts(ui, s); break;
-    case gallery::Section::WidgetsImages: sectionWidgetsImages(ui, s); break;
-    case gallery::Section::WidgetsListBoxes: sectionWidgetsListBoxes(ui, s); break;
-    case gallery::Section::WidgetsMultiComponents: sectionWidgetsMultiComponents(ui, s); break;
-    case gallery::Section::WidgetsPlotting: sectionWidgetsPlotting(ui, s); break;
-    case gallery::Section::WidgetsProgressBars: sectionWidgetsProgressBars(ui, s); break;
-    case gallery::Section::WidgetsQueryingStatuses: sectionWidgetsQueryingStatuses(ui, s); break;
-    case gallery::Section::WidgetsSelectables: sectionWidgetsSelectables(ui, s); break;
-    case gallery::Section::WidgetsSelectionAndMultiSelect:
-        sectionWidgetsSelectionAndMultiSelect(ui, s);
-        break;
-    case gallery::Section::WidgetsTabs: sectionWidgetsTabs(ui, s); break;
-    case gallery::Section::WidgetsTextInput: sectionWidgetsTextInput(ui, s); break;
-    case gallery::Section::WidgetsTrees: sectionWidgetsTrees(ui, s); break;
-    case gallery::Section::WidgetsTooltips: sectionWidgetsTooltips(ui, s); break;
-    case gallery::Section::LayoutAndScrolling: sectionLayoutAndScrolling(ui, s); break;
-    case gallery::Section::PopupsAndModalWindows: sectionPopupsAndModalWindows(ui, s); break;
-    case gallery::Section::TablesAndColumns: sectionTablesAndColumns(ui, s); break;
-    case gallery::Section::InputsNavigationAndFocus:
-        sectionInputsNavigationAndFocus(ui, s);
-        break;
-    case gallery::Section::Count: break;
+        case gallery::Section::Help:
+            sectionHelp(ui, s);
+            break;
+        case gallery::Section::Configuration:
+            sectionConfiguration(ui, s);
+            break;
+        case gallery::Section::WindowOptions:
+            sectionWindowOptions(ui, s);
+            break;
+        case gallery::Section::WidgetsBasic:
+            sectionWidgetsBasic(ui, s);
+            break;
+        case gallery::Section::WidgetsBullets:
+            sectionWidgetsBullets(ui, s);
+            break;
+        case gallery::Section::WidgetsCollapsingHeaders:
+            sectionWidgetsCollapsingHeaders(ui, s);
+            break;
+        case gallery::Section::WidgetsColorAndPickers:
+            sectionWidgetsColorAndPickers(ui, s);
+            break;
+        case gallery::Section::WidgetsCombo:
+            sectionWidgetsCombo(ui, s);
+            break;
+        case gallery::Section::WidgetsDataTypes:
+            sectionWidgetsDataTypes(ui, s);
+            break;
+        case gallery::Section::WidgetsDisableBlocks:
+            sectionWidgetsDisableBlocks(ui, s);
+            break;
+        case gallery::Section::WidgetsDragAndDrop:
+            sectionWidgetsDragAndDrop(ui, s);
+            break;
+        case gallery::Section::WidgetsDragAndSliderFlags:
+            sectionWidgetsDragAndSliderFlags(ui, s);
+            break;
+        case gallery::Section::WidgetsFonts:
+            sectionWidgetsFonts(ui, s);
+            break;
+        case gallery::Section::WidgetsImages:
+            sectionWidgetsImages(ui, s);
+            break;
+        case gallery::Section::WidgetsListBoxes:
+            sectionWidgetsListBoxes(ui, s);
+            break;
+        case gallery::Section::WidgetsMultiComponents:
+            sectionWidgetsMultiComponents(ui, s);
+            break;
+        case gallery::Section::WidgetsPlotting:
+            sectionWidgetsPlotting(ui, s);
+            break;
+        case gallery::Section::WidgetsProgressBars:
+            sectionWidgetsProgressBars(ui, s);
+            break;
+        case gallery::Section::WidgetsQueryingStatuses:
+            sectionWidgetsQueryingStatuses(ui, s);
+            break;
+        case gallery::Section::WidgetsSelectables:
+            sectionWidgetsSelectables(ui, s);
+            break;
+        case gallery::Section::WidgetsSelectionAndMultiSelect:
+            sectionWidgetsSelectionAndMultiSelect(ui, s);
+            break;
+        case gallery::Section::WidgetsTabs:
+            sectionWidgetsTabs(ui, s);
+            break;
+        case gallery::Section::WidgetsTextInput:
+            sectionWidgetsTextInput(ui, s);
+            break;
+        case gallery::Section::WidgetsTrees:
+            sectionWidgetsTrees(ui, s);
+            break;
+        case gallery::Section::WidgetsTooltips:
+            sectionWidgetsTooltips(ui, s);
+            break;
+        case gallery::Section::LayoutAndScrolling:
+            sectionLayoutAndScrolling(ui, s);
+            break;
+        case gallery::Section::PopupsAndModalWindows:
+            sectionPopupsAndModalWindows(ui, s);
+            break;
+        case gallery::Section::TablesAndColumns:
+            sectionTablesAndColumns(ui, s);
+            break;
+        case gallery::Section::InputsNavigationAndFocus:
+            sectionInputsNavigationAndFocus(ui, s);
+            break;
+        case gallery::Section::Count:
+            break;
     }
 }
 
@@ -2042,7 +2049,7 @@ void reset()
 // redimensionamento: é a mesma coisa que o lado do ImGui faz com uma janela
 // NoTitleBar, e é o que deixa a janela do demo por baixo dela a começar à mesma
 // altura nos dois painéis.
-void readout(ig::Context &ui)
+void readout(ig::Context& ui)
 {
     ig::Context::WindowOptions options;
     options.titleBar = false;
@@ -2052,16 +2059,15 @@ void readout(ig::Context &ui)
     options.fixedBounds = true;
     const ig::Vec2 display = ui.displaySize();
     if (!ui.beginWindow("##numeros", ig::Rect(0.0f, 0.0f, display.x, gallery::kReadoutHeight),
-                        options))
+                options))
         return;
-    const gallery::Readout &info = gallery::readout();
+    const gallery::Readout& info = gallery::readout();
     char line[192];
     snprintf(line, sizeof(line),
-             "iGUI   submit %.2f ms   render %.2f ms   gpu %.2f ms   %d itens   %d vtx   "
-             "%d draw calls   %d lacunas",
-             static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
-             static_cast<double>(info.gpuMs), info.items, info.vertices, info.drawCalls,
-             info.gaps);
+            "iGUI   submit %.2f ms   render %.2f ms   gpu %.2f ms   %d itens   %d vtx   "
+            "%d draw calls   %d lacunas",
+            static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
+            static_cast<double>(info.gpuMs), info.items, info.vertices, info.drawCalls, info.gaps);
     ui.separatorText(line);
     const ig::Vec2 origin = ui.cursor();
     const float width = ui.availableWidth();
@@ -2076,12 +2082,10 @@ void readout(ig::Context &ui)
         for (int i = 0; i < count; ++i)
         {
             float clamped = info.history[info.historyCount - count + i] / maxMs;
-            if (clamped > 1.0f)
-                clamped = 1.0f;
-            if (clamped < 0.0f)
-                clamped = 0.0f;
+            if (clamped > 1.0f) clamped = 1.0f;
+            if (clamped < 0.0f) clamped = 0.0f;
             const ig::Vec2 point(origin.x + step * static_cast<float>(i),
-                                 origin.y + height - clamped * height);
+                    origin.y + height - clamped * height);
             ui.drawLine(previous, point, ig::Color(120u, 200u, 255u));
             previous = point;
         }
@@ -2090,7 +2094,7 @@ void readout(ig::Context &ui)
     ui.endWindow();
 }
 
-void applyDemoStyle(ig::Context &ui)
+void applyDemoStyle(ig::Context& ui)
 {
     // O estilo por omissão do ImGui, campo a campo: fonte 13, item 19 (fonte +
     // FramePadding.y*2), espaçamento 4 (ItemSpacing.y), FramePadding.x 4, e as
@@ -2144,13 +2148,12 @@ void openAllSections()
 // deixa pôr lado a lado uma secção do demo de cada vez. Nas sub-secções de
 // "Widgets" o header de cima segue a mesma entrada de topOpen (ver draw), por
 // isso o "Widgets" abre com ela.
-bool setOnlySection(const char *name)
+bool setOnlySection(const char* name)
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
     {
         const gallery::Section section = static_cast<gallery::Section>(i);
-        if (strcmp(gallery::sectionName(section), name) != 0)
-            continue;
+        if (strcmp(gallery::sectionName(section), name) != 0) continue;
         g_onlySection = i;
         g_panel.topOpen[i] = true;
         g_panel.subOpen[i] = true;
@@ -2164,11 +2167,10 @@ namespace
 
 // Lê um ficheiro inteiro para um buffer, ou devolve falso. Não abrir não é uma
 // face em falta: quem chama segue sem ela.
-bool readFile(const char *path, ct::Vector<uint8_t> &out)
+bool readFile(const char* path, ct::Vector<uint8_t>& out)
 {
-    std::FILE *file = std::fopen(path, "rb");
-    if (!file)
-        return false;
+    std::FILE* file = std::fopen(path, "rb");
+    if (!file) return false;
     std::fseek(file, 0L, SEEK_END);
     const long size = std::ftell(file);
     std::fseek(file, 0L, SEEK_SET);
@@ -2186,25 +2188,22 @@ bool readFile(const char *path, ct::Vector<uint8_t> &out)
 // O nome da face é o do ficheiro sem o caminho nem a extensão, mais o tamanho
 // (".../misc/fonts/Cousine-Regular.ttf" a 13 -> "Cousine-Regular 13px"), que é
 // como se lê o combo do demo.
-void faceName(const char *file, float size, char *out, int outSize)
+void faceName(const char* file, float size, char* out, int outSize)
 {
-    const char *base = file;
-    for (const char *p = file; *p; ++p)
-        if (*p == '/' || *p == '\\')
-            base = p + 1;
+    const char* base = file;
+    for (const char* p = file; *p; ++p)
+        if (*p == '/' || *p == '\\') base = p + 1;
     int length = 0;
-    while (base[length] && base[length] != '.' && length < outSize - 12)
-        ++length;
+    while (base[length] && base[length] != '.' && length < outSize - 12) ++length;
     int written = 0;
-    for (int i = 0; i < length; ++i)
-        out[written++] = base[i];
+    for (int i = 0; i < length; ++i) out[written++] = base[i];
     snprintf(out + written, static_cast<size_t>(outSize - written), " %.0fpx",
-             static_cast<double>(size));
+            static_cast<double>(size));
 }
 
 } // namespace
 
-void loadDemoFonts(ig::FontAtlas &atlas, const char *directory)
+void loadDemoFonts(ig::FontAtlas& atlas, const char* directory)
 {
     g_atlasWidth = atlas.width();
     g_atlasHeight = atlas.height();
@@ -2212,16 +2211,15 @@ void loadDemoFonts(ig::FontAtlas &atlas, const char *directory)
     // A face 0 é a do painel: a que o atlas já tem, e a que o combo mostra como
     // "default".
     gFontDefault = atlas.defaultFont();
-    DemoFont &base = gDemoFonts[gDemoFontCount++];
+    DemoFont& base = gDemoFonts[gDemoFontCount++];
     base.id = atlas.defaultFont();
     base.size = gallery::kFontSize;
     snprintf(base.name, sizeof(base.name), "default %.0fpx",
-             static_cast<double>(gallery::kFontSize));
-    if (!directory || !*directory)
-        return;
+            static_cast<double>(gallery::kFontSize));
+    if (!directory || !*directory) return;
 
     int fileCount = 0;
-    const gallery::DemoFontFile *files = gallery::demoFontFiles(fileCount);
+    const gallery::DemoFontFile* files = gallery::demoFontFiles(fileCount);
     ct::Vector<uint8_t> bytes;
     char path[512];
     for (int i = 0; i < fileCount && gDemoFontCount < kMaxDemoFonts; ++i)
@@ -2232,18 +2230,17 @@ void loadDemoFonts(ig::FontAtlas &atlas, const char *directory)
             fprintf(stderr, "fonte do demo em falta: %s\n", path);
             continue;
         }
-        const ig::FontId id = atlas.loadFont(
-            ig::Span<const uint8_t>(bytes.data(), bytes.size()), files[i].size);
+        const ig::FontId id =
+                atlas.loadFont(ig::Span<const uint8_t>(bytes.data(), bytes.size()), files[i].size);
         if (id.value == 0u)
         {
             fprintf(stderr, "nao consegui cozer a fonte do demo: %s\n", path);
             continue;
         }
-        DemoFont &face = gDemoFonts[gDemoFontCount++];
+        DemoFont& face = gDemoFonts[gDemoFontCount++];
         face.id = id;
         face.size = files[i].size;
-        faceName(files[i].file, files[i].size, face.name,
-                 static_cast<int>(sizeof(face.name)));
+        faceName(files[i].file, files[i].size, face.name, static_cast<int>(sizeof(face.name)));
     }
     // Cozer faces reconstrói o atlas inteiro, por isso o tamanho que a secção
     // "Fonts" mostra é o que ficou no fim.
@@ -2262,7 +2259,7 @@ namespace
 // que edita, e é por isso que uma cor nova no tema aparece aqui com uma linha a mais.
 struct ThemeSizeRow
 {
-    const char *name;
+    const char* name;
     float ig::Theme::*member;
     float minimum;
     float maximum;
@@ -2270,54 +2267,54 @@ struct ThemeSizeRow
 
 struct ThemeColorRow
 {
-    const char *name;
+    const char* name;
     ig::Color ig::Theme::*member;
 };
 
 const ThemeSizeRow kThemeSizes[] = {
-    {"fontSize", &ig::Theme::fontSize, 5.0f, 40.0f},
-    {"widgetHeight", &ig::Theme::widgetHeight, 8.0f, 60.0f},
-    {"buttonHeight", &ig::Theme::buttonHeight, 8.0f, 60.0f},
-    {"sliderHeight", &ig::Theme::sliderHeight, 8.0f, 60.0f},
-    {"inputHeight", &ig::Theme::inputHeight, 8.0f, 60.0f},
-    {"titleBarHeight", &ig::Theme::titleBarHeight, 8.0f, 60.0f},
-    {"itemSpacing", &ig::Theme::itemSpacing, 0.0f, 30.0f},
-    {"windowPadding", &ig::Theme::windowPadding, 0.0f, 30.0f},
-    {"padding", &ig::Theme::padding, 0.0f, 20.0f},
-    {"borderRadius", &ig::Theme::borderRadius, 0.0f, 20.0f},
-    {"scrollbarWidth", &ig::Theme::scrollbarWidth, 4.0f, 40.0f},
-    {"menuBarHeight", &ig::Theme::menuBarHeight, 8.0f, 60.0f},
-    {"menuItemHeight", &ig::Theme::menuItemHeight, 8.0f, 60.0f},
-    {"menuItemPadX", &ig::Theme::menuItemPadX, 0.0f, 40.0f},
-    {"menuMinWidth", &ig::Theme::menuMinWidth, 40.0f, 400.0f},
+    { "fontSize", &ig::Theme::fontSize, 5.0f, 40.0f },
+    { "widgetHeight", &ig::Theme::widgetHeight, 8.0f, 60.0f },
+    { "buttonHeight", &ig::Theme::buttonHeight, 8.0f, 60.0f },
+    { "sliderHeight", &ig::Theme::sliderHeight, 8.0f, 60.0f },
+    { "inputHeight", &ig::Theme::inputHeight, 8.0f, 60.0f },
+    { "titleBarHeight", &ig::Theme::titleBarHeight, 8.0f, 60.0f },
+    { "itemSpacing", &ig::Theme::itemSpacing, 0.0f, 30.0f },
+    { "windowPadding", &ig::Theme::windowPadding, 0.0f, 30.0f },
+    { "padding", &ig::Theme::padding, 0.0f, 20.0f },
+    { "borderRadius", &ig::Theme::borderRadius, 0.0f, 20.0f },
+    { "scrollbarWidth", &ig::Theme::scrollbarWidth, 4.0f, 40.0f },
+    { "menuBarHeight", &ig::Theme::menuBarHeight, 8.0f, 60.0f },
+    { "menuItemHeight", &ig::Theme::menuItemHeight, 8.0f, 60.0f },
+    { "menuItemPadX", &ig::Theme::menuItemPadX, 0.0f, 40.0f },
+    { "menuMinWidth", &ig::Theme::menuMinWidth, 40.0f, 400.0f },
 };
 
 const ThemeColorRow kThemeColors[] = {
-    {"windowBackground", &ig::Theme::windowBackground},
-    {"panelColor", &ig::Theme::panelColor},
-    {"borderColor", &ig::Theme::borderColor},
-    {"textColor", &ig::Theme::textColor},
-    {"labelText", &ig::Theme::labelText},
-    {"titleBarBackground", &ig::Theme::titleBarBackground},
-    {"buttonBackground", &ig::Theme::buttonBackground},
-    {"buttonHovered", &ig::Theme::buttonHovered},
-    {"buttonPressed", &ig::Theme::buttonPressed},
-    {"buttonText", &ig::Theme::buttonText},
-    {"checkboxBackground", &ig::Theme::checkboxBackground},
-    {"checkboxChecked", &ig::Theme::checkboxChecked},
-    {"sliderBackground", &ig::Theme::sliderBackground},
-    {"sliderFilled", &ig::Theme::sliderFilled},
-    {"sliderHandle", &ig::Theme::sliderHandle},
-    {"menuBg", &ig::Theme::menuBg},
-    {"menuBorder", &ig::Theme::menuBorder},
-    {"menuItemHover", &ig::Theme::menuItemHover},
-    {"collapsibleHeaderBg", &ig::Theme::collapsibleHeaderBg},
-    {"tooltipBg", &ig::Theme::tooltipBg},
+    { "windowBackground", &ig::Theme::windowBackground },
+    { "panelColor", &ig::Theme::panelColor },
+    { "borderColor", &ig::Theme::borderColor },
+    { "textColor", &ig::Theme::textColor },
+    { "labelText", &ig::Theme::labelText },
+    { "titleBarBackground", &ig::Theme::titleBarBackground },
+    { "buttonBackground", &ig::Theme::buttonBackground },
+    { "buttonHovered", &ig::Theme::buttonHovered },
+    { "buttonPressed", &ig::Theme::buttonPressed },
+    { "buttonText", &ig::Theme::buttonText },
+    { "checkboxBackground", &ig::Theme::checkboxBackground },
+    { "checkboxChecked", &ig::Theme::checkboxChecked },
+    { "sliderBackground", &ig::Theme::sliderBackground },
+    { "sliderFilled", &ig::Theme::sliderFilled },
+    { "sliderHandle", &ig::Theme::sliderHandle },
+    { "menuBg", &ig::Theme::menuBg },
+    { "menuBorder", &ig::Theme::menuBorder },
+    { "menuItemHover", &ig::Theme::menuItemHover },
+    { "collapsibleHeaderBg", &ig::Theme::collapsibleHeaderBg },
+    { "tooltipBg", &ig::Theme::tooltipBg },
 };
 
 // O estilo por omissão da galeria, o mesmo dos dois painéis: é ele que dá o "Revert"
 // do demo (voltar ao que estava) e voltar ao ponto de partida depois de se brincar.
-void styleEditorWindow(ig::Context &ui)
+void styleEditorWindow(ig::Context& ui)
 {
     ig::Context::WindowOptions options;
     options.saveSettings = false;
@@ -2327,15 +2324,14 @@ void styleEditorWindow(ig::Context &ui)
     const ig::Rect bounds(16.0f, 130.0f, 300.0f, 520.0f);
     if (!ui.beginWindow("Style Editor###style-editor", bounds, options, &g_panel.showStyleEditor))
         return;
-    ig::Theme &theme = ui.theme();
+    ig::Theme& theme = ui.theme();
     // O "Ref" do ImGui: o tema como estava quando o editor se abriu pela primeira vez.
     if (!g_panel.styleBackupTaken)
     {
         g_panel.styleBackup = theme;
         g_panel.styleBackupTaken = true;
     }
-    if (ui.button("Revert"))
-        ui.setTheme(g_panel.styleBackup);
+    if (ui.button("Revert")) ui.setTheme(g_panel.styleBackup);
     item();
     ui.sameLine();
     if (ui.button("Estilo do demo"))
@@ -2350,7 +2346,7 @@ void styleEditorWindow(ig::Context &ui)
     const int sizeCount = static_cast<int>(sizeof(kThemeSizes) / sizeof(kThemeSizes[0]));
     for (int i = 0; i < sizeCount; ++i)
     {
-        const ThemeSizeRow &row = kThemeSizes[i];
+        const ThemeSizeRow& row = kThemeSizes[i];
         ui.sliderFloat(row.name, theme.*(row.member), row.minimum, row.maximum);
         item();
     }
@@ -2358,7 +2354,7 @@ void styleEditorWindow(ig::Context &ui)
     const int colorCount = static_cast<int>(sizeof(kThemeColors) / sizeof(kThemeColors[0]));
     for (int i = 0; i < colorCount; ++i)
     {
-        const ThemeColorRow &row = kThemeColors[i];
+        const ThemeColorRow& row = kThemeColors[i];
         if (ui.colorButton(row.name, theme.*(row.member), 32.0f, 18.0f))
             g_panel.styleColorEdit = g_panel.styleColorEdit == i ? -1 : i;
         item();
@@ -2390,7 +2386,7 @@ void styleEditorWindow(ig::Context &ui)
 // O Metrics/Debugger do demo. O que se mostra é o que o iGUI já mede (os tempos e os
 // vertices do frame, que estão na faixa de cima) e, em vez de uma lista de janelas que
 // ele não sabe fazer, o relatório das lacunas face ao demo.
-void metricsWindow(ig::Context &ui)
+void metricsWindow(ig::Context& ui)
 {
     ig::Context::WindowOptions options;
     options.saveSettings = false;
@@ -2400,15 +2396,15 @@ void metricsWindow(ig::Context &ui)
     const ig::Rect bounds(326.0f, 130.0f, 306.0f, 430.0f);
     if (!ui.beginWindow("Metrics/Debugger###metrics", bounds, options, &g_panel.showMetrics))
         return;
-    const gallery::Readout &info = gallery::readout();
+    const gallery::Readout& info = gallery::readout();
     char line[256];
     snprintf(line, sizeof(line), "submit %.2f ms   render %.2f ms   gpu %.2f ms",
-             static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
-             static_cast<double>(info.gpuMs));
+            static_cast<double>(info.submitMs), static_cast<double>(info.renderMs),
+            static_cast<double>(info.gpuMs));
     ui.label(line);
     item();
-    snprintf(line, sizeof(line), "%d itens   %d vertices   %d draw calls   %d lacunas",
-             info.items, info.vertices, info.drawCalls, info.gaps);
+    snprintf(line, sizeof(line), "%d itens   %d vertices   %d draw calls   %d lacunas", info.items,
+            info.vertices, info.drawCalls, info.gaps);
     ui.label(line);
     item();
     ui.separatorText("O QUE O DEMO MOSTRA AQUI E O iGUI NAO EXPOE");
@@ -2430,7 +2426,7 @@ void metricsWindow(ig::Context &ui)
     }
     for (int i = 0; i < gaps; ++i)
     {
-        const gallery::Gap &entry = gallery::gap(i);
+        const gallery::Gap& entry = gallery::gap(i);
         snprintf(line, sizeof(line), "%s: %s", entry.section, entry.widget);
         ui.bulletText(line);
         item();
@@ -2438,7 +2434,7 @@ void metricsWindow(ig::Context &ui)
     ui.endWindow();
 }
 
-void aboutWindow(ig::Context &ui)
+void aboutWindow(ig::Context& ui)
 {
     ig::Context::WindowOptions options;
     options.saveSettings = false;
@@ -2446,8 +2442,7 @@ void aboutWindow(ig::Context &ui)
     // com o p_open em baixo, fechá-la desliga o item do menu Tools.
     ui.setWindowButtons("About Dear iGUI###about", false, false);
     const ig::Rect bounds(326.0f, 570.0f, 306.0f, 190.0f);
-    if (!ui.beginWindow("About Dear iGUI###about", bounds, options, &g_panel.showAbout))
-        return;
+    if (!ui.beginWindow("About Dear iGUI###about", bounds, options, &g_panel.showAbout)) return;
     ui.label("iGUI, interface em modo imediato");
     item();
     ui.separator();
@@ -2468,13 +2463,12 @@ void aboutWindow(ig::Context &ui)
 
 } // namespace
 
-bool openSection(const char *name)
+bool openSection(const char* name)
 {
     for (int i = 0; i < static_cast<int>(gallery::Section::Count); ++i)
     {
         const gallery::Section section = static_cast<gallery::Section>(i);
-        if (strcmp(gallery::sectionName(section), name) != 0)
-            continue;
+        if (strcmp(gallery::sectionName(section), name) != 0) continue;
         g_panel.topOpen[i] = true;
         g_panel.subOpen[i] = true;
         // O CollapsingHeader("Widgets") é o de WidgetsBasic que diz se está aberto
@@ -2489,7 +2483,7 @@ bool openSection(const char *name)
     return false;
 }
 
-gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
+gallery::FrameStats draw(ig::Context& ui, float deltaSeconds)
 {
     gallery::FrameStats stats;
     g_panel.widgets = 0;
@@ -2502,9 +2496,8 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
 
     const ig::Vec2 display = ui.displaySize();
     const ig::Rect demo(0.0f, gallery::kReadoutHeight, display.x,
-                        display.y - gallery::kReadoutHeight);
-    if (!ui.beginWindow("Dear iGUI Demo", demo))
-        return stats;
+            display.y - gallery::kReadoutHeight);
+    if (!ui.beginWindow("Dear iGUI Demo", demo)) return stats;
 
     // A face escolhida no combo da secção "Fonts" (o io.FontDefault do ImGui) vale
     // para o painel todo. O combo escreve a escolha e este push lê-a no início do
@@ -2546,10 +2539,9 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
             // iGUI - o popup de um menu não era um contentor de layout.
             if (ui.beginSubMenu("Options"))
             {
-                gallery::State &shared = g_panel.shared;
+                gallery::State& shared = g_panel.shared;
                 bool enabled = shared.flag[0];
-                if (ui.menuCheckbox("Enabled", enabled))
-                    shared.flag[0] = enabled;
+                if (ui.menuCheckbox("Enabled", enabled)) shared.flag[0] = enabled;
                 if (ui.beginChild("child", 60.0f))
                 {
                     char scrolling[32];
@@ -2590,12 +2582,9 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
             // menu diz "Metrics/Debugger", "Style Editor" e "About").
             // Abrir é isto; fechar é o "x" da própria janela (como no demo, em que
             // o p_open é que manda): por isso um item não é um interruptor.
-            if (ui.menuItem("Metrics/Debugger"))
-                g_panel.showMetrics = true;
-            if (ui.menuItem("Style Editor"))
-                g_panel.showStyleEditor = true;
-            if (ui.menuItem("About Dear iGUI"))
-                g_panel.showAbout = true;
+            if (ui.menuItem("Metrics/Debugger")) g_panel.showMetrics = true;
+            if (ui.menuItem("Style Editor")) g_panel.showStyleEditor = true;
+            if (ui.menuItem("About Dear iGUI")) g_panel.showAbout = true;
             item();
             gallery::reportGap("Menu", "o Item Picker e as debug options do Tools");
             ui.endMenu();
@@ -2607,8 +2596,8 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
 
     if (ui.beginChild("demo", ui.availableHeight(), false))
     {
-        gallery::State &s = g_panel.shared;
-        const gallery::Section *list = gallery::sections();
+        gallery::State& s = g_panel.shared;
+        const gallery::Section* list = gallery::sections();
         // Com o --only desenha-se só a secção pedida, e sem o header dela: é uma
         // secção sozinha no topo, para comparar com o lado do ImGui.
         if (g_onlySection >= 0)
@@ -2644,11 +2633,9 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
                     // demo, que tambem e desenhado antes das suas sub-seccoes.
                     widgetsOpen = ui.collapsingHeader("Widgets", g_panel.topOpen[index]);
                     item();
-                    if (widgetsOpen)
-                        ui.indent();
+                    if (widgetsOpen) ui.indent();
                 }
-                if (!widgetsOpen)
-                    continue;
+                if (!widgetsOpen) continue;
                 if (ui.treeNode(gallery::sectionName(current), g_panel.subOpen[index]))
                     section(ui, current, s);
                 else
@@ -2661,8 +2648,7 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
             else
                 item();
         }
-        if (widgetsOpen)
-            ui.unindent();
+        if (widgetsOpen) ui.unindent();
         ui.endChild();
     }
     if (pushedFace)
@@ -2676,12 +2662,9 @@ gallery::FrameStats draw(ig::Context &ui, float deltaSeconds)
     // por cima dela, como no demo), e so por isso: quem as abriu foi o menu Tools.
     // Levam um frame a pegar no tema, tal como no demo, porque o que o Style Editor
     // escreve so vale para o que for submetido a seguir.
-    if (g_panel.showStyleEditor)
-        styleEditorWindow(ui);
-    if (g_panel.showMetrics)
-        metricsWindow(ui);
-    if (g_panel.showAbout)
-        aboutWindow(ui);
+    if (g_panel.showStyleEditor) styleEditorWindow(ui);
+    if (g_panel.showMetrics) metricsWindow(ui);
+    if (g_panel.showAbout) aboutWindow(ui);
 
     stats.items = g_panel.widgets;
     stats.gaps = gallery::gapCount();

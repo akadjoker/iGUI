@@ -4,34 +4,35 @@
 #include <algorithm>
 #include <cmath>
 
-namespace {
-    inline float setupFont(PaintContext& ctx, const Color& color, float size)
-    {
-        ctx.font.SetFontSize(size);
-        ctx.font.SetBatch(&ctx.text);
-        ctx.font.SetColor(color);
-        return ctx.font.GetAscender();
-    }
-
-    // First index in [lo, hi) where pred holds, for a pred that stays true once true.
-    template<typename Pred>
-    int firstWhere(int lo, int hi, Pred pred)
-    {
-        while (lo < hi)
-        {
-            const int mid = lo + (hi - lo) / 2;
-            if (pred(mid))
-            {
-                hi = mid;
-            }
-            else
-            {
-                lo = mid + 1;
-            }
-        }
-        return lo;
-    }
+namespace
+{
+inline float setupFont(PaintContext& ctx, const Color& color, float size)
+{
+    ctx.font.SetFontSize(size);
+    ctx.font.SetBatch(&ctx.text);
+    ctx.font.SetColor(color);
+    return ctx.font.GetAscender();
 }
+
+// First index in [lo, hi) where pred holds, for a pred that stays true once true.
+template<typename Pred>
+int firstWhere(int lo, int hi, Pred pred)
+{
+    while (lo < hi)
+    {
+        const int mid = lo + (hi - lo) / 2;
+        if (pred(mid))
+        {
+            hi = mid;
+        }
+        else
+        {
+            lo = mid + 1;
+        }
+    }
+    return lo;
+}
+} // namespace
 
 ThumbnailGrid::ThumbnailGrid()
 {
@@ -94,7 +95,7 @@ void ThumbnailGrid::layout()
 
 int ThumbnailGrid::addItem(const String& label, const Color& color)
 {
-    items_.push_back({label, color, {}, false});
+    items_.push_back({ label, color, {}, false });
     syncScroll();
     return static_cast<int>(items_.size()) - 1;
 }
@@ -106,7 +107,8 @@ void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex)
     markDirty();
 }
 
-void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex, float width, float height)
+void ThumbnailGrid::setItemTexture(int idx, ig::retained::TextureHandle tex, float width,
+        float height)
 {
     if (idx < 0 || idx >= static_cast<int>(items_.size())) return;
     items_[idx].tex = tex;
@@ -128,7 +130,8 @@ void ThumbnailGrid::removeItem(int idx)
     items_.erase(items_.begin() + idx);
     hover_ = pressed_ = -1;
     if (selected_ == idx) selected_ = -1;
-    else if (selected_ > idx) --selected_;
+    else if (selected_ > idx)
+        --selected_;
     syncScroll();
 }
 
@@ -146,8 +149,7 @@ void ThumbnailGrid::setSelected(int idx)
         items_[selected_].selected = false;
     const bool changed = selected_ != idx;
     selected_ = idx;
-    if (idx >= 0 && idx < static_cast<int>(items_.size()))
-        items_[idx].selected = true;
+    if (idx >= 0 && idx < static_cast<int>(items_.size())) items_[idx].selected = true;
     markDirty();
     if (changed) selectionChanged.emit(idx);
 }
@@ -160,8 +162,8 @@ int ThumbnailGrid::hitTest(float mx, float my) const
     const float cellW = m.cellW;
     const float cellH = m.cellH;
     const int cols = m.cols;
-    const float padX   = spacing_;
-    const float padY   = spacing_;
+    const float padX = spacing_;
+    const float padY = spacing_;
 
     const int count = static_cast<int>(items_.size());
     auto colX = [&](int col) { return b.x + padX + col * cellW; };
@@ -203,13 +205,12 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     const float cellW = m.cellW;
     const float cellH = m.cellH;
     const int cols = m.cols;
-    const float padX   = spacing_;
-    const float padY   = spacing_;
+    const float padX = spacing_;
+    const float padY = spacing_;
     if (m.bar) ctx.pushClip({ b.x, b.y, m.viewW, b.h });
 
     float asc = 0;
-    if (showLabels_)
-        asc = setupFont(ctx, Color(200, 200, 205, 255), 9.f);
+    if (showLabels_) asc = setupFont(ctx, Color(200, 200, 205, 255), 9.f);
 
     const int count = static_cast<int>(items_.size());
     auto rowY = [&](int row) { return b.y + padY + row * cellH - m.scroll; };
@@ -232,15 +233,18 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         if (y + cellH < b.y || y > b.y + b.h) continue;
 
         // Selection highlight
-        if (item.selected) {
+        if (item.selected)
+        {
             ctx.fill.SetColor(255, 200, 60, 40);
             ctx.fillRect(x - 2, y - 2, thumbW_ + 4, thumbH_ + labelH + 4);
         }
 
         // Thumbnail
-        if (item.tex) {
-            Rect dst = {x, y, thumbW_, thumbH_};
-            if (item.texW > 0.f && item.texH > 0.f) {
+        if (item.tex)
+        {
+            Rect dst = { x, y, thumbW_, thumbH_ };
+            if (item.texW > 0.f && item.texH > 0.f)
+            {
                 // Fit inside the cell, centred, keeping the aspect.
                 const float fit = std::min(thumbW_ / item.texW, thumbH_ / item.texH);
                 dst.w = item.texW * fit;
@@ -250,15 +254,18 @@ void ThumbnailGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(item.color.r, item.color.g, item.color.b, item.color.a);
                 ctx.fillRect(x, y, thumbW_, thumbH_);
             }
-            Rect uv  = {0.f, 0.f, 1.f, 1.f};
+            Rect uv = { 0.f, 0.f, 1.f, 1.f };
             ctx.drawImage(item.tex, dst, uv);
-        } else {
+        }
+        else
+        {
             ctx.fill.SetColor(item.color.r, item.color.g, item.color.b, item.color.a);
             ctx.fillRect(x, y, thumbW_, thumbH_);
 
             // Subtle gradient at bottom of thumb (darkening)
             float gradH = thumbH_ * 0.3f;
-            for (int g = 0; g < static_cast<int>(gradH); ++g) {
+            for (int g = 0; g < static_cast<int>(gradH); ++g)
+            {
                 float t2 = float(g) / gradH;
                 uint8_t a = static_cast<uint8_t>(t2 * 80.f);
                 ctx.fill.SetColor(0, 0, 0, a);
@@ -266,7 +273,8 @@ void ThumbnailGrid::paint(PaintContext& ctx)
             }
         }
 
-        if (!item.tex && item.icon != IconId::None) {
+        if (!item.tex && item.icon != IconId::None)
+        {
             const float size = std::min(thumbW_, thumbH_) * 0.5f;
             ctx.drawIcon(item.icon, x + (thumbW_ - size) * 0.5f, y + (thumbH_ - size) * 0.5f, size);
         }
@@ -274,13 +282,14 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         // Border
         Color brd = item.selected ? Color(255, 200, 60, 255) : Color(50, 52, 58, 255);
         ctx.fill.SetColor(brd.r, brd.g, brd.b, brd.a);
-        ctx.fillRect(x,             y,             thumbW_, 1);
-        ctx.fillRect(x,             y + thumbH_-1, thumbW_, 1);
-        ctx.fillRect(x,             y,             1,       thumbH_);
-        ctx.fillRect(x + thumbW_-1, y,             1,       thumbH_);
+        ctx.fillRect(x, y, thumbW_, 1);
+        ctx.fillRect(x, y + thumbH_ - 1, thumbW_, 1);
+        ctx.fillRect(x, y, 1, thumbH_);
+        ctx.fillRect(x + thumbW_ - 1, y, 1, thumbH_);
 
         // Label (truncated to thumb width)
-        if (showLabels_ && !item.label.empty()) {
+        if (showLabels_ && !item.label.empty())
+        {
             ctx.font.SetColor(item.selected ? Color(255, 220, 80, 255) : Color(180, 182, 190, 255));
             const String shown = ctx.fitText(item.label, thumbW_);
             ctx.font.Print(shown.c_str(), x, y + thumbH_ + (labelH - 9.f) * 0.5f + asc);
@@ -305,8 +314,7 @@ bool ThumbnailGrid::isDragSource() const
 
 DragPayload ThumbnailGrid::onDragBegin()
 {
-    if (!dragPayload_ || pressed_ < 0 || pressed_ >= static_cast<int>(items_.size()))
-        return {};
+    if (!dragPayload_ || pressed_ < 0 || pressed_ >= static_cast<int>(items_.size())) return {};
     return dragPayload_(pressed_);
 }
 
@@ -315,7 +323,8 @@ void ThumbnailGrid::onMousePress(MouseEvent& e)
     if (e.button != 0) return;
     int idx = hitTest(e.x, e.y);
     pressed_ = idx;
-    if (idx >= 0) {
+    if (idx >= 0)
+    {
         const bool again = e.clickCount == 2 && idx == selected_;
         setSelected(idx);
         onItemClicked.emit(idx);

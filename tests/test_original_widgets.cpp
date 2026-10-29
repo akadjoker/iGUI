@@ -19,13 +19,13 @@
 #include <type_traits>
 
 static_assert(std::is_same<ig::Color, ig::retained::Color>::value,
-              "retained widgets must use ig::Color");
+        "retained widgets must use ig::Color");
 static_assert(std::is_same<ig::Vec2, ig::retained::Vec2>::value,
-              "retained widgets must use ig::Vec2");
+        "retained widgets must use ig::Vec2");
 static_assert(std::is_same<ig::Rect, ig::retained::Rect>::value,
-              "retained widgets must use ig::Rect");
+        "retained widgets must use ig::Rect");
 static_assert(std::is_same<ig::Widget, ig::retained::Widget>::value,
-              "retained widgets must be exposed as ig::Widget");
+        "retained widgets must be exposed as ig::Widget");
 
 // The rounded rectangle used to be built from a fixed 30 degree table: four
 // points per corner, which leaves a radius above a few pixels visibly faceted
@@ -34,19 +34,16 @@ static void test_round_rect_corner_is_a_curve()
 {
     ig::retained::DrawList list;
     const float radius = 12.0f;
-    const ig::Rect rect = {0.0f, 0.0f, 100.0f, 40.0f};
+    const ig::Rect rect = { 0.0f, 0.0f, 100.0f, 40.0f };
     list.addRoundRectFilled(rect, radius, ig::Color(255u, 255u, 255u, 255u), 8);
 
     // Outline plus the fringe ring the anti-aliasing adds, 4 * (8 + 1) each.
-    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
+    const ct::Vector<ig::retained::DrawVertex>& vertices = list.vertices();
     assert(vertices.size() == 2u * 4u * 9u);
 
-    const ig::Vec2 centres[4] = {
-        {rect.x + rect.w - radius, rect.y + radius},
-        {rect.x + rect.w - radius, rect.y + rect.h - radius},
-        {rect.x + radius, rect.y + rect.h - radius},
-        {rect.x + radius, rect.y + radius}
-    };
+    const ig::Vec2 centres[4] = { { rect.x + rect.w - radius, rect.y + radius },
+        { rect.x + rect.w - radius, rect.y + rect.h - radius },
+        { rect.x + radius, rect.y + rect.h - radius }, { rect.x + radius, rect.y + radius } };
     for (int corner = 0; corner < 4; ++corner)
     {
         float minDistance = 1e9f;
@@ -57,8 +54,8 @@ static void test_round_rect_corner_is_a_curve()
         {
             // Odd vertices are the transparent fringe; the solid corner points
             // are the even ones.
-            const ig::retained::DrawVertex &vertex =
-                vertices[static_cast<size_t>(2 * (corner * 9 + i))];
+            const ig::retained::DrawVertex& vertex =
+                    vertices[static_cast<size_t>(2 * (corner * 9 + i))];
             const float dx = vertex.x - centres[corner].x;
             const float dy = vertex.y - centres[corner].y;
             const float distance = std::sqrt(dx * dx + dy * dy);
@@ -71,7 +68,7 @@ static void test_round_rect_corner_is_a_curve()
                 const float gap = std::sqrt(gapX * gapX + gapY * gapY);
                 maxGap = gap > maxGap ? gap : maxGap;
             }
-            previous = {vertex.x, vertex.y};
+            previous = { vertex.x, vertex.y };
         }
         // The nine points lie on one circle centred on the corner.
         assert(maxDistance - minDistance < 0.01f);
@@ -90,7 +87,7 @@ static void test_knob_arc_is_open_at_the_bottom()
     ig::retained::DrawList list;
     ig::retained::PaintContext ctx(list);
     ig::retained::Knob knob;
-    knob.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    knob.setRect({ 0.0f, 0.0f, 64.0f, 64.0f });
     knob.setShowValue(false);
     knob.setValue(1.0f);
     knob.paint(ctx);
@@ -103,16 +100,16 @@ static void test_knob_arc_is_open_at_the_bottom()
     bool nearLeft = false;
     bool nearTop = false;
     bool nearRight = false;
-    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
+    const ct::Vector<ig::retained::DrawVertex>& vertices = list.vertices();
     for (size_t i = 0; i < vertices.size(); ++i)
     {
-        const ig::retained::DrawVertex &vertex = vertices[i];
+        const ig::retained::DrawVertex& vertex = vertices[i];
         if (vertex.color.r != track.r || vertex.color.g != track.g || vertex.color.b != track.b)
             continue;
         const float dx = vertex.x - cx;
         const float dy = vertex.y - cy;
         const float distance = std::sqrt(dx * dx + dy * dy);
-        if (distance < 20.0f || distance > 34.0f)   // the value ring only
+        if (distance < 20.0f || distance > 34.0f) // the value ring only
             continue;
         ++trackPoints;
         float angle = std::atan2(dy, dx) * 180.0f / 3.14159265f;
@@ -137,7 +134,7 @@ static void test_knob_accent_comes_from_the_caller()
     ig::retained::DrawList themed;
     ig::retained::PaintContext themedCtx(themed);
     ig::retained::Knob plain;
-    plain.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    plain.setRect({ 0.0f, 0.0f, 64.0f, 64.0f });
     plain.setShowValue(false);
     plain.setValue(1.0f);
     plain.paint(themedCtx);
@@ -145,15 +142,14 @@ static void test_knob_accent_comes_from_the_caller()
     bool foundThemeAccent = false;
     for (size_t i = 0; i < themed.vertices().size(); ++i)
     {
-        if (themed.vertices()[i].color == accent)
-            foundThemeAccent = true;
+        if (themed.vertices()[i].color == accent) foundThemeAccent = true;
     }
     assert(foundThemeAccent);
 
     ig::retained::DrawList coloured;
     ig::retained::PaintContext colouredCtx(coloured);
     ig::retained::Knob picked;
-    picked.setRect({0.0f, 0.0f, 64.0f, 64.0f});
+    picked.setRect({ 0.0f, 0.0f, 64.0f, 64.0f });
     picked.setShowValue(false);
     picked.setArcColor(ig::Color(10u, 20u, 30u, 255u));
     picked.setValue(1.0f);
@@ -163,11 +159,9 @@ static void test_knob_accent_comes_from_the_caller()
     bool foundTheme = false;
     for (size_t i = 0; i < coloured.vertices().size(); ++i)
     {
-        const ig::Color &colour = coloured.vertices()[i].color;
-        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
-            foundPicked = true;
-        if (colour == accent)
-            foundTheme = true;
+        const ig::Color& colour = coloured.vertices()[i].color;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u) foundPicked = true;
+        if (colour == accent) foundTheme = true;
     }
     assert(foundPicked);
     assert(!foundTheme);
@@ -181,7 +175,7 @@ static void test_fader_takes_a_press_anywhere()
     // coordinates, so the drag has to be measured from the widget, not from the
     // top left of the screen.
     ig::retained::Fader fader;
-    fader.setRect({30.0f, 210.0f, 40.0f, 120.0f});
+    fader.setRect({ 30.0f, 210.0f, 40.0f, 120.0f });
     fader.setShowTicks(false);
     fader.setValue(0.5f);
 
@@ -218,15 +212,15 @@ static void test_fader_takes_a_press_anywhere()
 
     // Horizontal faders read left to right.
     ig::retained::Fader across;
-    across.setRect({30.0f, 340.0f, 120.0f, 40.0f});
+    across.setRect({ 30.0f, 340.0f, 120.0f, 40.0f });
     across.setOrientation(ig::LayoutDir::Horizontal);
     across.setShowTicks(false);
     across.setValue(0.0f);
-    press.localX = 113.0f;   // the right end of the travel
+    press.localX = 113.0f; // the right end of the travel
     press.localY = 13.0f;
     across.onMousePress(press);
     assert(across.value() == 1.0f);
-    press.localX = 7.0f;     // the left end of the travel
+    press.localX = 7.0f; // the left end of the travel
     across.onMousePress(press);
     assert(across.value() == 0.0f);
     across.onMouseRelease(press);
@@ -234,23 +228,22 @@ static void test_fader_takes_a_press_anywhere()
 
 // The box the gizmo outlines, in pixels: the model outline is the only geometry
 // drawn in its colour, so its vertices measure the box.
-static ig::Rect modelOutlineBounds(const ig::retained::DrawList &list)
+static ig::Rect modelOutlineBounds(const ig::retained::DrawList& list)
 {
-    ig::Rect bounds = {0.0f, 0.0f, 0.0f, 0.0f};
+    ig::Rect bounds = { 0.0f, 0.0f, 0.0f, 0.0f };
     float lowX = 1e9f, lowY = 1e9f, highX = -1e9f, highY = -1e9f;
-    const ct::Vector<ig::retained::DrawVertex> &vertices = list.vertices();
-    for (ct::Vector<ig::retained::DrawVertex>::size_type index = 0; index < vertices.size(); ++index)
+    const ct::Vector<ig::retained::DrawVertex>& vertices = list.vertices();
+    for (ct::Vector<ig::retained::DrawVertex>::size_type index = 0; index < vertices.size();
+            ++index)
     {
-        const ig::retained::DrawVertex &vertex = vertices[index];
-        if (vertex.color.r != 238u || vertex.color.g != 150u || vertex.color.b != 62u)
-            continue;
+        const ig::retained::DrawVertex& vertex = vertices[index];
+        if (vertex.color.r != 238u || vertex.color.g != 150u || vertex.color.b != 62u) continue;
         lowX = vertex.x < lowX ? vertex.x : lowX;
         lowY = vertex.y < lowY ? vertex.y : lowY;
         highX = vertex.x > highX ? vertex.x : highX;
         highY = vertex.y > highY ? vertex.y : highY;
     }
-    if (highX < lowX)
-        return bounds;
+    if (highX < lowX) return bounds;
     bounds.x = lowX;
     bounds.y = lowY;
     bounds.width = highX - lowX;
@@ -263,14 +256,14 @@ static ig::Rect modelOutlineBounds(const ig::retained::DrawList &list)
 // themselves are pinned to the world.
 static void test_gizmo3d_draws_the_box_it_moves()
 {
-    const float view[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1};
-    const float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-    const float position[3] = {0.0f, 0.0f, 0.0f};
-    const float scale[3] = {1.0f, 1.0f, 1.0f};
-    const float upright[3] = {0.0f, 0.0f, 0.0f};
+    const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+    const float position[3] = { 0.0f, 0.0f, 0.0f };
+    const float scale[3] = { 1.0f, 1.0f, 1.0f };
+    const float upright[3] = { 0.0f, 0.0f, 0.0f };
 
     ig::retained::Gizmo3D gizmo;
-    gizmo.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    gizmo.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
     gizmo.setViewProjection(view, projection, 400, 300);
     gizmo.setScreenScale(50.0f);
     gizmo.setMode(ig::retained::GizmoMode3D::Rotate);
@@ -290,9 +283,9 @@ static void test_gizmo3d_draws_the_box_it_moves()
     assert(uprightBox.x > 64.0f && uprightBox.x < 70.0f);
 
     // Turned 45 degrees towards the eye, its corners reach further across.
-    const float turned[3] = {0.0f, 45.0f, 0.0f};
+    const float turned[3] = { 0.0f, 45.0f, 0.0f };
     ig::retained::Gizmo3D turning;
-    turning.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    turning.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
     turning.setViewProjection(view, projection, 400, 300);
     turning.setScreenScale(50.0f);
     turning.setMode(ig::retained::GizmoMode3D::Rotate);
@@ -316,14 +309,14 @@ static void test_gizmo3d_draws_the_box_it_moves()
 // clicks.
 static void test_gizmo3d_grabs_the_handle_under_the_pointer()
 {
-    const float view[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1};
-    const float projection[16] = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1};
-    const float position[3] = {0.0f, 0.0f, 0.0f};
-    const float rotation[3] = {0.0f, 0.0f, 0.0f};
-    const float scale[3] = {1.0f, 1.0f, 1.0f};
+    const float view[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -4, 1 };
+    const float projection[16] = { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+    const float position[3] = { 0.0f, 0.0f, 0.0f };
+    const float rotation[3] = { 0.0f, 0.0f, 0.0f };
+    const float scale[3] = { 1.0f, 1.0f, 1.0f };
 
     ig::retained::Gizmo3D gizmo;
-    gizmo.setRect({0.0f, 0.0f, 400.0f, 300.0f});
+    gizmo.setRect({ 0.0f, 0.0f, 400.0f, 300.0f });
     gizmo.setViewProjection(view, projection, 400, 300);
     gizmo.setTarget(position, rotation, scale);
     // The camera sits four units away, so the handles measure 50 * 4 / 300 world
@@ -376,7 +369,8 @@ static void test_gizmo3d_grabs_the_handle_under_the_pointer()
     // turns the target by the 25 degrees between them - and 45 degrees, which is
     // between two of the samples the ring used to be tested at, has to be on the
     // ring as well.
-    const auto ringPoint = [](float degrees, float &x, float &y) {
+    const auto ringPoint = [](float degrees, float& x, float& y)
+    {
         const float radians = degrees * 3.14159265f / 180.0f;
         const float cosine = std::cos(radians);
         const float sine = std::sin(radians);
@@ -408,15 +402,18 @@ static void test_gizmo3d_grabs_the_handle_under_the_pointer()
     // camera a pixel maps to the world point the ring lives in, so the expected
     // angle is the angle between the two world vectors, which the ellipse's
     // 25 degrees of screen are not.
-    const auto worldOnRing = [](float px, float py, float &x, float &y) {
+    const auto worldOnRing = [](float px, float py, float& x, float& y)
+    {
         x = (px / 400.0f) * 2.0f - 1.0f;
         y = 1.0f - (py / 300.0f) * 2.0f;
     };
     float fromX = 0.0f, fromY = 0.0f, toX = 0.0f, toY = 0.0f;
     worldOnRing(ring.x, ring.y, fromX, fromY);
     worldOnRing(along.x, along.y, toX, toY);
-    const float expected = std::atan2(fromX * toY - fromY * toX, fromX * toX + fromY * toY) * 180.0f / 3.14159265f;
-    assert(gizmo.targetRotation().z > expected - 0.5f && gizmo.targetRotation().z < expected + 0.5f);
+    const float expected =
+            std::atan2(fromX * toY - fromY * toX, fromX * toX + fromY * toY) * 180.0f / 3.14159265f;
+    assert(gizmo.targetRotation().z > expected - 0.5f &&
+            gizmo.targetRotation().z < expected + 0.5f);
     assert(gizmo.targetRotation().x == 0.0f && gizmo.targetRotation().y == 0.0f);
     gizmo.onMouseRelease(along);
 }
@@ -430,7 +427,7 @@ static void test_fader_accent_comes_from_the_caller()
     ig::retained::DrawList themed;
     ig::retained::PaintContext themedCtx(themed);
     ig::retained::Fader plain;
-    plain.setRect({0.0f, 0.0f, 40.0f, 120.0f});
+    plain.setRect({ 0.0f, 0.0f, 40.0f, 120.0f });
     plain.setShowValue(false);
     plain.setShowTicks(false);
     plain.setValue(1.0f);
@@ -439,15 +436,14 @@ static void test_fader_accent_comes_from_the_caller()
     bool foundThemeAccent = false;
     for (size_t i = 0; i < themed.vertices().size(); ++i)
     {
-        if (themed.vertices()[i].color == accent)
-            foundThemeAccent = true;
+        if (themed.vertices()[i].color == accent) foundThemeAccent = true;
     }
     assert(foundThemeAccent);
 
     ig::retained::DrawList coloured;
     ig::retained::PaintContext colouredCtx(coloured);
     ig::retained::Fader picked;
-    picked.setRect({0.0f, 0.0f, 40.0f, 120.0f});
+    picked.setRect({ 0.0f, 0.0f, 40.0f, 120.0f });
     picked.setShowValue(false);
     picked.setShowTicks(false);
     picked.setFillColor(ig::Color(10u, 20u, 30u, 255u));
@@ -458,11 +454,9 @@ static void test_fader_accent_comes_from_the_caller()
     bool foundTheme = false;
     for (size_t i = 0; i < coloured.vertices().size(); ++i)
     {
-        const ig::Color &colour = coloured.vertices()[i].color;
-        if (colour.r == 10u && colour.g == 20u && colour.b == 30u)
-            foundPicked = true;
-        if (colour == accent)
-            foundTheme = true;
+        const ig::Color& colour = coloured.vertices()[i].color;
+        if (colour.r == 10u && colour.g == 20u && colour.b == 30u) foundPicked = true;
+        if (colour == accent) foundTheme = true;
     }
     assert(foundPicked);
     assert(!foundTheme);
@@ -472,25 +466,25 @@ static void test_fader_accent_comes_from_the_caller()
 // section per window title, applied when the window is created again.
 static void test_float_window_state_round_trips_through_ini()
 {
-    const char *path = "igui_window_state_test.ini";
+    const char* path = "igui_window_state_test.ini";
     std::remove(path);
 
-    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
     app.setWindowStatePath(path);
     assert(app.windowStatePath() == path);
 
-    auto *inspector = app.addFloat<ig::retained::FloatWindow>("Inspector");
+    auto* inspector = app.addFloat<ig::retained::FloatWindow>("Inspector");
     inspector->setFloatPos(120.0f, 80.0f);
     inspector->setFloatSize(360.0f, 240.0f);
     inspector->setMinimized(true);
 
     // ']' cannot appear in a section name, so a title carrying one is folded.
-    auto *console = app.addFloat<ig::retained::FloatWindow>("Console]");
+    auto* console = app.addFloat<ig::retained::FloatWindow>("Console]");
     console->setFloatPos(12.0f, 34.0f);
     console->setFloatSize(100.0f, 50.0f);
 
     // A blank title has no section to live in, so it is left out.
-    auto *untitled = app.addFloat<ig::retained::FloatWindow>("   ");
+    auto* untitled = app.addFloat<ig::retained::FloatWindow>("   ");
     untitled->setFloatPos(7.0f, 7.0f);
 
     assert(app.saveWindowState());
@@ -516,13 +510,13 @@ static void test_float_window_state_round_trips_through_ini()
 
     // A window created after the file has been read comes back where it was.
     assert(app.loadWindowState());
-    auto *reopened = app.addFloat<ig::retained::FloatWindow>("Inspector");
+    auto* reopened = app.addFloat<ig::retained::FloatWindow>("Inspector");
     assert(reopened->floatX() == 120.0f && reopened->floatY() == 80.0f);
     assert(reopened->floatW() == 360.0f && reopened->floatH() == 240.0f);
     assert(reopened->isMinimized());
 
     // A title the file knows nothing about keeps its own geometry.
-    auto *fresh = app.addFloat<ig::retained::FloatWindow>("Never saved");
+    auto* fresh = app.addFloat<ig::retained::FloatWindow>("Never saved");
     assert(fresh->floatX() == 50.0f && fresh->floatY() == 50.0f);
     assert(fresh->floatW() == 300.0f && fresh->floatH() == 200.0f);
 
@@ -558,7 +552,7 @@ static void test_dock_tab_shown_from_code_gets_a_size()
     io.displayHeight = 300.0f;
     DrawData data;
     app.update(io);
-    app.paint(data);   // the layout pass runs here
+    app.paint(data); // the layout pass runs here
     assert(first->rect().w > 0.0f);
 
     dock->showPanel("Second");
@@ -572,21 +566,21 @@ static void test_dock_tab_shown_from_code_gets_a_size()
 // remembered, and a panel built fresh comes back to that arrangement.
 static void test_dock_layout_is_remembered_in_the_state_file()
 {
-    const char *path = "igui_dock_state_test.ini";
+    const char* path = "igui_dock_state_test.ini";
     std::remove(path);
 
-    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
     app.setWindowStatePath(path);
 
-    ig::retained::Widget *stage = app.addStage("dockstate");
-    auto *dock = stage->createChild<ig::retained::DockPanel>();
+    ig::retained::Widget* stage = app.addStage("dockstate");
+    auto* dock = stage->createChild<ig::retained::DockPanel>();
     dock->setSettingsKey("main");
     dock->addPanel("Scene", new ig::retained::Panel());
     dock->addPanel("Properties", new ig::retained::Panel());
     dock->addPanel("Console", new ig::retained::Panel());
     dock->splitOff("Properties", ig::retained::DockSide::Right, 0.3f);
     // A panel without a key is never remembered.
-    auto *loose = stage->createChild<ig::retained::DockPanel>();
+    auto* loose = stage->createChild<ig::retained::DockPanel>();
     loose->addPanel("Loose", new ig::retained::Panel());
     const ig::retained::String arranged = dock->saveLayout();
 
@@ -597,10 +591,10 @@ static void test_dock_layout_is_remembered_in_the_state_file()
     const ig::retained::String section = ig::dockStateSection("main");
     assert(section == "dock:main");
     assert(written.get(section, "layout") == arranged);
-    assert(written.size() == 1u);   // the keyless panel is not in the file
+    assert(written.size() == 1u); // the keyless panel is not in the file
 
     // The panel the next run builds starts flat and takes the layout back.
-    auto *fresh = stage->createChild<ig::retained::DockPanel>();
+    auto* fresh = stage->createChild<ig::retained::DockPanel>();
     fresh->setSettingsKey("main");
     fresh->addPanel("Scene", new ig::retained::Panel());
     fresh->addPanel("Properties", new ig::retained::Panel());
@@ -630,7 +624,7 @@ static void test_dock_layout_is_remembered_in_the_state_file()
 static void test_closing_a_dock_panel_deletes_its_content_once()
 {
     ig::retained::DockPanel dock;
-    dock.setRect({0.0f, 0.0f, 600.0f, 400.0f});
+    dock.setRect({ 0.0f, 0.0f, 600.0f, 400.0f });
     dock.addPanel("Inspector", new ig::retained::Panel());
     dock.addPanel("Console", new ig::retained::Panel());
     dock.splitOff("Console", ig::retained::DockSide::Bottom, 0.3f);
@@ -660,17 +654,17 @@ static void test_closing_a_dock_panel_deletes_its_content_once()
 // pointer, or the deferred delete frees it twice.
 static void test_removing_a_float_twice_is_harmless()
 {
-    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
     const size_t floatsBefore = app.floats().size();
 
-    auto *dialog = app.addFloat<ig::retained::FloatWindow>("Dialog");
+    auto* dialog = app.addFloat<ig::retained::FloatWindow>("Dialog");
     assert(app.floats().size() == floatsBefore + 1u);
     app.removeFloat(dialog);
     app.removeFloat(dialog);
     assert(app.floats().size() == floatsBefore);
 
     ig::retained::IO io;
-    app.update(io);   // the deferred deletes are flushed here
+    app.update(io); // the deferred deletes are flushed here
     assert(app.floats().size() == floatsBefore);
 }
 
@@ -679,12 +673,12 @@ static void test_removing_a_float_twice_is_harmless()
 static void test_a_column_added_after_rows_has_cells()
 {
     ig::retained::DataGrid grid;
-    grid.setRect({0.0f, 0.0f, 400.0f, 200.0f});
+    grid.setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
     grid.addColumn("Name", 120.0f);
-    grid.addRow({"first"});
-    grid.addColumn("Note", 120.0f);      // the row predates this column
+    grid.addRow({ "first" });
+    grid.addColumn("Note", 120.0f); // the row predates this column
 
-    grid.setCell(0, 1, "hello");         // used to write past the row's cells
+    grid.setCell(0, 1, "hello"); // used to write past the row's cells
     assert(grid.cell(0, 1) == "hello");
     assert(grid.cell(0, 0) == "first");
     assert(grid.cell(1, 1) == "");
@@ -714,15 +708,15 @@ static void test_removing_a_line_can_be_undone()
 
     ig::retained::KeyEvent typed;
     typed.text[0] = 'x';
-    editor.onTextInput(typed);           // an undoable edit on the last line
+    editor.onTextInput(typed); // an undoable edit on the last line
     const ig::retained::String edited = editor.text();
     assert(edited == "l0\nl1\nl2\nxl3");
 
-    editor.removeLine();                 // the last line: no break to take with it
-    editor.removeLine();                 // and now the one that followed it
+    editor.removeLine(); // the last line: no break to take with it
+    editor.removeLine(); // and now the one that followed it
     assert(editor.lineCount() == 2);
 
-    editor.undo();                       // used to replay the insert at line 3 of a 2-line buffer
+    editor.undo(); // used to replay the insert at line 3 of a 2-line buffer
     assert(editor.lineCount() == 3);
     editor.undo();
     assert(editor.lineCount() == 4);
@@ -737,7 +731,7 @@ static void test_removing_a_line_can_be_undone()
 // abort the application: it folds into a name the file can hold and read back.
 static void test_odd_window_titles_do_not_abort_the_state_file()
 {
-    const char *path = "igui_odd_title_test.ini";
+    const char* path = "igui_odd_title_test.ini";
     std::remove(path);
 
     ig::WindowStateIni store;
@@ -747,9 +741,9 @@ static void test_odd_window_titles_do_not_abort_the_state_file()
     geometry.y = 6.0f;
     geometry.w = 70.0f;
     geometry.h = 80.0f;
-    store.putWindow("Console ", geometry);   // trailing space
-    store.putWindow(" Frame", geometry);     // leading space
-    store.putWindow("   ", geometry);        // nothing but blanks: left out
+    store.putWindow("Console ", geometry); // trailing space
+    store.putWindow(" Frame", geometry);   // leading space
+    store.putWindow("   ", geometry);      // nothing but blanks: left out
     assert(store.save());
 
     ct::Ini written;
@@ -774,12 +768,12 @@ static void test_odd_window_titles_do_not_abort_the_state_file()
 // after the signal.
 static void test_a_widget_can_be_removed_by_its_own_handler()
 {
-    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
-    ig::retained::Widget *stage = app.addStage("selfremove");
-    auto *panel = stage->createChild<ig::retained::Panel>();
-    panel->setRect({0.0f, 0.0f, 200.0f, 100.0f});
-    auto *button = panel->createChild<ig::retained::Button>("Close");
-    button->setRect({10.0f, 10.0f, 80.0f, 30.0f});
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
+    ig::retained::Widget* stage = app.addStage("selfremove");
+    auto* panel = stage->createChild<ig::retained::Panel>();
+    panel->setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    auto* button = panel->createChild<ig::retained::Button>("Close");
+    button->setRect({ 10.0f, 10.0f, 80.0f, 30.0f });
     button->clicked.connect([panel, button]() { panel->removeChild(button); });
 
     ig::MouseEvent press;
@@ -801,9 +795,9 @@ static void test_a_widget_can_be_removed_by_its_own_handler()
 static void test_a_carousel_shows_one_page_at_a_time()
 {
     ig::retained::Carousel carousel;
-    carousel.setRect({0.0f, 0.0f, 400.0f, 200.0f});
-    auto *first  = new ig::retained::Panel();
-    auto *second = new ig::retained::Panel();
+    carousel.setRect({ 0.0f, 0.0f, 400.0f, 200.0f });
+    auto* first = new ig::retained::Panel();
+    auto* second = new ig::retained::Panel();
     carousel.addPageWidget(first);
     carousel.addPageWidget(second);
     carousel.layout();
@@ -811,9 +805,9 @@ static void test_a_carousel_shows_one_page_at_a_time()
     assert(first->isVisible());
     assert(!second->isVisible());
 
-    carousel.removePage(0);              // the page on screen goes away
+    carousel.removePage(0); // the page on screen goes away
     carousel.layout();
-    assert(second->isVisible());         // the one left takes over
+    assert(second->isVisible()); // the one left takes over
 }
 
 // Setting the content the window already has must not delete it: removeChild()
@@ -821,7 +815,7 @@ static void test_a_carousel_shows_one_page_at_a_time()
 static void test_setting_the_same_float_content_again_keeps_it()
 {
     ig::retained::FloatWindow window("Content");
-    auto *content = new ig::retained::Panel();
+    auto* content = new ig::retained::Panel();
     window.setContentWidget(content);
     assert(window.content() == content);
 
@@ -829,7 +823,7 @@ static void test_setting_the_same_float_content_again_keeps_it()
     assert(window.content() == content);
     assert(content->parent() == &window);
 
-    window.setContentWidget(nullptr);    // clearing still deletes it
+    window.setContentWidget(nullptr); // clearing still deletes it
     assert(window.content() == nullptr);
 }
 
@@ -840,7 +834,7 @@ static void test_tree_nodes_report_structural_changes()
 {
     const unsigned int before = ig::retained::TreeNode::revision();
     ig::retained::TreeNode root("A");
-    ig::retained::TreeNode *child = root.addChild("B");
+    ig::retained::TreeNode* child = root.addChild("B");
 
     const unsigned int afterAdd = ig::retained::TreeNode::revision();
     assert(afterAdd != before);
@@ -862,19 +856,19 @@ static void test_tree_nodes_report_structural_changes()
 // popup holds a pointer back to its owner and keeps calling it.
 static void test_a_popup_goes_away_with_its_owner()
 {
-    ig::retained::WidgetApp &app = ig::retained::WidgetApp::instance();
-    ig::retained::Widget *stage = app.addStage("popupowner");
-    auto *panel = stage->createChild<ig::retained::Panel>();
-    panel->setRect({0.0f, 0.0f, 200.0f, 100.0f});
-    auto *owner = panel->createChild<ig::retained::Button>("Menu");
+    ig::retained::WidgetApp& app = ig::retained::WidgetApp::instance();
+    ig::retained::Widget* stage = app.addStage("popupowner");
+    auto* panel = stage->createChild<ig::retained::Panel>();
+    panel->setRect({ 0.0f, 0.0f, 200.0f, 100.0f });
+    auto* owner = panel->createChild<ig::retained::Button>("Menu");
 
-    auto *popup = new ig::retained::Panel();     // owned by the test: `owned` is false
+    auto* popup = new ig::retained::Panel(); // owned by the test: `owned` is false
     app.showPopup(popup, owner, false);
     assert(app.popup() == popup);
     assert(app.popupOwner() == owner);
 
-    panel->removeChild(owner);                   // the owner goes away
-    assert(app.popup() == nullptr);              // and its popup with it
+    panel->removeChild(owner);      // the owner goes away
+    assert(app.popup() == nullptr); // and its popup with it
 
     delete popup;
 }
@@ -884,17 +878,22 @@ static void test_a_popup_goes_away_with_its_owner()
 static void test_a_toolbar_item_can_remove_itself_when_clicked()
 {
     ig::retained::ToolBar bar;
-    bar.setRect({0.0f, 0.0f, 400.0f, 40.0f});
-    const int first  = bar.addButton(0, "New");
+    bar.setRect({ 0.0f, 0.0f, 400.0f, 40.0f });
+    const int first = bar.addButton(0, "New");
     bar.addButton(1, "Open");
     bar.layout();
 
     bool handled = false;
-    bar.buttonClicked.connect([&bar, &handled](int id) { handled = true; bar.removeItem(id); });
+    bar.buttonClicked.connect(
+            [&bar, &handled](int id)
+            {
+                handled = true;
+                bar.removeItem(id);
+            });
 
     ig::MouseEvent press;
     press.button = 0;
-    press.x = 10.0f;                 // the first item sits at (2, 2, 28, 28)
+    press.x = 10.0f; // the first item sits at (2, 2, 28, 28)
     press.y = 10.0f;
     bar.onMousePress(press);
     ig::MouseEvent release = press;
@@ -1060,7 +1059,7 @@ static void test_split_button_popup_is_forgotten_when_destroyed()
     WidgetApp& app = WidgetApp::instance();
     Widget* stage = app.addStage("splitbuttonpopup");
     auto* split = stage->createChild<SplitButton>("Split");
-    split->setRect({0.0f, 0.0f, 100.0f, 30.0f});
+    split->setRect({ 0.0f, 0.0f, 100.0f, 30.0f });
     split->addAction("Action", [] {});
 
     MouseEvent press;
@@ -1082,26 +1081,26 @@ static void test_tiny_widgets_do_not_emit_non_finite_scrollbar_vertices()
     auto assertFinite = [](const DrawList& list)
     {
         for (const DrawVertex& vertex: list.vertices())
-            assert(std::isfinite(vertex.x) && std::isfinite(vertex.y)
-                   && std::isfinite(vertex.u) && std::isfinite(vertex.v));
+            assert(std::isfinite(vertex.x) && std::isfinite(vertex.y) && std::isfinite(vertex.u) &&
+                    std::isfinite(vertex.v));
     };
 
     DataGrid dataGrid;
-    dataGrid.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    dataGrid.setRect({ 0.0f, 0.0f, 100.0f, 1.0f });
     DrawList dataDraw;
     PaintContext dataContext(dataDraw);
     dataGrid.paint(dataContext);
     assertFinite(dataDraw);
 
     TreeGrid treeGrid;
-    treeGrid.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    treeGrid.setRect({ 0.0f, 0.0f, 100.0f, 1.0f });
     DrawList treeDraw;
     PaintContext treeContext(treeDraw);
     treeGrid.paint(treeContext);
     assertFinite(treeDraw);
 
     ConsoleWidget console;
-    console.setRect({0.0f, 0.0f, 100.0f, 1.0f});
+    console.setRect({ 0.0f, 0.0f, 100.0f, 1.0f });
     DrawList consoleDraw;
     PaintContext consoleContext(consoleDraw);
     console.paint(consoleContext);
@@ -1278,9 +1277,8 @@ static void test_hidden_widgets_do_not_paint()
         DrawData data;
         app.paint(data);
         size_t count = 0;
-        for (const DrawPass& pass : data.passes)
-            if (pass.list)
-                count += pass.list->vertices().size();
+        for (const DrawPass& pass: data.passes)
+            if (pass.list) count += pass.list->vertices().size();
         return count;
     };
 
@@ -1307,8 +1305,7 @@ static void test_widget_app_clock_keeps_short_frames()
     IO io;
     io.deltaTime = 0.0005f;
     const uint32_t start = app.elapsedMs();
-    for (int i = 0; i < 4000; ++i)
-        app.update(io);
+    for (int i = 0; i < 4000; ++i) app.update(io);
     const uint32_t elapsed = app.elapsedMs() - start;
     assert(elapsed >= 1999u && elapsed <= 2001u);
 }
@@ -1319,9 +1316,18 @@ namespace
 // consumir: o bubble continua para o pai depois de o widget ter sido apagado.
 struct RemovesItselfOnKey : ig::retained::Widget
 {
-    RemovesItselfOnKey() { acceptsFocus_ = true; }
-    void onKeyPress(ig::retained::KeyEvent&) override { parent()->removeChild(this); }
-    void onTextInput(ig::retained::KeyEvent&) override { parent()->removeChild(this); }
+    RemovesItselfOnKey()
+    {
+        acceptsFocus_ = true;
+    }
+    void onKeyPress(ig::retained::KeyEvent&) override
+    {
+        parent()->removeChild(this);
+    }
+    void onTextInput(ig::retained::KeyEvent&) override
+    {
+        parent()->removeChild(this);
+    }
 };
 } // namespace
 
@@ -1362,12 +1368,13 @@ static void test_unhandled_keys_reach_the_application()
     int seen = 0;
     int lastKey = 0;
     bool lastCtrl = false;
-    const auto slot = app.unhandledKey.connect([&](KeyEvent& e)
-    {
-        ++seen;
-        lastKey = e.key;
-        lastCtrl = e.ctrl;
-    });
+    const auto slot = app.unhandledKey.connect(
+            [&](KeyEvent& e)
+            {
+                ++seen;
+                lastKey = e.key;
+                lastCtrl = e.ctrl;
+            });
     auto press = [&app](int key, bool ctrl, bool down = true)
     {
         IO io;
@@ -1387,7 +1394,7 @@ static void test_unhandled_keys_reach_the_application()
 
     auto* first = stage->createChild<RemovesItselfOnKey>();
     app.setFocused(first);
-    press(Key::Escape, false);   // consumed (it removes itself)
+    press(Key::Escape, false); // consumed (it removes itself)
     assert(seen == 1);
     auto* input = stage->createChild<TextInput>();
     app.setFocused(input);
@@ -1409,16 +1416,19 @@ static void test_signal_handlers_can_change_the_signal()
     int otherCalls = 0;
     int addedCalls = 0;
     int captured = 41;
-    once = signal.connect([&signal, &once, &onceCalls, captured](int) mutable {
-        signal.disconnect(once);
-        ++captured;
-        onceCalls += captured - 41;
-    });
-    signal.connect([&signal, &otherCalls, &addedCalls](int) {
-        ++otherCalls;
-        for (int i = 0; i < 16; ++i)
-            signal.connect([&addedCalls](int) { ++addedCalls; });
-    });
+    once = signal.connect(
+            [&signal, &once, &onceCalls, captured](int) mutable
+            {
+                signal.disconnect(once);
+                ++captured;
+                onceCalls += captured - 41;
+            });
+    signal.connect(
+            [&signal, &otherCalls, &addedCalls](int)
+            {
+                ++otherCalls;
+                for (int i = 0; i < 16; ++i) signal.connect([&addedCalls](int) { ++addedCalls; });
+            });
     signal.connect([&otherCalls](int) { ++otherCalls; });
 
     signal.emit(1);
@@ -1432,7 +1442,12 @@ static void test_signal_handlers_can_change_the_signal()
 
     auto* owned = new Signal<>();
     bool after = false;
-    owned->connect([&owned]() { delete owned; owned = nullptr; });
+    owned->connect(
+            [&owned]()
+            {
+                delete owned;
+                owned = nullptr;
+            });
     owned->connect([&after]() { after = true; });
     owned->emit();
     assert(owned == nullptr);
@@ -4043,14 +4058,15 @@ static void test_thumbnail_grid_drags_an_item()
 
     assert(!pointAt(28.0f, 38.0f));
     int asked = -1;
-    grid.setDragPayload([&asked](int index)
-    {
-        asked = index;
-        DragPayload payload;
-        payload.type = "thumb";
-        payload.data = index;
-        return payload;
-    });
+    grid.setDragPayload(
+            [&asked](int index)
+            {
+                asked = index;
+                DragPayload payload;
+                payload.type = "thumb";
+                payload.data = index;
+                return payload;
+            });
     assert(!pointAt(210.0f, 250.0f));
     assert(pointAt(116.0f, 38.0f));
     const DragPayload payload = grid.onDragBegin();
@@ -4235,15 +4251,22 @@ static void test_choice_dialog_answers_once()
     using namespace ig::retained;
     WidgetApp& app = WidgetApp::instance();
     int answer = -2, answers = 0;
-    auto make = [&]() {
+    auto make = [&]()
+    {
         auto* d = app.addFloat<ChoiceDialog>("Unsaved", "Save it?");
         d->addChoice("Save", IconId::Check, ChoiceDialog::Role::Default);
         d->addChoice("Don't save", IconId::Trash, ChoiceDialog::Role::Destructive);
         d->addChoice("Cancel", IconId::Cross, ChoiceDialog::Role::Cancel);
-        d->chosen.connect([&](int i) { answer = i; ++answers; });
+        d->chosen.connect(
+                [&](int i)
+                {
+                    answer = i;
+                    ++answers;
+                });
         return d;
     };
-    auto key = [](ChoiceDialog* d, int code) {
+    auto key = [](ChoiceDialog* d, int code)
+    {
         KeyEvent e;
         e.key = code;
         d->onKeyPress(e);
@@ -4251,7 +4274,7 @@ static void test_choice_dialog_answers_once()
     ChoiceDialog* d = make();
     key(d, Key::Return);
     assert(answer == 0 && answers == 1);
-    key(d, Key::Escape);   // already answered
+    key(d, Key::Escape); // already answered
     assert(answers == 1);
 
     d = make();
@@ -4259,7 +4282,7 @@ static void test_choice_dialog_answers_once()
     assert(answer == 2 && answers == 2);
 
     d = make();
-    d->closed.emit();      // the window's close button
+    d->closed.emit(); // the window's close button
     assert(answer == 2 && answers == 3);
 
     d = make();
@@ -4273,7 +4296,7 @@ static void test_choice_dialog_answers_once()
     key(plain, Key::Escape);
     assert(none == -1);
     IO io;
-    app.update(io);   // the closed dialogs are deleted here
+    app.update(io); // the closed dialogs are deleted here
 }
 
 // O ColorButton abre o ColorPicker num popup: um arrasto avisa a cada passo e
@@ -4287,16 +4310,22 @@ static void test_color_button_opens_a_picker_and_commits_once()
     Widget* stage = app.addStage("colorbutton");
     assert(app.setStage("colorbutton", TransitionType::None));
     auto* button = stage->createChild<ColorButton>(Color(10, 20, 30, 255));
-    button->setRect({20.0f, 20.0f, 96.0f, 22.0f});
+    button->setRect({ 20.0f, 20.0f, 96.0f, 22.0f });
     int changes = 0, commits = 0;
     Color committed;
     button->colorChanged.connect([&](Color) { ++changes; });
-    button->colorCommitted.connect([&](Color c) { ++commits; committed = c; });
+    button->colorCommitted.connect(
+            [&](Color c)
+            {
+                ++commits;
+                committed = c;
+            });
 
     button->setColor(Color(200, 40, 40, 255));
     assert(changes == 0 && button->color().r == 200 && button->picker() == nullptr);
 
-    auto click = [&](float x, float y) {
+    auto click = [&](float x, float y)
+    {
         MouseEvent press;
         press.button = 0;
         press.x = x;
@@ -4323,7 +4352,8 @@ static void test_color_button_opens_a_picker_and_commits_once()
     picker->onMouseMove(e);
     picker->onMouseRelease(e);
     assert(changes >= 2 && commits == 1);
-    assert(button->color().r == committed.r && button->color().g == committed.g && button->color().b == committed.b);
+    assert(button->color().r == committed.r && button->color().g == committed.g &&
+            button->color().b == committed.b);
 
     // The same point again changes nothing: no commit.
     picker->onMousePress(e);
@@ -4374,7 +4404,7 @@ static void test_tree_view_selects_several_rows()
     click(12.0f, false, false);
     click(60.0f, true, false);
     tree.selectedNodes(nodes);
-    assert(nodes.size() == 1 && nodes[0] == c);   // sem a seleção múltipla, Ctrl+clique seleciona
+    assert(nodes.size() == 1 && nodes[0] == c); // sem a seleção múltipla, Ctrl+clique seleciona
 
     tree.setMultiSelect(true);
     click(12.0f, false, false);
@@ -4386,9 +4416,11 @@ static void test_tree_view_selects_several_rows()
     assert(nodes.size() == 1 && nodes[0] == a);
     click(84.0f, false, true);
     tree.selectedNodes(nodes);
-    assert(nodes.size() == 4 && tree.selectedNode() == a && tree.isNodeSelected(b) && tree.isNodeSelected(d));
+    assert(nodes.size() == 4 && tree.selectedNode() == a && tree.isNodeSelected(b) &&
+            tree.isNodeSelected(d));
     click(12.0f, true, false);
-    assert(tree.selectedNode() == b && !tree.isNodeSelected(a));   // a seguinte passa a ser a selecionada
+    assert(tree.selectedNode() == b &&
+            !tree.isNodeSelected(a)); // a seguinte passa a ser a selecionada
     click(36.0f, false, false);
     tree.selectedNodes(nodes);
     assert(nodes.size() == 1 && nodes[0] == b);
@@ -4406,18 +4438,19 @@ static void test_tree_view_drops_a_dragged_node()
     TreeNode* a1 = a->addChild("a1");
     TreeNode* b = tree.addRoot("B");
     b->addToggle(IconId::Eye, IconId::EyeOff, true);
-    (void)a1;
+    (void) a1;
     TreeNode* dropped = nullptr;
     TreeNode* onto = nullptr;
     TreeView::DropZone zone = TreeView::DropZone::Before;
     int drops = 0;
-    tree.nodeDropped.connect([&](TreeNode* n, TreeNode* t, TreeView::DropZone z)
-    {
-        dropped = n;
-        onto = t;
-        zone = z;
-        ++drops;
-    });
+    tree.nodeDropped.connect(
+            [&](TreeNode* n, TreeNode* t, TreeView::DropZone z)
+            {
+                dropped = n;
+                onto = t;
+                zone = z;
+                ++drops;
+            });
     // Linhas de 24: A em 0, a1 em 24, B em 48.
     auto hover = [&tree](float x, float y)
     {
@@ -4429,8 +4462,7 @@ static void test_tree_view_drops_a_dragged_node()
     auto drag = [&](float fromY, float toY, float x = 60.0f)
     {
         hover(x, fromY);
-        if (!tree.isDragSource())
-            return false;
+        if (!tree.isDragSource()) return false;
         MouseEvent press;
         press.button = 0;
         press.x = x;
@@ -4441,8 +4473,7 @@ static void test_tree_view_drops_a_dragged_node()
         hover(x, toY);
         payload.dropX = x;
         payload.dropY = toY;
-        if (tree.acceptsDrop(payload))
-            tree.onDropReceive(payload);
+        if (tree.acceptsDrop(payload)) tree.onDropReceive(payload);
         tree.onDragEnd(true);
         return true;
     };
@@ -4480,7 +4511,12 @@ static void test_tree_view_drops_a_dragged_node()
     TreeNode* landed = a;
     int outsideDrops = 0;
     tree.setExternalDrop([](const DragPayload& p) { return p.type == "asset"; });
-    tree.externalDropped.connect([&](const DragPayload&, TreeNode* node) { landed = node; ++outsideDrops; });
+    tree.externalDropped.connect(
+            [&](const DragPayload&, TreeNode* node)
+            {
+                landed = node;
+                ++outsideDrops;
+            });
     assert(tree.acceptsDrop(outside));
     tree.onDropReceive(outside);
     assert(outsideDrops == 1 && landed == b);
@@ -6567,9 +6603,9 @@ static void test_scroll_view_wheel_reaches_the_end_with_both_bars()
 }
 
 static_assert(std::is_same<ig::retained::CodeEditor::SuperType, ig::retained::TextEdit>::value,
-              "SuperType must name the declared base");
+        "SuperType must name the declared base");
 static_assert(std::is_same<ig::retained::TextEdit::SuperType, ig::retained::Widget>::value,
-              "SuperType must name the declared base");
+        "SuperType must name the declared base");
 
 // widget_cast e typeName seguem a cadeia declarada em IG_WIDGET_CLASS, sem RTTI.
 static void test_widget_cast_follows_the_declared_chain()
@@ -6630,12 +6666,11 @@ static void test_serializer_round_trips_every_listed_type()
     WidgetSerializer::registerBuiltinTypes();
 
     auto* root = new BoxLayout(LayoutDir::Vertical);
-    static const char* const expected[] = {
-        "ImageView", "ScrollView", "ScrollBar", "Canvas", "ProgressBar", "Slider",
-        "ComboBox", "ListWidget", "ListBox", "RadioButton", "Switch", "CheckBox",
-        "Button", "Line", "Spacer", "Label", "Panel", "StatusBar", "Collapsible",
-        "StackLayout", "FormLayout", "FlowLayout", "Overlay", "Splitter",
-        "GridLayout", "BorderLayout", "BoxLayout"};
+    static const char* const expected[] = { "ImageView", "ScrollView", "ScrollBar", "Canvas",
+        "ProgressBar", "Slider", "ComboBox", "ListWidget", "ListBox", "RadioButton", "Switch",
+        "CheckBox", "Button", "Line", "Spacer", "Label", "Panel", "StatusBar", "Collapsible",
+        "StackLayout", "FormLayout", "FlowLayout", "Overlay", "Splitter", "GridLayout",
+        "BorderLayout", "BoxLayout" };
     root->createChild<ImageView>();
     root->createChild<ScrollView>();
     root->createChild<ScrollBar>();
@@ -6714,7 +6749,7 @@ static void test_side_tab_bar_opens_pages_and_folds()
 {
     using namespace ig::retained;
     SideTabBar bar(SideTabBar::Side::Left);
-    bar.setRect({0.0f, 0.0f, 400.0f, 600.0f});
+    bar.setRect({ 0.0f, 0.0f, 400.0f, 600.0f });
     bar.setPageWidth(240.0f);
     auto* character = bar.addPage<Label>(IconId::User, "Character", "character");
     auto* camera = bar.addPage<Label>(IconId::Eye, "Camera", "camera");
@@ -6834,7 +6869,7 @@ static void test_side_tab_bar_right_side_hidden_and_disabled_pages()
 {
     using namespace ig::retained;
     SideTabBar bar(SideTabBar::Side::Right);
-    bar.setRect({100.0f, 50.0f, 400.0f, 600.0f});
+    bar.setRect({ 100.0f, 50.0f, 400.0f, 600.0f });
     bar.setRailWidth(64.0f);
     auto* a = bar.addPage<Label>(IconId::Gear, "Settings", "a");
     auto* b = bar.addPage<Label>(IconId::Info, "Log", "b");
@@ -6857,11 +6892,11 @@ static void test_side_tab_bar_right_side_hidden_and_disabled_pages()
     assert(bar.buttonRect(2, moved));
     assert(std::fabs(moved.y - r1.y) < 0.001f);
     assert(bar.buttonAt(r1.x + 2.0f, r1.y + 2.0f) == 2);
-    bar.setCurrentIndex(1);   // escondida: fica como estava
+    bar.setCurrentIndex(1); // escondida: fica como estava
     assert(bar.currentIndex() == 0);
-    bar.setPageVisible(0, false);   // a aberta: dobra
+    bar.setPageVisible(0, false); // a aberta: dobra
     assert(bar.isCollapsed());
-    bar.expand();   // a última aberta está escondida: abre a primeira visível
+    bar.expand(); // a última aberta está escondida: abre a primeira visível
     assert(bar.currentIndex() == 2 && bar.currentWidget() == c);
     bar.setPageVisible(0, true);
     bar.setPageVisible(1, true);
@@ -6897,7 +6932,7 @@ static void test_side_tab_bar_right_side_hidden_and_disabled_pages()
     away.x = 10.0f;
     away.y = 10.0f;
     bar.onMouseMove(move);
-    assert(bar.tooltip().empty());   // com rótulos à vista o tooltip não os repete
+    assert(bar.tooltip().empty()); // com rótulos à vista o tooltip não os repete
     assert(bar.cursor() == CursorType::Hand);
     bar.setShowLabels(false);
     bar.onMouseMove(away);
@@ -7017,7 +7052,7 @@ static void test_side_tab_bar_paints_badge_and_active_frame()
 {
     using namespace ig::retained;
     SideTabBar bar;
-    bar.setRect({0.0f, 0.0f, 300.0f, 400.0f});
+    bar.setRect({ 0.0f, 0.0f, 300.0f, 400.0f });
     bar.setRailWidth(60.0f);
     bar.addPage<Panel>(IconId::Gear, "A");
     bar.addPage<Panel>(IconId::Info, "B");
@@ -7040,8 +7075,8 @@ static void test_side_tab_bar_paints_badge_and_active_frame()
     const Theme& t = Theme::instance();
     Rect r0, r1;
     assert(bar.buttonRect(0, r0) && bar.buttonRect(1, r1));
-    const Rect rail{0.0f, 0.0f, 60.0f, 400.0f};
-    const Rect page{60.0f, 0.0f, 240.0f, 400.0f};
+    const Rect rail{ 0.0f, 0.0f, 60.0f, 400.0f };
+    const Rect page{ 60.0f, 0.0f, 240.0f, 400.0f };
 
     DrawList open;
     PaintContext openCtx(open);
@@ -7198,25 +7233,34 @@ int main()
     test_widget_cast_follows_the_declared_chain();
     test_serializer_round_trips_every_listed_type();
     PropertyGrid transformGrid;
-    transformGrid.setRect({0, 0, 400, 180});
+    transformGrid.setRect({ 0, 0, 400, 180 });
     float editedX = 1, editedY = 2, editedZ = 3;
     int changes = 0;
     transformGrid.addVec3("Position", 1, 2, 3, -100, 100,
-        [&](float x, float y, float z) { editedX=x; editedY=y; editedZ=z; ++changes; });
+            [&](float x, float y, float z)
+            {
+                editedX = x;
+                editedY = y;
+                editedZ = z;
+                ++changes;
+            });
     MouseEvent numericMouse;
-    numericMouse.x=180; numericMouse.y=12;
+    numericMouse.x = 180;
+    numericMouse.y = 12;
     transformGrid.onMousePress(numericMouse);
     assert(changes == 0); // pressing must not jump to the pointer's absolute value
     transformGrid.onMouseRelease(numericMouse);
     KeyEvent editKey;
-    editKey.key=ig::retained::Key::Home;
+    editKey.key = ig::retained::Key::Home;
     transformGrid.onKeyPress(editKey);
-    editKey.key=ig::retained::Key::Delete;
-    for (int i=0; i<32; ++i) transformGrid.onKeyPress(editKey);
+    editKey.key = ig::retained::Key::Delete;
+    for (int i = 0; i < 32; ++i) transformGrid.onKeyPress(editKey);
     KeyEvent numericText;
-    numericText.text[0]='4'; numericText.text[1]='.'; numericText.text[2]='5';
+    numericText.text[0] = '4';
+    numericText.text[1] = '.';
+    numericText.text[2] = '5';
     transformGrid.onTextInput(numericText);
-    editKey.key=ig::retained::Key::Return;
+    editKey.key = ig::retained::Key::Return;
     transformGrid.onKeyPress(editKey);
     assert(editedX == 4.5f && editedY == 2 && editedZ == 3 && changes == 1);
     transformGrid.onMousePress(numericMouse);
@@ -7225,7 +7269,7 @@ int main()
     transformGrid.onMouseRelease(numericMouse);
     assert(editedX > 4.5f && editedY == 2 && editedZ == 3);
     Timeline timeline;
-    timeline.setRect({0, 0, 600, 240});
+    timeline.setRect({ 0, 0, 600, 240 });
     timeline.setTimeRange(0, 5);
     const int rootJoint = timeline.addJoint("Root");
     const int handJoint = timeline.addJoint("Hand", rootJoint);
@@ -7237,7 +7281,8 @@ int main()
     timeline.addKeyframe(rootJoint, 0);
     timeline.addKeyframe(rootJoint, 5);
     MouseEvent mouse;
-    mouse.x = 176; mouse.y = 38;
+    mouse.x = 176;
+    mouse.y = 38;
     timeline.onMousePress(mouse);
     assert(timeline.track(rootJoint).keyframes[0].selected);
     mouse.x = 190;
@@ -7251,16 +7296,18 @@ int main()
     timeline.onMouseMove(mouse);
     timeline.onMouseRelease(mouse);
     assert(timeline.track(rootJoint).keyframes[1].time == 5);
-    mouse.x = 380; mouse.y = 66; mouse.clickCount = 2;
+    mouse.x = 380;
+    mouse.y = 66;
+    mouse.clickCount = 2;
     timeline.onMousePress(mouse);
     assert(timeline.track(handJoint).keyframes.size() == 1);
     timeline.setTimeRange(2, 2);
     assert(timeline.viewStart() == 0 && timeline.viewEnd() == 5);
     SyntaxLanguage language;
     language.name = "Example";
-    language.extensions = {"example"};
-    language.keywords = {"emit"};
-    language.constants = {"yes"};
+    language.extensions = { "example" };
+    language.keywords = { "emit" };
+    language.constants = { "yes" };
     DefinedHighlighter defined(language);
     auto tokens = defined.highlightLine(0, "emit yes // comment", 0);
     assert(tokens.spans[0].type == SyntaxHighlighter::TokenType::Keyword);
@@ -7269,9 +7316,11 @@ int main()
     auto block = defined.highlightLine(0, "/* start", 0);
     assert(block.state == 1);
     auto endBlock = defined.highlightLine(1, "end */ emit", block.state);
-    assert(endBlock.state == 0 && endBlock.spans.back().type == SyntaxHighlighter::TokenType::Keyword);
+    assert(endBlock.state == 0 &&
+            endBlock.spans.back().type == SyntaxHighlighter::TokenType::Keyword);
     auto quoted = defined.highlightLine(0, "\"// text\"", 0);
-    assert(quoted.spans.size() == 1 && quoted.spans[0].type == SyntaxHighlighter::TokenType::String);
+    assert(quoted.spans.size() == 1 &&
+            quoted.spans[0].type == SyntaxHighlighter::TokenType::String);
     assert(defined.foldDelta(0, "{ \"}\" // }") == 1);
     CodeEditor editor;
     CodeEditor::registerLanguage(language);
@@ -7288,8 +7337,8 @@ int main()
 
     // ct::Regex-backed find/replace (see third_party/containers submodule)
     editor.setText("foo bar foo baz");
-    TextEdit::TextPos expectCol3{0, 3};
-    TextEdit::TextPos expectCol11{0, 11};
+    TextEdit::TextPos expectCol3{ 0, 3 };
+    TextEdit::TextPos expectCol11{ 0, 11 };
     assert(editor.findNext("foo", true, false, false));
     assert(editor.cursorPos() == expectCol3);
     assert(editor.findNext("foo", true, false, false));

@@ -25,15 +25,24 @@
 //    - Scrollbar
 // ═════════════════════════════════════════════════════════════════════════════
 
-namespace ig { namespace retained
+namespace ig
 {
-enum class LogLevel { Trace, Info, Warn, Error };
+namespace retained
+{
+enum class LogLevel
+{
+    Trace,
+    Info,
+    Warn,
+    Error
+};
 
-struct LogEntry {
-    LogLevel    level     = LogLevel::Info;
+struct LogEntry
+{
+    LogLevel level = LogLevel::Info;
     String message;
-    float       timestamp = 0;    // seconds since app start
-    int         count     = 1;    // collapse duplicate consecutive messages
+    float timestamp = 0; // seconds since app start
+    int count = 1;       // collapse duplicate consecutive messages
 };
 
 class ConsoleWidget : public Widget
@@ -51,24 +60,50 @@ public:
     void clear();
 
     /// @brief Set maximum log entries (oldest evicted).
-    void setMaxLines(int n)          { maxLines_ = n; trimEntries(); }
+    void setMaxLines(int n)
+    {
+        maxLines_ = n;
+        trimEntries();
+    }
     /// @brief Get the max line count.
-    int  maxLines() const            { return maxLines_; }
+    int maxLines() const
+    {
+        return maxLines_;
+    }
 
     /// @brief Show or hide timestamps.
-    void setShowTimestamp(bool v)    { showTimestamp_ = v; markDirty(); }
+    void setShowTimestamp(bool v)
+    {
+        showTimestamp_ = v;
+        markDirty();
+    }
     /// @brief Check if timestamps are shown.
-    bool showTimestamp() const       { return showTimestamp_; }
+    bool showTimestamp() const
+    {
+        return showTimestamp_;
+    }
 
     /// @brief Enable auto-scroll to bottom on new entries.
-    void setAutoScroll(bool v)       { autoScroll_ = v; }
+    void setAutoScroll(bool v)
+    {
+        autoScroll_ = v;
+    }
     /// @brief Check if auto-scroll is enabled.
-    bool autoScroll() const          { return autoScroll_; }
+    bool autoScroll() const
+    {
+        return autoScroll_;
+    }
 
     /// @brief Collapse consecutive duplicate messages.
-    void setCollapseDuplicates(bool v) { collapse_ = v; }
+    void setCollapseDuplicates(bool v)
+    {
+        collapse_ = v;
+    }
     /// @brief Check if duplicate collapsing is enabled.
-    bool collapseDuplicates() const    { return collapse_; }
+    bool collapseDuplicates() const
+    {
+        return collapse_;
+    }
 
     /// @brief Show or hide a log level in the output.
     void setFilter(LogLevel level, bool show);
@@ -77,18 +112,27 @@ public:
     /// @brief Set text search/highlight filter.
     void setSearchText(const String& s);
     /// @brief Get the current search filter text.
-    const String& searchText() const { return searchText_; }
+    const String& searchText() const
+    {
+        return searchText_;
+    }
     /// @brief Messages of @p level still in the log, repeats included.
     int messageCount(LogLevel level) const;
 
     /// @brief Set the console background color.
-    void setBgColor(const Color& c) { bgColor_ = c; }
+    void setBgColor(const Color& c)
+    {
+        bgColor_ = c;
+    }
 
     /// @brief Emitted when a command is submitted.
     Signal<const String&> onCommand;
 
     // ── Overrides ────────────────────────────────────────────────────────
-    Vec2f sizeHint() const override { return {400, 250}; }
+    Vec2f sizeHint() const override
+    {
+        return { 400, 250 };
+    }
     void paint(PaintContext& ctx) override;
     void layout() override;
     void onMousePress(MouseEvent& e) override;
@@ -101,16 +145,16 @@ private:
     // ── Entries ──────────────────────────────────────────────────────────
     ct::Deque<LogEntry> entries_;
     int maxLines_ = 10000;
-    bool collapse_      = true;
-    bool showTimestamp_  = false;
-    bool autoScroll_     = true;
+    bool collapse_ = true;
+    bool showTimestamp_ = false;
+    bool autoScroll_ = true;
 
     void trimEntries();
 
     // ── Filter state ─────────────────────────────────────────────────────
     bool showTrace_ = true;
-    bool showInfo_  = true;
-    bool showWarn_  = true;
+    bool showInfo_ = true;
+    bool showWarn_ = true;
     bool showError_ = true;
     String searchText_;
 
@@ -132,35 +176,35 @@ private:
     void updateCount(LogLevel l, int delta);
 
     // ── Scroll ───────────────────────────────────────────────────────────
-    float scrollY_       = 0;
-    bool  scrollLocked_  = false;  // user scrolled up manually
+    float scrollY_ = 0;
+    bool scrollLocked_ = false; // user scrolled up manually
 
     // ── Selection ────────────────────────────────────────────────────────
-    int  selectedLine_ = -1;
+    int selectedLine_ = -1;
 
     // ── Command input ────────────────────────────────────────────────────
     String inputBuf_;
-    bool        inputFocused_ = false;
-    int         cursorPos_    = 0;
+    bool inputFocused_ = false;
+    int cursorPos_ = 0;
 
     // ── Command history ──────────────────────────────────────────────────
     ct::Vector<String> history_;
-    int                      historyIdx_ = -1;
+    int historyIdx_ = -1;
 
     // ── Search mode ──────────────────────────────────────────────────────
-    bool searchMode_   = false;
+    bool searchMode_ = false;
     String searchBuf_;
 
     // ── Layout rects ─────────────────────────────────────────────────────
-    static constexpr float kToolbarH  = 24.f;
-    static constexpr float kInputH    = 26.f;
-    static constexpr float kLineH     = 18.f;
+    static constexpr float kToolbarH = 24.f;
+    static constexpr float kInputH = 26.f;
+    static constexpr float kLineH = 18.f;
 
     Color bgColor_ = Color(22, 24, 28, 255);
 
     // ── Helpers ──────────────────────────────────────────────────────────
-    Color  levelColor(LogLevel l) const;
-    Color  levelBgColor(LogLevel l) const;
+    Color levelColor(LogLevel l) const;
+    Color levelBgColor(LogLevel l) const;
     const char* levelTag(LogLevel l) const;
 
     void paintToolbar(PaintContext& ctx, const Rect& area);

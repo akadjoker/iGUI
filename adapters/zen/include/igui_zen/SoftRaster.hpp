@@ -1,7 +1,7 @@
 #pragma once
 
-#include <igui/widgets/Retained.hpp>
 #include <ct/vector.hpp>
+#include <igui/widgets/Retained.hpp>
 #include <stdint.h>
 
 namespace ig
@@ -15,20 +15,24 @@ namespace zen
 class SoftRaster
 {
 public:
-    ig::retained::TextureHandle createTexture(int width, int height, const unsigned char *rgba);
+    ig::retained::TextureHandle createTexture(int width, int height, const unsigned char* rgba);
     void destroyTexture(ig::retained::TextureHandle texture);
     // Replaces the pixels; the size must match the texture's.
-    bool updateTexture(ig::retained::TextureHandle texture, const unsigned char *rgba, int width, int height);
+    bool updateTexture(ig::retained::TextureHandle texture, const unsigned char* rgba, int width,
+            int height);
 
     // Samples per axis: 1 = no AA, 2 = 4 samples per pixel, 3 or 4 = more.
     void setSamples(int perAxis);
-    int samples() const { return samples_; }
+    int samples() const
+    {
+        return samples_;
+    }
 
     // dst is 0xAARRGGBB. It is overwritten, starting from background. When the
     // draw data, size and settings match the previous call, the cached image is
     // copied instead of rasterised again; returns true only when it rasterised.
-    bool render(ig::retained::DrawData &data, uint32_t *dst, int width, int height,
-                int stride, uint32_t background);
+    bool render(ig::retained::DrawData& data, uint32_t* dst, int width, int height, int stride,
+            uint32_t background);
 
 private:
     struct Texture
@@ -46,20 +50,20 @@ private:
         float r, g, b, a;
     };
 
-    void resolve(uint32_t *dst, int width, int height, int stride);
-    void storeCache(uint64_t sig, const uint32_t *src, int width, int height, int stride);
-    void drawTriangle(const Vertex &a, const Vertex &b, const Vertex &c, const Texture *texture,
-                      int clipX0, int clipY0, int clipX1, int clipY1);
+    void resolve(uint32_t* dst, int width, int height, int stride);
+    void storeCache(uint64_t sig, const uint32_t* src, int width, int height, int stride);
+    void drawTriangle(const Vertex& a, const Vertex& b, const Vertex& c, const Texture* texture,
+            int clipX0, int clipY0, int clipX1, int clipY1);
 
-    uint64_t signature(const ig::retained::DrawData &data, int width, int height,
-                       uint32_t background) const;
+    uint64_t signature(const ig::retained::DrawData& data, int width, int height,
+            uint32_t background) const;
 
     int samples_ = 2;
     uint64_t lastSignature_ = 0;
     int cacheWidth_ = 0;
     int cacheHeight_ = 0;
     ct::Vector<uint32_t> cache_;
-    uint32_t *target_ = nullptr;
+    uint32_t* target_ = nullptr;
     int targetWidth_ = 0;
     int targetHeight_ = 0;
     int targetStride_ = 0;
