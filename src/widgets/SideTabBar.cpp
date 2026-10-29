@@ -619,6 +619,13 @@ void SideTabBar::onMouseMove(MouseEvent& e)
     updateHover(e.x, e.y);
 }
 
+void SideTabBar::onDragHover(const DragPayload&, float x, float y)
+{
+    const int index = buttonAt(x, y);
+    if (validIndex(index) && pages_[index].enabled && pages_[index].visible && index != currentIndex_)
+        showPage(index);
+}
+
 void SideTabBar::onMouseLeave()
 {
     Widget::onMouseLeave();

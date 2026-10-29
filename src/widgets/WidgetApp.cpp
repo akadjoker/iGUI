@@ -187,7 +187,7 @@ void WidgetApp::update(const ig::retained::IO& io)
     deferredCalls_.clear();
 
     // Tooltip timer
-    if (hovered_ && !hovered_->tooltip().empty())
+    if (hovered_ && hovered_->hasTooltip())
     {
         tooltipTimer_ += dt_;
         if (!tooltipVisible_ && tooltipTimer_ >= hovered_->tooltipDelay()) {
@@ -283,6 +283,9 @@ void WidgetApp::dispatchMouseMove(float x, float y)
         me.relX = relX;
         me.relY = relY;
         bubble(pressed_, me, &Widget::onMouseMove);
+        if (dragPayload_)
+            for (Widget* w = topWidgetAt(x, y); w; w = w->parent())
+                w->onDragHover(*dragPayload_, x, y);
         return;
     }
 
@@ -1798,10 +1801,20 @@ void WidgetApp::paintDebugOverlay(Widget* w, ig::retained::DrawList& dl, int dep
 
 void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained::Font* font)
 {
-    if (!tooltipWidget_ || tooltipWidget_->tooltip().empty()) return;
+    if (!tooltipWidget_ || !tooltipWidget_->hasTooltip()) return;
 
     const auto& t = Theme::instance();
     const String& text = tooltipWidget_->tooltip();
+    const TextureHandle image = tooltipWidget_->tooltipImage();
+    float imageW = 0.0f, imageH = 0.0f;
+    if (image && tooltipWidget_->tooltipImageWidth() > 0.0f && tooltipWidget_->tooltipImageHeight() > 0.0f)
+    {
+        const float side = 192.0f;
+        const float sw = tooltipWidget_->tooltipImageWidth(), sh = tooltipWidget_->tooltipImageHeight();
+        const float scale = sw > sh ? (sw > side ? side / sw : 1.0f) : (sh > side ? side / sh : 1.0f);
+        imageW = sw * scale;
+        imageH = sh * scale;
+    }
 
     float w = static_cast<float>(width_);
     float h = static_cast<float>(height_);
@@ -1810,12 +1823,13 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     ctx.font.SetColor(t.tooltipText);
-    float textW = ctx.font.GetTextWidth(text.c_str());
-    float textH = t.fontSize;
+    float textW = text.empty() ? 0.0f : ctx.font.GetTextWidth(text.c_str());
+    float textH = text.empty() ? 0.0f : t.fontSize;
+    const float gap = !text.empty() && imageH > 0.0f ? 4.0f : 0.0f;
 
     float padX = 8.0f, padY = 4.0f;
-    float tipW = textW + padX * 2;
-    float tipH = textH + padY * 2;
+    float tipW = (textW > imageW ? textW : imageW) + padX * 2;
+    float tipH = textH + gap + imageH + padY * 2;
 
     float tx = mouseX_ + 12.0f;
     float ty = mouseY_ + 18.0f;
@@ -1828,11 +1842,29 @@ void WidgetApp::paintTooltipInto(ig::retained::DrawList& dl, const ig::retained:
     ctx.fillRoundedRect(tx, ty, tipW, tipH, 3.0f, 4);
     ctx.line.SetColor(t.tooltipBorder);
     ctx.lineRoundedRect(tx, ty, tipW, tipH, 3.0f, 4);
-    ctx.font.SetFontSize(t.fontSize);
-    ctx.font.SetBatch(&ctx.text);
-    ctx.font.SetColor(t.tooltipText);
-    float asc = ctx.font.GetAscender();
-    ctx.font.Print(text.c_str(), tx + padX, ty + padY + asc);
+    if (imageH > 0.0f)
+    {
+        // A checker under the image, so its transparent parts read as such.
+        const float ix = tx + padX, iy = ty + padY + textH + gap;
+        const float cell = 8.0f;
+        for (float cy = 0.0f; cy < imageH; cy += cell)
+            for (float cx = 0.0f; cx < imageW; cx += cell)
+            {
+                const bool dark = (static_cast<int>(cx / cell) + static_cast<int>(cy / cell)) % 2 == 0;
+                ctx.fill.SetColor(dark ? Color(70, 70, 76, 255) : Color(100, 100, 108, 255));
+                ctx.fillRect(ix + cx, iy + cy, cx + cell > imageW ? imageW - cx : cell,
+                             cy + cell > imageH ? imageH - cy : cell);
+            }
+        ctx.drawImage(image, Rect{ix, iy, imageW, imageH});
+    }
+    if (!text.empty())
+    {
+        ctx.font.SetFontSize(t.fontSize);
+        ctx.font.SetBatch(&ctx.text);
+        ctx.font.SetColor(t.tooltipText);
+        float asc = ctx.font.GetAscender();
+        ctx.font.Print(text.c_str(), tx + padX, ty + padY + asc);
+    }
 }
 
 float WidgetApp::textWidth(const char* text) const

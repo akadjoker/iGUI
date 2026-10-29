@@ -442,6 +442,8 @@ public:
     virtual void        onDragEnd(bool accepted)         { (void)accepted; }
     virtual bool        acceptsDrop(const DragPayload& p){ (void)p; return false; }
     virtual void        onDropReceive(const DragPayload& p) { (void)p; }
+    /// @brief A drag passes over this widget or one inside it (window coordinates).
+    virtual void        onDragHover(const DragPayload& p, float x, float y) { (void)p; (void)x; (void)y; }
     virtual void        onFileDrop(const ct::Vector<String>& paths) { (void)paths; }
 
     // ── Signals (connect from user code) ──────────────────────────────────
@@ -512,6 +514,18 @@ public:
     void setTooltip(const String& tip) { tooltip_ = tip; }
     /// @brief Get the tooltip text.
     const String& tooltip() const      { return tooltip_; }
+    /// @brief An image the tooltip shows under its text, or alone; drawn at
+    ///        most 192 px on its longer side. A zero handle takes it away.
+    void setTooltipImage(TextureHandle texture, float width, float height)
+    {
+        tooltipImage_ = texture;
+        tooltipImageW_ = width;
+        tooltipImageH_ = height;
+    }
+    TextureHandle tooltipImage() const { return tooltipImage_; }
+    float tooltipImageWidth() const { return tooltipImageW_; }
+    float tooltipImageHeight() const { return tooltipImageH_; }
+    bool hasTooltip() const { return !tooltip_.empty() || (tooltipImage_ && tooltipImageW_ > 0.0f && tooltipImageH_ > 0.0f); }
     /// @brief Set delay before tooltip appears (seconds).
     void setTooltipDelay(float seconds)     { tooltipDelay_ = seconds; }
     /// @brief Get tooltip delay in seconds.
@@ -605,6 +619,9 @@ protected:
     ct::HashSet<String> tags_;
     ct::HashMap<String, std::any> data_;
     String tooltip_;
+    TextureHandle tooltipImage_;
+    float tooltipImageW_ = 0.0f;
+    float tooltipImageH_ = 0.0f;
     float tooltipDelay_ = 0.6f;  // seconds before tooltip appears
     CursorType cursor_ = CursorType::Arrow;
     Menu* contextMenu_ = nullptr;  // owned - deleted in ~Widget
