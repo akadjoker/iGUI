@@ -1230,6 +1230,16 @@ Widget* FileDialog::focusOnOpen()
     return fileNameInput_;
 }
 
+ct::Vector<String> FileDialog::selectedPaths() const
+{
+    ct::Vector<String> paths;
+    if (multiSelect_)
+        for (std::size_t i = 0; i < entries_.size() && i < multiSel_.size(); ++i)
+            if (multiSel_[i] && !entries_[i].isDir) paths.push_back(entries_[i].path);
+    if (paths.empty() && !selectedPath_.empty()) paths.push_back(selectedPath_);
+    return paths;
+}
+
 void FileDialog::onOk()
 {
     if (mode_ == Mode::SelectFolder)
