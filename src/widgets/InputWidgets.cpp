@@ -635,8 +635,20 @@ public:
         {
             float gx = abs.x + pad + col * cellW;
             float cy2 = gy + row * cellH;
-            bool isSel = (d == selected_.day && viewMonth_ == selected_.month &&
-                          viewYear_ == selected_.year);
+            bool isSel = (d == selected_.day && viewMonth_ == selected_.month && viewYear_ == selected_.year);
+            if (!isSel && d == hoverDay_) {
+                // The day under the pointer: the accent colour, filled and outlined.
+                Rect hoverR = {gx, cy2, cellW, cellH};
+                Rect hr;
+                if (ctx.clipRectIntersect(hoverR, hr)) {
+                    ctx.fill.SetColor(60, 140, 255, 110);
+                    ctx.fill.RoundedRectangle(static_cast<int>(hr.x + 2), static_cast<int>(hr.y + 1),
+                                               static_cast<int>(hr.w - 4), static_cast<int>(hr.h - 2), 3, 4, true);
+                    ctx.line.SetColor(60, 140, 255, 255);
+                    ctx.line.RoundedRectangle(static_cast<int>(hr.x + 2), static_cast<int>(hr.y + 1),
+                                               static_cast<int>(hr.w - 4), static_cast<int>(hr.h - 2), 3, 4, false);
+                }
+            }
 
             if (isSel)
             {
@@ -994,8 +1006,7 @@ void DatePicker::paint(PaintContext& ctx)
         segRect_[i] = {x - 2.0f, segY, w + 4.0f, segH};
         const bool active = focused_ && activeSeg_ == i + 1;
         if (hoverSeg_ == i + 1 || active) {
-            Color c = active ? t.focusColor : t.buttonHover;
-            ctx.fill.SetColor(c.r, c.g, c.b, active ? 120 : 255);
+            ctx.fill.SetColor(60, 140, 255, active ? 150 : 90);
             ctx.fill.RoundedRectangle(static_cast<int>(segRect_[i].x), static_cast<int>(segRect_[i].y),
                                        static_cast<int>(segRect_[i].w), static_cast<int>(segRect_[i].h), 3, 4, true);
         }
