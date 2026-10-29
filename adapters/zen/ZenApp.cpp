@@ -86,15 +86,23 @@ int cursorShape(int wanted)
 
 App::~App()
 {
-    if (!window_) return;
-    destroyTexture(atlas_.texture());
-    gl_.shutdown();
+    if (!main_)
+        return;
+    // Dialogs first, the main window last: the GL context lives in the main window.
+    for (int i = static_cast<int>(windows_.size()) - 1; i >= 0; --i)
+        destroyWindow(windows_[static_cast<size_t>(i)]);
+    windows_.clear();
+    main_ = current_ = nullptr;
     rt::DestroyContext(context_);
-    window_destroy(window_);
     platform_shutdown();
 }
 
-bool App::create(const Config& config)
+bool App::Window::closeRequested() const
+{
+    return platform && window_should_close(platform);
+}
+
+bool App::create(const Config &config)
 {
     if (!platform_init()) return false;
 
@@ -108,21 +116,22 @@ bool App::create(const Config& config)
     cfg.resizable = true;
     cfg.vsync = config.vsync;
     cfg.gl.msaa = config.msaa;
+    PlatformWindow *pw = nullptr;
     if (config.preferOpenGL && config.openGLES)
     {
         cfg.render = RENDER_GL;
         cfg.gl.profile = GL_PROFILE_ES;
         cfg.gl.major = 3;
         cfg.gl.minor = 0;
-        window_ = window_create(&cfg);
-        if (window_)
+        pw = window_create(&cfg);
+        if (pw)
         {
-            window_make_current(window_);
+            window_make_current(pw);
             useGl_ = gl_.init(gl_proc_address);
             if (!useGl_)
             {
-                window_destroy(window_);
-                window_ = nullptr;
+                window_destroy(pw);
+                pw = nullptr;
             }
         }
         if (useGl_)
@@ -144,13 +153,15 @@ bool App::create(const Config& config)
                 continue;
             cfg.gl.major = version[0];
             cfg.gl.minor = version[1];
-            window_ = window_create(&cfg);
-            if (!window_) continue;
-            window_make_current(window_);
+            pw = window_create(&cfg);
+            if (!pw)
+                continue;
+            window_make_current(pw);
             useGl_ = gl_.init(gl_proc_address);
-            if (useGl_) break;
-            window_destroy(window_);
-            window_ = nullptr;
+            if (useGl_)
+                break;
+            window_destroy(pw);
+            pw = nullptr;
         }
         if (useGl_)
             fprintf(stderr, "[ZenApp] OpenGL %d.%d core: %s\n", gl_.versionMajor(),
@@ -158,20 +169,28 @@ bool App::create(const Config& config)
         else
             fprintf(stderr, "[ZenApp] OpenGL core not available, using the software rasteriser\n");
     }
-    if (!window_)
+    if (!pw)
     {
         cfg.render = RENDER_PIXELS;
-        window_ = window_create(&cfg);
+        pw = window_create(&cfg);
     }
-    if (!window_)
+    if (!pw)
     {
         platform_shutdown();
         return false;
     }
 
-    background_ = config.background;
+    main_ = new Window();
+    main_->platform = pw;
+    main_->background = config.background;
+    windows_.push_back(main_);
+    current_ = main_;
+
     showStats_ = config.showStats;
     raster_.setSamples(config.samples);
+#if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
+    systemLoop_ = true;
+#endif
 
     context_ = rt::CreateContext();
     rt::SetCurrentContext(context_);
@@ -193,48 +212,173 @@ bool App::create(const Config& config)
             { return updateTexture(t, p, w, h); });
     app.setTextureDestroy([this](rt::TextureHandle t) { destroyTexture(t); });
 
-    window_text_input_start(window_);
+    window_text_input_start(pw);
     return true;
 }
 
-rt::TextureHandle App::createTexture(int w, int h, const unsigned char* rgba)
+bool App::supportsWindows() const
 {
-    return useGl_ ? gl_.createTexture(w, h, rgba) : raster_.createTexture(w, h, rgba);
+    return main_ && useGl_ && !systemLoop_;
 }
 
-void App::destroyTexture(rt::TextureHandle t)
+App::Window *App::openWindow(const WindowDesc &desc)
 {
-    if (useGl_) gl_.destroyTexture(t);
-    else
-        raster_.destroyTexture(t);
+    if (!supportsWindows())
+        return nullptr;
+    Window *parent = desc.parent ? desc.parent : main_;
+    if (!isOpen(parent))
+        return nullptr;
+
+    WindowConfig cfg;
+    memset(&cfg, 0, sizeof cfg);
+    cfg.title = desc.title;
+    cfg.width = desc.width;
+    cfg.height = desc.height;
+    cfg.x = WINDOW_POS_CENTERED;
+    cfg.y = WINDOW_POS_CENTERED;
+    cfg.resizable = desc.resizable;
+    cfg.vsync = false; // one vsync wait per frame, on the main window
+    cfg.render = RENDER_GL;
+    cfg.gl.profile = GL_PROFILE_CORE;
+    cfg.gl.major = gl_.versionMajor();
+    cfg.gl.minor = gl_.versionMinor();
+    cfg.kind = desc.dialog ? WINDOW_KIND_DIALOG : WINDOW_KIND_NORMAL;
+    cfg.parent = desc.dialog ? parent->platform : nullptr;
+    PlatformWindow *pw = window_create(&cfg);
+    if (!pw)
+        return nullptr;
+    window_text_input_start(pw);
+
+    Window *w = new Window();
+    w->platform = pw;
+    w->parent = parent;
+    w->dialog = desc.dialog;
+    w->modal = desc.dialog && desc.modal;
+    w->background = desc.background;
+    windows_.push_back(w);
+    makeCurrent(w);
+    return w;
 }
 
-bool App::updateTexture(rt::TextureHandle t, const unsigned char* rgba, int w, int h)
+void App::closeWindow(Window *w)
 {
-    return useGl_ ? gl_.updateTexture(t, rgba, w, h) : raster_.updateTexture(t, rgba, w, h);
+    if (w && isOpen(w))
+        w->closing = true;
+}
+
+bool App::isOpen(const Window *w) const
+{
+    for (const Window *x : windows_)
+        if (x == w)
+            return !x->closing;
+    return false;
+}
+
+void App::makeCurrent(Window *w)
+{
+    if (!w || w == current_)
+        return;
+    rt::WidgetApp &app = widgets();
+    if (current_)
+        app.swapSurface(current_->surface); // live state out, to the old window
+    app.swapSurface(w->surface);            // the new window's state in
+    current_ = w;
+}
+
+bool App::blockedByModal(const Window *w) const
+{
+    for (const Window *x : windows_)
+        if (x != w && x->modal && !x->closing)
+            for (const Window *p = x->parent; p; p = p->parent)
+                if (p == w)
+                    return true;
+    return false;
+}
+
+void App::destroyWindow(Window *w)
+{
+    makeCurrent(w);
+    widgets().releaseSurface();
+    if (w == main_)
+    {
+        destroyTexture(atlas_.texture());
+        gl_.shutdown();
+    }
+    window_destroy(w->platform);
+    w->platform = nullptr;
+    // The live state is now empty; whoever becomes current next swaps its own in.
+    current_ = nullptr;
+    delete w;
 }
 
 void App::run()
 {
     statsTime_ = lastFrame_ = time_seconds();
-    app_run(window_, &App::frameThunk, this);
+    if (systemLoop_)
+    {
+        app_run(main_->platform, &App::frameThunk, this);
+        return;
+    }
+    while (pump())
+    {
+    }
 }
 
 void App::frameThunk(PlatformWindow*, void* user)
 {
-    static_cast<App*>(user)->frame();
+    App *app = static_cast<App *>(user);
+    app->frameWindow(app->main_, true);
+    app->updateStats();
 }
 
-void App::feedInput()
+bool App::pump()
 {
-    rt::IO& io = rt::GetIO();
-    const int mods = key_mods(window_);
+    if (!main_ || main_->closeRequested() || main_->closing)
+        return false;
+    // Windows may be opened or closed by widget handlers during the frame:
+    // go by index, and destroy only afterwards.
+    for (size_t i = 0; i < windows_.size(); ++i)
+    {
+        Window *w = windows_[i];
+        if (w->closing)
+            continue;
+        if (w != main_ && w->closeRequested())
+        {
+            w->closing = true;
+            continue;
+        }
+        window_begin_frame(w->platform);
+        frameWindow(w, false);
+        window_swap(w->platform);
+    }
+    for (size_t i = windows_.size(); i-- > 1;)
+    {
+        Window *w = windows_[i];
+        if (!w->closing)
+            continue;
+        // Children of a closing window close with it.
+        for (Window *x : windows_)
+            if (x->parent == w)
+                x->closing = true;
+        destroyWindow(w);
+        windows_.erase(windows_.begin() + static_cast<ptrdiff_t>(i));
+    }
+    if (!current_)
+        makeCurrent(main_);
+    updateStats();
+    return !main_->closeRequested();
+}
+
+void App::feedInput(PlatformWindow *pw)
+{
+    rt::IO &io = rt::GetIO();
+    const int mods = key_mods(pw);
     io.keyShift = (mods & KEYMOD_SHIFT) != 0;
     io.keyCtrl = (mods & KEYMOD_CTRL) != 0;
     io.keyAlt = (mods & KEYMOD_ALT) != 0;
 
     Event e;
-    while (poll_event(window_, &e))
+    while (poll_event(pw, &e))
     {
         if (eventHook_) eventHook_(e);
         if (e.type == EVENT_MOUSE_WHEEL)
@@ -248,7 +392,7 @@ void App::feedInput()
             for (int i = 0; i < e.data.drop.count; ++i)
                 paths.push_back(rt::String(e.data.drop.paths[i]));
             int dx = 0, dy = 0;
-            mouse_position(window_, &dx, &dy);
+            mouse_position(pw, &dx, &dy);
             io.addDropEvent(static_cast<float>(dx), static_cast<float>(dy), paths);
         }
         else if (e.type == EVENT_CHAR)
@@ -271,62 +415,89 @@ void App::feedInput()
     }
 }
 
-void App::frame()
+void App::frameWindow(Window *w, bool driven)
 {
-    rt::IO& io = rt::GetIO();
+    makeCurrent(w);
+    PlatformWindow *pw = w->platform;
+    rt::IO &io = rt::GetIO();
 
     int sw = 0, sh = 0;
-    window_get_size(window_, &sw, &sh);
+    window_get_size(pw, &sw, &sh);
     int mx = 0, my = 0;
-    mouse_position(window_, &mx, &my);
+    mouse_position(pw, &mx, &my);
 
     const double now = time_seconds();
-    const double dt = now - lastFrame_;
-    lastFrame_ = now;
+    double dt = now - lastFrame_;
+    if (w == main_)
+        lastFrame_ = now;
     io.deltaTime = static_cast<float>(dt > 0.1 ? 0.1 : dt);
     io.displayWidth = static_cast<float>(sw);
     io.displayHeight = static_cast<float>(sh);
-    io.mouseX = static_cast<float>(mx);
-    io.mouseY = static_cast<float>(my);
-    io.mouseDown[0] = mouse_button_down(window_, MOUSE_LEFT);
-    io.mouseDown[1] = mouse_button_down(window_, MOUSE_RIGHT);
-    io.mouseDown[2] = mouse_button_down(window_, MOUSE_MIDDLE);
-    feedInput();
-    if (inputHook_) inputHook_(frameIndex_, io);
-    ++frameIndex_;
+    const bool blocked = blockedByModal(w);
+    if (blocked)
+    {
+        // A modal child has the input: drop this window's events, no buttons,
+        // and the mouse out of reach so nothing hovers.
+        Event e;
+        while (poll_event(pw, &e))
+        {
+        }
+        io.mouseX = -1.0f;
+        io.mouseY = -1.0f;
+        io.mouseDown[0] = io.mouseDown[1] = io.mouseDown[2] = false;
+    }
+    else
+    {
+        io.mouseX = static_cast<float>(mx);
+        io.mouseY = static_cast<float>(my);
+        io.mouseDown[0] = mouse_button_down(pw, MOUSE_LEFT);
+        io.mouseDown[1] = mouse_button_down(pw, MOUSE_RIGHT);
+        io.mouseDown[2] = mouse_button_down(pw, MOUSE_MIDDLE);
+        feedInput(pw);
+    }
+    if (w == main_)
+    {
+        if (inputHook_) inputHook_(frameIndex_, io);
+        ++frameIndex_;
+    }
 
     rt::NewFrame();
     widgets().update(io);
-    if (frameCallback_)
+    if (w == main_ && frameCallback_)
     {
-        if (useGl_) window_make_current(window_);
+        if (useGl_) window_make_current(main_->platform);
         frameCallback_(io.deltaTime);
     }
     widgets().paint(*rt::GetDrawData(), font_, nullptr);
     rt::Render();
-    mouse_set_cursor(window_, cursorShape(io.wantedCursor));
+    if (!blocked)
+        mouse_set_cursor(pw, cursorShape(io.wantedCursor));
 
-    if (useGl_) frameGl();
+    if (useGl_)
+        renderGl(w);
     else
         framePixels();
+    (void)driven;
+}
 
+void App::updateStats()
+{
     ++statsFrames_;
     const double elapsed = time_seconds() - statsTime_;
     if (elapsed >= 1.0 && !showStats_) statsTime_ = time_seconds();
     else if (elapsed >= 1.0)
     {
         int fbW = 0, fbH = 0;
-        window_get_framebuffer_size(window_, &fbW, &fbH);
+        window_get_framebuffer_size(main_->platform, &fbW, &fbH);
         char title[160];
         if (useGl_)
             snprintf(title, sizeof title, "%dx%d - OpenGL - %.0f fps", fbW, fbH,
                     statsFrames_ / elapsed);
         else
-            snprintf(title, sizeof title,
-                    "%dx%d - AA %dx%d - %.0f fps - raster %.2f ms (%d/%d frames)", fbW, fbH,
-                    raster_.samples(), raster_.samples(), statsFrames_ / elapsed,
-                    rasterFrames_ ? rasterMs_ / rasterFrames_ : 0.0, rasterFrames_, statsFrames_);
-        window_set_title(window_, title);
+            snprintf(title, sizeof title, "%dx%d - AA %dx%d - %.0f fps - raster %.2f ms (%d/%d frames)", fbW, fbH,
+                     raster_.samples(), raster_.samples(), statsFrames_ / elapsed,
+                     rasterFrames_ ? rasterMs_ / rasterFrames_ : 0.0, rasterFrames_, statsFrames_);
+        window_set_title(main_->platform, title);
         statsTime_ = time_seconds();
         rasterMs_ = 0.0;
         statsFrames_ = 0;
@@ -334,30 +505,35 @@ void App::frame()
     }
 }
 
-void App::frameGl()
+void App::renderGl(Window *w)
 {
     int width = 0, height = 0;
-    window_get_framebuffer_size(window_, &width, &height);
-    if (width <= 0 || height <= 0) return;
-    window_make_current(window_);
-    gl_.render(*rt::GetDrawData(), width, height, background_);
-    static const char* shotPath = getenv("ZEN_SCREENSHOT");
-    if (shotPath)
+    window_get_framebuffer_size(w->platform, &width, &height);
+    if (width <= 0 || height <= 0)
+        return;
+    // One context, the main window's, draws into every window.
+    if (w == main_)
+        window_make_current(w->platform);
+    else
+        window_make_current_on(w->platform, main_->platform);
+    gl_.render(*rt::GetDrawData(), width, height, w->background);
+    static const char *shotPath = getenv("ZEN_SCREENSHOT");
+    if (shotPath && w == main_)
     {
         ct::Vector<uint32_t> pixels;
         pixels.resize(static_cast<size_t>(width) * height);
         gl_.readPixels(pixels.data(), width, height);
         saveScreenshot(pixels.data(), width, height, width);
     }
-    if (afterRenderCallback_) afterRenderCallback_();
-    // No window_swap here: app_run swaps after every frame callback.
+    if (w == main_ && afterRenderCallback_) afterRenderCallback_();
+    // No window_swap here: the caller presents (pump, or app_run after the frame callback).
 }
 
 bool App::readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height)
 {
     width = 0;
     height = 0;
-    window_get_framebuffer_size(window_, &width, &height);
+    window_get_framebuffer_size(main_->platform, &width, &height);
     if (width <= 0 || height <= 0 || !usesOpenGL()) return false;
     out.resize(static_cast<size_t>(width) * height);
     gl_.readPixels(out.data(), width, height);
@@ -366,21 +542,40 @@ bool App::readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height)
 
 void App::framePixels()
 {
+    PlatformWindow *pw = main_->platform;
     Framebuffer fb;
-    if (!window_lock_pixels(window_, &fb)) return;
+    if (!window_lock_pixels(pw, &fb))
+        return;
     const double t0 = time_seconds();
-    if (raster_.render(*rt::GetDrawData(), fb.pixels, fb.width, fb.height, fb.stride, background_))
+    if (raster_.render(*rt::GetDrawData(), fb.pixels, fb.width, fb.height, fb.stride, main_->background))
     {
         rasterMs_ += (time_seconds() - t0) * 1000.0;
         ++rasterFrames_;
     }
-    window_present_pixels(window_);
+    window_present_pixels(pw);
     saveScreenshot(fb.pixels, fb.width, fb.height, fb.stride);
 }
 
-// ZEN_SCREENSHOT=file.ppm saves the 30th frame and closes the window: a way to look at the UI
-// without a screen grab.
-void App::saveScreenshot(const uint32_t* pixels, int width, int height, int stride)
+rt::TextureHandle App::createTexture(int w, int h, const unsigned char *rgba)
+{
+    return useGl_ ? gl_.createTexture(w, h, rgba) : raster_.createTexture(w, h, rgba);
+}
+
+void App::destroyTexture(rt::TextureHandle t)
+{
+    if (useGl_)
+        gl_.destroyTexture(t);
+    else
+        raster_.destroyTexture(t);
+}
+
+bool App::updateTexture(rt::TextureHandle t, const unsigned char *rgba, int w, int h)
+{
+    return useGl_ ? gl_.updateTexture(t, rgba, w, h) : raster_.updateTexture(t, rgba, w, h);
+}
+
+// ZEN_SCREENSHOT=file.ppm saves the 30th frame and closes the window: a way to look at the UI without a screen grab.
+void App::saveScreenshot(const uint32_t *pixels, int width, int height, int stride)
 {
     static const char* shotPath = getenv("ZEN_SCREENSHOT");
     static const int shotAt =
@@ -402,7 +597,7 @@ void App::saveScreenshot(const uint32_t* pixels, int width, int height, int stri
         }
         fclose(f);
     }
-    window_set_should_close(window_, true);
+    window_set_should_close(main_->platform, true);
 }
 
 } // namespace zen
