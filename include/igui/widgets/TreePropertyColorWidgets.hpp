@@ -191,6 +191,13 @@ public:
     /// @brief Window-space rectangle of a node's row, scrolled into view first; false when the node
     /// is not shown.
     bool rowRect(const TreeNode* node, Rect& out);
+    /// @brief The node whose row is under a window-space point; nullptr outside the rows or on the
+    /// scrollbar.
+    TreeNode* nodeAt(float x, float y);
+    /// @brief Scrolls the node's row into view, when it is shown.
+    void scrollTo(const TreeNode* node);
+    /// @brief Emitted when a row is double-clicked.
+    Signal<TreeNode*> nodeActivated;
     /// @brief Window-space point at the start of a node's text, for pointing at it.
     bool labelPoint(const TreeNode* node, float& x, float& y);
     /// @brief Window-space rectangle of one of a node's toggles, scrolled into view first.

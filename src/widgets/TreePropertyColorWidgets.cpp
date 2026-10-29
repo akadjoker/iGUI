@@ -852,6 +852,7 @@ void TreeView::onMousePress(MouseEvent& e)
     if (hadExtra) selectionSetChanged.emit();
     // The selection handler may have rebuilt the tree.
     if (selected_ == pressed) dragCandidate_ = pressed;
+    if (selected_ == pressed && e.button == 0 && e.clickCount >= 2) nodeActivated.emit(pressed);
 }
 
 void TreeView::onMouseMove(MouseEvent& e)
@@ -1014,6 +1015,28 @@ void TreeView::scrollToRow(int row)
     else if (top + rowHeight_ > scrollOffset_ + rect_.h)
         scrollOffset_ = top + rowHeight_ - rect_.h;
     scrollOffset_ = clamp(scrollOffset_, 0.f, maxScroll());
+}
+
+TreeNode* TreeView::nodeAt(float x, float y)
+{
+    const Rect abs = absoluteRect();
+    if (!abs.contains(x, y)) return nullptr;
+    rebuildFlat();
+    Rect track, thumb;
+    if (scrollbar(track, thumb) && x >= track.x) return nullptr;
+    const float localY = y - abs.y + scrollOffset_;
+    const int row = static_cast<int>(localY / rowHeight_);
+    if (localY < 0.f || row < 0 || row >= static_cast<int>(flatRows_.size())) return nullptr;
+    return flatRows_[row].node;
+}
+
+void TreeView::scrollTo(const TreeNode* node)
+{
+    rebuildFlat();
+    const int row = rowOf(node);
+    if (row < 0) return;
+    scrollToRow(row);
+    markDirty();
 }
 
 bool TreeView::rowRect(const TreeNode* node, Rect& out)
