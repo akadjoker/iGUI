@@ -532,6 +532,18 @@ void Widget::removeChild(Widget* child)
     markDirty();
 }
 
+void Widget::moveChild(Widget* child, int toIndex)
+{
+    auto it = std::find(children_.begin(), children_.end(), child);
+    if (it == children_.end())
+        return;
+    children_.erase(it);
+    if (toIndex < 0) toIndex = 0;
+    if (toIndex > static_cast<int>(children_.size())) toIndex = static_cast<int>(children_.size());
+    children_.insert(children_.begin() + toIndex, child);
+    markDirty();
+}
+
 Rect Widget::absoluteRect() const
 {
     Rect r = rect_;

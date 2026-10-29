@@ -409,6 +409,8 @@ public:
 
     /// @brief Remove and delete a child widget.
     void removeChild(Widget* child);
+    /// @brief Move a child to another position among its siblings (clamped).
+    void moveChild(Widget* child, int toIndex);
     /// @brief Get the parent widget (nullptr if root).
     Widget* parent() const
     {
