@@ -156,6 +156,8 @@ public:
     void  onMouseRelease(MouseEvent& e) override;
     void  onMouseMove(MouseEvent& e) override;
     void  onMouseLeave() override;
+    // A drag over a rail button opens its page, so what is dragged can be dropped there.
+    void  onDragHover(const DragPayload& payload, float x, float y) override;
 
 private:
     struct Page
