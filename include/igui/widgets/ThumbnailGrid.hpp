@@ -66,6 +66,17 @@ public:
         dragPayload_ = std::move(provider);
     }
 
+    /// @brief Let drags be dropped on the grid: the filter says whether the item
+    ///        under the drop (-1 for the empty space) takes the payload, and
+    ///        itemDropped says where it went. While a drag passes over an item
+    ///        that takes it, the item is outlined.
+    void setDropFilter(ct::Function<bool(const DragPayload&, int)> filter)
+    {
+        dropFilter_ = std::move(filter);
+    }
+    /// @brief The item at a point in window coordinates, -1 for none.
+    int itemAt(float x, float y) const;
+
     /// @brief Get the number of items.
     int itemCount() const
     {
@@ -125,6 +136,12 @@ public:
     Signal<int> onItemClicked;
     /// @brief Emitted when an item is double-clicked.
     Signal<int> onItemDoubleClicked;
+    /// @brief Emitted on a right press, after selecting what it hit: the item
+    ///        (-1 for the empty space) and the window coordinates, for a menu.
+    Signal<int, float, float> onItemContextMenu;
+    /// @brief Emitted when a drag the filter took is dropped: the item (-1 for
+    ///        the empty space).
+    Signal<const DragPayload&, int> itemDropped;
 
     Vec2f sizeHint() const override
     {
@@ -138,9 +155,13 @@ public:
     void onMouseMove(MouseEvent& e) override;
     bool isDragSource() const override;
     DragPayload onDragBegin() override;
+    bool acceptsDrop(const DragPayload& p) override;
+    void onDropReceive(const DragPayload& p) override;
+    void onDragHover(const DragPayload& p, float x, float y) override;
 
 private:
     ct::Function<DragPayload(int)> dragPayload_;
+    ct::Function<bool(const DragPayload&, int)> dropFilter_;
     int hover_ = -1;
     int pressed_ = -1;
     ct::Vector<ThumbnailItem> items_;

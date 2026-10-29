@@ -1,6 +1,7 @@
 #include "ThumbnailGrid.hpp"
 #include "ScrollWidgets.hpp"
 #include "Theme.hpp"
+#include "WidgetApp.hpp"
 #include <algorithm>
 #include <cmath>
 
@@ -154,6 +155,29 @@ void ThumbnailGrid::setSelected(int idx)
     if (changed) selectionChanged.emit(idx);
 }
 
+int ThumbnailGrid::itemAt(float x, float y) const
+{
+    return absoluteRect().contains(x, y) ? hitTest(x, y) : -1;
+}
+
+bool ThumbnailGrid::acceptsDrop(const DragPayload& p)
+{
+    return dropFilter_ && dropFilter_(p, itemAt(p.dropX, p.dropY));
+}
+
+void ThumbnailGrid::onDropReceive(const DragPayload& p)
+{
+    itemDropped.emit(p, itemAt(p.dropX, p.dropY));
+}
+
+void ThumbnailGrid::onDragHover(const DragPayload& p, float x, float y)
+{
+    (void) p;
+    (void) x;
+    (void) y;
+    if (dropFilter_) markDirty();
+}
+
 int ThumbnailGrid::hitTest(float mx, float my) const
 {
     const Rect b = absoluteRect();
@@ -213,6 +237,13 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     if (showLabels_) asc = setupFont(ctx, Color(200, 200, 205, 255), 9.f);
 
     const int count = static_cast<int>(items_.size());
+    int dropTarget = -1;
+    const WidgetApp& app = WidgetApp::instance();
+    if (dropFilter_ && app.isDragging())
+    {
+        const int under = itemAt(app.mouseX(), app.mouseY());
+        if (under >= 0 && dropFilter_(*app.dragPayload(), under)) dropTarget = under;
+    }
     auto rowY = [&](int row) { return b.y + padY + row * cellH - m.scroll; };
     int firstRow = 0, endRow = (count + cols - 1) / cols;
     if (cellH >= 0.f)
@@ -286,6 +317,14 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         ctx.fillRect(x, y + thumbH_ - 1, thumbW_, 1);
         ctx.fillRect(x, y, 1, thumbH_);
         ctx.fillRect(x + thumbW_ - 1, y, 1, thumbH_);
+        if (i == dropTarget)
+        {
+            ctx.fill.SetColor(90, 170, 255, 255);
+            ctx.fillRect(x - 2, y - 2, thumbW_ + 4, 2);
+            ctx.fillRect(x - 2, y + thumbH_, thumbW_ + 4, 2);
+            ctx.fillRect(x - 2, y - 2, 2, thumbH_ + 4);
+            ctx.fillRect(x + thumbW_, y - 2, 2, thumbH_ + 4);
+        }
 
         // Label (truncated to thumb width)
         if (showLabels_ && !item.label.empty())
@@ -320,6 +359,14 @@ DragPayload ThumbnailGrid::onDragBegin()
 
 void ThumbnailGrid::onMousePress(MouseEvent& e)
 {
+    if (e.button == 1)
+    {
+        const int idx = itemAt(e.x, e.y);
+        setSelected(idx);
+        e.consumed = true;
+        onItemContextMenu.emit(idx, e.x, e.y);
+        return;
+    }
     if (e.button != 0) return;
     int idx = hitTest(e.x, e.y);
     pressed_ = idx;
