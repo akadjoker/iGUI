@@ -110,6 +110,9 @@ public:
     {
         return multiSelect_;
     }
+    /// @brief Every highlighted file, for a handler of `accepted` with multi-select on; the
+    ///        accepted path alone when nothing else is highlighted.
+    ct::Vector<String> selectedPaths() const;
 
     /// @brief Add a sidebar bookmark entry.
     void addBookmark(const String& name, const String& path);
