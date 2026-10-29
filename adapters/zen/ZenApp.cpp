@@ -286,6 +286,11 @@ void App::frameThunk(PlatformWindow *, void *user)
     app->updateStats();
 }
 
+void App::requestCapture(ct::Function<void(const uint32_t *, int, int)> fn)
+{
+    capture_ = static_cast<ct::Function<void(const uint32_t *, int, int)> &&>(fn);
+}
+
 bool App::pump()
 {
     if (!main_ || main_->closeRequested() || main_->closing)
@@ -463,6 +468,15 @@ void App::renderGl(Window *w)
     else
         window_make_current_on(w->platform, main_->platform);
     gl_.render(*rt::GetDrawData(), width, height, w->background);
+    if (capture_ && w == main_)
+    {
+        ct::Vector<uint32_t> pixels;
+        pixels.resize(static_cast<size_t>(width) * height);
+        gl_.readPixels(pixels.data(), width, height);
+        ct::Function<void(const uint32_t *, int, int)> fn = static_cast<ct::Function<void(const uint32_t *, int, int)> &&>(capture_);
+        capture_ = nullptr;
+        fn(pixels.data(), width, height);
+    }
     static const char *shotPath = getenv("ZEN_SCREENSHOT");
     if (shotPath && w == main_)
     {
