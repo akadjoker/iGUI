@@ -93,6 +93,43 @@ public:
     /// Call on the UI thread; custom definitions take precedence over built-ins.
     static void registerLanguage(const SyntaxLanguage& language);
 
+    // ── Breakpoints ───────────────────────────────────────────────────────
+
+    /// @brief A gutter column for breakpoints: a click there toggles the
+    ///        line's, and breakpointToggled says which (lines from 0). They
+    ///        move with the text as lines come and go.
+    void setShowBreakpoints(bool show)
+    {
+        showBreakpoints_ = show;
+        markDirty();
+    }
+    bool showBreakpoints() const
+    {
+        return showBreakpoints_;
+    }
+    void setBreakpoint(int line, bool on);
+    bool hasBreakpoint(int line) const;
+    void clearBreakpoints()
+    {
+        breakpoints_.clear();
+        markDirty();
+    }
+    const ct::Vector<int>& breakpoints() const
+    {
+        return breakpoints_;
+    }
+    /// @brief The line a debugger stopped at (-1 for none): an arrow in the
+    ///        gutter and the line tinted.
+    void setExecutionLine(int line)
+    {
+        executionLine_ = line;
+        markDirty();
+    }
+    int executionLine() const
+    {
+        return executionLine_;
+    }
+
     // ── Code folding ──────────────────────────────────────────────────────
 
     /// @brief Enable or disable fold gutter icons.
@@ -370,6 +407,7 @@ public:
 
     /// @brief Emitted when a fold region is toggled (line, isFolded).
     Signal<int, bool> foldToggled;
+    Signal<int, bool> breakpointToggled; // (line, on)
 
     // ── Overrides ─────────────────────────────────────────────────────────
     void paint(PaintContext& ctx) override;
@@ -411,6 +449,15 @@ private:
     mutable bool hiddenDirty_ = true;
     int foldGutterWidth() const;
     void paintFoldGutter(PaintContext& ctx, const Rect& abs);
+    int breakpointGutterWidth() const
+    {
+        return showBreakpoints_ ? 16 : 0;
+    }
+    void paintBreakpoints(PaintContext& ctx, const Rect& abs);
+    int lineAtVisualRow(int vRow);
+    bool showBreakpoints_ = false;
+    ct::Vector<int> breakpoints_;
+    int executionLine_ = -1;
 
     // ── Undo / Redo ──────────────────────────────────────────────────────
     struct EditAction

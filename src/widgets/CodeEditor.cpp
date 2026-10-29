@@ -260,6 +260,23 @@ void CodeEditor::rebuildFoldRanges()
 void CodeEditor::onLinesChanged(int line, int removed, int inserted)
 {
     hiddenDirty_ = true;
+    // Breakpoints after the change move with it; one inside stays on its line,
+    // or goes with the lines when they all went.
+    for (std::size_t i = 0; i < breakpoints_.size();)
+    {
+        int& at = breakpoints_[i];
+        if (at >= line + removed) at += inserted - removed;
+        else if (at >= line && at - line >= inserted)
+        {
+            if (inserted == 0)
+            {
+                breakpoints_.erase(breakpoints_.begin() + i);
+                continue;
+            }
+            at = line + inserted - 1;
+        }
+        ++i;
+    }
     if (lineCount() == inserted)
     {
         if (!foldRanges_.empty()) invalidateWrap();
@@ -390,6 +407,76 @@ bool CodeEditor::isLineHidden(int line) const
         hiddenDirty_ = false;
     }
     return line >= 0 && line < lc && hiddenLines_[line] != 0;
+}
+
+void CodeEditor::setBreakpoint(int line, bool on)
+{
+    for (std::size_t i = 0; i < breakpoints_.size(); ++i)
+        if (breakpoints_[i] == line)
+        {
+            if (!on)
+            {
+                breakpoints_.erase(breakpoints_.begin() + i);
+                markDirty();
+            }
+            return;
+        }
+    if (on && line >= 0)
+    {
+        breakpoints_.push_back(line);
+        markDirty();
+    }
+}
+
+bool CodeEditor::hasBreakpoint(int line) const
+{
+    for (int at: breakpoints_)
+        if (at == line) return true;
+    return false;
+}
+
+int CodeEditor::lineAtVisualRow(int vRow)
+{
+    int row = 0;
+    for (int i = 0; i < lineCount(); i++)
+    {
+        if (isLineHidden(i)) continue;
+        if (row == vRow) return i;
+        row++;
+    }
+    return -1;
+}
+
+void CodeEditor::paintBreakpoints(PaintContext& ctx, const Rect& abs)
+{
+    if (!showBreakpoints_ && executionLine_ < 0) return;
+    const float lh = lineHeight();
+    if (lh <= 0) return;
+    const float bpW = static_cast<float>(breakpointGutterWidth());
+    const float columnX = abs.x + gutterW_ - static_cast<float>(foldGutterWidth()) - bpW;
+    ctx.pushClip(abs);
+    if (executionLine_ >= 0 && executionLine_ < lineCount() && !isLineHidden(executionLine_))
+    {
+        const float y = abs.y + logicalToVisualRow(executionLine_) * lh - scrollY_;
+        ctx.fill.SetColor(255, 205, 65, 45);
+        ctx.fill.Rectangle(abs.x + gutterW_, y, abs.w - gutterW_, lh, true);
+    }
+    for (int line: breakpoints_)
+    {
+        if (line < 0 || line >= lineCount() || isLineHidden(line)) continue;
+        const float y = abs.y + logicalToVisualRow(line) * lh - scrollY_;
+        if (y + lh < abs.y || y > abs.y + abs.h) continue;
+        ctx.fill.SetColor(220, 60, 60, 255);
+        ctx.fillCircle(columnX + bpW * 0.5f, y + lh * 0.5f, std::min(bpW, lh) * 0.3f);
+    }
+    if (executionLine_ >= 0 && executionLine_ < lineCount() && !isLineHidden(executionLine_))
+    {
+        const float y = abs.y + logicalToVisualRow(executionLine_) * lh - scrollY_;
+        const float cx = columnX + bpW * 0.5f, cy = y + lh * 0.5f, r = std::min(bpW, lh) * 0.32f;
+        ctx.fill.SetColor(255, 205, 65, 255);
+        ctx.fillTriangle(cx - r, cy - r, cx - r, cy + r, cx + r, cy);
+    }
+    ctx.popClip();
 }
 
 int CodeEditor::foldGutterWidth() const
@@ -1655,7 +1742,7 @@ void CodeEditor::paint(PaintContext& ctx)
     }
 
     // Reserve gutter space for fold icons (between line numbers and code)
-    extraGutterW_ = static_cast<float>(foldGutterWidth());
+    extraGutterW_ = static_cast<float>(foldGutterWidth() + breakpointGutterWidth());
 
     // Shrink editor width to leave room for minimap
     float mmW = minimapEffectiveWidth();
@@ -1692,6 +1779,7 @@ void CodeEditor::paint(PaintContext& ctx)
     paintBracketMatch(ctx, abs);
     ctx.popClip();
     paintFoldGutter(ctx, abs);
+    paintBreakpoints(ctx, abs);
 
     // Restore default scale for other widgets
     ctx.font.scale = 1.0f;
@@ -2160,6 +2248,27 @@ void CodeEditor::onMousePress(MouseEvent& e)
             markDirty();
             e.consumed = true;
             return;
+        }
+    }
+
+    // A click in the breakpoint column toggles the line's breakpoint.
+    if (showBreakpoints_ && e.button == 0)
+    {
+        Rect abs = absoluteRect();
+        const float bpW = static_cast<float>(breakpointGutterWidth());
+        const float bpX = abs.x + gutterW_ - static_cast<float>(foldGutterWidth()) - bpW;
+        const float lh = lineHeight();
+        if (e.x >= bpX && e.x < bpX + bpW && lh > 0)
+        {
+            const int clicked = lineAtVisualRow(static_cast<int>((e.y - abs.y + scrollY_) / lh));
+            if (clicked >= 0)
+            {
+                const bool on = !hasBreakpoint(clicked);
+                setBreakpoint(clicked, on);
+                breakpointToggled.emit(clicked, on);
+                e.consumed = true;
+                return;
+            }
         }
     }
 
