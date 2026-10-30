@@ -37,6 +37,16 @@ namespace ig { namespace retained
         constexpr int KPEnter   = 1073741912;
         constexpr int Space     = ' ';
         constexpr int F1        = 1073741882;
+        constexpr int F2        = 1073741883;
+        constexpr int F3        = 1073741884;
+        constexpr int F4        = 1073741885;
+        constexpr int F5        = 1073741886;
+        constexpr int F6        = 1073741887;
+        constexpr int F7        = 1073741888;
+        constexpr int F8        = 1073741889;
+        constexpr int F9        = 1073741890;
+        constexpr int F10       = 1073741891;
+        constexpr int F11       = 1073741892;
         constexpr int F12       = 1073741893;
         // Letters (lowercase ASCII)
         constexpr int A = 'a', B = 'b', C = 'c', D = 'd', E = 'e';

@@ -183,7 +183,7 @@ public:
     /// @brief Close the search/replace bar.
     void hideSearchBar();
     /// @brief Check if the search bar is visible.
-    bool isSearchBarVisible() const { return searchVisible_; }
+    bool isSearchBarVisible() const { return bar_ == Bar::Find || bar_ == Bar::Replace; }
 
     /// @brief Find and select the next occurrence of the search term.
     /// @param text       The text to search for, or a pattern when useRegex is set.
@@ -276,6 +276,102 @@ public:
     TextPos findWordStart(TextPos pos) const;
     /// @brief Find the end of the word at the given position.
     TextPos findWordEnd(TextPos pos) const;
+
+    // ── Inline bars: find, replace, go to line, go to symbol ──────────────
+    //
+    //  One bar at a time, at the top right of the editor, with a field the
+    //  keyboard types into while it is open (Escape closes it). Find (Ctrl+F)
+    //  searches as you type from where the cursor was, Return and Shift+Return
+    //  step through the matches, F3/Shift+F3 do the same with the bar closed,
+    //  Alt+C/W/R toggle case, whole word and regex. Replace (Ctrl+H) adds a
+    //  second field (Tab switches), Return replaces the match and finds the
+    //  next, Ctrl+Return replaces every match as one undo step. Go to line
+    //  (Ctrl+G) takes a number. Go to symbol (Ctrl+Shift+O) filters the
+    //  symbols of the text as you type, Up/Down pick, Return reveals.
+
+    enum class Bar
+    {
+        None,
+        Find,
+        Replace,
+        GotoLine,
+        GotoSymbol,
+    };
+    void showBar(Bar bar);
+    void hideBar();
+    Bar activeBar() const { return bar_; }
+    /// @brief What is typed in the bar: the search term, the line, the filter.
+    const String& barText() const { return barText_; }
+    const String& barReplaceText() const { return barReplace_; }
+    /// @brief The symbols the go-to-symbol bar matches, best first.
+    const ct::Vector<int>& symbolMatches() const { return paletteMatches_; }
+    int symbolMatchSelected() const { return paletteSelected_; }
+
+    // ── Commands ──────────────────────────────────────────────────────────
+    //  Each one undo step where it changes the text (see shortcuts()).
+
+    /// @brief Ctrl+L: the whole line; pressed again, the next line too.
+    void selectLine();
+    /// @brief Ctrl+J: the next line onto this one, one space between.
+    void joinLines();
+    /// @brief Ctrl+M: cursor to the bracket matching the one at the cursor
+    /// (or just before it); with select, selects through it.
+    bool jumpToMatchingBracket(bool select = false);
+    /// @brief Ctrl+B: reveal the symbol the word at the cursor names. False if none.
+    bool gotoDefinition();
+    /// @brief Ctrl+Alt+Up / Ctrl+Alt+Down: another cursor on the line above / below.
+    void addCursorAbove();
+    void addCursorBelow();
+    /// @brief Ctrl+F2 / F2 / Shift+F2: a bookmark marker on the line, the next one, the previous one.
+    void toggleBookmark();
+    bool nextBookmark();
+    bool previousBookmark();
+    /// @brief Ctrl+Shift+U / Ctrl+U: the selection in upper / lower case (ASCII).
+    void transformSelection(bool upper);
+    /// @brief Tab / Shift+Tab with a selection over several lines: every line one level.
+    void indentSelection();
+    void unindentSelection();
+    /// @brief Alt+Left / Alt+Right: back to where the cursor was before a
+    /// reveal, a go-to or a find; and forward again (vim's Ctrl+O / Ctrl+I).
+    bool jumpBack();
+    bool jumpForward();
+
+    // ── Formatting ────────────────────────────────────────────────────────
+    //  Ctrl+Shift+F: the whole text, as one undo step. Every language loses
+    //  its trailing spaces, runs of blank lines shrink to one and the text
+    //  ends with a newline. An indentation language (Python) is reindented by
+    //  block levels: each level becomes the indent unit, however the levels
+    //  were written. A brace language is reindented by the depth a line
+    //  starts at, a closing brace one less; lines inside block comments and
+    //  preprocessor lines are left where they are. Lua and Blitz keep their
+    //  indentation.
+
+    /// @brief Spaces per indent level the formatter writes; 0 means a tab. Default 4.
+    void setIndentUnit(int spaces)
+    {
+        indentUnit_ = spaces < 0 ? 0 : spaces;
+    }
+    int indentUnit() const { return indentUnit_; }
+    /// @brief The text as formatDocument would leave it.
+    String formattedText() const;
+    void formatDocument();
+
+    /// @brief Other occurrences of the word at the cursor (or of a one-line
+    /// selection) painted behind the text, like VS Code. On by default.
+    void setHighlightOccurrences(bool on)
+    {
+        highlightOccurrences_ = on;
+        markDirty();
+    }
+    bool highlightOccurrences() const { return highlightOccurrences_; }
+
+    /// @brief The keyboard, for a host's help page: {"Ctrl+D", "..."}.
+    struct Shortcut
+    {
+        const char* keys;
+        const char* action;
+    };
+    static Span<const Shortcut> shortcuts();
 
     // ── Symbols: outline, go-to-symbol ────────────────────────────────────
 
@@ -383,7 +479,17 @@ private:
         String newText;       // text after (for redo)
         TextPos oldCursor;         // cursor before
         TextPos newCursor;         // cursor after
+        int group = 0;             // actions sharing a nonzero group undo together
     };
+    int undoGroup_ = 0;  // the group being recorded, 0 for none
+    int nextGroup_ = 1;
+    void beginUndoGroup();
+    void endUndoGroup();
+    void recordReplace(TextPos pos, const String& oldText, const String& newText, TextPos oldCursor, TextPos newCursor);
+    // Replaces [start, end) with text as one recorded edit; the cursor ends
+    // after the text. Nothing happens when the text is already there.
+    void editRange(TextPos start, TextPos end, const String& text);
+    static TextPos advance(TextPos pos, const String& text);
     ct::Vector<EditAction> undoStack_;
     ct::Vector<EditAction> redoStack_;
     bool   recording_ = false;     // prevents recursive recording
@@ -428,8 +534,6 @@ private:
     float minimapEffectiveWidth() const;  // 0 when hidden
 
     // ── Search ───────────────────────────────────────────────────────────
-    bool        searchVisible_ = false;
-    bool        replaceVisible_ = false;
     String searchTerm_;
     String replaceTerm_;
     bool        searchCaseSensitive_ = false;
@@ -443,7 +547,43 @@ private:
     int                  searchMatchIdx_ = -1;
     void rebuildSearchMatches();
     void paintSearchHighlights(PaintContext& ctx, const Rect& abs);
-    void paintSearchBar(PaintContext& ctx, const Rect& abs);
+    // ── Bars ─────────────────────────────────────────────────────────────
+    Bar bar_ = Bar::None;
+    String barText_;
+    String barReplace_;
+    int barField_ = 0;        // Replace: 0 the find field, 1 the replace field
+    TextPos barOrigin_;       // where the cursor was when the bar opened: a live find starts there
+    ct::Vector<int> paletteMatches_;
+    int paletteSelected_ = 0;
+    int paletteFirst_ = 0;
+    Rect barRect_{};
+    Rect paletteRect_{};
+    float paletteRowHeight_ = 0.0f;
+    bool barKey(KeyEvent& e);       // the keys the open bar takes; true if it took one
+    void barInput(const char* text);
+    void barBackspace();
+    void barChanged();              // after the field changed: live find, refilter
+    void liveFind();
+    void refilterPalette();
+    void paintBar(PaintContext& ctx, const Rect& abs);
+    // A list of rows (text, dimmed detail) at x, y; writes the rect it took
+    // and its row height for hit tests.
+    struct ListRow
+    {
+        String text;
+        String detail;
+    };
+    void paintList(PaintContext& ctx, const Rect& abs, const ct::Vector<ListRow>& rows, int selected, int first, float x, float y, Rect& outRect, float& outRowHeight);
+    // ── Occurrences, jumps ───────────────────────────────────────────────
+    bool highlightOccurrences_ = true;
+    int indentUnit_ = 4;
+    void paintOccurrences(PaintContext& ctx, const Rect& abs);
+    // The word at the cursor, or the one-line selection: what to highlight / look up.
+    String wordAtCursor(TextPos& start, TextPos& end) const;
+    ct::Vector<TextPos> jumps_;
+    int jumpIndex_ = 0;             // jumps_[jumpIndex_ - 1] is where Alt+Left goes
+    void pushJump();
+    void indentLines(int first, int last, bool indent);
 
     // ── Multi-cursor ─────────────────────────────────────────────────────
     ct::Vector<CursorState> extraCursors_;

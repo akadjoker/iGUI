@@ -149,6 +149,7 @@ if(IGUI_BUILD_TESTS)
         igui_code_editor_tests
         igui_symbols_tests
         igui_code_outline_tests
+        igui_code_editor_keys_tests
         igui_both_modes_tests
         igui_original_widgets_tests
         igui_font_tests
@@ -232,6 +233,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/BuImage.cpp
         src/widgets/ChartWidgets.cpp
         src/widgets/CodeEditor.cpp
+        src/widgets/CodeEditorTools.cpp
         src/widgets/ComboBox.cpp
         src/widgets/ConsoleWidget.cpp
         src/widgets/DataWidgets.cpp
@@ -292,6 +294,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
             target_link_options(igui_code_outline_tests PRIVATE -fsanitize=address)
         endif()
         add_test(NAME igui_code_outline COMMAND igui_code_outline_tests)
+
+        # The retained CodeEditor's keyboard: undo groups, the inline bars,
+        # the commands, cursors, bookmarks, the jump list.
+        add_executable(igui_code_editor_keys_tests tests/test_code_editor_keys.cpp)
+        target_compile_features(igui_code_editor_keys_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_code_editor_keys_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_code_editor_keys_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_code_editor_keys_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_code_editor_keys COMMAND igui_code_editor_keys_tests)
 
         add_executable(igui_original_widgets_tests tests/test_original_widgets.cpp)
         target_compile_features(igui_original_widgets_tests PRIVATE cxx_std_17)
