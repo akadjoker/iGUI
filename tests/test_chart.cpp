@@ -273,6 +273,24 @@ void testHoverAndPress()
     check(c.hitTest(center.x + c.pieRadius() * 0.5f, center.y).index != 0, "the hidden category has no slice");
 }
 
+void testPressWithoutMove()
+{
+    // A press with no move first still names its item as the hovered one.
+    Bench fresh;
+    fresh.chart->bars(labels("a", "b", "c"), values(1.0f, 2.0f, 3.0f));
+    fresh.frame();
+    const Rect r1 = fresh.chart->barRect(0, 1);
+    int seen = -1;
+    fresh.chart->itemPressed.connect([&](int, int) { seen = fresh.chart->hoveredItem().index; });
+    fresh.io.mouseX = 10.0f + r1.x + r1.w * 0.5f;
+    fresh.io.mouseY = 20.0f + r1.y + r1.h * 0.5f;
+    fresh.io.mouseDown[0] = true;
+    fresh.frame();
+    fresh.io.mouseDown[0] = false;
+    fresh.frame();
+    check(seen == 1, "the handler of a press sees the pressed item as hovered");
+}
+
 void testLegendPlacement()
 {
     {
@@ -343,6 +361,7 @@ int main()
     testPieGeometry();
     testBarsGeometry();
     testHoverAndPress();
+    testPressWithoutMove();
     testLegendPlacement();
     testManyThinSlices();
     if (gFailures == 0)
