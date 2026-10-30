@@ -432,6 +432,12 @@ void registerGalleryStage(WidgetApp& app)
         dots->setStretch(1.0f);
         dots->setTitle("Height vs weight");
         dots->scatter(xs, ys, "sample");
+        // The same heights as a histogram of twelve bins.
+        auto* histogram = xy->createChild<Chart>();
+        histogram->setStretch(1.0f);
+        histogram->setTitle("Heights");
+        histogram->hist(xs, 12, "sample");
+        histogram->setShowValues(true);
     }
 
     auto* audio = tabs->addTab<BoxLayout>("Audio", LayoutDir::Vertical);

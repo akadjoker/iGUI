@@ -372,6 +372,52 @@ void testLinesAndScatter()
     check(mid.x > 0.0f && c.hitTest(mid.x, mid.y).index == 250, "a point among five hundred is found");
 }
 
+void testHistogram()
+{
+    Bench b;
+    Chart& c = *b.chart;
+    ct::Vector<float> samples;
+    for (int i = 0; i < 100; ++i)
+        samples.push_back(static_cast<float>(i % 10));   // ten of each 0..9
+    const int first = c.hist(samples, 5, String("h"));
+    check(first == 0 && c.kind() == ChartKind::Histogram && c.bins() == 5 && c.categoryCount() == 5, "hist() makes a histogram with the bins asked");
+    check(c.binEdges().size() == 6 && near(c.binEdges()[0], 0.0f, 1e-5f) && near(c.binEdges()[5], 9.0f, 1e-5f), "the edges run from the smallest to the largest sample");
+    check(near(c.value(0, 0), 20.0f, 1e-5f) && near(c.value(0, 4), 20.0f, 1e-5f) && near(c.total(0), 100.0f, 1e-5f), "each bin counts its samples, the top edge included");
+    check(c.categories()[0] == "0.0-1.8", "a bin is labelled by its edges");
+    b.frame();
+    const Rect r0 = c.barRect(0, 0);
+    const Rect r1 = c.barRect(0, 1);
+    check(r0.w > 10.0f && near(r1.x, r0.right(), 1.5f), "histogram bars touch");
+    check(near(c.axisMax(), 25.0f, 1e-4f) || near(c.axisMax(), 20.0f, 1e-4f), "the axis holds the biggest count");
+    check(c.hitTest(r1.x + r1.w * 0.5f, r1.y + r1.h * 0.5f).index == 1, "a bin is under its bar");
+
+    // Another series shares the bins; the range widens to its samples.
+    ct::Vector<float> more;
+    for (int i = 0; i < 50; ++i)
+        more.push_back(static_cast<float>(i % 20));
+    const int second = c.hist(more, 0, String("m"));
+    check(second == 1 && c.seriesCount() == 2 && c.bins() == 5 && near(c.binEdges()[5], 19.0f, 1e-5f), "a second hist() keeps the bins and widens the range");
+    check(near(c.total(0), 100.0f, 1e-5f) && near(c.total(1), 50.0f, 1e-5f), "both series are recounted over the shared bins");
+    b.frame();
+    check(c.legendEntryCount() == 2, "two named series make the legend");
+
+    c.setBins(10);
+    check(c.categoryCount() == 10 && near(c.total(0) + c.total(1), 150.0f, 1e-5f), "setBins rebuilds the bins");
+
+    // Constant samples still make a bin; no samples make no bins.
+    c.hist(values(3.0f, 3.0f, 3.0f), 4);
+    check(c.kind() == ChartKind::Histogram && c.seriesCount() == 3 && c.categoryCount() == 4 && near(c.total(2), 3.0f, 1e-5f), "equal samples sit in a padded range");
+    c.clear();
+    c.hist(ct::Vector<float>(), 4);
+    b.frame();
+    check(c.categoryCount() == 0 && !c.hitTest(100.0f, 100.0f).valid(), "an empty histogram draws nothing and hits nothing");
+
+    // Bars with hist(): the chart becomes a histogram and the bars go.
+    c.bars(labels("a", "b", "c"), values(1.0f, 2.0f, 3.0f));
+    c.hist(samples, 2);
+    check(c.kind() == ChartKind::Histogram && c.seriesCount() == 1 && c.categoryCount() == 2, "hist() on a bar chart replaces it");
+}
+
 void testLegendPlacement()
 {
     {
@@ -444,6 +490,7 @@ int main()
     testHoverAndPress();
     testPressWithoutMove();
     testLinesAndScatter();
+    testHistogram();
     testLegendPlacement();
     testManyThinSlices();
     if (gFailures == 0)

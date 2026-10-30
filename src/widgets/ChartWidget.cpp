@@ -256,6 +256,7 @@ void Chart::clear()
     slices_.clear();
     bars_.clear();
     points_.clear();
+    edges_.clear();
     hovered_ = Item();
     markDirty();
 }
@@ -308,6 +309,92 @@ int Chart::scatter(const ct::Vector<float>& xs, const ct::Vector<float>& ys, con
     series_[static_cast<size_t>(idx)].line = false;
     series_[static_cast<size_t>(idx)].markers = true;
     return idx;
+}
+
+int Chart::hist(const ct::Vector<float>& samples, int bins, const String& name)
+{
+    if (kind_ != ChartKind::Histogram || series_.empty())
+    {
+        clear();
+        kind_ = ChartKind::Histogram;
+    }
+    if (bins > 0)
+        bins_ = bins > 1000 ? 1000 : bins;
+    const int idx = addSeries(name, ct::Vector<float>());
+    series_[static_cast<size_t>(idx)].samples = samples;
+    buildHistogram();
+    return idx;
+}
+
+void Chart::setBins(int bins)
+{
+    if (bins < 1)
+        bins = 1;
+    if (bins > 1000)
+        bins = 1000;
+    if (bins_ == bins)
+        return;
+    bins_ = bins;
+    if (kind_ == ChartKind::Histogram)
+        buildHistogram();
+    markDirty();
+}
+
+// Equal bins over the range of every series' samples, counted per series.
+// The categories become the bins ("lo-hi"), the values the counts.
+void Chart::buildHistogram()
+{
+    bool any = false;
+    float lo = 0.0f, hi = 0.0f;
+    for (const ChartSeries& se : series_)
+    {
+        for (float v : se.samples)
+        {
+            if (!any) { lo = hi = v; any = true; }
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+        }
+    }
+    edges_.clear();
+    categories_.clear();
+    categoryHidden_.clear();
+    if (!any)
+    {
+        for (ChartSeries& se : series_)
+            se.values.clear();
+        markDirty();
+        return;
+    }
+    if (hi - lo < 1e-6f)
+    {
+        lo -= 0.5f;
+        hi += 0.5f;
+    }
+    const int n = bins_;
+    const float width = (hi - lo) / static_cast<float>(n);
+    char buf[64];
+    const int decimals = decimalsFor(width) > 3 ? 3 : decimalsFor(width);
+    for (int i = 0; i <= n; ++i)
+        edges_.push_back(i == n ? hi : lo + width * static_cast<float>(i));
+    for (int i = 0; i < n; ++i)
+    {
+        snprintf(buf, sizeof(buf), "%.*f-%.*f", decimals, static_cast<double>(edges_[static_cast<size_t>(i)]), decimals, static_cast<double>(edges_[static_cast<size_t>(i) + 1]));
+        categories_.push_back(String(buf));
+        categoryHidden_.push_back(false);
+    }
+    for (ChartSeries& se : series_)
+    {
+        se.values.assign(static_cast<size_t>(n), 0.0f);
+        for (float v : se.samples)
+        {
+            int k = static_cast<int>((v - lo) / width);
+            if (k >= n) k = n - 1;   // the top edge belongs to the last bin
+            if (k < 0) k = 0;
+            se.values[static_cast<size_t>(k)] += 1.0f;
+        }
+    }
+    hovered_ = Item();
+    markDirty();
 }
 
 float Chart::x(int series, int index) const
@@ -598,7 +685,7 @@ Chart::Item Chart::hitTest(float localX, float localY) const
         }
         return hit;
     }
-    if (kind_ == ChartKind::Bars)
+    if (isBars())
     {
         for (const Bar& bar : bars_)
         {
@@ -1159,8 +1246,11 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     char buf[64];
     const float gutter = valueAxisGutter(ctx, lo, hi, step, decimals);
 
+    // A histogram's bars touch, and the bin edges are written under the axis
+    // in place of the category labels.
+    const bool histogram = kind_ == ChartKind::Histogram && edges_.size() == static_cast<size_t>(categoryCount()) + 1;
     const bool labelsBelow = categoryCount() > 0;
-    Rect area(plot.x + gutter, plot.y + (showValues_ ? lh : 4.0f), plot.w - gutter - 4.0f,
+    Rect area(plot.x + gutter, plot.y + (showValues_ ? lh : 4.0f), plot.w - gutter - (histogram ? 16.0f : 4.0f),
               plot.h - (showValues_ ? lh : 4.0f) - (labelsBelow ? lh + kAxisPad : 4.0f));
     if (area.w < 10.0f || area.h < 10.0f)
         return;
@@ -1173,7 +1263,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     // Visible categories and series.
     ct::Vector<int> cats;
     for (int i = 0; i < categoryCount(); ++i)
-        if (categoryVisible(i))
+        if (categoryVisible(i) || histogram)
             cats.push_back(i);
     ct::Vector<int> sers;
     for (int s = 0; s < seriesCount(); ++s)
@@ -1188,7 +1278,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     }
 
     const float groupW = area.w / static_cast<float>(cats.size());
-    const float groupPad = groupW * 0.18f;
+    const float groupPad = histogram ? 0.5f : groupW * 0.18f;
     const float innerW = groupW - 2.0f * groupPad;
     const float gap = sers.size() > 1 ? (innerW * 0.06f < 2.0f ? innerW * 0.06f : 2.0f) : 0.0f;
     float barW = (innerW - gap * static_cast<float>(sers.size() - 1)) / static_cast<float>(sers.size());
@@ -1219,7 +1309,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
             const Color c = series_[static_cast<size_t>(s)].color;
             const Color fill = hot ? lighten(c, 0.22f) : c;
             ctx.fill.SetColor(fill.r, fill.g, fill.b, fill.a);
-            const float radius = barW > 8.0f ? 2.0f : 0.0f;
+            const float radius = barW > 8.0f && !histogram ? 2.0f : 0.0f;
             if (radius > 0.0f)
                 ctx.fillRoundedRect(x, top, barW, h, radius, 4);
             else
@@ -1238,8 +1328,8 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
             }
         }
 
-        // Category label under the group.
-        if (labelsBelow)
+        // Category label under the group (a histogram writes its edges below instead).
+        if (labelsBelow && !histogram)
         {
             const String& label = categories_[static_cast<size_t>(cat)];
             char fitted[128];
@@ -1247,6 +1337,29 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
             const float w = ctx.font.GetTextWidth(fitted);
             const float asc = setupFont(ctx, t.textColor);
             ctx.font.Print(fitted, gx + (groupW - w) * 0.5f, ay + area.h + kAxisPad + asc);
+        }
+    }
+
+    // A histogram's bin edges along the bottom, as many as fit.
+    if (histogram)
+    {
+        const int n = static_cast<int>(cats.size());
+        const float width = edges_[1] - edges_[0];
+        const int decimals = decimalsFor(width) > 3 ? 3 : decimalsFor(width);
+        snprintf(buf, sizeof(buf), "%.*f", decimals, static_cast<double>(edges_.back()));
+        const float labelW = ctx.font.GetTextWidth(buf) + 10.0f;
+        int every = 1;
+        while (n / every > 0 && groupW * static_cast<float>(every) < labelW)
+            ++every;
+        for (int i = 0; i <= n; i += every)
+        {
+            const float px = ax + groupW * static_cast<float>(i);
+            ctx.line.SetColor(t.textDisabled.r, t.textDisabled.g, t.textDisabled.b, 255);
+            ctx.drawLine(floorf(px) + 0.5f, ay + area.h, floorf(px) + 0.5f, ay + area.h + 4.0f);
+            snprintf(buf, sizeof(buf), "%.*f", decimals, static_cast<double>(edges_[static_cast<size_t>(i)]));
+            const float w = ctx.font.GetTextWidth(buf);
+            const float asc = setupFont(ctx, t.textDisabled);
+            ctx.font.Print(buf, px - w * 0.5f, ay + area.h + kAxisPad + asc);
         }
     }
 
@@ -1467,7 +1580,7 @@ void Chart::paintTooltip(PaintContext& ctx, const Rect& b)
         else
             snprintf(text, sizeof(text), "%s - %s: %s", se.name.c_str(), xText, valueText);
     }
-    else if (kind_ == ChartKind::Bars)
+    else if (isBars())
     {
         const String& name = series_[static_cast<size_t>(hovered_.series)].name;
         if (name.empty())
@@ -1513,7 +1626,7 @@ void Chart::paint(PaintContext& ctx)
     if (plot.h < 0.0f) plot.h = 0.0f;
     plot_ = plot;
 
-    if (kind_ == ChartKind::Bars)
+    if (isBars())
         paintBars(ctx, b, plot);
     else if (isXY())
         paintXY(ctx, b, plot);
