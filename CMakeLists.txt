@@ -150,6 +150,7 @@ if(IGUI_BUILD_TESTS)
         igui_symbols_tests
         igui_code_outline_tests
         igui_code_editor_keys_tests
+        igui_chart_tests
         igui_both_modes_tests
         igui_original_widgets_tests
         igui_font_tests
@@ -231,6 +232,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/BasicWidgets.cpp
         src/widgets/Retained.cpp
         src/widgets/BuImage.cpp
+        src/widgets/ChartWidget.cpp
         src/widgets/ChartWidgets.cpp
         src/widgets/CodeEditor.cpp
         src/widgets/CodeEditorTools.cpp
@@ -294,6 +296,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
             target_link_options(igui_code_outline_tests PRIVATE -fsanitize=address)
         endif()
         add_test(NAME igui_code_outline COMMAND igui_code_outline_tests)
+
+        # The retained Chart: pie, donut and bars, their legend, labels and
+        # hit testing, driven through WidgetApp.
+        add_executable(igui_chart_tests tests/test_chart.cpp)
+        target_compile_features(igui_chart_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_chart_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_chart_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_chart_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_chart COMMAND igui_chart_tests)
 
         # The retained CodeEditor's keyboard: undo groups, the inline bars,
         # the commands, cursors, bookmarks, the jump list.

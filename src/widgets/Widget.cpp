@@ -183,6 +183,16 @@ void PaintContext::fillTriangle(float x1, float y1, float x2, float y2, float x3
     drawList.addTriangleFilled({x1, y1}, {x2, y2}, {x3, y3}, fill.current);
 }
 
+void PaintContext::fillPolygon(const ct::Vector<ig::retained::Vec2>& points)
+{
+    drawList.addConvexPolyFilled(points, fill.current);
+}
+
+void PaintContext::drawPolyline(const ct::Vector<ig::retained::Vec2>& points, float thickness, bool closed)
+{
+    drawList.addPolyline(points, line.current, thickness, closed);
+}
+
 // ── Line helpers ──────────────────────────────────────────────────────────
 
 void PaintContext::lineRect(float x, float y, float w, float h)

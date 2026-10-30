@@ -15,6 +15,7 @@
 #include "ViewWidgets.hpp"
 #include "GizmoWidgets.hpp"
 #include "ChartWidgets.hpp"
+#include "ChartWidget.hpp"
 #include "NodeEditor.hpp"
 #include "Timeline.hpp"
 #include "AudioWidgets.hpp"

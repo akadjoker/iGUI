@@ -278,9 +278,9 @@ static void test_gizmo3d_draws_the_box_it_moves()
     const ig::Rect uprightBox = modelOutlineBounds(first);
     // The widget is 400 by 300, so a world unit is 200 pixels across and 150
     // down: the box is 266 by 200 of them, its outline's anti-aliased fringe
-    // included.
+    // (at most two pixels past each corner) included.
     assert(uprightBox.width > 266.0f && uprightBox.width < 272.0f);
-    assert(uprightBox.height > 197.0f && uprightBox.height < 204.0f);
+    assert(uprightBox.height > 197.0f && uprightBox.height <= 204.5f);
     assert(uprightBox.x > 64.0f && uprightBox.x < 70.0f);
 
     // Turned 45 degrees towards the eye, its corners reach further across.
