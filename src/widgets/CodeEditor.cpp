@@ -541,7 +541,7 @@ void CodeEditor::recordInsert(TextPos pos, const String& text, TextPos oldCursor
 {
     if (recording_) return;
     clearRedoStack();
-    undoStack_.push_back({ EditAction::Insert, pos, "", text, oldCursor, newCursor });
+    undoStack_.push_back({EditAction::Insert, pos, "", text, oldCursor, newCursor, undoGroup_});
     undoRedoChanged.emit(canUndo(), canRedo());
 }
 
@@ -549,7 +549,7 @@ void CodeEditor::recordDelete(TextPos pos, const String& text, TextPos oldCursor
 {
     if (recording_) return;
     clearRedoStack();
-    undoStack_.push_back({ EditAction::Delete, pos, text, "", oldCursor, newCursor });
+    undoStack_.push_back({EditAction::Delete, pos, text, "", oldCursor, newCursor, undoGroup_});
     undoRedoChanged.emit(canUndo(), canRedo());
 }
 
@@ -581,14 +581,19 @@ void CodeEditor::clearUndoHistory()
 void CodeEditor::undo()
 {
     if (undoStack_.empty()) return;
-    auto action = undoStack_.back();
-    undoStack_.pop_back();
-
-    recording_ = true;
-    applyAction(action, true);
-    recording_ = false;
-
-    redoStack_.push_back(action);
+    // The actions of a group (a replace-all, an indent of several lines) go
+    // back together.
+    const int group = undoStack_.back().group;
+    do
+    {
+        auto action = undoStack_.back();
+        undoStack_.pop_back();
+        recording_ = true;
+        applyAction(action, true);
+        recording_ = false;
+        redoStack_.push_back(action);
+    } while (group != 0 && !undoStack_.empty() && undoStack_.back().group == group);
+    hlDirty_ = true;
     markDirty();
     undoRedoChanged.emit(canUndo(), canRedo());
 }
@@ -596,14 +601,17 @@ void CodeEditor::undo()
 void CodeEditor::redo()
 {
     if (redoStack_.empty()) return;
-    auto action = redoStack_.back();
-    redoStack_.pop_back();
-
-    recording_ = true;
-    applyAction(action, false);
-    recording_ = false;
-
-    undoStack_.push_back(action);
+    const int group = redoStack_.back().group;
+    do
+    {
+        auto action = redoStack_.back();
+        redoStack_.pop_back();
+        recording_ = true;
+        applyAction(action, false);
+        recording_ = false;
+        undoStack_.push_back(action);
+    } while (group != 0 && !redoStack_.empty() && redoStack_.back().group == group);
+    hlDirty_ = true;
     markDirty();
     undoRedoChanged.emit(canUndo(), canRedo());
 }
@@ -636,6 +644,17 @@ void CodeEditor::applyAction(const EditAction& action, bool isUndo)
         else if (action.type == EditAction::Delete)
         {
             // Undo delete = re-insert the deleted text
+            cursor_ = pos;
+            selAnchor_ = cursor_;
+            insertTextAtCursor(action.oldText);
+            cursor_ = oldCursor;
+            selAnchor_ = cursor_;
+        } else {
+            // Undo replace = the new text out, the old one back in
+            selAnchor_ = pos;
+            cursor_ = advance(pos, action.newText);
+            clampPos(cursor_);
+            if (cursor_ != selAnchor_) deleteSelection();
             cursor_ = pos;
             selAnchor_ = cursor_;
             insertTextAtCursor(action.oldText);
@@ -674,6 +693,16 @@ void CodeEditor::applyAction(const EditAction& action, bool isUndo)
             selAnchor_ = pos;
             cursor_ = end;
             deleteSelection();
+            cursor_ = newCursor;
+            selAnchor_ = cursor_;
+        } else {
+            selAnchor_ = pos;
+            cursor_ = advance(pos, action.oldText);
+            clampPos(cursor_);
+            if (cursor_ != selAnchor_) deleteSelection();
+            cursor_ = pos;
+            selAnchor_ = cursor_;
+            insertTextAtCursor(action.newText);
             cursor_ = newCursor;
             selAnchor_ = cursor_;
         }
@@ -1163,22 +1192,17 @@ void CodeEditor::paintScopeLines(PaintContext& ctx, const Rect& abs)
 
 void CodeEditor::showSearchBar()
 {
-    searchVisible_ = true;
-    replaceVisible_ = false;
-    markDirty();
+    showBar(Bar::Find);
 }
 
 void CodeEditor::showReplaceBar()
 {
-    searchVisible_ = true;
-    replaceVisible_ = true;
-    markDirty();
+    showBar(Bar::Replace);
 }
 
 void CodeEditor::hideSearchBar()
 {
-    searchVisible_ = false;
-    replaceVisible_ = false;
+    if (bar_ == Bar::Find || bar_ == Bar::Replace) hideBar();
     searchMatches_.clear();
     searchMatchIdx_ = -1;
     markDirty();
@@ -1313,11 +1337,11 @@ bool CodeEditor::findPrev(const String& text, bool caseSensitive, bool wholeWord
     rebuildSearchMatches();
     if (searchMatches_.empty()) return false;
 
-    // Find last match before cursor
-    for (int i = static_cast<int>(searchMatches_.size()) - 1; i >= 0; i--)
-    {
-        if (searchMatches_[i] < cursor_)
-        {
+    // The last match before the current one (the selection is the current
+    // match, its end is where the cursor sits).
+    const TextPos before = hasSelection() ? selectionStart() : cursor_;
+    for (int i = static_cast<int>(searchMatches_.size()) - 1; i >= 0; i--) {
+        if (searchMatches_[i] < before) {
             searchMatchIdx_ = i;
             selAnchor_ = searchMatches_[i];
             cursor_ = selAnchor_;
@@ -1341,41 +1365,23 @@ bool CodeEditor::findPrev(const String& text, bool caseSensitive, bool wholeWord
 bool CodeEditor::replaceNext(const String& find, const String& replace, bool caseSensitive,
         bool useRegex)
 {
-    bool selectionMatches = false;
-    if (hasSelection())
-    {
+    if (hasSelection() && !readOnly_) {
         const String selected = selectedText();
-        if (useRegex)
-        {
+        String replacement;
+        bool matches = false;
+        if (useRegex) {
             ct::Regex::Error err;
-            ct::Regex re =
-                    ct::Regex::compile(find, caseSensitive ? 0u : ct::Regex::IgnoreCase, &err);
-            selectionMatches =
-                    re.valid() && re.fullmatch(ct::StringView(selected.data(), selected.size()));
-            if (selectionMatches)
-            {
-                ct::StringView view(selected.data(), selected.size());
-                const String replacement =
-                        re.sub(view, ct::StringView(replace.data(), replace.size()), 1);
-                TextPos oldCur = cursor_;
-                deleteSelection();
-                TextPos afterDel = cursor_;
-                insertTextAtCursor(replacement);
-                recordInsert(afterDel, replacement, oldCur, cursor_);
-            }
+            ct::Regex re = ct::Regex::compile(find, caseSensitive ? 0u : ct::Regex::IgnoreCase, &err);
+            matches = re.valid() && re.fullmatch(ct::StringView(selected.data(), selected.size()));
+            if (matches) replacement = re.sub(ct::StringView(selected.data(), selected.size()), ct::StringView(replace.data(), replace.size()), 1);
+        } else {
+            matches = selected.size() == find.size();
+            for (size_t i = 0; matches && i < selected.size(); ++i)
+                matches = caseSensitive ? selected[i] == find[i]
+                                        : std::tolower(static_cast<unsigned char>(selected[i])) == std::tolower(static_cast<unsigned char>(find[i]));
+            if (matches) replacement = replace;
         }
-        else
-        {
-            selectionMatches = selected == find;
-            if (selectionMatches)
-            {
-                TextPos oldCur = cursor_;
-                deleteSelection();
-                TextPos afterDel = cursor_;
-                insertTextAtCursor(replace);
-                recordInsert(afterDel, replace, oldCur, cursor_);
-            }
-        }
+        if (matches) editRange(selectionStart(), selectionEnd(), replacement);
     }
     return findNext(find, caseSensitive, false, useRegex);
 }
@@ -1383,6 +1389,7 @@ bool CodeEditor::replaceNext(const String& find, const String& replace, bool cas
 int CodeEditor::replaceAll(const String& find, const String& replace, bool caseSensitive,
         bool useRegex)
 {
+    if (readOnly_) return 0;
     searchTerm_ = find;
     searchCaseSensitive_ = caseSensitive;
     searchWholeWord_ = false;
@@ -1397,29 +1404,30 @@ int CodeEditor::replaceAll(const String& find, const String& replace, bool caseS
         if (!re.valid()) return 0;
     }
 
+    // Bottom to top, so the positions above stay; one undo step for all.
+    const TextPos keep = cursor_;
     int count = 0;
-    // Replace from bottom to top so positions don't shift
-    for (int i = static_cast<int>(searchMatches_.size()) - 1; i >= 0; i--)
-    {
-        cursor_ = searchMatches_[i];
-        selAnchor_ = cursor_;
-        cursor_.col += searchMatchLengths_[i];
-        if (useRegex)
-        {
+    beginUndoGroup();
+    for (int i = static_cast<int>(searchMatches_.size()) - 1; i >= 0; i--) {
+        TextPos from = searchMatches_[i];
+        TextPos to = from;
+        to.col += searchMatchLengths_[i];
+        String replacement = replace;
+        if (useRegex) {
+            setSelection(from, to);
             const String matched = selectedText();
-            const String replacement = re.sub(ct::StringView(matched.data(), matched.size()),
-                    ct::StringView(replace.data(), replace.size()), 1);
-            deleteSelection();
-            insertTextAtCursor(replacement);
+            replacement = re.sub(ct::StringView(matched.data(), matched.size()), ct::StringView(replace.data(), replace.size()), 1);
         }
-        else
-        {
-            deleteSelection();
-            insertTextAtCursor(replace);
-        }
+        editRange(from, to, replacement);
         count++;
     }
-
+    endUndoGroup();
+    searchMatches_.clear();
+    searchMatchIdx_ = -1;
+    cursor_ = keep;
+    clampPos(cursor_);
+    selAnchor_ = cursor_;
+    hlDirty_ = true;
     markDirty();
     return count;
 }
@@ -1691,41 +1699,6 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
     ctx.popClip();
 }
 
-void CodeEditor::paintSearchBar(PaintContext& ctx, const Rect& abs)
-{
-    if (!searchVisible_) return;
-
-    float barH = replaceVisible_ ? 56.0f : 28.0f;
-    float barY = abs.y;
-    float barW = std::min(400.0f, abs.w - 20.0f);
-    float barX = abs.x + abs.w - barW - 10.0f;
-
-    // Background
-    ctx.fill.SetColor(40, 44, 52, 240);
-    ctx.fill.RoundedRectangle(barX, barY, barW, barH, 4, 6, true);
-    ctx.line.SetColor(80, 85, 95, 255);
-    ctx.line.RoundedRectangle(barX, barY, barW, barH, 4, 6, false);
-
-    // Search term
-    ctx.font.SetColor(200, 200, 210, 255);
-    char buf[256];
-    if (searchTerm_.empty())
-    {
-        ctx.font.Print("Search...", barX + 8, barY + 6);
-    }
-    else
-    {
-        snprintf(buf, sizeof(buf), "%sFind: %s  (%d matches)", searchIsRegex_ ? ".*  " : "",
-                searchTerm_.c_str(), static_cast<int>(searchMatches_.size()));
-        ctx.font.Print(buf, barX + 8, barY + 6);
-    }
-
-    if (replaceVisible_ && !replaceTerm_.empty())
-    {
-        snprintf(buf, sizeof(buf), "Replace: %s", replaceTerm_.c_str());
-        ctx.font.Print(buf, barX + 8, barY + 30);
-    }
-}
 
 // ── Paint ────────────────────────────────────────────────────────────────────
 
@@ -1769,6 +1742,7 @@ void CodeEditor::paint(PaintContext& ctx)
     ctx.pushClip(textRect);
     paintIndentGuides(ctx, abs);
     paintScopeLines(ctx, abs);
+    paintOccurrences(ctx, abs);
     paintSearchHighlights(ctx, abs);
     ctx.popClip();
 
@@ -1810,6 +1784,7 @@ void CodeEditor::paint(PaintContext& ctx)
         paintCompletion(ctx, abs);
         ctx.font.scale = 1.0f;
     }
+    if (bar_ != Bar::None) paintBar(ctx, abs);
     if (overrideFont_) ctx.popFont();
 }
 
@@ -2731,41 +2706,33 @@ void CodeEditor::duplicateLine()
 void CodeEditor::indent()
 {
     if (readOnly_) return;
-    int ln = cursor_.line;
-    lines_[ln].insert(0, "\t");
-    linesChanged(ln, 1, 1);
-    cursor_.col++;
+    if (hasSelection() && selectionStart().line != selectionEnd().line) {
+        indentSelection();
+        return;
+    }
+    const TextPos keep = cursor_;
+    editRange({cursor_.line, 0}, {cursor_.line, 0}, "\t");
+    cursor_ = {keep.line, keep.col + 1};
     selAnchor_ = cursor_;
-    markDirty();
-    textChanged.emit();
 }
 
 void CodeEditor::unindent()
 {
     if (readOnly_) return;
-    int ln = cursor_.line;
-    if (lines_[ln].empty()) return;
-    if (lines_[ln][0] == '\t')
-    {
-        lines_[ln].erase(0, 1);
-        if (cursor_.col > 0) cursor_.col--;
+    if (hasSelection() && selectionStart().line != selectionEnd().line) {
+        unindentSelection();
+        return;
     }
+    const TextPos keep = cursor_;
+    const int ln = cursor_.line;
+    int removed = 0;
+    if (!lines_[ln].empty() && lines_[ln][0] == '\t') removed = 1;
     else
-    {
-        int spaces = 0;
-        while (spaces < tabSize_ && spaces < static_cast<int>(lines_[ln].size()) &&
-                lines_[ln][spaces] == ' ')
-            spaces++;
-        if (spaces > 0)
-        {
-            lines_[ln].erase(0, spaces);
-            cursor_.col = std::max(0, cursor_.col - spaces);
-        }
-    }
-    linesChanged(ln, 1, 1);
+        while (removed < tabSize_ && removed < static_cast<int>(lines_[ln].size()) && lines_[ln][removed] == ' ') removed++;
+    if (removed == 0) return;
+    editRange({ln, 0}, {ln, removed}, "");
+    cursor_ = {keep.line, std::max(0, keep.col - removed)};
     selAnchor_ = cursor_;
-    markDirty();
-    textChanged.emit();
 }
 
 String CodeEditor::commentPrefix() const
@@ -2773,7 +2740,9 @@ String CodeEditor::commentPrefix() const
     if (highlighter_)
     {
         String name = highlighter_->languageName();
-        if (name == "Python" || name == "Lua") return "# ";
+        if (name == "Python") return "# ";
+        if (name == "Lua") return "-- ";
+        if (name == "Blitz") return "; ";
     }
     return "// ";
 }
@@ -3147,6 +3116,7 @@ void CodeEditor::reveal(int line, int col)
 {
     closeCompletion();
     clearExtraCursors();
+    pushJump();
     setCursorPos(line, col);
     pendingRevealLine_ = cursor_.line;
     if (lineHeight_ > 0.0f)
@@ -3374,6 +3344,12 @@ bool CodeEditor::acceptCompletion()
 
 void CodeEditor::onTextInput(KeyEvent& e)
 {
+    if (bar_ != Bar::None && !e.ctrl && !e.alt)
+    {
+        barInput(e.text);
+        e.consumed = true;
+        return;
+    }
     handleTextInput(e);
     if (!autocomplete_ || readOnly_ || !e.text[0]) return;
     const char c = e.text[0];
@@ -3387,11 +3363,79 @@ void CodeEditor::onTextInput(KeyEvent& e)
 
 void CodeEditor::onKeyPress(KeyEvent& e)
 {
-    if (autocomplete_ && e.ctrl && !e.alt && e.key == ig::retained::Key::Space)
+    namespace Key = ig::retained::Key;
+    if (bar_ != Bar::None && barKey(e)) return;
+    if (autocomplete_ && e.ctrl && !e.alt && e.key == Key::Space)
     {
         requestCompletion();
         e.consumed = true;
         return;
+    }
+    // ── The editor's own keys, before the inherited handling ─────────────
+    if (e.ctrl && !e.alt)
+    {
+        bool handled = true;
+        switch (e.key)
+        {
+            case Key::Z: if (e.shift) redo(); else undo(); break;
+            case Key::Y: redo(); break;
+            case Key::F: if (e.shift) formatDocument(); else showBar(Bar::Find); break;
+            case Key::H: showBar(Bar::Replace); break;
+            case Key::G: showBar(Bar::GotoLine); break;
+            case Key::O: if (e.shift) showBar(Bar::GotoSymbol); else handled = false; break;
+            case Key::L: if (e.shift) handled = false; else selectLine(); break;
+            case Key::J: joinLines(); break;
+            case Key::M: jumpToMatchingBracket(e.shift); break;
+            case Key::B: gotoDefinition(); break;
+            case Key::U: transformSelection(e.shift); break;
+            case Key::F2: toggleBookmark(); break;
+            default: handled = false; break;
+        }
+        if (handled)
+        {
+            e.consumed = true;
+            return;
+        }
+    }
+    if (e.ctrl && e.alt && !e.shift && (e.key == Key::Up || e.key == Key::Down))
+    {
+        if (e.key == Key::Up) addCursorAbove(); else addCursorBelow();
+        e.consumed = true;
+        return;
+    }
+    if (e.alt && !e.ctrl && !e.shift && (e.key == Key::Left || e.key == Key::Right))
+    {
+        if (e.key == Key::Left) jumpBack(); else jumpForward();
+        e.consumed = true;
+        return;
+    }
+    if (e.key == Key::F2 && !e.ctrl && !e.alt)
+    {
+        if (e.shift) previousBookmark(); else nextBookmark();
+        e.consumed = true;
+        return;
+    }
+    if (e.key == Key::F3 && !e.ctrl && !e.alt && !searchTerm_.empty())
+    {
+        if (e.shift) findPrev(searchTerm_, searchCaseSensitive_, searchWholeWord_, searchIsRegex_);
+        else findNext(searchTerm_, searchCaseSensitive_, searchWholeWord_, searchIsRegex_);
+        e.consumed = true;
+        return;
+    }
+    if (e.key == Key::Tab && !e.ctrl && !e.alt && !readOnly_)
+    {
+        if (e.shift)
+        {
+            unindent();
+            e.consumed = true;
+            return;
+        }
+        if (hasSelection() && selectionStart().line != selectionEnd().line)
+        {
+            indentSelection();
+            e.consumed = true;
+            return;
+        }
     }
     if (completionVisible_)
     {
@@ -3470,48 +3514,10 @@ void CodeEditor::paintCompletion(PaintContext& ctx, const Rect& abs)
     const Theme& t = Theme::instance();
     const String& text = lineAt(completionContext_.line);
     const String before(text.c_str(), utf8ByteOffset(text, completionContext_.wordStart));
-    const int shown = std::min(kCompletionRows, static_cast<int>(completionItems_.size()));
-    float width = 0.0f;
-    for (int i = 0; i < shown; ++i)
-    {
-        const CompletionItem& item = completionItems_[static_cast<size_t>(completionFirstShown_ + i)];
-        const float detail = item.detail.empty() ? 0.0f : ctx.font.GetTextWidth(item.detail.c_str()) + 24.0f;
-        width = std::max(width, ctx.font.GetTextWidth(item.text.c_str()) + detail);
-    }
-    width = std::min(abs.w - 8.0f, std::max(160.0f, width + 20.0f));
-    const float height = shown * lh + 8.0f;
+    ct::Vector<ListRow> rows;
+    rows.reserve(completionItems_.size());
+    for (const CompletionItem& item: completionItems_) rows.push_back({ item.text, item.detail });
     const float lineY = abs.y + t.textEditPadding + logicalToVisualRow(completionContext_.line) * lh - scrollY_;
-    float x = abs.x + gutterW_ + t.textEditPadding + ctx.font.GetTextWidth(before.c_str()) - scrollX_ - 6.0f;
-    x = std::max(abs.x, std::min(x, abs.x + abs.w - width));
-    float y = lineY + lh + 2.0f;
-    if (y + height > abs.y + abs.h && lineY - height - 2.0f >= abs.y) y = lineY - height - 2.0f;
-    completionRect_ = { x, y, width, height };
-    completionRowHeight_ = lh;
-
-    ctx.pushClip(abs);
-    ctx.fill.SetColor(t.menuBg);
-    ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
-    ctx.line.SetColor(t.borderColor);
-    ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
-    const float textOffset = (lh - ctx.font.GetFontSize()) * 0.5f;
-    for (int i = 0; i < shown; ++i)
-    {
-        const int index = completionFirstShown_ + i;
-        const CompletionItem& item = completionItems_[static_cast<size_t>(index)];
-        const float rowY = y + 4.0f + i * lh;
-        if (index == completionSelected_)
-        {
-            ctx.fill.SetColor(t.selectionColor);
-            ctx.fill.Rectangle(x + 2.0f, rowY, width - 4.0f, lh, true);
-        }
-        ctx.font.SetColor(t.textColor);
-        ctx.font.Print(item.text.c_str(), x + 8.0f, rowY + textOffset);
-        if (!item.detail.empty())
-        {
-            ctx.font.SetColor(t.textDisabled);
-            const float dw = ctx.font.GetTextWidth(item.detail.c_str());
-            ctx.font.Print(item.detail.c_str(), x + width - dw - 8.0f, rowY + textOffset);
-        }
-    }
-    ctx.popClip();
+    const float x = abs.x + gutterW_ + t.textEditPadding + ctx.font.GetTextWidth(before.c_str()) - scrollX_ - 6.0f;
+    paintList(ctx, abs, rows, completionSelected_, completionFirstShown_, x, lineY + lh + 2.0f, completionRect_, completionRowHeight_);
 }
