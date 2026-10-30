@@ -2,6 +2,7 @@
 // SymbolOutline beside it, driven through WidgetApp the way a window does.
 
 #include <igui/widgets/CodeEditor.hpp>
+#include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/SymbolOutline.hpp>
 #include <igui/widgets/WidgetApp.hpp>
 
@@ -194,8 +195,8 @@ void testProviderCompletion()
         receivers.push_back(ctx.receiver);
         if (ctx.receiver == "self")
         {
-            items.push_back({ "display", "Edit" });
-            items.push_back({ "message", "method" });
+            items.push_back({ "display", "Edit", "" });
+            items.push_back({ "message", "method", "A message box of the system." });
         }
     });
     b.editor->moveBottom();
@@ -203,6 +204,7 @@ void testProviderCompletion()
     check(b.editor->completionVisible() && !receivers.empty() && receivers.back() == "self", "a dot asks the provider with the name before it");
     const ct::Vector<CodeEditor::CompletionItem>& items = b.editor->completionItems();
     check(items.size() >= 2 && items[0].text == "display" && items[0].detail == "Edit" && items[1].text == "message", "the host's items come first, in its order");
+    check(items[1].doc == "A message box of the system.", "with their line of documentation");
     bool textWord = false;
     for (const CodeEditor::CompletionItem& item: items)
         textWord = textWord || item.text == "sender";
@@ -260,6 +262,39 @@ void testOutline()
     check(b.outline->roots().empty(), "without an editor the outline is empty");
 }
 
+void testConsoleClick()
+{
+    WidgetApp& app = WidgetApp::instance();
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    io.deltaTime = 1.0f / 60.0f;
+    DrawData data;
+    Widget* stage = app.addStage("console");
+    app.setStage("console", TransitionType::None);
+    auto* console = stage->createChild<ConsoleWidget>();
+    console->setRect({ 0.0f, 0.0f, 600.0f, 300.0f });
+    console->log(LogLevel::Info, "run: starting");
+    console->log(LogLevel::Error, "run: main.py:7: name 'x' is not defined");
+    String activated;
+    console->entryActivated.connect([&](const LogEntry& entry) { activated = entry.message; });
+    app.update(io);
+    app.paint(data);
+    // Rows of 18 px under a 24 px tool bar: the second line.
+    io.mouseX = 100.0f;
+    io.mouseY = 24.0f + 18.0f + 9.0f;
+    app.update(io);
+    app.paint(data);
+    io.mouseDown[0] = true;
+    app.update(io);
+    app.paint(data);
+    io.mouseDown[0] = false;
+    app.update(io);
+    check(activated == "run: main.py:7: name 'x' is not defined", "a press on a console line reports that entry");
+    check(console->selectedEntry() && console->selectedEntry()->level == LogLevel::Error, "and it is the selected one");
+    app.removeStage("console");
+}
+
 void testEditorDeletedFirst()
 {
     // The stage deletes its children in order: the editor goes before the
@@ -283,6 +318,7 @@ int main()
     testBuiltinCompletion();
     testProviderCompletion();
     testOutline();
+    testConsoleClick();
     testEditorDeletedFirst();
     if (gFailures)
         printf("%d failure(s)\n", gFailures);

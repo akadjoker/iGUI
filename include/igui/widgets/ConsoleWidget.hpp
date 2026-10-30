@@ -127,6 +127,11 @@ public:
 
     /// @brief Emitted when a command is submitted.
     Signal<const String&> onCommand;
+    /// @brief A press on a line of the log: the entry under the pointer. A
+    /// host turns "file:line:" messages into a jump to the editor.
+    Signal<const LogEntry&> entryActivated;
+    /// @brief The line last pressed, or nullptr.
+    const LogEntry* selectedEntry() const;
 
     // ── Overrides ────────────────────────────────────────────────────────
     Vec2f sizeHint() const override

@@ -102,6 +102,8 @@ void testPython()
     const Symbol* top = find(symbols, "top_level", SymbolKind::Function);
     check(top && top->parent == -1 && top->line == 21 && top->endLine == 22, "python: a top-level function");
     check(find(symbols, "later", SymbolKind::Function) != nullptr, "python: async def");
+    check(digit && digit->signature == "(self, sender)" && top && top->signature == "(a, b)", "python: a def keeps its parameter list");
+    check(form && form->signature.empty(), "python: a class has no signature");
     check(ig::syntax::enclosingSymbol(symbols, 13) == indexOf(symbols, helper), "python: the innermost block holds the line");
     check(ig::syntax::enclosingSymbol(symbols, 14) == indexOf(symbols, digit), "python: after the nested def, back in the method");
     check(ig::syntax::enclosingSymbol(symbols, 23) == -1, "python: a blank line between functions is top level");
@@ -179,7 +181,9 @@ void testCpp()
     check(size && size->line == 28 && size->endLine == 32 && size->parent == indexOf(symbols, inner), "c++: an out-of-line definition with a qualified name");
     const Symbol* outCtor = find(symbols, "CodeEditor::CodeEditor", SymbolKind::Function);
     check(outCtor && outCtor->endLine == 36, "c++: a constructor with an initializer list");
-    check(find(symbols, "helper", SymbolKind::Function) != nullptr, "c++: a static function");
+    const Symbol* helperFn = find(symbols, "helper", SymbolKind::Function);
+    check(helperFn && helperFn->signature == "(int a)", "c++: a function keeps its parameter list");
+    check(ctor && ctor->signature == "()" && tmpl && tmpl->signature == "(Args&&... args)", "c++: constructors and templates too");
     check(!has(symbols, "lambda"), "c++: a lambda initializer is not a function");
     const Symbol* exported = find(symbols, "exported", SymbolKind::Function);
     check(exported && exported->parent == indexOf(symbols, inner), "c++: a declaration inside extern \"C\"");
@@ -318,6 +322,7 @@ void testLua()
     check(area && area->endLine == 13, "lua: the method ends after the for ... end inside it");
     const Symbol* helper = find(symbols, "helper", SymbolKind::Function);
     check(helper && helper->line == 14 && helper->endLine == 16, "lua: local name = function");
+    check(helper && helper->signature == "(a)" && mnew && mnew->signature == "(x)", "lua: the parameter lists");
     check(find(symbols, "M.cb", SymbolKind::Method) != nullptr, "lua: a.b = function");
     check(ig::syntax::enclosingSymbol(symbols, 19) == -1, "lua: a do block is not a symbol");
 }
@@ -353,6 +358,7 @@ void testBlitz()
     const Symbol* update = find(symbols, "Update", SymbolKind::Function);
     check(update && update->line == 8 && update->endLine == 12, "blitz: Function ... End Function, an EndIf inside does not close it");
     check(find(symbols, "Greet$", SymbolKind::Function) != nullptr, "blitz: a function with a return sigil");
+    check(update && update->signature == "(dt#)", "blitz: the parameter list");
     check(ig::syntax::enclosingSymbol(symbols, 14) == indexOf(symbols, find(symbols, "Greet$", SymbolKind::Function)), "blitz: a line inside a function");
 }
 

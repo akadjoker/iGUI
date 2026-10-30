@@ -397,6 +397,25 @@ public:
     /// @brief Find the end of the word at the given position.
     TextPos findWordEnd(TextPos pos) const;
 
+    // ── Signature help ────────────────────────────────────────────────────
+    //
+    //  While the cursor is inside the parentheses of a call, a line above
+    //  shows the callee's parameters with the active one marked. The host's
+    //  provider answers for its API (given the dotted callee, "self.message");
+    //  for anything else the text's own symbols answer, when the callee names
+    //  a function or method they know. Escape dismisses it for that call.
+
+    using SignatureProvider = ct::Function<bool(const String& callee, String& signature, String& doc)>;
+    void setSignatureProvider(SignatureProvider provider);
+    bool signatureVisible() const { return sigVisible_; }
+    const String& signatureCallee() const { return sigCallee_; }
+    /// @brief "message(title, text, kind)" as shown.
+    const String& signatureText() const { return sigText_; }
+    const String& signatureDoc() const { return sigDoc_; }
+    /// @brief The parameter the cursor is on, from 0.
+    int signatureParameter() const { return sigParam_; }
+    void dismissSignature();
+
     // ── Inline bars: find, replace, go to line, go to symbol ──────────────
     //
     //  One bar at a time, at the top right of the editor, with a field the
@@ -527,7 +546,8 @@ public:
     struct CompletionItem
     {
         String text;   // what is inserted
-        String detail; // shown dimmed at the right: a type, "method", "keyword"
+        String detail; // shown dimmed at the right: a type, a signature, "keyword"
+        String doc;    // one line under the list while the item is selected
     };
     /// Where the cursor is when items are asked for. Columns are code points
     /// on the line, as TextPos counts them; the word ends at the cursor.
@@ -727,6 +747,28 @@ private:
     // ── Occurrences, jumps ───────────────────────────────────────────────
     bool highlightOccurrences_ = true;
     int indentUnit_ = 4;
+    // ── Signature help ───────────────────────────────────────────────────
+    SignatureProvider signatureProvider_;
+    bool sigVisible_ = false;
+    String sigCallee_;
+    String sigText_;
+    String sigDoc_;
+    int sigParam_ = 0;
+    int sigOpenCol_ = -1;     // byte offset of the call's "(" on the cursor line
+    int sigLine_ = -1;
+    bool sigDismissed_ = false;
+    int sigDismissedLine_ = -1;
+    int sigDismissedCol_ = -1;
+    struct SigKey
+    {
+        int line = -1, col = -1;
+        size_t bytes = 0;
+    } sigKey_;
+    // The call the cursor is in on its line: the dotted name before the
+    // unmatched "(", that "("'s byte offset and the parameter index.
+    bool callAtCursor(String& callee, int& openCol, int& parameter) const;
+    void updateSignature();
+    void paintSignature(PaintContext& ctx, const Rect& abs);
     void paintOccurrences(PaintContext& ctx, const Rect& abs);
     // The word at the cursor, or the one-line selection: what to highlight / look up.
     String wordAtCursor(TextPos& start, TextPos& end) const;
