@@ -1770,10 +1770,10 @@ void CodeEditor::paint(PaintContext& ctx)
         Rect fullAbs = absoluteRect();
         paintMinimap(ctx, fullAbs);
     }
-    if (pendingRevealLine_ >= 0 && lineHeight_ > 0.0f)
+    if (pendingRevealLine_ >= 0 && lineHeight() > 0.0f)
     {
         // The line a third of the way down, so what follows it is in view.
-        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight_));
+        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight()));
         scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
         pendingRevealLine_ = -1;
         markDirty();
@@ -3127,9 +3127,9 @@ void CodeEditor::reveal(int line, int col)
     pushJump();
     setCursorPos(line, col);
     pendingRevealLine_ = cursor_.line;
-    if (lineHeight_ > 0.0f)
+    if (lineHeight() > 0.0f)
     {
-        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight_));
+        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight()));
         scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
         pendingRevealLine_ = -1;
     }
@@ -3523,7 +3523,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 
 void CodeEditor::paintCompletion(PaintContext& ctx, const Rect& abs)
 {
-    const float lh = lineHeight_;
+    const float lh = lineHeight();
     if (completionItems_.empty() || lh <= 0.0f || completionContext_.line >= lineCount()) return;
     const Theme& t = Theme::instance();
     const String& text = lineAt(completionContext_.line);

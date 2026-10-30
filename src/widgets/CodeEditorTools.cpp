@@ -614,12 +614,12 @@ bool CodeEditor::jumpForward()
 
 void CodeEditor::paintOccurrences(PaintContext& ctx, const Rect& abs)
 {
-    if (!highlightOccurrences_ || lineHeight_ <= 0.0f) return;
+    if (!highlightOccurrences_ || lineHeight() <= 0.0f) return;
     TextPos start, end;
     const String word = wordAtCursor(start, end);
     if (word.size() < 2 || word.size() > 64) return;
     const bool wholeWord = !hasSelection();
-    const float lh = lineHeight_;
+    const float lh = lineHeight();
     const float textX = abs.x + gutterW_ + Theme::instance().textEditPadding;
     const int first = firstVisibleLine();
     const int rows = visibleLineCount();
@@ -655,7 +655,7 @@ void CodeEditor::paintOccurrences(PaintContext& ctx, const Rect& abs)
 
 void CodeEditor::paintList(PaintContext& ctx, const Rect& abs, const ct::Vector<ListRow>& rows, int selected, int first, float x, float y, Rect& outRect, float& outRowHeight)
 {
-    const float lh = lineHeight_;
+    const float lh = lineHeight();
     if (rows.empty() || lh <= 0.0f) return;
     const Theme& t = Theme::instance();
     const int shown = std::min(kListRows, static_cast<int>(rows.size()) - first);
@@ -922,7 +922,7 @@ void CodeEditor::updateSignature()
 
 void CodeEditor::paintSignature(PaintContext& ctx, const Rect& abs)
 {
-    const float lh = lineHeight_;
+    const float lh = lineHeight();
     if (lh <= 0.0f || sigLine_ < 0 || sigLine_ >= lineCount()) return;
     const Theme& t = Theme::instance();
     const float rows = sigDoc_.empty() ? 1.0f : 2.0f;

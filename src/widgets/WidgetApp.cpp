@@ -208,9 +208,9 @@ void WidgetApp::update(const ig::retained::IO& io)
 
     // Calls deferred by the handlers above, in the order they were made; one
     // deferred while they run joins this same pass.
-    for (ct::Vector<DeferredCall>::size_type i = 0; i < s_.deferredCalls_.size(); ++i)
+    for (ct::Vector<Surface::DeferredCall>::size_type i = 0; i < s_.deferredCalls_.size(); ++i)
     {
-        DeferredCall call = std::move(s_.deferredCalls_[i]);
+        Surface::DeferredCall call = std::move(s_.deferredCalls_[i]);
         if (call.owner) call.fn();
     }
     s_.deferredCalls_.clear();
@@ -903,7 +903,7 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     if (!w) return;
     ++deletions_;
     if (Animator* animator = Animator::existing()) animator->forget(w);
-    for (DeferredCall& call: s_.deferredCalls_)
+    for (Surface::DeferredCall& call: s_.deferredCalls_)
         if (call.owner && isDescendantOf(call.owner, w)) call.owner = nullptr;
     if (s_.tooltipWidget_ && isDescendantOf(s_.tooltipWidget_, w))
     {
@@ -950,9 +950,9 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     }
     const bool focusWentAway = s_.focused_ && isDescendantOf(s_.focused_, w);
     if (focusWentAway) s_.focused_ = nullptr;
-    for (ct::Vector<FocusLoan>::size_type i = 0; i < s_.focusLoans_.size();)
+    for (ct::Vector<Surface::FocusLoan>::size_type i = 0; i < s_.focusLoans_.size();)
     {
-        FocusLoan& loan = s_.focusLoans_[i];
+        Surface::FocusLoan& loan = s_.focusLoans_[i];
         if (loan.previous && isDescendantOf(loan.previous, w)) loan.previous = nullptr;
         if (!isDescendantOf(loan.holder, w))
         {
@@ -1231,7 +1231,7 @@ void WidgetApp::lendFocus(Widget* holder, Widget* target)
 void WidgetApp::returnFocus(Widget* holder)
 {
     Widget* previous = nullptr;
-    for (ct::Vector<FocusLoan>::size_type i = 0; i < s_.focusLoans_.size(); ++i)
+    for (ct::Vector<Surface::FocusLoan>::size_type i = 0; i < s_.focusLoans_.size(); ++i)
     {
         if (s_.focusLoans_[i].holder != holder) continue;
         previous = s_.focusLoans_[i].previous;
