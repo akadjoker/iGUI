@@ -87,7 +87,7 @@ void CodeEditor::recordReplace(TextPos pos, const String& oldText, const String&
     undoRedoChanged.emit(canUndo(), canRedo());
 }
 
-void CodeEditor::editRange(TextPos start, TextPos end, const String& text)
+void CodeEditor::replaceRange(TextPos start, TextPos end, const String& text)
 {
     if (readOnly_) return;
     clampPos(start);
@@ -367,7 +367,7 @@ void CodeEditor::joinLines()
     const bool spaceNeeded = !line.empty() && lead < static_cast<int>(next.size()) &&
                              line[line.size() - 1] != ' ' && line[line.size() - 1] != '\t';
     const TextPos joinAt = { ln, lineColCount(ln) };
-    editRange(joinAt, { ln + 1, lead }, spaceNeeded ? String(" ") : String());
+    replaceRange(joinAt, { ln + 1, lead }, spaceNeeded ? String(" ") : String());
     cursor_ = joinAt;
     selAnchor_ = cursor_;
     cursorMoved.emit(cursor_);
@@ -495,7 +495,7 @@ void CodeEditor::transformSelection(bool upper)
         const unsigned char c = static_cast<unsigned char>(text[i]);
         if (c < 0x80) text[i] = static_cast<char>(upper ? std::toupper(c) : std::tolower(c));
     }
-    editRange(start, end, text);
+    replaceRange(start, end, text);
     setSelection(start, advance(start, text));
 }
 
@@ -511,7 +511,7 @@ void CodeEditor::indentLines(int first, int last, bool indent)
         if (indent)
         {
             if (lineAt(ln).empty()) continue; // blank lines stay blank
-            editRange({ ln, 0 }, { ln, 0 }, "\t");
+            replaceRange({ ln, 0 }, { ln, 0 }, "\t");
             delta = 1;
         }
         else
@@ -522,7 +522,7 @@ void CodeEditor::indentLines(int first, int last, bool indent)
             else
                 while (removed < tabSize_ && removed < static_cast<int>(line.size()) && line[static_cast<size_t>(removed)] == ' ') removed++;
             if (removed == 0) continue;
-            editRange({ ln, 0 }, { ln, removed }, "");
+            replaceRange({ ln, 0 }, { ln, removed }, "");
             delta = -removed;
         }
         if (ln == first) shiftFirst = delta;
@@ -949,7 +949,7 @@ void CodeEditor::formatDocument()
     const String after = formattedText();
     const int keepLine = cursor_.line;
     const int last = lineCount() - 1;
-    editRange({ 0, 0 }, { last, lineColCount(last) }, after);
+    replaceRange({ 0, 0 }, { last, lineColCount(last) }, after);
     cursor_ = { std::min(keepLine, lineCount() - 1), 0 };
     clampPos(cursor_);
     selAnchor_ = cursor_;
