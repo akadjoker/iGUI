@@ -11,6 +11,7 @@
 #include <ct/function.hpp>
 
 #include "Color.hpp"
+#include "Symbols.hpp"
 
 namespace ig { namespace syntax
 {
@@ -114,6 +115,10 @@ public:
     /// @brief Get file extensions this highlighter handles (e.g. {"cpp","hpp","h"}).
     virtual ct::Vector<String> extensions() const = 0;
 
+    /// @brief How the language nests its declarations: picks the symbol scan
+    /// (see Symbols.hpp) an outline or go-to-symbol runs over the text.
+    virtual SymbolSyntax symbolSyntax() const { return SymbolSyntax::Braces; }
+
     /// @brief Keywords known to this highlighter (used for autocomplete).
     const ct::HashSet<String>& keywordSet() const { return keywords_; }
     /// @brief Built-in types known to this highlighter (used for autocomplete).
@@ -186,6 +191,8 @@ struct SyntaxLanguage
     // language can use either, both, or neither.
     String verbatimPrefix;
     bool caseSensitive = true;
+    // Which symbol scan the outline uses for this language (Symbols.hpp).
+    SymbolSyntax symbols = SymbolSyntax::Braces;
 };
 
 class DefinedHighlighter : public SyntaxHighlighter
@@ -196,6 +203,7 @@ public:
     int foldDelta(int, const String&) const override;
     const char* languageName() const override { return language_.name.c_str(); }
     ct::Vector<String> extensions() const override { return language_.extensions; }
+    SymbolSyntax symbolSyntax() const override { return language_.symbols; }
 private:
     SyntaxLanguage language_;
 };
@@ -236,6 +244,7 @@ public:
     const char* languageName() const override { return "Python"; }
     ct::Vector<String> extensions() const override
     { return {"py", "pyw", "pyi"}; }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Indent; }
 };
 
 /// @brief JavaScript/TypeScript syntax highlighter.
@@ -269,6 +278,7 @@ public:
     const char* languageName() const override { return "Lua"; }
     ct::Vector<String> extensions() const override
     { return {"lua"}; }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Lua; }
 };
 
 /// @brief GLSL shader syntax highlighter.
@@ -323,6 +333,7 @@ public:
     const char* languageName() const override { return "Blitz"; }
     ct::Vector<String> extensions() const override
     { return {"blitz", "bb", "bmx", "decls"}; }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Blitz; }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

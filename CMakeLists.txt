@@ -66,7 +66,7 @@ endif()
 # highlighting layer (ig::syntax). Both are things the immediate-mode Context
 # and the retained widget toolkit actually have in common - everything else
 # below depends on this, never on each other.
-add_library(igui_core src/DrawList.cpp src/Syntax.cpp)
+add_library(igui_core src/DrawList.cpp src/Syntax.cpp src/Symbols.cpp)
 add_library(igui::core ALIAS igui_core)
 target_include_directories(igui_core PUBLIC include)
 target_link_libraries(igui_core PUBLIC ct)
@@ -119,6 +119,12 @@ if(IGUI_BUILD_TESTS)
     # directly in the same binary - it needs both modes, not just legacy
     # (it only linked before because igui_legacy used to publicly depend on
     # igui; that link is now igui_legacy -> igui_core only, see above).
+    # The symbol scan of ig::syntax (outline, go-to-symbol): one sample per
+    # language family.
+    add_executable(igui_symbols_tests tests/test_symbols.cpp)
+    target_link_libraries(igui_symbols_tests PRIVATE igui_core)
+    add_test(NAME igui_symbols COMMAND igui_symbols_tests)
+
     if(IGUI_BUILD_LEGACY AND IGUI_BUILD_IMMEDIATE)
         add_executable(igui_tests tests/test_core.cpp)
         target_link_libraries(igui_tests PRIVATE igui_legacy igui)
@@ -141,6 +147,8 @@ if(IGUI_BUILD_TESTS)
         igui_text_editing_tests
         igui_windows_tests
         igui_code_editor_tests
+        igui_symbols_tests
+        igui_code_outline_tests
         igui_both_modes_tests
         igui_original_widgets_tests
         igui_font_tests
@@ -240,6 +248,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/MenuWidgets.cpp
         src/widgets/NodeEditor.cpp
         src/widgets/ScrollWidgets.cpp
+        src/widgets/SymbolOutline.cpp
         src/widgets/TextInputWidgets.cpp
         src/widgets/ThumbnailGrid.cpp
         src/widgets/Timeline.cpp
@@ -273,6 +282,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
     endif()
 
     if(IGUI_BUILD_TESTS)
+        # The retained CodeEditor's symbols, reveal and completion popup, and
+        # the SymbolOutline beside it, driven through WidgetApp.
+        add_executable(igui_code_outline_tests tests/test_code_outline.cpp)
+        target_compile_features(igui_code_outline_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_code_outline_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_code_outline_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_code_outline_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_code_outline COMMAND igui_code_outline_tests)
+
         add_executable(igui_original_widgets_tests tests/test_original_widgets.cpp)
         target_compile_features(igui_original_widgets_tests PRIVATE cxx_std_17)
         target_link_libraries(igui_original_widgets_tests PRIVATE

@@ -278,6 +278,10 @@ public:
     Widget() = default;
     virtual ~Widget();
 
+    /// @brief Emitted first thing in ~Widget, before the children go: a widget
+    /// that keeps a pointer to this one (an outline to its editor) drops it here.
+    Signal<> destroyed;
+
     // non-copyable, non-movable (tree node)
     Widget(const Widget&) = delete;
     Widget& operator=(const Widget&) = delete;
