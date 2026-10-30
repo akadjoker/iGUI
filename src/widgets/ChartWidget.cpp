@@ -165,11 +165,35 @@ int Chart::addSeries(const String& name, const ct::Vector<float>& values, const 
     return static_cast<int>(series_.size()) - 1;
 }
 
+int Chart::addSeries(const String& name, const ct::Vector<float>& xs, const ct::Vector<float>& ys)
+{
+    const int idx = addSeries(name, ys);
+    series_[static_cast<size_t>(idx)].xs = xs;
+    return idx;
+}
+
 void Chart::setSeriesValues(int series, const ct::Vector<float>& values)
 {
     if (series < 0 || series >= seriesCount())
         return;
     series_[static_cast<size_t>(series)].values = values;
+    markDirty();
+}
+
+void Chart::setSeriesX(int series, const ct::Vector<float>& xs)
+{
+    if (series < 0 || series >= seriesCount())
+        return;
+    series_[static_cast<size_t>(series)].xs = xs;
+    markDirty();
+}
+
+void Chart::setSeriesStyle(int series, bool line, bool markers)
+{
+    if (series < 0 || series >= seriesCount())
+        return;
+    series_[static_cast<size_t>(series)].line = line;
+    series_[static_cast<size_t>(series)].markers = markers;
     markDirty();
 }
 
@@ -231,6 +255,7 @@ void Chart::clear()
     legend_.clear();
     slices_.clear();
     bars_.clear();
+    points_.clear();
     hovered_ = Item();
     markDirty();
 }
@@ -255,6 +280,51 @@ void Chart::bars(const ct::Vector<String>& labels, const ct::Vector<float>& valu
     kind_ = ChartKind::Bars;
     setCategories(labels);
     addSeries(name, values);
+}
+
+int Chart::plot(const ct::Vector<float>& xs, const ct::Vector<float>& ys, const String& name)
+{
+    // An empty chart takes the kind; a line or scatter chart gets one more
+    // series; anything else is replaced.
+    if (!isXY() || series_.empty())
+    {
+        clear();
+        kind_ = ChartKind::Line;
+    }
+    const int idx = addSeries(name, xs, ys);
+    series_[static_cast<size_t>(idx)].line = true;
+    series_[static_cast<size_t>(idx)].markers = true;
+    return idx;
+}
+
+int Chart::scatter(const ct::Vector<float>& xs, const ct::Vector<float>& ys, const String& name)
+{
+    if (!isXY() || series_.empty())
+    {
+        clear();
+        kind_ = ChartKind::Scatter;
+    }
+    const int idx = addSeries(name, xs, ys);
+    series_[static_cast<size_t>(idx)].line = false;
+    series_[static_cast<size_t>(idx)].markers = true;
+    return idx;
+}
+
+float Chart::x(int series, int index) const
+{
+    if (series < 0 || series >= seriesCount() || index < 0)
+        return 0.0f;
+    const ChartSeries& s = series_[static_cast<size_t>(series)];
+    if (static_cast<size_t>(index) < s.xs.size())
+        return s.xs[static_cast<size_t>(index)];
+    return static_cast<float>(index);
+}
+
+int Chart::pointCount(int series) const
+{
+    if (series < 0 || series >= seriesCount())
+        return 0;
+    return static_cast<int>(series_[static_cast<size_t>(series)].values.size());
 }
 
 float Chart::value(int series, int index) const
@@ -315,6 +385,18 @@ void Chart::setShowGrid(bool show)
     markDirty();
 }
 
+void Chart::setMarkerSize(float radius)
+{
+    markerSize_ = radius < 1.0f ? 1.0f : (radius > 20.0f ? 20.0f : radius);
+    markDirty();
+}
+
+void Chart::setLineWidth(float width)
+{
+    lineWidth_ = width < 1.0f ? 1.0f : (width > 10.0f ? 10.0f : width);
+    markDirty();
+}
+
 void Chart::setValueSuffix(const String& suffix)
 {
     valueSuffix_ = suffix;
@@ -341,7 +423,7 @@ void Chart::setPalette(const ct::Vector<Color>& palette)
 
 Color Chart::colorOf(int series, int index) const
 {
-    if (kind_ == ChartKind::Bars)
+    if (!isPie())
     {
         if (series >= 0 && series < seriesCount())
             return series_[static_cast<size_t>(series)].color;
@@ -435,6 +517,7 @@ void Chart::buildSlices()
 // A 1-2-5 axis that contains every visible bar and zero.
 void Chart::buildAxis(float& lo, float& hi, float& step) const
 {
+    // Bars grow from zero, so the axis always holds it.
     float vmin = 0.0f, vmax = 0.0f;
     for (int s = 0; s < seriesCount(); ++s)
     {
@@ -449,8 +532,19 @@ void Chart::buildAxis(float& lo, float& hi, float& step) const
             if (v > vmax) vmax = v;
         }
     }
+    niceAxis(vmin, vmax, lo, hi, step);
+}
+
+// A 1-2-5 axis that holds vmin..vmax with about five steps.
+void Chart::niceAxis(float vmin, float vmax, float& lo, float& hi, float& step)
+{
     if (vmax - vmin < 1e-6f)
-        vmax = vmin + 1.0f;
+    {
+        // One value: a span around it, so the point sits in the middle.
+        const float pad = fabsf(vmin) > 1e-6f ? fabsf(vmin) * 0.1f : 0.5f;
+        vmin -= pad;
+        vmax += pad;
+    }
     const float span = vmax - vmin;
     const float rough = span / 5.0f;
     const float mag = powf(10.0f, floorf(log10f(rough)));
@@ -486,6 +580,24 @@ void Chart::sliceLabel(const Slice& slice, float sum, char* out, int outSize) co
 Chart::Item Chart::hitTest(float localX, float localY) const
 {
     Item hit;
+    if (isXY())
+    {
+        // The nearest point within a few pixels of the mouse.
+        const float reach = markerSize_ + 6.0f;
+        float best = reach * reach;
+        for (const Point& pt : points_)
+        {
+            const float dx = pt.x - localX, dy = pt.y - localY;
+            const float d = dx * dx + dy * dy;
+            if (d <= best)
+            {
+                best = d;
+                hit.series = pt.series;
+                hit.index = pt.index;
+            }
+        }
+        return hit;
+    }
     if (kind_ == ChartKind::Bars)
     {
         for (const Bar& bar : bars_)
@@ -541,6 +653,14 @@ Rect Chart::legendEntryRect(int entry) const
     return legend_[static_cast<size_t>(entry)].rect;
 }
 
+Widget::Vec2f Chart::pointAt(int series, int index) const
+{
+    for (const Point& pt : points_)
+        if (pt.series == series && pt.index == index)
+            return { pt.x, pt.y };
+    return { -1.0f, -1.0f };
+}
+
 Rect Chart::barRect(int series, int index) const
 {
     for (const Bar& bar : bars_)
@@ -586,9 +706,9 @@ void Chart::buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea,
     if (legendPosition_ == LegendPosition::Hidden)
         return;
 
-    // Entries: the categories of a pie, the series of a bar chart.
+    // Entries: the categories of a pie, the series otherwise.
     ct::Vector<LegendEntry> entries;
-    if (kind_ == ChartKind::Bars)
+    if (!isPie())
     {
         const bool single = seriesCount() == 1 && series_[0].name.empty();
         if (single)
@@ -736,7 +856,8 @@ void Chart::paintLegend(PaintContext& ctx, const Rect& b)
         const Color textColor = e.visible ? t.textColor : t.textDisabled;
         const float asc = setupFont(ctx, textColor);
         char buf[160];
-        const float labelW = r.w - kSwatch - kLegendGap - (onRight ? 0.0f : kLegendGap * 3.0f);
+        // Below the plot an entry is gap, swatch, gap, label, gap wide.
+        const float labelW = r.w - kSwatch - kLegendGap - (onRight ? 0.0f : kLegendGap * 2.0f);
         fitText(ctx, e.label.c_str(), labelW, buf, sizeof(buf));
         ctx.font.Print(buf, sx + kSwatch + kLegendGap, r.y + (r.h - lh) * 0.5f + asc);
     }
@@ -981,6 +1102,47 @@ void Chart::paintPie(PaintContext& ctx, const Rect& b, const Rect& plot)
     }
 }
 
+// Width taken by the value axis labels at the left, the widest tick plus a gap.
+float Chart::valueAxisGutter(PaintContext& ctx, float lo, float hi, float step, int decimals) const
+{
+    char buf[64];
+    float gutter = 0.0f;
+    const int ticks = static_cast<int>(roundf((hi - lo) / step));
+    for (int k = 0; k <= ticks; ++k)
+    {
+        snprintf(buf, sizeof(buf), "%.*f%s", decimals, static_cast<double>(lo + step * static_cast<float>(k)), valueSuffix_.c_str());
+        const float w = ctx.font.GetTextWidth(buf);
+        if (w > gutter) gutter = w;
+    }
+    return gutter + kAxisPad;
+}
+
+// The value axis of an area (absolute coordinates): grid lines or just the
+// zero line, and a label per tick at the left.
+void Chart::paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, float ah, float lo, float hi, float step, int decimals)
+{
+    const Theme& t = Theme::instance();
+    const float lh = lineHeight(ctx);
+    char buf[64];
+    const int ticks = static_cast<int>(roundf((hi - lo) / step));
+    for (int k = 0; k <= ticks; ++k)
+    {
+        const float v = lo + step * static_cast<float>(k);
+        const float y = floorf(ay + ah - (v - lo) / (hi - lo) * ah) + 0.5f;
+        const bool zero = fabsf(v) < step * 0.01f;
+        if (showGrid_ || zero)
+        {
+            const Color c = zero ? t.textDisabled : t.borderColor;
+            ctx.line.SetColor(c.r, c.g, c.b, zero ? 255 : 160);
+            ctx.drawLine(ax, y, ax + aw, y);
+        }
+        snprintf(buf, sizeof(buf), "%.*f%s", decimals, static_cast<double>(v), valueSuffix_.c_str());
+        const float w = ctx.font.GetTextWidth(buf);
+        const float asc = setupFont(ctx, t.textDisabled);
+        ctx.font.Print(buf, ax - kAxisPad - w, y - lh * 0.5f + asc);
+    }
+}
+
 void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
 {
     const Theme& t = Theme::instance();
@@ -993,18 +1155,9 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     axisMax_ = hi;
     axisStep_ = step;
 
-    // Axis labels: measure the widest tick to size the gutter.
     const int decimals = valueDecimals_ >= 0 ? valueDecimals_ : decimalsFor(step);
     char buf[64];
-    float gutter = 0.0f;
-    const int ticks = static_cast<int>(roundf((hi - lo) / step));
-    for (int k = 0; k <= ticks; ++k)
-    {
-        snprintf(buf, sizeof(buf), "%.*f%s", decimals, static_cast<double>(lo + step * static_cast<float>(k)), valueSuffix_.c_str());
-        const float w = ctx.font.GetTextWidth(buf);
-        if (w > gutter) gutter = w;
-    }
-    gutter += kAxisPad;
+    const float gutter = valueAxisGutter(ctx, lo, hi, step, decimals);
 
     const bool labelsBelow = categoryCount() > 0;
     Rect area(plot.x + gutter, plot.y + (showValues_ ? lh : 4.0f), plot.w - gutter - 4.0f,
@@ -1015,23 +1168,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     const float ay = b.y + area.y;
     auto yOf = [&](float v) { return ay + area.h - (v - lo) / (hi - lo) * area.h; };
 
-    // Grid and tick labels.
-    for (int k = 0; k <= ticks; ++k)
-    {
-        const float v = lo + step * static_cast<float>(k);
-        const float y = floorf(yOf(v)) + 0.5f;
-        if (showGrid_ || fabsf(v) < step * 0.01f)
-        {
-            const bool zero = fabsf(v) < step * 0.01f;
-            const Color c = zero ? t.textDisabled : t.borderColor;
-            ctx.line.SetColor(c.r, c.g, c.b, zero ? 255 : 160);
-            ctx.drawLine(ax, y, ax + area.w, y);
-        }
-        snprintf(buf, sizeof(buf), "%.*f%s", decimals, static_cast<double>(v), valueSuffix_.c_str());
-        const float w = ctx.font.GetTextWidth(buf);
-        const float asc = setupFont(ctx, t.textDisabled);
-        ctx.font.Print(buf, ax - kAxisPad - w, y - lh * 0.5f + asc);
-    }
+    paintValueAxis(ctx, ax, ay, area.w, area.h, lo, hi, step, decimals);
 
     // Visible categories and series.
     ct::Vector<int> cats;
@@ -1118,6 +1255,195 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
     ctx.drawLine(ax + 0.5f, ay, ax + 0.5f, ay + area.h);
 }
 
+// Lines and scatter: every visible series over a shared x axis, numeric when
+// any series has xs, the categories (or the indices) otherwise.
+void Chart::paintXY(PaintContext& ctx, const Rect& b, const Rect& plot)
+{
+    const Theme& t = Theme::instance();
+    points_.clear();
+    const float lh = lineHeight(ctx);
+
+    // Ranges over the visible points.
+    bool numericX = false;
+    bool any = false;
+    float xmin = 0.0f, xmax = 0.0f, ymin = 0.0f, ymax = 0.0f;
+    int maxCount = 0;
+    for (int s = 0; s < seriesCount(); ++s)
+    {
+        const ChartSeries& se = series_[static_cast<size_t>(s)];
+        if (!se.visible)
+            continue;
+        if (!se.xs.empty())
+            numericX = true;
+        const int n = pointCount(s);
+        if (n > maxCount) maxCount = n;
+        for (int i = 0; i < n; ++i)
+        {
+            if (se.xs.empty() && i < categoryCount() && !categoryVisible(i))
+                continue;
+            const float px = x(s, i), py = value(s, i);
+            if (!any) { xmin = xmax = px; ymin = ymax = py; any = true; }
+            if (px < xmin) xmin = px;
+            if (px > xmax) xmax = px;
+            if (py < ymin) ymin = py;
+            if (py > ymax) ymax = py;
+        }
+    }
+
+    float lo, hi, step;
+    niceAxis(any ? ymin : 0.0f, any ? ymax : 1.0f, lo, hi, step);
+    axisMin_ = lo;
+    axisMax_ = hi;
+    axisStep_ = step;
+    const int decimals = valueDecimals_ >= 0 ? valueDecimals_ : decimalsFor(step);
+    const float gutter = valueAxisGutter(ctx, lo, hi, step, decimals);
+
+    // The x axis: nice ticks over the numbers, or one slot per index.
+    float xlo = 0.0f, xhi = 1.0f, xstep = 1.0f;
+    const int slots = maxCount > categoryCount() ? maxCount : categoryCount();
+    if (numericX)
+        niceAxis(any ? xmin : 0.0f, any ? xmax : 1.0f, xlo, xhi, xstep);
+    else
+    {
+        xlo = 0.0f;
+        xhi = static_cast<float>(slots > 1 ? slots - 1 : 1);
+        xstep = 1.0f;
+    }
+    xAxisMin_ = xlo;
+    xAxisMax_ = xhi;
+    xAxisStep_ = xstep;
+
+    Rect area(plot.x + gutter, plot.y + (showValues_ ? lh : markerSize_ + 2.0f), plot.w - gutter - 8.0f,
+              plot.h - (showValues_ ? lh : markerSize_ + 2.0f) - lh - kAxisPad);
+    if (area.w < 10.0f || area.h < 10.0f)
+        return;
+    const float ax = b.x + area.x;
+    const float ay = b.y + area.y;
+    // Index slots leave half a slot at each side, so the first and last
+    // points do not sit on the frame.
+    const float xpad = numericX ? 0.0f : (slots > 1 ? area.w / static_cast<float>(slots) * 0.5f : area.w * 0.5f);
+    auto xOf = [&](float v) { return ax + xpad + (xhi > xlo ? (v - xlo) / (xhi - xlo) * (area.w - 2.0f * xpad) : 0.0f); };
+    auto yOf = [&](float v) { return ay + area.h - (v - lo) / (hi - lo) * area.h; };
+
+    paintValueAxis(ctx, ax, ay, area.w, area.h, lo, hi, step, decimals);
+
+    // The x ticks: numbers along the bottom, or the category labels.
+    char buf[128];
+    if (numericX)
+    {
+        const int xdecimals = decimalsFor(xstep);
+        const int xticks = static_cast<int>(roundf((xhi - xlo) / xstep));
+        // Skip ticks when their labels would touch.
+        snprintf(buf, sizeof(buf), "%.*f", xdecimals, static_cast<double>(xhi));
+        const float labelW = ctx.font.GetTextWidth(buf) + 10.0f;
+        int every = 1;
+        while (xticks / every > 0 && area.w / static_cast<float>(xticks / every) < labelW)
+            ++every;
+        for (int k = 0; k <= xticks; k += every)
+        {
+            const float v = xlo + xstep * static_cast<float>(k);
+            const float px = floorf(xOf(v)) + 0.5f;
+            if (showGrid_)
+            {
+                ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 110);
+                ctx.drawLine(px, ay, px, ay + area.h);
+            }
+            snprintf(buf, sizeof(buf), "%.*f", xdecimals, static_cast<double>(v));
+            const float w = ctx.font.GetTextWidth(buf);
+            const float asc = setupFont(ctx, t.textDisabled);
+            ctx.font.Print(buf, px - w * 0.5f, ay + area.h + kAxisPad + asc);
+        }
+    }
+    else if (slots > 0)
+    {
+        const float slotW = area.w / static_cast<float>(slots);
+        for (int i = 0; i < slots; ++i)
+        {
+            const float px = xOf(static_cast<float>(i));
+            if (i < categoryCount())
+            {
+                char fitted[128];
+                fitText(ctx, categories_[static_cast<size_t>(i)].c_str(), slotW - 4.0f, fitted, sizeof(fitted));
+                const float w = ctx.font.GetTextWidth(fitted);
+                if (w > 0.0f)
+                {
+                    const float asc = setupFont(ctx, categoryVisible(i) ? t.textColor : t.textDisabled);
+                    ctx.font.Print(fitted, px - w * 0.5f, ay + area.h + kAxisPad + asc);
+                }
+            }
+            else
+            {
+                snprintf(buf, sizeof(buf), "%d", i);
+                const float w = ctx.font.GetTextWidth(buf);
+                const float asc = setupFont(ctx, t.textDisabled);
+                ctx.font.Print(buf, px - w * 0.5f, ay + area.h + kAxisPad + asc);
+            }
+        }
+    }
+
+    // The axis lines.
+    ctx.line.SetColor(t.textDisabled.r, t.textDisabled.g, t.textDisabled.b, 255);
+    ctx.drawLine(ax + 0.5f, ay, ax + 0.5f, ay + area.h);
+    ctx.drawLine(ax, floorf(ay + area.h) + 0.5f, ax + area.w, floorf(ay + area.h) + 0.5f);
+
+    if (!any)
+    {
+        const float asc = setupFont(ctx, t.textDisabled);
+        const char* note = "no data";
+        ctx.font.Print(note, ax + (area.w - ctx.font.GetTextWidth(note)) * 0.5f, ay + area.h * 0.5f - lh * 0.5f + asc);
+        return;
+    }
+
+    // Each series: its line, then its markers, so the dots sit on the line.
+    ctx.pushClip(Rect(ax - markerSize_ - 2.0f, ay - markerSize_ - 2.0f, area.w + 2.0f * markerSize_ + 4.0f, area.h + 2.0f * markerSize_ + 4.0f));
+    for (int s = 0; s < seriesCount(); ++s)
+    {
+        const ChartSeries& se = series_[static_cast<size_t>(s)];
+        if (!se.visible)
+            continue;
+        const int n = pointCount(s);
+        polyline_.clear();
+        const size_t firstPoint = points_.size();
+        for (int i = 0; i < n; ++i)
+        {
+            if (se.xs.empty() && i < categoryCount() && !categoryVisible(i))
+                continue;
+            Point pt;
+            pt.series = s;
+            pt.index = i;
+            pt.x = xOf(x(s, i)) - b.x;
+            pt.y = yOf(value(s, i)) - b.y;
+            points_.push_back(pt);
+            polyline_.push_back(Vec2{ pt.x + b.x, pt.y + b.y });
+        }
+        const Color c = se.color;
+        if (se.line && polyline_.size() >= 2)
+        {
+            ctx.line.SetColor(c.r, c.g, c.b, c.a);
+            ctx.drawPolyline(polyline_, lineWidth_, false);
+        }
+        const bool dots = se.markers && (!se.line || n <= 60);
+        for (size_t k = firstPoint; k < points_.size(); ++k)
+        {
+            const Point& pt = points_[k];
+            const bool hot = hovered_.series == pt.series && hovered_.index == pt.index;
+            if (!dots && !hot)
+                continue;
+            const Color fill = hot ? lighten(c, 0.3f) : c;
+            ctx.fill.SetColor(fill.r, fill.g, fill.b, fill.a);
+            ctx.fillCircle(pt.x + b.x, pt.y + b.y, hot ? markerSize_ + 2.0f : markerSize_);
+            if (showValues_ && n <= 24)
+            {
+                formatValue(value(pt.series, pt.index), buf, sizeof(buf));
+                const float w = ctx.font.GetTextWidth(buf);
+                const float asc = setupFont(ctx, t.textColor);
+                ctx.font.Print(buf, pt.x + b.x - w * 0.5f, pt.y + b.y - markerSize_ - lh + asc);
+            }
+        }
+    }
+    ctx.popClip();
+}
+
 void Chart::paintTooltip(PaintContext& ctx, const Rect& b)
 {
     if (!hovered_.valid() || mouseX_ < 0.0f)
@@ -1128,7 +1454,20 @@ void Chart::paintTooltip(PaintContext& ctx, const Rect& b)
     formatValue(value(hovered_.series, hovered_.index), valueText, sizeof(valueText));
     char text[256];
     const char* category = hovered_.index < categoryCount() ? categories_[static_cast<size_t>(hovered_.index)].c_str() : "";
-    if (kind_ == ChartKind::Bars)
+    if (isXY())
+    {
+        const ChartSeries& se = series_[static_cast<size_t>(hovered_.series)];
+        char xText[48];
+        if (se.xs.empty() && hovered_.index < categoryCount())
+            snprintf(xText, sizeof(xText), "%s", category);
+        else
+            snprintf(xText, sizeof(xText), "%g", static_cast<double>(x(hovered_.series, hovered_.index)));
+        if (se.name.empty())
+            snprintf(text, sizeof(text), "%s: %s", xText, valueText);
+        else
+            snprintf(text, sizeof(text), "%s - %s: %s", se.name.c_str(), xText, valueText);
+    }
+    else if (kind_ == ChartKind::Bars)
     {
         const String& name = series_[static_cast<size_t>(hovered_.series)].name;
         if (name.empty())
@@ -1176,6 +1515,8 @@ void Chart::paint(PaintContext& ctx)
 
     if (kind_ == ChartKind::Bars)
         paintBars(ctx, b, plot);
+    else if (isXY())
+        paintXY(ctx, b, plot);
     else
         paintPie(ctx, b, plot);
     paintLegend(ctx, b);
@@ -1209,7 +1550,7 @@ void Chart::onMousePress(MouseEvent& e)
     if (entry >= 0)
     {
         const LegendEntry& le = legend_[static_cast<size_t>(entry)];
-        if (kind_ == ChartKind::Bars)
+        if (!isPie())
             setSeriesVisible(le.target, !le.visible);
         else
             setCategoryVisible(le.target, !le.visible);

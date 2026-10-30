@@ -57,6 +57,13 @@ ct::Vector<float> values(float a, float b, float c, float d)
     return v;
 }
 
+ct::Vector<float> values(float a, float b, float c, float d, float e)
+{
+    ct::Vector<float> v = values(a, b, c, d);
+    v.push_back(e);
+    return v;
+}
+
 bool near(float a, float b, float eps = 0.5f)
 {
     return fabsf(a - b) <= eps;
@@ -291,6 +298,80 @@ void testPressWithoutMove()
     check(seen == 1, "the handler of a press sees the pressed item as hovered");
 }
 
+ct::Vector<float> ramp(int count, float start, float step)
+{
+    ct::Vector<float> v;
+    for (int i = 0; i < count; ++i)
+        v.push_back(start + step * static_cast<float>(i));
+    return v;
+}
+
+void testLinesAndScatter()
+{
+    Bench b;
+    Chart& c = *b.chart;
+    c.bars(labels("a", "b", "c"), values(1.0f, 2.0f, 3.0f));
+    const int first = c.plot(ramp(5, 0.0f, 1.0f), values(10.0f, 30.0f, 20.0f, 40.0f, 50.0f), String("one"));
+    check(c.kind() == ChartKind::Line && first == 0 && c.seriesCount() == 1, "plot() on a bar chart starts a line chart with one series");
+    const int second = c.plot(ramp(5, 0.0f, 1.0f), values(5.0f, 15.0f, 25.0f, 35.0f, 45.0f), String("two"));
+    check(second == 1 && c.kind() == ChartKind::Line && c.series(1).line, "a second plot() adds a line to the same chart");
+    const int dots = c.scatter(ramp(5, 0.0f, 1.0f), values(12.0f, 22.0f, 32.0f, 42.0f, 52.0f), String("dots"));
+    check(dots == 2 && c.kind() == ChartKind::Line && !c.series(2).line && c.series(2).markers, "scatter() on a line chart adds a markers-only series");
+    b.frame();
+    check(c.legendEntryCount() == 3, "named series make the legend");
+    check(near(c.axisMin(), 0.0f, 1e-4f) && near(c.axisMax(), 60.0f, 1e-4f) && near(c.axisStep(), 10.0f, 1e-4f), "the y axis holds 5..52: 0..60 by 10");
+    check(near(c.xAxisMin(), 0.0f, 1e-4f) && near(c.xAxisMax(), 4.0f, 1e-4f), "the x axis holds 0..4");
+    const Widget::Vec2f p0 = c.pointAt(0, 0);
+    const Widget::Vec2f p1 = c.pointAt(0, 1);
+    const Widget::Vec2f p4 = c.pointAt(0, 4);
+    check(p0.x >= 0.0f && p1.x > p0.x && p4.x > p1.x, "points follow x left to right");
+    check(p1.y < p0.y && p4.y < p1.y, "a higher value is higher up");
+    check(c.hitTest(p1.x + 2.0f, p1.y - 2.0f) == (Chart::Item{ 0, 1 }), "near a point hits it");
+    check(!c.hitTest(p1.x + 40.0f, p1.y + 40.0f).valid(), "far from every point is nothing");
+    int hovered = -1;
+    c.hoverChanged.connect([&](Chart::Item item) { hovered = item.index; });
+    b.move(p4.x, p4.y);
+    check(hovered == 4 && c.hoveredItem().series == 0, "moving onto a point hovers it");
+
+    // The legend hides a series: its points go, the axis follows.
+    const Rect entry = c.legendEntryRect(0);
+    b.click(entry.x + 4.0f, entry.y + entry.h * 0.5f);
+    check(!c.series(0).visible && c.pointAt(0, 2).x < 0.0f, "a legend press hides the series and its points");
+    check(near(c.axisMax(), 60.0f, 1e-4f) || near(c.axisMax(), 55.0f, 1e-4f), "the axis still holds the shown series");
+    b.click(entry.x + 4.0f, entry.y + entry.h * 0.5f);
+    check(c.series(0).visible, "and shows it again");
+
+    // Numeric x that is not evenly spaced, with a single series: no legend.
+    c.clear();
+    c.scatter(values(1.0f, 2.0f, 10.0f), values(3.0f, 1.0f, 2.0f));
+    b.frame();
+    check(c.kind() == ChartKind::Scatter && c.legendEntryCount() == 0, "scatter() after clear() is a scatter chart; one unnamed series has no legend");
+    check(c.pointAt(0, 2).x - c.pointAt(0, 1).x > (c.pointAt(0, 1).x - c.pointAt(0, 0).x) * 4.0f, "x positions follow the numbers, not the order");
+    check(c.xAxisMax() >= 10.0f, "the x axis reaches the last x");
+
+    // Categories as x: a bar chart turned into lines keeps its data.
+    c.bars(labels("jan", "feb", "mar"), values(3.0f, 1.0f, 2.0f), String("s"));
+    c.setKind(ChartKind::Line);
+    b.frame();
+    check(c.pointAt(0, 0).x >= 0.0f && c.pointAt(0, 2).x > c.pointAt(0, 0).x, "a line over categories has a point per category");
+    check(near(c.xAxisMax(), 2.0f, 1e-4f), "the x axis counts the categories");
+    c.setCategoryVisible(1, false);
+    b.frame();
+    check(c.pointAt(0, 1).x < 0.0f && c.pointAt(0, 2).x > 0.0f, "a hidden category has no point");
+
+    // Nothing to draw paints without a crash and hits nothing.
+    c.clear();
+    c.setKind(ChartKind::Scatter);
+    b.frame();
+    check(!c.hitTest(100.0f, 100.0f).valid(), "an empty scatter hits nothing");
+
+    // Many points: the line keeps no markers, the hit test still finds a point.
+    c.plot(ramp(500, 0.0f, 0.1f), ramp(500, 0.0f, 0.02f), String("long"));
+    b.frame();
+    const Widget::Vec2f mid = c.pointAt(0, 250);
+    check(mid.x > 0.0f && c.hitTest(mid.x, mid.y).index == 250, "a point among five hundred is found");
+}
+
 void testLegendPlacement()
 {
     {
@@ -362,6 +443,7 @@ int main()
     testBarsGeometry();
     testHoverAndPress();
     testPressWithoutMove();
+    testLinesAndScatter();
     testLegendPlacement();
     testManyThinSlices();
     if (gFailures == 0)
