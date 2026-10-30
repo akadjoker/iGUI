@@ -413,6 +413,43 @@ void registerGalleryStage(WidgetApp& app)
         bars->setShowValues(true);
     }
 
+    // Lines and points over an x axis: two lines with markers, and a scatter.
+    auto* xy = tabs->addTab<BoxLayout>("Lines & Points", LayoutDir::Horizontal);
+    xy->setPadding(10.0f);
+    xy->setSpacing(8.0f);
+    {
+        ct::Vector<float> xs, a, c;
+        for (int i = 0; i <= 24; ++i)
+        {
+            xs.push_back(static_cast<float>(i));
+            a.push_back(12.0f + 6.0f * std::sin(i * 0.35f));
+            c.push_back(9.0f + 4.0f * std::cos(i * 0.25f));
+        }
+        auto* lines = xy->createChild<Chart>();
+        lines->setStretch(1.0f);
+        lines->setTitle("Temperature over the day");
+        lines->plot(xs, a, "outside");
+        lines->plot(xs, c, "inside");
+        lines->setValueSuffix(" °C");
+    }
+    {
+        ct::Vector<float> xs, ys;
+        unsigned seed = 7u;
+        for (int i = 0; i < 80; ++i)
+        {
+            seed = seed * 1103515245u + 12345u;
+            const float u = static_cast<float>((seed >> 8) & 0xffffu) / 65535.0f;
+            seed = seed * 1103515245u + 12345u;
+            const float v = static_cast<float>((seed >> 8) & 0xffffu) / 65535.0f;
+            xs.push_back(u * 100.0f);
+            ys.push_back(u * 60.0f + v * 30.0f);
+        }
+        auto* dots = xy->createChild<Chart>();
+        dots->setStretch(1.0f);
+        dots->setTitle("Height vs weight");
+        dots->scatter(xs, ys, "sample");
+    }
+
     auto* audio = tabs->addTab<BoxLayout>("Audio", LayoutDir::Vertical);
     audio->setPadding(10.0f);
     audio->setSpacing(8.0f);
