@@ -169,6 +169,8 @@ struct PaintContext
     void fillCircle(float cx, float cy, float radius);
     /// @brief Fill a triangle.
     void fillTriangle(float x1, float y1, float x2, float y2, float x3, float y3);
+    /// @brief Fill a convex polygon given its corners in order.
+    void fillPolygon(const ct::Vector<ig::retained::Vec2>& points);
 
     /// @brief Outline a rectangle.
     void lineRect(float x, float y, float w, float h);
@@ -178,6 +180,8 @@ struct PaintContext
     void lineCircle(float cx, float cy, float radius);
     /// @brief Draw a line segment.
     void drawLine(float x1, float y1, float x2, float y2);
+    /// @brief Stroke a path through the points, closed when asked.
+    void drawPolyline(const ct::Vector<ig::retained::Vec2>& points, float thickness = 1.0f, bool closed = false);
 
     /// @brief Draw text at position (x, y) using the current font.
     void drawText(float x, float y, const char* text);

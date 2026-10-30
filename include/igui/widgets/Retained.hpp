@@ -389,6 +389,12 @@ public:
     void addTextAligned(const Font& font, const Rect& bounds, const Color& color, const char* text,
             AlignX ax = AlignX::Left, AlignY ay = AlignY::Top);
 
+    /// A filled convex polygon (points in order, either winding), anti-aliased like the other
+    /// fills.
+    void addConvexPolyFilled(const ct::Vector<Vec2>& points, const Color& color);
+    /// A stroked path through the points, closed back to the first when asked.
+    void addPolyline(const ct::Vector<Vec2>& points, const Color& color, float thickness,
+            bool closed);
     void addIcon(IconId icon, const Rect& rect, const Color& color, float thickness = 2.0f);
     /// True when addIcon has a vector drawing for the icon.
     static bool hasVectorIcon(IconId icon);
@@ -440,8 +446,6 @@ private:
     void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
     uint32_t addVertex(float x, float y, const Color& color);
     uint32_t addVertex(float x, float y, float u, float v, const Color& color);
-    void addConvexPolyFilled(const ct::Vector<Vec2>& points, const Color& color);
-    void addPolyline(const ct::Vector<Vec2>& points, const Color& color, float thickness,
             bool closed);
 
     ct::Vector<Rect> clipStack_;

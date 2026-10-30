@@ -464,7 +464,11 @@ void DrawList::pathFillConvex(const Color& color)
             d2 = 1.0f;
         }
         float inv = 1.0f / d2;
-        if (inv > 100.0f) inv = 100.0f;
+        // The mitre at an acute corner would run far past the vertex (a thin pie slice grew a
+        // hair at its tip), so it is capped at twice the fringe: the join loses a little
+        // anti-aliasing, not its shape.
+        const float maxInv = 2.0f / std::sqrt(d2);
+        if (inv > maxInv) inv = maxInv;
         nx *= inv * 2.0f * fringe * 0.5f;
         ny *= inv * 2.0f * fringe * 0.5f;
         vertices_.push_back({ p.x - nx, p.y - ny, whiteUV_.x, whiteUV_.y, color });

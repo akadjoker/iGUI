@@ -1,5 +1,6 @@
 #include "AppWidgets.hpp"
 #include "AssetBrowser.hpp"
+#include "ChartWidget.hpp"
 #include "AudioWidgets.hpp"
 #include "AutomotiveWidgets.hpp"
 #include "BasicWidgets.hpp"
@@ -348,6 +349,69 @@ void registerGalleryStage(WidgetApp& app)
     gradient->addStop(0.0f, Color(30, 70, 170, 255));
     gradient->addStop(0.45f, Color(80, 210, 180, 255));
     gradient->addStop(1.0f, Color(245, 170, 50, 255));
+
+    // Categorical charts: a pie, a donut and grouped bars. The legend entries
+    // toggle a category or a series; a slice or bar under the mouse shows
+    // its value.
+    auto* categorical = tabs->addTab<BoxLayout>("Pie & Bars", LayoutDir::Vertical);
+    categorical->setPadding(10.0f);
+    categorical->setSpacing(8.0f);
+    auto* pieRow = categorical->createChild<BoxLayout>(LayoutDir::Horizontal);
+    pieRow->setSpacing(8.0f);
+    pieRow->setStretch(1.0f);
+    {
+        ct::Vector<String> labels;
+        ct::Vector<float> share;
+        const char* names[] = { "Chrome", "Safari", "Edge", "Firefox", "Samsung", "Opera", "Other" };
+        const float values[] = { 64.7f, 18.6f, 5.2f, 2.7f, 2.4f, 2.1f, 4.3f };
+        for (int i = 0; i < 7; ++i)
+        {
+            labels.push_back(names[i]);
+            share.push_back(values[i]);
+        }
+        auto* pie = pieRow->createChild<Chart>();
+        pie->setStretch(1.0f);
+        pie->setTitle("Browser share");
+        pie->pie(labels, share);
+    }
+    {
+        ct::Vector<String> labels;
+        ct::Vector<float> gb;
+        const char* names[] = { "Photos", "Video", "Music", "Documents", "Apps" };
+        const float values[] = { 128.0f, 342.0f, 56.0f, 24.0f, 91.0f };
+        for (int i = 0; i < 5; ++i)
+        {
+            labels.push_back(names[i]);
+            gb.push_back(values[i]);
+        }
+        auto* donut = pieRow->createChild<Chart>();
+        donut->setStretch(1.0f);
+        donut->setTitle("Storage");
+        donut->donut(labels, gb);
+        donut->setValueSuffix(" GB");
+        donut->setShowValues(true);
+        donut->setShowPercent(false);
+    }
+    {
+        ct::Vector<String> labels;
+        ct::Vector<float> last;
+        ct::Vector<float> now;
+        const char* names[] = { "Q1", "Q2", "Q3", "Q4" };
+        const float lastValues[] = { 42.0f, 58.0f, 51.0f, 73.0f };
+        const float nowValues[] = { 55.0f, 61.0f, 48.0f, 86.0f };
+        for (int i = 0; i < 4; ++i)
+        {
+            labels.push_back(names[i]);
+            last.push_back(lastValues[i]);
+            now.push_back(nowValues[i]);
+        }
+        auto* bars = categorical->createChild<Chart>();
+        bars->setStretch(1.0f);
+        bars->setTitle("Quarterly revenue (k)");
+        bars->bars(labels, last, "2024");
+        bars->addSeries("2025", now);
+        bars->setShowValues(true);
+    }
 
     auto* audio = tabs->addTab<BoxLayout>("Audio", LayoutDir::Vertical);
     audio->setPadding(10.0f);

@@ -5,6 +5,7 @@
 #include "AudioWidgets.hpp"
 #include "AutomotiveWidgets.hpp"
 #include "BasicWidgets.hpp"
+#include "ChartWidget.hpp"
 #include "ChartWidgets.hpp"
 #include "ComboBox.hpp"
 #include "ConsoleWidget.hpp"
