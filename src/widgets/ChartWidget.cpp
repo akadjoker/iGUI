@@ -1220,6 +1220,9 @@ void Chart::onMousePress(MouseEvent& e)
     const Item item = hitTest(lx, ly);
     if (item.valid())
     {
+        // The pressed item is the hovered one while the handlers run, even
+        // when no move came first (a touch, a synthetic press).
+        setHovered(item);
         itemPressed.emit(item.series, item.index);
         e.consumed = true;
     }
