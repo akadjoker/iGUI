@@ -26,7 +26,8 @@ enum class ChartKind
     Donut,
     Bars,
     Line,     // series as polylines over x, markers when the points are few
-    Scatter   // series as markers only
+    Scatter,  // series as markers only
+    Histogram // bars touching, one per bin of the series' samples, the bin edges under the axis
 };
 
 enum class LegendPosition
@@ -42,6 +43,7 @@ struct ChartSeries
     String            name;
     ct::Vector<float> values;   // one per category; missing entries read as 0
     ct::Vector<float> xs;       // line/scatter: the x of each value; empty means the index
+    ct::Vector<float> samples;  // histogram: the raw values its bins count
     Color             color;
     bool              visible = true;
     bool              line    = true;   // line/scatter: join the points
@@ -108,6 +110,13 @@ public:
     int  plot(const ct::Vector<float>& xs, const ct::Vector<float>& ys, const String& name = String());
     /// @brief Points of ys over xs, added to a scatter chart (the chart becomes one when it is neither line nor scatter); returns the series.
     int  scatter(const ct::Vector<float>& xs, const ct::Vector<float>& ys, const String& name = String());
+    /// @brief A histogram of the samples in `bins` equal bins, added as a series (the chart becomes a histogram when it is not one; every series shares the bins); returns the series.
+    int  hist(const ct::Vector<float>& samples, int bins = 10, const String& name = String());
+    /// @brief Number of bins of a histogram; the bins are rebuilt.
+    void setBins(int bins);
+    int  bins() const { return bins_; }
+    /// @brief The bin edges of the last histogram build (bins + 1 numbers).
+    const ct::Vector<float>& binEdges() const { return edges_; }
 
     /// @brief Value of a series at a category; 0 when the series is shorter.
     float value(int series, int index) const;
@@ -117,6 +126,8 @@ public:
     int   pointCount(int series) const;
     /// @brief Line and scatter charts draw over an x axis.
     bool  isXY() const { return kind_ == ChartKind::Line || kind_ == ChartKind::Scatter; }
+    /// @brief Bars and histograms draw bars per category.
+    bool  isBars() const { return kind_ == ChartKind::Bars || kind_ == ChartKind::Histogram; }
     /// @brief Sum of the visible categories of a series.
     float total(int series) const;
 
@@ -250,6 +261,8 @@ private:
     float              donutRatio_ = 0.55f;
     float              markerSize_ = 3.5f;
     float              lineWidth_  = 2.0f;
+    int                bins_ = 10;
+    ct::Vector<float>  edges_;
 
     // Geometry of the last paint, in widget coordinates.
     Rect   plot_ = {};
@@ -272,6 +285,7 @@ private:
     bool legendOnRight(const Rect& b) const;
     void buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea, Rect& plot);
     void buildSlices();
+    void buildHistogram();
     void sliceLabel(const Slice& slice, float sum, char* out, int outSize) const;
     bool isPie() const { return kind_ == ChartKind::Pie || kind_ == ChartKind::Donut; }
     void buildAxis(float& lo, float& hi, float& step) const;
