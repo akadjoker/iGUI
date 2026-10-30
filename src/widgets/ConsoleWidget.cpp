@@ -474,6 +474,18 @@ void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
 //  Mouse events
 // ═════════════════════════════════════════════════════════════════════════════
 
+const LogEntry* ConsoleWidget::selectedEntry() const
+{
+    if (selectedLine_ < 0) return nullptr;
+    int visIdx = 0;
+    for (const auto& entry : entries_) {
+        if (!passesFilter(entry)) continue;
+        if (visIdx == selectedLine_) return &entry;
+        visIdx++;
+    }
+    return nullptr;
+}
+
 void ConsoleWidget::onMousePress(MouseEvent& e)
 {
     Rect r = absoluteRect();
@@ -533,6 +545,7 @@ void ConsoleWidget::onMousePress(MouseEvent& e)
         setFocused(true);
         markDirty();
         e.consumed = true;
+        if (const LogEntry* entry = selectedEntry()) entryActivated.emit(*entry);
         return;
     }
 

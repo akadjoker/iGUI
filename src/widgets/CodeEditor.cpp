@@ -1451,12 +1451,20 @@ void CodeEditor::paint(PaintContext& ctx)
         pendingRevealLine_ = -1;
         markDirty();
     }
-    if (completionVisible_)
     {
-        ctx.font.scale = fontScale_;
-        paintCompletion(ctx, abs);
-        ctx.font.scale = 1.0f;
+        // The call the cursor is in: checked once a frame, worked out only when
+        // the cursor or its line changed.
+        const SigKey key = { cursor_.line, cursor_.col, cursor_.line < lineCount() ? lineAt(cursor_.line).size() : 0u };
+        if (key.line != sigKey_.line || key.col != sigKey_.col || key.bytes != sigKey_.bytes)
+        {
+            sigKey_ = key;
+            updateSignature();
+        }
     }
+    ctx.font.scale = fontScale_;
+    if (sigVisible_) paintSignature(ctx, abs);
+    if (completionVisible_) paintCompletion(ctx, abs);
+    ctx.font.scale = 1.0f;
     if (bar_ != Bar::None) paintBar(ctx, abs);
 }
 
@@ -2800,6 +2808,12 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 {
     namespace Key = ig::retained::Key;
     if (bar_ != Bar::None && barKey(e)) return;
+    if (e.key == Key::Escape && sigVisible_ && !completionVisible_ && extraCursors_.empty())
+    {
+        dismissSignature();
+        e.consumed = true;
+        return;
+    }
     if (autocomplete_ && e.ctrl && !e.alt && e.key == Key::Space)
     {
         requestCompletion();
@@ -2955,4 +2969,18 @@ void CodeEditor::paintCompletion(PaintContext& ctx, const Rect& abs)
     const float lineY = abs.y + t.textEditPadding + logicalToVisualRow(completionContext_.line) * lh - scrollY_;
     const float x = abs.x + gutterW_ + t.textEditPadding + ctx.font.GetTextWidth(before.c_str()) - scrollX_ - 6.0f;
     paintList(ctx, abs, rows, completionSelected_, completionFirstShown_, x, lineY + lh + 2.0f, completionRect_, completionRowHeight_);
+    // The selected item's line of documentation, under the list.
+    const String& doc = completionItems_[static_cast<size_t>(completionSelected_)].doc;
+    if (doc.empty() || completionRect_.w <= 0.0f) return;
+    const float width = std::min(abs.w - 8.0f, std::max(completionRect_.w, ctx.font.GetTextWidth(doc.c_str()) + 16.0f));
+    const float docX = std::max(abs.x, std::min(completionRect_.x, abs.x + abs.w - width));
+    const float docY = completionRect_.y + completionRect_.h + 2.0f;
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(t.menuBg);
+    ctx.fill.RoundedRectangle(docX, docY, width, lh + 6.0f, 4, 6, true);
+    ctx.line.SetColor(t.borderColor);
+    ctx.line.RoundedRectangle(docX, docY, width, lh + 6.0f, 4, 6, false);
+    ctx.font.SetColor(t.textDisabled);
+    ctx.font.Print(doc.c_str(), docX + 8.0f, docY + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f);
+    ctx.popClip();
 }

@@ -48,6 +48,7 @@ struct Symbol
     int endLine = 0;   // last line of its block; the declaration's own for a leaf
     int indent = 0;    // columns before the declaration (a tab counts 4)
     int parent = -1;   // index of the enclosing symbol, -1 at the top level
+    String signature;  // a function's or method's "(a, b=2)" as written; empty otherwise
 };
 
 // How a language nests its declarations.

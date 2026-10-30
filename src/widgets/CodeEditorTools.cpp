@@ -799,6 +799,196 @@ void CodeEditor::paintBar(PaintContext& ctx, const Rect& abs)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Signature help
+// ═════════════════════════════════════════════════════════════════════════════
+
+void CodeEditor::setSignatureProvider(SignatureProvider provider)
+{
+    signatureProvider_ = std::move(provider);
+    sigKey_ = SigKey();
+    markDirty();
+}
+
+void CodeEditor::dismissSignature()
+{
+    if (!sigVisible_) return;
+    sigDismissed_ = true;
+    sigDismissedLine_ = sigLine_;
+    sigDismissedCol_ = sigOpenCol_;
+    sigVisible_ = false;
+    markDirty();
+}
+
+// Walks the cursor's line up to the cursor with a stack of open brackets;
+// the innermost "(" still open is the call, the commas after it at its
+// depth count the parameter, the identifiers and dots before it name the
+// callee. Strings are skipped.
+bool CodeEditor::callAtCursor(String& callee, int& openCol, int& parameter) const
+{
+    if (cursor_.line < 0 || cursor_.line >= lineCount()) return false;
+    const String& line = lineAt(cursor_.line);
+    const size_t end = utf8ByteOffset(line, cursor_.col);
+    struct Open
+    {
+        char bracket;
+        int col;
+        int commas;
+    };
+    Open stack[32];
+    int depth = 0;
+    for (size_t i = 0; i < end && i < line.size(); ++i)
+    {
+        const char c = line[i];
+        if (c == '"' || c == '\'')
+        {
+            ++i;
+            while (i < end && line[i] != c) i += line[i] == '\\' ? 2 : 1;
+            continue;
+        }
+        if (c == '#') return false; // a comment: no call
+        if (c == '(' || c == '[' || c == '{')
+        {
+            if (depth < 32) stack[depth] = { c, static_cast<int>(i), 0 };
+            ++depth;
+        }
+        else if (c == ')' || c == ']' || c == '}')
+        {
+            if (depth > 0) --depth;
+        }
+        else if (c == ',' && depth > 0 && depth <= 32)
+            ++stack[depth - 1].commas;
+    }
+    while (depth > 0 && depth <= 32 && stack[depth - 1].bracket != '(') --depth;
+    if (depth <= 0 || depth > 32) return false;
+    const Open& call = stack[depth - 1];
+    int nameEnd = call.col;
+    while (nameEnd > 0 && (line[static_cast<size_t>(nameEnd - 1)] == ' ' || line[static_cast<size_t>(nameEnd - 1)] == '\t')) --nameEnd;
+    int nameStart = nameEnd;
+    while (nameStart > 0 && (isWord(line[static_cast<size_t>(nameStart - 1)]) || line[static_cast<size_t>(nameStart - 1)] == '.')) --nameStart;
+    if (nameStart == nameEnd) return false;
+    callee = line.substr(static_cast<size_t>(nameStart), static_cast<size_t>(nameEnd - nameStart));
+    if (callee[callee.size() - 1] == '.' || callee[0] == '.') return false;
+    openCol = call.col;
+    parameter = call.commas;
+    return true;
+}
+
+void CodeEditor::updateSignature()
+{
+    String callee;
+    int openCol = 0, parameter = 0;
+    const bool wasVisible = sigVisible_;
+    sigVisible_ = false;
+    if (callAtCursor(callee, openCol, parameter))
+    {
+        if (sigDismissed_ && sigDismissedLine_ == cursor_.line && sigDismissedCol_ == openCol)
+        {
+            // Dismissed for this very call: it stays away.
+        }
+        else
+        {
+            sigDismissed_ = false;
+            String signature, doc;
+            bool found = signatureProvider_ && signatureProvider_(callee, signature, doc);
+            if (!found)
+            {
+                // The text's own functions and methods: the last part of the name.
+                size_t cut = callee.size();
+                while (cut > 0 && callee[cut - 1] != '.') --cut;
+                const String name = callee.substr(cut);
+                const ct::Vector<syntax::Symbol>& list = symbols();
+                for (size_t i = 0; i < list.size() && !found; ++i)
+                    if (list[i].name == name && !list[i].signature.empty() &&
+                            (list[i].kind == syntax::SymbolKind::Function || list[i].kind == syntax::SymbolKind::Method))
+                    {
+                        signature = name + list[i].signature;
+                        found = true;
+                    }
+            }
+            if (found)
+            {
+                sigVisible_ = true;
+                sigCallee_ = callee;
+                sigText_ = signature;
+                sigDoc_ = doc;
+                sigParam_ = parameter;
+                sigOpenCol_ = openCol;
+                sigLine_ = cursor_.line;
+            }
+        }
+    }
+    if (wasVisible != sigVisible_) markDirty();
+}
+
+void CodeEditor::paintSignature(PaintContext& ctx, const Rect& abs)
+{
+    const float lh = lineHeight_;
+    if (lh <= 0.0f || sigLine_ < 0 || sigLine_ >= lineCount()) return;
+    const Theme& t = Theme::instance();
+    const float rows = sigDoc_.empty() ? 1.0f : 2.0f;
+    const float height = rows * lh + 6.0f;
+    const float width = std::min(abs.w - 8.0f, std::max(ctx.font.GetTextWidth(sigText_.c_str()), ctx.font.GetTextWidth(sigDoc_.c_str())) + 16.0f);
+    const String& line = lineAt(sigLine_);
+    int col = 0;
+    for (int i = 0; i < sigOpenCol_ && i < static_cast<int>(line.size()); ++i)
+        if ((static_cast<unsigned char>(line[static_cast<size_t>(i)]) & 0xC0) != 0x80) ++col;
+    const float lineY = abs.y + t.textEditPadding + logicalToVisualRow(sigLine_) * lh - scrollY_;
+    float x = abs.x + gutterW_ + t.textEditPadding + colToPixelX(sigLine_, col) - scrollX_ - 6.0f;
+    x = std::max(abs.x, std::min(x, abs.x + abs.w - width));
+    float y = lineY - height - 2.0f;
+    if (y < abs.y) y = lineY + lh + 2.0f;
+
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(t.menuBg);
+    ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
+    ctx.line.SetColor(t.borderColor);
+    ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
+    const float textY = y + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f;
+    // The active parameter: the n-th comma-separated piece inside the parens.
+    const size_t open = sigText_.find('(');
+    if (open != String::npos)
+    {
+        size_t start = open + 1, pos = start;
+        int index = 0, depth = 0;
+        size_t pieceStart = start, pieceEnd = String::npos;
+        for (; pos < sigText_.size(); ++pos)
+        {
+            const char c = sigText_[pos];
+            if (c == '(' || c == '[') ++depth;
+            else if ((c == ')' && depth == 0) || (c == ',' && depth == 0))
+            {
+                if (index == sigParam_)
+                {
+                    pieceEnd = pos;
+                    break;
+                }
+                ++index;
+                pieceStart = pos + 1;
+                while (pieceStart < sigText_.size() && sigText_[pieceStart] == ' ') ++pieceStart;
+                if (c == ')') break;
+            }
+            else if (c == ')' || c == ']') --depth;
+        }
+        if (pieceEnd != String::npos && pieceEnd > pieceStart)
+        {
+            const String before = sigText_.substr(0, pieceStart);
+            const String piece = sigText_.substr(pieceStart, pieceEnd - pieceStart);
+            const float px = x + 8.0f + ctx.font.GetTextWidth(before.c_str());
+            ctx.fill.SetColor(t.selectionColor);
+            ctx.fill.Rectangle(px - 1.0f, y + 3.0f, ctx.font.GetTextWidth(piece.c_str()) + 2.0f, lh, true);
+        }
+    }
+    ctx.font.SetColor(t.textColor);
+    ctx.font.Print(sigText_.c_str(), x + 8.0f, textY);
+    if (!sigDoc_.empty())
+    {
+        ctx.font.SetColor(t.textDisabled);
+        ctx.font.Print(sigDoc_.c_str(), x + 8.0f, textY + lh);
+    }
+    ctx.popClip();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Formatting
 // ═════════════════════════════════════════════════════════════════════════════
 

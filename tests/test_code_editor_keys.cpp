@@ -302,6 +302,44 @@ void testCursorsBookmarksDefinition()
     check(!b.editor->hasMarker(5, TextEdit::MarkerType::Bookmark), "Ctrl+F2 again clears it");
 }
 
+void testSignatureHelp()
+{
+    Bench b("def helper(a, b=2):\n    return a\n\nx = \n");
+    b.editor->setCursorPos(3, 4);
+    b.type("helper(");
+    check(b.editor->signatureVisible() && b.editor->signatureText() == "helper(a, b=2)" && b.editor->signatureParameter() == 0,
+          "typing '(' after a function of the text shows its parameters, the first active");
+    b.type("1, ");
+    check(b.editor->signatureParameter() == 1, "a comma moves to the next parameter");
+    b.type("[3, 4], ");
+    check(b.editor->signatureParameter() == 2, "commas inside brackets do not count");
+    b.key(Key::Escape);
+    check(!b.editor->signatureVisible(), "Escape dismisses it");
+    b.type("5");
+    check(!b.editor->signatureVisible(), "and it stays away for this call");
+    b.type(")");
+    b.type(" + helper(");
+    check(b.editor->signatureVisible() && b.editor->signatureParameter() == 0, "another call shows it again");
+    b.editor->setCursorPos(3, 4);
+    b.frame();
+    check(!b.editor->signatureVisible(), "outside the parentheses there is nothing to show");
+
+    b.editor->setSignatureProvider([](const String& callee, String& signature, String& doc) {
+        if (callee != "self.message") return false;
+        signature = "message(title, text, kind=\"info\")";
+        doc = "A message box of the system; kind is info, warning or error.";
+        return true;
+    });
+    b.editor->moveBottom();
+    b.type("self.message(\"zenforms\", ");
+    check(b.editor->signatureVisible() && b.editor->signatureCallee() == "self.message" && b.editor->signatureParameter() == 1 && !b.editor->signatureDoc().empty(),
+          "the host's provider answers for its API, with a line of documentation; commas inside strings do not count");
+    b.type("\"a, b\"");
+    check(b.editor->signatureParameter() == 1, "a comma inside the string argument does not move on");
+    b.type(", ");
+    check(b.editor->signatureParameter() == 2, "the next one does");
+}
+
 void testFormat()
 {
     Bench b("class A:\n  def f(self):\n\treturn 1   \n\n\n\n  def g(self):\n      if x:\n            pass\n      return 2\nprint(1)");
@@ -333,6 +371,7 @@ int main()
     testGotoLineAndSymbol();
     testCommands();
     testCursorsBookmarksDefinition();
+    testSignatureHelp();
     testFormat();
     if (gFailures)
         printf("%d failure(s)\n", gFailures);

@@ -77,6 +77,26 @@ String identifierAt(const String& line, size_t& i)
     return line.substr(start, i - start);
 }
 
+// "(a, b)" from the "(" at i to its ")" on the same line; cut with "...)"
+// when the list goes on to the next line.
+String parenText(const String& line, size_t i)
+{
+    if (i >= line.size() || line[i] != '(')
+        return String();
+    int depth = 0;
+    for (size_t k = i; k < line.size(); ++k)
+    {
+        if (line[k] == '(')
+            ++depth;
+        else if (line[k] == ')' && --depth == 0)
+            return line.substr(i, k - i + 1);
+    }
+    String open = line.substr(i);
+    while (!open.empty() && (open[open.size() - 1] == ' ' || open[open.size() - 1] == ','))
+        open.resize(open.size() - 1);
+    return open + " ...)";
+}
+
 Symbol make(SymbolKind kind, const String& name, int line, int indent, int parent)
 {
     Symbol s;
@@ -226,6 +246,7 @@ ct::Vector<Symbol> scanIndent(const ct::Vector<String>& lines)
                 continue;
             const bool inClass = parent >= 0 && out[static_cast<size_t>(parent)].kind == SymbolKind::Class;
             out.push_back(make(inClass ? SymbolKind::Method : SymbolKind::Function, name, current, indent, parent));
+            out.back().signature = parenText(line, skipBlanks(line, i));
             open.push_back(static_cast<int>(out.size()) - 1);
         }
         else if (wordAt(line, i, "import") || wordAt(line, i, "from"))
@@ -367,6 +388,7 @@ ct::Vector<Symbol> scanBlitz(const ct::Vector<String>& lines)
             if (name.empty())
                 continue;
             out.push_back(make(SymbolKind::Function, name, current, indent, -1));
+            out.back().signature = parenText(line, skipBlanks(line, i));
             open = static_cast<int>(out.size()) - 1;
         }
         else if (wordAt(line, i, "type", true))
@@ -512,6 +534,7 @@ ct::Vector<Symbol> scanLua(const ct::Vector<String>& lines)
                         parent = blocks[b - 1].symbol;
                     const bool method = name.find('.') != String::npos || name.find(':') != String::npos;
                     out.push_back(make(method ? SymbolKind::Method : SymbolKind::Function, name, current, indent, parent));
+                    out.back().signature = parenText(line, skipBlanks(line, i));
                     symbol = static_cast<int>(out.size()) - 1;
                 }
                 blocks.push_back({symbol});
@@ -558,6 +581,7 @@ struct Token
     TokenType type = TokenType::None;
     String text;
     int line = 0;
+    size_t col = 0; // byte offset in the line
 };
 
 // Words that are never a function's name, whatever precedes the "(".
@@ -708,6 +732,7 @@ private:
         const bool member = parent >= 0 && scopeKind() == ScopeKind::Container &&
                             out_[static_cast<size_t>(parent)].kind != SymbolKind::Namespace;
         out_.push_back(make(member ? SymbolKind::Method : SymbolKind::Function, candidate_, candidateLine_, candidateIndent_, parent));
+        out_.back().signature = signatureHead_;
         if (definition)
             scopes_.push_back({ScopeKind::Opaque, static_cast<int>(out_.size()) - 1});
         else
@@ -716,8 +741,14 @@ private:
         pendingContainer_ = false;
     }
 
+    // The parameter list, from the "(" that started the candidate.
+    String signatureHead_;
+    int signatureLine_ = 0;
+
     void startCandidate(const String& name, int line, int indent, bool typed, bool arrow)
     {
+        signatureHead_ = currentLine_ ? parenText(*currentLine_, currentCol_) : String();
+        signatureLine_ = currentTokenLine_;
         candidate_ = name;
         candidateLine_ = line;
         candidateIndent_ = indent;
@@ -846,7 +877,12 @@ private:
                 if (t.text == "(")
                     ++parenDepth_;
                 else if (t.text == ")" && --parenDepth_ == 0)
+                {
                     phase_ = Phase::AfterParens;
+                    // On one line parenText already has it whole; over several
+                    // lines it ends in "...)".
+                    (void)t;
+                }
             }
         }
         else if (phase_ == Phase::AfterParens)
@@ -893,11 +929,17 @@ private:
         prev_ = t;
     }
 
+    const String* currentLine_ = nullptr; // the line being tokenized, for signatures
+    size_t currentCol_ = 0;               // where the token being fed starts
+    int currentTokenLine_ = 0;
+
     void scanLine(const String& line, int lineIndex)
     {
         const size_t n = line.size();
         size_t i = 0;
         const int indent = indentOf(line);
+        currentLine_ = &line;
+        currentTokenLine_ = lineIndex;
         if (!blockComment_ && !templateString_)
         {
             const size_t first = skipBlanks(line, 0);
@@ -994,6 +1036,8 @@ private:
                 continue;
             }
             t.type = TokenType::Punct;
+            t.col = i;
+            currentCol_ = i;
             if (i + 1 < n && isTwoCharPunct(c, line[i + 1]))
             {
                 t.text = line.substr(i, 2);
