@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <ct/regex.hpp>
+#include <ct/sort.hpp>
 
 // The lexical highlighter classes (SyntaxHighlighter, SyntaxLanguage,
 // DefinedHighlighter, CppHighlighter, PythonHighlighter, JsHighlighter,
@@ -66,6 +67,9 @@ void spliceLines(ct::Vector<int>& values, int line, int removed, int inserted)
 
 CodeEditor::CodeEditor()
 {
+    // Every edit through the keyboard, the clipboard or undo reports here;
+    // setText is wrapped below.
+    textChanged.connect([this] { symbolsDirty_ = true; });
     setShowLineNumbers(true);
     acceptsFocus_ = true;
 
@@ -92,6 +96,7 @@ void CodeEditor::setHighlighterRaw(SyntaxHighlighter* hl)
     highlighter_ = hl;
     lineStates_.clear();
     hlDirty_ = true;
+    symbolsDirty_ = true;
     installSyntaxCallback();
     markDirty();
 }
@@ -1791,12 +1796,26 @@ void CodeEditor::paint(PaintContext& ctx)
         Rect fullAbs = absoluteRect();
         paintMinimap(ctx, fullAbs);
     }
+    if (pendingRevealLine_ >= 0 && lineHeight_ > 0.0f)
+    {
+        // The line a third of the way down, so what follows it is in view.
+        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight_));
+        scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
+        pendingRevealLine_ = -1;
+        markDirty();
+    }
+    if (completionVisible_)
+    {
+        ctx.font.scale = fontScale_;
+        paintCompletion(ctx, abs);
+        ctx.font.scale = 1.0f;
+    }
     if (overrideFont_) ctx.popFont();
 }
 
 // ── Key handling ─────────────────────────────────────────────────────────────
 
-void CodeEditor::onKeyPress(KeyEvent& e)
+void CodeEditor::handleKeyPress(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
     // Multi-cursor: Ctrl+D = add cursor for next occurrence
@@ -1901,7 +1920,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
                     // Insert tab at all cursors (reuse onTextInput path)
                     KeyEvent tabE;
                     std::strcpy(tabE.text, "\t");
-                    onTextInput(tabE);
+                    handleTextInput(tabE);
                 }
                 break;
             case ig::retained::Key::Return:
@@ -2115,7 +2134,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
     TextEdit::onKeyPress(e);
 }
 
-void CodeEditor::onTextInput(KeyEvent& e)
+void CodeEditor::handleTextInput(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
     if (readOnly_)
@@ -2203,6 +2222,22 @@ void CodeEditor::onTextInput(KeyEvent& e)
 void CodeEditor::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
+    if (completionVisible_)
+    {
+        if (completionRect_.contains(e.x, e.y) && completionRowHeight_ > 0.0f)
+        {
+            const int row = static_cast<int>((e.y - completionRect_.y - 4.0f) / completionRowHeight_);
+            const int index = completionFirstShown_ + row;
+            if (index >= 0 && index < static_cast<int>(completionItems_.size()))
+            {
+                completionSelected_ = index;
+                acceptCompletion();
+            }
+            e.consumed = true;
+            return;
+        }
+        closeCompletion();
+    }
     // Check minimap click — use full rect (before width shrink)
     if (showMinimap_)
     {
@@ -3076,4 +3111,407 @@ void CodeEditor::paintExtraSelections(PaintContext& ctx, const Rect& abs)
             }
         }
     }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Symbols and reveal
+// ═════════════════════════════════════════════════════════════════════════════
+
+const ct::Vector<ig::syntax::Symbol>& CodeEditor::symbols() const
+{
+    if (symbolsDirty_)
+    {
+        symbols_ = ig::syntax::scanSymbols(lines_, highlighter_ ? highlighter_->symbolSyntax() : ig::syntax::SymbolSyntax::None);
+        symbolsDirty_ = false;
+    }
+    return symbols_;
+}
+
+bool CodeEditor::gotoSymbol(ig::StringView name)
+{
+    const int index = ig::syntax::findSymbol(symbols(), name);
+    if (index < 0) return false;
+    const ig::syntax::Symbol& s = symbols_[static_cast<size_t>(index)];
+    reveal(s.line, s.indent);
+    return true;
+}
+
+void CodeEditor::setText(const String& text)
+{
+    TextEdit::setText(text);
+    symbolsDirty_ = true;
+    closeCompletion();
+}
+
+void CodeEditor::reveal(int line, int col)
+{
+    closeCompletion();
+    clearExtraCursors();
+    setCursorPos(line, col);
+    pendingRevealLine_ = cursor_.line;
+    if (lineHeight_ > 0.0f)
+    {
+        const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight_));
+        scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
+        pendingRevealLine_ = -1;
+    }
+    markDirty();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Completion
+// ═════════════════════════════════════════════════════════════════════════════
+
+namespace
+{
+
+constexpr int kCompletionRows = 10;
+
+bool completionIdentChar(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
+}
+
+bool startsWith(const ig::retained::String& word, const ig::retained::String& prefix)
+{
+    return word.size() >= prefix.size() && std::strncmp(word.c_str(), prefix.c_str(), prefix.size()) == 0;
+}
+
+} // namespace
+
+void CodeEditor::setAutocompleteEnabled(bool on)
+{
+    autocomplete_ = on;
+    if (!on) closeCompletion();
+}
+
+void CodeEditor::setCompletionProvider(CompletionProvider provider)
+{
+    completionProvider_ = std::move(provider);
+}
+
+bool CodeEditor::completionContextAtCursor(CompletionContext& out) const
+{
+    if (cursor_.line < 0 || cursor_.line >= lineCount()) return false;
+    const String& text = lineAt(cursor_.line);
+    // Only what is before the cursor matters: the word ends there.
+    const size_t end = utf8ByteOffset(text, cursor_.col);
+    size_t start = end;
+    while (start > 0 && completionIdentChar(text[start - 1])) --start;
+    out.line = cursor_.line;
+    out.prefix = String(text.c_str() + start, end - start);
+    // The identifier is ASCII: its column differs from its byte only by what
+    // precedes it on the line.
+    int cols = 0;
+    for (size_t i = 0; i < start; ++i)
+        if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) ++cols;
+    out.wordStart = cols;
+    out.wordEnd = cursor_.col;
+    out.receiver.clear();
+    if (start > 0 && text[start - 1] == '.')
+    {
+        // The dotted name before the dot: "self.display" in "self.display.te".
+        size_t r = start - 1;
+        while (r > 0 && (completionIdentChar(text[r - 1]) || text[r - 1] == '.')) --r;
+        out.receiver = String(text.c_str() + r, start - 1 - r);
+        if (out.receiver.empty()) return false;
+    }
+    return true;
+}
+
+// The language's words and the words of the text itself, the way the
+// immediate-mode editor offers them; after a dot only the text's words.
+void CodeEditor::builtinCompletionItems(const CompletionContext& ctx, ct::Vector<CompletionItem>& items) const
+{
+    ct::HashSet<String> seen;
+    for (const CompletionItem& item: items) seen.insert(item.text);
+    ct::Vector<CompletionItem> found;
+    auto add = [&](const String& word, const char* detail)
+    {
+        if (word.size() <= ctx.prefix.size() || !startsWith(word, ctx.prefix) || seen.contains(word)) return;
+        seen.insert(word);
+        CompletionItem item;
+        item.text = word;
+        item.detail = detail;
+        found.push_back(item);
+    };
+    if (highlighter_ && ctx.receiver.empty())
+    {
+        for (const String& w: highlighter_->keywordSet()) add(w, "keyword");
+        for (const String& w: highlighter_->typeSet()) add(w, "type");
+        for (const String& w: highlighter_->constantSet()) add(w, "constant");
+    }
+    const size_t languageWords = found.size();
+    const int lc = lineCount();
+    for (int i = 0; i < lc && found.size() < 200; ++i)
+    {
+        const String& text = lineAt(i);
+        const int n = static_cast<int>(text.size());
+        int j = 0;
+        while (j < n)
+        {
+            const char c = text[static_cast<size_t>(j)];
+            if (!completionIdentChar(c) || (c >= '0' && c <= '9'))
+            {
+                ++j;
+                continue;
+            }
+            const int wordStart = j;
+            while (j < n && completionIdentChar(text[static_cast<size_t>(j)])) ++j;
+            if (j - wordStart < 3) continue;
+            // Not the word being typed itself.
+            if (i == ctx.line && wordStart == static_cast<int>(utf8ByteOffset(text, ctx.wordStart))) continue;
+            add(text.substr(static_cast<size_t>(wordStart), static_cast<size_t>(j - wordStart)), "");
+        }
+    }
+    auto byText = [](const CompletionItem& a, const CompletionItem& b) { return a.text < b.text; };
+    if (languageWords > 1) ct::sort(found.begin(), found.begin() + languageWords, byText);
+    if (found.size() > languageWords + 1) ct::sort(found.begin() + languageWords, found.end(), byText);
+    for (CompletionItem& item: found) items.push_back(std::move(item));
+}
+
+void CodeEditor::updateCompletion(bool requested)
+{
+    const bool wasVisible = completionVisible_;
+    const bool keepRequested = wasVisible && completionContext_.requested;
+    CompletionContext ctx;
+    if (!autocomplete_ || readOnly_ || !completionContextAtCursor(ctx))
+    {
+        closeCompletion();
+        return;
+    }
+    ctx.requested = requested || keepRequested;
+    // Unasked, a popup needs a couple of letters, or a dot before them.
+    if (!ctx.requested && ctx.prefix.size() < 2 && ctx.receiver.empty())
+    {
+        closeCompletion();
+        return;
+    }
+    ct::Vector<CompletionItem> items;
+    if (completionProvider_)
+    {
+        // The host gives everything it knows for the context; what the
+        // prefix rules out goes here, so a provider needs no filtering.
+        ct::Vector<CompletionItem> offered;
+        completionProvider_(ctx, offered);
+        for (CompletionItem& item: offered)
+            if (startsWith(item.text, ctx.prefix) && item.text.size() > ctx.prefix.size()) items.push_back(std::move(item));
+    }
+    if (builtinCompletions_) builtinCompletionItems(ctx, items);
+    if (items.empty())
+    {
+        closeCompletion();
+        return;
+    }
+    // The highlighted item stays while the prefix grows, if it is still offered.
+    int keep = 0;
+    if (wasVisible && completionSelected_ >= 0 && completionSelected_ < static_cast<int>(completionItems_.size()))
+        for (size_t i = 0; i < items.size(); ++i)
+            if (items[i].text == completionItems_[static_cast<size_t>(completionSelected_)].text) keep = static_cast<int>(i);
+    completionItems_ = std::move(items);
+    completionContext_ = ctx;
+    completionSelected_ = keep;
+    completionFirstShown_ = std::max(0, std::min(completionFirstShown_, completionSelected_));
+    if (completionSelected_ >= completionFirstShown_ + kCompletionRows)
+        completionFirstShown_ = completionSelected_ - kCompletionRows + 1;
+    if (!wasVisible) completionNavigated_ = false;
+    completionVisible_ = true;
+    markDirty();
+}
+
+void CodeEditor::requestCompletion()
+{
+    updateCompletion(true);
+}
+
+void CodeEditor::closeCompletion()
+{
+    if (!completionVisible_) return;
+    completionVisible_ = false;
+    completionNavigated_ = false;
+    completionItems_.clear();
+    completionSelected_ = 0;
+    completionFirstShown_ = 0;
+    markDirty();
+}
+
+void CodeEditor::typeText(const char* text)
+{
+    // A KeyEvent carries at most 31 bytes: a longer insertion goes in pieces,
+    // each through the editor's own input path (undo, extra cursors).
+    const size_t n = std::strlen(text);
+    size_t at = 0;
+    while (at < n)
+    {
+        KeyEvent e;
+        const size_t chunk = std::min<size_t>(n - at, sizeof(e.text) - 1);
+        std::memcpy(e.text, text + at, chunk);
+        e.text[chunk] = '\0';
+        handleTextInput(e);
+        at += chunk;
+    }
+}
+
+bool CodeEditor::acceptCompletion()
+{
+    if (!completionVisible_ || completionSelected_ < 0 || completionSelected_ >= static_cast<int>(completionItems_.size()))
+        return false;
+    const String text = completionItems_[static_cast<size_t>(completionSelected_)].text;
+    const CompletionContext ctx = completionContext_;
+    closeCompletion();
+    // The cursor is at the end of the prefix: type what is missing. A choice
+    // that does not extend the prefix (another case) replaces it whole.
+    if (startsWith(text, ctx.prefix))
+        typeText(text.c_str() + ctx.prefix.size());
+    else
+    {
+        setSelection({ ctx.line, ctx.wordStart }, { ctx.line, ctx.wordEnd });
+        typeText(text.c_str());
+    }
+    markDirty();
+    return true;
+}
+
+void CodeEditor::onTextInput(KeyEvent& e)
+{
+    handleTextInput(e);
+    if (!autocomplete_ || readOnly_ || !e.text[0]) return;
+    const char c = e.text[0];
+    if (c == '.')
+        updateCompletion(true);
+    else if (completionIdentChar(c) && !e.text[1])
+        updateCompletion(false);
+    else
+        closeCompletion();
+}
+
+void CodeEditor::onKeyPress(KeyEvent& e)
+{
+    if (autocomplete_ && e.ctrl && !e.alt && e.key == ig::retained::Key::Space)
+    {
+        requestCompletion();
+        e.consumed = true;
+        return;
+    }
+    if (completionVisible_)
+    {
+        const int count = static_cast<int>(completionItems_.size());
+        switch (e.key)
+        {
+            case ig::retained::Key::Up:
+                completionSelected_ = completionSelected_ > 0 ? completionSelected_ - 1 : count - 1;
+                completionNavigated_ = true;
+                e.consumed = true;
+                break;
+            case ig::retained::Key::Down:
+                completionSelected_ = (completionSelected_ + 1) % count;
+                completionNavigated_ = true;
+                e.consumed = true;
+                break;
+            case ig::retained::Key::PageUp:
+                completionSelected_ = std::max(0, completionSelected_ - kCompletionRows);
+                completionNavigated_ = true;
+                e.consumed = true;
+                break;
+            case ig::retained::Key::PageDown:
+                completionSelected_ = std::min(count - 1, completionSelected_ + kCompletionRows);
+                completionNavigated_ = true;
+                e.consumed = true;
+                break;
+            case ig::retained::Key::Escape:
+                closeCompletion();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::Tab:
+                acceptCompletion();
+                e.consumed = true;
+                return;
+            case ig::retained::Key::Return:
+            case ig::retained::Key::KPEnter:
+                // A popup nobody asked for must not take the Return meant as a
+                // newline until it was browsed.
+                if (completionNavigated_ || completionContext_.requested)
+                {
+                    acceptCompletion();
+                    e.consumed = true;
+                    return;
+                }
+                closeCompletion();
+                break;
+            case ig::retained::Key::Backspace:
+                handleKeyPress(e);
+                updateCompletion(false);
+                return;
+            case ig::retained::Key::Left:
+            case ig::retained::Key::Right:
+            case ig::retained::Key::Home:
+            case ig::retained::Key::End:
+                closeCompletion();
+                break;
+            default:
+                break;
+        }
+        if (e.consumed)
+        {
+            if (completionSelected_ < completionFirstShown_) completionFirstShown_ = completionSelected_;
+            if (completionSelected_ >= completionFirstShown_ + kCompletionRows)
+                completionFirstShown_ = completionSelected_ - kCompletionRows + 1;
+            markDirty();
+            return;
+        }
+    }
+    handleKeyPress(e);
+}
+
+void CodeEditor::paintCompletion(PaintContext& ctx, const Rect& abs)
+{
+    const float lh = lineHeight_;
+    if (completionItems_.empty() || lh <= 0.0f || completionContext_.line >= lineCount()) return;
+    const Theme& t = Theme::instance();
+    const String& text = lineAt(completionContext_.line);
+    const String before(text.c_str(), utf8ByteOffset(text, completionContext_.wordStart));
+    const int shown = std::min(kCompletionRows, static_cast<int>(completionItems_.size()));
+    float width = 0.0f;
+    for (int i = 0; i < shown; ++i)
+    {
+        const CompletionItem& item = completionItems_[static_cast<size_t>(completionFirstShown_ + i)];
+        const float detail = item.detail.empty() ? 0.0f : ctx.font.GetTextWidth(item.detail.c_str()) + 24.0f;
+        width = std::max(width, ctx.font.GetTextWidth(item.text.c_str()) + detail);
+    }
+    width = std::min(abs.w - 8.0f, std::max(160.0f, width + 20.0f));
+    const float height = shown * lh + 8.0f;
+    const float lineY = abs.y + t.textEditPadding + logicalToVisualRow(completionContext_.line) * lh - scrollY_;
+    float x = abs.x + gutterW_ + t.textEditPadding + ctx.font.GetTextWidth(before.c_str()) - scrollX_ - 6.0f;
+    x = std::max(abs.x, std::min(x, abs.x + abs.w - width));
+    float y = lineY + lh + 2.0f;
+    if (y + height > abs.y + abs.h && lineY - height - 2.0f >= abs.y) y = lineY - height - 2.0f;
+    completionRect_ = { x, y, width, height };
+    completionRowHeight_ = lh;
+
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(t.menuBg);
+    ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
+    ctx.line.SetColor(t.borderColor);
+    ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
+    const float textOffset = (lh - ctx.font.GetFontSize()) * 0.5f;
+    for (int i = 0; i < shown; ++i)
+    {
+        const int index = completionFirstShown_ + i;
+        const CompletionItem& item = completionItems_[static_cast<size_t>(index)];
+        const float rowY = y + 4.0f + i * lh;
+        if (index == completionSelected_)
+        {
+            ctx.fill.SetColor(t.selectionColor);
+            ctx.fill.Rectangle(x + 2.0f, rowY, width - 4.0f, lh, true);
+        }
+        ctx.font.SetColor(t.textColor);
+        ctx.font.Print(item.text.c_str(), x + 8.0f, rowY + textOffset);
+        if (!item.detail.empty())
+        {
+            ctx.font.SetColor(t.textDisabled);
+            const float dw = ctx.font.GetTextWidth(item.detail.c_str());
+            ctx.font.Print(item.detail.c_str(), x + width - dw - 8.0f, rowY + textOffset);
+        }
+    }
+    ctx.popClip();
 }

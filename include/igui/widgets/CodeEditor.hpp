@@ -400,6 +400,65 @@ public:
     /// @brief Find the end of the word at the given position.
     TextPos findWordEnd(TextPos pos) const;
 
+    // ── Symbols: outline, go-to-symbol ────────────────────────────────────
+
+    /// @brief The declarations of the text (classes, methods, functions,
+    /// imports), found by the scan the highlighter names (see Symbols.hpp).
+    /// Scanned again only after an edit, when next asked.
+    const ct::Vector<syntax::Symbol>& symbols() const;
+    /// @brief Cursor to the first symbol with that name, revealed. False if none.
+    bool gotoSymbol(StringView name);
+    /// @brief Cursor to (line, col), and the line scrolled into the upper
+    /// third of the view: now, or on the first painted frame when the editor
+    /// does not know its line height yet.
+    void reveal(int line, int col = 0);
+    /// @brief TextEdit::setText, and the symbols know the text changed.
+    void setText(const String& text);
+
+    // ── Completion ────────────────────────────────────────────────────────
+    //
+    //  A popup at the cursor with what the word being typed may be. It opens
+    //  by itself after two letters, at once after a "." or Ctrl+Space, and
+    //  closes on Escape or when the cursor leaves the word. Up/Down browse,
+    //  Tab accepts; Return accepts a popup that was asked for or browsed, and
+    //  stays a newline otherwise. The built-in items are the language's words
+    //  (from the highlighter) and the words of the text; a host adds its own
+    //  with a provider (an engine's API, a form's widgets).
+
+    struct CompletionItem
+    {
+        String text;   // what is inserted
+        String detail; // shown dimmed at the right: a type, "method", "keyword"
+    };
+    /// Where the cursor is when items are asked for. Columns are code points
+    /// on the line, as TextPos counts them; the word ends at the cursor.
+    struct CompletionContext
+    {
+        String receiver; // the dotted name before a ".": "self", "self.display"; empty for a bare word
+        String prefix;   // the word typed so far
+        int line = 0;
+        int wordStart = 0;
+        int wordEnd = 0;
+        bool requested = false; // by a "." or Ctrl+Space, not by typing letters
+    };
+    using CompletionProvider = ct::Function<void(const CompletionContext&, ct::Vector<CompletionItem>&)>;
+
+    void setAutocompleteEnabled(bool on);
+    bool autocompleteEnabled() const { return autocomplete_; }
+    /// @brief The host's items come first, in the order it gives them (what
+    /// the prefix rules out is dropped here); the built-in ones follow unless
+    /// setBuiltinCompletions(false).
+    void setCompletionProvider(CompletionProvider provider);
+    void setBuiltinCompletions(bool on) { builtinCompletions_ = on; }
+    /// @brief Open the popup for the word at the cursor (Ctrl+Space).
+    void requestCompletion();
+    bool completionVisible() const { return completionVisible_; }
+    const ct::Vector<CompletionItem>& completionItems() const { return completionItems_; }
+    int completionSelected() const { return completionSelected_; }
+    /// @brief Insert the selected item, as typed text: one undo step.
+    bool acceptCompletion();
+    void closeCompletion();
+
     // ── Signals ───────────────────────────────────────────────────────────
 
     /// @brief Emitted when undo/redo availability changes.
@@ -544,6 +603,33 @@ private:
     void paintExtraSelections(PaintContext& ctx, const Rect& abs);
 
     // ── Word utilities (internal) ─────────────────────────────────────────
+    // ── Symbols ──────────────────────────────────────────────────────────
+    mutable ct::Vector<syntax::Symbol> symbols_;
+    mutable bool symbolsDirty_ = true;
+    int pendingRevealLine_ = -1;
+
+    // ── Completion ───────────────────────────────────────────────────────
+    bool autocomplete_ = true;
+    bool builtinCompletions_ = true;
+    CompletionProvider completionProvider_;
+    ct::Vector<CompletionItem> completionItems_;
+    CompletionContext completionContext_;
+    bool completionVisible_ = false;
+    bool completionNavigated_ = false; // Up/Down pressed: Return now accepts
+    int completionSelected_ = 0;
+    int completionFirstShown_ = 0;
+    Rect completionRect_{};
+    float completionRowHeight_ = 0.0f;
+    // The key and text handlers as they were; the overrides wrap them with
+    // the popup's keys and its refresh after typing.
+    void handleKeyPress(KeyEvent& e);
+    void handleTextInput(KeyEvent& e);
+    bool completionContextAtCursor(CompletionContext& out) const;
+    void updateCompletion(bool requested);
+    void builtinCompletionItems(const CompletionContext& ctx, ct::Vector<CompletionItem>& items) const;
+    void typeText(const char* text);
+    void paintCompletion(PaintContext& ctx, const Rect& abs);
+
     bool isWordChar(char c) const;
     String commentPrefix() const;
 };

@@ -497,6 +497,7 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 
 Widget::~Widget()
 {
+    destroyed.emit();
     // Anything still holding a pointer into this widget - the hover/focus/press
     // pointers, the tooltip, a popup being painted - has to hear about it before
     // the memory goes away. A widget the manager is never told about leaves

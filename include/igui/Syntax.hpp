@@ -11,6 +11,7 @@
 #include <ct/vector.hpp>
 
 #include "Color.hpp"
+#include "Symbols.hpp"
 
 namespace ig
 {
@@ -115,6 +116,10 @@ public:
     /// @brief Get file extensions this highlighter handles (e.g. {"cpp","hpp","h"}).
     virtual ct::Vector<String> extensions() const = 0;
 
+    /// @brief How the language nests its declarations: picks the symbol scan
+    /// (see Symbols.hpp) an outline or go-to-symbol runs over the text.
+    virtual SymbolSyntax symbolSyntax() const { return SymbolSyntax::Braces; }
+
     /// @brief Keywords known to this highlighter (used for autocomplete).
     const ct::HashSet<String>& keywordSet() const
     {
@@ -196,6 +201,8 @@ struct SyntaxLanguage
     // language can use either, both, or neither.
     String verbatimPrefix;
     bool caseSensitive = true;
+    // Which symbol scan the outline uses for this language (Symbols.hpp).
+    SymbolSyntax symbols = SymbolSyntax::Braces;
 };
 
 class DefinedHighlighter : public SyntaxHighlighter
@@ -212,6 +219,7 @@ public:
     {
         return language_.extensions;
     }
+    SymbolSyntax symbolSyntax() const override { return language_.symbols; }
 
 private:
     SyntaxLanguage language_;
@@ -261,6 +269,7 @@ public:
     {
         return { "py", "pyw", "pyi" };
     }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Indent; }
 };
 
 /// @brief JavaScript/TypeScript syntax highlighter.
@@ -302,6 +311,7 @@ public:
     {
         return { "lua" };
     }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Lua; }
 };
 
 /// @brief GLSL shader syntax highlighter.
@@ -368,6 +378,7 @@ public:
     {
         return { "blitz", "bb", "bmx", "decls" };
     }
+    SymbolSyntax symbolSyntax() const override { return SymbolSyntax::Blitz; }
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
