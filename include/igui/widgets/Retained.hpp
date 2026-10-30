@@ -446,7 +446,6 @@ private:
     void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
     uint32_t addVertex(float x, float y, const Color& color);
     uint32_t addVertex(float x, float y, float u, float v, const Color& color);
-            bool closed);
 
     ct::Vector<Rect> clipStack_;
     ct::Vector<Vec2> path_;
