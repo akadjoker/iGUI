@@ -310,6 +310,12 @@ public:
     // ── Commands ──────────────────────────────────────────────────────────
     //  Each one undo step where it changes the text (see shortcuts()).
 
+    /// @brief Replaces [start, end) with text as one recorded edit, the way
+    /// the keyboard would: undoable, reported by textChanged, the cursor
+    /// after the text. A host editing the buffer (a tool, an assistant) goes
+    /// through here. Nothing happens when the text is already there.
+    void replaceRange(TextPos start, TextPos end, const String& text);
+
     /// @brief Ctrl+L: the whole line; pressed again, the next line too.
     void selectLine();
     /// @brief Ctrl+J: the next line onto this one, one space between.
@@ -486,9 +492,6 @@ private:
     void beginUndoGroup();
     void endUndoGroup();
     void recordReplace(TextPos pos, const String& oldText, const String& newText, TextPos oldCursor, TextPos newCursor);
-    // Replaces [start, end) with text as one recorded edit; the cursor ends
-    // after the text. Nothing happens when the text is already there.
-    void editRange(TextPos start, TextPos end, const String& text);
     static TextPos advance(TextPos pos, const String& text);
     ct::Vector<EditAction> undoStack_;
     ct::Vector<EditAction> redoStack_;

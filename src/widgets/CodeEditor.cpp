@@ -1103,7 +1103,7 @@ bool CodeEditor::replaceNext(const String& find, const String& replace,
                                         : std::tolower(static_cast<unsigned char>(selected[i])) == std::tolower(static_cast<unsigned char>(find[i]));
             if (matches) replacement = replace;
         }
-        if (matches) editRange(selectionStart(), selectionEnd(), replacement);
+        if (matches) replaceRange(selectionStart(), selectionEnd(), replacement);
     }
     return findNext(find, caseSensitive, false, useRegex);
 }
@@ -1139,7 +1139,7 @@ int CodeEditor::replaceAll(const String& find, const String& replace,
             const String matched = selectedText();
             replacement = re.sub(ct::StringView(matched.data(), matched.size()), ct::StringView(replace.data(), replace.size()), 1);
         }
-        editRange(from, to, replacement);
+        replaceRange(from, to, replacement);
         count++;
     }
     endUndoGroup();
@@ -2190,7 +2190,7 @@ void CodeEditor::indent()
         return;
     }
     const TextPos keep = cursor_;
-    editRange({cursor_.line, 0}, {cursor_.line, 0}, "\t");
+    replaceRange({cursor_.line, 0}, {cursor_.line, 0}, "\t");
     cursor_ = {keep.line, keep.col + 1};
     selAnchor_ = cursor_;
 }
@@ -2209,7 +2209,7 @@ void CodeEditor::unindent()
     else
         while (removed < tabSize_ && removed < static_cast<int>(lines_[ln].size()) && lines_[ln][removed] == ' ') removed++;
     if (removed == 0) return;
-    editRange({ln, 0}, {ln, removed}, "");
+    replaceRange({ln, 0}, {ln, removed}, "");
     cursor_ = {keep.line, std::max(0, keep.col - removed)};
     selAnchor_ = cursor_;
 }
