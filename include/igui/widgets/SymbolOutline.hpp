@@ -28,6 +28,8 @@ namespace ig { namespace retained
 class SymbolOutline : public TreeView
 {
 public:
+    IG_WIDGET_CLASS(SymbolOutline, TreeView);
+
     SymbolOutline();
     ~SymbolOutline() override;
 

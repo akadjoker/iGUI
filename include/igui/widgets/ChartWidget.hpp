@@ -53,6 +53,8 @@ struct ChartSeries
 class Chart : public Widget
 {
 public:
+    IG_WIDGET_CLASS(Chart, Widget);
+
     // What is under a point: a slice (series 0, category), a bar, or a point of a line.
     struct Item
     {
