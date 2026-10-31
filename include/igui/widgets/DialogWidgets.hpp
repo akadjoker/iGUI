@@ -7,6 +7,10 @@
 #include <ct/vector.hpp>
 #include <igui/widgets/String.hpp>
 
+#ifdef MessageBox
+#undef MessageBox
+#endif
+
 namespace ig
 {
 namespace retained
