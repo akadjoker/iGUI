@@ -1663,6 +1663,7 @@ const DrawData& Context::endFrame()
     frameDrawList_.append(tooltipDrawList_);
     frameDrawList_.append(modalPopupDrawList_);
     frameDrawList_.append(modalDrawList_);
+    drawClickEffect();
 
     const uint32_t left = buttonIndex(PointerButton::Left);
     if (dragDrop_.armed && pointer_.released[left])
@@ -8672,6 +8673,39 @@ void Context::setDoubleClickInterval(float seconds)
     doubleClickInterval_ = seconds > 0.0f ? seconds : 0.0f;
 }
 
+void Context::setClickEffect(bool enabled, float seconds)
+{
+    clickEffect_ = enabled;
+    clickEffectSeconds_ = seconds > 0.01f ? seconds : 0.01f;
+    if (!enabled) clickRipples_.clear();
+}
+
+void Context::drawClickEffect()
+{
+    if (clickRipples_.empty()) return;
+    const Rect clip(0.0f, 0.0f, frame_.displaySize.x, frame_.displaySize.y);
+    ct::Vector<ClickRipple>::size_type kept = 0;
+    for (ct::Vector<ClickRipple>::size_type i = 0; i < clickRipples_.size(); ++i)
+    {
+        const ClickRipple ripple = clickRipples_[i];
+        const float age = static_cast<float>(elapsedSeconds_ - ripple.start);
+        if (age >= clickEffectSeconds_) continue;
+        clickRipples_[kept++] = ripple;
+        const float t = age > 0.0f ? age / clickEffectSeconds_ : 0.0f;
+        const float fade = 1.0f - t;
+        const float open = 1.0f - fade * fade;
+        const uint8_t red = ripple.button == 0u ? 255u : (ripple.button == 1u ? 64u : 96u);
+        const uint8_t green = ripple.button == 0u ? 64u : (ripple.button == 1u ? 160u : 220u);
+        const uint8_t blue = ripple.button == 0u ? 56u : (ripple.button == 1u ? 255u : 128u);
+        const float radius = 8.0f + 26.0f * open;
+        frameDrawList_.addCircleFilled(ripple.position, radius * 0.55f,
+                Color(red, green, blue, static_cast<uint8_t>(170.0f * fade)), clip);
+        frameDrawList_.addArc(ripple.position, radius, 0.0f, 6.2831853f,
+                Color(red, green, blue, static_cast<uint8_t>(255.0f * fade)), clip, 3.0f);
+    }
+    clickRipples_.resize(kept);
+}
+
 void Context::setDoubleClickDistance(float pixels)
 {
     doubleClickDistance_ = pixels > 0.0f ? pixels : 0.0f;
@@ -12167,6 +12201,14 @@ void Context::consumeEvents()
                 // múltipla lê quando o item é carregado (ver beginMultiSelect).
                 pointer_.pressedControl[index] = event.control;
                 pointer_.pressedShift[index] = event.shift;
+                if (clickEffect_)
+                {
+                    ClickRipple ripple;
+                    ripple.position = event.position;
+                    ripple.start = elapsedSeconds_;
+                    ripple.button = index;
+                    clickRipples_.push_back(ripple);
+                }
                 // Duplo clique: outra carregada do mesmo botão, perto no tempo e no
                 // espaço desta. Depois de um duplo a contagem recomeça, para um triplo
                 // não valer como dois.

@@ -1275,6 +1275,14 @@ public:
     {
         return doubleClickDistance_;
     }
+    // Feedback for screen recordings and demos: where a button goes down a disc and a ring open
+    // and fade out over `seconds` (left button red, right blue, middle green), above everything
+    // else. Off by default; turning it off drops the ones still showing.
+    void setClickEffect(bool enabled, float seconds = 0.5f);
+    bool clickEffect() const
+    {
+        return clickEffect_;
+    }
     // Segundos que o ponteiro tem de estar parado sobre o item para o flag Delay
     // (o style.HoverDelay do ImGui; o tooltip tem o seu, este é para consultas).
     void setHoverDelay(float seconds);
@@ -2666,6 +2674,16 @@ private:
     // Tempo acumulado desde o primeiro frame, para o que anima sozinho (a barra
     // indeterminada). Soma os deltaSeconds de cada frame.
     double elapsedSeconds_;
+    struct ClickRipple
+    {
+        Vec2 position;
+        double start = 0.0;
+        uint32_t button = 0;
+    };
+    bool clickEffect_ = false;
+    float clickEffectSeconds_ = 0.5f;
+    ct::Vector<ClickRipple> clickRipples_;
+    void drawClickEffect();
     // beginDisabled()/endDisabled() depth: above zero, nothing reacts and the
     // draw lists fade what they draw (see applyDisabledFade).
     uint32_t disabledDepth_;
