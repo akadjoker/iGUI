@@ -92,19 +92,18 @@ struct FontProxy
     PaintContext* ctx = nullptr;
     float scale = 1.0f; // zoom scale factor
 
-    void SetFontSize(float)
-    {
-    } // no-op: font baked at init
+    // The height of the text drawn from now on in this paint context, in
+    // pixels (the theme's fontSize when nothing was asked). It is real: the
+    // glyphs are rasterised at that size, once, when the atlas has a dynamic
+    // page, and the baked 16 pixel font otherwise.
+    void SetFontSize(float px);
     void SetBatch(void*)
     {
     } // no-op
     void SetClip(int, int, int, int)
     {
     } // no-op: DrawList clip stack handles it
-    float GetFontSize() const
-    {
-        return 16.0f * scale;
-    }
+    float GetFontSize() const;
     /// @brief Get font ascender height.
     float GetAscender() const;
     /// @brief Set text rendering color.
@@ -129,6 +128,13 @@ struct PaintContext
     FontProxy font;  // ctx.font.Print / SetColor / GetTextWidth
 
     Color textColor_ = { 220, 220, 220, 255 };
+
+    // The text height asked for with ctx.font.SetFontSize; 0 is the theme's.
+    float fontHeight_ = 0.0f;
+    /// @brief The text height in force: what SetFontSize asked, else the theme's.
+    float fontHeight() const;
+    /// @brief The font to draw with at that height (the base font when the atlas cannot size it).
+    const ig::retained::Font* activeFont() const;
 
     // Optional procedural icon atlas (TextureHandle resolved internally)
     IconAtlas* icons = nullptr;

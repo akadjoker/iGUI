@@ -259,9 +259,14 @@ struct FontGlyph
     float advanceX = 0.0f;
 };
 
+class FontAtlas;
+
 class Font
 {
 public:
+    // A glyph of this font; for a font made by atHeight() it is rasterised
+    // into the atlas's dynamic page the first time it is asked for. The
+    // pointer is good until the next findGlyph on the same font.
     const FontGlyph* findGlyph(uint32_t codepoint) const;
     TextureHandle texture() const
     {
@@ -275,6 +280,18 @@ public:
     {
         return ascender_;
     }
+    // The height the face was rasterised at (ascent plus descent, in pixels).
+    float pixelHeight() const
+    {
+        return pixelHeight_;
+    }
+    // The same face at another height, rasterised exactly at that size on
+    // first use. Without a dynamic page (FontAtlas::enableDynamic) this font
+    // itself, so a backend that never uploads one keeps drawing as before.
+    const Font* atHeight(float pixelHeight) const;
+    // What to add to the pen between two glyphs, in pixels at this font's
+    // height: negative closes the gap (A and V). The face's kern or GPOS table.
+    float kerning(uint32_t left, uint32_t right) const;
 
 private:
     friend class FontAtlas;
@@ -282,7 +299,12 @@ private:
     TextureHandle texture_;
     float lineHeight_ = 0.0f;
     float ascender_ = 0.0f;
-    ct::HashMap<uint32_t, FontGlyph> glyphs_;
+    float pixelHeight_ = 0.0f;
+    FontAtlas* atlas_ = nullptr; // the atlas that holds the face; null for a Font made by hand
+    int face_ = -1;              // its index there
+    bool dynamic_ = false;       // glyphs come from the dynamic page, on demand
+    mutable ct::HashMap<uint32_t, FontGlyph> glyphs_;
+    mutable ct::HashMap<uint64_t, float> kern_;
 };
 
 class FontAtlas
@@ -309,6 +331,27 @@ public:
     // ── Legacy single-font API (calls addFont + build internally) ─────
     bool buildDefault();
     bool buildFromTTFMemory(const unsigned char* data, int dataSize, float pixelHeight = 16.0f);
+
+    // ── Sizes on demand ──────────────────────────────────────────────
+    // A page of glyphs rasterised at the exact size asked for, so text is
+    // sharp at any size and not a 16 pixel bitmap stretched. The adapter
+    // calls prepareDynamic(), makes a texture from dynamicPixels() and gives
+    // it to enableDynamic(); after drawing it uploads the page again when
+    // dynamicDirty().
+    bool prepareDynamic();
+    bool enableDynamic(TextureHandle texture);
+    bool dynamicEnabled() const;
+    TextureHandle dynamicTexture() const;
+    int dynamicWidth() const;
+    int dynamicHeight() const;
+    const unsigned char* dynamicPixels() const;
+    bool dynamicDirty() const;
+    void clearDynamicDirty();
+
+    FontAtlas();
+    ~FontAtlas();
+    FontAtlas(const FontAtlas&) = delete;
+    FontAtlas& operator=(const FontAtlas&) = delete;
 
     void setTexture(TextureHandle texture);
     TextureHandle texture() const
@@ -350,6 +393,13 @@ public:
     }
 
 private:
+    friend class Font;
+    struct Impl;
+    Impl* impl_ = nullptr;
+    const Font* fontAtHeight(int face, float pixelHeight);
+    bool bakeGlyph(const Font& font, uint32_t codepoint);
+    float kerningOf(const Font& font, uint32_t left, uint32_t right) const;
+
     int width_ = 0;
     int height_ = 0;
     TextureHandle texture_;

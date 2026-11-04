@@ -1965,7 +1965,7 @@ float WidgetApp::textWidth(const char* text) const
 
 float WidgetApp::textWidth(const char* text, const ig::retained::Font* font, float scale) const
 {
-    if (!font) font = font_;
+    if (!font && font_) font = font_->atHeight(Theme::instance().fontSize);
     if (!font || !drawList_ || !text) return 0.0f;
     return drawList_->calcTextSize(*font, text, scale).x;
 }

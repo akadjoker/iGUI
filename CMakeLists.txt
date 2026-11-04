@@ -158,6 +158,7 @@ if(IGUI_BUILD_TESTS)
         igui_code_editor_keys_tests
         igui_chart_tests
         igui_themes_tests
+        igui_text_sizes_tests
         igui_both_modes_tests
         igui_original_widgets_tests
         igui_font_tests
@@ -327,6 +328,12 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_compile_features(igui_themes_tests PRIVATE cxx_std_17)
         target_link_libraries(igui_themes_tests PRIVATE igui_widgets)
         add_test(NAME igui_themes COMMAND igui_themes_tests)
+
+        # The text engine: glyphs at the exact size, kerning, the dynamic page.
+        add_executable(igui_text_sizes_tests tests/test_text_sizes.cpp)
+        target_compile_features(igui_text_sizes_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_text_sizes_tests PRIVATE igui_widgets)
+        add_test(NAME igui_text_sizes COMMAND igui_text_sizes_tests)
 
         # The retained CodeEditor's keyboard: undo groups, the inline bars,
         # the commands, cursors, bookmarks, the jump list.

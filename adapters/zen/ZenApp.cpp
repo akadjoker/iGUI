@@ -206,6 +206,9 @@ bool App::create(const Config &config)
         atlas_.setTexture(createTexture(atlas_.width(), atlas_.height(), atlas_.pixels()));
         font_ = &atlas_.defaultFont();
         rt::SetWhitePixel(atlas_.texture(), atlas_.whitePixelUV());
+        // Glyphs at the size a widget asks for, rasterised when first drawn.
+        if (atlas_.prepareDynamic())
+            atlas_.enableDynamic(createTexture(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicPixels()));
     }
 
     rt::WidgetApp& app = widgets();
@@ -334,6 +337,8 @@ void App::destroyWindow(Window *w)
     if (w == main_)
     {
         destroyTexture(atlas_.texture());
+        if (atlas_.dynamicEnabled())
+            destroyTexture(atlas_.dynamicTexture());
         gl_.shutdown();
     }
     window_destroy(w->platform);
@@ -519,6 +524,12 @@ void App::frameWindow(Window *w, bool driven)
         frameCallback_(io.deltaTime);
     }
     widgets().paint(*rt::GetDrawData(), font_, nullptr);
+    if (atlas_.dynamicDirty())
+    {
+        // A glyph was rasterised while painting: the page goes up before the frame is drawn.
+        updateTexture(atlas_.dynamicTexture(), atlas_.dynamicPixels(), atlas_.dynamicWidth(), atlas_.dynamicHeight());
+        atlas_.clearDynamicDirty();
+    }
     rt::Render();
     if (!blocked)
         mouse_set_cursor(pw, cursorShape(io.wantedCursor));

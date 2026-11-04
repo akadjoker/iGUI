@@ -57,22 +57,35 @@ void FontProxy::SetColor(u8 r, u8 g, u8 b, u8 a)
     if (ctx) ctx->textColor_ = { r, g, b, a };
 }
 
+void FontProxy::SetFontSize(float px)
+{
+    if (ctx) ctx->fontHeight_ = px > 0.0f ? px : 0.0f;
+}
+
+float FontProxy::GetFontSize() const
+{
+    return (ctx ? ctx->fontHeight() : 16.0f) * scale;
+}
+
 float FontProxy::GetAscender() const
 {
-    if (!ctx || !ctx->buFont) return 12.0f * scale;
-    return ctx->buFont->ascender() * scale;
+    const Font* f = ctx ? ctx->activeFont() : nullptr;
+    if (!f) return 12.0f * scale;
+    return f->ascender() * scale;
 }
 
 float FontProxy::GetTextWidth(const char* text) const
 {
-    if (!ctx || !ctx->buFont || !text) return 0.0f;
-    return ctx->drawList.calcTextSize(*ctx->buFont, text, scale).x;
+    const Font* f = ctx ? ctx->activeFont() : nullptr;
+    if (!f || !text) return 0.0f;
+    return ctx->drawList.calcTextSize(*f, text, scale).x;
 }
 
 void FontProxy::Print(const char* text, float x, float y, const void* /*clipHint*/)
 {
-    if (!ctx || !ctx->buFont || !text) return;
-    ctx->drawList.addText(*ctx->buFont, { x, y }, ctx->textColor_, text, scale);
+    const Font* f = ctx ? ctx->activeFont() : nullptr;
+    if (!f || !text) return;
+    ctx->drawList.addText(*f, { x, y }, ctx->textColor_, text, scale);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -91,6 +104,16 @@ PaintContext::PaintContext(ig::retained::DrawList& dl, const ig::retained::Font*
 }
 
 // ── Font stack ────────────────────────────────────────────────────────────
+
+float PaintContext::fontHeight() const
+{
+    return fontHeight_ > 0.0f ? fontHeight_ : Theme::instance().fontSize;
+}
+
+const ig::retained::Font* PaintContext::activeFont() const
+{
+    return buFont ? buFont->atHeight(fontHeight()) : nullptr;
+}
 
 void PaintContext::pushFont(const ig::retained::Font* f)
 {
@@ -647,7 +670,11 @@ void Widget::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    for (auto& c: children_) c->paint(ctx);
+    for (auto& c: children_)
+    {
+        ctx.fontHeight_ = 0.0f; // each widget starts from the theme's text size
+        c->paint(ctx);
+    }
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
