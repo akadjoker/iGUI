@@ -1571,8 +1571,9 @@ void TextEdit::paint(PaintContext& ctx)
 
         if (ly + lineHeight() < abs.y || ly > abs.y + abs.h) continue;
 
-        // Selection highlight
-        if (isFocused() && hasSelection())
+        // Selection highlight, fainter when another widget has the focus: a
+        // find that leaves the focus in its own box still shows its match.
+        if (hasSelection())
         {
             TextPos s = selectionStart(), e = selectionEnd();
             if ((i > s.line || (i == s.line && endCol > s.col)) &&
@@ -1596,8 +1597,9 @@ void TextEdit::paint(PaintContext& ctx)
                     float cx2 = std::min(sx2, textArea.x + textArea.w);
                     if (cx1 < cx2)
                     {
+                        const float dim = isFocused() ? 1.0f : 0.7f;
                         ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g,
-                                t.selectionColor.b, t.selectionColor.a);
+                                t.selectionColor.b, static_cast<unsigned char>(t.selectionColor.a * dim));
                         ctx.fill.Rectangle(static_cast<int>(cx1), static_cast<int>(ly),
                                 static_cast<int>(cx2 - cx1), static_cast<int>(lineHeight()), true);
                     }

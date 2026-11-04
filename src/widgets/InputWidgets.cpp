@@ -47,6 +47,20 @@ Widget::Vec2f Slider::sizeHint() const
     return { 120.0f, t.sliderHeight };
 }
 
+// The Windows XP style thumb: a small box with the button's shading and border.
+static void paintThumbBox(PaintContext& ctx, const Theme& t, const Color& face, float x, float y, float w, float h)
+{
+    if (t.controlGradient > 0.0f)
+        ctx.fillRoundedRectGradient(x, y, w, h, 2.0f, Theme::shade(face, 255, t.controlGradient), Theme::shade(face, 0, t.controlGradient * 0.12f));
+    else
+    {
+        ctx.fill.SetColor(face);
+        ctx.fillRoundedRect(x, y, w, h, 2.0f, 4);
+    }
+    ctx.line.SetColor(t.buttonBorder);
+    ctx.lineRoundedRect(x, y, w, h, 2.0f, 4);
+}
+
 void Slider::paint(PaintContext& ctx)
 {
     if (!visible_) return;
@@ -96,8 +110,13 @@ void Slider::paint(PaintContext& ctx)
         {
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
-            ctx.fill.SetColor(thumbC);
-            ctx.fillCircle(thumbX, thumbY, thumbR);
+            if (t.sliderThumbBox)
+                paintThumbBox(ctx, t, thumbC, thumbX - std::min(abs.w, 22.0f) * 0.5f, thumbY - 5.5f, std::min(abs.w, 22.0f), 11.0f);
+            else
+            {
+                ctx.fill.SetColor(thumbC);
+                ctx.fillCircle(thumbX, thumbY, thumbR);
+            }
         }
     }
     else
@@ -136,8 +155,13 @@ void Slider::paint(PaintContext& ctx)
         {
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
-            ctx.fill.SetColor(thumbC);
-            ctx.fillCircle(thumbX, thumbY, thumbR);
+            if (t.sliderThumbBox)
+                paintThumbBox(ctx, t, thumbC, thumbX - 5.5f, thumbY - std::min(abs.h, 22.0f) * 0.5f, 11.0f, std::min(abs.h, 22.0f));
+            else
+            {
+                ctx.fill.SetColor(thumbC);
+                ctx.fillCircle(thumbX, thumbY, thumbR);
+            }
         }
     }
 

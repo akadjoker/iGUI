@@ -74,6 +74,9 @@ void testPreset(const char* name, const Theme& t)
     readable(name, "dialog text / dialog", t.dialogText, t.dialogBg, 4.5f);
     readable(name, "dialog title / its bar", t.dialogTitleText, t.dialogTitleBg.a > 0 ? t.dialogTitleBg : t.panelColor, 4.5f);
     readable(name, "tooltip text / tooltip", t.tooltipText, t.tooltipBg, 4.5f);
+    readable(name, "text / tab bar", t.textColor, t.buttonNormal, 4.5f);
+    readable(name, "other tabs' text / tab bar", t.textDisabled, t.buttonNormal, 1.3f);
+    readable(name, "selected tab line / tab bar", t.tabAccent, t.buttonNormal, 1.15f);
 
     // Dimmer on purpose, but still there.
     readable(name, "disabled text / window", t.textDisabled, t.bgColor, 1.5f);

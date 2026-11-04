@@ -135,6 +135,8 @@ struct Theme
     Color buttonHoverRing = Color(0, 0, 0, 0);      // alpha 0: none; else a ring inside the border of a hovered button
     Color dialogTitleBg = Color(0, 0, 0, 0);        // alpha 0: panelColor; the title bar of a Dialog
     float titleGradient = 0.0f;                     // title bars (Dialog, FloatWindow) shade from lighter to darker by this much, 0..1
+    Color tabAccent = Color(60, 140, 255, 255);     // the line on top of the selected tab (zenforms Tabs)
+    bool sliderThumbBox = false;                    // the Slider's thumb is a small box, not a circle
 
     /// @brief @p c moved toward @p target (0 black .. 255 white) by @p k (0..1).
     static Color shade(const Color& c, int target, float k)
@@ -378,6 +380,7 @@ struct Theme
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(214, 214, 218, 255);
+        t.tabAccent = accent;
         // Sizes
         t.fontSize = 14.0f;
         t.borderRadius = 6.0f;
@@ -492,6 +495,7 @@ struct Theme
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(78, 78, 82, 255);
+        t.tabAccent = accent;
         return t;
     }
 
@@ -606,6 +610,8 @@ struct Theme
         t.buttonHoverRing = Color(250, 195, 90, 255);
         t.dialogTitleBg = Color(0, 84, 227, 255);
         t.titleGradient = 0.35f;
+        t.tabAccent = Color(250, 195, 90, 255);
+        t.sliderThumbBox = true;
         // Sizes
         t.fontSize = 14.0f;
         t.borderRadius = 3.0f;
