@@ -40,7 +40,7 @@ void Label::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     const auto& t = Theme::instance();
-    const Color& c = isEnabledInTree() ? color_ : t.textDisabled;
+    const Color& c = isEnabledInTree() ? (color_.a > 0 ? color_ : t.textColor) : t.textDisabled;
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
@@ -110,7 +110,8 @@ void Line::paint(PaintContext& ctx)
     auto* p = widget_cast<BoxLayout>(parent());
     bool vertical = p && p->dir() == LayoutDir::Horizontal;
 
-    ctx.line.SetColor(color_.r, color_.g, color_.b, color_.a);
+    const Color lineColor = color();
+    ctx.line.SetColor(lineColor.r, lineColor.g, lineColor.b, lineColor.a);
     int t = std::max(1, (int) std::round(thickness_));
 
     if (vertical)
@@ -192,14 +193,37 @@ void Button::paint(PaintContext& ctx)
         }
         if (!isEnabledInTree()) bg = t.panelColor;
 
-        ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
-        ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
-                true);
+        const bool shaded = t.controlGradient > 0.0f && isEnabledInTree();
+        if (shaded)
+        {
+            // Lighter above, darker below; a pressed button is the other way round.
+            const float g = t.controlGradient;
+            Color lit = Theme::shade(bg, 255, g), dim = Theme::shade(bg, 0, g * 0.12f);
+            if (pressed_) std::swap(lit, dim);
+            ctx.fillRoundedRectGradient(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, lit, dim);
+        }
+        else
+        {
+            ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
+            ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
+                    true);
+        }
 
         Color bc = focused_ ? t.focusColor : t.buttonBorder;
         ctx.line.SetColor(bc.r, bc.g, bc.b, bc.a);
         ctx.line.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
                 false);
+
+        if (t.buttonHoverRing.a > 0 && hovered_ && !pressed_ && isEnabledInTree())
+        {
+            const Color& ring = t.buttonHoverRing;
+            ctx.line.SetColor(ring.r, ring.g, ring.b, ring.a);
+            ctx.line.RoundedRectangle(clipped.x + 1.0f, clipped.y + 1.0f, clipped.w - 2.0f, clipped.h - 2.0f,
+                    std::max(0.0f, t.borderRadius - 1.0f), 6, false);
+            ctx.line.SetColor(ring.r, ring.g, ring.b, static_cast<unsigned char>(ring.a * 0.5f));
+            ctx.line.RoundedRectangle(clipped.x + 2.0f, clipped.y + 2.0f, clipped.w - 4.0f, clipped.h - 4.0f,
+                    std::max(0.0f, t.borderRadius - 2.0f), 6, false);
+        }
     }
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
@@ -547,7 +571,8 @@ void Panel::paint(PaintContext& ctx)
     Rect clipped;
     if (ctx.clipRectIntersect(abs, clipped))
     {
-        ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
+        const Color panelBg = bgColor();
+        ctx.fill.SetColor(panelBg.r, panelBg.g, panelBg.b, panelBg.a);
         ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, t.borderRadius, 6,
                 true);
 

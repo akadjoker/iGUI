@@ -227,9 +227,21 @@ void Dialog::paint(PaintContext& ctx)
     ctx.fill.RoundedRectangle(dr.x, dr.y, dr.w, dr.h, t.borderRadius * 2, 8, true);
 
     // Title bar
-    ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, 255);
-    ctx.fill.RoundedRectangle(dr.x, dr.y, dr.w, kTitleH, t.borderRadius * 2, 8, true);
-    ctx.fill.Rectangle(dr.x, dr.y + kTitleH - 6, dr.w, 6, true);
+    const Color titleBg = t.dialogTitleBg.a > 0 ? t.dialogTitleBg : t.panelColor;
+    if (t.titleGradient > 0.0f)
+    {
+        const Color lit = Theme::shade(titleBg, 255, t.titleGradient);
+        const Color dim = Theme::shade(titleBg, 0, t.titleGradient * 0.45f);
+        ctx.fillRoundedRectGradient(dr.x, dr.y, dr.w, kTitleH, t.borderRadius * 2, lit, dim);
+        ctx.fill.SetColor(dim.r, dim.g, dim.b, 255);
+        ctx.fill.Rectangle(dr.x, dr.y + kTitleH - 6, dr.w, 6, true);
+    }
+    else
+    {
+        ctx.fill.SetColor(titleBg.r, titleBg.g, titleBg.b, 255);
+        ctx.fill.RoundedRectangle(dr.x, dr.y, dr.w, kTitleH, t.borderRadius * 2, 8, true);
+        ctx.fill.Rectangle(dr.x, dr.y + kTitleH - 6, dr.w, 6, true);
+    }
 
     // Border
     ctx.line.SetColor(t.dialogBorder.r, t.dialogBorder.g, t.dialogBorder.b, 255);

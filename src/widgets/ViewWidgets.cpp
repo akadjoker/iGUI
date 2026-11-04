@@ -109,8 +109,16 @@ void FloatWindow::paint(PaintContext& ctx)
     ctx.lineRoundedRect(floatX_, floatY_, floatW_, fh, t.borderRadius, 4);
 
     // ── Title bar background ─────────────────────────────────────────────
-    ctx.fill.SetColor(t.floatTitleBg.r, t.floatTitleBg.g, t.floatTitleBg.b, t.floatTitleBg.a);
-    ctx.fillRoundedRect(floatX_, floatY_, floatW_, titleBarH_, t.borderRadius, 4);
+    if (t.titleGradient > 0.0f)
+    {
+        ctx.fillRoundedRectGradient(floatX_, floatY_, floatW_, titleBarH_, t.borderRadius,
+                Theme::shade(t.floatTitleBg, 255, t.titleGradient), Theme::shade(t.floatTitleBg, 0, t.titleGradient * 0.45f));
+    }
+    else
+    {
+        ctx.fill.SetColor(t.floatTitleBg.r, t.floatTitleBg.g, t.floatTitleBg.b, t.floatTitleBg.a);
+        ctx.fillRoundedRect(floatX_, floatY_, floatW_, titleBarH_, t.borderRadius, 4);
+    }
 
     // ── Title text ───────────────────────────────────────────────────────
     float fsz = t.fontSize * 0.9f;
@@ -302,7 +310,7 @@ void Canvas::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     // Background
-    ctx.fill.SetColor(bgColor_);
+    ctx.fill.SetColor(bgColor());
     ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
 
     // Border

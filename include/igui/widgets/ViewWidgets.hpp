@@ -209,9 +209,9 @@ public:
         markDirty();
     }
     /// @brief Get the background color.
-    const Color& bgColor() const
+    Color bgColor() const
     {
-        return bgColor_;
+        return bgColor_.a > 0 ? bgColor_ : Theme::instance().panelColor;
     }
 
     /// @brief Set a custom paint callback.
@@ -225,7 +225,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    Color bgColor_ = Theme::instance().panelColor;
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's panel colour
     PaintCallback onPaint_;
 };
 

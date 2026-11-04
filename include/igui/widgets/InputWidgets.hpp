@@ -145,9 +145,9 @@ public:
         markDirty();
     }
     /// @brief Get the filled bar color.
-    const Color& barColor() const
+    Color barColor() const
     {
-        return barColor_;
+        return barColor_.a > 0 ? barColor_ : Theme::instance().progressFill;
     }
     /// @brief Set the text color.
     void setTextColor(const Color& c)
@@ -171,7 +171,7 @@ private:
     LayoutDir orientation_ = LayoutDir::Horizontal;
     String text_;
     TextAlign textAlign_ = TextAlign::CENTER;
-    Color barColor_ = Color(140, 140, 145, 255);
+    Color barColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's progressFill
     Color textColor_ = Color(220, 220, 220, 255);
 };
 

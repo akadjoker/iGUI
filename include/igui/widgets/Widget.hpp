@@ -165,6 +165,9 @@ struct PaintContext
     void fillRect(float x, float y, float w, float h);
     /// @brief Fill a rounded rectangle.
     void fillRoundedRect(float x, float y, float w, float h, float r, int seg = 8);
+    /// @brief Fill a rounded rectangle shading from @p top to @p bottom, one
+    ///        row at a time so the corners keep their curve.
+    void fillRoundedRectGradient(float x, float y, float w, float h, float r, const Color& top, const Color& bottom);
     /// @brief Fill a circle.
     void fillCircle(float cx, float cy, float radius);
     /// @brief Fill a triangle.

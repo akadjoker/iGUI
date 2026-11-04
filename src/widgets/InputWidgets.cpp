@@ -245,12 +245,28 @@ void ProgressBar::paint(PaintContext& ctx)
     Rect clipped;
     if (ctx.clipRectIntersect(abs, clipped))
     {
-        ctx.fill.SetColor(t.sliderTrack);
+        ctx.fill.SetColor(t.progressTrack.a > 0 ? t.progressTrack : t.sliderTrack);
         ctx.fill.RoundedRectangle(clipped.x, clipped.y, clipped.w, clipped.h, 3.0f, 6, true);
     }
 
-    // Fill bar
-    if (vert)
+    // Fill bar: a row of small blocks in the Windows XP look, else one bar
+    if (t.progressBlocks && !vert)
+    {
+        const Color fill = barColor();
+        const float inset = 3.0f, blockW = 8.0f, gap = 2.0f;
+        const float room = abs.w - inset * 2.0f;
+        const float filled = room * ratio;
+        const Color shine(std::min(255, fill.r + 70), std::min(255, fill.g + 40), std::min(255, fill.b + 70), fill.a);
+        for (float bx = 0.0f; bx + blockW * 0.5f <= filled; bx += blockW + gap)
+        {
+            const float w = std::min(blockW, filled - bx);
+            Rect block = { abs.x + inset + bx, abs.y + inset, w, abs.h - inset * 2.0f };
+            Rect clippedBlock;
+            if (!ctx.clipRectIntersect(block, clippedBlock)) continue;
+            ctx.fillRoundedRectGradient(clippedBlock.x, clippedBlock.y, clippedBlock.w, clippedBlock.h, 1.5f, shine, fill);
+        }
+    }
+    else if (vert)
     {
         float fillH = abs.h * ratio;
         float fillY = abs.y + abs.h - fillH;
@@ -258,7 +274,7 @@ void ProgressBar::paint(PaintContext& ctx)
         Rect clippedFill;
         if (ctx.clipRectIntersect(fillRect, clippedFill))
         {
-            ctx.fill.SetColor(barColor_);
+            ctx.fill.SetColor(barColor());
             ctx.fill.RoundedRectangle(clippedFill.x, clippedFill.y, clippedFill.w, clippedFill.h,
                     3.0f, 6, true);
         }
@@ -270,7 +286,7 @@ void ProgressBar::paint(PaintContext& ctx)
         Rect clippedFill;
         if (ctx.clipRectIntersect(fillRect, clippedFill))
         {
-            ctx.fill.SetColor(barColor_);
+            ctx.fill.SetColor(barColor());
             ctx.fill.RoundedRectangle(clippedFill.x, clippedFill.y, clippedFill.w, clippedFill.h,
                     3.0f, 6, true);
         }

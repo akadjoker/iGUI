@@ -177,6 +177,32 @@ void PaintContext::fillRoundedRect(float x, float y, float w, float h, float r, 
     drawList.addRoundRectFilled({ x, y, w, h }, r, fill.current, seg);
 }
 
+void PaintContext::fillRoundedRectGradient(float x, float y, float w, float h, float r, const Color& top, const Color& bottom)
+{
+    if (w <= 0.0f || h <= 0.0f) return;
+    r = std::min(r, std::min(w, h) * 0.5f);
+    const int rows = std::max(1, static_cast<int>(std::ceil(h)));
+    for (int i = 0; i < rows; ++i)
+    {
+        const float y0 = y + static_cast<float>(i);
+        const float rowH = std::min(1.0f, y + h - y0);
+        const float mid = static_cast<float>(i) + rowH * 0.5f;
+        const float k = mid / h;
+        float inset = 0.0f;
+        const float fromEdge = std::min(mid, h - mid);
+        if (fromEdge < r)
+        {
+            const float dy = r - fromEdge;
+            inset = r - std::sqrt(std::max(0.0f, r * r - dy * dy));
+        }
+        const auto lerp = [k](unsigned char a, unsigned char b) {
+            return static_cast<unsigned char>(static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * k + 0.5f);
+        };
+        const Color c(lerp(top.r, bottom.r), lerp(top.g, bottom.g), lerp(top.b, bottom.b), lerp(top.a, bottom.a));
+        drawList.addRect({ x + inset, y0, w - 2.0f * inset, rowH }, c);
+    }
+}
+
 void PaintContext::fillCircle(float cx, float cy, float radius)
 {
     drawList.addCircleFilled({ cx, cy }, radius, fill.current);

@@ -43,7 +43,7 @@ public:
 
 private:
     String text_;
-    Color color_ = Theme::instance().textColor;
+    Color color_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's text colour
     TextAlign align_ = TextAlign::LEFT;
 };
 
@@ -97,9 +97,9 @@ public:
         markDirty();
     }
     /// @brief Get the line color.
-    const Color& color() const
+    Color color() const
     {
-        return color_;
+        return color_.a > 0 ? color_ : Theme::instance().borderColor;
     }
 
     Vec2f sizeHint() const override;
@@ -107,7 +107,7 @@ public:
 
 private:
     float thickness_;
-    Color color_ = Theme::instance().borderColor;
+    Color color_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's border colour
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -356,16 +356,16 @@ public:
     /// @brief Set the panel background color.
     void setBgColor(const Color& c);
     /// @brief Get the panel background color.
-    const Color& bgColor() const
+    Color bgColor() const
     {
-        return bgColor_;
+        return bgColor_.a > 0 ? bgColor_ : Theme::instance().panelColor;
     }
 
     void layout() override;
     void paint(PaintContext& ctx) override;
 
 private:
-    Color bgColor_ = Theme::instance().panelColor;
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's panel colour
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
