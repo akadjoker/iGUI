@@ -1,5 +1,8 @@
 #include "igui/FontAtlas.hpp"
 
+// Private to this file: the retained widgets build their own stb_truetype (third_party/stb/
+// stb_impl.cpp), and a program that links both modules must not see two copies.
+#define STBTT_STATIC
 #define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
 
