@@ -48,12 +48,10 @@ Widget::Vec2f Slider::sizeHint() const
 }
 
 // The Windows XP style thumb: a small box with the button's shading and border.
-static void paintThumbBox(PaintContext& ctx, const Theme& t, const Color& face, float x, float y,
-        float w, float h)
+static void paintThumbBox(PaintContext& ctx, const Theme& t, const Color& face, float x, float y, float w, float h)
 {
     if (t.controlGradient > 0.0f)
-        ctx.fillRoundedRectGradient(x, y, w, h, 2.0f, Theme::shade(face, 255, t.controlGradient),
-                Theme::shade(face, 0, t.controlGradient * 0.12f));
+        ctx.fillRoundedRectGradient(x, y, w, h, 2.0f, Theme::shade(face, 255, t.controlGradient), Theme::shade(face, 0, t.controlGradient * 0.12f));
     else
     {
         ctx.fill.SetColor(face);
@@ -113,8 +111,7 @@ void Slider::paint(PaintContext& ctx)
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
             if (t.sliderThumbBox)
-                paintThumbBox(ctx, t, thumbC, thumbX - std::min(abs.w, 22.0f) * 0.5f, thumbY - 5.5f,
-                        std::min(abs.w, 22.0f), 11.0f);
+                paintThumbBox(ctx, t, thumbC, thumbX - std::min(abs.w, 22.0f) * 0.5f, thumbY - 5.5f, std::min(abs.w, 22.0f), 11.0f);
             else
             {
                 ctx.fill.SetColor(thumbC);
@@ -159,8 +156,7 @@ void Slider::paint(PaintContext& ctx)
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
             if (t.sliderThumbBox)
-                paintThumbBox(ctx, t, thumbC, thumbX - 5.5f, thumbY - std::min(abs.h, 22.0f) * 0.5f,
-                        11.0f, std::min(abs.h, 22.0f));
+                paintThumbBox(ctx, t, thumbC, thumbX - 5.5f, thumbY - std::min(abs.h, 22.0f) * 0.5f, 11.0f, std::min(abs.h, 22.0f));
             else
             {
                 ctx.fill.SetColor(thumbC);
@@ -284,16 +280,14 @@ void ProgressBar::paint(PaintContext& ctx)
         const float inset = 3.0f, blockW = 8.0f, gap = 2.0f;
         const float room = abs.w - inset * 2.0f;
         const float filled = room * ratio;
-        const Color shine(std::min(255, fill.r + 70), std::min(255, fill.g + 40),
-                std::min(255, fill.b + 70), fill.a);
+        const Color shine(std::min(255, fill.r + 70), std::min(255, fill.g + 40), std::min(255, fill.b + 70), fill.a);
         for (float bx = 0.0f; bx + blockW * 0.5f <= filled; bx += blockW + gap)
         {
             const float w = std::min(blockW, filled - bx);
             Rect block = { abs.x + inset + bx, abs.y + inset, w, abs.h - inset * 2.0f };
             Rect clippedBlock;
             if (!ctx.clipRectIntersect(block, clippedBlock)) continue;
-            ctx.fillRoundedRectGradient(clippedBlock.x, clippedBlock.y, clippedBlock.w,
-                    clippedBlock.h, 1.5f, shine, fill);
+            ctx.fillRoundedRectGradient(clippedBlock.x, clippedBlock.y, clippedBlock.w, clippedBlock.h, 1.5f, shine, fill);
         }
     }
     else if (vert)
@@ -681,23 +675,18 @@ public:
         {
             float gx = abs.x + pad + col * cellW;
             float cy2 = gy + row * cellH;
-            bool isSel = (d == selected_.day && viewMonth_ == selected_.month &&
-                          viewYear_ == selected_.year);
-            if (!isSel && d == hoverDay_)
-            {
+            bool isSel = (d == selected_.day && viewMonth_ == selected_.month && viewYear_ == selected_.year);
+            if (!isSel && d == hoverDay_) {
                 // The day under the pointer: the accent colour, filled and outlined.
-                Rect hoverR = { gx, cy2, cellW, cellH };
+                Rect hoverR = {gx, cy2, cellW, cellH};
                 Rect hr;
-                if (ctx.clipRectIntersect(hoverR, hr))
-                {
+                if (ctx.clipRectIntersect(hoverR, hr)) {
                     ctx.fill.SetColor(60, 140, 255, 110);
-                    ctx.fill.RoundedRectangle(static_cast<int>(hr.x + 2),
-                            static_cast<int>(hr.y + 1), static_cast<int>(hr.w - 4),
-                            static_cast<int>(hr.h - 2), 3, 4, true);
+                    ctx.fill.RoundedRectangle(static_cast<int>(hr.x + 2), static_cast<int>(hr.y + 1),
+                                               static_cast<int>(hr.w - 4), static_cast<int>(hr.h - 2), 3, 4, true);
                     ctx.line.SetColor(60, 140, 255, 255);
-                    ctx.line.RoundedRectangle(static_cast<int>(hr.x + 2),
-                            static_cast<int>(hr.y + 1), static_cast<int>(hr.w - 4),
-                            static_cast<int>(hr.h - 2), 3, 4, false);
+                    ctx.line.RoundedRectangle(static_cast<int>(hr.x + 2), static_cast<int>(hr.y + 1),
+                                               static_cast<int>(hr.w - 4), static_cast<int>(hr.h - 2), 3, 4, false);
                 }
             }
 
@@ -821,19 +810,11 @@ public:
     void onMouseMove(MouseEvent& e) override
     {
         int day = dayAt(e.x, e.y);
-        if (day != hoverDay_)
-        {
-            hoverDay_ = day;
-            markDirty();
-        }
+        if (day != hoverDay_) { hoverDay_ = day; markDirty(); }
     }
     void onMouseLeave() override
     {
-        if (hoverDay_)
-        {
-            hoverDay_ = 0;
-            markDirty();
-        }
+        if (hoverDay_) { hoverDay_ = 0; markDirty(); }
     }
     void onMousePress(MouseEvent& e) override
     {
@@ -960,7 +941,7 @@ public:
 private:
     DatePicker* owner_;
     int hoverDay_ = 0;
-    int viewYear_, viewMonth_;
+    int  viewYear_, viewMonth_;
     Date selected_;
 
     enum Mode
@@ -1041,12 +1022,12 @@ void DatePicker::paint(PaintContext& ctx)
     }
 
     // The whole field lights its border under the pointer or with the focus.
-    if (ctx.clipRectIntersect(abs, clipped))
-    {
+    if (ctx.clipRectIntersect(abs, clipped)) {
         Color bc = focused_ ? t.focusColor : (hovered_ ? t.inputBorderHover : t.inputBorder);
         ctx.line.SetColor(bc.r, bc.g, bc.b, 255);
         ctx.line.RoundedRectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
-                static_cast<int>(clipped.w), static_cast<int>(clipped.h), t.borderRadius, 6, false);
+                                   static_cast<int>(clipped.w), static_cast<int>(clipped.h),
+                                   t.borderRadius, 6, false);
     }
     // Text, as three segments: the hovered one and the active one get a box.
     ctx.font.SetFontSize(t.fontSize);
@@ -1060,23 +1041,19 @@ void DatePicker::paint(PaintContext& ctx)
     const float segH = asc + 6.0f;
     const float segY = abs.y + (abs.h - segH) * 0.5f;
     float x = abs.x + t.padding;
-    for (int i = 0; i < 3; ++i)
-    {
+    for (int i = 0; i < 3; ++i) {
         const float w = ctx.font.GetTextWidth(part[i]);
-        segRect_[i] = { x - 2.0f, segY, w + 4.0f, segH };
+        segRect_[i] = {x - 2.0f, segY, w + 4.0f, segH};
         const bool active = focused_ && activeSeg_ == i + 1;
-        if (hoverSeg_ == i + 1 || active)
-        {
+        if (hoverSeg_ == i + 1 || active) {
             ctx.fill.SetColor(60, 140, 255, active ? 150 : 90);
-            ctx.fill.RoundedRectangle(static_cast<int>(segRect_[i].x),
-                    static_cast<int>(segRect_[i].y), static_cast<int>(segRect_[i].w),
-                    static_cast<int>(segRect_[i].h), 3, 4, true);
+            ctx.fill.RoundedRectangle(static_cast<int>(segRect_[i].x), static_cast<int>(segRect_[i].y),
+                                       static_cast<int>(segRect_[i].w), static_cast<int>(segRect_[i].h), 3, 4, true);
         }
         ctx.font.SetColor(t.textColor);
         ctx.font.Print(part[i], x, abs.y + (abs.h + asc) * 0.5f);
         x += w;
-        if (i < 2)
-        {
+        if (i < 2) {
             ctx.font.Print("-", x, abs.y + (abs.h + asc) * 0.5f);
             x += dashW;
         }
@@ -1110,29 +1087,14 @@ void DatePicker::adjust(int seg, int delta)
 {
     Date d = date_;
     if (seg == 1) d.year += delta;
-    else if (seg == 2)
-    {
-        d.month += delta;
-        while (d.month < 1)
-        {
-            d.month += 12;
-            d.year--;
-        }
-        while (d.month > 12)
-        {
-            d.month -= 12;
-            d.year++;
-        }
-    }
-    else if (seg == 3)
-    {
+    else if (seg == 2) { d.month += delta; while (d.month < 1) { d.month += 12; d.year--; } while (d.month > 12) { d.month -= 12; d.year++; } }
+    else if (seg == 3) {
         int n = daysInMonth(d.year, d.month);
         d.day += delta;
         while (d.day < 1) d.day += n;
         while (d.day > n) d.day -= n;
     }
-    else
-        return;
+    else return;
     int n = daysInMonth(d.year, d.month);
     if (d.day > n) d.day = n;
     setDate(d);
@@ -1143,36 +1105,25 @@ void DatePicker::onMousePress(MouseEvent& e)
     if (!isEnabledInTree()) return;
     e.consumed = true;
     const int seg = segmentAt(e.x, e.y);
-    if (seg)
-    {
+    if (seg) {
         activeSeg_ = seg;
         if (isOpen()) closeCalendar();
         markDirty();
         return;
     }
-    if (isOpen()) closeCalendar();
-    else
-        openCalendar();
+    if (isOpen()) closeCalendar(); else openCalendar();
 }
 
 void DatePicker::onMouseMove(MouseEvent& e)
 {
     const int seg = segmentAt(e.x, e.y);
-    if (seg != hoverSeg_)
-    {
-        hoverSeg_ = seg;
-        markDirty();
-    }
+    if (seg != hoverSeg_) { hoverSeg_ = seg; markDirty(); }
 }
 
 void DatePicker::onMouseLeave()
 {
     Widget::onMouseLeave();
-    if (hoverSeg_)
-    {
-        hoverSeg_ = 0;
-        markDirty();
-    }
+    if (hoverSeg_) { hoverSeg_ = 0; markDirty(); }
 }
 
 void DatePicker::onMouseScroll(MouseEvent& e)
@@ -1186,28 +1137,10 @@ void DatePicker::onMouseScroll(MouseEvent& e)
 void DatePicker::onKeyPress(KeyEvent& e)
 {
     if (!activeSeg_) return;
-    if (e.key == ig::retained::Key::Up)
-    {
-        adjust(activeSeg_, 1);
-        e.consumed = true;
-    }
-    else if (e.key == ig::retained::Key::Down)
-    {
-        adjust(activeSeg_, -1);
-        e.consumed = true;
-    }
-    else if (e.key == ig::retained::Key::Left && activeSeg_ > 1)
-    {
-        activeSeg_--;
-        markDirty();
-        e.consumed = true;
-    }
-    else if (e.key == ig::retained::Key::Right && activeSeg_ < 3)
-    {
-        activeSeg_++;
-        markDirty();
-        e.consumed = true;
-    }
+    if (e.key == ig::retained::Key::Up)        { adjust(activeSeg_, 1); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Down) { adjust(activeSeg_, -1); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Left && activeSeg_ > 1)  { activeSeg_--; markDirty(); e.consumed = true; }
+    else if (e.key == ig::retained::Key::Right && activeSeg_ < 3) { activeSeg_++; markDirty(); e.consumed = true; }
 }
 
 void DatePicker::openCalendar()
