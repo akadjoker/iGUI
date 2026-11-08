@@ -88,6 +88,35 @@ bool SdlWidgetBridge::render(ig::retained::DrawData& data)
             SDL_Texture* texture = command.texture
                                            ? reinterpret_cast<SDL_Texture*>(command.texture.value)
                                            : nullptr;
+            if (command.roundClipCount > 0)
+            {
+                // Aliased, but correct: the geometry is cut to the rounded clips first.
+                clipped_.clear();
+                ig::retained::ClipToRoundClips(sourceVertices.data(), sourceVertices.size(),
+                        sourceIndices.data(), sourceIndices.size(), command, clipped_);
+                if (clipped_.indices.empty()) continue;
+                clippedVertices_.resize(clipped_.vertices.size());
+                clippedIndices_.resize(clipped_.indices.size());
+                for (size_t i = 0; i < clipped_.vertices.size(); ++i)
+                {
+                    const ig::retained::DrawVertex& source = clipped_.vertices[i];
+                    SDL_Vertex& target = clippedVertices_[i];
+                    target.position = { cosine * source.x - sine * source.y + translateX,
+                        sine * source.x + cosine * source.y + translateY };
+                    target.tex_coord = { source.u, source.v };
+                    target.color = { source.color.r, source.color.g, source.color.b,
+                        source.color.a };
+                }
+                for (size_t i = 0; i < clipped_.indices.size(); ++i)
+                    clippedIndices_[i] = static_cast<int>(clipped_.indices[i]);
+                if (SDL_RenderGeometry(renderer_, texture, clippedVertices_.data(),
+                            static_cast<int>(clippedVertices_.size()), clippedIndices_.data(),
+                            static_cast<int>(clippedIndices_.size())) != 0)
+                    return false;
+                ++data.stats.drawCalls;
+                data.stats.triangles += static_cast<int>(clippedIndices_.size() / 3u);
+                continue;
+            }
             if (command.indexOffset + command.indexCount > indices_.size() ||
                     SDL_RenderGeometry(renderer_, texture, vertices_.data(),
                             static_cast<int>(vertices_.size()),

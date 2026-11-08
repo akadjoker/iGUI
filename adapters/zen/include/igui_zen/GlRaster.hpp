@@ -73,6 +73,10 @@ private:
     int uTranslate_ = -1;
     int uInvDisplay_ = -1;
     int uTexture_ = -1;
+    int uRoundCount_ = -1;
+    int uRoundRect_ = -1;
+    int uRoundRadii_ = -1;
+    int uAaWidth_ = -1;
     ct::HashMap<uintptr_t, Size> sizes_;
 };
 

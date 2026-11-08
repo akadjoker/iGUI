@@ -290,6 +290,16 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
     target_compile_definitions(igui_widgets PUBLIC IGUI_RETAINEDMODE=1)
     target_precompile_headers(igui_widgets PRIVATE src/widgets/pch.hpp)
 
+    # Rounded clips of the retained DrawList, including the software rasteriser's
+    # coverage (SoftRaster.cpp needs nothing but the widgets).
+    if(IGUI_BUILD_TESTS)
+        add_executable(igui_round_clip_tests tests/test_round_clip.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_round_clip_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_round_clip_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_round_clip_tests PRIVATE igui_widgets)
+        add_test(NAME igui_round_clip COMMAND igui_round_clip_tests)
+    endif()
+
     # Both widget APIs linked into one binary. Only possible when both were
     # built, and the only target that compiles with IGUI_BOTH_MODES=1 - see
     # tests/test_both_modes.cpp and include/igui/Modes.hpp.

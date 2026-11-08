@@ -11,7 +11,9 @@ namespace zen
 
 // Software rasteriser for the retained DrawData. Triangles are drawn into a
 // supersampled buffer and box-filtered down, so every edge is anti-aliased
-// and shared diagonals of a triangle fan leave no seam.
+// and shared diagonals of a triangle fan leave no seam. A command's rounded
+// clips (DrawList::pushClipRoundedRect) are tested per sample, so their curves
+// are anti-aliased the same way (with one sample per pixel, by partial coverage).
 class SoftRaster
 {
 public:
@@ -50,6 +52,23 @@ private:
         float r, g, b, a;
     };
 
+    // The rounded clips of the command being drawn, in sample space terms: a sample's centre is
+    // taken back to the DrawList's coordinates (the camera's inverse) and tested against each.
+    struct RoundState
+    {
+        int count = 0;
+        ig::retained::RoundClip clips[ig::retained::DrawCmd::MaxRoundClips];
+        float scale = 1.0f;      // logical units to samples
+        float translateX = 0.0f; // camera translation, logical units
+        float translateY = 0.0f;
+        float cosine = 1.0f; // camera rotation times scale
+        float sine = 0.0f;
+        float inverse = 1.0f;    // 1 / (cosine^2 + sine^2)
+        float sampleSize = 1.0f; // one sample, in DrawList units
+        bool smooth = false;     // partial coverage (one sample per pixel); else all or nothing
+    };
+
+    float roundCoverage(int sampleX, int sampleY) const;
     void resolve(uint32_t* dst, int width, int height, int stride);
     void storeCache(uint64_t sig, const uint32_t* src, int width, int height, int stride);
     void drawTriangle(const Vertex& a, const Vertex& b, const Vertex& c, const Texture* texture,
@@ -69,6 +88,7 @@ private:
     int targetStride_ = 0;
     ct::Vector<uint32_t> scratch_;
     ct::Vector<Vertex> vertices_;
+    RoundState round_;
 };
 
 } // namespace zen

@@ -21,4 +21,8 @@ private:
     SDL_Renderer* renderer_;
     ct::Vector<SDL_Vertex> vertices_;
     ct::Vector<int> indices_;
+    // Geometry of commands with rounded clips, cut on the CPU (SDL cannot clip to a curve).
+    ig::retained::ClippedGeometry clipped_;
+    ct::Vector<SDL_Vertex> clippedVertices_;
+    ct::Vector<int> clippedIndices_;
 };

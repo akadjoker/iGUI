@@ -566,10 +566,57 @@ void DrawList::clear()
 
 void DrawList::pushClip(const Rect& rect)
 {
-    Rect clipped = rect;
-    if (!clipStack_.empty()) intersectRects(clipStack_.back(), rect, clipped);
-    clipStack_.push_back(clipped);
+    ClipEntry entry;
+    entry.rect = rect;
+    if (!clipStack_.empty())
+    {
+        const ClipEntry& parent = clipStack_.back();
+        intersectRects(parent.rect, rect, entry.rect);
+        entry.roundCount = parent.roundCount;
+        for (int i = 0; i < parent.roundCount; ++i) entry.rounds[i] = parent.rounds[i];
+    }
+    clipStack_.push_back(entry);
     ++pushClipCount_;
+}
+
+void DrawList::pushClipRoundedRect(const Rect& rect, const float radii[4])
+{
+    RoundClip round;
+    round.rect = rect;
+    float r[4];
+    bool any = false;
+    for (int i = 0; i < 4; ++i)
+    {
+        r[i] = radii[i] > 0.0f ? radii[i] : 0.0f;
+        any = any || r[i] > 0.0f;
+    }
+    pushClip(rect);
+    if (!any || rect.w <= 0.0f || rect.h <= 0.0f) return;
+
+    // CSS: when two radii on a side add up to more than the side, all shrink by the same factor.
+    float factor = 1.0f;
+    const float sums[4] = { r[0] + r[1], r[1] + r[2], r[3] + r[2], r[0] + r[3] };
+    const float sides[4] = { rect.w, rect.h, rect.w, rect.h };
+    for (int i = 0; i < 4; ++i)
+        if (sums[i] > sides[i] && sides[i] / sums[i] < factor) factor = sides[i] / sums[i];
+    for (int i = 0; i < 4; ++i) round.radii[i] = r[i] * factor;
+
+    ClipEntry& entry = clipStack_.back();
+    // The same shape twice clips nothing more.
+    for (int i = 0; i < entry.roundCount; ++i)
+    {
+        const RoundClip& old = entry.rounds[i];
+        bool same = old.rect.x == round.rect.x && old.rect.y == round.rect.y &&
+                    old.rect.w == round.rect.w && old.rect.h == round.rect.h;
+        for (int c = 0; c < 4; ++c) same = same && old.radii[c] == round.radii[c];
+        if (same) return;
+    }
+    if (entry.roundCount == DrawCmd::MaxRoundClips)
+    {
+        for (int i = 1; i < entry.roundCount; ++i) entry.rounds[i - 1] = entry.rounds[i];
+        --entry.roundCount;
+    }
+    entry.rounds[entry.roundCount++] = round;
 }
 
 void DrawList::popClip()
@@ -612,6 +659,20 @@ void DrawList::pathArcToFast(Vec2 center, float radius, int aMinOf12, int aMaxOf
 
 void DrawList::pathFillConvex(const Color& color)
 {
+    fillConvexPath(nullptr, color);
+}
+
+void DrawList::addConvexPolyFilledMultiColor(const Vec2* points, const Color* colors, int count)
+{
+    path_.clear();
+    if (!points || !colors || count < 3) return;
+    for (int i = 0; i < count; ++i) path_.push_back(points[i]);
+    fillConvexPath(colors, colors[0]);
+}
+
+// Fills path_; `colors` (one per path point) or, when null, `color` for every point.
+void DrawList::fillConvexPath(const Color* colors, const Color& color)
+{
     int n = static_cast<int>(path_.size());
     if (n < 3)
     {
@@ -628,12 +689,15 @@ void DrawList::pathFillConvex(const Color& color)
 
     uint32_t offset = static_cast<uint32_t>(indices_.size());
     uint32_t base = static_cast<uint32_t>(vertices_.size());
-    Color transparent = color;
-    transparent.a = 0;
+    auto colorAt = [&](int i) { return colors ? colors[i] : color; };
 
     if (fringe <= 0.0f)
     {
-        for (const auto& p: path_) vertices_.push_back({ p.x, p.y, whiteUV_.x, whiteUV_.y, color });
+        for (int i = 0; i < n; ++i)
+        {
+            const Vec2& p = path_[static_cast<size_t>(i)];
+            vertices_.push_back({ p.x, p.y, whiteUV_.x, whiteUV_.y, colorAt(i) });
+        }
         for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
         {
             indices_.push_back(base);
@@ -689,8 +753,11 @@ void DrawList::pathFillConvex(const Color& color)
         if (inv > maxInv) inv = maxInv;
         nx *= inv * 2.0f * fringe * 0.5f;
         ny *= inv * 2.0f * fringe * 0.5f;
-        vertices_.push_back({ p.x - nx, p.y - ny, whiteUV_.x, whiteUV_.y, color });
-        vertices_.push_back({ p.x + nx, p.y + ny, whiteUV_.x, whiteUV_.y, transparent });
+        Color inner = colorAt(i);
+        Color outer = inner;
+        outer.a = 0;
+        vertices_.push_back({ p.x - nx, p.y - ny, whiteUV_.x, whiteUV_.y, inner });
+        vertices_.push_back({ p.x + nx, p.y + ny, whiteUV_.x, whiteUV_.y, outer });
     }
 
     for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
@@ -1559,7 +1626,7 @@ void DrawList::addPolyline(const ct::Vector<Vec2>& points, const Color& color, f
 
 Rect DrawList::currentClip() const
 {
-    if (!clipStack_.empty()) return clipStack_.back();
+    if (!clipStack_.empty()) return clipStack_.back().rect;
     return { 0.0f, 0.0f, 100000.0f, 100000.0f };
 }
 
@@ -1569,6 +1636,8 @@ void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle t
 
     Rect clip = currentClip();
     if (clip.w <= 0.0f || clip.h <= 0.0f) return;
+    const int roundCount = clipStack_.empty() ? 0 : clipStack_.back().roundCount;
+    const RoundClip* rounds = clipStack_.empty() ? nullptr : clipStack_.back().rounds;
 
     if (!commands_.empty())
     {
@@ -1579,15 +1648,211 @@ void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle t
         // Só faz merge se os índices forem mesmo contíguos
         const bool contiguous = (prev.indexOffset + prev.indexCount == indexOffset);
 
-        if (sameTexture && sameClip && contiguous)
+        // Commands under different rounded clips must stay apart: the shape is per command.
+        bool sameRounds = prev.roundClipCount == roundCount;
+        for (int i = 0; sameRounds && i < roundCount; ++i)
+        {
+            const RoundClip &a = prev.roundClips[i], &b = rounds[i];
+            sameRounds = a.rect.x == b.rect.x && a.rect.y == b.rect.y && a.rect.w == b.rect.w &&
+                         a.rect.h == b.rect.h && a.radii[0] == b.radii[0] &&
+                         a.radii[1] == b.radii[1] && a.radii[2] == b.radii[2] &&
+                         a.radii[3] == b.radii[3];
+        }
+
+        if (sameTexture && sameClip && sameRounds && contiguous)
         {
             prev.indexCount += indexCount;
             return;
         }
     }
 
-    commands_.push_back({ texture, clip, indexOffset, indexCount });
+    DrawCmd command;
+    command.texture = texture;
+    command.clip = clip;
+    command.indexOffset = indexOffset;
+    command.indexCount = indexCount;
+    command.roundClipCount = roundCount;
+    for (int i = 0; i < roundCount; ++i) command.roundClips[i] = rounds[i];
+    commands_.push_back(command);
 }
+namespace
+{
+
+struct ClipVertex
+{
+    float x, y, u, v, r, g, b, a;
+};
+
+// The outline of a rounded rectangle, a convex polygon, corners top-left, top-right, bottom-right,
+// bottom-left, each arc flat to within a tenth of a pixel.
+void roundClipPolygon(const RoundClip& clip, ct::Vector<Vec2>& out)
+{
+    const Rect& r = clip.rect;
+    const Vec2 centres[4] = { { r.x + clip.radii[0], r.y + clip.radii[0] },
+        { r.x + r.w - clip.radii[1], r.y + clip.radii[1] },
+        { r.x + r.w - clip.radii[2], r.y + r.h - clip.radii[2] },
+        { r.x + clip.radii[3], r.y + r.h - clip.radii[3] } };
+    const float starts[4] = { Pi, Pi * 1.5f, 0.0f, Pi * 0.5f };
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const float radius = clip.radii[corner];
+        int segments = 1;
+        if (radius > 0.0f)
+        {
+            const float step = 2.0f * std::acos(std::max(-1.0f, 1.0f - 0.1f / radius));
+            segments = std::min(64,
+                    std::max(2, static_cast<int>(std::ceil(Pi * 0.5f / std::max(step, 0.01f)))));
+        }
+        for (int i = 0; i <= segments; ++i)
+        {
+            const float angle = starts[corner] +
+                                Pi * 0.5f * static_cast<float>(i) / static_cast<float>(segments);
+            const Vec2 p = { centres[corner].x + radius * std::cos(angle),
+                centres[corner].y + radius * std::sin(angle) };
+            // Corners that meet share a point; a repeated one is a zero length edge.
+            if (!out.empty() && std::fabs(out.back().x - p.x) < 0.001f &&
+                    std::fabs(out.back().y - p.y) < 0.001f)
+                continue;
+            out.push_back(p);
+        }
+    }
+}
+
+// `subject` cut to the half plane left of (or on) the edge a->b, `sign` being the polygon's
+// winding.
+void clipHalfPlane(const ct::Vector<ClipVertex>& subject, Vec2 a, Vec2 b, float sign,
+        ct::Vector<ClipVertex>& result)
+{
+    result.clear();
+    const size_t count = subject.size();
+    for (size_t i = 0; i < count; ++i)
+    {
+        const ClipVertex& cur = subject[i];
+        const ClipVertex& prev = subject[(i + count - 1) % count];
+        const float curSide = sign * ((b.x - a.x) * (cur.y - a.y) - (b.y - a.y) * (cur.x - a.x));
+        const float prevSide = sign * ((b.x - a.x) * (prev.y - a.y) - (b.y - a.y) * (prev.x - a.x));
+        if ((curSide >= 0.0f) != (prevSide >= 0.0f))
+        {
+            const float t = prevSide / (prevSide - curSide);
+            ClipVertex cut;
+            cut.x = prev.x + (cur.x - prev.x) * t;
+            cut.y = prev.y + (cur.y - prev.y) * t;
+            cut.u = prev.u + (cur.u - prev.u) * t;
+            cut.v = prev.v + (cur.v - prev.v) * t;
+            cut.r = prev.r + (cur.r - prev.r) * t;
+            cut.g = prev.g + (cur.g - prev.g) * t;
+            cut.b = prev.b + (cur.b - prev.b) * t;
+            cut.a = prev.a + (cur.a - prev.a) * t;
+            result.push_back(cut);
+        }
+        if (curSide >= 0.0f) result.push_back(cur);
+    }
+}
+
+} // namespace
+
+void ClipToRoundClips(const DrawVertex* vertices, size_t vertexCount, const uint32_t* indices,
+        size_t indexCount, const DrawCmd& command, ClippedGeometry& out)
+{
+    if (command.indexOffset + command.indexCount > indexCount) return;
+    ct::Vector<Vec2> polygons[DrawCmd::MaxRoundClips];
+    float signs[DrawCmd::MaxRoundClips];
+    Rect inner[DrawCmd::MaxRoundClips]; // the rectangle no corner reaches into
+    const int clips = std::min<int>(command.roundClipCount, DrawCmd::MaxRoundClips);
+    for (int c = 0; c < clips; ++c)
+    {
+        const RoundClip& clip = command.roundClips[c];
+        roundClipPolygon(clip, polygons[c]);
+        float area = 0.0f;
+        const ct::Vector<Vec2>& pts = polygons[c];
+        for (size_t i = 0; i < pts.size(); ++i)
+        {
+            const Vec2 &a = pts[i], &b = pts[(i + 1) % pts.size()];
+            area += a.x * b.y - b.x * a.y;
+        }
+        signs[c] = area >= 0.0f ? 1.0f : -1.0f;
+        const float top = std::max(clip.radii[0], clip.radii[1]);
+        const float bottom = std::max(clip.radii[2], clip.radii[3]);
+        const float left = std::max(clip.radii[0], clip.radii[3]);
+        const float right = std::max(clip.radii[1], clip.radii[2]);
+        inner[c] = { clip.rect.x + left, clip.rect.y + top,
+            std::max(0.0f, clip.rect.w - left - right),
+            std::max(0.0f, clip.rect.h - top - bottom) };
+        if (inner[c].w <= 0.0f || inner[c].h <= 0.0f) inner[c] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    }
+
+    ct::Vector<ClipVertex> polygon, scratch;
+    for (uint32_t i = 0; i + 2 < command.indexCount; i += 3)
+    {
+        const uint32_t ids[3] = { indices[command.indexOffset + i],
+            indices[command.indexOffset + i + 1], indices[command.indexOffset + i + 2] };
+        if (ids[0] >= vertexCount || ids[1] >= vertexCount || ids[2] >= vertexCount) continue;
+        const DrawVertex* tri[3] = { &vertices[ids[0]], &vertices[ids[1]], &vertices[ids[2]] };
+        const float minX = std::min(tri[0]->x, std::min(tri[1]->x, tri[2]->x));
+        const float maxX = std::max(tri[0]->x, std::max(tri[1]->x, tri[2]->x));
+        const float minY = std::min(tri[0]->y, std::min(tri[1]->y, tri[2]->y));
+        const float maxY = std::max(tri[0]->y, std::max(tri[1]->y, tri[2]->y));
+
+        bool outside = false, inside = true;
+        for (int c = 0; c < clips; ++c)
+        {
+            const Rect& r = command.roundClips[c].rect;
+            if (maxX <= r.x || minX >= r.x + r.w || maxY <= r.y || minY >= r.y + r.h)
+                outside = true;
+            if (!(minX >= inner[c].x && maxX <= inner[c].x + inner[c].w && minY >= inner[c].y &&
+                        maxY <= inner[c].y + inner[c].h))
+                inside = false;
+        }
+        if (outside) continue;
+        if (inside)
+        {
+            const uint32_t base = static_cast<uint32_t>(out.vertices.size());
+            for (int k = 0; k < 3; ++k)
+            {
+                out.vertices.push_back(*tri[k]);
+                out.indices.push_back(base + static_cast<uint32_t>(k));
+            }
+            continue;
+        }
+
+        polygon.clear();
+        for (int k = 0; k < 3; ++k)
+            polygon.push_back({ tri[k]->x, tri[k]->y, tri[k]->u, tri[k]->v,
+                static_cast<float>(tri[k]->color.r), static_cast<float>(tri[k]->color.g),
+                static_cast<float>(tri[k]->color.b), static_cast<float>(tri[k]->color.a) });
+        for (int c = 0; c < clips && polygon.size() >= 3; ++c)
+        {
+            const ct::Vector<Vec2>& pts = polygons[c];
+            for (size_t e = 0; e < pts.size() && polygon.size() >= 3; ++e)
+            {
+                clipHalfPlane(polygon, pts[e], pts[(e + 1) % pts.size()], signs[c], scratch);
+                polygon = scratch;
+            }
+        }
+        if (polygon.size() < 3) continue;
+        const uint32_t base = static_cast<uint32_t>(out.vertices.size());
+        for (size_t k = 0; k < polygon.size(); ++k)
+        {
+            const ClipVertex& cv = polygon[k];
+            auto byte = [](float value)
+            { return static_cast<uint8_t>(std::min(255.0f, std::max(0.0f, value + 0.5f))); };
+            DrawVertex vertex;
+            vertex.x = cv.x;
+            vertex.y = cv.y;
+            vertex.u = cv.u;
+            vertex.v = cv.v;
+            vertex.color = Color(byte(cv.r), byte(cv.g), byte(cv.b), byte(cv.a));
+            out.vertices.push_back(vertex);
+        }
+        for (size_t k = 1; k + 1 < polygon.size(); ++k)
+        {
+            out.indices.push_back(base);
+            out.indices.push_back(base + static_cast<uint32_t>(k));
+            out.indices.push_back(base + static_cast<uint32_t>(k + 1));
+        }
+    }
+}
+
 uint32_t DrawList::addVertex(float x, float y, const Color& color)
 {
     return addVertex(x, y, whiteUV_.x, whiteUV_.y, color);

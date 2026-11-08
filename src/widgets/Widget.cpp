@@ -138,6 +138,12 @@ void PaintContext::pushClip(const Rect& r)
     clipStack_.push_back(r);
 }
 
+void PaintContext::pushClipRoundedRect(const Rect& r, const float radii[4])
+{
+    drawList.pushClipRoundedRect({ r.x, r.y, r.w, r.h }, radii);
+    clipStack_.push_back(r);
+}
+
 void PaintContext::popClip()
 {
     drawList.popClip();

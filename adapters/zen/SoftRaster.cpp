@@ -122,6 +122,40 @@ void SoftRaster::setSamples(int perAxis)
     samples_ = clampInt(perAxis, 1, 4);
 }
 
+float SoftRaster::roundCoverage(int sampleX, int sampleY) const
+{
+    const RoundState& st = round_;
+    // The sample's centre in logical units, then the camera's inverse.
+    const float lx = (static_cast<float>(sampleX) + 0.5f) / st.scale - st.translateX;
+    const float ly = (static_cast<float>(sampleY) + 0.5f) / st.scale - st.translateY;
+    const float px = (st.cosine * lx + st.sine * ly) * st.inverse;
+    const float py = (-st.sine * lx + st.cosine * ly) * st.inverse;
+    float coverage = 1.0f;
+    for (int i = 0; i < st.count; ++i)
+    {
+        const ig::retained::RoundClip& clip = st.clips[i];
+        const float halfW = clip.rect.w * 0.5f, halfH = clip.rect.h * 0.5f;
+        const float cx = clip.rect.x + halfW, cy = clip.rect.y + halfH;
+        const float radius = px < cx ? (py < cy ? clip.radii[0] : clip.radii[3])
+                                     : (py < cy ? clip.radii[1] : clip.radii[2]);
+        const float qx = fabsf(px - cx) - halfW + radius;
+        const float qy = fabsf(py - cy) - halfH + radius;
+        const float distance = (qx > 0.0f && qy > 0.0f) ? sqrtf(qx * qx + qy * qy) - radius
+                                                        : (qx > qy ? qx : qy) - radius;
+        float one;
+        if (st.smooth)
+        {
+            one = 0.5f - distance / st.sampleSize;
+            one = one < 0.0f ? 0.0f : (one > 1.0f ? 1.0f : one);
+        }
+        else
+            one = distance <= 0.0f ? 1.0f : 0.0f;
+        coverage *= one;
+        if (coverage <= 0.0f) return 0.0f;
+    }
+    return coverage;
+}
+
 void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& vc,
         const Texture* texture, int clipX0, int clipY0, int clipX1, int clipY1)
 {
@@ -210,6 +244,16 @@ void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& 
         const int xs = x0 + static_cast<int>(kmin);
         const int xe = x0 + static_cast<int>(kmax) + 1;
         uint32_t* line = target_ + static_cast<size_t>(y) * targetStride_;
+        if (flat && round_.count > 0)
+        {
+            for (int x = xs; x < xe; ++x)
+            {
+                const uint32_t alpha = toByte(static_cast<float>(flatA) * roundCoverage(x, y));
+                if (alpha == 0) continue;
+                line[x] = alpha == 255u ? flatPixel : blend(line[x], flatR, flatG, flatB, alpha);
+            }
+            continue;
+        }
         if (flat)
         {
             if (flatA == 255u)
@@ -236,6 +280,7 @@ void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& 
             if (texture)
                 texel(l0 * a->u + l1 * b->u + l2 * c->u, l0 * a->v + l1 * b->v + l2 * c->v, r, g,
                         bl, al);
+            if (round_.count > 0) al *= roundCoverage(x, y);
             const uint32_t alpha = toByte(al);
             if (alpha == 0) continue;
             line[x] = alpha == 255u ? (0xff000000u | (static_cast<uint32_t>(toByte(r)) << 16) |
@@ -273,6 +318,9 @@ uint64_t SoftRaster::signature(const ig::retained::DrawData& data, int width, in
                 mix(&reinterpret_cast<const Texture*>(cmd.texture.value)->version,
                         sizeof(uint32_t));
             mix(&cmd.clip, sizeof cmd.clip);
+            mix(&cmd.roundClipCount, sizeof cmd.roundClipCount);
+            for (int i = 0; i < cmd.roundClipCount && i < ig::retained::DrawCmd::MaxRoundClips; ++i)
+                mix(&cmd.roundClips[i], sizeof cmd.roundClips[i]);
             mix(&cmd.indexOffset, sizeof cmd.indexOffset);
             mix(&cmd.indexCount, sizeof cmd.indexCount);
         }
@@ -380,6 +428,23 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
                 cy1 = clampInt(static_cast<int>(ceilf(fy1)), 0, bufH);
             }
             if (command.indexOffset + command.indexCount > indices.size()) continue;
+            round_.count = command.roundClipCount < ig::retained::DrawCmd::MaxRoundClips
+                                   ? command.roundClipCount
+                                   : ig::retained::DrawCmd::MaxRoundClips;
+            if (round_.count > 0)
+            {
+                for (int i = 0; i < round_.count; ++i) round_.clips[i] = command.roundClips[i];
+                const float cameraScale2 = cosine * cosine + sine * sine;
+                round_.scale = scale;
+                round_.translateX = translateX;
+                round_.translateY = translateY;
+                round_.cosine = cosine;
+                round_.sine = sine;
+                round_.inverse = cameraScale2 > 0.0f ? 1.0f / cameraScale2 : 0.0f;
+                round_.sampleSize =
+                        cameraScale2 > 0.0f ? 1.0f / (scale * sqrtf(cameraScale2)) : 1.0f;
+                round_.smooth = ss == 1;
+            }
             const Texture* texture =
                     command.texture ? reinterpret_cast<const Texture*>(command.texture.value)
                                     : nullptr;
@@ -396,6 +461,7 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
             ++data.stats.drawCalls;
             data.stats.triangles += static_cast<int>(command.indexCount / 3u);
         }
+        round_.count = 0;
         data.stats.vertices += static_cast<int>(source.size());
         data.stats.clipChanges += pass.list->pushClipCount();
     }

@@ -154,6 +154,9 @@ struct PaintContext
 
     /// @brief Push a clip rectangle onto the clip stack.
     void pushClip(const Rect& r);
+    /// @brief Push a rounded clip (radii: top-left, top-right, bottom-right, bottom-left); see
+    ///        DrawList::pushClipRoundedRect. clipRect() reports its bounding rectangle.
+    void pushClipRoundedRect(const Rect& r, const float radii[4]);
     /// @brief Pop the topmost clip rectangle.
     void popClip();
     /// @brief Get the current clip rectangle.

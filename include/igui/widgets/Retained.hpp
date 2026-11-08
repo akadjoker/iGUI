@@ -178,12 +178,34 @@ struct DrawVertex
     Color color = Color(255, 255, 255, 255);
 };
 
+/// A rounded rectangle a draw command is clipped to (see DrawList::pushClipRoundedRect). The
+/// rectangle and radii are in the DrawList's own coordinates, before the pass camera; the radii
+/// are the corners' in the order top-left, top-right, bottom-right, bottom-left, already clamped
+/// so that neighbouring corners fit on each side.
+struct RoundClip
+{
+    Rect rect;
+    float radii[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+};
+
 struct DrawCmd
 {
+    /// How many rounded clips one command can carry. Nested rounded clips beyond it lose the
+    /// outermost ones (their rectangle still scissors the command).
+    enum
+    {
+        MaxRoundClips = 4
+    };
+
     TextureHandle texture;
+    /// Scissor rectangle: the intersection of every clip rectangle pushed, rounded or not.
     Rect clip;
     uint32_t indexOffset = 0;
     uint32_t indexCount = 0;
+    /// Rounded clips on top of `clip`, outermost first. A pixel is drawn with the product of its
+    /// coverage in each; a backend that cannot evaluate them can use ClipToRoundClips.
+    int roundClipCount = 0;
+    RoundClip roundClips[MaxRoundClips];
 };
 
 enum class IconId
@@ -416,6 +438,13 @@ public:
     void clear();
 
     void pushClip(const Rect& rect);
+    /// Clips what follows to the rounded rectangle `rect` (radii: top-left, top-right,
+    /// bottom-right, bottom-left; negative values count as 0 and radii that do not fit a side are
+    /// scaled down together, as in CSS). The commands carry the shape in DrawCmd::roundClips so
+    /// the backend can anti-alias the curve; the scissor is the intersection of all clips pushed.
+    /// Nesting keeps every rounded clip (up to DrawCmd::MaxRoundClips, the innermost kept).
+    /// Ended with popClip(), like pushClip(). With no radius it is a plain pushClip().
+    void pushClipRoundedRect(const Rect& rect, const float radii[4]);
     void popClip();
 
     void addRect(const Rect& rect, const Color& color);
@@ -442,6 +471,9 @@ public:
     /// A filled convex polygon (points in order, either winding), anti-aliased like the other
     /// fills.
     void addConvexPolyFilled(const ct::Vector<Vec2>& points, const Color& color);
+    /// A filled convex polygon with one colour per point, shaded linearly across its triangles
+    /// (a gradient quad). Edges are anti-aliased like addConvexPolyFilled; `count` points.
+    void addConvexPolyFilledMultiColor(const Vec2* points, const Color* colors, int count);
     /// A stroked path through the points, closed back to the first when asked.
     void addPolyline(const ct::Vector<Vec2>& points, const Color& color, float thickness,
             bool closed);
@@ -492,12 +524,20 @@ public:
     }
 
 private:
+    struct ClipEntry
+    {
+        Rect rect;
+        int roundCount = 0;
+        RoundClip rounds[DrawCmd::MaxRoundClips];
+    };
+
     Rect currentClip() const;
+    void fillConvexPath(const Color* colors, const Color& color);
     void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
     uint32_t addVertex(float x, float y, const Color& color);
     uint32_t addVertex(float x, float y, float u, float v, const Color& color);
 
-    ct::Vector<Rect> clipStack_;
+    ct::Vector<ClipEntry> clipStack_;
     ct::Vector<Vec2> path_;
     bool antiAliasing_ = true;
     TextureHandle fontTexture_;
@@ -508,6 +548,27 @@ private:
     int pushClipCount_ = 0;
     ct::HashMap<uint32_t, FontGlyph> glyphs_;
 };
+
+/// Triangles that went through ClipToRoundClips.
+struct ClippedGeometry
+{
+    ct::Vector<DrawVertex> vertices;
+    ct::Vector<uint32_t> indices;
+    void clear()
+    {
+        vertices.clear();
+        indices.clear();
+    }
+};
+
+/// CPU fallback for backends that cannot clip to a DrawCmd's rounded clips: appends to `out` the
+/// triangles `indices[command.indexOffset, +command.indexCount)` of `vertices`, cut to the
+/// intersection of command.roundClips (each polygonised to within a tenth of a pixel, then
+/// Sutherland-Hodgman; position, UV and colour are interpolated). Coverage is all or nothing, so
+/// the curve is not anti-aliased; the scissor `command.clip` is still the backend's to apply.
+/// Positions stay in the DrawList's coordinates: transform them afterwards.
+void ClipToRoundClips(const DrawVertex* vertices, size_t vertexCount, const uint32_t* indices,
+        size_t indexCount, const DrawCmd& command, ClippedGeometry& out);
 
 struct RenderStats
 {

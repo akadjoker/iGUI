@@ -24,12 +24,14 @@ uniform vec2 uTranslate;  // camera translation, in logical pixels
 uniform vec2 uInvDisplay; // 1 / logical display size
 out vec2 vUv;
 out vec4 vColor;
+out highp vec2 vPos;
 void main()
 {
     vec2 p = uRotation * aPos + uTranslate;
     gl_Position = vec4(p.x * uInvDisplay.x * 2.0 - 1.0, 1.0 - p.y * uInvDisplay.y * 2.0, 0.0, 1.0);
     vUv = aUv;
     vColor = aColor;
+    vPos = aPos;
 }
 )";
 
@@ -37,11 +39,31 @@ const char* const kFragmentShader = R"(
 precision mediump float;
 in vec2 vUv;
 in vec4 vColor;
+in highp vec2 vPos;
 uniform sampler2D uTexture;
+// Rounded clips of the command (DrawCmd::roundClips): centre and half size of each rectangle, and
+// its corner radii (top-left, top-right, bottom-right, bottom-left). uAaWidth is one framebuffer
+// pixel in the DrawList's units.
+uniform int uRoundCount;
+uniform highp vec4 uRoundRect[4];
+uniform highp vec4 uRoundRadii[4];
+uniform highp float uAaWidth;
 out vec4 fragColor;
 void main()
 {
+    float coverage = 1.0;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (i >= uRoundCount) break;
+        highp vec2 p = vPos - uRoundRect[i].xy;
+        highp vec4 r = uRoundRadii[i];
+        highp float radius = p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
+        highp vec2 q = abs(p) - uRoundRect[i].zw + radius;
+        highp float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
+        coverage *= clamp(0.5 - d / uAaWidth, 0.0, 1.0);
+    }
     fragColor = vColor * texture(uTexture, vUv);
+    fragColor.a *= coverage;
 }
 )";
 
@@ -135,6 +157,10 @@ bool GlRaster::init(void* (*procAddress)(const char* name))
     uTranslate_ = glGetUniformLocation(program_, "uTranslate");
     uInvDisplay_ = glGetUniformLocation(program_, "uInvDisplay");
     uTexture_ = glGetUniformLocation(program_, "uTexture");
+    uRoundCount_ = glGetUniformLocation(program_, "uRoundCount");
+    uRoundRect_ = glGetUniformLocation(program_, "uRoundRect");
+    uRoundRadii_ = glGetUniformLocation(program_, "uRoundRadii");
+    uAaWidth_ = glGetUniformLocation(program_, "uAaWidth");
 
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);
@@ -229,6 +255,8 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
     const float scaleX = static_cast<float>(width) / data.displayWidth;
     const float scaleY = static_cast<float>(height) / data.displayHeight;
 
+    glUniform1i(uRoundCount_, 0);
+    int roundsSet = 0; // rounded clips currently in the uniforms
     for (const ig::retained::DrawPass& pass: data.passes)
     {
         if (!pass.list || pass.list->commands().empty()) continue;
@@ -247,6 +275,8 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
         const float rotation[4] = { cosine, sine, -sine, cosine }; // column major
         glUniformMatrix2fv(uRotation_, 1, GL_FALSE, rotation);
         glUniform2f(uTranslate_, translateX, translateY);
+        // One framebuffer pixel, in the list's units (the rounded clips' anti-aliasing width).
+        glUniform1f(uAaWidth_, 2.0f / ((scaleX + scaleY) * pass.camera.scale));
 
         glBindBuffer(GL_ARRAY_BUFFER, vbo_);
         glBufferData(GL_ARRAY_BUFFER,
@@ -294,6 +324,28 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
                 sh = iy1 - iy0;
             }
             glScissor(sx, sy, sw, sh);
+            if (command.roundClipCount > 0 || roundsSet > 0)
+            {
+                float rects[ig::retained::DrawCmd::MaxRoundClips * 4] = {};
+                float radii[ig::retained::DrawCmd::MaxRoundClips * 4] = {};
+                const int count = command.roundClipCount;
+                for (int i = 0; i < count; ++i)
+                {
+                    const ig::retained::RoundClip& clip = command.roundClips[i];
+                    rects[i * 4] = clip.rect.x + clip.rect.w * 0.5f;
+                    rects[i * 4 + 1] = clip.rect.y + clip.rect.h * 0.5f;
+                    rects[i * 4 + 2] = clip.rect.w * 0.5f;
+                    rects[i * 4 + 3] = clip.rect.h * 0.5f;
+                    for (int c = 0; c < 4; ++c) radii[i * 4 + c] = clip.radii[c];
+                }
+                glUniform1i(uRoundCount_, count);
+                if (count > 0)
+                {
+                    glUniform4fv(uRoundRect_, count, rects);
+                    glUniform4fv(uRoundRadii_, count, radii);
+                }
+                roundsSet = count;
+            }
             glBindTexture(GL_TEXTURE_2D,
                     command.texture ? static_cast<unsigned>(command.texture.value) : whiteTexture_);
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indexCount), GL_UNSIGNED_INT,
