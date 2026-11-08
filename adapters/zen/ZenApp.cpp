@@ -175,6 +175,9 @@ bool App::create(const Config &config)
     if (!pw)
     {
         cfg.render = RENDER_PIXELS;
+        // A ZEN_SCREENSHOT run (see saveScreenshot) draws into memory and closes by itself: it needs no window on
+        // the screen. Only here: an unmapped window has no OpenGL pixels to read back.
+        cfg.hidden = getenv("ZEN_SCREENSHOT") != nullptr;
         pw = window_create(&cfg);
     }
     if (!pw)
