@@ -48,8 +48,18 @@ void Label::paint(PaintContext& ctx)
     ctx.font.SetBatch(&ctx.text);
 
     float textW = ctx.font.GetTextWidth(text_.c_str());
+    // an eliding label wider than its rectangle is cut with "..." instead of spilling over its
+    // neighbours (a status bar message next to other labels)
+    String shown = text_;
+    const float room = abs.w - t.padding * 2;
+    const bool cut = elide_ && abs.w > 0 && !shown.empty() && textW > room;
+    if (cut)
+    {
+        shown = ctx.fitText(text_, room);
+        textW = ctx.font.GetTextWidth(shown.c_str());
+    }
     float tx;
-    switch (align_)
+    switch (cut ? TextAlign::LEFT : align_)
     {
         case TextAlign::CENTER:
             tx = abs.x + (abs.w - textW) * 0.5f;
@@ -65,7 +75,7 @@ void Label::paint(PaintContext& ctx)
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
     Rect textRect = { tx, ty - asc, textW, asc };
-    if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+    if (!ctx.isClipped(textRect)) ctx.font.Print(shown.c_str(), tx, ty);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }

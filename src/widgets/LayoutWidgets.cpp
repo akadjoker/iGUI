@@ -492,14 +492,29 @@ void StatusBar::layout()
         x += tw + spacing_;
     }
 
-    // Layout children horizontally
+    // Layout children horizontally; the width left over goes to the children with a stretch,
+    // in proportion (a status label that fills the bar, a spacer that pushes the rest right)
+    float fixed = 0.0f;
+    float stretchSum = 0.0f;
+    int visibleCount = 0;
+    for (auto* c: children_)
+    {
+        if (!c->isVisible()) continue;
+        ++visibleCount;
+        if (c->stretch() > 0.0f) stretchSum += c->stretch();
+        else fixed += c->sizeHint().x;
+    }
+    float spare = rect_.w - x - fixed - spacing_ * static_cast<float>(visibleCount);
+    if (spare < 0.0f) spare = 0.0f;
     for (auto* c: children_)
     {
         if (!c->isVisible()) continue;
         auto hint = c->sizeHint();
-        c->setRect({ x, 0, hint.x, h });
+        float w = hint.x;
+        if (c->stretch() > 0.0f && stretchSum > 0.0f) w = spare * c->stretch() / stretchSum;
+        c->setRect({ x, 0, w, h });
         c->layout();
-        x += hint.x + spacing_;
+        x += w + spacing_;
     }
 }
 

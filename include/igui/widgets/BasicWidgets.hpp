@@ -37,6 +37,16 @@ public:
     {
         return align_;
     }
+    /// @brief Cut the text with "..." when it is wider than the widget (off by default: a label
+    /// normally takes the size of its text).
+    void setElide(bool on)
+    {
+        elide_ = on;
+    }
+    bool elide() const
+    {
+        return elide_;
+    }
 
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;
@@ -45,6 +55,7 @@ private:
     String text_;
     Color color_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's text colour
     TextAlign align_ = TextAlign::LEFT;
+    bool elide_ = false;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
