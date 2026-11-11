@@ -350,6 +350,8 @@ private:
 // ═════════════════════════════════════════════════════════════════════════════
 //  PropertyGrid
 // ═════════════════════════════════════════════════════════════════════════════
+class SpinSlider;
+
 class PropertyGrid : public Widget
 {
 public:
@@ -422,11 +424,13 @@ public:
     /// @brief How much a drag changes a number or vector row per pixel (0, the default, spreads the
     ///        whole range over the field). Shift drags ten times slower and Ctrl ten times faster.
     void setDragStep(int row, float perPixel);
+    /// @brief Set the unit drawn after the number of a float or int row (addFloat and addInt take
+    ///        it from the row name when that ends with the unit in brackets, "Length (m)").
+    void setSuffix(int row, const String& suffix);
+    /// @brief Let the number of a float or int row go past its range typed or dragged.
+    void setAllowOutOfRange(int row, bool greater, bool lesser);
     /// @brief True while a value is typed or dragged, so the application does not overwrite it.
-    bool isEditing() const
-    {
-        return editing_ || draggingSlider_;
-    }
+    bool isEditing() const;
     /// @brief Emitted when any property value changes.
     Signal<int> propertyChanged;
 
@@ -467,15 +471,19 @@ public:
         String value;
         ct::Function<void(const String&)> onChange;
     };
+    // Float and int rows host a SpinSlider child (the number field with the bar under it); `spin`
+    // belongs to the grid.
     struct PropFloat
     {
         float value = 0.f, min = 0.f, max = 1.f;
         ct::Function<void(float)> onChange;
+        SpinSlider* spin = nullptr;
     };
     struct PropInt
     {
         int value = 0, min = 0, max = 100;
         ct::Function<void(int)> onChange;
+        SpinSlider* spin = nullptr;
     };
     struct PropBool
     {
@@ -575,6 +583,12 @@ private:
     int activeRow_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+
+    SpinSlider* makeSpin(int row, double value, double minimum, double maximum, bool integer,
+            const String& name);
+    void spinChanged(int row, double value);
+    void placeSpins(float gridY, float gh);
+    int typing_ = 0; // SpinSliders with their text field open
 
     bool draggingSlider_ = false;
     float dragStartX_ = 0.f;

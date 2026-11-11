@@ -1,4 +1,5 @@
 #include "TreePropertyColorWidgets.hpp"
+#include "SpinSlider.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
 #include "WidgetApp.hpp"
@@ -1154,14 +1155,126 @@ int PropertyGrid::addString(const String& name, const String& value,
     return static_cast<int>(rows_.size()) - 1;
 }
 
+namespace
+{
+
+// The unit of a row named "Length (m)" or "Angle (deg, + left)": the text in the last brackets up
+// to a comma, when it is short.
+String unitOfName(const String& name)
+{
+    const size_t close = name.rfind(')');
+    const size_t open = name.rfind('(');
+    if (close == String::npos || open == String::npos || open > close || close + 1 != name.size())
+        return String();
+    String unit = name.substr(open + 1, close - open - 1);
+    const size_t comma = unit.find(',');
+    if (comma != String::npos) unit = unit.substr(0, comma);
+    if (unit.empty() || unit.size() > 5) return String();
+    return unit;
+}
+
+// A step that gives about three significant digits over the range.
+double stepOfRange(double range)
+{
+    if (!(range > 0.0)) return 0.01;
+    double step = std::pow(10.0, std::floor(std::log10(range)) - 2.0);
+    if (step < 0.001) step = 0.001;
+    if (step > 1.0) step = 1.0;
+    return step;
+}
+
+} // namespace
+
+SpinSlider* PropertyGrid::makeSpin(int row, double value, double minimum, double maximum,
+        bool integer, const String& name)
+{
+    auto* spin = createChild<SpinSlider>();
+    spin->setEditingInteger(integer);
+    spin->setMin(minimum);
+    spin->setMax(maximum);
+    spin->setStep(integer ? 1.0 : stepOfRange(maximum - minimum));
+    spin->setValueNoSignal(value);
+    spin->setSuffix(unitOfName(name));
+    spin->setVisible(false);
+    spin->valueChanged.connect([this, row](double v) { spinChanged(row, v); });
+    spin->valueFocusEntered.connect([this]() { ++typing_; });
+    spin->valueFocusExited.connect(
+            [this]()
+            {
+                if (typing_ > 0) --typing_;
+            });
+    return spin;
+}
+
+void PropertyGrid::spinChanged(int row, double value)
+{
+    if (row < 0 || row >= (int) rows_.size()) return;
+    auto& r = rows_[row];
+    if (r.type == PropType::Float)
+    {
+        auto& d = std::get<PropFloat>(r.data);
+        d.value = static_cast<float>(value);
+        if (d.onChange) d.onChange(d.value);
+    }
+    else if (r.type == PropType::Int)
+    {
+        auto& d = std::get<PropInt>(r.data);
+        d.value = static_cast<int>(std::lround(value));
+        if (d.onChange) d.onChange(d.value);
+    }
+    else
+        return;
+    propertyChanged.emit(row);
+    markDirty();
+}
+
+void PropertyGrid::setSuffix(int row, const String& suffix)
+{
+    if (row < 0 || row >= (int) rows_.size()) return;
+    auto& r = rows_[row];
+    if (r.type == PropType::Float && std::get<PropFloat>(r.data).spin)
+        std::get<PropFloat>(r.data).spin->setSuffix(suffix);
+    else if (r.type == PropType::Int && std::get<PropInt>(r.data).spin)
+        std::get<PropInt>(r.data).spin->setSuffix(suffix);
+}
+
+void PropertyGrid::setAllowOutOfRange(int row, bool greater, bool lesser)
+{
+    if (row < 0 || row >= (int) rows_.size()) return;
+    auto& r = rows_[row];
+    SpinSlider* spin = nullptr;
+    if (r.type == PropType::Float) spin = std::get<PropFloat>(r.data).spin;
+    else if (r.type == PropType::Int)
+        spin = std::get<PropInt>(r.data).spin;
+    if (!spin) return;
+    spin->setAllowGreater(greater);
+    spin->setAllowLesser(lesser);
+}
+
+bool PropertyGrid::isEditing() const
+{
+    if (editing_ || draggingSlider_ || typing_ > 0) return true;
+    for (const auto& r: rows_)
+    {
+        const SpinSlider* spin = nullptr;
+        if (r.type == PropType::Float) spin = std::get<PropFloat>(r.data).spin;
+        else if (r.type == PropType::Int)
+            spin = std::get<PropInt>(r.data).spin;
+        if (spin && spin->isGrabbing()) return true;
+    }
+    return false;
+}
+
 int PropertyGrid::addFloat(const String& name, float value, float mn, float mx,
         ct::Function<void(float)> onChange, const String& desc)
 {
     PropRow r{ PropType::Float, name, desc, PropFloat{ value, mn, mx, std::move(onChange) } };
     rows_.push_back(std::move(r));
+    const int row = static_cast<int>(rows_.size()) - 1;
+    std::get<PropFloat>(rows_[row].data).spin = makeSpin(row, value, mn, mx, false, name);
     visDirty_ = true;
     markDirty();
-    return static_cast<int>(rows_.size()) - 1;
+    return row;
 }
 
 int PropertyGrid::addInt(const String& name, int value, int mn, int mx,
@@ -1169,9 +1282,11 @@ int PropertyGrid::addInt(const String& name, int value, int mn, int mx,
 {
     PropRow r{ PropType::Int, name, desc, PropInt{ value, mn, mx, std::move(onChange) } };
     rows_.push_back(std::move(r));
+    const int row = static_cast<int>(rows_.size()) - 1;
+    std::get<PropInt>(rows_[row].data).spin = makeSpin(row, value, mn, mx, true, name);
     visDirty_ = true;
     markDirty();
-    return static_cast<int>(rows_.size()) - 1;
+    return row;
 }
 
 int PropertyGrid::addBool(const String& name, bool value, ct::Function<void(bool)> onChange,
@@ -1466,6 +1581,7 @@ void PropertyGrid::startEdit(int row)
 {
     if (row < 0 || row >= (int) rows_.size()) return;
     auto& r = rows_[row];
+    if (r.type == PropType::Float || r.type == PropType::Int) return; // the SpinSlider types it
     editing_ = true;
     activeRow_ = row;
     switch (r.type)
@@ -1473,20 +1589,6 @@ void PropertyGrid::startEdit(int row)
         case PropType::String:
             editBuf_ = std::get<PropString>(r.data).value;
             break;
-        case PropType::Float:
-        {
-            char b[32];
-            snprintf(b, 32, "%.2f", std::get<PropFloat>(r.data).value);
-            editBuf_ = b;
-            break;
-        }
-        case PropType::Int:
-        {
-            char b[32];
-            snprintf(b, 32, "%d", std::get<PropInt>(r.data).value);
-            editBuf_ = b;
-            break;
-        }
         case PropType::Vec2:
         case PropType::Vec3:
         case PropType::Vec4:
@@ -1687,30 +1789,8 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             break;
         }
         case PropType::Float:
-        {
-            auto& d = std::get<PropFloat>(row.data);
-            char buf[32];
-            snprintf(buf, 32, "%.2f", d.value);
-            Color bc(60, 100, 160, 200);
-            if (draggingSlider_ && activeRow_ == idx) bc = Color(80, 130, 200, 220);
-            else if (hoveredRow_ == idx)
-                bc = Color(70, 110, 175, 210);
-            drawSliderBar(valTextX, y + 2, valW, rowHeight_ - 4, d.value, d.min, d.max, buf, bc);
-            break;
-        }
         case PropType::Int:
-        {
-            auto& d = std::get<PropInt>(row.data);
-            char buf[32];
-            snprintf(buf, 32, "%d", d.value);
-            Color bc(60, 140, 90, 200);
-            if (draggingSlider_ && activeRow_ == idx) bc = Color(80, 170, 110, 220);
-            else if (hoveredRow_ == idx)
-                bc = Color(70, 155, 100, 210);
-            drawSliderBar(valTextX, y + 2, valW, rowHeight_ - 4, (float) d.value, (float) d.min,
-                    (float) d.max, buf, bc);
-            break;
-        }
+            break; // the SpinSlider child paints the number
         case PropType::Bool:
         {
             auto& d = std::get<PropBool>(row.data);
@@ -1856,6 +1936,49 @@ void PropertyGrid::paintDescPanel(PaintContext& ctx, const Rect& abs)
     }
 }
 
+// The SpinSlider of every visible float and int row goes in its value cell, the others hide; the
+// numbers follow what the application set.
+void PropertyGrid::placeSpins(float gridY, float gh)
+{
+    (void) gridY;
+    const auto vis = visibleRows();
+    const int count = (int) vis.size();
+    const int first = static_cast<int>(scrollOffset_ / rowHeight_);
+    const int last = std::min(first + static_cast<int>(gh / rowHeight_) + 2, count);
+    const float labelW = rect_.w * labelRatio_, pad = 4.f;
+    for (auto& row: rows_)
+    {
+        SpinSlider* spin = nullptr;
+        if (row.type == PropType::Float) spin = std::get<PropFloat>(row.data).spin;
+        else if (row.type == PropType::Int)
+            spin = std::get<PropInt>(row.data).spin;
+        if (spin) spin->setVisible(false);
+    }
+    for (int vi = first; vi < last; ++vi)
+    {
+        auto& row = rows_[vis[vi]];
+        SpinSlider* spin = nullptr;
+        double value = 0.0;
+        if (row.type == PropType::Float)
+        {
+            auto& d = std::get<PropFloat>(row.data);
+            spin = d.spin;
+            value = d.value;
+        }
+        else if (row.type == PropType::Int)
+        {
+            auto& d = std::get<PropInt>(row.data);
+            spin = d.spin;
+            value = d.value;
+        }
+        if (!spin) continue;
+        spin->setVisible(true);
+        spin->setRect({ labelW + pad, vi * rowHeight_ - scrollOffset_ + 1.f,
+            rect_.w - labelW - pad * 2, rowHeight_ - 2.f });
+        if (!spin->isGrabbing() && spin->value() != value) spin->setValueNoSignal(value);
+    }
+}
+
 void PropertyGrid::paint(PaintContext& ctx)
 {
     if (!visible_) return;
@@ -1887,6 +2010,9 @@ void PropertyGrid::paint(PaintContext& ctx)
         float ry = abs.y + (vi + 1) * rowHeight_ - scrollOffset_;
         ctx.drawLine(abs.x, ry, abs.x + abs.w, ry);
     }
+
+    placeSpins(abs.y, gh);
+    Widget::paint(ctx);
 
     ctx.popClip();
     paintDescPanel(ctx, abs);
@@ -1941,29 +2067,8 @@ void PropertyGrid::onMousePress(MouseEvent& e)
             break;
         }
         case PropType::Float:
-        {
-            auto& d = std::get<PropFloat>(row.data);
-            if (editing_ && activeRow_ == idx) break;
-            draggingSlider_ = true;
-            activeRow_ = idx;
-            dragStartX_ = e.x;
-            dragComponent_ = 0;
-            dragStartVal_ = d.value;
-            markDirty();
-            break;
-        }
         case PropType::Int:
-        {
-            auto& d = std::get<PropInt>(row.data);
-            if (editing_ && activeRow_ == idx) break;
-            draggingSlider_ = true;
-            activeRow_ = idx;
-            dragStartX_ = e.x;
-            dragComponent_ = 0;
-            dragStartVal_ = (float) d.value;
-            markDirty();
-            break;
-        }
+            break; // the SpinSlider takes the press
         case PropType::Vec2:
         case PropType::Vec3:
         case PropType::Vec4:
