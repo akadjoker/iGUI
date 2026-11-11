@@ -149,8 +149,11 @@ void DockPanel::splitOff(const String& tabName, DockSide side, float ratio)
     markDirty();
 }
 
-void DockPanel::closePanel(const String& name)
+void DockPanel::closePanel(const String& nameRef)
 {
+    // a copy: the reference often points into the tab erased below (the close cross passes
+    // the tab's own name) or into a record the panelClosed handler deletes
+    const String name = nameRef;
     ensureRoot();
     int tabIdx = -1;
     DockNode* leaf = root_->findTab(name, &tabIdx);
