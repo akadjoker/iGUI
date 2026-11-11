@@ -55,6 +55,15 @@ public:
     {
         text_ = text;
     }
+    /// @brief Draw the label dimmed (a value that is a default, for example).
+    void setDimmed(bool dim)
+    {
+        dimmed_ = dim;
+    }
+    bool dimmed() const
+    {
+        return dimmed_;
+    }
     /// @brief Check if the node has children.
     bool hasChildren() const
     {
@@ -137,6 +146,7 @@ private:
     TreeView* view_ = nullptr; // the view showing this node, told when it is deleted
     ct::Vector<TreeNode*> children_;
     bool expanded_ = true;
+    bool dimmed_ = false;
     static unsigned int sRevision_;
 };
 

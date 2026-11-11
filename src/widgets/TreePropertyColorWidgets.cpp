@@ -631,7 +631,9 @@ void TreeView::paint(PaintContext& ctx)
             indX += isz + 3.f;
         }
 
-        ctx.font.SetColor(row.node == selected_ ? Color(255, 255, 255, 255) : t.textColor);
+        Color labelColor = t.textColor;
+        if (row.node->dimmed()) labelColor.a = uint8_t(labelColor.a * 0.5f);
+        ctx.font.SetColor(row.node == selected_ ? Color(255, 255, 255, 255) : labelColor);
         float ty = rowY + (rowHeight_ - t.fontSize) * 0.5f + asc;
         ctx.font.Print(row.node->text().c_str(), indX, ty);
 
