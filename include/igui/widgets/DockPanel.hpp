@@ -167,6 +167,16 @@ public:
     Signal<String> panelActivated;
     /// @brief Emitted when a panel is closed.
     Signal<String> panelClosed;
+    /// @brief Emitted on a right click on a tab (its name); menuX/menuY give the click position.
+    Signal<String> tabMenuRequested;
+    float menuX() const
+    {
+        return menuX_;
+    }
+    float menuY() const
+    {
+        return menuY_;
+    }
 
     // ── Widget overrides ──────────────────────────────────────────────────
     void layout() override;
@@ -212,6 +222,9 @@ private:
     } splitDrag_;
 
     DockNode* hoveredSplit_ = nullptr;
+    DockNode* hoverCloseNode_ = nullptr; // tab whose close button is under the mouse
+    int hoverCloseIdx_ = -1;
+    float menuX_ = 0, menuY_ = 0;
 
     // ── Internal helpers ───────────────────────────────────────────────────
     void ensureRoot();
@@ -229,6 +242,7 @@ private:
     DockNode* hitLeaf(float sx, float sy) const;
     DockNode* hitLeafImpl(DockNode* n, float ox, float oy, float sx, float sy) const;
     int hitTab(DockNode* leaf, float ox, float oy, float sx, float sy) const;
+    int hitTabClose(DockNode* leaf, float ox, float oy, float sx, float sy) const;
     DockNode* hitSplitter(float sx, float sy) const;
     DockNode* hitSplitterImpl(DockNode* n, float ox, float oy, float sx, float sy) const;
 

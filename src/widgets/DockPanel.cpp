@@ -599,6 +599,8 @@ void DockPanel::paintNode(DockNode* node, PaintContext& ctx)
     ctx.lineRect(sr.x, sr.y, sr.w, sr.h);
 }
 
+static constexpr float kTabCloseW = 16.f; // room for the close cross in a tab
+
 void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
 {
     // Bar background
@@ -613,7 +615,7 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
         auto& tab = leaf->tabs[i];
 
         setupFont(ctx, { 200, 200, 200, 255 }, 12.f);
-        float tw = ctx.font.GetTextWidth(tab.name.c_str()) + padX * 2;
+        float tw = ctx.font.GetTextWidth(tab.name.c_str()) + padX * 2 + kTabCloseW;
         tab.cachedWidth = tw;
 
         bool active = (i == leaf->currentTab);
@@ -645,6 +647,22 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
             ctx.pushClip(barR);
             ctx.font.Print(tab.name.c_str(), tx + padX, barR.y + (barR.h - 12.f) * 0.5f + asc);
             ctx.popClip();
+
+            // close button: a cross at the right of the tab, brighter under the mouse
+            const bool hot = (hoverCloseNode_ == leaf && hoverCloseIdx_ == i);
+            const float cx = tx + tw - kTabCloseW * 0.5f - 4.f;
+            const float cy = barR.y + barR.h * 0.5f;
+            const float r = 3.5f;
+            if (hot)
+            {
+                ctx.fill.SetColor(90, 90, 96, 255);
+                ctx.fillRect(cx - 7.f, cy - 7.f, 14.f, 14.f);
+            }
+            ctx.line.SetColor(
+                    hot ? Color(235, 235, 235, 255)
+                        : (active ? Color(170, 170, 175, 255) : Color(110, 110, 115, 255)));
+            ctx.drawLine(cx - r, cy - r, cx + r, cy + r);
+            ctx.drawLine(cx - r, cy + r, cx + r, cy - r);
         }
         tx += tw + 2.f;
     }
@@ -760,6 +778,24 @@ int DockPanel::hitTab(DockNode* leaf, float ox, float oy, float sx, float sy) co
     return -1;
 }
 
+int DockPanel::hitTabClose(DockNode* leaf, float ox, float oy, float sx, float sy) const
+{
+    const int i = hitTab(leaf, ox, oy, sx, sy);
+    if (i < 0) return -1;
+    float tx = ox + leaf->rect.x + 4.f;
+    for (int k = 0; k < i; ++k)
+    {
+        float tw = leaf->tabs[k].cachedWidth;
+        if (tw <= 0) tw = 60.f;
+        tx += tw + 2.f;
+    }
+    float tw = leaf->tabs[i].cachedWidth;
+    if (tw <= 0) tw = 60.f;
+    const float cx = tx + tw - kTabCloseW * 0.5f - 4.f;
+    const float cy = oy + leaf->rect.y + tabBarH_ * 0.5f;
+    return (sx >= cx - 7.f && sx <= cx + 7.f && sy >= cy - 7.f && sy <= cy + 7.f) ? i : -1;
+}
+
 DockNode* DockPanel::hitSplitter(float sx, float sy) const
 {
     if (!root_) return nullptr;
@@ -807,9 +843,26 @@ DockSide DockPanel::computeDropZone(DockNode* leaf, float ox, float oy, float sx
 
 void DockPanel::onMousePress(MouseEvent& e)
 {
-    if (e.button != 0) return;
     const Rect abs = absoluteRect();
     float ox = abs.x, oy = abs.y;
+    if (e.button != 0)
+    {
+        // right: a menu for the tab; middle: close it
+        DockNode* leaf = hitLeaf(e.x, e.y);
+        const int i = leaf ? hitTab(leaf, ox, oy, e.x, e.y) : -1;
+        if (i < 0) return;
+        e.consumed = true;
+        const String name = leaf->tabs[i].name;
+        if (e.button == 1)
+        {
+            menuX_ = e.x;
+            menuY_ = e.y;
+            tabMenuRequested.emit(name);
+        }
+        else
+            closePanel(name);
+        return;
+    }
 
     // Splitter drag
     DockNode* spl = hitSplitter(e.x, e.y);
@@ -827,6 +880,14 @@ void DockPanel::onMousePress(MouseEvent& e)
     DockNode* leaf = hitLeaf(e.x, e.y);
     if (!leaf) return;
     int tabIdx = hitTab(leaf, ox, oy, e.x, e.y);
+    if (tabIdx >= 0 && hitTabClose(leaf, ox, oy, e.x, e.y) == tabIdx)
+    {
+        e.consumed = true;
+        hoverCloseNode_ = nullptr;
+        hoverCloseIdx_ = -1;
+        closePanel(leaf->tabs[tabIdx].name);
+        return;
+    }
     if (tabIdx >= 0)
     {
         // Switch tab (skip if already active)
@@ -891,6 +952,18 @@ void DockPanel::onMouseMove(MouseEvent& e)
 
     hoveredSplit_ = hitSplitter(e.x, e.y);
 
+    {
+        DockNode* leaf = drag_.active ? nullptr : hitLeaf(e.x, e.y);
+        const int i = leaf ? hitTabClose(leaf, abs.x, abs.y, e.x, e.y) : -1;
+        DockNode* node = i >= 0 ? leaf : nullptr;
+        if (node != hoverCloseNode_ || i != hoverCloseIdx_)
+        {
+            hoverCloseNode_ = node;
+            hoverCloseIdx_ = i;
+            markDirty();
+        }
+    }
+
     if (drag_.active)
     {
         drag_.curX = e.x;
@@ -924,6 +997,8 @@ void DockPanel::onMouseMove(MouseEvent& e)
 void DockPanel::onMouseLeave()
 {
     hoveredSplit_ = nullptr;
+    hoverCloseNode_ = nullptr;
+    hoverCloseIdx_ = -1;
     dropValid_ = false;
     dropNode_ = nullptr;
     markDirty();
