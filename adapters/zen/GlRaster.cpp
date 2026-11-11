@@ -1,6 +1,10 @@
 #include <igui_zen/GlRaster.hpp>
 
+#ifdef __EMSCRIPTEN__
+#include <GLES3/gl3.h>
+#else
 #include <glad/gl.h>
+#endif
 
 #include <math.h>
 #include <stddef.h>
@@ -122,7 +126,11 @@ void GlRaster::shutdown()
 
 bool GlRaster::init(void* (*procAddress)(const char* name))
 {
+#ifdef __EMSCRIPTEN__
+    (void) procAddress; // WebGL 2 functions are linked directly
+#else
     if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(procAddress))) return false;
+#endif
     glGetIntegerv(GL_MAJOR_VERSION, &major_);
     glGetIntegerv(GL_MINOR_VERSION, &minor_);
     const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
@@ -360,6 +368,13 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
 
 void GlRaster::readPixels(uint32_t* dst, int width, int height) const
 {
+#ifdef __EMSCRIPTEN__
+    // WebGL reads RGBA bytes only: the screenshot path is not used in the browser
+    (void) dst;
+    (void) width;
+    (void) height;
+    return;
+#else
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     // glReadPixels gives the bottom row first, so rows go in from the end.
     for (int y = 0; y < height; ++y)
@@ -367,6 +382,7 @@ void GlRaster::readPixels(uint32_t* dst, int width, int height) const
         glReadPixels(0, height - 1 - y, width, 1, GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV,
                 dst + static_cast<size_t>(y) * width);
     }
+#endif
 }
 
 } // namespace zen
