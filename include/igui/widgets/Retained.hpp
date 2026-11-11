@@ -311,6 +311,13 @@ public:
     // first use. Without a dynamic page (FontAtlas::enableDynamic) this font
     // itself, so a backend that never uploads one keeps drawing as before.
     const Font* atHeight(float pixelHeight) const;
+    // Device pixels per unit of this font's sizes: 1 unless the atlas was given a pixel scale
+    // (FontAtlas::setPixelScale). The glyphs of a font made by atHeight() are rasterised at
+    // pixelHeight() times this and measured back in units, so text is as sharp as the screen.
+    float pixelScale() const
+    {
+        return pixelScale_;
+    }
     // What to add to the pen between two glyphs, in pixels at this font's
     // height: negative closes the gap (A and V). The face's kern or GPOS table.
     float kerning(uint32_t left, uint32_t right) const;
@@ -322,6 +329,7 @@ private:
     float lineHeight_ = 0.0f;
     float ascender_ = 0.0f;
     float pixelHeight_ = 0.0f;
+    float pixelScale_ = 1.0f;
     FontAtlas* atlas_ = nullptr; // the atlas that holds the face; null for a Font made by hand
     int face_ = -1;              // its index there
     bool dynamic_ = false;       // glyphs come from the dynamic page, on demand
@@ -369,6 +377,11 @@ public:
     const unsigned char* dynamicPixels() const;
     bool dynamicDirty() const;
     void clearDynamicDirty();
+    // Device pixels per unit of the sizes asked for (a window on a 2x screen with the UI in
+    // CSS-sized units: 2). The dynamic glyphs are rasterised at that scale and measured in units;
+    // changing it bakes them again. Default 1.
+    void setPixelScale(float scale);
+    float pixelScale() const;
 
     FontAtlas();
     ~FontAtlas();

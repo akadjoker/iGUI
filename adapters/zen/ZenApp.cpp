@@ -1,3 +1,4 @@
+#include <cmath>
 #include <igui_zen/ZenApp.hpp>
 #include <stdlib.h>
 
@@ -491,6 +492,15 @@ void App::frameWindow(Window *w, bool driven)
     io.deltaTime = static_cast<float>(dt > 0.1 ? 0.1 : dt);
     io.displayWidth = static_cast<float>(sw) / k;
     io.displayHeight = static_cast<float>(sh) / k;
+    if (useGl_ && w == main_ && io.displayWidth > 0.0f)
+    {
+        // Device pixels per UI unit (the screen's content scale times the UI scale): the text is
+        // rasterised at that density and measured back in UI units, so it is as sharp as the screen.
+        int fbW = 0, fbH = 0;
+        window_get_framebuffer_size(pw, &fbW, &fbH);
+        if (fbW > 0)
+            atlas_.setPixelScale(std::floor(static_cast<float>(fbW) / io.displayWidth * 16.0f + 0.5f) / 16.0f);
+    }
     const bool blocked = blockedByModal(w);
     if (blocked)
     {

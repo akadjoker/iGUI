@@ -156,6 +156,7 @@ struct FontAtlas::Impl
     ct::Vector<Font*> sized; // the fonts atHeight() made, kept for good
 
     bool enabled = false;
+    float pixelScale = 1.0f;
     TextureHandle texture;
     int width = 1024;
     int height = 1024;
@@ -253,6 +254,7 @@ const Font* FontAtlas::fontAtHeight(int face, float pixelHeight)
     f->face_ = face;
     f->dynamic_ = true;
     f->pixelHeight_ = h;
+    f->pixelScale_ = impl_->pixelScale;
     const float scale = stbtt_ScaleForPixelHeight(&fc.info, h);
     int ascent = 0, descent = 0, lineGap = 0;
     stbtt_GetFontVMetrics(&fc.info, &ascent, &descent, &lineGap);
@@ -262,11 +264,40 @@ const Font* FontAtlas::fontAtHeight(int face, float pixelHeight)
     return f;
 }
 
+void FontAtlas::setPixelScale(float scale)
+{
+    if (!impl_) return;
+    if (!(scale >= 0.25f)) scale = 1.0f;
+    if (scale > 8.0f) scale = 8.0f;
+    if (scale == impl_->pixelScale) return;
+    impl_->pixelScale = scale;
+    // every size is baked again at the new scale
+    if (!impl_->rgba.empty())
+    {
+        std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
+        impl_->penX = impl_->penY = 1;
+        impl_->rowHeight = 0;
+        impl_->dirty = true;
+    }
+    for (Font* f: impl_->sized)
+    {
+        f->pixelScale_ = scale;
+        f->glyphs_.clear();
+        f->kern_.clear();
+    }
+}
+
+float FontAtlas::pixelScale() const
+{
+    return impl_ ? impl_->pixelScale : 1.0f;
+}
+
 bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
 {
     if (!impl_ || !impl_->enabled || font.face_ < 0) return false;
     const Impl::Face& fc = *impl_->faces[static_cast<size_t>(font.face_)];
-    const float scale = stbtt_ScaleForPixelHeight(&fc.info, font.pixelHeight_);
+    const float ps = font.pixelScale_ > 0.0f ? font.pixelScale_ : 1.0f;
+    const float scale = stbtt_ScaleForPixelHeight(&fc.info, font.pixelHeight_ * ps);
 
     int gi = stbtt_FindGlyphIndex(&fc.info, static_cast<int>(codepoint));
     if (gi == 0 && codepoint != '?')
@@ -288,9 +319,10 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
 
     FontGlyph glyph;
     glyph.codepoint = codepoint;
-    glyph.advanceX = static_cast<float>(adv) * scale;
-    glyph.offset = { static_cast<float>(x0), static_cast<float>(y0) };
-    glyph.size = { static_cast<float>(gw > 0 ? gw : 0), static_cast<float>(gh > 0 ? gh : 0) };
+    // the bitmap is in device pixels, the glyph is measured in units
+    glyph.advanceX = static_cast<float>(adv) * scale / ps;
+    glyph.offset = { static_cast<float>(x0) / ps, static_cast<float>(y0) / ps };
+    glyph.size = { static_cast<float>(gw > 0 ? gw : 0) / ps, static_cast<float>(gh > 0 ? gh : 0) / ps };
 
     if (gw > 0 && gh > 0)
     {
@@ -340,6 +372,7 @@ float FontAtlas::kerningOf(const Font& font, uint32_t left, uint32_t right) cons
         return 0.0f;
     const Impl::Face& fc = *impl_->faces[static_cast<size_t>(font.face_)];
     if (!fc.ok || font.pixelHeight_ <= 0.0f) return 0.0f;
+    // the kerning is in units: the height the face is scaled by is in units too
     const float scale = stbtt_ScaleForPixelHeight(&fc.info, font.pixelHeight_);
     return static_cast<float>(stbtt_GetCodepointKernAdvance(&fc.info, static_cast<int>(left),
                    static_cast<int>(right))) *
@@ -1079,9 +1112,10 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
         {
             // each glyph lands on whole pixels: the pen keeps its fractional advance, but a
             // bitmap drawn between pixels blurs under linear filtering
-            Rect rect{ std::floor(pen.x + glyph->offset.x * scale + 0.5f),
-                std::floor(pen.y + glyph->offset.y * scale + 0.5f), glyph->size.x * scale,
-                glyph->size.y * scale };
+            const float ps = font.pixelScale();
+            Rect rect{ std::floor((pen.x + glyph->offset.x * scale) * ps + 0.5f) / ps,
+                std::floor((pen.y + glyph->offset.y * scale) * ps + 0.5f) / ps,
+                glyph->size.x * scale, glyph->size.y * scale };
             Rect uv = glyph->uv;
 
             uint32_t v0 = addVertex(rect.x, rect.y, uv.x, uv.y, color);
