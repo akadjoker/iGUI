@@ -49,6 +49,12 @@ public:
     {
         return text_;
     }
+
+    /// @brief Change the label of the node in place; the rows and the expansion stay as they are.
+    void setText(const String& text)
+    {
+        text_ = text;
+    }
     /// @brief Check if the node has children.
     bool hasChildren() const
     {
