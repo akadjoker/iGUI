@@ -653,8 +653,8 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
 
             // close button: a cross at the right of the tab, brighter under the mouse
             const bool hot = (hoverCloseNode_ == leaf && hoverCloseIdx_ == i);
-            const float cx = tx + tw - kTabCloseW * 0.5f - 4.f;
-            const float cy = barR.y + barR.h * 0.5f;
+            const float cx = std::floor(tx + tw - kTabCloseW * 0.5f - 4.f) + 0.5f;
+            const float cy = std::floor(barR.y + barR.h * 0.5f) + 0.5f;
             const float r = 3.5f;
             if (hot)
             {

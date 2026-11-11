@@ -165,17 +165,20 @@ struct FontAtlas::Impl
 
     ~Impl()
     {
-        for (Face* f : faces) delete f;
-        for (Font* f : sized) delete f;
+        for (Face* f: faces) delete f;
+        for (Font* f: sized) delete f;
     }
     void clearFaces()
     {
-        for (Face* f : faces) delete f;
+        for (Face* f: faces) delete f;
         faces.clear();
     }
 };
 
-FontAtlas::FontAtlas() : impl_(new Impl) {}
+FontAtlas::FontAtlas()
+        : impl_(new Impl)
+{
+}
 
 FontAtlas::~FontAtlas()
 {
@@ -187,7 +190,8 @@ FontAtlas::~FontAtlas()
 bool FontAtlas::prepareDynamic()
 {
     if (!impl_ || impl_->faces.empty()) return false;
-    impl_->rgba.assign(static_cast<size_t>(impl_->width) * static_cast<size_t>(impl_->height) * 4, 0);
+    impl_->rgba.assign(static_cast<size_t>(impl_->width) * static_cast<size_t>(impl_->height) * 4,
+            0);
     impl_->penX = impl_->penY = 1;
     impl_->rowHeight = 0;
     impl_->enabled = false;
@@ -203,12 +207,30 @@ bool FontAtlas::enableDynamic(TextureHandle texture)
     return true;
 }
 
-bool FontAtlas::dynamicEnabled() const { return impl_ && impl_->enabled; }
-TextureHandle FontAtlas::dynamicTexture() const { return impl_ ? impl_->texture : TextureHandle(); }
-int FontAtlas::dynamicWidth() const { return impl_ ? impl_->width : 0; }
-int FontAtlas::dynamicHeight() const { return impl_ ? impl_->height : 0; }
-const unsigned char* FontAtlas::dynamicPixels() const { return impl_ ? impl_->rgba.data() : nullptr; }
-bool FontAtlas::dynamicDirty() const { return impl_ && impl_->dirty; }
+bool FontAtlas::dynamicEnabled() const
+{
+    return impl_ && impl_->enabled;
+}
+TextureHandle FontAtlas::dynamicTexture() const
+{
+    return impl_ ? impl_->texture : TextureHandle();
+}
+int FontAtlas::dynamicWidth() const
+{
+    return impl_ ? impl_->width : 0;
+}
+int FontAtlas::dynamicHeight() const
+{
+    return impl_ ? impl_->height : 0;
+}
+const unsigned char* FontAtlas::dynamicPixels() const
+{
+    return impl_ ? impl_->rgba.data() : nullptr;
+}
+bool FontAtlas::dynamicDirty() const
+{
+    return impl_ && impl_->dirty;
+}
 void FontAtlas::clearDynamicDirty()
 {
     if (impl_) impl_->dirty = false;
@@ -216,11 +238,12 @@ void FontAtlas::clearDynamicDirty()
 
 const Font* FontAtlas::fontAtHeight(int face, float pixelHeight)
 {
-    if (!impl_ || face < 0 || face >= static_cast<int>(impl_->faces.size()) || !impl_->faces[static_cast<size_t>(face)]->ok)
+    if (!impl_ || face < 0 || face >= static_cast<int>(impl_->faces.size()) ||
+            !impl_->faces[static_cast<size_t>(face)]->ok)
         return nullptr;
     // Heights are kept to an eighth of a pixel, so 14.4 and 14.4001 are one font.
     const float h = std::floor(pixelHeight * 8.0f + 0.5f) / 8.0f;
-    for (Font* f : impl_->sized)
+    for (Font* f: impl_->sized)
         if (f->face_ == face && f->pixelHeight_ == h) return f;
 
     const Impl::Face& fc = *impl_->faces[static_cast<size_t>(face)];
@@ -284,17 +307,20 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
             std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
             impl_->penX = impl_->penY = 1;
             impl_->rowHeight = 0;
-            for (Font* f : impl_->sized) f->glyphs_.clear();
+            for (Font* f: impl_->sized) f->glyphs_.clear();
         }
         ct::Vector<unsigned char> alpha(static_cast<size_t>(gw) * static_cast<size_t>(gh), 0);
         stbtt_MakeGlyphBitmap(&fc.info, alpha.data(), gw, gh, gw, scale, scale, gi);
         for (int y = 0; y < gh; ++y)
             for (int x = 0; x < gw; ++x)
             {
-                unsigned char* px = &impl_->rgba[(static_cast<size_t>(impl_->penY + y) * static_cast<size_t>(impl_->width) +
-                                                  static_cast<size_t>(impl_->penX + x)) * 4];
+                unsigned char* px = &impl_->rgba[(static_cast<size_t>(impl_->penY + y) *
+                                                                 static_cast<size_t>(impl_->width) +
+                                                         static_cast<size_t>(impl_->penX + x)) *
+                                                 4];
                 px[0] = px[1] = px[2] = 255;
-                px[3] = alpha[static_cast<size_t>(y) * static_cast<size_t>(gw) + static_cast<size_t>(x)];
+                px[3] = alpha[static_cast<size_t>(y) * static_cast<size_t>(gw) +
+                              static_cast<size_t>(x)];
             }
         glyph.uv = { static_cast<float>(impl_->penX) / static_cast<float>(impl_->width),
             static_cast<float>(impl_->penY) / static_cast<float>(impl_->height),
@@ -310,11 +336,14 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
 
 float FontAtlas::kerningOf(const Font& font, uint32_t left, uint32_t right) const
 {
-    if (!impl_ || font.face_ < 0 || font.face_ >= static_cast<int>(impl_->faces.size())) return 0.0f;
+    if (!impl_ || font.face_ < 0 || font.face_ >= static_cast<int>(impl_->faces.size()))
+        return 0.0f;
     const Impl::Face& fc = *impl_->faces[static_cast<size_t>(font.face_)];
     if (!fc.ok || font.pixelHeight_ <= 0.0f) return 0.0f;
     const float scale = stbtt_ScaleForPixelHeight(&fc.info, font.pixelHeight_);
-    return static_cast<float>(stbtt_GetCodepointKernAdvance(&fc.info, static_cast<int>(left), static_cast<int>(right))) * scale;
+    return static_cast<float>(stbtt_GetCodepointKernAdvance(&fc.info, static_cast<int>(left),
+                   static_cast<int>(right))) *
+           scale;
 }
 
 const Font* Font::atHeight(float pixelHeight) const
@@ -468,7 +497,7 @@ bool FontAtlas::build()
     // Build Font objects
     fonts_.clear();
     fonts_.resize(packs.size());
-    for (Font* f : impl_->sized) delete f;
+    for (Font* f: impl_->sized) delete f;
     impl_->sized.clear();
     impl_->clearFaces();
     impl_->enabled = false;
@@ -1048,8 +1077,11 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
 
         if (glyph->size.x > 0.0f && glyph->size.y > 0.0f)
         {
-            Rect rect{ pen.x + glyph->offset.x * scale, pen.y + glyph->offset.y * scale,
-                glyph->size.x * scale, glyph->size.y * scale };
+            // each glyph lands on whole pixels: the pen keeps its fractional advance, but a
+            // bitmap drawn between pixels blurs under linear filtering
+            Rect rect{ std::floor(pen.x + glyph->offset.x * scale + 0.5f),
+                std::floor(pen.y + glyph->offset.y * scale + 0.5f), glyph->size.x * scale,
+                glyph->size.y * scale };
             Rect uv = glyph->uv;
 
             uint32_t v0 = addVertex(rect.x, rect.y, uv.x, uv.y, color);
