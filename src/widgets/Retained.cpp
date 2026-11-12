@@ -1189,9 +1189,13 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
             // each glyph lands on whole pixels: the pen keeps its fractional advance, but a
             // bitmap drawn between pixels blurs under linear filtering
             const float ps = font.pixelScale();
-            Rect rect{ std::floor((pen.x + glyph->offset.x * scale) * ps + 0.5f) / ps,
-                std::floor((pen.y + glyph->offset.y * scale) * ps + 0.5f) / ps,
+            Rect rect{ pen.x + glyph->offset.x * scale, pen.y + glyph->offset.y * scale,
                 glyph->size.x * scale, glyph->size.y * scale };
+            if (textSnapping_)
+            {
+                rect.x = std::floor(rect.x * ps + 0.5f) / ps;
+                rect.y = std::floor(rect.y * ps + 0.5f) / ps;
+            }
             Rect uv = glyph->uv;
 
             uint32_t v0 = addVertex(rect.x, rect.y, uv.x, uv.y, color);

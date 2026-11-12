@@ -168,6 +168,28 @@ void testText()
     check(all, "text under a translation moves the glyph quads, UVs untouched");
 }
 
+void testTextSnapping()
+{
+    FontAtlas atlas;
+    check(atlas.buildDefault(), "default atlas (snapping)");
+    TextureHandle texture;
+    texture.value = 1;
+    atlas.setTexture(texture);
+    const Font& font = atlas.defaultFont();
+    DrawList snapped, loose;
+    check(snapped.textSnapping(), "snapping is on by default");
+    loose.setTextSnapping(false);
+    snapped.addText(font, { 10.3f, 10 }, Red, "H");
+    loose.addText(font, { 10.3f, 10 }, Red, "H");
+    const float ps = font.pixelScale();
+    const float sx = snapped.vertices()[0].x * ps, lx = loose.vertices()[0].x;
+    check(near(sx, floorf(sx + 0.5f)), "snapping on: the glyph quad lands on a whole pixel");
+    check(near(lx - loose.vertices()[0].x, 0) && fabsf(lx - (10.3f + font.findGlyph('H')->offset.x)) < 1e-3f,
+            "snapping off: the quad stays at pen + offset (fractional)");
+    loose.clear();
+    check(!loose.textSnapping(), "clear() leaves the snapping flag alone");
+}
+
 void testPolygonsAndClear()
 {
     DrawList list;
@@ -196,6 +218,7 @@ int main()
     testNested();
     testClip();
     testText();
+    testTextSnapping();
     testPolygonsAndClear();
     if (gFailures == 0) printf("transform tests ok\n");
     return gFailures == 0 ? 0 : 1;

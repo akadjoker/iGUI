@@ -538,6 +538,17 @@ public:
     {
         return antiAliasing_;
     }
+    /// Glyph quads of addText land on whole device pixels (default on: a bitmap drawn between
+    /// pixels blurs under linear filtering). Off keeps the fractional pen + offset position.
+    /// A configuration: clear() leaves it alone.
+    void setTextSnapping(bool on)
+    {
+        textSnapping_ = on;
+    }
+    bool textSnapping() const
+    {
+        return textSnapping_;
+    }
     void pathClear();
 
     const ct::Vector<DrawVertex>& vertices() const
@@ -583,6 +594,7 @@ private:
     float transform_[6] = { 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f };
     ct::Vector<Vec2> path_;
     bool antiAliasing_ = true;
+    bool textSnapping_ = true;
     TextureHandle fontTexture_;
     Vec2 whiteUV_;
     ct::Vector<DrawVertex> vertices_;
