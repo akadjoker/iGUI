@@ -460,6 +460,27 @@ public:
     void pushClipRoundedRect(const Rect& rect, const float radii[4]);
     void popClip();
 
+    /// Maps the vertex positions of everything added from now on by an affine matrix in the CSS
+    /// matrix(a, b, c, d, e, f) convention: x' = a*x + c*y + e, y' = b*x + d*y + f. The matrix is
+    /// composed with the transform in force (new = current * given: a nested push is in the
+    /// coordinates of the outer one). UVs and colours are untouched. Clips pushed while a
+    /// transform is in force are mapped too: the rectangle becomes the bounding box of its four
+    /// mapped corners (exact for translations and scales, over-inclusive for rotations and
+    /// skews) and its rounded part is kept only when the matrix has no rotation or skew (radii
+    /// scaled by min(|a|, |d|)). Clips pushed before stay as they are: the clip stack and the
+    /// transform stack are independent. Ended with popTransform(); clear() empties the stack.
+    void pushTransform(const float matrix[6]);
+    void popTransform();
+    bool hasTransform() const
+    {
+        return !transformStack_.empty();
+    }
+    /// The matrix in force (identity when none).
+    const float* currentTransform() const
+    {
+        return transform_;
+    }
+
     void addRect(const Rect& rect, const Color& color);
     void addRectOutline(const Rect& rect, const Color& color, float thickness = 1.0f);
     void addRoundRectFilled(const Rect& rect, float radius, const Color& color, int segments = 8);
@@ -544,13 +565,22 @@ private:
         RoundClip rounds[DrawCmd::MaxRoundClips];
     };
 
+    struct TransformEntry
+    {
+        float m[6];
+    };
+
     Rect currentClip() const;
+    Vec2 mapPoint(float x, float y) const;
+    void pushClipScreen(const Rect& rect);
     void fillConvexPath(const Color* colors, const Color& color);
     void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
     uint32_t addVertex(float x, float y, const Color& color);
     uint32_t addVertex(float x, float y, float u, float v, const Color& color);
 
     ct::Vector<ClipEntry> clipStack_;
+    ct::Vector<TransformEntry> transformStack_;
+    float transform_[6] = { 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f };
     ct::Vector<Vec2> path_;
     bool antiAliasing_ = true;
     TextureHandle fontTexture_;

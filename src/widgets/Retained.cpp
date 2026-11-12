@@ -619,6 +619,13 @@ void FontAtlas::setTexture(TextureHandle texture)
 void DrawList::clear()
 {
     clipStack_.clear();
+    transformStack_.clear();
+    transform_[0] = 1.0f;
+    transform_[1] = 0.0f;
+    transform_[2] = 0.0f;
+    transform_[3] = 1.0f;
+    transform_[4] = 0.0f;
+    transform_[5] = 0.0f;
     path_.clear();
     vertices_.clear();
     indices_.clear();
@@ -626,7 +633,55 @@ void DrawList::clear()
     pushClipCount_ = 0;
 }
 
-void DrawList::pushClip(const Rect& rect)
+void DrawList::pushTransform(const float matrix[6])
+{
+    TransformEntry saved;
+    for (int i = 0; i < 6; ++i) saved.m[i] = transform_[i];
+    transformStack_.push_back(saved);
+    const float* o = saved.m;
+    // new = current * given
+    transform_[0] = o[0] * matrix[0] + o[2] * matrix[1];
+    transform_[1] = o[1] * matrix[0] + o[3] * matrix[1];
+    transform_[2] = o[0] * matrix[2] + o[2] * matrix[3];
+    transform_[3] = o[1] * matrix[2] + o[3] * matrix[3];
+    transform_[4] = o[0] * matrix[4] + o[2] * matrix[5] + o[4];
+    transform_[5] = o[1] * matrix[4] + o[3] * matrix[5] + o[5];
+}
+
+void DrawList::popTransform()
+{
+    if (transformStack_.empty()) return;
+    const TransformEntry& saved = transformStack_.back();
+    for (int i = 0; i < 6; ++i) transform_[i] = saved.m[i];
+    transformStack_.pop_back();
+}
+
+Vec2 DrawList::mapPoint(float x, float y) const
+{
+    if (transformStack_.empty()) return { x, y };
+    return { transform_[0] * x + transform_[2] * y + transform_[4],
+        transform_[1] * x + transform_[3] * y + transform_[5] };
+}
+
+void DrawList::pushClip(const Rect& source)
+{
+    Rect rect = source;
+    if (!transformStack_.empty())
+    {
+        const Vec2 p0 = mapPoint(source.x, source.y);
+        const Vec2 p1 = mapPoint(source.x + source.w, source.y);
+        const Vec2 p2 = mapPoint(source.x + source.w, source.y + source.h);
+        const Vec2 p3 = mapPoint(source.x, source.y + source.h);
+        float x0 = std::min(std::min(p0.x, p1.x), std::min(p2.x, p3.x));
+        float x1 = std::max(std::max(p0.x, p1.x), std::max(p2.x, p3.x));
+        float y0 = std::min(std::min(p0.y, p1.y), std::min(p2.y, p3.y));
+        float y1 = std::max(std::max(p0.y, p1.y), std::max(p2.y, p3.y));
+        rect = { x0, y0, x1 - x0, y1 - y0 };
+    }
+    pushClipScreen(rect);
+}
+
+void DrawList::pushClipScreen(const Rect& rect)
 {
     ClipEntry entry;
     entry.rect = rect;
@@ -641,18 +696,32 @@ void DrawList::pushClip(const Rect& rect)
     ++pushClipCount_;
 }
 
-void DrawList::pushClipRoundedRect(const Rect& rect, const float radii[4])
+void DrawList::pushClipRoundedRect(const Rect& source, const float radii[4])
 {
+    Rect rect = source;
+    float scale = 1.0f;
+    bool keepRound = true;
+    if (!transformStack_.empty())
+    {
+        // The rounded part survives only a translation / scale; the rectangle always scissors.
+        keepRound = transform_[1] == 0.0f && transform_[2] == 0.0f;
+        scale = std::min(std::fabs(transform_[0]), std::fabs(transform_[3]));
+        const Vec2 p0 = mapPoint(source.x, source.y);
+        const Vec2 p2 = mapPoint(source.x + source.w, source.y + source.h);
+        rect = { std::min(p0.x, p2.x), std::min(p0.y, p2.y), std::fabs(p2.x - p0.x),
+            std::fabs(p2.y - p0.y) };
+    }
     RoundClip round;
     round.rect = rect;
     float r[4];
     bool any = false;
     for (int i = 0; i < 4; ++i)
     {
-        r[i] = radii[i] > 0.0f ? radii[i] : 0.0f;
+        r[i] = radii[i] > 0.0f ? radii[i] * scale : 0.0f;
         any = any || r[i] > 0.0f;
     }
-    pushClip(rect);
+    if (!keepRound) any = false;
+    pushClipScreen(rect);
     if (!any || rect.w <= 0.0f || rect.h <= 0.0f) return;
 
     // CSS: when two radii on a side add up to more than the side, all shrink by the same factor.
@@ -758,7 +827,10 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
         for (int i = 0; i < n; ++i)
         {
             const Vec2& p = path_[static_cast<size_t>(i)];
-            vertices_.push_back({ p.x, p.y, whiteUV_.x, whiteUV_.y, colorAt(i) });
+            {
+                const Vec2 q = mapPoint(p.x, p.y);
+                vertices_.push_back({ q.x, q.y, whiteUV_.x, whiteUV_.y, colorAt(i) });
+            }
         }
         for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
         {
@@ -818,8 +890,10 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
         Color inner = colorAt(i);
         Color outer = inner;
         outer.a = 0;
-        vertices_.push_back({ p.x - nx, p.y - ny, whiteUV_.x, whiteUV_.y, inner });
-        vertices_.push_back({ p.x + nx, p.y + ny, whiteUV_.x, whiteUV_.y, outer });
+        const Vec2 q0 = mapPoint(p.x - nx, p.y - ny);
+        const Vec2 q1 = mapPoint(p.x + nx, p.y + ny);
+        vertices_.push_back({ q0.x, q0.y, whiteUV_.x, whiteUV_.y, inner });
+        vertices_.push_back({ q1.x, q1.y, whiteUV_.x, whiteUV_.y, outer });
     }
 
     for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
@@ -872,6 +946,10 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
     uint32_t base = static_cast<uint32_t>(vertices_.size());
     Color transparent = color;
     transparent.a = 0;
+    auto addMapped = [&](float x, float y, const Color& c) {
+        const Vec2 q = mapPoint(x, y);
+        vertices_.push_back({ q.x, q.y, whiteUV_.x, whiteUV_.y, c });
+    };
 
     for (int i = 0; i < n; ++i)
     {
@@ -915,18 +993,16 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
         if (aa)
         {
             float hw = core * 0.5f, ow = hw + fringe;
-            vertices_.push_back(
-                    { p.x + ux * ow, p.y + uy * ow, whiteUV_.x, whiteUV_.y, transparent });
-            vertices_.push_back({ p.x + ux * hw, p.y + uy * hw, whiteUV_.x, whiteUV_.y, color });
-            vertices_.push_back({ p.x - ux * hw, p.y - uy * hw, whiteUV_.x, whiteUV_.y, color });
-            vertices_.push_back(
-                    { p.x - ux * ow, p.y - uy * ow, whiteUV_.x, whiteUV_.y, transparent });
+            addMapped(p.x + ux * ow, p.y + uy * ow, transparent);
+            addMapped(p.x + ux * hw, p.y + uy * hw, color);
+            addMapped(p.x - ux * hw, p.y - uy * hw, color);
+            addMapped(p.x - ux * ow, p.y - uy * ow, transparent);
         }
         else
         {
             float hw = thickness * 0.5f;
-            vertices_.push_back({ p.x + ux * hw, p.y + uy * hw, whiteUV_.x, whiteUV_.y, color });
-            vertices_.push_back({ p.x - ux * hw, p.y - uy * hw, whiteUV_.x, whiteUV_.y, color });
+            addMapped(p.x + ux * hw, p.y + uy * hw, color);
+            addMapped(p.x - ux * hw, p.y - uy * hw, color);
         }
     }
 
@@ -1927,7 +2003,8 @@ uint32_t DrawList::addVertex(float x, float y, const Color& color)
 uint32_t DrawList::addVertex(float x, float y, float u, float v, const Color& color)
 {
     uint32_t index = static_cast<uint32_t>(vertices_.size());
-    vertices_.push_back({ x, y, u, v, color });
+    const Vec2 q = mapPoint(x, y);
+    vertices_.push_back({ q.x, q.y, u, v, color });
     return index;
 }
 

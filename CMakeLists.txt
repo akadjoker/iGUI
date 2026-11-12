@@ -345,6 +345,12 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_text_sizes_tests PRIVATE igui_widgets)
         add_test(NAME igui_text_sizes COMMAND igui_text_sizes_tests)
 
+        # The DrawList's vertex transform (pushTransform / popTransform).
+        add_executable(igui_transform_tests tests/test_transform.cpp)
+        target_compile_features(igui_transform_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_transform_tests PRIVATE igui_widgets)
+        add_test(NAME igui_transform COMMAND igui_transform_tests)
+
         # The retained CodeEditor's keyboard: undo groups, the inline bars,
         # the commands, cursors, bookmarks, the jump list.
         add_executable(igui_code_editor_keys_tests tests/test_code_editor_keys.cpp)
