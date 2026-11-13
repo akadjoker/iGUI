@@ -192,8 +192,13 @@ void ToolBar::setItemVisible(int id, bool visible)
 {
     if (auto* it = findItem(id))
     {
+        if (it->visible == visible) return;
         it->visible = visible;
         markDirty();
+        // The rectangles of the items are worked out by layout(): without a new pass an item that
+        // was hidden at the last one is still a 0x0 rectangle when it is shown (an empty slot),
+        // and the ones after a hidden or shown item are not moved.
+        WidgetApp::instance().requestLayout();
     }
 }
 bool ToolBar::isItemVisible(int id) const
