@@ -117,6 +117,25 @@ void FileDialog::setMode(Mode m)
     refreshDir();
 }
 
+BoxLayout* FileDialog::extraRow()
+{
+    if (!extraRow_)
+    {
+        constexpr float kExtraRowH = 26.0f;
+        extraRow_ = mainLayout_->createChild<BoxLayout>(LayoutDir::Horizontal);
+        extraRow_->setSize(0, kExtraRowH);
+        extraRow_->setSpacing(10);
+        extraRow_->setPadding(0);
+        // Right above the file name, not below the status line it was appended after.
+        const auto& siblings = mainLayout_->children();
+        int at = 0;
+        while (at < static_cast<int>(siblings.size()) && siblings[at] != bottomBar_) ++at;
+        mainLayout_->moveChild(extraRow_, at);
+        setFloatSize(floatW(), floatH() + kExtraRowH + mainLayout_->spacing());
+    }
+    return extraRow_;
+}
+
 void FileDialog::setViewMode(ViewMode vm)
 {
     viewMode_ = vm;

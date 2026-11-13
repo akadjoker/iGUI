@@ -117,6 +117,12 @@ public:
     /// @brief Add a sidebar bookmark entry.
     void addBookmark(const String& name, const String& path);
 
+    /// @brief A row of the application's own widgets just above the file name (the options of a
+    ///        Save: a check box, a number). Made on the first call and empty; put children in it
+    ///        and read them back when `accepted` is emitted. The dialog gives it room: a window
+    ///        that is not resized by the application grows by the height of the row.
+    BoxLayout* extraRow();
+
     /// @brief Get the selected file/folder path.
     const String& selectedPath() const
     {
@@ -213,6 +219,7 @@ private:
     BoxLayout* fileListLayout_ = nullptr;
     Widget* previewPanel_ = nullptr;
     BoxLayout* bottomBar_ = nullptr;
+    BoxLayout* extraRow_ = nullptr;
     TextInput* fileNameInput_ = nullptr;
     Label* statusLabel_ = nullptr;
     // The "new folder" prompt, when one is open: it holds an accepted handler
