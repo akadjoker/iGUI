@@ -1582,8 +1582,11 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 
             if (cx1 < b.x + kHeaderW || cx0 > b.x + b.w) continue;
 
-            // Clip body
+            // Clip body: grey while its media loads, dark red when it could not be loaded
             Color cc = clip.selected ? Color(255, 200, 60, 200) : clip.color;
+            if (clip.status == TimelineClip::Status::Loading) cc = Color(96, 98, 106, clip.color.a);
+            else if (clip.status == TimelineClip::Status::Failed)
+                cc = Color(140, 40, 44, clip.color.a);
             ctx.fill.SetColor(cc.r, cc.g, cc.b, cc.a);
             ctx.fillRect(cx0, clipY, cx1 - cx0, clipH);
 
@@ -1666,11 +1669,36 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 }
             }
 
-            // Clip label
+            // Loading: a bar along the bottom of the clip, as full as the media is loaded
+            if (clip.status == TimelineClip::Status::Loading && cx1 - cx0 > 4.0f)
+            {
+                const float barH = 3.0f;
+                const float width = (cx1 - cx0) - 2.0f;
+                const float done = fmaxf(0.0f, fminf(1.0f, clip.progress));
+                ctx.fill.SetColor(20, 20, 24, 180);
+                ctx.fillRect(cx0 + 1.0f, clipY + clipH - 1.0f - barH, width, barH);
+                ctx.fill.SetColor(240, 242, 250, 230);
+                ctx.fillRect(cx0 + 1.0f, clipY + clipH - 1.0f - barH, width * done, barH);
+            }
+
+            // Clip label (after a cross, when the media failed)
+            float labelX = cx0 + 4;
+            if (clip.status == TimelineClip::Status::Failed && cx1 - cx0 > 16.0f)
+            {
+                // two thin diagonals, the same way the envelope is stroked
+                const float s = fminf(8.0f, clipH * 0.5f - 2.0f), x = cx0 + 5.0f,
+                            y = clipY + (clipH - s) * 0.5f, w = 0.9f;
+                ctx.fill.SetColor(255, 235, 235, 255);
+                ctx.fillTriangle(x - w, y, x + w, y, x + s + w, y + s);
+                ctx.fillTriangle(x - w, y, x + s + w, y + s, x + s - w, y + s);
+                ctx.fillTriangle(x + s - w, y, x + s + w, y, x + w, y + s);
+                ctx.fillTriangle(x + s - w, y, x + w, y + s, x - w, y + s);
+                labelX += s + 6.0f;
+            }
             if (!clip.label.empty() && cx1 - cx0 > 30)
             {
                 float ascClip = setupFont(ctx, Color(240, 242, 250, 230), 9.0f);
-                ctx.font.Print(clip.label.c_str(), cx0 + 4,
+                ctx.font.Print(clip.label.c_str(), labelX,
                         clipY + (clipH - 9.0f) * 0.5f + ascClip);
             }
         }

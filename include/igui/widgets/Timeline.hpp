@@ -74,6 +74,17 @@ struct TimelineClip
     float sourceLength = 0; // length of the media, 0 = unlimited (limits trimming)
     int link = -1;          // clips sharing a link are moved and trimmed together
     int user = -1;
+    // What the application says about the clip's media, and the timeline shows: Ready draws the
+    // clip as usual; Loading greys it, with a bar along its bottom filled to `progress` (0 to 1);
+    // Failed paints it dark red with a cross. The widget only draws it, the application sets it.
+    enum class Status : unsigned char
+    {
+        Ready,
+        Loading,
+        Failed
+    };
+    Status status = Status::Ready;
+    float progress = 0; // of Loading, 0 to 1
     int generator =
             -1; // an overlay made by the application (a title, a balloon): no media, drawn on top
     // A curve over the media's own time (seconds), drawn on the clip between envelopeMin and
