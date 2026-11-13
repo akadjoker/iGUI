@@ -133,6 +133,8 @@ struct TimelineTrack
     TrackKind kind = TrackKind::Generic;
     bool rulerMarks =
             false; // the keyframes are markers: a flag with the label is also drawn on the ruler
+    bool keysInert = false; // the keyframes are drawn (along the bottom of the row) and snapped to, but
+                            // cannot be picked or moved: a click goes to the clip (a beat grid)
 };
 
 class Timeline : public Widget
@@ -146,6 +148,10 @@ public:
     void setExpanded(int joint, bool expanded);
     ct::Vector<int> visibleTracks() const;
     void setHeaderWidth(float width);
+    /// Height of a track row in pixels (clamped to 20-200). The clips, their waveforms and curves grow with it;
+    /// Ctrl + mouse wheel changes it too and emits onTrackHeightChanged (Shift + wheel zooms the time, the width).
+    void setTrackHeight(float height);
+    float trackHeight() const { return kTrackH; }
     /// Space in pixels inside both timeline edges (minimum 8 for full diamonds).
     void setEdgePadding(float pixels);
     float edgePadding() const
@@ -372,6 +378,10 @@ public:
     Signal<int, int> onEnvelopeChanged;
     /// @brief The drag that moved or trimmed a clip ended. Track and clip index.
     Signal<int, int> onClipEdited;
+    /// @brief The track height was changed with Ctrl + mouse wheel.
+    Signal<float> onTrackHeightChanged;
+    /// @brief A clip was right-clicked (it is selected now): track, clip index and the screen position of the pointer.
+    Signal<int, int, float, float> onClipContextMenu;
     /// @brief A track header was clicked (-1: selection cleared).
     Signal<int> onTrackSelected;
     /// @brief A key pressed while the timeline has focus (key, modifiers: 1 shift, 2 ctrl); the
@@ -403,7 +413,7 @@ private:
     float rangeIn_ = 0.0f;
     float rangeOut_ = -1.0f;
 
-    static constexpr float kTrackH = 28;
+    float kTrackH = 28;
     float kHeaderW = 160;
     float edgePadding_ = 16;
     float verticalScroll_ = 0;

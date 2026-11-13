@@ -218,6 +218,13 @@ void Timeline::setHeaderWidth(float width)
     if (std::isfinite(width)) kHeaderW = std::max(40.0f, width);
     markDirty();
 }
+void Timeline::setTrackHeight(float height)
+{
+    if (!std::isfinite(height)) return;
+    kTrackH = std::clamp(height, 20.0f, 200.0f);
+    setVerticalScroll(verticalScroll_); // clamps to the new content height
+    markDirty();
+}
 void Timeline::setEdgePadding(float pixels)
 {
     if (std::isfinite(pixels)) edgePadding_ = std::max(8.0f, pixels);
@@ -634,6 +641,29 @@ void Timeline::onMousePress(MouseEvent& e)
         e.consumed = true;
         return;
     }
+    // Right-click on a clip: select it and let the application show the menu of what can be done with it.
+    if (e.button == 1) {
+        const int rt = trackAtY(e.y);
+        if (rt < 0 || e.x < b.x + kHeaderW || tracks_[rt].locked) return;
+        const auto rtRows = visibleTracks();
+        int rtRow = 0;
+        while (rtRow < static_cast<int>(rtRows.size()) && rtRows[rtRow] != rt) ++rtRow;
+        const float rcy = b.y + kRulerH + rtRow * kTrackH - verticalScroll_ + 3;
+        for (int ci = 0; ci < static_cast<int>(tracks_[rt].clips.size()); ++ci) {
+            const auto& clip = tracks_[rt].clips[ci];
+            if (e.x < timeToX(clip.start) || e.x > timeToX(clip.end) || e.y < rcy || e.y > rcy + kTrackH - 6) continue;
+            if (!clip.selected) {
+                clearSelection();
+                tracks_[rt].clips[ci].selected = true;
+                onClipSelected.emit(rt, ci);
+            }
+            onClipContextMenu.emit(rt, ci, e.x, e.y);
+            markDirty();
+            e.consumed = true;
+            return;
+        }
+        return;
+    }
     if (e.button != 0) return;
 
     // Left-click on ruler → scrub playhead
@@ -688,7 +718,7 @@ void Timeline::onMousePress(MouseEvent& e)
     while (row < static_cast<int>(rows.size()) && rows[row] != ti) ++row;
 
     // Keyframe hit (diamond proximity)
-    for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()); ++ki)
+    for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()) && !trk.keysInert; ++ki)
     {
         float kx = timeToX(trk.keyframes[ki].time);
         float ky = b.y + kRulerH + row * kTrackH - verticalScroll_ + kTrackH * 0.5f;
@@ -937,7 +967,7 @@ void Timeline::updateMarquee()
             bool selected = false;
             for (size_t i = 0; i < marqueeKeyBase_.size() && !selected; ++i)
                 selected = marqueeKeyBase_[i].track == ti && marqueeKeyBase_[i].key == ki;
-            if (shown)
+            if (shown && !tracks_[ti].keysInert)
             {
                 const float kx = timeToX(kf.time);
                 if (kx > b.x + kHeaderW && kx + 6 >= x0 && kx - 6 <= x1 && ky + 6 >= y0 &&
@@ -1280,19 +1310,29 @@ void Timeline::onDropReceive(const DragPayload& p)
 
 void Timeline::onMouseScroll(MouseEvent& e)
 {
-    if (e.scrollY == 0) return;
+    // With Shift held some systems turn the vertical wheel into a sideways one.
+    const float wheel = (e.shift && e.scrollY == 0) ? e.scrollX : e.scrollY;
+    if (wheel == 0) return;
     const bool overHeader = e.x < absoluteRect().x + kHeaderW;
     const bool overBar = vbar_->isVisible() && vbar_->absoluteRect().contains(e.x, e.y);
     if (labelTrack_ >= 0) finishLabelEdit(true, true);
-    if (overHeader || overBar || (wheelScrollsTracks_ && !e.ctrl && !e.shift))
+    if (e.ctrl)
     {
-        setVerticalScroll(verticalScroll_ - e.scrollY * kTrackH);
+        // Ctrl + wheel: taller or shorter tracks
+        setTrackHeight(kTrackH + wheel * 6.0f);
+        onTrackHeightChanged.emit(kTrackH);
         e.consumed = true;
         return;
     }
-    // Zoom centred on mouse X
-    float tAtMouse = xToTime(e.x);
-    float factor = (e.scrollY > 0) ? 0.9f : 1.1f;
+    if ((!e.shift && (overHeader || overBar)) || (wheelScrollsTracks_ && !e.shift))
+    {
+        setVerticalScroll(verticalScroll_ - wheel * kTrackH);
+        e.consumed = true;
+        return;
+    }
+    // Wheel, or Shift + wheel: zoom the time (the width), centred on mouse X
+    float tAtMouse = std::max(viewStart_, xToTime(e.x));
+    float factor = (wheel > 0) ? 0.9f : 1.1f;
     const float nextRange = (viewEnd_ - viewStart_) * factor;
     if (!std::isfinite(nextRange) || nextRange < 0.001f || nextRange > 1000000.0f) return;
     viewStart_ = tAtMouse + (viewStart_ - tAtMouse) * factor;
@@ -1656,7 +1696,8 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         }
 
         // ── Keyframes (diamonds) ─────────────────────────────────────────
-        const float ky = ty + kTrackH * 0.5f;
+        // Inert ones (a beat grid) run along the bottom of the row, out of the way of the waveform and the label.
+        const float ky = trk.keysInert ? ty + kTrackH - 9.0f : ty + kTrackH * 0.5f;
         auto drawKey = [&](float kx, KeyShape shape, float ds)
         {
             if (shape == KeyShape::Square)
