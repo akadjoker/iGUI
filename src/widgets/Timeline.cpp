@@ -489,6 +489,21 @@ void Timeline::setTimeRange(float start, float end)
     markDirty();
 }
 
+void Timeline::setClipGrab(bool on)
+{
+    if (!on) cancelGrab();
+    grabClips_ = on;
+}
+
+void Timeline::cancelGrab()
+{
+    if (dragMode_ != DragMode::Grab) return;
+    dragMode_ = DragMode::None;
+    dragTrack_ = -1;
+    dragIndex_ = -1;
+    markDirty();
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Coordinate helpers
 // ─────────────────────────────────────────────────────────────────────────────
@@ -787,6 +802,25 @@ void Timeline::onMousePress(MouseEvent& e)
 
         if (e.x >= cx0 && e.x <= cx1 && e.y >= cy && e.y <= cy + ch)
         {
+            // Grab mode: the application takes the press. The clip is selected (alone), and
+            // nothing moves, trims or edits.
+            if (grabClips_)
+            {
+                clearSelection();
+                trk.clips[ci].selected = true;
+                onClipSelected.emit(ti, ci);
+                dragMode_ = DragMode::Grab;
+                dragTrack_ = ti;
+                dragIndex_ = ci;
+                dragMoved_ = false;
+                dragStartX_ = e.x;
+                dragGroup_.clear();
+                collapseOnRelease_ = false;
+                onClipGrabbed.emit(ti, ci, e.x, xToTime(e.x));
+                markDirty();
+                e.consumed = true;
+                return;
+            }
             // Ctrl+click toggles the clip, Shift+click adds it, a plain click selects only it; a
             // plain click on a clip that is already selected keeps the others, so they can be
             // dragged together (a click without a drag keeps only that clip). The edges of the bar
@@ -981,6 +1015,7 @@ void Timeline::updateMarquee()
 
 void Timeline::onMouseRelease(MouseEvent& e)
 {
+    const bool grabbed = dragMode_ == DragMode::Grab;
     const bool marquee = dragMode_ == DragMode::Marquee;
     const bool collapse = collapseOnRelease_ && !dragMoved_ && dragMode_ == DragMode::MoveClip &&
                           dragTrack_ >= 0 && dragTrack_ < static_cast<int>(tracks_.size()) &&
@@ -1022,6 +1057,7 @@ void Timeline::onMouseRelease(MouseEvent& e)
     dragTrack_ = -1;
     dragIndex_ = -1;
     e.consumed = true;
+    if (grabbed) onClipGrabReleased.emit(e.x, xToTime(e.x));
     if (marquee)
     {
         markDirty();
@@ -1286,6 +1322,11 @@ void Timeline::onMouseMove(MouseEvent& e)
             e.consumed = true;
             break;
         }
+        case DragMode::Grab:
+            onClipGrabMoved.emit(e.x, xToTime(e.x));
+            e.consumed = true;
+            break;
+
         case DragMode::None:
             break;
     }
@@ -1667,6 +1708,62 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                     ctx.fill.SetColor(20, 20, 20, 255);
                     ctx.fillRect(kx - 2, ky - 2, 4, 4);
                 }
+            }
+
+            // The trace the application laid over the clip: its stretch tinted, a thin baseline
+            // across it, and the line, all kept inside the bar
+            if (clip.trace.size() >= 2)
+            {
+                const float left = fmaxf(cx0, b.x + kHeaderW), right = fminf(cx1, b.x + b.w);
+                const float t0 = timeToX(clip.start +
+                                         (clip.trace[0].time - clip.offset) / clip.speed);
+                const float t1 = timeToX(clip.start +
+                                         (clip.trace[clip.trace.size() - 1].time - clip.offset) /
+                                                 clip.speed);
+                const float bandL = fmaxf(left, t0), bandR = fminf(right, t1);
+                const Color tc = clip.traceColor;
+                const auto heightY = [&](float v)
+                { return clipY + clipH - 2.0f - fminf(1.0f, fmaxf(0.0f, v)) * (clipH - 4.0f); };
+                if (bandR > bandL)
+                {
+                    ctx.fill.SetColor(tc.r, tc.g, tc.b, 56);
+                    ctx.fillRect(bandL, clipY + 1.0f, bandR - bandL, clipH - 2.0f);
+                    if (clip.traceBaseline >= 0.0f)
+                    {
+                        ctx.fill.SetColor(tc.r, tc.g, tc.b, 130);
+                        ctx.fillRect(bandL, heightY(clip.traceBaseline), bandR - bandL, 1.0f);
+                    }
+                }
+                ctx.pushClip({ left, clipY, fmaxf(0.0f, right - left), clipH });
+                ctx.fill.SetColor(tc.r, tc.g, tc.b, tc.a);
+                float px = timeToX(clip.start + (clip.trace[0].time - clip.offset) / clip.speed);
+                float py = heightY(clip.trace[0].value);
+                for (size_t k = 1; k < clip.trace.size(); ++k)
+                {
+                    const float x = timeToX(clip.start +
+                                            (clip.trace[k].time - clip.offset) / clip.speed);
+                    const float y = heightY(clip.trace[k].value);
+                    if ((x < left && px < left) || (x > right && px > right))
+                    {
+                        px = x;
+                        py = y;
+                        continue;
+                    }
+                    // a point closer than a pixel to the last one drawn adds nothing
+                    if (x - px < 0.5f && fabsf(y - py) < 0.5f && k + 1 < clip.trace.size())
+                        continue;
+                    const float dx = x - px, dy = y - py;
+                    const float len = sqrtf(dx * dx + dy * dy);
+                    if (len > 0.01f)
+                    {
+                        const float nx = -dy / len * 0.8f, ny = dx / len * 0.8f;
+                        ctx.fillTriangle(px + nx, py + ny, px - nx, py - ny, x - nx, y - ny);
+                        ctx.fillTriangle(px + nx, py + ny, x - nx, y - ny, x + nx, y + ny);
+                    }
+                    px = x;
+                    py = y;
+                }
+                ctx.popClip();
             }
 
             // Loading: a bar along the bottom of the clip, as full as the media is loaded

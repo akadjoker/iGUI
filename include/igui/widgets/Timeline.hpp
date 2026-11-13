@@ -20,6 +20,9 @@
 //  empty
 //    part of a track selects the clips inside the rectangle, and dragging a selected clip moves all
 //    of them
+//  - Grab mode (setClipGrab): a press on a clip goes to the application with the pointer's moves
+//    and the release, and the clip is not moved
+//  - A trace on a clip: a line the application draws over the waveform (a scratch)
 //  - Horizontal zoom (scroll) and pan (middle-drag)
 //  - Snapping while dragging: clip edges, keyframes, the playhead and zero within 8 pixels, whole
 //  frames otherwise
@@ -100,6 +103,19 @@ struct TimelineClip
     // A curve per entry of params over the media's own time (seconds); when there is one it
     // replaces the constant.
     ct::Vector<CurveKey> automation[12];
+    // A line the application lays over the clip, on top of the waveform and the curve: points of
+    // the media's own time (seconds, like the envelope's) and a height from 0 (the bottom of the
+    // bar) to 1 (the top), straight between points. The stretch between the first and the last
+    // point is tinted. It is drawn only: the timeline never edits it, and a press on it is a press
+    // on the clip (the path of a scratch, for instance).
+    struct TracePoint
+    {
+        float time = 0;
+        float value = 0;
+    };
+    ct::Vector<TracePoint> trace;
+    Color traceColor = Color(255, 70, 170, 255);
+    float traceBaseline = -1; // a height 0..1 drawn as a thin line across the tinted stretch; < 0 none
 };
 
 /// @brief The candidate nearest to t when it lies within threshold of it (false when none does).
@@ -292,6 +308,26 @@ public:
     {
         clipTooltip_ = std::move(provider);
     }
+    /// @brief A mode in which a left press on a clip is handed to the application instead of
+    /// moving, trimming or editing it: the clip is selected, and onClipGrabbed, onClipGrabMoved
+    /// (every pointer move, also when the pointer has left the clip or the widget) and
+    /// onClipGrabReleased follow until the button goes up. Presses elsewhere (the ruler, the
+    /// headers, the empty part of a track) behave as usual. Turning the mode off ends a grab.
+    void setClipGrab(bool on);
+    bool clipGrab() const
+    {
+        return grabClips_;
+    }
+    /// @brief Ends a grab that is going on without a release signal (the application stopped it:
+    /// Escape, the window lost the focus, the clip is gone). The button may still be down; its
+    /// release does nothing.
+    void cancelGrab();
+    /// @brief Whether a grab is going on.
+    bool grabbing() const
+    {
+        return dragMode_ == DragMode::Grab;
+    }
+
     /// @brief Opens a small text field over a keyframe to type its label. Enter or leaving the
     /// field keeps the text
     ///        (onKeyframeLabelEdited), Escape drops it.
@@ -389,6 +425,13 @@ public:
     Signal<int, int> onEnvelopeChanged;
     /// @brief The drag that moved or trimmed a clip ended. Track and clip index.
     Signal<int, int> onClipEdited;
+    /// @brief In grab mode (setClipGrab), a press on a clip: track, clip index, the pointer's x in
+    /// window pixels and the time under it.
+    Signal<int, int, float, float> onClipGrabbed;
+    /// @brief The pointer moved during a grab: x in window pixels and the time under it.
+    Signal<float, float> onClipGrabMoved;
+    /// @brief The button of a grab went up: x and the time under it.
+    Signal<float, float> onClipGrabReleased;
     /// @brief The track height was changed with Ctrl + mouse wheel.
     Signal<float> onTrackHeightChanged;
     /// @brief A clip was right-clicked (it is selected now): track, clip index and the screen position of the pointer.
@@ -446,7 +489,8 @@ private:
         ResizeClipR,
         StretchClipR,
         MoveEnvelopeKey,
-        Marquee
+        Marquee,
+        Grab
     };
     struct DragMember
     {
@@ -468,6 +512,7 @@ private:
     float dragOrigSpeed_ = 1;
     bool dragMoved_ = false;
     bool snapping_ = true;
+    bool grabClips_ = false;
     int nextClipId_ = 0;
     int selectedTrack_ = -1;
     ct::Vector<DragMember> dragGroup_; // the selected clips a move drags together (more than one)
