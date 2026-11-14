@@ -44,6 +44,16 @@ extern "C" void* __wrap_realloc(void* p, size_t n)
     traceAlloc();
     return __real_realloc(p, n);
 }
+// Under ThreadSanitizer the runtime defines operator new itself (a second definition does not
+// link): only the malloc calls are counted there, which is all that ct makes.
+#if defined(__SANITIZE_THREAD__)
+#define IGUI_ALLOC_COUNTER_KEEP_NEW 1
+#elif defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+#define IGUI_ALLOC_COUNTER_KEEP_NEW 1
+#endif
+#endif
+#ifndef IGUI_ALLOC_COUNTER_KEEP_NEW
 void* operator new(unsigned long n)
 {
     ++gAllocs;
@@ -75,4 +85,4 @@ void operator delete[](void* p, unsigned long) noexcept
 {
     free(p);
 }
-
+#endif // IGUI_ALLOC_COUNTER_KEEP_NEW
