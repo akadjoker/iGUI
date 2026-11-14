@@ -556,6 +556,20 @@ private:
     // ── Helpers ──────────────────────────────────────────────────────────
     float timeToX(float t) const;
     float xToTime(float x) const;
+    // timeToX / xToTime for a rectangle already in hand (loops over many clips and keys).
+    struct TimeMap
+    {
+        float bx = 0, header = 0, edge = 0, width = 1, start = 0, range = 1;
+        float x(float t) const
+        {
+            return bx + header + edge + (t - start) / range * width;
+        }
+        float t(float px) const
+        {
+            return start + (px - bx - header - edge) / width * range;
+        }
+    };
+    TimeMap timeMap(const Rect& b) const;
     int trackAtY(float y) const;
 
     void paintRuler(PaintContext& ctx, const Rect& b);

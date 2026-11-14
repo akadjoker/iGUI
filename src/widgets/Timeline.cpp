@@ -617,6 +617,21 @@ float Timeline::xToTime(float x) const
     return viewStart_ + (x - b.x - kHeaderW - edgePadding_) / contentW * (viewEnd_ - viewStart_);
 }
 
+// timeToX / xToTime for a widget rectangle already in hand: the loops over every clip and every
+// key of a track run them thousands of times, and each timeToX() would walk up the parents to
+// find the same rectangle again. The arithmetic is the same.
+Timeline::TimeMap Timeline::timeMap(const Rect& b) const
+{
+    TimeMap m;
+    m.bx = b.x;
+    m.header = kHeaderW;
+    m.edge = edgePadding_;
+    m.width = std::max(1.0f, b.w - kHeaderW - edgePadding_ * 2);
+    m.start = viewStart_;
+    m.range = viewEnd_ - viewStart_;
+    return m;
+}
+
 int Timeline::trackAtY(float y) const
 {
     Rect b = absoluteRect();
@@ -1068,6 +1083,7 @@ void Timeline::updateMarquee()
     const float x0 = std::min(marqueeX0_, marqueeX1_), x1 = std::max(marqueeX0_, marqueeX1_);
     const float y0 = std::min(marqueeY0_, marqueeY1_), y1 = std::max(marqueeY0_, marqueeY1_);
     const auto rows = visibleTracks();
+    const TimeMap tm = timeMap(b);
     for (int ti = 0; ti < trackCount(); ++ti)
     {
         int row = 0;
@@ -1083,7 +1099,7 @@ void Timeline::updateMarquee()
                 selected = marqueeBase_[i].track == ti && marqueeBase_[i].clip == ci;
             if (shown)
             {
-                const float cx0 = timeToX(clip.start), cx1 = timeToX(clip.end);
+                const float cx0 = tm.x(clip.start), cx1 = tm.x(clip.end);
                 if (cx1 > b.x + kHeaderW && cx1 >= x0 && cx0 <= x1 && cy + ch >= y0 && cy <= y1)
                     selected = true;
             }
@@ -1098,7 +1114,7 @@ void Timeline::updateMarquee()
                 selected = marqueeKeyBase_[i].track == ti && marqueeKeyBase_[i].key == ki;
             if (shown && !tracks_[ti].keysInert)
             {
-                const float kx = timeToX(kf.time);
+                const float kx = tm.x(kf.time);
                 if (kx > b.x + kHeaderW && kx + 6 >= x0 && kx - 6 <= x1 && ky + 6 >= y0 &&
                         ky - 6 <= y1)
                     selected = true;
@@ -1208,9 +1224,10 @@ bool Timeline::clipAtPoint(float x, float y, int& track, int& clip) const
     const float ch = kTrackH - 6;
     if (y < cy || y > cy + ch) return false;
     const auto& clips = tracks_[ti].clips;
+    const TimeMap tm = timeMap(b);
     for (int ci = 0; ci < static_cast<int>(clips.size()); ++ci)
     {
-        if (x < timeToX(clips[ci].start) || x > timeToX(clips[ci].end)) continue;
+        if (x < tm.x(clips[ci].start) || x > tm.x(clips[ci].end)) continue;
         track = ti;
         clip = ci;
         return true;
@@ -1696,6 +1713,7 @@ void Timeline::sortByStart(ct::Vector<int>& order, const ct::Vector<TimelineClip
 void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 {
     float ascName = setupFont(ctx, Color(180, 180, 180, 255), 10.0f);
+    const TimeMap tm = timeMap(b);
 
     const auto rows = visibleTracks();
     for (int row = 0; row < static_cast<int>(rows.size()); ++row)
@@ -1755,8 +1773,8 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         for (int ci = 0; ci < static_cast<int>(trk.clips.size()); ++ci)
         {
             const auto& clip = trk.clips[ci];
-            float cx0 = timeToX(clip.start);
-            float cx1 = timeToX(clip.end);
+            float cx0 = tm.x(clip.start);
+            float cx1 = tm.x(clip.end);
             float clipY = ty + 3;
             float clipH = kTrackH - 6;
 
@@ -1786,12 +1804,12 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 const float x0 = std::max(cx0, b.x + kHeaderW);
                 const float x1 = std::min(cx1, b.x + b.w);
                 const float mid = clipY + clipH * 0.5f;
-                float previous = clip.offset + (xToTime(x0) - clip.start) * clip.speed;
+                float previous = clip.offset + (tm.t(x0) - clip.start) * clip.speed;
                 ctx.fill.SetColor(255, 255, 255, 105);
                 for (float x = x0; x < x1; x += 2.0f)
                 {
                     const float source =
-                            clip.offset + (xToTime(x + 2.0f) - clip.start) * clip.speed;
+                            clip.offset + (tm.t(x + 2.0f) - clip.start) * clip.speed;
                     const float peak = peakProvider_(clip.media, std::min(previous, source),
                             std::max(previous, source));
                     previous = source;
@@ -1812,7 +1830,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 for (float x = x0; x <= x1 + 2.0f; x += 2.0f)
                 {
                     const float xs = std::min(x, x1);
-                    const float t = xToTime(xs);
+                    const float t = tm.t(xs);
                     const float v = CurveEditor::evaluateKeys(clip.envelope,
                             clip.offset + (t - clip.start) * clip.speed);
                     const float f = std::max(0.0f,
@@ -1855,9 +1873,9 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             if (clip.trace.size() >= 2)
             {
                 const float left = fmaxf(cx0, b.x + kHeaderW), right = fminf(cx1, b.x + b.w);
-                const float t0 = timeToX(clip.start +
+                const float t0 = tm.x(clip.start +
                                          (clip.trace[0].time - clip.offset) / clip.speed);
-                const float t1 = timeToX(clip.start +
+                const float t1 = tm.x(clip.start +
                                          (clip.trace[clip.trace.size() - 1].time - clip.offset) /
                                                  clip.speed);
                 const float bandL = fmaxf(left, t0), bandR = fminf(right, t1);
@@ -1876,11 +1894,11 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 }
                 ctx.pushClip({ left, clipY, fmaxf(0.0f, right - left), clipH });
                 ctx.fill.SetColor(tc.r, tc.g, tc.b, tc.a);
-                float px = timeToX(clip.start + (clip.trace[0].time - clip.offset) / clip.speed);
+                float px = tm.x(clip.start + (clip.trace[0].time - clip.offset) / clip.speed);
                 float py = heightY(clip.trace[0].value);
                 for (size_t k = 1; k < clip.trace.size(); ++k)
                 {
-                    const float x = timeToX(clip.start +
+                    const float x = tm.x(clip.start +
                                             (clip.trace[k].time - clip.offset) / clip.speed);
                     const float y = heightY(clip.trace[k].value);
                     if ((x < left && px < left) || (x > right && px > right))
@@ -1958,7 +1976,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                 const float e = std::min(trk.clips[a].end, trk.clips[o].end);
                 if (e - s < 0.01f || trk.clips[a].generator >= 0 || trk.clips[o].generator >= 0)
                     continue;
-                const float x0 = timeToX(s), x1 = timeToX(e);
+                const float x0 = tm.x(s), x1 = tm.x(e);
                 if (x1 < b.x + kHeaderW || x0 > b.x + b.w) continue;
                 ctx.fill.SetColor(255, 255, 255, 70);
                 ctx.fillRect(x0, ty + 3, x1 - x0, kTrackH - 6);
@@ -2019,7 +2037,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         for (int ki = 0; ki < static_cast<int>(trk.keyframes.size()); ++ki)
         {
             const auto& kf = trk.keyframes[ki];
-            float kx = timeToX(kf.time);
+            float kx = tm.x(kf.time);
 
             if (kx < b.x + kHeaderW || kx > b.x + b.w) continue;
             const bool plain = !kf.selected && kf.label.empty();

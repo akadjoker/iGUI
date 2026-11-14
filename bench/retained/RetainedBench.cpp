@@ -156,6 +156,14 @@ void editorScene(const char* scene, int clips)
     h.relayout();
     h.frames(5);
 
+    if (wanted(scene, "draw_list_size"))
+    {
+        // What a frame produces: vertices, indices and draw commands (the work of the backend).
+        const DrawList& dl = GetDrawList();
+        printf("%-34s %10u vertices %u indices %u commands\n", scene, static_cast<unsigned>(dl.vertices().size()),
+                static_cast<unsigned>(dl.indices().size()), static_cast<unsigned>(dl.commands().size()));
+    }
+
     // A frame where nothing changed: the idle CPU of an application sitting open.
     RUN_IF(scene, "idle_frame", 200, [&] { h.frame(); });
 
