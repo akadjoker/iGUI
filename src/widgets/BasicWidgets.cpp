@@ -1,6 +1,38 @@
 #include "BasicWidgets.hpp"
 #include "pch.hpp"
 
+namespace
+{
+
+// The width a text takes for a sizeHint: never less than the estimate (characters * 0.6 em) every hint
+// works from, and the real width when that is more (wide capitals, a larger font), so that a rectangle
+// of the hinted size holds all of the text.
+float hintedTextWidth(const String& text, const ig::retained::Font* font, float estimate)
+{
+    if (text.empty()) return estimate;
+    const float real = WidgetApp::instance().textWidth(text.c_str(), font);
+    return real > estimate ? real : estimate;
+}
+
+// Prints `text` (`width` wide) from x, with its baseline at y. Text that runs past a side of `bounds`
+// is cut there: a widget never draws over its neighbours. Up and down the clip is loose, so a taller
+// font is not cut. Text that fits is printed without any clip.
+void printWithin(PaintContext& ctx, const Rect& bounds, const String& text, float x, float width, float y,
+        float ascender)
+{
+    const bool overflows = x < bounds.x - 0.5f || x + width > bounds.x + bounds.w + 0.5f;
+    if (!overflows)
+    {
+        ctx.font.Print(text.c_str(), x, y);
+        return;
+    }
+    ctx.pushClip({ bounds.x, bounds.y - ascender, bounds.w, bounds.h + ascender * 2.0f });
+    ctx.font.Print(text.c_str(), x, y);
+    ctx.popClip();
+}
+
+} // namespace
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  Label
 // ═════════════════════════════════════════════════════════════════════════════
@@ -28,14 +60,8 @@ void Label::setAlign(TextAlign a)
 Widget::Vec2f Label::sizeHint() const
 {
     const auto& t = Theme::instance();
-    float w = text_.size() * t.fontSize * 0.6f;
-    // Never narrower than the text really is (wide capitals, a larger font): paint cuts the text
-    // at the label's rectangle, so a rectangle of this size must hold all of it.
-    if (!text_.empty())
-    {
-        const float real = WidgetApp::instance().textWidth(text_.c_str(), overrideFont_);
-        if (real > w) w = real;
-    }
+    // paint cuts the text at the label's rectangle, so a rectangle of this size must hold all of it.
+    const float w = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     return { w + t.padding * 2, t.fontSize + t.padding * 2 };
 }
 
@@ -82,21 +108,8 @@ void Label::paint(PaintContext& ctx)
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
     Rect textRect = { tx, ty - asc, textW, asc };
-    if (!ctx.isClipped(textRect))
-    {
-        // Text wider than the rectangle (no elide, or a rectangle too narrow even for "...") is cut at
-        // the rectangle's sides: a label never draws over its neighbours. Up and down the clip is
-        // loose, so a taller font is not cut.
-        const bool overflows = tx < abs.x - 0.5f || tx + textW > abs.x + abs.w + 0.5f;
-        if (overflows)
-        {
-            ctx.pushClip({ abs.x, abs.y - asc, abs.w, abs.h + asc * 2.0f });
-            ctx.font.Print(shown.c_str(), tx, ty);
-            ctx.popClip();
-        }
-        else
-            ctx.font.Print(shown.c_str(), tx, ty);
-    }
+    // Text wider than the rectangle (no elide, or a rectangle too narrow even for "...") is cut at it.
+    if (!ctx.isClipped(textRect)) printWithin(ctx, abs, shown, tx, textW, ty, asc);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -651,7 +664,7 @@ Widget::Vec2f CheckBox::sizeHint() const
 {
     const auto& t = Theme::instance();
     float boxSize = t.fontSize;
-    float textW = text_.size() * t.fontSize * 0.6f;
+    const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     return { boxSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 };
 }
 
@@ -702,7 +715,8 @@ void CheckBox::paint(PaintContext& ctx)
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
     Rect textRect = { tx, ty - asc, abs.w, asc };
-    if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+    // A text longer than the room beside the box is cut at the check box's rectangle.
+    if (!ctx.isClipped(textRect)) printWithin(ctx, abs, text_, tx, ctx.font.GetTextWidth(text_.c_str()), ty, asc);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -808,7 +822,7 @@ Widget::Vec2f RadioButton::sizeHint() const
 {
     const auto& t = Theme::instance();
     float circSize = t.fontSize;
-    float textW = text_.size() * t.fontSize * 0.6f;
+    const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     return { circSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 };
 }
 
@@ -847,7 +861,7 @@ void RadioButton::paint(PaintContext& ctx)
     float rty = abs.y + (abs.h + asc2) * 0.5f;
 
     Rect trRect = { rtx, rty - asc2, abs.w, asc2 };
-    if (!ctx.isClipped(trRect)) ctx.font.Print(text_.c_str(), rtx, rty);
+    if (!ctx.isClipped(trRect)) printWithin(ctx, abs, text_, rtx, ctx.font.GetTextWidth(text_.c_str()), rty, asc2);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -886,7 +900,7 @@ Widget::Vec2f Switch::sizeHint() const
     const auto& t = Theme::instance();
     float trackW = 36.0f;
     float trackH = 18.0f;
-    float textW = text_.size() * t.fontSize * 0.6f;
+    const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     float w = trackW + (text_.empty() ? 0 : t.padding + textW);
     return { w + t.padding * 2, std::max(trackH, t.fontSize) + t.padding * 2 };
 }
@@ -935,7 +949,7 @@ void Switch::paint(PaintContext& ctx)
         float ly = abs.y + (abs.h + asc3) * 0.5f;
 
         Rect textRect = { lx, ly - asc3, abs.w, asc3 };
-        if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), lx, ly);
+        if (!ctx.isClipped(textRect)) printWithin(ctx, abs, text_, lx, ctx.font.GetTextWidth(text_.c_str()), ly, asc3);
     }
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);

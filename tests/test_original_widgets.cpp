@@ -5261,6 +5261,36 @@ static void test_slider_thumb_radius_is_a_theme_value()
     theme.sliderThumbRadius = saved;
 }
 
+// O que se desenha nas linhas de um widget com o rectângulo em x = 100..160: se há desenho, se algum
+// vértice cai fora do rectângulo sem que o clip do comando o deixe de fora, e se algum comando tem o
+// clip dentro do rectângulo (o clip do próprio widget).
+static void inspectTextRows(const ig::retained::DrawData& data, float top, bool& drawn, bool& escapes, bool& clipped)
+{
+    using namespace ig::retained;
+    drawn = escapes = clipped = false;
+    for (const DrawPass& pass: data.passes)
+    {
+        if (!pass.list) continue;
+        const DrawList& list = *pass.list;
+        for (const DrawCmd& cmd: list.commands())
+        {
+            bool inRows = false, outside = false;
+            for (uint32_t i = 0; i < cmd.indexCount; ++i)
+            {
+                const DrawVertex& vertex = list.vertices()[list.indices()[cmd.indexOffset + i]];
+                if (vertex.y < top - 8.0f || vertex.y > top + 36.0f) continue;
+                inRows = true;
+                if (vertex.x < 99.5f || vertex.x > 160.5f) outside = true;
+            }
+            if (!inRows) continue;
+            drawn = true;
+            const bool clipsToWidget = cmd.clip.x >= 99.9f && cmd.clip.x + cmd.clip.w <= 160.1f;
+            clipped = clipped || clipsToWidget;
+            if (outside && !clipsToWidget) escapes = true;
+        }
+    }
+}
+
 // O Label nunca desenha fora do seu rectângulo: com o texto mais largo do que ele, o texto sai com o
 // clip do Label (não fica por cima dos vizinhos, como o Slider ao lado); com o texto a caber, sem clip
 // nenhum. E o sizeHint nunca é mais estreito do que o texto de verdade (maiúsculas largas), para que um
@@ -5294,44 +5324,71 @@ static void test_label_text_stays_inside_its_rectangle()
     DrawData data;
     app.paint(data, font);
 
-    // For each label: the vertices in its rows, and whether any of them is outside the rectangle
-    // without the command's clip leaving them out.
-    auto inspect = [&data](float top, bool& drawn, bool& escapes, bool& clipped)
-    {
-        drawn = escapes = clipped = false;
-        for (const DrawPass& pass: data.passes)
-        {
-            if (!pass.list) continue;
-            const DrawList& list = *pass.list;
-            for (const DrawCmd& cmd: list.commands())
-            {
-                bool inRows = false, outside = false;
-                for (uint32_t i = 0; i < cmd.indexCount; ++i)
-                {
-                    const DrawVertex& vertex = list.vertices()[list.indices()[cmd.indexOffset + i]];
-                    if (vertex.y < top - 8.0f || vertex.y > top + 36.0f) continue;
-                    inRows = true;
-                    if (vertex.x < 99.5f || vertex.x > 160.5f) outside = true;
-                }
-                if (!inRows) continue;
-                drawn = true;
-                const bool clipsToLabel = cmd.clip.x >= 99.9f && cmd.clip.x + cmd.clip.w <= 160.1f;
-                clipped = clipped || clipsToLabel;
-                if (outside && !clipsToLabel) escapes = true;
-            }
-        }
-    };
     bool drawn = false, escapes = false, clipped = false;
-    inspect(10.0f, drawn, escapes, clipped);
+    inspectTextRows(data, 10.0f, drawn, escapes, clipped);
     assert(drawn && clipped && !escapes);
-    inspect(100.0f, drawn, escapes, clipped);
+    inspectTextRows(data, 100.0f, drawn, escapes, clipped);
     assert(drawn && !clipped && !escapes);
-    inspect(200.0f, drawn, escapes, clipped);
+    inspectTextRows(data, 200.0f, drawn, escapes, clipped);
     assert(drawn && !escapes); // elided: "..." fits, or is cut at the rectangle
 
     const String capitals(12, 'W');
     auto* wide = screen->createChild<Label>(capitals);
     assert(wide->sizeHint().x >= app.textWidth(capitals.c_str()) + Theme::instance().padding * 2.0f - 0.01f);
+}
+
+// O CheckBox, o RadioButton e o Switch fazem o mesmo com o texto: mais largo do que o espaço ao lado do
+// botão, é cortado no rectângulo do widget (a caixa das opções de uma janela estreita não deixa o
+// texto sair da janela); a caber, sem clip. O sizeHint também leva o texto todo.
+static void test_check_radio_and_switch_text_stays_inside_their_rectangle()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    TextureHandle texture;
+    texture.value = 1;
+    atlas.setTexture(texture);
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("checkclip");
+    auto* screen = stage->createChild<Widget>();
+    const String longText = "An option with far more text than the room beside its button";
+    auto* check = screen->createChild<CheckBox>(longText);
+    check->setRect({ 100.0f, 10.0f, 60.0f, 28.0f });
+    auto* radio = screen->createChild<RadioButton>(longText);
+    radio->setRect({ 100.0f, 100.0f, 60.0f, 28.0f });
+    auto* toggle = screen->createChild<Switch>(longText);
+    toggle->setRect({ 100.0f, 200.0f, 60.0f, 28.0f });
+    auto* fits = screen->createChild<CheckBox>("ok");
+    fits->setRect({ 100.0f, 300.0f, 60.0f, 28.0f });
+    assert(app.setStage("checkclip", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    GetDrawList().clear();
+    DrawData data;
+    app.paint(data, font);
+
+    bool drawn = false, escapes = false, clipped = false;
+    const float tops[] = { 10.0f, 100.0f, 200.0f };
+    for (float top: tops)
+    {
+        inspectTextRows(data, top, drawn, escapes, clipped);
+        assert(drawn && clipped && !escapes);
+    }
+    inspectTextRows(data, 300.0f, drawn, escapes, clipped);
+    assert(drawn && !clipped && !escapes);
+
+    const String capitals(12, 'W');
+    auto* wideCheck = screen->createChild<CheckBox>(capitals);
+    auto* wideRadio = screen->createChild<RadioButton>(capitals);
+    auto* wideSwitch = screen->createChild<Switch>(capitals);
+    const float room = app.textWidth(capitals.c_str());
+    const float pad = Theme::instance().padding;
+    assert(wideCheck->sizeHint().x >= Theme::instance().fontSize + pad * 2.0f + room - 0.01f);
+    assert(wideRadio->sizeHint().x >= Theme::instance().fontSize + pad * 2.0f + room - 0.01f);
+    assert(wideSwitch->sizeHint().x >= 36.0f + pad * 3.0f + room - 0.01f);
 }
 
 // O Range guarda o valor dentro da gama e no passo. O passo arredonda em
@@ -7352,6 +7409,7 @@ int main()
     test_slider_thumb_stays_inside_its_track();
     test_slider_thumb_radius_is_a_theme_value();
     test_label_text_stays_inside_its_rectangle();
+    test_check_radio_and_switch_text_stays_inside_their_rectangle();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
