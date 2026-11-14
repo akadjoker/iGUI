@@ -134,6 +134,32 @@ int main()
     const float wi = list.calcTextSize(*f24, "i").x;
     check(fabsf(list.calcTextSize(*f24, "ii").x - 2 * wi) < 0.01f, "a pair with no kerning is just the two advances");
 
+    // DrawList::setKerning: which fonts addText / calcTextSize kern. The default is what it always was.
+    {
+        check(list.kerning() == DrawList::Kerning::Dynamic, "the default kerning mode is Dynamic");
+        check(base.kerning('A', 'V') == 0.0f && base.pairKerning('A', 'V') < 0.0f,
+            "a baked font's kerning() stays 0 for the code that adds advances by hand; pairKerning() answers");
+        check(fabsf(base.pairKerning('A', 'V') * 24.0f / base.pixelHeight() - f24->kerning('A', 'V')) < 0.05f,
+            "and it is the dynamic font's kerning scaled to the height");
+        const float baked = list.calcTextSize(base, "AV").x, plain = list.calcTextSize(base, "A").x + list.calcTextSize(base, "V").x;
+        check(fabsf(baked - plain) < 0.001f, "a baked font draws AV unkerned by default");
+        list.setKerning(DrawList::Kerning::All);
+        const float all = list.calcTextSize(base, "AV").x;
+        check(fabsf(all - (plain + base.pairKerning('A', 'V'))) < 0.001f, "Kerning::All kerns the baked font: AV closes by the pair");
+        check(fabsf(list.calcTextSize(base, "AV", 2.0f).x - 2.0f * all) < 0.001f, "and the scale applies to the kerning");
+        const size_t before = list.vertices().size();
+        list.addText(base, Vec2{0.0f, 20.0f}, Color{0, 0, 0, 255}, "AV");
+        const float vSkew = list.vertices()[before + 4].x - list.vertices()[before].x; // second quad's left edge against the first's
+        list.setKerning(DrawList::Kerning::None);
+        const size_t middle = list.vertices().size();
+        list.addText(base, Vec2{0.0f, 20.0f}, Color{0, 0, 0, 255}, "AV");
+        const float vFlat = list.vertices()[middle + 4].x - list.vertices()[middle].x;
+        check(vSkew < vFlat - 0.1f, "addText places the V closer after the A with Kerning::All than with None");
+        check(fabsf(list.calcTextSize(*f24, "AV").x - (wa + wv)) < 0.001f, "Kerning::None switches the dynamic fonts' kerning off");
+        list.setKerning(DrawList::Kerning::Dynamic);
+        check(fabsf(list.calcTextSize(*f24, "AV").x - wav) < 0.001f, "and Dynamic gives it back");
+    }
+
     // Coverage beyond what build() packs, and what the face lacks.
     const FontGlyph* cyr = f24->findGlyph(0x0416); // Ж
     const FontGlyph* lstroke = f24->findGlyph(0x0142); // ł

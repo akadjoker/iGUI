@@ -331,7 +331,12 @@ public:
     }
     // What to add to the pen between two glyphs, in pixels at this font's
     // height: negative closes the gap (A and V). The face's kern or GPOS table.
+    // Only for a font made by atHeight(): a baked font answers 0, so code that adds its advances by
+    // hand (the code editor) keeps agreeing with the drawing.
     float kerning(uint32_t left, uint32_t right) const;
+    // The same for any font of an atlas, a baked one too (0 for a font made by hand). What
+    // DrawList::addText / calcTextSize apply to a baked font after DrawList::setKerning(All).
+    float pairKerning(uint32_t left, uint32_t right) const;
 
 private:
     friend class FontAtlas;
@@ -569,6 +574,24 @@ public:
     {
         return textSnapping_;
     }
+    /// Which fonts addText / calcTextSize kern. Dynamic (the default): only the fonts made by
+    /// Font::atHeight, as always. All: the baked fonts too (Font::pairKerning), so text of any font
+    /// is as wide as its face's kern / GPOS pairs say. None: no font. A configuration:
+    /// clear() leaves it alone.
+    enum class Kerning
+    {
+        Dynamic,
+        All,
+        None
+    };
+    void setKerning(Kerning mode)
+    {
+        kerning_ = mode;
+    }
+    Kerning kerning() const
+    {
+        return kerning_;
+    }
     void pathClear();
 
     const ct::Vector<DrawVertex>& vertices() const
@@ -615,6 +638,8 @@ private:
     ct::Vector<Vec2> path_;
     bool antiAliasing_ = true;
     bool textSnapping_ = true;
+    Kerning kerning_ = Kerning::Dynamic;
+    float kernBetween(const Font& font, uint32_t left, uint32_t right) const;
     TextureHandle fontTexture_;
     Vec2 whiteUV_;
     ct::Vector<DrawVertex> vertices_;

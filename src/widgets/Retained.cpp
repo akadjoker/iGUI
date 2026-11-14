@@ -396,7 +396,13 @@ float Font::kerning(uint32_t left, uint32_t right) const
 {
     // Only the fonts made by atHeight(): code that adds the baked font's
     // advances by hand (the code editor) must keep agreeing with the drawing.
-    if (!atlas_ || !dynamic_) return 0.0f;
+    if (!dynamic_) return 0.0f;
+    return pairKerning(left, right);
+}
+
+float Font::pairKerning(uint32_t left, uint32_t right) const
+{
+    if (!atlas_) return 0.0f;
     const uint64_t key = (static_cast<uint64_t>(left) << 32) | static_cast<uint64_t>(right);
     if (const float* k = kern_.find(key)) return *k;
     const float v = atlas_->kerningOf(*this, left, right);
@@ -1194,6 +1200,17 @@ void DrawList::addImage(TextureHandle texture, const Rect& rect, const Rect& uv,
     addCmd(offset, 6, texture);
 }
 
+float DrawList::kernBetween(const Font& font, uint32_t left, uint32_t right) const
+{
+    switch (kerning_)
+    {
+    case Kerning::All: return font.pairKerning(left, right);
+    case Kerning::None: return 0.0f;
+    case Kerning::Dynamic: break;
+    }
+    return font.kerning(left, right);
+}
+
 void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const char* text,
         float scale)
 {
@@ -1216,7 +1233,7 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
 
         const FontGlyph* glyph = font.findGlyph(codepoint);
         if (!glyph) continue;
-        if (previous) pen.x += font.kerning(previous, codepoint) * scale;
+        if (previous) pen.x += kernBetween(font, previous, codepoint) * scale;
         previous = codepoint;
 
         if (glyph->size.x > 0.0f && glyph->size.y > 0.0f)
@@ -1277,7 +1294,7 @@ Vec2 DrawList::calcTextSize(const Font& font, const char* text, float scale)
         const FontGlyph* glyph = font.findGlyph(codepoint);
         if (glyph)
         {
-            if (previous) lineWidth += font.kerning(previous, codepoint) * scale;
+            if (previous) lineWidth += kernBetween(font, previous, codepoint) * scale;
             lineWidth += glyph->advanceX * scale;
             previous = codepoint;
         }
