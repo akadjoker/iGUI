@@ -1382,30 +1382,50 @@ void WidgetApp::applyCursor(CursorType type)
 void WidgetApp::updateHover(Widget* newLeaf)
 {
     ct::Vector<Widget*> newChain = newLeaf ? buildChain(newLeaf) : ct::Vector<Widget*>{};
+    // The old chain is walked from a copy: a leave handler may delete widgets, and the manager
+    // then edits s_.hoverChain_ under the loop.
+    const ct::Vector<Widget*> oldChain = s_.hoverChain_;
 
     // Find common prefix length
     size_t common = 0;
-    size_t minLen = std::min(s_.hoverChain_.size(), newChain.size());
-    while (common < minLen && s_.hoverChain_[common] == newChain[common]) ++common;
+    size_t minLen = oldChain.size() < newChain.size() ? oldChain.size() : newChain.size();
+    while (common < minLen && oldChain[common] == newChain[common]) ++common;
+
+    // A handler may delete widgets, the one it was called for, others of the chains, or the whole
+    // tree. Once one did (the count of deletions moved), a widget is only touched when it is still
+    // in the tree that is drawn.
+    const uint32_t deletionsBefore = deletions_;
+    auto stillThere = [&](const Widget* w) { return deletions_ == deletionsBefore || isWidgetInTrees(w); };
 
     // Leave: old widgets that are no longer in the chain (deepest first)
-    for (size_t i = s_.hoverChain_.size(); i > common; --i)
+    for (size_t i = oldChain.size(); i > common; --i)
     {
-        Widget* w = s_.hoverChain_[i - 1];
+        Widget* w = oldChain[i - 1];
+        if (!stillThere(w)) continue;
         w->hovered_ = false;
         w->onMouseLeave();
-        w->markDirty();
+        if (stillThere(w)) w->markDirty();
     }
 
     // Enter: new widgets that just appeared in the chain (shallowest first)
     for (size_t i = common; i < newChain.size(); ++i)
     {
         Widget* w = newChain[i];
+        if (!stillThere(w)) break; // what is below a deleted widget went with it
         w->hovered_ = true;
         w->onMouseEnter();
-        w->markDirty();
+        if (stillThere(w)) w->markDirty();
     }
 
+    // What survived the handlers is the hover chain: a widget deleted meanwhile is not in it, and
+    // the hovered widget is the deepest one left.
+    if (deletions_ != deletionsBefore)
+    {
+        size_t keep = 0;
+        while (keep < newChain.size() && isWidgetInTrees(newChain[keep])) ++keep;
+        newChain.resize(keep);
+        newLeaf = newChain.empty() ? nullptr : newChain.back();
+    }
     s_.hoverChain_ = std::move(newChain);
     s_.hovered_ = newLeaf;
 

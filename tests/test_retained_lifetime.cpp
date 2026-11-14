@@ -91,13 +91,102 @@ void testRebuiltAtlas()
     check(WidgetApp::instance().textWidth("Música") > 0.0f, "and the next frame measures with the new one");
 }
 
+void testDeleteFromClicked()
+{
+    printf("button deletes itself in clicked\n");
+    Harness h;
+    BoxLayout* box = column(h);
+    Button* a = box->createChild<Button>("keep");
+    Button* b = box->createChild<Button>("remove me");
+    int clicks = 0;
+    b->clicked.connect(
+            [&]
+            {
+                ++clicks;
+                box->removeChild(b);
+            });
+    (void) a;
+    h.relayout();
+    h.clickWidget(b);
+    check(clicks == 1, "the handler ran once");
+    check(box->children().size() == 1u, "the button is gone from the box");
+    h.frames(3);
+    h.moveTo(5.0f, 5.0f);
+    h.moveTo(600.0f, 400.0f);
+}
+
+void testDeleteFromPressedReleasedHover()
+{
+    printf("button deleted from pressed / released / hover handlers\n");
+    for (int variant = 0; variant < 4; ++variant)
+    {
+        Harness h;
+        BoxLayout* box = column(h);
+        Button* b = box->createChild<Button>("x");
+        box->createChild<Button>("y");
+        h.relayout();
+        auto kill = [&]
+        {
+            if (b)
+            {
+                Button* dead = b;
+                b = nullptr;
+                box->removeChild(dead);
+            }
+        };
+        switch (variant)
+        {
+            case 0: b->pressed.connect([&](int) { kill(); }); break;
+            case 1: b->released.connect([&](int) { kill(); }); break;
+            case 2: b->hoverEnter.connect([&] { kill(); }); break;
+            case 3: b->moved.connect([&](float, float) { kill(); }); break;
+        }
+        float x = 0, y = 0;
+        Harness::centre(b, x, y);
+        h.moveTo(x, y);
+        h.down();
+        h.up();
+        h.moveTo(x + 1.0f, y + 1.0f);
+        h.relayout();
+        check(b == nullptr, "the handler removed the button");
+    }
+}
+
+void testDeleteWholeTreeInsideHover()
+{
+    printf("whole tree replaced while the pointer is over it\n");
+    Harness h;
+    for (int round = 0; round < 6; ++round)
+    {
+        BoxLayout* box = column(h);
+        for (int i = 0; i < 8; ++i)
+        {
+            box->createChild<Label>("Vídeos e Música");
+            box->createChild<Button>("ação");
+        }
+        h.relayout();
+        h.moveTo(100.0f, 60.0f + 20.0f * static_cast<float>(round));
+        h.down();
+        h.root()->removeChild(box);
+        h.up();
+        h.relayout();
+    }
+}
+
 } // namespace
 
-int main()
+// A scenario name on the command line runs only that one.
+int main(int argc, char** argv)
 {
-    testAtlasGoneBeforeWidgets();
-    testContextGoneBeforeWidgets();
-    testRebuiltAtlas();
+    const char* only = argc > 1 ? argv[1] : nullptr;
+#define RUN(fn) \
+    if (!only || strcmp(only, #fn) == 0) fn()
+    RUN(testAtlasGoneBeforeWidgets);
+    RUN(testContextGoneBeforeWidgets);
+    RUN(testRebuiltAtlas);
+    RUN(testDeleteFromClicked);
+    RUN(testDeleteFromPressedReleasedHover);
+    RUN(testDeleteWholeTreeInsideHover);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

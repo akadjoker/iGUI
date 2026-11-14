@@ -755,25 +755,35 @@ void Widget::onMouseRelease(MouseEvent& e)
     }
 }
 
+// A handler of these signals may delete the widget (a button that removes itself when the
+// pointer reaches it): `this` is not touched again after one did, as in onMousePress.
 void Widget::onMouseMove(MouseEvent& e)
 {
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t deletions = app.deletions();
     moved.emit(e.localX, e.localY);
-    WidgetApp::instance().fireEvent("move", this);
+    if (app.deletions() == deletions) app.fireEvent("move", this);
 }
 
 void Widget::onMouseEnter()
 {
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t deletions = app.deletions();
     hoverEnter.emit();
-    WidgetApp::instance().fireEvent("hover", this);
-    markDirty();
+    if (app.deletions() != deletions) return;
+    app.fireEvent("hover", this);
+    if (app.deletions() == deletions) markDirty();
 }
 
 void Widget::onMouseLeave()
 {
     pressed_ = false;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t deletions = app.deletions();
     hoverLeave.emit();
-    WidgetApp::instance().fireEvent("leave", this);
-    markDirty();
+    if (app.deletions() != deletions) return;
+    app.fireEvent("leave", this);
+    if (app.deletions() == deletions) markDirty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
