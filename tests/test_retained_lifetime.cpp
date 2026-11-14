@@ -319,6 +319,21 @@ void testStageSwitchAndRemoveInEvent()
     app.setStage("harness", TransitionType::None); // gone: false, no crash
 }
 
+void testSetRootInEvent()
+{
+    printf("setRoot from a click\n");
+    Harness h;
+    BoxLayout* box = column(h);
+    Button* b = box->createChild<Button>("replace");
+    b->clicked.connect([&] { h.app.setRoot(new Widget()); });
+    h.relayout();
+    h.clickWidget(b);
+    h.frames(3);
+    check(h.app.stage("harness") == nullptr, "the stage whose root was replaced is gone");
+    check(h.app.currentStageName().empty(), "and it is not the current one any more");
+    h.moveTo(30.0f, 30.0f);
+}
+
 void testFloatClosedByItsButton()
 {
     printf("a float window closed from its own button, twice\n");
@@ -521,6 +536,7 @@ int main(int argc, char** argv)
     RUN(testTextEditDeletedFromChange);
     RUN(testUnhandledKeyDeletes);
     RUN(testStageSwitchAndRemoveInEvent);
+    RUN(testSetRootInEvent);
     RUN(testFloatClosedByItsButton);
     RUN(testTooltipOnRemovedWidget);
     RUN(testDragSourceDeleted);

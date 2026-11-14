@@ -721,8 +721,24 @@ void WidgetApp::setRoot(Widget* r)
 {
     if (s_.root_ != r)
     {
-        delete s_.root_;
+        Widget* old = s_.root_;
         s_.root_ = r;
+        if (old)
+        {
+            // The old root may be a stage's root: that stage goes with it (its table entry would
+            // point at freed memory), and a click that replaces the whole interface may be
+            // running inside it, so it is deleted when the frame phase is over.
+            ct::Vector<String> gone;
+            for (auto& [name, stageRoot]: s_.stages_)
+                if (stageRoot == old) gone.push_back(name);
+            for (const String& name: gone)
+            {
+                s_.stages_.erase(name);
+                if (name == s_.currentStage_) s_.currentStage_.clear();
+            }
+            notifyWidgetRemoved(old);
+            deleteLater(old);
+        }
     }
     s_.focused_ = nullptr;
     s_.hovered_ = nullptr;
