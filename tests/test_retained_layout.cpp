@@ -286,6 +286,67 @@ void testSliderRangeSetUnderTheValue()
     h.frames(2);
 }
 
+// The number field ZenMix is made of, with the ranges a project file or a typo can give it: no
+// range, a step of nothing, NaN, infinity, a value typed that is not a number.
+void testSpinSliderOddRanges()
+{
+    printf("spin sliders with odd ranges, steps and typed values\n");
+    Harness h;
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    const double odd[] = { 0.0, 1.0, -1.0, 1e-300, 1e300, -1e300, 1e18, nan(""), INFINITY, -INFINITY, 0.001, 123456789.123 };
+    const int n = static_cast<int>(sizeof odd / sizeof odd[0]);
+    Rng rng(21);
+    ct::Vector<SpinSlider*> spins;
+    for (int i = 0; i < 24; ++i)
+    {
+        SpinSlider* s = box->createChild<SpinSlider>();
+        s->setLabel(String("Valor ") + String::number(i));
+        s->setSuffix(" dB");
+        s->setMin(odd[rng.below(n)]);
+        s->setMax(odd[rng.below(n)]);
+        s->setStep(odd[rng.below(n)]);
+        s->setAllowGreater(rng.chance(50));
+        s->setAllowLesser(rng.chance(50));
+        s->setEditingInteger(rng.chance(30));
+        s->setValue(odd[rng.below(n)]);
+        spins.push_back(s);
+    }
+    h.relayout();
+    h.frames(2);
+    const char* typed[] = { "1e999", "nan", "inf", "-inf", "-", "", "1/0", "0/0", "99999999999999999999", "1e-999", "2+2", "abc", "  7  ", "0x10", "ação" };
+    for (size_t i = 0; i < spins.size(); ++i)
+    {
+        SpinSlider* s = spins[i];
+        const Rect r = s->absoluteRect();
+        // drag across it and past it, scroll on it, double-click to type into it
+        h.moveTo(r.x + 2.0f, r.y + r.h * 0.5f);
+        h.down();
+        h.moveTo(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+        h.moveTo(r.x + r.w + 400.0f, r.y + r.h * 0.5f);
+        h.moveTo(r.x - 400.0f, r.y + r.h * 0.9f);
+        h.up();
+        h.moveTo(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+        h.wheel(1.0f);
+        h.wheel(-3.0f);
+        h.click(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+        h.click(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+        h.type(typed[i % (sizeof typed / sizeof typed[0])]);
+        h.key(Key::Return);
+        h.key(Key::Up);
+        h.key(Key::Escape);
+        s->setValue(odd[rng.below(n)]);
+        s->setAsRatio(odd[rng.below(n)]);
+        check(s->textValue().size() < 1000u, "the text of any value is a sensible length");
+        if (s->minValue() <= s->maxValue())
+        {
+            const double v = s->value();
+            const bool inRange = v != v || (s->lesserAllowed() || v >= s->minValue()) && (s->greaterAllowed() || v <= s->maxValue());
+            check(inRange, "the value is in the range, or the range lets it out");
+        }
+    }
+    h.frames(2);
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -301,6 +362,7 @@ int main(int argc, char** argv)
     RUN(testScrollOddSizes);
     RUN(testSliderRanges);
     RUN(testSliderRangeSetUnderTheValue);
+    RUN(testSpinSliderOddRanges);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

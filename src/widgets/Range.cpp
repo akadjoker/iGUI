@@ -46,6 +46,7 @@ int stepDecimals(double step)
     static const double sd[maxn] = { 0.9999, 0.09999, 0.009999, 0.0009999, 0.00009999, 0.000009999,
         0.0000009999, 0.00000009999, 0.000000009999, 0.0000000009999 };
     const double abs = std::fabs(step);
+    if (!(abs < 1e9)) return 0; // NaN, infinity, or too big for the int below: no decimals
     const double decs = abs - static_cast<int>(abs);
     for (int i = 0; i < maxn; i++)
         if (decs >= sd[i]) return i;
@@ -112,6 +113,8 @@ int Range::rangeStepDecimals(double step)
 double Range::snappedR128(double value, double step)
 {
     if (step == 0.0) return value;
+    // NaN and infinity are not on any step (and the digit count below is a cast of a log of them)
+    if (!std::isfinite(value) || !std::isfinite(step)) return value;
     if (value > (1e18 * step) || value < -(1e18 * step)) return snapped(value, step);
 
     const int decimals = static_cast<int>(
@@ -251,15 +254,23 @@ double Range::asRatio() const
 {
     if (isEqualApprox(max_, min_)) return 1.0;
 
+    // A ratio is 0 to 1, never NaN: a NaN value, an infinite range (inf / inf) or a log of
+    // nothing gave one, and callers turn the ratio into pixels with a cast that is undefined
+    // for it.
+    double ratio;
     if (expRatio_ && min_ >= 0)
     {
         const double expMin = min_ == 0 ? 0.0 : std::log(min_) / std::log(2.0);
         const double expMax = std::log(max_) / std::log(2.0);
         const double v = std::log(clampValue(value_, min_, max_)) / std::log(2.0);
-        return clampValue((v - expMin) / (expMax - expMin), 0, 1);
+        ratio = clampValue((v - expMin) / (expMax - expMin), 0, 1);
     }
-    const double v = clampValue(value_, min_, max_);
-    return clampValue((v - min_) / (max_ - min_), 0, 1);
+    else
+    {
+        const double v = clampValue(value_, min_, max_);
+        ratio = clampValue((v - min_) / (max_ - min_), 0, 1);
+    }
+    return ratio == ratio ? ratio : 0.0;
 }
 
 void Range::setExpRatio(bool enable)

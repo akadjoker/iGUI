@@ -165,6 +165,9 @@ String SpinSlider::textValue() const
 {
     if (editingInteger_)
     {
+        // a value no integer holds (NaN, infinity, 1e300) is shown as the number it is: the cast
+        // below is undefined for it
+        if (!(std::fabs(value()) < 9.0e18)) return numberText(value(), 0);
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%lld",
                 static_cast<long long>(static_cast<int64_t>(value())));
