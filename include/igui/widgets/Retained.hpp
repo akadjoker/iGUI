@@ -336,7 +336,20 @@ public:
     float kerning(uint32_t left, uint32_t right) const;
     // The same for any font of an atlas, a baked one too (0 for a font made by hand). What
     // DrawList::addText / calcTextSize apply to a baked font after DrawList::setKerning(All).
-    float pairKerning(uint32_t left, uint32_t right) const;
+    // The cached pair inline (the drawing asks for every pair of every text); the face is read only
+    // for a pair not seen yet.
+    float pairKerning(uint32_t left, uint32_t right) const
+    {
+        if (!atlas_) return 0.0f;
+        const uint64_t key = (static_cast<uint64_t>(left) << 32) | static_cast<uint64_t>(right);
+        if (const float* k = kern_.find(key)) return *k;
+        return pairKerningFromFace(key, left, right);
+    }
+    /// True for a font made by atHeight(): its glyphs come from the dynamic page, and it is kerned.
+    bool isDynamic() const
+    {
+        return dynamic_;
+    }
 
 private:
     friend class FontAtlas;
@@ -351,6 +364,7 @@ private:
     bool dynamic_ = false;       // glyphs come from the dynamic page, on demand
     mutable ct::HashMap<uint32_t, FontGlyph> glyphs_;
     mutable ct::HashMap<uint64_t, float> kern_;
+    float pairKerningFromFace(uint64_t key, uint32_t left, uint32_t right) const;
 };
 
 class FontAtlas
@@ -645,8 +659,13 @@ private:
     ct::Vector<Vec2> path_;
     bool antiAliasing_ = true;
     bool textSnapping_ = true;
-    Kerning kerning_ = Kerning::Dynamic;
-    float kernBetween(const Font& font, uint32_t left, uint32_t right) const;
+    // Whether addText / calcTextSize kern this font, by the mode: All, or Dynamic for a font made
+    // by atHeight (Font::kerning's rule). Asked once per text, so a font that is not kerned costs
+    // nothing per character.
+    bool kerns(const Font& font) const
+    {
+        return kerning_ == Kerning::All || (kerning_ == Kerning::Dynamic && font.isDynamic());
+    }
     TextureHandle fontTexture_;
     Vec2 whiteUV_;
     ct::Vector<DrawVertex> vertices_;
@@ -657,6 +676,9 @@ private:
     // last, so the members the drawing calls use all the time keep their place: the outlines addIcon
     // builds, kept from icon to icon (an icon used to allocate its own)
     ct::Vector<Vec2> iconPoints_[2];
+    // last too: in the middle it moved the members the drawing calls use all the time (text
+    // measuring 7-9% slower)
+    Kerning kerning_ = Kerning::Dynamic;
 };
 
 /// Triangles that went through ClipToRoundClips.

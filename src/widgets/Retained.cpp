@@ -402,11 +402,8 @@ float Font::kerning(uint32_t left, uint32_t right) const
     return pairKerning(left, right);
 }
 
-float Font::pairKerning(uint32_t left, uint32_t right) const
+float Font::pairKerningFromFace(uint64_t key, uint32_t left, uint32_t right) const
 {
-    if (!atlas_) return 0.0f;
-    const uint64_t key = (static_cast<uint64_t>(left) << 32) | static_cast<uint64_t>(right);
-    if (const float* k = kern_.find(key)) return *k;
     const float v = atlas_->kerningOf(*this, left, right);
     kern_[key] = v;
     return v;
@@ -1209,17 +1206,6 @@ void DrawList::addImage(TextureHandle texture, const Rect& rect, const Rect& uv,
     addCmd(offset, 6, texture);
 }
 
-float DrawList::kernBetween(const Font& font, uint32_t left, uint32_t right) const
-{
-    switch (kerning_)
-    {
-    case Kerning::All: return font.pairKerning(left, right);
-    case Kerning::None: return 0.0f;
-    case Kerning::Dynamic: break;
-    }
-    return font.kerning(left, right);
-}
-
 void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const char* text,
         float scale)
 {
@@ -1228,6 +1214,7 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
     uint32_t offset = static_cast<uint32_t>(indices_.size());
     Vec2 pen = pos;
     uint32_t previous = 0;
+    const bool kern = kerns(font); // decided once for the text, not for every pair
 
     while (*text)
     {
@@ -1242,7 +1229,7 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
 
         const FontGlyph* glyph = font.findGlyph(codepoint);
         if (!glyph) continue;
-        if (previous) pen.x += kernBetween(font, previous, codepoint) * scale;
+        if (kern && previous) pen.x += font.pairKerning(previous, codepoint) * scale;
         previous = codepoint;
 
         if (glyph->size.x > 0.0f && glyph->size.y > 0.0f)
@@ -1293,6 +1280,7 @@ Vec2 DrawList::calcTextSize(const Font& font, const char* text, float scale)
     int lines = 1;
     const char* cursor = text;
     uint32_t previous = 0;
+    const bool kern = kerns(font); // decided once for the text, not for every pair
 
     while (*cursor)
     {
@@ -1309,7 +1297,7 @@ Vec2 DrawList::calcTextSize(const Font& font, const char* text, float scale)
         const FontGlyph* glyph = font.findGlyph(codepoint);
         if (glyph)
         {
-            if (previous) lineWidth += kernBetween(font, previous, codepoint) * scale;
+            if (kern && previous) lineWidth += font.pairKerning(previous, codepoint) * scale;
             lineWidth += glyph->advanceX * scale;
             previous = codepoint;
         }
