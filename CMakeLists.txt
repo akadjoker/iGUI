@@ -437,6 +437,20 @@ if(IGUI_BUILD_FONT)
     endif()
 endif()
 
+# Headless benchmark of the retained widgets' hot paths on an editor-sized window: idle frame,
+# layout, text measuring, timeline hover and drag, with the allocations of each (bench/retained).
+option(IGUI_BUILD_RETAINED_BENCH "Build the headless retained-widgets benchmark" OFF)
+if(IGUI_BUILD_RETAINED_BENCH AND TARGET igui_widgets)
+    add_executable(igui_retained_bench bench/retained/RetainedBench.cpp)
+    target_compile_features(igui_retained_bench PRIVATE cxx_std_17)
+    target_link_libraries(igui_retained_bench PRIVATE igui_widgets)
+    # The allocation counter wraps malloc (ct allocates with it); operator new is replaced in the file.
+    target_link_options(igui_retained_bench PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
+    if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+        message(WARNING "igui_retained_bench: configure with -DCMAKE_BUILD_TYPE=Release for meaningful numbers.")
+    endif()
+endif()
+
 # Headless benchmark: same widget scenes submitted through ig::Context and
 # through ImGui, timed side by side. See bench/README.md.
 if(IGUI_BUILD_BENCH)
