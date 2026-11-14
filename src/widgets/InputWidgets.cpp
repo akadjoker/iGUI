@@ -32,12 +32,27 @@ void Slider::setValue(float v)
     }
 }
 
+float Slider::thumbRadius() const
+{
+    const bool vert = orientation_ == LayoutDir::Vertical;
+    // Half of the thickness, less the half pixel of anti-aliasing fringe the circle is drawn with.
+    const float room = (vert ? rect_.w : rect_.h) * 0.5f - 0.5f;
+    const float radius = Theme::instance().sliderThumbRadius;
+    const float fitting = radius < room ? radius : room;
+    return fitting > 0.0f ? fitting : 0.0f;
+}
+
 float Slider::thumbInset() const
 {
     const bool vert = orientation_ == LayoutDir::Vertical;
-    const float inset = (vert ? std::min(rect_.w, 24.0f) : std::min(rect_.h, 24.0f)) * 0.4f + 2.0f;
-    // A slider too short for the thumb lets it travel the whole length.
-    return (vert ? rect_.h : rect_.w) > inset * 2.0f ? inset : 0.0f;
+    // The XP box is 11 px long along the slider, whatever the radius.
+    const float half = Theme::instance().sliderThumbBox ? 5.5f : thumbRadius();
+    const float length = vert ? rect_.h : rect_.w;
+    const float inset = half + 2.0f;
+    if (length > inset * 2.0f) return inset;
+    // Too short for the gap: the thumb still stays inside while it fits; too short for the thumb
+    // itself, it travels the whole length.
+    return length > half * 2.0f ? half : 0.0f;
 }
 
 Widget::Vec2f Slider::sizeHint() const
@@ -102,16 +117,18 @@ void Slider::paint(PaintContext& ctx)
                     2.0f, 4, true);
         }
 
-        float thumbR = std::min(abs.w, 24.0f) * 0.4f;
+        const float thumbR = thumbRadius();
         float thumbX = abs.x + abs.w * 0.5f;
         float thumbY = fillY;
-        Rect thumbBounds = { thumbX - thumbR, thumbY - thumbR, thumbR * 2, thumbR * 2 };
+        const float boxW = abs.w < 22.0f ? abs.w : 22.0f;
+        Rect thumbBounds = t.sliderThumbBox ? Rect{ thumbX - boxW * 0.5f, thumbY - 5.5f, boxW, 11.0f }
+                                            : Rect{ thumbX - thumbR, thumbY - thumbR, thumbR * 2, thumbR * 2 };
         if (!ctx.isClipped(thumbBounds))
         {
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
             if (t.sliderThumbBox)
-                paintThumbBox(ctx, t, thumbC, thumbX - std::min(abs.w, 22.0f) * 0.5f, thumbY - 5.5f, std::min(abs.w, 22.0f), 11.0f);
+                paintThumbBox(ctx, t, thumbC, thumbBounds.x, thumbBounds.y, thumbBounds.w, thumbBounds.h);
             else
             {
                 ctx.fill.SetColor(thumbC);
@@ -147,16 +164,18 @@ void Slider::paint(PaintContext& ctx)
                     2.0f, 4, true);
         }
 
-        float thumbR = std::min(abs.h, 24.0f) * 0.4f;
+        const float thumbR = thumbRadius();
         float thumbX = abs.x + fillW;
         float thumbY = abs.y + abs.h * 0.5f;
-        Rect thumbBounds = { thumbX - thumbR, thumbY - thumbR, thumbR * 2, thumbR * 2 };
+        const float boxH = abs.h < 22.0f ? abs.h : 22.0f;
+        Rect thumbBounds = t.sliderThumbBox ? Rect{ thumbX - 5.5f, thumbY - boxH * 0.5f, 11.0f, boxH }
+                                            : Rect{ thumbX - thumbR, thumbY - thumbR, thumbR * 2, thumbR * 2 };
         if (!ctx.isClipped(thumbBounds))
         {
             Color thumbC = pressed_ ? t.sliderThumbPressed
                                     : (hovered_ ? t.sliderThumbHover : t.sliderThumb);
             if (t.sliderThumbBox)
-                paintThumbBox(ctx, t, thumbC, thumbX - 5.5f, thumbY - std::min(abs.h, 22.0f) * 0.5f, 11.0f, std::min(abs.h, 22.0f));
+                paintThumbBox(ctx, t, thumbC, thumbBounds.x, thumbBounds.y, thumbBounds.w, thumbBounds.h);
             else
             {
                 ctx.fill.SetColor(thumbC);

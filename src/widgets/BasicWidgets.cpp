@@ -29,6 +29,13 @@ Widget::Vec2f Label::sizeHint() const
 {
     const auto& t = Theme::instance();
     float w = text_.size() * t.fontSize * 0.6f;
+    // Never narrower than the text really is (wide capitals, a larger font): paint cuts the text
+    // at the label's rectangle, so a rectangle of this size must hold all of it.
+    if (!text_.empty())
+    {
+        const float real = WidgetApp::instance().textWidth(text_.c_str(), overrideFont_);
+        if (real > w) w = real;
+    }
     return { w + t.padding * 2, t.fontSize + t.padding * 2 };
 }
 
@@ -75,7 +82,21 @@ void Label::paint(PaintContext& ctx)
     float ty = abs.y + (abs.h + asc) * 0.5f;
 
     Rect textRect = { tx, ty - asc, textW, asc };
-    if (!ctx.isClipped(textRect)) ctx.font.Print(shown.c_str(), tx, ty);
+    if (!ctx.isClipped(textRect))
+    {
+        // Text wider than the rectangle (no elide, or a rectangle too narrow even for "...") is cut at
+        // the rectangle's sides: a label never draws over its neighbours. Up and down the clip is
+        // loose, so a taller font is not cut.
+        const bool overflows = tx < abs.x - 0.5f || tx + textW > abs.x + abs.w + 0.5f;
+        if (overflows)
+        {
+            ctx.pushClip({ abs.x, abs.y - asc, abs.w, abs.h + asc * 2.0f });
+            ctx.font.Print(shown.c_str(), tx, ty);
+            ctx.popClip();
+        }
+        else
+            ctx.font.Print(shown.c_str(), tx, ty);
+    }
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }

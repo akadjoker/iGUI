@@ -68,6 +68,9 @@ private:
     // The thumb's centre travels this far in from each end, so the whole thumb
     // and a small gap stay inside the slider (0 when the slider is too short).
     float thumbInset() const;
+    // Radius of the round thumb: the theme's sliderThumbRadius, but never more than half of the
+    // slider's thickness, so the thumb stays inside the slider's rectangle.
+    float thumbRadius() const;
     void updateFromMouse(float localX, float localY);
 };
 

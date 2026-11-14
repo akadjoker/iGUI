@@ -153,6 +153,7 @@ struct Theme
     float buttonHeight = 28.0f;
     float sliderHeight = 20.0f;
     float sliderTrackWidth = 4.0f;
+    float sliderThumbRadius = 6.5f; // the round thumb of a Slider; never more than half of the slider's thickness
     float inputHeight = 26.0f;
     float scrollbarWidth = 12.0f;
     float scrollbarMinThumb = 16.0f;

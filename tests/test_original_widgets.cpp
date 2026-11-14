@@ -5125,9 +5125,9 @@ static void test_code_editor_markers_follow_their_lines()
 // O botão do Slider fica sempre dentro do widget, com 2 px de folga (1,5 px
 // depois da franja do anti-aliasing): no mínimo e no máximo não sai pelas pontas. O rato usa o
 // mesmo percurso: um clique no centro do botão em cada ponta dá o mínimo e o máximo, e o meio dá o
-// meio. Na horizontal com 120x20 o botão tem raio 8 e anda de x = 10 a x = 110; na vertical com
-// 20x120 anda de y = 110 (mínimo) a y = 10 (máximo). Um slider mais curto do que o botão usa o
-// comprimento todo.
+// meio. Na horizontal com 120x20 o botão tem raio 6,5 (sliderThumbRadius) e anda de x = 8,5 a
+// x = 111,5; na vertical com 20x120 anda de y = 111,5 (mínimo) a y = 8,5 (máximo). Um slider mais
+// curto do que o botão usa o comprimento todo.
 static void test_slider_thumb_stays_inside_its_track()
 {
     using namespace ig::retained;
@@ -5182,8 +5182,8 @@ static void test_slider_thumb_stays_inside_its_track()
             slider.onMouseRelease(release);
             return slider.value();
         };
-        assert(press(vertical ? 110.0f : 10.0f) == 0.0f);
-        assert(press(vertical ? 10.0f : 110.0f) == 100.0f);
+        assert(press(vertical ? 112.0f : 8.0f) == 0.0f);
+        assert(press(vertical ? 8.0f : 112.0f) == 100.0f);
         assert(press(60.0f) == 50.0f);
         assert(press(vertical ? 115.0f : 5.0f) == 0.0f);
     }
@@ -5208,6 +5208,130 @@ static void test_slider_thumb_stays_inside_its_track()
         high = vertex.x > high ? vertex.x : high;
     }
     assert(high > low && std::fabs((low + high) * 0.5f - 2.5f) < 0.01f);
+}
+
+// O raio do botão redondo do Slider é um valor do tema (sliderThumbRadius, 6,5 por omissão) e nunca
+// passa de metade da espessura do slider: com um raio enorme o botão enche a espessura e não sai.
+static void test_slider_thumb_radius_is_a_theme_value()
+{
+    using namespace ig::retained;
+    Theme& theme = Theme::instance();
+    const float saved = theme.sliderThumbRadius;
+    const Color thumb = theme.sliderThumb;
+    assert(saved == 6.5f);
+    auto crossSize = [&thumb](float radius, bool vertical, float thickness)
+    {
+        Theme::instance().sliderThumbRadius = radius;
+        Slider slider(0.0f, 100.0f, 50.0f);
+        if (vertical)
+        {
+            slider.setOrientation(LayoutDir::Vertical);
+            slider.setRect({ 0.0f, 0.0f, thickness, 120.0f });
+        }
+        else
+            slider.setRect({ 0.0f, 0.0f, 120.0f, thickness });
+        DrawList list;
+        PaintContext ctx(list);
+        slider.paint(ctx);
+        float low = 1e9f, high = -1e9f;
+        for (size_t v = 0; v < list.vertices().size(); ++v)
+        {
+            const DrawVertex& vertex = list.vertices()[v];
+            if (!(vertex.color == thumb)) continue;
+            const float at = vertical ? vertex.x : vertex.y;
+            low = at < low ? at : low;
+            high = at > high ? at : high;
+        }
+        assert(high > low);
+        assert(low >= -0.05f && high <= thickness + 0.05f); // inside the slider's own rectangle
+        return high - low;
+    };
+    for (int vertical = 0; vertical < 2; ++vertical)
+    {
+        // The circle is drawn with a half pixel of anti-aliasing fringe on each side: 2 * radius + 1.
+        const float normal = crossSize(6.5f, vertical != 0, 20.0f);
+        const float small = crossSize(3.0f, vertical != 0, 20.0f);
+        assert(normal > 13.5f && normal < 14.5f);
+        assert(small > 6.5f && small < 7.5f);
+        const float huge = crossSize(50.0f, vertical != 0, 20.0f);
+        assert(huge > 19.0f && huge <= 20.05f);
+        const float thin = crossSize(6.5f, vertical != 0, 8.0f);
+        assert(thin > 7.0f && thin <= 8.05f);
+    }
+    theme.sliderThumbRadius = saved;
+}
+
+// O Label nunca desenha fora do seu rectângulo: com o texto mais largo do que ele, o texto sai com o
+// clip do Label (não fica por cima dos vizinhos, como o Slider ao lado); com o texto a caber, sem clip
+// nenhum. E o sizeHint nunca é mais estreito do que o texto de verdade (maiúsculas largas), para que um
+// rectângulo com o tamanho pedido o leve todo.
+static void test_label_text_stays_inside_its_rectangle()
+{
+    using namespace ig::retained;
+    FontAtlas atlas;
+    assert(atlas.buildDefault());
+    TextureHandle texture;
+    texture.value = 1; // the glyph quads are only made for an atlas with a texture
+    atlas.setTexture(texture);
+    const Font* font = &atlas.defaultFont();
+    WidgetApp& app = WidgetApp::instance();
+    Widget* stage = app.addStage("labelclip");
+    auto* screen = stage->createChild<Widget>();
+    screen->setRect({ 0.0f, 0.0f, 800.0f, 600.0f });
+    auto* narrow = screen->createChild<Label>("A label with far more text than its rectangle holds");
+    narrow->setRect({ 100.0f, 10.0f, 60.0f, 28.0f });
+    auto* fits = screen->createChild<Label>("ok");
+    fits->setRect({ 100.0f, 100.0f, 60.0f, 28.0f });
+    auto* elided = screen->createChild<Label>("Another label with far more text than its rectangle holds");
+    elided->setElide(true);
+    elided->setRect({ 100.0f, 200.0f, 60.0f, 28.0f });
+    assert(app.setStage("labelclip", TransitionType::None));
+    IO io;
+    io.displayWidth = 800.0f;
+    io.displayHeight = 600.0f;
+    app.update(io);
+    GetDrawList().clear();
+    DrawData data;
+    app.paint(data, font);
+
+    // For each label: the vertices in its rows, and whether any of them is outside the rectangle
+    // without the command's clip leaving them out.
+    auto inspect = [&data](float top, bool& drawn, bool& escapes, bool& clipped)
+    {
+        drawn = escapes = clipped = false;
+        for (const DrawPass& pass: data.passes)
+        {
+            if (!pass.list) continue;
+            const DrawList& list = *pass.list;
+            for (const DrawCmd& cmd: list.commands())
+            {
+                bool inRows = false, outside = false;
+                for (uint32_t i = 0; i < cmd.indexCount; ++i)
+                {
+                    const DrawVertex& vertex = list.vertices()[list.indices()[cmd.indexOffset + i]];
+                    if (vertex.y < top - 8.0f || vertex.y > top + 36.0f) continue;
+                    inRows = true;
+                    if (vertex.x < 99.5f || vertex.x > 160.5f) outside = true;
+                }
+                if (!inRows) continue;
+                drawn = true;
+                const bool clipsToLabel = cmd.clip.x >= 99.9f && cmd.clip.x + cmd.clip.w <= 160.1f;
+                clipped = clipped || clipsToLabel;
+                if (outside && !clipsToLabel) escapes = true;
+            }
+        }
+    };
+    bool drawn = false, escapes = false, clipped = false;
+    inspect(10.0f, drawn, escapes, clipped);
+    assert(drawn && clipped && !escapes);
+    inspect(100.0f, drawn, escapes, clipped);
+    assert(drawn && !clipped && !escapes);
+    inspect(200.0f, drawn, escapes, clipped);
+    assert(drawn && !escapes); // elided: "..." fits, or is cut at the rectangle
+
+    const String capitals(12, 'W');
+    auto* wide = screen->createChild<Label>(capitals);
+    assert(wide->sizeHint().x >= app.textWidth(capitals.c_str()) + Theme::instance().padding * 2.0f - 0.01f);
 }
 
 // O Range guarda o valor dentro da gama e no passo. O passo arredonda em
@@ -7226,6 +7350,8 @@ int main()
     test_spin_slider_value_input_keys_and_focus();
     test_spin_slider_value_input_tab();
     test_slider_thumb_stays_inside_its_track();
+    test_slider_thumb_radius_is_a_theme_value();
+    test_label_text_stays_inside_its_rectangle();
     test_list_box_scroll_follows_removed_items();
     test_code_editor_matches_brackets_after_multibyte_text();
     test_code_editor_draws_invalid_utf8_as_the_replacement();
