@@ -1259,11 +1259,16 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
             }
             Rect uv = glyph->uv;
 
-            uint32_t v0 = addVertex(rect.x, rect.y, uv.x, uv.y, color);
-            uint32_t v1 = addVertex(rect.x + rect.w, rect.y, uv.x + uv.w, uv.y, color);
-            uint32_t v2 =
-                    addVertex(rect.x + rect.w, rect.y + rect.h, uv.x + uv.w, uv.y + uv.h, color);
-            uint32_t v3 = addVertex(rect.x, rect.y + rect.h, uv.x, uv.y + uv.h, color);
+            const uint32_t v0 = static_cast<uint32_t>(vertices_.size()), v1 = v0 + 1, v2 = v0 + 2,
+                           v3 = v0 + 3;
+            DrawVertex* vp = appendVertices(4);
+            const Vec2 q0 = mapPoint(rect.x, rect.y), q1 = mapPoint(rect.x + rect.w, rect.y),
+                       q2 = mapPoint(rect.x + rect.w, rect.y + rect.h),
+                       q3 = mapPoint(rect.x, rect.y + rect.h);
+            vp[0] = { q0.x, q0.y, uv.x, uv.y, color };
+            vp[1] = { q1.x, q1.y, uv.x + uv.w, uv.y, color };
+            vp[2] = { q2.x, q2.y, uv.x + uv.w, uv.y + uv.h, color };
+            vp[3] = { q3.x, q3.y, uv.x, uv.y + uv.h, color };
             uint32_t* ix = appendIndices(6);
             ix[0] = v0;
             ix[1] = v1;
