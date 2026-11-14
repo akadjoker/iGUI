@@ -518,6 +518,32 @@ void testDeleteWholeTreeInsideHover()
     }
 }
 
+// A drop-down open on a stage that is switched away from: the popup stayed up over the next
+// stage with an owner that is not on screen (and, once the old stage was removed, with an owner
+// that no longer exists).
+void testStageSwitchClosesThePopup()
+{
+    printf("switching the stage closes the popup of the old one\n");
+    Harness h;
+    WidgetApp& app = h.app;
+    app.addStage("other")->createChild<Label>("other");
+    BoxLayout* box = column(h);
+    ComboBox* combo = box->createChild<ComboBox>();
+    combo->addItem("one");
+    combo->addItem("two");
+    h.relayout();
+    h.clickWidget(combo);
+    h.frames(2);
+    check(app.popup() != nullptr, "the drop-down is open");
+    app.setStage("other", TransitionType::None);
+    check(app.popup() == nullptr, "switching the stage closed it");
+    h.frames(12);
+    check(app.removeStage("harness"), "the old stage is removed");
+    h.frames(3);
+    h.click(100.0f, 100.0f);
+    h.frames(2);
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -544,6 +570,7 @@ int main(int argc, char** argv)
     RUN(testSliderDeletedWhileDragging);
     RUN(testSplitterChildrenRemovedWhileDragging);
     RUN(testDeleteWholeTreeInsideHover);
+    RUN(testStageSwitchClosesThePopup);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

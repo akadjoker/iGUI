@@ -796,8 +796,11 @@ bool WidgetApp::setStage(const String& name, TransitionType transition, EaseType
     if (!stageRoot) return false;
     if (name == s_.currentStage_) return true;
 
-    // Clear interaction state (old tree pointers become invalid)
+    // Clear interaction state (old tree pointers become invalid). A popup open on the stage that is
+    // left (a drop-down, a menu) closes with it: it would stay over the next stage, with an owner
+    // that is not on screen.
     dropMouseFocus();
+    closePopup();
     s_.focused_ = nullptr;
     s_.hovered_ = nullptr;
     s_.hoverChain_.clear();
