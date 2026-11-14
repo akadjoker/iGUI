@@ -63,6 +63,7 @@ void WidgetApp::swapSurface(Surface& other)
 void WidgetApp::releaseSurface()
 {
     saveWindowState();
+    flushWidgetDeletes();
     if (s_.popupOwned_) delete s_.popup_;
     if (s_.popupClosingOwned_) delete s_.popupClosing_;
     flushPopupDeletes();
@@ -87,6 +88,7 @@ WidgetApp::~WidgetApp()
 void WidgetApp::shutdown()
 {
     inited_ = false;
+    flushWidgetDeletes();
 
     // Write the float window geometry and dock layouts out before the windows
     // and stages they belong to go away. A no-op when persistence is off.
@@ -145,6 +147,7 @@ bool WidgetApp::init()
 
 void WidgetApp::update(const ig::retained::IO& io)
 {
+    BusyScope busy(*this);
     dt_ = io.deltaTime;
     elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;
     elapsedMs_ = static_cast<uint32_t>(fmod(elapsedSeconds_ * 1000.0, 4294967296.0));
@@ -1671,6 +1674,25 @@ bool WidgetApp::addDynamicAtlas(ig::retained::FontAtlas& atlas)
     return true;
 }
 
+void WidgetApp::deleteLater(Widget* w)
+{
+    if (!w) return;
+    if (busy_ > 0) pendingWidgetDeletes_.push_back(w);
+    else
+        delete w;
+}
+
+void WidgetApp::flushWidgetDeletes()
+{
+    // A destructor can remove more widgets (they are deleted at once: nothing is running now).
+    while (!pendingWidgetDeletes_.empty())
+    {
+        Widget* w = pendingWidgetDeletes_.back();
+        pendingWidgetDeletes_.pop_back();
+        delete w;
+    }
+}
+
 void WidgetApp::forgetAtlas(const ig::retained::FontAtlas& atlas)
 {
     if (font_ && atlas.owns(*font_)) font_ = nullptr;
@@ -1697,6 +1719,7 @@ void WidgetApp::removeDynamicAtlas(ig::retained::FontAtlas& atlas)
 void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* font,
         IconAtlas* icons)
 {
+    BusyScope busy(*this);
     float w = static_cast<float>(s_.width_);
     float h = static_cast<float>(s_.height_);
     if (w <= 0 || h <= 0) return;

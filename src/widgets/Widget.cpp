@@ -605,9 +605,14 @@ void Widget::removeChild(Widget* child)
     auto it = std::find(children_.begin(), children_.end(), child);
     if (it != children_.end())
     {
-        WidgetApp::instance().notifyWidgetRemoved(child);
-        delete *it;
+        Widget* removed = *it;
         children_.erase(it);
+        removed->parent_ = nullptr;
+        WidgetApp& app = WidgetApp::instance();
+        app.notifyWidgetRemoved(removed);
+        // Out of the tree now; the memory goes when the frame phase that may be running (a
+        // handler removing the widget it runs in) is over.
+        app.deleteLater(removed);
     }
     markDirty();
 }

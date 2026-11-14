@@ -521,6 +521,13 @@ public:
     /// @brief Clear internal refs to a widget being destroyed.
     void notifyWidgetRemoved(Widget* w);
 
+    /// @brief Deletes a widget already taken out of its tree (Widget::removeChild): right away,
+    ///        or, while update() or paint() is running, when it is done. A handler can then remove
+    ///        the widget it is running in - a combo box whose selection rebuilds the panel it is
+    ///        on - and the code after the signal, which still touches the widget, reads memory
+    ///        that is there.
+    void deleteLater(Widget* w);
+
     /// @brief How many widgets the manager has been told about going away.
     ///        A caller that runs application code (an event handler, a signal)
     ///        compares it before and after: when it changed, the widgets it was
@@ -703,6 +710,19 @@ private:
     void returnFocus(Widget* holder);
     void queuePopupDelete(Widget* popup);
     void flushPopupDeletes();
+    void flushWidgetDeletes();
+    // Counts the frame phases (update, paint) that are running: widgets removed meanwhile wait.
+    int busy_ = 0;
+    ct::Vector<Widget*> pendingWidgetDeletes_; // taken out of their trees during a phase
+    struct BusyScope
+    {
+        explicit BusyScope(WidgetApp& a) : app(a) { ++app.busy_; }
+        ~BusyScope()
+        {
+            if (--app.busy_ == 0) app.flushWidgetDeletes();
+        }
+        WidgetApp& app;
+    };
 
     // State
     bool inited_ = false;
