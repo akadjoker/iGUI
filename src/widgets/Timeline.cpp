@@ -1666,6 +1666,33 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
 //  Tracks — header, clips, keyframes
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Puts the clip indices in order of the clip's start. Clips are mostly added in time order, so
+// the list is usually sorted already (one pass to see it); otherwise a merge sort.
+void Timeline::sortByStart(ct::Vector<int>& order, const ct::Vector<TimelineClip>& clips)
+{
+    const size_t n = order.size();
+    bool sorted = true;
+    for (size_t i = 1; i < n && sorted; ++i)
+        sorted = !(clips[order[i]].start < clips[order[i - 1]].start);
+    if (sorted) return;
+    ct::Vector<int> scratch;
+    scratch.resize(n);
+    for (size_t width = 1; width < n; width *= 2)
+    {
+        for (size_t lo = 0; lo < n; lo += 2 * width)
+        {
+            const size_t mid = lo + width < n ? lo + width : n;
+            const size_t hi = lo + 2 * width < n ? lo + 2 * width : n;
+            size_t i = lo, j = mid, k = lo;
+            while (i < mid && j < hi)
+                scratch[k++] = clips[order[j]].start < clips[order[i]].start ? order[j++] : order[i++];
+            while (i < mid) scratch[k++] = order[i++];
+            while (j < hi) scratch[k++] = order[j++];
+        }
+        for (size_t i = 0; i < n; ++i) order[i] = scratch[i];
+    }
+}
+
 void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 {
     float ascName = setupFont(ctx, Color(180, 180, 180, 255), 10.0f);
@@ -1724,6 +1751,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         ctx.fillRect(b.x + kHeaderW, ty, 1, kTrackH);
 
         // ── Clips ────────────────────────────────────────────────────────
+        paintVisible_.clear();
         for (int ci = 0; ci < static_cast<int>(trk.clips.size()); ++ci)
         {
             const auto& clip = trk.clips[ci];
@@ -1733,6 +1761,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             float clipH = kTrackH - 6;
 
             if (cx1 < b.x + kHeaderW || cx0 > b.x + b.w) continue;
+            paintVisible_.push_back(ci);
 
             // Clip body: grey while its media loads, dark red when it could not be loaded
             Color cc = clip.selected ? Color(255, 200, 60, 200) : clip.color;
@@ -1912,10 +1941,19 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         }
 
         // ── Overlaps: where two clips of a track are on top of each other ──
-        for (int a = 0; a < static_cast<int>(trk.clips.size()); ++a)
+        // Only the clips drawn above can have an overlap on screen (an overlap is inside both of
+        // its clips), and walked in order of start, a clip's overlaps are the clips that follow
+        // it until one starts after it ends: the work is the number of clips plus the number of
+        // overlaps, not the square of the clips of the track (what it took every frame).
+        sortByStart(paintVisible_, trk.clips);
+        for (size_t ai = 0; ai < paintVisible_.size(); ++ai)
         {
-            for (int o = a + 1; o < static_cast<int>(trk.clips.size()); ++o)
+            const int a = paintVisible_[ai];
+            for (size_t oi = ai + 1; oi < paintVisible_.size(); ++oi)
             {
+                const int o = paintVisible_[oi];
+                // sorted by start: from here on nothing starts before this clip ends
+                if (trk.clips[o].start - trk.clips[a].end >= -0.01f) break;
                 const float s = std::max(trk.clips[a].start, trk.clips[o].start);
                 const float e = std::min(trk.clips[a].end, trk.clips[o].end);
                 if (e - s < 0.01f || trk.clips[a].generator >= 0 || trk.clips[o].generator >= 0)

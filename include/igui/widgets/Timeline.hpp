@@ -565,6 +565,8 @@ private:
     void paintMarquee(PaintContext& ctx, const Rect& b);
     void clearKeySelection();
     void updateMarquee();
+    ct::Vector<int> paintVisible_; // the clips of a track that paintTracks drew
+    static void sortByStart(ct::Vector<int>& order, const ct::Vector<TimelineClip>& clips);
     void clipRemoved(int track, int clip);
     bool dragTargetExists() const;
 };

@@ -62,9 +62,80 @@ struct Rig
     }
 };
 
-// ---- scenarios ----
+// The bands drawn where two clips of a track overlap, against a plain pairwise count: the
+// painting looks for them with a sweep over the clips in order of start. The count follows the
+// painting's own rule: an overlap of 0.01 s or more between clips that are not generators, whose
+// span is not wholly outside the rectangle of the clips (the default header width and padding).
+int expectedBands(Rig& r, int track, float viewStart, float viewEnd)
+{
+    const Rect b = r.tl->absoluteRect();
+    const float left = b.x + 160.0f + 16.0f, width = b.w - 160.0f - 32.0f;
+    const ct::Vector<TimelineClip>& clips = r.tl->track(track).clips;
+    int expected = 0;
+    for (size_t a = 0; a < clips.size(); ++a)
+        for (size_t o = a + 1; o < clips.size(); ++o)
+        {
+            const float s = maxf(clips[a].start, clips[o].start);
+            const float e = minf(clips[a].end, clips[o].end);
+            if (e - s < 0.01f || clips[a].generator >= 0 || clips[o].generator >= 0) continue;
+            const float x0 = left + (s - viewStart) / (viewEnd - viewStart) * width;
+            const float x1 = left + (e - viewStart) / (viewEnd - viewStart) * width;
+            if (x1 < b.x + 160.0f || x0 > b.x + b.w) continue;
+            ++expected;
+        }
+    return expected;
+}
+
+// The quads of the band's colour (white, alpha 70) in the frame just drawn.
+int bandQuads(Rig& r)
+{
+    r.h.frame();
+    const DrawList& dl = GetDrawList();
+    int vertices = 0;
+    for (size_t i = 0; i < dl.vertices().size(); ++i)
+    {
+        const Color c = dl.vertices()[i].color;
+        if (c.r == 255 && c.g == 255 && c.b == 255 && c.a == 70) ++vertices;
+    }
+    return vertices / 4;
+}
 
 // ---- scenarios ----
+void testOverlapBandsMatchThePairwiseRule()
+{
+    printf("overlap bands equal the pairwise rule, in any order of the clips\n");
+    Rng rng(5);
+    for (int round = 0; round < 6; ++round)
+    {
+        Rig r;
+        const int n = round < 3 ? 12 : 150;
+        for (int i = 0; i < n; ++i)
+        {
+            const float start = rng.range(-2.0f, 24.0f);
+            const float length = rng.chance(10) ? 0.005f : rng.range(0.2f, 4.0f);
+            r.tl->addClip(0, start, start + length, "c");
+            if (rng.chance(10)) r.tl->track(0).clips[static_cast<size_t>(i)].generator = 1;
+        }
+        if (round % 2) // in order of start, the usual case (the other rounds: any order)
+        {
+            ct::Vector<TimelineClip>& clips = r.tl->track(0).clips;
+            for (size_t i = 0; i < clips.size(); ++i)
+                for (size_t j = i + 1; j < clips.size(); ++j)
+                    if (clips[j].start < clips[i].start)
+                    {
+                        TimelineClip t = clips[i];
+                        clips[i] = clips[j];
+                        clips[j] = t;
+                    }
+        }
+        r.tl->setTimeRange(0.0f, 20.0f);
+        r.h.relayout();
+        const int expected = expectedBands(r, 0, 0.0f, 20.0f);
+        check(expected > 0, "the clips do overlap");
+        check(bandQuads(r) == expected, "the bands drawn are the overlaps of the pairwise rule");
+    }
+}
+
 // A project command (Delete, undo of an add) removes the clip that is being
 // dragged: the drag state held its index and the next move wrote past the end.
 void testRemoveDraggedClip()
@@ -330,47 +401,6 @@ void testGrabModeClipRemoved()
     r.tl->setClipGrab(false);
 }
 
-void testSnapIgnoresNaN()
-{
-    printf("snapping with NaN candidates, NaN times and no frame rate\n");
-    ct::Vector<float> none;
-    float out = 0;
-    check(!findSnap(none, 1.0f, 0.5f, out), "no candidates, no snap");
-    ct::Vector<float> some;
-    some.push_back(1.0f);
-    some.push_back(nanf(""));
-    some.push_back(2.0f);
-    check(findSnap(some, 1.1f, 0.5f, out) && out == 1.0f, "a NaN candidate does not win over the nearest one");
-    ct::Vector<float> onlyNaN;
-    onlyNaN.push_back(nanf(""));
-    check(!findSnap(onlyNaN, 1.0f, 0.5f, out), "a NaN candidate alone is nowhere near");
-    check(snapTime(onlyNaN, 1.0f, 0.5f) == 1.0f, "and the time stays what it was");
-    check(!findSnap(some, nanf(""), 0.5f, out), "a NaN time snaps to nothing");
-    check(snapFrame(1.234f, 0.0f) == 1.234f, "no snapping without a frame rate");
-    check(snapFrame(1.234f, nanf("")) == 1.234f, "nor with a NaN one");
-    check(snapFrame(nanf(""), 30.0f) != snapFrame(nanf(""), 30.0f), "a NaN time stays NaN, no crash");
-}
-
-// A split at a time that is not a number made two clips of NaN.
-void testSplitAndRemoveArguments()
-{
-    printf("splitting and removing with bad arguments\n");
-    Rig r;
-    r.tl->addClip(0, 1.0f, 5.0f, "a");
-    check(r.tl->splitClip(0, 0, nanf("")) == -1, "a NaN split is refused");
-    check(r.tl->track(0).clips[0].end == 5.0f && r.tl->track(0).clips.size() == 1u, "and nothing changed");
-    check(r.tl->splitClip(0, 0, 3.0f) == 1, "a split in the middle works");
-    check(r.tl->splitClip(0, 5, 3.0f) == -1, "a bad clip index is refused");
-    check(r.tl->splitClip(9, 0, 3.0f) == -1, "a bad track index is refused");
-    check(r.tl->clipAt(0, nanf("")) == -1, "no clip at a NaN time");
-    r.tl->removeClip(0, 99);
-    r.tl->removeClip(-1, 0);
-    r.tl->removeKeyframe(0, 5);
-    r.tl->editKeyframeLabel(0, 5);
-    r.tl->setSelectedTrack(99);
-    r.h.frames(2);
-}
-
 // Thousands of clips, and times no editor should produce but a project file can.
 void testThousandsAndOddTimes()
 {
@@ -457,6 +487,47 @@ void testZoomAndScrollExtremes()
     r.h.resize(1280.0f, 720.0f);
 }
 
+void testSnapIgnoresNaN()
+{
+    printf("snapping with NaN candidates, NaN times and no frame rate\n");
+    ct::Vector<float> none;
+    float out = 0;
+    check(!findSnap(none, 1.0f, 0.5f, out), "no candidates, no snap");
+    ct::Vector<float> some;
+    some.push_back(1.0f);
+    some.push_back(nanf(""));
+    some.push_back(2.0f);
+    check(findSnap(some, 1.1f, 0.5f, out) && out == 1.0f, "a NaN candidate does not win over the nearest one");
+    ct::Vector<float> onlyNaN;
+    onlyNaN.push_back(nanf(""));
+    check(!findSnap(onlyNaN, 1.0f, 0.5f, out), "a NaN candidate alone is nowhere near");
+    check(snapTime(onlyNaN, 1.0f, 0.5f) == 1.0f, "and the time stays what it was");
+    check(!findSnap(some, nanf(""), 0.5f, out), "a NaN time snaps to nothing");
+    check(snapFrame(1.234f, 0.0f) == 1.234f, "no snapping without a frame rate");
+    check(snapFrame(1.234f, nanf("")) == 1.234f, "nor with a NaN one");
+    check(snapFrame(nanf(""), 30.0f) != snapFrame(nanf(""), 30.0f), "a NaN time stays NaN, no crash");
+}
+
+// A split at a time that is not a number made two clips of NaN.
+void testSplitAndRemoveArguments()
+{
+    printf("splitting and removing with bad arguments\n");
+    Rig r;
+    r.tl->addClip(0, 1.0f, 5.0f, "a");
+    check(r.tl->splitClip(0, 0, nanf("")) == -1, "a NaN split is refused");
+    check(r.tl->track(0).clips[0].end == 5.0f && r.tl->track(0).clips.size() == 1u, "and nothing changed");
+    check(r.tl->splitClip(0, 0, 3.0f) == 1, "a split in the middle works");
+    check(r.tl->splitClip(0, 5, 3.0f) == -1, "a bad clip index is refused");
+    check(r.tl->splitClip(9, 0, 3.0f) == -1, "a bad track index is refused");
+    check(r.tl->clipAt(0, nanf("")) == -1, "no clip at a NaN time");
+    r.tl->removeClip(0, 99);
+    r.tl->removeClip(-1, 0);
+    r.tl->removeKeyframe(0, 5);
+    r.tl->editKeyframeLabel(0, 5);
+    r.tl->setSelectedTrack(99);
+    r.h.frames(2);
+}
+
 // A keyframe label typed in place, with accents, and the timeline changing under it.
 void testKeyframeLabelEdit()
 {
@@ -486,6 +557,7 @@ int main(int argc, char** argv)
     const char* only = argc > 1 ? argv[1] : nullptr;
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
+    RUN(testOverlapBandsMatchThePairwiseRule);
     RUN(testRemoveDraggedClip);
     RUN(testRemoveLastClipWhileDragged);
     RUN(testRemoveClipOfDraggedGroup);
@@ -495,10 +567,10 @@ int main(int argc, char** argv)
     RUN(testRemoveKeyframeWhileDragging);
     RUN(testEnvelopePointRemovedWhileDragging);
     RUN(testGrabModeClipRemoved);
-    RUN(testSnapIgnoresNaN);
-    RUN(testSplitAndRemoveArguments);
     RUN(testThousandsAndOddTimes);
     RUN(testZoomAndScrollExtremes);
+    RUN(testSnapIgnoresNaN);
+    RUN(testSplitAndRemoveArguments);
     RUN(testKeyframeLabelEdit);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
