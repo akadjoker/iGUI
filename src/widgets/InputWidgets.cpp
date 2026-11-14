@@ -16,13 +16,19 @@ Slider::Slider(float minVal, float maxVal, float value)
 
 void Slider::setRange(float minVal, float maxVal)
 {
+    if (minVal != minVal || maxVal != maxVal) return; // NaN: the range stays
     min_ = minVal;
-    max_ = maxVal;
+    max_ = maxVal < minVal ? minVal : maxVal; // never below the minimum
+    // The value is brought into the new range (without the signal: the application is setting
+    // the range itself); left outside it, the thumb was drawn off the track.
+    value_ = value_ < min_ ? min_ : (value_ > max_ ? max_ : value_);
+    markDirty();
 }
 
 void Slider::setValue(float v)
 {
-    v = std::clamp(v, min_, max_);
+    if (v != v) return; // NaN is not a value (clamp would pass it, and it would stay)
+    v = v < min_ ? min_ : (v > max_ ? max_ : v);
     if (v != value_)
     {
         value_ = v;
@@ -250,7 +256,8 @@ ProgressBar::ProgressBar(float minVal, float maxVal, float value)
 
 void ProgressBar::setValue(float v)
 {
-    v = std::clamp(v, min_, max_);
+    if (v != v) return; // NaN is not a value
+    v = v < min_ ? min_ : (v > max_ ? max_ : v);
     if (v != value_)
     {
         value_ = v;
@@ -262,8 +269,10 @@ void ProgressBar::setValue(float v)
 
 void ProgressBar::setRange(float minVal, float maxVal)
 {
+    if (minVal != minVal || maxVal != maxVal) return;
     min_ = minVal;
-    max_ = maxVal;
+    max_ = maxVal < minVal ? minVal : maxVal;
+    value_ = value_ < min_ ? min_ : (value_ > max_ ? max_ : value_);
     markDirty();
 }
 

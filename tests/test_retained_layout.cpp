@@ -221,6 +221,71 @@ void testScrollOddSizes()
     h.resize(800.0f, 600.0f);
 }
 
+void testSliderRanges()
+{
+    printf("sliders with no range, a backwards range, NaN and a value outside\n");
+    Harness h;
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    const float ranges[][3] = { { 0.0f, 0.0f, 0.0f }, { 1.0f, 1.0f, 1.0f }, { 5.0f, 1.0f, 3.0f }, { 0.0f, 1e30f, 1.0f },
+        { -1e30f, 1e30f, 0.0f }, { 0.0f, 1.0f, 7.0f }, { 0.0f, nanf(""), 0.5f }, { nanf(""), 1.0f, 0.5f }, { 0.0f, 1.0f, nanf("") },
+        { 0.0f, INFINITY, 1.0f }, { -INFINITY, INFINITY, 0.0f } };
+    ct::Vector<Slider*> sliders;
+    for (size_t i = 0; i < sizeof ranges / sizeof ranges[0]; ++i)
+    {
+        Slider* s = box->createChild<Slider>(ranges[i][0], ranges[i][1], ranges[i][2]);
+        sliders.push_back(s);
+        Slider* v = box->createChild<Slider>(ranges[i][0], ranges[i][1], ranges[i][2]);
+        v->setOrientation(LayoutDir::Vertical);
+        sliders.push_back(v);
+    }
+    h.relayout();
+    h.frames(2);
+    for (size_t i = 0; i < sliders.size(); ++i)
+    {
+        Slider* s = sliders[i];
+        const Rect r = s->absoluteRect();
+        // press at the ends, in the middle, and past them, drag, release
+        const float xs[] = { r.x - 20.0f, r.x, r.x + r.w * 0.5f, r.x + r.w, r.x + r.w + 50.0f };
+        h.moveTo(xs[0], r.y + r.h * 0.5f);
+        h.down();
+        for (size_t k = 0; k < 5; ++k) h.moveTo(xs[k], r.y + r.h * 0.5f + static_cast<float>(k) * 5.0f - 10.0f);
+        h.up();
+        const float poke[] = { 1e30f, -1e30f, INFINITY, -INFINITY, nanf("") };
+        for (size_t k = 0; k < 5; ++k)
+        {
+            s->setValue(poke[k]);
+            // within its own range, whatever that is
+            if (s->minValue() <= s->maxValue() && finite(s->minValue()) && finite(s->maxValue()))
+            {
+                check(s->value() >= s->minValue() && s->value() <= s->maxValue(), "the value stays in the range");
+                check(finite(s->value()), "and is a number");
+            }
+        }
+    }
+    h.frames(2);
+}
+
+// A slider whose range is set after its value: the value is brought into the range, not left
+// outside it with the thumb drawn off the track.
+void testSliderRangeSetUnderTheValue()
+{
+    printf("setRange brings the value into the range\n");
+    Harness h;
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    Slider* s = box->createChild<Slider>(0.0f, 10.0f, 8.0f);
+    int emitted = 0;
+    s->onValueChanged.connect([&](float) { ++emitted; });
+    h.relayout();
+    s->setRange(0.0f, 2.0f);
+    check(s->value() == 2.0f, "the value of 8 is brought down to 2");
+    s->setRange(5.0f, 9.0f);
+    check(s->value() == 5.0f, "and up to 5");
+    s->setRange(9.0f, 5.0f); // backwards
+    check(finite(s->value()), "a backwards range leaves a number");
+    check(emitted == 0, "no signal for a range the application sets itself");
+    h.frames(2);
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -234,6 +299,8 @@ int main(int argc, char** argv)
     RUN(testBoxLayoutOddSizes);
     RUN(testWindowSizes);
     RUN(testScrollOddSizes);
+    RUN(testSliderRanges);
+    RUN(testSliderRangeSetUnderTheValue);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
