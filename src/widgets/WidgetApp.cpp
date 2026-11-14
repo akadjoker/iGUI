@@ -992,7 +992,8 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
         }
         Widget* previous = loan.previous;
         s_.focusLoans_.erase(s_.focusLoans_.begin() + i);
-        if (focusWentAway && !s_.focused_ && previous) setFocused(previous);
+        // (what had the focus before may be on a stage that is not shown now: not there)
+        if (focusWentAway && !s_.focused_ && previous && isWidgetInTrees(previous)) setFocused(previous);
     }
     if (s_.dragSource_ && isDescendantOf(s_.dragSource_, w)) cancelDrag();
     if (s_.hovered_ && isDescendantOf(s_.hovered_, w))
@@ -1269,7 +1270,9 @@ void WidgetApp::returnFocus(Widget* holder)
         s_.focusLoans_.erase(s_.focusLoans_.begin() + i);
         break;
     }
-    if (s_.focused_ && isDescendantOf(s_.focused_, holder)) setFocused(previous);
+    // (what had the focus before may be on a stage that is not shown now: not there)
+    if (s_.focused_ && isDescendantOf(s_.focused_, holder))
+        setFocused(previous && isWidgetInTrees(previous) ? previous : nullptr);
 }
 
 void WidgetApp::retirePopup(Widget* popup, bool owned)

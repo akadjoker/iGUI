@@ -7,6 +7,7 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/BasicWidgets.hpp>
+#include <igui/widgets/DialogWidgets.hpp>
 #include <igui/widgets/ComboBox.hpp>
 #include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
@@ -281,7 +282,7 @@ void testUnhandledKeyDeletes()
     Button* b = box->createChild<Button>("focus me");
     h.relayout();
     h.clickWidget(b);
-    h.app.unhandledKey.connect(
+    const auto slot = h.app.unhandledKey.connect(
             [&](KeyEvent&)
             {
                 if (box)
@@ -294,6 +295,7 @@ void testUnhandledKeyDeletes()
     check(box == nullptr, "the handler ran");
     h.key(Key::F5);
     h.type("z");
+    h.app.unhandledKey.disconnect(slot); // it holds references to this function's variables
 }
 
 void testStageSwitchAndRemoveInEvent()
@@ -544,6 +546,33 @@ void testStageSwitchClosesThePopup()
     h.frames(2);
 }
 
+// A dialog opened on one stage lends the focus and gives it back to what had it: when the stage was
+// switched meanwhile that is a widget of a stage that is not shown, and the keys went there.
+void testFocusDoesNotReturnToAnotherStage()
+{
+    printf("a dialog closed after a stage switch does not give the focus to the old stage\n");
+    Harness h;
+    WidgetApp& app = h.app;
+    Widget* other = app.addStage("other");
+    other->createChild<Label>("other");
+    BoxLayout* box = column(h);
+    TextInput* input = box->createChild<TextInput>("focus me");
+    h.relayout();
+    h.clickWidget(input);
+    check(app.focused() == input, "the input has the focus");
+    auto* mb = app.addFloat<MessageBox>("Question", "Really?", MessageBox::Ok, MessageBox::Question);
+    h.frames(2);
+    app.setStage("other", TransitionType::None);
+    h.frames(2);
+    app.setFocused(mb); // a click on the dialog: it is shown over every stage
+    app.removeFloat(mb);
+    h.frames(3);
+    check(app.focused() != input, "the focus is not at the input of the stage that is not shown");
+    h.key(Key::Return);
+    h.type("x");
+    check(input->text() == String("focus me"), "and the typed text did not reach it");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -571,6 +600,7 @@ int main(int argc, char** argv)
     RUN(testSplitterChildrenRemovedWhileDragging);
     RUN(testDeleteWholeTreeInsideHover);
     RUN(testStageSwitchClosesThePopup);
+    RUN(testFocusDoesNotReturnToAnotherStage);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
