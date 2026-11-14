@@ -453,6 +453,8 @@ if(IGUI_BUILD_RETAINED_BENCH AND TARGET igui_widgets)
     add_executable(igui_retained_bench bench/retained/RetainedBench.cpp)
     target_compile_features(igui_retained_bench PRIVATE cxx_std_17)
     target_link_libraries(igui_retained_bench PRIVATE igui_widgets)
+    target_sources(igui_retained_bench PRIVATE adapters/zen/SoftRaster.cpp)
+    target_include_directories(igui_retained_bench PRIVATE adapters/zen/include)
     # The allocation counter wraps malloc (ct allocates with it); operator new is replaced in the file.
     target_link_options(igui_retained_bench PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
     if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Debug")

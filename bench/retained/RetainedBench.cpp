@@ -10,6 +10,8 @@
 //   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--hash]
 #include "../../tests/EditorTree.hpp"
 
+#include <igui_zen/SoftRaster.hpp>
+
 #include <signal.h>
 #include <sys/time.h>
 #include <time.h>
@@ -299,6 +301,34 @@ void widgetCost(const char* name, Make make)
     }
 }
 
+// The software rasteriser (the zen adapter without OpenGL) on the editor window: a frame whose draw
+// data did not change is copied from its cache (the data is hashed to tell), a changed one is drawn.
+void softRasterScene()
+{
+    // baked fonts only, and the atlas as a texture of the rasteriser itself (the handles the
+    // other scenes use are not memory it can read)
+    Harness h(1600.0f, 900.0f, false);
+    ig::zen::SoftRaster raster;
+    h.atlas().setTexture(raster.createTexture(h.atlas().width(), h.atlas().height(), h.atlas().pixels()));
+    EditorTree ed;
+    ed.build(h, 300);
+    h.relayout();
+    h.frames(5);
+    ct::Vector<uint32_t> pixels;
+    pixels.resize(1600u * 900u);
+    const uint32_t bg = 0xff181a1eu;
+    raster.render(*GetDrawData(), pixels.data(), 1600, 900, 1600, bg);
+    // render() reads the draw data of the last frame; the frame itself is not repeated here
+    RUN_IF("softraster", "cached_frame", 100, [&] { raster.render(*GetDrawData(), pixels.data(), 1600, 900, 1600, bg); });
+    RUN_IF("softraster", "full_render_aa2", 5,
+            [&]
+            {
+                static uint32_t shade = 0;
+                shade ^= 1; // a changed background: the cache is not used
+                raster.render(*GetDrawData(), pixels.data(), 1600, 900, 1600, bg + shade);
+            });
+}
+
 void textScene()
 {
     Harness h(800.0f, 400.0f);
@@ -412,6 +442,7 @@ int main(int argc, char** argv)
     widgetCost("combo", [](BoxLayout* b, int) { b->createChild<ComboBox>()->addItem("Cross dissolve"); });
     widgetCost("textinput", [](BoxLayout* b, int i) { b->createChild<TextInput>(String("texto ") + String::number(i)); });
     widgetCost("panel_empty", [](BoxLayout* b, int) { b->createChild<Panel>(); });
+    softRasterScene();
     textScene();
     shutdown();
     return 0;
