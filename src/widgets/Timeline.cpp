@@ -372,7 +372,100 @@ void Timeline::removeClip(int trackId, int clipIdx)
     if (clipIdx >= 0 && clipIdx < static_cast<int>(clips.size()))
     {
         clips.erase(clips.begin() + clipIdx);
+        clipRemoved(trackId, clipIdx);
         markDirty();
+    }
+}
+
+// A drag, a grab and a marquee remember clips by their index in the track. A clip taken out under
+// a drag ends it when it was the clip dragged (the next move would otherwise work on whatever
+// slid into its place, or past the end of the track), and the clips after it move up one index.
+void Timeline::clipRemoved(int track, int clip)
+{
+    // (A grab holds no index it uses again: the application keeps getting its moves and release.)
+    const bool onClip = dragMode_ == DragMode::MoveClip || dragMode_ == DragMode::ResizeClipL ||
+                        dragMode_ == DragMode::ResizeClipR || dragMode_ == DragMode::StretchClipR ||
+                        dragMode_ == DragMode::MoveEnvelopeKey;
+    if (onClip && dragTrack_ == track)
+    {
+        if (dragIndex_ == clip)
+        {
+            dragMode_ = DragMode::None;
+            dragTrack_ = -1;
+            dragIndex_ = -1;
+            dragKey_ = -1;
+            dragMoved_ = false;
+            dragGroup_.clear();
+            collapseOnRelease_ = false;
+        }
+        else if (dragIndex_ > clip)
+            --dragIndex_;
+    }
+    for (size_t i = 0; i < dragGroup_.size();)
+    {
+        if (dragGroup_[i].track == track && dragGroup_[i].clip == clip)
+        {
+            dragGroup_.erase(dragGroup_.begin() + i);
+            continue;
+        }
+        if (dragGroup_[i].track == track && dragGroup_[i].clip > clip) --dragGroup_[i].clip;
+        ++i;
+    }
+    for (size_t i = 0; i < marqueeBase_.size();)
+    {
+        if (marqueeBase_[i].track == track && marqueeBase_[i].clip == clip)
+        {
+            marqueeBase_.erase(marqueeBase_.begin() + i);
+            continue;
+        }
+        if (marqueeBase_[i].track == track && marqueeBase_[i].clip > clip) --marqueeBase_[i].clip;
+        ++i;
+    }
+}
+
+// True when what a drag in progress holds still exists: the application may have taken clips or
+// keys out through track() since the press. A drag that lost its target ends.
+bool Timeline::dragTargetExists() const
+{
+    switch (dragMode_)
+    {
+        case DragMode::MoveClip:
+        case DragMode::ResizeClipL:
+        case DragMode::ResizeClipR:
+        case DragMode::StretchClipR:
+        case DragMode::MoveEnvelopeKey:
+        {
+            if (dragTrack_ < 0 || dragTrack_ >= trackCount() || dragIndex_ < 0 ||
+                    dragIndex_ >= static_cast<int>(tracks_[dragTrack_].clips.size()))
+                return false;
+            if (dragMode_ == DragMode::MoveEnvelopeKey &&
+                    (dragKey_ < 0 ||
+                            dragKey_ >= static_cast<int>(
+                                    tracks_[dragTrack_].clips[dragIndex_].envelope.size())))
+                return false;
+            for (size_t i = 0; i < dragGroup_.size(); ++i)
+                if (dragGroup_[i].track < 0 || dragGroup_[i].track >= trackCount() ||
+                        dragGroup_[i].clip < 0 ||
+                        dragGroup_[i].clip >=
+                                static_cast<int>(tracks_[dragGroup_[i].track].clips.size()))
+                    return false;
+            return true;
+        }
+        case DragMode::MoveKey:
+        {
+            if (dragTrack_ < 0 || dragTrack_ >= trackCount() || dragIndex_ < 0 ||
+                    dragIndex_ >= static_cast<int>(tracks_[dragTrack_].keyframes.size()))
+                return false;
+            for (size_t i = 0; i < keyGroup_.size(); ++i)
+                if (keyGroup_[i].track < 0 || keyGroup_[i].track >= trackCount() ||
+                        keyGroup_[i].key < 0 ||
+                        keyGroup_[i].key >=
+                                static_cast<int>(tracks_[keyGroup_[i].track].keyframes.size()))
+                    return false;
+            return true;
+        }
+        default:
+            return true;
     }
 }
 
@@ -1015,6 +1108,14 @@ void Timeline::updateMarquee()
 
 void Timeline::onMouseRelease(MouseEvent& e)
 {
+    if (!dragTargetExists())
+    {
+        dragMode_ = DragMode::None;
+        dragTrack_ = dragIndex_ = dragKey_ = -1;
+        dragMoved_ = false;
+        dragGroup_.clear();
+        keyGroup_.clear();
+    }
     const bool grabbed = dragMode_ == DragMode::Grab;
     const bool marquee = dragMode_ == DragMode::Marquee;
     const bool collapse = collapseOnRelease_ && !dragMoved_ && dragMode_ == DragMode::MoveClip &&
@@ -1129,6 +1230,14 @@ void Timeline::updateClipTooltip(float x, float y)
 
 void Timeline::onMouseMove(MouseEvent& e)
 {
+    if (!dragTargetExists())
+    {
+        dragMode_ = DragMode::None;
+        dragTrack_ = dragIndex_ = dragKey_ = -1;
+        dragMoved_ = false;
+        dragGroup_.clear();
+        keyGroup_.clear();
+    }
     if (dragMode_ == DragMode::None) updateClipTooltip(e.x, e.y);
     switch (dragMode_)
     {

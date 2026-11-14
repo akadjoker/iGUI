@@ -29,6 +29,7 @@ BoxLayout* column(Harness& h)
     return box;
 }
 
+// ---- scenarios ----
 // The font atlas of a window can go away before its widgets (an application
 // that destroys its renderer first): the manager caches the font of the last
 // paint for measuring text, and measuring after that read freed memory.

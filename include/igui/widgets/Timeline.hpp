@@ -565,6 +565,8 @@ private:
     void paintMarquee(PaintContext& ctx, const Rect& b);
     void clearKeySelection();
     void updateMarquee();
+    void clipRemoved(int track, int clip);
+    bool dragTargetExists() const;
 };
 
 } // namespace retained
