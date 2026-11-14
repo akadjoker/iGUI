@@ -347,6 +347,88 @@ void testSpinSliderOddRanges()
     h.frames(2);
 }
 
+// The software rasteriser fed with geometry that is not numbers: it must not write outside its
+// buffer. Run under ASan.
+void testSoftRasterOddVertices()
+{
+    printf("software rasteriser with NaN, infinite and huge vertices\n");
+    ig::zen::SoftRaster raster;
+    unsigned char white[4] = { 255, 255, 255, 255 };
+    const TextureHandle tex = raster.createTexture(1, 1, white);
+    const float odd[] = { 0.0f, 5.0f, -5.0f, 1e9f, -1e9f, 3.4e38f, -3.4e38f, nanf(""), INFINITY, -INFINITY, 1e-30f };
+    const int n = static_cast<int>(sizeof odd / sizeof odd[0]);
+    Rng rng(3);
+    for (int round = 0; round < 40; ++round)
+    {
+        DrawList list;
+        for (int k = 0; k < 12; ++k)
+        {
+            list.addRect({ odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)] }, Color(200, 100, 50, 255));
+            list.addCircleFilled({ odd[rng.below(n)], odd[rng.below(n)] }, odd[rng.below(n)], Color(10, 200, 50, 255));
+            list.addTriangleFilled({ odd[rng.below(n)], odd[rng.below(n)] }, { odd[rng.below(n)], odd[rng.below(n)] },
+                    { odd[rng.below(n)], odd[rng.below(n)] }, Color(10, 20, 250, 128));
+            list.addImage(tex, { odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)] },
+                    { odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)] });
+            list.pushClip({ odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)] });
+            list.addRect({ 0.0f, 0.0f, 50.0f, 50.0f }, Color(255, 255, 255, 255));
+            list.popClip();
+            const float radii[4] = { odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)], odd[rng.below(n)] };
+            list.pushClipRoundedRect({ 1.0f, 1.0f, 40.0f, 40.0f }, radii);
+            list.addRect({ 0.0f, 0.0f, 50.0f, 50.0f }, Color(255, 0, 255, 255));
+            list.popClip();
+        }
+        DrawData data;
+        Camera2D cam;
+        if (round % 3 == 1) cam.scale = odd[rng.below(n)];
+        data.passes.push_back({ &list, cam });
+        data.displayWidth = 64.0f;
+        data.displayHeight = 48.0f;
+        const int w = 8 + round % 5 * 20, hgt = 6 + round % 7 * 9;
+        ct::Vector<uint32_t> pixels;
+        pixels.resize(static_cast<size_t>(w) * static_cast<size_t>(hgt) + 4);
+        for (size_t i = 0; i < pixels.size(); ++i) pixels[i] = 0xDEADBEEFu;
+        raster.setSamples(1 + round % 4);
+        raster.render(data, pixels.data(), w, hgt, w, 0xff000000u);
+        // the guard words after the picture are untouched
+        for (size_t i = static_cast<size_t>(w) * static_cast<size_t>(hgt); i < pixels.size(); ++i)
+            if (pixels[i] != 0xDEADBEEFu)
+            {
+                check(false, "the rasteriser wrote past the end of its buffer");
+                break;
+            }
+    }
+    raster.destroyTexture(tex);
+}
+
+// A rectangle with a coordinate that is not a number is not drawn; the background stays.
+void testSoftRasterNaNDrawsNothing()
+{
+    printf("software rasteriser: a NaN rectangle leaves the picture alone\n");
+    ig::zen::SoftRaster raster;
+    for (int samples = 1; samples <= 3; ++samples)
+    {
+        raster.setSamples(samples);
+        const float bad[][4] = { { nanf(""), 5.0f, 20.0f, 20.0f }, { 5.0f, nanf(""), 20.0f, 20.0f }, { 5.0f, 5.0f, nanf(""), 20.0f },
+            { 5.0f, 5.0f, 20.0f, INFINITY }, { -INFINITY, 5.0f, 20.0f, 20.0f } };
+        for (size_t i = 0; i < sizeof bad / sizeof bad[0]; ++i)
+        {
+            DrawList list;
+            list.addRect({ bad[i][0], bad[i][1], bad[i][2], bad[i][3] }, Color(255, 0, 0, 255));
+            DrawData data;
+            data.passes.push_back({ &list, Camera2D() });
+            data.displayWidth = 64.0f;
+            data.displayHeight = 48.0f;
+            uint32_t pixels[64 * 48];
+            for (int k = 0; k < 64 * 48; ++k) pixels[k] = 0;
+            raster.render(data, pixels, 64, 48, 64, 0xff102030u);
+            int changed = 0;
+            for (int k = 0; k < 64 * 48; ++k)
+                if (pixels[k] != 0xff102030u) ++changed;
+            check(changed == 0, "nothing is drawn for a rectangle that is not a number");
+        }
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -363,6 +445,8 @@ int main(int argc, char** argv)
     RUN(testSliderRanges);
     RUN(testSliderRangeSetUnderTheValue);
     RUN(testSpinSliderOddRanges);
+    RUN(testSoftRasterOddVertices);
+    RUN(testSoftRasterNaNDrawsNothing);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

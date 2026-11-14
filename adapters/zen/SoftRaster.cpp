@@ -61,7 +61,31 @@ inline int clampInt(int v, int lo, int hi)
 }
 inline uint8_t toByte(float v)
 {
-    return v <= 0.0f ? 0 : (v >= 255.0f ? 255 : static_cast<uint8_t>(v + 0.5f));
+    // (written so that NaN is 0: a cast of NaN is undefined)
+    return !(v > 0.0f) ? 0 : (v >= 255.0f ? 255 : static_cast<uint8_t>(v + 0.5f));
+}
+
+// float to int inside [lo, hi] (a NaN gives lo): a plain cast of a float that does not fit an int
+// is undefined.
+inline int floatToInt(float f, int lo, int hi)
+{
+    if (!(f >= static_cast<float>(lo))) return lo;
+    if (f >= static_cast<float>(hi)) return hi;
+    return static_cast<int>(f);
+}
+
+// A vertex that is not a number, or is infinite, marks its triangles as not to be drawn.
+constexpr int32_t kInvalidCoord = INT32_MIN;
+
+// A coordinate in 28.4 fixed point, in sample units. A position beyond ~33 million samples is
+// held there: differences of coordinates, the bounding box and the edge functions then stay inside
+// the integers they are computed in (a vertex a plain cast made wrap would put a triangle anywhere).
+inline int32_t fixedCoord(float f)
+{
+    if (!(f - f == 0.0f)) return kInvalidCoord; // NaN or infinite
+    const float limit = 536870912.0f;           // 2^29
+    f = f < -limit ? -limit : (f > limit ? limit : f);
+    return static_cast<int32_t>(lroundf(f));
 }
 
 inline uint32_t blend(uint32_t dst, uint32_t r, uint32_t g, uint32_t b, uint32_t a)
@@ -208,8 +232,8 @@ void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& 
     auto texel = [texture](float u, float v, float& r, float& g, float& bl, float& al)
     {
         if (!texture) return;
-        const int tx = clampInt(static_cast<int>(u * texture->width), 0, texture->width - 1);
-        const int ty = clampInt(static_cast<int>(v * texture->height), 0, texture->height - 1);
+        const int tx = floatToInt(u * static_cast<float>(texture->width), 0, texture->width - 1);
+        const int ty = floatToInt(v * static_cast<float>(texture->height), 0, texture->height - 1);
         const uint32_t t = texture->pixels[static_cast<size_t>(ty) * texture->width + tx];
         r = r * ((t >> 16) & 0xffu) * (1.0f / 255.0f);
         g = g * ((t >> 8) & 0xffu) * (1.0f / 255.0f);
@@ -389,10 +413,9 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
         {
             const ig::retained::DrawVertex& s = source[i];
             Vertex& v = vertices_[i];
-            v.x = static_cast<int32_t>(
-                    lroundf((cosine * s.x - sine * s.y + translateX) * scale * 16.0f));
-            v.y = static_cast<int32_t>(
-                    lroundf((sine * s.x + cosine * s.y + translateY) * scale * 16.0f));
+            v.x = fixedCoord((cosine * s.x - sine * s.y + translateX) * scale * 16.0f);
+            v.y = fixedCoord((sine * s.x + cosine * s.y + translateY) * scale * 16.0f);
+            if (v.x == kInvalidCoord || v.y == kInvalidCoord) v.x = v.y = kInvalidCoord;
             v.u = s.u;
             v.v = s.v;
             v.r = s.color.r;
@@ -422,10 +445,10 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
                     fy0 = fy1;
                     fy1 = t;
                 }
-                cx0 = clampInt(static_cast<int>(floorf(fx0)), 0, bufW);
-                cy0 = clampInt(static_cast<int>(floorf(fy0)), 0, bufH);
-                cx1 = clampInt(static_cast<int>(ceilf(fx1)), 0, bufW);
-                cy1 = clampInt(static_cast<int>(ceilf(fy1)), 0, bufH);
+                cx0 = floatToInt(floorf(fx0), 0, bufW);
+                cy0 = floatToInt(floorf(fy0), 0, bufH);
+                cx1 = floatToInt(ceilf(fx1), 0, bufW);
+                cy1 = floatToInt(ceilf(fy1), 0, bufH);
             }
             if (command.indexOffset + command.indexCount > indices.size()) continue;
             round_.count = command.roundClipCount < ig::retained::DrawCmd::MaxRoundClips
@@ -454,6 +477,9 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
                 const uint32_t ib = indices[command.indexOffset + i + 1];
                 const uint32_t ic = indices[command.indexOffset + i + 2];
                 if (ia >= vertices_.size() || ib >= vertices_.size() || ic >= vertices_.size())
+                    continue;
+                if (vertices_[ia].x == kInvalidCoord || vertices_[ib].x == kInvalidCoord ||
+                        vertices_[ic].x == kInvalidCoord)
                     continue;
                 drawTriangle(vertices_[ia], vertices_[ib], vertices_[ic], texture, cx0, cy0, cx1,
                         cy1);
