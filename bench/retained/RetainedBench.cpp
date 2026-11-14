@@ -7,10 +7,13 @@
 // process, so a busy machine does not move it), in microseconds per iteration, with
 // the heap allocations one iteration makes. No standard library: ct and C only.
 //
-//   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs]
+//   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--hash]
 #include "../../tests/EditorTree.hpp"
 
+#include <signal.h>
+#include <sys/time.h>
 #include <time.h>
+#include <ucontext.h>
 
 #include "../../tests/AllocCounter.hpp"
 
@@ -18,6 +21,37 @@ using namespace rh;
 
 namespace
 {
+
+// --profile: a sampling profiler without perf: every millisecond of CPU time the program counter
+// is recorded, and printed at the end as addresses with their counts (pipe through
+// scripts that run addr2line on them: tools in the build log of this change).
+unsigned long long gSamples[200000];
+volatile unsigned long gSampleCount = 0;
+void onProf(int, siginfo_t*, void* ctx)
+{
+    if (gSampleCount < sizeof gSamples / sizeof gSamples[0])
+        gSamples[gSampleCount++] = static_cast<unsigned long long>(static_cast<ucontext_t*>(ctx)->uc_mcontext.gregs[REG_RIP]);
+}
+void profileStart()
+{
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_sigaction = onProf;
+    sa.sa_flags = SA_SIGINFO | SA_RESTART;
+    sigaction(SIGPROF, &sa, nullptr);
+    struct itimerval it;
+    it.it_interval.tv_sec = 0;
+    it.it_interval.tv_usec = 500;
+    it.it_value = it.it_interval;
+    setitimer(ITIMER_PROF, &it, nullptr);
+}
+void profileStop()
+{
+    struct itimerval it;
+    memset(&it, 0, sizeof it);
+    setitimer(ITIMER_PROF, &it, nullptr);
+    for (unsigned long i = 0; i < gSampleCount; ++i) printf("PC %llx\n", gSamples[i]);
+}
 
 double cpuUs()
 {
@@ -250,13 +284,19 @@ void widgetCost(const char* name, Make make)
     for (int i = 0; i < 200; ++i) make(box, i);
     h.relayout();
     h.frames(3);
-    if (!wanted("widget", name)) return;
-    Result r = measure(200, [&] { h.frame(); });
+    if (!wanted("widget", name) && !wanted("widget", "geometry")) return;
+    Result r = measure(wanted("widget", name) ? 200 : 1, [&] { h.frame(); });
     r.bestUs /= 200.0;
     r.allocs /= 200.0;
     char metric[64];
     snprintf(metric, sizeof metric, "%s_per_widget", name);
-    report("widget", metric, r);
+    if (wanted("widget", name)) report("widget", metric, r);
+    if (wanted("widget", "geometry"))
+    {
+        const DrawList& dl = GetDrawList();
+        printf("%-34s %10.1f vertices %.1f indices per widget\n", name, static_cast<double>(dl.vertices().size()) / 200.0,
+                static_cast<double>(dl.indices().size()) / 200.0);
+    }
 }
 
 void textScene()
@@ -278,7 +318,7 @@ void textScene()
 
 int main(int argc, char** argv)
 {
-    bool traceIdle = false;
+    bool traceIdle = false, profile = false, hashOnly = false;
     for (int i = 1; i < argc; ++i)
     {
         if (!strncmp(argv[i], "--reps=", 7)) gReps = atoi(argv[i] + 7);
@@ -288,6 +328,10 @@ int main(int argc, char** argv)
             gOnly = argv[i] + 7;
         else if (!strcmp(argv[i], "--trace-allocs"))
             traceIdle = true;
+        else if (!strcmp(argv[i], "--profile"))
+            profile = true;
+        else if (!strcmp(argv[i], "--hash"))
+            hashOnly = true;
     }
     if (traceIdle)
     {
@@ -300,6 +344,58 @@ int main(int argc, char** argv)
         gTraceAllocs = true;
         h.frame();
         gTraceAllocs = false;
+        shutdown();
+        return 0;
+    }
+    if (hashOnly)
+    {
+        // A checksum of what the frames of the editor window draw (vertices, indices, commands): the
+        // same before and after a change that is only meant to make drawing faster.
+        for (int clips = 300; clips <= 3000; clips *= 10)
+        {
+            Harness h(1600.0f, 900.0f);
+            EditorTree ed;
+            ed.build(h, clips);
+            h.relayout();
+            h.frames(5);
+            h.clickWidget(ed.notes);
+            h.frame();
+            ed.menuBar->openMenu(1);
+            h.frames(3);
+            const DrawList& dl = GetDrawList();
+            unsigned long long hv = 1469598103934665603ull;
+            auto mix = [&hv](const void* p, size_t n)
+            {
+                const unsigned char* b = static_cast<const unsigned char*>(p);
+                for (size_t i = 0; i < n; ++i) hv = (hv ^ b[i]) * 1099511628211ull;
+            };
+            mix(dl.vertices().data(), dl.vertices().size() * sizeof(DrawVertex));
+            mix(dl.indices().data(), dl.indices().size() * sizeof(uint32_t));
+            for (size_t i = 0; i < dl.commands().size(); ++i)
+            {
+                const DrawCmd& c = dl.commands()[i];
+                mix(&c.indexOffset, sizeof c.indexOffset);
+                mix(&c.indexCount, sizeof c.indexCount);
+                mix(&c.clip, sizeof c.clip);
+            }
+            printf("draw checksum with %d clips: %016llx (%u vertices, %u indices, %u commands)\n", clips, hv,
+                    static_cast<unsigned>(dl.vertices().size()), static_cast<unsigned>(dl.indices().size()),
+                    static_cast<unsigned>(dl.commands().size()));
+        }
+        shutdown();
+        return 0;
+    }
+    if (profile)
+    {
+        // the idle frame of the editor window with 300 clips, many times, sampled
+        Harness h(1600.0f, 900.0f);
+        EditorTree ed;
+        ed.build(h, 300);
+        h.relayout();
+        h.frames(5);
+        profileStart();
+        for (int i = 0; i < 60000; ++i) h.frame();
+        profileStop();
         shutdown();
         return 0;
     }

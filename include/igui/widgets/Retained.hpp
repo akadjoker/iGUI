@@ -634,6 +634,8 @@ private:
     void pushClipScreen(const Rect& rect);
     void fillConvexPath(const Color* colors, const Color& color);
     void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
+    DrawVertex* appendVertices(size_t count);
+    uint32_t* appendIndices(size_t count);
     uint32_t addVertex(float x, float y, const Color& color);
     uint32_t addVertex(float x, float y, float u, float v, const Color& color);
 

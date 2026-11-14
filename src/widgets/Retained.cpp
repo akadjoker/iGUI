@@ -859,8 +859,6 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
     // edge is anti-aliased whatever the renderer does with the triangles.
     const float fringe = antiAliasing_ ? 1.0f : 0.0f;
     uint32_t idxCount = static_cast<uint32_t>((n - 2) * 3 + (fringe > 0.0f ? n * 6 : 0));
-    vertices_.reserve(vertices_.size() + static_cast<size_t>(fringe > 0.0f ? n * 2 : n));
-    indices_.reserve(indices_.size() + idxCount);
 
     uint32_t offset = static_cast<uint32_t>(indices_.size());
     uint32_t base = static_cast<uint32_t>(vertices_.size());
@@ -868,19 +866,19 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
 
     if (fringe <= 0.0f)
     {
+        DrawVertex* vp = appendVertices(static_cast<size_t>(n));
         for (int i = 0; i < n; ++i)
         {
             const Vec2& p = path_[static_cast<size_t>(i)];
-            {
-                const Vec2 q = mapPoint(p.x, p.y);
-                vertices_.push_back({ q.x, q.y, whiteUV_.x, whiteUV_.y, colorAt(i) });
-            }
+            const Vec2 q = mapPoint(p.x, p.y);
+            *vp++ = { q.x, q.y, whiteUV_.x, whiteUV_.y, colorAt(i) };
         }
+        uint32_t* ix = appendIndices(idxCount);
         for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
         {
-            indices_.push_back(base);
-            indices_.push_back(base + i - 1);
-            indices_.push_back(base + i);
+            *ix++ = base;
+            *ix++ = base + i - 1;
+            *ix++ = base + i;
         }
         addCmd(offset, idxCount, fontTexture_);
         path_.clear();
@@ -896,6 +894,7 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
     }
     const float side = area >= 0.0f ? 1.0f : -1.0f;
 
+    DrawVertex* vp = appendVertices(static_cast<size_t>(n) * 2);
     for (int i = 0; i < n; ++i)
     {
         const Vec2& p = path_[static_cast<size_t>(i)];
@@ -936,25 +935,26 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
         outer.a = 0;
         const Vec2 q0 = mapPoint(p.x - nx, p.y - ny);
         const Vec2 q1 = mapPoint(p.x + nx, p.y + ny);
-        vertices_.push_back({ q0.x, q0.y, whiteUV_.x, whiteUV_.y, inner });
-        vertices_.push_back({ q1.x, q1.y, whiteUV_.x, whiteUV_.y, outer });
+        *vp++ = { q0.x, q0.y, whiteUV_.x, whiteUV_.y, inner };
+        *vp++ = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, outer };
     }
 
+    uint32_t* ix = appendIndices(idxCount);
     for (uint32_t i = 2; i < static_cast<uint32_t>(n); ++i)
     {
-        indices_.push_back(base);
-        indices_.push_back(base + (i - 1) * 2);
-        indices_.push_back(base + i * 2);
+        *ix++ = base;
+        *ix++ = base + (i - 1) * 2;
+        *ix++ = base + i * 2;
     }
     for (uint32_t i = 0; i < static_cast<uint32_t>(n); ++i)
     {
         uint32_t j = (i + 1) % static_cast<uint32_t>(n);
-        indices_.push_back(base + i * 2);
-        indices_.push_back(base + j * 2);
-        indices_.push_back(base + j * 2 + 1);
-        indices_.push_back(base + i * 2);
-        indices_.push_back(base + j * 2 + 1);
-        indices_.push_back(base + i * 2 + 1);
+        *ix++ = base + i * 2;
+        *ix++ = base + j * 2;
+        *ix++ = base + j * 2 + 1;
+        *ix++ = base + i * 2;
+        *ix++ = base + j * 2 + 1;
+        *ix++ = base + i * 2 + 1;
     }
 
     addCmd(offset, idxCount, fontTexture_);
@@ -983,16 +983,15 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
     const int perPoint = aa ? 4 : 2;
     uint32_t vtxCount = static_cast<uint32_t>(n * perPoint);
     uint32_t idxCount = static_cast<uint32_t>(segs * (aa ? 18 : 6));
-    vertices_.reserve(vertices_.size() + vtxCount);
-    indices_.reserve(indices_.size() + idxCount);
 
     uint32_t offset = static_cast<uint32_t>(indices_.size());
     uint32_t base = static_cast<uint32_t>(vertices_.size());
     Color transparent = color;
     transparent.a = 0;
+    DrawVertex* vp = appendVertices(vtxCount);
     auto addMapped = [&](float x, float y, const Color& c) {
         const Vec2 q = mapPoint(x, y);
-        vertices_.push_back({ q.x, q.y, whiteUV_.x, whiteUV_.y, c });
+        *vp++ = { q.x, q.y, whiteUV_.x, whiteUV_.y, c };
     };
 
     for (int i = 0; i < n; ++i)
@@ -1050,18 +1049,19 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
         }
     }
 
+    uint32_t* ix = appendIndices(idxCount);
     for (int i = 0; i < segs; ++i)
     {
         uint32_t a = base + static_cast<uint32_t>(i) * static_cast<uint32_t>(perPoint);
         uint32_t b = base + static_cast<uint32_t>((i + 1) % n) * static_cast<uint32_t>(perPoint);
         for (int k = 0; k + 1 < perPoint; ++k)
         {
-            indices_.push_back(a + static_cast<uint32_t>(k));
-            indices_.push_back(b + static_cast<uint32_t>(k));
-            indices_.push_back(b + static_cast<uint32_t>(k) + 1);
-            indices_.push_back(a + static_cast<uint32_t>(k));
-            indices_.push_back(b + static_cast<uint32_t>(k) + 1);
-            indices_.push_back(a + static_cast<uint32_t>(k) + 1);
+            *ix++ = a + static_cast<uint32_t>(k);
+            *ix++ = b + static_cast<uint32_t>(k);
+            *ix++ = b + static_cast<uint32_t>(k) + 1;
+            *ix++ = a + static_cast<uint32_t>(k);
+            *ix++ = b + static_cast<uint32_t>(k) + 1;
+            *ix++ = a + static_cast<uint32_t>(k) + 1;
         }
     }
 
@@ -1072,17 +1072,22 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
 void DrawList::addRect(const Rect& rect, const Color& color)
 {
     uint32_t offset = static_cast<uint32_t>(indices_.size());
-    uint32_t v0 = addVertex(rect.x, rect.y, color);
-    uint32_t v1 = addVertex(rect.x + rect.w, rect.y, color);
-    uint32_t v2 = addVertex(rect.x + rect.w, rect.y + rect.h, color);
-    uint32_t v3 = addVertex(rect.x, rect.y + rect.h, color);
+    const uint32_t v0 = static_cast<uint32_t>(vertices_.size()), v1 = v0 + 1, v2 = v0 + 2, v3 = v0 + 3;
+    DrawVertex* vp = appendVertices(4);
+    const Vec2 q0 = mapPoint(rect.x, rect.y), q1 = mapPoint(rect.x + rect.w, rect.y),
+               q2 = mapPoint(rect.x + rect.w, rect.y + rect.h), q3 = mapPoint(rect.x, rect.y + rect.h);
+    vp[0] = { q0.x, q0.y, whiteUV_.x, whiteUV_.y, color };
+    vp[1] = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, color };
+    vp[2] = { q2.x, q2.y, whiteUV_.x, whiteUV_.y, color };
+    vp[3] = { q3.x, q3.y, whiteUV_.x, whiteUV_.y, color };
 
-    indices_.push_back(v0);
-    indices_.push_back(v1);
-    indices_.push_back(v2);
-    indices_.push_back(v0);
-    indices_.push_back(v2);
-    indices_.push_back(v3);
+    uint32_t* ix = appendIndices(6);
+    ix[0] = v0;
+    ix[1] = v1;
+    ix[2] = v2;
+    ix[3] = v0;
+    ix[4] = v2;
+    ix[5] = v3;
     addCmd(offset, 6, fontTexture_);
 }
 void DrawList::addRectOutline(const Rect& rect, const Color& color, float thickness)
@@ -1194,12 +1199,13 @@ void DrawList::addImage(TextureHandle texture, const Rect& rect, const Rect& uv,
     uint32_t v2 = addVertex(rect.x + rect.w, rect.y + rect.h, uv.x + uv.w, uv.y + uv.h, color);
     uint32_t v3 = addVertex(rect.x, rect.y + rect.h, uv.x, uv.y + uv.h, color);
 
-    indices_.push_back(v0);
-    indices_.push_back(v1);
-    indices_.push_back(v2);
-    indices_.push_back(v0);
-    indices_.push_back(v2);
-    indices_.push_back(v3);
+    uint32_t* ix = appendIndices(6);
+    ix[0] = v0;
+    ix[1] = v1;
+    ix[2] = v2;
+    ix[3] = v0;
+    ix[4] = v2;
+    ix[5] = v3;
     addCmd(offset, 6, texture);
 }
 
@@ -1258,12 +1264,13 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
             uint32_t v2 =
                     addVertex(rect.x + rect.w, rect.y + rect.h, uv.x + uv.w, uv.y + uv.h, color);
             uint32_t v3 = addVertex(rect.x, rect.y + rect.h, uv.x, uv.y + uv.h, color);
-            indices_.push_back(v0);
-            indices_.push_back(v1);
-            indices_.push_back(v2);
-            indices_.push_back(v0);
-            indices_.push_back(v2);
-            indices_.push_back(v3);
+            uint32_t* ix = appendIndices(6);
+            ix[0] = v0;
+            ix[1] = v1;
+            ix[2] = v2;
+            ix[3] = v0;
+            ix[4] = v2;
+            ix[5] = v3;
         }
 
         pen.x += glyph->advanceX * scale;
@@ -2064,6 +2071,22 @@ void ClipToRoundClips(const DrawVertex* vertices, size_t vertexCount, const uint
             out.indices.push_back(base + static_cast<uint32_t>(k + 1));
         }
     }
+}
+
+// Room for `count` more indices, for the caller to write: one growth check for all of them instead
+// of one for each (a frame writes twenty thousand).
+DrawVertex* DrawList::appendVertices(size_t count)
+{
+    const size_t at = vertices_.size();
+    vertices_.resize(at + count);
+    return vertices_.data() + at;
+}
+
+uint32_t* DrawList::appendIndices(size_t count)
+{
+    const size_t at = indices_.size();
+    indices_.resize(at + count);
+    return indices_.data() + at;
 }
 
 uint32_t DrawList::addVertex(float x, float y, const Color& color)
