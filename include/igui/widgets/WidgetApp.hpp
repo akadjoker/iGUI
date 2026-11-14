@@ -711,6 +711,9 @@ private:
     void queuePopupDelete(Widget* popup);
     void flushPopupDeletes();
     void flushWidgetDeletes();
+    // The clip and font stacks of the paint context, kept from frame to frame (see swapStacks).
+    ct::Vector<Rect> paintClipScratch_;
+    ct::Vector<const ig::retained::Font*> paintFontScratch_;
     // Counts the frame phases (update, paint) that are running: widgets removed meanwhile wait.
     int busy_ = 0;
     ct::Vector<Widget*> pendingWidgetDeletes_; // taken out of their trees during a phase

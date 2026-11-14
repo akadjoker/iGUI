@@ -1683,7 +1683,11 @@ void WidgetApp::paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
     dl.addRect({ 0, 0, w, h }, bgColor);
 
     PaintContext ctx{ dl, font, icons };
+    ctx.swapStacks(paintClipScratch_, paintFontScratch_);
     tree->paint(ctx);
+    ctx.swapStacks(paintClipScratch_, paintFontScratch_);
+    paintClipScratch_.clear();
+    paintFontScratch_.clear();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1890,6 +1894,7 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
         dl.addRect({ 0, 0, w, h }, stageBgColor(s_.currentStage_));
 
         PaintContext ctx{ dl, font, icons };
+        ctx.swapStacks(paintClipScratch_, paintFontScratch_);
         if (s_.root_) s_.root_->paint(ctx);
 
         // Float windows (above stage, below popup)
@@ -1942,6 +1947,9 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
         }
 
         data.passes.push_back({ &dl, cam });
+        ctx.swapStacks(paintClipScratch_, paintFontScratch_);
+        paintClipScratch_.clear();
+        paintFontScratch_.clear();
     }
 
     // Debug layout overlay

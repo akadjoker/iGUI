@@ -652,6 +652,9 @@ private:
     ct::Vector<DrawCmd> commands_;
     int pushClipCount_ = 0;
     ct::HashMap<uint32_t, FontGlyph> glyphs_;
+    // last, so the members the drawing calls use all the time keep their place: the outlines addIcon
+    // builds, kept from icon to icon (an icon used to allocate its own)
+    ct::Vector<Vec2> iconPoints_[2];
 };
 
 /// Triangles that went through ClipToRoundClips.

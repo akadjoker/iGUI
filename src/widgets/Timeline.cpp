@@ -124,7 +124,7 @@ Timeline::Timeline()
 
 float Timeline::maxVerticalScroll() const
 {
-    return std::max(0.0f, visibleTracks().size() * kTrackH - (rect_.h - kRulerH));
+    return std::max(0.0f, visibleTrackCount() * kTrackH - (rect_.h - kRulerH));
 }
 
 void Timeline::setVerticalScroll(float pixels)
@@ -138,7 +138,7 @@ void Timeline::setVerticalScroll(float pixels)
 void Timeline::syncScrollBar()
 {
     const float view = std::max(0.0f, rect_.h - kRulerH);
-    const float content = visibleTracks().size() * kTrackH;
+    const float content = visibleTrackCount() * kTrackH;
     verticalScroll_ = std::clamp(verticalScroll_, 0.0f, std::max(0.0f, content - view));
     vbar_->setContentSize(content);
     vbar_->setViewSize(view);
@@ -235,6 +235,14 @@ void Timeline::setEdgePadding(float pixels)
 ct::Vector<int> Timeline::visibleTracks() const
 {
     ct::Vector<int> rows;
+    collectVisibleTracks(rows);
+    return rows;
+}
+
+// The rows into a vector that is kept from call to call (an idle frame must not allocate).
+void Timeline::collectVisibleTracks(ct::Vector<int>& rows) const
+{
+    rows.clear();
     auto visit = [&](auto&& self, int parent) -> void
     {
         for (int i = 0; i < trackCount(); ++i)
@@ -245,7 +253,23 @@ ct::Vector<int> Timeline::visibleTracks() const
             }
     };
     visit(visit, -1);
-    return rows;
+}
+
+// How many rows are shown, without making the list.
+int Timeline::visibleTrackCount() const
+{
+    int count = 0;
+    auto visit = [&](auto&& self, int parent) -> void
+    {
+        for (int i = 0; i < trackCount(); ++i)
+            if (tracks_[i].parent == parent)
+            {
+                ++count;
+                if (tracks_[i].expanded) self(self, i);
+            }
+    };
+    visit(visit, -1);
+    return count;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1715,7 +1739,8 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
     float ascName = setupFont(ctx, Color(180, 180, 180, 255), 10.0f);
     const TimeMap tm = timeMap(b);
 
-    const auto rows = visibleTracks();
+    collectVisibleTracks(paintRows_);
+    const ct::Vector<int>& rows = paintRows_;
     for (int row = 0; row < static_cast<int>(rows.size()); ++row)
     {
         const int ti = rows[row];

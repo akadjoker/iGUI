@@ -174,6 +174,8 @@ public:
     int addJoint(const String& name, int parent = -1);
     void setExpanded(int joint, bool expanded);
     ct::Vector<int> visibleTracks() const;
+    int visibleTrackCount() const;
+    void collectVisibleTracks(ct::Vector<int>& rows) const;
     void setHeaderWidth(float width);
     /// Height of a track row in pixels (clamped to 20-200). The clips, their waveforms and curves grow with it;
     /// Ctrl + mouse wheel changes it too and emits onTrackHeightChanged (Shift + wheel zooms the time, the width).
@@ -580,6 +582,7 @@ private:
     void clearKeySelection();
     void updateMarquee();
     ct::Vector<int> paintVisible_; // the clips of a track that paintTracks drew
+    ct::Vector<int> paintRows_;    // the rows shown, as paintTracks walks them
     static void sortByStart(ct::Vector<int>& order, const ct::Vector<TimelineClip>& clips);
     void clipRemoved(int track, int clip);
     bool dragTargetExists() const;

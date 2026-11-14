@@ -1410,7 +1410,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
             Color body = color;
             body.a = static_cast<uint8_t>(color.a * 0.35f);
             addRect({ l, t, r - l, b - t }, body);
-            ct::Vector<Vec2> outline;
+            ct::Vector<Vec2>& outline = iconPoints_[0];
+            outline.clear();
             outline.push_back({ l, b });
             outline.push_back({ l, tab });
             outline.push_back({ l + s * 0.30f, tab });
@@ -1436,7 +1437,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
             // page with a folded corner, and a mark for the kind
             float l = x0 + s * 0.20f, r = x1 - s * 0.20f, t = y0 + s * 0.08f, b = y1 - s * 0.08f;
             float fold = s * 0.22f;
-            ct::Vector<Vec2> page;
+            ct::Vector<Vec2>& page = iconPoints_[0];
+            page.clear();
             page.push_back({ l, t });
             page.push_back({ r - fold, t });
             page.push_back({ r, t + fold });
@@ -1507,7 +1509,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
         case IconId::EyeOff:
         {
             // almond outline from two arcs, a pupil, and a strike for "off"
-            ct::Vector<Vec2> eye;
+            ct::Vector<Vec2>& eye = iconPoints_[0];
+            eye.clear();
             const int n = 10;
             float w = s * 0.5f - p * 0.6f, h = s * 0.26f;
             for (int i = 0; i <= n; ++i)
@@ -1561,13 +1564,15 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
         {
             float top = y0 + s * 0.30f, bot = y1 - s * 0.14f;
             addLine({ cx - s * 0.30f, top }, { cx + s * 0.30f, top }, color, thickness);
-            ct::Vector<Vec2> handle;
+            ct::Vector<Vec2>& handle = iconPoints_[0];
+            handle.clear();
             handle.push_back({ cx - s * 0.10f, top });
             handle.push_back({ cx - s * 0.10f, y0 + s * 0.18f });
             handle.push_back({ cx + s * 0.10f, y0 + s * 0.18f });
             handle.push_back({ cx + s * 0.10f, top });
             addPolyline(handle, color, thickness, false);
-            ct::Vector<Vec2> bin;
+            ct::Vector<Vec2>& bin = iconPoints_[1];
+            bin.clear();
             bin.push_back({ cx - s * 0.22f, top });
             bin.push_back({ cx - s * 0.18f, bot });
             bin.push_back({ cx + s * 0.18f, bot });
@@ -1586,7 +1591,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
             float body = cy + s * 0.02f, r = s * 0.17f;
             addRect({ cx - s * 0.25f, body, s * 0.50f, s * 0.34f }, color);
             float lift = icon == IconId::Unlock ? s * 0.10f : 0.0f;
-            ct::Vector<Vec2> shackle;
+            ct::Vector<Vec2>& shackle = iconPoints_[0];
+            shackle.clear();
             shackle.push_back({ cx - r, body });
             shackle.push_back({ cx - r, body - s * 0.08f - lift });
             for (int i = 0; i <= 8; ++i)
@@ -1619,7 +1625,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
                     thickness * 1.2f);
             addLine({ cx, cy + s * 0.16f }, { cx + s * 0.17f, cy - s * 0.02f }, color,
                     thickness * 1.2f);
-            ct::Vector<Vec2> tray;
+            ct::Vector<Vec2>& tray = iconPoints_[0];
+            tray.clear();
             tray.push_back({ cx - s * 0.32f, cy + s * 0.12f });
             tray.push_back({ cx - s * 0.32f, y1 - s * 0.14f });
             tray.push_back({ cx + s * 0.32f, y1 - s * 0.14f });
@@ -1661,7 +1668,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
             const Vec2 d{ 0.7071f, -0.7071f }, n{ 0.7071f, 0.7071f };
             const float l = s * 0.30f, w = s * 0.14f;
             const Vec2 c{ cx, cy - s * 0.04f };
-            ct::Vector<Vec2> block;
+            ct::Vector<Vec2>& block = iconPoints_[0];
+            block.clear();
             block.push_back({ c.x - d.x * l - n.x * w, c.y - d.y * l - n.y * w });
             block.push_back({ c.x + d.x * l - n.x * w, c.y + d.y * l - n.y * w });
             block.push_back({ c.x + d.x * l + n.x * w, c.y + d.y * l + n.y * w });
@@ -1678,7 +1686,8 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
         case IconId::PaintBucket:
         {
             // a tipped pail with a drop falling from its lip
-            ct::Vector<Vec2> pail;
+            ct::Vector<Vec2>& pail = iconPoints_[0];
+            pail.clear();
             pail.push_back({ cx - s * 0.06f, y0 + p * 0.8f });
             pail.push_back({ x1 - p * 1.3f, cy - s * 0.04f });
             pail.push_back({ cx - s * 0.06f, y1 - p * 0.9f });
@@ -1721,7 +1730,10 @@ void DrawList::addIcon(IconId icon, const Rect& rect, const Color& color, float 
         case IconId::Magnet:
         {
             float r = s * 0.27f, w = s * 0.14f, my = cy - s * 0.06f, bot = y1 - s * 0.14f;
-            ct::Vector<Vec2> outer, inner;
+            ct::Vector<Vec2>& outer = iconPoints_[0];
+            ct::Vector<Vec2>& inner = iconPoints_[1];
+            outer.clear();
+            inner.clear();
             outer.push_back({ cx - r - w * 0.5f, bot });
             inner.push_back({ cx - r + w * 0.5f, bot });
             for (int i = 0; i <= 12; ++i)

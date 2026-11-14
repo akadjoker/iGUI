@@ -142,6 +142,15 @@ struct PaintContext
     PaintContext(ig::retained::DrawList& dl, const ig::retained::Font* f = nullptr,
             IconAtlas* ico = nullptr);
 
+    /// @brief Swaps the buffers of the clip and font stacks with @p clips and @p fonts. A context
+    ///        is made for every paint, and its stacks would allocate again each time: the
+    ///        manager lends it the buffers of the frame before (call it again to take them back).
+    void swapStacks(ct::Vector<Rect>& clips, ct::Vector<const ig::retained::Font*>& fonts)
+    {
+        clipStack_.swap(clips);
+        fontStack_.swap(fonts);
+    }
+
     /// @brief Push a font onto the font stack.
     void pushFont(const ig::retained::Font* f);
     /// @brief Pop the topmost font from the stack.

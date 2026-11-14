@@ -10,79 +10,9 @@
 //   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs]
 #include "../../tests/EditorTree.hpp"
 
-#include <execinfo.h>
-#include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
 
-// ── Allocation counter ───────────────────────────────────────────────────────
-// ct allocates with malloc, the rest with operator new: both are counted.
-extern "C" void* __real_malloc(size_t);
-extern "C" void* __real_calloc(size_t, size_t);
-extern "C" void* __real_realloc(void*, size_t);
-
-static unsigned long long gAllocs = 0;
-static bool gTrace = false; // --trace-allocs: where the allocations of one idle frame come from
-
-static void traceAlloc()
-{
-    if (!gTrace) return;
-    gTrace = false; // backtrace() itself may allocate
-    void* frames[14];
-    const int n = backtrace(frames, 14);
-    backtrace_symbols_fd(frames + 2, n - 2, 2);
-    if (write(2, "--\n", 3) < 0) return;
-    gTrace = true;
-}
-
-extern "C" void* __wrap_malloc(size_t n)
-{
-    ++gAllocs;
-    traceAlloc();
-    return __real_malloc(n);
-}
-extern "C" void* __wrap_calloc(size_t a, size_t b)
-{
-    ++gAllocs;
-    return __real_calloc(a, b);
-}
-extern "C" void* __wrap_realloc(void* p, size_t n)
-{
-    ++gAllocs;
-    traceAlloc();
-    return __real_realloc(p, n);
-}
-void* operator new(unsigned long n)
-{
-    ++gAllocs;
-    traceAlloc();
-    void* p = __real_malloc(n ? n : 1);
-    if (!p) abort();
-    return p;
-}
-void* operator new[](unsigned long n)
-{
-    ++gAllocs;
-    void* p = __real_malloc(n ? n : 1);
-    if (!p) abort();
-    return p;
-}
-void operator delete(void* p) noexcept
-{
-    free(p);
-}
-void operator delete[](void* p) noexcept
-{
-    free(p);
-}
-void operator delete(void* p, unsigned long) noexcept
-{
-    free(p);
-}
-void operator delete[](void* p, unsigned long) noexcept
-{
-    free(p);
-}
+#include "../../tests/AllocCounter.hpp"
 
 using namespace rh;
 
@@ -240,6 +170,35 @@ void editorScene(const char* scene, int clips)
         h.relayout();
     }
 
+    // The idle frame in other states: a text edit with the focus (a blinking cursor), a menu
+    // open, a drop-down open, a tooltip showing.
+    if (wanted(scene, "idle_frame_text_focus"))
+    {
+        h.clickWidget(ed.notes);
+        h.frames(2);
+        report(scene, "idle_frame_text_focus", measure(200, [&] { h.frame(); }));
+        ed.menuBar->openMenu(1);
+        h.frames(3);
+        report(scene, "idle_frame_menu_open", measure(200, [&] { h.frame(); }));
+        ed.menuBar->closeMenu();
+        h.frames(30);
+        ed.combos[1]->openDropdown();
+        h.frames(30);
+        report(scene, "idle_frame_combo_open", measure(200, [&] { h.frame(); }));
+        h.app.closePopup();
+        h.frames(30);
+        ed.sliders[0]->setTooltip("a tooltip");
+        float x = 0, y = 0;
+        Harness::centre(ed.sliders[0], x, y);
+        h.moveTo(x, y);
+        h.io().deltaTime = 1.0f;
+        h.frames(3);
+        h.io().deltaTime = 1.0f / 60.0f;
+        report(scene, "idle_frame_tooltip", measure(200, [&] { h.frame(); }));
+        h.moveTo(5.0f, 5.0f);
+        h.frames(2);
+    }
+
     // A frame with the window being resized: layout + paint every time.
     RUN_IF(scene, "resize_frame", 100,
             [&]
@@ -338,9 +297,9 @@ int main(int argc, char** argv)
         ed.build(h, 300);
         h.relayout();
         h.frames(5);
-        gTrace = true;
+        gTraceAllocs = true;
         h.frame();
-        gTrace = false;
+        gTraceAllocs = false;
         shutdown();
         return 0;
     }
