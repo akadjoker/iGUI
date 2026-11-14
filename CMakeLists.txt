@@ -586,6 +586,15 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         set_tests_properties(igui_zen_sidetabs PROPERTIES SKIP_RETURN_CODE 77)
     endif()
 
+    if(IGUI_BUILD_TESTS)
+        # The window lifecycle: the application and dialog windows made and destroyed over and over,
+        # parents closed with dialogs open, the scale changed. Needs an X server (77: skipped).
+        add_executable(igui_zen_lifecycle_tests tests/test_zen_lifecycle.cpp)
+        target_link_libraries(igui_zen_lifecycle_tests PRIVATE igui_zen)
+        add_test(NAME igui_zen_lifecycle COMMAND igui_zen_lifecycle_tests)
+        set_tests_properties(igui_zen_lifecycle PROPERTIES SKIP_RETURN_CODE 77)
+    endif()
+
     if(IGUI_BUILD_ZEN_DEMO)
         add_executable(igui_zen_windows examples/zen_windows/main.cpp)
         target_link_libraries(igui_zen_windows PRIVATE igui_zen)

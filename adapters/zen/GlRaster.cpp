@@ -124,12 +124,29 @@ void GlRaster::shutdown()
     program_ = 0;
 }
 
+#ifndef __EMSCRIPTEN__
+namespace
+{
+// glad calls its loader as a function that returns a function pointer; the platform's returns
+// void*. Calling one through a pointer of the other type is undefined (the function sanitizer says
+// so on every load): a function of glad's own type forwards to the platform's.
+void* (*gProcAddress)(const char* name) = nullptr;
+GLADapiproc procThunk(const char* name)
+{
+    return reinterpret_cast<GLADapiproc>(gProcAddress(name));
+}
+} // namespace
+#endif
+
 bool GlRaster::init(void* (*procAddress)(const char* name))
 {
 #ifdef __EMSCRIPTEN__
     (void) procAddress; // WebGL 2 functions are linked directly
 #else
-    if (!gladLoadGL(reinterpret_cast<GLADloadfunc>(procAddress))) return false;
+    gProcAddress = procAddress;
+    const bool loaded = gladLoadGL(procThunk) != 0;
+    gProcAddress = nullptr;
+    if (!loaded) return false;
 #endif
     glGetIntegerv(GL_MAJOR_VERSION, &major_);
     glGetIntegerv(GL_MINOR_VERSION, &minor_);
