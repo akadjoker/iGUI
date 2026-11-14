@@ -936,6 +936,28 @@ Widget::Vec2f Splitter::sizeHint() const
     return { w, h };
 }
 
+// How much of `total` (the length along the split, less the handle) the first pane gets: the
+// ratio of it, then each pane kept at least minSize when there is room for both, and never outside
+// the splitter (a window narrower than two minimum panes used to give a negative pane). The
+// handle is drawn, hit and dragged where this puts it, which is where the panes meet.
+float Splitter::firstSize(float total) const
+{
+    if (!(total > 0.0f)) return 0.0f;
+    float first = total * ratio_;
+    float second = total - first;
+    if (first < minSize_)
+    {
+        first = minSize_;
+        second = total - first;
+    }
+    if (second < minSize_)
+    {
+        second = minSize_;
+        first = total - second;
+    }
+    return first < 0.0f ? 0.0f : (first > total ? total : first);
+}
+
 void Splitter::layout()
 {
     // We only handle the first two children
@@ -946,20 +968,8 @@ void Splitter::layout()
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        float firstW = total * ratio_;
-        float secondW = total - firstW;
-
-        // Clamp to min sizes
-        if (firstW < minSize_)
-        {
-            firstW = minSize_;
-            secondW = total - firstW;
-        }
-        if (secondW < minSize_)
-        {
-            secondW = minSize_;
-            firstW = total - secondW;
-        }
+        float firstW = firstSize(total);
+        float secondW = total > firstW ? total - firstW : 0.0f;
 
         if (first)
         {
@@ -975,19 +985,8 @@ void Splitter::layout()
     else
     {
         float total = rect_.h - handleSize_;
-        float firstH = total * ratio_;
-        float secondH = total - firstH;
-
-        if (firstH < minSize_)
-        {
-            firstH = minSize_;
-            secondH = total - firstH;
-        }
-        if (secondH < minSize_)
-        {
-            secondH = minSize_;
-            firstH = total - secondH;
-        }
+        float firstH = firstSize(total);
+        float secondH = total > firstH ? total - firstH : 0.0f;
 
         if (first)
         {
@@ -1018,7 +1017,7 @@ void Splitter::paint(PaintContext& ctx)
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        float firstW = total * ratio_;
+        float firstW = firstSize(total);
         hx = abs.x + firstW;
         hy = abs.y;
         hw = handleSize_;
@@ -1027,7 +1026,7 @@ void Splitter::paint(PaintContext& ctx)
     else
     {
         float total = rect_.h - handleSize_;
-        float firstH = total * ratio_;
+        float firstH = firstSize(total);
         hx = abs.x;
         hy = abs.y + firstH;
         hw = abs.w;
@@ -1082,7 +1081,7 @@ void Splitter::onMousePress(MouseEvent& e)
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        float handleX = total * ratio_;
+        float handleX = firstSize(total);
         if (localX >= handleX && localX <= handleX + handleSize_)
         {
             dragging_ = true;
@@ -1093,7 +1092,7 @@ void Splitter::onMousePress(MouseEvent& e)
     else
     {
         float total = rect_.h - handleSize_;
-        float handleY = total * ratio_;
+        float handleY = firstSize(total);
         if (localY >= handleY && localY <= handleY + handleSize_)
         {
             dragging_ = true;
@@ -1125,13 +1124,13 @@ void Splitter::onMouseMove(MouseEvent& e)
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        float hx = abs.x + total * ratio_;
+        float hx = abs.x + firstSize(total);
         onHandle = (e.x >= hx && e.x <= hx + handleSize_);
     }
     else
     {
         float total = rect_.h - handleSize_;
-        float hy = abs.y + total * ratio_;
+        float hy = abs.y + firstSize(total);
         onHandle = (e.y >= hy && e.y <= hy + handleSize_);
     }
     if (onHandle != handleHovered_)
@@ -1144,15 +1143,27 @@ void Splitter::onMouseMove(MouseEvent& e)
 
     if (!dragging_) return;
 
+    // The ratio the pointer asks for, kept where both panes keep their minimum size (when there
+    // is room for both): past that the handle stays at the limit, and so does the ratio.
+    auto dragRatio = [this](float pointer, float total)
+    {
+        float r = pointer / total;
+        if (total >= minSize_ * 2.0f)
+        {
+            const float lo = minSize_ / total, hi = 1.0f - minSize_ / total;
+            r = r < lo ? lo : (r > hi ? hi : r);
+        }
+        return r;
+    };
     if (dir_ == LayoutDir::Horizontal)
     {
         float total = rect_.w - handleSize_;
-        if (total > 0) setRatio((e.x - abs.x) / total);
+        if (total > 0) setRatio(dragRatio(e.x - abs.x, total));
     }
     else
     {
         float total = rect_.h - handleSize_;
-        if (total > 0) setRatio((e.y - abs.y) / total);
+        if (total > 0) setRatio(dragRatio(e.y - abs.y, total));
     }
     e.consumed = true;
 }

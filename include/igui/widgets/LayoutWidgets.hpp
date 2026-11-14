@@ -693,6 +693,8 @@ private:
     float minSize_ = 30.0f;
     bool dragging_ = false;
     bool handleHovered_ = false;
+
+    float firstSize(float total) const;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
