@@ -677,40 +677,49 @@ void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
 void WidgetApp::dispatchTextInput(const ct::Vector<uint32_t>& chars)
 {
     if (!s_.focused_) return;
+    // A text event carries 28 bytes. More than that in one frame (a slow frame, an input method
+    // committing a phrase) goes in several events, in order: the characters past the first 28
+    // bytes used to be dropped.
     KeyEvent ke;
-    // Convert UTF-32 codepoints to UTF-8 text[]
     int off = 0;
+    auto flush = [&]()
+    {
+        if (off == 0) return;
+        ke.text[off] = 0;
+        bubbleKey(ke, &Widget::onTextInput);
+        ke = KeyEvent();
+        off = 0;
+    };
     for (uint32_t cp: chars)
     {
-        if (cp < 0x80)
-        {
-            if (off + 1 > 28) break;
-            ke.text[off++] = static_cast<char>(cp);
-        }
+        char utf8[4];
+        int n = 0;
+        // Convert UTF-32 codepoints to UTF-8
+        if (cp < 0x80) utf8[n++] = static_cast<char>(cp);
         else if (cp < 0x800)
         {
-            if (off + 2 > 28) break;
-            ke.text[off++] = static_cast<char>(0xC0 | (cp >> 6));
-            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+            utf8[n++] = static_cast<char>(0xC0 | (cp >> 6));
+            utf8[n++] = static_cast<char>(0x80 | (cp & 0x3F));
         }
         else if (cp < 0x10000)
         {
-            if (off + 3 > 28) break;
-            ke.text[off++] = static_cast<char>(0xE0 | (cp >> 12));
-            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+            utf8[n++] = static_cast<char>(0xE0 | (cp >> 12));
+            utf8[n++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            utf8[n++] = static_cast<char>(0x80 | (cp & 0x3F));
         }
         else if (cp <= 0x10FFFF)
         {
-            if (off + 4 > 28) break;
-            ke.text[off++] = static_cast<char>(0xF0 | (cp >> 18));
-            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-            ke.text[off++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            ke.text[off++] = static_cast<char>(0x80 | (cp & 0x3F));
+            utf8[n++] = static_cast<char>(0xF0 | (cp >> 18));
+            utf8[n++] = static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            utf8[n++] = static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            utf8[n++] = static_cast<char>(0x80 | (cp & 0x3F));
         }
+        if (n == 0) continue; // not a character
+        if (off + n > 28) flush();
+        if (!s_.focused_) return; // a handler took the focus away or deleted the widget
+        for (int i = 0; i < n; ++i) ke.text[off++] = utf8[i];
     }
-    ke.text[off] = 0;
-    bubbleKey(ke, &Widget::onTextInput);
+    flush();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
