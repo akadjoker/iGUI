@@ -573,6 +573,38 @@ void testFocusDoesNotReturnToAnotherStage()
     check(input->text() == String("focus me"), "and the typed text did not reach it");
 }
 
+// The window goes (releaseSurface) with a dialog open that borrowed the focus from the input of
+// another float, raised above the dialog afterwards. The stage root is freed first; the dialog's
+// destructor then gave the focus back and looked the input up in the trees, starting at the freed
+// root (found by the editor fuzz with 2000 seeds of 500 steps).
+void testReleaseWithDialogOpen()
+{
+    printf("the window goes with a dialog open that borrowed the focus from another float\n");
+    {
+        Harness h;
+        WidgetApp& app = h.app;
+        BoxLayout* box = column(h);
+        box->createChild<TextInput>("on the stage");
+        auto* fw = app.addFloat<FloatWindow>("Tools");
+        fw->setFloatPos(40.0f, 40.0f);
+        fw->setFloatSize(300.0f, 200.0f);
+        auto* inner = new BoxLayout(LayoutDir::Vertical);
+        fw->setContentWidget(inner);
+        TextInput* input = inner->createChild<TextInput>("in the float");
+        h.relayout();
+        h.clickWidget(input);
+        check(app.focused() == input, "the input of the float has the focus");
+        auto* mb = app.addFloat<MessageBox>("Question", "Really?", MessageBox::Ok, MessageBox::Question);
+        mb->setFloatPos(500.0f, 300.0f);
+        h.frames(2);
+        check(app.focused() != input, "the dialog borrowed the focus");
+        app.bringToFront(fw);
+        h.frames(2);
+        check(app.floats().size() == 2 && app.floats()[1] == fw, "the float is above the dialog");
+    } // the harness releases the window here: the root, then the dialog, then the float
+    check(true, "the window went without reading what it had freed");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -594,6 +626,7 @@ int main(int argc, char** argv)
     RUN(testStageSwitchAndRemoveInEvent);
     RUN(testSetRootInEvent);
     RUN(testFloatClosedByItsButton);
+    RUN(testReleaseWithDialogOpen);
     RUN(testTooltipOnRemovedWidget);
     RUN(testDragSourceDeleted);
     RUN(testSliderDeletedWhileDragging);

@@ -64,6 +64,10 @@ void WidgetApp::releaseSurface()
 {
     saveWindowState();
     flushWidgetDeletes();
+    // Everything of the window goes now. The destructors below tell the manager about each widget,
+    // and what it would do with that (give a lent focus back, walk the trees, cancel a drag) reads
+    // the surface, whose root and floats are freed one by one here: it is skipped until the end.
+    releasing_ = true;
     if (s_.popupOwned_) delete s_.popup_;
     if (s_.popupClosingOwned_) delete s_.popupClosing_;
     flushPopupDeletes();
@@ -72,9 +76,16 @@ void WidgetApp::releaseSurface()
         if (stageRoot != s_.root_) delete stageRoot;
     }
     delete s_.root_;
-    for (auto* fw: s_.floats_) delete fw;
-    for (auto* fw: s_.pendingFloatDeletes_) delete fw;
+    // The float lists leave the surface before their windows go: a destructor may look a float up
+    // and remove it (FileDialog removes its new-folder prompt), which would edit the list under the loop.
+    auto floats = static_cast<decltype(s_.floats_)&&>(s_.floats_);
+    auto pendingFloats = static_cast<decltype(s_.pendingFloatDeletes_)&&>(s_.pendingFloatDeletes_);
+    s_.floats_.clear();
+    s_.pendingFloatDeletes_.clear();
+    for (auto* fw: floats) delete fw;
+    for (auto* fw: pendingFloats) delete fw;
     s_ = Surface();
+    releasing_ = false;
 }
 
 WidgetApp::~WidgetApp()
@@ -934,6 +945,7 @@ void WidgetApp::notifyWidgetRemoved(Widget* w)
     if (!w) return;
     ++deletions_;
     if (Animator* animator = Animator::existing()) animator->forget(w);
+    if (releasing_) return; // the whole surface is going (releaseSurface): nothing in it to fix
     for (Surface::DeferredCall& call: s_.deferredCalls_)
         if (call.owner && isDescendantOf(call.owner, w)) call.owner = nullptr;
     if (s_.tooltipWidget_ && isDescendantOf(s_.tooltipWidget_, w))

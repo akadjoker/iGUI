@@ -716,6 +716,8 @@ private:
     ct::Vector<const ig::retained::Font*> paintFontScratch_;
     // Counts the frame phases (update, paint) that are running: widgets removed meanwhile wait.
     int busy_ = 0;
+    // True while releaseSurface() deletes the window's widgets (notifyWidgetRemoved does nothing then).
+    bool releasing_ = false;
     ct::Vector<Widget*> pendingWidgetDeletes_; // taken out of their trees during a phase
     struct BusyScope
     {
