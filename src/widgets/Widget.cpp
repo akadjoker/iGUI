@@ -299,14 +299,25 @@ float PaintContext::textWidth(const char* text) const
 String PaintContext::fitText(const String& text, float room)
 {
     if (text.empty() || font.GetTextWidth(text.c_str()) <= room) return text;
-    String shown = text;
-    while (!shown.empty())
+    // The text is cut before a character - a lead byte and the continuation bytes after it - at the
+    // last place where what is before it and "..." still fit. Taking one character off the end
+    // and measuring again, until it fits, measured a text of n characters n times: the square of
+    // its length, every frame (a label of 8000 characters took a quarter of a second). A longer
+    // prefix is never narrower than a shorter one, so the place is found by halving.
+    ct::Vector<size_t> cuts;
+    for (size_t i = 0; i < text.size(); ++i)
+        if (i == 0 || (static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) cuts.push_back(i);
+    // cuts[k] is the start of the k-th character; the shown prefix ends at one of them, and is
+    // empty at cuts[0]. The whole text does not fit, so the prefix is shorter than it.
+    size_t lo = 0, hi = cuts.size() - 1;
+    while (lo < hi)
     {
-        size_t last = shown.size() - 1;
-        while (last > 0 && (static_cast<unsigned char>(shown[last]) & 0xC0) == 0x80) --last;
-        shown.resize(last);
-        if (font.GetTextWidth((shown + "...").c_str()) <= room) break;
+        const size_t mid = lo + (hi - lo + 1) / 2;
+        if (font.GetTextWidth((text.substr(0, cuts[mid]) + "...").c_str()) <= room) lo = mid;
+        else
+            hi = mid - 1;
     }
+    String shown = text.substr(0, cuts[lo]);
     shown += "...";
     return shown;
 }
