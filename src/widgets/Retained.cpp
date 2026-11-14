@@ -208,6 +208,11 @@ bool FontAtlas::enableDynamic(TextureHandle texture)
     return true;
 }
 
+void FontAtlas::disableDynamic()
+{
+    if (impl_) impl_->enabled = false;
+}
+
 bool FontAtlas::dynamicEnabled() const
 {
     return impl_ && impl_->enabled;
@@ -399,6 +404,19 @@ float Font::kerning(uint32_t left, uint32_t right) const
     return v;
 }
 
+bool FontAtlas::faceHasGlyph(int face, uint32_t codepoint) const
+{
+    if (!impl_ || face < 0 || face >= static_cast<int>(impl_->faces.size())) return false;
+    const Impl::Face& fc = *impl_->faces[static_cast<size_t>(face)];
+    return fc.ok && stbtt_FindGlyphIndex(&fc.info, static_cast<int>(codepoint)) != 0;
+}
+
+bool Font::hasGlyph(uint32_t codepoint) const
+{
+    if (atlas_ && face_ >= 0) return atlas_->faceHasGlyph(face_, codepoint);
+    return glyphs_.find(codepoint) != nullptr;
+}
+
 const FontGlyph* Font::findGlyph(uint32_t codepoint) const
 {
     const FontGlyph* glyph = glyphs_.find(codepoint);
@@ -437,8 +455,11 @@ bool FontAtlas::build()
 {
     if (pending_.empty()) return false;
 
-    width_ = 2048;
-    height_ = 1024;
+    bool anyBaked = false;
+    for (const auto& cfg: pending_) anyBaked = anyBaked || cfg.baked;
+    // only the white pixel is needed when nothing is baked
+    width_ = anyBaked ? 2048 : 8;
+    height_ = anyBaked ? 1024 : 8;
     ct::Vector<unsigned char> alpha(static_cast<size_t>(width_ * height_), 0);
 
     stbtt_pack_context pack = {};
@@ -474,6 +495,8 @@ bool FontAtlas::build()
         const unsigned char* data;
         int dataSize;
         float pixelHeight;
+        int faceIndex;
+        bool baked;
         ct::Vector<ct::Vector<stbtt_packedchar>> rangePacked; // [range][char]
     };
     ct::Vector<FontPack> packs(pending_.size());
@@ -487,6 +510,11 @@ bool FontAtlas::build()
         fp.data = cfg.ttfData ? cfg.ttfData : DejaVuSans_ttf_data;
         fp.dataSize = cfg.ttfData ? cfg.ttfSize : static_cast<int>(DejaVuSans_ttf_size);
         fp.pixelHeight = cfg.pixelHeight;
+        fp.faceIndex = cfg.faceIndex > 0 ? cfg.faceIndex : 0;
+        fp.baked = cfg.baked;
+        // a face a collection does not have: nothing is packed and the face stays unusable
+        if (stbtt_GetFontOffsetForIndex(fp.data, fp.faceIndex) < 0) fp.baked = false;
+        if (!fp.baked) continue;
         fp.rangePacked.resize(kRangeCount);
         for (int ri = 0; ri < kRangeCount; ++ri)
         {
@@ -506,7 +534,9 @@ bool FontAtlas::build()
     size_t rangeIdx = 0;
     for (size_t fi = 0; fi < packs.size(); ++fi)
     {
-        stbtt_PackFontRanges(&pack, packs[fi].data, 0, &allRanges[rangeIdx], kRangeCount);
+        if (!packs[fi].baked) continue;
+        stbtt_PackFontRanges(&pack, packs[fi].data, packs[fi].faceIndex, &allRanges[rangeIdx],
+                kRangeCount);
         rangeIdx += kRangeCount;
     }
 
@@ -547,7 +577,8 @@ bool FontAtlas::build()
         face->data = fp.data;
         impl_->faces.push_back(face);
         stbtt_fontinfo& info = face->info;
-        if (!stbtt_InitFont(&info, fp.data, stbtt_GetFontOffsetForIndex(fp.data, 0))) continue;
+        const int offset = stbtt_GetFontOffsetForIndex(fp.data, fp.faceIndex);
+        if (offset < 0 || !stbtt_InitFont(&info, fp.data, offset)) continue;
         face->ok = true;
 
         float scale = stbtt_ScaleForPixelHeight(&info, fp.pixelHeight);
@@ -556,7 +587,7 @@ bool FontAtlas::build()
         fnt.lineHeight_ = static_cast<float>(ascent - descent + lineGap) * scale;
         fnt.ascender_ = static_cast<float>(ascent) * scale;
 
-        for (int ri = 0; ri < kRangeCount; ++ri)
+        for (int ri = 0; ri < kRangeCount && fp.baked; ++ri)
         {
             for (int ci = 0; ci < kRanges[ri].count; ++ci)
             {
@@ -578,7 +609,11 @@ bool FontAtlas::build()
     }
 
     pending_.clear();
-    return !fonts_.empty() && !fonts_[0].glyphs_.empty();
+    if (fonts_.empty()) return false;
+    if (!anyBaked) return true;
+    for (const auto& f: fonts_)
+        if (!f.glyphs_.empty()) return true;
+    return false;
 }
 
 // ── Legacy single-font API ───────────────────────────────────────────

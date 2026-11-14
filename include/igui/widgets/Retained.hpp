@@ -290,6 +290,17 @@ public:
     // into the atlas's dynamic page the first time it is asked for. The
     // pointer is good until the next findGlyph on the same font.
     const FontGlyph* findGlyph(uint32_t codepoint) const;
+    // True when the face has a glyph of its own for the code point (findGlyph would draw the
+    // question mark otherwise). For a font of a FontAtlas that is the face's character map, so
+    // it also answers for code points outside the baked ranges; a font made by hand answers from
+    // its glyph table.
+    bool hasGlyph(uint32_t codepoint) const;
+    // True when findGlyph would not need to rasterise the code point: it is in the glyph table
+    // (the baked ranges, or a glyph a font made by atHeight() drew before).
+    bool hasBakedGlyph(uint32_t codepoint) const
+    {
+        return glyphs_.find(codepoint) != nullptr;
+    }
     TextureHandle texture() const
     {
         return texture_;
@@ -347,6 +358,12 @@ public:
         const unsigned char* ttfData = nullptr;
         int ttfSize = 0;
         float pixelHeight = 16.0f;
+        // Which face of a font collection (.ttc / .otc) to use; 0 for a plain font file.
+        int faceIndex = 0;
+        // false: nothing of this face is baked into the atlas (no space used); its glyphs only
+        // come from the dynamic page (FontAtlas::enableDynamic), at the size asked for. For a face
+        // that is a fallback for the glyphs another one lacks (CJK).
+        bool baked = true;
         // If ttfData is nullptr, uses embedded DejaVuSans
     };
 
@@ -370,6 +387,8 @@ public:
     // dynamicDirty().
     bool prepareDynamic();
     bool enableDynamic(TextureHandle texture);
+    // Stops rasterising on demand (the adapter calls it before it frees the texture).
+    void disableDynamic();
     bool dynamicEnabled() const;
     TextureHandle dynamicTexture() const;
     int dynamicWidth() const;
@@ -433,6 +452,7 @@ private:
     Impl* impl_ = nullptr;
     const Font* fontAtHeight(int face, float pixelHeight);
     bool bakeGlyph(const Font& font, uint32_t codepoint);
+    bool faceHasGlyph(int face, uint32_t codepoint) const;
     float kerningOf(const Font& font, uint32_t left, uint32_t right) const;
 
     int width_ = 0;

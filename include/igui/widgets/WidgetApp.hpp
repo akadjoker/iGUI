@@ -390,6 +390,17 @@ public:
         return updateTex_ && tex ? updateTex_(tex, rgba, w, h) : false;
     }
 
+    /// @brief Gives a built FontAtlas (see FontAtlas::build, its texture already set) the dynamic
+    /// page: from now on the glyphs the baked ranges lack, and every size asked of
+    /// Font::atHeight, are rasterised when first drawn and the page is uploaded again after the
+    /// paint() that baked something. Needs the texture upload / update functions registered. An
+    /// atlas is added once; it must outlive this WidgetApp (or be dropped with
+    /// removeDynamicAtlas before it goes). False when there is no upload function or the atlas
+    /// has no faces; the atlas then keeps working as before.
+    bool addDynamicAtlas(ig::retained::FontAtlas& atlas);
+    /// @brief Stops uploading the page of `atlas` (and frees its texture).
+    void removeDynamicAtlas(ig::retained::FontAtlas& atlas);
+
     /// @brief Free a previously uploaded texture.
     void destroyTexture(ig::retained::TextureHandle tex)
     {
@@ -712,6 +723,7 @@ private:
     UploadTextureFn uploadTex_;
     DestroyTextureFn destroyTex_;
     UpdateTextureFn updateTex_;
+    ct::Vector<ig::retained::FontAtlas*> dynamicAtlases_; // see addDynamicAtlas
     // Global event dispatcher: per event, the handlers by widget id and the
     // catch-all ones.
     struct EventHandlers

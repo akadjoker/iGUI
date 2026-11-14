@@ -4,6 +4,7 @@
 
 #include <igui/widgets/Retained.hpp>
 #include <igui/widgets/Theme.hpp>
+#include <igui/widgets/WidgetApp.hpp>
 
 #include <math.h>
 #include <stdio.h>
@@ -44,6 +45,44 @@ TextureHandle handle(uintptr_t v)
     TextureHandle h;
     h.value = v;
     return h;
+}
+
+// A font collection with `count` faces that all share the tables of `font`: the collection header, then one table
+// directory per face (each with its table offsets moved to where the data sits in the new file).
+ct::Vector<unsigned char> makeCollection(const unsigned char* font, int size, int count)
+{
+    const int numTables = (font[4] << 8) | font[5];
+    const int directory = 12 + 16 * numTables;
+    const int header = 12 + 4 * count;
+    ct::Vector<unsigned char> out;
+    out.resize(static_cast<size_t>(header + count * directory + size - directory));
+    unsigned char* o = out.data();
+    memcpy(o, "ttcf", 4);
+    o[4] = 0; o[5] = 1; o[6] = 0; o[7] = 0; // version 1.0
+    o[8] = 0; o[9] = 0; o[10] = 0; o[11] = static_cast<unsigned char>(count);
+    const int shift = header + count * directory - directory;
+    for (int i = 0; i < count; ++i)
+    {
+        const int at = header + i * directory;
+        o[12 + 4 * i + 0] = static_cast<unsigned char>(at >> 24);
+        o[12 + 4 * i + 1] = static_cast<unsigned char>(at >> 16);
+        o[12 + 4 * i + 2] = static_cast<unsigned char>(at >> 8);
+        o[12 + 4 * i + 3] = static_cast<unsigned char>(at);
+        memcpy(o + at, font, static_cast<size_t>(directory));
+        for (int t = 0; t < numTables; ++t)
+        {
+            unsigned char* rec = o + at + 12 + 16 * t + 8; // the offset of the table
+            const unsigned value = (static_cast<unsigned>(rec[0]) << 24) | (static_cast<unsigned>(rec[1]) << 16) |
+                                   (static_cast<unsigned>(rec[2]) << 8) | rec[3];
+            const unsigned moved = value + static_cast<unsigned>(shift);
+            rec[0] = static_cast<unsigned char>(moved >> 24);
+            rec[1] = static_cast<unsigned char>(moved >> 16);
+            rec[2] = static_cast<unsigned char>(moved >> 8);
+            rec[3] = static_cast<unsigned char>(moved);
+        }
+    }
+    memcpy(o + header + count * directory, font + directory, static_cast<size_t>(size - directory));
+    return out;
 }
 
 } // namespace
@@ -121,6 +160,121 @@ int main()
     check(again && ink(atlas, again) > 20, "after a reset the glyph that is made again has its pixels where it says");
     check(allFound, "four hundred sizes of 62 glyphs fill the page more than once and every glyph still comes back");
     check(f24->findGlyph('H') != nullptr && f24->findGlyph('H')->size.y > 0, "and an old font bakes again after a reset");
+
+    // ── Glyphs outside the baked ranges, and faces that bake nothing ─────────
+    {
+        FontAtlas a;
+        check(a.buildDefault(), "a second default atlas builds");
+        a.setTexture(handle(1));
+        const Font& b = a.defaultFont();
+        check(b.hasGlyph('A') && b.hasBakedGlyph('A'), "a baked glyph is the face's and baked");
+        check(b.hasGlyph(0x0416) && !b.hasBakedGlyph(0x0416), "Cyrillic is in the face but not baked");
+        check(!b.hasGlyph(0x4E2D) && !b.hasBakedGlyph(0x4E2D), "CJK is not in the face at all");
+        check(a.prepareDynamic() && a.enableDynamic(handle(2)), "its page is enabled");
+        const Font* sized = b.atHeight(b.pixelHeight());
+        check(sized != &b && !sized->hasBakedGlyph(0x0416), "the sized font has not made it yet");
+        const FontGlyph* zhe = sized->findGlyph(0x0416);
+        check(ink(a, zhe) > 20 && sized->hasBakedGlyph(0x0416) && zhe->codepoint == 0x0416,
+                "a glyph outside the old ranges comes out of the page with a bitmap of its own");
+        const FontGlyph* euro = sized->findGlyph(0x20AC);
+        check(euro && ink(a, euro) > 20, "so does the euro sign");
+
+        FontAtlas only; // a face of which nothing is baked
+        const unsigned char* data = nullptr;
+        int dataSize = 0;
+        GetDefaultFont(&data, &dataSize);
+        FontAtlas::FontConfig cfg;
+        cfg.ttfData = data;
+        cfg.ttfSize = dataSize;
+        cfg.pixelHeight = 16.0f;
+        cfg.baked = false;
+        only.addFont(cfg);
+        check(only.build() && only.width() <= 8 && only.height() <= 8, "an atlas of unbaked faces is tiny");
+        const Font* unbaked = only.font(0);
+        check(unbaked && !unbaked->hasBakedGlyph('A') && unbaked->hasGlyph('A'), "the face has glyphs, none baked");
+        check(unbaked->lineHeight() > 0.0f && unbaked->ascender() > 0.0f, "and its metrics are there");
+        only.setTexture(handle(3));
+        check(unbaked->atHeight(20.0f) == unbaked, "without a page it draws nothing of its own");
+        check(only.prepareDynamic() && only.enableDynamic(handle(4)), "the page is enabled");
+        const FontGlyph* g = unbaked->atHeight(20.0f)->findGlyph('A');
+        check(ink(only, g) > 20, "the glyphs come from the page");
+        only.disableDynamic();
+        check(!only.dynamicEnabled() && unbaked->atHeight(30.0f) == unbaked, "and disableDynamic stops it");
+    }
+
+    // ── A face of a font collection ────────────────────────────────────────
+    {
+        const unsigned char* data = nullptr;
+        int dataSize = 0;
+        GetDefaultFont(&data, &dataSize);
+        ct::Vector<unsigned char> collection = makeCollection(data, dataSize, 3);
+        auto build = [&](int index, FontAtlas& a) {
+            FontAtlas::FontConfig cfg;
+            cfg.ttfData = collection.data();
+            cfg.ttfSize = static_cast<int>(collection.size());
+            cfg.pixelHeight = 16.0f;
+            cfg.faceIndex = index;
+            a.addFont(cfg);
+            return a.build();
+        };
+        FontAtlas plain;
+        plain.buildDefault();
+        FontAtlas f0, f2, f9;
+        check(build(0, f0) && f0.font(0)->findGlyph('A')->advanceX == plain.font(0)->findGlyph('A')->advanceX,
+                "face 0 of a collection is the font");
+        check(build(2, f2) && f2.font(0)->findGlyph('A')->advanceX == plain.font(0)->findGlyph('A')->advanceX &&
+                        f2.font(0)->hasGlyph('A'),
+                "so is face 2, found through the collection header");
+        build(9, f9);
+        check(!f9.font(0) || (!f9.font(0)->hasGlyph('A') && f9.font(0)->lineHeight() == 0.0f),
+                "a face the collection does not have gives no glyphs");
+    }
+
+    // ── The app uploads the page after a paint that baked a glyph ──────────
+    {
+        WidgetApp& app = WidgetApp::instance();
+        int uploads = 0, updates = 0;
+        TextureHandle lastUpdated;
+        app.setTextureUpload([&](const unsigned char*, int, int) {
+            ++uploads;
+            return handle(100 + static_cast<uintptr_t>(uploads));
+        });
+        app.setTextureUpdate([&](TextureHandle t, const unsigned char* px, int w, int h) {
+            ++updates;
+            lastUpdated = t;
+            return px != nullptr && w > 0 && h > 0;
+        });
+        FontAtlas a;
+        a.buildDefault();
+        a.setTexture(handle(1));
+        check(app.addDynamicAtlas(a) && a.dynamicEnabled() && uploads == 1, "the app makes a texture of the page and enables it");
+        check(app.addDynamicAtlas(a) && uploads == 1, "adding the atlas again does nothing");
+        IO io;
+        io.displayWidth = 200.0f;
+        io.displayHeight = 100.0f;
+        io.deltaTime = 1.0f / 60.0f;
+        DrawData data;
+        app.update(io);
+        app.paint(data);
+        check(updates == 0, "a paint that baked nothing uploads nothing");
+        a.defaultFont().atHeight(18.0f)->findGlyph('Q');
+        check(a.dynamicDirty(), "a glyph was made");
+        app.update(io);
+        app.paint(data);
+        check(updates == 1 && lastUpdated.value == a.dynamicTexture().value && !a.dynamicDirty(),
+                "the paint after it uploads the page once and clears the mark");
+        app.update(io);
+        app.paint(data);
+        check(updates == 1, "and not again");
+        app.removeDynamicAtlas(a);
+        check(!a.dynamicEnabled(), "removing the atlas stops it");
+        a.defaultFont().atHeight(18.0f);
+        app.setTextureUpload(nullptr);
+        app.setTextureUpdate(nullptr);
+        FontAtlas b;
+        b.buildDefault();
+        check(!app.addDynamicAtlas(b) && !b.dynamicEnabled(), "without an upload function the atlas keeps working as before");
+    }
 
     if (failures)
     {

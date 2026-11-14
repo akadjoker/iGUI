@@ -1639,6 +1639,30 @@ void WidgetApp::paintTreeInto(Widget* tree, ig::retained::DrawList& dl,
 //  paint – layout + paint the full widget tree, pushing DrawPasses into data.
 // ═════════════════════════════════════════════════════════════════════════════
 
+bool WidgetApp::addDynamicAtlas(ig::retained::FontAtlas& atlas)
+{
+    for (auto* known: dynamicAtlases_)
+        if (known == &atlas) return atlas.dynamicEnabled();
+    if (!uploadTex_ || !atlas.prepareDynamic()) return false;
+    const ig::retained::TextureHandle page =
+            uploadTex_(atlas.dynamicPixels(), atlas.dynamicWidth(), atlas.dynamicHeight());
+    if (!atlas.enableDynamic(page)) return false;
+    dynamicAtlases_.push_back(&atlas);
+    return true;
+}
+
+void WidgetApp::removeDynamicAtlas(ig::retained::FontAtlas& atlas)
+{
+    for (size_t i = 0; i < dynamicAtlases_.size(); ++i)
+    {
+        if (dynamicAtlases_[i] != &atlas) continue;
+        destroyTexture(atlas.dynamicTexture());
+        atlas.disableDynamic();
+        dynamicAtlases_.erase(dynamicAtlases_.begin() + static_cast<std::ptrdiff_t>(i));
+        return;
+    }
+}
+
 void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* font,
         IconAtlas* icons)
 {
@@ -1870,6 +1894,15 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
         ig::retained::DrawList& dlToast = ig::retained::GetDrawList();
         PaintContext tctx{ dlToast, font, icons };
         Toast::paint(tctx, w, h);
+    }
+
+    // A glyph rasterised while painting: its page goes up before the frame is drawn.
+    for (auto* atlas: dynamicAtlases_)
+    {
+        if (!atlas->dynamicDirty()) continue;
+        updateTexture(atlas->dynamicTexture(), atlas->dynamicPixels(), atlas->dynamicWidth(),
+                atlas->dynamicHeight());
+        atlas->clearDynamicDirty();
     }
 }
 
