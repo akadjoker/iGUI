@@ -330,6 +330,154 @@ void testGrabModeClipRemoved()
     r.tl->setClipGrab(false);
 }
 
+void testSnapIgnoresNaN()
+{
+    printf("snapping with NaN candidates, NaN times and no frame rate\n");
+    ct::Vector<float> none;
+    float out = 0;
+    check(!findSnap(none, 1.0f, 0.5f, out), "no candidates, no snap");
+    ct::Vector<float> some;
+    some.push_back(1.0f);
+    some.push_back(nanf(""));
+    some.push_back(2.0f);
+    check(findSnap(some, 1.1f, 0.5f, out) && out == 1.0f, "a NaN candidate does not win over the nearest one");
+    ct::Vector<float> onlyNaN;
+    onlyNaN.push_back(nanf(""));
+    check(!findSnap(onlyNaN, 1.0f, 0.5f, out), "a NaN candidate alone is nowhere near");
+    check(snapTime(onlyNaN, 1.0f, 0.5f) == 1.0f, "and the time stays what it was");
+    check(!findSnap(some, nanf(""), 0.5f, out), "a NaN time snaps to nothing");
+    check(snapFrame(1.234f, 0.0f) == 1.234f, "no snapping without a frame rate");
+    check(snapFrame(1.234f, nanf("")) == 1.234f, "nor with a NaN one");
+    check(snapFrame(nanf(""), 30.0f) != snapFrame(nanf(""), 30.0f), "a NaN time stays NaN, no crash");
+}
+
+// A split at a time that is not a number made two clips of NaN.
+void testSplitAndRemoveArguments()
+{
+    printf("splitting and removing with bad arguments\n");
+    Rig r;
+    r.tl->addClip(0, 1.0f, 5.0f, "a");
+    check(r.tl->splitClip(0, 0, nanf("")) == -1, "a NaN split is refused");
+    check(r.tl->track(0).clips[0].end == 5.0f && r.tl->track(0).clips.size() == 1u, "and nothing changed");
+    check(r.tl->splitClip(0, 0, 3.0f) == 1, "a split in the middle works");
+    check(r.tl->splitClip(0, 5, 3.0f) == -1, "a bad clip index is refused");
+    check(r.tl->splitClip(9, 0, 3.0f) == -1, "a bad track index is refused");
+    check(r.tl->clipAt(0, nanf("")) == -1, "no clip at a NaN time");
+    r.tl->removeClip(0, 99);
+    r.tl->removeClip(-1, 0);
+    r.tl->removeKeyframe(0, 5);
+    r.tl->editKeyframeLabel(0, 5);
+    r.tl->setSelectedTrack(99);
+    r.h.frames(2);
+}
+
+// Thousands of clips, and times no editor should produce but a project file can.
+void testThousandsAndOddTimes()
+{
+    printf("3000 clips, zero length, negative, huge and NaN times\n");
+    Rig r;
+    for (int i = 0; i < 3000; ++i)
+    {
+        const float start = static_cast<float>(i) * 0.05f;
+        r.tl->addClip(i % 3, start, start + 0.04f + static_cast<float>(i % 7) * 0.2f, "clip Música", Color(80, 120, 180, 200));
+    }
+    r.tl->addClip(0, 3.0f, 3.0f, "zero");
+    r.tl->addClip(0, -5.0f, -1.0f, "negative");
+    r.tl->addClip(1, 5.0f, 1.0f, "backwards");
+    r.tl->addClip(1, -1e30f, 1e30f, "enormous");
+    r.tl->addClip(2, nanf(""), 4.0f, "nan start");
+    r.tl->addClip(2, 4.0f, nanf(""), "nan end");
+    r.tl->addClip(2, 1.0f, INFINITY, "infinite");
+    r.tl->addKeyframe(0, nanf(""));
+    r.tl->addKeyframe(0, -1e30f);
+    r.tl->addKeyframe(1, INFINITY);
+    r.h.relayout();
+    r.h.frames(3);
+    check(r.tl->track(0).clips.size() > 1000u, "the clips are there");
+    // Click, drag, double-click and right-click all over the tracks.
+    Rng rng(7);
+    for (int i = 0; i < 400; ++i)
+    {
+        const float x = rng.range(0.0f, 1280.0f), y = rng.range(0.0f, 300.0f);
+        r.h.moveTo(x, y);
+        const int button = rng.below(3);
+        r.h.io().keyCtrl = rng.chance(20);
+        r.h.io().keyShift = rng.chance(20);
+        r.h.down(button);
+        if (rng.chance(70)) r.h.moveTo(rng.range(0.0f, 1280.0f), rng.range(0.0f, 300.0f));
+        r.h.up(button);
+        r.h.io().keyCtrl = r.h.io().keyShift = false;
+    }
+    r.h.frames(2);
+}
+
+void testZoomAndScrollExtremes()
+{
+    printf("zoom to the extremes, scroll past the ends, odd ranges\n");
+    Rig r;
+    for (int i = 0; i < 200; ++i)
+        r.tl->addClip(i % 3, static_cast<float>(i), static_cast<float>(i) + 1.5f, "c");
+    r.tl->setTimeRange(0.0f, 20.0f);
+    r.h.relayout();
+    float x = 0, y = 0;
+    r.tl->pointAt(0, 10.0f, x, y);
+    r.h.moveTo(x, y);
+    for (int i = 0; i < 400; ++i) r.h.wheel(1.0f); // zoom in as far as it goes
+    for (int i = 0; i < 400; ++i) r.h.wheel(-1.0f); // and out
+    r.h.io().keyCtrl = true;
+    for (int i = 0; i < 50; ++i) r.h.wheel(1.0f); // track height
+    for (int i = 0; i < 100; ++i) r.h.wheel(-1.0f);
+    r.h.io().keyCtrl = false;
+    r.h.moveTo(50.0f, y); // over the headers: vertical scroll
+    for (int i = 0; i < 50; ++i) r.h.wheel(-1.0f);
+    for (int i = 0; i < 50; ++i) r.h.wheel(1.0f);
+    r.tl->setTimeRange(1e7f, 1e7f + 0.5f); // precision of a float runs out
+    r.tl->setTimeRange(-1e7f, -1e7f + 0.5f);
+    r.tl->setTimeRange(0.0f, 0.0001f);
+    r.tl->setTimeRange(5.0f, 5.0f);
+    r.tl->setTimeRange(nanf(""), 5.0f);
+    r.tl->setTimeRange(0.0f, INFINITY);
+    r.h.frames(2);
+    r.tl->setPlayhead(nanf(""));
+    r.tl->setPlayhead(1e30f);
+    r.tl->setMarkedRange(-1e30f, 1e30f);
+    r.tl->setMarkedRange(nanf(""), 3.0f);
+    r.tl->setFrameRate(0.0f);
+    r.tl->setFrameRate(-30.0f);
+    r.tl->setFrameRate(nanf(""));
+    r.tl->setTrackHeight(nanf(""));
+    r.tl->setVerticalScroll(1e30f);
+    r.tl->setHeaderWidth(1e9f);
+    r.tl->setEdgePadding(1e9f);
+    r.h.frames(2);
+    r.tl->setHeaderWidth(160.0f);
+    r.tl->setEdgePadding(16.0f);
+    r.h.resize(1.0f, 1.0f); // a window squeezed to a point
+    r.h.resize(200.0f, 30.0f);
+    r.h.resize(1280.0f, 720.0f);
+}
+
+// A keyframe label typed in place, with accents, and the timeline changing under it.
+void testKeyframeLabelEdit()
+{
+    printf("a keyframe label edited in place while the timeline changes\n");
+    Rig r;
+    r.tl->addKeyframe(0, 4.0f);
+    r.h.relayout();
+    r.tl->editKeyframeLabel(0, 0);
+    check(r.tl->editingKeyframeLabel(), "the editor is open");
+    r.h.type("Música ação");
+    r.tl->removeKeyframe(0, 0);
+    r.h.key(Key::Return);
+    r.h.frames(2);
+    r.tl->addKeyframe(0, 4.0f);
+    r.tl->editKeyframeLabel(0, 0);
+    r.tl->clearTracks();
+    r.h.key(Key::Escape);
+    r.tl->addTrack("again", TrackKind::Video);
+    r.h.frames(2);
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -347,6 +495,11 @@ int main(int argc, char** argv)
     RUN(testRemoveKeyframeWhileDragging);
     RUN(testEnvelopePointRemovedWhileDragging);
     RUN(testGrabModeClipRemoved);
+    RUN(testSnapIgnoresNaN);
+    RUN(testSplitAndRemoveArguments);
+    RUN(testThousandsAndOddTimes);
+    RUN(testZoomAndScrollExtremes);
+    RUN(testKeyframeLabelEdit);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

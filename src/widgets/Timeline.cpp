@@ -37,7 +37,8 @@ bool findSnap(const ct::Vector<float>& candidates, float t, float threshold, flo
     for (size_t i = 0; i < candidates.size(); ++i)
     {
         const float distance = std::fabs(candidates[i] - t);
-        if (distance > threshold) continue;
+        // A NaN edge or time is nowhere near: it must not win (every comparison with it is false).
+        if (!(distance <= threshold)) continue;
         if (found && distance >= bestDistance) continue;
         found = true;
         bestDistance = distance;
@@ -475,7 +476,8 @@ int Timeline::splitClip(int trackId, int clipIdx, float t)
     auto& clips = tracks_[trackId].clips;
     if (clipIdx < 0 || clipIdx >= static_cast<int>(clips.size())) return -1;
     TimelineClip second = clips[clipIdx];
-    if (t <= second.start + 0.02f || t >= second.end - 0.02f) return -1;
+    // (written so that a NaN t is refused too: every comparison with it is false)
+    if (!(t > second.start + 0.02f && t < second.end - 0.02f)) return -1;
     second.id = nextClipId_++;
     second.offset = second.offset + (t - second.start) * second.speed;
     second.start = t;
