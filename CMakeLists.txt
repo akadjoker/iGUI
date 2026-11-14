@@ -373,6 +373,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         add_test(NAME igui_original_widgets COMMAND igui_original_widgets_tests)
         set_tests_properties(igui_original_widgets PROPERTIES
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+        # Retained widgets driven through the real frame loop of the zen adapter, headless
+        # (tests/RetainedHarness.hpp): lifetime under event dispatch, text, layout, the timeline,
+        # and a random event / tree-mutation fuzz. Most of what they catch is memory errors: run
+        # them from a sanitizer build too (-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined).
+        foreach(_igui_rt_test lifetime)
+            add_executable(igui_retained_${_igui_rt_test}_tests tests/test_retained_${_igui_rt_test}.cpp)
+            target_compile_features(igui_retained_${_igui_rt_test}_tests PRIVATE cxx_std_17)
+            target_link_libraries(igui_retained_${_igui_rt_test}_tests PRIVATE igui_widgets)
+            add_test(NAME igui_retained_${_igui_rt_test} COMMAND igui_retained_${_igui_rt_test}_tests)
+        endforeach()
     endif()
 endif()
 

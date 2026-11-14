@@ -183,6 +183,8 @@ FontAtlas::FontAtlas()
 
 FontAtlas::~FontAtlas()
 {
+    // The manager caches the font of the last paint to measure text with: it must not outlive us.
+    if (WidgetApp* app = WidgetApp::existing()) app->forgetAtlas(*this);
     delete impl_;
 }
 
@@ -563,7 +565,8 @@ bool FontAtlas::build()
     pixels_[0] = pixels_[1] = pixels_[2] = pixels_[3] = 255;
     whitePixelUV_ = { 0.5f / static_cast<float>(width_), 0.5f / static_cast<float>(height_) };
 
-    // Build Font objects
+    // Build Font objects. The fonts of an earlier build go away: the manager must not keep them.
+    if (WidgetApp* app = WidgetApp::existing()) app->forgetAtlas(*this);
     fonts_.clear();
     fonts_.resize(packs.size());
     for (Font* f: impl_->sized) delete f;
@@ -2072,6 +2075,9 @@ Context* CreateContext()
 void DestroyContext(Context* ctx)
 {
     if (gCurrentContext == ctx) gCurrentContext = nullptr;
+    // The manager caches the draw list of the last paint to measure text with.
+    if (ctx)
+        if (WidgetApp* app = WidgetApp::existing()) app->forgetDrawList(&ctx->drawList);
     delete ctx;
 }
 

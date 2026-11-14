@@ -401,6 +401,17 @@ public:
     /// @brief Stops uploading the page of `atlas` (and frees its texture).
     void removeDynamicAtlas(ig::retained::FontAtlas& atlas);
 
+    /// @brief Drops what the manager keeps of @p atlas: the font cached by the last paint() when
+    /// it belongs to the atlas, and the atlas itself from the dynamic list. FontAtlas calls it as
+    /// it is destroyed or rebuilt, so measuring text afterwards never reads a freed font.
+    void forgetAtlas(const ig::retained::FontAtlas& atlas);
+    /// @brief Drops the draw list cached by the last paint() when it is @p list (DestroyContext
+    /// calls it for the list of the context going away).
+    void forgetDrawList(const ig::retained::DrawList* list)
+    {
+        if (drawList_ == list) drawList_ = nullptr;
+    }
+
     /// @brief Free a previously uploaded texture.
     void destroyTexture(ig::retained::TextureHandle tex)
     {

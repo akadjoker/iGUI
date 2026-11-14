@@ -417,6 +417,11 @@ public:
     {
         return texture_;
     }
+    /// True when @p font is one of this atlas's fonts: a baked one or one made by Font::atHeight.
+    bool owns(const Font& font) const
+    {
+        return font.atlas_ == this;
+    }
     const Font& defaultFont() const
     {
         return fonts_.empty() ? fallback_ : fonts_[0];

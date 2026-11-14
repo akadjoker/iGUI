@@ -1651,6 +1651,17 @@ bool WidgetApp::addDynamicAtlas(ig::retained::FontAtlas& atlas)
     return true;
 }
 
+void WidgetApp::forgetAtlas(const ig::retained::FontAtlas& atlas)
+{
+    if (font_ && atlas.owns(*font_)) font_ = nullptr;
+    for (size_t i = 0; i < dynamicAtlases_.size(); ++i)
+    {
+        if (dynamicAtlases_[i] != &atlas) continue;
+        dynamicAtlases_.erase(dynamicAtlases_.begin() + i);
+        break;
+    }
+}
+
 void WidgetApp::removeDynamicAtlas(ig::retained::FontAtlas& atlas)
 {
     for (size_t i = 0; i < dynamicAtlases_.size(); ++i)
