@@ -757,7 +757,7 @@ void Outliner::paint(PaintContext& ctx)
         }
 
         // Icon (if any)
-        if (fr.node->iconId() != IconId::None && ctx.icons)
+        if (fr.node->iconId() != IconId::None)
         {
             ctx.drawIcon(fr.node->iconId(), tx - 16, ry + 3, 16);
         }

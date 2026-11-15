@@ -507,6 +507,34 @@ void testAssetBrowserPathStopsAtTheButtons()
     check(between == 0 && after == 0, "the path of an AssetBrowser stops before its view buttons");
 }
 
+// Icons are drawn when the application paints with no icon atlas (the zen adapter passes none): the vector
+// icons need no atlas. Widgets that drew their icons only with one never showed them there.
+void testIconsAreDrawnWithoutAnAtlas()
+{
+    {
+        const SweepCase plain = { "Outliner",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                Outliner* w = b->createChild<Outliner>();
+                w->addRoot(t);
+                return w;
+            } };
+        const SweepCase iconed = { "Outliner",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                Outliner* w = b->createChild<Outliner>();
+                w->addRoot(t)->setIconId(IconId::File);
+                return w;
+            } };
+        Rect r;
+        const Shot a = sweepShot(plain, "No", &r);
+        const Shot b = sweepShot(iconed, "No", &r);
+        const int n = differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x) + 80, static_cast<int>(r.y) + 30);
+        if (n < 10) printf("    Outliner: only %d pixels differ where the icon goes\n", n);
+        check(n >= 10, "the icon of an Outliner node is drawn with no icon atlas");
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -522,6 +550,7 @@ int main(int argc, char** argv)
     RUN(testSweepTextStaysInItsWidget);
     RUN(testStatusBarTextIsInTheBar);
     RUN(testAssetBrowserPathStopsAtTheButtons);
+    RUN(testIconsAreDrawnWithoutAnAtlas);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
