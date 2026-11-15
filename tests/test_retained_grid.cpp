@@ -933,6 +933,236 @@ void testTreeGridDoubleClickIsPerGridAndForgottenWithTheNode()
     check(edited2 == 0, "a click in another grid is not a double click");
 }
 
+// ---- the scroll bars of the grids (the same for a DataGrid and a TreeGrid) ----
+
+bool within(float a, float b)
+{
+    return a - b < 0.01f && b - a < 0.01f;
+}
+
+// One kind of grid, behind the same calls: a column of numbers (the text of row i is i), `rows` rows, and
+// what the click on a row selected.
+class BarGrid
+{
+public:
+    BarGrid(bool tree, int rows, int columns, float columnWidth, float width = kWindowW, float height = kWindowH)
+            : h(width, height),
+              tree_(tree)
+    {
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        if (tree)
+        {
+            tg = box->createChild<TreeGrid>();
+            tg->setStretch(1.0f);
+            for (int c = 0; c < columns; ++c) tg->addColumn(String("C") + String::number(c), columnWidth);
+            tg->selectionChanged.connect(
+                    [this](TreeGrid::Node* n) { selected = n && n->cells.size() > 0 ? atoi(n->cells[0].c_str()) : -1; });
+            tg->columnSorted.connect([this](int col) { sortedColumn = col; });
+        }
+        else
+        {
+            dg = box->createChild<DataGrid>();
+            dg->setStretch(1.0f);
+            for (int c = 0; c < columns; ++c) dg->addColumn(String("C") + String::number(c), columnWidth);
+            dg->selectionChanged.connect([this](int row) { selected = row; });
+            dg->columnSorted.connect([this](int col) { sortedColumn = col; });
+        }
+        for (int r = 0; r < rows; ++r) addRow(r, columns);
+        columns_ = columns;
+        relayout();
+    }
+    void addRow(int r, int columns)
+    {
+        ct::Vector<String> cells;
+        for (int c = 0; c < columns; ++c) cells.push_back(String::number(r));
+        if (tree_) tg->addRoot(cells);
+        else
+            dg->addRow(cells);
+    }
+    void relayout()
+    {
+        if (tree_) tg->rebuild();
+        h.relayout();
+    }
+    Rect rect() const
+    {
+        return tree_ ? tg->absoluteRect() : dg->absoluteRect();
+    }
+    float columnWidth(int c) const
+    {
+        return tree_ ? tg->columnWidth(c) : dg->columnWidth(c);
+    }
+    void stretchLast()
+    {
+        if (tree_) tg->setStretchLastColumn(true);
+        else
+            dg->setStretchLastColumn(true);
+        h.frames(2);
+    }
+    // The first row in sight: what a click on the top of the rows (x = 20) selects.
+    int topRow()
+    {
+        selected = -1;
+        const Rect r = rect();
+        h.click(r.x + 20.0f, r.y + kHeaderH + 2.0f);
+        return selected;
+    }
+    // The first column in sight: what a click at the left of the header sorts.
+    int leftColumn()
+    {
+        sortedColumn = -1;
+        const Rect r = rect();
+        h.click(r.x + 5.0f, r.y + kHeaderH * 0.5f);
+        return sortedColumn;
+    }
+    // A press on (x, y) in the grid, a move to (x2, y2) and the release
+    void drag(float x, float y, float x2, float y2)
+    {
+        h.moveTo(x, y);
+        h.down();
+        h.moveTo((x + x2) * 0.5f, (y + y2) * 0.5f);
+        h.moveTo(x2, y2);
+        h.up();
+    }
+    Harness h;
+    DataGrid* dg = nullptr;
+    TreeGrid* tg = nullptr;
+    int selected = -1;
+    int sortedColumn = -1;
+
+private:
+    bool tree_;
+    int columns_ = 0;
+};
+
+void testGridVerticalBarThumbAndTrack()
+{
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        BarGrid g(tree != 0, 100, 1, 100.0f);
+        const Rect r = g.rect();
+        check(g.topRow() == 0, "the first row is in sight");
+        // the track is the 292 pixels under the header (28), 8 pixels wide at the right; the thumb is at the top
+        const float barX = r.x + r.w - 4.0f, trackTop = r.y + kHeaderH;
+        g.selected = -1;
+        g.drag(barX, trackTop + 10.0f, barX, trackTop + 110.0f);
+        check(g.selected == -1, (String(name) + ": a press on the bar does not select a row").c_str());
+        const int dragged = g.topRow();
+        // 100 pixels of 292 - 36 of track move the content 100 / 256 of 2108 pixels: row 34
+        check(dragged >= 30 && dragged <= 38, (String(name) + ": the thumb of the vertical bar can be dragged").c_str());
+        if (!(dragged >= 30 && dragged <= 38)) printf("    top row %d\n", dragged);
+        // a press on the track below the thumb scrolls a page: the 292 pixels of the rows, 12 rows
+        g.selected = -1;
+        g.h.click(barX, trackTop + 280.0f);
+        const int paged = g.topRow();
+        check(g.selected == paged && paged - dragged >= 11 && paged - dragged <= 13, (String(name) + ": a press on the track pages").c_str());
+        if (!(paged - dragged >= 11 && paged - dragged <= 13)) printf("    from row %d to %d\n", dragged, paged);
+        g.h.click(barX, trackTop + 5.0f); // above the thumb
+        const int back = g.topRow();
+        check(paged - back >= 11 && paged - back <= 13, (String(name) + ": and a press above the thumb pages back").c_str());
+        // the horizontal wheel does not move it and the vertical one does
+        g.h.wheel(-1.0f);
+        check(g.topRow() == back + 2, (String(name) + ": a notch of the wheel is two rows").c_str());
+    }
+}
+
+void testGridHorizontalBarThumbAndTrack()
+{
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        // 20 columns of 100: 2000 pixels in 640; the thumb is 205 long
+        BarGrid g(tree != 0, 3, 20, 100.0f);
+        const Rect r = g.rect();
+        check(g.leftColumn() == 0, "the first column is in sight");
+        const float barY = r.y + r.h - 4.0f;
+        // a press on the track right of the thumb scrolls a page (640 pixels): the column at the left edge is 6
+        g.h.click(r.x + 330.0f, barY);
+        const int paged = g.leftColumn();
+        check(paged == 6, (String(name) + ": a press on the track of the horizontal bar pages").c_str());
+        if (paged != 6) printf("    left column %d\n", paged);
+        // the thumb is dragged back to the start
+        // (scrolled 640 of 1360: the thumb starts 640 / 1360 * 435 = 205 pixels in, and is 205 long)
+        g.drag(r.x + 300.0f, barY, r.x + 50.0f, barY);
+        const int back = g.leftColumn();
+        check(back == 0, (String(name) + ": the thumb of the horizontal bar can be dragged").c_str());
+        if (back != 0) printf("    left column %d\n", back);
+    }
+}
+
+void testGridScrollStaysInsideTheContent()
+{
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        // rows taken away: scrolled to the end of 100 rows, then 70 of them go
+        {
+            BarGrid g(tree != 0, 100, 1, 100.0f);
+            const Rect r = g.rect();
+            g.h.moveTo(r.x + 20.0f, r.y + 100.0f);
+            g.h.wheel(-200.0f);
+            check(g.topRow() >= 85, (String(name) + ": the wheel scrolls to the end").c_str());
+            if (tree)
+            {
+                // the first root has the other rows under it, closed
+                g.tg->clearAll();
+                for (int i = 0; i < 30; ++i) g.addRow(i, 1);
+                g.relayout();
+            }
+            else
+            {
+                for (int i = 0; i < 70; ++i) g.dg->removeRow(99 - i);
+                g.h.frames(2);
+            }
+            // 30 rows of 24 in 292 pixels: the last row in sight is the 12th, and the grid is not scrolled past its end
+            const int top = g.topRow();
+            check(top >= 0 && top <= 18, (String(name) + ": rows taken away do not leave the grid scrolled past its end").c_str());
+            if (!(top >= 0 && top <= 18)) printf("    top row %d\n", top);
+        }
+        // a window that grows: 100 rows scrolled to the end, then the window is three times as tall
+        {
+            BarGrid g(tree != 0, 20, 1, 100.0f);
+            const Rect r = g.rect();
+            g.h.moveTo(r.x + 20.0f, r.y + 100.0f);
+            g.h.wheel(-200.0f);
+            check(g.topRow() >= 7, (String(name) + ": 20 rows scroll to row 8 in 292 pixels").c_str());
+            g.h.resize(kWindowW, 1000.0f);
+            const int top = g.topRow();
+            check(top == 0, (String(name) + ": a window that grows takes the grid back to the top").c_str());
+            if (top != 0) printf("    top row %d\n", top);
+        }
+    }
+}
+
+void testGridColumnsEndWhereTheBarBegins()
+{
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        {
+            BarGrid few(tree != 0, 3, 3, 100.0f);
+            few.stretchLast();
+            const Rect r = few.rect();
+            const float sum = few.columnWidth(0) + few.columnWidth(1) + few.columnWidth(2);
+            check(within(sum, r.w), (String(name) + ": without a vertical bar the columns fill the width").c_str());
+        }
+        {
+            BarGrid many(tree != 0, 100, 3, 100.0f);
+            many.stretchLast();
+            const Rect r = many.rect();
+            const float sum = many.columnWidth(0) + many.columnWidth(1) + many.columnWidth(2);
+            check(within(sum, r.w - 8.0f), (String(name) + ": with a vertical bar the columns end where it begins").c_str());
+            if (!within(sum, r.w - 8.0f)) printf("    %g of %g\n", sum, r.w);
+            // and the bar is where the last column was: its pixels are the track, not the cells
+            many.selected = -1;
+            many.h.click(r.x + r.w - 4.0f, r.y + kHeaderH + 100.0f);
+            check(many.selected == -1, (String(name) + ": a press on the bar is not a press on a cell").c_str());
+        }
+    }
+}
+
 void testFixedColumnsKeepTheirWidth()
 {
     printf("columns that do not stretch keep the width they were given\n");
@@ -1956,7 +2186,7 @@ void testStretchWithAModel()
     printf("stretching columns of a DataGrid with a model\n");
     // columns given to the grid before the model, two of them asked to stretch (the least they get: 90 and 160)
     {
-        TextModel model(schemeA, kMemoRows);
+        TextModel model(schemeA, 8); // few rows: no vertical bar, the columns have the whole width
         ModelRig r(640.0f, &model,
                 [](DataGrid* g)
                 {
@@ -1993,7 +2223,7 @@ void testStretchWithAModel()
     }
     // the columns of the model: 4 of 120, the last one stretching
     {
-        TextModel model(schemeA, kMemoRows);
+        TextModel model(schemeA, 8); // few rows: no vertical bar, the columns have the whole width
         ModelRig r(640.0f, &model, [](DataGrid* g) { g->setStretchLastColumn(true); });
         check(near(r.grid->columnWidth(0), 120.0f) && near(r.grid->columnWidth(2), 120.0f) && near(r.grid->columnWidth(3), 640.0f - 360.0f),
                 "columns made from the model's headers stretch too (the last one: 280)");
@@ -2005,7 +2235,7 @@ void testStretchWithAModel()
     }
     // a cell of the stretched column is edited, and the model is the one that gets it
     {
-        TextModel model(schemeA, kMemoRows);
+        TextModel model(schemeA, 8); // few rows: no vertical bar, the columns have the whole width
         ModelRig r(640.0f, &model,
                 [](DataGrid* g)
                 {
@@ -2027,7 +2257,7 @@ void testStretchWithAModel()
         float effective[4];
         Shot stretched, fixed;
         {
-            TextModel model(schemeA, kMemoRows);
+            TextModel model(schemeA, 8); // few rows: no vertical bar, the columns have the whole width
             Screen screen(500.0f, kWindowH);
             BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
             box->setPadding(0.0f);
@@ -2043,7 +2273,7 @@ void testStretchWithAModel()
             stretched = screen.take();
         }
         {
-            TextModel model(schemeA, kMemoRows);
+            TextModel model(schemeA, 8); // few rows: no vertical bar, the columns have the whole width
             Screen screen(500.0f, kWindowH);
             BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
             box->setPadding(0.0f);
@@ -2114,6 +2344,10 @@ int main(int argc, char** argv)
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
     RUN(testTreeGridSetColumnWidth);
+    RUN(testGridVerticalBarThumbAndTrack);
+    RUN(testGridHorizontalBarThumbAndTrack);
+    RUN(testGridScrollStaysInsideTheContent);
+    RUN(testGridColumnsEndWhereTheBarBegins);
     RUN(testTreeGridDoubleClickIsPerGridAndForgottenWithTheNode);
     RUN(testTreeGridDrawsNodeIconsWithoutAnAtlas);
     RUN(testGridIgnoresANaNColumnWidth);

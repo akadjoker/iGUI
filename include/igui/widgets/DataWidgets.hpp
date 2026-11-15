@@ -97,8 +97,8 @@ public:
     ///        the grid scrolls sideways as it does for columns that do not stretch. A stretching
     ///        column is not resized by dragging, as in Qt: its edge is not a resize edge (a press
     ///        on it is a press on the header, the column's or its neighbour's, wherever it falls).
-    ///        The grid's scrollbars are drawn over it, so a column that reaches the right edge is
-    ///        under the vertical one. Off by default.
+    ///        The columns end where the vertical scroll bar begins (8 pixels from the right edge) when
+    ///        the rows need it, and fill the whole width when they do not. Off by default.
     void setColumnStretch(int col, bool stretch);
     /// @brief Whether a column was asked to stretch (not whether it is the last and stretches
     ///        because of setStretchLastColumn).
@@ -248,7 +248,14 @@ private:
     bool stretchLast_ = false;
     mutable ct::Vector<float> colW_;
     mutable float colTotal_ = 0.f;  // the checkbox column and every column
-    mutable float colGridW_ = -1.f; // the width of the grid colW_ was worked out for
+    mutable float colGridW_ = -1.f; // the width and the height of the grid, the height of the rows and the
+    mutable float colGridH_ = -1.f; // header colW_ and the view were worked out for
+    mutable float colContentH_ = -1.f;
+    mutable float colHeaderH_ = -1.f;
+    mutable float viewW_ = 0.f;     // the part of the grid that shows cells: what the scroll bars leave
+    mutable float viewH_ = 0.f;
+    mutable bool vbar_ = false;     // the scroll bars that are shown (the content is bigger than the view)
+    mutable bool hbar_ = false;
     mutable bool colDirty_ = true;
     ct::Vector<Row> rows_;
     mutable ct::Vector<int> sortedIndices_;
@@ -268,8 +275,8 @@ private:
     float rowHeight_ = 24.f;
     float headerHeight_ = 28.f;
     float checkboxColW_ = 24.f;
-    mutable float scrollX_ = 0.f; // kept inside the columns by ensureColumns
-    float scrollY_ = 0.f;
+    mutable float scrollX_ = 0.f; // kept inside the content by ensureColumns
+    mutable float scrollY_ = 0.f;
 
     int sortCol_ = -1;
     SortOrder sortOrder_ = SortOrder::None;
@@ -288,6 +295,9 @@ private:
     bool hScrollDrag_ = false;
     float hScrollDragStartX_ = 0.f;
     float hScrollDragStartSX_ = 0.f;
+    bool vScrollDrag_ = false;
+    float vScrollDragStartY_ = 0.f;
+    float vScrollDragStartSY_ = 0.f;
 
     // Double-click detection (per-instance)
     uint32_t lastClickTime_ = 0;
@@ -375,8 +385,8 @@ public:
     ///        sideways as it does for columns that do not stretch. A stretching column is not
     ///        resized by dragging, as in Qt: its edge is not a resize edge (a press on it is a
     ///        press on the header, the column's or its neighbour's, wherever it falls). The
-    ///        grid's scrollbars are drawn over it, so a column that reaches the right edge is under
-    ///        the vertical one. Off by default.
+    ///        columns end where the vertical scroll bar begins (8 pixels from the right edge) when the
+    ///        rows need it, and fill the whole width when they do not. Off by default.
     void setColumnStretch(int col, bool stretch);
     /// @brief Whether a column was asked to stretch (not whether it is the last and stretches
     ///        because of setStretchLastColumn).
@@ -498,7 +508,14 @@ private:
     bool stretchLast_ = false;
     mutable ct::Vector<float> colW_;
     mutable float colTotal_ = 0.f;
-    mutable float colGridW_ = -1.f; // the width of the grid colW_ was worked out for
+    mutable float colGridW_ = -1.f; // the width and the height of the grid, the height of the rows and the
+    mutable float colGridH_ = -1.f; // header colW_ and the view were worked out for
+    mutable float colContentH_ = -1.f;
+    mutable float colHeaderH_ = -1.f;
+    mutable float viewW_ = 0.f;     // the part of the grid that shows cells: what the scroll bars leave
+    mutable float viewH_ = 0.f;
+    mutable bool vbar_ = false;     // the scroll bars that are shown (the content is bigger than the view)
+    mutable bool hbar_ = false;
     mutable bool colDirty_ = true;
     mutable ct::Vector<FlatEntry> flatList_;
     mutable bool flatDirty_ = true; // a node was added: the flat list is rebuilt before it is read
@@ -514,8 +531,8 @@ private:
 
     float rowHeight_ = 24.f;
     float headerHeight_ = 28.f;
-    mutable float scrollX_ = 0.f; // kept inside the columns by ensureColumns
-    float scrollY_ = 0.f;
+    mutable float scrollX_ = 0.f; // kept inside the content by ensureColumns
+    mutable float scrollY_ = 0.f;
 
     int sortCol_ = -1;
     DataGrid::SortOrder sortOrder_ = DataGrid::SortOrder::None;
@@ -534,6 +551,13 @@ private:
     int resizeCol_ = -1;
     float resizeStartX_ = 0.f;
     float resizeStartW_ = 0.f;
+
+    bool hScrollDrag_ = false; // a scroll bar thumb being dragged, and where the drag started
+    bool vScrollDrag_ = false;
+    float hScrollDragStartX_ = 0.f;
+    float hScrollDragStartSX_ = 0.f;
+    float vScrollDragStartY_ = 0.f;
+    float vScrollDragStartSY_ = 0.f;
 };
 
 } // namespace retained

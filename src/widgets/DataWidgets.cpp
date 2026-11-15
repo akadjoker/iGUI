@@ -98,6 +98,82 @@ void layoutColumns(const ct::Vector<ColumnT>& cols, bool stretchLast, float grid
     for (size_t i = 0; i < n; ++i) total += widths[i];
 }
 
+// The thickness of the scroll bars of a grid: the vertical one at the right of the rows, the horizontal one
+// under them.
+const float kBarW = 8.0f;
+
+// The part of a grid that shows cells (the grid less its header and the bars that are needed) and which bars
+// are needed: the vertical one when the rows are taller than the body, the horizontal one when the columns
+// are wider than what is left of the width. Each bar takes its thickness from the other's track and from the
+// room of the cells, so the columns end where the vertical bar begins and the last row is not under the
+// horizontal one.
+struct GridView
+{
+    float viewW = 0.0f;
+    float viewH = 0.0f;
+    bool vbar = false;
+    bool hbar = false;
+};
+
+// Lays out the columns in the room the cells have (layoutColumns for the width the bars leave) and says
+// which bars are shown. `contentH` is the height of all the rows.
+template<class ColumnT>
+GridView layoutGrid(const ct::Vector<ColumnT>& cols, bool stretchLast, float gridW, float gridH, float headerH, float contentH,
+        float leading, ct::Vector<float>& widths, float& total)
+{
+    GridView v;
+    const float bodyH = gridH - headerH > 0.0f ? gridH - headerH : 0.0f;
+    v.vbar = contentH > bodyH && bodyH > 0.0f;
+    for (int pass = 0; pass < 3; ++pass)
+    {
+        v.viewW = gridW - (v.vbar ? kBarW : 0.0f);
+        if (v.viewW < 0.0f) v.viewW = 0.0f;
+        layoutColumns(cols, stretchLast, v.viewW, leading, widths, total);
+        v.hbar = total > v.viewW && v.viewW > 0.0f;
+        v.viewH = bodyH - (v.hbar ? kBarW : 0.0f);
+        if (v.viewH < 0.0f) v.viewH = 0.0f;
+        const bool needV = contentH > v.viewH && bodyH > 0.0f;
+        if (needV == v.vbar) break;
+        v.vbar = needV;
+    }
+    return v;
+}
+
+// The length of the thumb of a scroll bar of a `track` long, over `content` seen through `view`.
+inline float thumbLength(float track, float view, float content)
+{
+    float len = content > 0.0f ? view / content * track : track;
+    if (len < 20.0f) len = 20.0f;
+    if (len > track) len = track;
+    return len;
+}
+
+// A press at `pos` (from the start of the track) on a scroll bar. On the thumb: true (a drag starts). On
+// the track: the content scrolls a page (the size of the view) toward the press, never past its ends, and false.
+inline bool barPress(float pos, float track, float view, float content, float& scroll)
+{
+    const float most = content > view ? content - view : 0.0f;
+    const float len = thumbLength(track, view, content);
+    const float off = most > 0.0f && track > len ? scroll / most * (track - len) : 0.0f;
+    if (pos >= off && pos <= off + len) return true;
+    scroll += pos < off ? -view : view;
+    if (!(scroll > 0.0f)) scroll = 0.0f;
+    if (scroll > most) scroll = most;
+    return false;
+}
+
+// The scroll of a thumb dragged `delta` pixels from where the press found the content scrolled to `start`.
+inline float barDrag(float start, float delta, float track, float view, float content)
+{
+    const float most = content > view ? content - view : 0.0f;
+    const float len = thumbLength(track, view, content);
+    const float ratio = track > len ? most / (track - len) : 0.0f;
+    float scroll = start + delta * ratio;
+    if (!(scroll > 0.0f)) scroll = 0.0f;
+    if (scroll > most) scroll = most;
+    return scroll;
+}
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -154,14 +230,29 @@ float DataGrid::columnWidth(int col) const
 void DataGrid::ensureColumns() const
 {
     const float gridW = layoutWidth(rect_.w);
-    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW) return;
+    const float gridH = layoutWidth(rect_.h);
+    const float contentH = static_cast<float>(modelRowCount()) * rowHeight_;
+    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW && colGridH_ == gridH && colContentH_ == contentH &&
+            colHeaderH_ == headerHeight_)
+        return;
     colDirty_ = false;
     colGridW_ = gridW;
-    layoutColumns(columns_, stretchLast_, gridW, contentX(), colW_, colTotal_);
-    // A grid scrolled sideways does not stay scrolled past the end of its columns when they get
-    // narrower or the grid wider (a window made larger)
-    const float most = colTotal_ > gridW ? colTotal_ - gridW : 0.0f;
-    if (scrollX_ > most) scrollX_ = most;
+    colGridH_ = gridH;
+    colContentH_ = contentH;
+    colHeaderH_ = headerHeight_;
+    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, contentX(), colW_, colTotal_);
+    viewW_ = v.viewW;
+    viewH_ = v.viewH;
+    vbar_ = v.vbar;
+    hbar_ = v.hbar;
+    // A grid scrolled does not stay scrolled past the end of its content when the content gets smaller
+    // (columns narrower, rows removed) or the grid bigger (a window made larger)
+    const float mostX = colTotal_ > viewW_ ? colTotal_ - viewW_ : 0.0f;
+    if (!(scrollX_ > 0.0f)) scrollX_ = 0.0f;
+    if (scrollX_ > mostX) scrollX_ = mostX;
+    const float mostY = contentH > viewH_ ? contentH - viewH_ : 0.0f;
+    if (!(scrollY_ > 0.0f)) scrollY_ = 0.0f;
+    if (scrollY_ > mostY) scrollY_ = mostY;
 }
 
 void DataGrid::reserveMemos(const Rect& abs)
@@ -407,7 +498,8 @@ int DataGrid::hitColumn(float localX) const
 int DataGrid::hitRow(float localY) const
 {
     ensureSortOrder();
-    if (localY < headerHeight_) return -1;
+    ensureColumns();
+    if (localY < headerHeight_ || localY >= headerHeight_ + viewH_) return -1; // not the header, not the bar under the rows
     float y = localY - headerHeight_ + scrollY_;
     int idx = static_cast<int>(y / rowHeight_);
     if (idx < 0 || idx >= static_cast<int>(sortedIndices_.size())) return -1;
@@ -531,6 +623,8 @@ void DataGrid::paint(PaintContext& ctx)
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
         ctx.fill.SetColor(hdrBg.r, hdrBg.g, hdrBg.b, hdrBg.a);
         ctx.fillRect(abs.x, abs.y, abs.w, headerHeight_);
+        // the columns end where the vertical bar begins: the header is cut there
+        ctx.pushClip({ abs.x, abs.y, viewW_, headerHeight_ });
 
         float hx = abs.x + contentX() - scrollX_;
         float hdrTextY = abs.y + (headerHeight_ - t.fontSize) * 0.5f + asc;
@@ -540,7 +634,7 @@ void DataGrid::paint(PaintContext& ctx)
             auto& col = columns_[i];
             const float colW = colW_[i];
             float colR = hx + colW;
-            if (colR <= abs.x || hx >= abs.x + abs.w)
+            if (colR <= abs.x || hx >= abs.x + viewW_)
             {
                 hx = colR; // out of sight: nothing to measure or draw
                 continue;
@@ -583,6 +677,7 @@ void DataGrid::paint(PaintContext& ctx)
                     abs.y + headerHeight_ - 2);
         }
 
+        ctx.popClip(); // the columns of the header
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
         ctx.drawLine(abs.x, abs.y + headerHeight_, abs.x + abs.w, abs.y + headerHeight_);
     }
@@ -590,8 +685,9 @@ void DataGrid::paint(PaintContext& ctx)
 
     // ── Rows ─────────────────────────────────────────────────────────────
     float bodyY = abs.y + headerHeight_;
-    float bodyH = abs.h - headerHeight_;
-    Rect bodyClip = { abs.x, bodyY, abs.w, bodyH };
+    float bodyH = viewH_; // the rows end above the horizontal bar
+    const float bodyW = viewW_;
+    Rect bodyClip = { abs.x, bodyY, bodyW, bodyH };
     ctx.pushClip(bodyClip);
     {
         int totalVis = static_cast<int>(sortedIndices_.size());
@@ -609,7 +705,7 @@ void DataGrid::paint(PaintContext& ctx)
             ElideMemo* const memoRow = memos_.row(vi);
 
             float ry = bodyY + vi * rowHeight_ - scrollY_;
-            Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
+            Rect rowR = { abs.x, ry, bodyW, rowHeight_ };
             if (ctx.isClipped(rowR)) continue;
 
             // Zebra stripes
@@ -618,7 +714,7 @@ void DataGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
                         static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
                         static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             // Selection highlight
@@ -626,14 +722,14 @@ void DataGrid::paint(PaintContext& ctx)
             {
                 ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
                         t.selectionColor.a);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             // Hover highlight
             if (hoveredRow_ == vi && !isSelected(dataIdx))
             {
                 ctx.fill.SetColor(t.buttonHover.r, t.buttonHover.g, t.buttonHover.b, 60);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             float textY = ry + (rowHeight_ - t.fontSize) * 0.5f + asc;
@@ -663,7 +759,7 @@ void DataGrid::paint(PaintContext& ctx)
             for (int ci = 0; ci < nCols; ++ci, memoCol = memoCol + 1 == memoCols ? 0 : memoCol + 1)
             {
                 float colW = colW_[ci];
-                if (cx + colW <= abs.x || cx >= abs.x + abs.w)
+                if (cx + colW <= abs.x || cx >= abs.x + bodyW)
                 {
                     cx += colW; // out of sight: nothing to measure or draw
                     continue;
@@ -698,45 +794,41 @@ void DataGrid::paint(PaintContext& ctx)
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 30);
-            ctx.drawLine(abs.x, ry + rowHeight_, abs.x + abs.w, ry + rowHeight_);
+            ctx.drawLine(abs.x, ry + rowHeight_, abs.x + bodyW, ry + rowHeight_);
         }
     }
     ctx.popClip();
 
     // ── Scrollbars ───────────────────────────────────────────────────────
-    float contentH = static_cast<float>(nRows) * rowHeight_;
-    float contentW = totalColumnsWidth();
-
-    if (bodyH > 0.0f && contentH > bodyH)
+    // (the vertical one beside the rows, the horizontal one under them: neither is over a cell)
+    const float contentH = colContentH_;
+    const float contentW = totalColumnsWidth();
+    if (vbar_)
     {
-        float sbW = 8.0f;
-        float sbX = abs.x + abs.w - sbW;
-        float trackH = bodyH;
-        float thumbH = std::max(20.0f, (bodyH / contentH) * trackH);
-        float maxSY = contentH - bodyH;
-        float thumbY = bodyY + (scrollY_ / maxSY) * (trackH - thumbH);
+        const float sbX = abs.x + abs.w - kBarW;
+        const float thumbH = thumbLength(viewH_, viewH_, contentH);
+        const float maxSY = contentH - viewH_;
+        const float thumbY = bodyY + (maxSY > 0.0f && viewH_ > thumbH ? (scrollY_ / maxSY) * (viewH_ - thumbH) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(sbX, bodyY, sbW, trackH);
+        ctx.fillRect(sbX, bodyY, kBarW, viewH_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
+        ctx.fillRect(sbX + 1, thumbY, kBarW - 2, thumbH);
     }
 
-    if (abs.w > 0.0f && contentW > abs.w)
+    if (hbar_)
     {
-        float sbH = 8.0f;
-        float sbY = abs.y + abs.h - sbH;
-        float trackW = abs.w;
-        float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX = contentW - abs.w;
-        float thumbX = abs.x + (scrollX_ / maxSX) * (trackW - thumbW);
+        const float sbY = abs.y + abs.h - kBarW;
+        const float thumbW = thumbLength(viewW_, viewW_, contentW);
+        const float maxSX = contentW - viewW_;
+        const float thumbX = abs.x + (maxSX > 0.0f && viewW_ > thumbW ? (scrollX_ / maxSX) * (viewW_ - thumbW) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(abs.x, sbY, trackW, sbH);
+        ctx.fillRect(abs.x, sbY, viewW_, kBarW);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(thumbX, sbY + 1, thumbW, sbH - 2);
+        ctx.fillRect(thumbX, sbY + 1, thumbW, kBarW - 2);
     }
 
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
@@ -758,34 +850,29 @@ void DataGrid::onMousePress(MouseEvent& e)
     float localX = e.x - abs.x;
     float localY = e.y - abs.y;
 
-    // ── Horizontal scrollbar drag ─────────────────────────────────────────
-    float contentW = totalColumnsWidth();
-    if (contentW > abs.w)
+    // ── Scroll bars: a press on a thumb starts a drag, one on a track scrolls a page toward it ──
+    ensureColumns();
+    if (vbar_ && localX >= abs.w - kBarW && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
     {
-        float sbH = 8.0f;
-        float sbY = abs.y + abs.h - sbH;
-        float trackW = abs.w;
-        float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX = contentW - abs.w;
-        float thumbX = (maxSX > 0.f ? (scrollX_ / maxSX) * (trackW - thumbW) : 0.f);
-        if (e.y >= sbY && e.y <= sbY + sbH)
+        if (barPress(localY - headerHeight_, viewH_, viewH_, colContentH_, scrollY_))
         {
-            // Click on thumb → start drag; click on track → jump
-            if (e.x >= abs.x + thumbX && e.x <= abs.x + thumbX + thumbW)
-            {
-                hScrollDrag_ = true;
-                hScrollDragStartX_ = e.x;
-                hScrollDragStartSX_ = scrollX_;
-            }
-            else
-            {
-                // Jump to clicked position
-                float clickRatio = (localX - thumbW * 0.5f) / (trackW - thumbW);
-                scrollX_ = std::max(0.f, std::min(maxSX, clickRatio * maxSX));
-                markDirty();
-            }
-            return;
+            vScrollDrag_ = true;
+            vScrollDragStartY_ = e.y;
+            vScrollDragStartSY_ = scrollY_;
         }
+        markDirty();
+        return;
+    }
+    if (hbar_ && localY >= abs.h - kBarW && localX < viewW_)
+    {
+        if (barPress(localX, viewW_, viewW_, colTotal_, scrollX_))
+        {
+            hScrollDrag_ = true;
+            hScrollDragStartX_ = e.x;
+            hScrollDragStartSX_ = scrollX_;
+        }
+        markDirty();
+        return;
     }
 
     if (localY < headerHeight_)
@@ -911,10 +998,8 @@ void DataGrid::onMousePress(MouseEvent& e)
 
 void DataGrid::onMouseRelease(MouseEvent& e)
 {
-    if (hScrollDrag_)
-    {
-        hScrollDrag_ = false;
-    }
+    hScrollDrag_ = false;
+    vScrollDrag_ = false;
     if (resizeCol_ >= 0) resizeCol_ = -1;
     (void) e;
 }
@@ -924,16 +1009,13 @@ void DataGrid::onMouseMove(MouseEvent& e)
     if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
 
-    if (hScrollDrag_)
+    if (hScrollDrag_ || vScrollDrag_)
     {
         e.consumed = true;
-        float contentW = totalColumnsWidth();
-        float trackW = abs.w;
-        float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX = contentW - abs.w;
-        float dx = e.x - hScrollDragStartX_;
-        float ratio = maxSX > 0.f ? maxSX / (trackW - thumbW) : 0.f;
-        scrollX_ = std::max(0.f, std::min(maxSX, hScrollDragStartSX_ + dx * ratio));
+        ensureColumns();
+        if (hScrollDrag_) scrollX_ = barDrag(hScrollDragStartSX_, e.x - hScrollDragStartX_, viewW_, viewW_, colTotal_);
+        else
+            scrollY_ = barDrag(vScrollDragStartSY_, e.y - vScrollDragStartY_, viewH_, viewH_, colContentH_);
         markDirty();
         return;
     }
@@ -952,6 +1034,7 @@ void DataGrid::onMouseMove(MouseEvent& e)
     float localY = e.y - abs.y;
     int visIdx = hitRow(localY);
     int col = hitColumn(localX);
+    if (localX >= viewW_) visIdx = col = -1; // over the vertical bar: no row
     if (visIdx != hoveredRow_ || col != hoveredCol_)
     {
         hoveredRow_ = visIdx;
@@ -968,19 +1051,19 @@ void DataGrid::onMouseScroll(MouseEvent& e)
 
     e.consumed = true;
     bool shift = e.shift;
-    float bodyH = abs.h - headerHeight_;
-    float contentH = static_cast<float>(modelRowCount()) * rowHeight_;
-    float contentW = totalColumnsWidth();
+    ensureColumns();
+    const float mostX = colTotal_ > viewW_ ? colTotal_ - viewW_ : 0.0f;
+    const float mostY = colContentH_ > viewH_ ? colContentH_ - viewH_ : 0.0f;
 
     if (shift)
     {
         scrollX_ -= e.scrollY * 40.0f;
-        scrollX_ = clamp(scrollX_, 0.0f, std::max(0.0f, contentW - abs.w));
+        scrollX_ = clamp(scrollX_, 0.0f, mostX);
     }
     else
     {
         scrollY_ -= e.scrollY * rowHeight_ * 2.0f;
-        scrollY_ = clamp(scrollY_, 0.0f, std::max(0.0f, contentH - bodyH));
+        scrollY_ = clamp(scrollY_, 0.0f, mostY);
     }
     markDirty();
 }
@@ -1141,7 +1224,8 @@ void DataGrid::onKeyPress(KeyEvent& e)
             int pos = -1;
             for (int i = 0; i < count && pos < 0; ++i)
                 if (displayRow(i) == selectedRow_) pos = i;
-            const float bodyH = rect_.h - headerHeight_;
+            ensureColumns();
+            const float bodyH = viewH_;
             const int next = listKeyTarget(e.key, pos, count, static_cast<int>(bodyH / rowHeight_));
             if (next != pos)
             {
@@ -1425,15 +1509,31 @@ float TreeGrid::columnWidth(int col) const
 
 void TreeGrid::ensureColumns() const
 {
+    ensureFlatList();
     const float gridW = layoutWidth(rect_.w);
-    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW) return;
+    const float gridH = layoutWidth(rect_.h);
+    const float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
+    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW && colGridH_ == gridH && colContentH_ == contentH &&
+            colHeaderH_ == headerHeight_)
+        return;
     colDirty_ = false;
     colGridW_ = gridW;
-    layoutColumns(columns_, stretchLast_, gridW, 0.0f, colW_, colTotal_);
-    // A grid scrolled sideways does not stay scrolled past the end of its columns when they get
-    // narrower or the grid wider (a window made larger)
-    const float most = colTotal_ > gridW ? colTotal_ - gridW : 0.0f;
-    if (scrollX_ > most) scrollX_ = most;
+    colGridH_ = gridH;
+    colContentH_ = contentH;
+    colHeaderH_ = headerHeight_;
+    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, 0.0f, colW_, colTotal_);
+    viewW_ = v.viewW;
+    viewH_ = v.viewH;
+    vbar_ = v.vbar;
+    hbar_ = v.hbar;
+    // A grid scrolled does not stay scrolled past the end of its content when the content gets smaller
+    // (columns narrower, rows removed or closed) or the grid bigger (a window made larger)
+    const float mostX = colTotal_ > viewW_ ? colTotal_ - viewW_ : 0.0f;
+    if (!(scrollX_ > 0.0f)) scrollX_ = 0.0f;
+    if (scrollX_ > mostX) scrollX_ = mostX;
+    const float mostY = contentH > viewH_ ? contentH - viewH_ : 0.0f;
+    if (!(scrollY_ > 0.0f)) scrollY_ = 0.0f;
+    if (scrollY_ > mostY) scrollY_ = mostY;
 }
 
 void TreeGrid::reserveMemos(const Rect& abs)
@@ -1590,7 +1690,8 @@ int TreeGrid::hitColumn(float localX) const
 int TreeGrid::hitRow(float localY) const
 {
     ensureFlatList();
-    if (localY < headerHeight_) return -1;
+    ensureColumns();
+    if (localY < headerHeight_ || localY >= headerHeight_ + viewH_) return -1; // not the header, not the bar under the rows
     float y = localY - headerHeight_ + scrollY_;
     int idx = static_cast<int>(y / rowHeight_);
     if (idx < 0 || idx >= static_cast<int>(flatList_.size())) return -1;
@@ -1701,6 +1802,8 @@ void TreeGrid::paint(PaintContext& ctx)
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 15)), 255);
         ctx.fill.SetColor(hdrBg.r, hdrBg.g, hdrBg.b, hdrBg.a);
         ctx.fillRect(abs.x, abs.y, abs.w, headerHeight_);
+        // the columns end where the vertical bar begins: the header is cut there
+        ctx.pushClip({ abs.x, abs.y, viewW_, headerHeight_ });
 
         float hx = abs.x - scrollX_;
         float hdrTextY = abs.y + (headerHeight_ - t.fontSize) * 0.5f + asc;
@@ -1710,7 +1813,7 @@ void TreeGrid::paint(PaintContext& ctx)
             auto& col = columns_[i];
             const float colW = colW_[i];
             float colR = hx + colW;
-            if (colR <= abs.x || hx >= abs.x + abs.w)
+            if (colR <= abs.x || hx >= abs.x + viewW_)
             {
                 hx = colR; // out of sight: nothing to measure or draw
                 continue;
@@ -1746,6 +1849,7 @@ void TreeGrid::paint(PaintContext& ctx)
             hx = colR;
         }
 
+        ctx.popClip(); // the columns of the header
         ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
         ctx.drawLine(abs.x, abs.y + headerHeight_, abs.x + abs.w, abs.y + headerHeight_);
     }
@@ -1753,8 +1857,9 @@ void TreeGrid::paint(PaintContext& ctx)
 
     // ── Rows ─────────────────────────────────────────────────────────────
     float bodyY = abs.y + headerHeight_;
-    float bodyH = abs.h - headerHeight_;
-    Rect bodyClip = { abs.x, bodyY, abs.w, bodyH };
+    float bodyH = viewH_; // the rows end above the horizontal bar
+    const float bodyW = viewW_;
+    Rect bodyClip = { abs.x, bodyY, bodyW, bodyH };
     ctx.pushClip(bodyClip);
     {
         int totalVis = static_cast<int>(flatList_.size());
@@ -1772,7 +1877,7 @@ void TreeGrid::paint(PaintContext& ctx)
             ElideMemo* const memoRow = memos_.row(vi);
 
             float ry = bodyY + vi * rowHeight_ - scrollY_;
-            Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
+            Rect rowR = { abs.x, ry, bodyW, rowHeight_ };
             if (ctx.isClipped(rowR)) continue;
 
             if (zebraStripes_ && (vi % 2 == 1))
@@ -1780,20 +1885,20 @@ void TreeGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 5)),
                         static_cast<uint8_t>(std::min(255, t.panelColor.g + 5)),
                         static_cast<uint8_t>(std::min(255, t.panelColor.b + 5)), 255);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             if (isSelected(node))
             {
                 ctx.fill.SetColor(t.selectionColor.r, t.selectionColor.g, t.selectionColor.b,
                         t.selectionColor.a);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             if (hoveredRow_ == vi && !isSelected(node))
             {
                 ctx.fill.SetColor(t.buttonHover.r, t.buttonHover.g, t.buttonHover.b, 60);
-                ctx.fillRect(abs.x, ry, abs.w, rowHeight_);
+                ctx.fillRect(abs.x, ry, bodyW, rowHeight_);
             }
 
             float textY = ry + (rowHeight_ - t.fontSize) * 0.5f + asc;
@@ -1803,7 +1908,7 @@ void TreeGrid::paint(PaintContext& ctx)
             for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci, memoCol = memoCol + 1 == memoCols ? 0 : memoCol + 1)
             {
                 float colW = colW_[ci];
-                if (cx + colW <= abs.x || cx >= abs.x + abs.w)
+                if (cx + colW <= abs.x || cx >= abs.x + bodyW)
                 {
                     cx += colW; // out of sight: nothing to measure or draw
                     continue;
@@ -1901,45 +2006,41 @@ void TreeGrid::paint(PaintContext& ctx)
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 30);
-            ctx.drawLine(abs.x, ry + rowHeight_, abs.x + abs.w, ry + rowHeight_);
+            ctx.drawLine(abs.x, ry + rowHeight_, abs.x + bodyW, ry + rowHeight_);
         }
     }
     ctx.popClip();
 
     // ── Scrollbars ───────────────────────────────────────────────────────
-    float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
-    float contentW = totalColumnsWidth();
-
-    if (bodyH > 0.0f && contentH > bodyH)
+    // (the vertical one beside the rows, the horizontal one under them: neither is over a cell)
+    const float contentH = colContentH_;
+    const float contentW = totalColumnsWidth();
+    if (vbar_)
     {
-        float sbW = 8.0f;
-        float sbX = abs.x + abs.w - sbW;
-        float trackH = bodyH;
-        float thumbH = std::max(20.0f, (bodyH / contentH) * trackH);
-        float maxSY = contentH - bodyH;
-        float thumbY = bodyY + (maxSY > 0 ? (scrollY_ / maxSY) * (trackH - thumbH) : 0);
+        const float sbX = abs.x + abs.w - kBarW;
+        const float thumbH = thumbLength(viewH_, viewH_, contentH);
+        const float maxSY = contentH - viewH_;
+        const float thumbY = bodyY + (maxSY > 0.0f && viewH_ > thumbH ? (scrollY_ / maxSY) * (viewH_ - thumbH) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(sbX, bodyY, sbW, trackH);
+        ctx.fillRect(sbX, bodyY, kBarW, viewH_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(sbX + 1, thumbY, sbW - 2, thumbH);
+        ctx.fillRect(sbX + 1, thumbY, kBarW - 2, thumbH);
     }
 
-    if (abs.w > 0.0f && contentW > abs.w)
+    if (hbar_)
     {
-        float sbH = 8.0f;
-        float sbY = abs.y + abs.h - sbH;
-        float trackW = abs.w;
-        float thumbW = std::max(20.0f, (abs.w / contentW) * trackW);
-        float maxSX = contentW - abs.w;
-        float thumbX = abs.x + (maxSX > 0 ? (scrollX_ / maxSX) * (trackW - thumbW) : 0);
+        const float sbY = abs.y + abs.h - kBarW;
+        const float thumbW = thumbLength(viewW_, viewW_, contentW);
+        const float maxSX = contentW - viewW_;
+        const float thumbX = abs.x + (maxSX > 0.0f && viewW_ > thumbW ? (scrollX_ / maxSX) * (viewW_ - thumbW) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(abs.x, sbY, trackW, sbH);
+        ctx.fillRect(abs.x, sbY, viewW_, kBarW);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(thumbX, sbY + 1, thumbW, sbH - 2);
+        ctx.fillRect(thumbX, sbY + 1, thumbW, kBarW - 2);
     }
 
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
@@ -1960,6 +2061,31 @@ void TreeGrid::onMousePress(MouseEvent& e)
     e.consumed = true;
     float localX = e.x - abs.x;
     float localY = e.y - abs.y;
+
+    // ── Scroll bars: a press on a thumb starts a drag, one on a track scrolls a page toward it ──
+    ensureColumns();
+    if (vbar_ && localX >= abs.w - kBarW && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
+    {
+        if (barPress(localY - headerHeight_, viewH_, viewH_, colContentH_, scrollY_))
+        {
+            vScrollDrag_ = true;
+            vScrollDragStartY_ = e.y;
+            vScrollDragStartSY_ = scrollY_;
+        }
+        markDirty();
+        return;
+    }
+    if (hbar_ && localY >= abs.h - kBarW && localX < viewW_)
+    {
+        if (barPress(localX, viewW_, viewW_, colTotal_, scrollX_))
+        {
+            hScrollDrag_ = true;
+            hScrollDragStartX_ = e.x;
+            hScrollDragStartSX_ = scrollX_;
+        }
+        markDirty();
+        return;
+    }
 
     if (localY < headerHeight_)
     {
@@ -2057,6 +2183,8 @@ void TreeGrid::onMousePress(MouseEvent& e)
 
 void TreeGrid::onMouseRelease(MouseEvent& e)
 {
+    hScrollDrag_ = false;
+    vScrollDrag_ = false;
     if (resizeCol_ >= 0) resizeCol_ = -1;
     (void) e;
 }
@@ -2065,6 +2193,17 @@ void TreeGrid::onMouseMove(MouseEvent& e)
 {
     if (!visible_ || !isEnabledInTree()) return;
     Rect abs = absoluteRect();
+
+    if (hScrollDrag_ || vScrollDrag_)
+    {
+        e.consumed = true;
+        ensureColumns();
+        if (hScrollDrag_) scrollX_ = barDrag(hScrollDragStartSX_, e.x - hScrollDragStartX_, viewW_, viewW_, colTotal_);
+        else
+            scrollY_ = barDrag(vScrollDragStartSY_, e.y - vScrollDragStartY_, viewH_, viewH_, colContentH_);
+        markDirty();
+        return;
+    }
 
     if (resizeCol_ >= 0)
     {
@@ -2077,6 +2216,7 @@ void TreeGrid::onMouseMove(MouseEvent& e)
 
     float localY = e.y - abs.y;
     int visIdx = hitRow(localY);
+    if (e.x - abs.x >= viewW_) visIdx = -1; // over the vertical bar: no row
     if (visIdx != hoveredRow_)
     {
         hoveredRow_ = visIdx;
@@ -2093,19 +2233,19 @@ void TreeGrid::onMouseScroll(MouseEvent& e)
 
     e.consumed = true;
     bool shift = e.shift;
-    float bodyH = abs.h - headerHeight_;
-    float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
-    float contentW = totalColumnsWidth();
+    ensureColumns();
+    const float mostX = colTotal_ > viewW_ ? colTotal_ - viewW_ : 0.0f;
+    const float mostY = colContentH_ > viewH_ ? colContentH_ - viewH_ : 0.0f;
 
     if (shift)
     {
         scrollX_ -= e.scrollY * 40.0f;
-        scrollX_ = clamp(scrollX_, 0.0f, std::max(0.0f, contentW - abs.w));
+        scrollX_ = clamp(scrollX_, 0.0f, mostX);
     }
     else
     {
         scrollY_ -= e.scrollY * rowHeight_ * 2.0f;
-        scrollY_ = clamp(scrollY_, 0.0f, std::max(0.0f, contentH - bodyH));
+        scrollY_ = clamp(scrollY_, 0.0f, mostY);
     }
     markDirty();
 }
@@ -2206,7 +2346,8 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 break;
             }
 
-        const int page = static_cast<int>((rect_.h - headerHeight_) / rowHeight_);
+        ensureColumns();
+        const int page = static_cast<int>(viewH_ / rowHeight_);
         const int target = listKeyTarget(e.key, curIdx, static_cast<int>(flatList_.size()), page);
         if (target != curIdx)
         {
@@ -2274,7 +2415,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
             for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
             {
                 if (flatList_[i].node != selectedNode_) continue;
-                const float bodyH = rect_.h - headerHeight_;
+                const float bodyH = viewH_;
                 const float top = static_cast<float>(i) * rowHeight_;
                 if (top < scrollY_) scrollY_ = top;
                 else if (top + rowHeight_ > scrollY_ + bodyH)
