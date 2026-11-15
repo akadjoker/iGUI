@@ -188,12 +188,40 @@ void WidgetApp::update(const ig::retained::IO& io)
     float mx = io.mouseX;
     float my = io.mouseY;
 
+    // What the platform's event stream said, in order, before the state the frame ends with: each press,
+    // release and move is dispatched where it happened (a click that began and ended between two frames
+    // is not lost, a press is where the pointer was). The previous state follows each, so the comparison
+    // with the polled state below finds only what the events did not say; and a button the events spoke of
+    // is not compared with the polled state at all (a platform may hold a press in its polled state for a
+    // frame after the release, which would be a second press at the end of the frame).
+    bool spokenOf[5] = {};
+    for (const auto& me: io.mouseEvents)
+    {
+
+        if (me.button < 0 || me.button >= 5)
+        {
+            if (me.x != s_.prevMouseX_ || me.y != s_.prevMouseY_) dispatchMouseMove(me.x, me.y);
+            s_.prevMouseX_ = me.x;
+            s_.prevMouseY_ = me.y;
+            continue;
+        }
+        if (me.x != s_.prevMouseX_ || me.y != s_.prevMouseY_) dispatchMouseMove(me.x, me.y);
+        s_.prevMouseX_ = me.x;
+        s_.prevMouseY_ = me.y;
+        if (me.down && !s_.prevMouseDown_[me.button]) dispatchMousePress(me.x, me.y, me.button);
+        else if (!me.down && s_.prevMouseDown_[me.button])
+            dispatchMouseRelease(me.x, me.y, me.button);
+        s_.prevMouseDown_[me.button] = me.down;
+        spokenOf[me.button] = true;
+    }
+
     // Mouse move
     if (mx != s_.prevMouseX_ || my != s_.prevMouseY_) dispatchMouseMove(mx, my);
 
     // Mouse buttons (delta detection)
     for (int i = 0; i < 5; ++i)
     {
+        if (spokenOf[i]) continue;
         if (io.mouseDown[i] && !s_.prevMouseDown_[i]) dispatchMousePress(mx, my, i);
         else if (!io.mouseDown[i] && s_.prevMouseDown_[i])
             dispatchMouseRelease(mx, my, i);
@@ -203,9 +231,19 @@ void WidgetApp::update(const ig::retained::IO& io)
     if (io.mouseWheelX != 0.0f || io.mouseWheelY != 0.0f)
         dispatchMouseScroll(mx, my, io.mouseWheelX, io.mouseWheelY);
 
-    // Key press / release events
+    // Key press / release events, and the letters typed before each of them put in first, so that
+    // "a", Left, "b" in one frame is what it was typed as
+    unsigned charsDone = 0;
+    ct::Vector<uint32_t> typedBefore;
     for (const auto& ke: io.keyEvents)
     {
+        if (ke.charsBefore > charsDone && ke.charsBefore <= io.inputChars.size())
+        {
+            typedBefore.clear();
+            for (unsigned i = charsDone; i < ke.charsBefore; ++i) typedBefore.push_back(io.inputChars[i]);
+            charsDone = ke.charsBefore;
+            dispatchTextInput(typedBefore);
+        }
         if (debugLayoutKey_ != 0 && ke.scancode == debugLayoutKey_)
         {
             if (ke.down) debugLayout_ = !debugLayout_;
@@ -214,8 +252,17 @@ void WidgetApp::update(const ig::retained::IO& io)
             dispatchKeyEvent(ke);
     }
 
-    // Text input
-    if (!io.inputChars.empty()) dispatchTextInput(io.inputChars);
+    // Text input (what is left of it)
+    if (charsDone == 0)
+    {
+        if (!io.inputChars.empty()) dispatchTextInput(io.inputChars);
+    }
+    else if (charsDone < io.inputChars.size())
+    {
+        typedBefore.clear();
+        for (size_t i = charsDone; i < io.inputChars.size(); ++i) typedBefore.push_back(io.inputChars[i]);
+        dispatchTextInput(typedBefore);
+    }
 
     // OS-level file drops
     if (!io.dropEvents.empty()) dispatchDropEvents(io.dropEvents);
@@ -295,7 +342,8 @@ void WidgetApp::update(const ig::retained::IO& io)
     // Store prev state
     s_.prevMouseX_ = mx;
     s_.prevMouseY_ = my;
-    for (int i = 0; i < 5; ++i) s_.prevMouseDown_[i] = io.mouseDown[i];
+    for (int i = 0; i < 5; ++i)
+        if (!spokenOf[i]) s_.prevMouseDown_[i] = io.mouseDown[i];
 
     // Write cursor hint into IO so backend can read it
     ig::retained::GetIO().wantedCursor = static_cast<int>(s_.wantedCursor_);

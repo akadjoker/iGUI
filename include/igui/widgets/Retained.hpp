@@ -118,8 +118,25 @@ struct IO
         bool ctrl = false;
         bool alt = false;
         bool down = true; // true = press, false = release
+        // How many of inputChars were added before this event: the letters of the frame that were typed
+        // before the key are put in before it acts (addKeyEvent fills it in).
+        unsigned charsBefore = 0;
     };
     ct::Vector<KeyEvent> keyEvents;
+
+    // Per-frame mouse events, in the order they happened (cleared by Render), for a backend that reads the
+    // platform's event stream: a press and a release that both fall between two frames are a click, a press
+    // happens where the pointer was when it was pressed, a move and a press somewhere else are two things.
+    // The polled mouseX, mouseY and mouseDown are still what the frame ends with, and are all a backend that
+    // adds no events needs to fill in.
+    struct MouseInput
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        int button = -1;   // -1: the pointer moved to x, y; else the button that changed
+        bool down = false; // with a button: pressed (true) or released
+    };
+    ct::Vector<MouseInput> mouseEvents;
 
     // Cursor hint written by WidgetApp::update(), read by backend.
     // Matches CursorType: 0=Arrow 1=Hand 2=IBeam 3=Crosshair
@@ -165,7 +182,17 @@ struct IO
     }
     void addKeyEvent(int key, int scancode, bool shift, bool ctrl, bool alt, bool down)
     {
-        keyEvents.push_back({ key, scancode, shift, ctrl, alt, down });
+        keyEvents.push_back({ key, scancode, shift, ctrl, alt, down, static_cast<unsigned>(inputChars.size()) });
+    }
+    /// The pointer moved to x, y.
+    void addMouseMoveEvent(float x, float y)
+    {
+        mouseEvents.push_back({ x, y, -1, false });
+    }
+    /// A button was pressed or released with the pointer at x, y.
+    void addMouseButtonEvent(float x, float y, int button, bool down)
+    {
+        mouseEvents.push_back({ x, y, button, down });
     }
 };
 

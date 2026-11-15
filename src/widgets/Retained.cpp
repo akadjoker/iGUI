@@ -2162,6 +2162,7 @@ void Render()
     ctx.io.mouseWheelY = 0.0f;
     ctx.io.inputChars.clear();
     ctx.io.keyEvents.clear();
+    ctx.io.mouseEvents.clear();
     ctx.io.dropEvents.clear();
     // passes are already populated by WidgetApp::paint();
     // append the overlay as the last pass (identity camera, always on top).
