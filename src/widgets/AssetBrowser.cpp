@@ -165,11 +165,11 @@ void AssetBrowser::paint(PaintContext& ctx)
 
     ctx.fill.SetColor(isGrid ? 60 : 40, isGrid ? 120 : 44, isGrid ? 200 : 52, 255);
     ctx.fillRect(bx, by, 22.f, 20.f);
-    if (ctx.icons) ctx.drawIcon(IconId::ViewGrid, bx + 3.f, by + 3.f, 14.f);
+    ctx.drawIcon(IconId::ViewGrid, bx + 3.f, by + 3.f, 14.f);
 
     ctx.fill.SetColor(!isGrid ? 60 : 40, !isGrid ? 120 : 44, !isGrid ? 200 : 52, 255);
     ctx.fillRect(bx + 26.f, by, 22.f, 20.f);
-    if (ctx.icons) ctx.drawIcon(IconId::ViewList, bx + 29.f, by + 3.f, 14.f);
+    ctx.drawIcon(IconId::ViewList, bx + 29.f, by + 3.f, 14.f);
 
     // ── Clip content area ────────────────────────────────────────────────
     Rect ca = { b.x, b.y + 27.f, b.w, b.h - 27.f };
@@ -202,7 +202,6 @@ void AssetBrowser::paint(PaintContext& ctx)
             float ts = thumbSize_ * 0.5f;
             ctx.fillRect(cx + (g.cellW - ts) * 0.5f, cy + (thumbSize_ - ts) * 0.5f, ts, ts);
 
-            if (ctx.icons)
             {
                 float is = std::min(32.f, thumbSize_ * 0.5f);
                 ctx.drawIcon(typeToIcon(it.type), cx + (g.cellW - is) * 0.5f,
@@ -245,7 +244,8 @@ void AssetBrowser::paint(PaintContext& ctx)
             ctx.fillRect(b.x, ry, b.w, rowH);
 
             Color ic = typeToColor(it.type);
-            if (ctx.icons)
+            // an icon with no drawing of its own and no atlas to take it from is a swatch of the type's colour
+            if (ctx.icons || DrawList::hasVectorIcon(typeToIcon(it.type)))
             {
                 ctx.drawIcon(typeToIcon(it.type), b.x + 6.f, ry + 3.f, 16.f,
                         Color(ic.r, ic.g, ic.b, 220));

@@ -535,6 +535,61 @@ void testIconsAreDrawnWithoutAnAtlas()
     }
 }
 
+// The pixels of a rectangle that are not the colour `fill` (0xAARRGGBB).
+int notColour(const Shot& s, int x0, int y0, int x1, int y1, uint32_t fill)
+{
+    int n = 0;
+    for (int y = y0; y < y1; ++y)
+        for (int x = x0; x < x1; ++x)
+            if (s.px[static_cast<size_t>(y) * static_cast<size_t>(s.w) + static_cast<size_t>(x)] != fill) ++n;
+    return n;
+}
+
+// The AssetBrowser draws the icons of its view buttons and of its items with no icon atlas.
+void testAssetBrowserIconsAreDrawnWithoutAnAtlas()
+{
+    const SweepCase c = { "AssetBrowser",
+        [](BoxLayout* b, const String&) -> Widget*
+        {
+            AssetBrowser* w = b->createChild<AssetBrowser>();
+            AssetItem item;
+            item.name = "clip";
+            item.type = AssetType::Folder;
+            w->addItem(item);
+            return w;
+        } };
+    Rect r;
+    const Shot shot = sweepShot(c, "", &r);
+    const int bx = static_cast<int>(r.x + r.w - 52.0f), by = static_cast<int>(r.y) + 3;
+    // the first button (the grid view is on): 60,120,200 under the icon; the second: 40,44,52
+    const uint32_t on = 0xff000000u | (60u << 16) | (120u << 8) | 200u;
+    const uint32_t off = 0xff000000u | (40u << 16) | (44u << 8) | 52u;
+    const int a = notColour(shot, bx + 3, by + 3, bx + 17, by + 17, on);
+    const int b = notColour(shot, bx + 29, by + 3, bx + 43, by + 17, off);
+    if (a < 8 || b < 8) printf("    pixels of the icons of the view buttons: %d, %d\n", a, b);
+    check(a >= 8, "the grid icon of the AssetBrowser is drawn with no icon atlas");
+    check(b >= 8, "the list icon of the AssetBrowser is drawn with no icon atlas");
+    // the list view: without an atlas the row drew a solid square of the type's colour where the icon
+    // goes (12 pixels, from 5 pixels under the top of the row); the icon is strokes, not a solid square
+    const SweepCase list = { "AssetBrowser list",
+        [](BoxLayout* b, const String&) -> Widget*
+        {
+            AssetBrowser* w = b->createChild<AssetBrowser>();
+            w->setViewMode(AssetBrowser::ViewMode::List);
+            AssetItem item;
+            item.name = "clip";
+            item.type = AssetType::Folder;
+            w->addItem(item);
+            return w;
+        } };
+    const Shot rows = sweepShot(list, "", &r);
+    const int sx = static_cast<int>(r.x) + 6, sy = static_cast<int>(r.y) + 27 + 5;
+    const uint32_t centre = rows.px[static_cast<size_t>(sy + 6) * static_cast<size_t>(rows.w) + static_cast<size_t>(sx + 6)];
+    const int solid = 144 - notColour(rows, sx, sy, sx + 12, sy + 12, centre);
+    if (solid >= 100) printf("    %d of the 144 pixels where the icon goes are one colour\n", solid);
+    check(solid < 100, "the icon of a row of the AssetBrowser is drawn, not a solid square, with no icon atlas");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -551,6 +606,7 @@ int main(int argc, char** argv)
     RUN(testStatusBarTextIsInTheBar);
     RUN(testAssetBrowserPathStopsAtTheButtons);
     RUN(testIconsAreDrawnWithoutAnAtlas);
+    RUN(testAssetBrowserIconsAreDrawnWithoutAnAtlas);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
