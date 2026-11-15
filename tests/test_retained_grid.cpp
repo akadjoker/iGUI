@@ -765,6 +765,72 @@ void fixedColumns()
     }
 }
 
+// TreeGrid::setColumnWidth (as DataGrid's): the width a column has, the minimum it keeps, the pixels the
+// grid draws (the same as a grid made with that width), the width of the columns after it and the scroll.
+void testTreeGridSetColumnWidth()
+{
+    Harness h(kWindowW, kWindowH);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TreeGrid* grid = box->createChild<TreeGrid>();
+    grid->setStretch(1.0f);
+    grid->addColumn("A", 100.0f);
+    grid->addColumn("B", 100.0f);
+    grid->addColumn("C", 100.0f);
+    grid->addRoot({ "um", "dois", "tres" });
+    grid->rebuild();
+    h.relayout();
+    check(grid->columnWidth(1) == 100.0f, "columns have the width they were added with");
+    grid->setColumnWidth(1, 250.0f);
+    h.frame();
+    check(grid->columnWidth(1) == 250.0f, "setColumnWidth sets the width of a column");
+    check(grid->columnWidth(0) == 100.0f && grid->columnWidth(2) == 100.0f, "the other columns keep theirs");
+    check(grid->sizeHint().x == 450.0f, "the size hint follows the column widths");
+    grid->setColumnWidth(1, 1.0f);
+    DataGrid reference;
+    reference.addColumn("A", 100.0f);
+    reference.setColumnWidth(0, 1.0f);
+    check(grid->columnWidth(1) == reference.columnWidth(0) && grid->columnWidth(1) > 1.0f,
+            "a width below the minimum of the column is the minimum, as in the DataGrid");
+    grid->setColumnWidth(1, 250.0f);
+    grid->setColumnWidth(-1, 10.0f);
+    grid->setColumnWidth(3, 10.0f);
+    grid->setColumnWidth(1, 0.0f / 0.0f);
+    check(grid->columnWidth(1) == 250.0f && grid->columnWidth(0) == 100.0f, "a column that does not exist or a width that is not a number changes nothing");
+    // the columns after it move: a click in the middle of the third column (at 100 + 250 + 50) selects the row
+    h.frame();
+    const Rect rect = grid->absoluteRect();
+    bool selected = false;
+    grid->selectionChanged.connect([&selected](TreeGrid::Node*) { selected = true; });
+    h.click(rect.x + 100.0f + 250.0f + 50.0f, rect.y + kHeaderH + kRowH * 0.5f);
+    check(selected, "the third column starts after the wider second one");
+    // the grid draws as one made with the widths
+    TreeSpec wide;
+    wide.col0 = 100.0f;
+    wide.col1 = 250.0f;
+    wide.text0 = "um";
+    wide.text1 = "dois";
+    wide.roots = 1;
+    Rect grid1;
+    const Shot expected = treeShot(wide, &grid1);
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box2 = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box2->setPadding(0.0f);
+    TreeGrid* g2 = box2->createChild<TreeGrid>();
+    g2->setStretch(1.0f);
+    g2->addColumn("Nome", 10.0f);
+    g2->addColumn("B", 10.0f);
+    g2->addColumn("C", 160.0f);
+    g2->setColumnWidth(0, 100.0f);
+    g2->setColumnWidth(1, 250.0f);
+    g2->addRoot({ "um", "dois", "" });
+    g2->rebuild();
+    screen.h.relayout();
+    screen.h.frames(2);
+    const Shot got = screen.take();
+    check(differing(expected, got, 0, 0, got.w, got.h) == 0, "a grid whose columns were widened draws as one made with those widths");
+}
+
 void testFixedColumnsKeepTheirWidth()
 {
     printf("columns that do not stretch keep the width they were given\n");
@@ -1945,6 +2011,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridElidesWithDots);
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
+    RUN(testTreeGridSetColumnWidth);
     RUN(testDataGridMemosDoNotGoStale);
     RUN(testModelDataIsNotStaleInTheGrid);
     RUN(testTreeGridMemosDoNotGoStale);

@@ -361,6 +361,10 @@ public:
     int addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
+    /// @brief Set a column's own width (never less than its minimum; a width that is not a number is
+    ///        ignored), as DataGrid::setColumnWidth does. For a column that stretches it is the least
+    ///        the column gets.
+    void setColumnWidth(int col, float w);
     /// @brief The width a column has now, which is what painting, hit testing and the scroll range use:
     ///        its own width, or its share of the room when it stretches.
     float columnWidth(int col) const;

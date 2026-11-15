@@ -1408,6 +1408,14 @@ int TreeGrid::addColumn(const String& name, float width, bool sortable)
     return static_cast<int>(columns_.size()) - 1;
 }
 
+void TreeGrid::setColumnWidth(int col, float w)
+{
+    if (col < 0 || col >= static_cast<int>(columns_.size()) || !(w == w)) return;
+    columns_[col].width = w > columns_[col].minWidth ? w : columns_[col].minWidth;
+    invalidateColumns();
+    markDirty();
+}
+
 float TreeGrid::columnWidth(int col) const
 {
     ensureColumns();
