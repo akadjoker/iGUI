@@ -349,7 +349,8 @@ void textScene()
 // painted, so what is measured is the cost of the cells in view (28 rows of 6 columns on this window).
 // kind 0: short texts (they fit, and stay in the string's own buffer: 11 characters), 1: texts of 30
 // characters in columns that hold them (a copy of each needs the heap), 2: the same kind of text in
-// columns too narrow for it, in every cell.
+// columns too narrow for it, in every cell. kind 3: the short texts of kind 0 in a tree whose first
+// column is wide enough for the deepest node (the same as kind 0 without the elision of that column).
 void gridScene(const char* scene, bool tree, int kind)
 {
     Harness h(1280.0f, 720.0f);
@@ -357,7 +358,7 @@ void gridScene(const char* scene, bool tree, int kind)
     box->setPadding(0.0f);
     auto text = [kind](int row, int col)
     {
-        if (kind == 0) return String("Item ") + String::number(row) + "." + String::number(col);
+        if (kind == 0 || kind == 3) return String("Item ") + String::number(row) + "." + String::number(col);
         return String("Entrevista ") + String::number(row) + " com o cliente " + String::number(col);
     };
     const int columns = 6;
@@ -378,7 +379,7 @@ void gridScene(const char* scene, bool tree, int kind)
     {
         TreeGrid* grid = box->createChild<TreeGrid>();
         grid->setStretch(1.0f);
-        for (int c = 0; c < columns; ++c) grid->addColumn(String("Coluna ") + String::number(c), columnWidth);
+        for (int c = 0; c < columns; ++c) grid->addColumn(String("Coluna ") + String::number(c), c == 0 && kind == 3 ? 400.0f : columnWidth);
         int n = 0;
         auto cells = [&](int depth)
         {
@@ -414,6 +415,17 @@ void gridScene(const char* scene, bool tree, int kind)
                 Render();
             });
     RUN_IF(scene, "frame", 200, [&] { h.frame(); });
+    // The wheel moving the list a notch (two rows) up and down: a frame each, with update and layout.
+    if (wanted(scene, "scroll_frame"))
+    {
+        h.moveTo(x, y);
+        report(scene, "scroll_frame", measure(200,
+                [&]
+                {
+                    static int step = 0;
+                    h.wheel((step++ & 1) ? 1.0f : -1.0f);
+                }));
+    }
     if (wanted(scene, "draw_list_size"))
     {
         const DrawList& dl = GetDrawList();
@@ -528,6 +540,7 @@ int main(int argc, char** argv)
     gridScene("treegrid_short", true, 0);
     gridScene("treegrid_fit", true, 1);
     gridScene("treegrid_long", true, 2);
+    gridScene("treegrid_short_wide", true, 3);
     shutdown();
     return 0;
 }
