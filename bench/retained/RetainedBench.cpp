@@ -11,6 +11,7 @@
 #include "../../tests/EditorTree.hpp"
 
 #include <igui/widgets/DataWidgets.hpp>
+#include <igui/widgets/TreePropertyColorWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
 #include <signal.h>
@@ -434,6 +435,57 @@ void gridScene(const char* scene, bool tree, int kind)
     }
 }
 
+// A PropertyGrid of 200 rows (a section, then rows of every kind in turn), the first screenful in view:
+// kind 0: short names and values (they fit), 1: names and values too long for their columns.
+void propertyScene(const char* scene, int kind)
+{
+    Harness h(480.0f, 720.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    PropertyGrid* grid = box->createChild<PropertyGrid>();
+    grid->setStretch(1.0f);
+    auto name = [kind](int i)
+    {
+        return kind == 0 ? String("Propriedade ") + String::number(i)
+                         : String("Propriedade numero ") + String::number(i) + " com um nome bem mais comprido do que a coluna";
+    };
+    ct::Vector<String> options;
+    options.push_back(kind == 0 ? String("Opcao") : String("Uma opcao com um texto bem mais comprido do que a caixa"));
+    options.push_back("Outra");
+    for (int i = 0; i < 200; ++i)
+    {
+        switch (i % 10)
+        {
+            case 0: grid->addSection(name(i)); break;
+            case 1: grid->addString(name(i), kind == 0 ? String("valor") : String("um valor de texto bem mais comprido do que a caixa")); break;
+            case 2: grid->addFloat(name(i), 0.5f, 0.0f, 1.0f); break;
+            case 3: grid->addInt(name(i), 3, 0, 10); break;
+            case 4: grid->addBool(name(i), true); break;
+            case 5: grid->addColor(name(i), Color(200, 40, 40, 255)); break;
+            case 6: grid->addCombo(name(i), options, 0); break;
+            case 7: grid->addVec3(name(i), 1.0f, 2.0f, 3.0f, 0.0f, 10.0f); break;
+            case 8: grid->addButton(name(i)); break;
+            default: grid->addRange(name(i), 2.0f, 6.0f, 0.0f, 10.0f); break;
+        }
+    }
+    h.relayout();
+    h.frames(3);
+    RUN_IF(scene, "paint_only", 300,
+            [&]
+            {
+                NewFrame();
+                h.app.paint(*GetDrawData(), h.font(), nullptr);
+                Render();
+            });
+    RUN_IF(scene, "frame", 300, [&] { h.frame(); });
+    if (wanted(scene, "draw_list_size"))
+    {
+        const DrawList& dl = GetDrawList();
+        printf("%-34s %10u vertices %u indices %u commands\n", scene, static_cast<unsigned>(dl.vertices().size()),
+                static_cast<unsigned>(dl.indices().size()), static_cast<unsigned>(dl.commands().size()));
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -541,6 +593,8 @@ int main(int argc, char** argv)
     gridScene("treegrid_fit", true, 1);
     gridScene("treegrid_long", true, 2);
     gridScene("treegrid_short_wide", true, 3);
+    propertyScene("propgrid_short", 0);
+    propertyScene("propgrid_long", 1);
     shutdown();
     return 0;
 }
