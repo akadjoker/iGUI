@@ -184,9 +184,16 @@ struct IO
     {
         keyEvents.push_back({ key, scancode, shift, ctrl, alt, down, static_cast<unsigned>(inputChars.size()) });
     }
-    /// The pointer moved to x, y.
+    /// The pointer moved to x, y. Moves with no press or release between them are one move, to the last: a
+    /// mouse that reports thousands of times a second is not hit tested for each of them.
     void addMouseMoveEvent(float x, float y)
     {
+        if (!mouseEvents.empty() && mouseEvents.back().button < 0)
+        {
+            mouseEvents.back().x = x;
+            mouseEvents.back().y = y;
+            return;
+        }
         mouseEvents.push_back({ x, y, -1, false });
     }
     /// A button was pressed or released with the pointer at x, y.

@@ -113,6 +113,57 @@ void testKeysAndLettersKeepTheirOrder()
     check(input->text() == "rpq", "a key and a letter after it");
 }
 
+// A widget that counts the moves it is given.
+class MoveCounter : public Widget
+{
+public:
+    Vec2f sizeHint() const override { return { 200.0f, 100.0f }; }
+    void onMouseMove(MouseEvent& e) override
+    {
+        ++moves;
+        lastX = e.x;
+        relSum += e.relX;
+    }
+    int moves = 0;
+    float lastX = 0.0f;
+    float relSum = 0.0f;
+};
+
+// The moves of a frame that no press or release is between are one move to where the pointer ends: a mouse
+// that reports 8000 times a second must not be hit tested 130 times in a frame, and the widgets see the
+// whole distance anyway (relX is the sum).
+void testMovesOfAFrameAreOne()
+{
+    Harness h(400.0f, 200.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    MoveCounter* counter = box->createChild<MoveCounter>();
+    h.relayout();
+    const Rect r = counter->absoluteRect();
+    const float y = r.y + 10.0f;
+    h.io().mouseX = r.x + 5.0f;
+    h.io().mouseY = y;
+    h.frame();
+    counter->moves = 0;
+    counter->relSum = 0.0f;
+    for (int i = 1; i <= 130; ++i) h.io().addMouseMoveEvent(r.x + 5.0f + static_cast<float>(i), y);
+    check(h.io().mouseEvents.size() == 1, "130 moves in a row are one event in the IO");
+    h.io().mouseX = r.x + 135.0f;
+    h.frame();
+    check(counter->moves == 1, "and one move for the widgets");
+    check(counter->lastX == r.x + 135.0f && counter->relSum == 130.0f, "to where the pointer ended, with all the distance");
+    // a press in the middle keeps the two stretches apart
+    h.io().addMouseMoveEvent(r.x + 10.0f, y);
+    h.io().addMouseMoveEvent(r.x + 20.0f, y);
+    h.io().addMouseButtonEvent(r.x + 20.0f, y, 0, true);
+    h.io().addMouseMoveEvent(r.x + 30.0f, y);
+    h.io().addMouseMoveEvent(r.x + 40.0f, y);
+    check(h.io().mouseEvents.size() == 3, "a press between moves keeps them apart: a move, the press, a move");
+    h.io().mouseX = r.x + 40.0f;
+    h.io().mouseDown[0] = true;
+    h.frame();
+    check(counter->moves == 3, "the widgets get the move before the press, and the move after it");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -123,6 +174,7 @@ int main(int argc, char** argv)
     RUN(testPressAndReleaseInOneFrameIsAClick);
     RUN(testPressIsWhereThePointerWas);
     RUN(testKeysAndLettersKeepTheirOrder);
+    RUN(testMovesOfAFrameAreOne);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
