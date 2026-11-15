@@ -11,6 +11,8 @@
 #include "../../tests/EditorTree.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/ComboBox.hpp>
+#include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/AssetBrowser.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DataWidgets.hpp>
@@ -492,6 +494,179 @@ void propertyScene(const char* scene, int kind)
     }
 }
 
+// What an input event costs on top of an idle frame, and what it allocates: the pointer moving over widgets
+// that react (a button, a slider, a list, a grid, a text field) and over one that does not (a label), and
+// keys in a text field, a text editor and a list. Every figure is a whole frame (the update with the event,
+// the layout it asks for and the paint), so the idle frame of the same window is the zero.
+void inputScene()
+{
+    Harness h(900.0f, 700.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    Label* label = box->createChild<Label>("Um texto que nao faz nada");
+    Button* button = box->createChild<Button>("Botao");
+    Slider* slider = box->createChild<Slider>(0.0f, 1.0f, 0.3f);
+    TextInput* field = box->createChild<TextInput>("um campo de texto com bastante texto dentro");
+    ComboBox* combo = box->createChild<ComboBox>();
+    combo->addItem("um");
+    combo->addItem("dois");
+    String doc;
+    for (int i = 0; i < 40; ++i) doc += String("uma linha de texto numero ") + String::number(i) + " do documento\n";
+    TextEdit* editor = box->createChild<TextEdit>(doc);
+    editor->setStretch(1.0f);
+    ListBox* list = box->createChild<ListBox>();
+    for (int i = 0; i < 1000; ++i) list->addItem(String("Item ") + String::number(i));
+    list->setStretch(1.0f);
+    DataGrid* grid = box->createChild<DataGrid>();
+    for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna ") + String::number(c), 120.0f);
+    for (int r = 0; r < 1000; ++r) grid->addRow({ String::number(r), "b", "c", "d" });
+    grid->setStretch(1.0f);
+    h.relayout();
+    h.frames(5);
+    RUN_IF("input", "idle_frame", 300, [&] { h.frame(); });
+    if (wanted("input", "trace_idle_frame"))
+    {
+        // one idle frame of this window, every allocation with its call stack (--only=trace_idle_frame)
+        gTraceAllocs = true;
+        h.frame();
+        gTraceAllocs = false;
+    }
+    // the pointer moving over a widget: a step of a pixel each frame, back and forth
+    auto sweep = [&](const char* metric, Widget* w)
+    {
+        if (!wanted("input", metric)) return;
+        const Rect r = w->absoluteRect();
+        const float y = r.y + (r.h > 40.0f ? 40.0f : r.h * 0.5f);
+        h.moveTo(r.x + 20.0f, y);
+        h.frames(2);
+        int step = 0;
+        report("input", metric, measure(300,
+                [&]
+                {
+                    step = (step + 1) % 60;
+                    h.moveTo(r.x + 20.0f + static_cast<float>(step < 30 ? step : 60 - step), y);
+                }));
+    };
+    sweep("move_label", label);
+    sweep("move_button", button);
+    sweep("move_slider", slider);
+    sweep("move_textinput", field);
+    sweep("move_combo", combo);
+    sweep("move_textedit", editor);
+    sweep("move_list", list);
+    sweep("move_datagrid", grid);
+    // keys
+    if (wanted("input", "key_textinput"))
+    {
+        h.clickWidget(field);
+        h.frames(2);
+        int n = 0;
+        report("input", "key_textinput", measure(300, [&] { h.key((n++ & 1) ? Key::Right : Key::Left); }));
+        report("input", "type_textinput", measure(300,
+                [&]
+                {
+                    h.type("a");
+                    h.key(Key::Backspace);
+                }));
+    }
+    if (wanted("input", "key_textedit"))
+    {
+        h.clickWidget(editor);
+        h.frames(2);
+        int n = 0;
+        report("input", "key_textedit", measure(300, [&] { h.key((n++ & 1) ? Key::Right : Key::Left); }));
+        report("input", "type_textedit", measure(300,
+                [&]
+                {
+                    h.type("a");
+                    h.key(Key::Backspace);
+                }));
+    }
+    if (wanted("input", "key_list"))
+    {
+        h.clickWidget(list);
+        h.frames(2);
+        int n = 0;
+        report("input", "key_list", measure(300, [&] { h.key((n++ & 1) ? Key::Down : Key::Up); }));
+    }
+    if (wanted("input", "wheel_list"))
+    {
+        float x = 0, y = 0;
+        Harness::centre(list, x, y);
+        h.moveTo(x, y);
+        int n = 0;
+        report("input", "wheel_list", measure(300, [&] { h.wheel((n++ & 1) ? 1.0f : -1.0f); }));
+    }
+}
+
+// Text fields with a lot of text: a document of 20000 lines, one line of 200000 characters, a single-line
+// field with 100000: the frame, a letter typed, a key, and a big paste (what the clipboard gives).
+void bigTextScene()
+{
+    {
+        Harness h(900.0f, 600.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        String doc;
+        for (int i = 0; i < 20000; ++i) doc += String("linha numero ") + String::number(i) + " com um texto razoavel para ter largura\n";
+        TextEdit* editor = box->createChild<TextEdit>(doc);
+        editor->setStretch(1.0f);
+        h.relayout();
+        h.frames(3);
+        h.clickWidget(editor);
+        h.key(Key::Home, false, true); // Ctrl+Home: the start
+        h.frames(2);
+        RUN_IF("bigtext", "doc20000_frame", 100, [&] { h.frame(); });
+        RUN_IF("bigtext", "doc20000_type", 20, [&] { h.type("a"); });
+        RUN_IF("bigtext", "doc20000_key_down", 50, [&] { h.key(Key::Down); });
+        RUN_IF("bigtext", "doc20000_key_pagedown", 50, [&] { h.key(Key::PageDown); });
+        RUN_IF("bigtext", "doc20000_wheel", 50,
+                [&]
+                {
+                    static int n = 0;
+                    h.wheel((n++ & 1) ? 3.0f : -3.0f);
+                });
+        // paste: the clipboard holds a megabyte of text
+        if (wanted("bigtext", "doc20000_paste_1MB"))
+        {
+            String big;
+            for (int i = 0; i < 16000; ++i) big += "uma linha colada com uns sessenta e tal caracteres de texto\n";
+            clipboardText() = big;
+            h.key(Key::Home, false, true);
+            report("bigtext", "doc20000_paste_1MB", measure(1, [&] { h.key(Key::V, false, true); }));
+        }
+    }
+    {
+        Harness h(900.0f, 300.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        String line;
+        for (int i = 0; i < 20000; ++i) line += "dez letras";
+        TextEdit* editor = box->createChild<TextEdit>(line);
+        editor->setStretch(1.0f);
+        h.relayout();
+        h.frames(3);
+        h.clickWidget(editor);
+        h.key(Key::End);
+        h.frames(2);
+        RUN_IF("bigtext", "line200000_frame", 20, [&] { h.frame(); });
+        RUN_IF("bigtext", "line200000_type", 10, [&] { h.type("a"); });
+        RUN_IF("bigtext", "line200000_key_left", 20, [&] { h.key(Key::Left); });
+    }
+    {
+        Harness h(900.0f, 200.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        String line;
+        for (int i = 0; i < 10000; ++i) line += "dez letras";
+        TextInput* field = box->createChild<TextInput>(line);
+        h.relayout();
+        h.frames(3);
+        h.clickWidget(field);
+        h.key(Key::End);
+        h.frames(2);
+        RUN_IF("bigtext", "field100000_frame", 20, [&] { h.frame(); });
+        RUN_IF("bigtext", "field100000_type", 10, [&] { h.type("a"); });
+        RUN_IF("bigtext", "field100000_key_left", 20, [&] { h.key(Key::Left); });
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -649,6 +824,8 @@ int main(int argc, char** argv)
     gridScene("treegrid_short_wide", true, 3);
     propertyScene("propgrid_short", 0);
     propertyScene("propgrid_long", 1);
+    inputScene();
+    bigTextScene();
     shutdown();
     return 0;
 }
