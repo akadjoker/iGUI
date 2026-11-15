@@ -616,6 +616,28 @@ void testOneFrameOfInput(Scene& s, Injector& x)
     s.steps(1);
     check(s.input->text() == "ba", "a, Left and b typed within one frame make ba");
     if (s.input->text() != "ba") printf("    got \"%s\"\n", s.input->text().c_str());
+    // Ctrl+A with the Ctrl pressed and released inside the frame: the key carries the Ctrl it was pressed with
+    s.input->setText("selecione tudo");
+    s.input->clearSelection();
+    x.key(XK_Control_L, true);
+    x.key(XK_a, true);
+    x.key(XK_a, false);
+    x.key(XK_Control_L, false);
+    x.flush();
+    s.step();
+    s.steps(1);
+    check(s.input->hasSelection() && s.input->selectedText() == "selecione tudo",
+            "Ctrl+A with the Ctrl pressed and released within one frame selects all");
+    // and a Shift+Left, the same way, extends the selection by one letter
+    s.input->clearSelection();
+    x.key(XK_Shift_L, true);
+    x.key(XK_Left, true);
+    x.key(XK_Left, false);
+    x.key(XK_Shift_L, false);
+    x.flush();
+    s.step();
+    s.steps(1);
+    check(s.input->hasSelection(), "Shift+Left with the Shift pressed and released within one frame selects a letter");
 }
 
 } // namespace

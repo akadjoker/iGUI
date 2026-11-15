@@ -480,7 +480,11 @@ void App::feedInput(PlatformWindow *pw)
             const int key = sdlKey(e.data.key.key);
             if (key == 0) continue;
             const int scancode = key == rt::Key::F1 ? 58 : e.data.key.scancode;
-            io.addKeyEvent(key, scancode, io.keyShift, io.keyCtrl, io.keyAlt, e.data.key.down);
+            // the modifiers the key was pressed with (the event's own): the ones read at the start of the frame
+            // miss a Ctrl+A whose Ctrl was pressed and released inside it
+            const int mods = e.data.key.mods;
+            io.addKeyEvent(key, scancode, (mods & KEYMOD_SHIFT) != 0, (mods & KEYMOD_CTRL) != 0, (mods & KEYMOD_ALT) != 0,
+                    e.data.key.down);
         }
     }
 }
