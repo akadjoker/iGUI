@@ -733,8 +733,11 @@ void applyStretch(DataGrid* grid, int count, int mask, bool last)
         if (mask & (1 << i)) grid->setColumnStretch(i, true);
     grid->setStretchLastColumn(last);
 }
-void applyStretch(TreeGrid*, int, int, bool)
+void applyStretch(TreeGrid* grid, int count, int mask, bool last)
 {
+    for (int i = 0; i < count; ++i)
+        if (mask & (1 << i)) grid->setColumnStretch(i, true);
+    grid->setStretchLastColumn(last);
 }
 
 // A window with a grid filling it (no padding) and the columns of the given widths; the clicks of the
@@ -1042,11 +1045,21 @@ void stretchSizeHint()
     }
 }
 
+void addLongRows(DataGrid* grid)
+{
+    for (int r = 0; r < 5; ++r) grid->addRow({ longText(), longText(), longText(), longText() });
+}
+void addLongRows(TreeGrid* grid)
+{
+    for (int r = 0; r < 5; ++r) grid->addRoot({ longText(), longText(), longText(), longText() });
+    grid->rebuild();
+}
+
 // The grid with stretching columns is painted as one whose columns have, without stretching, the widths
 // that it works out: every pixel the same.
-void testStretchPaintsLikeFixedColumns()
+template<class Grid>
+void stretchPaintsLikeFixedColumns()
 {
-    printf("a grid with stretching columns is painted like one with those widths\n");
     const float windows[] = { 640.0f, 380.0f, 300.0f };
     for (size_t k = 0; k < sizeof windows / sizeof windows[0]; ++k)
     {
@@ -1056,11 +1069,11 @@ void testStretchPaintsLikeFixedColumns()
             Screen screen(windows[k], kWindowH);
             BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
             box->setPadding(0.0f);
-            DataGrid* grid = box->createChild<DataGrid>();
+            Grid* grid = box->createChild<Grid>();
             grid->setStretch(1.0f);
             for (int i = 0; i < 4; ++i) grid->addColumn(longText(), kFour.widths[i]);
             applyStretch(grid, 4, kFourMask, false);
-            for (int r = 0; r < 5; ++r) grid->addRow({ longText(), longText(), longText(), longText() });
+            addLongRows(grid);
             screen.h.relayout();
             screen.h.click(5.0f, 10.0f); // a sort arrow on the first column
             screen.h.frames(2);
@@ -1072,25 +1085,24 @@ void testStretchPaintsLikeFixedColumns()
             Screen screen(windows[k], kWindowH);
             BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
             box->setPadding(0.0f);
-            DataGrid* grid = box->createChild<DataGrid>();
+            Grid* grid = box->createChild<Grid>();
             grid->setStretch(1.0f);
             for (int i = 0; i < 4; ++i) grid->addColumn(longText(), effective[i]);
-            for (int r = 0; r < 5; ++r) grid->addRow({ longText(), longText(), longText(), longText() });
+            addLongRows(grid);
             screen.h.relayout();
             screen.h.click(5.0f, 10.0f);
             screen.h.frames(2);
             fixed = screen.take();
         }
+        check(stretched.w == fixed.w && stretched.h == fixed.h, "of the same size");
         check(differing(stretched, fixed, 0, 0, static_cast<int>(windows[k]), static_cast<int>(kWindowH)) == 0, "the same picture");
-        check(differing(stretched, fixed, 0, 0, 3, 3) == 0 && stretched.w == fixed.w, "of the same size");
     }
 }
 
 // A click lands on the cell that is drawn there, and the cell it starts to edit is that one: the last column
 // of a grid that stretches is clicked far to the right of where it ends without stretching.
-void testStretchedCellsAreClickedAndEdited()
+void stretchedCellsAreClickedAndEdited(DataGrid*)
 {
-    printf("a click on a stretched column selects and edits its cell\n");
     const float widths[] = { 100.0f, 100.0f, 100.0f };
     Rig<DataGrid> r(640.0f, widths, 3, 0, true);
     int editedRow = -1, editedColumn = -1;
@@ -1104,21 +1116,46 @@ void testStretchedCellsAreClickedAndEdited()
     check(editedRow == 1 && editedColumn == 2, "and the double click edited the last column, 500 pixels in");
     check(r.grid->cell(1, 2) == String("cz"), "the typed text is in that cell");
 }
+void stretchedCellsAreClickedAndEdited(TreeGrid*)
+{
+    const float widths[] = { 100.0f, 100.0f, 100.0f };
+    Rig<TreeGrid> r(640.0f, widths, 3, 0, true);
+    TreeGrid::Node* edited = nullptr;
+    int editedColumn = -1;
+    r.grid->cellEdited.connect([&edited, &editedColumn](TreeGrid::Node* node, int column) { edited = node; editedColumn = column; });
+    const float y = r.rect().y + kHeaderH + kRowH * 1.5f;
+    r.h.click(r.rect().x + 500.0f, y);
+    r.h.click(r.rect().x + 500.0f, y);
+    check(r.grid->selectedNode() == r.grid->roots()[1], "the click selected the node under it");
+    r.h.type("z");
+    r.h.key(Key::Return);
+    check(edited == r.grid->roots()[1] && editedColumn == 2, "and the double click edited the last column, 500 pixels in");
+    check(edited && edited->cells[2] == String("cz"), "the typed text is in that cell");
+}
 
 void testStretchingColumns()
 {
     printf("stretching columns share the width the fixed ones leave over\n");
     stretchingColumns<DataGrid>();
+    stretchingColumns<TreeGrid>();
     printf("the columns follow the window\n");
     stretchFollowsTheWindow<DataGrid>();
+    stretchFollowsTheWindow<TreeGrid>();
     printf("the last column stretches\n");
     stretchLastColumn<DataGrid>();
+    stretchLastColumn<TreeGrid>();
     printf("dragging edges with stretching columns\n");
     stretchAndResize<DataGrid>();
+    stretchAndResize<TreeGrid>();
     printf("the size hint of a grid with stretching columns\n");
     stretchSizeHint<DataGrid>();
-    testStretchPaintsLikeFixedColumns();
-    testStretchedCellsAreClickedAndEdited();
+    stretchSizeHint<TreeGrid>();
+    printf("a grid with stretching columns is painted like one with those widths\n");
+    stretchPaintsLikeFixedColumns<DataGrid>();
+    stretchPaintsLikeFixedColumns<TreeGrid>();
+    printf("a click on a stretched column selects and edits its cell\n");
+    stretchedCellsAreClickedAndEdited(static_cast<DataGrid*>(nullptr));
+    stretchedCellsAreClickedAndEdited(static_cast<TreeGrid*>(nullptr));
 }
 
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows

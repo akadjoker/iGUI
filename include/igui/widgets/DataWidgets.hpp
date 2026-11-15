@@ -308,8 +308,31 @@ public:
     int addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
-    /// @brief The width a column has now, which is what painting, hit testing and the scroll range use.
+    /// @brief The width a column has now, which is what painting, hit testing and the scroll range use:
+    ///        its own width, or its share of the room when it stretches.
     float columnWidth(int col) const;
+    /// @brief Make a column stretch (like QHeaderView::Stretch): the stretching columns share
+    ///        equally the width the other columns leave over in the grid, and follow the grid as
+    ///        it is resized. The width given to a column (addColumn) is the least it gets: when
+    ///        the columns do not fit in the grid the stretching ones keep it, and the grid scrolls
+    ///        sideways as it does for columns that do not stretch. A stretching column is not
+    ///        resized by dragging, as in Qt: its edge is not a resize edge (a press on it is a
+    ///        press on the header, the column's or its neighbour's, wherever it falls). The
+    ///        grid's scrollbars are drawn over it, so a column that reaches the right edge is under
+    ///        the vertical one. Off by default.
+    void setColumnStretch(int col, bool stretch);
+    /// @brief Whether a column was asked to stretch (not whether it is the last and stretches
+    ///        because of setStretchLastColumn).
+    bool columnStretch(int col) const;
+    /// @brief Stretch the last column, whichever it is as columns are added (like
+    ///        QHeaderView::setStretchLastSection): it is a stretching column for everything
+    ///        setColumnStretch says. Off by default.
+    void setStretchLastColumn(bool stretch);
+    /// @brief Whether the last column stretches because of setStretchLastColumn.
+    bool stretchLastColumn() const
+    {
+        return stretchLast_;
+    }
 
     // ── Selection ─────────────────────────────────────────────────────────
     /// @brief Deselect all nodes.
@@ -375,10 +398,11 @@ private:
     struct Column
     {
         String name;
-        float width = 100.f;
+        float width = 100.f; // the least it has when it stretches
         float minWidth = 40.f;
         bool sortable = true;
         bool readOnly = false;
+        bool stretch = false;
     };
     struct FlatEntry
     {
@@ -404,6 +428,7 @@ private:
         colDirty_ = true;
     }
     float totalColumnsWidth() const;
+    float minColumnsWidth() const; // the own width of every column
     float columnX(int col) const;
     int hitColumn(float localX) const;
     int hitRow(float localY) const;
@@ -411,8 +436,10 @@ private:
 
     ct::Vector<Node*> roots_;
     ct::Vector<Column> columns_;
+    bool stretchLast_ = false;
     mutable ct::Vector<float> colW_;
     mutable float colTotal_ = 0.f;
+    mutable float colGridW_ = -1.f; // the width of the grid colW_ was worked out for
     mutable bool colDirty_ = true;
     mutable ct::Vector<FlatEntry> flatList_;
     mutable bool flatDirty_ = true; // a node was added: the flat list is rebuilt before it is read
@@ -428,7 +455,7 @@ private:
 
     float rowHeight_ = 24.f;
     float headerHeight_ = 28.f;
-    float scrollX_ = 0.f;
+    mutable float scrollX_ = 0.f; // kept inside the columns by ensureColumns
     float scrollY_ = 0.f;
 
     int sortCol_ = -1;

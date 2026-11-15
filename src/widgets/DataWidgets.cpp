@@ -1411,16 +1411,37 @@ float TreeGrid::columnWidth(int col) const
 
 void TreeGrid::ensureColumns() const
 {
-    if (!colDirty_ && colW_.size() == columns_.size()) return;
+    const float gridW = layoutWidth(rect_.w);
+    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW) return;
     colDirty_ = false;
-    colW_.resize(columns_.size());
-    float total = 0.f;
-    for (size_t i = 0; i < columns_.size(); ++i)
+    colGridW_ = gridW;
+    layoutColumns(columns_, stretchLast_, gridW, 0.0f, colW_, colTotal_);
+    // A grid scrolled sideways does not stay scrolled past the end of its columns when they get
+    // narrower or the grid wider (a window made larger)
+    const float most = colTotal_ > gridW ? colTotal_ - gridW : 0.0f;
+    if (scrollX_ > most) scrollX_ = most;
+}
+
+void TreeGrid::setColumnStretch(int col, bool stretch)
+{
+    if (col >= 0 && col < static_cast<int>(columns_.size()))
     {
-        colW_[i] = columns_[i].width;
-        total += colW_[i];
+        columns_[col].stretch = stretch;
+        invalidateColumns();
+        markDirty();
     }
-    colTotal_ = total;
+}
+
+bool TreeGrid::columnStretch(int col) const
+{
+    return col >= 0 && col < static_cast<int>(columns_.size()) && columns_[col].stretch;
+}
+
+void TreeGrid::setStretchLastColumn(bool stretch)
+{
+    stretchLast_ = stretch;
+    invalidateColumns();
+    markDirty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1554,15 +1575,25 @@ int TreeGrid::hitResizeEdge(float localX) const
     for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
         x += colW_[i];
-        if (std::abs(localX - x) <= 4.0f) return i;
+        // a stretching column is as wide as the grid makes it: its edge is not one to drag
+        const float away = localX - x;
+        if (away <= 4.0f && away >= -4.0f && !isStretching(columns_, stretchLast_, static_cast<size_t>(i))) return i;
     }
     return -1;
+}
+
+float TreeGrid::minColumnsWidth() const
+{
+    float w = 0;
+    for (auto& c: columns_) w += c.width;
+    return w;
 }
 
 Widget::Vec2f TreeGrid::sizeHint() const
 {
     ensureFlatList();
-    return { totalColumnsWidth(), headerHeight_ + flatList_.size() * rowHeight_ };
+    // the least the columns need: the stretching ones are as wide as the grid makes them
+    return { minColumnsWidth(), headerHeight_ + flatList_.size() * rowHeight_ };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
