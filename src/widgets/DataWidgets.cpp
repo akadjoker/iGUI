@@ -20,6 +20,74 @@ const float kSortArrowRoom = 18.0f;
 // Space between the frame of a cell being edited and its text, left and right.
 const float kEditPad = 3.0f;
 
+// Whether column i of `cols` takes part in the stretching: it was asked to, or it is the last and the
+// grid stretches its last column.
+template<class ColumnT>
+bool isStretching(const ct::Vector<ColumnT>& cols, bool stretchLast, size_t i)
+{
+    return cols[i].stretch || (stretchLast && i + 1 == cols.size());
+}
+
+// The width of a grid for the column layout: finite, not negative, and not absurd.
+float layoutWidth(float width)
+{
+    if (!(width > 0.0f)) return 0.0f;
+    return width < 1.0e6f ? width : 1.0e6f;
+}
+
+// The width of every column of a grid `gridW` wide whose columns start `leading` pixels in (the checkbox
+// column), and the total width of it all. A column that does not stretch has its own width. The ones that
+// stretch share equally what the others leave over - but a column is never narrower than its own width:
+// one whose own width is more than the equal share keeps it, and the others share what that leaves.
+// When even the own widths do not fit, every column has its own width, and the total is more than gridW
+// (the grid scrolls sideways); when they fill it, the total is gridW exactly.
+template<class ColumnT>
+void layoutColumns(const ct::Vector<ColumnT>& cols, bool stretchLast, float gridW, float leading,
+        ct::Vector<float>& widths, float& total)
+{
+    const size_t n = cols.size();
+    widths.resize(n);
+    float fixedSum = 0.0f;
+    size_t open = 0; // stretching columns that have no width yet
+    for (size_t i = 0; i < n; ++i)
+    {
+        widths[i] = cols[i].width;
+        if (isStretching(cols, stretchLast, i)) ++open;
+        else
+            fixedSum += cols[i].width;
+    }
+    float pool = gridW - leading - fixedSum;
+    ct::Vector<unsigned char> pinned; // stretching columns held at their own width
+    pinned.resize(n);
+    for (size_t i = 0; i < n; ++i) pinned[i] = 0;
+    bool filled = false;
+    while (open > 0)
+    {
+        const float share = pool / static_cast<float>(open);
+        bool pinnedOne = false;
+        for (size_t i = 0; i < n; ++i)
+            if (!pinned[i] && isStretching(cols, stretchLast, i) && cols[i].width > share)
+            {
+                pinned[i] = 1;
+                pool -= cols[i].width;
+                --open;
+                pinnedOne = true;
+            }
+        if (pinnedOne) continue;
+        for (size_t i = 0; i < n; ++i)
+            if (!pinned[i] && isStretching(cols, stretchLast, i)) widths[i] = share;
+        filled = true;
+        break;
+    }
+    if (filled)
+    {
+        total = gridW;
+        return;
+    }
+    total = leading;
+    for (size_t i = 0; i < n; ++i) total += widths[i];
+}
+
 // The text of a cell being edited, in the field that starts at fieldX and is fieldW wide (the frame
 // is drawn already): all of it, never elided, and cut at the field. `scroll` is how far the text is
 // moved to the left, kept between frames: it changes only as far as the cursor needs to stay in sight,
@@ -100,16 +168,37 @@ float DataGrid::columnWidth(int col) const
 
 void DataGrid::ensureColumns() const
 {
-    if (!colDirty_ && colW_.size() == columns_.size()) return;
+    const float gridW = layoutWidth(rect_.w);
+    if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW) return;
     colDirty_ = false;
-    colW_.resize(columns_.size());
-    float total = contentX();
-    for (size_t i = 0; i < columns_.size(); ++i)
+    colGridW_ = gridW;
+    layoutColumns(columns_, stretchLast_, gridW, contentX(), colW_, colTotal_);
+    // A grid scrolled sideways does not stay scrolled past the end of its columns when they get
+    // narrower or the grid wider (a window made larger)
+    const float most = colTotal_ > gridW ? colTotal_ - gridW : 0.0f;
+    if (scrollX_ > most) scrollX_ = most;
+}
+
+void DataGrid::setColumnStretch(int col, bool stretch)
+{
+    if (col >= 0 && col < static_cast<int>(columns_.size()))
     {
-        colW_[i] = columns_[i].width;
-        total += colW_[i];
+        columns_[col].stretch = stretch;
+        invalidateColumns();
+        markDirty();
     }
-    colTotal_ = total;
+}
+
+bool DataGrid::columnStretch(int col) const
+{
+    return col >= 0 && col < static_cast<int>(columns_.size()) && columns_[col].stretch;
+}
+
+void DataGrid::setStretchLastColumn(bool stretch)
+{
+    stretchLast_ = stretch;
+    invalidateColumns();
+    markDirty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -332,14 +421,24 @@ int DataGrid::hitResizeEdge(float localX) const
     for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
         x += colW_[i];
-        if (std::abs(localX - x) <= 4.0f) return i;
+        // a stretching column is as wide as the grid makes it: its edge is not one to drag
+        const float away = localX - x;
+        if (away <= 4.0f && away >= -4.0f && !isStretching(columns_, stretchLast_, static_cast<size_t>(i))) return i;
     }
     return -1;
 }
 
+float DataGrid::minColumnsWidth() const
+{
+    float w = contentX();
+    for (auto& c: columns_) w += c.width;
+    return w;
+}
+
 Widget::Vec2f DataGrid::sizeHint() const
 {
-    float w = totalColumnsWidth();
+    // the least the columns need: the stretching ones are as wide as the grid makes them
+    float w = minColumnsWidth();
     float h = headerHeight_ + modelRowCount() * rowHeight_;
     return { w, h };
 }

@@ -727,6 +727,16 @@ void addRows(TreeGrid* grid)
     grid->rebuild();
 }
 
+void applyStretch(DataGrid* grid, int count, int mask, bool last)
+{
+    for (int i = 0; i < count; ++i)
+        if (mask & (1 << i)) grid->setColumnStretch(i, true);
+    grid->setStretchLastColumn(last);
+}
+void applyStretch(TreeGrid*, int, int, bool)
+{
+}
+
 // A window with a grid filling it (no padding) and the columns of the given widths; the clicks of the
 // tests are in the grid's own coordinates.
 template<class Grid>
@@ -736,7 +746,8 @@ struct Rig
     Grid* grid = nullptr;
     int sorted = -1; // the column the last header click asked to sort
 
-    Rig(float windowWidth, const float* widths, int count)
+    // stretchMask: bit i set makes column i stretch; stretchLast the last one
+    Rig(float windowWidth, const float* widths, int count, int stretchMask = 0, bool stretchLast = false)
             : h(windowWidth, kWindowH)
     {
         BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
@@ -744,6 +755,7 @@ struct Rig
         grid = box->createChild<Grid>();
         grid->setStretch(1.0f);
         for (int i = 0; i < count; ++i) grid->addColumn(String("C") + String::number(i), widths[i]);
+        applyStretch(grid, count, stretchMask, stretchLast);
         addRows(grid);
         int* where = &sorted;
         grid->columnSorted.connect([where](int column) { *where = column; });
@@ -767,6 +779,12 @@ struct Rig
         h.down();
         h.moveTo(rect().x + x + dx, rect().y + kHeaderH * 0.5f);
         h.up();
+    }
+    // The window made this wide (and the layout made again, as an application does).
+    void resizeTo(float width)
+    {
+        h.resize(width, kWindowH);
+        h.relayout();
     }
     // The shift and the wheel together, as a horizontal scroll.
     void scrollRight(float notches)
@@ -832,6 +850,277 @@ void testFixedColumnsKeepTheirWidth()
     check(r.headerAt(24.0f + 10.0f) == 0 && r.headerAt(24.0f + 100.0f + 10.0f) == 1, "but the header clicks start after it");
 }
 
+bool near(float a, float b)
+{
+    return fabsf(a - b) < 0.01f;
+}
+
+// Four columns: 100 fixed, 80 stretching, 60 fixed, 120 stretching. The fixed ones take 160, the
+// stretching ones share what is left, none under its own width (so the second and fourth have 200 of
+// minimums and the columns fill the grid from 360 up).
+struct FourColumns
+{
+    float widths[4];
+    float expected(float window, int i) const
+    {
+        const float leftover = window - 160.0f;
+        float second, fourth;
+        if (leftover * 0.5f >= 120.0f) second = fourth = leftover * 0.5f;
+        else if (leftover - 120.0f >= 80.0f)
+        {
+            fourth = 120.0f; // its minimum is more than the equal share: it keeps it, the other gets the rest
+            second = leftover - 120.0f;
+        }
+        else
+        {
+            second = 80.0f;
+            fourth = 120.0f;
+        }
+        const float all[4] = { 100.0f, second, 60.0f, fourth };
+        return all[i];
+    }
+};
+
+const FourColumns kFour = { { 100.0f, 80.0f, 60.0f, 120.0f } };
+const int kFourMask = 0x2 | 0x8;
+
+template<class Grid>
+void stretchingColumns()
+{
+    const float windows[] = { 800.0f, 640.0f, 500.0f, 400.0f, 380.0f, 361.0f, 360.0f, 359.0f, 300.0f, 200.0f, 100.0f, 40.0f };
+    for (size_t k = 0; k < sizeof windows / sizeof windows[0]; ++k)
+    {
+        const float window = windows[k];
+        Rig<Grid> r(window, kFour.widths, 4, kFourMask);
+        float total = 0.0f;
+        bool widthsOk = true;
+        for (int i = 0; i < 4; ++i)
+        {
+            widthsOk = widthsOk && near(r.grid->columnWidth(i), kFour.expected(window, i));
+            total += r.grid->columnWidth(i);
+        }
+        check(widthsOk, "each column has its width: the fixed ones their own, the others their share but never less than their own");
+        check(near(total, window > 360.0f ? window : 360.0f), "the columns fill the grid, or are as narrow as they can be");
+        if (!widthsOk) printf("    window %.0f: %.2f %.2f %.2f %.2f\n", window, r.grid->columnWidth(0), r.grid->columnWidth(1), r.grid->columnWidth(2), r.grid->columnWidth(3));
+
+        // a click on a header lands on the column that is drawn there (at the left of the window)
+        float x = 0.0f;
+        for (int i = 0; i < 4; ++i)
+        {
+            const float w = r.grid->columnWidth(i);
+            if (x + w * 0.5f + 5.0f < window) check(r.headerAt(x + w * 0.5f) == i, "a click on the middle of a header lands on its column");
+            x += w;
+        }
+        if (window >= 360.0f) check(r.headerAt(window - 3.0f) == 3, "the last column reaches the right edge of the grid");
+    }
+}
+
+// The widths follow the window as it is resized, up and down, through the narrower-than-the-minimums.
+template<class Grid>
+void stretchFollowsTheWindow()
+{
+    Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask);
+    const float sizes[] = { 640.0f, 400.0f, 300.0f, 200.0f, 380.0f, 700.0f, 1000.0f, 360.0f, 640.0f };
+    for (size_t k = 0; k < sizeof sizes / sizeof sizes[0]; ++k)
+    {
+        r.resizeTo(sizes[k]);
+        bool ok = near(r.rect().w, sizes[k]);
+        for (int i = 0; i < 4; ++i) ok = ok && near(r.grid->columnWidth(i), kFour.expected(sizes[k], i));
+        check(ok, "after the window is resized the columns have the widths of that size");
+        if (!ok) printf("    window %.0f: grid %.1f wide, columns %.2f %.2f %.2f %.2f\n", sizes[k], r.rect().w, r.grid->columnWidth(0), r.grid->columnWidth(1), r.grid->columnWidth(2), r.grid->columnWidth(3));
+    }
+    // a grid scrolled sideways in a narrow window is not left scrolled when the window is wide enough for it
+    r.resizeTo(200.0f);
+    r.scrollRight(20.0f);
+    check(r.headerAt(190.0f) == 3, "scrolled as far as it goes, the end of the columns is at the right edge");
+    r.resizeTo(640.0f);
+    check(r.headerAt(10.0f) == 0, "made wide enough, the first column is back at the left edge");
+    check(r.headerAt(630.0f) == 3, "and the last at the right");
+}
+
+// The last column stretches by itself, alone or with the ones asked for.
+template<class Grid>
+void stretchLastColumn()
+{
+    const float widths[] = { 100.0f, 100.0f, 100.0f };
+    {
+        Rig<Grid> r(640.0f, widths, 3, 0, true);
+        check(r.grid->stretchLastColumn(), "the flag is on");
+        check(near(r.grid->columnWidth(0), 100.0f) && near(r.grid->columnWidth(1), 100.0f) && near(r.grid->columnWidth(2), 440.0f),
+                "the last column has what the others leave");
+        r.resizeTo(250.0f);
+        check(near(r.grid->columnWidth(2), 100.0f), "and its own width when there is no more");
+        r.resizeTo(301.0f);
+        check(near(r.grid->columnWidth(2), 101.0f), "and as much as the window gives from there on");
+        check(r.headerAt(299.0f) == 2, "its right edge is the window's");
+        r.resizeTo(400.0f);
+        r.grid->addColumn("late", 50.0f);
+        check(near(r.grid->columnWidth(2), 100.0f) && near(r.grid->columnWidth(3), 100.0f) && !r.grid->columnStretch(3),
+                "a column added later is the last one now, and the one that stretches");
+        r.grid->setStretchLastColumn(false);
+        check(near(r.grid->columnWidth(3), 50.0f), "switched off, it is as wide as it was given");
+    }
+    {
+        // the last column and another one asked for share equally
+        Rig<Grid> r(640.0f, widths, 3, 0x2, true);
+        check(near(r.grid->columnWidth(0), 100.0f) && near(r.grid->columnWidth(1), 270.0f) && near(r.grid->columnWidth(2), 270.0f),
+                "the last column and a stretching one share what is left");
+        check(r.grid->columnStretch(1) && !r.grid->columnStretch(2) && r.grid->stretchLastColumn(), "the last is not marked as stretching by itself");
+    }
+    {
+        // off by default: nothing stretches
+        Rig<Grid> r(640.0f, widths, 3);
+        check(!r.grid->stretchLastColumn() && !r.grid->columnStretch(0) && !r.grid->columnStretch(2) && !r.grid->columnStretch(5), "nothing stretches by default");
+        check(near(r.grid->columnWidth(0), 100.0f) && near(r.grid->columnWidth(2), 100.0f), "and the columns have their widths");
+        r.grid->setColumnStretch(5, true); // no such column: ignored
+        r.grid->setColumnStretch(-1, true);
+        check(near(r.grid->columnWidth(2), 100.0f), "setColumnStretch on a column that does not exist changes nothing");
+        r.grid->setColumnStretch(0, true);
+        check(near(r.grid->columnWidth(0), 440.0f) && r.grid->columnStretch(0), "the first column can stretch as well");
+        r.grid->setColumnStretch(0, false);
+        check(near(r.grid->columnWidth(0), 100.0f), "and be switched off");
+    }
+}
+
+// What dragging an edge does when columns stretch: a column that does not stretch is resized (and the
+// stretching ones take up what it gives or takes); the edge of a stretching column is not an edge.
+template<class Grid>
+void stretchAndResize()
+{
+    // 100 fixed | 80 stretching | 60 fixed | 120 stretching, in 640: 100 | 240 | 60 | 240
+    {
+        Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask);
+        r.drag(100.0f, 20.0f);
+        check(near(r.grid->columnWidth(0), 120.0f), "the first column is resized by its edge");
+        check(near(r.grid->columnWidth(1), 230.0f) && near(r.grid->columnWidth(3), 230.0f), "and the stretching ones share what is left");
+        r.drag(120.0f + 230.0f + 60.0f, -10.0f); // the edge between the third column and the fourth
+        check(near(r.grid->columnWidth(2), 50.0f), "the third, between two that stretch, too");
+        check(near(r.grid->columnWidth(1), 235.0f) && near(r.grid->columnWidth(3), 235.0f), "(40 less to the others from the first and the third)");
+    }
+    {
+        // the edge of a stretching column is not dragged: nothing changes, and the press is a press on a header
+        Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask);
+        r.sorted = -1;
+        r.drag(340.0f, 30.0f); // the right edge of the second column, 100 + 240
+        check(near(r.grid->columnWidth(0), 100.0f) && near(r.grid->columnWidth(1), 240.0f) && near(r.grid->columnWidth(2), 60.0f) && near(r.grid->columnWidth(3), 240.0f),
+                "dragging the edge of a stretching column changes no width");
+        check(r.sorted == 2, "the press on it was a press on the header under it (the third column)");
+        r.drag(639.0f, 15.0f); // the last column's edge is the window's
+        check(near(r.grid->columnWidth(3), 240.0f) && near(r.grid->columnWidth(0), 100.0f), "nor does the edge of the last column");
+        r.drag(-1.0f, 15.0f); // the left edge of the first
+        check(near(r.grid->columnWidth(0), 100.0f), "or the left of the grid");
+    }
+    {
+        // widen a fixed column until the stretching ones are at their own width: the columns are wider than the window
+        Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask);
+        r.drag(100.0f, 400.0f);
+        check(near(r.grid->columnWidth(0), 500.0f) && near(r.grid->columnWidth(1), 80.0f) && near(r.grid->columnWidth(2), 60.0f) && near(r.grid->columnWidth(3), 120.0f),
+                "the stretching columns do not go under their own width");
+        check(r.headerAt(630.0f) == 2, "the end of the columns is out of sight");
+        r.scrollRight(10.0f);
+        check(r.headerAt(630.0f) == 3 && r.headerAt(500.0f) == 2, "and scrolling brings it in by exactly what is missing (760 - 640)");
+        r.drag(500.0f - 120.0f, -300.0f); // made narrower again: the first column's edge, 500 - 120 scrolled
+        check(near(r.grid->columnWidth(0), 200.0f) && near(r.grid->columnWidth(1), 190.0f) && near(r.grid->columnWidth(3), 190.0f),
+                "narrowed again, the stretching ones take the room back");
+        check(r.headerAt(10.0f) == 0, "and the scroll is back at the left (the columns fit)");
+    }
+}
+
+// The least width the columns need is what the grid asks its parent for.
+template<class Grid>
+void stretchSizeHint()
+{
+    {
+        Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask);
+        check(near(r.grid->sizeHint().x, 360.0f), "a grid with stretching columns asks for the least they need");
+        r.resizeTo(1000.0f);
+        check(near(r.grid->sizeHint().x, 360.0f), "whatever its width");
+    }
+    {
+        Rig<Grid> r(640.0f, kFour.widths, 4);
+        check(near(r.grid->sizeHint().x, 360.0f), "and one without them the sum of the widths");
+    }
+}
+
+// The grid with stretching columns is painted as one whose columns have, without stretching, the widths
+// that it works out: every pixel the same.
+void testStretchPaintsLikeFixedColumns()
+{
+    printf("a grid with stretching columns is painted like one with those widths\n");
+    const float windows[] = { 640.0f, 380.0f, 300.0f };
+    for (size_t k = 0; k < sizeof windows / sizeof windows[0]; ++k)
+    {
+        float effective[4];
+        Shot stretched;
+        {
+            Screen screen(windows[k], kWindowH);
+            BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+            box->setPadding(0.0f);
+            DataGrid* grid = box->createChild<DataGrid>();
+            grid->setStretch(1.0f);
+            for (int i = 0; i < 4; ++i) grid->addColumn(longText(), kFour.widths[i]);
+            applyStretch(grid, 4, kFourMask, false);
+            for (int r = 0; r < 5; ++r) grid->addRow({ longText(), longText(), longText(), longText() });
+            screen.h.relayout();
+            screen.h.click(5.0f, 10.0f); // a sort arrow on the first column
+            screen.h.frames(2);
+            for (int i = 0; i < 4; ++i) effective[i] = grid->columnWidth(i);
+            stretched = screen.take();
+        }
+        Shot fixed;
+        {
+            Screen screen(windows[k], kWindowH);
+            BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+            box->setPadding(0.0f);
+            DataGrid* grid = box->createChild<DataGrid>();
+            grid->setStretch(1.0f);
+            for (int i = 0; i < 4; ++i) grid->addColumn(longText(), effective[i]);
+            for (int r = 0; r < 5; ++r) grid->addRow({ longText(), longText(), longText(), longText() });
+            screen.h.relayout();
+            screen.h.click(5.0f, 10.0f);
+            screen.h.frames(2);
+            fixed = screen.take();
+        }
+        check(differing(stretched, fixed, 0, 0, static_cast<int>(windows[k]), static_cast<int>(kWindowH)) == 0, "the same picture");
+        check(differing(stretched, fixed, 0, 0, 3, 3) == 0 && stretched.w == fixed.w, "of the same size");
+    }
+}
+
+// A click lands on the cell that is drawn there, and the cell it starts to edit is that one: the last column
+// of a grid that stretches is clicked far to the right of where it ends without stretching.
+void testStretchedCellsAreClickedAndEdited()
+{
+    printf("a click on a stretched column selects and edits its cell\n");
+    const float widths[] = { 100.0f, 100.0f, 100.0f };
+    Rig<DataGrid> r(640.0f, widths, 3, 0, true);
+    int editedRow = -1, editedColumn = -1;
+    r.grid->cellEdited.connect([&editedRow, &editedColumn](int row, int column) { editedRow = row; editedColumn = column; });
+    const float y = r.rect().y + kHeaderH + kRowH * 1.5f; // the second row
+    r.h.click(r.rect().x + 500.0f, y);
+    r.h.click(r.rect().x + 500.0f, y);
+    check(r.grid->selectedRow() == 1, "the click selected the row under it");
+    r.h.type("z");
+    r.h.key(Key::Return);
+    check(editedRow == 1 && editedColumn == 2, "and the double click edited the last column, 500 pixels in");
+    check(r.grid->cell(1, 2) == String("cz"), "the typed text is in that cell");
+}
+
+void testStretchingColumns()
+{
+    printf("stretching columns share the width the fixed ones leave over\n");
+    stretchingColumns<DataGrid>();
+    printf("the columns follow the window\n");
+    stretchFollowsTheWindow<DataGrid>();
+    printf("the last column stretches\n");
+    stretchLastColumn<DataGrid>();
+    printf("dragging edges with stretching columns\n");
+    stretchAndResize<DataGrid>();
+    printf("the size hint of a grid with stretching columns\n");
+    stretchSizeHint<DataGrid>();
+    testStretchPaintsLikeFixedColumns();
+    testStretchedCellsAreClickedAndEdited();
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -886,6 +1175,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridElidesWithDots);
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
+    RUN(testStretchingColumns);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
