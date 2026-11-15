@@ -28,6 +28,18 @@ bool isStretching(const ct::Vector<ColumnT>& cols, bool stretchLast, size_t i)
     return cols[i].stretch || (stretchLast && i + 1 == cols.size());
 }
 
+// Prints the text of a cell elided to its room, with the memo of the cell: a text the memo already holds
+// and that fits is printed here as the grid always printed it, one call, and only the cells that
+// are new, changed, or elided go through PaintContext::printElided.
+inline void printCell(PaintContext& ctx, const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo,
+        uint32_t fontId)
+{
+    if (!text.empty() && memo.holds(text, bounds.w, fontId) && !memo.elided)
+        ctx.font.Print(text.c_str(), bounds.x, y);
+    else
+        ctx.printElided(bounds, text, y, ascender, memo, fontId);
+}
+
 // The width of a grid for the column layout: finite, not negative, and not absurd.
 float layoutWidth(float width)
 {
@@ -177,6 +189,21 @@ void DataGrid::ensureColumns() const
     // narrower or the grid wider (a window made larger)
     const float most = colTotal_ > gridW ? colTotal_ - gridW : 0.0f;
     if (scrollX_ > most) scrollX_ = most;
+}
+
+void DataGrid::reserveMemos(const Rect& abs)
+{
+    // the rows and columns that can be in sight, with some to spare for the scroll
+    const float bodyH = abs.h - headerHeight_;
+    const int rows = (bodyH > 0.0f && rowHeight_ > 0.0f ? static_cast<int>(bodyH / rowHeight_) : 0) + 4;
+    int cols = 0;
+    float x = abs.x + contentX() - scrollX_;
+    for (size_t i = 0; i < colW_.size(); ++i)
+    {
+        if (x + colW_[i] > abs.x && x < abs.x + abs.w) ++cols;
+        x += colW_[i];
+    }
+    memos_.reserve(rows, cols + 2);
 }
 
 void DataGrid::setColumnStretch(int col, bool stretch)
@@ -512,6 +539,7 @@ void DataGrid::paint(PaintContext& ctx)
     const int nRows = modelRowCount();
     const int nCols = static_cast<int>(columns_.size());
     ensureColumns();
+    reserveMemos(abs);
 
     ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
     ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
@@ -519,6 +547,7 @@ void DataGrid::paint(PaintContext& ctx)
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
+    const uint32_t fontId = ctx.fontStamp().id; // the font stays this one all through the paint
 
     // ── Column headers ───────────────────────────────────────────────────
     Rect headerClip = { abs.x, abs.y, abs.w, headerHeight_ };
@@ -550,7 +579,7 @@ void DataGrid::paint(PaintContext& ctx)
             const float textRight = colR - (arrow ? kSortArrowRoom : kCellPad);
             ctx.font.SetColor(t.textColor);
             ctx.printElided({ hx + kCellPad, abs.y, textRight - (hx + kCellPad), headerHeight_ }, col.name,
-                    hdrTextY, asc);
+                    hdrTextY, asc, memos_.header(i), fontId);
 
             if (arrow)
             {
@@ -599,10 +628,12 @@ void DataGrid::paint(PaintContext& ctx)
         if (lastVis > totalVis) lastVis = totalVis;
 
         String cellScratch;
+        const int memoCols = memos_.cols();
         for (int vi = firstVis; vi < lastVis; ++vi)
         {
             int dataIdx = displayRow(vi);
             if (dataIdx < 0 || dataIdx >= nRows) continue;
+            ElideMemo* const memoRow = memos_.row(vi);
 
             float ry = bodyY + vi * rowHeight_ - scrollY_;
             Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
@@ -655,7 +686,8 @@ void DataGrid::paint(PaintContext& ctx)
 
             // Cells
             float cx = abs.x + contentX() - scrollX_;
-            for (int ci = 0; ci < nCols; ++ci)
+            int memoCol = 0; // ci % memoCols
+            for (int ci = 0; ci < nCols; ++ci, memoCol = memoCol + 1 == memoCols ? 0 : memoCol + 1)
             {
                 float colW = colW_[ci];
                 if (cx + colW <= abs.x || cx >= abs.x + abs.w)
@@ -682,8 +714,8 @@ void DataGrid::paint(PaintContext& ctx)
                     {
                         ctx.font.SetColor(
                                 isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
-                        ctx.printElided({ cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, cellText,
-                                textY, asc);
+                        printCell(ctx, { cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, cellText, textY, asc,
+                                memoRow[memoCol], fontId);
                     }
                 }
 
@@ -1422,6 +1454,21 @@ void TreeGrid::ensureColumns() const
     if (scrollX_ > most) scrollX_ = most;
 }
 
+void TreeGrid::reserveMemos(const Rect& abs)
+{
+    // the rows and columns that can be in sight, with some to spare for the scroll
+    const float bodyH = abs.h - headerHeight_;
+    const int rows = (bodyH > 0.0f && rowHeight_ > 0.0f ? static_cast<int>(bodyH / rowHeight_) : 0) + 4;
+    int cols = 0;
+    float x = abs.x - scrollX_;
+    for (size_t i = 0; i < colW_.size(); ++i)
+    {
+        if (x + colW_[i] > abs.x && x < abs.x + abs.w) ++cols;
+        x += colW_[i];
+    }
+    memos_.reserve(rows, cols + 2);
+}
+
 void TreeGrid::setColumnStretch(int col, bool stretch)
 {
     if (col >= 0 && col < static_cast<int>(columns_.size()))
@@ -1653,6 +1700,7 @@ void TreeGrid::paint(PaintContext& ctx)
 
     const auto& t = Theme::instance();
     ensureColumns();
+    reserveMemos(abs);
 
     ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
     ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
@@ -1660,6 +1708,7 @@ void TreeGrid::paint(PaintContext& ctx)
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
+    const uint32_t fontId = ctx.fontStamp().id; // the font stays this one all through the paint
 
     // ── Column headers ───────────────────────────────────────────────────
     Rect headerClip = { abs.x, abs.y, abs.w, headerHeight_ };
@@ -1691,7 +1740,7 @@ void TreeGrid::paint(PaintContext& ctx)
             const float textRight = colR - (arrow ? kSortArrowRoom : kCellPad);
             ctx.font.SetColor(t.textColor);
             ctx.printElided({ hx + kCellPad, abs.y, textRight - (hx + kCellPad), headerHeight_ }, col.name,
-                    hdrTextY, asc);
+                    hdrTextY, asc, memos_.header(i), fontId);
 
             if (arrow)
             {
@@ -1732,11 +1781,13 @@ void TreeGrid::paint(PaintContext& ctx)
         if (firstVis < 0) firstVis = 0;
         if (lastVis > totalVis) lastVis = totalVis;
 
+        const int memoCols = memos_.cols();
         for (int vi = firstVis; vi < lastVis; ++vi)
         {
             auto& entry = flatList_[vi];
             Node* node = entry.node;
             int depth = entry.depth;
+            ElideMemo* const memoRow = memos_.row(vi);
 
             float ry = bodyY + vi * rowHeight_ - scrollY_;
             Rect rowR = { abs.x, ry, abs.w, rowHeight_ };
@@ -1766,7 +1817,8 @@ void TreeGrid::paint(PaintContext& ctx)
             float textY = ry + (rowHeight_ - t.fontSize) * 0.5f + asc;
 
             float cx = abs.x - scrollX_;
-            for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci)
+            int memoCol = 0; // ci % memoCols
+            for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci, memoCol = memoCol + 1 == memoCols ? 0 : memoCol + 1)
             {
                 float colW = colW_[ci];
                 if (cx + colW <= abs.x || cx >= abs.x + abs.w)
@@ -1832,8 +1884,8 @@ void TreeGrid::paint(PaintContext& ctx)
                             ctx.font.SetColor(
                                     isSelected(node) ? Color(255, 255, 255, 255) : t.textColor);
                             const float textLeft = textX + 2;
-                            ctx.printElided({ textLeft, ry, cx + colW - kCellPad - textLeft, rowHeight_ },
-                                    node->cells[0], textY, asc);
+                            printCell(ctx, { textLeft, ry, cx + colW - kCellPad - textLeft, rowHeight_ }, node->cells[0], textY,
+                                    asc, memoRow[memoCol], fontId);
                         }
                     }
                 }
@@ -1855,8 +1907,8 @@ void TreeGrid::paint(PaintContext& ctx)
                         {
                             ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255)
                                                                : Color(170, 170, 175, 255));
-                            ctx.printElided({ cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ },
-                                    node->cells[ci], textY, asc);
+                            printCell(ctx, { cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, node->cells[ci], textY, asc,
+                                    memoRow[memoCol], fontId);
                         }
                     }
                 }

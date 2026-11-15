@@ -12,6 +12,57 @@ namespace ig
 {
 namespace retained
 {
+// The memos (ElideMemo) of the cells of a grid that are in sight, and of its headers. A table of `rows` by
+// `cols`, found by the position of the row in the list (not in the window: a row keeps its slot as the
+// list scrolls) and the column, each modulo the table, so as many as the cells in sight and no more:
+// what it holds is bounded by them, not by the rows of the grid. A slot is only used while the text, the
+// room and the font are the ones it was made for (PaintContext::printElided), so the one a different row
+// takes over is made again, and nothing in it can be taken for what is not.
+class ElideMemos
+{
+public:
+    /// Makes room for @p rows by @p cols cells in sight. What it holds is lost when it has to grow, or
+    /// when it is more than four times what is asked for.
+    void reserve(int rows, int cols)
+    {
+        if (rows < 1) rows = 1;
+        if (cols < 1) cols = 1;
+        if (rows <= rows_ && cols <= cols_ && rows_ * cols_ <= 4 * rows * cols) return;
+        rows_ = rows;
+        cols_ = cols;
+        cells_.clear();
+        cells_.resize(static_cast<size_t>(rows_) * static_cast<size_t>(cols_));
+        headers_.clear();
+        headers_.resize(static_cast<size_t>(cols_));
+    }
+    /// The memos of the row at position @p row of the list (never negative): cols() of them, the one
+    /// of column c at c % cols() (a paint walks the columns counting round, and divides once a row).
+    ElideMemo* row(int row)
+    {
+        return &cells_[static_cast<size_t>(row % rows_) * static_cast<size_t>(cols_)];
+    }
+    /// How many columns a row of memos has.
+    int cols() const
+    {
+        return cols_;
+    }
+    ElideMemo& header(int col)
+    {
+        return headers_[static_cast<size_t>(col % cols_)];
+    }
+    /// How many cells it has room for.
+    size_t capacity() const
+    {
+        return cells_.size();
+    }
+
+private:
+    ct::Vector<ElideMemo> cells_;
+    ct::Vector<ElideMemo> headers_;
+    int rows_ = 0;
+    int cols_ = 0;
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  DataGrid — spreadsheet table with sortable columns, inline edit,
 //             checkboxes, multi-select, zebra stripes
@@ -179,6 +230,7 @@ private:
     {
         colDirty_ = true;
     }
+    void reserveMemos(const Rect& abs); // sizes memos_ for the cells in sight
     float totalColumnsWidth() const;
     float minColumnsWidth() const; // the checkbox column and the own width of every column
     float columnX(int col) const;
@@ -192,6 +244,7 @@ private:
     }
 
     ct::Vector<Column> columns_;
+    ElideMemos memos_; // what paint worked out for the text of the cells and headers in sight
     bool stretchLast_ = false;
     mutable ct::Vector<float> colW_;
     mutable float colTotal_ = 0.f;  // the checkbox column and every column
@@ -427,6 +480,7 @@ private:
     {
         colDirty_ = true;
     }
+    void reserveMemos(const Rect& abs); // sizes memos_ for the cells in sight
     float totalColumnsWidth() const;
     float minColumnsWidth() const; // the own width of every column
     float columnX(int col) const;
@@ -436,6 +490,7 @@ private:
 
     ct::Vector<Node*> roots_;
     ct::Vector<Column> columns_;
+    ElideMemos memos_; // what paint worked out for the text of the cells and headers in sight
     bool stretchLast_ = false;
     mutable ct::Vector<float> colW_;
     mutable float colTotal_ = 0.f;

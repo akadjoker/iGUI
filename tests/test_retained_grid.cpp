@@ -9,6 +9,7 @@
 
 #include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/IconAtlas.hpp>
+#include <igui/widgets/ItemModel.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
@@ -30,8 +31,8 @@ struct Shot
 class Screen
 {
 public:
-    Screen(float width, float height)
-            : h(width, height, false),
+    Screen(float width, float height, bool dynamicFonts = false)
+            : h(width, height, dynamicFonts),
               w_(static_cast<int>(width)),
               h_(static_cast<int>(height))
     {
@@ -1173,6 +1174,622 @@ void testStretchingColumns()
     stretchingGridIdlesWithoutAllocating<TreeGrid>();
 }
 
+// ---- what the grids remember of their cells (the memos of PaintContext::printElided) ----
+//
+// A grid keeps, for each cell in sight, the width of its text and the text elided to its column. Whatever
+// changes in the grid after it has drawn that - a cell, the width of a column, the font, the data of a
+// model, the scroll, the order of the rows - must show in the next frame as in a grid made after the
+// change: each test draws a grid, changes it, draws it again at several scroll positions, and compares
+// that with a grid that never saw the old state, pixel by pixel (the font size, which a baked font does not
+// follow, by where the glyphs are).
+
+// The text of a cell, from its row and column: the ones next to each other differ, so that a memo made
+// for one that moves to the slot of another is not taken for it: some are cut by their column, some fit,
+// some are short, some empty.
+typedef String (*Scheme)(int row, int column);
+
+// longText() with its first letter another: as long, and as wide, and not the same text.
+String otherLongText()
+{
+    String t = longText();
+    t[0] = 'X';
+    return t;
+}
+
+String schemeA(int row, int column)
+{
+    switch ((row + column) % 4)
+    {
+        case 0: return longText();
+        case 1: return String("r") + String::number(row) + "c" + String::number(column);
+        case 2: return String("Entrevista com o cliente ") + String::number(row);
+        default: return "";
+    }
+}
+String schemeB(int row, int column)
+{
+    switch ((row * 2 + column * 3) % 5)
+    {
+        case 0: return String("Cabe ") + String::number(row);
+        case 1: return longText().substr(static_cast<size_t>(column * 5), 40);
+        case 2: return otherLongText();
+        case 3: return "";
+        default: return String("c") + String::number(column);
+    }
+}
+// A of the cells whose row and column add up to a multiple of three, B of the others.
+String schemeMixed(int row, int column)
+{
+    return (row + column) % 3 == 0 ? schemeA(row, column) : schemeB(row, column);
+}
+
+const int kMemoRows = 60;
+const float kMemoWidths[4] = { 100.0f, 140.0f, 90.0f, 160.0f };
+
+// A text model of the tests: it holds what it is given, and says so only when asked to.
+class TextModel : public AbstractItemModel
+{
+public:
+    TextModel(Scheme scheme, int rows) : rows_(rows)
+    {
+        for (int r = 0; r < rows; ++r)
+            for (int c = 0; c < 4; ++c) cells_.push_back(scheme(r, c));
+    }
+    int rowCount(const ModelIndex& = {}) const override
+    {
+        return rows_;
+    }
+    int columnCount(const ModelIndex& = {}) const override
+    {
+        return 4;
+    }
+    String data(const ModelIndex& index, ItemRole = ItemRole::Display) const override
+    {
+        return cells_[static_cast<size_t>(index.row() * 4 + index.column())];
+    }
+    String headerData(int section, bool = true) const override
+    {
+        return String("Coluna comprida ") + String::number(section);
+    }
+    void set(int row, int column, const String& text)
+    {
+        cells_[static_cast<size_t>(row * 4 + column)] = text;
+    }
+    void announce(int row, int column)
+    {
+        dataChanged.emit(ModelIndex(row, column));
+    }
+
+private:
+    ct::Vector<String> cells_;
+    int rows_;
+};
+
+// A window with a DataGrid of kMemoRows rows of four columns, filled by a scheme (or a model's).
+struct DataStage
+{
+    Screen screen;
+    DataGrid* grid = nullptr;
+    TextModel* model = nullptr;
+
+    DataStage(Scheme scheme, float firstWidth = 100.0f, float width = kWindowW, bool dynamicFonts = false, TextModel* withModel = nullptr)
+            : screen(width, kWindowH, dynamicFonts)
+    {
+        BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        grid = box->createChild<DataGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna comprida ") + String::number(c), c == 0 ? firstWidth : kMemoWidths[c]);
+        if (withModel)
+        {
+            model = withModel;
+            grid->setModel(model);
+        }
+        else
+        {
+            for (int r = 0; r < kMemoRows; ++r) grid->addRow({ scheme(r, 0), scheme(r, 1), scheme(r, 2), scheme(r, 3) });
+        }
+        screen.h.relayout();
+        screen.h.frames(3);
+    }
+    Harness& h()
+    {
+        return screen.h;
+    }
+};
+
+// The same, with a TreeGrid: kMemoRows / 4 roots of three children each.
+struct TreeStage
+{
+    Screen screen;
+    TreeGrid* grid = nullptr;
+    ct::Vector<TreeGrid::Node*> roots;
+
+    TreeStage(Scheme scheme, float width = kWindowW, bool dynamicFonts = false)
+            : screen(width, kWindowH, dynamicFonts)
+    {
+        BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        grid = box->createChild<TreeGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna comprida ") + String::number(c), kMemoWidths[c]);
+        int n = 0;
+        for (int r = 0; r < kMemoRows / 4; ++r)
+        {
+            TreeGrid::Node* root = grid->addRoot({ scheme(n, 0), scheme(n, 1), scheme(n, 2), scheme(n, 3) });
+            ++n;
+            roots.push_back(root);
+            for (int k = 0; k < 3; ++k)
+            {
+                root->addChild({ scheme(n, 0), scheme(n, 1), scheme(n, 2), scheme(n, 3) });
+                ++n;
+            }
+        }
+        grid->rebuild();
+        screen.h.relayout();
+        screen.h.frames(3);
+    }
+    Harness& h()
+    {
+        return screen.h;
+    }
+};
+
+// Where the glyphs and shapes of the last frame are (x and y of every vertex): compared when the pixels
+// cannot tell (a baked font ignores the size).
+ct::Vector<float> positions()
+{
+    ct::Vector<float> out;
+    const ct::Vector<DrawVertex>& v = GetDrawList().vertices();
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        out.push_back(v[i].x);
+        out.push_back(v[i].y);
+    }
+    return out;
+}
+
+bool samePositions(const ct::Vector<float>& a, const ct::Vector<float>& b)
+{
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i] != b[i]) return false;
+    return true;
+}
+
+// The grid drawn at the top, scrolled a few notches down, a long way down, and back up some: the first
+// frames of each are the ones that meet the memos of the rows that were in sight before.
+template<class Stage>
+ct::Vector<Shot> viewsOf(Stage& s)
+{
+    ct::Vector<Shot> shots;
+    const Rect r = s.grid->absoluteRect();
+    s.h().moveTo(r.x + 20.0f, r.y + kHeaderH + 40.0f);
+    const float steps[] = { 0.0f, -3.0f, -20.0f, 7.0f, -1.0f, 30.0f };
+    for (size_t i = 0; i < sizeof steps / sizeof steps[0]; ++i)
+    {
+        if (steps[i] != 0.0f) s.h().wheel(steps[i]);
+        s.h().frames(2);
+        shots.push_back(s.screen.take());
+    }
+    return shots;
+}
+
+// Is `history` (drawn, changed, drawn again) what `fresh` (made after the change) is, at every view?
+bool sameViews(const ct::Vector<Shot>& history, const ct::Vector<Shot>& fresh, int* firstDifference)
+{
+    if (history.size() != fresh.size()) return false;
+    for (size_t i = 0; i < history.size(); ++i)
+        if (differing(history[i], fresh[i], 0, 0, history[i].w, history[i].h) != 0)
+        {
+            if (firstDifference) *firstDifference = static_cast<int>(i);
+            return false;
+        }
+    return true;
+}
+
+// A DataGrid made with `before`, drawn, changed by `change`, and a DataGrid made with `after` and put in
+// the same state by `settle` (what the change did that a different scheme does not say), compared at every view.
+template<class Change, class Settle>
+void staleDataGrid(const char* what, Scheme before, Scheme after, float firstWidthBefore, float firstWidthAfter, Change change, Settle settle)
+{
+    ct::Vector<Shot> history, fresh;
+    {
+        DataStage s(before, firstWidthBefore);
+        change(s);
+        s.h().frames(2);
+        history = viewsOf(s);
+    }
+    {
+        DataStage s(after, firstWidthAfter);
+        settle(s);
+        s.h().frames(2);
+        fresh = viewsOf(s);
+    }
+    int at = -1;
+    if (!sameViews(history, fresh, &at)) printf("    (%s: view %d)\n", what, at);
+    check(sameViews(history, fresh, nullptr), what);
+}
+
+template<class Change, class Settle>
+void staleTreeGrid(const char* what, Scheme before, Scheme after, Change change, Settle settle)
+{
+    ct::Vector<Shot> history, fresh;
+    {
+        TreeStage s(before);
+        change(s);
+        s.h().frames(2);
+        history = viewsOf(s);
+    }
+    {
+        TreeStage s(after);
+        settle(s);
+        s.h().frames(2);
+        fresh = viewsOf(s);
+    }
+    int at = -1;
+    if (!sameViews(history, fresh, &at)) printf("    (%s: view %d)\n", what, at);
+    check(sameViews(history, fresh, nullptr), what);
+}
+
+void testDataGridMemosDoNotGoStale()
+{
+    printf("a DataGrid draws what it would draw new, after a cell, a column, the model, the order or the rows change\n");
+    // a cell changes (some of them: the ones that stay keep their memos)
+    staleDataGrid("a changed cell shows its new text", schemeA, schemeMixed, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                for (int r = 0; r < kMemoRows; ++r)
+                    for (int c = 0; c < 4; ++c)
+                        if ((r + c) % 3 != 0) s.grid->setCell(r, c, schemeB(r, c));
+            },
+            [](DataStage&) {});
+    // a column gets wider and narrower: the texts that were cut fit, and the ones that fit are cut
+    staleDataGrid("a column made wider shows what fits in it", schemeA, schemeA, 100.0f, 300.0f,
+            [](DataStage& s) { s.grid->setColumnWidth(0, 300.0f); }, [](DataStage&) {});
+    staleDataGrid("a column made narrower cuts what does not fit", schemeB, schemeB, 300.0f, 60.0f,
+            [](DataStage& s) { s.grid->setColumnWidth(0, 60.0f); }, [](DataStage&) {});
+    // there and back: the memo made first is not the one that is right now
+    staleDataGrid("a column made wider and narrower again", schemeA, schemeA, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                s.grid->setColumnWidth(0, 300.0f);
+                s.h().frames(2);
+                s.grid->setColumnWidth(0, 100.0f);
+            },
+            [](DataStage&) {});
+    // the order of the rows (the header clicked: ascending, then descending), which moves each text to
+    // the position of another
+    staleDataGrid("sorted rows show their own text", schemeA, schemeA, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+                s.h().frames(2);
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+            },
+            [](DataStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+            });
+    // rows go and come: every row below takes the position (and the slot) of the one above
+    staleDataGrid("removed rows leave the ones below with their own text", schemeA, schemeA, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                s.grid->removeRow(3);
+                s.grid->removeRow(3);
+                s.grid->removeRow(10);
+            },
+            [](DataStage& s)
+            {
+                s.grid->removeRow(3);
+                s.grid->removeRow(3);
+                s.grid->removeRow(10);
+            });
+    // a cell edited and committed (the text of the grid's own row changes under its slot)
+    staleDataGrid("an edited cell shows what was typed", schemeA, schemeA, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                const float y = r.y + kHeaderH + kRowH * 1.5f;
+                s.h().click(r.x + 20.0f, y);
+                s.h().click(r.x + 20.0f, y);
+                s.h().type("zz");
+                s.h().key(Key::Return);
+            },
+            [](DataStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                const float y = r.y + kHeaderH + kRowH * 1.5f;
+                s.h().click(r.x + 20.0f, y);
+                s.h().click(r.x + 20.0f, y);
+                s.h().type("zz");
+                s.h().key(Key::Return);
+            });
+    // columns that stretch: the window gets narrower and wider, and so does what the column can show
+    staleDataGrid("stretching columns follow the window", schemeA, schemeA, 100.0f, 100.0f,
+            [](DataStage& s)
+            {
+                s.grid->setStretchLastColumn(true);
+                s.grid->setColumnStretch(1, true);
+                s.h().frames(2);
+                s.h().resize(400.0f, kWindowH);
+                s.h().relayout();
+                s.h().resize(kWindowW, kWindowH);
+                s.h().relayout();
+            },
+            [](DataStage& s)
+            {
+                s.grid->setStretchLastColumn(true);
+                s.grid->setColumnStretch(1, true);
+            });
+}
+
+// A model: it changes without telling, and tells; the grid shows it either way.
+void testModelDataIsNotStaleInTheGrid()
+{
+    printf("a DataGrid with a model shows the model's data as it is, told or not\n");
+    for (int told = 0; told < 2; ++told)
+    {
+        ct::Vector<Shot> history, fresh;
+        {
+            TextModel model(schemeA, kMemoRows);
+            DataStage s(schemeA, 100.0f, kWindowW, false, &model);
+            for (int r = 0; r < kMemoRows; ++r)
+                for (int c = 0; c < 4; ++c)
+                    if ((r + c) % 3 != 0)
+                    {
+                        model.set(r, c, schemeB(r, c));
+                        if (told) model.announce(r, c);
+                    }
+            s.h().frames(2);
+            history = viewsOf(s);
+        }
+        {
+            TextModel model(schemeMixed, kMemoRows);
+            DataStage s(schemeMixed, 100.0f, kWindowW, false, &model);
+            fresh = viewsOf(s);
+        }
+        check(sameViews(history, fresh, nullptr), told ? "data changed and announced shows" : "data changed without a word shows too");
+    }
+    // one cell, back and forth, each frame (one window at a time: the grid is drawn through all the
+    // changes first, and the grids made after each of them one by one after)
+    {
+        ct::Vector<Shot> history;
+        {
+            TextModel model(schemeA, kMemoRows);
+            DataStage s(schemeA, 100.0f, kWindowW, false, &model);
+            for (int i = 0; i < 6; ++i)
+            {
+                model.set(2, 1, i % 2 ? longText() : String("curto"));
+                s.h().frames(2);
+                history.push_back(s.screen.take());
+            }
+        }
+        bool same = true;
+        for (int i = 0; i < 6; ++i)
+        {
+            TextModel again(schemeA, kMemoRows);
+            again.set(2, 1, i % 2 ? longText() : String("curto"));
+            DataStage f(schemeA, 100.0f, kWindowW, false, &again);
+            const Shot expected = f.screen.take();
+            const int nd = differing(history[static_cast<size_t>(i)], expected, 0, 0, expected.w, expected.h);
+            if (nd) printf("    change %d: %d pixels differ\n", i, nd);
+            same = same && nd == 0;
+        }
+        check(same, "one cell flipped between a long and a short text, each frame");
+    }
+}
+
+void testTreeGridMemosDoNotGoStale()
+{
+    printf("a TreeGrid draws what it would draw new, after a cell, a node folding or a window resize\n");
+    staleTreeGrid("a changed cell shows its new text", schemeA, schemeMixed,
+            [](TreeStage& s)
+            {
+                int n = 0;
+                for (size_t r = 0; r < s.roots.size(); ++r)
+                {
+                    TreeGrid::Node* root = s.roots[r];
+                    for (int c = 0; c < 4; ++c)
+                        if ((n + c) % 3 != 0) root->cells[static_cast<size_t>(c)] = schemeB(n, c);
+                    ++n;
+                    for (size_t k = 0; k < root->children.size(); ++k, ++n)
+                        for (int c = 0; c < 4; ++c)
+                            if ((n + c) % 3 != 0) root->children[k]->cells[static_cast<size_t>(c)] = schemeB(n, c);
+                }
+            },
+            [](TreeStage&) {});
+    // nodes folded and opened: the rows below move to other positions (other slots)
+    staleTreeGrid("folded nodes leave the rows below with their own text", schemeA, schemeA,
+            [](TreeStage& s)
+            {
+                s.roots[1]->setExpanded(false);
+                s.roots[4]->setExpanded(false);
+                s.h().frames(2);
+                s.roots[1]->setExpanded(true);
+                s.roots[2]->setExpanded(false);
+            },
+            [](TreeStage& s)
+            {
+                s.roots[4]->setExpanded(false);
+                s.roots[2]->setExpanded(false);
+                s.roots[4]->setExpanded(true);
+                s.roots[4]->setExpanded(false);
+            });
+    staleTreeGrid("stretching columns follow the window", schemeA, schemeA,
+            [](TreeStage& s)
+            {
+                s.grid->setStretchLastColumn(true);
+                s.grid->setColumnStretch(1, true);
+                s.h().frames(2);
+                s.h().resize(420.0f, kWindowH);
+                s.h().relayout();
+                s.h().resize(kWindowW, kWindowH);
+                s.h().relayout();
+            },
+            [](TreeStage& s)
+            {
+                s.grid->setStretchLastColumn(true);
+                s.grid->setColumnStretch(1, true);
+            });
+    // the sort by a column (which reorders the children, and the rows)
+    staleTreeGrid("sorted nodes show their own text", schemeA, schemeA,
+            [](TreeStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+                s.h().frames(2);
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+            },
+            [](TreeStage& s)
+            {
+                const Rect r = s.grid->absoluteRect();
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+                s.h().click(r.x + 50.0f, r.y + kHeaderH * 0.5f);
+            });
+}
+
+// The font size changes (the theme's): a baked font does not follow it, so the glyphs are compared by
+// where they are, in a window with the fonts made at each size, as an application has.
+struct ThemeSizeGuard
+{
+    float saved;
+    ThemeSizeGuard() : saved(Theme::instance().fontSize) {}
+    ~ThemeSizeGuard()
+    {
+        Theme::instance().fontSize = saved;
+    }
+};
+
+void testMemosFollowTheFontSize()
+{
+    printf("the grids draw their text at the new size after the theme's font size changes\n");
+    ThemeSizeGuard guard;
+    const float sizes[] = { 14.0f, 22.0f, 11.0f, 16.0f };
+    const size_t count = sizeof sizes / sizeof sizes[0];
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        // one window at a time: the grid is drawn at each size, then a grid made at each size
+        ct::Vector<ct::Vector<float> > history;
+        Theme::instance().fontSize = sizes[0];
+        if (tree)
+        {
+            TreeStage s(schemeA, kWindowW, true);
+            for (size_t i = 1; i < count; ++i)
+            {
+                Theme::instance().fontSize = sizes[i];
+                s.h().frames(2);
+                history.push_back(positions());
+            }
+        }
+        else
+        {
+            DataStage s(schemeA, 100.0f, kWindowW, true);
+            for (size_t i = 1; i < count; ++i)
+            {
+                Theme::instance().fontSize = sizes[i];
+                s.h().frames(2);
+                history.push_back(positions());
+            }
+        }
+        for (size_t i = 1; i < count; ++i)
+        {
+            Theme::instance().fontSize = sizes[i];
+            if (tree)
+            {
+                TreeStage fresh(schemeA, kWindowW, true);
+                fresh.h().frames(2);
+                check(samePositions(history[i - 1], positions()), "a TreeGrid at the size the theme has now");
+            }
+            else
+            {
+                DataStage fresh(schemeA, 100.0f, kWindowW, true);
+                fresh.h().frames(2);
+                check(samePositions(history[i - 1], positions()), "a DataGrid at the size the theme has now");
+            }
+        }
+    }
+    // the window made taller and shorter, and narrower: more and fewer cells in sight than the memos were made for
+    const float windows[][2] = { { 640.0f, 600.0f }, { 400.0f, 200.0f }, { 900.0f, 700.0f }, { 640.0f, 320.0f } };
+    const size_t windowCount = sizeof windows / sizeof windows[0];
+    Theme::instance().fontSize = sizes[0];
+    ct::Vector<ct::Vector<float> > history;
+    {
+        DataStage s(schemeA, 100.0f, kWindowW, true);
+        for (size_t i = 0; i < windowCount; ++i)
+        {
+            s.h().resize(windows[i][0], windows[i][1]);
+            s.h().relayout();
+            history.push_back(positions());
+        }
+    }
+    for (size_t i = 0; i < windowCount; ++i)
+    {
+        Screen screen(windows[i][0], windows[i][1], true);
+        BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        DataGrid* grid = box->createChild<DataGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna comprida ") + String::number(c), c == 0 ? 100.0f : kMemoWidths[c]);
+        for (int r = 0; r < kMemoRows; ++r) grid->addRow({ schemeA(r, 0), schemeA(r, 1), schemeA(r, 2), schemeA(r, 3) });
+        screen.h.relayout();
+        screen.h.frames(3);
+        check(samePositions(history[i], positions()), "a window of another size shows the cells it has room for");
+    }
+}
+
+// What the memos take is a table of the cells in sight, not of the rows (ElideMemos::reserve): the table
+// is as big as the window asks and gives back what it does not need; and a grid of fifty thousand rows, the
+// slots of which have been taken over by thousands of rows, still shows each one's own text.
+void testMemosAreBoundedByTheCellsInSight()
+{
+    printf("the memos of a grid are as many as the cells in sight, however many rows it has\n");
+    ElideMemos table;
+    table.reserve(15, 6);
+    check(table.capacity() == 90 && table.cols() == 6, "a table has a memo for each cell asked for");
+    table.reserve(10, 4);
+    check(table.capacity() == 90, "asked for less (not four times less) it keeps what it has");
+    table.reserve(3, 3);
+    check(table.capacity() == 9, "asked for much less it gives back what it does not need");
+    table.reserve(20, 8);
+    check(table.capacity() == 160, "and for more it grows");
+    table.reserve(0, 0);
+    check(table.capacity() >= 1, "never to nothing: a grid of no size has a slot");
+
+    ct::Vector<Shot> history, fresh;
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        Screen screen(kWindowW, kWindowH);
+        BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        DataGrid* grid = box->createChild<DataGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < 4; ++c) grid->addColumn(String("C") + String::number(c), kMemoWidths[c]);
+        for (int r = 0; r < 50000; ++r) grid->addRow({ schemeA(r, 0), schemeA(r, 1), schemeA(r, 2), schemeA(r, 3) });
+        screen.h.relayout();
+        screen.h.frames(3);
+        const Rect r = grid->absoluteRect();
+        screen.h.moveTo(r.x + 20.0f, r.y + kHeaderH + 40.0f);
+        // pass 0 goes there by thousands of small steps (every slot is taken over many times), pass 1 in one
+        if (pass == 0)
+        {
+            for (int i = 0; i < 3000; ++i) screen.h.wheel(-1.0f);
+            for (int i = 0; i < 1000; ++i) screen.h.wheel(1.0f);
+        }
+        else
+        {
+            screen.h.wheel(-2000.0f);
+        }
+        screen.h.frames(2);
+        (pass == 0 ? history : fresh).push_back(screen.take());
+    }
+    check(history.size() == 1 && fresh.size() == 1 && differing(history[0], fresh[0], 0, 0, history[0].w, history[0].h) == 0,
+            "after thousands of rows scrolled through, the rows in sight are the ones that are there");
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -1227,6 +1844,11 @@ int main(int argc, char** argv)
     RUN(testTreeGridElidesWithDots);
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
+    RUN(testDataGridMemosDoNotGoStale);
+    RUN(testModelDataIsNotStaleInTheGrid);
+    RUN(testTreeGridMemosDoNotGoStale);
+    RUN(testMemosFollowTheFontSize);
+    RUN(testMemosAreBoundedByTheCellsInSight);
     RUN(testStretchingColumns);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
