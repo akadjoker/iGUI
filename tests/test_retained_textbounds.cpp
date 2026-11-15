@@ -316,6 +316,13 @@ const SweepCase kSweep[] = {
                 w->addItem(t);
                 return w;
             } },
+    { "SpinBox",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                SpinBox* w = b->createChild<SpinBox>();
+                w->setSuffix(t);
+                return w;
+            } },
     { "TreeView",
             [](BoxLayout* b, const String& t) -> Widget*
             {

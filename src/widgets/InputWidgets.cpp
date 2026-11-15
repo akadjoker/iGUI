@@ -506,7 +506,11 @@ void SpinBox::paint(PaintContext& ctx)
     float tx = abs.x + bw + (abs.w - 2 * bw - tw) * 0.5f;
     float ty = abs.y + (abs.h + asc) * 0.5f;
     ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
-    ctx.font.Print(txt.c_str(), tx, ty);
+    // a text wider than the room between the two buttons is cut with "..." there, not drawn over them
+    const float room = abs.w - 2 * bw - 8.0f;
+    if (tw <= room) ctx.font.Print(txt.c_str(), tx, ty);
+    else
+        ctx.printElided({ abs.x + bw + 4.0f, abs.y, room, abs.h }, txt, ty, asc);
     if (overrideFont_) ctx.popFont();
 
     // Border
