@@ -887,6 +887,52 @@ void testTreeGridDrawsNodeIconsWithoutAnAtlas()
     check(n >= 10, "the icon of a node is drawn with no icon atlas");
 }
 
+// The time and the node of the last click of a TreeGrid belong to the grid (they were static, one pair for
+// every TreeGrid in the program) and are forgotten with the nodes: a node made after the others were
+// cleared, at the address of one that was clicked a moment before, was taken for it (a double click).
+void testTreeGridDoubleClickIsPerGridAndForgottenWithTheNode()
+{
+    Harness h(kWindowW, kWindowH);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TreeGrid* grid = box->createChild<TreeGrid>();
+    grid->setStretch(1.0f);
+    grid->addColumn("A", 200.0f);
+    TreeGrid::Node* first = grid->addRoot({ "um" });
+    grid->rebuild();
+    h.relayout();
+    const Rect rect = grid->absoluteRect();
+    const float x = rect.x + 100.0f, y = rect.y + kHeaderH + kRowH * 0.5f;
+    int edited = 0;
+    grid->cellEdited.connect([&edited](TreeGrid::Node*, int) { ++edited; });
+    h.click(x, y);
+    grid->clearAll();
+    TreeGrid::Node* second = grid->addRoot({ "dois" });
+    grid->rebuild();
+    h.relayout();
+    if (second != first) printf("    (the new node is not at the address of the old one: the check cannot fail here)\n");
+    h.click(x, y);
+    h.type("z");
+    h.key(Key::Return);
+    check(edited == 0, "a click on a new node is not a double click with the node that was there");
+
+    // and two grids: a click in one is not the first click of a double click in the other
+    TreeGrid* other = box->createChild<TreeGrid>();
+    other->setStretch(1.0f);
+    other->addColumn("A", 200.0f);
+    other->addRoot({ "tres" });
+    other->rebuild();
+    h.relayout();
+    const Rect r2 = other->absoluteRect();
+    int edited2 = 0;
+    other->cellEdited.connect([&edited2](TreeGrid::Node*, int) { ++edited2; });
+    h.click(x, y);
+    h.click(r2.x + 100.0f, r2.y + kHeaderH + kRowH * 0.5f);
+    h.type("z");
+    h.key(Key::Return);
+    check(edited2 == 0, "a click in another grid is not a double click");
+}
+
 void testFixedColumnsKeepTheirWidth()
 {
     printf("columns that do not stretch keep the width they were given\n");
@@ -2068,6 +2114,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
     RUN(testTreeGridSetColumnWidth);
+    RUN(testTreeGridDoubleClickIsPerGridAndForgottenWithTheNode);
     RUN(testTreeGridDrawsNodeIconsWithoutAnAtlas);
     RUN(testGridIgnoresANaNColumnWidth);
     RUN(testDataGridMemosDoNotGoStale);

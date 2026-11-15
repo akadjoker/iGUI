@@ -1371,6 +1371,7 @@ void TreeGrid::clearAll()
     for (auto* r: roots_) deleteNodes(r);
     roots_.clear();
     flatList_.clear();
+    lastClickNode_ = nullptr;
     selectedNode_ = nullptr;
     selectedNodes_.clear();
     scrollY_ = 0;
@@ -2014,19 +2015,17 @@ void TreeGrid::onMousePress(MouseEvent& e)
         return;
     }
 
-    static uint32_t lastClickTime = 0;
-    static Node* lastClickNode = nullptr;
     uint32_t now = WidgetApp::instance().elapsedMs();
 
-    if (node == lastClickNode && (now - lastClickTime) < 400 && col >= 0)
+    if (node == lastClickNode_ && (now - lastClickTime_) < 400 && col >= 0)
     {
         startEdit(node, col);
-        lastClickTime = 0;
-        lastClickNode = nullptr;
+        lastClickTime_ = 0;
+        lastClickNode_ = nullptr;
         return;
     }
-    lastClickTime = now;
-    lastClickNode = node;
+    lastClickTime_ = now;
+    lastClickNode_ = node;
 
     if (editing_) commitEdit();
 

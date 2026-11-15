@@ -524,6 +524,8 @@ private:
 
     bool editing_ = false;
     Node* editNode_ = nullptr;
+    uint32_t lastClickTime_ = 0;     // the last click on a row, for the double click that edits (this grid's own)
+    Node* lastClickNode_ = nullptr;  // the node it was on, forgotten when the nodes go
     int editCol_ = -1;
     String editBuf_;
     int editCursor_ = 0;
