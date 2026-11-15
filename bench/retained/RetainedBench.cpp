@@ -11,6 +11,8 @@
 #include "../../tests/EditorTree.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/AssetBrowser.hpp>
+#include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/ScrollWidgets.hpp>
@@ -617,6 +619,23 @@ int main(int argc, char** argv)
             {
                 ListBox* l = b->createChild<ListBox>();
                 l->addItem(String("Item ") + String::number(i));
+            });
+    widgetCost("assetbrowser",
+            [](BoxLayout* b, int i)
+            {
+                AssetBrowser* a = b->createChild<AssetBrowser>();
+                a->setStretch(1.0f);
+                a->setPath(String("/projecto/media/clips/") + String::number(i));
+                AssetItem item;
+                item.name = "clip.mp4";
+                a->addItem(item);
+            });
+    widgetCost("console",
+            [](BoxLayout* b, int i)
+            {
+                ConsoleWidget* c = b->createChild<ConsoleWidget>();
+                c->setStretch(1.0f);
+                c->log(LogLevel::Info, String("Linha de registo ") + String::number(i));
             });
     widgetCost("searchbar", [](BoxLayout* b, int i) { b->createChild<SearchBar>()->setText(String("busca ") + String::number(i)); });
     softRasterScene();
