@@ -296,9 +296,9 @@ float PaintContext::textWidth(const char* text) const
     return drawList.calcTextSize(*buFont, text).x;
 }
 
-String PaintContext::fitText(const String& text, float room)
+String PaintContext::fitText(const String& text, float room, float width)
 {
-    if (text.empty() || font.GetTextWidth(text.c_str()) <= room) return text;
+    if (text.empty() || (width >= 0.0f ? width : font.GetTextWidth(text.c_str())) <= room) return text;
     // The text is cut before a character - a lead byte and the continuation bytes after it - at the
     // last place where what is before it and "..." still fit. Taking one character off the end
     // and measuring again, until it fits, measured a text of n characters n times: the square of
@@ -333,6 +333,19 @@ void PaintContext::printWithin(const Rect& bounds, const String& text, float x, 
     pushClip({ bounds.x, bounds.y - ascender, bounds.w, bounds.h + ascender * 2.0f });
     font.Print(text.c_str(), x, y);
     popClip();
+}
+
+void PaintContext::printElided(const Rect& bounds, const String& text, float y, float ascender)
+{
+    if (text.empty() || bounds.w <= 0.0f) return;
+    const float width = font.GetTextWidth(text.c_str());
+    if (width <= bounds.w)
+    {
+        font.Print(text.c_str(), bounds.x, y);
+        return;
+    }
+    const String shown = fitText(text, bounds.w, width);
+    printWithin(bounds, shown, bounds.x, font.GetTextWidth(shown.c_str()), y, ascender);
 }
 
 float PaintContext::textHeight() const

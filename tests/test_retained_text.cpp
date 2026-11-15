@@ -107,6 +107,63 @@ void testFitTextMatchesTheLoop()
     check(ctx.fitText("Música e vídeos", 0.0f) == String("..."), "no room, only the dots");
 }
 
+// A text printed in a room of a given width (a table cell): all of it when it fits, without a clip
+// and as one Print; otherwise what fitText makes of it; and when not even the dots fit, cut at the room.
+void testPrintElided()
+{
+    printf("printElided: whole text when it fits, fitText's when not, a cut when not even the dots fit\n");
+    Harness h;
+    const float asc = h.font()->ascender();
+    const String text = "Entrevista com Ação e outras coisas mais compridas";
+    DrawList probe;
+    PaintContext measure(probe, h.font());
+    const float whole = measure.font.GetTextWidth(text.c_str());
+    const float dots = measure.font.GetTextWidth("...");
+    check(whole > dots * 4.0f, "the text is much wider than the dots");
+
+    // fitText told the width it would measure itself gives the same text
+    check(measure.fitText(text, whole * 0.5f, whole) == measure.fitText(text, whole * 0.5f), "fitText with the width measured by the caller");
+    check(measure.fitText(text, whole * 2.0f, whole) == text, "and leaves a text that fits");
+
+    struct Case
+    {
+        float room;
+        const char* name;
+    };
+    const Case cases[] = { { whole + 0.5f, "fits" }, { whole * 0.5f, "half" }, { dots + 0.5f, "just the dots" } };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; ++i)
+    {
+        DrawList got, want;
+        PaintContext a(got, h.font()), b(want, h.font());
+        const Rect bounds = { 30.0f, 10.0f, cases[i].room, 24.0f };
+        a.printElided(bounds, text, 30.0f, asc);
+        const String shown = b.fitText(text, cases[i].room);
+        b.font.Print(shown.c_str(), bounds.x, 30.0f);
+        check(got.pushClipCount() == 0, cases[i].name);
+        check(got.vertices().size() == want.vertices().size() && got.vertices().size() > 0, "the same glyphs as fitText's text printed whole");
+        bool same = got.vertices().size() == want.vertices().size();
+        for (size_t v = 0; same && v < got.vertices().size(); ++v)
+            same = got.vertices()[v].x == want.vertices()[v].x && got.vertices()[v].y == want.vertices()[v].y;
+        check(same, "at the same places");
+        if (i == 0) check(shown == text, "a text that fits is not elided");
+        else
+            check(shown.size() >= 3 && shown.substr(shown.size() - 3) == String("..."), "an elided text ends in the dots");
+    }
+    {
+        // not even the dots fit: they are cut at the room (one clip), and nothing is printed in no room
+        DrawList got;
+        PaintContext a(got, h.font());
+        a.printElided({ 30.0f, 10.0f, dots * 0.5f, 24.0f }, text, 30.0f, asc);
+        check(got.pushClipCount() == 1 && got.vertices().size() > 0, "a room narrower than the dots cuts them");
+        DrawList none;
+        PaintContext b(none, h.font());
+        b.printElided({ 30.0f, 10.0f, 0.0f, 24.0f }, text, 30.0f, asc);
+        b.printElided({ 30.0f, 10.0f, -5.0f, 24.0f }, text, 30.0f, asc);
+        b.printElided({ 30.0f, 10.0f, 100.0f, 24.0f }, "", 30.0f, asc);
+        check(none.vertices().empty() && none.pushClipCount() == 0, "no room or no text, nothing printed");
+    }
+}
+
 // A label can carry a very long text: the frame must not take a quarter of a second.
 void testLongElidedLabelIsCheap()
 {
@@ -382,6 +439,7 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testFitTextMatchesTheLoop);
+    RUN(testPrintElided);
     RUN(testLongElidedLabelIsCheap);
     RUN(testTypedTextBeyondOneEvent);
     RUN(testTextEditKeysOnMultibyteText);
