@@ -323,6 +323,13 @@ const SweepCase kSweep[] = {
                 w->addRoot(t);
                 return w;
             } },
+    { "ProgressBar",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                ProgressBar* w = b->createChild<ProgressBar>();
+                w->setText(t);
+                return w;
+            } },
     { "SpinSlider suffix",
             [](BoxLayout* b, const String& t) -> Widget*
             {

@@ -357,25 +357,34 @@ void ProgressBar::paint(PaintContext& ctx)
         if (overrideFont_) ctx.pushFont(overrideFont_);
         float textH = ctx.font.GetFontSize();
         float textW = ctx.font.GetTextWidth(text_.c_str());
-        float tx, ty = abs.y + (abs.h + ctx.font.GetAscender()) * 0.5f;
-
-        switch (textAlign_)
-        {
-            case TextAlign::LEFT:
-                tx = abs.x + 4.0f;
-                break;
-            case TextAlign::RIGHT:
-                tx = abs.x + abs.w - textW - 4.0f;
-                break;
-            case TextAlign::CENTER:
-            default:
-                tx = abs.x + (abs.w - textW) * 0.5f;
-                break;
-        }
+        const float asc = ctx.font.GetAscender();
+        float tx, ty = abs.y + (abs.h + asc) * 0.5f;
 
         ctx.font.SetColor(textColor_);
-        Rect textRect = { tx, ty - textH, textW, textH };
-        if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+        if (textW > abs.w - 8.0f)
+        {
+            // a text wider than the bar is cut with "..." inside it, from the left whatever the alignment
+            ctx.printElided({ abs.x + 4.0f, abs.y, abs.w - 8.0f, abs.h }, text_, ty, asc);
+        }
+        else
+        {
+            switch (textAlign_)
+            {
+                case TextAlign::LEFT:
+                    tx = abs.x + 4.0f;
+                    break;
+                case TextAlign::RIGHT:
+                    tx = abs.x + abs.w - textW - 4.0f;
+                    break;
+                case TextAlign::CENTER:
+                default:
+                    tx = abs.x + (abs.w - textW) * 0.5f;
+                    break;
+            }
+
+            Rect textRect = { tx, ty - textH, textW, textH };
+            if (!ctx.isClipped(textRect)) ctx.font.Print(text_.c_str(), tx, ty);
+        }
         if (overrideFont_) ctx.popFont();
     }
 
