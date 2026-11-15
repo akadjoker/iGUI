@@ -1433,6 +1433,7 @@ void TreeGrid::startEdit(Node* node, int col)
     editCol_ = col;
     editBuf_ = (col < static_cast<int>(node->cells.size())) ? node->cells[col] : "";
     editCursor_ = static_cast<int>(editBuf_.size());
+    editScroll_ = 0.f;
     markDirty();
 }
 
@@ -1495,21 +1496,35 @@ void TreeGrid::paint(PaintContext& ctx)
         {
             auto& col = columns_[i];
             float colR = hx + col.width;
+            if (colR <= abs.x || hx >= abs.x + abs.w)
+            {
+                hx = colR; // out of sight: nothing to measure or draw
+                continue;
+            }
 
+            // The name is cut with "..." before the arrow of a sorted column (or the right edge), so
+            // it never reaches the next column.
+            const bool arrow = sortCol_ == i && sortOrder_ != DataGrid::SortOrder::None;
+            const float textRight = colR - (arrow ? kSortArrowRoom : kCellPad);
             ctx.font.SetColor(t.textColor);
-            ctx.font.Print(col.name.c_str(), hx + 4, hdrTextY);
+            ctx.printElided({ hx + kCellPad, abs.y, textRight - (hx + kCellPad), headerHeight_ }, col.name,
+                    hdrTextY, asc);
 
-            if (sortCol_ == i && sortOrder_ != DataGrid::SortOrder::None)
+            if (arrow)
             {
                 float arrowX = colR - 14.0f;
                 float arrowY = abs.y + headerHeight_ * 0.5f;
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
+                // cut at the column: in a column too narrow for it the arrow would be drawn over
+                // the one before
+                ctx.pushClip({ hx, abs.y, col.width, headerHeight_ });
                 if (sortOrder_ == DataGrid::SortOrder::Ascending)
                     ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
                             arrowY - 3);
                 else
                     ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3,
                             arrowY + 3);
+                ctx.popClip();
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 80);
@@ -1571,14 +1586,29 @@ void TreeGrid::paint(PaintContext& ctx)
             for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci)
             {
                 float colW = columns_[ci].width;
+                if (cx + colW <= abs.x || cx >= abs.x + abs.w)
+                {
+                    cx += colW; // out of sight: nothing to measure or draw
+                    continue;
+                }
 
                 if (ci == 0)
                 {
                     float indent = depth * indentWidth_;
                     float arrowX = cx + indent + 2;
                     float arrowCY = ry + rowHeight_ * 0.5f;
+                    float textX = cx + indent + 14;
+                    const float iconS = rowHeight_ - 6;
+                    const bool hasIcon = node->iconId != IconId::None && ctx.icons;
+                    const bool hasArrow = !node->children.empty();
 
-                    if (!node->children.empty())
+                    // The expander and the icon come before the text, and a deep node in a narrow
+                    // column has them past the right edge of the column (a pixel more for the
+                    // anti-aliasing): cut there, so they are not drawn over the next column.
+                    const bool spills = (hasArrow && arrowX + 8 + 1 > cx + colW) || (hasIcon && textX + iconS + 1 > cx + colW);
+                    if (spills) ctx.pushClip({ cx, ry, colW, rowHeight_ });
+
+                    if (hasArrow)
                     {
                         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 180);
                         if (node->expanded)
@@ -1589,28 +1619,28 @@ void TreeGrid::paint(PaintContext& ctx)
                                     arrowCY + 4);
                     }
 
-                    float textX = cx + indent + 14;
-
-                    if (node->iconId != IconId::None && ctx.icons)
+                    if (hasIcon)
                     {
-                        float iconS = rowHeight_ - 6;
                         ctx.drawIcon(node->iconId, textX, ry + 3, iconS);
                         textX += iconS + 2;
                     }
+                    if (spills) ctx.popClip();
 
                     if (editing_ && editNode_ == node && editCol_ == 0)
                     {
-                        ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, 255);
-                        ctx.fillRect(textX - 1, ry + 1, colW - indent - 16, rowHeight_ - 2);
-                        ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
-                                t.inputBorderHover.b, 255);
-                        ctx.lineRect(textX - 1, ry + 1, colW - indent - 16, rowHeight_ - 2);
-                        ctx.font.SetColor(Color(255, 255, 255, 255));
-                        ctx.font.Print(editBuf_.c_str(), textX + 2, textY);
-                        String bc = editBuf_.substr(0, editCursor_);
-                        float curX = textX + 2 + ctx.font.GetTextWidth(bc.c_str());
-                        ctx.line.SetColor(255, 255, 255, 200);
-                        ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
+                        // the field starts at the text and ends a little before the column does
+                        const float fieldX = textX - 1;
+                        const float fieldW = cx + colW - 3 - fieldX;
+                        if (fieldW > 0.0f)
+                        {
+                            ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, 255);
+                            ctx.fillRect(fieldX, ry + 1, fieldW, rowHeight_ - 2);
+                            ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
+                                    t.inputBorderHover.b, 255);
+                            ctx.lineRect(fieldX, ry + 1, fieldW, rowHeight_ - 2);
+                            ctx.font.SetColor(Color(255, 255, 255, 255));
+                            paintEditText(ctx, editBuf_, editCursor_, editScroll_, fieldX, fieldW, ry, rowHeight_, textY, asc);
+                        }
                     }
                     else
                     {
@@ -1618,7 +1648,9 @@ void TreeGrid::paint(PaintContext& ctx)
                         {
                             ctx.font.SetColor(
                                     isSelected(node) ? Color(255, 255, 255, 255) : t.textColor);
-                            ctx.font.Print(node->cells[0].c_str(), textX + 2, textY);
+                            const float textLeft = textX + 2;
+                            ctx.printElided({ textLeft, ry, cx + colW - kCellPad - textLeft, rowHeight_ },
+                                    node->cells[0], textY, asc);
                         }
                     }
                 }
@@ -1632,11 +1664,7 @@ void TreeGrid::paint(PaintContext& ctx)
                                 t.inputBorderHover.b, 255);
                         ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                         ctx.font.SetColor(Color(255, 255, 255, 255));
-                        ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
-                        String bc = editBuf_.substr(0, editCursor_);
-                        float curX = cx + 4 + ctx.font.GetTextWidth(bc.c_str());
-                        ctx.line.SetColor(255, 255, 255, 200);
-                        ctx.drawLine(curX, ry + 3, curX, ry + rowHeight_ - 3);
+                        paintEditText(ctx, editBuf_, editCursor_, editScroll_, cx + 1, colW - 2, ry, rowHeight_, textY, asc);
                     }
                     else
                     {
@@ -1644,7 +1672,8 @@ void TreeGrid::paint(PaintContext& ctx)
                         {
                             ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255)
                                                                : Color(170, 170, 175, 255));
-                            ctx.font.Print(node->cells[ci].c_str(), cx + 4, textY);
+                            ctx.printElided({ cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ },
+                                    node->cells[ci], textY, asc);
                         }
                     }
                 }

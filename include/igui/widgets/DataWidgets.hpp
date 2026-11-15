@@ -389,6 +389,7 @@ private:
     int editCol_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+    float editScroll_ = 0.f; // how far the text of the edited cell is moved left to keep the cursor in sight
 
     int resizeCol_ = -1;
     float resizeStartX_ = 0.f;

@@ -8,6 +8,7 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/DataWidgets.hpp>
+#include <igui/widgets/IconAtlas.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
@@ -44,8 +45,16 @@ public:
     }
     Screen(const Screen&) = delete;
     Screen& operator=(const Screen&) = delete;
-    Shot take()
+    // withIcons: the frame is painted again with an icon atlas (an empty one: icons come out as vector
+    // drawings), which a TreeGrid needs to draw the icons of its nodes
+    Shot take(bool withIcons = false)
     {
+        if (withIcons)
+        {
+            NewFrame();
+            h.app.paint(*GetDrawData(), h.font(), &icons_);
+            Render();
+        }
         Shot shot;
         shot.w = w_;
         shot.h = h_;
@@ -58,6 +67,7 @@ public:
 private:
     ig::zen::SoftRaster raster_;
     TextureHandle atlasTexture_;
+    IconAtlas icons_;
     int w_;
     int h_;
 };
@@ -171,6 +181,74 @@ int pixelsRightOfFirstColumn(const Shot& a, const Shot& b, const Rect& grid, flo
     const int y0 = static_cast<int>(grid.y) + (header ? 0 : static_cast<int>(kHeaderH));
     const int y1 = static_cast<int>(grid.y) + (body ? static_cast<int>(grid.h) : static_cast<int>(kHeaderH));
     return differing(a, b, x0, y0, static_cast<int>(grid.x + grid.w) - 1, y1);
+}
+
+// ---- the TreeGrid under test ----
+
+struct TreeSpec
+{
+    String header0 = "Nome";
+    String header1 = "B";
+    String text0;
+    String text1;
+    float col0 = 120.0f;
+    float col1 = 120.0f;
+    int sortColumn = -1;
+    int roots = 6;
+    int chain = 0;         // every root has a chain of this many nested nodes under it, all expanded
+    float indent = 16.0f;  // TreeGrid::setIndentWidth
+    bool icons = false;    // every node has an icon
+    int editColumn = -1;   // double click this column of the first row
+    String typed;
+    int homeKeys = 0;
+    int leftKeys = 0;
+};
+
+Shot treeShot(const TreeSpec& spec, Rect* gridRect = nullptr, int* clipPushes = nullptr)
+{
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TreeGrid* grid = box->createChild<TreeGrid>();
+    grid->setStretch(1.0f);
+    grid->setIndentWidth(spec.indent);
+    grid->addColumn(spec.header0, spec.col0);
+    grid->addColumn(spec.header1, spec.col1);
+    grid->addColumn("C", 160.0f);
+    for (int r = 0; r < spec.roots; ++r)
+    {
+        TreeGrid::Node* node = grid->addRoot({ spec.text0, spec.text1, "" });
+        if (spec.icons) node->iconId = IconId::File;
+        for (int d = 0; d < spec.chain; ++d)
+        {
+            node = node->addChild({ spec.text0, spec.text1, "" });
+            if (spec.icons) node->iconId = IconId::File;
+        }
+    }
+    grid->rebuild();
+    screen.h.relayout();
+    const Rect rect = grid->absoluteRect();
+    if (spec.sortColumn >= 0)
+    {
+        const float start = spec.sortColumn == 0 ? 0.0f : (spec.sortColumn == 1 ? spec.col0 : spec.col0 + spec.col1);
+        const float width = spec.sortColumn == 0 ? spec.col0 : (spec.sortColumn == 1 ? spec.col1 : 160.0f);
+        screen.h.click(rect.x + start + width * 0.5f, rect.y + kHeaderH * 0.5f);
+    }
+    if (spec.editColumn >= 0)
+    {
+        const float start = spec.editColumn == 0 ? 0.0f : (spec.editColumn == 1 ? spec.col0 : spec.col0 + spec.col1);
+        const float width = spec.editColumn == 0 ? spec.col0 : (spec.editColumn == 1 ? spec.col1 : 160.0f);
+        const float x = rect.x + start + (width < 40.0f ? width * 0.5f : 40.0f), y = rect.y + kHeaderH + kRowH * 0.5f;
+        screen.h.click(x, y);
+        screen.h.click(x, y);
+        if (spec.typed.size() > 0) screen.h.type(spec.typed.c_str());
+        for (int i = 0; i < spec.homeKeys; ++i) screen.h.key(Key::Home);
+        for (int i = 0; i < spec.leftKeys; ++i) screen.h.key(Key::Left);
+    }
+    screen.h.frames(2);
+    if (gridRect) *gridRect = rect;
+    if (clipPushes) *clipPushes = GetDrawList().pushClipCount();
+    return screen.take(spec.icons);
 }
 
 // The x of a cursor, a vertical line of bright pixels at least `run` rows tall, in [x0, x1) x [y0, y1)
@@ -423,6 +501,220 @@ void testDataGridEditedCellStaysInItsColumn()
     }
 }
 
+void testTreeGridHeaderStaysInItsColumn()
+{
+    printf("a TreeGrid header longer than its column does not reach the next one\n");
+    TreeSpec plain;
+    TreeSpec longHeader;
+    longHeader.header0 = longText();
+    Rect r;
+    const Shot a = treeShot(plain, &r);
+    const Shot b = treeShot(longHeader);
+    check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y), ceilInt(r.x + 120.0f), static_cast<int>(r.y + kHeaderH)) > 50,
+            "the long header is drawn inside its own column");
+    check(pixelsRightOfFirstColumn(a, b, r, 120.0f, true, false) == 0, "and nothing of it is drawn in the next column");
+
+    TreeSpec sorted;
+    sorted.sortColumn = 0;
+    TreeSpec sortedLong = longHeader;
+    sortedLong.sortColumn = 0;
+    const Shot c = treeShot(sorted);
+    const Shot d = treeShot(sortedLong);
+    check(pixelsRightOfFirstColumn(c, d, r, 120.0f, true, false) == 0, "a sorted long header stays in its column too");
+    const int arrowX = static_cast<int>(r.x + 120.0f - 14.0f);
+    check(differing(c, d, arrowX - 1, static_cast<int>(r.y), arrowX + 7, static_cast<int>(r.y + kHeaderH)) == 0,
+            "the header text stops before the sort arrow");
+
+    const float widths[] = { 60.0f, 30.0f, 14.0f, 8.0f, 2.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        TreeSpec narrow;
+        narrow.col0 = widths[i];
+        TreeSpec narrowLong = narrow;
+        narrowLong.header0 = longText();
+        check(pixelsRightOfFirstColumn(treeShot(narrow), treeShot(narrowLong), r, widths[i], true, false) == 0,
+                "in a column too narrow for the dots too");
+    }
+
+    // the arrow of a narrow second column
+    const float arrowWidths[] = { 40.0f, 20.0f, 14.0f, 10.0f };
+    for (size_t i = 0; i < sizeof arrowWidths / sizeof arrowWidths[0]; ++i)
+    {
+        TreeSpec unsorted;
+        unsorted.col1 = arrowWidths[i];
+        unsorted.header0 = "";
+        unsorted.header1 = "";
+        TreeSpec arrow = unsorted;
+        arrow.sortColumn = 1;
+        const Shot e = treeShot(unsorted);
+        const Shot f = treeShot(arrow);
+        check(differing(e, f, ceilInt(r.x + 120.0f) + 1, static_cast<int>(r.y), ceilInt(r.x + 120.0f + arrowWidths[i]), static_cast<int>(r.y + kHeaderH)) > 0,
+                "the arrow is drawn in the sorted column");
+        check(differing(e, f, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + kHeaderH)) == 0,
+                "the arrow of the second column is not drawn in the first");
+        check(differing(e, f, ceilInt(r.x + 120.0f + arrowWidths[i]) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w) - 1,
+                      static_cast<int>(r.y + kHeaderH)) == 0,
+                "nor in the third");
+    }
+}
+
+void testTreeGridCellsStayInTheirColumn()
+{
+    printf("a TreeGrid cell longer than its column does not reach the next one\n");
+    TreeSpec plain;
+    TreeSpec longCell;
+    longCell.text0 = longText();
+    Rect r;
+    const Shot a = treeShot(plain, &r);
+    const Shot b = treeShot(longCell);
+    check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 120.0f), static_cast<int>(r.y + r.h)) > 200,
+            "the long cells are drawn inside their column");
+    check(pixelsRightOfFirstColumn(a, b, r, 120.0f, false, true) == 0, "and nothing of them is drawn in the next column");
+
+    TreeSpec middle;
+    middle.text1 = longText();
+    const Shot c = treeShot(middle);
+    check(differing(a, c, ceilInt(r.x + 240.0f) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w), static_cast<int>(r.y + r.h)) == 0,
+            "a long cell of the second column stays out of the third");
+    check(differing(a, c, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + r.h)) == 0,
+            "and out of the first");
+
+    const float widths[] = { 60.0f, 30.0f, 14.0f, 8.0f, 2.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        TreeSpec narrow;
+        narrow.col0 = widths[i];
+        TreeSpec narrowLong = narrow;
+        narrowLong.text0 = longText();
+        check(pixelsRightOfFirstColumn(treeShot(narrow), treeShot(narrowLong), r, widths[i], false, true) == 0,
+                "in a column too narrow for the dots too");
+    }
+}
+
+// The first column of a tree starts its text after the indentation, the expander and the icon: a deep node
+// in a narrow column has nothing left of the column for its text, and the expander and the icon themselves
+// can lie past its right edge. The picture right of the column must be that of a tree that is not indented.
+void testTreeGridIndentationStaysInTheFirstColumn()
+{
+    printf("the indentation, expander and icon of a deep TreeGrid node stay in the first column\n");
+    const float widths[] = { 120.0f, 60.0f, 30.0f, 16.0f };
+    for (int icons = 0; icons < 2; ++icons)
+        for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+        {
+            TreeSpec flat;
+            flat.col0 = widths[i];
+            flat.roots = 2;
+            flat.chain = 8;
+            flat.indent = 0.0f;
+            flat.icons = icons != 0;
+            flat.text0 = longText();
+            TreeSpec deep = flat;
+            deep.indent = 16.0f;
+            Rect r;
+            const Shot a = treeShot(flat, &r);
+            const Shot b = treeShot(deep);
+            check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + widths[i]),
+                          static_cast<int>(r.y + r.h)) > 100,
+                    "the indentation changes what the first column shows");
+            check(pixelsRightOfFirstColumn(a, b, r, widths[i], false, true) == 0,
+                    icons ? "with icons: nothing of the deep nodes is drawn in the next column" : "nothing of the deep nodes is drawn in the next column");
+        }
+}
+
+void testTreeGridElidesWithDots()
+{
+    printf("a TreeGrid cell and header that do not fit end in \"...\"\n");
+    TreeSpec longCell;
+    longCell.text0 = longText();
+    longCell.text1 = longText();
+    Rect r;
+    const Shot shownCell = treeShot(longCell, &r);
+    bool firstMatched = false, secondMatched = false;
+    String firstText, secondText;
+    // The first column keeps 16 pixels for the expander and a margin each side, the second a margin each
+    // side: the candidate rooms are those a little narrower than the column, in the range where the
+    // dots would still be inside it.
+    for (int room = 108; room >= 80 && !firstMatched; --room)
+    {
+        const String shown = elided(longText(), static_cast<float>(room));
+        TreeSpec spec;
+        spec.text0 = shown;
+        spec.text1 = longText();
+        if (differing(shownCell, treeShot(spec), static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 120.0f),
+                    static_cast<int>(r.y + r.h)) == 0)
+        {
+            firstMatched = true;
+            firstText = shown;
+        }
+    }
+    for (int room = 124; room >= 100 && !secondMatched; --room)
+    {
+        const String shown = elided(longText(), static_cast<float>(room));
+        TreeSpec spec;
+        spec.text0 = longText();
+        spec.text1 = shown;
+        if (differing(shownCell, treeShot(spec), ceilInt(r.x + 120.0f), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 240.0f),
+                    static_cast<int>(r.y + r.h)) == 0)
+        {
+            secondMatched = true;
+            secondText = shown;
+        }
+    }
+    check(firstMatched && secondMatched, "both columns show the text elided to a room a little narrower than the column");
+    check(firstText.size() > 3 && firstText.substr(firstText.size() - 3) == String("..."), "the first column's text ends in the dots");
+    check(secondText.size() > 3 && secondText.substr(secondText.size() - 3) == String("..."), "the second column's text ends in the dots");
+}
+
+void testTreeGridEditedCellStaysInItsColumn()
+{
+    printf("a TreeGrid cell being edited does not leave its column and keeps the cursor in sight\n");
+    for (int column = 0; column < 2; ++column)
+    {
+        TreeSpec plain;
+        plain.editColumn = column;
+        TreeSpec longEdit = plain;
+        (column == 0 ? longEdit.text0 : longEdit.text1) = longText();
+        Rect r;
+        const Shot a = treeShot(plain, &r);
+        const Shot b = treeShot(longEdit);
+        const float left = column == 0 ? 0.0f : 120.0f;
+        check(differing(a, b, ceilInt(r.x + left + 120.0f) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w) - 1, static_cast<int>(r.y + r.h)) == 0,
+                "the edited text does not reach the next column");
+        if (column == 1)
+            check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + r.h)) == 0,
+                    "or the one before");
+        const int y0 = static_cast<int>(r.y + kHeaderH) + 4, y1 = static_cast<int>(r.y + kHeaderH + kRowH) - 4;
+        const int x0 = static_cast<int>(r.x + left) + 3, x1 = static_cast<int>(r.x + left + 120.0f) - 3;
+        check(findCursor(b, x0, x1, y0, y1, 14) >= 0, "the cursor at the end of a long text is inside the cell");
+        TreeSpec typed = longEdit;
+        typed.typed = "xyz";
+        check(findCursor(treeShot(typed), x0, x1, y0, y1, 14) >= 0, "after typing it is still inside");
+        TreeSpec walk = longEdit;
+        for (int keys = 5; keys <= 60; keys += 11)
+        {
+            walk.leftKeys = keys;
+            check(findCursor(treeShot(walk), x0, x1, y0, y1, 14) >= 0, "after Left it is still inside");
+        }
+        TreeSpec home = longEdit;
+        home.homeKeys = 1;
+        const int cursorX = findCursor(treeShot(home), x0, x1, y0, y1, 14);
+        check(cursorX >= 0 && cursorX <= x0 + 20, "with Home it is at the start of the cell");
+    }
+    // a column too narrow for the field
+    const float widths[] = { 30.0f, 14.0f, 8.0f, 4.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        TreeSpec narrow;
+        narrow.col0 = widths[i];
+        narrow.editColumn = 0;
+        TreeSpec narrowLong = narrow;
+        narrowLong.text0 = longText();
+        Rect r;
+        const Shot n = treeShot(narrow, &r);
+        check(pixelsRightOfFirstColumn(n, treeShot(narrowLong), r, widths[i], false, true) == 0, "an edited cell in a column too narrow stays in it");
+    }
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -471,6 +763,11 @@ int main(int argc, char** argv)
     RUN(testDataGridElidesWithDots);
     RUN(testDataGridSortArrowStaysInItsColumn);
     RUN(testDataGridEditedCellStaysInItsColumn);
+    RUN(testTreeGridHeaderStaysInItsColumn);
+    RUN(testTreeGridCellsStayInTheirColumn);
+    RUN(testTreeGridIndentationStaysInTheFirstColumn);
+    RUN(testTreeGridElidesWithDots);
+    RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
