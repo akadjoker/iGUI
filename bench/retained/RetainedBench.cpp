@@ -10,6 +10,7 @@
 //   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--hash]
 #include "../../tests/EditorTree.hpp"
 
+#include <igui/widgets/DataWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
 #include <signal.h>
@@ -344,6 +345,83 @@ void textScene()
     RUN_IF("text", "elided_8000_chars_frame", 5, [&] { h.frame(); });
 }
 
+// DataGrid and TreeGrid with thousands of rows, scrolled to the middle: only the rows on screen are
+// painted, so what is measured is the cost of the cells in view (28 rows of 6 columns on this window).
+// kind 0: short texts (they fit, and stay in the string's own buffer: 11 characters), 1: texts of 30
+// characters in columns that hold them (a copy of each needs the heap), 2: the same kind of text in
+// columns too narrow for it, in every cell.
+void gridScene(const char* scene, bool tree, int kind)
+{
+    Harness h(1280.0f, 720.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    auto text = [kind](int row, int col)
+    {
+        if (kind == 0) return String("Item ") + String::number(row) + "." + String::number(col);
+        return String("Entrevista ") + String::number(row) + " com o cliente " + String::number(col);
+    };
+    const int columns = 6;
+    const float columnWidth = kind == 1 ? 280.0f : 140.0f;
+    if (!tree)
+    {
+        DataGrid* grid = box->createChild<DataGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < columns; ++c) grid->addColumn(String("Coluna ") + String::number(c), columnWidth);
+        for (int r = 0; r < 5000; ++r)
+        {
+            ct::Vector<String> cells;
+            for (int c = 0; c < columns; ++c) cells.push_back(text(r, c));
+            grid->addRow(cells);
+        }
+    }
+    else
+    {
+        TreeGrid* grid = box->createChild<TreeGrid>();
+        grid->setStretch(1.0f);
+        for (int c = 0; c < columns; ++c) grid->addColumn(String("Coluna ") + String::number(c), columnWidth);
+        int n = 0;
+        auto cells = [&](int depth)
+        {
+            ct::Vector<String> v;
+            for (int c = 0; c < columns; ++c) v.push_back(text(n, c) + String::number(depth));
+            ++n;
+            return v;
+        };
+        for (int a = 0; a < 50; ++a)
+        {
+            TreeGrid::Node* root = grid->addRoot(cells(0));
+            for (int b = 0; b < 20; ++b)
+            {
+                TreeGrid::Node* child = root->addChild(cells(1));
+                for (int d = 0; d < 4; ++d) child->addChild(cells(2));
+            }
+        }
+        grid->rebuild();
+    }
+    h.relayout();
+    h.frames(3);
+    float x = 0, y = 0;
+    Harness::centre(box->children()[0], x, y);
+    h.moveTo(x, y);
+    h.wheel(-1250.0f); // 2400 rows down (a notch is two rows)
+    h.moveTo(5.0f, 5.0f);
+    h.frames(3);
+    RUN_IF(scene, "paint_only", 200,
+            [&]
+            {
+                NewFrame();
+                h.app.paint(*GetDrawData(), h.font(), nullptr);
+                Render();
+            });
+    RUN_IF(scene, "frame", 200, [&] { h.frame(); });
+    if (wanted(scene, "draw_list_size"))
+    {
+        const DrawList& dl = GetDrawList();
+        printf("%-34s %10u vertices %u indices %u commands\n", scene, static_cast<unsigned>(dl.vertices().size()),
+                static_cast<unsigned>(dl.indices().size()), static_cast<unsigned>(dl.commands().size()));
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -444,6 +522,12 @@ int main(int argc, char** argv)
     widgetCost("panel_empty", [](BoxLayout* b, int) { b->createChild<Panel>(); });
     softRasterScene();
     textScene();
+    gridScene("datagrid_short", false, 0);
+    gridScene("datagrid_fit", false, 1);
+    gridScene("datagrid_long", false, 2);
+    gridScene("treegrid_short", true, 0);
+    gridScene("treegrid_fit", true, 1);
+    gridScene("treegrid_long", true, 2);
     shutdown();
     return 0;
 }
