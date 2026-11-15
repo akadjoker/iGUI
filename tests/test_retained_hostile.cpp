@@ -4,7 +4,8 @@
 // window must stay under a sane number of vertices (a loop that draws one rectangle for each step of a float that
 // no longer advances would take the memory of the machine, so a regression has to fail fast, not grow). Meant for a
 // sanitizer build too (the conversions of a float to an int that does not fit are what UndefinedBehaviorSanitizer
-// finds, with -fsanitize=float-cast-overflow too). One check for each setter. No standard library: ct and C only.
+// finds, with -fsanitize=float-cast-overflow too). One check for each setter, and a few scenes for the loops that
+// step through time, pixels or grid lines. No standard library: ct and C only.
 //
 //   igui_retained_hostile_tests [--list] [--only=TEXT]
 //
@@ -159,6 +160,11 @@ const HostileCase kHostile[] = {
     H("WaveformView::setPlayhead", WaveformView, w->setPlayhead(v)),
     H("WaveformView::setViewRange(v, v)", WaveformView, w->setViewRange(v, v)),
     H("WaveformView::setLoopRegion(0, v)", WaveformView, w->setLoopRegion(0.0f, v)),
+    H("PianoRoll::setTimeRange(v, v)", PianoRoll, w->setTimeRange(v, v)),
+    H("PianoRoll::setTimeRange(0, v)", PianoRoll, w->setTimeRange(0.0f, v)),
+    H("PianoRoll::setPlayhead", PianoRoll, w->setPlayhead(v)),
+    H("PianoRoll::setKeyWidth", PianoRoll, w->setKeyWidth(v)),
+    H("PianoRoll::setRowHeight", PianoRoll, w->setRowHeight(v)),
     H("RadialGauge::setValue", RadialGauge, w->setValue(v)),
     H("RadialGauge::setNeedleLength", RadialGauge, w->setNeedleLength(v)),
     H("PowerBar::setValue", PowerBar, w->setValue(v)),
@@ -208,6 +214,111 @@ void runHostile(const HostileCase& c)
     check(s.ok, text.c_str());
 }
 
+// ── Scenes: loops that step through time, pixels or grid lines ───────────────────────────────────────────────────
+
+struct SceneCase
+{
+    const char* name;
+    void (*run)(Scene& s);
+};
+
+// Starts and widths (in beats or seconds) of a visible time range around the places where a float stops adding
+// one: 2^24 (a whole number cannot go up by one any more), 2^31 and the enormous ones; the widths are a tiny range,
+// a few ones and a million.
+const float kStarts[] = { 0.0f, 16777200.0f, 16777216.0f, 33554432.0f, 2147483648.0f, 1.0e15f, 1.0e30f, -16777216.0f, -2147483648.0f, -1.0e30f };
+const float kWidths[] = { 1.0f, 16.0f, 1.0e6f, 0.0f, 1.0e30f };
+
+void sceneTimeRanges(Scene& s, PianoRoll* roll, Timeline* line)
+{
+    char what[96];
+    for (float start: kStarts)
+        for (float width: kWidths)
+        {
+            snprintf(what, sizeof what, "the range %g + %g", static_cast<double>(start), static_cast<double>(width));
+            if (roll) roll->setTimeRange(start, start + width);
+            if (line) line->setTimeRange(start, start + width);
+            if (!s.settle(what, 1)) return;
+        }
+    // and the same with the ends the same, infinite or not a number
+    const float odd[] = { 1.0f / 0.0f, -1.0f / 0.0f, 0.0f / 0.0f, 3.0e38f, -3.0e38f };
+    for (float a: odd)
+        for (float b: odd)
+        {
+            snprintf(what, sizeof what, "the range %g to %g", static_cast<double>(a), static_cast<double>(b));
+            if (roll) roll->setTimeRange(a, b);
+            if (line) line->setTimeRange(a, b);
+            if (!s.settle(what, 1)) return;
+        }
+}
+
+PianoRoll* makeRoll(Scene& s)
+{
+    PianoRoll* roll = s.box->createChild<PianoRoll>();
+    roll->setStretch(1.0f);
+    roll->addNote(60, 0.0f, 1.0f);
+    roll->addNote(64, 16777216.0f, 4.0f);
+    roll->addNote(67, 2147483648.0f, 1.0e6f);
+    roll->addNote(62, -5.0f, 1.0e30f);
+    return roll;
+}
+
+const SceneCase kScenes[] = {
+    { "PianoRoll::setBeatsPerBar(0, -1, INT_MIN)",
+            [](Scene& s)
+            {
+                PianoRoll* roll = makeRoll(s);
+                roll->setTimeRange(0.0f, 16.0f);
+                const int values[] = { 0, -1, -2147483647 - 1, 1, 2147483647, 4 };
+                for (int bpb: values)
+                {
+                    char what[48];
+                    snprintf(what, sizeof what, "%d beats to a bar", bpb);
+                    roll->setBeatsPerBar(bpb);
+                    if (!s.settle(what)) return;
+                }
+            } },
+    { "PianoRoll: time ranges near 2^24, 2^31 and enormous",
+            [](Scene& s)
+            {
+                PianoRoll* roll = makeRoll(s);
+                sceneTimeRanges(s, roll, nullptr);
+            } },
+    { "PianoRoll: a million beats in view, whatever the beats to a bar",
+            [](Scene& s)
+            {
+                PianoRoll* roll = makeRoll(s);
+                roll->setTimeRange(0.0f, 1.0e6f);
+                const int values[] = { 1, 2, 3, 4, 7, 16, 1000 };
+                for (int bpb: values)
+                {
+                    char what[48];
+                    snprintf(what, sizeof what, "%d beats to a bar", bpb);
+                    roll->setBeatsPerBar(bpb);
+                    if (!s.settle(what)) return;
+                }
+            } },
+    { "PianoRoll: a note with a start or a length that is not a number",
+            [](Scene& s)
+            {
+                PianoRoll* roll = makeRoll(s);
+                const float odd[] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 1.0e30f, -1.0e30f };
+                for (float v: odd)
+                {
+                    roll->addNote(60, v, 1.0f);
+                    roll->addNote(61, 1.0f, v);
+                }
+                if (!s.settle("the notes")) return;
+            } },
+};
+
+void runScene(const SceneCase& c)
+{
+    Scene s(c.name);
+    c.run(s);
+    String text = String(c.name) + ": the frames stay finite and small";
+    check(s.ok, text.c_str());
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -223,6 +334,11 @@ int main(int argc, char** argv)
     {
         if (list) printf("%s\n", c.name);
         else if (!only || strstr(c.name, only)) runHostile(c);
+    }
+    for (const SceneCase& c: kScenes)
+    {
+        if (list) printf("%s\n", c.name);
+        else if (!only || strstr(c.name, only)) runScene(c);
     }
     if (list) return 0;
     shutdown();

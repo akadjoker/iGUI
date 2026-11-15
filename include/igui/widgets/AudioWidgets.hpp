@@ -920,10 +920,10 @@ public:
     void setPitchRange(int lo, int hi);
     /// @brief Set the visible time range in beats.
     void setTimeRange(float startBeat, float endBeat);
-    /// @brief Set beats per bar for grid lines.
+    /// @brief Set beats per bar for grid lines (at least 1).
     void setBeatsPerBar(int bpb)
     {
-        bpb_ = bpb;
+        bpb_ = bpb < 1 ? 1 : bpb;
         markDirty();
     }
     /// @brief Get the lowest visible pitch.
@@ -937,28 +937,24 @@ public:
         return pitchHi_;
     }
 
-    /// @brief Set the playhead position in beats.
-    void setPlayhead(float beat)
-    {
-        playhead_ = beat;
-        markDirty();
-    }
+    /// @brief Set the playhead position in beats (NaN keeps the old one, the infinities and the enormous are clamped).
+    void setPlayhead(float beat);
     /// @brief Get the current playhead position.
     float playhead() const
     {
         return playhead_;
     }
 
-    /// @brief Set the piano key column width in pixels.
+    /// @brief Set the piano key column width in pixels (0 to 10000; NaN keeps the old one).
     void setKeyWidth(float w)
     {
-        keyW_ = w;
+        keyW_ = Math::sane(w, keyW_, 0.0f, 10000.0f);
         markDirty();
     }
-    /// @brief Set the note row height in pixels.
+    /// @brief Set the note row height in pixels (1 to 10000; NaN keeps the old one).
     void setRowHeight(float h)
     {
-        rowH_ = h;
+        rowH_ = Math::sane(h, rowH_, 1.0f, 10000.0f);
         markDirty();
     }
     /// @brief Set the note rectangle color.

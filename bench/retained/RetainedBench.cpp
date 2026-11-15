@@ -15,6 +15,7 @@
 #include <igui/widgets/ComboBox.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/AssetBrowser.hpp>
+#include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/InputWidgets.hpp>
@@ -678,6 +679,27 @@ void bigTextScene()
     }
 }
 
+// The widgets that draw by stepping through a range with a loop (grid lines, ticks, rulers), as one idle frame each
+// on a window of 1280x720: what a change to those loops costs (the frame, with every other widget the same).
+void loopScenes()
+{
+    {
+        Harness h(1280.0f, 720.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        PianoRoll* roll = box->createChild<PianoRoll>();
+        roll->setStretch(1.0f);
+        roll->setPitchRange(36, 96);
+        for (int i = 0; i < 200; ++i) roll->addNote(40 + (i * 7) % 50, static_cast<float>(i) * 0.5f, 0.5f + 0.25f * static_cast<float>(i % 4));
+        roll->setTimeRange(0.0f, 32.0f);
+        h.relayout();
+        h.frames(3);
+        RUN_IF("loops", "pianoroll_32_beats", 300, [&] { h.frame(); });
+        roll->setTimeRange(0.0f, 400.0f);
+        h.frames(3);
+        RUN_IF("loops", "pianoroll_400_beats", 300, [&] { h.frame(); });
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -766,6 +788,13 @@ int main(int argc, char** argv)
         return 0;
     }
     printf("igui_retained_bench: best of %d, CPU time per iteration\n", gReps);
+    if (gOnly && !strncmp(gOnly, "loops", 5))
+    {
+        // only the loop scenes: the other scenes take seconds to build and are not measured then
+        loopScenes();
+        shutdown();
+        return 0;
+    }
     struct SampleDump
     {
         ~SampleDump()
@@ -852,6 +881,7 @@ int main(int argc, char** argv)
     propertyScene("propgrid_long", 1);
     inputScene();
     bigTextScene();
+    loopScenes();
     shutdown();
     return 0;
 }

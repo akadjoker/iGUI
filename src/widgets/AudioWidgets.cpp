@@ -1,4 +1,5 @@
 #include "AudioWidgets.hpp"
+#include "GridSteps.hpp"
 #include "Theme.hpp"
 #include <algorithm>
 #include <cmath>
@@ -1342,9 +1343,15 @@ PianoRoll::PianoRoll()
     setPitchRange(48, 72);
 }
 
+// The beats a roll can hold: past this a float cannot tell one beat from the next, and a note or a view that far
+// out only makes coordinates that overflow.
+static constexpr float kMaxBeat = 1.0e9f;
+
 void PianoRoll::addNote(int pitch, float start, float length)
 {
-    notes_.push_back({ pitch, start, std::max(0.01f, length) });
+    // a note with a start or a length that is not a number would be a rectangle that is not a number
+    if (Math::isNaN(start) || Math::isNaN(length)) return;
+    notes_.push_back({ pitch, Math::sane(start, 0.0f, -kMaxBeat, kMaxBeat), Math::sane(length, 0.01f, 0.01f, kMaxBeat) });
     markDirty();
 }
 
@@ -1370,10 +1377,28 @@ void PianoRoll::setPitchRange(int lo, int hi)
     markDirty();
 }
 
+// A view of the roll made of two numbers that may be anything: NaN keeps what the view has, the infinities and
+// the enormous are clamped, and the end is always past the start (by 0.01 beats, or by what a float can tell apart
+// at that distance), so that the beats of a pixel are never zero.
+static void fixBeatRange(float& start, float& end, float keepStart, float keepEnd)
+{
+    start = Math::sane(start, keepStart, -kMaxBeat, kMaxBeat);
+    end = Math::sane(end, keepEnd, -kMaxBeat, kMaxBeat);
+    end = end > start + 0.01f ? end : start + 0.01f;
+    if (!(end > start)) end = nextafterf(start, 1.0e30f);
+}
+
 void PianoRoll::setTimeRange(float s, float e)
 {
+    fixBeatRange(s, e, viewStart_, viewEnd_);
     viewStart_ = s;
-    viewEnd_ = std::max(viewStart_ + 0.01f, e);
+    viewEnd_ = e;
+    markDirty();
+}
+
+void PianoRoll::setPlayhead(float beat)
+{
+    playhead_ = Math::sane(beat, playhead_, -kMaxBeat, kMaxBeat);
     markDirty();
 }
 
@@ -1469,25 +1494,36 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
         ctx.fillRect(ga.x, y + rowH_ - 1, ga.w, 1);
     }
 
-    // Beat/bar grid
-    float firstBeat = std::floor(viewStart_);
-    for (float beat = firstBeat; beat <= viewEnd_; beat += 1.f)
+    // The lines are counted before they are drawn (GridSteps.hpp): whole beats from the first one in view, never
+    // more than there are pixels (a view of a million beats draws every few thousandth), so no time range and no
+    // number of beats to a bar can make a loop that does not end or one that draws a line for every beat.
+    const float bpb = bpb_ > 0 ? static_cast<float>(bpb_) : 1.0f;
+    const float firstBeat = floorf(viewStart_);
+    const GridMarks beats = gridMarks(firstBeat, viewEnd_, 1.0f, ga.w);
+    for (int i = 0; i < beats.count; ++i)
     {
+        const float beat = beats.first + static_cast<float>(i) * beats.step;
+        if (beat > viewEnd_) break;
         float x = beatToX(beat);
         if (x < ga.x || x > ga.x + ga.w) continue;
-        bool isBar = (std::fmod(beat, float(bpb_)) < 0.001f);
+        bool isBar = (fmodf(beat, bpb) < 0.001f);
         ctx.fill.SetColor(isBar ? 70 : 45, isBar ? 74 : 48, isBar ? 80 : 54, 255);
         ctx.fillRect(x, ga.y, 1, ga.h);
     }
 
     // Bar numbers
     float asc = setupFont(ctx, Color(100, 104, 110, 255), 9.f);
-    for (float beat = firstBeat; beat <= viewEnd_; beat += float(bpb_))
+    const GridMarks bars = gridMarks(firstBeat, viewEnd_, bpb, ga.w);
+    for (int i = 0; i < bars.count; ++i)
     {
+        const float beat = bars.first + static_cast<float>(i) * bars.step;
+        if (beat > viewEnd_) break;
         float x = beatToX(beat);
         if (x < ga.x || x > ga.x + ga.w) continue;
+        const float bar = beat / bpb;
+        if (!(bar > -1.0e9f && bar < 1.0e9f)) continue; // the number would not fit an int
         char buf[16];
-        snprintf(buf, sizeof(buf), "%d", static_cast<int>(beat / bpb_) + 1);
+        snprintf(buf, sizeof(buf), "%d", static_cast<int>(bar) + 1);
         ctx.font.Print(buf, x + 2, ga.y + 1 + asc);
     }
 }
@@ -1563,6 +1599,7 @@ void PianoRoll::paint(PaintContext& ctx)
 void PianoRoll::onMousePress(MouseEvent& e)
 {
     const Rect ga = gridArea();
+    if (!(ga.w > 0.0f)) return; // no grid to point at (the keys take the whole width): a beat is a division by it
     if (e.x < ga.x || e.x > ga.x + ga.w || e.y < ga.y || e.y > ga.y + ga.h) return;
 
     if (e.button == 2)
@@ -1622,10 +1659,13 @@ void PianoRoll::onMouseMove(MouseEvent& e)
     if (panning_)
     {
         const Rect ga = gridArea();
+        if (!(ga.w > 0.0f)) return;
         float dx = e.x - panStartX_;
         float dtpp = (panVE_ - panVS_) / ga.w;
-        viewStart_ = panVS_ - dx * dtpp;
-        viewEnd_ = panVE_ - dx * dtpp;
+        float vs = panVS_ - dx * dtpp, ve = panVE_ - dx * dtpp;
+        fixBeatRange(vs, ve, viewStart_, viewEnd_);
+        viewStart_ = vs;
+        viewEnd_ = ve;
         markDirty();
         return;
     }
@@ -1653,12 +1693,15 @@ void PianoRoll::onMouseRelease(MouseEvent&)
 void PianoRoll::onMouseScroll(MouseEvent& e)
 {
     const Rect ga = gridArea();
+    if (!(ga.w > 0.0f)) return;
     float t = viewStart_ + (e.x - ga.x) / ga.w * (viewEnd_ - viewStart_);
     float span =
             std::clamp((viewEnd_ - viewStart_) * (e.scrollY > 0 ? 0.8f : 1.f / 0.8f), 0.25f, 64.f);
     float ns = t - (e.x - ga.x) / ga.w * span;
+    float ne = ns + span;
+    fixBeatRange(ns, ne, viewStart_, viewEnd_);
     viewStart_ = ns;
-    viewEnd_ = ns + span;
+    viewEnd_ = ne;
     markDirty();
     e.consumed = true;
 }

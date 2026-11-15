@@ -64,6 +64,28 @@ inline float lerp(float a, float b, float t)
 {
     return a + (b - a) * t;
 }
+/// True for a number that is not NaN and not an infinity. Read from the bits, so that it still
+/// answers when the program is built with -ffast-math (which lets a compiler assume there are none).
+inline bool isFinite(float v)
+{
+    uint32_t bits;
+    __builtin_memcpy(&bits, &v, sizeof bits);
+    return (bits & 0x7f800000u) != 0x7f800000u;
+}
+inline bool isNaN(float v)
+{
+    uint32_t bits;
+    __builtin_memcpy(&bits, &v, sizeof bits);
+    return (bits & 0x7fffffffu) > 0x7f800000u;
+}
+/// What a setter does with a number it was given: NaN gives `keep` (what the widget has now), the
+/// infinities and everything outside [lo, hi] are clamped to the nearest end. A number inside the
+/// range comes back as it is.
+inline float sane(float v, float keep, float lo, float hi)
+{
+    if (isNaN(v)) return keep;
+    return v < lo ? lo : (v > hi ? hi : v);
+}
 inline float min2(float a, float b)
 {
     return a < b ? a : b;
