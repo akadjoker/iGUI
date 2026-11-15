@@ -379,6 +379,7 @@ private:
     Color bgColor_ = Color(35, 36, 40, 255);
     float spacing_ = 6.0f;
     String text_;
+    ElideMemo textMemo_; // what paint worked out for the text (cut to its room)
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

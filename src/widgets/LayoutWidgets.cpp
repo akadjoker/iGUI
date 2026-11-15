@@ -549,8 +549,23 @@ void StatusBar::paint(PaintContext& ctx)
         ctx.font.SetColor(t.textDisabled);
         ctx.font.SetBatch(&ctx.text);
         // the baseline: the text centred in the bar (y was the top of the text, which put half of it above the bar)
-        float ty = abs.y + (abs.h - t.fontSize * 0.85f) * 0.5f + ctx.font.GetAscender();
-        ctx.font.Print(text_.c_str(), abs.x + t.padding, ty);
+        const float asc = ctx.font.GetAscender();
+        float ty = abs.y + (abs.h - t.fontSize * 0.85f) * 0.5f + asc;
+        // The text ends in "..." before the first child (they are laid out after the room the text was
+        // given) or, with none, before the resize grip at the corner.
+        float right = abs.x + abs.w - 14.0f;
+        for (auto* c: children_)
+            if (c->isVisible())
+            {
+                const float beforeChild = abs.x + c->rect().x - spacing_;
+                if (beforeChild < right) right = beforeChild;
+                break;
+            }
+        const float room = right - (abs.x + t.padding);
+        const uint32_t fontId = ctx.fontStamp().id;
+        if (textMemo_.holds(text_, room, fontId) && !textMemo_.elided) ctx.font.Print(text_.c_str(), abs.x + t.padding, ty);
+        else
+            ctx.printElided({ abs.x + t.padding, abs.y, room, abs.h }, text_, ty, asc, textMemo_, fontId);
     }
 
     // Resize grip — three diagonal lines at bottom-right corner (Windows style)
