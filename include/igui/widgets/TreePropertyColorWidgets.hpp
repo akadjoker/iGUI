@@ -583,6 +583,13 @@ private:
     int activeRow_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+    float editScroll_ = 0.f; // how far the text being edited is moved to the left (kept between frames)
+
+    // What paint worked out for the texts it prints (PaintContext::printElided): a few for each row, and
+    // one for the name and one for the text of the description panel.
+    ct::Vector<ElideMemo> memos_;
+    ElideMemo descNameMemo_;
+    ElideMemo descTextMemo_;
 
     SpinSlider* makeSpin(int row, double value, double minimum, double maximum, bool integer,
             const String& name);

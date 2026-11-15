@@ -1,4 +1,5 @@
 #include "TreePropertyColorWidgets.hpp"
+#include "EditText.hpp"
 #include "SpinSlider.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
@@ -9,6 +10,17 @@
 #include <cstdio>
 
 using ig::retained::clamp;
+
+namespace
+{
+// Space between a text and the edge of its room, at the right
+const float kTextPad = 4.0f;
+// The memos of a row (PropertyGrid::memos_): the name, then the texts of the value (up to four, the
+// components of a vector)
+const size_t kName = 0;
+const size_t kValue = 1;
+const size_t kMemosPerRow = 5;
+} // namespace
 // ─────────────────────────────────────────────────────────────────────────────
 //  ColorPickerPopup_ — popup wrapper for PropertyGrid color editing
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1603,6 +1615,7 @@ void PropertyGrid::startEdit(int row)
             return;
     }
     editCursor_ = static_cast<int>(editBuf_.size());
+    editScroll_ = 0.f;
     markDirty();
 }
 
@@ -1684,6 +1697,11 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
     float textY = y + (rowHeight_ - t.fontSize) * 0.5f + asc;
+    // The texts of a row are cut with "..." to their room (the name to its column, a value to its box),
+    // each with the memo of its place: a text that has not changed is not measured again.
+    const uint32_t fontId = ctx.fontStamp().id;
+    if (memos_.size() < rows_.size() * kMemosPerRow) memos_.resize(rows_.size() * kMemosPerRow);
+    ElideMemo* const memo = &memos_[static_cast<size_t>(idx) * kMemosPerRow];
 
     // ── Section header ───────────────────────────────────────────────────
     if (row.type == PropType::Section)
@@ -1706,7 +1724,8 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         else
             ctx.fillTriangle(tx + 1, tcy - ts * 0.5f, tx + 1, tcy + ts * 0.5f, tx + ts, tcy);
         ctx.font.SetColor(t.textColor);
-        ctx.font.Print(row.name.c_str(), tx + ts + 4.f, textY);
+        const float nameX = tx + ts + 4.f;
+        ctx.printElided({ nameX, y, abs.x + abs.w - kTextPad - nameX, rowHeight_ }, row.name, textY, asc, memo[kName], fontId);
         return;
     }
 
@@ -1730,7 +1749,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
 
     // Label
     ctx.font.SetColor(idx == selectedRow_ ? Color(255, 255, 255, 255) : t.textColor);
-    ctx.font.Print(row.name.c_str(), abs.x + 8.f, textY);
+    ctx.printElided({ abs.x + 8.f, y, labelW - 8.f - kTextPad, rowHeight_ }, row.name, textY, asc, memo[kName], fontId);
 
     // Column separator
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 50);
@@ -1753,16 +1772,14 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         ctx.line.SetColor(t.focusColor.r, t.focusColor.g, t.focusColor.b, t.focusColor.a);
         ctx.lineRect(valTextX, y + 1, valW, rowHeight_ - 2);
         ctx.font.SetColor(Color(255, 255, 255, 255));
-        ctx.font.Print(editBuf_.c_str(), valTextX + 3, textY);
-        float curX = valTextX + 3 + ctx.font.GetTextWidth(editBuf_.substr(0, editCursor_).c_str());
-        ctx.line.SetColor(255, 255, 255, 255);
-        ctx.drawLine(curX, y + 3, curX, y + rowHeight_ - 3);
+        // the text is cut at the box and moved to the left as far as the cursor needs to stay in it
+        paintEditText(ctx, editBuf_, editCursor_, editScroll_, valTextX, valW, y, rowHeight_, textY, asc);
         return;
     }
 
     // ── Slider helper ────────────────────────────────────────────────────
     auto drawSliderBar = [&](float sx, float sy, float sw, float sh, float val, float mn, float mxa,
-                                 const char* label, Color barCol)
+                                 const String& label, ElideMemo& labelMemo, Color barCol)
     {
         ctx.fill.SetColor(t.inputBg.r, t.inputBg.g, t.inputBg.b, t.inputBg.a);
         ctx.fillRect(sx, sy, sw, sh);
@@ -1772,7 +1789,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
         ctx.lineRect(sx, sy, sw, sh);
         ctx.font.SetColor(Color(230, 230, 230, 255));
-        ctx.font.Print(label, sx + 3, sy + (sh - t.fontSize) * 0.5f + asc);
+        ctx.printElided({ sx + 3, sy, sw - 6, sh }, label, sy + (sh - t.fontSize) * 0.5f + asc, asc, labelMemo, fontId);
     };
 
     switch (row.type)
@@ -1785,7 +1802,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
             ctx.lineRect(valTextX, y + 2, valW, rowHeight_ - 4);
             ctx.font.SetColor(Color(200, 220, 255, 255));
-            ctx.font.Print(d.value.c_str(), valTextX + 3, textY);
+            ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, d.value, textY, asc, memo[kValue], fontId);
             break;
         }
         case PropType::Float:
@@ -1818,7 +1835,8 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             char buf[20];
             snprintf(buf, 20, "#%02X%02X%02X", d.value.r, d.value.g, d.value.b);
             ctx.font.SetColor(Color(180, 180, 180, 255));
-            ctx.font.Print(buf, valTextX + sw2 + 4.f, textY);
+            const float hexX = valTextX + sw2 + 4.f;
+            ctx.printElided({ hexX, y, valTextX + valW - hexX, rowHeight_ }, String(buf), textY, asc, memo[kValue], fontId);
             break;
         }
         case PropType::Combo:
@@ -1831,8 +1849,9 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             const String& txt =
                     (d.index >= 0 && d.index < (int) d.options.size()) ? d.options[d.index] : "";
             ctx.font.SetColor(Color(180, 220, 180, 255));
-            ctx.font.Print(txt.c_str(), valTextX + 3, textY);
             float ax = valueX + valueW - 14.f, ay = y + rowHeight_ * 0.5f;
+            // the text ends before the arrow
+            ctx.printElided({ valTextX + 3, y, ax - 4.f - (valTextX + 3), rowHeight_ }, txt, textY, asc, memo[kValue], fontId);
             ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
             ctx.fillTriangle(ax, ay - 3, ax + 8, ay - 3, ax + 4, ay + 3);
             break;
@@ -1856,7 +1875,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
                 if (draggingSlider_ && activeRow_ == idx && dragComponent_ == c)
                     bc = Color(std::min(255, bc.r + 30), std::min(255, bc.g + 30),
                             std::min(255, bc.b + 30), 220);
-                drawSliderBar(cx2, y + 2, compW, rowHeight_ - 4, d.value[c], d.min, d.max, buf, bc);
+                drawSliderBar(cx2, y + 2, compW, rowHeight_ - 4, d.value[c], d.min, d.max, String(buf), memo[kValue + c], bc);
             }
             break;
         }
@@ -1869,7 +1888,9 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.lineRoundedRect(valTextX, y + 2, valW, rowHeight_ - 4, 3.f);
             float tw = ctx.font.GetTextWidth(row.name.c_str());
             ctx.font.SetColor(t.textColor);
-            ctx.font.Print(row.name.c_str(), valTextX + (valW - tw) * 0.5f, textY);
+            if (tw <= valW - 6.f) ctx.font.Print(row.name.c_str(), valTextX + (valW - tw) * 0.5f, textY);
+            else
+                ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, row.name, textY, asc, memo[kValue], fontId);
             break;
         }
         case PropType::Separator:
@@ -1905,7 +1926,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             char buf[48];
             snprintf(buf, 48, "%.1f - %.1f", d.lo, d.hi);
             ctx.font.SetColor(Color(230, 230, 230, 255));
-            ctx.font.Print(buf, valTextX + 3, textY);
+            ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, String(buf), textY, asc, memo[kValue], fontId);
             break;
         }
         default:
@@ -1927,12 +1948,15 @@ void PropertyGrid::paintDescPanel(PaintContext& ctx, const Rect& abs)
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
+    const uint32_t fontId = ctx.fontStamp().id;
+    const float descW = abs.w - 6.f - kTextPad;
     ctx.font.SetColor(Color(220, 220, 225, 255));
-    ctx.font.Print(row.name.c_str(), abs.x + 6, descY + 4 + asc);
+    ctx.printElided({ abs.x + 6, descY + 4, descW, t.fontSize }, row.name, descY + 4 + asc, asc, descNameMemo_, fontId);
     if (!row.description.empty())
     {
         ctx.font.SetColor(Color(150, 150, 155, 255));
-        ctx.font.Print(row.description.c_str(), abs.x + 6, descY + 4 + t.fontSize + 2 + asc);
+        ctx.printElided({ abs.x + 6, descY + 4 + t.fontSize + 2, descW, t.fontSize }, row.description,
+                descY + 4 + t.fontSize + 2 + asc, asc, descTextMemo_, fontId);
     }
 }
 
