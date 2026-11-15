@@ -1815,7 +1815,7 @@ void TreeGrid::paint(PaintContext& ctx)
                     float arrowCY = ry + rowHeight_ * 0.5f;
                     float textX = cx + indent + 14;
                     const float iconS = rowHeight_ - 6;
-                    const bool hasIcon = node->iconId != IconId::None && ctx.icons;
+                    const bool hasIcon = node->iconId != IconId::None;
                     const bool hasArrow = !node->children.empty();
 
                     // The expander and the icon come before the text, and a deep node in a narrow

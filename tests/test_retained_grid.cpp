@@ -855,6 +855,38 @@ void testGridIgnoresANaNColumnWidth()
     check(selected, "the second column can still be clicked");
 }
 
+// The icon of a node is drawn when the application paints with no icon atlas (the zen adapter paints with
+// none: ZenApp passes nullptr): the vector icons need no atlas. The frame is the one the harness draws
+// (no atlas), and the text of the node is where the icon leaves it.
+Shot iconShot(bool icon, Rect* gridRect)
+{
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TreeGrid* grid = box->createChild<TreeGrid>();
+    grid->setStretch(1.0f);
+    grid->addColumn("Nome", 200.0f);
+    TreeGrid::Node* node = grid->addRoot({ "No" });
+    if (icon) node->iconId = IconId::File;
+    grid->rebuild();
+    screen.h.relayout();
+    screen.h.frames(2);
+    *gridRect = grid->absoluteRect();
+    return screen.take(false);
+}
+
+void testTreeGridDrawsNodeIconsWithoutAnAtlas()
+{
+    Rect grid;
+    const Shot with = iconShot(true, &grid);
+    const Shot without = iconShot(false, &grid);
+    // the icon sits after the expander: from 14 pixels in, a row (24) less 6 pixels square
+    const int x0 = static_cast<int>(grid.x) + 14, y0 = static_cast<int>(grid.y + kHeaderH) + 3;
+    const int n = differing(with, without, x0, y0, x0 + 18, y0 + 18);
+    if (n < 10) printf("    only %d pixels differ where the icon goes\n", n);
+    check(n >= 10, "the icon of a node is drawn with no icon atlas");
+}
+
 void testFixedColumnsKeepTheirWidth()
 {
     printf("columns that do not stretch keep the width they were given\n");
@@ -2036,6 +2068,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
     RUN(testTreeGridSetColumnWidth);
+    RUN(testTreeGridDrawsNodeIconsWithoutAnAtlas);
     RUN(testGridIgnoresANaNColumnWidth);
     RUN(testDataGridMemosDoNotGoStale);
     RUN(testModelDataIsNotStaleInTheGrid);
