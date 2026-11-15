@@ -363,6 +363,11 @@ private:
     const ig::retained::Font* stampBase_ = nullptr;
     float stampHeight_ = -1.0f; // fontHeight_ as it was when the stamp was made (0: the theme's)
     float stampScale_ = -1.0f;
+    // activeFont(): the font found for the base font and height it was asked for last (every Print, every
+    // measure and every ascender asked the atlas for it again: a search over the sizes it has made)
+    mutable const ig::retained::Font* activeBase_ = nullptr;
+    mutable float activeHeight_ = -1.0f;
+    mutable const ig::retained::Font* active_ = nullptr;
     const FontStamp& makeFontStamp();
     void rememberElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId);
 };

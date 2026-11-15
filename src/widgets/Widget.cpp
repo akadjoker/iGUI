@@ -112,7 +112,15 @@ float PaintContext::fontHeight() const
 
 const ig::retained::Font* PaintContext::activeFont() const
 {
-    return buFont ? buFont->atHeight(fontHeight()) : nullptr;
+    if (!buFont) return nullptr;
+    const float height = fontHeight();
+    if (activeBase_ != buFont || activeHeight_ != height)
+    {
+        active_ = buFont->atHeight(height);
+        activeBase_ = buFont;
+        activeHeight_ = height;
+    }
+    return active_;
 }
 
 void PaintContext::pushFont(const ig::retained::Font* f)
