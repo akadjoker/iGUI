@@ -548,7 +548,8 @@ void StatusBar::paint(PaintContext& ctx)
         ctx.font.SetFontSize(t.fontSize * 0.85f);
         ctx.font.SetColor(t.textDisabled);
         ctx.font.SetBatch(&ctx.text);
-        float ty = abs.y + (abs.h - t.fontSize * 0.85f) * 0.5f;
+        // the baseline: the text centred in the bar (y was the top of the text, which put half of it above the bar)
+        float ty = abs.y + (abs.h - t.fontSize * 0.85f) * 0.5f + ctx.font.GetAscender();
         ctx.font.Print(text_.c_str(), abs.x + t.padding, ty);
     }
 

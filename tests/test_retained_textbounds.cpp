@@ -378,6 +378,28 @@ void testSweepTextStaysInItsWidget()
     }
 }
 
+// The status text of a StatusBar is inside the bar: a short text drawn, and the pixels outside the bar the same
+// as without it (the baseline was where the top of the text should have been, half of it was above the bar).
+void testStatusBarTextIsInTheBar()
+{
+    Rect r1, r2;
+    const SweepCase c = { "StatusBar",
+        [](BoxLayout* b, const String& t) -> Widget*
+        {
+            StatusBar* w = b->createChild<StatusBar>();
+            w->setText(t);
+            return w;
+        } };
+    const Shot withText = sweepShot(c, "Pronto", &r1);
+    const Shot without = sweepShot(c, "", &r2);
+    const int n = outside(withText, without, r1);
+    if (n) printf("    %d pixels of the status text are outside the bar\n", n);
+    check(n == 0, "the status text of a StatusBar is inside the bar");
+    const int inside = differing(withText, without, static_cast<int>(r1.x), static_cast<int>(r1.y), ceilInt(r1.x + r1.w),
+            ceilInt(r1.y + r1.h));
+    check(inside > 20, "the status text of a StatusBar is drawn");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -391,6 +413,7 @@ int main(int argc, char** argv)
     RUN(testPropertyGridDescriptionStaysInTheGrid);
     RUN(testPropertyGridEditedValueStaysInItsBox);
     RUN(testSweepTextStaysInItsWidget);
+    RUN(testStatusBarTextIsInTheBar);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
