@@ -49,6 +49,10 @@ void Breadcrumbs::paint(PaintContext& ctx)
     float asc = ctx.font.GetAscender();
     float ty = abs.y + (abs.h + asc) * 0.5f;
     float cx = abs.x + t.padding;
+    // a path longer than the widget is cut at its right edge (printWithin clips only a text that
+    // crosses it), and what starts past the edge is not drawn
+    const float right = abs.x + abs.w - t.padding;
+    const Rect room = { abs.x, abs.y, abs.w - t.padding, abs.h };
 
     segRects_.clear();
     segRects_.resize(segments_.size());
@@ -67,7 +71,7 @@ void Breadcrumbs::paint(PaintContext& ctx)
             ctx.font.SetColor(Color(120, 170, 220, 255));
             // Underline
             ctx.line.SetColor(Color(120, 170, 220, 255));
-            ctx.line.Line2D(cx, ty + 2, cx + tw, ty + 2);
+            ctx.line.Line2D(cx, ty + 2, cx + tw < right ? cx + tw : right, ty + 2);
         }
         else if (!isLast)
         {
@@ -77,7 +81,7 @@ void Breadcrumbs::paint(PaintContext& ctx)
         {
             ctx.font.SetColor(t.textColor);
         }
-        ctx.font.Print(segments_[i].c_str(), cx, ty);
+        if (cx < right) ctx.printWithin(room, segments_[i], cx, tw, ty, asc);
         cx += tw;
 
         // Separator
@@ -87,7 +91,7 @@ void Breadcrumbs::paint(PaintContext& ctx)
             float sepPad = t.fontSize * 0.3f;
             cx += sepPad;
             ctx.font.SetColor(Color(100, 100, 105, 255));
-            ctx.font.Print(separator_.c_str(), cx, ty);
+            if (cx < right) ctx.printWithin(room, separator_, cx, sepW, ty, asc);
             cx += sepW + sepPad;
         }
     }

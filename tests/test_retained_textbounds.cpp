@@ -323,6 +323,15 @@ const SweepCase kSweep[] = {
                 w->setSuffix(t);
                 return w;
             } },
+    { "Breadcrumbs",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                Breadcrumbs* w = b->createChild<Breadcrumbs>();
+                ct::Vector<String> path;
+                path.push_back(t);
+                w->setPath(path);
+                return w;
+            } },
     { "TreeView",
             [](BoxLayout* b, const String& t) -> Widget*
             {
