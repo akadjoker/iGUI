@@ -1251,6 +1251,15 @@ public:
     {
         return String("Coluna comprida ") + String::number(section);
     }
+    int flags(const ModelIndex&) const override
+    {
+        return Selectable | Editable | Enabled;
+    }
+    bool setData(const ModelIndex& index, const String& value, ItemRole = ItemRole::Edit) override
+    {
+        set(index.row(), index.column(), value);
+        return true;
+    }
     void set(int row, int column, const String& text)
     {
         cells_[static_cast<size_t>(row * 4 + column)] = text;
@@ -1790,6 +1799,169 @@ void testMemosAreBoundedByTheCellsInSight()
             "after thousands of rows scrolled through, the rows in sight are the ones that are there");
 }
 
+// ---- stretching columns of a DataGrid with a model ----
+//
+// The columns of a grid with a model come from the grid (addColumn) or, when it has none yet, from the
+// model's headers (120 wide each). Either way they stretch as the others do, and the model's rows are
+// found where the stretched columns are.
+//
+// (TreeGrid takes no model: it has no setModel.)
+
+// A grid of the model in a window, with what `prepare` does to it (addColumn, setColumnStretch) before
+// the model is set.
+struct ModelRig
+{
+    Harness h;
+    DataGrid* grid = nullptr;
+    int sorted = -1;
+
+    template<class Prepare>
+    ModelRig(float windowWidth, TextModel* model, Prepare prepare)
+            : h(windowWidth, kWindowH)
+    {
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        grid = box->createChild<DataGrid>();
+        grid->setStretch(1.0f);
+        prepare(grid);
+        grid->setModel(model);
+        int* where = &sorted;
+        grid->columnSorted.connect([where](int column) { *where = column; });
+        h.relayout();
+    }
+    Rect rect() const
+    {
+        return grid->absoluteRect();
+    }
+    int headerAt(float x)
+    {
+        sorted = -1;
+        h.click(rect().x + x, rect().y + kHeaderH * 0.5f);
+        return sorted;
+    }
+    void resizeTo(float width)
+    {
+        h.resize(width, kWindowH);
+        h.relayout();
+    }
+    // A drag that starts on the header at x and moves dx pixels to the right.
+    void drag(float x, float dx)
+    {
+        h.moveTo(rect().x + x, rect().y + kHeaderH * 0.5f);
+        h.down();
+        h.moveTo(rect().x + x + dx, rect().y + kHeaderH * 0.5f);
+        h.up();
+    }
+};
+
+void testStretchWithAModel()
+{
+    printf("stretching columns of a DataGrid with a model\n");
+    // columns given to the grid before the model, two of them asked to stretch (the least they get: 90 and 160)
+    {
+        TextModel model(schemeA, kMemoRows);
+        ModelRig r(640.0f, &model,
+                [](DataGrid* g)
+                {
+                    for (int c = 0; c < 4; ++c) g->addColumn(String("C") + String::number(c), kMemoWidths[c]);
+                    g->setColumnStretch(2, true);
+                    g->setColumnStretch(3, true);
+                });
+        // 100 + 140 fixed, 90 and 160 stretching: (640 - 240) / 2 = 200 each
+        check(near(r.grid->columnWidth(0), 100.0f) && near(r.grid->columnWidth(1), 140.0f) && near(r.grid->columnWidth(2), 200.0f) && near(r.grid->columnWidth(3), 200.0f),
+                "the columns share what the fixed ones leave over");
+        check(r.grid->columnStretch(2) && r.grid->columnStretch(3) && !r.grid->columnStretch(0), "the flags set before the model are there after it");
+        check(r.headerAt(100.0f + 140.0f + 100.0f) == 2 && r.headerAt(100.0f + 140.0f + 200.0f + 100.0f) == 3 && r.headerAt(636.0f) == 3, "a header click lands on the stretched column under it");
+        r.resizeTo(500.0f);
+        // 260 left for two columns: the equal share, 130, is under the 160 the fourth was given, which keeps it
+        check(near(r.grid->columnWidth(2), 100.0f) && near(r.grid->columnWidth(3), 160.0f), "they follow the window narrower (the one with the larger own width keeps it)");
+        r.resizeTo(300.0f);
+        check(near(r.grid->columnWidth(2), 90.0f) && near(r.grid->columnWidth(3), 160.0f), "and stay at their own width when it does not hold them");
+        r.resizeTo(900.0f);
+        check(near(r.grid->columnWidth(2), 330.0f) && near(r.grid->columnWidth(3), 330.0f), "and wider");
+        // the model's rows are added and taken away: nothing of the widths changes
+        model.set(3, 1, "x");
+        model.modelReset.emit();
+        model.rowsInserted.emit();
+        model.rowsRemoved.emit();
+        r.h.frames(2);
+        check(near(r.grid->columnWidth(2), 330.0f) && near(r.grid->columnWidth(0), 100.0f), "the model's signals leave the widths alone");
+        // the edge of a fixed column is dragged (the stretching ones take what it gives), the edge of a
+        // stretching column is not
+        r.drag(100.0f, 30.0f);
+        check(near(r.grid->columnWidth(0), 130.0f) && near(r.grid->columnWidth(2), 315.0f) && near(r.grid->columnWidth(3), 315.0f), "dragging the edge of a fixed column widens it and the stretching ones give way");
+        r.drag(130.0f + 140.0f + 315.0f, 40.0f);
+        check(near(r.grid->columnWidth(0), 130.0f) && near(r.grid->columnWidth(1), 140.0f) && near(r.grid->columnWidth(2), 315.0f) && near(r.grid->columnWidth(3), 315.0f),
+                "dragging the edge of a stretching column changes nothing");
+    }
+    // the columns of the model: 4 of 120, the last one stretching
+    {
+        TextModel model(schemeA, kMemoRows);
+        ModelRig r(640.0f, &model, [](DataGrid* g) { g->setStretchLastColumn(true); });
+        check(near(r.grid->columnWidth(0), 120.0f) && near(r.grid->columnWidth(2), 120.0f) && near(r.grid->columnWidth(3), 640.0f - 360.0f),
+                "columns made from the model's headers stretch too (the last one: 280)");
+        r.resizeTo(400.0f);
+        check(near(r.grid->columnWidth(3), 120.0f), "and stay at 120 when there is no more room");
+        r.resizeTo(1000.0f);
+        check(near(r.grid->columnWidth(3), 640.0f), "and grow with the window");
+        check(r.headerAt(996.0f) == 3, "to its edge");
+    }
+    // a cell of the stretched column is edited, and the model is the one that gets it
+    {
+        TextModel model(schemeA, kMemoRows);
+        ModelRig r(640.0f, &model,
+                [](DataGrid* g)
+                {
+                    for (int c = 0; c < 4; ++c) g->addColumn(String("C") + String::number(c), 100.0f);
+                    g->setStretchLastColumn(true);
+                });
+        int editedRow = -1, editedColumn = -1;
+        r.grid->cellEdited.connect([&editedRow, &editedColumn](int row, int column) { editedRow = row; editedColumn = column; });
+        const float y = r.rect().y + kHeaderH + kRowH * 1.5f;
+        r.h.click(r.rect().x + 500.0f, y); // 400 + 240: well past the 100 the last column was given
+        r.h.click(r.rect().x + 500.0f, y);
+        r.h.type("!");
+        r.h.key(Key::Return);
+        check(editedRow == 1 && editedColumn == 3, "a double click far in the last column edits its cell");
+        check(model.data(ModelIndex(1, 3)) == schemeA(1, 3) + "!", "and the model has what was typed");
+    }
+    // painted as a grid with those widths, every pixel
+    {
+        float effective[4];
+        Shot stretched, fixed;
+        {
+            TextModel model(schemeA, kMemoRows);
+            Screen screen(500.0f, kWindowH);
+            BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+            box->setPadding(0.0f);
+            DataGrid* grid = box->createChild<DataGrid>();
+            grid->setStretch(1.0f);
+            for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna comprida ") + String::number(c), kMemoWidths[c]);
+            grid->setColumnStretch(0, true);
+            grid->setColumnStretch(2, true);
+            grid->setModel(&model);
+            screen.h.relayout();
+            screen.h.frames(3);
+            for (int c = 0; c < 4; ++c) effective[c] = grid->columnWidth(c);
+            stretched = screen.take();
+        }
+        {
+            TextModel model(schemeA, kMemoRows);
+            Screen screen(500.0f, kWindowH);
+            BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+            box->setPadding(0.0f);
+            DataGrid* grid = box->createChild<DataGrid>();
+            grid->setStretch(1.0f);
+            for (int c = 0; c < 4; ++c) grid->addColumn(String("Coluna comprida ") + String::number(c), effective[c]);
+            grid->setModel(&model);
+            screen.h.relayout();
+            screen.h.frames(3);
+            fixed = screen.take();
+        }
+        check(differing(stretched, fixed, 0, 0, stretched.w, stretched.h) == 0, "a grid with a model and stretching columns is painted like one with those widths");
+    }
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -1849,6 +2021,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridMemosDoNotGoStale);
     RUN(testMemosFollowTheFontSize);
     RUN(testMemosAreBoundedByTheCellsInSight);
+    RUN(testStretchWithAModel);
     RUN(testStretchingColumns);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
