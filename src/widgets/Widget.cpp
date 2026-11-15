@@ -368,6 +368,105 @@ void PaintContext::printElided(const Rect& bounds, const String& text, float y, 
     printWithin(bounds, shown, bounds.x, font.GetTextWidth(shown.c_str()), y, ascender);
 }
 
+namespace
+{
+// The stamps seen so far, each numbered by its place: a font state is told from another by one integer.
+// A table that grows past 256 (a text size changing through hundreds of values) is forgotten and the
+// numbers start again in a new generation, so a number of the old table never means one of the new.
+uint32_t numberOfStamp(const FontStamp& stamp)
+{
+    static ct::Vector<FontStamp> known;
+    static uint32_t generation = 1;
+    for (size_t i = 0; i < known.size(); ++i)
+        if (known[i].sameFont(stamp)) return known[i].id;
+    if (known.size() >= 256)
+    {
+        known.clear();
+        ++generation;
+    }
+    FontStamp numbered = stamp;
+    numbered.id = (generation << 16) | static_cast<uint32_t>(known.size() + 1);
+    known.push_back(numbered);
+    return numbered.id;
+}
+
+} // namespace
+
+const FontStamp& PaintContext::makeFontStamp()
+{
+    const float height = fontHeight();
+    stampBase_ = buFont;
+    stampHeight_ = fontHeight_;
+    stampScale_ = font.scale;
+    const Font* f = activeFont();
+    stamp_ = FontStamp();
+    stamp_.font = f;
+    stamp_.height = height;
+    stamp_.scale = font.scale;
+    if (f)
+    {
+        stamp_.pixelHeight = f->pixelHeight();
+        stamp_.pixelScale = f->pixelScale();
+        stamp_.lineHeight = f->lineHeight();
+        stamp_.dynamic = f->isDynamic();
+        stamp_.probe = drawList.calcTextSize(*f, "Mgyj.W", font.scale).x;
+    }
+    stamp_.kerning = static_cast<int>(drawList.kerning());
+    stamp_.id = numberOfStamp(stamp_);
+    return stamp_;
+}
+
+void PaintContext::printElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo)
+{
+    if (text.empty() || !(bounds.w > 0.0f)) return;
+    printElided(bounds, text, y, ascender, memo, fontStamp().id);
+}
+
+void PaintContext::printElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId)
+{
+    if (text.empty() || !(bounds.w > 0.0f)) return;
+    if (memo.fontId != fontId || memo.room != bounds.w || !detail::sameBytes(memo.text, text))
+    {
+        rememberElided(bounds, text, y, ascender, memo, fontId);
+        return;
+    }
+    if (!memo.elided) font.Print(text.c_str(), bounds.x, y);
+    else
+        printWithin(bounds, memo.shown, bounds.x, memo.shownWidth, y, ascender);
+}
+
+// The memo does not hold (or the text is too long to keep): work the text out, keep it, print it. Kept out
+// of line: inlined into printElided, its strings and their clean-up made every hit pay for a large frame.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+void PaintContext::rememberElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId)
+{
+    if (text.size() > 512)
+    {
+        printElided(bounds, text, y, ascender);
+        return;
+    }
+    memo.text = text;
+    memo.fontId = fontId;
+    memo.room = bounds.w;
+    const float width = font.GetTextWidth(text.c_str());
+    if (width <= bounds.w)
+    {
+        memo.elided = false;
+        memo.shown.clear();
+        memo.shownWidth = width;
+        font.Print(text.c_str(), bounds.x, y);
+        return;
+    }
+    memo.elided = true;
+    memo.shown = fitText(text, bounds.w, width);
+    memo.shownWidth = font.GetTextWidth(memo.shown.c_str());
+    printWithin(bounds, memo.shown, bounds.x, memo.shownWidth, y, ascender);
+}
+
 float PaintContext::textHeight() const
 {
     return buFont ? buFont->lineHeight() : 16.0f;

@@ -116,6 +116,100 @@ struct FontProxy
     void Print(const char* text, float x, float y, const void* clipHint = nullptr);
 };
 
+/// @brief Everything the width of a text depends on besides the text: the font in force, its height and
+///        scale, how the draw list kerns, and the width of a fixed probe text (so that a font that
+///        was made again at the same address, with other glyphs, is not taken for the one before).
+///        What PaintContext::printElided keeps next to a measure, to know it still holds. @c id numbers
+///        the stamps: two stamps with the same fields have the same id, two that differ have different
+///        ones (a table of the ones seen, forgotten and numbered anew when it grows past 256), so that
+///        a memo tells the font is the one it was made for by comparing one integer.
+struct FontStamp
+{
+    uint32_t id = 0;
+    const ig::retained::Font* font = nullptr;
+    float height = 0.0f;
+    float scale = 0.0f;
+    float pixelHeight = 0.0f;
+    float pixelScale = 0.0f;
+    float lineHeight = 0.0f;
+    float probe = 0.0f;
+    int kerning = 0;
+    bool dynamic = false;
+
+    /// Whether every field but the id is the same.
+    bool sameFont(const FontStamp& o) const
+    {
+        return font == o.font && height == o.height && scale == o.scale && pixelHeight == o.pixelHeight &&
+               pixelScale == o.pixelScale && lineHeight == o.lineHeight && probe == o.probe &&
+               kerning == o.kerning && dynamic == o.dynamic;
+    }
+};
+
+namespace detail
+{
+/// Whether two texts are the same bytes: a word at a time, the last one overlapping the one before when
+/// the length is not a multiple of eight, so a short text takes two or three compares and no loop over
+/// bytes (the C library's memcmp, through the dynamic linker's table, cost more than the rest of a
+/// memo hit on a short text).
+inline bool sameBytes(const String& a, const String& b)
+{
+    const size_t n = a.size();
+    if (n != b.size()) return false;
+    const char* p = a.data();
+    const char* q = b.data();
+    if (n >= 8)
+    {
+        uint64_t x, y;
+        for (size_t i = 0; i + 8 < n; i += 8)
+        {
+            memcpy(&x, p + i, 8);
+            memcpy(&y, q + i, 8);
+            if (x != y) return false;
+        }
+        memcpy(&x, p + n - 8, 8);
+        memcpy(&y, q + n - 8, 8);
+        return x == y;
+    }
+    if (n >= 4)
+    {
+        uint32_t x, y;
+        memcpy(&x, p, 4);
+        memcpy(&y, q, 4);
+        if (x != y) return false;
+        memcpy(&x, p + n - 4, 4);
+        memcpy(&y, q + n - 4, 4);
+        return x == y;
+    }
+    for (size_t i = 0; i < n; ++i)
+        if (p[i] != q[i]) return false;
+    return true;
+}
+} // namespace detail
+
+/// @brief What PaintContext::printElided remembers of one text it printed (a cell of a grid): the text,
+///        its width, and when it did not fit the room, the text elided to it. Kept by the widget between
+///        frames, one for each cell in sight; it holds only while the text, the room and the font are
+///        the same, and is worked out again when any of them changes.
+struct ElideMemo
+{
+    // What a hit reads comes first, in the first 40 of the 64 bytes this takes (a hit that had to read
+    // the elided text's string as well cost a second cache line for every cell)
+    String text;         // the text it was worked out for
+    uint32_t fontId = 0; // FontStamp::id of the font it was worked out with; 0: nothing in it yet
+    float room = -1.0f;  // the width it was fitted to
+    bool elided = false; // the text did not fit: `shown` is what is printed
+    float shownWidth = 0.0f;
+    String shown; // the text elided to `room`; empty when the text fits
+
+    /// Whether this memo was worked out for @p t, in @p roomWidth, with the font of id @p id: what
+    /// it holds can be used. Inline, for a widget that prints the text itself when it holds and the
+    /// text fits (not elided).
+    bool holds(const String& t, float roomWidth, uint32_t id) const
+    {
+        return fontId == id && room == roomWidth && detail::sameBytes(text, t);
+    }
+};
+
 struct PaintContext
 {
     ig::retained::DrawList& drawList;
@@ -230,6 +324,25 @@ struct PaintContext
     ///        @p bounds (printWithin); a @p bounds with no width prints nothing. @p ascender is
     ///        the font's, for the loose clip above and below.
     void printElided(const Rect& bounds, const String& text, float y, float ascender);
+    /// @brief printElided that remembers the measure of @p text (and its elision) in @p memo: a text printed
+    ///        again in the same room with the same font is not measured or elided again, and with
+    ///        a text that fits nothing is allocated. @p memo is used only when the text, the room
+    ///        and the font are the ones it was made for; otherwise it is made again. A text longer
+    ///        than 512 bytes is not remembered (a cell holding a document would be copied into
+    ///        every memo).
+    void printElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo);
+    /// @brief The same, for a widget that has asked for fontStamp().id once for all the texts it prints in a
+    ///        paint with the same font: @p fontId is that id, and must be the one of the font in force.
+    void printElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId);
+    /// @brief What the width of a text depends on besides the text, for the font in force. Made again
+    ///        when the font, the height or the scale in force changes, not when the draw list's
+    ///        kerning or the atlas's pixel scale does in the middle of a paint context (they do not
+    ///        change in the middle of a paint: the next context sees them).
+    const FontStamp& fontStamp()
+    {
+        if (stampBase_ == buFont && stampHeight_ == fontHeight_ && stampScale_ == font.scale) return stamp_;
+        return makeFontStamp();
+    }
 
     /// @brief Draw a textured image in dst rect with UV and tint.
     void drawImage(ig::retained::TextureHandle tex, const Rect& dst,
@@ -245,7 +358,16 @@ private:
     ct::Vector<Rect> clipStack_;
     ct::Vector<const ig::retained::Font*> fontStack_;
     mutable Rect cachedClip_ = { 0, 0, 99999, 99999 };
+    // fontStamp(): the stamp, and the font, height and scale it was made for
+    FontStamp stamp_;
+    const ig::retained::Font* stampBase_ = nullptr;
+    float stampHeight_ = -1.0f; // fontHeight_ as it was when the stamp was made (0: the theme's)
+    float stampScale_ = -1.0f;
+    const FontStamp& makeFontStamp();
+    void rememberElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId);
 };
+
+
 
 // ═════════════════════════════════════════════════════════════════════════════
 //  MouseEvent / KeyEvent

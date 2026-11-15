@@ -164,6 +164,106 @@ void testPrintElided()
     }
 }
 
+// The memo of printElided (what a grid keeps for each cell in sight): used again only while the text, the
+// room and the font are the ones it was made for. One memo goes through changes of each of them, of the
+// kerning, and of the atlas's pixel scale, and what it prints is always what printElided without a memo
+// prints with the new values.
+bool sameGlyphs(const DrawList& a, const DrawList& b)
+{
+    if (a.vertices().size() != b.vertices().size() || a.pushClipCount() != b.pushClipCount()) return false;
+    for (size_t i = 0; i < a.vertices().size(); ++i)
+        if (a.vertices()[i].x != b.vertices()[i].x || a.vertices()[i].y != b.vertices()[i].y) return false;
+    return true;
+}
+
+void printElidedMemoRun(bool dynamicFonts)
+{
+    Harness h(1280.0f, 720.0f, dynamicFonts);
+    const Font* base = h.font();
+    String big;
+    for (int i = 0; i < 60; ++i) big += "Entrevista com Ação ";
+    const String texts[] = { "", "Item 12.3", "Entrevista 2400 com o cliente 3 e outras coisas", "AVAVAVTo Wa Ta Ye AVAV To Wa Ta Ye",
+        "Música e vídeos de ação, e mais alguns acentos: ç ã é", big, "x",
+        // two texts as long as each other, and only one letter apart: a memo told by the length would mix them
+        "Entrevista com Ação e outras coisas mais compridas do que a coluna", "Xntrevista com Ação e outras coisas mais compridas do que a coluna" };
+    const int textCount = static_cast<int>(sizeof texts / sizeof texts[0]);
+    const float rooms[] = { 0.0f, 4.0f, 12.0f, 60.0f, 111.5f, 300.0f, 2000.0f };
+    const int roomCount = static_cast<int>(sizeof rooms / sizeof rooms[0]);
+    const float heights[] = { 12.0f, 14.0f, 18.0f, 24.0f };
+    // rooms a hair either side of the width each text has now, at 14 pixels: with the kerning or the pixel
+    // scale of a later pass the text is on the other side of them, and a memo that still held the old
+    // width would elide what fits, or not elide what does not
+    float edge[10][2];
+    for (int i = 0; i < textCount && i < 10; ++i)
+    {
+        DrawList list;
+        PaintContext measure(list, base);
+        measure.font.SetFontSize(14.0f);
+        const float w = measure.font.GetTextWidth(texts[i].c_str());
+        edge[i][0] = w - 0.3f;
+        edge[i][1] = w + 0.3f;
+    }
+    // one memo for each text, room and height, as a grid keeps one for each cell: each lives through
+    // all the passes, and is used again (or not) by the first call of a pass that has its key
+    // (the other half of the calls use three memos shared by everything, as a grid scrolling over
+    // its cells does: a memo made for one text is met by another)
+    ct::Vector<ElideMemo> memos;
+    memos.resize(static_cast<size_t>(textCount * (roomCount + 2) * 4));
+    ElideMemo shared[3];
+    Rng rng(7);
+    int mismatches = 0;
+    int steps = 0;
+    for (int pass = 0; pass < 4; ++pass)
+    {
+        // pass 1 kerns every font, pass 2 a pixel scale of 1.5, pass 3 both back to the start
+        if (pass == 1) GetDrawList().setKerning(DrawList::Kerning::All);
+        if (pass == 2) h.atlas().setPixelScale(1.5f);
+        if (pass == 3)
+        {
+            GetDrawList().setKerning(DrawList::Kerning::Dynamic);
+            h.atlas().setPixelScale(1.0f);
+        }
+        for (int i = 0; i < 400; ++i)
+        {
+            const int which = rng.below(textCount);
+            const String& text = texts[which];
+            const bool atEdge = rng.chance(40) && which < 10;
+            const int roomIndex = atEdge ? roomCount + rng.below(2) : rng.below(roomCount);
+            const int heightIndex = atEdge ? 1 : rng.below(4);
+            const float room = atEdge ? edge[which][roomIndex - roomCount] : rooms[roomIndex];
+            const float height = heights[heightIndex];
+            ElideMemo& memo = rng.chance(50) ? memos[static_cast<size_t>((which * (roomCount + 2) + roomIndex) * 4 + heightIndex)]
+                                             : shared[rng.below(3)];
+            // the same call twice in a row half of the time: the memo is used, not made again
+            for (int repeat = 0; repeat < 1 + rng.below(2); ++repeat)
+            {
+                DrawList withMemo, without;
+                withMemo.setKerning(GetDrawList().kerning());
+                without.setKerning(GetDrawList().kerning());
+                PaintContext a(withMemo, base), b(without, base);
+                a.font.SetFontSize(height);
+                b.font.SetFontSize(height);
+                const Rect bounds = { 10.0f, 5.0f, room, 24.0f };
+                a.printElided(bounds, text, 20.0f, a.font.GetAscender(), memo);
+                b.printElided(bounds, text, 20.0f, b.font.GetAscender());
+                ++steps;
+                if (!sameGlyphs(withMemo, without)) ++mismatches;
+            }
+        }
+    }
+    check(steps > 1000 && mismatches == 0, "the memo never prints anything but what the same call without it does");
+    if (mismatches) printf("    %d of %d calls differ\n", mismatches, steps);
+    GetDrawList().setKerning(DrawList::Kerning::Dynamic);
+    h.atlas().setPixelScale(1.0f);
+}
+
+void testPrintElidedMemo()
+{
+    printf("printElided with a memo prints what it prints without one, through every change\n");
+    printElidedMemoRun(true);  // fonts made at each height: the glyphs change with it
+    printElidedMemoRun(false); // the baked font only: the kerning mode changes its widths
+}
+
 // A label can carry a very long text: the frame must not take a quarter of a second.
 void testLongElidedLabelIsCheap()
 {
@@ -440,6 +540,7 @@ int main(int argc, char** argv)
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testFitTextMatchesTheLoop);
     RUN(testPrintElided);
+    RUN(testPrintElidedMemo);
     RUN(testLongElidedLabelIsCheap);
     RUN(testTypedTextBeyondOneEvent);
     RUN(testTextEditKeysOnMultibyteText);
