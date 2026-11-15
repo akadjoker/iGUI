@@ -1,0 +1,371 @@
+// DataGrid and TreeGrid: the text of a header, a cell or a cell being edited stays inside its
+// column (checked on the pixels the software rasteriser draws), text that does not fit ends in
+// "...", a text that fits costs no clip and no allocation. Driven through the real frame loop
+// (tests/RetainedHarness.hpp); the allocations are counted with tests/AllocCounter.hpp. No
+// standard library: ct and C only.
+
+#include "AllocCounter.hpp"
+#include "RetainedHarness.hpp"
+
+#include <igui/widgets/DataWidgets.hpp>
+#include <igui/widgets/LayoutWidgets.hpp>
+#include <igui_zen/SoftRaster.hpp>
+
+using namespace rh;
+
+namespace
+{
+
+// What the rasteriser drew, 0xAARRGGBB.
+struct Shot
+{
+    ct::Vector<uint32_t> px;
+    int w = 0;
+    int h = 0;
+};
+
+// A window whose font atlas is a texture of the software rasteriser (baked sizes only: the dynamic
+// page is not a texture it can read), so what a frame draws can be compared pixel by pixel.
+class Screen
+{
+public:
+    Screen(float width, float height)
+            : h(width, height, false),
+              w_(static_cast<int>(width)),
+              h_(static_cast<int>(height))
+    {
+        raster_.setSamples(1);
+        atlasTexture_ = raster_.createTexture(h.atlas().width(), h.atlas().height(), h.atlas().pixels());
+        h.atlas().setTexture(atlasTexture_);
+    }
+    ~Screen()
+    {
+        raster_.destroyTexture(atlasTexture_);
+    }
+    Screen(const Screen&) = delete;
+    Screen& operator=(const Screen&) = delete;
+    Shot take()
+    {
+        Shot shot;
+        shot.w = w_;
+        shot.h = h_;
+        shot.px.resize(static_cast<size_t>(w_) * static_cast<size_t>(h_));
+        raster_.render(*GetDrawData(), shot.px.data(), w_, h_, w_, 0xff000000u);
+        return shot;
+    }
+    Harness h;
+
+private:
+    ig::zen::SoftRaster raster_;
+    TextureHandle atlasTexture_;
+    int w_;
+    int h_;
+};
+
+// The pixels of a rectangle (x0, y0 inclusive, x1, y1 exclusive) that are not the same in two shots.
+int differing(const Shot& a, const Shot& b, int x0, int y0, int x1, int y1)
+{
+    if (a.w != b.w || a.h != b.h) return 1 << 30;
+    if (x0 < 0) x0 = 0;
+    if (y0 < 0) y0 = 0;
+    if (x1 > a.w) x1 = a.w;
+    if (y1 > a.h) y1 = a.h;
+    int n = 0;
+    for (int y = y0; y < y1; ++y)
+        for (int x = x0; x < x1; ++x)
+            if (a.px[static_cast<size_t>(y) * static_cast<size_t>(a.w) + static_cast<size_t>(x)] !=
+                    b.px[static_cast<size_t>(y) * static_cast<size_t>(b.w) + static_cast<size_t>(x)])
+                ++n;
+    return n;
+}
+
+const float kWindowW = 640.0f;
+const float kWindowH = 320.0f;
+const float kHeaderH = 28.0f; // DataGrid's and TreeGrid's header
+const float kRowH = 24.0f;
+
+int ceilInt(float v)
+{
+    const int i = static_cast<int>(v);
+    return static_cast<float>(i) < v ? i + 1 : i;
+}
+
+// The elided text the grid should show in a room of `room` pixels, as the font measures it.
+String elided(const String& text, float room)
+{
+    Harness h(kWindowW, kWindowH, false);
+    DrawList list;
+    PaintContext ctx(list, h.font());
+    ctx.font.SetFontSize(Theme::instance().fontSize);
+    return ctx.fitText(text, room);
+}
+
+// A text far wider than any of the columns used here.
+String longText()
+{
+    return "Entrevista com Ação e muitas outras coisas bem mais compridas do que a coluna";
+}
+
+// ---- the DataGrid under test ----
+
+struct DataSpec
+{
+    String header0 = "Nome";
+    String header1 = "B";
+    String cell0;
+    String cell1;
+    float col0 = 120.0f;
+    float col1 = 120.0f;
+    int sortColumn = -1; // click this header once: an ascending arrow
+    int rows = 6;
+};
+
+// A window with the grid of `spec`, drawn once: what it drew, where the grid is and how many clips
+// the frame pushed.
+Shot dataShot(const DataSpec& spec, Rect* gridRect = nullptr, int* clipPushes = nullptr)
+{
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    DataGrid* grid = box->createChild<DataGrid>();
+    grid->setStretch(1.0f);
+    grid->addColumn(spec.header0, spec.col0);
+    grid->addColumn(spec.header1, spec.col1);
+    grid->addColumn("C", 160.0f);
+    for (int r = 0; r < spec.rows; ++r) grid->addRow({ spec.cell0, spec.cell1, "" });
+    screen.h.relayout();
+    const Rect rect = grid->absoluteRect();
+    if (spec.sortColumn >= 0)
+    {
+        // the middle of the header (a point less than 4 pixels from a border would start a resize)
+        const float start = spec.sortColumn == 0 ? 0.0f : (spec.sortColumn == 1 ? spec.col0 : spec.col0 + spec.col1);
+        const float width = spec.sortColumn == 0 ? spec.col0 : (spec.sortColumn == 1 ? spec.col1 : 160.0f);
+        screen.h.click(rect.x + start + width * 0.5f, rect.y + kHeaderH * 0.5f);
+    }
+    screen.h.frames(2);
+    if (gridRect) *gridRect = rect;
+    if (clipPushes) *clipPushes = GetDrawList().pushClipCount();
+    return screen.take();
+}
+
+// The pixels right of the first column (header and rows), left of its right border. `header` limits
+// the rectangle to the header, `body` to the rows.
+int pixelsRightOfFirstColumn(const Shot& a, const Shot& b, const Rect& grid, float col0, bool header, bool body)
+{
+    const int x0 = ceilInt(grid.x + col0) + 1;
+    const int y0 = static_cast<int>(grid.y) + (header ? 0 : static_cast<int>(kHeaderH));
+    const int y1 = static_cast<int>(grid.y) + (body ? static_cast<int>(grid.h) : static_cast<int>(kHeaderH));
+    return differing(a, b, x0, y0, static_cast<int>(grid.x + grid.w) - 1, y1);
+}
+
+// ---- scenarios ----
+
+void testDataGridHeaderStaysInItsColumn()
+{
+    printf("a DataGrid header longer than its column does not reach the next one\n");
+    DataSpec plain;
+    DataSpec longHeader;
+    longHeader.header0 = longText();
+    Rect r;
+    const Shot a = dataShot(plain, &r);
+    const Shot b = dataShot(longHeader);
+    check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y), ceilInt(r.x + 120.0f), static_cast<int>(r.y + kHeaderH)) > 50,
+            "the long header is drawn inside its own column");
+    check(pixelsRightOfFirstColumn(a, b, r, 120.0f, true, false) == 0, "and nothing of it is drawn in the next column");
+
+    // the same with the sort arrow: the text stops before it, and the arrow is where it was
+    DataSpec sorted;
+    sorted.sortColumn = 0;
+    DataSpec sortedLong = longHeader;
+    sortedLong.sortColumn = 0;
+    const Shot c = dataShot(sorted);
+    const Shot d = dataShot(sortedLong);
+    check(pixelsRightOfFirstColumn(c, d, r, 120.0f, true, false) == 0, "a sorted long header stays in its column too");
+    // the arrow sits 14 pixels from the column's right edge and is 6 wide: its box, a pixel around it
+    const int arrowX = static_cast<int>(r.x + 120.0f - 14.0f);
+    check(differing(c, d, arrowX - 1, static_cast<int>(r.y), arrowX + 7, static_cast<int>(r.y + kHeaderH)) == 0,
+            "the header text stops before the sort arrow");
+}
+
+void testDataGridHeaderInAColumnTooNarrow()
+{
+    printf("a DataGrid header in a column too narrow even for the dots stays in it\n");
+    const float widths[] = { 60.0f, 30.0f, 14.0f, 8.0f, 2.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        DataSpec plain;
+        plain.col0 = widths[i];
+        DataSpec longHeader = plain;
+        longHeader.header0 = longText();
+        Rect r;
+        const Shot a = dataShot(plain, &r);
+        const Shot b = dataShot(longHeader);
+        check(pixelsRightOfFirstColumn(a, b, r, widths[i], true, false) == 0, "nothing is drawn right of the column");
+    }
+}
+
+void testDataGridCellsStayInTheirColumn()
+{
+    printf("a DataGrid cell longer than its column does not reach the next one\n");
+    DataSpec plain;
+    DataSpec longCell;
+    longCell.cell0 = longText();
+    Rect r;
+    const Shot a = dataShot(plain, &r);
+    const Shot b = dataShot(longCell);
+    check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 120.0f), static_cast<int>(r.y + r.h)) > 200,
+            "the long cells are drawn inside their column");
+    check(pixelsRightOfFirstColumn(a, b, r, 120.0f, false, true) == 0, "and nothing of them is drawn in the next column");
+
+    // a middle column: neither its neighbour on the right nor the one on the left
+    DataSpec middle;
+    middle.cell1 = longText();
+    const Shot c = dataShot(middle);
+    check(differing(a, c, ceilInt(r.x + 240.0f) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w), static_cast<int>(r.y + r.h)) == 0,
+            "a long cell of the second column stays out of the third");
+    check(differing(a, c, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + r.h)) == 0,
+            "and out of the first");
+
+    const float widths[] = { 60.0f, 30.0f, 14.0f, 8.0f, 2.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        DataSpec narrow;
+        narrow.col0 = widths[i];
+        DataSpec narrowLong = narrow;
+        narrowLong.cell0 = longText();
+        const Shot e = dataShot(narrow);
+        const Shot t = dataShot(narrowLong);
+        check(pixelsRightOfFirstColumn(e, t, r, widths[i], false, true) == 0, "in a column too narrow for the dots too");
+    }
+}
+
+// What a cell shows when its text does not fit is the text cut with "...", measured with the font:
+// the picture of the long cell is that of a grid holding the elided text, whatever the margin is.
+void testDataGridElidesWithDots()
+{
+    printf("a DataGrid cell and header that do not fit end in \"...\"\n");
+    DataSpec longCell;
+    longCell.cell0 = longText();
+    Rect r;
+    const Shot shownCell = dataShot(longCell, &r);
+    DataSpec longHeader;
+    longHeader.header0 = longText();
+    const Shot shownHeader = dataShot(longHeader);
+    bool cellMatched = false, headerMatched = false;
+    String cellText, headerText;
+    for (int room = 120; room >= 100 && !(cellMatched && headerMatched); --room)
+    {
+        const String shown = elided(longText(), static_cast<float>(room));
+        if (!cellMatched)
+        {
+            DataSpec spec;
+            spec.cell0 = shown;
+            if (differing(shownCell, dataShot(spec), static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 120.0f),
+                        static_cast<int>(r.y + r.h)) == 0)
+            {
+                cellMatched = true;
+                cellText = shown;
+            }
+        }
+        if (!headerMatched)
+        {
+            DataSpec spec;
+            spec.header0 = shown;
+            if (differing(shownHeader, dataShot(spec), static_cast<int>(r.x), static_cast<int>(r.y), ceilInt(r.x + 120.0f),
+                        static_cast<int>(r.y + kHeaderH)) == 0)
+            {
+                headerMatched = true;
+                headerText = shown;
+            }
+        }
+    }
+    check(cellMatched, "the cell shows the text elided to a room a little narrower than the column");
+    check(headerMatched, "the header shows the text elided to a room a little narrower than the column");
+    check(cellText.size() > 3 && cellText.substr(cellText.size() - 3) == String("..."), "the cell's text ends in the dots");
+    check(headerText.size() > 3 && headerText.substr(headerText.size() - 3) == String("..."), "the header's text ends in the dots");
+
+    // a text that fits is shown whole: the grid draws what a grid with that text always drew
+    check(elided("Cabe", 112.0f) == String("Cabe"), "a text that fits is not elided");
+}
+
+void testDataGridSortArrowStaysInItsColumn()
+{
+    printf("the sort arrow of a narrow DataGrid column does not leave it\n");
+    // 10 is the narrowest column a click can sort (less, and every point of its header is within
+    // 4 pixels of a border, which starts a resize); the arrow is 14 pixels from the right edge
+    const float widths[] = { 40.0f, 20.0f, 14.0f, 10.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        DataSpec unsorted;
+        unsorted.col1 = widths[i];
+        unsorted.header0 = "";
+        unsorted.header1 = "";
+        DataSpec sorted = unsorted;
+        sorted.sortColumn = 1;
+        Rect r;
+        const Shot a = dataShot(unsorted, &r);
+        const Shot b = dataShot(sorted);
+        check(differing(a, b, ceilInt(r.x + 120.0f) + 1, static_cast<int>(r.y), ceilInt(r.x + 120.0f + widths[i]), static_cast<int>(r.y + kHeaderH)) > 0,
+                "the arrow is drawn in the sorted column");
+        check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + kHeaderH)) == 0,
+                "the arrow of the second column is not drawn in the first");
+        check(differing(a, b, ceilInt(r.x + 120.0f + widths[i]) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w) - 1,
+                      static_cast<int>(r.y + kHeaderH)) == 0,
+                "nor in the third");
+    }
+}
+
+// A text that fits asks for no clip and no allocation: only the clips of the header and the rows
+// are pushed, and a frame of a grid whose texts all fit allocates nothing.
+void testFittingTextCostsNothingExtra()
+{
+    printf("a DataGrid whose text fits pushes no clip per cell and allocates nothing\n");
+    DataSpec empty;
+    DataSpec fits;
+    fits.cell0 = "Cabe";
+    fits.cell1 = "Cabe tambem";
+    int clipsEmpty = 0, clipsFits = 0;
+    dataShot(empty, nullptr, &clipsEmpty);
+    dataShot(fits, nullptr, &clipsFits);
+    check(clipsEmpty > 0 && clipsEmpty == clipsFits, "fitting texts push no clip of their own");
+
+    Harness h(kWindowW, kWindowH);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    DataGrid* grid = box->createChild<DataGrid>();
+    grid->setStretch(1.0f);
+    for (int c = 0; c < 6; ++c) grid->addColumn(String("Coluna ") + String::number(c), 280.0f);
+    for (int r = 0; r < 60; ++r)
+    {
+        ct::Vector<String> cells;
+        for (int c = 0; c < 6; ++c) cells.push_back(String("Entrevista ") + String::number(r) + " com o cliente " + String::number(c));
+        grid->addRow(cells);
+    }
+    h.relayout();
+    h.frames(5);
+    const unsigned long long before = gAllocs;
+    for (int i = 0; i < 10; ++i) h.frame();
+    check(gAllocs - before == 0, "ten frames of a grid with 30 character cells allocate nothing");
+    if (gAllocs - before != 0) printf("    %llu allocations\n", gAllocs - before);
+}
+
+} // namespace
+
+// A scenario name on the command line runs only that one.
+int main(int argc, char** argv)
+{
+    const char* only = argc > 1 ? argv[1] : nullptr;
+#define RUN(fn) \
+    if (!only || strcmp(only, #fn) == 0) fn()
+    RUN(testDataGridHeaderStaysInItsColumn);
+    RUN(testDataGridHeaderInAColumnTooNarrow);
+    RUN(testDataGridCellsStayInTheirColumn);
+    RUN(testDataGridElidesWithDots);
+    RUN(testDataGridSortArrowStaysInItsColumn);
+    RUN(testFittingTextCostsNothingExtra);
+    shutdown();
+    if (failures()) printf("%d checks failed\n", failures());
+    else
+        printf("ok\n");
+    return failures() ? 1 : 0;
+}

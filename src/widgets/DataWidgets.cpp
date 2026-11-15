@@ -10,6 +10,15 @@
 
 using ig::retained::clamp;
 
+namespace
+{
+// Space around the text of a header or a cell, left and right.
+const float kCellPad = 4.0f;
+// What a sorted column keeps for its arrow at the right, from the right edge: the arrow (6 wide,
+// from 14 to 8 pixels in) and a gap before it.
+const float kSortArrowRoom = 18.0f;
+} // namespace
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  DataGrid - constructor
 // ═════════════════════════════════════════════════════════════════════════════
@@ -375,21 +384,35 @@ void DataGrid::paint(PaintContext& ctx)
         {
             auto& col = columns_[i];
             float colR = hx + col.width;
+            if (colR <= abs.x || hx >= abs.x + abs.w)
+            {
+                hx = colR; // out of sight: nothing to measure or draw
+                continue;
+            }
 
+            // The name is cut with "..." before the arrow of a sorted column (or the right edge), so
+            // it never reaches the next column.
+            const bool arrow = sortCol_ == i && sortOrder_ != SortOrder::None;
+            const float textRight = colR - (arrow ? kSortArrowRoom : kCellPad);
             ctx.font.SetColor(t.textColor);
-            ctx.font.Print(col.name.c_str(), hx + 4, hdrTextY);
+            ctx.printElided({ hx + kCellPad, abs.y, textRight - (hx + kCellPad), headerHeight_ }, col.name,
+                    hdrTextY, asc);
 
-            if (sortCol_ == i && sortOrder_ != SortOrder::None)
+            if (arrow)
             {
                 float arrowX = colR - 14.0f;
                 float arrowY = abs.y + headerHeight_ * 0.5f;
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
+                // cut at the column: in a column too narrow for it the arrow would be drawn over
+                // the one before
+                ctx.pushClip({ hx, abs.y, col.width, headerHeight_ });
                 if (sortOrder_ == SortOrder::Ascending)
                     ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
                             arrowY - 3);
                 else
                     ctx.fillTriangle(arrowX, arrowY - 3, arrowX + 6, arrowY - 3, arrowX + 3,
                             arrowY + 3);
+                ctx.popClip();
             }
 
             ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 80);
@@ -421,6 +444,7 @@ void DataGrid::paint(PaintContext& ctx)
         if (firstVis < 0) firstVis = 0;
         if (lastVis > totalVis) lastVis = totalVis;
 
+        String cellScratch;
         for (int vi = firstVis; vi < lastVis; ++vi)
         {
             int dataIdx = displayRow(vi);
@@ -480,6 +504,11 @@ void DataGrid::paint(PaintContext& ctx)
             for (int ci = 0; ci < nCols; ++ci)
             {
                 float colW = columns_[ci].width;
+                if (cx + colW <= abs.x || cx >= abs.x + abs.w)
+                {
+                    cx += colW; // out of sight: nothing to measure or draw
+                    continue;
+                }
 
                 if (editing_ && editRow_ == dataIdx && editCol_ == ci)
                 {
@@ -497,12 +526,14 @@ void DataGrid::paint(PaintContext& ctx)
                 }
                 else
                 {
-                    String cellText = modelCell(dataIdx, ci);
+                    // a cell of the grid's own rows is read where it is; a model's comes by value
+                    const String& cellText = cellRef(dataIdx, ci, cellScratch);
                     if (!cellText.empty())
                     {
                         ctx.font.SetColor(
                                 isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
-                        ctx.font.Print(cellText.c_str(), cx + 4, textY);
+                        ctx.printElided({ cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, cellText,
+                                textY, asc);
                     }
                 }
 
@@ -1094,6 +1125,20 @@ String DataGrid::modelCell(int row, int col) const
             col < static_cast<int>(rows_[row].cells.size()))
         return rows_[row].cells[col];
     return {};
+}
+
+const String& DataGrid::cellRef(int row, int col, String& scratch) const
+{
+    if (model_)
+    {
+        scratch = model_->data(model_->index(row, col));
+        return scratch;
+    }
+    if (row >= 0 && row < static_cast<int>(rows_.size()) && col >= 0 &&
+            col < static_cast<int>(rows_[row].cells.size()))
+        return rows_[row].cells[col];
+    scratch.clear();
+    return scratch;
 }
 
 String DataGrid::modelHeader(int col) const

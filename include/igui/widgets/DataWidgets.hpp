@@ -208,6 +208,9 @@ private:
     int modelRowCount() const;
     int modelColCount() const;
     String modelCell(int row, int col) const;
+    // The same text without a copy when the grid holds the rows itself; a model's comes by value
+    // into `scratch`.
+    const String& cellRef(int row, int col, String& scratch) const;
     String modelHeader(int col) const;
     bool modelIsChecked(int row) const;
     bool modelIsEditable(int row, int col) const;
