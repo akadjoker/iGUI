@@ -590,6 +590,42 @@ void testAssetBrowserIconsAreDrawnWithoutAnAtlas()
     check(solid < 100, "the icon of a row of the AssetBrowser is drawn, not a solid square, with no icon atlas");
 }
 
+// A TextEdit draws a tab as the spaces up to the next tab stop (4), and a text with tabs and accents the same
+// pixels as the text with the spaces written out; focused, with the cursor in the middle of it, too.
+Shot tabShot(const String& text, bool focus, bool select, int cursorCol)
+{
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(10.0f);
+    TextEdit* editor = box->createChild<TextEdit>(text);
+    editor->setStretch(1.0f);
+    screen.h.relayout();
+    if (focus)
+    {
+        screen.h.clickWidget(editor);
+        editor->setCursorPos(0, cursorCol);
+        if (select) editor->selectAll();
+        // the cursor blinks: a frame with it drawn
+        screen.h.frames(2);
+    }
+    screen.h.frames(2);
+    return screen.take();
+}
+
+void testTextEditTabsAreSpaces()
+{
+    const String tabs = "\ta\tb\t\xC3\xA7\xC3\xA3\nlinha dois\tcom tab\n";
+    const String spaces = "    a   b   \xC3\xA7\xC3\xA3\nlinha dois  com tab\n";
+    for (int mode = 0; mode < 3; ++mode)
+    {
+        const Shot a = tabShot(tabs, mode > 0, mode == 2, 2); // after the tab and the a
+        const Shot b = tabShot(spaces, mode > 0, mode == 2, 5);
+        const int n = differing(a, b, 0, 0, a.w, a.h);
+        if (n) printf("    mode %d: %d pixels differ\n", mode, n);
+        check(n == 0, "a text with tabs is drawn as the text with the spaces written out (plain, focused, selected)");
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -606,6 +642,7 @@ int main(int argc, char** argv)
     RUN(testStatusBarTextIsInTheBar);
     RUN(testAssetBrowserPathStopsAtTheButtons);
     RUN(testIconsAreDrawnWithoutAnAtlas);
+    RUN(testTextEditTabsAreSpaces);
     RUN(testAssetBrowserIconsAreDrawnWithoutAnAtlas);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());

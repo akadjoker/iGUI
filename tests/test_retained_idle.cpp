@@ -8,6 +8,8 @@
 #include "AllocCounter.hpp"
 #include "EditorTree.hpp"
 
+#include <igui/widgets/TextInputWidgets.hpp>
+
 using namespace rh;
 
 namespace
@@ -65,11 +67,42 @@ void testIdleFrameDoesNotAllocate()
     h.up();
 }
 
+// Text fields with text that does not fit the small string of ct::String (16 bytes): a text editor
+// whose lines are long (a copy of each visible line, and another with the tabs expanded, were made in
+// every frame) and a field with a long text (a copy of it for the paint and another of the text before
+// the cursor), unfocused, focused and with a selection.
+void testTextFieldsDoNotAllocateInAnIdleFrame()
+{
+    printf("an idle frame of text fields with long text does not allocate\n");
+    Harness h(900.0f, 600.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    TextInput* field = box->createChild<TextInput>("um campo de texto com bastante texto dentro dele");
+    String doc;
+    for (int i = 0; i < 40; ++i) doc += String("\tuma linha de texto numero ") + String::number(i) + " do documento\n";
+    TextEdit* editor = box->createChild<TextEdit>(doc);
+    editor->setStretch(1.0f);
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "a field and an editor with long text, nothing focused");
+    h.clickWidget(field);
+    h.frames(2);
+    check(allocsOfAFrame(h) == 0, "the field focused (the cursor measured)");
+    field->selectAll();
+    check(allocsOfAFrame(h) == 0, "the field with everything selected");
+    h.clickWidget(editor);
+    h.frames(2);
+    check(allocsOfAFrame(h) == 0, "the editor focused");
+    editor->selectAll();
+    h.frames(2);
+    check(allocsOfAFrame(h) == 0, "the editor with everything selected");
+}
+
 } // namespace
 
 int main()
 {
     testIdleFrameDoesNotAllocate();
+    testTextFieldsDoNotAllocateInAnIdleFrame();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

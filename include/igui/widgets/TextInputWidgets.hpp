@@ -110,6 +110,8 @@ private:
     bool dragging_ = false;
 
     String displayText() const;
+    const String& shownText(String& scratch) const;
+    mutable String measureScratch_; // cursorXOffset's text before the cursor, kept between frames
     int hitTestChar(const ig::retained::Font* font, float localX) const;
     float cursorXOffset(const ig::retained::Font* font, int pos) const;
     void deleteSelection();
@@ -353,6 +355,8 @@ protected:
     static const String emptyLine_;
 
     ct::Vector<String> lines_;
+    String rowScratch_; // paint's text of the row being drawn, tabs expanded, kept between frames
+    mutable String rangeScratch_[2]; // and of the parts of it (the selection, the colour spans, the cursor)
     TextPos cursor_;
     TextPos selAnchor_;
 
@@ -410,6 +414,8 @@ protected:
     int lineAtVisualRow(int visualRow) const;
     String expandTabs(const String& text) const;
     String expandTabs(const String& text, int startVisCol) const;
+    void expandTabsInto(const char* text, size_t size, int startVisCol, String& out) const;
+    const String& expandRange(int line, int from, int to, int startVisCol, String& out) const;
     String expandTabsVisible(const String& text, int startVisCol) const;
     int visColAt(int line, int col) const;
 

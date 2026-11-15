@@ -81,10 +81,19 @@ String TextInput::displayText() const
     return text_;
 }
 
+// What the field shows: its text itself (no copy), or the bullets of a password in `scratch`.
+const String& TextInput::shownText(String& scratch) const
+{
+    if (mode_ != Mode::Password) return text_;
+    scratch = displayText();
+    return scratch;
+}
+
 int TextInput::hitTestChar(const ig::retained::Font* font, float localX) const
 {
     auto& wa = WidgetApp::instance();
-    String disp = displayText();
+    String maskScratch;
+    const String& disp = shownText(maskScratch);
     int len = utf8Length(text_);
     float pad = Theme::instance().padding;
     float x = pad - scrollX_;
@@ -101,9 +110,11 @@ int TextInput::hitTestChar(const ig::retained::Font* font, float localX) const
 
 float TextInput::cursorXOffset(const ig::retained::Font* font, int pos) const
 {
-    String disp = displayText();
-    String sub = utf8Substr(disp, 0, pos);
-    return WidgetApp::instance().textWidth(sub.c_str(), font);
+    String maskScratch;
+    const String& disp = shownText(maskScratch);
+    // the text before the cursor, in a string the field keeps (the copy of every frame of a focused field)
+    measureScratch_.assign(disp.c_str(), utf8ByteOffset(disp, pos));
+    return WidgetApp::instance().textWidth(measureScratch_.c_str(), font);
 }
 
 void TextInput::deleteSelection()
@@ -234,7 +245,8 @@ void TextInput::paint(PaintContext& ctx)
 
         // Text
         ctx.font.SetColor(enabled ? t.textColor : t.textDisabled);
-        ctx.font.Print(displayText().c_str(), textX, textY);
+        String maskScratch;
+        ctx.font.Print(shownText(maskScratch).c_str(), textX, textY);
 
         // Cursor
         if (isFocused() && blinkTimer_ < 0.5f && mode_ != Mode::ReadOnly && font)
@@ -727,6 +739,45 @@ void TextEdit::scrollToLine(int n)
 String TextEdit::expandTabs(const String& text) const
 {
     return expandTabs(text, 0);
+}
+
+// expandTabs of the `size` bytes at `text`, into `out` (which keeps its room from one call to the next); a text
+// with no tab, the usual one, is copied as it is.
+// The tabs expanded of the columns [from, to) of a line, in `out`.
+const String& TextEdit::expandRange(int line, int from, int to, int startVisCol, String& out) const
+{
+    const size_t b0 = utf8ByteOffset(lines_[line], from);
+    const size_t b1 = utf8ByteOffset(lines_[line], to);
+    expandTabsInto(lines_[line].c_str() + b0, b1 > b0 ? b1 - b0 : 0, startVisCol, out);
+    return out;
+}
+
+void TextEdit::expandTabsInto(const char* text, size_t size, int startVisCol, String& out) const
+{
+    if (!size || !memchr(text, '\t', size))
+    {
+        out.assign(text, size);
+        return;
+    }
+    out.clear();
+    int visCol = startVisCol;
+    for (size_t i = 0; i < size;)
+    {
+        if (text[i] == '\t')
+        {
+            int spaces = tabSize_ - (visCol % tabSize_);
+            out.append(static_cast<size_t>(spaces), ' ');
+            visCol += spaces;
+            i++;
+        }
+        else
+        {
+            int seqLen = utf8CharLen(text + i);
+            for (int k = 0; k < seqLen && i + static_cast<size_t>(k) < size; k++) out += text[i + static_cast<size_t>(k)];
+            visCol++;
+            i += static_cast<size_t>(seqLen);
+        }
+    }
 }
 
 String TextEdit::expandTabs(const String& text, int startVisCol) const
@@ -1569,8 +1620,11 @@ void TextEdit::paint(PaintContext& ctx)
         int startCol = rows[rowIdx].startCol;
         int endCol = rows[rowIdx].endCol;
         int startVisCol = visColAt(i, startCol);
-        String rowTextRaw = utf8Substr(lines_[i], startCol, endCol);
-        String rowText = expandTabs(rowTextRaw, startVisCol);
+        // The text of the row, tabs expanded, in a string the widget keeps between frames (a copy of the line
+        // and another with the tabs expanded were made for every visible row, in every frame)
+        expandTabsInto(lines_[i].c_str() + utf8ByteOffset(lines_[i], startCol), utf8ByteOffset(lines_[i], endCol) - utf8ByteOffset(lines_[i], startCol),
+                startVisCol, rowScratch_);
+        const String& rowText = rowScratch_;
 
         float ly = abs.y + vr * lineHeight() - scrollY_;
         float lty = ly + lineHeight() - t.lineSpacing; // baseline
@@ -1594,8 +1648,8 @@ void TextEdit::paint(PaintContext& ctx)
                 }
                 if (selS < selE)
                 {
-                    String pre = expandTabs(utf8Substr(lines_[i], startCol, selS), startVisCol);
-                    String sel = expandTabs(utf8Substr(lines_[i], startCol, selE), startVisCol);
+                    const String& pre = expandRange(i, startCol, selS, startVisCol, rangeScratch_[0]);
+                    const String& sel = expandRange(i, startCol, selE, startVisCol, rangeScratch_[1]);
                     float sx1 = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
                     float sx2 = textArea.x + pad + ctx.font.GetTextWidth(sel.c_str()) - scrollX_;
                     if (i < e.line && selE == endCol) sx2 += 6;
@@ -1651,14 +1705,14 @@ void TextEdit::paint(PaintContext& ctx)
                     // Gap before span (default color)
                     if (s0 > prevCol)
                     {
-                        String gap = expandTabs(utf8Substr(lines_[i], prevCol, s0), curVisCol);
+                        const String& gap = expandRange(i, prevCol, s0, curVisCol, rangeScratch_[0]);
                         ctx.font.SetColor(textColor);
                         ctx.font.Print(gap.c_str(), cx, lty);
                         cx += ctx.font.GetTextWidth(gap.c_str());
                         curVisCol += utf8Length(gap);
                     }
                     // Colored span
-                    String seg = expandTabs(utf8Substr(lines_[i], s0, s1), curVisCol);
+                    const String& seg = expandRange(i, s0, s1, curVisCol, rangeScratch_[1]);
                     ctx.font.SetColor(enabled ? sp.color : textColor);
                     ctx.font.Print(seg.c_str(), cx, lty);
                     cx += ctx.font.GetTextWidth(seg.c_str());
@@ -1668,7 +1722,7 @@ void TextEdit::paint(PaintContext& ctx)
                 // Trailing text after last span
                 if (prevCol < endCol)
                 {
-                    String tail = expandTabs(utf8Substr(lines_[i], prevCol, endCol), curVisCol);
+                    const String& tail = expandRange(i, prevCol, endCol, curVisCol, rangeScratch_[0]);
                     ctx.font.SetColor(textColor);
                     ctx.font.Print(tail.c_str(), cx, lty);
                 }
@@ -1691,8 +1745,7 @@ void TextEdit::paint(PaintContext& ctx)
             rowStart = wrapRows_[cursor_.line][cursorRowInLine].startCol;
 
         int rowStartVisCol = visColAt(cursor_.line, rowStart);
-        String pre =
-                expandTabs(utf8Substr(lines_[cursor_.line], rowStart, cursor_.col), rowStartVisCol);
+        const String& pre = expandRange(cursor_.line, rowStart, cursor_.col, rowStartVisCol, rangeScratch_[0]);
         float cx = textArea.x + pad + ctx.font.GetTextWidth(pre.c_str()) - scrollX_;
 
         if (cx >= textArea.x && cx <= textArea.x + textArea.w && cy >= abs.y &&
