@@ -1006,10 +1006,16 @@ void TextEdit::insertTextAtCursor(const String& t)
     {
         String tail = utf8Substr(lines_[cursor_.line], cursor_.col, lineColCount(cursor_.line));
         lines_[cursor_.line] = utf8Substr(lines_[cursor_.line], 0, cursor_.col) + insertLines[0];
-        for (size_t i = 1; i < insertLines.size() - 1; ++i)
-            lines_.insert(lines_.begin() + cursor_.line + static_cast<int>(i), insertLines[i]);
+        // The new lines go in at once: what follows the cursor's line moves once, not once for each new line
+        // (a paste of thousands of lines moved the rest of the document for each of them)
+        const size_t first = static_cast<size_t>(cursor_.line);
+        const size_t added = insertLines.size() - 1;
+        const size_t before = lines_.size();
+        lines_.resize(before + added);
+        for (size_t i = before; i-- > first + 1;) lines_[i + added] = static_cast<String&&>(lines_[i]);
+        for (size_t i = 1; i + 1 < insertLines.size(); ++i) lines_[first + i] = static_cast<String&&>(insertLines[i]);
         int lastIdx = cursor_.line + static_cast<int>(insertLines.size()) - 1;
-        lines_.insert(lines_.begin() + lastIdx, insertLines.back() + tail);
+        lines_[static_cast<size_t>(lastIdx)] = insertLines.back() + tail;
         cursor_.line = lastIdx;
         cursor_.col = utf8Length(insertLines.back());
     }

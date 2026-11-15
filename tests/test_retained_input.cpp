@@ -164,6 +164,55 @@ void testMovesOfAFrameAreOne()
     check(counter->moves == 3, "the widgets get the move before the press, and the move after it");
 }
 
+// Text of several lines put into a document in the middle, at the start, at the end and over a selection: the
+// lines are where they belong (insertTextAtCursor moves what follows once, not once for each new line).
+void testPasteOfManyLines()
+{
+    Harness h(400.0f, 300.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    TextEdit* editor = box->createChild<TextEdit>("a0\na1\na2\na3");
+    editor->setStretch(1.0f);
+    h.relayout();
+    h.clickWidget(editor);
+    // a paste: what the clipboard gives goes in at the cursor
+    auto paste = [&](const String& text)
+    {
+        clipboardText() = text;
+        h.key(Key::V, false, true);
+    };
+    // in the middle of a line: the line splits, the pasted lines go between the halves
+    editor->setCursorPos(1, 1);
+    paste("X\nb0\nb1\nY");
+    check(editor->lineCount() == 7, "three new lines in the middle of a document");
+    check(editor->lineAt(0) == "a0" && editor->lineAt(1) == "a" + String("X") && editor->lineAt(2) == "b0" &&
+                    editor->lineAt(3) == "b1" && editor->lineAt(4) == "Y1" && editor->lineAt(5) == "a2" && editor->lineAt(6) == "a3",
+            "with the lines before and after them where they were");
+    check(editor->cursorPos().line == 4 && editor->cursorPos().col == 1, "and the cursor after the pasted text");
+    // at the very end of the document
+    editor->setCursorPos(6, 2);
+    paste("\nz0\nz1");
+    check(editor->lineCount() == 9 && editor->lineAt(6) == "a3" && editor->lineAt(7) == "z0" && editor->lineAt(8) == "z1", "at the end");
+    // at the start of the document, over a selection
+    editor->setCursorPos(0, 0);
+    paste("s0\ns1\n");
+    check(editor->lineCount() == 11 && editor->lineAt(0) == "s0" && editor->lineAt(1) == "s1" && editor->lineAt(2) == "a0", "at the start");
+    // two lines only (no middle ones)
+    editor->setCursorPos(2, 1);
+    paste("p\nq");
+    check(editor->lineCount() == 12 && editor->lineAt(2) == "ap" && editor->lineAt(3) == "q0", "a pasted line break and nothing else");
+    // many lines, then the document is what was put in
+    String many;
+    for (int i = 0; i < 3000; ++i) many += String("linha ") + String::number(i) + "\n";
+    editor->setText("inicio\nfim");
+    editor->setCursorPos(0, 6);
+    paste(many);
+    check(editor->lineCount() == 3002, "three thousand lines in one paste");
+    check(editor->lineAt(0) == "iniciolinha 0" && editor->lineAt(1) == "linha 1" && editor->lineAt(2999) == "linha 2999" &&
+                    editor->lineAt(3000) == "" && editor->lineAt(3001) == "fim",
+            "in order, with the rest of the document after them");
+    h.frames(2);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -175,6 +224,7 @@ int main(int argc, char** argv)
     RUN(testPressIsWhereThePointerWas);
     RUN(testKeysAndLettersKeepTheirOrder);
     RUN(testMovesOfAFrameAreOne);
+    RUN(testPasteOfManyLines);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

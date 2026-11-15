@@ -7,7 +7,8 @@
 // process, so a busy machine does not move it), in microseconds per iteration, with
 // the heap allocations one iteration makes. No standard library: ct and C only.
 //
-//   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--hash]
+//   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--profile-only] [--hash]
+//   --profile-only samples the timed loops of the scenes --only selects and prints the program counters (PC lines)
 #include "../../tests/EditorTree.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
@@ -22,6 +23,7 @@
 #include <igui/widgets/TreePropertyColorWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
+#include <dlfcn.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <time.h>
@@ -57,6 +59,12 @@ void profileStart()
     it.it_value = it.it_interval;
     setitimer(ITIMER_PROF, &it, nullptr);
 }
+void profileStopQuiet()
+{
+    struct itimerval it;
+    memset(&it, 0, sizeof it);
+    setitimer(ITIMER_PROF, &it, nullptr);
+}
 void profileStop()
 {
     struct itimerval it;
@@ -72,6 +80,7 @@ double cpuUs()
     return static_cast<double>(t.tv_sec) * 1e6 + static_cast<double>(t.tv_nsec) * 1e-3;
 }
 
+bool gProfileMeasure = false; // --profile-only: the timed loops of the selected scene are sampled
 int gReps = 7;
 float gScale = 1.0f;
 const char* gOnly = nullptr;
@@ -92,9 +101,11 @@ Result measure(int iters, F body)
     for (int rep = 0; rep < gReps; ++rep)
     {
         const unsigned long long a0 = gAllocs;
+        if (gProfileMeasure) profileStart();
         const double t0 = cpuUs();
         for (int i = 0; i < iters; ++i) body();
         const double dt = (cpuUs() - t0) / static_cast<double>(iters);
+        if (gProfileMeasure) profileStopQuiet();
         if (dt < r.bestUs) r.bestUs = dt;
         r.allocs = static_cast<double>(gAllocs - a0) / static_cast<double>(iters);
     }
@@ -683,6 +694,8 @@ int main(int argc, char** argv)
             traceIdle = true;
         else if (!strcmp(argv[i], "--profile"))
             profile = true;
+        else if (!strcmp(argv[i], "--profile-only"))
+            gProfileMeasure = true;
         else if (!strcmp(argv[i], "--hash"))
             hashOnly = true;
     }
@@ -753,6 +766,19 @@ int main(int argc, char** argv)
         return 0;
     }
     printf("igui_retained_bench: best of %d, CPU time per iteration\n", gReps);
+    struct SampleDump
+    {
+        ~SampleDump()
+        {
+            if (gProfileMeasure)
+            {
+                Dl_info info;
+                dladdr(reinterpret_cast<void*>(&profileStart), &info);
+                for (unsigned long i = 0; i < gSampleCount; ++i)
+                    printf("PC %llx\n", gSamples[i] - static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(info.dli_fbase)));
+            }
+        }
+    } sampleDump;
     editorScene("editor300", 300);
     editorScene("editor3000", 3000);
     timelineScene("timeline300", 300);
