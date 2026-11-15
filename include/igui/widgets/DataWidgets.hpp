@@ -36,6 +36,8 @@ public:
     int addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column's width.
     void setColumnWidth(int col, float w);
+    /// @brief The width a column has now, which is what painting, hit testing and the scroll range use.
+    float columnWidth(int col) const;
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
 
@@ -89,6 +91,7 @@ public:
     void setShowCheckboxes(bool s)
     {
         showCheckboxes_ = s;
+        invalidateColumns();
         markDirty();
     }
     /// @brief Enable alternating row colors.
@@ -145,6 +148,13 @@ private:
     void startEdit(int row, int col);
     void commitEdit();
     void cancelEdit();
+    // The width of every column and their total, worked out once and kept until a column changes:
+    // the one place that says how wide a column is (colW_ is read by nothing else).
+    void ensureColumns() const;
+    void invalidateColumns()
+    {
+        colDirty_ = true;
+    }
     float totalColumnsWidth() const;
     float columnX(int col) const;
     int hitColumn(float localX) const;
@@ -157,6 +167,9 @@ private:
     }
 
     ct::Vector<Column> columns_;
+    mutable ct::Vector<float> colW_;
+    mutable float colTotal_ = 0.f; // the checkbox column and every column
+    mutable bool colDirty_ = true;
     ct::Vector<Row> rows_;
     mutable ct::Vector<int> sortedIndices_;
     mutable bool sortDirty_ = true; // rows changed: the order is rebuilt before it is read
@@ -268,6 +281,8 @@ public:
     int addColumn(const String& name, float width, bool sortable = true);
     /// @brief Set a column as read-only.
     void setColumnReadOnly(int col, bool ro);
+    /// @brief The width a column has now, which is what painting, hit testing and the scroll range use.
+    float columnWidth(int col) const;
 
     // ── Selection ─────────────────────────────────────────────────────────
     /// @brief Deselect all nodes.
@@ -354,6 +369,13 @@ private:
     void startEdit(Node* node, int col);
     void commitEdit();
     void cancelEdit();
+    // The width of every column and their total, worked out once and kept until a column changes:
+    // the one place that says how wide a column is (colW_ is read by nothing else).
+    void ensureColumns() const;
+    void invalidateColumns()
+    {
+        colDirty_ = true;
+    }
     float totalColumnsWidth() const;
     float columnX(int col) const;
     int hitColumn(float localX) const;
@@ -362,6 +384,9 @@ private:
 
     ct::Vector<Node*> roots_;
     ct::Vector<Column> columns_;
+    mutable ct::Vector<float> colW_;
+    mutable float colTotal_ = 0.f;
+    mutable bool colDirty_ = true;
     mutable ct::Vector<FlatEntry> flatList_;
     mutable bool flatDirty_ = true; // a node was added: the flat list is rebuilt before it is read
 

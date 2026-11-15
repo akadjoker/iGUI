@@ -72,6 +72,7 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
     c.width = width;
     c.sortable = sortable;
     columns_.push_back(std::move(c));
+    invalidateColumns();
     // Rows added before this column have no cell for it, and the accessors
     // index cells up to columns_.size(): pad them the way addRow does.
     for (auto& row: rows_)
@@ -86,8 +87,29 @@ void DataGrid::setColumnWidth(int col, float w)
     if (col >= 0 && col < static_cast<int>(columns_.size()))
     {
         columns_[col].width = std::max(w, columns_[col].minWidth);
+        invalidateColumns();
         markDirty();
     }
+}
+
+float DataGrid::columnWidth(int col) const
+{
+    ensureColumns();
+    return col >= 0 && col < static_cast<int>(colW_.size()) ? colW_[col] : 0.f;
+}
+
+void DataGrid::ensureColumns() const
+{
+    if (!colDirty_ && colW_.size() == columns_.size()) return;
+    colDirty_ = false;
+    colW_.resize(columns_.size());
+    float total = contentX();
+    for (size_t i = 0; i < columns_.size(); ++i)
+    {
+        colW_[i] = columns_[i].width;
+        total += colW_[i];
+    }
+    colTotal_ = total;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -269,25 +291,26 @@ int DataGrid::displayRow(int idx) const
 
 float DataGrid::totalColumnsWidth() const
 {
-    float w = contentX();
-    for (auto& c: columns_) w += c.width;
-    return w;
+    ensureColumns();
+    return colTotal_;
 }
 
 float DataGrid::columnX(int col) const
 {
+    ensureColumns();
     float x = contentX();
-    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i) x += columns_[i].width;
+    for (int i = 0; i < col && i < static_cast<int>(colW_.size()); ++i) x += colW_[i];
     return x;
 }
 
 int DataGrid::hitColumn(float localX) const
 {
+    ensureColumns();
     float x = contentX() - scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
-        if (localX >= x && localX < x + columns_[i].width) return i;
-        x += columns_[i].width;
+        if (localX >= x && localX < x + colW_[i]) return i;
+        x += colW_[i];
     }
     return -1;
 }
@@ -304,10 +327,11 @@ int DataGrid::hitRow(float localY) const
 
 int DataGrid::hitResizeEdge(float localX) const
 {
+    ensureColumns();
     float x = contentX() - scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
-        x += columns_[i].width;
+        x += colW_[i];
         if (std::abs(localX - x) <= 4.0f) return i;
     }
     return -1;
@@ -388,6 +412,7 @@ void DataGrid::paint(PaintContext& ctx)
     const auto& t = Theme::instance();
     const int nRows = modelRowCount();
     const int nCols = static_cast<int>(columns_.size());
+    ensureColumns();
 
     ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
     ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
@@ -412,7 +437,8 @@ void DataGrid::paint(PaintContext& ctx)
         for (int i = 0; i < nCols; ++i)
         {
             auto& col = columns_[i];
-            float colR = hx + col.width;
+            const float colW = colW_[i];
+            float colR = hx + colW;
             if (colR <= abs.x || hx >= abs.x + abs.w)
             {
                 hx = colR; // out of sight: nothing to measure or draw
@@ -434,7 +460,7 @@ void DataGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
                 // cut at the column: in a column too narrow for it the arrow would be drawn over
                 // the one before
-                ctx.pushClip({ hx, abs.y, col.width, headerHeight_ });
+                ctx.pushClip({ hx, abs.y, colW, headerHeight_ });
                 if (sortOrder_ == SortOrder::Ascending)
                     ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
                             arrowY - 3);
@@ -532,7 +558,7 @@ void DataGrid::paint(PaintContext& ctx)
             float cx = abs.x + contentX() - scrollX_;
             for (int ci = 0; ci < nCols; ++ci)
             {
-                float colW = columns_[ci].width;
+                float colW = colW_[ci];
                 if (cx + colW <= abs.x || cx >= abs.x + abs.w)
                 {
                     cx += colW; // out of sight: nothing to measure or draw
@@ -665,7 +691,7 @@ void DataGrid::onMousePress(MouseEvent& e)
         {
             resizeCol_ = resEdge;
             resizeStartX_ = e.x;
-            resizeStartW_ = columns_[resEdge].width;
+            resizeStartW_ = colW_[resEdge];
             return;
         }
 
@@ -813,6 +839,7 @@ void DataGrid::onMouseMove(MouseEvent& e)
         float dx = e.x - resizeStartX_;
         float newW = std::max(columns_[resizeCol_].minWidth, resizeStartW_ + dx);
         columns_[resizeCol_].width = newW;
+        invalidateColumns();
         markDirty();
         return;
     }
@@ -1087,6 +1114,7 @@ void DataGrid::setModel(AbstractItemModel* model)
             c.sortable = true;
             columns_.push_back(std::move(c));
         }
+        invalidateColumns();
     }
 
     // Connect model signals to refresh the view
@@ -1271,8 +1299,29 @@ int TreeGrid::addColumn(const String& name, float width, bool sortable)
     c.width = width;
     c.sortable = sortable;
     columns_.push_back(std::move(c));
+    invalidateColumns();
     markDirty();
     return static_cast<int>(columns_.size()) - 1;
+}
+
+float TreeGrid::columnWidth(int col) const
+{
+    ensureColumns();
+    return col >= 0 && col < static_cast<int>(colW_.size()) ? colW_[col] : 0.f;
+}
+
+void TreeGrid::ensureColumns() const
+{
+    if (!colDirty_ && colW_.size() == columns_.size()) return;
+    colDirty_ = false;
+    colW_.resize(columns_.size());
+    float total = 0.f;
+    for (size_t i = 0; i < columns_.size(); ++i)
+    {
+        colW_[i] = columns_[i].width;
+        total += colW_[i];
+    }
+    colTotal_ = total;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -1365,25 +1414,26 @@ bool TreeGrid::isSelected(Node* n) const
 
 float TreeGrid::totalColumnsWidth() const
 {
-    float w = 0;
-    for (auto& c: columns_) w += c.width;
-    return w;
+    ensureColumns();
+    return colTotal_;
 }
 
 float TreeGrid::columnX(int col) const
 {
+    ensureColumns();
     float x = 0;
-    for (int i = 0; i < col && i < static_cast<int>(columns_.size()); ++i) x += columns_[i].width;
+    for (int i = 0; i < col && i < static_cast<int>(colW_.size()); ++i) x += colW_[i];
     return x;
 }
 
 int TreeGrid::hitColumn(float localX) const
 {
+    ensureColumns();
     float x = -scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
-        if (localX >= x && localX < x + columns_[i].width) return i;
-        x += columns_[i].width;
+        if (localX >= x && localX < x + colW_[i]) return i;
+        x += colW_[i];
     }
     return -1;
 }
@@ -1400,10 +1450,11 @@ int TreeGrid::hitRow(float localY) const
 
 int TreeGrid::hitResizeEdge(float localX) const
 {
+    ensureColumns();
     float x = -scrollX_;
-    for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
+    for (int i = 0; i < static_cast<int>(colW_.size()); ++i)
     {
-        x += columns_[i].width;
+        x += colW_[i];
         if (std::abs(localX - x) <= 4.0f) return i;
     }
     return -1;
@@ -1471,6 +1522,7 @@ void TreeGrid::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     const auto& t = Theme::instance();
+    ensureColumns();
 
     ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, t.panelColor.a);
     ctx.fillRect(abs.x, abs.y, abs.w, abs.h);
@@ -1495,7 +1547,8 @@ void TreeGrid::paint(PaintContext& ctx)
         for (int i = 0; i < static_cast<int>(columns_.size()); ++i)
         {
             auto& col = columns_[i];
-            float colR = hx + col.width;
+            const float colW = colW_[i];
+            float colR = hx + colW;
             if (colR <= abs.x || hx >= abs.x + abs.w)
             {
                 hx = colR; // out of sight: nothing to measure or draw
@@ -1517,7 +1570,7 @@ void TreeGrid::paint(PaintContext& ctx)
                 ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
                 // cut at the column: in a column too narrow for it the arrow would be drawn over
                 // the one before
-                ctx.pushClip({ hx, abs.y, col.width, headerHeight_ });
+                ctx.pushClip({ hx, abs.y, colW, headerHeight_ });
                 if (sortOrder_ == DataGrid::SortOrder::Ascending)
                     ctx.fillTriangle(arrowX, arrowY + 3, arrowX + 6, arrowY + 3, arrowX + 3,
                             arrowY - 3);
@@ -1585,7 +1638,7 @@ void TreeGrid::paint(PaintContext& ctx)
             float cx = abs.x - scrollX_;
             for (int ci = 0; ci < static_cast<int>(columns_.size()); ++ci)
             {
-                float colW = columns_[ci].width;
+                float colW = colW_[ci];
                 if (cx + colW <= abs.x || cx >= abs.x + abs.w)
                 {
                     cx += colW; // out of sight: nothing to measure or draw
@@ -1751,7 +1804,7 @@ void TreeGrid::onMousePress(MouseEvent& e)
         {
             resizeCol_ = resEdge;
             resizeStartX_ = e.x;
-            resizeStartW_ = columns_[resEdge].width;
+            resizeStartW_ = colW_[resEdge];
             return;
         }
 
@@ -1855,6 +1908,7 @@ void TreeGrid::onMouseMove(MouseEvent& e)
     {
         float dx = e.x - resizeStartX_;
         columns_[resizeCol_].width = std::max(columns_[resizeCol_].minWidth, resizeStartW_ + dx);
+        invalidateColumns();
         markDirty();
         return;
     }

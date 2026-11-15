@@ -715,6 +715,123 @@ void testTreeGridEditedCellStaysInItsColumn()
     }
 }
 
+// ---- the widths of the columns ----
+
+void addRows(DataGrid* grid)
+{
+    for (int r = 0; r < 3; ++r) grid->addRow({ "a", "b", "c", "d" });
+}
+void addRows(TreeGrid* grid)
+{
+    for (int r = 0; r < 3; ++r) grid->addRoot({ "a", "b", "c", "d" });
+    grid->rebuild();
+}
+
+// A window with a grid filling it (no padding) and the columns of the given widths; the clicks of the
+// tests are in the grid's own coordinates.
+template<class Grid>
+struct Rig
+{
+    Harness h;
+    Grid* grid = nullptr;
+    int sorted = -1; // the column the last header click asked to sort
+
+    Rig(float windowWidth, const float* widths, int count)
+            : h(windowWidth, kWindowH)
+    {
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        grid = box->createChild<Grid>();
+        grid->setStretch(1.0f);
+        for (int i = 0; i < count; ++i) grid->addColumn(String("C") + String::number(i), widths[i]);
+        addRows(grid);
+        int* where = &sorted;
+        grid->columnSorted.connect([where](int column) { *where = column; });
+        h.relayout();
+    }
+    Rect rect() const
+    {
+        return grid->absoluteRect();
+    }
+    // The column whose header sort a click at x asks for (-1: none).
+    int headerAt(float x)
+    {
+        sorted = -1;
+        h.click(rect().x + x, rect().y + kHeaderH * 0.5f);
+        return sorted;
+    }
+    // A drag that starts on the header at x and moves dx pixels to the right.
+    void drag(float x, float dx)
+    {
+        h.moveTo(rect().x + x, rect().y + kHeaderH * 0.5f);
+        h.down();
+        h.moveTo(rect().x + x + dx, rect().y + kHeaderH * 0.5f);
+        h.up();
+    }
+    // The shift and the wheel together, as a horizontal scroll.
+    void scrollRight(float notches)
+    {
+        h.moveTo(rect().x + 10.0f, rect().y + kHeaderH + 10.0f);
+        h.io().keyShift = true;
+        h.wheel(-notches);
+        h.io().keyShift = false;
+    }
+};
+
+// Columns that do not stretch (the default) are as wide as they were given, and everything reads that
+// width: the header click, the resize edge, and how far the grid scrolls.
+template<class Grid>
+void fixedColumns()
+{
+    const float widths[] = { 100.0f, 150.0f, 80.0f };
+    {
+        Rig<Grid> r(640.0f, widths, 3);
+        check(r.grid->columnWidth(0) == 100.0f && r.grid->columnWidth(1) == 150.0f && r.grid->columnWidth(2) == 80.0f, "each column has the width it was given");
+        check(r.grid->columnWidth(3) == 0.0f && r.grid->columnWidth(-1) == 0.0f, "and a column that does not exist none");
+        float x = 0.0f;
+        for (int i = 0; i < 3; ++i)
+        {
+            check(r.headerAt(x + 10.0f) == i && r.headerAt(x + widths[i] * 0.5f) == i && r.headerAt(x + widths[i] - 10.0f) == i, "a header click lands on the column under it");
+            x += widths[i];
+        }
+        check(r.headerAt(x + 10.0f) == -1, "and one right of the last column on none");
+
+        // the edge between the first and the second column: dragging it makes the first wider
+        r.drag(100.0f, 30.0f);
+        check(r.grid->columnWidth(0) == 130.0f && r.grid->columnWidth(1) == 150.0f, "dragging the edge of a column widens it");
+        check(r.headerAt(120.0f) == 0 && r.headerAt(140.0f) == 1, "and the next clicks follow the new border");
+        r.drag(130.0f, -500.0f);
+        check(r.grid->columnWidth(0) == 40.0f, "a column does not get narrower than its minimum");
+        r.drag(40.0f + 150.0f + 80.0f, 25.0f);
+        check(r.grid->columnWidth(2) == 105.0f, "the last column's right edge can be dragged too");
+    }
+    {
+        // narrower than the columns: the grid scrolls sideways as far as the columns need
+        Rig<Grid> r(250.0f, widths, 3);
+        check(r.headerAt(240.0f) == 1, "the right end of the columns is out of sight at first");
+        r.scrollRight(10.0f);
+        check(r.headerAt(240.0f) == 2 && r.headerAt(180.0f) == 2 && r.headerAt(150.0f) == 1, "and in sight when scrolled as far as it goes (330 - 250)");
+    }
+}
+
+void testFixedColumnsKeepTheirWidth()
+{
+    printf("columns that do not stretch keep the width they were given\n");
+    fixedColumns<DataGrid>();
+    fixedColumns<TreeGrid>();
+
+    // DataGrid only: setColumnWidth, and the checkbox column in front
+    const float widths[] = { 100.0f, 150.0f };
+    Rig<DataGrid> r(640.0f, widths, 2);
+    r.grid->setColumnWidth(1, 200.0f);
+    check(r.grid->columnWidth(1) == 200.0f, "setColumnWidth sets the width");
+    r.grid->setColumnWidth(1, 10.0f);
+    check(r.grid->columnWidth(1) == 40.0f, "and not below the minimum");
+    r.grid->setShowCheckboxes(true);
+    check(r.grid->columnWidth(0) == 100.0f, "the checkbox column is not one of the columns");
+    check(r.headerAt(24.0f + 10.0f) == 0 && r.headerAt(24.0f + 100.0f + 10.0f) == 1, "but the header clicks start after it");
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -768,6 +885,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridIndentationStaysInTheFirstColumn);
     RUN(testTreeGridElidesWithDots);
     RUN(testTreeGridEditedCellStaysInItsColumn);
+    RUN(testFixedColumnsKeepTheirWidth);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
