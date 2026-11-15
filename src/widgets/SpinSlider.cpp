@@ -249,10 +249,21 @@ void SpinSlider::paint(PaintContext& ctx)
     }
 
     const int sep = kSeparation + sbOffsetX;
-    const int labelWidth = static_cast<int>(ctx.font.GetTextWidth(label_.c_str()));
+    int labelWidth = static_cast<int>(ctx.font.GetTextWidth(label_.c_str()));
+    // a label wider than the widget is cut with "..." inside it (and the number gets what is left)
+    String cutLabel;
+    const float labelRoom = abs.w - pad * 2.0f;
+    const bool labelCut = static_cast<float>(labelWidth) > labelRoom;
+    if (labelCut)
+    {
+        if (labelRoom > 0.0f) cutLabel = ctx.fitText(label_, labelRoom);
+        labelWidth = static_cast<int>(ctx.font.GetTextWidth(cutLabel.c_str()));
+        if (static_cast<float>(labelWidth) > labelRoom) labelWidth = static_cast<int>(labelRoom > 0.0f ? labelRoom : 0.0f);
+    }
     const int numberWidth = static_cast<int>(abs.w) - sbMinWidth - labelWidth - sep;
     const String numstr = textValue();
-    const int vofs = static_cast<int>((abs.h - ctx.textHeight()) / 2.0f + ctx.font.GetAscender());
+    const float asc = ctx.font.GetAscender();
+    const int vofs = static_cast<int>((abs.h - ctx.textHeight()) / 2.0f + asc);
 
     const Color fc = readOnly_ ? t.textDisabled : t.textColor;
     const Color lc = readOnly_ ? t.textDisabled : t.textColor;
@@ -271,8 +282,9 @@ void SpinSlider::paint(PaintContext& ctx)
     }
 
     ctx.font.SetColor(scaledAlpha(lc, 0.5f));
-    ctx.font.Print(label_.c_str(), abs.x + static_cast<float>(sbOffsetX),
-            abs.y + static_cast<float>(vofs));
+    if (!label_.empty())
+        ctx.printWithin(abs, labelCut ? cutLabel : label_, abs.x + static_cast<float>(sbOffsetX), static_cast<float>(labelWidth),
+                abs.y + static_cast<float>(vofs), asc);
 
     // The number, a thin space and the suffix; only the glyphs that fit whole
     // in the number's room are drawn, the suffix fainter than the number.

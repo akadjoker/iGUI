@@ -346,6 +346,13 @@ const SweepCase kSweep[] = {
                 w->setText(t);
                 return w;
             } },
+    { "SpinSlider label",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                SpinSlider* w = b->createChild<SpinSlider>();
+                w->setLabel(t);
+                return w;
+            } },
     { "SpinSlider suffix",
             [](BoxLayout* b, const String& t) -> Widget*
             {
