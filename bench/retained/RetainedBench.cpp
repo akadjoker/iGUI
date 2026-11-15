@@ -10,7 +10,11 @@
 //   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--hash]
 #include "../../tests/EditorTree.hpp"
 
+#include <igui/widgets/AppWidgets.hpp>
 #include <igui/widgets/DataWidgets.hpp>
+#include <igui/widgets/InputWidgets.hpp>
+#include <igui/widgets/ScrollWidgets.hpp>
+#include <igui/widgets/SpinSlider.hpp>
 #include <igui/widgets/TreePropertyColorWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
@@ -584,6 +588,37 @@ int main(int argc, char** argv)
     widgetCost("combo", [](BoxLayout* b, int) { b->createChild<ComboBox>()->addItem("Cross dissolve"); });
     widgetCost("textinput", [](BoxLayout* b, int i) { b->createChild<TextInput>(String("texto ") + String::number(i)); });
     widgetCost("panel_empty", [](BoxLayout* b, int) { b->createChild<Panel>(); });
+    widgetCost("radiobutton", [](BoxLayout* b, int i) { b->createChild<RadioButton>(String("Opção ") + String::number(i)); });
+    widgetCost("switch", [](BoxLayout* b, int i) { b->createChild<Switch>(String("Opção ") + String::number(i)); });
+    widgetCost("splitbutton", [](BoxLayout* b, int i) { b->createChild<SplitButton>(String("Acção ") + String::number(i)); });
+    widgetCost("collapsible", [](BoxLayout* b, int i) { b->createChild<Collapsible>(String("Secção ") + String::number(i), false); });
+    widgetCost("statusbar", [](BoxLayout* b, int i) { b->createChild<StatusBar>()->setText(String("Pronto ") + String::number(i)); });
+    widgetCost("spinbox", [](BoxLayout* b, int) { b->createChild<SpinBox>(); });
+    widgetCost("breadcrumbs",
+            [](BoxLayout* b, int)
+            {
+                ct::Vector<String> path;
+                path.push_back("Projecto");
+                path.push_back("Média");
+                path.push_back("Clips");
+                b->createChild<Breadcrumbs>()->setPath(path);
+            });
+    widgetCost("progressbar", [](BoxLayout* b, int i) { b->createChild<ProgressBar>()->setText(String("Passo ") + String::number(i)); });
+    widgetCost("spinslider", [](BoxLayout* b, int i) { b->createChild<SpinSlider>()->setLabel(String("Ganho ") + String::number(i)); });
+    widgetCost("tablayout",
+            [](BoxLayout* b, int i)
+            {
+                TabLayout* t = b->createChild<TabLayout>();
+                t->addTab<Panel>(String("Separador ") + String::number(i));
+                t->addTab<Panel>("Outro");
+            });
+    widgetCost("listbox",
+            [](BoxLayout* b, int i)
+            {
+                ListBox* l = b->createChild<ListBox>();
+                l->addItem(String("Item ") + String::number(i));
+            });
+    widgetCost("searchbar", [](BoxLayout* b, int i) { b->createChild<SearchBar>()->setText(String("busca ") + String::number(i)); });
     softRasterScene();
     textScene();
     gridScene("datagrid_short", false, 0);
