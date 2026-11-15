@@ -125,6 +125,10 @@ float snapTime(const ct::Vector<float>& candidates, float t, float threshold);
 /// @brief t rounded to a whole frame at fps (t itself when fps is not positive).
 float snapFrame(float t, float fps);
 
+/// The times a Timeline holds, in seconds (the view, the playhead, the marked range): past this a float cannot tell
+/// one second from the next, and a time that far out only makes coordinates that overflow.
+constexpr float kTimelineMaxTime = 1.0e12f;
+
 /// A clip by its track and its index in the track.
 struct TimelineClipRef
 {
@@ -346,10 +350,11 @@ public:
     ///        range.
     bool pointAt(int trackId, float time, float& x, float& y);
 
-    /// @brief Set the playhead position in seconds.
+    /// @brief Set the playhead position in seconds (NaN keeps the old one, the infinities and the
+    ///        enormous are clamped to +-kTimelineMaxTime).
     void setPlayhead(float t)
     {
-        playhead_ = t;
+        playhead_ = Math::sane(t, playhead_, -kTimelineMaxTime, kTimelineMaxTime);
         markDirty();
     }
     /// @brief Get the playhead position in seconds.
@@ -371,11 +376,17 @@ public:
         return viewEnd_;
     }
 
-    /// @brief Shade the range between two times (an in/out selection); out <= in hides it.
+    /// @brief Shade the range between two times (an in/out selection); out <= in hides it, and so does a
+    ///        time that is not a number. The infinities and the enormous are clamped to +-kTimelineMaxTime.
     void setMarkedRange(float in, float out)
     {
-        rangeIn_ = in;
-        rangeOut_ = out;
+        if (Math::isNaN(in) || Math::isNaN(out))
+        {
+            clearMarkedRange();
+            return;
+        }
+        rangeIn_ = Math::sane(in, 0.0f, -kTimelineMaxTime, kTimelineMaxTime);
+        rangeOut_ = Math::sane(out, -1.0f, -kTimelineMaxTime, kTimelineMaxTime);
         markDirty();
     }
     void clearMarkedRange()

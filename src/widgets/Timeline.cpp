@@ -1,4 +1,5 @@
 #include "Timeline.hpp"
+#include "GridSteps.hpp"
 #include "Retained.hpp"
 #include "TextInputWidgets.hpp"
 #include "Theme.hpp"
@@ -350,6 +351,8 @@ void Timeline::clearTracks()
 int Timeline::addKeyframe(int trackId, float time)
 {
     if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return -1;
+    if (Math::isNaN(time)) return -1; // a keyframe nowhere would be a line that is not a number
+    time = Math::sane(time, 0.0f, -kTimelineMaxTime, kTimelineMaxTime);
     dragMode_ = DragMode::None;
     auto& kfs = tracks_[trackId].keyframes;
     TimelineKeyframe kf;
@@ -379,9 +382,10 @@ void Timeline::removeKeyframe(int trackId, int keyIdx)
 int Timeline::addClip(int trackId, float start, float end, const String& label, const Color& color)
 {
     if (trackId < 0 || trackId >= static_cast<int>(tracks_.size())) return -1;
+    if (Math::isNaN(start) || Math::isNaN(end)) return -1; // a clip nowhere would be a rectangle that is not a number
     TimelineClip clip;
-    clip.start = start;
-    clip.end = end;
+    clip.start = Math::sane(start, 0.0f, -kTimelineMaxTime, kTimelineMaxTime);
+    clip.end = Math::sane(end, 1.0f, -kTimelineMaxTime, kTimelineMaxTime);
     clip.label = label;
     clip.color = color;
     clip.id = nextClipId_++;
@@ -602,7 +606,10 @@ int Timeline::clipAt(int trackId, float t) const
 
 void Timeline::setTimeRange(float start, float end)
 {
-    if (!std::isfinite(start) || !std::isfinite(end) || end - start < 0.0001f) return;
+    if (!Math::isFinite(start) || !Math::isFinite(end)) return;
+    start = Math::sane(start, viewStart_, -kTimelineMaxTime, kTimelineMaxTime);
+    end = Math::sane(end, viewEnd_, -kTimelineMaxTime, kTimelineMaxTime);
+    if (end - start < 0.0001f) return;
     viewStart_ = start;
     viewEnd_ = end;
     markDirty();
@@ -1649,7 +1656,14 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
     float asc = setupFont(ctx, Color(150, 152, 160, 200), 10.0f);
 
     float tStart = std::floor(viewStart_ / step) * step;
-    for (float t = tStart; t <= viewEnd_; t += step)
+    // The ticks are counted before they are drawn: a range that is empty or not a number has none, and one so
+    // far from zero that adding the step to a time changes nothing (a float above 2^24 does not add one) has
+    // the one at its start, so the loop always ends.
+    int ticks = range > 0.0f && Math::isFinite(range) ? stepLimit(tStart, viewEnd_, step, pixelCap(b.w)) : 0;
+    const float far = fabsf(tStart) > fabsf(viewEnd_) ? fabsf(tStart) : fabsf(viewEnd_);
+    if (ticks > 1 && !(far + step > far)) ticks = 1;
+    float t = tStart;
+    for (int tick = 0; tick < ticks && t <= viewEnd_; ++tick, t += step)
     {
         float x = timeToX(t);
         if (x < b.x + kHeaderW || x > b.x + b.w) continue;
@@ -1660,9 +1674,9 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
 
         // Label
         char buf[16];
-        if (fps_ > 0 && step < 1.0f)
+        if (fps_ > 0 && step < 1.0f && fabsf(t * fps_) < 2.0e9f)
             snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::round(t * fps_)));
-        else if (t >= 60.0f)
+        else if (t >= 60.0f && t < 2.0e9f)
             snprintf(buf, sizeof(buf), "%d:%02d", static_cast<int>(t) / 60,
                     static_cast<int>(t) % 60);
         else

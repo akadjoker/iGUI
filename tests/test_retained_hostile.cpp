@@ -148,6 +148,7 @@ const HostileCase kHostile[] = {
     H("Timeline::setTrackHeight", Timeline, w->setTrackHeight(v)),
     H("Timeline::setEdgePadding", Timeline, w->setEdgePadding(v)),
     H("Timeline::setVerticalScroll", Timeline, w->setVerticalScroll(v)),
+    H("Timeline::setPlayhead", Timeline, w->setPlayhead(v)),
     H("Timeline::setTimeRange(v, v)", Timeline, w->setTimeRange(v, v)),
     H("Timeline::setTimeRange(0, v)", Timeline, w->setTimeRange(0.0f, v)),
     H("Timeline::setFrameRate", Timeline, w->setFrameRate(v)),
@@ -262,6 +263,18 @@ PianoRoll* makeRoll(Scene& s)
     return roll;
 }
 
+Timeline* makeTimeline(Scene& s)
+{
+    Timeline* line = s.box->createChild<Timeline>();
+    line->setStretch(1.0f);
+    const int t = line->addTrack("Video", TrackKind::Video);
+    line->addClip(t, 0.0f, 2.0f, "A");
+    line->addClip(t, 16777216.0f, 16777220.0f, "B");
+    line->addClip(t, 2147483648.0f, 2147483904.0f, "C");
+    line->setFrameRate(30.0f);
+    return line;
+}
+
 const SceneCase kScenes[] = {
     { "PianoRoll::setBeatsPerBar(0, -1, INT_MIN)",
             [](Scene& s)
@@ -308,6 +321,51 @@ const SceneCase kScenes[] = {
                     roll->addNote(61, 1.0f, v);
                 }
                 if (!s.settle("the notes")) return;
+            } },
+    { "Timeline: time ranges near 2^24, 2^31 and enormous",
+            [](Scene& s)
+            {
+                Timeline* line = makeTimeline(s);
+                sceneTimeRanges(s, nullptr, line);
+            } },
+    { "Timeline: clips and keyframes at times that are not numbers, with a waveform",
+            [](Scene& s)
+            {
+                Timeline* line = makeTimeline(s);
+                const int audio = line->addTrack("Audio", TrackKind::Audio);
+                line->setPeakProvider([](int, float, float) { return 0.5f; });
+                const float odd[] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 1.0e30f, -1.0e30f, 16777216.0f };
+                for (float a: odd)
+                    for (float b: odd)
+                    {
+                        const int id = line->addClip(audio, a, b, "odd");
+                        if (id >= 0) line->track(audio).clips[id].media = 1;
+                    }
+                for (float a: odd) line->addKeyframe(audio, a);
+                const float ranges[][2] = { { 0.0f, 20.0f }, { 0.0f, 1.0e-3f }, { -1.0e12f, 1.0e12f }, { 1.0e12f - 1.0f, 1.0e12f } };
+                for (const auto& r: ranges)
+                {
+                    line->setTimeRange(r[0], r[1]);
+                    char what[64];
+                    snprintf(what, sizeof what, "the range %g to %g", static_cast<double>(r[0]), static_cast<double>(r[1]));
+                    if (!s.settle(what, 1)) return;
+                }
+            } },
+    { "Timeline: the playhead and the marked range at the same places",
+            [](Scene& s)
+            {
+                Timeline* line = makeTimeline(s);
+                const float odd[] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 16777216.0f, 2147483648.0f, 1.0e30f, -1.0e30f };
+                for (float v: odd)
+                    for (float w: odd)
+                    {
+                        line->setTimeRange(0.0f, 20.0f);
+                        line->setPlayhead(v);
+                        line->setMarkedRange(v, w);
+                        char what[64];
+                        snprintf(what, sizeof what, "the playhead %g, the range %g", static_cast<double>(v), static_cast<double>(w));
+                        if (!s.settle(what, 1)) return;
+                    }
             } },
 };
 
