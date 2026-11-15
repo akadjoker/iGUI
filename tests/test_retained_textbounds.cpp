@@ -360,6 +360,13 @@ const SweepCase kSweep[] = {
                 w->setSuffix(t);
                 return w;
             } },
+    { "TabLayout",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                TabLayout* w = b->createChild<TabLayout>();
+                w->addTab<Panel>(t);
+                return w;
+            } },
     { "DockPanel",
             [](BoxLayout* b, const String& t) -> Widget*
             {

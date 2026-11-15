@@ -809,6 +809,7 @@ private:
     {
         String label;
         Widget* content = nullptr;
+        ElideMemo memo; // what paint worked out for the label (cut to its tab)
     };
 
     ct::Vector<TabInfo> tabs_;

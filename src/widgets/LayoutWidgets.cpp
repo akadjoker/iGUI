@@ -1334,6 +1334,9 @@ Rect TabLayout::tabRect(int index, const Rect& barRect) const
             float tw = tabs_[i].label.size() * t.fontSize * 0.55f + t.padding * 2;
             if (closable_) tw += 18.0f; // space for X button
             if (tw < 60.0f) tw = 60.0f;
+            // a tab does not go past the end of the bar: the last ones are cut short, and the ones after it have no room
+            const float room = barRect.x + barRect.w - x;
+            if (tw > room) tw = room > 0.0f ? room : 0.0f;
 
             if (i == index) return { x, barRect.y, tw, barRect.h };
             x += tw + 1.0f;
@@ -1484,7 +1487,9 @@ void TabLayout::paint(PaintContext& ctx)
         float textX = horiz ? absTr.x + t.padding : absTr.x + 4.0f;
         float textY = absTr.y + (absTr.h + asc) * 0.5f; // baseline-correct centering
 
-        ctx.font.Print(tabs_[i].label.c_str(), textX, textY);
+        // the label is cut with "..." before the close button, or the edge of the tab
+        const float labelRight = absTr.x + absTr.w - (closable_ ? 22.0f : (horiz ? t.padding : 4.0f));
+        ctx.printElided({ textX, absTr.y, labelRight - textX, absTr.h }, tabs_[i].label, textY, asc, tabs_[i].memo);
 
         // Close button (X)
         if (closable_)
