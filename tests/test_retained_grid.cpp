@@ -118,6 +118,10 @@ struct DataSpec
     float col1 = 120.0f;
     int sortColumn = -1; // click this header once: an ascending arrow
     int rows = 6;
+    int editColumn = -1; // double click this column of the first row: its cell is being edited
+    String typed;        // typed into the edited cell (after its text)
+    int homeKeys = 0;    // Home pressed this many times (once is enough) after the typing
+    int leftKeys = 0;    // Left pressed this many times after that
 };
 
 // A window with the grid of `spec`, drawn once: what it drew, where the grid is and how many clips
@@ -142,6 +146,17 @@ Shot dataShot(const DataSpec& spec, Rect* gridRect = nullptr, int* clipPushes = 
         const float width = spec.sortColumn == 0 ? spec.col0 : (spec.sortColumn == 1 ? spec.col1 : 160.0f);
         screen.h.click(rect.x + start + width * 0.5f, rect.y + kHeaderH * 0.5f);
     }
+    if (spec.editColumn >= 0)
+    {
+        const float start = spec.editColumn == 0 ? 0.0f : (spec.editColumn == 1 ? spec.col0 : spec.col0 + spec.col1);
+        const float width = spec.editColumn == 0 ? spec.col0 : (spec.editColumn == 1 ? spec.col1 : 160.0f);
+        const float x = rect.x + start + (width < 40.0f ? width * 0.5f : 20.0f), y = rect.y + kHeaderH + kRowH * 0.5f;
+        screen.h.click(x, y);
+        screen.h.click(x, y); // a second click on the same row within 400 ms starts the edit
+        if (spec.typed.size() > 0) screen.h.type(spec.typed.c_str());
+        for (int i = 0; i < spec.homeKeys; ++i) screen.h.key(Key::Home);
+        for (int i = 0; i < spec.leftKeys; ++i) screen.h.key(Key::Left);
+    }
     screen.h.frames(2);
     if (gridRect) *gridRect = rect;
     if (clipPushes) *clipPushes = GetDrawList().pushClipCount();
@@ -156,6 +171,25 @@ int pixelsRightOfFirstColumn(const Shot& a, const Shot& b, const Rect& grid, flo
     const int y0 = static_cast<int>(grid.y) + (header ? 0 : static_cast<int>(kHeaderH));
     const int y1 = static_cast<int>(grid.y) + (body ? static_cast<int>(grid.h) : static_cast<int>(kHeaderH));
     return differing(a, b, x0, y0, static_cast<int>(grid.x + grid.w) - 1, y1);
+}
+
+// The x of a cursor, a vertical line of bright pixels at least `run` rows tall, in [x0, x1) x [y0, y1)
+// (text is never that tall in a 24 pixel row), or -1.
+int findCursor(const Shot& s, int x0, int x1, int y0, int y1, int run)
+{
+    for (int x = x0; x < x1 && x < s.w; ++x)
+    {
+        int best = 0, now = 0;
+        for (int y = y0; y < y1 && y < s.h; ++y)
+        {
+            const uint32_t p = s.px[static_cast<size_t>(y) * static_cast<size_t>(s.w) + static_cast<size_t>(x)];
+            const int sum = static_cast<int>((p >> 16) & 0xff) + static_cast<int>((p >> 8) & 0xff) + static_cast<int>(p & 0xff);
+            now = sum >= 3 * 170 ? now + 1 : 0;
+            if (now > best) best = now;
+        }
+        if (best >= run) return x;
+    }
+    return -1;
 }
 
 // ---- scenarios ----
@@ -315,6 +349,80 @@ void testDataGridSortArrowStaysInItsColumn()
     }
 }
 
+// A cell being edited shows its text cut at the cell, not elided, and scrolled so that the cursor
+// stays in sight: with the cursor at the end the last part of the text is shown, with Home the first.
+void testDataGridEditedCellStaysInItsColumn()
+{
+    printf("a DataGrid cell being edited does not leave its column and keeps the cursor in sight\n");
+    DataSpec plain;
+    plain.editColumn = 0;
+    DataSpec longEdit = plain;
+    longEdit.cell0 = longText();
+    Rect r;
+    const Shot a = dataShot(plain, &r);
+    const Shot b = dataShot(longEdit);
+    check(differing(a, b, static_cast<int>(r.x), static_cast<int>(r.y + kHeaderH), ceilInt(r.x + 120.0f), static_cast<int>(r.y + kHeaderH + kRowH)) > 100,
+            "the edited text is drawn in the cell");
+    check(pixelsRightOfFirstColumn(a, b, r, 120.0f, false, true) == 0, "and none of it in the next column");
+
+    const int y0 = static_cast<int>(r.y + kHeaderH) + 4, y1 = static_cast<int>(r.y + kHeaderH + kRowH) - 4;
+    const int x0 = static_cast<int>(r.x) + 3, x1 = static_cast<int>(r.x + 120.0f) - 3;
+    check(findCursor(b, x0, x1, y0, y1, 14) >= 0, "the cursor, at the end of a text longer than the cell, is inside the cell");
+
+    // the end of the text is what is shown: the same as for a shorter text with the same ending
+    DataSpec shorter = plain;
+    shorter.cell0 = longText().substr(20);
+    const Shot c = dataShot(shorter);
+    check(differing(b, c, x0, y0, x1, y1) == 0, "with the cursor at the end the end of the text is shown, not the dots");
+
+    // typing more keeps the cursor in sight; Home brings the start back
+    DataSpec typed = longEdit;
+    typed.typed = "xyz";
+    const Shot d = dataShot(typed);
+    check(findCursor(d, x0, x1, y0, y1, 14) >= 0, "after typing the cursor is still inside the cell");
+    DataSpec home = longEdit;
+    home.homeKeys = 1;
+    const Shot e = dataShot(home);
+    const int cursorX = findCursor(e, x0, x1, y0, y1, 14);
+    check(cursorX >= 0 && cursorX <= static_cast<int>(r.x) + 8, "with Home the cursor is at the start of the cell");
+    DataSpec sameStart = home;
+    sameStart.cell0 = longText().substr(0, 50) + "ZZZ";
+    const Shot f = dataShot(sameStart);
+    check(differing(e, f, x0, y0, x1, y1) == 0, "and the start of the text is shown");
+
+    // moving the cursor back through the text keeps it in sight
+    DataSpec walk = longEdit;
+    for (int keys = 5; keys <= 60; keys += 11)
+    {
+        walk.leftKeys = keys;
+        const int x = findCursor(dataShot(walk), x0, x1, y0, y1, 14);
+        check(x >= 0, "after Left the cursor is still inside the cell");
+    }
+
+    // another column, and one too narrow to hold the cursor
+    DataSpec second;
+    second.editColumn = 1;
+    DataSpec secondLong = second;
+    secondLong.cell1 = longText();
+    const Shot g = dataShot(second);
+    const Shot h = dataShot(secondLong);
+    check(differing(g, h, ceilInt(r.x + 240.0f) + 1, static_cast<int>(r.y), static_cast<int>(r.x + r.w), static_cast<int>(r.y + r.h)) == 0,
+            "the edited cell of the second column stays out of the third");
+    check(differing(g, h, static_cast<int>(r.x), static_cast<int>(r.y), static_cast<int>(r.x + 120.0f), static_cast<int>(r.y + r.h)) == 0,
+            "and out of the first");
+    const float widths[] = { 30.0f, 14.0f, 8.0f, 4.0f };
+    for (size_t i = 0; i < sizeof widths / sizeof widths[0]; ++i)
+    {
+        DataSpec narrow = plain;
+        narrow.col0 = widths[i];
+        DataSpec narrowLong = narrow;
+        narrowLong.cell0 = longText();
+        const Shot n = dataShot(narrow);
+        const Shot m = dataShot(narrowLong);
+        check(pixelsRightOfFirstColumn(n, m, r, widths[i], false, true) == 0, "an edited cell in a column too narrow stays in it");
+    }
+}
+
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
 // are pushed, and a frame of a grid whose texts all fit allocates nothing.
 void testFittingTextCostsNothingExtra()
@@ -362,6 +470,7 @@ int main(int argc, char** argv)
     RUN(testDataGridCellsStayInTheirColumn);
     RUN(testDataGridElidesWithDots);
     RUN(testDataGridSortArrowStaysInItsColumn);
+    RUN(testDataGridEditedCellStaysInItsColumn);
     RUN(testFittingTextCostsNothingExtra);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());

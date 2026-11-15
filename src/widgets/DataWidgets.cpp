@@ -17,6 +17,34 @@ const float kCellPad = 4.0f;
 // What a sorted column keeps for its arrow at the right, from the right edge: the arrow (6 wide,
 // from 14 to 8 pixels in) and a gap before it.
 const float kSortArrowRoom = 18.0f;
+// Space between the frame of a cell being edited and its text, left and right.
+const float kEditPad = 3.0f;
+
+// The text of a cell being edited, in the field that starts at fieldX and is fieldW wide (the frame
+// is drawn already): all of it, never elided, and cut at the field. `scroll` is how far the text is
+// moved to the left, kept between frames: it changes only as far as the cursor needs to stay in sight,
+// and goes back as the text gets shorter. `cursor` is a byte offset into `text`.
+void paintEditText(PaintContext& ctx, const String& text, int cursor, float& scroll, float fieldX, float fieldW,
+        float rowY, float rowH, float textY, float ascender)
+{
+    const float left = fieldX + kEditPad;
+    const float room = fieldW - 2.0f * kEditPad;
+    if (room <= 0.0f) return;
+    if (cursor < 0) cursor = 0;
+    if (cursor > static_cast<int>(text.size())) cursor = static_cast<int>(text.size());
+    const float textW = ctx.font.GetTextWidth(text.c_str());
+    const float cursorW = cursor == static_cast<int>(text.size()) ? textW : ctx.font.GetTextWidth(text.substr(0, cursor).c_str());
+    // the cursor is a line a pixel wide: it stays inside [0, room - 1] from the left of the text area
+    if (cursorW - scroll > room - 1.0f) scroll = cursorW - (room - 1.0f);
+    if (cursorW - scroll < 0.0f) scroll = cursorW;
+    const float most = textW + 1.0f - room; // no more than the end of the text needs
+    if (scroll > most) scroll = most;
+    if (scroll < 0.0f) scroll = 0.0f;
+    if (!text.empty()) ctx.printWithin({ left, rowY, room, rowH }, text, left - scroll, textW, textY, ascender);
+    const float cursorX = left + cursorW - scroll;
+    ctx.line.SetColor(255, 255, 255, 200);
+    ctx.drawLine(cursorX, rowY + 3, cursorX, rowY + rowH - 3);
+}
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -312,6 +340,7 @@ void DataGrid::startEdit(int row, int col)
     editCol_ = col;
     editBuf_ = modelCell(row, col);
     editCursor_ = static_cast<int>(editBuf_.size());
+    editScroll_ = 0.f;
     markDirty();
 }
 
@@ -518,11 +547,7 @@ void DataGrid::paint(PaintContext& ctx)
                             t.inputBorderHover.b, 255);
                     ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
                     ctx.font.SetColor(Color(255, 255, 255, 255));
-                    ctx.font.Print(editBuf_.c_str(), cx + 4, textY);
-                    String beforeCursor = editBuf_.substr(0, editCursor_);
-                    float cursorX = cx + 4 + ctx.font.GetTextWidth(beforeCursor.c_str());
-                    ctx.line.SetColor(255, 255, 255, 200);
-                    ctx.drawLine(cursorX, ry + 3, cursorX, ry + rowHeight_ - 3);
+                    paintEditText(ctx, editBuf_, editCursor_, editScroll_, cx + 1, colW - 2, ry, rowHeight_, textY, asc);
                 }
                 else
                 {
