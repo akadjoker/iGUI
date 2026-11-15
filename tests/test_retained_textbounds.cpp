@@ -292,6 +292,7 @@ const SweepCase kSweep[] = {
                 w->setPlaceholder(t);
                 return w;
             } },
+    { "SplitButton", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<SplitButton>(t); } },
     { "ComboBox",
             [](BoxLayout* b, const String& t) -> Widget*
             {

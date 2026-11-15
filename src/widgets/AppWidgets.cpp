@@ -468,7 +468,11 @@ void SplitButton::paint(PaintContext& ctx)
     float tw = ctx.font.GetTextWidth(text_.c_str());
     float tx = abs.x + (mainW - tw) * 0.5f;
     ctx.font.SetColor(t.textColor);
-    ctx.font.Print(text_.c_str(), tx, ty);
+    // a text wider than the main button is cut with "..." before the arrow button, as a Button's is
+    const float room = mainW - t.padding * 4;
+    if (tw <= room) ctx.font.Print(text_.c_str(), tx, ty);
+    else
+        ctx.printElided({ abs.x + t.padding * 2, abs.y, room, abs.h }, text_, ty, asc);
 
     // Down arrow
     float ax = abs.x + mainW + arrowW * 0.5f;
