@@ -457,7 +457,8 @@ void Collapsible::paint(PaintContext& ctx)
     Rect textRect = { textX, textY - asc, abs.w, asc };
     if (!ctx.isClipped(textRect))
     {
-        ctx.font.Print(title_.c_str(), textX, textY);
+        // cut with "..." at the right edge of the header
+        ctx.printElided({ textX, abs.y, abs.x + abs.w - 4.0f - textX, headerH_ }, title_, textY, asc, titleMemo_);
     }
 
     // ── Content (children) - only if expanded ────────────────────────────

@@ -320,6 +320,7 @@ private:
     float contentPad_ = 4.0f;
     float contentSpacing_ = 2.0f;
     Color headerColor_ = Color(0, 0, 0, 0); // transparent = use theme
+    ElideMemo titleMemo_;                   // what paint worked out for the title (cut to the header)
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

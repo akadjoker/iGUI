@@ -301,6 +301,7 @@ const SweepCase kSweep[] = {
                 w->setSelectedIndex(0);
                 return w;
             } },
+    { "Collapsible", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<Collapsible>(t, false); } },
     { "ListBox",
             [](BoxLayout* b, const String& t) -> Widget*
             {
