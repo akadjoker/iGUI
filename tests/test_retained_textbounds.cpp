@@ -9,8 +9,10 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/AssetBrowser.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/ComboBox.hpp>
+#include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DockPanel.hpp>
 #include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
@@ -381,6 +383,39 @@ const SweepCase kSweep[] = {
                 w->addTrack(t);
                 return w;
             } },
+    { "AssetBrowser path",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                AssetBrowser* w = b->createChild<AssetBrowser>();
+                w->setPath(t);
+                return w;
+            } },
+    { "AssetBrowser grid name",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                AssetBrowser* w = b->createChild<AssetBrowser>();
+                AssetItem item;
+                item.name = t;
+                w->addItem(item);
+                return w;
+            } },
+    { "AssetBrowser list name",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                AssetBrowser* w = b->createChild<AssetBrowser>();
+                w->setViewMode(AssetBrowser::ViewMode::List);
+                AssetItem item;
+                item.name = t;
+                w->addItem(item);
+                return w;
+            } },
+    { "ConsoleWidget message",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                ConsoleWidget* w = b->createChild<ConsoleWidget>();
+                w->log(LogLevel::Info, t);
+                return w;
+            } },
     { "Outliner",
             [](BoxLayout* b, const String& t) -> Widget*
             {
@@ -399,6 +434,12 @@ Shot sweepShot(const SweepCase& c, const String& text, Rect* widgetRect)
     Widget* w = c.make(box, text);
     w->setLayoutAlign(Align::Fill);
     screen.h.relayout();
+    // a widget with no height of its own (a browser, a console) is given the rest of the box
+    if (w->absoluteRect().h < 1.0f)
+    {
+        w->setStretch(1.0f);
+        screen.h.relayout();
+    }
     screen.h.frames(2);
     *widgetRect = w->absoluteRect();
     return screen.take();
@@ -444,6 +485,28 @@ void testStatusBarTextIsInTheBar()
     check(inside > 20, "the status text of a StatusBar is drawn");
 }
 
+// The path in the top bar of an AssetBrowser stops before the buttons that switch the view: in the gaps
+// between and after them the pixels are the same with a long path as with a short one.
+void testAssetBrowserPathStopsAtTheButtons()
+{
+    const SweepCase c = { "AssetBrowser path",
+        [](BoxLayout* b, const String& t) -> Widget*
+        {
+            AssetBrowser* w = b->createChild<AssetBrowser>();
+            w->setPath(t);
+            return w;
+        } };
+    Rect r;
+    const Shot shortShot = sweepShot(c, "x", &r);
+    const Shot longShot = sweepShot(c, wideText(), &r);
+    const int bx = static_cast<int>(r.x + r.w - 52.0f);
+    const int y0 = static_cast<int>(r.y) + 3, y1 = static_cast<int>(r.y) + 23;
+    const int between = differing(shortShot, longShot, bx + 22, y0, bx + 26, y1);
+    const int after = differing(shortShot, longShot, bx + 48, y0, static_cast<int>(r.x + r.w) - 1, y1);
+    if (between || after) printf("    %d pixels between and %d after the buttons differ\n", between, after);
+    check(between == 0 && after == 0, "the path of an AssetBrowser stops before its view buttons");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -458,6 +521,7 @@ int main(int argc, char** argv)
     RUN(testPropertyGridEditedValueStaysInItsBox);
     RUN(testSweepTextStaysInItsWidget);
     RUN(testStatusBarTextIsInTheBar);
+    RUN(testAssetBrowserPathStopsAtTheButtons);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

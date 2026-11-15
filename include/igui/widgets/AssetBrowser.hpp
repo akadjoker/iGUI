@@ -115,6 +115,7 @@ private:
     ViewMode viewMode_ = ViewMode::Grid;
     float thumbSize_ = 64.f;
     float scrollY_ = 0.f;
+    ElideMemo pathMemo_; // what paint worked out for the path (cut before the view buttons)
     int selected_ = -1;
     int lastClick_ = -1;
     float lastClickT_ = 0.f;

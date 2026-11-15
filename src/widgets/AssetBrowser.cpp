@@ -153,11 +153,13 @@ void AssetBrowser::paint(PaintContext& ctx)
     ctx.line.SetColor(45, 48, 55, 255);
     ctx.drawLine(b.x, b.y + 26.f, b.x + b.w, b.y + 26.f);
 
-    float asc = setupFont(ctx, Color(160, 165, 175, 255), th.fontSize * 0.85f);
-    ctx.font.Print(path_.c_str(), b.x + 8.f, b.y + 7.f + asc);
-
     // View mode toggle buttons (top-right)
     float bx = b.x + b.w - 52.f;
+
+    // the path ends in "..." before the buttons
+    float asc = setupFont(ctx, Color(160, 165, 175, 255), th.fontSize * 0.85f);
+    ctx.printElided({ b.x + 8.f, b.y, bx - 6.f - (b.x + 8.f), 26.f }, path_, b.y + 7.f + asc, asc, pathMemo_);
+
     float by = b.y + 3.f;
     bool isGrid = (viewMode_ == ViewMode::Grid);
 
