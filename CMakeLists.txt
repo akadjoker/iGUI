@@ -611,6 +611,21 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         set_tests_properties(igui_zen_lifecycle PROPERTIES SKIP_RETURN_CODE 77)
     endif()
 
+    # Mouse and keyboard through the adapter, with real events made by the XTEST extension of an X server
+    # (Linux): clicks, drags, typing, auto-repeat, the wheel; the delays and what is lost are printed.
+    if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE)
+        find_library(IGUI_X11_LIBRARY X11)
+        find_library(IGUI_XTEST_LIBRARY Xtst)
+        find_path(IGUI_XTEST_INCLUDE_DIR X11/extensions/XTest.h)
+        if(IGUI_X11_LIBRARY AND IGUI_XTEST_LIBRARY AND IGUI_XTEST_INCLUDE_DIR)
+            add_executable(igui_zen_input_tests tests/test_zen_input.cpp)
+            target_include_directories(igui_zen_input_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
+            target_link_libraries(igui_zen_input_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
+            add_test(NAME igui_zen_input COMMAND igui_zen_input_tests)
+            set_tests_properties(igui_zen_input PROPERTIES SKIP_RETURN_CODE 77)
+        endif()
+    endif()
+
     if(IGUI_BUILD_ZEN_DEMO)
         add_executable(igui_zen_windows examples/zen_windows/main.cpp)
         target_link_libraries(igui_zen_windows PRIVATE igui_zen)

@@ -451,6 +451,20 @@ void App::feedInput(PlatformWindow *pw)
             mouse_position(pw, &dx, &dy);
             io.addDropEvent(static_cast<float>(dx) / scaleOf(pw), static_cast<float>(dy) / scaleOf(pw), paths);
         }
+        else if (e.type == EVENT_MOUSE_MOVE)
+        {
+            // the pointer's way across the frame: a press is where the pointer was, not where the frame ends
+            io.addMouseMoveEvent(static_cast<float>(e.data.mouse.x) / scaleOf(pw), static_cast<float>(e.data.mouse.y) / scaleOf(pw));
+        }
+        else if (e.type == EVENT_MOUSE_BUTTON)
+        {
+            // a press and a release between two frames are both here (the polled state holds the press for a
+            // frame, so a tap was a click a frame late)
+            const int button = e.data.mouse.button == MOUSE_LEFT ? 0 : (e.data.mouse.button == MOUSE_RIGHT ? 1 : (e.data.mouse.button == MOUSE_MIDDLE ? 2 : -1));
+            if (button >= 0)
+                io.addMouseButtonEvent(static_cast<float>(e.data.mouse.x) / scaleOf(pw), static_cast<float>(e.data.mouse.y) / scaleOf(pw), button,
+                        e.data.mouse.down);
+        }
         else if (e.type == EVENT_CHAR)
         {
             const uint32_t c = e.data.codepoint;
