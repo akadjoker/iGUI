@@ -8,7 +8,16 @@
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
 
+#include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/BasicWidgets.hpp>
+#include <igui/widgets/ComboBox.hpp>
+#include <igui/widgets/DockPanel.hpp>
+#include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ScrollWidgets.hpp>
+#include <igui/widgets/SpinSlider.hpp>
+#include <igui/widgets/Timeline.hpp>
+#include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/TreePropertyColorWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
@@ -244,6 +253,129 @@ void testPropertyGridEditedValueStaysInItsBox()
     check(n == 0, "the text of a string being edited does not pass its box");
 }
 
+// ---- widgets that print one text in a rectangle of their own ----
+
+struct SweepCase
+{
+    const char* name;
+    Widget* (*make)(BoxLayout* box, const String& text);
+};
+
+// The widgets are 320 pixels wide in a window of 640: a long text has a place to go, in the window,
+// and a widget that does not keep it in its rectangle is seen.
+const SweepCase kSweep[] = {
+    { "Label", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<Label>(t); } },
+    { "Button", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<Button>(t); } },
+    { "CheckBox", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<CheckBox>(t); } },
+    { "RadioButton", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<RadioButton>(t); } },
+    { "Switch", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<Switch>(t); } },
+    { "TextInput", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<TextInput>(t); } },
+    { "TextInput placeholder",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                TextInput* w = b->createChild<TextInput>("");
+                w->setPlaceholder(t);
+                return w;
+            } },
+    { "TextEdit", [](BoxLayout* b, const String& t) -> Widget* { return b->createChild<TextEdit>(t); } },
+    { "SearchBar",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                SearchBar* w = b->createChild<SearchBar>();
+                w->setText(t);
+                return w;
+            } },
+    { "SearchBar placeholder",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                SearchBar* w = b->createChild<SearchBar>();
+                w->setPlaceholder(t);
+                return w;
+            } },
+    { "ComboBox",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                ComboBox* w = b->createChild<ComboBox>();
+                w->addItem(t);
+                w->setSelectedIndex(0);
+                return w;
+            } },
+    { "ListBox",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                ListBox* w = b->createChild<ListBox>();
+                w->addItem(t);
+                return w;
+            } },
+    { "TreeView",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                TreeView* w = b->createChild<TreeView>();
+                w->addRoot(t);
+                return w;
+            } },
+    { "SpinSlider suffix",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                SpinSlider* w = b->createChild<SpinSlider>();
+                w->setSuffix(t);
+                return w;
+            } },
+    { "DockPanel",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                DockPanel* w = b->createChild<DockPanel>();
+                w->addPanel<Panel>(t);
+                return w;
+            } },
+    { "Timeline track",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                Timeline* w = b->createChild<Timeline>();
+                w->addTrack(t);
+                return w;
+            } },
+    { "Outliner",
+            [](BoxLayout* b, const String& t) -> Widget*
+            {
+                Outliner* w = b->createChild<Outliner>();
+                w->addRoot(t);
+                return w;
+            } },
+};
+
+// A window with the widget of a case (320 wide, the rest of the window free), drawn once.
+Shot sweepShot(const SweepCase& c, const String& text, Rect* widgetRect)
+{
+    Screen screen(kWindowW, kWindowH);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(40.0f, 280.0f, 80.0f, 40.0f);
+    Widget* w = c.make(box, text);
+    w->setLayoutAlign(Align::Fill);
+    screen.h.relayout();
+    screen.h.frames(2);
+    *widgetRect = w->absoluteRect();
+    return screen.take();
+}
+
+void testSweepTextStaysInItsWidget()
+{
+    for (const SweepCase& c: kSweep)
+    {
+        Rect shortRect, longRect;
+        const Shot shortShot = sweepShot(c, "x", &shortRect);
+        const Shot longShot = sweepShot(c, wideText(), &longRect);
+        String what = String(c.name) + ": a long text stays inside the widget";
+        const bool sameRect = shortRect.x == longRect.x && shortRect.y == longRect.y && shortRect.w == longRect.w &&
+                              shortRect.h == longRect.h;
+        if (!sameRect) printf("    %s: the size of the widget follows the text (%g x %g, %g x %g)\n", c.name,
+                                      shortRect.w, shortRect.h, longRect.w, longRect.h);
+        const int n = outside(shortShot, longShot, longRect);
+        if (n) printf("    %s: %d pixels outside the widget differ\n", c.name, n);
+        check(sameRect && n == 0, what.c_str());
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -256,6 +388,7 @@ int main(int argc, char** argv)
     RUN(testPropertyGridValueStaysInItsBox);
     RUN(testPropertyGridDescriptionStaysInTheGrid);
     RUN(testPropertyGridEditedValueStaysInItsBox);
+    RUN(testSweepTextStaysInItsWidget);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
