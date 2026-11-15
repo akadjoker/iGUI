@@ -831,6 +831,30 @@ void testTreeGridSetColumnWidth()
     check(differing(expected, got, 0, 0, got.w, got.h) == 0, "a grid whose columns were widened draws as one made with those widths");
 }
 
+// A column width that is not a number (NaN) is ignored by both grids: it made the total width of the
+// columns, the scroll range and every cell a NaN.
+void testGridIgnoresANaNColumnWidth()
+{
+    Harness h(kWindowW, kWindowH);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    DataGrid* grid = box->createChild<DataGrid>();
+    grid->setStretch(1.0f);
+    grid->addColumn("A", 100.0f);
+    grid->addColumn("B", 100.0f);
+    grid->addRow({ "um", "dois" });
+    h.relayout();
+    grid->setColumnWidth(0, 0.0f / 0.0f);
+    check(grid->columnWidth(0) == 100.0f, "a DataGrid column keeps its width when given a NaN");
+    check(grid->sizeHint().x == 200.0f, "and the size hint is a number");
+    h.frames(2);
+    const Rect rect = grid->absoluteRect();
+    bool selected = false;
+    grid->selectionChanged.connect([&selected](int) { selected = true; });
+    h.click(rect.x + 150.0f, rect.y + kHeaderH + kRowH * 0.5f);
+    check(selected, "the second column can still be clicked");
+}
+
 void testFixedColumnsKeepTheirWidth()
 {
     printf("columns that do not stretch keep the width they were given\n");
@@ -2012,6 +2036,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridEditedCellStaysInItsColumn);
     RUN(testFixedColumnsKeepTheirWidth);
     RUN(testTreeGridSetColumnWidth);
+    RUN(testGridIgnoresANaNColumnWidth);
     RUN(testDataGridMemosDoNotGoStale);
     RUN(testModelDataIsNotStaleInTheGrid);
     RUN(testTreeGridMemosDoNotGoStale);

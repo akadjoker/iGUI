@@ -137,7 +137,7 @@ int DataGrid::addColumn(const String& name, float width, bool sortable)
 
 void DataGrid::setColumnWidth(int col, float w)
 {
-    if (col >= 0 && col < static_cast<int>(columns_.size()))
+    if (col >= 0 && col < static_cast<int>(columns_.size()) && w == w)
     {
         columns_[col].width = std::max(w, columns_[col].minWidth);
         invalidateColumns();
