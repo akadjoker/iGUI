@@ -322,6 +322,19 @@ String PaintContext::fitText(const String& text, float room)
     return shown;
 }
 
+void PaintContext::printWithin(const Rect& bounds, const String& text, float x, float width, float y, float ascender)
+{
+    const bool overflows = x < bounds.x - 0.5f || x + width > bounds.x + bounds.w + 0.5f;
+    if (!overflows)
+    {
+        font.Print(text.c_str(), x, y);
+        return;
+    }
+    pushClip({ bounds.x, bounds.y - ascender, bounds.w, bounds.h + ascender * 2.0f });
+    font.Print(text.c_str(), x, y);
+    popClip();
+}
+
 float PaintContext::textHeight() const
 {
     return buFont ? buFont->lineHeight() : 16.0f;

@@ -14,23 +14,6 @@ float hintedTextWidth(const String& text, const ig::retained::Font* font, float 
     return real > estimate ? real : estimate;
 }
 
-// Prints `text` (`width` wide) from x, with its baseline at y. Text that runs past a side of `bounds`
-// is cut there: a widget never draws over its neighbours. Up and down the clip is loose, so a taller
-// font is not cut. Text that fits is printed without any clip.
-void printWithin(PaintContext& ctx, const Rect& bounds, const String& text, float x, float width, float y,
-        float ascender)
-{
-    const bool overflows = x < bounds.x - 0.5f || x + width > bounds.x + bounds.w + 0.5f;
-    if (!overflows)
-    {
-        ctx.font.Print(text.c_str(), x, y);
-        return;
-    }
-    ctx.pushClip({ bounds.x, bounds.y - ascender, bounds.w, bounds.h + ascender * 2.0f });
-    ctx.font.Print(text.c_str(), x, y);
-    ctx.popClip();
-}
-
 } // namespace
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -109,7 +92,7 @@ void Label::paint(PaintContext& ctx)
 
     Rect textRect = { tx, ty - asc, textW, asc };
     // Text wider than the rectangle (no elide, or a rectangle too narrow even for "...") is cut at it.
-    if (!ctx.isClipped(textRect)) printWithin(ctx, abs, shown, tx, textW, ty, asc);
+    if (!ctx.isClipped(textRect)) ctx.printWithin(abs, shown, tx, textW, ty, asc);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -716,7 +699,7 @@ void CheckBox::paint(PaintContext& ctx)
 
     Rect textRect = { tx, ty - asc, abs.w, asc };
     // A text longer than the room beside the box is cut at the check box's rectangle.
-    if (!ctx.isClipped(textRect)) printWithin(ctx, abs, text_, tx, ctx.font.GetTextWidth(text_.c_str()), ty, asc);
+    if (!ctx.isClipped(textRect)) ctx.printWithin(abs, text_, tx, ctx.font.GetTextWidth(text_.c_str()), ty, asc);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -861,7 +844,7 @@ void RadioButton::paint(PaintContext& ctx)
     float rty = abs.y + (abs.h + asc2) * 0.5f;
 
     Rect trRect = { rtx, rty - asc2, abs.w, asc2 };
-    if (!ctx.isClipped(trRect)) printWithin(ctx, abs, text_, rtx, ctx.font.GetTextWidth(text_.c_str()), rty, asc2);
+    if (!ctx.isClipped(trRect)) ctx.printWithin(abs, text_, rtx, ctx.font.GetTextWidth(text_.c_str()), rty, asc2);
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);
 }
@@ -949,7 +932,7 @@ void Switch::paint(PaintContext& ctx)
         float ly = abs.y + (abs.h + asc3) * 0.5f;
 
         Rect textRect = { lx, ly - asc3, abs.w, asc3 };
-        if (!ctx.isClipped(textRect)) printWithin(ctx, abs, text_, lx, ctx.font.GetTextWidth(text_.c_str()), ly, asc3);
+        if (!ctx.isClipped(textRect)) ctx.printWithin(abs, text_, lx, ctx.font.GetTextWidth(text_.c_str()), ly, asc3);
     }
     if (overrideFont_) ctx.popFont();
     Widget::paint(ctx);

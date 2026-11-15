@@ -217,6 +217,11 @@ struct PaintContext
     /// @brief @p text as the font proxy draws it in @p room at most: cut at a
     ///        character and ended with "..." when the whole text does not fit.
     String fitText(const String& text, float room);
+    /// @brief Prints @p text (@p width wide) from x, with its baseline at y. Text that runs past a
+    ///        side of @p bounds is cut there: a widget never draws over its neighbours. Up and
+    ///        down the clip is loose, so a taller font is not cut. Text that fits is printed
+    ///        without any clip.
+    void printWithin(const Rect& bounds, const String& text, float x, float width, float y, float ascender);
 
     /// @brief Draw a textured image in dst rect with UV and tint.
     void drawImage(ig::retained::TextureHandle tex, const Rect& dst,
