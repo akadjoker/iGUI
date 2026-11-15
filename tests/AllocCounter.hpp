@@ -45,11 +45,14 @@ extern "C" void* __wrap_realloc(void* p, size_t n)
     return __real_realloc(p, n);
 }
 // Under ThreadSanitizer the runtime defines operator new itself (a second definition does not
-// link): only the malloc calls are counted there, which is all that ct makes.
-#if defined(__SANITIZE_THREAD__)
+// link): only the malloc calls are counted there, which is all that ct makes. Under AddressSanitizer
+// replacing operator new and delete here, but not the nothrow forms (the standard stable sort asks for its
+// buffer with one), frees with free() what the runtime allocated with its operator new, and it aborts
+// with alloc-dealloc-mismatch: the runtime's are kept there too.
+#if defined(__SANITIZE_THREAD__) || defined(__SANITIZE_ADDRESS__)
 #define IGUI_ALLOC_COUNTER_KEEP_NEW 1
 #elif defined(__has_feature)
-#if __has_feature(thread_sanitizer)
+#if __has_feature(thread_sanitizer) || __has_feature(address_sanitizer)
 #define IGUI_ALLOC_COUNTER_KEEP_NEW 1
 #endif
 #endif
