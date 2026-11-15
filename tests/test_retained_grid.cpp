@@ -1133,6 +1133,18 @@ void stretchedCellsAreClickedAndEdited(TreeGrid*)
     check(edited && edited->cells[2] == String("cz"), "the typed text is in that cell");
 }
 
+// The widths are worked out when the grid or a column changes, not every frame: an idle frame of a grid
+// with stretching columns allocates nothing.
+template<class Grid>
+void stretchingGridIdlesWithoutAllocating()
+{
+    Rig<Grid> r(640.0f, kFour.widths, 4, kFourMask, true);
+    r.h.frames(5);
+    const unsigned long long before = gAllocs;
+    for (int i = 0; i < 10; ++i) r.h.frame();
+    check(gAllocs - before == 0, "ten idle frames of a grid with stretching columns allocate nothing");
+}
+
 void testStretchingColumns()
 {
     printf("stretching columns share the width the fixed ones leave over\n");
@@ -1156,6 +1168,9 @@ void testStretchingColumns()
     printf("a click on a stretched column selects and edits its cell\n");
     stretchedCellsAreClickedAndEdited(static_cast<DataGrid*>(nullptr));
     stretchedCellsAreClickedAndEdited(static_cast<TreeGrid*>(nullptr));
+    printf("the idle frame of a grid with stretching columns\n");
+    stretchingGridIdlesWithoutAllocating<DataGrid>();
+    stretchingGridIdlesWithoutAllocating<TreeGrid>();
 }
 
 // A text that fits asks for no clip and no allocation: only the clips of the header and the rows
