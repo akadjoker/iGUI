@@ -32,10 +32,12 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | 15 | Popup com widgets arbitrarios; FloatWindow com dono | por fazer | | |
 | 16 | API publica para injectar input sintetico | por fazer | | |
 | 17 | SideTabBar e ToolBar: icones da aplicacao e valores no Theme | por fazer | | |
-| 18 | ImageButton: desactivado, hover, premido, tooltip como o IconButton | por fazer | | |
+| 18 | ImageButton: desactivado, hover, premido, tooltip como o IconButton | ja existiam (fixados por teste); a imagem desactivada passa a esbatida | e8e406e | testImageButtonStates |
 | 19 | Timeline: regua de compassos; PianoRoll: velocidade, sinais com o indice | por fazer; `PianoRoll::setRowHeight` ja existe (altura das linhas configuravel) | | |
 | 20 | Chart: dados double; titulos dos eixos | por fazer | | |
 | 21 | Slider: leitura do valor | por fazer | | |
+
+Verificado ate aqui (local, nada no GitHub Actions): a fase nostd do check.sh (nenhuma linha nova com std:: ou #include <...>), a build Release e o ctest (40 testes, 1 saltado por falta de Xvfb livre nessa corrida), o hash de desenho; o ASan+UBSan so correu o igui_retained_menus (limpo, e com o destrutor do MenuAction mutilado o LeakSanitizer apanha 226 fugas); o check.sh completo, a build do ZenDAW e do ZenVideo e as benches estao por fazer.
 
 Benches: nao se correu nenhuma campanha ainda (so o hash de desenho em cada commit). O commit d387b39 muda
 bench/retained/draw.hash (os botoes cujo texto medido passa da estimativa ficam mais largos). A comparacao completa
