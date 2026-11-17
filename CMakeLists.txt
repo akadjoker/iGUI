@@ -548,6 +548,11 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         target_link_libraries(igui_zen_sidetabs_tests PRIVATE igui_zen)
         add_test(NAME igui_zen_sidetabs COMMAND igui_zen_sidetabs_tests)
         set_tests_properties(igui_zen_sidetabs PROPERTIES SKIP_RETURN_CODE 77)
+        # ZEN_SCREENSHOT_BACKEND=gl and Config::defaultDynamicPage: needs a display with OpenGL, skipped (77) without.
+        add_executable(igui_zen_screenshot_gl_tests tests/test_zen_screenshot_gl.cpp)
+        target_link_libraries(igui_zen_screenshot_gl_tests PRIVATE igui_zen)
+        add_test(NAME igui_zen_screenshot_gl COMMAND igui_zen_screenshot_gl_tests)
+        set_tests_properties(igui_zen_screenshot_gl PROPERTIES SKIP_RETURN_CODE 77)
     endif()
 
     if(IGUI_BUILD_ZEN_DEMO)

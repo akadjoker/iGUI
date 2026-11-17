@@ -36,6 +36,15 @@ public:
     // Clears the framebuffer to background (0xAARRGGBB) and draws every pass.
     void render(ig::retained::DrawData& data, int width, int height, uint32_t background);
 
+    // true: render() draws into an RGBA8 framebuffer object of the size asked for (made on first use) instead of the window's, and
+    // readPixels() reads that one: a screenshot of a window that is never shown. Default false.
+    // `samples` (0: none) asks for a multisampled target like the window's own (msaa), resolved into a single sample target on read.
+    void setOffscreen(bool on, int samples = 0)
+    {
+        offscreen_ = on;
+        wantSamples_ = samples;
+    }
+
     // Reads the framebuffer back as 0xAARRGGBB, top row first.
     void readPixels(uint32_t* dst, int width, int height) const;
 
@@ -61,6 +70,16 @@ private:
         int height = 0;
     };
 
+    bool offscreen_ = false;
+    int wantSamples_ = 0;
+    int samples_ = 0;        // what the offscreen target really has
+    unsigned fbo_ = 0;       // drawn into (multisampled when samples_ > 0)
+    unsigned rbo_ = 0;
+    mutable unsigned resolveFbo_ = 0; // samples_ > 0: the single sample copy that readPixels() reads
+    unsigned resolveRbo_ = 0;
+    int fboWidth_ = 0;
+    int fboHeight_ = 0;
+    void bindTarget(int width, int height);
     int major_ = 0;
     int minor_ = 0;
     bool es_ = false;

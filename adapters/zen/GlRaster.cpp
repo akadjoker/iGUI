@@ -121,6 +121,18 @@ void GlRaster::shutdown()
     glDeleteBuffers(1, &ibo_);
     glDeleteVertexArrays(1, &vao_);
     glDeleteProgram(program_);
+    if (fbo_)
+    {
+        glDeleteFramebuffers(1, &fbo_);
+        glDeleteRenderbuffers(1, &rbo_);
+        fbo_ = rbo_ = 0;
+        if (resolveFbo_)
+        {
+            glDeleteFramebuffers(1, &resolveFbo_);
+            glDeleteRenderbuffers(1, &resolveRbo_);
+            resolveFbo_ = resolveRbo_ = 0;
+        }
+    }
     program_ = 0;
 }
 
@@ -238,9 +250,52 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
     return true;
 }
 
+void GlRaster::bindTarget(int width, int height)
+{
+    if (!offscreen_)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        return;
+    }
+    if (!fbo_ || width != fboWidth_ || height != fboHeight_)
+    {
+        if (!fbo_)
+        {
+            glGenFramebuffers(1, &fbo_);
+            glGenRenderbuffers(1, &rbo_);
+            int maxSamples = 0;
+            glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
+            samples_ = wantSamples_ < maxSamples ? wantSamples_ : maxSamples;
+            if (samples_ > 0)
+            {
+                glGenFramebuffers(1, &resolveFbo_);
+                glGenRenderbuffers(1, &resolveRbo_);
+            }
+        }
+        glBindRenderbuffer(GL_RENDERBUFFER, rbo_);
+        if (samples_ > 0)
+            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples_, GL_RGBA8, width, height);
+        else
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo_);
+        if (samples_ > 0)
+        {
+            glBindRenderbuffer(GL_RENDERBUFFER, resolveRbo_);
+            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+            glBindFramebuffer(GL_FRAMEBUFFER, resolveFbo_);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveRbo_);
+        }
+        fboWidth_ = width;
+        fboHeight_ = height;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+}
+
 void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint32_t background)
 {
     data.stats.reset();
+    bindTarget(width, height);
     glViewport(0, 0, width, height);
     glDisable(GL_SCISSOR_TEST);
     glClearColor(((background >> 16) & 0xff) / 255.0f, ((background >> 8) & 0xff) / 255.0f,
@@ -368,6 +423,15 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
 
 void GlRaster::readPixels(uint32_t* dst, int width, int height) const
 {
+    if (offscreen_ && samples_ > 0)
+    {
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, resolveFbo_);
+        glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, resolveFbo_);
+    }
+    else
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, offscreen_ ? fbo_ : 0);
 #ifdef __EMSCRIPTEN__
     // WebGL reads RGBA bytes only: the screenshot path is not used in the browser
     (void) dst;
