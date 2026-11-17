@@ -9,6 +9,7 @@
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ViewWidgets.hpp>
 
 using namespace rh;
 
@@ -231,6 +232,23 @@ void testWaveformViewButtons()
     check(wave->viewStart() != before, "a right drag on a WaveformView pans it");
 }
 
+// ---- FloatWindow: a move or a resize is in its rectangle at once ----
+
+void testFloatWindowSettersLayOut()
+{
+    Harness h(640.0f, 480.0f, false);
+    FloatWindow* fw = h.app.addFloat<FloatWindow>(String("Janela"));
+    fw->setContent<Label>(String("conteudo"));
+    fw->setFloatSize(300.0f, 200.0f);
+    fw->setFloatPos(120.0f, 90.0f);
+    // no frame yet: the rectangle already is where the window was put
+    check(fw->rect().x == 120.0f && fw->rect().y == 90.0f, "setFloatPos puts the rectangle where it says, at once");
+    check(fw->rect().w == 300.0f && fw->rect().h == 200.0f, "setFloatSize puts the size of the rectangle at once");
+    check(fw->content() && fw->content()->rect().w > 200.0f, "setFloatSize lays the content out at once");
+    fw->setFloatPos(300.0f, 220.0f);
+    check(fw->absoluteRect().x == 300.0f && fw->absoluteRect().y == 220.0f, "a second setFloatPos moves it again");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -242,6 +260,7 @@ int main(int argc, char** argv)
     RUN(testButtonAtItsHintShowsItsWholeLabel);
     RUN(testPianoRollButtons);
     RUN(testWaveformViewButtons);
+    RUN(testFloatWindowSettersLayOut);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

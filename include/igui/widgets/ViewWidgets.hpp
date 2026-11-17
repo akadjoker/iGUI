@@ -45,11 +45,14 @@ public:
     }
 
     // ── Floating position (absolute screen coords) ───────────────────────
-    /// @brief Set absolute screen position.
+    /// @brief Set absolute screen position. The rectangle of the window is there at once (moving a
+    ///        window does not change how its content is laid out, so only the rectangle moves).
     void setFloatPos(float x, float y)
     {
         floatX_ = x;
         floatY_ = y;
+        rect_.x = x;
+        rect_.y = y;
         markDirty();
     }
     /// @brief Get the X position.
@@ -64,11 +67,13 @@ public:
     }
 
     // ── Floating size ────────────────────────────────────────────────────
-    /// @brief Set the floating window size.
+    /// @brief Set the floating window size. The window and its content are laid out at once, so the
+    ///        rectangles are the new ones before the next frame.
     void setFloatSize(float w, float h)
     {
         floatW_ = w;
         floatH_ = h;
+        layout();
         markDirty();
     }
     /// @brief Get the width.
