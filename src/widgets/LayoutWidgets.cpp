@@ -338,7 +338,8 @@ Widget::Vec2f Collapsible::sizeHint() const
         h += contentPad_; // bottom padding after content
     }
 
-    if (rect_.w > 0) w = std::max(w, rect_.w);
+    // the hint is what the content asks for, never the widget's own rectangle: with it, the width a scroll
+    // area gave its content depended on the width of the content, and it never got narrower
     return { w, h };
 }
 

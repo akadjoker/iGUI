@@ -249,6 +249,20 @@ void testFloatWindowSettersLayOut()
     check(fw->absoluteRect().x == 300.0f && fw->absoluteRect().y == 220.0f, "a second setFloatPos moves it again");
 }
 
+// ---- Collapsible: its size hint does not depend on its own rectangle ----
+
+void testCollapsibleHintIgnoresItsRect()
+{
+    Harness h(640.0f, 480.0f, false);
+    Collapsible* c = h.root()->createChild<Collapsible>(String("Grupo"), true);
+    c->createChild<Label>(String("conteudo"));
+    const float narrow = c->sizeHint().x;
+    c->setRect({ 0.0f, 0.0f, 500.0f, 100.0f });
+    check(c->sizeHint().x == narrow, "a Collapsible asks for the same width whatever width it has");
+    c->setRect({ 0.0f, 0.0f, 50.0f, 100.0f });
+    check(c->sizeHint().x == narrow, "and when it is narrower than its hint");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -261,6 +275,7 @@ int main(int argc, char** argv)
     RUN(testPianoRollButtons);
     RUN(testWaveformViewButtons);
     RUN(testFloatWindowSettersLayOut);
+    RUN(testCollapsibleHintIgnoresItsRect);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
