@@ -45,6 +45,11 @@ public:
         wantSamples_ = samples;
     }
 
+    // With setOffscreen(true): makes the target for a window of this size now and says whether the driver completed it (a
+    // multisampled one that it cannot complete is made single sample). false: offscreen drawing is not possible here and
+    // render() draws nothing. Without setOffscreen it is true.
+    bool prepareOffscreen(int width, int height);
+
     // Reads the framebuffer back as 0xAARRGGBB, top row first.
     void readPixels(uint32_t* dst, int width, int height) const;
 
@@ -72,6 +77,7 @@ private:
 
     bool offscreen_ = false;
     int wantSamples_ = 0;
+    bool offscreenFailed_ = false;
     int samples_ = 0;        // what the offscreen target really has
     unsigned fbo_ = 0;       // drawn into (multisampled when samples_ > 0)
     unsigned rbo_ = 0;
@@ -79,7 +85,7 @@ private:
     unsigned resolveRbo_ = 0;
     int fboWidth_ = 0;
     int fboHeight_ = 0;
-    void bindTarget(int width, int height);
+    bool bindTarget(int width, int height); // false: no offscreen target could be made
     int major_ = 0;
     int minor_ = 0;
     bool es_ = false;

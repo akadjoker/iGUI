@@ -188,7 +188,27 @@ bool App::create(const Config &config)
         return false;
     }
     if (shotGl)
+    {
         gl_.setOffscreen(true, config.msaa);
+        // The target is made now, at the window's size, so that a driver that cannot give it (no framebuffer objects, no
+        // multisample storage or resolve: a software GL) fails here, where the caller sees it, and not as an empty picture.
+        int fbW = 0, fbH = 0;
+        window_get_framebuffer_size(pw, &fbW, &fbH);
+        if (fbW <= 0 || fbH <= 0)
+        {
+            fbW = config.width;
+            fbH = config.height;
+        }
+        if (!gl_.prepareOffscreen(fbW, fbH))
+        {
+            fprintf(stderr, "[ZenApp] ZEN_SCREENSHOT_BACKEND=gl: the OpenGL driver cannot make the offscreen framebuffer (no fall back to the software rasteriser)\n");
+            gl_.shutdown();
+            window_destroy(pw);
+            useGl_ = false;
+            platform_shutdown();
+            return false;
+        }
+    }
     if (!pw)
     {
         cfg.render = RENDER_PIXELS;

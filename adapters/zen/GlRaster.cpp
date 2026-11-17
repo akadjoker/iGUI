@@ -267,52 +267,74 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
     return true;
 }
 
-void GlRaster::bindTarget(int width, int height)
+bool GlRaster::bindTarget(int width, int height)
 {
     if (!offscreen_)
     {
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        return;
+        return true;
     }
+    if (offscreenFailed_ || width <= 0 || height <= 0) return false;
     if (!fbo_ || width != fboWidth_ || height != fboHeight_)
     {
         if (!fbo_)
         {
             glGenFramebuffers(1, &fbo_);
             glGenRenderbuffers(1, &rbo_);
+            glGenFramebuffers(1, &resolveFbo_);
+            glGenRenderbuffers(1, &resolveRbo_);
             int maxSamples = 0;
             glGetIntegerv(GL_MAX_SAMPLES, &maxSamples);
             samples_ = wantSamples_ < maxSamples ? wantSamples_ : maxSamples;
+        }
+        // The samples asked for first; a driver that cannot complete that target (a software one may lack the multisample
+        // storage or the resolve) gets a single sample one; if that is not complete either, offscreen drawing is not possible.
+        for (;;)
+        {
+            glBindRenderbuffer(GL_RENDERBUFFER, rbo_);
+            if (samples_ > 0)
+                glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples_, GL_RGBA8, width, height);
+            else
+                glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo_);
+            bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
             if (samples_ > 0)
             {
-                glGenFramebuffers(1, &resolveFbo_);
-                glGenRenderbuffers(1, &resolveRbo_);
+                glBindRenderbuffer(GL_RENDERBUFFER, resolveRbo_);
+                glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+                glBindFramebuffer(GL_FRAMEBUFFER, resolveFbo_);
+                glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveRbo_);
+                complete = complete && glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
             }
-        }
-        glBindRenderbuffer(GL_RENDERBUFFER, rbo_);
-        if (samples_ > 0)
-            glRenderbufferStorageMultisample(GL_RENDERBUFFER, samples_, GL_RGBA8, width, height);
-        else
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
-        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rbo_);
-        if (samples_ > 0)
-        {
-            glBindRenderbuffer(GL_RENDERBUFFER, resolveRbo_);
-            glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
-            glBindFramebuffer(GL_FRAMEBUFFER, resolveFbo_);
-            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, resolveRbo_);
+            if (complete) break;
+            if (samples_ > 0)
+            {
+                fprintf(stderr, "[GlRaster] offscreen target with %d samples is not complete, trying a single sample one\n", samples_);
+                samples_ = 0;
+                continue;
+            }
+            fprintf(stderr, "[GlRaster] the offscreen framebuffer (RGBA8, %dx%d) is not complete on this driver\n", width, height);
+            offscreenFailed_ = true;
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return false;
         }
         fboWidth_ = width;
         fboHeight_ = height;
     }
     glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    return true;
+}
+
+bool GlRaster::prepareOffscreen(int width, int height)
+{
+    return bindTarget(width, height);
 }
 
 void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint32_t background)
 {
     data.stats.reset();
-    bindTarget(width, height);
+    if (!bindTarget(width, height)) return;
     glViewport(0, 0, width, height);
     glDisable(GL_SCISSOR_TEST);
     glClearColor(((background >> 16) & 0xff) / 255.0f, ((background >> 8) & 0xff) / 255.0f,
