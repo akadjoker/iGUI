@@ -643,6 +643,15 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         igui_add_window_test(igui_zen_lifecycle igui_zen_lifecycle_tests)
     endif()
 
+    if(IGUI_BUILD_TESTS)
+        # ZEN_SCREENSHOT_BACKEND=gl (the screenshot drawn by OpenGL into an offscreen framebuffer of a window that is never
+        # shown), Config::defaultDynamicPage and text drawn with the atlas pixels released. Needs an X server with OpenGL (on the
+        # Xvfb of tools/xvfb-test.sh: software GL, which is enough); 77 (skipped) without one.
+        add_executable(igui_zen_screenshot_gl_tests tests/test_zen_screenshot_gl.cpp)
+        target_link_libraries(igui_zen_screenshot_gl_tests PRIVATE igui_zen)
+        igui_add_window_test(igui_zen_screenshot_gl igui_zen_screenshot_gl_tests)
+    endif()
+
     # Mouse and keyboard through the adapter, with real events made by the XTEST extension of an X server
     # (Linux): clicks, drags, typing, auto-repeat, the wheel; the delays and what is lost are printed.
     if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE)

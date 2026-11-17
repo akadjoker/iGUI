@@ -48,6 +48,8 @@ public:
         float scale = 1.0f;      // the UI drawn this many times bigger (2 = HiDPI look); 1 = the screen's own units
     };
 
+    // Config::defaultDynamicPage exists (a host can use it without a version check).
+#define IGUI_ZEN_DEFAULT_DYNAMIC_PAGE_OPTION 1
     struct Config
     {
         const char* title = "iGUI";
@@ -67,6 +69,9 @@ public:
         bool showStats = true; // fps and size in the window title, once a second
         int samples = 2;       // software only: anti-aliasing samples per axis, F2 cycles 1..4
         uint32_t background = 0xff181a1eu;
+        // The default font's page of glyphs at the exact size asked for (1024x1024 RGBA, 4 MB of RAM and as much texture). false: the
+        // default font is drawn at its baked size only; for a host that draws its text with faces of its own (zenhtml's HtmlView).
+        bool defaultDynamicPage = true;
     };
 
     class Window;

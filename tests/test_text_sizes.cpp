@@ -302,6 +302,29 @@ int main()
         check(!app.addDynamicAtlas(b) && !b.dynamicEnabled(), "without an upload function the atlas keeps working as before");
     }
 
+    // A page of one face is cropped to the rows it uses, and its RAM copy can be released after the upload.
+    {
+        FontAtlas small;
+        small.buildDefault();
+        check(small.width() == 2048 && small.height() < 1024 && small.height() >= 64 && (small.height() & (small.height() - 1)) == 0,
+                "a baked page is cropped to a power of two of rows the packer used");
+        check(small.pixelSize() == static_cast<size_t>(small.width()) * small.height() * 4, "its pixels are the cropped page");
+        const FontGlyph* h = small.defaultFont().findGlyph('H');
+        check(h != nullptr && h->uv.y >= 0.0f && h->uv.y + h->uv.h <= 1.0f && h->advanceX > 0, "every glyph's UVs are inside the cropped page");
+        float lowest = 0;
+        for (uint32_t code = 0x20; code < 0x2800; ++code)
+            if (const FontGlyph* g = small.defaultFont().findGlyph(code))
+                if (g->uv.y + g->uv.h > lowest)
+                    lowest = g->uv.y + g->uv.h;
+        check(lowest > 0.5f && lowest <= 1.0f, "the lowest glyph reaches over half of the cropped page (it is no emptier than a power of two allows)");
+#ifdef IGUI_FONTATLAS_RELEASE_PIXELS
+        small.releasePixels();
+        check(small.pixels() == nullptr && small.pixelSize() == 0, "releasePixels frees the RAM copy");
+        check(small.defaultFont().findGlyph('H') != nullptr && small.defaultFont().hasBakedGlyph('H') && small.width() == 2048,
+                "and leaves the glyph table, the UVs and the size alone");
+#endif
+    }
+
     if (failures)
     {
         printf("%d failure(s)\n", failures);
