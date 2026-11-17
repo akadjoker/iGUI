@@ -260,6 +260,20 @@ void PaintContext::drawPolyline(const ct::Vector<ig::retained::Vec2>& points, fl
     drawList.addPolyline(points, line.current, thickness, closed);
 }
 
+void PaintContext::drawCheckMark(const Rect& box, const Color& color)
+{
+    const float side = box.w < box.h ? box.w : box.h;
+    if (side <= 0.0f || color.a == 0) return;
+    const float cx = box.x + box.w * 0.5f;
+    const float cy = box.y + box.h * 0.5f;
+    // a short stroke down to the left of the middle, a long one up to the right: about three fifths of the box
+    const float thickness = side * 0.13f > 1.5f ? side * 0.13f : 1.5f;
+    drawList.pathLineTo({ cx - 0.30f * side, cy + 0.02f * side });
+    drawList.pathLineTo({ cx - 0.08f * side, cy + 0.26f * side });
+    drawList.pathLineTo({ cx + 0.32f * side, cy - 0.24f * side });
+    drawList.pathStroke(color, thickness, false);
+}
+
 // ── Line helpers ──────────────────────────────────────────────────────────
 
 void PaintContext::lineRect(float x, float y, float w, float h)

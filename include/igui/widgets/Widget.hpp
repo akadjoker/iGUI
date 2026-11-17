@@ -360,6 +360,12 @@ struct PaintContext
     /// @brief Draw an icon with a custom tint color.
     void drawIcon(IconId id, float x, float y, float size, const Color& tint);
 
+    /// @brief Draw a tick inside @p box in @p color: two strokes, as thick as the size of the box asks
+    ///        (never less than a pixel and a half), so that it is as clear in a box of 10 pixels as
+    ///        in one of 24. What a CheckBox and the header check box of a Collapsible mark a checked
+    ///        state with (the theme's checkMark colour).
+    void drawCheckMark(const Rect& box, const Color& color);
+
 private:
     ct::Vector<Rect> clipStack_;
     ct::Vector<const ig::retained::Font*> fontStack_;

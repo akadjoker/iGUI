@@ -436,12 +436,7 @@ void Collapsible::paint(PaintContext& ctx)
             Color border = over ? t.inputBorderHover : t.inputBorder;
             ctx.line.SetColor(border.r, border.g, border.b, border.a);
             ctx.line.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, false);
-            if (checked_)
-            {
-                const float m = 3.0f;
-                ctx.fill.SetColor(t.checkMark.r, t.checkMark.g, t.checkMark.b, t.checkMark.a);
-                ctx.fill.Rectangle(box.x + m, box.y + m, box.w - m * 2, box.h - m * 2, true);
-            }
+            if (checked_) ctx.drawCheckMark(box, t.checkMark);
         }
         textX = box.x + box.w + 6.0f;
     }

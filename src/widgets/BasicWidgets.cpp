@@ -675,18 +675,7 @@ void CheckBox::paint(PaintContext& ctx)
         ctx.line.SetColor(border.r, border.g, border.b, border.a);
         ctx.line.Rectangle(clippedBox.x, clippedBox.y, clippedBox.w, clippedBox.h, false);
 
-        if (checked_)
-        {
-            float m = 3.0f;
-            Rect markRect = { bx + m, by + m, boxSize - m * 2, boxSize - m * 2 };
-            Rect clippedMark;
-            if (ctx.clipRectIntersect(markRect, clippedMark))
-            {
-                ctx.fill.SetColor(t.checkMark.r, t.checkMark.g, t.checkMark.b, t.checkMark.a);
-                ctx.fill.Rectangle(clippedMark.x, clippedMark.y, clippedMark.w, clippedMark.h,
-                        true);
-            }
-        }
+        if (checked_) ctx.drawCheckMark(boxRect, t.checkMark);
     }
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
