@@ -6,6 +6,7 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 
@@ -181,6 +182,55 @@ void testButtonAtItsHintShowsItsWholeLabel()
     }
 }
 
+// ---- mouse buttons: the window delivers 0 (left), 1 (right) and 2 (middle) ----
+
+void testPianoRollButtons()
+{
+    Harness h(520.0f, 360.0f, false);
+    Widget* holder = h.root()->createChild<Widget>();
+    PianoRoll* roll = holder->createChild<PianoRoll>();
+    roll->setRect({ 20.0f, 20.0f, 460.0f, 300.0f });
+    roll->setPitchRange(48, 72);
+    roll->setTimeRange(0.0f, 8.0f);
+    h.relayout();
+    const float x = 20.0f + 36.0f + 150.0f, y = 20.0f + 150.0f;
+    h.click(x, y, 0);
+    check(roll->notes().size() == 1, "a left click in the grid of a PianoRoll adds a note");
+    h.click(x + 2.0f, y, 1);
+    check(roll->notes().size() == 0, "a right click on a note of a PianoRoll removes it");
+    h.click(x, y, 2);
+    check(roll->notes().size() == 0, "a middle click in the grid of a PianoRoll adds nothing");
+    // a left click on a note drags it to another pitch
+    h.click(x, y, 0);
+    const int pitch = roll->notes().size() == 1 ? roll->notes()[0].pitch : -1;
+    h.moveTo(x + 2.0f, y);
+    h.down(0);
+    h.moveTo(x + 2.0f, y - 36.0f);
+    h.up(0);
+    check(roll->notes().size() == 1 && roll->notes()[0].pitch != pitch, "a left drag on a note moves it");
+}
+
+void testWaveformViewButtons()
+{
+    Harness h(520.0f, 240.0f, false);
+    Widget* holder = h.root()->createChild<Widget>();
+    WaveformView* wave = holder->createChild<WaveformView>();
+    wave->setRect({ 20.0f, 20.0f, 400.0f, 120.0f });
+    float samples[64] = {};
+    for (int i = 0; i < 64; ++i) samples[i] = (i & 1) ? 0.5f : -0.5f;
+    wave->setSamples(samples, 64, 1, 44100.0f);
+    wave->setViewRange(0.0f, 0.5f);
+    h.relayout();
+    h.click(220.0f, 80.0f, 0);
+    check(wave->playhead() > 0.1f && wave->playhead() < 0.4f, "a left click on a WaveformView moves the playhead");
+    const float before = wave->viewStart();
+    h.moveTo(300.0f, 80.0f);
+    h.down(1);
+    h.moveTo(200.0f, 80.0f);
+    h.up(1);
+    check(wave->viewStart() != before, "a right drag on a WaveformView pans it");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -190,6 +240,8 @@ int main(int argc, char** argv)
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testCheckBoxDrawsATick);
     RUN(testButtonAtItsHintShowsItsWholeLabel);
+    RUN(testPianoRollButtons);
+    RUN(testWaveformViewButtons);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

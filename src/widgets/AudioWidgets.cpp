@@ -1253,7 +1253,7 @@ void WaveformView::paint(PaintContext& ctx)
 void WaveformView::onMousePress(MouseEvent& e)
 {
     const Rect b = absoluteRect();
-    if (e.button == 1)
+    if (e.button == 0) // left: scrubs the playhead
     {
         float t = std::clamp(viewStart_ + (e.x - b.x) / b.w * (viewEnd_ - viewStart_), 0.f, 1.f);
         playhead_ = t;
@@ -1262,7 +1262,7 @@ void WaveformView::onMousePress(MouseEvent& e)
         markDirty();
         e.consumed = true;
     }
-    else if (e.button == 2)
+    else if (e.button == 1 || e.button == 2) // right or middle: pans the view
     {
         panning_ = true;
         panStartX_ = e.x - b.x;
@@ -1617,7 +1617,7 @@ void PianoRoll::onMousePress(MouseEvent& e)
     if (!(ga.w > 0.0f)) return; // no grid to point at (the keys take the whole width): a beat is a division by it
     if (e.x < ga.x || e.x > ga.x + ga.w || e.y < ga.y || e.y > ga.y + ga.h) return;
 
-    if (e.button == 2)
+    if (e.button == 1) // right: removes the note under the pointer
     {
         for (int i = static_cast<int>(notes_.size()) - 1; i >= 0; --i)
         {
@@ -1633,7 +1633,7 @@ void PianoRoll::onMousePress(MouseEvent& e)
         return;
     }
 
-    if (e.button == 1)
+    if (e.button == 0) // left: picks a note to drag, or adds one
     {
         for (int i = static_cast<int>(notes_.size()) - 1; i >= 0; --i)
         {
@@ -1659,7 +1659,7 @@ void PianoRoll::onMousePress(MouseEvent& e)
         e.consumed = true;
     }
 
-    if (e.button == 3)
+    if (e.button == 2) // middle: pans the view
     {
         panning_ = true;
         panStartX_ = e.x;
