@@ -176,6 +176,7 @@ private:
     TextAlign textAlign_ = TextAlign::CENTER;
     Color barColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's progressFill
     Color textColor_ = Color(220, 220, 220, 255);
+    ElideMemo textMemo_; // what paint worked out for a text wider than the bar (cut to its room)
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

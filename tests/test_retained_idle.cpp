@@ -114,6 +114,18 @@ void testSplitButtonTextDoesNotAllocate()
     check(allocsOfAFrame(h) == 0, "a SplitButton whose text is wider than its main button");
 }
 
+void testProgressBarTextDoesNotAllocate()
+{
+    printf("an idle frame with a ProgressBar whose text does not fit does not allocate\n");
+    Harness h(200.0f, 120.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    ProgressBar* bar = box->createChild<ProgressBar>(0.0f, 1.0f, 0.5f);
+    bar->setText("Um texto muito mais largo do que a barra toda, com a percentagem");
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "a ProgressBar whose text is wider than the bar");
+}
+
 } // namespace
 
 int main()
@@ -121,6 +133,7 @@ int main()
     testIdleFrameDoesNotAllocate();
     testTextFieldsDoNotAllocateInAnIdleFrame();
     testSplitButtonTextDoesNotAllocate();
+    testProgressBarTextDoesNotAllocate();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

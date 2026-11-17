@@ -364,7 +364,7 @@ void ProgressBar::paint(PaintContext& ctx)
         if (textW > abs.w - 8.0f)
         {
             // a text wider than the bar is cut with "..." inside it, from the left whatever the alignment
-            ctx.printElided({ abs.x + 4.0f, abs.y, abs.w - 8.0f, abs.h }, text_, ty, asc);
+            ctx.printElided({ abs.x + 4.0f, abs.y, abs.w - 8.0f, abs.h }, text_, ty, asc, textMemo_);
         }
         else
         {
