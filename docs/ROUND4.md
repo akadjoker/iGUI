@@ -16,15 +16,15 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | # | Item | Estado | Commit | Teste |
 |---|------|--------|--------|-------|
 | 1 | CheckBox sem visto (e o do cabecalho do Collapsible) | feito | 77c1ffe | testCheckBoxDrawsATick |
-| 2 | Button: hint e paint a discordar (SplitButton, ToolBar, ImageButton, IconButton) | feito (Button e SplitButton; os outros ja concordavam) | d387b39 | testButtonAtItsHintShowsItsWholeLabel |
+| 2 | Button: hint e paint a discordar (SplitButton, ToolBar, ImageButton, IconButton) | feito (Button e SplitButton; os outros ja concordavam) | 37eb3ea | testButtonAtItsHintShowsItsWholeLabel |
 | 3 | Label e ComboBox::sizeHint com a estimativa 0,6 x corpo | por fazer (ver abaixo) | | |
-| 4 | Menu: atalho por cima da seta do submenu | feito | 08496df | testMenuShortcutDoesNotOverlapTheSubmenuArrow |
+| 4 | Menu: atalho por cima da seta do submenu | feito | 9074d03 | testMenuShortcutDoesNotOverlapTheSubmenuArrow |
 | 5 | Collapsible::sizeHint inclui o proprio rect | feito | e1b816c | testCollapsibleHintIgnoresItsRect |
 | 6 | ScrollView::layout: barra horizontal presa, barra vertical fina | por fazer | | |
 | 7 | FloatWindow::setFloatPos nao faz layout | feito | 602345d | testFloatWindowSettersLayOut |
 | 8 | PianoRoll::onMousePress com botoes 1/2/3 (a janela da 0/1/2) | feito (e o mesmo engano no WaveformView; os outros widgets estao certos) | 8dea1b8 | testPianoRollButtons, testWaveformViewButtons |
 | 9 | WidgetApp: layout so no resize / requestLayout() | feito (Widget::invalidateLayout; ver abaixo) | 2bf456d | testLayoutRunsByItself, testIdleFrameDoesNoLayout |
-| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | parcial: so o formatValue (e Chart::setThousandsSeparator) feito; faltam os tres primeiros (ChartWidgets.cpp / ChartWidget.cpp: ver addPolyline da linha, o rotulo da fatia, a legenda do histograma) | ver git log (Chart: formatValue) | testFormatValue (tests/test_chart.cpp) |
+| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | parcial: so o formatValue (e Chart::setThousandsSeparator) feito; faltam os tres primeiros (ChartWidgets.cpp / ChartWidget.cpp: ver addPolyline da linha, o rotulo da fatia, a legenda do histograma) | 57941ab | testFormatValue (tests/test_chart.cpp) |
 | 11 | Fuga de Menu ao sair | feito: contrato escrito no cabecalho, Menu::addSubmenu e setSubmenu(m, owned) novos; setSubmenu(m) continua sem apagar | f79a949 | testMenuOwnership (para o ASan) |
 | 12 | MenuAction: icone | por fazer | | |
 | 13 | Menu: toggled(bool) e auto-toggle desligavel | por fazer | | |
@@ -37,9 +37,11 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | 20 | Chart: dados double; titulos dos eixos | por fazer | | |
 | 21 | Slider: leitura do valor | por fazer | | |
 
+Para a ZenDAW: o `Roll::onMousePress` dela traduz os botoes do PianoRoll (1/2/3) e, com o commit 8dea1b8, essa traducao tem de sair (o widget ja usa 0/1/2).
+
 Verificado ate aqui (local, nada no GitHub Actions): a fase nostd do check.sh (nenhuma linha nova com std:: ou #include <...>), a build Release e o ctest (40 testes, 1 saltado por falta de Xvfb livre nessa corrida), o hash de desenho; o ASan+UBSan so correu o igui_retained_menus (limpo, e com o destrutor do MenuAction mutilado o LeakSanitizer apanha 226 fugas); o check.sh completo, a build do ZenDAW e do ZenVideo e as benches estao por fazer.
 
-Benches: nao se correu nenhuma campanha ainda (so o hash de desenho em cada commit). O commit d387b39 muda
+Benches: nao se correu nenhuma campanha ainda (so o hash de desenho em cada commit). O commit 37eb3ea muda
 bench/retained/draw.hash (os botoes cujo texto medido passa da estimativa ficam mais largos). A comparacao completa
 main contra o ramo (simples e alinhada) esta por fazer.
 
