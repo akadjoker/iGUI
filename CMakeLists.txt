@@ -592,14 +592,42 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     target_include_directories(igui_zen PUBLIC adapters/zen/include)
     target_link_libraries(igui_zen PUBLIC igui_widgets platform)
 
+    # The tests that open windows or inject keyboard and mouse events must never do it on the display of whoever
+    # runs ctest (a bare `ctest` in a desktop session would click and type on the desktop). On Linux they are
+    # run through tools/xvfb-test.sh, which starts an Xvfb of its own and tells the test which display that is
+    # (the test is skipped, 77, where xvfb-run is not installed), and each test refuses on its own, before it
+    # touches a display, unless it can prove it is on that Xvfb (tests/ThrowawayDisplay.hpp). The second ctest
+    # entry runs the same program on an Xvfb without telling it, and passes only when it refuses: a guard that
+    # is taken out fails there, on a display that does not matter. With the fake backend of zen_plataform
+    # there is no window at all and the tests run as they are. Anywhere else there is no throwaway display: the
+    # test is built and not registered.
+    function(igui_add_window_test name target)
+        if(PLATFORM_USE_FAKE)
+            target_compile_definitions(${target} PRIVATE IGUI_ZEN_FAKE_PLATFORM=1)
+            add_test(NAME ${name} COMMAND ${target})
+            set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180)
+        elseif(UNIX AND NOT APPLE)
+            set(_igui_xvfb sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/xvfb-test.sh")
+            add_test(NAME ${name} COMMAND ${_igui_xvfb} $<TARGET_FILE:${target}>)
+            set_tests_properties(${name} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 180 RESOURCE_LOCK igui_xvfb)
+            add_test(NAME ${name}_refuses_unproven
+                COMMAND ${_igui_xvfb} env -u IGUI_TEST_THROWAWAY_DISPLAY $<TARGET_FILE:${target}>)
+            # passes on the refusal (the program exits 77 then, which is what is wanted here, not a skip); where there
+            # is no xvfb-run the script says so and nothing was started
+            set_tests_properties(${name}_refuses_unproven PROPERTIES TIMEOUT 60 RESOURCE_LOCK igui_xvfb
+                PASS_REGULAR_EXPRESSION "refused: not started by tools/xvfb-test.sh|xvfb-run or Xvfb is not installed")
+        else()
+            message(STATUS "${name}: no throwaway display on this system, the test is built and not registered")
+        endif()
+    endfunction()
+
     # The SideTabBar driven through a zen_plataform window, no SDL. With
     # PLATFORM_USE_FAKE=ON it runs headless; on X11/Wayland it needs a display
     # and is skipped (exit 77) without one.
     if(IGUI_BUILD_TESTS)
         add_executable(igui_zen_sidetabs_tests tests/test_zen_sidetabs.cpp)
         target_link_libraries(igui_zen_sidetabs_tests PRIVATE igui_zen)
-        add_test(NAME igui_zen_sidetabs COMMAND igui_zen_sidetabs_tests)
-        set_tests_properties(igui_zen_sidetabs PROPERTIES SKIP_RETURN_CODE 77)
+        igui_add_window_test(igui_zen_sidetabs igui_zen_sidetabs_tests)
     endif()
 
     if(IGUI_BUILD_TESTS)
@@ -607,8 +635,7 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         # parents closed with dialogs open, the scale changed. Needs an X server (77: skipped).
         add_executable(igui_zen_lifecycle_tests tests/test_zen_lifecycle.cpp)
         target_link_libraries(igui_zen_lifecycle_tests PRIVATE igui_zen)
-        add_test(NAME igui_zen_lifecycle COMMAND igui_zen_lifecycle_tests)
-        set_tests_properties(igui_zen_lifecycle PROPERTIES SKIP_RETURN_CODE 77)
+        igui_add_window_test(igui_zen_lifecycle igui_zen_lifecycle_tests)
     endif()
 
     # Mouse and keyboard through the adapter, with real events made by the XTEST extension of an X server
@@ -621,9 +648,17 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
             add_executable(igui_zen_input_tests tests/test_zen_input.cpp)
             target_include_directories(igui_zen_input_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
             target_link_libraries(igui_zen_input_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
-            add_test(NAME igui_zen_input COMMAND igui_zen_input_tests)
-            set_tests_properties(igui_zen_input PROPERTIES SKIP_RETURN_CODE 77)
+            igui_add_window_test(igui_zen_input igui_zen_input_tests)
         endif()
+    endif()
+
+    # The guard those tests share (tests/ThrowawayDisplay.hpp): yes on the Xvfb of tools/xvfb-test.sh, no in every
+    # other case it is given. It opens no window.
+    if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE AND NOT PLATFORM_USE_FAKE)
+        add_executable(igui_throwaway_display_tests tests/test_throwaway_display.cpp)
+        add_test(NAME igui_throwaway_display
+            COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/xvfb-test.sh" $<TARGET_FILE:igui_throwaway_display_tests>)
+        set_tests_properties(igui_throwaway_display PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60 RESOURCE_LOCK igui_xvfb)
     endif()
 
     if(IGUI_BUILD_ZEN_DEMO)

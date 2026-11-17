@@ -3,7 +3,11 @@
 // callback depois do render lê a janela tal como foi pintada. Com o backend
 // fake do zen_plataform (PLATFORM_USE_FAKE=ON) não há janela nem ecrã; com o
 // X11/Wayland abre-se uma janela de verdade e o teste sai com 77 (saltado) se
-// não houver ecrã.
+// não houver ecrã. A janela só se abre num Xvfb descartável que o
+// tools/xvfb-test.sh arrancou (o ctest corre-o assim): noutro sítio o teste
+// recusa-se antes de abrir uma (ThrowawayDisplay.hpp).
+
+#include "ThrowawayDisplay.hpp"
 
 #include <igui_zen/ZenApp.hpp>
 
@@ -238,6 +242,8 @@ struct Runner
 
 int main()
 {
+    // first of all: no window on a display that is not a throwaway one
+    if (!igui_test::onThrowawayDisplay("test_zen_sidetabs")) return 77;
     ig::zen::App::Config config;
     config.title = "iGUI SideTabBar test";
     config.width = kWidth;

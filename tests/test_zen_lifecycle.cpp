@@ -1,9 +1,13 @@
 // The zen adapter's window lifecycle, over and over: the application created and destroyed, dialog
 // windows opened (modal or not) and closed from their own buttons, a parent closed while its
 // dialog is open, the UI scale changed, text drawn at many sizes (the dynamic font page). Real
-// windows of zen_plataform (an X server is needed; the test exits 77, skipped, without one). Meant
-// for a sanitizer build: a leak (LSan), a use after free, a widget deleted under its own click.
+// windows of zen_plataform (an X server is needed; the test exits 77, skipped, without one), opened only on
+// a throwaway Xvfb that tools/xvfb-test.sh started for it (ctest runs it that way): anywhere else it refuses
+// before it opens one (ThrowawayDisplay.hpp). Meant for a sanitizer build: a leak (LSan), a use after free,
+// a widget deleted under its own click.
 // No standard library.
+
+#include "ThrowawayDisplay.hpp"
 
 #include <igui_zen/ZenApp.hpp>
 
@@ -94,6 +98,8 @@ bool createApp(ig::zen::App& zen, bool openGl)
 
 int main()
 {
+    // first of all: no window on a display that is not a throwaway one
+    if (!igui_test::onThrowawayDisplay("test_zen_lifecycle")) return 77;
     // The application made and destroyed again and again (the software and the GL path).
     for (int cycle = 0; cycle < 8; ++cycle)
     {

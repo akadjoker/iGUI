@@ -4,8 +4,12 @@
 // two frames). Each case counts how many frames pass between the injection and its effect, what is lost or
 // doubled, and how long the frames take while the input comes. A case that has a right answer (a tap is a
 // click, a letter typed is one letter, in order) fails when it is not; the delays and times are printed.
-// Needs an X server with the XTEST extension (the test exits 77, skipped, without one). No standard
-// library: ct and C only.
+// Needs an X server with the XTEST extension (the test exits 77, skipped, without one), and it injects real
+// pointer and keyboard events into the server it is on: it does so only on a throwaway Xvfb that
+// tools/xvfb-test.sh started for it (ctest runs it that way), and refuses, before it connects to anything,
+// anywhere else (ThrowawayDisplay.hpp). No standard library: ct and C only.
+
+#include "ThrowawayDisplay.hpp"
 
 #include <igui_zen/ZenApp.hpp>
 
@@ -644,6 +648,8 @@ void testOneFrameOfInput(Scene& s, Injector& x)
 
 int main()
 {
+    // first of all: no window and no event on a display that is not a throwaway one
+    if (!igui_test::onThrowawayDisplay("test_zen_input")) return 77;
     Scene scene;
     if (!scene.build())
     {
