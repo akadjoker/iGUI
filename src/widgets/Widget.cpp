@@ -738,7 +738,12 @@ void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color
 
     const float scale = size / buFont->lineHeight();
     int len = 0;
-    const ig::retained::FontGlyph* glyph = buFont->findGlyph(utf8Decode(glyphText, len));
+    const uint32_t codepoint = utf8Decode(glyphText, len);
+    // A font that does not have the glyph prints a '?' in its place, as it does for any text: an icon that is a
+    // question mark says nothing, so there is none. The glyph is there when it is in the font's table (what was
+    // baked) or, for a font that rasterises as it is asked (atHeight), when the face has it.
+    if (!(buFont->hasBakedGlyph(codepoint) || (buFont->isDynamic() && buFont->hasGlyph(codepoint)))) return;
+    const ig::retained::FontGlyph* glyph = buFont->findGlyph(codepoint);
     if (glyph && glyph->size.x > 0.0f && glyph->size.y > 0.0f)
     {
         const float inkW = glyph->size.x * scale;

@@ -716,6 +716,76 @@ void testTabsPastTheEndOfTheBarAreNotDrawnOrHit()
     check(most >= 3 && most <= 6, "a click along the bar selects only the tabs that have room (the first five or six)");
 }
 
+// An icon with no drawing of its own, no atlas to take it from and a glyph the font does not have draws nothing: the
+// font puts a '?' in place of a glyph it lacks, and a question mark says nothing about what the icon was. The font that
+// ships with the library has all of these glyphs, so the test takes the ones of the system (fonts of a few common
+// families, wherever they are: none of them, or none that lacks a glyph, and it says so and checks nothing).
+bool readFile(const char* path, ct::Vector<unsigned char>& out)
+{
+    FILE* f = fopen(path, "rb");
+    if (!f) return false;
+    unsigned char chunk[4096];
+    size_t n;
+    while ((n = fread(chunk, 1, sizeof chunk, f)) > 0)
+        for (size_t i = 0; i < n; ++i) out.push_back(chunk[i]);
+    fclose(f);
+    return !out.empty();
+}
+
+void testIconWithoutAGlyphIsNotAQuestionMark()
+{
+    const char* candidates[] = { "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf", "/usr/share/fonts/truetype/droid/DroidSans.ttf",
+        "/usr/share/fonts/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/TTF/LiberationSans-Regular.ttf",
+        "C:\\Windows\\Fonts\\arial.ttf", "/Library/Fonts/Arial.ttf" };
+    int fonts = 0, missingSomewhere = 0, marks = 0;
+    for (const char* path: candidates)
+    {
+        ct::Vector<unsigned char> data;
+        if (!readFile(path, data)) continue;
+        FontAtlas atlas;
+        if (!atlas.buildFromTTFMemory(data.data(), static_cast<int>(data.size()), 16.0f)) continue;
+        atlas.setTexture(handle(9));
+        ++fonts;
+        // what this font draws for '?': the texture coordinates of its glyph
+        DrawList reference;
+        PaintContext refCtx(reference, &atlas.defaultFont());
+        refCtx.font.SetFontSize(16.0f);
+        refCtx.drawText(0.0f, 20.0f, "?");
+        ct::Vector<Vec2> question;
+        for (size_t i = 0; i < reference.vertices().size(); ++i) question.push_back({ reference.vertices()[i].u, reference.vertices()[i].v });
+        check(!question.empty(), "the font draws a question mark");
+        int nothing = 0, here = 0;
+        for (int i = 1; i < static_cast<int>(IconId::COUNT); ++i)
+        {
+            const IconId id = static_cast<IconId>(i);
+            if (DrawList::hasVectorIcon(id)) continue;
+            DrawList list;
+            PaintContext ctx(list, &atlas.defaultFont());
+            ctx.drawIcon(id, 10.0f, 10.0f, 24.0f);
+            if (list.vertices().empty())
+            {
+                ++nothing;
+                continue;
+            }
+            bool mark = false;
+            for (size_t v = 0; v < list.vertices().size() && !mark; ++v)
+                for (size_t q = 0; q < question.size(); ++q)
+                    if (list.vertices()[v].u == question[q].x && list.vertices()[v].v == question[q].y) mark = true;
+            if (mark) ++here;
+        }
+        if (here) printf("    %s: %d icons drew a question mark (%d drew nothing)\n", path, here, nothing);
+        marks += here;
+        if (nothing > 0) ++missingSomewhere;
+    }
+    if (!missingSomewhere && marks == 0)
+    {
+        printf("    %s\n", fonts ? "no system font here lacks an icon glyph: nothing to check" : "no system font found: nothing to check");
+        return;
+    }
+    check(marks == 0, "an icon whose glyph the font lacks is not drawn as a question mark");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -736,6 +806,7 @@ int main(int argc, char** argv)
     RUN(testAssetBrowserIconsAreDrawnWithoutAnAtlas);
     RUN(testSplitButtonCutsWhereAButtonDoes);
     RUN(testTabsPastTheEndOfTheBarAreNotDrawnOrHit);
+    RUN(testIconWithoutAGlyphIsNotAQuestionMark);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
