@@ -433,8 +433,14 @@ float SplitButton::dropArrowW() const
 Widget::Vec2f SplitButton::sizeHint() const
 {
     const auto& t = Theme::instance();
+    // paint cuts a text wider than the main button less its four paddings: the hint holds all of it
     float tw = text_.size() * t.fontSize * 0.6f;
-    return { tw + t.padding * 3 + dropArrowW(), t.buttonHeight };
+    if (!text_.empty())
+    {
+        const float real = WidgetApp::instance().textWidth(text_.c_str()); // paint takes the theme font
+        if (real > tw) tw = real;
+    }
+    return { tw + t.padding * 4 + dropArrowW(), t.buttonHeight };
 }
 
 void SplitButton::paint(PaintContext& ctx)
@@ -474,7 +480,7 @@ void SplitButton::paint(PaintContext& ctx)
     ctx.font.SetColor(t.textColor);
     // a text wider than the main button is cut with "..." before the arrow button, as a Button's is
     const float room = mainW - t.padding * 4;
-    if (tw <= room) ctx.font.Print(text_.c_str(), tx, ty);
+    if (tw <= room + 0.01f) ctx.font.Print(text_.c_str(), tx, ty);
     else
         ctx.printElided({ abs.x + t.padding * 2, abs.y, room, abs.h }, text_, ty, asc, textMemo_);
 

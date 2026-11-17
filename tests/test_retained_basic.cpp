@@ -5,6 +5,7 @@
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
 
+#include <igui/widgets/AppWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 
@@ -130,6 +131,56 @@ void testCheckBoxDrawsATick()
         }
 }
 
+// ---- Button and SplitButton: a widget at its own size hint shows its whole label ----
+
+// A widget of type W with each text, drawn at its size hint and again with room to spare: a label that is cut ends in
+// dots and draws other glyphs, so the vertices differ.
+template<typename W>
+int hintsThatCut(Harness& h, const char* kind, const char* const* texts, int n)
+{
+    int bad = 0;
+    for (int i = 0; i < n; ++i)
+    {
+        Widget* holder = h.root()->createChild<Widget>();
+        W* w = holder->createChild<W>(String(texts[i]));
+        const Widget::Vec2f hint = w->sizeHint();
+        w->setRect({ 10.0f, 10.0f, hint.x, hint.y });
+        h.frames(2);
+        const size_t atHint = GetDrawList().vertices().size();
+        w->setRect({ 10.0f, 10.0f, hint.x + 150.0f, hint.y });
+        h.frames(2);
+        const size_t wide = GetDrawList().vertices().size();
+        h.root()->removeChild(holder);
+        if (atHint != wide)
+        {
+            ++bad;
+            printf("    %s \"%s\": %u vertices at its hint (%.1f wide), %u when wide\n", kind, texts[i],
+                    static_cast<unsigned>(atHint), static_cast<double>(hint.x), static_cast<unsigned>(wide));
+        }
+    }
+    return bad;
+}
+
+void testButtonAtItsHintShowsItsWholeLabel()
+{
+    const char* texts[] = { "W", "M", "i", "Wi", "WW", "MM", "mm", "Ok", "OK", "Gravar", "MMMM", "Ficheiro", "AVWXYZ" };
+    const int n = static_cast<int>(sizeof texts / sizeof texts[0]);
+    const float sizes[] = { 12.0f, 16.0f, 24.0f };
+    for (float size: sizes)
+    {
+        const Theme saved = Theme::instance();
+        Theme::instance().fontSize = size;
+        {
+            Harness h(480.0f, 120.0f, false);
+            printf("  font %.0f\n", static_cast<double>(size));
+            check(hintsThatCut<Button>(h, "Button", texts, n) == 0, "a Button at its size hint shows its whole label");
+            check(hintsThatCut<SplitButton>(h, "SplitButton", texts, n) == 0,
+                    "a SplitButton at its size hint shows its whole label");
+        }
+        Theme::instance() = saved;
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -138,6 +189,7 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testCheckBoxDrawsATick);
+    RUN(testButtonAtItsHintShowsItsWholeLabel);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

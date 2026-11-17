@@ -180,7 +180,8 @@ void Button::setAlign(TextAlign a)
 Widget::Vec2f Button::sizeHint() const
 {
     const auto& t = Theme::instance();
-    float textW = text_.size() * t.fontSize * 0.6f;
+    // paint cuts a label wider than the width less its four paddings and the icon, so the hint holds all of it
+    const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     float iconW = (iconId_ != IconId::None) ? (t.fontSize + 2.f) : 0.f;
     return { textW + iconW + t.padding * 4, t.buttonHeight };
 }
@@ -266,7 +267,7 @@ void Button::paint(PaintContext& ctx)
     // a label wider than the button is cut with "..." instead of spilling over its neighbours
     String shown = text_;
     float room = abs.w - iconW - t.padding * 4;
-    bool cut = !shown.empty() && textW > room && abs.w > 0;
+    bool cut = !shown.empty() && textW > room + 0.01f && abs.w > 0; // a hair of room: the hint is this sum
     if (cut)
     {
         shown = ctx.fitText(text_, room);
