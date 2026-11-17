@@ -339,7 +339,7 @@ struct PaintContext
     ///        memo.elided says whether the text had to be cut, memo.shown is then what to print and
     ///        memo.shownWidth its width (the text's own when it was not cut). Held while the text, the
     ///        room and the font stay the same; a text longer than 512 bytes is worked out each time.
-    const ElideMemo& fitTextMemo(const String& text, float room, ElideMemo& memo);
+    const ElideMemo& fitTextMemo(const String& whole, float room, ElideMemo& memo);
     /// @brief What the width of a text depends on besides the text, for the font in force. Made again
     ///        when the font, the height or the scale in force changes, not when the draw list's
     ///        kerning or the atlas's pixel scale does in the middle of a paint context (they do not

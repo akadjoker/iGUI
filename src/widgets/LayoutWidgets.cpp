@@ -1204,7 +1204,7 @@ static const String kEmptyTabLabel;
 
 void TabLayout::addTabWidget(const String& label, Widget* content)
 {
-    tabs_.push_back({ label, content });
+    tabs_.push_back({ label, content, ElideMemo() });
     addChild(content);
 
     // First tab added → show it

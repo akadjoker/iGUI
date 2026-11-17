@@ -482,8 +482,8 @@ void App::feedInput(PlatformWindow *pw)
             const int scancode = key == rt::Key::F1 ? 58 : e.data.key.scancode;
             // the modifiers the key was pressed with (the event's own): the ones read at the start of the frame
             // miss a Ctrl+A whose Ctrl was pressed and released inside it
-            const int mods = e.data.key.mods;
-            io.addKeyEvent(key, scancode, (mods & KEYMOD_SHIFT) != 0, (mods & KEYMOD_CTRL) != 0, (mods & KEYMOD_ALT) != 0,
+            const int keyMods = e.data.key.mods;
+            io.addKeyEvent(key, scancode, (keyMods & KEYMOD_SHIFT) != 0, (keyMods & KEYMOD_CTRL) != 0, (keyMods & KEYMOD_ALT) != 0,
                     e.data.key.down);
         }
     }

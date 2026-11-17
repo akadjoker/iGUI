@@ -202,11 +202,9 @@ void AssetBrowser::paint(PaintContext& ctx)
             float ts = thumbSize_ * 0.5f;
             ctx.fillRect(cx + (g.cellW - ts) * 0.5f, cy + (thumbSize_ - ts) * 0.5f, ts, ts);
 
-            {
-                float is = std::min(32.f, thumbSize_ * 0.5f);
-                ctx.drawIcon(typeToIcon(it.type), cx + (g.cellW - is) * 0.5f,
-                        cy + (thumbSize_ - is) * 0.5f, is, Color(255, 255, 255, 200));
-            }
+            const float is = Math::min2(32.f, thumbSize_ * 0.5f);
+            ctx.drawIcon(typeToIcon(it.type), cx + (g.cellW - is) * 0.5f, cy + (thumbSize_ - is) * 0.5f, is,
+                    Color(255, 255, 255, 200));
 
             if (sel)
             {

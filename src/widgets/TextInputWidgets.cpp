@@ -741,8 +741,6 @@ String TextEdit::expandTabs(const String& text) const
     return expandTabs(text, 0);
 }
 
-// expandTabs of the `size` bytes at `text`, into `out` (which keeps its room from one call to the next); a text
-// with no tab, the usual one, is copied as it is.
 // The tabs expanded of the columns [from, to) of a line, in `out`.
 const String& TextEdit::expandRange(int line, int from, int to, int startVisCol, String& out) const
 {
@@ -752,6 +750,8 @@ const String& TextEdit::expandRange(int line, int from, int to, int startVisCol,
     return out;
 }
 
+// expandTabs of the `size` bytes at `text`, into `out` (which keeps its room from one call to the next); a text
+// with no tab, the usual one, is copied as it is.
 void TextEdit::expandTabsInto(const char* text, size_t size, int startVisCol, String& out) const
 {
     if (!size || !memchr(text, '\t', size))
@@ -1060,10 +1060,10 @@ void TextEdit::insertTextAtCursor(const String& t)
         // The new lines go in at once: what follows the cursor's line moves once, not once for each new line
         // (a paste of thousands of lines moved the rest of the document for each of them)
         const size_t first = static_cast<size_t>(cursor_.line);
-        const size_t added = insertLines.size() - 1;
+        const size_t newLines = insertLines.size() - 1;
         const size_t before = lines_.size();
-        lines_.resize(before + added);
-        for (size_t i = before; i-- > first + 1;) lines_[i + added] = static_cast<String&&>(lines_[i]);
+        lines_.resize(before + newLines);
+        for (size_t i = before; i-- > first + 1;) lines_[i + newLines] = static_cast<String&&>(lines_[i]);
         for (size_t i = 1; i + 1 < insertLines.size(); ++i) lines_[first + i] = static_cast<String&&>(insertLines[i]);
         int lastIdx = cursor_.line + static_cast<int>(insertLines.size()) - 1;
         lines_[static_cast<size_t>(lastIdx)] = insertLines.back() + tail;
