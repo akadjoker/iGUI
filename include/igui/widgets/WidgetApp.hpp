@@ -732,20 +732,6 @@ private:
         WidgetApp& app;
     };
 
-    // The events of the frame update() is dispatching, taken out of the IO (see there). Kept between frames so
-    // that the IO and this trade their storage and a frame with events allocates nothing; a nested update()
-    // (a handler that runs a loop of frames) finds it busy and uses a buffer of its own.
-    struct FrameEvents
-    {
-        ct::Vector<ig::retained::IO::MouseInput> mouse;
-        ct::Vector<ig::retained::IO::KeyEvent> keys;
-        ct::Vector<uint32_t> chars;
-        ct::Vector<ig::retained::IO::DropEvent> drops;
-    };
-    FrameEvents frameEvents_;
-    FrameEvents noEvents_; // always empty: what a frame with no events walks
-    bool frameEventsBusy_ = false;
-
     // State
     bool inited_ = false;
     float dt_ = 0.0f;
@@ -790,6 +776,21 @@ private:
     void cancelDrag();
 
     Surface s_;
+
+    // The events of the frame update() is dispatching, taken out of the IO (see there), the last of the members
+    // so that every other one stays where it was. Kept between frames so that the IO and this trade their
+    // storage and a frame with events allocates nothing; a nested update() (a handler that runs a loop of
+    // frames) finds it busy and uses a buffer of its own.
+    struct FrameEvents
+    {
+        ct::Vector<ig::retained::IO::MouseInput> mouse;
+        ct::Vector<ig::retained::IO::KeyEvent> keys;
+        ct::Vector<uint32_t> chars;
+        ct::Vector<ig::retained::IO::DropEvent> drops;
+    };
+    FrameEvents frameEvents_;
+    FrameEvents noEvents_; // always empty: what a frame with no events walks
+    bool frameEventsBusy_ = false;
 };
 
 } // namespace retained

@@ -124,20 +124,6 @@ struct IO
     };
     ct::Vector<KeyEvent> keyEvents;
 
-    // Per-frame mouse events, in the order they happened (taken out by WidgetApp::update, cleared by Render), for a backend that reads the
-    // platform's event stream: a press and a release that both fall between two frames are a click, a press
-    // happens where the pointer was when it was pressed, a move and a press somewhere else are two things.
-    // The polled mouseX, mouseY and mouseDown are still what the frame ends with, and are all a backend that
-    // adds no events needs to fill in.
-    struct MouseInput
-    {
-        float x = 0.0f;
-        float y = 0.0f;
-        int button = -1;   // -1: the pointer moved to x, y; else the button that changed
-        bool down = false; // with a button: pressed (true) or released
-    };
-    ct::Vector<MouseInput> mouseEvents;
-
     // Cursor hint written by WidgetApp::update(), read by backend.
     // Matches CursorType: 0=Arrow 1=Hand 2=IBeam 3=Crosshair
     //                     4=SizeH 5=SizeV 6=SizeAll 7=No
@@ -170,6 +156,21 @@ struct IO
         String text;                  // text dropped (if any)
     };
     ct::Vector<DropEvent> dropEvents;
+
+    // Per-frame mouse events, in the order they happened (taken out by WidgetApp::update, cleared by Render), for
+    // a backend that reads the platform's event stream: a press and a release that both fall between two frames
+    // are a click, a press happens where the pointer was when it was pressed, a move and a press somewhere else
+    // are two things. The polled mouseX, mouseY and mouseDown are still what the frame ends with, and are all a
+    // backend that adds no events needs to fill in. After the members that were there before, which stay where
+    // they were.
+    struct MouseInput
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        int button = -1;   // -1: the pointer moved to x, y; else the button that changed
+        bool down = false; // with a button: pressed (true) or released
+    };
+    ct::Vector<MouseInput> mouseEvents;
 
     void addDropEvent(float x, float y, const ct::Vector<String>& paths, const String& txt = "")
     {
