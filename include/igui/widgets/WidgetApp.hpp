@@ -94,6 +94,9 @@ public:
     struct Surface
     {
         bool needsLayout_ = true;
+        // Something the layout depends on changed (see Widget::invalidateLayout): the containers lay their children
+        // out again, but the rectangles of the stage's own children stay as the application left them.
+        bool relayout_ = false;
         int width_ = 0;
         int height_ = 0;
         Color bgColor_ = Color(30, 30, 30, 255);
@@ -501,10 +504,20 @@ public:
     /// @brief Get a stage's background color.
     Color stageBgColor(const String& name) const;
 
-    /// @brief Request a layout pass on the next frame.
+    /// @brief Request a layout pass on the next frame: the window size is applied again, so every child of
+    ///        the stage takes the whole window (a resize, a stage change and the widgets that always asked
+    ///        for it do this).
     void requestLayout()
     {
         s_.needsLayout_ = true;
+    }
+    /// @brief Request a layout pass on the next frame that lays the containers out again and leaves the
+    ///        rectangles of the stage's children alone: a rectangle the application gave a widget that sits
+    ///        directly on the stage (a panel or an overlay placed by hand) stays; only a child that has no
+    ///        size yet (just added) takes the whole window. Widget::invalidateLayout() asks for this.
+    void requestRelayout()
+    {
+        s_.relayout_ = true;
     }
 
     /// @brief Move the focus from @p from to the next widget Tab reaches, or with

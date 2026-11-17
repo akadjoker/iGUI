@@ -826,7 +826,7 @@ void Widget::removeChild(Widget* child)
 
 void Widget::invalidateLayout()
 {
-    if (WidgetApp* app = WidgetApp::existing()) app->requestLayout();
+    if (WidgetApp* app = WidgetApp::existing()) app->requestRelayout();
 }
 
 void Widget::moveChild(Widget* child, int toIndex)

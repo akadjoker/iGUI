@@ -403,6 +403,56 @@ void testImageButtonStates()
     check(faded > 0 && faded < 255, "a disabled ImageButton draws its image faded");
 }
 
+// The layout that asks for itself must not move what the application placed by hand: a widget directly on the stage with a
+// rectangle of its own (a panel, an overlay), one inside a container nobody lays out, and a container with a rectangle of its
+// own. Only a widget with no size at all (just added) takes the window.
+void testAutomaticLayoutKeepsHandPlacedWidgets()
+{
+    Harness h(640.0f, 480.0f, false);
+    Panel* placed = h.root()->createChild<Panel>();
+    placed->setRect({ 50.0f, 60.0f, 200.0f, 100.0f });
+    BoxLayout* overlay = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    overlay->setRect({ 300.0f, 40.0f, 150.0f, 90.0f });
+    Label* inOverlay = overlay->createChild<Label>(String("um"));
+    Widget* canvas = h.root()->createChild<Widget>();
+    canvas->setRect({ 10.0f, 300.0f, 300.0f, 100.0f });
+    Label* free = canvas->createChild<Label>(String("livre"));
+    free->setRect({ 33.0f, 44.0f, 55.0f, 20.0f });
+    h.frames(2); // the first layout of the window, as it always was: the children of the stage take the window
+    placed->setRect({ 50.0f, 60.0f, 200.0f, 100.0f });
+    overlay->setRect({ 300.0f, 40.0f, 150.0f, 90.0f });
+    canvas->setRect({ 10.0f, 300.0f, 300.0f, 100.0f });
+    free->setRect({ 33.0f, 44.0f, 55.0f, 20.0f });
+    h.frames(2);
+
+    // everything that asks for a layout by itself
+    placed->createChild<Label>(String("filho"));
+    h.frame();
+    inOverlay->setText("um texto mais comprido");
+    h.frame();
+    inOverlay->setVisible(false);
+    h.frame();
+    inOverlay->setVisible(true);
+    h.frame();
+    overlay->setSpacing(9.0f);
+    overlay->setPadding(7.0f);
+    h.frame();
+    Widget* late = h.root()->createChild<Widget>();
+    h.frame();
+    canvas->createChild<Label>(String("outro"));
+    h.frame();
+    check(placed->rect().x == 50.0f && placed->rect().y == 60.0f && placed->rect().w == 200.0f && placed->rect().h == 100.0f,
+            "a Panel placed by hand on the stage keeps its rectangle");
+    check(overlay->rect().x == 300.0f && overlay->rect().y == 40.0f && overlay->rect().w == 150.0f && overlay->rect().h == 90.0f,
+            "so does a BoxLayout placed by hand");
+    check(inOverlay->rect().x >= 7.0f && inOverlay->rect().x < 150.0f && inOverlay->rect().w <= 150.0f,
+            "while its children are laid out again inside it (padding 7)");
+    check(canvas->rect().x == 10.0f && canvas->rect().w == 300.0f, "a plain widget placed by hand keeps its rectangle");
+    check(free->rect().x == 33.0f && free->rect().y == 44.0f && free->rect().w == 55.0f && free->rect().h == 20.0f,
+            "a child of a widget that lays nothing out keeps the rectangle it was given");
+    check(late->rect().w == 640.0f && late->rect().h == 480.0f, "a widget just added to the stage takes the window");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -417,6 +467,7 @@ int main(int argc, char** argv)
     RUN(testFloatWindowSettersLayOut);
     RUN(testCollapsibleHintIgnoresItsRect);
     RUN(testLayoutRunsByItself);
+    RUN(testAutomaticLayoutKeepsHandPlacedWidgets);
     RUN(testImageButtonStates);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());

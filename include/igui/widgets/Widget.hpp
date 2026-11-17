@@ -727,7 +727,9 @@ public:
     ///        The setters that change those call it themselves; a widget of your own whose size hint
     ///        changes calls it from the setter that changed it. It only raises a flag of the manager
     ///        (the layout runs once, in the next paint, however many calls came before it), so an
-    ///        idle frame does no layout work.
+    ///        idle frame does no layout work. The pass it asks for (WidgetApp::requestRelayout) lays the
+    ///        containers out again and never resets the rectangle of a widget the application placed
+    ///        directly on the stage; WidgetApp::requestLayout() is the one that applies the window size.
     void invalidateLayout();
 
     // ── Scroll offset (overridden by ScrollView) ──────────────────────────

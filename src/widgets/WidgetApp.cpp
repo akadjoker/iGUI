@@ -1860,19 +1860,33 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
     drawList_ = &ig::retained::GetDrawList();
 
     // Layout pass
-    if (s_.needsLayout_ && s_.root_)
+    if ((s_.needsLayout_ || s_.relayout_) && s_.root_)
     {
-        s_.root_->setRect({ 0, 0, w, h });
-        for (auto* c: s_.root_->children()) c->setRect({ 0, 0, w, h });
+        if (s_.needsLayout_)
+        {
+            s_.root_->setRect({ 0, 0, w, h });
+            for (auto* c: s_.root_->children()) c->setRect({ 0, 0, w, h });
+        }
+        else
+        {
+            // only something under the tree changed: a child of the stage that the application placed keeps its
+            // rectangle, and one that was just added (no size yet) takes the window
+            for (auto* c: s_.root_->children())
+                if (!(c->rect().w > 0.0f && c->rect().h > 0.0f)) c->setRect({ 0, 0, w, h });
+        }
         s_.root_->layout();
 
         if (s_.transActive_ && s_.transOldRoot_)
         {
-            s_.transOldRoot_->setRect({ 0, 0, w, h });
-            for (auto* c: s_.transOldRoot_->children()) c->setRect({ 0, 0, w, h });
+            if (s_.needsLayout_)
+            {
+                s_.transOldRoot_->setRect({ 0, 0, w, h });
+                for (auto* c: s_.transOldRoot_->children()) c->setRect({ 0, 0, w, h });
+            }
             s_.transOldRoot_->layout();
         }
         s_.needsLayout_ = false;
+        s_.relayout_ = false;
     }
 
     // Transition
