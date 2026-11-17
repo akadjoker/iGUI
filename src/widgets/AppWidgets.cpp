@@ -476,7 +476,7 @@ void SplitButton::paint(PaintContext& ctx)
     const float room = mainW - t.padding * 4;
     if (tw <= room) ctx.font.Print(text_.c_str(), tx, ty);
     else
-        ctx.printElided({ abs.x + t.padding * 2, abs.y, room, abs.h }, text_, ty, asc);
+        ctx.printElided({ abs.x + t.padding * 2, abs.y, room, abs.h }, text_, ty, asc, textMemo_);
 
     // Down arrow
     float ax = abs.x + mainW + arrowW * 0.5f;

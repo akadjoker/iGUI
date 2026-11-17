@@ -626,6 +626,49 @@ void testTextEditTabsAreSpaces()
     }
 }
 
+// The text of a SplitButton is cut where a Button's is: the main button of a SplitButton is a button of its own width
+// (the arrow takes the rest), and a text in it that is wider than the width less two paddings on each side is cut with
+// "..." in the main button as in a Button, so a text is whole or cut in both for every width. Counted in the vertices of
+// the frame: the same text in a Button of the width of the main button and in the SplitButton differ by what the
+// SplitButton has more (its arrow and divider), the same for every length of text, as long as both cut at the same width.
+size_t verticesOfAWidget(float width, const String& text, bool split)
+{
+    Harness h(width, 60.0f, false);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    if (split) box->createChild<SplitButton>(text);
+    else
+        box->createChild<Button>(text);
+    h.relayout();
+    h.frames(2);
+    return GetDrawList().vertices().size();
+}
+
+void testSplitButtonCutsWhereAButtonDoes()
+{
+    const float mainWidth = 150.0f;
+    const float arrowWidth = 22.0f; // SplitButton::dropArrowW
+    String text;
+    const size_t base = verticesOfAWidget(mainWidth + arrowWidth, "M", true) - verticesOfAWidget(mainWidth, "M", false);
+    int mismatches = 0;
+    int cuts = 0;
+    for (int n = 1; n <= 24; ++n)
+    {
+        text += "M";
+        const size_t split = verticesOfAWidget(mainWidth + arrowWidth, text, true);
+        const size_t button = verticesOfAWidget(mainWidth, text, false);
+        if (split - button != base)
+        {
+            ++mismatches;
+            printf("    %d letters: %u vertices in the SplitButton, %u in the Button (%u more at one letter)\n", n,
+                    static_cast<unsigned>(split), static_cast<unsigned>(button), static_cast<unsigned>(base));
+        }
+        if (split < verticesOfAWidget(mainWidth + arrowWidth, "M", true) + 4 * static_cast<size_t>(n - 1)) ++cuts;
+    }
+    check(cuts > 0, "the sweep reaches texts that are cut");
+    check(mismatches == 0, "a text is cut at the same length in a SplitButton and in a Button as wide as its main button");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -644,6 +687,7 @@ int main(int argc, char** argv)
     RUN(testIconsAreDrawnWithoutAnAtlas);
     RUN(testTextEditTabsAreSpaces);
     RUN(testAssetBrowserIconsAreDrawnWithoutAnAtlas);
+    RUN(testSplitButtonCutsWhereAButtonDoes);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

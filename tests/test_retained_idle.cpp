@@ -8,6 +8,9 @@
 #include "AllocCounter.hpp"
 #include "EditorTree.hpp"
 
+#include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/InputWidgets.hpp>
+#include <igui/widgets/SpinSlider.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
 
 using namespace rh;
@@ -97,12 +100,27 @@ void testTextFieldsDoNotAllocateInAnIdleFrame()
     check(allocsOfAFrame(h) == 0, "the editor with everything selected");
 }
 
+// Text that is wider than its widget is cut with "..." to its room, and what that came to (the text, the room, the
+// cut text and its width) is kept between frames (ElideMemo): the frame of a window nobody touches does not
+// allocate for it. The cut text, and a copy of it, were made again in every frame.
+void testSplitButtonTextDoesNotAllocate()
+{
+    printf("an idle frame with a SplitButton whose text does not fit does not allocate\n");
+    Harness h(200.0f, 120.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->createChild<SplitButton>("Uma accao com um nome muito comprido demais para o botao");
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "a SplitButton whose text is wider than its main button");
+}
+
 } // namespace
 
 int main()
 {
     testIdleFrameDoesNotAllocate();
     testTextFieldsDoNotAllocateInAnIdleFrame();
+    testSplitButtonTextDoesNotAllocate();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

@@ -173,6 +173,7 @@ private:
     Menu* dropMenu_ = nullptr;
     bool hoverMain_ = false;
     bool hoverDrop_ = false;
+    ElideMemo textMemo_; // what paint worked out for a text wider than the main button (cut to its room)
 
     float dropArrowW() const; // width of the arrow area
 };
