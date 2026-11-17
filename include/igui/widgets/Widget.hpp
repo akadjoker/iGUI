@@ -334,6 +334,12 @@ struct PaintContext
     /// @brief The same, for a widget that has asked for fontStamp().id once for all the texts it prints in a
     ///        paint with the same font: @p fontId is that id, and must be the one of the font in force.
     void printElided(const Rect& bounds, const String& text, float y, float ascender, ElideMemo& memo, uint32_t fontId);
+    /// @brief The text cut to @p room (fitText) and its width, worked out once and kept in @p memo for a
+    ///        widget that must know them before it prints (printElided prints as well). Afterwards
+    ///        memo.elided says whether the text had to be cut, memo.shown is then what to print and
+    ///        memo.shownWidth its width (the text's own when it was not cut). Held while the text, the
+    ///        room and the font stay the same; a text longer than 512 bytes is worked out each time.
+    const ElideMemo& fitTextMemo(const String& text, float room, ElideMemo& memo);
     /// @brief What the width of a text depends on besides the text, for the font in force. Made again
     ///        when the font, the height or the scale in force changes, not when the draw list's
     ///        kerning or the atlas's pixel scale does in the middle of a paint context (they do not

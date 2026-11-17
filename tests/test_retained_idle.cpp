@@ -139,6 +139,18 @@ void testSpinBoxTextDoesNotAllocate()
     check(allocsOfAFrame(h) == 0, "a SpinBox whose value, with its prefix and suffix, is wider than the room between its buttons");
 }
 
+void testSpinSliderLabelDoesNotAllocate()
+{
+    printf("an idle frame with a SpinSlider whose label does not fit does not allocate\n");
+    Harness h(200.0f, 120.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    SpinSlider* slider = box->createChild<SpinSlider>();
+    slider->setLabel("Um nome de parametro muito comprido para o campo");
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "a SpinSlider whose label is wider than the widget");
+}
+
 } // namespace
 
 int main()
@@ -148,6 +160,7 @@ int main()
     testSplitButtonTextDoesNotAllocate();
     testProgressBarTextDoesNotAllocate();
     testSpinBoxTextDoesNotAllocate();
+    testSpinSliderLabelDoesNotAllocate();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

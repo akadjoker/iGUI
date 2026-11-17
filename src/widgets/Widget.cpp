@@ -475,6 +475,29 @@ void PaintContext::rememberElided(const Rect& bounds, const String& text, float 
     printWithin(bounds, memo.shown, bounds.x, memo.shownWidth, y, ascender);
 }
 
+const ElideMemo& PaintContext::fitTextMemo(const String& text, float room, ElideMemo& memo)
+{
+    const uint32_t fontId = fontStamp().id;
+    if (memo.holds(text, room, fontId)) return memo;
+    const float width = font.GetTextWidth(text.c_str());
+    // too long to keep (a document in a label would be copied into the memo): worked out, and kept as nothing
+    // that holds, so the next call works it out again
+    const bool keep = text.size() <= 512;
+    memo.text = keep ? text : String();
+    memo.fontId = keep ? fontId : 0;
+    memo.room = room;
+    memo.elided = width > room;
+    if (!memo.elided)
+    {
+        memo.shown.clear();
+        memo.shownWidth = width;
+        return memo;
+    }
+    memo.shown = fitText(text, room, width);
+    memo.shownWidth = font.GetTextWidth(memo.shown.c_str());
+    return memo;
+}
+
 float PaintContext::textHeight() const
 {
     return buFont ? buFont->lineHeight() : 16.0f;

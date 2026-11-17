@@ -167,6 +167,7 @@ private:
     float grabbingSpinnerMouseX_ = 0.0f;
     float grabbingSpinnerMouseY_ = 0.0f;
     double preGrabValue_ = 0.0;
+    ElideMemo labelMemo_; // what paint worked out for a label wider than the widget (cut to its room)
 };
 
 } // namespace retained

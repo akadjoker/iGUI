@@ -251,13 +251,20 @@ void SpinSlider::paint(PaintContext& ctx)
     const int sep = kSeparation + sbOffsetX;
     int labelWidth = static_cast<int>(ctx.font.GetTextWidth(label_.c_str()));
     // a label wider than the widget is cut with "..." inside it (and the number gets what is left)
-    String cutLabel;
+    const String noLabel;
+    const String* cutLabel = &noLabel;
     const float labelRoom = abs.w - pad * 2.0f;
     const bool labelCut = static_cast<float>(labelWidth) > labelRoom;
     if (labelCut)
     {
-        if (labelRoom > 0.0f) cutLabel = ctx.fitText(label_, labelRoom);
-        labelWidth = static_cast<int>(ctx.font.GetTextWidth(cutLabel.c_str()));
+        float cutWidth = 0.0f;
+        if (labelRoom > 0.0f)
+        {
+            const ElideMemo& cut = ctx.fitTextMemo(label_, labelRoom, labelMemo_);
+            cutLabel = &cut.shown;
+            cutWidth = cut.shownWidth;
+        }
+        labelWidth = static_cast<int>(cutWidth);
         if (static_cast<float>(labelWidth) > labelRoom) labelWidth = static_cast<int>(labelRoom > 0.0f ? labelRoom : 0.0f);
     }
     const int numberWidth = static_cast<int>(abs.w) - sbMinWidth - labelWidth - sep;
@@ -283,7 +290,7 @@ void SpinSlider::paint(PaintContext& ctx)
 
     ctx.font.SetColor(scaledAlpha(lc, 0.5f));
     if (!label_.empty())
-        ctx.printWithin(abs, labelCut ? cutLabel : label_, abs.x + static_cast<float>(sbOffsetX), static_cast<float>(labelWidth),
+        ctx.printWithin(abs, labelCut ? *cutLabel : label_, abs.x + static_cast<float>(sbOffsetX), static_cast<float>(labelWidth),
                 abs.y + static_cast<float>(vofs), asc);
 
     // The number, a thin space and the suffix; only the glyphs that fit whole
