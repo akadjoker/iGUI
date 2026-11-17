@@ -325,6 +325,41 @@ int main()
 #endif
     }
 
+    // Glyphs first used after the release: the dynamic page makes them from the face (the TTF data), never from the baked
+    // page's pixels, so releasing those changes nothing for it: a size not baked, a codepoint outside the baked ranges (Cyrillic
+    // Zhe), the page filling up and starting again, and a new pixel scale (HiDPI) that bakes every size again.
+#ifdef IGUI_FONTATLAS_RELEASE_PIXELS
+    {
+        FontAtlas rel;
+        check(rel.buildDefault(), "an atlas to release builds");
+        rel.setTexture(handle(3));
+        check(rel.prepareDynamic() && rel.enableDynamic(handle(4)), "with a dynamic page");
+        rel.releasePixels();
+        check(rel.pixels() == nullptr, "its baked pixels are released before any glyph of the page is made");
+        const Font* big = rel.defaultFont().atHeight(24.0f);
+        check(big != nullptr && big != &rel.defaultFont(), "a size that is not the baked one gives a font of the dynamic page");
+        const FontGlyph* q = big ? big->findGlyph('Q') : nullptr;
+        check(q && ink(rel, q) > 20 && rel.dynamicDirty(), "a Latin glyph first used after the release is rasterised into the dynamic page");
+        const FontGlyph* zhe = big ? big->findGlyph(0x0416) : nullptr;
+        check(zhe && zhe->codepoint == 0x0416 && ink(rel, zhe) > 20, "so is a codepoint the baked page never had");
+        check(rel.defaultFont().findGlyph('Q') != nullptr && rel.defaultFont().hasBakedGlyph('Q') && rel.defaultFont().findGlyph(0x0416) != nullptr &&
+                        !rel.defaultFont().hasBakedGlyph(0x0416),
+                "the baked font keeps its table (a glyph the baked page lacks is still the question mark: no dynamic size, no new glyphs)");
+        // fill the page: many sizes of many glyphs make it start again, after the release
+        int made = 0;
+        for (int size = 20; size < 60; ++size)
+            for (uint32_t code = 0x41; code < 0x7f; ++code)
+                if (const Font* f = rel.defaultFont().atHeight(static_cast<float>(size)))
+                    if (f->findGlyph(code)) ++made;
+        check(made == 40 * 0x3e, "many sizes of many glyphs are made after the release (the page fills and starts again)");
+        const FontGlyph* again = big ? big->findGlyph('Q') : nullptr;
+        check(again && ink(rel, again) > 20, "and a glyph made before the page started again is made again");
+        rel.setPixelScale(2.0f);
+        const FontGlyph* hidpi = rel.defaultFont().atHeight(16.0f)->findGlyph(0x0416);
+        check(hidpi && ink(rel, hidpi) > 20 && rel.pixels() == nullptr, "a new pixel scale bakes the sizes again from the face, with the baked pixels still gone");
+    }
+#endif
+
     if (failures)
     {
         printf("%d failure(s)\n", failures);

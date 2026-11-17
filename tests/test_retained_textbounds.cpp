@@ -786,6 +786,44 @@ void testIconWithoutAGlyphIsNotAQuestionMark()
     check(marks == 0, "an icon whose glyph the font lacks is not drawn as a question mark");
 }
 
+// The RAM copy of the baked page is freed once the texture is made (ZenApp does it with its default atlas): the same
+// window, drawn with the pixels released, comes out pixel for pixel as it does without. Text of the baked ranges (Latin-1,
+// an arrow, a star), a button, a text box being edited and a bigger font; every glyph is first drawn after the release.
+Shot releasedShot(bool release, bool* hadPixels, int* inkPixels)
+{
+    Screen screen(kWindowW, kWindowH, false, release);
+    *hadPixels = screen.h.atlas().pixels() != nullptr;
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(20.0f);
+    box->createChild<Label>(String("Hamburgefonstiv 0123 \xc3\xa9\xc3\xa7 \xe2\x86\x92 \xe2\x98\x85 The quick brown fox"));
+    box->createChild<Button>(String("A button with text"));
+    TextEdit* edit = box->createChild<TextEdit>();
+    edit->setText("edited text");
+    screen.h.relayout();
+    screen.h.frames(2);
+    const Shot shot = screen.take();
+    int ink = 0;
+    for (size_t i = 0; i < shot.px.size(); ++i)
+        if (shot.px[i] != shot.px[0]) ++ink;
+    *inkPixels = ink;
+    return shot;
+}
+
+void testTextIsDrawnWithTheAtlasPixelsReleased()
+{
+#ifdef IGUI_FONTATLAS_RELEASE_PIXELS
+    bool keptPixels = false, releasedPixels = true;
+    int keptInk = 0, releasedInk = 0;
+    const Shot kept = releasedShot(false, &keptPixels, &keptInk);
+    const Shot released = releasedShot(true, &releasedPixels, &releasedInk);
+    check(keptPixels, "without the release the atlas has its pixels (the comparison is against something)");
+    check(!releasedPixels, "after the release the atlas keeps no RAM copy of its page");
+    check(keptInk > 1500, "the window has text in it (ink was counted)");
+    check(releasedInk == keptInk && differing(kept, released, 0, 0, kept.w, kept.h) == 0,
+            "text, a button and a text box are drawn pixel for pixel the same with the atlas pixels released");
+#endif
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -807,6 +845,7 @@ int main(int argc, char** argv)
     RUN(testSplitButtonCutsWhereAButtonDoes);
     RUN(testTabsPastTheEndOfTheBarAreNotDrawnOrHit);
     RUN(testIconWithoutAGlyphIsNotAQuestionMark);
+    RUN(testTextIsDrawnWithTheAtlasPixelsReleased);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
