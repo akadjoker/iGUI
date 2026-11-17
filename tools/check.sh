@@ -6,15 +6,20 @@
 #   1. nostd    no new `std::` and no new `#include <...>` in what src/, include/ and adapters/ gained
 #               since the base revision (the project uses its own `ct` containers)
 #   2. release  Release build, every test (ctest, one at a time)
-#   3. asan     Debug build with AddressSanitizer + UndefinedBehaviorSanitizer, every test
+#   3. asan     Debug build with AddressSanitizer + UndefinedBehaviorSanitizer, every test; a finding of the
+#               undefined-behaviour sanitizer stops the program (-fno-sanitize-recover=undefined) and fails the test
 #   4. hash     the checksum of what the bench draws for the editor window and for the piano roll (igui_retained_bench --hash)
 #               against the reference in bench/retained/draw.hash: a change that is only meant to make
 #               drawing faster, or to fix something outside the editor window, must not move it
 #
-# Every program and test runs through an invisible X server and scratch settings, never the real display:
-#   env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR XDG_DATA_HOME=... XDG_CONFIG_HOME=... xvfb-run -a -s "-screen 0 1280x800x24" <command>
-# (unsetting WAYLAND_DISPLAY alone is not enough: with XDG_RUNTIME_DIR set, libwayland falls back to the
-# session of the user running this).
+# Nothing here touches the machine or the session of whoever runs it:
+#   - every build, test and program runs in a memory-capped scope of its own (systemd-run --user --scope
+#     -p MemoryMax=4G -p MemorySwapMax=0): a test that loops and allocates is killed there, alone, and cannot take
+#     the memory of the machine and the editor with it (without systemd-run it runs uncapped, with a warning);
+#   - they get no DISPLAY, WAYLAND_DISPLAY or XDG_RUNTIME_DIR (with XDG_RUNTIME_DIR set, libwayland falls back to
+#     the session of the user running this) and scratch XDG_DATA_HOME and XDG_CONFIG_HOME: the tests that open
+#     windows or inject input start an Xvfb of their own (tools/xvfb-test.sh, which is how ctest runs them) and
+#     refuse to run on anything else.
 #
 # One summary line per stage ("PASS <stage>: ..." or "FAIL <stage>: ..."), the output of each stage in
 # $BUILD/<stage>.log, and a last line with the totals; the exit status is not zero when any stage failed.
@@ -23,7 +28,7 @@
 #   --base REV          the revision the work is compared with for `nostd` (default origin/main)
 #   --build DIR         where the build trees and logs go (default $IGUI_CHECK_BUILD, else <repo>/../igui-check-build)
 #   --skip STAGE        leave a stage out (nostd, release, asan, hash); repeatable
-#   --jobs N            compiler jobs (default: half of the cores); the tests always run one at a time
+#   --jobs N            compiler jobs (default 4); the tests always run one at a time
 #   --update-hash       write bench/retained/draw.hash with the checksum of this tree instead of comparing
 #   IGUI_CONTAINERS_DIR, IGUI_ZEN_PLATFORM_DIR   the dependencies, as the CMake options of the same name
 #                       (without them CMake uses third_party/containers and ../zen_plataform)
@@ -32,8 +37,7 @@ set -u
 repo=$(cd "$(dirname "$0")/.." && pwd)
 base=origin/main
 build=${IGUI_CHECK_BUILD:-$repo/../igui-check-build}
-jobs=$(( $(nproc 2>/dev/null || echo 2) / 2 ))
-[ "$jobs" -lt 1 ] && jobs=1
+jobs=4
 skip=" "
 update_hash=0
 while [ $# -gt 0 ]; do
@@ -43,7 +47,7 @@ while [ $# -gt 0 ]; do
         --skip) skip="$skip$2 "; shift 2 ;;
         --jobs) jobs=$2; shift 2 ;;
         --update-hash) update_hash=1; shift ;;
-        -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d'; exit 0 ;;
         *) echo "check.sh: unknown option $1" >&2; exit 2 ;;
     esac
 done
@@ -53,11 +57,27 @@ build=$(cd "$build" && pwd)
 failed=0
 summary=()
 
-# a program or a test, through an invisible X server and scratch settings
-xrun()
+# What every program and test is run with: no display of the session of whoever runs this, scratch settings.
+scrub=(env -u DISPLAY -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR XDG_DATA_HOME="$build/xdg" XDG_CONFIG_HOME="$build/xdg/cfg")
+# the undefined-behaviour sanitizer stops the program at a finding, with where it was
+export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1
+
+# A memory-capped scope of its own for each command (see the top); without systemd-run, the command as it is.
+cap_args=(--user --scope --quiet -p MemoryMax=4G -p MemorySwapMax=0)
+have_scope=0
+if command -v systemd-run > /dev/null 2>&1 && systemd-run "${cap_args[@]}" -- true > /dev/null 2>&1; then
+    have_scope=1
+else
+    echo "check.sh: WARNING: systemd-run --user --scope is not usable here: the builds and tests run WITHOUT a memory cap" >&2
+    echo "check.sh: (a test that loops and allocates can take all the memory of the machine)" >&2
+fi
+capped()
 {
-    env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR XDG_DATA_HOME="$build/xdg" XDG_CONFIG_HOME="$build/xdg/cfg" \
-        xvfb-run -a -s "-screen 0 1280x800x24" "$@"
+    if [ $have_scope -eq 1 ]; then
+        systemd-run "${cap_args[@]}" -- "$@"
+    else
+        "$@"
+    fi
 }
 
 cmake_deps=()
@@ -88,16 +108,16 @@ ctest_stage()
     shift 2
     local log="$build/$stage.log"
     : > "$log"
-    if ! cmake -S "$repo" -B "$dir" "${common[@]}" "$@" >> "$log" 2>&1; then
+    if ! capped "${scrub[@]}" cmake -S "$repo" -B "$dir" "${common[@]}" "$@" >> "$log" 2>&1; then
         report FAIL "$stage" "cmake did not configure (see $log)"
         return
     fi
-    if ! cmake --build "$dir" -j "$jobs" >> "$log" 2>&1; then
+    if ! capped "${scrub[@]}" cmake --build "$dir" -j "$jobs" >> "$log" 2>&1; then
         report FAIL "$stage" "the build failed (see $log)"
         return
     fi
-    # no -j: the tests run one at a time
-    xrun ctest --test-dir "$dir" --output-on-failure >> "$log" 2>&1
+    # no -j: the tests run one at a time; a test that is not given a timeout of its own gets ten minutes
+    capped "${scrub[@]}" ctest --test-dir "$dir" --output-on-failure --timeout 600 >> "$log" 2>&1
     local code=$?
     local line
     line=$(grep -E "tests passed, [0-9]+ tests failed out of" "$log" | tail -1)
@@ -133,7 +153,7 @@ fi
 
 # ── 3. sanitizers ────────────────────────────────────────────────────────────
 if ! skipped asan; then
-    san="-fsanitize=address,undefined -fno-omit-frame-pointer"
+    san="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
     ctest_stage asan "$build/asan" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="$san" -DCMAKE_C_FLAGS="$san" \
         -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
 fi
@@ -145,7 +165,7 @@ if ! skipped hash; then
     if [ ! -x "$bench" ]; then
         report FAIL hash "no bench to run ($bench: the release stage did not build it)"
     else
-        xrun "$bench" --hash > "$build/hash.log" 2>&1
+        capped "${scrub[@]}" "$bench" --hash > "$build/hash.log" 2>&1
         # the checksums: one for each size of the editor window and one for the piano roll
         got=$(grep -o 'draw checksum [^:]*: [0-9a-f]* ([0-9]* vertices, [0-9]* indices, [0-9]* commands)' "$build/hash.log")
         if [ -z "$got" ]; then
