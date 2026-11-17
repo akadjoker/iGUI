@@ -1092,6 +1092,28 @@ void testGridHorizontalBarThumbAndTrack()
     }
 }
 
+// The square where the two bars meet, at the bottom right, is under neither of them: a press there is not on a
+// row either (the rows' hit test ends where the bar under them begins), though the rows go on under it.
+void testGridCornerBetweenTheBarsSelectsNothing()
+{
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        // 100 rows and 20 columns of 100: both bars are there
+        BarGrid g(tree != 0, 100, 20, 100.0f);
+        const Rect r = g.rect();
+        check(g.topRow() == 0, "the first row is in sight");
+        g.selected = -1;
+        g.h.click(r.x + r.w - 3.0f, r.y + r.h - 3.0f);
+        check(g.selected == -1, (String(name) + ": a press in the corner where the two bars meet does not select a row").c_str());
+        if (g.selected != -1) printf("    selected row %d\n", g.selected);
+        // a press just over the bar, on the last row in sight, does select
+        g.selected = -1;
+        g.h.click(r.x + 20.0f, r.y + r.h - 14.0f);
+        check(g.selected >= 0, (String(name) + ": a press on the last row, over the horizontal bar, selects it").c_str());
+    }
+}
+
 void testGridScrollStaysInsideTheContent()
 {
     for (int tree = 0; tree < 2; ++tree)
@@ -2346,6 +2368,7 @@ int main(int argc, char** argv)
     RUN(testTreeGridSetColumnWidth);
     RUN(testGridVerticalBarThumbAndTrack);
     RUN(testGridHorizontalBarThumbAndTrack);
+    RUN(testGridCornerBetweenTheBarsSelectsNothing);
     RUN(testGridScrollStaysInsideTheContent);
     RUN(testGridColumnsEndWhereTheBarBegins);
     RUN(testTreeGridDoubleClickIsPerGridAndForgottenWithTheNode);
