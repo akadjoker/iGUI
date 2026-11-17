@@ -317,6 +317,7 @@ struct FontGlyph
 };
 
 class FontAtlas;
+#define IGUI_FONTATLAS_RELEASE_PIXELS 1 // FontAtlas::releasePixels() exists
 
 class Font
 {
@@ -500,6 +501,9 @@ public:
     {
         return pixels_.data();
     }
+    // The RAM copy of the baked page: once the host uploaded it (the backend keeps its own), it is only kept to be read by
+    // pixels() / pixelSize(). Frees it; pixels() is null from then on. The glyph table, the UVs and the dynamic page are unchanged.
+    void releasePixels();
     size_t pixelSize() const
     {
         return pixels_.size();

@@ -547,6 +547,21 @@ bool FontAtlas::build()
 
     stbtt_PackEnd(&pack);
 
+    // Crop the page to the rows the packer used (rounded up to a power of two, so that v = y / height and the sampler's
+    // v * height stay exact and every glyph samples the same texels as in the full page). A face or two use a small part of the
+    // 2048x1024 page: the rest was a megabyte of zeros per 128 rows held twice (here and in the backend's texture).
+    if (anyBaked)
+    {
+        int used = 1;
+        for (const auto& fp: packs)
+            for (const auto& range: fp.rangePacked)
+                for (const stbtt_packedchar& pc: range)
+                    if (pc.y1 > used) used = pc.y1;
+        int cropped = 64;
+        while (cropped < used + 1 && cropped < height_) cropped *= 2;
+        if (cropped < height_) height_ = cropped;
+    }
+
     // Convert alpha → RGBA
     pixels_.assign(static_cast<size_t>(width_ * height_ * 4), 0);
     for (int i = 0; i < width_ * height_; ++i)
@@ -649,6 +664,12 @@ void GetDefaultFont(const unsigned char** data, int* size)
 {
     *data = DejaVuSans_ttf_data;
     *size = static_cast<int>(DejaVuSans_ttf_size);
+}
+
+void FontAtlas::releasePixels()
+{
+    ct::Vector<unsigned char> none;
+    pixels_.swap(none);
 }
 
 void FontAtlas::setTexture(TextureHandle texture)

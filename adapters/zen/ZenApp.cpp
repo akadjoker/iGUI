@@ -107,6 +107,13 @@ bool App::create(const Config &config)
 {
     if (!platform_init()) return false;
 
+    // ZEN_SCREENSHOT_BACKEND=gl (with ZEN_SCREENSHOT): the screenshot is drawn by the OpenGL backend into an offscreen framebuffer
+    // of a window that is created but never mapped, whatever Config::preferOpenGL says; no OpenGL context is an error, not a
+    // silent fall back to the software rasteriser. Unset or "soft": as before.
+    const char* shotBackend = getenv("ZEN_SCREENSHOT") ? getenv("ZEN_SCREENSHOT_BACKEND") : nullptr;
+    const bool shotGl = shotBackend && !strcmp(shotBackend, "gl");
+    const bool preferGl = config.preferOpenGL || shotGl;
+
     WindowConfig cfg;
     memset(&cfg, 0, sizeof cfg);
     cfg.title = config.title;
@@ -120,8 +127,9 @@ bool App::create(const Config &config)
     cfg.undecorated = !config.placement.decorated;
     cfg.vsync = config.vsync;
     cfg.gl.msaa = config.msaa;
+    cfg.hidden = shotGl;
     PlatformWindow *pw = nullptr;
-    if (config.preferOpenGL && config.openGLES)
+    if (preferGl && config.openGLES)
     {
         cfg.render = RENDER_GL;
         cfg.gl.profile = GL_PROFILE_ES;
@@ -144,7 +152,7 @@ bool App::create(const Config &config)
         else
             fprintf(stderr, "[ZenApp] OpenGL ES 3.0 not available, trying a core profile\n");
     }
-    if (config.preferOpenGL && !useGl_)
+    if (preferGl && !useGl_)
     {
         // Core profile only: the newest version the driver gives, then 3.3 as the floor.
         static const int versions[][2] = { { 4, 6 }, { 4, 5 }, { 4, 3 }, { 3, 3 } };
@@ -173,6 +181,14 @@ bool App::create(const Config &config)
         else
             fprintf(stderr, "[ZenApp] OpenGL core not available, using the software rasteriser\n");
     }
+    if (shotGl && !useGl_)
+    {
+        fprintf(stderr, "[ZenApp] ZEN_SCREENSHOT_BACKEND=gl: no OpenGL context could be made on a hidden window (no fall back to the software rasteriser)\n");
+        platform_shutdown();
+        return false;
+    }
+    if (shotGl)
+        gl_.setOffscreen(true, config.msaa);
     if (!pw)
     {
         cfg.render = RENDER_PIXELS;
@@ -208,10 +224,11 @@ bool App::create(const Config &config)
     if (atlas_.buildDefault())
     {
         atlas_.setTexture(createTexture(atlas_.width(), atlas_.height(), atlas_.pixels()));
+        atlas_.releasePixels(); // the backend has the page now
         font_ = &atlas_.defaultFont();
         rt::SetWhitePixel(atlas_.texture(), atlas_.whitePixelUV());
         // Glyphs at the size a widget asks for, rasterised when first drawn.
-        if (atlas_.prepareDynamic())
+        if (config.defaultDynamicPage && atlas_.prepareDynamic())
             atlas_.enableDynamic(createTexture(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicPixels()));
     }
 
@@ -597,6 +614,9 @@ void App::updateStats()
     }
 }
 
+static int& shotFrameCounter();
+static int shotFrameWanted();
+
 void App::renderGl(Window *w)
 {
     int width = 0, height = 0;
@@ -621,10 +641,17 @@ void App::renderGl(Window *w)
     static const char *shotPath = getenv("ZEN_SCREENSHOT");
     if (shotPath && w == main_)
     {
-        ct::Vector<uint32_t> pixels;
-        pixels.resize(static_cast<size_t>(width) * height);
-        gl_.readPixels(pixels.data(), width, height);
-        saveScreenshot(pixels.data(), width, height, width);
+        // Only the frame that is saved is read back (a run to measure memory waits on a far frame and must not pay a
+        // framebuffer copy every frame).
+        if (shotFrameCounter() + 1 != shotFrameWanted())
+            ++shotFrameCounter();
+        else
+        {
+            ct::Vector<uint32_t> pixels;
+            pixels.resize(static_cast<size_t>(width) * height);
+            gl_.readPixels(pixels.data(), width, height);
+            saveScreenshot(pixels.data(), width, height, width);
+        }
     }
     if (w == main_ && afterRenderCallback_) afterRenderCallback_();
     // No window_swap here: the caller presents (pump, or app_run after the frame callback).
@@ -696,14 +723,23 @@ bool App::updateTexture(rt::TextureHandle t, const unsigned char *rgba, int w, i
     return useGl_ ? gl_.updateTexture(t, rgba, w, h) : raster_.updateTexture(t, rgba, w, h);
 }
 
+static int& shotFrameCounter()
+{
+    static int frame = 0;
+    return frame;
+}
+
+static int shotFrameWanted()
+{
+    static const int at = getenv("ZEN_SCREENSHOT_FRAME") ? atoi(getenv("ZEN_SCREENSHOT_FRAME")) : 30;
+    return at;
+}
+
 // ZEN_SCREENSHOT=file.ppm saves the 30th frame and closes the window: a way to look at the UI without a screen grab.
 void App::saveScreenshot(const uint32_t *pixels, int width, int height, int stride)
 {
     static const char* shotPath = getenv("ZEN_SCREENSHOT");
-    static const int shotAt =
-            getenv("ZEN_SCREENSHOT_FRAME") ? atoi(getenv("ZEN_SCREENSHOT_FRAME")) : 30;
-    static int shotFrame = 0;
-    if (!shotPath || ++shotFrame != shotAt) return;
+    if (!shotPath || ++shotFrameCounter() != shotFrameWanted()) return;
     if (FILE* f = fopen(shotPath, "wb"))
     {
         fprintf(f, "P6\n%d %d\n255\n", width, height);
