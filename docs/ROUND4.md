@@ -23,9 +23,9 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | 6 | ScrollView::layout: barra horizontal presa, barra vertical fina | por fazer | | |
 | 7 | FloatWindow::setFloatPos nao faz layout | feito | 602345d | testFloatWindowSettersLayOut |
 | 8 | PianoRoll::onMousePress com botoes 1/2/3 (a janela da 0/1/2) | feito (e o mesmo engano no WaveformView; os outros widgets estao certos) | 8dea1b8 | testPianoRollButtons, testWaveformViewButtons |
-| 9 | WidgetApp: layout so no resize / requestLayout() | por fazer (ver abaixo) | | |
+| 9 | WidgetApp: layout so no resize / requestLayout() | feito (Widget::invalidateLayout; ver abaixo) | 2bf456d | testLayoutRunsByItself, testIdleFrameDoesNoLayout |
 | 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | por fazer | | |
-| 11 | Fuga de Menu ao sair | analisado, por fazer (ver abaixo) | | |
+| 11 | Fuga de Menu ao sair | feito: contrato escrito no cabecalho, Menu::addSubmenu e setSubmenu(m, owned) novos; setSubmenu(m) continua sem apagar | f79a949 | testMenuOwnership (para o ASan) |
 | 12 | MenuAction: icone | por fazer | | |
 | 13 | Menu: toggled(bool) e auto-toggle desligavel | por fazer | | |
 | 14 | Menu::aboutToShow | por fazer | | |
@@ -48,16 +48,12 @@ main contra o ramo (simples e alinhada) esta por fazer.
   tests/EditorTree.hpp e do bench mudam de largura: o hash muda). `ComboBox::sizeHint` (ComboBox.cpp) soma a estimativa
   de cada item: medir com uma memoria (largura e corpo da fonte) para nao medir todos os itens em cada hint.
 - 6: ver `ScrollView::layout` (ScrollWidgets.cpp, ~221-238); `Theme::scrollbarWidth` (12) ja existe, ver quem a usa.
-- 9: `Widget::markDirty()` nao serve (so o SpinSlider o le, e e chamado por todos os setters e pelo layout); a regra
-  proposta: um `Widget::invalidateLayout()` que levanta a bandeira `needsLayout_` da superficie viva (uma escrita), chamado
-  por addChild, removeChild, moveChild, setVisible (so se mudou), setMargins/setStretch/setLayoutAlign, os setters de
-  BoxLayout, e os setText dos widgets cujo hint depende do texto. Cuidado com os widgets que mexem em filhos dentro do
-  paint (viram layout a cada frame) e medir um teste de frame ociosa que conte as chamadas a layout(). O tests/RetainedHarness.hpp
-  tem `relayout()` por causa disto; os testes novos que adicionam filhos depois da primeira frame usam-no.
-- 11: o `Menu` e dono dos seus `MenuAction` (apaga-os no destrutor e em `clearActions()`), mas `MenuAction::setSubmenu`
-  nao e dono do submenu (o comentario diz "not owned"): quem faz `new Menu` para o submenu e o reconstroi (menu de
-  ficheiros recentes) tem de o apagar, e os exemplos (examples/sdl2_original_widgets/stages/stage_menus.cpp) nao o fazem.
-  `clearActions()` tambem nao poe a zero `hoveredIdx_`, `activeSubmenu_` e `activeSubmenuIdx_` (ponteiro solto se o menu
-  esta aberto). Proposta: `Menu::addSubmenu(texto)` que cria um submenu pertencente a accao e `setSubmenu(Menu*, bool owned = false)`;
-  `clearActions` e o destrutor apagam os que a accao possui; documentar; teste sob ASan (alvo igui_retained_menus corre
-  no `check.sh asan`).
+- 9 (feito): a regra esta em `Widget::invalidateLayout()` (comentario em Widget.hpp). Faltam, se se quiser a regra completa,
+  os `setText` e afins de outros widgets cujo hint depende do texto (RadioButton, Switch, ComboBox::addItem, Tabs...): cada
+  um e uma linha `invalidateLayout();`. Os widgets que mostram e escondem um filho sem que ninguem o posicione (overlays)
+  marcam `layoutNeutral_` (membro protegido), como o grabber do SpinSlider; sem isso cada entrada do rato pedia layout.
+  O teste de frame ociosa (test_retained_idle) conta as passagens de layout na janela do editor.
+- 11 (feito): ver o commit f79a949 e o comentario da classe Menu em MenuWidgets.hpp. Aplicacoes do dono com setSubmenu: coco,
+  deform, ZenHuman, ZenStage (src/app/MainWindow.cpp), todas com `setSubmenu(recentMenu_.get())` e o submenu em ct::unique_ptr
+  da aplicacao (o ZenStage tambem `clipTransition_->setSubmenu(transitionMenu_.get())`): por isso a posse por omissao nao
+  mudou. Nota sobre RTTI/UBSan no README (opcao IGUI_NO_RTTI).
