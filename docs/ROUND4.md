@@ -24,7 +24,7 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | 7 | FloatWindow::setFloatPos nao faz layout | feito | 602345d | testFloatWindowSettersLayOut |
 | 8 | PianoRoll::onMousePress com botoes 1/2/3 (a janela da 0/1/2) | feito (e o mesmo engano no WaveformView; os outros widgets estao certos) | 8dea1b8 | testPianoRollButtons, testWaveformViewButtons |
 | 9 | WidgetApp: layout so no resize / requestLayout() | feito (Widget::invalidateLayout; ver abaixo) | 2bf456d | testLayoutRunsByItself, testIdleFrameDoesNoLayout |
-| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | por fazer | | |
+| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | parcial: so o formatValue (e Chart::setThousandsSeparator) feito; faltam os tres primeiros (ChartWidgets.cpp / ChartWidget.cpp: ver addPolyline da linha, o rotulo da fatia, a legenda do histograma) | ver git log (Chart: formatValue) | testFormatValue (tests/test_chart.cpp) |
 | 11 | Fuga de Menu ao sair | feito: contrato escrito no cabecalho, Menu::addSubmenu e setSubmenu(m, owned) novos; setSubmenu(m) continua sem apagar | f79a949 | testMenuOwnership (para o ASan) |
 | 12 | MenuAction: icone | por fazer | | |
 | 13 | Menu: toggled(bool) e auto-toggle desligavel | por fazer | | |

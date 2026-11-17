@@ -198,6 +198,29 @@ void testPieGeometry()
     check(!c.hitTest(c.pieCenter().x, c.pieCenter().y).valid(), "an empty pie hits nothing");
 }
 
+void testFormatValue()
+{
+    Bench b;
+    Chart& c = *b.chart;
+    char buf[96];
+    c.formatValue(1234567890.0f, buf, sizeof buf);
+    check(strcmp(buf, "1234567936") == 0, "a whole number from 1e9 is printed in full, not as %.3g");
+    c.formatValue(2.0e9f, buf, sizeof buf);
+    check(strcmp(buf, "2000000000") == 0, "2e9 is 2000000000");
+    c.setThousandsSeparator(',');
+    c.formatValue(2.0e9f, buf, sizeof buf);
+    check(strcmp(buf, "2,000,000,000") == 0, "with a separator the thousands are grouped");
+    c.formatValue(-1234567.0f, buf, sizeof buf);
+    check(strcmp(buf, "-1,234,567") == 0, "a negative number is grouped after its sign");
+    c.formatValue(999.0f, buf, sizeof buf);
+    check(strcmp(buf, "999") == 0, "three digits take no separator");
+    c.formatValue(12.34f, buf, sizeof buf);
+    check(strcmp(buf, "12.3") == 0, "decimals are kept as before");
+    c.setThousandsSeparator('\0');
+    c.formatValue(1234567.0f, buf, sizeof buf);
+    check(strcmp(buf, "1234567") == 0, "the default prints the digits ungrouped");
+}
+
 void testBarsGeometry()
 {
     Bench b;
@@ -488,6 +511,7 @@ int main()
 {
     testData();
     testPieGeometry();
+    testFormatValue();
     testBarsGeometry();
     testHoverAndPress();
     testPressWithoutMove();

@@ -547,10 +547,36 @@ void Chart::formatValue(float v, char* out, int outSize) const
         else
             decimals = 2;
     }
-    if (fabsf(v) >= 1e9f)
-        snprintf(out, static_cast<size_t>(outSize), "%.3g%s", static_cast<double>(v), valueSuffix_.c_str());
-    else
-        snprintf(out, static_cast<size_t>(outSize), "%.*f%s", decimals, static_cast<double>(v), valueSuffix_.c_str());
+    // a whole number is printed in full (a float above 1e9 is a whole number): there was a %.3g here that
+    // turned 1234567890 into 1.23e+09
+    char number[96];
+    snprintf(number, sizeof(number), "%.*f", decimals, static_cast<double>(v));
+    char grouped[128];
+    const char* text = number;
+    if (thousandsSeparator_ != '\0')
+    {
+        const char* digits = number + (number[0] == '-' ? 1 : 0);
+        int whole = 0;
+        while (digits[whole] >= '0' && digits[whole] <= '9') ++whole;
+        int n = 0;
+        if (number[0] == '-') grouped[n++] = '-';
+        for (int i = 0; i < whole && n < static_cast<int>(sizeof(grouped)) - 8; ++i)
+        {
+            grouped[n++] = digits[i];
+            const int left = whole - 1 - i;
+            if (left > 0 && left % 3 == 0) grouped[n++] = thousandsSeparator_;
+        }
+        for (const char* rest = digits + whole; *rest && n < static_cast<int>(sizeof(grouped)) - 1; ++rest) grouped[n++] = *rest;
+        grouped[n] = '\0';
+        text = grouped;
+    }
+    snprintf(out, static_cast<size_t>(outSize), "%s%s", text, valueSuffix_.c_str());
+}
+
+void Chart::setThousandsSeparator(char separator)
+{
+    thousandsSeparator_ = separator;
+    markDirty();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

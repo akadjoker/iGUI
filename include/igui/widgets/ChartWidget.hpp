@@ -158,6 +158,11 @@ public:
     /// @brief Text after each printed value, e.g. "%" or " kg".
     void setValueSuffix(const String& suffix);
     const String& valueSuffix() const { return valueSuffix_; }
+    /// @brief Group the digits of the whole part of a printed value by thousands with @p separator
+    ///        (',' gives 1,234,567; '\0', the default, prints them ungrouped). Whole numbers are always
+    ///        printed in full, however large.
+    void setThousandsSeparator(char separator);
+    char thousandsSeparator() const { return thousandsSeparator_; }
     /// @brief Decimals of printed values; -1 picks them from the numbers.
     void setValueDecimals(int decimals);
     int  valueDecimals() const { return valueDecimals_; }
@@ -259,6 +264,7 @@ private:
     bool               hasBackground_  = false;
     Color              background_;
     String             valueSuffix_;
+    char               thousandsSeparator_ = '\0';
     int                valueDecimals_ = -1;
     float              donutRatio_ = 0.55f;
     float              markerSize_ = 3.5f;
