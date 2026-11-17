@@ -2106,10 +2106,13 @@ static void test_debug_layout_key_is_opt_in()
     assert(target->presses == 1);
     assert(!app.debugLayout());
 
+    // update() takes the events of the frame out of the IO: each frame gets its own
     app.setDebugLayoutKey(58);
+    io.keyEvents.push_back(f1);
     app.update(io);
     assert(target->presses == 1);
     assert(app.debugLayout());
+    io.keyEvents.push_back(f1);
     app.update(io);
     assert(!app.debugLayout());
     app.setDebugLayoutKey(0);

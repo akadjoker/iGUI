@@ -215,8 +215,11 @@ public:
     void shutdown();
 
     // ── Per-frame API ──────────────────────────────────────────────────────
-    /// @brief Dispatch IO events to the widget tree.
-    void update(const ig::retained::IO& io);
+    /// @brief Dispatch IO events to the widget tree. The frame's events (mouseEvents, keyEvents, inputChars,
+    ///        dropEvents) are taken out of @p io first: what a handler adds to the IO (the frames of a
+    ///        nested loop it runs do) belongs to the next update() to take it, never to this one, and
+    ///        nothing this update walks can be changed by a handler.
+    void update(ig::retained::IO& io);
 
     /// @brief Layout and paint the widget tree into draw data.
     void paint(ig::retained::DrawData& data, const ig::retained::Font* font = nullptr,
@@ -728,6 +731,20 @@ private:
         }
         WidgetApp& app;
     };
+
+    // The events of the frame update() is dispatching, taken out of the IO (see there). Kept between frames so
+    // that the IO and this trade their storage and a frame with events allocates nothing; a nested update()
+    // (a handler that runs a loop of frames) finds it busy and uses a buffer of its own.
+    struct FrameEvents
+    {
+        ct::Vector<ig::retained::IO::MouseInput> mouse;
+        ct::Vector<ig::retained::IO::KeyEvent> keys;
+        ct::Vector<uint32_t> chars;
+        ct::Vector<ig::retained::IO::DropEvent> drops;
+    };
+    FrameEvents frameEvents_;
+    FrameEvents noEvents_; // always empty: what a frame with no events walks
+    bool frameEventsBusy_ = false;
 
     // State
     bool inited_ = false;

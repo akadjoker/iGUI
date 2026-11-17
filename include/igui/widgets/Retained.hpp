@@ -109,7 +109,7 @@ struct IO
 
     ct::Vector<uint32_t> inputChars;
 
-    // Per-frame key press / release events (cleared by NewFrame)
+    // Per-frame key press / release events (taken out by WidgetApp::update, cleared by Render)
     struct KeyEvent
     {
         int key = 0;      // platform key code
@@ -124,7 +124,7 @@ struct IO
     };
     ct::Vector<KeyEvent> keyEvents;
 
-    // Per-frame mouse events, in the order they happened (cleared by Render), for a backend that reads the
+    // Per-frame mouse events, in the order they happened (taken out by WidgetApp::update, cleared by Render), for a backend that reads the
     // platform's event stream: a press and a release that both fall between two frames are a click, a press
     // happens where the pointer was when it was pressed, a move and a press somewhere else are two things.
     // The polled mouseX, mouseY and mouseDown are still what the frame ends with, and are all a backend that

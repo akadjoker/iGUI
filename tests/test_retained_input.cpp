@@ -213,6 +213,143 @@ void testPasteOfManyLines()
     h.frames(2);
 }
 
+// A widget that counts the presses and releases it is given, and where the last release was.
+class ClickCounter : public Widget
+{
+public:
+    Vec2f sizeHint() const override { return { 200.0f, 60.0f }; }
+    void onMousePress(MouseEvent& e) override
+    {
+        ++presses;
+        e.consumed = true;
+    }
+    void onMouseRelease(MouseEvent& e) override
+    {
+        ++releases;
+        lastReleaseX = e.x;
+    }
+    int presses = 0, releases = 0;
+    float lastReleaseX = 0.0f;
+};
+
+// The widget a click lands on, which runs a nested loop of its own from the click: what a modal dialog does when
+// it opens from a button (ZenApp::pump(true) in a loop, from inside the handler). The nested frames put the
+// events of the dialog's window into the same IO and the first of them draws and renders, which clears it; the
+// events the outer frame was dispatching are not the nested frame's to dispatch again, and the ones the nested
+// frame was given are not the outer frame's.
+class NestingButton : public ClickCounter
+{
+public:
+    void onMousePress(MouseEvent& e) override
+    {
+        ClickCounter::onMousePress(e);
+        if (nested) return;
+        nested = true;
+        // the dialog's window: 200 events (more than the vector of the IO has room for), alternating press and release
+        for (int i = 0; i < 200; ++i) harness->io().addMouseButtonEvent(targetX, targetY, 0, (i & 1) == 0);
+        harness->frame();
+    }
+    Harness* harness = nullptr;
+    bool nested = false;
+    float targetX = 0.0f, targetY = 0.0f;
+};
+
+// A handler that runs a nested loop does not change what the outer frame walks: the events the outer frame
+// had are dispatched once, each, and so are the ones the nested frame had. Before, WidgetApp::update walked the
+// vector of mouse events of the IO with a range-for while the handler added 200 to it (the vector moved: a
+// use of freed memory) and the nested frame walked, and dispatched again, the outer frame's events too.
+void testNestedLoopFromAMouseHandler()
+{
+    Harness h(400.0f, 200.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    NestingButton* a = box->createChild<NestingButton>();
+    ClickCounter* b = box->createChild<ClickCounter>();
+    h.relayout();
+    a->harness = &h;
+    float ax = 0, ay = 0, bx = 0, by = 0;
+    Harness::centre(a, ax, ay);
+    Harness::centre(b, bx, by);
+    a->targetX = bx;
+    a->targetY = by;
+    h.io().mouseX = ax;
+    h.io().mouseY = ay;
+    h.io().addMouseMoveEvent(ax, ay);
+    h.io().addMouseButtonEvent(ax, ay, 0, true);
+    h.io().addMouseButtonEvent(ax, ay, 0, false);
+    h.frame();
+    check(a->presses == 1, "the press that started the nested loop is dispatched once");
+    check(a->releases == 1, "and the release after it, which the outer frame had, still comes once the nested loop is over");
+    check(a->lastReleaseX == ax, "at the place it happened");
+    check(b->presses == 100 && b->releases == 100, "the 200 events of the nested frame are dispatched once, by that frame (100 clicks)");
+    if (b->presses != 100 || b->releases != 100) printf("    got %d presses and %d releases\n", b->presses, b->releases);
+    check(h.io().mouseEvents.empty(), "nothing is left in the IO");
+    h.frames(2);
+    check(a->presses == 1 && a->releases == 1 && b->presses == 100 && b->releases == 100, "and nothing comes again in the next frames");
+}
+
+// A widget that records what it is given from the keyboard: keys as K<code>, typed text as T<text>.
+class KeyLog : public Widget
+{
+public:
+    Vec2f sizeHint() const override { return { 200.0f, 60.0f }; }
+    void onKeyPress(KeyEvent& e) override
+    {
+        char item[16];
+        snprintf(item, sizeof item, "K%d ", e.key);
+        log += item;
+        ++keys;
+        e.consumed = true;
+        if (e.key == 1001 && !nested)
+        {
+            nested = true;
+            // the dialog's window: a letter and then 200 keys, the first of them with the letter before it
+            harness->io().addInputCharacter('n');
+            for (int i = 0; i < 200; ++i) harness->io().addKeyEvent(2000 + i, 2000 + i, false, false, false, true);
+            harness->frame();
+        }
+    }
+    void onTextInput(KeyEvent& e) override
+    {
+        log += "T";
+        log += e.text;
+        log += " ";
+        e.consumed = true;
+    }
+    Harness* harness = nullptr;
+    bool nested = false;
+    int keys = 0;
+    String log;
+};
+
+// The same for the keys and the letters: the key that starts the nested loop, the letter the outer frame
+// typed before the next key, and that key are dispatched in order around what the nested frame had.
+void testNestedLoopFromAKeyHandler()
+{
+    Harness h(400.0f, 200.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    KeyLog* w = box->createChild<KeyLog>();
+    h.relayout();
+    w->harness = &h;
+    h.app.setFocused(w);
+    h.io().addKeyEvent(1001, 1001, false, false, false, true);
+    h.io().addInputCharacter('x');
+    h.io().addKeyEvent(1002, 1002, false, false, false, true);
+    h.frame();
+    String expected = "K1001 Tn ";
+    for (int i = 0; i < 200; ++i)
+    {
+        char item[16];
+        snprintf(item, sizeof item, "K%d ", 2000 + i);
+        expected += item;
+    }
+    expected += "Tx K1002 ";
+    check(w->log == expected, "the keys and letters of both frames are dispatched once each and in order: the nested frame's between the outer frame's");
+    if (w->log != expected) printf("    got %d keys, the log starts \"%.60s\"\n", w->keys, w->log.c_str());
+    check(h.io().keyEvents.empty() && h.io().inputChars.empty(), "nothing is left in the IO");
+    h.frames(2);
+    check(w->keys == 202, "and nothing comes again in the next frames");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -225,6 +362,8 @@ int main(int argc, char** argv)
     RUN(testKeysAndLettersKeepTheirOrder);
     RUN(testMovesOfAFrameAreOne);
     RUN(testPasteOfManyLines);
+    RUN(testNestedLoopFromAMouseHandler);
+    RUN(testNestedLoopFromAKeyHandler);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

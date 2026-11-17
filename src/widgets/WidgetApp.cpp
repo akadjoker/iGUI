@@ -156,7 +156,7 @@ bool WidgetApp::init()
 //  Per-frame input dispatch
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::update(const ig::retained::IO& io)
+void WidgetApp::update(ig::retained::IO& io)
 {
     BusyScope busy(*this);
     dt_ = io.deltaTime;
@@ -194,10 +194,35 @@ void WidgetApp::update(const ig::retained::IO& io)
     // with the polled state below finds only what the events did not say; and a button the events spoke of
     // is not compared with the polled state at all (a platform may hold a press in its polled state for a
     // frame after the release, which would be a second press at the end of the frame).
-    bool spokenOf[5] = {};
-    for (const auto& me: io.mouseEvents)
+    //
+    // The events come out of the IO before the first handler runs. A handler may run a nested loop (a modal
+    // dialog pumps the frames of its own window from the click that opened it, ZenApp::pump): its frames
+    // put the events of that window into this same IO and the first Render clears it. What this frame is
+    // dispatching must not move or vanish under it (a vector that grows while it is walked is freed memory
+    // read), and the nested frame must find its own events only, not these again: so they are taken, by swapping
+    // with vectors kept between frames (the IO and the buffer trade their storage, nothing is allocated once
+    // both have room), and what is added to the IO from here on belongs to the next frame to take it.
+    FrameEvents* buffer = nullptr;       // where they were taken to; none when the IO has no events
+    FrameEvents* nestedEvents = nullptr; // a buffer of its own, for an update() nested in another that is dispatching
+    if (!io.mouseEvents.empty() || !io.keyEvents.empty() || !io.inputChars.empty() || !io.dropEvents.empty())
     {
+        if (frameEventsBusy_) buffer = nestedEvents = new FrameEvents;
+        else
+        {
+            buffer = &frameEvents_;
+            frameEventsBusy_ = true;
+        }
+        buffer->mouse.swap(io.mouseEvents);
+        buffer->keys.swap(io.keyEvents);
+        buffer->chars.swap(io.inputChars);
+        buffer->drops.swap(io.dropEvents);
+    }
+    const FrameEvents& events = buffer ? *buffer : noEvents_;
 
+    bool spokenOf[5] = {};
+    for (size_t e = 0; e < events.mouse.size(); ++e)
+    {
+        const ig::retained::IO::MouseInput& me = events.mouse[e];
         if (me.button < 0 || me.button >= 5)
         {
             if (me.x != s_.prevMouseX_ || me.y != s_.prevMouseY_) dispatchMouseMove(me.x, me.y);
@@ -235,12 +260,13 @@ void WidgetApp::update(const ig::retained::IO& io)
     // "a", Left, "b" in one frame is what it was typed as
     unsigned charsDone = 0;
     ct::Vector<uint32_t> typedBefore;
-    for (const auto& ke: io.keyEvents)
+    for (size_t e = 0; e < events.keys.size(); ++e)
     {
-        if (ke.charsBefore > charsDone && ke.charsBefore <= io.inputChars.size())
+        const ig::retained::IO::KeyEvent& ke = events.keys[e];
+        if (ke.charsBefore > charsDone && ke.charsBefore <= events.chars.size())
         {
             typedBefore.clear();
-            for (unsigned i = charsDone; i < ke.charsBefore; ++i) typedBefore.push_back(io.inputChars[i]);
+            for (unsigned i = charsDone; i < ke.charsBefore; ++i) typedBefore.push_back(events.chars[i]);
             charsDone = ke.charsBefore;
             dispatchTextInput(typedBefore);
         }
@@ -255,17 +281,29 @@ void WidgetApp::update(const ig::retained::IO& io)
     // Text input (what is left of it)
     if (charsDone == 0)
     {
-        if (!io.inputChars.empty()) dispatchTextInput(io.inputChars);
+        if (!events.chars.empty()) dispatchTextInput(events.chars);
     }
-    else if (charsDone < io.inputChars.size())
+    else if (charsDone < events.chars.size())
     {
         typedBefore.clear();
-        for (size_t i = charsDone; i < io.inputChars.size(); ++i) typedBefore.push_back(io.inputChars[i]);
+        for (size_t i = charsDone; i < events.chars.size(); ++i) typedBefore.push_back(events.chars[i]);
         dispatchTextInput(typedBefore);
     }
 
     // OS-level file drops
-    if (!io.dropEvents.empty()) dispatchDropEvents(io.dropEvents);
+    if (!events.drops.empty()) dispatchDropEvents(events.drops);
+
+    // Dispatched: the buffer is empty again (and keeps its room) for the next frame, or for the one this was nested in.
+    if (buffer)
+    {
+        buffer->mouse.clear();
+        buffer->keys.clear();
+        buffer->chars.clear();
+        buffer->drops.clear();
+        if (nestedEvents) delete nestedEvents;
+        else
+            frameEventsBusy_ = false;
+    }
 
     // Calls deferred by the handlers above, in the order they were made; one
     // deferred while they run joins this same pass.
