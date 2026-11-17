@@ -24,7 +24,9 @@ struct Shot
 class Screen
 {
 public:
-    Screen(float width, float height, bool dynamicFonts = false)
+    // releaseAtlasPixels: the RAM copy of the baked page is freed once the rasteriser has its texture, as ZenApp does with
+    // its default atlas; what is drawn must not change.
+    Screen(float width, float height, bool dynamicFonts = false, bool releaseAtlasPixels = false)
             : h(width, height, dynamicFonts),
               w_(static_cast<int>(width)),
               h_(static_cast<int>(height))
@@ -32,6 +34,11 @@ public:
         raster_.setSamples(1);
         atlasTexture_ = raster_.createTexture(h.atlas().width(), h.atlas().height(), h.atlas().pixels());
         h.atlas().setTexture(atlasTexture_);
+#ifdef IGUI_FONTATLAS_RELEASE_PIXELS
+        if (releaseAtlasPixels) h.atlas().releasePixels();
+#else
+        (void) releaseAtlasPixels;
+#endif
     }
     ~Screen()
     {
