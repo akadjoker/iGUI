@@ -14,8 +14,26 @@ Menu::Menu()
     scrollable_ = false;
 }
 
+MenuAction::~MenuAction()
+{
+    if (submenuOwned_) delete submenu_;
+}
+
+void MenuAction::setSubmenu(Menu* m, bool owned)
+{
+    if (m == submenu_)
+    {
+        submenuOwned_ = owned && m;
+        return;
+    }
+    if (submenuOwned_) delete submenu_; // the one it had, which it owned
+    submenu_ = m;
+    submenuOwned_ = owned && m;
+}
+
 Menu::~Menu()
 {
+    // activeSubmenu_ is not touched: a caller's submenu may be gone already
     for (auto* a: actions_) delete a;
 }
 
@@ -42,6 +60,14 @@ MenuAction* Menu::addCheckable(const String& text, bool checked)
     return a;
 }
 
+Menu* Menu::addSubmenu(const String& text)
+{
+    MenuAction* a = addAction(text);
+    Menu* sub = new Menu();
+    a->setSubmenu(sub, true);
+    return sub;
+}
+
 MenuAction* Menu::addSeparator()
 {
     auto* a = new MenuAction();
@@ -52,8 +78,12 @@ MenuAction* Menu::addSeparator()
 
 void Menu::clearActions()
 {
+    // an open submenu is about to go (or to lose its action): close it first, and forget the highlight
+    hideSubmenu_();
+    hoveredIdx_ = -1;
     for (auto* a: actions_) delete a;
     actions_.clear();
+    markDirty();
 }
 
 MenuAction* Menu::action(int idx) const

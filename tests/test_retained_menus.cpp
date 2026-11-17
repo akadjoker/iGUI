@@ -60,6 +60,72 @@ void testMenuShortcutDoesNotOverlapTheSubmenuArrow()
     check(edge > 10, "the shortcut of an item with no submenu is still at the right edge");
 }
 
+// ---- who owns what (meant to run under the address sanitizer: a leak or a double delete is a finding) ----
+
+void testMenuOwnership()
+{
+    Harness h(420.0f, 300.0f, false);
+    // submenus the action owns: a menu rebuilt over and over, then deleted, leaves nothing behind
+    Menu* menu = new Menu();
+    for (int round = 0; round < 20; ++round)
+    {
+        menu->clearActions();
+        menu->addAction("Novo");
+        Menu* recent = menu->addSubmenu("Recentes");
+        for (int i = 0; i < 5; ++i) recent->addAction(String("ficheiro") + String::number(i));
+        recent->addSubmenu("Mais")->addAction("x");
+        menu->addSeparator();
+    }
+    check(menu->actionCount() == 3 && menu->action(1)->ownsSubmenu(), "a menu rebuilt 20 times has only the last actions");
+    delete menu;
+
+    // a submenu the caller owns (setSubmenu with no second argument) is left alone by clearActions and by the destructor
+    Menu* mine = new Menu();
+    mine->addAction("a");
+    Menu* parent = new Menu();
+    parent->addAction("Abrir")->setSubmenu(mine);
+    check(!parent->action(0)->ownsSubmenu(), "setSubmenu(menu) leaves the submenu to the caller");
+    parent->clearActions();
+    check(mine->actionCount() == 1, "clearActions leaves a submenu of the caller alive");
+    parent->addAction("Abrir")->setSubmenu(mine);
+    delete parent;
+    check(mine->actionCount() == 1, "so does the destructor of the menu");
+    delete mine;
+
+    // setSubmenu(menu, true) takes it, and replacing it deletes the old one
+    Menu* owner = new Menu();
+    MenuAction* a = owner->addAction("S");
+    a->setSubmenu(new Menu(), true);
+    a->setSubmenu(new Menu(), true);
+    a->setSubmenu(nullptr, true);
+    check(a->submenu() == nullptr && !a->ownsSubmenu(), "an owned submenu replaced by nothing is deleted");
+    delete owner;
+
+    // a MenuBar deletes the menus it made, with their owned submenus
+    MenuBar* bar = new MenuBar();
+    Menu* file = bar->addMenu("Ficheiro");
+    file->addSubmenu("Recentes")->addAction("um");
+    delete bar;
+
+    // rebuilt while it is open and its submenu is open
+    Menu* open = new Menu();
+    open->addSubmenu("Sub")->addAction("one");
+    open->addAction("Outro");
+    open->exec(10.0f, 10.0f);
+    h.frames(12);
+    const Rect row = open->actionRect(0);
+    h.moveTo(row.x + row.w * 0.5f, row.y + row.h * 0.5f); // hover opens the submenu
+    h.frames(3);
+    open->clearActions(); // the submenu goes with its action
+    h.frames(3);
+    h.moveTo(row.x + 5.0f, row.y + 5.0f);
+    h.frames(2);
+    open->addAction("Novo");
+    h.frames(2);
+    WidgetApp::instance().closePopup();
+    delete open;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -68,6 +134,7 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testMenuShortcutDoesNotOverlapTheSubmenuArrow);
+    RUN(testMenuOwnership);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

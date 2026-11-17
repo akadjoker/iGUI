@@ -84,10 +84,18 @@ public:
     {
         checked_ = c;
     }
-    /// @brief Attach a submenu (not owned).
-    void setSubmenu(Menu* m)
+    /// @brief Attach a submenu the caller owns: nothing here deletes it (the actions of a Menu are
+    ///        deleted by it, the submenu they point to is not unless it was given as owned). The
+    ///        caller keeps it alive while the action exists and deletes it, after the menu that
+    ///        shows it is gone or its actions are cleared. This is what the applications that keep
+    ///        their submenus (a recent-files menu rebuilt from time to time) rely on.
+    /// @param owned true: the action takes the submenu and deletes it with itself (when the Menu
+    ///        deletes the action: clearActions(), its destructor). Menu::addSubmenu() does this.
+    void setSubmenu(Menu* m, bool owned = false);
+    /// @brief True when the action deletes its submenu with itself (see setSubmenu).
+    bool ownsSubmenu() const
     {
-        submenu_ = m;
+        return submenuOwned_;
     }
 
     /// @brief Emitted when the action is triggered.
@@ -97,8 +105,11 @@ private:
     friend class Menu;
     MenuAction() = default;
 
+    ~MenuAction(); // deletes the submenu when it owns it
+
     String text_;
     String shortcut_;
+    bool submenuOwned_ = false;
     bool enabled_ = true;
     bool checkable_ = false;
     bool checked_ = false;
@@ -114,6 +125,12 @@ private:
 //    menu->addSeparator();
 //    menu->addCheckable("Show Grid", true);
 //    menu->exec(x, y);  // show as popup at screen coordinates
+//
+//  Who owns what: a Menu deletes its MenuActions (in clearActions() and its destructor); a MenuBar
+//  deletes the menus made with addMenu(); a submenu is deleted by its action only when it was made
+//  with Menu::addSubmenu() or given to MenuAction::setSubmenu(menu, true): a submenu given to
+//  setSubmenu(menu) stays the caller's (a Widget deletes the context menu it was given, see
+//  Widget::setContextMenu). A menu shown with exec() is not owned by the popup system.
 // ═════════════════════════════════════════════════════════════════════════════
 
 class Menu : public Widget
@@ -132,8 +149,14 @@ public:
     MenuAction* addCheckable(const String& text, bool checked = false);
     /// @brief Add a separator line.
     MenuAction* addSeparator();
+    /// @brief Add an action with a submenu of its own, and return the submenu to fill: it belongs to
+    ///        the action, which deletes it when the menu clears its actions or goes away, so there is
+    ///        nothing to keep or delete (setSubmenu(), by default, leaves that to the caller).
+    Menu* addSubmenu(const String& text);
 
-    /// @brief Remove all actions.
+    /// @brief Remove all actions. The actions are deleted (and the submenus they own, see
+    ///        MenuAction::setSubmenu); a submenu the caller owns is left alone. A menu that is open
+    ///        closes its open submenu and forgets the highlight, so it can be rebuilt while it is shown.
     void clearActions();
     /// @brief Get the number of actions.
     int actionCount() const
