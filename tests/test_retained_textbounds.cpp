@@ -669,6 +669,53 @@ void testSplitButtonCutsWhereAButtonDoes()
     check(mismatches == 0, "a text is cut at the same length in a SplitButton and in a Button as wide as its main button");
 }
 
+// A tab past the end of the bar has no room (the tabs are cut short at the end of the bar and the ones after the last
+// have width 0): nothing of it is drawn (it was its background, and with close buttons a close button at its left
+// edge, on the last tab), and no click reaches it. What main did: the tab went on past the end of the bar, drawn
+// outside the widget over what is next to it, and no click reached it either (a click outside the bar is not in the bar).
+size_t verticesOfTabs(int tabs, bool closable)
+{
+    Harness h(300.0f, 200.0f, false);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TabLayout* tabsWidget = box->createChild<TabLayout>();
+    tabsWidget->setStretch(1.0f);
+    tabsWidget->setTabsClosable(closable);
+    for (int i = 0; i < tabs; ++i) tabsWidget->addTab<Panel>(String("T") + String::number(i % 10));
+    h.relayout();
+    h.frames(2);
+    return GetDrawList().vertices().size();
+}
+
+void testTabsPastTheEndOfTheBarAreNotDrawnOrHit()
+{
+    for (int closable = 0; closable < 2; ++closable)
+    {
+        // 300 pixels hold five tabs of 60: with 12 or with 40, what is drawn is the same
+        const size_t few = verticesOfTabs(12, closable != 0), many = verticesOfTabs(40, closable != 0);
+        if (few != many) printf("    %u vertices with 12 tabs, %u with 40\n", static_cast<unsigned>(few), static_cast<unsigned>(many));
+        check(few == many, closable ? "tabs with no room draw nothing, close buttons included" : "tabs with no room draw nothing");
+    }
+    // and a click anywhere along the bar lands on a tab that has room
+    Harness h(300.0f, 200.0f, false);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(0.0f);
+    TabLayout* tabs = box->createChild<TabLayout>();
+    tabs->setStretch(1.0f);
+    for (int i = 0; i < 40; ++i) tabs->addTab<Panel>(String("T") + String::number(i % 10));
+    h.relayout();
+    h.frames(2);
+    const Rect r = tabs->absoluteRect();
+    int most = 0;
+    for (float x = r.x + 1.0f; x < r.x + r.w; x += 3.0f)
+    {
+        h.click(x, r.y + 10.0f);
+        if (tabs->currentIndex() > most) most = tabs->currentIndex();
+    }
+    if (most > 6) printf("    a click along the bar selected tab %d\n", most);
+    check(most >= 3 && most <= 6, "a click along the bar selects only the tabs that have room (the first five or six)");
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -688,6 +735,7 @@ int main(int argc, char** argv)
     RUN(testTextEditTabsAreSpaces);
     RUN(testAssetBrowserIconsAreDrawnWithoutAnAtlas);
     RUN(testSplitButtonCutsWhereAButtonDoes);
+    RUN(testTabsPastTheEndOfTheBarAreNotDrawnOrHit);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

@@ -1446,6 +1446,8 @@ void TabLayout::paint(PaintContext& ctx)
     for (int i = 0; i < static_cast<int>(tabs_.size()); ++i)
     {
         Rect tr = tabRect(i, barR);
+        // a tab past the end of the bar has no room (width 0): nothing of it is drawn, not even its close button
+        if (!(tr.w > 0.0f)) continue;
         Rect absTr = { abs.x + tr.x, abs.y + tr.y, tr.w, tr.h };
         Rect clippedTab;
         if (!ctx.clipRectIntersect(absTr, clippedTab)) continue;
@@ -1552,6 +1554,7 @@ void TabLayout::onMousePress(MouseEvent& e)
     for (int i = 0; i < static_cast<int>(tabs_.size()); ++i)
     {
         Rect tr = tabRect(i, barR);
+        if (!(tr.w > 0.0f)) continue; // past the end of the bar: nothing to hit
         Rect absTr = { abs.x + tr.x, abs.y + tr.y, tr.w, tr.h };
 
         if (!absTr.contains(e.x, e.y)) continue;
