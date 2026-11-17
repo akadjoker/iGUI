@@ -87,6 +87,7 @@ cmake --build build --parallel
 | `IGUI_BUILD_IMMEDIATE` | `ON` | Build the immediate-mode library (`igui::igui`) |
 | `IGUI_BUILD_RETAINED` | `ON` | Build the retained widget toolkit (`igui::widgets`) |
 | `IGUI_BUILD_LEGACY` | `ON` | Build the older retained compatibility layer (`igui::legacy`) |
+| `IGUI_NO_RTTI` | `ON` | Compile every iGUI target with `-fno-rtti` (ignored on MSVC). An application that runs UBSan must build its own code the same way, or turn the check off (`-fno-sanitize=vptr`): mixing iGUI built without RTTI and application code built with it makes the `vptr` check report false "invalid vptr" errors on classes with inline virtual functions |
 | `IGUI_BUILD_TESTS` | `ON` | Build and register the test executables |
 | `IGUI_BUILD_FONT` | `OFF` | Build the embedded font atlas module (`igui::font`); forced on when a backend is built |
 | `IGUI_FONT_INPUT` | empty | TTF/OTF file to embed as the default font (defaults to Roboto Regular) |
