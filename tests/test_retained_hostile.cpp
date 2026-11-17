@@ -11,8 +11,19 @@
 //
 // --list prints the names of the cases, --only=TEXT runs the cases whose name has TEXT in it (one run of the
 // program for each case is how to find which one hangs).
+//
+// A loop that does not stop must fail here fast and small, never by taking the memory of the machine (one
+// once took 15 GB and the editor with it): the program limits itself, from the first line of main. The heap
+// requests of every frame are counted (the wrapped malloc, calloc and realloc below: ct allocates with them) and
+// a frame that asks for more than kMaxFrameBytes stops the program there, naming the case; and, where the
+// sanitizers do not forbid it (AddressSanitizer reserves terabytes of address space), the address space of the
+// process is limited to kMaxAddressSpace with setrlimit, which is what stops an allocation the counting does not
+// see. A case that spins without asking for memory is the timeout of the ctest entry's.
 
 #include "RetainedHarness.hpp"
+
+#include <sys/resource.h>
+#include <unistd.h>
 
 #include <igui/widgets/AppWidgets.hpp>
 #include <igui/widgets/AssetBrowser.hpp>
@@ -35,8 +46,92 @@
 
 using namespace rh;
 
+// ── The ceilings ──────────────────────────────────────────────────────────────────────────────────────────────────
+
 namespace
 {
+
+// What one frame of a 480x320 window may ask of the heap, in all the requests it makes (a realloc counts its new
+// size). A frame of any case here asks for a megabyte or two (the largest is printed at the end); a ceiling
+// far over that, and far under the memory of the machine.
+constexpr unsigned long long kMaxFrameBytes = 64ull << 20;
+// The address space of the whole process (not under a sanitizer): the program, its libraries, the font atlas and the
+// frames are a fraction of this.
+constexpr unsigned long long kMaxAddressSpace = 1ull << 30;
+
+unsigned long long gAskedBytes = 0;    // asked of the heap since the last frame began
+unsigned long long gMostAsked = 0;     // the most any frame asked
+const char* gCurrentCase = "(none)";   // for the message when a ceiling is reached
+
+// A frame has asked for too much: say so and stop, without allocating (snprintf and write do not).
+[[noreturn]] void frameAskedTooMuch(unsigned long long bytes)
+{
+    char text[256];
+    const int n = snprintf(text, sizeof text,
+            "\n    FAIL %s: one frame asked the heap for more than %llu MiB (%llu so far): a loop that does not stop\n",
+            gCurrentCase, kMaxFrameBytes >> 20, bytes >> 20);
+    if (n > 0)
+    {
+        const ssize_t written = write(2, text, static_cast<size_t>(n < static_cast<int>(sizeof text) ? n : static_cast<int>(sizeof text) - 1));
+        (void) written;
+    }
+    _exit(3);
+}
+
+void asked(size_t bytes)
+{
+    gAskedBytes += bytes;
+    if (gAskedBytes > kMaxFrameBytes) frameAskedTooMuch(gAskedBytes);
+}
+
+} // namespace
+
+extern "C" void* __real_malloc(size_t);
+extern "C" void* __real_calloc(size_t, size_t);
+extern "C" void* __real_realloc(void*, size_t);
+extern "C" void* __wrap_malloc(size_t n)
+{
+    asked(n);
+    return __real_malloc(n);
+}
+extern "C" void* __wrap_calloc(size_t a, size_t b)
+{
+    asked(a * b);
+    return __real_calloc(a, b);
+}
+extern "C" void* __wrap_realloc(void* p, size_t n)
+{
+    asked(n);
+    return __real_realloc(p, n);
+}
+
+namespace
+{
+
+// The address-space limit, set at the start of main where it can be: a sanitizer's own mappings do not fit in it.
+#if defined(__SANITIZE_ADDRESS__) || defined(__SANITIZE_THREAD__)
+#define IGUI_TEST_SANITIZED 1
+#elif defined(__has_feature)
+#if __has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || __has_feature(memory_sanitizer)
+#define IGUI_TEST_SANITIZED 1
+#endif
+#endif
+
+void limitAddressSpace()
+{
+#ifdef IGUI_TEST_SANITIZED
+    printf("test_retained_hostile: under a sanitizer: no address space limit, %llu MiB of requests for a frame at most\n",
+            kMaxFrameBytes >> 20);
+#else
+    struct rlimit limit;
+    limit.rlim_cur = static_cast<rlim_t>(kMaxAddressSpace);
+    limit.rlim_max = static_cast<rlim_t>(kMaxAddressSpace);
+    if (setrlimit(RLIMIT_AS, &limit) != 0) printf("test_retained_hostile: no address space limit (setrlimit failed)\n");
+    else
+        printf("test_retained_hostile: address space limited to %llu MiB, %llu MiB of requests for a frame at most\n",
+                kMaxAddressSpace >> 20, kMaxFrameBytes >> 20);
+#endif
+}
 
 // A 480x320 window never needs more than this for a frame of one widget (an editor window of 1600x900 is
 // about forty thousand); a frame over it is a loop that did not stop where it should.
@@ -83,7 +178,9 @@ struct Scene
         h.app.requestLayout();
         for (int i = 0; i < frames; ++i)
         {
+            gAskedBytes = 0;
             h.frame();
+            if (gAskedBytes > gMostAsked) gMostAsked = gAskedBytes;
             const size_t n = GetDrawList().vertices().size();
             if (n > kMaxVertices) return fail(what, "vertices over the limit", static_cast<double>(n));
             if (!treeFinite(h.root())) return fail(what, "a rectangle is not finite", 0.0);
@@ -202,6 +299,7 @@ const float kValues[] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, -1.0f, 0.0f, 1
 
 void runHostile(const HostileCase& c)
 {
+    gCurrentCase = c.name;
     Scene s(c.name);
     Widget* made = nullptr;
     for (size_t i = 0; i < sizeof kValues / sizeof kValues[0]; ++i)
@@ -371,6 +469,7 @@ const SceneCase kScenes[] = {
 
 void runScene(const SceneCase& c)
 {
+    gCurrentCase = c.name;
     Scene s(c.name);
     c.run(s);
     String text = String(c.name) + ": the frames stay finite and small";
@@ -388,6 +487,7 @@ int main(int argc, char** argv)
         if (!strncmp(argv[i], "--only=", 7)) only = argv[i] + 7;
         else if (!strcmp(argv[i], "--list")) list = true;
     }
+    if (!list) limitAddressSpace();
     for (const HostileCase& c: kHostile)
     {
         if (list) printf("%s\n", c.name);
@@ -400,6 +500,23 @@ int main(int argc, char** argv)
     }
     if (list) return 0;
     shutdown();
+    printf("the largest frame asked the heap for %.1f MiB (the ceiling is %llu MiB)", static_cast<double>(gMostAsked) / 1048576.0,
+            kMaxFrameBytes >> 20);
+#ifndef IGUI_TEST_SANITIZED
+    // and the most address space the process had, where the system says (Linux): what the limit above has to leave room for
+    if (FILE* status = fopen("/proc/self/status", "r"))
+    {
+        char line[128];
+        while (fgets(line, sizeof line, status))
+            if (!strncmp(line, "VmPeak:", 7))
+            {
+                unsigned long kb = 0;
+                if (sscanf(line + 7, "%lu", &kb) == 1) printf("; the process peaked at %lu MiB of address space", kb >> 10);
+            }
+        fclose(status);
+    }
+#endif
+    printf("\n");
     if (failures()) printf("%d checks failed\n", failures());
     else
         printf("ok\n");

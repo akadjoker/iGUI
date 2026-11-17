@@ -384,6 +384,11 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
             target_link_libraries(igui_retained_${_igui_rt_test}_tests PRIVATE igui_widgets)
             add_test(NAME igui_retained_${_igui_rt_test} COMMAND igui_retained_${_igui_rt_test}_tests)
         endforeach()
+        # The hostile test counts the heap requests of every frame through a wrapped malloc and stops at a ceiling,
+        # limits its address space where the sanitizers allow it, and has a timeout: a loop that does not stop
+        # fails here quickly instead of taking the memory of the machine (tests/test_retained_hostile.cpp).
+        target_link_options(igui_retained_hostile_tests PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
+        set_tests_properties(igui_retained_hostile PROPERTIES TIMEOUT 180)
         # an idle frame must not allocate: counted through a wrapped malloc and operator new
         add_executable(igui_retained_idle_tests tests/test_retained_idle.cpp)
         target_compile_features(igui_retained_idle_tests PRIVATE cxx_std_17)
