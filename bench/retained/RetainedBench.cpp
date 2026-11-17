@@ -700,6 +700,25 @@ void loopScenes()
     }
 }
 
+// The vertices, indices and commands of the draw list folded into a checksum (FNV-1a).
+void mixDrawList(const DrawList& dl, unsigned long long& hv)
+{
+    auto mix = [&hv](const void* p, size_t n)
+    {
+        const unsigned char* b = static_cast<const unsigned char*>(p);
+        for (size_t i = 0; i < n; ++i) hv = (hv ^ b[i]) * 1099511628211ull;
+    };
+    mix(dl.vertices().data(), dl.vertices().size() * sizeof(DrawVertex));
+    mix(dl.indices().data(), dl.indices().size() * sizeof(uint32_t));
+    for (size_t i = 0; i < dl.commands().size(); ++i)
+    {
+        const DrawCmd& c = dl.commands()[i];
+        mix(&c.indexOffset, sizeof c.indexOffset);
+        mix(&c.indexCount, sizeof c.indexCount);
+        mix(&c.clip, sizeof c.clip);
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -752,23 +771,45 @@ int main(int argc, char** argv)
             h.frames(3);
             const DrawList& dl = GetDrawList();
             unsigned long long hv = 1469598103934665603ull;
-            auto mix = [&hv](const void* p, size_t n)
-            {
-                const unsigned char* b = static_cast<const unsigned char*>(p);
-                for (size_t i = 0; i < n; ++i) hv = (hv ^ b[i]) * 1099511628211ull;
-            };
-            mix(dl.vertices().data(), dl.vertices().size() * sizeof(DrawVertex));
-            mix(dl.indices().data(), dl.indices().size() * sizeof(uint32_t));
-            for (size_t i = 0; i < dl.commands().size(); ++i)
-            {
-                const DrawCmd& c = dl.commands()[i];
-                mix(&c.indexOffset, sizeof c.indexOffset);
-                mix(&c.indexCount, sizeof c.indexCount);
-                mix(&c.clip, sizeof c.clip);
-            }
+            mixDrawList(dl, hv);
             printf("draw checksum with %d clips: %016llx (%u vertices, %u indices, %u commands)\n", clips, hv,
                     static_cast<unsigned>(dl.vertices().size()), static_cast<unsigned>(dl.indices().size()),
                     static_cast<unsigned>(dl.commands().size()));
+        }
+        // The piano roll (rows, grid lines, bar numbers, notes, playhead, keys) in a few views and bars: the
+        // grid is drawn from a count worked out before the loop, and from the rectangle the paint was given,
+        // which must not change what is on the screen. Only views with fewer beats than pixels (a view with
+        // more draws every few beats, on purpose).
+        {
+            const float views[][2] = { { 0.0f, 32.0f }, { 0.0f, 400.0f }, { -5.0f, 20.0f }, { 3.5f, 9.2f }, { 100000.0f, 100040.0f } };
+            const int bars[] = { 1, 3, 4, 7 };
+            unsigned long long hv = 1469598103934665603ull;
+            unsigned vertices = 0, indices = 0, commands = 0;
+            int scenes = 0;
+            for (const auto& view: views)
+                for (int bpb: bars)
+                {
+                    Harness h(1280.0f, 720.0f);
+                    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+                    PianoRoll* roll = box->createChild<PianoRoll>();
+                    roll->setStretch(1.0f);
+                    roll->setPitchRange(36, 96);
+                    for (int i = 0; i < 200; ++i)
+                        roll->addNote(40 + (i * 7) % 50, static_cast<float>(i) * 0.5f - 3.0f, 0.5f + 0.25f * static_cast<float>(i % 4));
+                    roll->setTimeRange(view[0], view[1]);
+                    roll->setBeatsPerBar(bpb);
+                    roll->setPlayhead(view[0] + (view[1] - view[0]) * 0.37f);
+                    h.relayout();
+                    h.frames(2);
+                    const DrawList& dl = GetDrawList();
+                    mixDrawList(dl, hv);
+                    vertices += static_cast<unsigned>(dl.vertices().size());
+                    indices += static_cast<unsigned>(dl.indices().size());
+                    commands += static_cast<unsigned>(dl.commands().size());
+                    ++scenes;
+                }
+            printf("draw checksum of the piano roll in %d views: %016llx (%u vertices, %u indices, %u commands)\n", scenes, hv,
+                    vertices, indices, commands);
         }
         shutdown();
         return 0;

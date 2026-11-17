@@ -7,7 +7,7 @@
 #               since the base revision (the project uses its own `ct` containers)
 #   2. release  Release build, every test (ctest, one at a time)
 #   3. asan     Debug build with AddressSanitizer + UndefinedBehaviorSanitizer, every test
-#   4. hash     the checksum of what the bench draws for the editor window (igui_retained_bench --hash)
+#   4. hash     the checksum of what the bench draws for the editor window and for the piano roll (igui_retained_bench --hash)
 #               against the reference in bench/retained/draw.hash: a change that is only meant to make
 #               drawing faster, or to fix something outside the editor window, must not move it
 #
@@ -146,8 +146,8 @@ if ! skipped hash; then
         report FAIL hash "no bench to run ($bench: the release stage did not build it)"
     else
         xrun "$bench" --hash > "$build/hash.log" 2>&1
-        # the checksums, one for each size of the editor window
-        got=$(grep -o 'draw checksum with [0-9]* clips: [0-9a-f]* ([0-9]* vertices, [0-9]* indices, [0-9]* commands)' "$build/hash.log")
+        # the checksums: one for each size of the editor window and one for the piano roll
+        got=$(grep -o 'draw checksum [^:]*: [0-9a-f]* ([0-9]* vertices, [0-9]* indices, [0-9]* commands)' "$build/hash.log")
         if [ -z "$got" ]; then
             report FAIL hash "the bench printed no checksum (see $build/hash.log)"
         elif [ $update_hash -eq 1 ]; then

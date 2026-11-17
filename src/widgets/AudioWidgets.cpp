@@ -1421,7 +1421,13 @@ Rect PianoRoll::gridArea() const
 
 float PianoRoll::pitchToY(int pitch) const
 {
-    const Rect ga = gridArea();
+    return pitchToY(pitch, gridArea());
+}
+
+// With the grid area given: the paint functions have it already, and gridArea() walks the parents of the widget
+// (absoluteRect) every time it is asked, which is once for each row, line and note if each of them calls the one-argument form.
+float PianoRoll::pitchToY(int pitch, const Rect& ga) const
+{
     return ga.y + (pitchHi_ - 1 - pitch) * rowH_;
 }
 
@@ -1434,7 +1440,11 @@ int PianoRoll::yToPitch(float y) const
 
 float PianoRoll::beatToX(float beat) const
 {
-    const Rect ga = gridArea();
+    return beatToX(beat, gridArea());
+}
+
+float PianoRoll::beatToX(float beat, const Rect& ga) const
+{
     return ga.x + (beat - viewStart_) / (viewEnd_ - viewStart_) * ga.w;
 }
 
@@ -1446,9 +1456,14 @@ float PianoRoll::xToBeat(float x) const
 
 Rect PianoRoll::noteRect(const PianoNote& n) const
 {
-    float x = beatToX(n.start);
-    float x2 = beatToX(n.start + n.length);
-    float y = pitchToY(n.pitch);
+    return noteRect(n, gridArea());
+}
+
+Rect PianoRoll::noteRect(const PianoNote& n, const Rect& ga) const
+{
+    float x = beatToX(n.start, ga);
+    float x2 = beatToX(n.start + n.length, ga);
+    float y = pitchToY(n.pitch, ga);
     return { x, y + 1, std::max(4.f, x2 - x - 1), rowH_ - 2 };
 }
 
@@ -1486,7 +1501,7 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
 {
     for (int p = pitchLo_; p < pitchHi_; ++p)
     {
-        float y = pitchToY(p);
+        float y = pitchToY(p, ga);
         ctx.fill.SetColor(isBlackKey(p) ? 22 : 30, isBlackKey(p) ? 24 : 32, isBlackKey(p) ? 28 : 36,
                 255);
         ctx.fillRect(ga.x, y, ga.w, rowH_);
@@ -1504,7 +1519,7 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
     {
         const float beat = beats.first + static_cast<float>(i) * beats.step;
         if (beat > viewEnd_) break;
-        float x = beatToX(beat);
+        float x = beatToX(beat, ga);
         if (x < ga.x || x > ga.x + ga.w) continue;
         bool isBar = (fmodf(beat, bpb) < 0.001f);
         ctx.fill.SetColor(isBar ? 70 : 45, isBar ? 74 : 48, isBar ? 80 : 54, 255);
@@ -1518,7 +1533,7 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
     {
         const float beat = bars.first + static_cast<float>(i) * bars.step;
         if (beat > viewEnd_) break;
-        float x = beatToX(beat);
+        float x = beatToX(beat, ga);
         if (x < ga.x || x > ga.x + ga.w) continue;
         const float bar = beat / bpb;
         if (!(bar > -1.0e9f && bar < 1.0e9f)) continue; // the number would not fit an int
@@ -1534,7 +1549,7 @@ void PianoRoll::paintNotes(PaintContext& ctx, const Rect& ga) const
     {
         const auto& n = notes_[i];
         if (n.pitch < pitchLo_ || n.pitch >= pitchHi_) continue;
-        Rect nr = noteRect(n);
+        Rect nr = noteRect(n, ga);
         if (nr.x + nr.w < ga.x || nr.x > ga.x + ga.w) continue;
 
         bool active = (i == draggingNote_);
@@ -1559,7 +1574,7 @@ void PianoRoll::paintNotes(PaintContext& ctx, const Rect& ga) const
 
 void PianoRoll::paintPlayhead(PaintContext& ctx, const Rect& ga) const
 {
-    float x = beatToX(playhead_);
+    float x = beatToX(playhead_, ga);
     if (x < ga.x || x > ga.x + ga.w) return;
     ctx.fill.SetColor(255, 200, 80, 220);
     ctx.fillRect(x, ga.y, 2, ga.h);

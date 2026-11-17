@@ -994,10 +994,13 @@ private:
     Rect gridArea() const;
     Rect keyArea() const;
     float pitchToY(int pitch) const;
+    float pitchToY(int pitch, const Rect& ga) const; // the same, with gridArea() given (the paint functions have it)
     int yToPitch(float y) const;
     float beatToX(float beat) const;
+    float beatToX(float beat, const Rect& ga) const;
     float xToBeat(float x) const;
     Rect noteRect(const PianoNote& n) const;
+    Rect noteRect(const PianoNote& n, const Rect& ga) const;
     bool isBlackKey(int pitch) const;
     void paintKeys(PaintContext& ctx, const Rect& ka) const;
     void paintGrid(PaintContext& ctx, const Rect& ga) const;
