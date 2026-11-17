@@ -383,7 +383,10 @@ void ImageButton::paint(PaintContext& ctx)
         ig::retained::Rect uv = { srcRect_.x / tw, srcRect_.y / th, srcRect_.width / tw,
             srcRect_.height / th };
         Rect dst = { ix, iy, iw, ih };
-        ctx.drawImage(tex_, dst, uv, tint_);
+        // a disabled button shows its image faded, as the text of a disabled Button is
+        Color tint = tint_;
+        if (!isEnabledInTree()) tint.a = static_cast<unsigned char>(tint.a * 0.4f);
+        ctx.drawImage(tex_, dst, uv, tint);
     }
 
     Widget::paint(ctx);

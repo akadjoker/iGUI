@@ -320,6 +320,89 @@ void testLayoutRunsByItself()
     check(probe->laidOut == before + 1, "removing a child takes one layout pass");
 }
 
+// ---- ImageButton has the states and the tooltip of an IconButton ----
+
+// A window with one button of type B, drawn in a state: 0 plain, 1 hovered, 2 pressed, 3 disabled, 4 hovered long enough
+// for its tooltip.
+template<typename B>
+Shot buttonInState(int state, Rect* where)
+{
+    Screen s(240.0f, 160.0f);
+    Widget* holder = s.h.root()->createChild<Widget>();
+    B* b = holder->createChild<B>();
+    b->setRect({ 20.0f, 20.0f, 40.0f, 32.0f });
+    b->setTooltip("uma dica");
+    b->setTooltipDelay(0.1f);
+    s.h.relayout();
+    if (where) *where = b->absoluteRect();
+    float x = 0, y = 0;
+    Harness::centre(b, x, y);
+    if (state == 3) b->setEnabled(false);
+    if (state == 1 || state == 2 || state == 4) s.h.moveTo(x, y);
+    if (state == 2)
+    {
+        s.h.io().mouseDown[0] = true;
+        s.h.frame();
+    }
+    if (state == 4)
+    {
+        s.h.io().deltaTime = 0.5f;
+        s.h.frames(3);
+    }
+    s.h.frames(2);
+    return s.take();
+}
+
+template<typename B>
+void buttonStates(const char* kind)
+{
+    Rect r;
+    const Shot plain = buttonInState<B>(0, &r);
+    const Shot hover = buttonInState<B>(1, nullptr);
+    const Shot pressed = buttonInState<B>(2, nullptr);
+    const Shot disabled = buttonInState<B>(3, nullptr);
+    const Shot tip = buttonInState<B>(4, nullptr);
+    const int x0 = static_cast<int>(r.x), y0 = static_cast<int>(r.y), x1 = x0 + static_cast<int>(r.w), y1 = y0 + static_cast<int>(r.h);
+    char what[128];
+    snprintf(what, sizeof what, "a hovered %s is drawn differently", kind);
+    check(differing(plain, hover, x0, y0, x1, y1) > 0, what);
+    snprintf(what, sizeof what, "a pressed %s is drawn differently from a hovered one", kind);
+    check(differing(hover, pressed, x0, y0, x1, y1) > 0, what);
+    snprintf(what, sizeof what, "a disabled %s is drawn differently", kind);
+    check(differing(plain, disabled, x0, y0, x1, y1) > 0, what);
+    snprintf(what, sizeof what, "a %s shows its tooltip after the delay", kind);
+    check(differing(hover, tip, 0, y1 + 1, 240, 160) > 0, what);
+}
+
+// The alpha of the white (untinted) vertices of the last frame: 255 when an image is drawn as it is, less when faded; -1 when
+// there are none.
+int whiteImageAlpha(bool enabled)
+{
+    Harness h(160.0f, 100.0f, false);
+    Widget* holder = h.root()->createChild<Widget>();
+    ImageButton* b = holder->createChild<ImageButton>();
+    b->setRect({ 20.0f, 20.0f, 40.0f, 32.0f });
+    b->setTexture(handle(7), 16, 16);
+    b->setSrcRect({ 0.0f, 0.0f, 16.0f, 16.0f });
+    b->setEnabled(enabled);
+    h.relayout();
+    h.frames(2);
+    int alpha = -1;
+    const ct::Vector<DrawVertex>& v = GetDrawList().vertices();
+    for (size_t i = 0; i < v.size(); ++i)
+        if (v[i].color.r == 255 && v[i].color.g == 255 && v[i].color.b == 255 && v[i].color.a > alpha) alpha = v[i].color.a;
+    return alpha;
+}
+
+void testImageButtonStates()
+{
+    buttonStates<IconButton>("IconButton");
+    buttonStates<ImageButton>("ImageButton");
+    check(whiteImageAlpha(true) == 255, "an enabled ImageButton draws its image as it is");
+    const int faded = whiteImageAlpha(false);
+    check(faded > 0 && faded < 255, "a disabled ImageButton draws its image faded");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -334,6 +417,7 @@ int main(int argc, char** argv)
     RUN(testFloatWindowSettersLayOut);
     RUN(testCollapsibleHintIgnoresItsRect);
     RUN(testLayoutRunsByItself);
+    RUN(testImageButtonStates);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
