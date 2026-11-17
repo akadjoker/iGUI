@@ -172,6 +172,7 @@ private:
     static constexpr float kSepH = 9.0f;
     static constexpr float kIconW = 22.0f;
     static constexpr float kPadX = 12.0f;
+    static constexpr float kArrowW = 16.0f; // what an item with a submenu adds on the right for its arrow
 
     ct::Vector<MenuAction*> actions_; // owned
     int hoveredIdx_ = -1;

@@ -418,6 +418,12 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_include_directories(igui_retained_basic_tests PRIVATE adapters/zen/include)
         target_link_libraries(igui_retained_basic_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_basic COMMAND igui_retained_basic_tests)
+        # Menus: what an item draws, who owns the actions and the submenus, the signals a menu emits.
+        add_executable(igui_retained_menus_tests tests/test_retained_menus.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_menus_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_menus_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_menus_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_menus COMMAND igui_retained_menus_tests)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)

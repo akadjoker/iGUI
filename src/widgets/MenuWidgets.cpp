@@ -105,7 +105,7 @@ float Menu::computeWidth_() const
                            ? 0.0f
                            : WidgetApp::instance().textWidth(a->shortcut().c_str()) + kPadX * 2;
         float w = kIconW + kPadX + tw + sw + kPadX;
-        if (a->submenu()) w += 16.0f;
+        if (a->submenu()) w += kArrowW;
         maxW = std::max(maxW, w);
     }
     return maxW;
@@ -254,7 +254,10 @@ void Menu::paint(PaintContext& ctx)
                 Color sc = hov ? t.menuShortcutHover : t.menuShortcutText;
                 ctx.font.SetColor(sc);
                 float shw = ctx.font.GetTextWidth(a->shortcut().c_str());
-                ctx.font.Print(a->shortcut().c_str(), abs.x + abs.w - shw - kPadX, ty);
+                // an item with a submenu has its arrow in the last 16 pixels (computeWidth_ made the room): the
+                // shortcut ends before it
+                const float right = abs.x + abs.w - kPadX - (a->submenu() ? kArrowW : 0.0f);
+                ctx.font.Print(a->shortcut().c_str(), right - shw, ty);
             }
 
             // Submenu arrow
