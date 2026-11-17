@@ -151,11 +151,48 @@ void testSpinSliderLabelDoesNotAllocate()
     check(allocsOfAFrame(h) == 0, "a SpinSlider whose label is wider than the widget");
 }
 
+// A widget that counts how many times a layout pass reaches it.
+class LayoutProbe : public Widget
+{
+public:
+    IG_WIDGET_CLASS(LayoutProbe, Widget);
+    void layout() override
+    {
+        ++laidOut;
+        Widget::layout();
+    }
+    int laidOut = 0;
+};
+
+// The tree asks for its own layout when it changes (children, visibility, text...): an idle window, and one the pointer
+// moves over, must not run a layout pass at all.
+void testIdleFrameDoesNoLayout()
+{
+    printf("an idle frame, and a pointer moving over the editor window, do no layout\n");
+    Harness h(1600.0f, 900.0f);
+    EditorTree ed;
+    ed.build(h, 300);
+    LayoutProbe* probe = h.root()->createChild<LayoutProbe>();
+    h.relayout();
+    h.frames(10);
+    const int settled = probe->laidOut;
+    h.frames(30);
+    check(probe->laidOut == settled, "idle frames do no layout");
+    for (int i = 0; i < 60; ++i)
+    {
+        h.moveTo(40.0f + static_cast<float>(i) * 25.0f, 30.0f + static_cast<float>((i * 37) % 800));
+        h.frame();
+    }
+    if (probe->laidOut != settled) printf("    %d layout passes while the pointer moved\n", probe->laidOut - settled);
+    check(probe->laidOut == settled, "a pointer moving over the window does no layout");
+}
+
 } // namespace
 
 int main()
 {
     testIdleFrameDoesNotAllocate();
+    testIdleFrameDoesNoLayout();
     testTextFieldsDoNotAllocateInAnIdleFrame();
     testSplitButtonTextDoesNotAllocate();
     testProgressBarTextDoesNotAllocate();

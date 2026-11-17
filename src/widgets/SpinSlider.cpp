@@ -67,6 +67,7 @@ public:
     explicit Grabber(SpinSlider* owner)
             : owner_(owner)
     {
+        layoutNeutral_ = true; // it appears under the pointer: showing it is not a change of layout
     }
 
     bool highlight = false;

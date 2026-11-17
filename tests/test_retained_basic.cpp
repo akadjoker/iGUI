@@ -263,6 +263,63 @@ void testCollapsibleHintIgnoresItsRect()
     check(c->sizeHint().x == narrow, "and when it is narrower than its hint");
 }
 
+// ---- layout asks for itself when what it depends on changes ----
+
+// A widget that counts how many times it is laid out.
+class LayoutProbe : public Widget
+{
+public:
+    IG_WIDGET_CLASS(LayoutProbe, Widget);
+    void layout() override
+    {
+        ++laidOut;
+        Widget::layout();
+    }
+    int laidOut = 0;
+};
+
+void testLayoutRunsByItself()
+{
+    Harness h(640.0f, 480.0f, false);
+    LayoutProbe* probe = h.root()->createChild<LayoutProbe>();
+    h.frames(3);
+    const int settled = probe->laidOut;
+    h.frames(30);
+    check(probe->laidOut == settled, "an idle window does no layout");
+
+    // a child added after the first frame is laid out by the next one, with no requestLayout()
+    Widget* late = h.root()->createChild<Widget>();
+    h.frame();
+    check(late->rect().w == 640.0f && late->rect().h == 480.0f, "a widget added later is laid out by the next frame");
+    check(probe->laidOut == settled + 1, "and it took one layout pass");
+
+    // visibility, text, spacing: a hidden child is skipped by a layout, a shown one is placed
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    Label* first = box->createChild<Label>(String("um"));
+    Label* second = box->createChild<Label>(String("dois"));
+    h.frame();
+    const float yWithBoth = second->rect().y;
+    first->setVisible(false);
+    h.frame();
+    check(second->rect().y < yWithBoth, "hiding a widget moves the ones after it (no requestLayout() needed)");
+    first->setVisible(true);
+    h.frame();
+    check(second->rect().y == yWithBoth, "showing it moves them back");
+    Button* b = box->createChild<Button>(String("a"));
+    h.frame();
+    const float narrow = b->sizeHint().x;
+    b->setText("um texto bem comprido para um botao");
+    h.frame();
+    check(b->sizeHint().x > narrow, "the hint follows the text");
+    const int before = probe->laidOut;
+    b->setText("um texto bem comprido para um botao"); // the same text: nothing changed
+    h.frames(3);
+    check(probe->laidOut == before, "setting the same text again asks for no layout");
+    box->removeChild(second);
+    h.frame();
+    check(probe->laidOut == before + 1, "removing a child takes one layout pass");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -276,6 +333,7 @@ int main(int argc, char** argv)
     RUN(testWaveformViewButtons);
     RUN(testFloatWindowSettersLayOut);
     RUN(testCollapsibleHintIgnoresItsRect);
+    RUN(testLayoutRunsByItself);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

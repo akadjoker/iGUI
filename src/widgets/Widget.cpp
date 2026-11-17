@@ -819,8 +819,14 @@ void Widget::removeChild(Widget* child)
         // Out of the tree now; the memory goes when the frame phase that may be running (a
         // handler removing the widget it runs in) is over.
         app.deleteLater(removed);
+        invalidateLayout();
     }
     markDirty();
+}
+
+void Widget::invalidateLayout()
+{
+    if (WidgetApp* app = WidgetApp::existing()) app->requestLayout();
 }
 
 void Widget::moveChild(Widget* child, int toIndex)
@@ -833,6 +839,7 @@ void Widget::moveChild(Widget* child, int toIndex)
     if (toIndex > static_cast<int>(children_.size())) toIndex = static_cast<int>(children_.size());
     children_.insert(children_.begin() + toIndex, child);
     markDirty();
+    invalidateLayout();
 }
 
 Rect Widget::absoluteRect() const

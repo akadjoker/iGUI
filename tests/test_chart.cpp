@@ -85,7 +85,9 @@ struct Bench
         io.deltaTime = 1.0f / 60.0f;
         stage = app.addStage("chart");
         app.setStage("chart", TransitionType::None);
-        chart = stage->createChild<Chart>();
+        // in a holder that keeps the rectangle the test gives it (a direct child of the stage is laid out to
+        // the whole window whenever a layout pass runs)
+        chart = stage->createChild<Widget>()->createChild<Chart>();
         chart->setRect({ 10.0f, 20.0f, w, h });
     }
     ~Bench()

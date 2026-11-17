@@ -27,8 +27,10 @@ Label::Label(const String& text)
 
 void Label::setText(const String& t)
 {
+    if (text_ == t) return;
     text_ = t;
     markDirty();
+    invalidateLayout();
 }
 void Label::setColor(const Color& c)
 {
@@ -168,8 +170,10 @@ Button::Button(const String& text)
 
 void Button::setText(const String& t)
 {
+    if (text_ == t) return;
     text_ = t;
     markDirty();
+    invalidateLayout();
 }
 void Button::setAlign(TextAlign a)
 {
@@ -635,8 +639,10 @@ CheckBox::CheckBox(const String& text)
 
 void CheckBox::setText(const String& t)
 {
+    if (text_ == t) return;
     text_ = t;
     markDirty();
+    invalidateLayout();
 }
 void CheckBox::setChecked(bool c)
 {

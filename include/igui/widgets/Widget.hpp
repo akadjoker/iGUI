@@ -578,6 +578,7 @@ public:
         child->parent_ = this;
         children_.push_back(child);
         markDirty();
+        invalidateLayout();
         return child;
     }
 
@@ -654,7 +655,9 @@ public:
     /// @brief Set widget visibility.
     void setVisible(bool v)
     {
+        if (visible_ == v) return;
         visible_ = v;
+        if (!layoutNeutral_) invalidateLayout();
     }
     /// @brief Check if the widget is visible.
     bool isVisible() const
@@ -718,6 +721,14 @@ public:
 
     // ── Layout ────────────────────────────────────────────────────────────
     virtual void layout();
+    /// @brief Ask for a layout pass on the next paint(): something that rectangles depend on has
+    ///        changed (a child added, removed or moved, a widget shown or hidden, margins, stretch,
+    ///        alignment, spacing or padding, the text of a widget whose size hint follows its text).
+    ///        The setters that change those call it themselves; a widget of your own whose size hint
+    ///        changes calls it from the setter that changed it. It only raises a flag of the manager
+    ///        (the layout runs once, in the next paint, however many calls came before it), so an
+    ///        idle frame does no layout work.
+    void invalidateLayout();
 
     // ── Scroll offset (overridden by ScrollView) ──────────────────────────
     // Returns how much this widget's children are scrolled (dx, dy).
@@ -1022,24 +1033,28 @@ public:
     {
         margins_ = m;
         markDirty();
+        invalidateLayout();
     }
     /// @brief Set uniform margins.
     void setMargins(float all)
     {
         margins_ = Edges(all);
         markDirty();
+        invalidateLayout();
     }
     /// @brief Set vertical and horizontal margins.
     void setMargins(float tb, float lr)
     {
         margins_ = Edges(tb, lr);
         markDirty();
+        invalidateLayout();
     }
     /// @brief Set individual margins.
     void setMargins(float t, float r, float b, float l)
     {
         margins_ = Edges(t, r, b, l);
         markDirty();
+        invalidateLayout();
     }
     /// @brief Get the current margins.
     const Edges& margins() const
@@ -1052,6 +1067,7 @@ public:
     {
         layoutAlign_ = a;
         markDirty();
+        invalidateLayout();
     }
     /// @brief Get cross-axis alignment.
     Align layoutAlign() const
@@ -1064,6 +1080,7 @@ public:
     {
         stretch_ = s;
         markDirty();
+        invalidateLayout();
     }
     /// @brief Get the stretch factor.
     float stretch() const
@@ -1085,6 +1102,9 @@ protected:
     bool tabStop_ = true;
     bool dirty_ = true;
     bool scrollable_ = true; // affected by parent's scroll offset
+    // Showing or hiding it moves nothing: an overlay its parent draws and places itself (the grabber of a
+    // SpinSlider, which appears under the pointer), so setVisible does not ask for a layout pass.
+    bool layoutNeutral_ = false;
 
     // Layout
     Edges margins_;
@@ -1165,6 +1185,7 @@ public:
     void setSpacing(float s)
     {
         spacing_ = s;
+        invalidateLayout();
     }
     float spacing() const
     {
@@ -1178,18 +1199,22 @@ public:
     void setPadding(const Edges& e)
     {
         padding_ = e;
+        invalidateLayout();
     }
     void setPadding(float all)
     {
         padding_ = Edges(all);
+        invalidateLayout();
     }
     void setPadding(float tb, float lr)
     {
         padding_ = Edges(tb, lr);
+        invalidateLayout();
     }
     void setPadding(float t, float r, float b, float l)
     {
         padding_ = Edges(t, r, b, l);
+        invalidateLayout();
     }
     const Edges& padding() const
     {
@@ -1199,6 +1224,7 @@ public:
     void setMainAlign(MainAlign a)
     {
         mainAlign_ = a;
+        invalidateLayout();
     }
     MainAlign mainAlign() const
     {
