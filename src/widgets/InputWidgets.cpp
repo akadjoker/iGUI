@@ -426,15 +426,15 @@ float SpinBox::buttonWidth() const
     return rect_.h;
 }
 
-String SpinBox::formatValue() const
+const String& SpinBox::formatValue() const
 {
     char buf[64];
     snprintf(buf, sizeof(buf), "%.*f", decimals_, static_cast<double>(value_));
-    String result;
-    if (!prefix_.empty()) result += prefix_;
-    result += buf;
-    if (!suffix_.empty()) result += suffix_;
-    return result;
+    valueText_.clear(); // keeps its room: a value that does not fit the small string is not allocated again in each frame
+    if (!prefix_.empty()) valueText_ += prefix_;
+    valueText_ += buf;
+    if (!suffix_.empty()) valueText_ += suffix_;
+    return valueText_;
 }
 
 SpinBox::HitZone SpinBox::hitZone(float localX) const
@@ -500,7 +500,7 @@ void SpinBox::paint(PaintContext& ctx)
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
-    String txt = formatValue();
+    const String& txt = formatValue();
     float tw = ctx.font.GetTextWidth(txt.c_str());
     float asc = ctx.font.GetAscender();
     float tx = abs.x + bw + (abs.w - 2 * bw - tw) * 0.5f;
@@ -510,7 +510,7 @@ void SpinBox::paint(PaintContext& ctx)
     const float room = abs.w - 2 * bw - 8.0f;
     if (tw <= room) ctx.font.Print(txt.c_str(), tx, ty);
     else
-        ctx.printElided({ abs.x + bw + 4.0f, abs.y, room, abs.h }, txt, ty, asc);
+        ctx.printElided({ abs.x + bw + 4.0f, abs.y, room, abs.h }, txt, ty, asc, valueMemo_);
     if (overrideFont_) ctx.popFont();
 
     // Border

@@ -298,8 +298,10 @@ private:
         Value
     };
     HitZone hitZone(float localX) const;
-    String formatValue() const;
+    const String& formatValue() const; // into valueText_, which keeps its room from one frame to the next
     float buttonWidth() const;
+    mutable String valueText_;
+    ElideMemo valueMemo_; // what paint worked out for a value wider than the room between the buttons (cut to it)
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

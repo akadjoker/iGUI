@@ -126,6 +126,19 @@ void testProgressBarTextDoesNotAllocate()
     check(allocsOfAFrame(h) == 0, "a ProgressBar whose text is wider than the bar");
 }
 
+void testSpinBoxTextDoesNotAllocate()
+{
+    printf("an idle frame with a SpinBox whose value does not fit does not allocate\n");
+    Harness h(200.0f, 120.0f);
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    SpinBox* spin = box->createChild<SpinBox>(0.0f, 1000000.0f, 123456.0f, 1.0f);
+    spin->setPrefix("preco: ");
+    spin->setSuffix(" euros e centimos de euro");
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "a SpinBox whose value, with its prefix and suffix, is wider than the room between its buttons");
+}
+
 } // namespace
 
 int main()
@@ -134,6 +147,7 @@ int main()
     testTextFieldsDoNotAllocateInAnIdleFrame();
     testSplitButtonTextDoesNotAllocate();
     testProgressBarTextDoesNotAllocate();
+    testSpinBoxTextDoesNotAllocate();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
