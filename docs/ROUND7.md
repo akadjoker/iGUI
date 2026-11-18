@@ -195,7 +195,7 @@ Dependencias: containers 34169bc e zen_plataform db76a13 (o iGUI), em
 UBSan e float-cast-overflow sem recuperar, e a opcao `IGUI_FAIL_ON_SANITIZER_REPORT`), `PASS hash` (os quatro valores de `bench/retained/draw.hash`, nenhum regravado: editor
 87b1fe59ac36adb1 com 300 e com 3000 clipes, piano roll 7956122198be0670, graficos 957c5363d01cdd4a); "4 stages, 0 failed". O `igui_zen_lifecycle` saiu `Skipped` ("no window
 here, skipped": o Xvfb da prova nao deu janela) no release; repetido tres vezes no mesmo build: `Skipped`, `Passed` e `Skipped` (visto: como as rondas 4b, 5 e 6 ja notaram, e
-independente do codigo). O `igui_retained_round7` demora 148 s (a corrida de 0a9f5b6, 149 casos) sob o ASan (150 casos num processo; o ctest tem TIMEOUT 600).
+independente do codigo da biblioteca: era o Xvfb a fazer reset, seccao 9). O `igui_retained_round7` demora 148 s (a corrida de 0a9f5b6, 149 casos) sob o ASan (150 casos num processo; o ctest tem TIMEOUT 600).
 
 **`std::`**: nenhuma contagem por ficheiro subiu (linhas com `std::` em 43e1ae5 e na ponta, ficheiros mexidos): so AudioWidgets.cpp desceu, 68 -> 67 (o `std::clamp` do LinearKnob passou a `clamp`);
 os cabecalhos e os testes novos 0.
@@ -256,12 +256,105 @@ contra isto, nem o backend GL com janela real (os testes correm o modo GL do bac
 
 ## 8. O que ficou de fora, e o que desconfio
 
-- A bancada (`igui_retained_bench`) nao se correu para tempos: a maquina esteve com carga 12 a 26 (outros agentes) durante toda a ronda e os tempos de uma frame ociosa
+- (Corrigido na seccao 9: bancada e aplicacoes correram-se depois.) A bancada (`igui_retained_bench`) nao se correu para tempos: a maquina esteve com carga 12 a 26 (outros agentes) durante toda a ronda e os tempos de uma frame ociosa
   varrem 10 a 100% entre corridas; as instrucoes por frame (o que nao depende do ruido) sao iguais nos cinco arneses da ronda 6, e nenhum caminho de frame ou de paint foi
   tocado (so caminhos de sinal). O que se acrescenta a um sinal e a chamada `WidgetApp::instance()` e a comparacao do contador (em `emitGone` e nos `hasGone`), um inteiro a
   subir e a descer por tecla ou clique no CodeEditor.
-- Nao se correu o ZenVideo, o ZenMix, o ZenDAW nem as outras aplicacoes contra esta ponta.
-- O `igui_zen_lifecycle` saiu `Skipped` na primeira passagem do release (o Xvfb de prova nao deu janela), como ja se disse na ronda 4b, 5 e 6; ver a secao 6.
+- Nao se correu o ZenVideo, o ZenMix, o ZenDAW nem as outras aplicacoes contra esta ponta (o ZenVideo correu-se depois: seccao 9; as outras nao).
+- (A causa e o arranjo estao na seccao 9.) O `igui_zen_lifecycle` saiu `Skipped` na primeira passagem do release (o Xvfb de prova nao deu janela), como ja se disse na ronda 4b, 5 e 6; ver a secao 6.
 - O Timeline, o PropertyGrid e o CodeEditor ficaram a meio (secao 3): quem precisar de tirar um deles de um sinal que nao esta na lista usa `WidgetApp::callDeferred`.
 - Os testes do modo 0 ("dentro de uma frame") so vem o que o despachante deixa vir: um gesto que nao o alcanca (o Gizmo3D, os popups do PropertyGrid, os da cor, a Console, os
   dialogos) ficou por correr.
+
+## 9. Verificacao depois do 745fcc6 (o que se correu e se viu; commits eba3ba5 e seguintes so mexem em testes e no script do Xvfb)
+
+Feita por outro agente sobre o ramo como estava (745fcc6), sem tocar no codigo da biblioteca (a contagem de `std::` nao mudou: nenhum ficheiro de `src`, `include`
+ou `adapters` foi tocado). Tudo em scope de 4G, `-j3`, Xvfb proprio, HOME e XDG em scratch. Ficheiros em `<SP>/ig8` (scratchpad da sessao).
+
+**`tools/check.sh --base 43e1ae5 --jobs 3` na ponta 745fcc6** (`<SP>/ig8/check_tip.out`, logs em `<SP>/ig8/chk_tip`, 10 minutos): `PASS nostd`, `PASS release` (47 de 47, 1 skipped:
+o `igui_zen_lifecycle`), `PASS asan` (47 de 47, 1 skipped: o mesmo), `PASS hash` (os quatro valores de `draw.hash`, iguais); "4 stages, 0 failed". Na ponta eba3ba5 (depois do arranjo do lifecycle), a mesma corrida (`<SP>/ig8/check_final.out`, 6,5 minutos, CPUs 0 a 5): `PASS nostd`, `PASS release` (47 de 47, **0 skipped**), `PASS asan` (47 de 47, 0 skipped),
+`PASS hash` (os mesmos quatro valores); "4 stages, 0 failed"; o `igui_zen_lifecycle` passou nos dois estagios (2,05 s e 6,22 s) e 15 vezes seguidas pelo ctest (`--repeat until-fail:15`).
+
+**O `igui_zen_lifecycle` Skipped: a causa e o arranjo (eba3ba5).** Visto com o gdb (ponto de paragem no `error_set` da zen_plataform): "cannot open the X display" no `platform_init` da 2a a
+9a criacao da aplicacao. O Xvfb faz RESET quando o ultimo cliente se desliga e nesse instante recusa ligacoes; o teste cria e destroi a aplicacao 8 vezes (o `platform_shutdown` fecha
+a ligacao) e a criacao seguinte apanha a janela do reset: o teste dizia "no window here, skipped" (77). Nao era do codigo. Medido: o binario de antes com o `xvfb-test.sh` de antes, 20
+corridas: 11 passam e 9 saem com 77; com `-noreset` no Xvfb (`tools/xvfb-test.sh`), 20 de 20 passam. O teste so deixa a PRIMEIRA criacao dizer "no window here"; uma que falha depois
+escreve FAIL e sai com 1 (o binario novo com o script velho: 3 passam e 7 falham, com "create number N failed", em vez de skip). Os outros testes de janela (`igui_zen_input`,
+`igui_zen_sidetabs`) usam o mesmo script e nao se saltaram nas corridas vistas (por leitura: so este destroi e recria a aplicacao dentro do mesmo processo).
+
+**Instrucoes por frame, as cinco do `ic` da ronda 7**: 695996, 328262, 824751, 973805 e 266955, iguais nas duas arvores (43e1ae5 e esta), outra vez.
+
+**Instrucoes dos caminhos de sinal** (o `markDirty` passou para antes do sinal em cerca de quarenta sitios, e os `hasGone`/`emitGone` custam uma leitura do contador): contador por ptrace,
+um evento ou uma chamada por regiao (`<SP>/ig8/ic/sig_ic.cpp`: 15 cenarios, 122 gestos: clique e tecla do CheckBox, TextEdit e TextInput, barra de rolagem, Timeline (clique, arrasto, regua,
+passagem do rato), ComboBox, TreeView, DataGrid, TreeGrid, Knob e Fader, SpinSlider (`setValue`, `setMax`, `setPage`), CodeEditor, Chart, ToolBar, Splitter e TabLayout), 43e1ae5 contra a ponta,
+CPU 4 (nao depende do ruido). Iguais em 62 dos 122; nos outros 60 a diferenca vai de -23 a +82 instrucoes (`<SP>/ig8/ic/sig_run2.txt`, tabela com `sigtab.py`):
+
+| caminho | 43e1ae5 | ponta | |
+|---------|---------|-------|--|
+| CodeEditor, uma tecla escrita | 4449 / 24471 / 6864 | +82 | `DeletionHold` (o contador sobe e desce) e o `hasGone` a seguir |
+| TextEdit, uma tecla escrita (`textChanged`, `cursorMoved`) | 25489 | +57 | `notifyEdited` e o `hasGone` a seguir a insercao |
+| TextEdit, Return | 3924 | +58 | |
+| TreeGrid, uma tecla (Left, Right, Down), um clique no cabecalho | 1469 a 2101 | +35 | o `hasGone` no fim do `onKeyPress` |
+| Chart, rato sobre uma barra | 3075 | +27 | |
+| ToolBar, botao; Splitter, premir | 2392; 1988 | +26; +28 | |
+| ComboBox, premir na lista (a escolha) | 1475 | +27 | |
+| TreeView, premir uma linha | 2466 | +23 | |
+| CheckBox, largar (`toggled` e o evento "toggle") | 2144 | +7 | |
+| DataGrid, premir uma linha | 2888 | -23 | o `markDirty` antes do sinal deixa o compilador juntar caudas |
+| setters (`setSelectedIndex`, `setTrackMuted`, `Knob::setValue`, `SpinSlider::setStep`): 62 a 79 instrucoes | | -4 | |
+| `TabLayout::setCurrentIndex`: 89 | | +5 | |
+
+O maior em percentagem num caminho com mais de cem instrucoes: +2,4% (TreeGrid, 35 de 1469); nos caminhos de 60 a 90 instrucoes, -4 a +5 instrucoes (-6,5% a +5,6%: quatro ou cinco instrucoes).
+Nenhum caminho de clique, arrasto ou escrita ficou mais lento de forma que se note: o maior custo absoluto e 82 instrucoes por tecla no CodeEditor (de 4449 a 24471).
+
+**Bancada** (`igui_retained_bench`, 140 linhas, o mesmo `bench/retained/RetainedBench.cpp` dos dois lados, Release, `-ffile-prefix-map`, os dois binarios dao os mesmos quatro hashes; fixo ao CPU 10,
+corridas alternadas): 43e1ae5 reconstruida (`<SP>/ig6/bench/bin/b43`, a antiga `tip` era de antes do f7dc0ac) contra a ponta (`bin/r7`).
+- Passagem completa, 5 pares alternados (`runs/r7p_*`), com a maquina a carga 14 a 23 (o `deform` de outro agente ocupava 5 CPUs): **123 das 140 linhas ficam a mais de 3%, nos dois sentidos**
+  (de -41% a +55%) e a variacao entre corridas do MESMO binario e de 20 a 150%: e ruido, nao codigo (as linhas do Chart, dos grids e do PianoRoll, cujo caminho de frame a ronda 7 nao mexeu, andam -15% a -40%
+  nesta passagem e as dos widgets, +10% a +50%, e o sentido muda de uma passagem para a outra). Nao se le.
+- Corridas focadas, 8 pares alternados com segundos de intervalo (o `fbench.sh` da ronda 6), com a maquina quase quieta (carga 3 a 6; `runs/f7_*`): `input/` (15 linhas: a frame ociosa de uma janela com um
+  TextEdit, uma ListBox de 1000 itens e uma DataGrid de 1000 linhas, o rato a passar por oito widgets, teclas e escrita): no MINIMO a ponta sai **+0,2% a +0,7%** (+0,2 us de 36,5 a 80) em TODAS as linhas, ate nas do
+  rato sobre um label; o MESMO binario contra uma copia de si proprio, no mesmo metodo, da -0,4% a 0,0% (o chao do ruido); as medianas andam 46 a 60% (ruido da maquina: so o minimo se le).
+  `chart/line_100k_hover` -0,1% (6 pares), `widget/checkbox_per_widget` 0,0%. As instrucoes da MESMA cena (`<SP>/ig8/ic/input_ic.cpp`: 37 regioes, as frames ociosas, os oito passeios do rato, as teclas) sao IGUAIS ao
+  instrucao em todas menos a escrita de um caractere no TextEdit (+57 de 448744) e o Backspace (+24 de 447517). O +0,5% de `input/` e por isso, com as instrucoes iguais, colocacao do codigo (a ronda 5 e a 6 ja viram
+  o mesmo: +-9% por 400 bytes de NOP num objecto sem relacao, e a construcao alinhada fazia-o desaparecer). A alinhada NAO se correu desta vez: e uma conclusao por exclusao (instrucoes iguais, chao do ruido
+  mais pequeno), nao uma prova.
+
+**Revisao das mudancas de comportamento (item 2 do pedido): nenhuma aplicacao dos donos depende da ordem antiga.** Procurou-se (so leitura) em ZenVideo, ZenMix, ZenDAW, ZenHuman, ZenStage, coco, deform, animator,
+zenforms, MapShape, mcpchat, ZenMusic e ZenVoice (1346 ficheiros `.cpp`/`.hpp`/`.h`, sem `build*`, `third_party` e `external`):
+- Tratadores dos sinais que mudaram: ZenVideo `src/Editor.cpp` 147, 221, 290, 342, 357, 386, 512, 539, 558 a 650 (a Timeline: `onPlayheadChanged`, `onTrackMuteChanged`, `onClipContextMenu`, `onClipSelected`,
+  `onEnvelopeChanged`, `onTrackSelected`, `onClipChanged`), `EditorOverlay.cpp` 144, `EditorSettings.cpp` 222 a 379; ZenMix `Editor.cpp` 202, 302 a 428, 570 a 634, `EditorFxPanel.cpp` 138 a 210,
+  `EditorProperties.cpp` 158 a 259, `AboutPanel.cpp` 298, `SongList.cpp` 31; ZenDAW `ui/App.cpp` 235 a 329, `PatternsPage.cpp` 229 a 231. Lidos: nenhum le o estado que a mudanca mexe (o `markDirty`, o
+  `e.consumed` e o `requestLayout` a antes do sinal nao se veem de um tratador; os que mudam a arvore usam `later`/`callDeferred`).
+- Eventos globais "toggle" e "change" que o CheckBox e o ProgressBar deixam de disparar quando o tratador os tirou: `fireEvent` e `WidgetApp::on("...")` nao existem em nenhuma aplicacao (so o `.on(` do
+  script do zenforms, que e dele: `zenforms/runtime/src/Script.cpp` 589, e liga a sinais proprios).
+- `AssetBrowser` (`onSelect`/`onOpen` com uma copia do item): nenhuma aplicacao o usa.
+- `DataGrid`/`TreeGrid::commitEdit` (estado da edicao limpo antes de `cellEdited`): so o zenforms, `runtime/src/Reflect.cpp` 845 (`connectGridEdited`: o tratador nao recebe nem le a celula) e 861.
+- `TreeGrid`/`TreeView` `nodeExpanded`/`nodeCollapsed` (a lista plana refeita ANTES do sinal no TreeGrid e `flatDirty_` antes no TreeView): nenhuma aplicacao liga a eles; o `Node::setExpanded` do
+  TreeGrid marca `flatDirty_`, por isso um tratador que acrescente filhos continua a ser visto.
+- `TabLayout::tabClosed` (o `e.consumed` antes do sinal): `zenforms/designer/Designer.cpp` 274 (`TabBar`, que e um TabLayout): o tratador chama `closeDocument`, que faz `tabs_->removeTab(index)` e o
+  TabLayout faz `removeTab(i)` outra vez depois do sinal; e a ordem de sempre (emite, depois tira) e nao mudou; o separador tirado duas vezes parece um defeito de sempre do zenforms (lido, nao corrido), que carrega uma
+  iGUI de 4 de Novembro. Nao se mexeu.
+- As aplicacoes `animator`, `coco`, `deform`, `ZenHuman`, `ZenStage`, `zenforms` carregam copias antigas da iGUI (de Outubro a 4 de Novembro): so notam isto quando as actualizarem; ZenVideo (175a023), ZenMix (73946ea) e ZenDAW (2e023fd) tambem carregam copias anteriores a esta ponta.
+
+**As aplicacoes (item 3), ZenVideo e uma de zen_ui, imagens lidas.**
+- ZenVideo (copias em `<SP>/ig8/zv/{main,new}`; `main` = iGUI 43e1ae5 + zen_plataform beb1db0, `new` = esta ponta + zen-ui-clip; Release, o LTO dele, `-j3`; o `main.cpp` das copias ganhou um condutor de
+  cena, `ZV_SCRIPT`, que mexe o ponteiro pelo `ZenApp::setInputHook`; a pasta do dono nao foi tocada): 14 cenas num Xvfb proprio, `ZENVIDEO_NULL_AUDIO=1`: o arranque a 1440x860 e a 1000x600, com a pasta de
+  32 clipes (a lista de media com barra, a timeline cheia) a 1440x860 e a 1000x600, o menu File aberto, o menu do botao direito de um clipe, o combo da biblioteca aberto, a lista de media rolada, o
+  FileDialog de "Import files...", o de "Import folder...", "Open project..." (so mostra o aviso de projecto por guardar, nao abre janela), um clipe arrastado na timeline (a meio e solto), um clique num clipe: **0 pixeis diferentes
+  nas 14** (`<SP>/ig8/shots/zv/main_*.ppm` e `new_*.ppm`; vistas: `new_montage.png` (combo, lista rolada, timeline a meio de um arrasto), `new_dialog2.png` (o FileDialog), `t_probe.png` (os dois menus)). O
+  ZenVideo nao usa a zen_ui (`zui_`): so compila.
+- Seis cenas de widgets desenhadas em processo pelo rasterizador por software de cada arvore (`<SP>/ig8/sc/scenes.cpp`: um TextEdit com as duas barras e uma TreeView com a sua, um combo aberto, um menu
+  de contexto com submenu, uma ListBox e uma DataGrid rolada, um InputBox e um MessageBox, uma Timeline com um clipe a meio de um arrasto): **0 pixeis diferentes** entre 43e1ae5 e a ponta (`<SP>/ig8/sc/out`,
+  vistas em `r7_montage.png`).
+- zen_ui: `demo_dock_pixel` (grupos, lista com barra, combo, barra de menus, barra de estado) e `demo_widgets_pixel` (janelas, lista, combo, barra de menus, dialogo), guiados por XTest (cliques e roda por um
+  Xvfb proprio, `<SP>/ig8/xdrive.py`), main contra a ponta do zen-ui-clip: o dock, 9 cenas (cursor numa linha, clique, menu File aberto e fechado, combo aberto, roda, menu Window): 0 pixeis diferentes. O
+  widgets: 5 cenas iguais (lista rolada, combo aberto, janela arrastada) e **uma com 14445 pixeis diferentes: o dialogo de ficheiros (Ficheiro, Abrir) tinha a lista de ficheiros VAZIA na ponta 873fc45** (`<SP>/ig8/shots/zp/B5_main_over_tip.png`,
+  vista). Era uma regressao do ramo zen-ui-clip: o dialogo poe o clip da barra lateral e o do cabecalho por atribuicao (`ui->clip = sb`, `= hr`) e deixa o ultimo em vigor; o `zui_group_begin` passou a cortar
+  o seu clip pelo que esta em vigor e o corte dava um rectangulo vazio. O `test_dialog_flow` nao a via (os comandos de texto estavam todos na lista de desenho, com o clip vazio). Arranjado na zen_plataform
+  (4309d99: `ui->clip = panel` antes do grupo `dlg_files`; teste novo `text_visible` nas tres vistas, 4 verificacoes que falham antes e passam depois). Com o arranjo o dialogo mostra os ficheiros e so difere da
+  main no fundo e no contorno do grupo da lista (`<SP>/ig8/shots/zp/D_icons_list_main_tip.png`: o grupo tem `ZUI_GROUP_BORDER` e na main o contorno e o fundo pintavam-se com o clip velho e nao se viam).
+
+**O que ficou por fazer (pedido do dono: so a verificacao).** Os itens 4 e 5 do pedido nao se fizeram: os sinais que a seccao 3 diz por mexer (Timeline: keyframe, envelope, redimensionar, grupo, Grab; PropertyGrid: `spinChanged`,
+`spinStep`, `commitEdit`, os popups; Console, SymbolOutline, FileDialog e dialogos, Gizmo3D, VideoCanvas, CurveEditor, GradientEditor, SpinSlider) continuam por mexer, o buraco do `hasGone` (um widget novo no mesmo endereco)
+tambem, e o `zui_statusbar_begin` e o teste do widget rolado para fora de um grupo (zen_plataform, `docs/SUSPEITAS.md`).
