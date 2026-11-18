@@ -6,8 +6,11 @@
 #   1. nostd    no new `std::` and no new `#include <...>` in what src/, include/ and adapters/ gained
 #               since the base revision (the project uses its own `ct` containers)
 #   2. release  Release build, every test (ctest, one at a time)
-#   3. asan     Debug build with AddressSanitizer + UndefinedBehaviorSanitizer, every test; a finding of the
-#               undefined-behaviour sanitizer stops the program (-fno-sanitize-recover=undefined) and fails the test
+#   3. asan     Debug build with AddressSanitizer + UndefinedBehaviorSanitizer + float-cast-overflow (a float that is NaN or
+#               too big for the integer it is cast to; GCC does not put it in the `undefined` group), every test; a finding of
+#               either stops the program (-fno-sanitize-recover) and fails the test, and a test that exits with 0 but has a
+#               sanitizer report in its output fails too (IGUI_FAIL_ON_SANITIZER_REPORT: ctest, without -V, shows nothing of a
+#               test that passed, and a warning that did not stop the program was never seen)
 #   4. hash     the checksum of what the bench draws for the editor window and for the piano roll (igui_retained_bench --hash)
 #               against the reference in bench/retained/draw.hash: a change that is only meant to make
 #               drawing faster, or to fix something outside the editor window, must not move it
@@ -153,9 +156,9 @@ fi
 
 # ── 3. sanitizers ────────────────────────────────────────────────────────────
 if ! skipped asan; then
-    san="-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer"
+    san="-fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=undefined,float-cast-overflow -fno-omit-frame-pointer"
     ctest_stage asan "$build/asan" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="$san" -DCMAKE_C_FLAGS="$san" \
-        -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+        -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined,float-cast-overflow" -DIGUI_FAIL_ON_SANITIZER_REPORT=ON
 fi
 
 # ── 4. what the bench draws ──────────────────────────────────────────────────

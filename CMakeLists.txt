@@ -12,6 +12,7 @@ if(IGUI_NO_RTTI AND NOT MSVC)
 endif()
 
 option(IGUI_BUILD_TESTS "Build iGUI core tests" ON)
+option(IGUI_FAIL_ON_SANITIZER_REPORT "A test whose output has a sanitizer report fails even when it exits with 0 (ctest hides the output of a test that passed, so a warning that does not stop the program is never seen; tools/check.sh turns it on for its sanitizer stage)" OFF)
 option(IGUI_BUILD_FONT "Build the optional embedded font atlas module" OFF)
 set(IGUI_FONT_INPUT "" CACHE FILEPATH
     "Optional TTF/OTF file embedded as iGUI's default font (defaults to Nuklear's Roboto)")
@@ -895,3 +896,14 @@ endif()
 foreach(igui_test_target IN LISTS IGUI_TEST_TARGETS)
     igui_test_keep_asserts(${igui_test_target})
 endforeach()
+
+# Um relatorio de um sanitizador na saida de um teste que sai com 0 e um teste que falha: o ctest nao mostra a saida de
+# um teste que passou, e um aviso que nao para o programa (UBSan sem -fno-sanitize-recover) nunca se via. Tem de correr
+# depois de todos os testes existirem (so apanha os desta pasta).
+if(IGUI_FAIL_ON_SANITIZER_REPORT AND IGUI_BUILD_TESTS)
+    get_directory_property(igui_all_tests TESTS)
+    if(igui_all_tests)
+        set_tests_properties(${igui_all_tests} PROPERTIES
+            FAIL_REGULAR_EXPRESSION "runtime error:;ERROR: AddressSanitizer;ERROR: LeakSanitizer;SUMMARY: [A-Za-z]*Sanitizer")
+    endif()
+endif()
