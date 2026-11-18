@@ -255,6 +255,82 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  PopupPanel — a popup that holds widgets
+//
+//    auto* panel = new PopupPanel(LayoutDir::Vertical);   // the application's: made once, shown many times
+//    panel->createChild<Slider>();
+//    TextInput* name = panel->createChild<TextInput>();
+//    panel->setFocusTarget(name);
+//    panel->openBelow(button);                            // or panel->open(x, y)
+//
+//  What the popup system does for a Menu it does for this: it is drawn over everything, a click outside
+//  closes it (a click on the owner, the widget it was opened for, does not: that widget toggles it with
+//  close()), and so does opening another popup. On top of that a PopupPanel gives the widgets in it what they
+//  have in the window: the press on a widget that takes the focus focuses it, Tab and Shift+Tab walk them
+//  and stay inside the panel, Escape closes it, and the focus it takes when it opens goes back to the widget
+//  that had it when it closes (WidgetApp::lendFocus).
+//
+//  Who owns what: the application owns the panel (showPopup(panel, owner, false): the popup system never
+//  deletes it) and the panel owns its children, as any widget does. A panel that is deleted while it is open
+//  goes away cleanly. A panel is laid out when it opens, at its size hint (the children's), moved to stay in
+//  the window; call layout() again if the children change while it is open.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class PopupPanel : public BoxLayout
+{
+public:
+    IG_WIDGET_CLASS(PopupPanel, BoxLayout);
+
+    explicit PopupPanel(LayoutDir dir = LayoutDir::Vertical);
+
+    /// @brief Open the panel with its top left corner at (x, y), in window coordinates, moved to
+    ///        stay inside the window. @p owner is the widget the panel was opened for (a press on it
+    ///        does not close the panel, so that it can toggle it). Opening a panel that is open
+    ///        moves it.
+    void open(float x, float y, Widget* owner = nullptr);
+    /// @brief Open the panel under @p anchor (above it when there is no room below), left edges
+    ///        aligned, with @p anchor as the owner.
+    void openBelow(Widget* anchor);
+    /// @brief Close the panel (it fades out for a tenth of a second, as popups do). Nothing happens
+    ///        when it is not open.
+    void close();
+    /// @brief True from open() until close() or whatever else closes the popup (a click outside,
+    ///        another popup).
+    bool isOpen() const;
+
+    /// @brief The child that takes the focus when the panel opens (a text field to type in);
+    ///        nullptr (the default) gives it to the panel, which is enough for Escape to work.
+    ///        It must be a descendant of the panel.
+    void setFocusTarget(Widget* w)
+    {
+        focusTarget_ = w;
+    }
+    Widget* focusTarget() const
+    {
+        return focusTarget_;
+    }
+
+    /// @brief Emitted once for each opening, when the popup system lets the panel go: a tenth of a
+    ///        second after close() or the click that closed it (the fade out), or at once when
+    ///        another popup takes its place. isOpen() is false by then (and from the moment of
+    ///        close()). The handler may delete the panel, and should not open a popup. Not emitted
+    ///        when the panel is deleted while it is open.
+    Signal<> closed;
+
+    void paint(PaintContext& ctx) override;
+    void onKeyPress(KeyEvent& e) override;
+    void resetPopupState() override;
+    bool popupHoldsWidgets() const override
+    {
+        return true;
+    }
+
+private:
+    Widget* focusTarget_ = nullptr;
+    bool shown_ = false; // opened and not yet let go by the popup system: the closed signal is owed
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  MenuBar — horizontal bar with top-level menus
 //
 //    auto* bar = root->createChild<MenuBar>();

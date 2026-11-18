@@ -486,6 +486,10 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
         if (!popupHit && s_.popup_->popupContains(x, y)) popupHit = s_.popup_;
         if (popupHit)
         {
+            // a popup of widgets (PopupPanel): the press gives the focus to the widget under it that takes it
+            if (s_.popup_->popupHoldsWidgets() && popupHit->acceptsFocus() && popupHit->isEnabledInTree() &&
+                    popupHit != s_.focused_)
+                setFocused(popupHit);
             MouseEvent me = makeMouseEvent(x, y, btn);
             bubble(popupHit, me, &Widget::onMousePress);
             if (s_.popup_) s_.pressed_ = popupHit;
@@ -673,8 +677,12 @@ void WidgetApp::dropMouseFocus()
 void WidgetApp::focusNeighbor(Widget* from, bool backward)
 {
     ct::Vector<Widget*> focusable;
-    collectFocusable(s_.root_, focusable, from);
-    for (auto* fw: s_.floats_) collectFocusable(fw, focusable, from);
+    if (s_.popup_ && s_.popup_->popupHoldsWidgets()) collectFocusable(s_.popup_, focusable, from); // Tab stays in the popup
+    else
+    {
+        collectFocusable(s_.root_, focusable, from);
+        for (auto* fw: s_.floats_) collectFocusable(fw, focusable, from);
+    }
     if (focusable.empty()) return;
 
     auto it = std::find(focusable.begin(), focusable.end(), from);

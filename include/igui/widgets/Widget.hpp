@@ -776,6 +776,15 @@ public:
     {
     }
 
+    // A popup that holds widgets the person works in (PopupPanel) says so here: a press on one of its widgets
+    // that takes the focus gives it the focus, as in the window, and Tab and Shift+Tab walk the widgets of
+    // the popup and stay in it. A popup that does not (the default: a Menu, a list that closes at the first
+    // click) leaves the focus where it was.
+    virtual bool popupHoldsWidgets() const
+    {
+        return false;
+    }
+
     /// @brief Set whether parent scroll offset affects this widget.
     void setScrollable(bool s)
     {

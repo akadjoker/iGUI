@@ -604,3 +604,86 @@ void MenuBar::onMouseLeave()
     hoveredIdx_ = -1;
     markDirty();
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  PopupPanel
+// ═════════════════════════════════════════════════════════════════════════════
+
+PopupPanel::PopupPanel(LayoutDir dir)
+        : BoxLayout(dir)
+{
+    acceptsFocus_ = true; // the focus lives here when no child has it: Escape reaches the panel
+    setTabStop(false);    // but Tab goes between the children, not through the panel itself
+    scrollable_ = false;
+}
+
+void PopupPanel::open(float x, float y, Widget* owner)
+{
+    WidgetApp& app = WidgetApp::instance();
+    const Vec2f sz = sizeHint();
+    const float sw = static_cast<float>(app.width());
+    const float sh = static_cast<float>(app.height());
+    if (x + sz.x > sw) x = sw - sz.x;
+    if (y + sz.y > sh) y = sh - sz.y;
+    if (x < 0) x = 0;
+    if (y < 0) y = 0;
+    setRect(Rect(x, y, sz.x, sz.y));
+    layout();
+    if (isOpen()) return; // moved: it is shown, with the focus where it was put
+    app.showPopup(this, owner, false); // (this lets go of the panel if it was fading out: closed goes out for that opening)
+    shown_ = true;
+    app.lendFocus(this, focusTarget_ ? focusTarget_ : this);
+}
+
+void PopupPanel::openBelow(Widget* anchor)
+{
+    if (!anchor) return;
+    const Rect a = anchor->absoluteRect();
+    const Vec2f sz = sizeHint();
+    float y = a.y + a.h + 2.0f;
+    // no room below and room above: above
+    if (y + sz.y > static_cast<float>(WidgetApp::instance().height()) && a.y - 2.0f - sz.y >= 0.0f) y = a.y - 2.0f - sz.y;
+    open(a.x, y, anchor);
+}
+
+void PopupPanel::close()
+{
+    if (isOpen()) WidgetApp::instance().closePopup();
+}
+
+bool PopupPanel::isOpen() const
+{
+    return WidgetApp::instance().popup() == this;
+}
+
+void PopupPanel::resetPopupState()
+{
+    // Called when the popup system is done with the panel (retirePopup, which only compares the pointer to the panel
+    // afterwards, so a handler may delete it: nothing here touches the panel after the emit).
+    if (!shown_) return;
+    shown_ = false;
+    closed.emit();
+}
+
+void PopupPanel::onKeyPress(KeyEvent& e)
+{
+    if (e.key == ig::retained::Key::Escape)
+    {
+        close();
+        e.consumed = true;
+        return;
+    }
+    BoxLayout::onKeyPress(e);
+}
+
+void PopupPanel::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+    const auto& t = Theme::instance();
+    const Rect abs = absoluteRect();
+    ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, 255);
+    ctx.fill.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, true);
+    BoxLayout::paint(ctx);
+    ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
+    ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
+}

@@ -5,7 +5,9 @@
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
 
+#include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/MenuWidgets.hpp>
+#include <igui/widgets/TextInputWidgets.hpp>
 
 using namespace rh;
 
@@ -319,6 +321,241 @@ void testSubmenuAboutToShowRebuildsParent()
     delete menu;
 }
 
+// ---- item 15: a popup that holds widgets ----
+
+// A panel with a text field, a check box and a button, and a button in the window to open it from.
+struct PanelRig
+{
+    Harness h;
+    Button* anchor = nullptr;
+    Widget* other = nullptr; // a widget of the window that has the focus before the panel opens
+    PopupPanel* panel = nullptr;
+    TextInput* input = nullptr;
+    CheckBox* box = nullptr;
+    Button* ok = nullptr;
+    int okClicks = 0, closedCount = 0;
+    explicit PanelRig(float w = 420.0f, float hh = 300.0f) : h(w, hh, false)
+    {
+        anchor = h.root()->createChild<Button>("Open");
+        anchor->setRect(Rect(20.0f, 20.0f, 80.0f, 28.0f));
+        TextInput* field = h.root()->createChild<TextInput>();
+        field->setRect(Rect(20.0f, 80.0f, 160.0f, 26.0f));
+        other = field;
+        panel = new PopupPanel(LayoutDir::Vertical);
+        input = panel->createChild<TextInput>();
+        box = panel->createChild<CheckBox>("Loop");
+        ok = panel->createChild<Button>("Apply");
+        ok->clicked.connect([this]() { ++okClicks; });
+        panel->closed.connect([this]() { ++closedCount; });
+        h.frames(2);
+    }
+    ~PanelRig()
+    {
+        if (panel && panel->isOpen()) panel->close();
+        h.frames(20);
+        delete panel;
+    }
+    void settle()
+    {
+        h.frames(14); // opening and closing take a tenth of a second
+    }
+    static bool inside(const Rect& inner, const Rect& outer)
+    {
+        return inner.x >= outer.x - 0.01f && inner.y >= outer.y - 0.01f && inner.x + inner.w <= outer.x + outer.w + 0.01f &&
+               inner.y + inner.h <= outer.y + outer.h + 0.01f;
+    }
+};
+
+void testPopupPanelOpensAndPlaces()
+{
+    PanelRig r;
+    check(!r.panel->isOpen(), "a panel is not open until it is opened");
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    check(r.panel->isOpen() && WidgetApp::instance().popup() == r.panel, "open() shows the panel as the popup");
+    const Rect pr = r.panel->absoluteRect();
+    check(pr.x == 30.0f && pr.y == 120.0f, "it opens where it was told to");
+    const Widget::Vec2f hint = r.panel->sizeHint();
+    check(pr.w == hint.x && pr.h == hint.y && pr.w > 40.0f && pr.h > 60.0f, "at its size hint");
+    check(PanelRig::inside(r.input->absoluteRect(), pr) && PanelRig::inside(r.box->absoluteRect(), pr) &&
+                    PanelRig::inside(r.ok->absoluteRect(), pr),
+            "its children are laid out inside it");
+    check(r.input->absoluteRect().w > 40.0f && r.ok->absoluteRect().h > 10.0f, "and have a size");
+    check(r.input->absoluteRect().y < r.box->absoluteRect().y && r.box->absoluteRect().y < r.ok->absoluteRect().y,
+            "one under the other, in the order they were added");
+    r.panel->close();
+    r.settle();
+    check(!r.panel->isOpen(), "close() closes it");
+
+    // too near the corner: moved to stay in the window
+    r.panel->open(410.0f, 295.0f);
+    r.settle();
+    const Rect corner = r.panel->absoluteRect();
+    check(corner.x + corner.w <= 420.0f && corner.y + corner.h <= 300.0f && corner.x >= 0.0f && corner.y >= 0.0f,
+            "a panel opened near the corner of the window is moved to stay in it");
+    r.panel->close();
+    r.settle();
+
+    // openBelow: under the anchor, left edges aligned; above it when there is no room below
+    r.panel->openBelow(r.anchor);
+    r.settle();
+    const Rect a = r.anchor->absoluteRect();
+    check(r.panel->absoluteRect().x == a.x && r.panel->absoluteRect().y == a.y + a.h + 2.0f, "openBelow puts the panel under the widget");
+    check(WidgetApp::instance().popupOwner() == r.anchor, "with the widget as the owner of the popup");
+    r.panel->close();
+    r.settle();
+    r.anchor->setRect(Rect(20.0f, 250.0f, 80.0f, 28.0f));
+    r.panel->openBelow(r.anchor);
+    r.settle();
+    check(r.panel->absoluteRect().y + r.panel->absoluteRect().h <= r.anchor->absoluteRect().y,
+            "with no room below, openBelow puts it above the widget");
+    // opening an open panel moves it
+    r.panel->open(200.0f, 20.0f);
+    r.settle();
+    check(r.panel->isOpen() && r.panel->absoluteRect().x == 200.0f, "opening an open panel moves it");
+    r.panel->close();
+    r.settle();
+    check(r.closedCount == 4, "closed went out once for each of the four openings");
+}
+
+void testPopupPanelFocusKeysAndClicks()
+{
+    PanelRig r;
+    WidgetApp& app = WidgetApp::instance();
+    r.h.clickWidget(r.other);
+    check(app.focused() == r.other, "(the window's text field has the focus)");
+    // the panel takes the focus when it opens, and gives it back when it closes
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    check(app.focused() == r.panel, "a panel with no focus target takes the focus itself");
+    r.panel->close();
+    r.settle();
+    check(app.focused() == r.other, "closing it gives the focus back to the widget that had it");
+    r.panel->setFocusTarget(r.input);
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    check(app.focused() == r.input && r.panel->focusTarget() == r.input, "with a focus target the target takes it");
+    // typing goes to the text field of the panel, not to the window's
+    r.h.type("ab");
+    check(r.input->text() == "ab" && r.other == r.other && static_cast<TextInput*>(r.other)->text().empty(),
+            "typed text goes to the field of the panel");
+    // a press on a widget that takes the focus focuses it: the check box, then the field again
+    r.h.clickWidget(r.box);
+    check(app.focused() == r.box && r.box->isChecked(), "a click on the check box focuses it and checks it");
+    r.h.clickWidget(r.input);
+    check(app.focused() == r.input, "a click on the text field focuses it");
+    check(r.panel->isOpen(), "clicks inside the panel leave it open");
+    // a click on a button works and leaves the panel open
+    r.h.clickWidget(r.ok);
+    check(r.okClicks == 1 && r.panel->isOpen(), "a button of the panel is clicked, and the panel stays open");
+    // Tab walks the children and stays inside the panel
+    r.h.clickWidget(r.input);
+    r.h.key(ig::retained::Key::Tab);
+    check(app.focused() == r.box, "Tab goes to the next widget of the panel");
+    r.h.key(ig::retained::Key::Tab);
+    check(app.focused() == r.ok, "and to the next");
+    r.h.key(ig::retained::Key::Tab);
+    check(app.focused() == r.input, "and round to the first: it does not leave the panel (nor stop at the panel itself)");
+    r.h.key(ig::retained::Key::Tab, true);
+    check(app.focused() == r.ok, "Shift+Tab goes back");
+    // Escape closes, whichever child has the focus
+    r.h.key(ig::retained::Key::Escape);
+    check(!r.panel->isOpen(), "Escape closes the panel");
+    r.settle();
+    check(app.focused() == r.other, "the focus is back in the window");
+    check(r.closedCount == 2, "and closed went out for the second opening");
+
+    // reopened: the children kept their state, and it is a new opening
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    check(r.input->text() == "ab" && r.box->isChecked(), "the children keep their state between showings");
+    // a click outside closes it (and the press goes on to what is under it)
+    r.h.click(380.0f, 250.0f);
+    check(!r.panel->isOpen(), "a click outside closes the panel");
+    r.settle();
+    check(r.closedCount == 3, "closed went out for the third opening too, and only once");
+    // a click on the owner does not close it by itself: the owner toggles it
+    r.anchor->clicked.connect([&r]() { if (r.panel->isOpen()) r.panel->close(); else r.panel->openBelow(r.anchor); });
+    r.h.clickWidget(r.anchor);
+    r.settle();
+    check(r.panel->isOpen(), "a click on the anchor opens the panel (the application's handler)");
+    r.h.clickWidget(r.anchor);
+    r.settle();
+    check(!r.panel->isOpen(), "and the next click on the anchor closes it, once (the press did not close it first)");
+}
+
+// opened over a menu and a menu over it: whichever came last is the popup, the other one goes at once; a panel deleted
+// while it is open takes its popup with it (meant to run under the address sanitizer)
+void testPopupPanelWithOtherPopupsAndDelete()
+{
+    PanelRig r;
+    Menu* menu = new Menu();
+    menu->addAction("one");
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    menu->exec(200.0f, 50.0f);
+    r.settle();
+    check(!r.panel->isOpen() && WidgetApp::instance().popup() == menu, "a menu opened over the panel takes its place");
+    check(r.closedCount == 1, "the panel let go: closed went out once, at once");
+    r.panel->open(30.0f, 120.0f, r.anchor);
+    r.settle();
+    check(WidgetApp::instance().popup() == r.panel, "and the panel takes the place of the menu");
+    WidgetApp::instance().closePopup();
+    r.settle();
+    delete menu;
+    // deleted while open
+    PopupPanel* second = new PopupPanel();
+    second->createChild<Button>("x");
+    second->open(100.0f, 100.0f);
+    r.settle();
+    delete second;
+    r.h.frames(20);
+    check(WidgetApp::instance().popup() == nullptr, "a panel deleted while it is open is not the popup any more");
+    // a handler of closed that deletes the panel
+    PopupPanel* third = new PopupPanel();
+    third->createChild<Button>("y");
+    bool handled = false;
+    third->closed.connect([&]() { handled = true; delete third; });
+    third->open(100.0f, 100.0f);
+    r.settle();
+    third->close();
+    r.settle();
+    check(handled, "a handler of closed may delete the panel");
+    // the panel is the popup of its window: a window that goes with it open leaves nothing behind (the rig's destructor
+    // closes and deletes the first panel)
+    r.panel->open(30.0f, 120.0f);
+    r.settle();
+}
+
+void testPopupPanelPaints()
+{
+    Screen screen(420.0f, 300.0f);
+    PopupPanel* panel = new PopupPanel(LayoutDir::Vertical);
+    panel->setPadding(20.0f);
+    Button* b = panel->createChild<Button>("Apply");
+    (void)b;
+    const Shot before = screen.take();
+    panel->open(40.0f, 40.0f);
+    screen.h.frames(14);
+    const Shot after = screen.take();
+    const Rect pr = panel->absoluteRect();
+    // the padding of the panel is drawn in the panel colour (an empty corner of it)
+    const int px = static_cast<int>(pr.x) + 6, py = static_cast<int>(pr.y) + 6;
+    const Color c = Theme::instance().panelColor;
+    const uint32_t want = 0xff000000u | (static_cast<uint32_t>(c.r) << 16) | (static_cast<uint32_t>(c.g) << 8) | c.b;
+    check(after.px[static_cast<size_t>(py) * static_cast<size_t>(after.w) + static_cast<size_t>(px)] == want,
+            "the panel is drawn with the panel colour of the theme");
+    check(differing(before, after, static_cast<int>(pr.x), static_cast<int>(pr.y), static_cast<int>(pr.x + pr.w),
+                  static_cast<int>(pr.y + pr.h)) > 200,
+            "and its button is drawn");
+    check(differing(before, after, 0, 0, after.w, static_cast<int>(pr.y) - 2) == 0, "nothing outside the panel changes");
+    panel->close();
+    screen.h.frames(20);
+    const Shot gone = screen.take();
+    check(differing(before, gone, 0, 0, gone.w, gone.h) == 0, "closed, the window is as it was");
+    delete panel;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -332,6 +569,10 @@ int main(int argc, char** argv)
     RUN(testMenuAboutToShow);
     RUN(testSubmenuAboutToShow);
     RUN(testSubmenuAboutToShowRebuildsParent);
+    RUN(testPopupPanelOpensAndPlaces);
+    RUN(testPopupPanelFocusKeysAndClicks);
+    RUN(testPopupPanelWithOtherPopupsAndDelete);
+    RUN(testPopupPanelPaints);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
