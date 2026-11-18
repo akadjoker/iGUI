@@ -83,6 +83,14 @@ void testPreset(const char* name, const Theme& t)
     check(contrast(t.textDisabled, t.bgColor) < contrast(t.textColor, t.bgColor), "disabled text is dimmer than text");
     readable(name, "line numbers / gutter", t.lineNumberColor, t.gutterBg, 2.0f);
 
+    // The tool bar: its icons on its panel, on the checked button, and the dot of a checked button on that button.
+    readable(name, "tool bar icon / panel", t.toolbarIcon, t.panelColor, 4.5f);
+    readable(name, "tool bar icon / checked button", t.toolbarIcon, t.toolbarChecked, 3.0f);
+    readable(name, "checked button / panel", t.toolbarChecked, t.panelColor, 1.1f);
+    readable(name, "tool bar dot / checked button", t.toolbarCheckedDot, t.toolbarChecked, 1.5f);
+    readable(name, "disabled tool bar icon / panel", t.toolbarIconDisabled, t.panelColor, 1.4f);
+    check(contrast(t.toolbarIconDisabled, t.panelColor) < contrast(t.toolbarIcon, t.panelColor), "a disabled tool bar icon is dimmer than an enabled one");
+
     // Marks and fills against what they sit in.
     readable(name, "check mark / input", t.checkMark, t.inputBg, 2.0f);
     readable(name, "progress fill / track", t.progressFill, t.progressTrack.a > 0 ? t.progressTrack : t.sliderTrack, 1.3f);
@@ -126,6 +134,15 @@ int main()
               "dark and light leave the look fields off");
         check(same(t.progressFill, Color(140, 140, 145, 255)), "and the progress bar keeps its grey");
     }
+
+    // dark is what the tool bar always painted (the values that were fixed in its paint)
+    check(same(Theme::dark().toolbarChecked, Color(60, 100, 160, 255)) && same(Theme::dark().toolbarCheckedDot, Color(100, 200, 255, 255)) &&
+                  same(Theme::dark().toolbarIcon, Color(220, 220, 225, 255)) && same(Theme::dark().toolbarIconDisabled, Color(100, 100, 110, 255)),
+          "dark keeps the colours of the tool bar it always had");
+    // the other presets say theirs: a light preset does not leave the light icons of the dark one on a light bar
+    check(!same(Theme::light().toolbarIcon, Theme::dark().toolbarIcon) && !same(Theme::macOS().toolbarChecked, Theme::dark().toolbarChecked) &&
+                  !same(Theme::windowsXP().toolbarIcon, Theme::dark().toolbarIcon) && !same(Theme::macOSDark().toolbarChecked, Theme::light().toolbarChecked),
+          "light, macos, macos-dark and xp define the colours of the tool bar");
 
     // The two looks that use them.
     check(Theme::windowsXP().progressBlocks && Theme::windowsXP().controlGradient > 0.0f && Theme::windowsXP().titleGradient > 0.0f && Theme::windowsXP().buttonHoverRing.a > 0, "xp turns the look fields on");

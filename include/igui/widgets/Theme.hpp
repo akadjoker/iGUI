@@ -280,6 +280,11 @@ struct Theme
         t.sideTabText = Color(90, 90, 95, 255);
         t.sideTabTextActive = Color(0, 100, 95, 255);
         t.sideTabBadge = Color(235, 130, 20, 255);
+        // ToolBar
+        t.toolbarChecked = Color(198, 220, 244, 255);
+        t.toolbarCheckedDot = Color(0, 120, 215, 255);
+        t.toolbarIcon = Color(60, 60, 65, 255);
+        t.toolbarIconDisabled = Color(165, 165, 170, 255);
         return t;
     }
 
@@ -383,6 +388,10 @@ struct Theme
         t.sideTabText = Color(100, 100, 105, 255);
         t.sideTabTextActive = Color(0, 90, 200, 255);
         t.sideTabBadge = Color(255, 59, 48, 255);
+        // ToolBar
+        t.toolbarChecked = Color(206, 224, 250, 255);
+        t.toolbarCheckedDot = accent;
+        t.toolbarIcon = Color(70, 70, 75, 255);
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(214, 214, 218, 255);
@@ -498,6 +507,11 @@ struct Theme
         t.sideTabText = Color(160, 160, 166, 255);
         t.sideTabTextActive = Color(214, 230, 255, 255);
         t.sideTabBadge = Color(255, 69, 58, 255);
+        // ToolBar
+        t.toolbarChecked = Color(28, 52, 86, 255);
+        t.toolbarCheckedDot = accent;
+        t.toolbarIcon = Color(214, 214, 220, 255);
+        t.toolbarIconDisabled = Color(110, 110, 116, 255);
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(78, 78, 82, 255);
@@ -608,6 +622,11 @@ struct Theme
         t.sideTabText = Color(33, 93, 198, 255);
         t.sideTabTextActive = Color(0, 40, 130, 255);
         t.sideTabBadge = Color(224, 80, 50, 255);
+        // ToolBar
+        t.toolbarChecked = Color(193, 210, 238, 255);
+        t.toolbarCheckedDot = blue;
+        t.toolbarIcon = Color(30, 30, 30, 255);
+        t.toolbarIconDisabled = Color(161, 161, 146, 255);
         // Look
         t.progressFill = Color(60, 205, 60, 255);
         t.progressTrack = Color(255, 255, 255, 255);
