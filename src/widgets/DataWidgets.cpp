@@ -565,22 +565,24 @@ void DataGrid::commitEdit()
 {
     if (!editing_) return;
     editing_ = false;
-    if (editRow_ >= 0 && editRow_ < modelRowCount() && editCol_ >= 0 &&
-            editCol_ < static_cast<int>(columns_.size()))
+    const int row = editRow_, col = editCol_;
+    bool edited = false;
+    if (row >= 0 && row < modelRowCount() && col >= 0 && col < static_cast<int>(columns_.size()))
     {
         if (model_)
         {
-            model_->setData(model_->index(editRow_, editCol_), editBuf_);
+            model_->setData(model_->index(row, col), editBuf_);
         }
         else
         {
-            rows_[editRow_].cells[editCol_] = editBuf_;
+            rows_[row].cells[col] = editBuf_;
         }
-        cellEdited.emit(editRow_, editCol_);
+        edited = true;
     }
     editRow_ = -1;
     editCol_ = -1;
     markDirty();
+    if (edited) cellEdited.emit(row, col); // (last: a handler may take the grid out of the tree, see WidgetApp::hasGone)
 }
 
 void DataGrid::cancelEdit()
@@ -905,8 +907,8 @@ void DataGrid::onMousePress(MouseEvent& e)
                 sortOrder_ = SortOrder::Ascending;
             }
             sortDirty_ = true;
-            columnSorted.emit(col);
             markDirty();
+            columnSorted.emit(col); // (last: a handler may take the grid out of the tree, see WidgetApp::hasGone)
         }
         return;
     }
@@ -927,8 +929,8 @@ void DataGrid::onMousePress(MouseEvent& e)
         {
             rows_[dataIdx].checked = !rows_[dataIdx].checked;
         }
-        rowCheckChanged.emit(dataIdx, modelIsChecked(dataIdx));
         markDirty();
+        rowCheckChanged.emit(dataIdx, modelIsChecked(dataIdx));
         return;
     }
 
@@ -946,7 +948,12 @@ void DataGrid::onMousePress(MouseEvent& e)
     lastClickTime_ = now;
     lastClickRow_ = dataIdx;
 
-    if (editing_) commitEdit();
+    if (editing_)
+    {
+        const uint32_t seen = WidgetApp::instance().deletions();
+        commitEdit();
+        if (WidgetApp::instance().hasGone(this, seen)) return; // (a handler of cellEdited took the grid out of the tree)
+    }
 
     if (multiSelect_)
     {
@@ -994,8 +1001,8 @@ void DataGrid::onMousePress(MouseEvent& e)
         selectedSet_.clear();
         selectedSet_.insert(dataIdx);
     }
-    selectionChanged.emit(dataIdx);
     markDirty();
+    selectionChanged.emit(dataIdx);
 }
 
 void DataGrid::onMouseRelease(MouseEvent& e)
@@ -1142,7 +1149,9 @@ void DataGrid::onKeyPress(KeyEvent& e)
                         break;
                     }
                 int cell = visual * cols + editCol_ + step;
+                const uint32_t seen = WidgetApp::instance().deletions();
                 commitEdit();
+                if (WidgetApp::instance().hasGone(this, seen)) return;
                 for (; cell >= 0 && cell < modelRowCount() * cols && !editing_; cell += step)
                     startEdit(displayRow(cell / cols), cell % cols);
                 return;
@@ -1260,8 +1269,8 @@ void DataGrid::onKeyPress(KeyEvent& e)
                 {
                     rows_[selectedRow_].checked = !rows_[selectedRow_].checked;
                 }
-                rowCheckChanged.emit(selectedRow_, modelIsChecked(selectedRow_));
                 markDirty();
+                rowCheckChanged.emit(selectedRow_, modelIsChecked(selectedRow_));
             }
         }
     }
@@ -1756,14 +1765,18 @@ void TreeGrid::commitEdit()
 {
     if (!editing_ || !editNode_) return;
     editing_ = false;
-    if (editCol_ >= 0 && editCol_ < static_cast<int>(editNode_->cells.size()))
+    Node* const node = editNode_;
+    const int col = editCol_;
+    bool edited = false;
+    if (col >= 0 && col < static_cast<int>(node->cells.size()))
     {
-        editNode_->cells[editCol_] = editBuf_;
-        cellEdited.emit(editNode_, editCol_);
+        node->cells[col] = editBuf_;
+        edited = true;
     }
     editNode_ = nullptr;
     editCol_ = -1;
     markDirty();
+    if (edited) cellEdited.emit(node, col); // (last: a handler may take the grid out of the tree)
 }
 
 void TreeGrid::cancelEdit()
@@ -2121,8 +2134,8 @@ void TreeGrid::onMousePress(MouseEvent& e)
             }
             for (auto* r: roots_) sortChildren(r);
             rebuildFlatList();
-            columnSorted.emit(col);
             markDirty();
+            columnSorted.emit(col); // (last: a handler may take the grid out of the tree)
         }
         return;
     }
@@ -2137,11 +2150,11 @@ void TreeGrid::onMousePress(MouseEvent& e)
     if (col == 0 && (localX + scrollX_) < arrowAreaEnd && !node->children.empty())
     {
         node->expanded = !node->expanded;
-        if (node->expanded) nodeExpanded.emit(node);
-        else
-            nodeCollapsed.emit(node);
         rebuildFlatList();
         markDirty();
+        if (node->expanded) nodeExpanded.emit(node); // (last: a handler may take the grid out of the tree)
+        else
+            nodeCollapsed.emit(node);
         return;
     }
 
@@ -2157,7 +2170,12 @@ void TreeGrid::onMousePress(MouseEvent& e)
     lastClickTime_ = now;
     lastClickNode_ = node;
 
-    if (editing_) commitEdit();
+    if (editing_)
+    {
+        const uint32_t seen = WidgetApp::instance().deletions();
+        commitEdit();
+        if (WidgetApp::instance().hasGone(this, seen)) return;
+    }
 
     if (multiSelect_)
     {
@@ -2181,8 +2199,8 @@ void TreeGrid::onMousePress(MouseEvent& e)
         selectedNode_ = node;
         selectedNodes_ = { node };
     }
-    selectionChanged.emit(node);
     markDirty();
+    selectionChanged.emit(node);
 }
 
 void TreeGrid::onMouseRelease(MouseEvent& e)
@@ -2342,6 +2360,7 @@ void TreeGrid::onKeyPress(KeyEvent& e)
     if (!editing_)
     {
         Node* before = selectedNode_;
+        const uint32_t seen = WidgetApp::instance().deletions();
         int curIdx = -1;
         for (int i = 0; i < static_cast<int>(flatList_.size()); ++i)
             if (flatList_[i].node == selectedNode_)
@@ -2358,17 +2377,18 @@ void TreeGrid::onKeyPress(KeyEvent& e)
             e.consumed = true;
             selectedNode_ = flatList_[target].node;
             selectedNodes_ = { selectedNode_ };
-            selectionChanged.emit(selectedNode_);
             markDirty();
+            selectionChanged.emit(selectedNode_); // (last: a handler may take the grid out of the tree)
         }
         else if (e.key == ig::retained::Key::Left && selectedNode_)
         {
             e.consumed = true;
+            markDirty();
             if (selectedNode_->expanded && !selectedNode_->children.empty())
             {
                 selectedNode_->expanded = false;
-                nodeCollapsed.emit(selectedNode_);
                 rebuildFlatList();
+                nodeCollapsed.emit(selectedNode_);
             }
             else if (selectedNode_->parent)
             {
@@ -2376,16 +2396,16 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectedNodes_ = { selectedNode_ };
                 selectionChanged.emit(selectedNode_);
             }
-            markDirty();
         }
         else if (e.key == ig::retained::Key::Right && selectedNode_)
         {
             e.consumed = true;
+            markDirty();
             if (!selectedNode_->expanded && !selectedNode_->children.empty())
             {
                 selectedNode_->expanded = true;
-                nodeExpanded.emit(selectedNode_);
                 rebuildFlatList();
+                nodeExpanded.emit(selectedNode_);
             }
             else if (!selectedNode_->children.empty())
             {
@@ -2393,7 +2413,6 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 selectedNodes_ = { selectedNode_ };
                 selectionChanged.emit(selectedNode_);
             }
-            markDirty();
         }
         else if (e.key == ig::retained::Key::Return && selectedNode_)
         {
@@ -2411,6 +2430,8 @@ void TreeGrid::onKeyPress(KeyEvent& e)
             }
             WidgetApp::instance().setClipboardText(text.c_str());
         }
+
+        if (WidgetApp::instance().hasGone(this, seen)) return; // (a handler took the grid out of the tree: see WidgetApp::hasGone)
 
         // Keep the node the arrows moved to in view
         if (selectedNode_ != before && selectedNode_)

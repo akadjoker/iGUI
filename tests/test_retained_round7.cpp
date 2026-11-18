@@ -1182,6 +1182,127 @@ void testTreeProperty()
             });
 }
 
+// ---- DataGrid and TreeGrid ----
+
+ct::Vector<String> rowOf(const char* a, const char* b)
+{
+    ct::Vector<String> v;
+    v.push_back(a);
+    v.push_back(b);
+    return v;
+}
+
+void testGrids()
+{
+    auto data = [](Stage& st) {
+        DataGrid* w = put<DataGrid>(st, 20.0f, 20.0f, 360.0f, 220.0f);
+        w->addColumn("name", 160.0f);
+        w->addColumn("value", 160.0f);
+        w->addRow(rowOf("one", "1"));
+        w->addRow(rowOf("two", "2"));
+        w->addRow(rowOf("three", "3"));
+        w->setShowCheckboxes(true);
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    victim<DataGrid>("DataGrid.selectionChanged by a click on a row", data,
+            [](DataGrid* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, DataGrid* w) { st.click(w, 100.0f, 56.0f); });
+    victim<DataGrid>("DataGrid.selectionChanged by the Down key",
+            [&](Stage& st) {
+                DataGrid* w = data(st);
+                w->setSelectedRow(0);
+                return w;
+            },
+            [](DataGrid* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, DataGrid* w) { st.key(w, Key::Down); });
+    victim<DataGrid>("DataGrid.columnSorted by a click on a header", data,
+            [](DataGrid* w, auto kill, auto) { w->columnSorted.connect(kill); },
+            [](Stage& st, DataGrid* w) { st.click(w, 100.0f, 10.0f); });
+    victim<DataGrid>("DataGrid.rowCheckChanged by a click on a check box", data,
+            [](DataGrid* w, auto kill, auto) { w->rowCheckChanged.connect(kill); },
+            [](Stage& st, DataGrid* w) { st.click(w, 8.0f, 56.0f); });
+    victim<DataGrid>("DataGrid.rowCheckChanged by the Space key",
+            [&](Stage& st) {
+                DataGrid* w = data(st);
+                w->setSelectedRow(0);
+                return w;
+            },
+            [](DataGrid* w, auto kill, auto) { w->rowCheckChanged.connect(kill); },
+            [](Stage& st, DataGrid* w) { st.key(w, Key::Space); });
+    victim<DataGrid>("DataGrid.cellEdited by typing into a cell and Return",
+            [&](Stage& st) {
+                DataGrid* w = data(st);
+                w->setSelectedRow(0);
+                return w;
+            },
+            [](DataGrid* w, auto kill, auto) { w->cellEdited.connect(kill); },
+            [](Stage& st, DataGrid* w) {
+                st.key(w, Key::Return);
+                st.type(w, "x");
+                st.key(w, Key::Return);
+            });
+    auto treeGrid = [](Stage& st) {
+        TreeGrid* w = put<TreeGrid>(st, 20.0f, 20.0f, 360.0f, 220.0f);
+        w->addColumn("name", 200.0f);
+        w->addColumn("value", 120.0f);
+        TreeGrid::Node* root = w->addRoot(rowOf("root", "r"));
+        root->addChild(rowOf("a", "1"));
+        root->addChild(rowOf("b", "2"));
+        w->addRoot(rowOf("other", "o"));
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    victim<TreeGrid>("TreeGrid.selectionChanged by a click on a row", treeGrid,
+            [](TreeGrid* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.click(w, 100.0f, 56.0f); });
+    victim<TreeGrid>("TreeGrid.selectionChanged by the Down key",
+            [&](Stage& st) {
+                TreeGrid* w = treeGrid(st);
+                st.click(w, 100.0f, 40.0f);
+                return w;
+            },
+            [](TreeGrid* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.key(w, Key::Down); });
+    victim<TreeGrid>("TreeGrid.columnSorted by a click on a header", treeGrid,
+            [](TreeGrid* w, auto kill, auto) { w->columnSorted.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.click(w, 100.0f, 10.0f); });
+    victim<TreeGrid>("TreeGrid.nodeCollapsed by a click on the arrow", treeGrid,
+            [](TreeGrid* w, auto kill, auto) { w->nodeCollapsed.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.click(w, 8.0f, 40.0f); });
+    victim<TreeGrid>("TreeGrid.nodeExpanded by the Right key",
+            [&](Stage& st) {
+                TreeGrid* w = treeGrid(st);
+                st.click(w, 100.0f, 40.0f);
+                w->roots()[0]->setExpanded(false);
+                return w;
+            },
+            [](TreeGrid* w, auto kill, auto) { w->nodeExpanded.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.key(w, Key::Right); });
+    victim<TreeGrid>("TreeGrid.cellEdited by typing into a cell and Return",
+            [&](Stage& st) {
+                TreeGrid* w = treeGrid(st);
+                st.click(w, 100.0f, 40.0f);
+                return w;
+            },
+            [](TreeGrid* w, auto kill, auto) { w->cellEdited.connect(kill); },
+            [](Stage& st, TreeGrid* w) {
+                st.key(w, Key::Return);
+                st.type(w, "x");
+                st.key(w, Key::Return);
+            });
+    victim<TreeGrid>("TreeGrid.nodeCollapsed by the Left key",
+            [&](Stage& st) {
+                TreeGrid* w = treeGrid(st);
+                st.click(w, 100.0f, 40.0f);
+                return w;
+            },
+            [](TreeGrid* w, auto kill, auto) { w->nodeCollapsed.connect(kill); },
+            [](Stage& st, TreeGrid* w) { st.key(w, Key::Left); });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1214,6 +1335,7 @@ int main(int argc, char** argv)
     testApp();
     testRangeGridsEditors();
     testTreeProperty();
+    testGrids();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)
