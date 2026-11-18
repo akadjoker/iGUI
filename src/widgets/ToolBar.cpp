@@ -160,6 +160,30 @@ const ToolBar::Item* ToolBar::findItem(int id) const
     return nullptr;
 }
 
+ToolBar::ItemType ToolBar::itemType(int id) const
+{
+    const Item* it = findItem(id);
+    return it ? it->type : ItemType::Button;
+}
+
+int ToolBar::itemCell(int id) const
+{
+    const Item* it = findItem(id);
+    return it ? it->iconIndex : -1;
+}
+
+IconId ToolBar::itemIcon(int id) const
+{
+    const Item* it = findItem(id);
+    return it ? it->iconId : IconId::None;
+}
+
+String ToolBar::itemTooltip(int id) const
+{
+    const Item* it = findItem(id);
+    return it ? it->tooltip : String();
+}
+
 void ToolBar::setItemEnabled(int id, bool enabled)
 {
     if (auto* it = findItem(id))

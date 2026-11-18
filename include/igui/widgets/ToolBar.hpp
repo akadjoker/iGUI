@@ -115,6 +115,27 @@ public:
     /// @brief Set an item's tooltip text.
     void setItemTooltip(int id, const String& tip);
 
+    /// @brief How many items the bar has (buttons, toggles, separators and spacers, hidden ones too).
+    int itemCount() const
+    {
+        return static_cast<int>(items_.size());
+    }
+    /// @brief The id of the item at a position in the bar, in the order they are drawn (after any
+    ///        drag reordering); -1 when there is none.
+    int itemIdAt(int index) const
+    {
+        return index >= 0 && index < static_cast<int>(items_.size()) ? items_[index].id : -1;
+    }
+    /// @brief What kind of item an id is (Button for an unknown id).
+    ItemType itemType(int id) const;
+    /// @brief The grid cell of an item added by cell index, -1 for one that uses an atlas icon (or for
+    ///        an unknown id).
+    int itemCell(int id) const;
+    /// @brief The atlas icon of an item (IconId::None for one added by cell index, or an unknown id).
+    IconId itemIcon(int id) const;
+    /// @brief An item's tooltip text (empty for an unknown id).
+    String itemTooltip(int id) const;
+
     /// @brief Window-space rectangle of an item; false when the id is unknown or the item is
     /// hidden.
     bool itemRect(int id, Rect& out) const;

@@ -2,6 +2,7 @@
 #include "BasicWidgets.hpp"
 #include "InputWidgets.hpp"
 #include "LayoutWidgets.hpp"
+#include "ToolBar.hpp"
 #include "Widgets.hpp"
 #include "pch.hpp"
 
@@ -74,6 +75,7 @@ String WidgetSerializer::typeName(const Widget* w)
         serializableType<TabLayout>(),
         serializableType<AnchorLayout>(),
         serializableType<SideTabBar>(),
+        serializableType<ToolBar>(),
     };
     if (!w) return "Widget";
     for (const auto& type: types)
@@ -572,6 +574,46 @@ json WidgetSerializer::save(const Widget* root)
         return j;
     }
 
+    else if (type == "ToolBar")
+    {
+        auto* w = static_cast<const ToolBar*>(root);
+        if (w->coloredIcons()) j["coloredIcons"] = true;
+        if (!w->bottomBorder()) j["bottomBorder"] = false;
+        if (!w->isDraggable()) j["draggable"] = false;
+        j["buttonSize"] = w->buttonSize();
+        j["iconPadding"] = w->iconPadding();
+        j["spacing"] = w->spacing();
+        // The items, in the order they are drawn (a drag may have moved them). What is left out is what a file cannot
+        // hold: the sprite sheet (image or texture, and its cell size), the images registered at run time (only the
+        // built-in icons survive, as in the SideTabBar), the connections to buttonClicked and toggleChanged, and the
+        // ids (they are given again, from 1, in this order when the bar is loaded).
+        json items = json::array();
+        for (int i = 0; i < w->itemCount(); ++i)
+        {
+            const int id = w->itemIdAt(i);
+            json ij = json::object();
+            const ToolBar::ItemType kind = w->itemType(id);
+            ij["type"] = kind == ToolBar::ItemType::Toggle ? "Toggle"
+                    : kind == ToolBar::ItemType::Separator ? "Separator"
+                    : kind == ToolBar::ItemType::Spacer    ? "Spacer"
+                                                           : "Button";
+            if (kind == ToolBar::ItemType::Button || kind == ToolBar::ItemType::Toggle)
+            {
+                if (w->itemCell(id) >= 0) ij["cell"] = w->itemCell(id);
+                else
+                    ij["icon"] = static_cast<int>(w->itemIcon(id));
+                if (!w->itemTooltip(id).empty()) ij["tooltip"] = w->itemTooltip(id);
+                if (!w->isItemEnabled(id)) ij["enabled"] = false;
+                if (kind == ToolBar::ItemType::Toggle && w->isItemChecked(id)) ij["checked"] = true;
+            }
+            if (!w->isItemVisible(id)) ij["visible"] = false;
+            if (!w->isItemDraggable(id)) ij["draggable"] = false;
+            items.push_back(ij);
+        }
+        j["items"] = items;
+        return j;
+    }
+
     if (!root->children().empty()) j["children"] = serializeChildren(root);
 
     return j;
@@ -1009,6 +1051,53 @@ void WidgetSerializer::registerBuiltinTypes()
                 }
                 if (j.contains("currentIndex"))
                     w->setCurrentIndex(jsonValue<int>(j["currentIndex"]));
+                return w;
+            });
+
+    registerType("ToolBar",
+            [](const json& j, Widget* parent) -> Widget*
+            {
+                auto* w = parent->createChild<ToolBar>();
+                if (j.contains("coloredIcons")) w->setColoredIcons(jsonValue<bool>(j["coloredIcons"]));
+                if (j.contains("bottomBorder")) w->setBottomBorder(jsonValue<bool>(j["bottomBorder"]));
+                if (j.contains("draggable")) w->setDraggable(jsonValue<bool>(j["draggable"]));
+                // (a file can hold any number: the sizes are kept to what a bar can use)
+                if (j.contains("buttonSize")) w->setButtonSize(Math::sane(jsonValue<float>(j["buttonSize"]), w->buttonSize(), 1.0f, 1000.0f));
+                if (j.contains("iconPadding")) w->setIconPadding(Math::sane(jsonValue<float>(j["iconPadding"]), w->iconPadding(), 0.0f, 1000.0f));
+                if (j.contains("spacing")) w->setSpacing(Math::sane(jsonValue<float>(j["spacing"]), w->spacing(), 0.0f, 1000.0f));
+                if (j.contains("items") && j["items"].is_array())
+                {
+                    for (const auto& ij: j["items"].items())
+                    {
+                        const String kind = ij.contains("type") ? jsonValue<String>(ij["type"]) : String("Button");
+                        const String tooltip = ij.contains("tooltip") ? jsonValue<String>(ij["tooltip"]) : String();
+                        const bool toggle = kind == "Toggle";
+                        const bool checked = toggle && ij.contains("checked") && jsonValue<bool>(ij["checked"]);
+                        int id = -1;
+                        if (kind == "Separator") id = w->addSeparator();
+                        else if (kind == "Spacer")
+                            id = w->addSpacer();
+                        else if (ij.contains("cell"))
+                        {
+                            const int cell = jsonValue<int>(ij["cell"]);
+                            id = toggle ? w->addToggle(cell, tooltip, checked) : w->addButton(cell, tooltip);
+                        }
+                        else
+                        {
+                            // Only the built-in icons survive a save: image icons are textures registered at run time.
+                            IconId icon = IconId::None;
+                            if (ij.contains("icon"))
+                            {
+                                const int raw = jsonValue<int>(ij["icon"]);
+                                if (raw > 0 && raw < static_cast<int>(IconId::COUNT)) icon = static_cast<IconId>(raw);
+                            }
+                            id = toggle ? w->addToggle(icon, tooltip, checked) : w->addButton(icon, tooltip);
+                        }
+                        if (ij.contains("enabled")) w->setItemEnabled(id, jsonValue<bool>(ij["enabled"]));
+                        if (ij.contains("visible")) w->setItemVisible(id, jsonValue<bool>(ij["visible"]));
+                        if (ij.contains("draggable")) w->setItemDraggable(id, jsonValue<bool>(ij["draggable"]));
+                    }
+                }
                 return w;
             });
 

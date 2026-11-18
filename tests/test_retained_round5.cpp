@@ -7,6 +7,9 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/AudioWidgets.hpp>
+#include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ToolBar.hpp>
+#include <igui/widgets/WidgetSerializer.hpp>
 
 using namespace rh;
 
@@ -652,6 +655,161 @@ void testPianoRollVelocityLaneHeightAndHitAreas()
     check(near(roll->notes()[0].velocity, 0.5f, 0.0001f), "however high it is asked, the lane is half of the roll at most");
 }
 
+// ---- item 4: the tool bar in the serializer ----
+
+// whether two bars have the same flags, sizes and items, in the same order
+bool sameToolBar(const ToolBar& a, const ToolBar& b, const char* what)
+{
+    bool same = true;
+    auto differ = [&](bool equal, const char* field)
+    {
+        if (!equal)
+        {
+            printf("    %s: %s differs\n", what, field);
+            same = false;
+        }
+    };
+    differ(a.coloredIcons() == b.coloredIcons(), "coloredIcons");
+    differ(a.bottomBorder() == b.bottomBorder(), "bottomBorder");
+    differ(a.isDraggable() == b.isDraggable(), "draggable");
+    differ(a.buttonSize() == b.buttonSize(), "buttonSize");
+    differ(a.iconPadding() == b.iconPadding(), "iconPadding");
+    differ(a.spacing() == b.spacing(), "spacing");
+    differ(a.itemCount() == b.itemCount(), "itemCount");
+    for (int i = 0; i < a.itemCount() && i < b.itemCount(); ++i)
+    {
+        const int x = a.itemIdAt(i), y = b.itemIdAt(i);
+        differ(a.itemType(x) == b.itemType(y), "item type");
+        differ(a.itemCell(x) == b.itemCell(y), "item cell");
+        differ(a.itemIcon(x) == b.itemIcon(y), "item icon");
+        differ(a.itemTooltip(x) == b.itemTooltip(y), "item tooltip");
+        differ(a.isItemEnabled(x) == b.isItemEnabled(y), "item enabled");
+        differ(a.isItemVisible(x) == b.isItemVisible(y), "item visible");
+        differ(a.isItemChecked(x) == b.isItemChecked(y), "item checked");
+        differ(a.isItemDraggable(x) == b.isItemDraggable(y), "item draggable");
+    }
+    return same;
+}
+
+ToolBar* toolBarOf(Widget* loaded)
+{
+    return loaded && !loaded->children().empty() ? widget_cast<ToolBar>(loaded->children()[0]) : nullptr;
+}
+
+void testSerializerKeepsToolBar()
+{
+    WidgetSerializer::registerBuiltinTypes();
+    BoxLayout root(LayoutDir::Vertical);
+    ToolBar* bar = root.createChild<ToolBar>();
+    bar->setColoredIcons(true);
+    bar->setBottomBorder(false);
+    bar->setButtonSize(32.0f);
+    bar->setIconPadding(6.0f);
+    bar->setSpacing(3.0f);
+    bar->setDraggable(false);
+    const int gear = bar->addButton(IconId::Gear, "Settings");
+    bar->addToggle(IconId::Folder, "Folder", true);
+    bar->addSeparator();
+    const int cell = bar->addButton(3, "Cell three");
+    bar->addSpacer();
+    const int file = bar->addToggle(IconId::File, "File");
+    const int cellToggle = bar->addToggle(7, "", false);
+    bar->setItemEnabled(gear, false);
+    bar->setItemVisible(file, false);
+    bar->setItemDraggable(cell, false);
+    bar->setItemChecked(cellToggle, true);
+
+    const json saved = WidgetSerializer::save(&root);
+    check(String(saved["children"][0]["type"].str()) == String("ToolBar"), "a tool bar is saved as a ToolBar (it was a plain Widget, with nothing of its own)");
+    check(saved["children"][0]["coloredIcons"].as_bool(false), "the saved bar says its icons are coloured");
+    check(saved["children"][0].contains("bottomBorder") && !saved["children"][0]["bottomBorder"].as_bool(true), "and that it has no bottom border");
+    BoxLayout destination(LayoutDir::Vertical);
+    Widget* loaded = WidgetSerializer::load(saved, &destination);
+    ToolBar* copy = toolBarOf(loaded);
+    check(copy != nullptr, "the bar is loaded as a ToolBar");
+    if (!copy) return;
+    check(copy->coloredIcons() && !copy->bottomBorder(), "the copy has setColoredIcons(true) and setBottomBorder(false)");
+    check(sameToolBar(*bar, *copy, "round trip"), "and the sizes, the flags and every item (type, cell or icon, tooltip, enabled, visible, checked, draggable) come back, in order");
+    check(copy->itemCount() == 7 && copy->itemTooltip(copy->itemIdAt(3)) == String("Cell three") && copy->itemCell(copy->itemIdAt(3)) == 3,
+            "(seven items; the fourth is the button of cell 3)");
+    check(copy->itemIdAt(0) == 1 && copy->itemIdAt(6) == 7, "the ids are 1 to 7 in the order of the bar");
+
+    // saved again, it is the same file
+    const json again = WidgetSerializer::save(loaded);
+    check(again.dump(0) == saved.dump(0), "a bar saved after it was loaded gives the same file");
+
+    // the defaults are not written, and load as the defaults
+    BoxLayout plainRoot(LayoutDir::Vertical);
+    ToolBar* plain = plainRoot.createChild<ToolBar>();
+    plain->addButton(IconId::Gear, "One");
+    const json plainJson = WidgetSerializer::save(&plainRoot);
+    const json& pj = plainJson["children"][0];
+    check(!pj.contains("coloredIcons") && !pj.contains("bottomBorder") && !pj.contains("draggable"), "a bar with the default flags writes none of them");
+    BoxLayout plainDest(LayoutDir::Vertical);
+    ToolBar* plainCopy = toolBarOf(WidgetSerializer::load(plainJson, &plainDest));
+    check(plainCopy && sameToolBar(*plain, *plainCopy, "defaults") && !plainCopy->coloredIcons() && plainCopy->bottomBorder(), "and loads with them");
+}
+
+void testSerializerKeepsTheOrderOfAToolBarAfterADrag()
+{
+    // the items are saved in the order they are drawn, which a drag of an item changes
+    Harness h(480.0f, 120.0f, false);
+    ToolBar* bar = h.root()->createChild<ToolBar>();
+    bar->setRect(Rect(0.0f, 0.0f, 300.0f, 34.0f));
+    const int a = bar->addButton(IconId::Gear, "A");
+    const int b = bar->addButton(IconId::Folder, "B");
+    bar->addButton(IconId::File, "C");
+    h.relayout();
+    Rect ra, rb;
+    check(bar->itemRect(a, ra) && bar->itemRect(b, rb), "(the items have rectangles)");
+    WidgetApp& app = h.app;
+    app.feedMouseMove(ra.x + ra.w * 0.5f, ra.y + ra.h * 0.5f);
+    app.feedMouseButton(0, true);
+    app.feedMouseMove(rb.x + rb.w * 0.5f + 6.0f, rb.y + rb.h * 0.5f);
+    app.feedMouseMove(rb.x + rb.w * 0.5f + 12.0f, rb.y + rb.h * 0.5f);
+    app.feedMouseButton(0, false);
+    check(bar->itemTooltip(bar->itemIdAt(0)) == String("B") && bar->itemTooltip(bar->itemIdAt(1)) == String("A"), "(dragging A over B put B first)");
+    WidgetSerializer::registerBuiltinTypes();
+    const json saved = WidgetSerializer::save(h.root());
+    BoxLayout destination(LayoutDir::Vertical);
+    Widget* loaded = WidgetSerializer::load(saved, &destination);
+    // the stage root is a plain widget: find the bar in what was loaded
+    ToolBar* copy = nullptr;
+    if (loaded)
+        for (Widget* c: loaded->children())
+            if (!copy) copy = widget_cast<ToolBar>(c);
+    check(copy && copy->itemCount() == 3 && copy->itemTooltip(copy->itemIdAt(0)) == String("B") && copy->itemTooltip(copy->itemIdAt(1)) == String("A") &&
+                    copy->itemTooltip(copy->itemIdAt(2)) == String("C"),
+            "the file keeps B, A, C: the order they are drawn in");
+}
+
+void testToolBarLoadsWhatAFileCanHold()
+{
+    // a file made by hand: numbers that are not for a bar, icons that do not exist, items of no known kind
+    WidgetSerializer::registerBuiltinTypes();
+    const char* text = "{\"type\":\"BoxLayout\",\"children\":[{\"type\":\"ToolBar\",\"buttonSize\":1e39,\"iconPadding\":-1e39,\"spacing\":\"x\","
+                       "\"items\":[{\"type\":\"Button\",\"icon\":99999,\"tooltip\":\"far\"},{\"type\":\"Toggle\",\"icon\":-4,\"checked\":true},"
+                       "{\"type\":\"Whatever\"},{\"cell\":2},5,{\"type\":\"Separator\",\"tooltip\":\"ignored\",\"checked\":true},{\"type\":\"Spacer\"}]},"
+                       "{\"type\":\"ToolBar\",\"items\":7}]}";
+    json::Error error;
+    const json file = json::parse(String(text), &error);
+    check(!error, "(the hand-made file parses)");
+    BoxLayout destination(LayoutDir::Vertical);
+    Widget* loaded = WidgetSerializer::load(file, &destination);
+    ToolBar* bar = toolBarOf(loaded);
+    check(bar != nullptr, "the file loads");
+    if (!bar) return;
+    check(bar->buttonSize() >= 1.0f && bar->buttonSize() <= 1000.0f && bar->iconPadding() >= 0.0f && bar->iconPadding() <= 1000.0f && bar->spacing() >= 0.0f && bar->spacing() <= 1000.0f,
+            "sizes that are infinite or not numbers are kept to what a bar can use");
+    check(bar->itemCount() == 7, "every entry of the list is an item (the ones of no known kind are buttons)");
+    check(bar->itemIcon(bar->itemIdAt(0)) == IconId::None && bar->itemIcon(bar->itemIdAt(1)) == IconId::None, "an icon that does not exist is no icon");
+    check(bar->itemType(bar->itemIdAt(1)) == ToolBar::ItemType::Toggle && bar->isItemChecked(bar->itemIdAt(1)), "a toggle comes back checked");
+    check(bar->itemCell(bar->itemIdAt(3)) == 2, "an entry with a cell is a button of that cell");
+    check(bar->itemType(bar->itemIdAt(5)) == ToolBar::ItemType::Separator && !bar->isItemChecked(bar->itemIdAt(5)), "a separator takes none of the state of a button");
+    ToolBar* second = loaded->children().size() > 1 ? widget_cast<ToolBar>(loaded->children()[1]) : nullptr;
+    check(second && second->itemCount() == 0, "a list that is not a list is no items");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -667,6 +825,9 @@ int main(int argc, char** argv)
     RUN(testPianoRollVelocityLaneDrawsOneBarPerNote);
     RUN(testPianoRollVelocityLaneFollowsTheView);
     RUN(testPianoRollVelocityLaneHeightAndHitAreas);
+    RUN(testSerializerKeepsToolBar);
+    RUN(testSerializerKeepsTheOrderOfAToolBarAfterADrag);
+    RUN(testToolBarLoadsWhatAFileCanHold);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
