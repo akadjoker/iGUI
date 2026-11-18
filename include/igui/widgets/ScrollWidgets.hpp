@@ -31,6 +31,11 @@ public:
     IG_WIDGET_CLASS(ScrollBar, Widget);
 
     explicit ScrollBar(ScrollBarOrientation orientation = ScrollBarOrientation::Vertical);
+    /// @brief Whether the bar is vertical or horizontal.
+    ScrollBarOrientation orientation() const
+    {
+        return orientation_;
+    }
 
     /// @brief Set the total content size.
     void setContentSize(float cs)

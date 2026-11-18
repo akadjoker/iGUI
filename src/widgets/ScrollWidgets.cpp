@@ -215,9 +215,11 @@ void ScrollView::layout()
         return;
     }
 
-    // First pass: measure content at full width
+    // First pass: measure the content at the width of the view, never at the width it asked for the time before: a hint
+    // that follows the content's own rectangle (a widget that asks for the width it has) would otherwise hold the content
+    // at its widest for ever, and the horizontal bar with it
     contentWidget_->setScrollable(true);
-    contentWidget_->setRect({ 0, 0, std::max(rect_.w, contentW_), std::max(rect_.h, contentH_) });
+    contentWidget_->setRect({ 0, 0, rect_.w, max2(rect_.h, contentH_) });
     contentWidget_->layout();
 
     // Read the content's resulting size hint
@@ -234,7 +236,8 @@ void ScrollView::layout()
     bool needH = hbar_ && hbar_->isVisible();
     float viewW = needV ? rect_.w - barThick : rect_.w;
     float viewH = needH ? rect_.h - barThick : rect_.h;
-    contentWidget_->setRect({ 0, 0, viewW, contentH_ });
+    // as wide as it asked for when that is more than the view (the horizontal bar scrolls over it), else as the view
+    contentWidget_->setRect({ 0, 0, needH ? max2(viewW, contentW_) : viewW, contentH_ });
     contentWidget_->layout();
 }
 

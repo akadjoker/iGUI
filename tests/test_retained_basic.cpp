@@ -10,6 +10,7 @@
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/ComboBox.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ScrollWidgets.hpp>
 #include <igui/widgets/ViewWidgets.hpp>
 
 using namespace rh;
@@ -511,6 +512,71 @@ void testLabelAndComboHintsAreMeasured()
     check(fabsf(combo->sizeHint().x - withTheme) < 0.01f, "and with the theme's again when the font is taken off");
 }
 
+// ---- ScrollView: a horizontal bar that does not stick, and content as wide as it asks for ----
+
+// A widget whose hint is the width it has (never less than 50): the kind that held a ScrollView's content at its widest.
+class AsWideAsItIs : public Widget
+{
+public:
+    IG_WIDGET_CLASS(AsWideAsItIs, Widget);
+    Vec2f sizeHint() const override
+    {
+        return { rect_.w > 50.0f ? rect_.w : 50.0f, 400.0f };
+    }
+};
+
+// A widget that asks for a fixed width and height.
+class Wants : public Widget
+{
+public:
+    IG_WIDGET_CLASS(Wants, Widget);
+    Wants(float w, float h) : w_(w), h_(h) {}
+    Vec2f sizeHint() const override
+    {
+        return { w_, h_ };
+    }
+    float w_, h_;
+};
+
+ScrollBar* barOf(ScrollView* view, ScrollBarOrientation o)
+{
+    for (Widget* c: view->children())
+        if (ScrollBar* bar = widget_cast<ScrollBar>(c))
+            if (bar->orientation() == o) return bar;
+    return nullptr;
+}
+
+void testScrollViewHorizontalBar()
+{
+    Harness h(700.0f, 400.0f, false);
+    Widget* holder = h.root()->createChild<Widget>();
+    ScrollView* view = holder->createChild<ScrollView>();
+    view->setRect({ 10.0f, 10.0f, 200.0f, 100.0f });
+    AsWideAsItIs* content = view->setContent<AsWideAsItIs>();
+    h.relayout();
+    check(content->rect().w <= 200.0f, "content that asks for the width it has fits a view of 200");
+    view->setRect({ 10.0f, 10.0f, 600.0f, 100.0f });
+    h.relayout();
+    view->setRect({ 10.0f, 10.0f, 200.0f, 100.0f });
+    h.relayout();
+    if (content->rect().w > 200.0f) printf("    the content is %.0f wide in a view of 200\n", static_cast<double>(content->rect().w));
+    check(content->rect().w <= 200.0f, "and after the view was 600 wide it fits 200 again (the horizontal bar does not stay)");
+    ScrollBar* hbar = barOf(view, ScrollBarOrientation::Horizontal);
+    check(hbar && !hbar->isVisible(), "the horizontal bar is not shown for it");
+
+    // content wider than the view: it is as wide as it asks for, and the bar scrolls over it
+    ScrollView* wide = holder->createChild<ScrollView>();
+    wide->setRect({ 10.0f, 200.0f, 200.0f, 100.0f });
+    Wants* wants = wide->setContent<Wants>(500.0f, 60.0f);
+    h.relayout();
+    check(wants->rect().w == 500.0f, "content that asks for 500 in a view of 200 is laid out 500 wide");
+    ScrollBar* wideBar = barOf(wide, ScrollBarOrientation::Horizontal);
+    check(wideBar && wideBar->isVisible(), "and the horizontal bar is shown");
+    wide->setRect({ 10.0f, 200.0f, 800.0f, 100.0f });
+    h.relayout();
+    check(wants->rect().w == 800.0f && wideBar && !wideBar->isVisible(), "in a view of 800 it takes the view and the bar goes");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -528,6 +594,7 @@ int main(int argc, char** argv)
     RUN(testAutomaticLayoutKeepsHandPlacedWidgets);
     RUN(testImageButtonStates);
     RUN(testLabelAndComboHintsAreMeasured);
+    RUN(testScrollViewHorizontalBar);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
