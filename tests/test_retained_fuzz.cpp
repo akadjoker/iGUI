@@ -123,10 +123,17 @@ public:
         if (what == 0 && parent->children().size() > 1)
         {
             Widget* sibling = parent->children()[static_cast<size_t>(rng_.below(static_cast<int>(parent->children().size())))];
-            if (sibling != self && removable(sibling)) parent->removeChild(sibling);
+            if (sibling != self && removable(sibling))
+            {
+                forget(sibling);
+                parent->removeChild(sibling);
+            }
         }
         else if (what == 1 && removable(self))
+        {
+            forget(self);
             parent->removeChild(self);
+        }
         else
             h_.app.requestLayout();
     }
@@ -184,10 +191,25 @@ private:
         return ok[static_cast<size_t>(rng_.below(static_cast<int>(ok.size())))];
     }
 
+    // scratch_ is a raw pointer, and the widget it points at (or one that holds it) can be taken out of the tree and
+    // deleted: it is forgotten then, because a widget made later at the same address would be taken for it, and where
+    // the run puts widgets would then depend on the allocator (the same seed gave two pictures after a change that only
+    // moved what the heap hands out).
+    void forget(const Widget* removed)
+    {
+        for (const Widget* p = scratch_; p; p = p->parent())
+            if (p == removed)
+            {
+                scratch_ = nullptr;
+                return;
+            }
+    }
+
     void removeWidget(Widget* w)
     {
         if (!w || !w->parent()) return;
         if (w == h_.app.root() || !removable(w)) return;
+        forget(w);
         w->parent()->removeChild(w);
         ++removed_;
     }
