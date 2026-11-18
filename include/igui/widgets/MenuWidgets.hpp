@@ -204,6 +204,14 @@ public:
 
     /// @brief Show the menu as a popup at screen coordinates.
     void exec(float x, float y, Widget* owner = nullptr);
+
+    /// @brief Emitted when the menu is about to be shown, before its size is worked out: by exec()
+    ///        (a click on the title in a MenuBar, a context menu) and when the menu is about to
+    ///        open as a submenu. The place to build or refresh the items (a list of recent files,
+    ///        the enabled and checked state of each action) instead of keeping them up to date
+    ///        all the time: the handler may clearActions() and add actions to this menu. It must
+    ///        not change the menu that holds this one as a submenu.
+    Signal<> aboutToShow;
     /// @brief Highlight an item as if the mouse were over it (-1 clears).
     void highlight(int idx)
     {

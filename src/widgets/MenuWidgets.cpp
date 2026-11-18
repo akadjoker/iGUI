@@ -154,6 +154,7 @@ Widget::Vec2f Menu::sizeHint() const
 
 void Menu::exec(float x, float y, Widget* owner)
 {
+    aboutToShow.emit(); // the items are up to date before the size is worked out
     Vec2f sz = sizeHint();
     float sw = static_cast<float>(WidgetApp::instance().width());
     float sh = static_cast<float>(WidgetApp::instance().height());
@@ -188,6 +189,9 @@ void Menu::showSubmenu_(int idx)
     MenuAction* a = actions_[idx];
     Menu* sub = a->submenu();
     if (!sub) return;
+    sub->aboutToShow.emit();
+    // (a handler that rebuilt this menu took the action away: nothing to open)
+    if (idx >= static_cast<int>(actions_.size()) || actions_[idx]->submenu() != sub) return;
 
     Widget::Vec2f sz = sub->sizeHint();
     Rect abs = absoluteRect();

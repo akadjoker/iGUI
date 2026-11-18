@@ -203,6 +203,122 @@ void testMenuToggledHandlerRebuildsMenu()
     }
 }
 
+// ---- item 14: aboutToShow ----
+
+void testMenuAboutToShow()
+{
+    Harness h(420.0f, 300.0f, false);
+    // exec: emitted once per showing, before the size is worked out, so the items the handler adds are in the menu
+    Menu* menu = new Menu();
+    menu->addAction("Fixed");
+    int shown = 0;
+    menu->aboutToShow.connect(
+            [&]()
+            {
+                ++shown;
+                menu->clearActions();
+                for (int i = 0; i < shown; ++i) menu->addAction(String("item ") + String::number(i));
+            });
+    check(shown == 0, "adding actions to a menu does not emit aboutToShow");
+    menu->exec(10.0f, 10.0f);
+    h.frames(12);
+    check(shown == 1, "exec emits aboutToShow once");
+    check(menu->actionCount() == 1, "the handler rebuilt the menu");
+    const float h1 = menu->rect().h;
+    h.frames(30);
+    check(shown == 1, "frames and hovering do not emit it again");
+    h.moveTo(menu->rect().x + 20.0f, menu->rect().y + 10.0f);
+    h.frames(3);
+    check(shown == 1, "hovering an item does not emit it again");
+    WidgetApp::instance().closePopup();
+    h.frames(20);
+    menu->exec(10.0f, 10.0f);
+    h.frames(12);
+    check(shown == 2 && menu->actionCount() == 2, "the second showing emits it again, and the menu has the items of the second");
+    check(menu->rect().h > h1, "the size of the menu is the one of the items the handler added, not of those it had");
+    check(menu->rect().h == menu->sizeHint().y, "the rectangle of the menu is its size hint");
+    WidgetApp::instance().closePopup();
+    h.frames(20);
+    delete menu;
+
+    // a MenuBar opens its menus with exec: a click on the title emits it
+    MenuBar* bar = new MenuBar();
+    h.root()->addChild(bar);
+    bar->setRect(Rect(0.0f, 0.0f, 420.0f, 26.0f));
+    Menu* file = bar->addMenu("File");
+    int fileShown = 0;
+    file->aboutToShow.connect([&]() { ++fileShown; file->addAction("New"); });
+    h.relayout();
+    h.clickWidget(bar);
+    bar->openMenu(0);
+    h.frames(3);
+    check(fileShown >= 1 && file->actionCount() >= 1, "a menu opened from a MenuBar emits aboutToShow");
+    WidgetApp::instance().closePopup();
+    h.frames(20);
+}  // the bar belongs to the window, which goes with the harness
+
+void testSubmenuAboutToShow()
+{
+    Harness h(420.0f, 300.0f, false);
+    Menu* menu = new Menu();
+    menu->addAction("A long entry that sets the width");
+    Menu* sub = menu->addSubmenu("Recent");
+    int shown = 0;
+    sub->aboutToShow.connect(
+            [&]()
+            {
+                ++shown;
+                sub->clearActions();
+                for (int i = 0; i < 3 * shown; ++i) sub->addAction(String("file") + String::number(i));
+            });
+    menu->exec(10.0f, 10.0f);
+    h.frames(12);
+    check(shown == 0, "a submenu that is not open has not emitted aboutToShow");
+    const Rect row = menu->actionRect(1);
+    h.moveTo(row.x + 20.0f, row.y + row.h * 0.5f);
+    h.frames(3);
+    check(shown == 1, "hovering the item of a submenu emits its aboutToShow");
+    check(sub->actionCount() == 3, "the submenu has the items its handler built");
+    check(sub->rect().h == sub->sizeHint().y && sub->rect().h > 3.0f * Theme::instance().menuItemHeight,
+            "and it opens with the size of those items");
+    h.moveTo(row.x + 30.0f, row.y + row.h * 0.5f);
+    h.frames(3);
+    check(shown == 1, "moving over the same item does not emit it again");
+    // away and back: the submenu closes, and opening it again emits again
+    const Rect first = menu->actionRect(0);
+    h.moveTo(first.x + 20.0f, first.y + first.h * 0.5f);
+    h.frames(3);
+    h.moveTo(row.x + 20.0f, row.y + row.h * 0.5f);
+    h.frames(3);
+    check(shown == 2 && sub->actionCount() == 6, "opening it again emits again, and the items are the new ones");
+    WidgetApp::instance().closePopup();
+    h.frames(20);
+    delete menu;
+}
+
+// the handler of a submenu's aboutToShow rebuilds the menu that holds it, which it must not: the menu stays standing and
+// opens nothing (meant to run under the address sanitizer)
+void testSubmenuAboutToShowRebuildsParent()
+{
+    Harness h(420.0f, 300.0f, false);
+    Menu* menu = new Menu();
+    menu->addAction("A long entry that sets the width");
+    Menu* sub = menu->addSubmenu("Recent");
+    sub->addAction("file");
+    sub->aboutToShow.connect([&]() { menu->clearActions(); });
+    menu->exec(10.0f, 10.0f);
+    h.frames(12);
+    const Rect row = menu->actionRect(1);
+    h.moveTo(row.x + 20.0f, row.y + row.h * 0.5f);
+    h.frames(3);
+    check(menu->actionCount() == 0, "the parent was cleared by the handler");
+    h.moveTo(row.x + 22.0f, row.y + 3.0f);
+    h.frames(3);
+    WidgetApp::instance().closePopup();
+    h.frames(20);
+    delete menu;
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -213,6 +329,9 @@ int main(int argc, char** argv)
     RUN(testMenuActionIcon);
     RUN(testMenuToggled);
     RUN(testMenuToggledHandlerRebuildsMenu);
+    RUN(testMenuAboutToShow);
+    RUN(testSubmenuAboutToShow);
+    RUN(testSubmenuAboutToShowRebuildsParent);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
