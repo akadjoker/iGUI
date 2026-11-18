@@ -898,6 +898,13 @@ struct PianoNote
     float velocity = 0.8f; ///< 0 to 1, how hard the note is played; the notes added without one have 0.8
 };
 
+/// A piano roll. How many notes it draws: only the notes whose row and time reach into the visible part, one by one (six
+/// rectangles each), while the roll has no more notes than half the cells it shows (a cell is a pixel column of a pitch row,
+/// the columns counted up to 4096). With more notes than that it draws what they cover: the notes that start in the same cell
+/// are one (from the first start to the last end, at the loudest velocity), the cells of a row that touch are one run, and a run
+/// is drawn as a note; and the velocity lane draws a bar for each pixel column (the tallest) when it has more than two notes for
+/// each column. So a frame is bounded by the pixels on screen, whatever the number of notes. A note being dragged is always
+/// drawn as a note, on top.
 class PianoRoll : public Widget
 {
 public:
@@ -1083,6 +1090,8 @@ private:
     void paintKeys(PaintContext& ctx, const Rect& ka) const;
     void paintGrid(PaintContext& ctx, const Rect& ga) const;
     void paintNotes(PaintContext& ctx, const Rect& ga) const;
+    bool notePitchesToDraw(PaintContext& ctx, const Rect& ga, int& from, int& to) const;
+    void paintDenseNotes(PaintContext& ctx, const Rect& ga) const; // paintNotes for a roll with more notes than it has cells for
     void paintPlayhead(PaintContext& ctx, const Rect& ga) const;
 
     ct::Vector<PianoNote> notes_;

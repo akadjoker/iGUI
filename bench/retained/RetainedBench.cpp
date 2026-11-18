@@ -753,6 +753,50 @@ void loopScenes()
         h.frames(3);
         RUN_IF("loops", "pianoroll_400_beats", 300, [&] { h.frame(); });
     }
+    // Many notes (round 6): a roll with more notes than half the cells it shows draws what they cover, and the lane one bar for
+    // each pixel column, so a frame is bounded by the pixels and not by the notes. 3000 notes in 32 beats are an ordinary roll
+    // (drawn note by note, as always); 200000 notes in 400 beats cover every row; the same with the lane on; and 100000 notes
+    // far out of view next to the 200 of the roll above, which is the pass over notes that are not seen.
+    {
+        Harness h(1280.0f, 720.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        PianoRoll* roll = box->createChild<PianoRoll>();
+        roll->setStretch(1.0f);
+        roll->setPitchRange(36, 96);
+        for (int i = 0; i < 3000; ++i) roll->addNote(40 + (i * 7) % 50, static_cast<float>(i) * (32.0f / 3000.0f), 0.5f + 0.25f * static_cast<float>(i % 4));
+        roll->setTimeRange(0.0f, 32.0f);
+        h.relayout();
+        h.frames(3);
+        RUN_IF("loops", "pianoroll_3000_notes_32_beats", 100, [&] { h.frame(); });
+    }
+    {
+        Harness h(1280.0f, 720.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        PianoRoll* roll = box->createChild<PianoRoll>();
+        roll->setStretch(1.0f);
+        roll->setPitchRange(36, 96);
+        for (int i = 0; i < 200000; ++i) roll->addNote(40 + (i * 7) % 50, static_cast<float>(i) * 0.002f, 0.25f + 0.25f * static_cast<float>(i % 4), 0.1f + 0.1f * static_cast<float>(i % 9));
+        roll->setTimeRange(0.0f, 400.0f);
+        h.relayout();
+        h.frames(2);
+        RUN_IF("loops", "pianoroll_200000_notes", 3, [&] { h.frame(); });
+        roll->setShowVelocityLane(true);
+        h.frames(2);
+        RUN_IF("loops", "pianoroll_200000_notes_lane", 3, [&] { h.frame(); });
+    }
+    {
+        Harness h(1280.0f, 720.0f);
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        PianoRoll* roll = box->createChild<PianoRoll>();
+        roll->setStretch(1.0f);
+        roll->setPitchRange(36, 96);
+        for (int i = 0; i < 200; ++i) roll->addNote(40 + (i * 7) % 50, static_cast<float>(i) * 0.5f, 0.5f + 0.25f * static_cast<float>(i % 4));
+        for (int i = 0; i < 100000; ++i) roll->addNote(40 + (i * 7) % 50, 1000.0f + static_cast<float>(i), 0.5f);
+        roll->setTimeRange(0.0f, 32.0f);
+        h.relayout();
+        h.frames(3);
+        RUN_IF("loops", "pianoroll_100000_notes_out_of_view", 20, [&] { h.frame(); });
+    }
 }
 
 // The Chart with many points: one idle frame (the chart repaints everything it has), a mouse move over it (the frame and

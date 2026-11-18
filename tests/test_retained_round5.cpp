@@ -1681,19 +1681,40 @@ void testHostileManyNotes()
     for (int i = 0; i < 4000; ++i) roll->addNote(50 + i % 9, static_cast<float>(i) * 0.002f, 0.002f, static_cast<float>(i % 10) * 0.1f);
     watch.frame("4000 notes in view");
     check(watch.ok, "four thousand notes of a quarter of a pixel each in view: a bounded frame");
-    // two hundred thousand in view at once, so many that the roll's own drawing of notes is not what is looked at: the events of a
-    // lane drag over all of them, without a frame, keep the heap bounded and say each note once
+    // two hundred thousand in view at once, with the lane on: the frames are drawn now (round 6: a roll with more notes than
+    // half the cells it shows draws what they cover, a note for each run, and the lane one bar for each pixel column; before
+    // that a frame of this asked the heap for 89 MiB and the program stopped at the ceiling), so the vertex bound, the heap
+    // ceiling and the finite rectangles are looked at in every frame of a lane drag over all of them, which says each note once
     roll->clearNotes();
     for (int i = 0; i < 200000; ++i) roll->addNote(50 + i % 9, static_cast<float>(i) * 0.00004f, 0.00004f, 0.5f);
     told = 0;
-    watch.drawAfterEvents = false;
+    watch.frame("200000 notes in view");
     watch.move(60.0f, yVelocity(0.9f), "200000 notes in view");
     watch.button(0, true, "200000 notes in view");
     watch.move(415.0f, yVelocity(0.1f), "200000 notes in view");
     watch.button(0, false, "200000 notes in view");
+    check(watch.ok, "two hundred thousand notes in view, the lane on: every frame is bounded and finite");
     check(told > 100000 && told <= 200000, "a lane drag over two hundred thousand notes in view says each note once");
-    check(watch.mostAsked < 16ull << 20, "and no event of it asked the heap for more than 16 MiB");
+    check(watch.mostAsked < 16ull << 20, "and no frame or event of it asked the heap for more than 16 MiB");
     check(notesSane(roll), "(the notes are sane)");
+    // the same without the lane, with the velocity shown, and with notes of a length (a million overlapping long notes would be
+    // 4 million vertices one by one)
+    roll->setShowVelocityLane(false);
+    roll->setShowVelocity(true);
+    watch.frame("200000 notes in view, no lane");
+    roll->clearNotes();
+    for (int i = 0; i < 200000; ++i) roll->addNote(48 + i % 12, static_cast<float>(i % 9973) * 0.0008f, 0.5f + static_cast<float>(i % 7), 0.1f * static_cast<float>(i % 11));
+    watch.frame("200000 long notes in view");
+    check(watch.ok, "two hundred thousand long notes, the velocity shown: a bounded, finite frame");
+    check(watch.mostAsked < 16ull << 20, "and a frame asks the heap for little (under 16 MiB)");
+    // and past the edges of the view, with a note being dragged among them
+    roll->setTimeRange(3.0f, 3.5f);
+    watch.frame("200000 notes, 0.5 beats in view");
+    watch.move(RollRig::xBeat(0.2f), RollRig::yPitch(50), "200000 notes, dragging");
+    watch.button(0, true, "200000 notes, dragging");
+    watch.move(RollRig::xBeat(0.4f), RollRig::yPitch(51), "200000 notes, dragging");
+    watch.button(0, false, "200000 notes, dragging");
+    check(watch.ok && notesSane(roll), "two hundred thousand notes with half a beat in view, one of them dragged: bounded, finite frames and sane notes");
 }
 
 // the thickness of the bars that is not a number, infinite, enormous, zero or negative, with every kind of bar in the window

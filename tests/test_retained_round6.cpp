@@ -288,6 +288,197 @@ void testPaintTakesTheBarsRoomFromTheBar()
     }
 }
 
+// ---- item 2: the piano roll's notes are bounded by the pixels on screen ----
+
+// The roll of these tests: 400x200 at (20, 20) in a 480x260 window, 12 rows of 12 pixels (pitches 48 to 59, the top row is 59),
+// the keys 36 pixels wide so the grid starts at x = 56 and 8 beats take 364 pixels, 45.5 a beat.
+struct RollRig
+{
+    explicit RollRig(float rollHeight = 200.0f)
+            : screen(480.0f, 260.0f),
+              h(screen.h)
+    {
+        roll = h.root()->createChild<PianoRoll>();
+        roll->setRect(Rect(20.0f, 20.0f, 400.0f, rollHeight));
+        roll->setPitchRange(48, 60);
+        roll->setTimeRange(0.0f, 8.0f);
+        h.frame();
+    }
+    static float xBeat(float beat)
+    {
+        return 56.0f + beat / 8.0f * 364.0f;
+    }
+    static float yPitch(int pitch)
+    {
+        return 20.0f + static_cast<float>(59 - pitch) * 12.0f + 6.0f;
+    }
+    size_t vertices()
+    {
+        h.frame();
+        return GetDrawList().vertices().size();
+    }
+    Screen screen;
+    Harness& h;
+    PianoRoll* roll = nullptr;
+};
+
+// How many vertices one note adds to a frame (all six rectangles of it).
+size_t verticesOfOneNote()
+{
+    RollRig rig;
+    const size_t none = rig.vertices();
+    rig.roll->addNote(55, 2.0f, 1.0f);
+    return rig.vertices() - none;
+}
+
+// An ordinary roll draws every note, one by one, as it always did: ten notes are ten times what one is.
+void testPianoRollOrdinaryRollDrawsEveryNote()
+{
+    const size_t one = verticesOfOneNote();
+    check(one > 0, "(one note adds vertices)");
+    RollRig rig;
+    const size_t none = rig.vertices();
+    for (int i = 0; i < 10; ++i) rig.roll->addNote(50 + i % 5, 0.5f * static_cast<float>(i), 0.4f);
+    check(rig.vertices() - none == 10 * one, "ten notes in view are ten times the vertices of one: an ordinary roll is drawn note by note");
+    // and a thousand notes (under half of the 4368 cells of this roll's view) still are
+    RollRig rig2;
+    const size_t none2 = rig2.vertices();
+    for (int i = 0; i < 1000; ++i) rig2.roll->addNote(48 + i % 12, 8.0f * static_cast<float>(i) / 1000.0f, 0.05f);
+    check(rig2.vertices() - none2 == 1000 * one, "a thousand notes in view, under half the cells of the view, are drawn one by one");
+}
+
+// The notes that do not reach the visible part are not drawn: a roll too short for its rows draws nothing for the rows that
+// are past its bottom edge.
+void testPianoRollDrawsOnlyNotesThatReachTheView()
+{
+    const size_t one = verticesOfOneNote();
+    RollRig rig(50.0f); // the rows from the fifth (the top four are 48 pixels) are below the bottom edge of the roll
+    const size_t none = rig.vertices();
+    for (int i = 0; i < 20; ++i) rig.roll->addNote(48 + i % 6, 0.2f * static_cast<float>(i), 0.1f); // pitches 48 to 53: the rows from the 7th
+    check(rig.vertices() == none, "notes in rows past the bottom of the roll add no vertices (they are drawn nowhere)");
+    for (int i = 0; i < 4; ++i) rig.roll->addNote(59 - i % 2, 0.2f * static_cast<float>(i), 0.1f); // the top two rows
+    check(rig.vertices() - none == 4 * one, "and the notes in the rows that show are drawn");
+    // notes past the left and right edges of the view
+    RollRig rig2;
+    const size_t none2 = rig2.vertices();
+    for (int i = 0; i < 50; ++i) rig2.roll->addNote(55, 20.0f + static_cast<float>(i), 1.0f);
+    for (int i = 0; i < 50; ++i) rig2.roll->addNote(55, -60.0f + static_cast<float>(i), 1.0f);
+    check(rig2.vertices() == none2, "notes before and after the view add no vertices");
+}
+
+// 36000 notes of a tenth of a pixel in nine rows (4000 in each, the first four beats) are nine runs: a note for each row, from
+// where the first starts to where the last one ends.
+void testPianoRollManyNotesAreDrawnAsWhatTheyCover()
+{
+    const size_t one = verticesOfOneNote();
+    const int rows = 9;
+    RollRig rig;
+    const size_t none = rig.vertices();
+    const Shot empty = rig.screen.take();
+    for (int k = 0; k < 4000; ++k)
+        for (int r = 0; r < rows; ++r) rig.roll->addNote(50 + r, static_cast<float>(k) * 0.001f, 0.00005f);
+    const size_t dense = rig.vertices();
+    check(dense - none == static_cast<size_t>(rows) * one, "36000 notes of tiny length in nine rows are nine notes' worth of vertices (a run in each row)");
+    if (dense - none != static_cast<size_t>(rows) * one) printf("    %zu vertices more than without notes, one note is %zu\n", dense - none, one);
+    const Shot shot = rig.screen.take();
+    // what they cover: each row from the first start (x = 56) to 4 pixels past the last (x = 56 + 3.999 beats of 45.5 pixels)
+    bool contiguous = true;
+    int firstCol[16] = {}, lastCol[16] = {};
+    for (int r = 0; r < rows; ++r)
+    {
+        const int y = static_cast<int>(RollRig::yPitch(50 + r));
+        int first = -1, last = -1;
+        for (int x = 56; x < 420; ++x)
+        {
+            const bool covered = pixelAt(shot, x, y) != pixelAt(empty, x, y);
+            if (covered)
+            {
+                if (first < 0) first = x;
+                if (last >= 0 && x != last + 1) contiguous = false;
+                last = x;
+            }
+        }
+        firstCol[r] = first;
+        lastCol[r] = last;
+    }
+    check(contiguous, "each row of them is drawn as one stretch, without a gap");
+    const int wantFirst = 56, wantLast = static_cast<int>(RollRig::xBeat(3.999f)) + 4;
+    bool ends = true;
+    for (int r = 0; r < rows; ++r)
+        if (firstCol[r] < wantFirst || firstCol[r] > wantFirst + 1 || lastCol[r] < wantLast - 1 || lastCol[r] > wantLast + 1) ends = false;
+    check(ends, "from the start of the first note to the end of the last");
+    if (!ends) printf("    row 0 covers %d to %d, wanted %d to %d\n", firstCol[0], lastCol[0], wantFirst, wantLast);
+    // the rows without notes are as they were
+    const int y = static_cast<int>(RollRig::yPitch(49));
+    int changed = 0;
+    for (int x = 56; x < 420; ++x)
+        if (pixelAt(shot, x, y) != pixelAt(empty, x, y)) ++changed;
+    check(changed == 0, "and the rows without notes are not touched");
+}
+
+// The same picture as a roll with the nine long notes would draw.
+void testPianoRollManyNotesLookLikeLongNotes()
+{
+    const int rows = 9;
+    RollRig dense;
+    for (int k = 0; k < 4000; ++k)
+        for (int r = 0; r < rows; ++r) dense.roll->addNote(50 + r, static_cast<float>(k) * 0.001f, 0.00005f);
+    dense.h.frame();
+    const Shot a = dense.screen.take();
+    RollRig plain;
+    // one note for a row from 56 to 4 pixels past the last start: a width of (x of 3.999 beats - 56) + 4, so a length of that plus 1 pixel
+    const float width = RollRig::xBeat(3.999f) - 56.0f + 4.0f;
+    for (int r = 0; r < rows; ++r) plain.roll->addNote(50 + r, 0.0f, (width + 1.0f) / 45.5f);
+    plain.h.frame();
+    const Shot b = plain.screen.take();
+    const int n = differing(a, b, 56, 20, 420, 220);
+    check(n < 60, "the picture of 36000 tiny notes is the picture of nine long ones (a few pixels of rounding at the ends apart)");
+    if (n >= 60) printf("    %d pixels differ\n", n);
+}
+
+// The lane: more than two notes for each pixel column is one bar for each column, the tallest.
+void testPianoRollLaneDrawsOneBarForEachColumn()
+{
+    // 3000 notes in the 364 pixels of the lane (eight in each column), velocities that differ, the lane on
+    const size_t one = verticesOfOneNote();
+    const int notes = 3000;
+    RollRig rig;
+    rig.roll->setShowVelocityLane(true);
+    rig.h.frame();
+    const size_t laneOnly = rig.vertices();
+    const Shot bare = rig.screen.take();
+    ct::Vector<float> starts, vels;
+    for (int i = 0; i < notes; ++i)
+    {
+        const float start = 8.0f * static_cast<float>(i) / static_cast<float>(notes);
+        const float vel = static_cast<float>((i * 37) % 100) / 100.0f;
+        starts.push_back(start);
+        vels.push_back(vel);
+        rig.roll->addNote(50 + i % 9, start, 0.00005f, vel);
+    }
+    const size_t with = rig.vertices();
+    // the notes area: nine runs; the lane: a bar (two rectangles, 8 vertices) for each column that has a note, 364 of them at most
+    check(with - laneOnly <= 9 * one + 364 * 8, "3000 notes with the lane on add at most nine runs and a bar for each pixel column");
+    if (with - laneOnly > 9 * one + 364 * 8) printf("    %zu vertices added\n", with - laneOnly);
+    // every note's own column has a bar at least as tall as the note's velocity: look for the bar's colour at the height of each
+    const Shot shot = rig.screen.take();
+    const float laneTop = 20.0f + 200.0f - 60.0f, foot = laneTop + 60.0f - 2.0f, usable = 60.0f - 2.0f - 4.0f;
+    int missing = 0;
+    for (int i = 0; i < notes; ++i)
+    {
+        const float x = 56.0f + starts[static_cast<size_t>(i)] / 8.0f * 364.0f;
+        const float h = Math::max2(2.0f, vels[static_cast<size_t>(i)] * usable);
+        if (x < 58.0f || x >= 418.0f) continue; // (the playhead is drawn over the first two columns, the roll's border over the last)
+        const int px = static_cast<int>(x), py = static_cast<int>(Math::min2(foot - 1.0f, foot - h + 1.5f)); // inside a bar of that height
+        if (pixelAt(shot, px, py) == pixelAt(bare, px, py))
+        {
+            if (++missing <= 4) printf("    note %d at x %g, velocity %g: pixel (%d, %d) is still the background\n", i, static_cast<double>(x), static_cast<double>(vels[static_cast<size_t>(i)]), px, py);
+        }
+    }
+    check(missing == 0, "each of the 3000 notes has a bar at its start at least as tall as its velocity");
+    if (missing) printf("    %d notes have no bar under them\n", missing);
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -296,6 +487,11 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testPaintTakesTheBarsRoomFromTheBar);
+    RUN(testPianoRollOrdinaryRollDrawsEveryNote);
+    RUN(testPianoRollDrawsOnlyNotesThatReachTheView);
+    RUN(testPianoRollManyNotesAreDrawnAsWhatTheyCover);
+    RUN(testPianoRollManyNotesLookLikeLongNotes);
+    RUN(testPianoRollLaneDrawsOneBarForEachColumn);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

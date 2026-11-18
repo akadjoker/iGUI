@@ -1601,12 +1601,227 @@ void PianoRoll::paintGrid(PaintContext& ctx, const Rect& ga) const
     }
 }
 
+// ---- notes bounded by the pixels on screen ----
+//
+// A roll draws its notes one by one, six rectangles each, while it has no more notes than half the cells of what it shows (a
+// cell is a pixel column of a pitch row): that is the picture of every ordinary roll, and the most it can ask of the draw list
+// is 12 vertices for each cell of the view. With more notes than that the notes cannot be told apart anyway, and the roll draws
+// what they cover: the notes that start in the same cell become one (from the first start to the last end, the loudest
+// velocity), the cells that touch in a row become one run, and a run is drawn as a note. That is at most one note for every five
+// pixels of a row, whatever the number of notes in the roll, and only the notes that reach the visible part are looked at.
+// The velocity lane does the same with its bars (one for each pixel column, the tallest) above two notes for each column.
+
+namespace
+{
+
+// The most pixel columns a frame of many notes counts (a wider roll counts wider cells).
+constexpr int kMaxNoteCols = 4096;
+// The notes a roll draws one by one, for each cell of the view.
+constexpr float kNotesPerCell = 0.5f;
+// The notes the lane draws a bar for, for each pixel column of the lane.
+constexpr float kLaneNotesPerCol = 2.0f;
+
+// Where the notes show: the part of the grid inside the clip, its pitch rows (counted from the top) and its columns.
+struct NoteView
+{
+    float x0 = 0.0f, x1 = 0.0f, y0 = 0.0f, y1 = 0.0f;
+    int row0 = 0, row1 = 0;
+    int cols = 1;
+    float colW = 1.0f;
+};
+
+// False when nothing of the grid is inside the clip (or the numbers say nothing).
+bool noteView(const PaintContext& ctx, const Rect& ga, int rows, float rowH, NoteView& v)
+{
+    const Rect& c = ctx.clipRect();
+    v.x0 = Math::max2(ga.x, c.x);
+    v.x1 = Math::min2(ga.x + ga.w, c.x + c.w);
+    v.y0 = Math::max2(ga.y, c.y);
+    v.y1 = Math::min2(ga.y + ga.h, c.y + c.h);
+    if (!(v.x1 > v.x0 && v.y1 > v.y0)) return false;
+    v.row0 = static_cast<int>(Math::sane(floorf((v.y0 - ga.y) / rowH), 0.0f, 0.0f, static_cast<float>(rows)));
+    v.row1 = static_cast<int>(Math::sane(ceilf((v.y1 - ga.y) / rowH), static_cast<float>(rows), 0.0f, static_cast<float>(rows)));
+    if (v.row1 <= v.row0) return false;
+    const float w = v.x1 - v.x0;
+    v.cols = static_cast<int>(Math::sane(ceilf(w), 1.0f, 1.0f, static_cast<float>(kMaxNoteCols)));
+    v.colW = w / static_cast<float>(v.cols);
+    return true;
+}
+
+// The column of an x (the first or the last when it is outside).
+int columnOf(const NoteView& v, float x)
+{
+    return static_cast<int>(Math::sane((x - v.x0) / v.colW, 0.0f, 0.0f, static_cast<float>(v.cols - 1)));
+}
+
+// What the notes that start in one cell cover.
+struct NoteCell
+{
+    float x0 = 1.0e30f;  // the leftmost start
+    float x1 = -1.0e30f; // the rightmost end (less than x0: nothing starts here)
+    unsigned char vel = 0;
+};
+
+// One note's rectangles: the body, the highlight along the top, the border.
+void drawNoteBox(PaintContext& ctx, const Rect& nr, const Color& c, bool showVelocity, float velocity)
+{
+    const float opacity = showVelocity ? 0.35f + 0.65f * velocity : 1.0f;
+    ctx.fill.SetColor(c.r, c.g, c.b, showVelocity ? static_cast<uint8_t>(c.a * opacity) : c.a);
+    ctx.fillRect(nr.x, nr.y, nr.w, nr.h);
+
+    // Top highlight
+    ctx.fill.SetColor(static_cast<uint8_t>(Math::min2(255, c.r + 60)),
+            static_cast<uint8_t>(Math::min2(255, c.g + 60)),
+            static_cast<uint8_t>(Math::min2(255, c.b + 60)), 200);
+    ctx.fillRect(nr.x, nr.y, nr.w, 2);
+
+    // Border
+    ctx.fill.SetColor(c.r / 2, c.g / 2, c.b / 2, 255);
+    ctx.fillRect(nr.x, nr.y, nr.w, 1);
+    ctx.fillRect(nr.x, nr.y + nr.h - 1, nr.w, 1);
+    ctx.fillRect(nr.x, nr.y, 1, nr.h);
+    ctx.fillRect(nr.x + nr.w - 1, nr.y, 1, nr.h);
+}
+
+// What the bars of the lane that start in one pixel column amount to: the tallest, and whether the gesture has touched one.
+struct LaneCol
+{
+    float x = 0.0f;
+    float vel = -1.0f; // less than 0: no bar starts here
+    bool touched = false;
+};
+
+} // namespace
+
+// More notes than the roll has cells for: see the note above. First the notes that reach the visible part are picked out (a roll
+// of a hundred thousand notes with a few in view is drawn as a roll of a few: one by one), and only when those are too many are
+// they drawn as what they cover.
+void PianoRoll::paintDenseNotes(PaintContext& ctx, const Rect& ga) const
+{
+    NoteView view;
+    if (!noteView(ctx, ga, pitchHi_ - pitchLo_, rowH_, view)) return;
+    const int rowsShown = view.row1 - view.row0;
+    const float cellCount = static_cast<float>(rowsShown) * static_cast<float>(view.cols);
+    ct::Vector<int> seen;
+    for (size_t i = 0; i < notes_.size(); ++i)
+    {
+        const PianoNote& n = notes_[i];
+        if (n.pitch < pitchHi_ - view.row1 || n.pitch >= pitchHi_ - view.row0) continue;
+        const float x = beatToX(n.start, ga);
+        const float x2 = beatToX(n.start + n.length, ga);
+        const float right = x + Math::max2(4.0f, x2 - x - 1.0f);
+        if (!(right >= view.x0 && x <= view.x1)) continue; // (a position that is not a number is out)
+        seen.push_back(static_cast<int>(i));
+    }
+    if (static_cast<float>(seen.size()) <= cellCount * kNotesPerCell)
+    {
+        // few: one by one, in the order of the notes
+        for (size_t k = 0; k < seen.size(); ++k)
+        {
+            const int i = seen[k];
+            const Rect nr = noteRect(notes_[static_cast<size_t>(i)], ga);
+            drawNoteBox(ctx, nr, i == draggingNote_ ? noteSelColor_ : noteColor_, showVelocity_, notes_[static_cast<size_t>(i)].velocity);
+        }
+        return;
+    }
+    // many: the cells
+    ct::Vector<NoteCell> cells;
+    cells.resize(static_cast<size_t>(rowsShown) * static_cast<size_t>(view.cols));
+    for (size_t k = 0; k < seen.size(); ++k)
+    {
+        const int i = seen[k];
+        if (i == draggingNote_) continue; // (drawn on top of the rest, below)
+        const PianoNote& n = notes_[static_cast<size_t>(i)];
+        const int row = pitchHi_ - 1 - n.pitch;
+        const float x = beatToX(n.start, ga);
+        const float x2 = beatToX(n.start + n.length, ga);
+        const float right = x + Math::max2(4.0f, x2 - x - 1.0f);
+        NoteCell& cell = cells[static_cast<size_t>(row - view.row0) * static_cast<size_t>(view.cols) + static_cast<size_t>(columnOf(view, x))];
+        if (x < cell.x0) cell.x0 = x;
+        if (right > cell.x1) cell.x1 = right;
+        const unsigned char vel = static_cast<unsigned char>(Math::clamp(n.velocity, 0.0f, 1.0f) * 255.0f);
+        if (vel > cell.vel) cell.vel = vel;
+    }
+    for (int rr = 0; rr < rowsShown; ++rr)
+    {
+        const float y = ga.y + static_cast<float>(view.row0 + rr) * rowH_ + 1.0f;
+        const NoteCell* line = &cells[static_cast<size_t>(rr) * static_cast<size_t>(view.cols)];
+        bool open = false;
+        float runX0 = 0.0f, runX1 = 0.0f;
+        unsigned char runVel = 0;
+        for (int c = 0; c <= view.cols; ++c)
+        {
+            // (the cell past the last one closes the run that is still open)
+            const bool has = c < view.cols && line[c].x1 >= line[c].x0;
+            if (open && (c == view.cols || (has && line[c].x0 > runX1)))
+            {
+                // the run ends here (its edges are kept near the view: the rest is clipped anyway)
+                const float left = Math::max2(runX0, view.x0 - 2.0f);
+                const float rightEnd = Math::min2(runX1, view.x1 + 2.0f);
+                drawNoteBox(ctx, Rect(left, y, rightEnd - left, rowH_ - 2.0f), noteColor_, showVelocity_, static_cast<float>(runVel) * (1.0f / 255.0f));
+                open = false;
+            }
+            if (!has) continue;
+            if (!open)
+            {
+                open = true;
+                runX0 = line[c].x0;
+                runX1 = line[c].x1;
+                runVel = line[c].vel;
+            }
+            else
+            {
+                if (line[c].x1 > runX1) runX1 = line[c].x1;
+                if (line[c].vel > runVel) runVel = line[c].vel;
+            }
+        }
+    }
+    // the note being dragged, as it always is, on top
+    if (draggingNote_ >= 0 && draggingNote_ < static_cast<int>(notes_.size()))
+    {
+        const PianoNote& n = notes_[static_cast<size_t>(draggingNote_)];
+        if (n.pitch >= pitchLo_ && n.pitch < pitchHi_)
+        {
+            const Rect nr = noteRect(n, ga);
+            if (!(nr.x + nr.w < ga.x || nr.x > ga.x + ga.w)) drawNoteBox(ctx, nr, noteSelColor_, showVelocity_, n.velocity);
+        }
+    }
+}
+
+// How the notes are drawn: false when there is nothing to draw (no notes, nothing of the grid in view) or when the roll has
+// more notes than cells and has drawn them as what they cover; true when they are drawn one by one, the pitches in
+// [from, to) being the ones whose rows reach into the visible part (a short roll, or a tall pitch range, has rows past its
+// edge, and the notes in them are drawn nowhere). Kept out of line: inlined into paintNotes it cost the loop of an
+// ordinary roll registers (some five instructions a note).
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+bool PianoRoll::notePitchesToDraw(PaintContext& ctx, const Rect& ga, int& from, int& to) const
+{
+    if (notes_.empty()) return false;
+    NoteView view;
+    if (!noteView(ctx, ga, pitchHi_ - pitchLo_, rowH_, view)) return false;
+    const float cellCount = static_cast<float>(view.row1 - view.row0) * static_cast<float>(view.cols);
+    if (static_cast<float>(notes_.size()) > cellCount * kNotesPerCell)
+    {
+        paintDenseNotes(ctx, ga);
+        return false;
+    }
+    from = pitchHi_ - view.row1;
+    to = pitchHi_ - view.row0;
+    return true;
+}
+
 void PianoRoll::paintNotes(PaintContext& ctx, const Rect& ga) const
 {
+    int pitchFrom = 0, pitchTo = 0;
+    if (!notePitchesToDraw(ctx, ga, pitchFrom, pitchTo)) return;
     for (int i = 0; i < static_cast<int>(notes_.size()); ++i)
     {
         const auto& n = notes_[i];
-        if (n.pitch < pitchLo_ || n.pitch >= pitchHi_) continue;
+        if (n.pitch < pitchFrom || n.pitch >= pitchTo) continue;
         Rect nr = noteRect(n, ga);
         if (nr.x + nr.w < ga.x || nr.x > ga.x + ga.w) continue;
 
@@ -1655,6 +1870,43 @@ void PianoRoll::paintVelocityLane(PaintContext& ctx, const Rect& ga, float laneH
     ctx.fillRect(lr.x, lr.y, lr.w, 1);
 
     const size_t touched = laneDrag_ ? laneOrig_.size() : 0;
+    // With more notes than two for each pixel column the bars that start in a column are one (the tallest): the bars are 3 pixels
+    // wide, so a column has no room for more than that, and the picture is the one the bars made over each other.
+    const int laneCols = static_cast<int>(Math::sane(ceilf(lr.w), 1.0f, 1.0f, static_cast<float>(kMaxNoteCols)));
+    if (static_cast<float>(notes_.size()) > static_cast<float>(laneCols) * kLaneNotesPerCol)
+    {
+        const float colW = lr.w / static_cast<float>(laneCols);
+        ct::Vector<LaneCol> columns;
+        columns.resize(static_cast<size_t>(laneCols));
+        for (size_t i = 0; i < notes_.size(); ++i)
+        {
+            const PianoNote& n = notes_[i];
+            const float x = beatToX(n.start, ga);
+            if (!(x >= ga.x - 2.0f && x <= ga.x + ga.w + 2.0f)) continue;
+            LaneCol& col = columns[static_cast<size_t>(Math::sane((x - lr.x) / colW, 0.0f, 0.0f, static_cast<float>(laneCols - 1)))];
+            const float vel = Math::clamp(n.velocity, 0.0f, 1.0f);
+            if (vel > col.vel)
+            {
+                col.vel = vel;
+                col.x = x;
+            }
+            if (i < touched && laneOrig_[i] >= 0.0f) col.touched = true;
+        }
+        for (int k = 0; k < laneCols; ++k)
+        {
+            const LaneCol& col = columns[static_cast<size_t>(k)];
+            if (col.vel < 0.0f) continue;
+            const float h = Math::max2(2.0f, col.vel * usable);
+            const Color c = col.touched ? noteSelColor_ : noteColor_;
+            ctx.fill.SetColor(c.r, c.g, c.b, 255);
+            ctx.fillRect(col.x - 1.0f, foot - h, 3.0f, h);
+            ctx.fill.SetColor(static_cast<uint8_t>(c.r + (255 - c.r) / 2), static_cast<uint8_t>(c.g + (255 - c.g) / 2),
+                    static_cast<uint8_t>(c.b + (255 - c.b) / 2), 255);
+            ctx.fillRect(col.x - 1.0f, foot - h, 3.0f, 2.0f);
+        }
+        ctx.popClip();
+        return;
+    }
     for (size_t i = 0; i < notes_.size(); ++i)
     {
         const PianoNote& n = notes_[i];
