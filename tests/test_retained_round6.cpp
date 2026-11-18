@@ -10,6 +10,9 @@
 #include <unistd.h>
 
 #include <igui/widgets/AudioWidgets.hpp>
+#include <igui/widgets/AssetBrowser.hpp>
+#include <igui/widgets/AutomotiveWidgets.hpp>
+#include <igui/widgets/ChartWidget.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/MenuWidgets.hpp>
@@ -992,6 +995,91 @@ void testToolBarLoadsFilesWithoutIdsAndWithBadOnes()
     check(bar2.itemType(9) == ToolBar::ItemType::Toggle && bar2.isItemChecked(9) && bar2.itemCell(9) == 3 && bar2.itemTooltip(7) == String("seven"), "(with what the kind has: cell, tooltip, checked)");
 }
 
+// ---- item 8: the casts of numbers that are not numbers (-fsanitize=float-cast-overflow) ----
+//
+// A float that is NaN, infinite or out of range cast to an int is undefined (the sanitizer says so; on x86 it gives INT_MIN, which
+// the code after it mostly handles by luck). Math::toInt is the cast that says what it gives. Each widget below hit one of these
+// with the geometry or the data of a hostile test; the cases run the widgets on exactly that, and under the sanitizer the program
+// stops if one is left.
+
+void testToIntCasts()
+{
+    const float nan = 0.0f / 0.0f, inf = 1.0f / 0.0f;
+    check(Math::toInt(nan) == 0 && Math::toInt(nan, 7) == 7, "Math::toInt: not a number gives what was asked to keep");
+    check(Math::toInt(inf) == 1000000000 && Math::toInt(-inf) == -1000000000, "the infinities give the ends of the default range");
+    check(Math::toInt(3.0e30f, 0, 0, 10) == 10 && Math::toInt(-3.0e30f, 0, 0, 10) == 0 && Math::toInt(-3.0f, 0, 0, 10) == 0, "and what is outside the range is clamped to it");
+    check(Math::toInt(2.9f) == 2 && Math::toInt(-2.9f) == -2 && Math::toInt(7.0f, 0, 0, 10) == 7, "what is inside is cut towards zero, as static_cast<int> does");
+}
+
+void testWidgetsMeetNumbersThatAreNotNumbers()
+{
+    const float nan = 0.0f / 0.0f, inf = 1.0f / 0.0f;
+    Harness h(400.0f, 300.0f, false);
+    Widget* holder = h.root()->createChild<Widget>();
+    holder->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+
+    // a bar and a speed whose value is not a number (the text of the value is cast to an int)
+    PowerBar* power = holder->createChild<PowerBar>(0.0f, 100.0f, nan);
+    power->setRect(Rect(10.0f, 10.0f, 200.0f, 30.0f));
+    DigitalSpeed* speed = holder->createChild<DigitalSpeed>(nan);
+    speed->setRect(Rect(10.0f, 50.0f, 200.0f, 100.0f));
+    // the divider of a splitter that has no rectangle (the handle is cast to pixels)
+    Splitter* split = holder->createChild<Splitter>(LayoutDir::Horizontal);
+    split->setRect(Rect(nan, nan, nan, nan));
+    Splitter* vsplit = holder->createChild<Splitter>(LayoutDir::Vertical);
+    vsplit->setRect(Rect(inf, 0.0f, nan, 50.0f));
+    // the columns of the thumbnail grid and of the asset browser from a width that is not one
+    ThumbnailGrid* grid = holder->createChild<ThumbnailGrid>();
+    grid->setRect(Rect(220.0f, 10.0f, nan, 100.0f));
+    for (int i = 0; i < 5; ++i) grid->addItem(String("t") + String::number(i));
+    AssetBrowser* assets = holder->createChild<AssetBrowser>();
+    assets->setRect(Rect(220.0f, 120.0f, nan, 100.0f));
+    for (int i = 0; i < 5; ++i)
+    {
+        AssetItem item;
+        item.name = String("asset") + String::number(i);
+        assets->addItem(item);
+    }
+    // charts: values and samples that are not numbers (the number of ticks, of segments of a slice, the bin of a sample)
+    Chart* bars = holder->createChild<Chart>();
+    bars->setRect(Rect(10.0f, 160.0f, 120.0f, 120.0f));
+    ct::Vector<String> names;
+    ct::Vector<float> values;
+    for (int i = 0; i < 4; ++i)
+    {
+        names.push_back(String("c") + String::number(i));
+        values.push_back(i == 1 ? nan : (i == 2 ? inf : static_cast<float>(i)));
+    }
+    bars->bars(names, values, String("s"));
+    Chart* pie = holder->createChild<Chart>();
+    pie->setRect(Rect(140.0f, 160.0f, 120.0f, 120.0f));
+    pie->pie(names, values);
+    Chart* line = holder->createChild<Chart>();
+    line->setRect(Rect(270.0f, 160.0f, 120.0f, 120.0f));
+    ct::Vector<float> xs, ys;
+    for (int i = 0; i < 6; ++i)
+    {
+        xs.push_back(i == 0 || i == 3 ? nan : static_cast<float>(i));
+        ys.push_back(i == 2 ? nan : static_cast<float>(i * i));
+    }
+    line->plot(xs, ys, String("l"));
+    h.relayout();
+    h.frames(3);
+
+    // a histogram counts every sample, one that is not a number in the first bin (as it always did), one past the top in the last
+    Chart* hist = holder->createChild<Chart>();
+    hist->setRect(Rect(270.0f, 10.0f, 120.0f, 100.0f));
+    ct::Vector<float> samples;
+    for (int i = 0; i < 20; ++i) samples.push_back(static_cast<float>(i % 7));
+    samples.push_back(nan);
+    samples.push_back(nan);
+    const int series = hist->hist(samples, 5, String("h"));
+    h.frames(2);
+    double total = 0.0;
+    for (int i = 0; i < hist->categoryCount(); ++i) total += hist->valueD(series, i);
+    check(total == 22.0, "a histogram with samples that are not numbers still counts every sample once");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1012,6 +1100,8 @@ int main(int argc, char** argv)
     RUN(testHandlerDeletesTheSlider);
     RUN(testToolBarKeepsItsIdsAfterRemovalsAndDrags);
     RUN(testToolBarLoadsFilesWithoutIdsAndWithBadOnes);
+    RUN(testToIntCasts);
+    RUN(testWidgetsMeetNumbersThatAreNotNumbers);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

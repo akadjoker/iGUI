@@ -91,7 +91,7 @@ AssetBrowser::GridLayout AssetBrowser::computeGrid(const Rect& b) const
     const float gap = 6.f;
     g.cellW = thumbSize_ + 8.f;
     g.cellH = thumbSize_ + labelH + 6.f;
-    g.cols = std::max(1, static_cast<int>((b.w - pad * 2 + gap) / (g.cellW + gap)));
+    g.cols = Math::max2(1, Math::toInt((b.w - pad * 2 + gap) / (g.cellW + gap), 1, 1, 1000000)); // (a width that is not a number is one column)
     g.startX = b.x + pad;
     g.startY = b.y + 28.f;
     int rows = (static_cast<int>(items_.size()) + g.cols - 1) / g.cols;

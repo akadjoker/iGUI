@@ -354,7 +354,7 @@ void PowerBar::paint(PaintContext& ctx)
     ctx.font.SetBatch(&ctx.text);
     {
         char buf[32];
-        std::snprintf(buf, sizeof(buf), "%d %s", static_cast<int>(value_), unit_.c_str());
+        snprintf(buf, sizeof(buf), "%d %s", Math::toInt(value_), unit_.c_str());
         ctx.font.SetColor(Color(150, 150, 155, 200));
         float tw = ctx.font.GetTextWidth(buf);
         float asc = ctx.font.GetAscender();
@@ -559,7 +559,7 @@ void DigitalSpeed::paint(PaintContext& ctx)
     // Big speed value
     {
         char buf[16];
-        std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(value_));
+        snprintf(buf, sizeof(buf), "%d", Math::toInt(value_));
 
         ctx.font.SetColor(valueColor_);
         // We only have one font size, so we render at the font size available

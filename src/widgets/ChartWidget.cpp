@@ -480,14 +480,18 @@ void Chart::buildHistogram()
         categories_.push_back(String(buf));
         categoryHidden_.push_back(false);
     }
+    const double last = static_cast<double>(n - 1);
     for (ChartSeries& se : series_)
     {
         se.values.assign(static_cast<size_t>(n), 0.0);
         for (double v : se.samples)
         {
-            int k = static_cast<int>((v - lo) / width);
-            if (k >= n) k = n - 1;   // the top edge belongs to the last bin
-            if (k < 0) k = 0;
+            // clamped to the bins in the double (the two selects are minsd and maxsd, no branch): a sample under the lowest edge, or
+            // that is not a number, is in the first bin, and the top edge belongs to the last; the cast is of a number that fits
+            double pos = (v - lo) / width;
+            pos = last < pos ? last : pos;
+            pos = pos > 0.0 ? pos : 0.0;
+            const int k = static_cast<int>(pos);
             se.values[static_cast<size_t>(k)] += 1.0;
         }
     }
@@ -1241,7 +1245,7 @@ void Chart::paintPie(PaintContext& ctx, const Rect& b, const Rect& plot)
             polar(0.0f, 0.0f, kHoverPop, slice.start + slice.sweep * 0.5f, ox, oy);
         const float scx = cx + ox, scy = cy + oy;
 
-        int segs = static_cast<int>(ceilf(slice.sweep / step));
+        int segs = Math::toInt(ceilf(slice.sweep / step), 1, 1, 100000);
         if (segs < 1) segs = 1;
         const float da = slice.sweep / static_cast<float>(segs);
         ctx.fill.SetColor(fill.r, fill.g, fill.b, fill.a);
@@ -1411,7 +1415,7 @@ float Chart::valueAxisGutter(PaintContext& ctx, double lo, double hi, double ste
 {
     char buf[400];
     float gutter = 0.0f;
-    const int ticks = static_cast<int>(round((hi - lo) / step));
+    const int ticks = Math::toInt(roundf((hi - lo) / step), 0, 0, 10000); // (data that is not a number: no ticks)
     for (int k = 0; k <= ticks; ++k)
     {
         snprintf(buf, sizeof(buf), "%.*f%s", decimals, lo + step * static_cast<double>(k), valueSuffix_.c_str());
@@ -1428,7 +1432,7 @@ void Chart::paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, floa
     const Theme& t = Theme::instance();
     const float lh = lineHeight(ctx);
     char buf[400];
-    const int ticks = static_cast<int>(round((hi - lo) / step));
+    const int ticks = Math::toInt(roundf((hi - lo) / step), 0, 0, 10000); // (data that is not a number: no ticks)
     for (int k = 0; k <= ticks; ++k)
     {
         const double v = lo + step * static_cast<double>(k);
@@ -1669,7 +1673,7 @@ void Chart::paintXY(PaintContext& ctx, const Rect& b, const Rect& plot)
     if (numericX)
     {
         const int xdecimals = decimalsFor(xstep);
-        const int xticks = static_cast<int>(round((xhi - xlo) / xstep));
+        const int xticks = Math::toInt(roundf((xhi - xlo) / xstep), 0, 0, 10000);
         // Skip ticks when their labels would touch.
         snprintf(buf, sizeof(buf), "%.*f", xdecimals, xhi);
         const float labelW = ctx.font.GetTextWidth(buf) + 10.0f;

@@ -1051,8 +1051,7 @@ void Splitter::paint(PaintContext& ctx)
                : handleHovered_ ? Color(80, 80, 90, 255)
                                 : Color(65, 65, 70, 255);
     ctx.fill.SetColor(hc.r, hc.g, hc.b, hc.a);
-    ctx.fill.Rectangle(static_cast<int>(hx), static_cast<int>(hy), static_cast<int>(hw),
-            static_cast<int>(hh), true);
+    ctx.fill.Rectangle(Math::toInt(hx), Math::toInt(hy), Math::toInt(hw), Math::toInt(hh), true);
 
     // Center dots/line indicator on the handle
     Color dc =
@@ -1064,9 +1063,9 @@ void Splitter::paint(PaintContext& ctx)
         float cy = hy + hh * 0.5f;
         for (int i = -2; i <= 2; ++i)
         {
-            int dy = static_cast<int>(cy + i * 6.0f);
+            int dy = Math::toInt(cy + i * 6.0f);
             ctx.fill.SetColor(dc.r, dc.g, dc.b, dc.a);
-            ctx.fill.Rectangle(static_cast<int>(cx - 1), dy, 2, 2, true);
+            ctx.fill.Rectangle(Math::toInt(cx - 1), dy, 2, 2, true);
         }
     }
     else
@@ -1075,9 +1074,9 @@ void Splitter::paint(PaintContext& ctx)
         float cy = hy + hh * 0.5f;
         for (int i = -2; i <= 2; ++i)
         {
-            int dx = static_cast<int>(cx + i * 6.0f);
+            int dx = Math::toInt(cx + i * 6.0f);
             ctx.fill.SetColor(dc.r, dc.g, dc.b, dc.a);
-            ctx.fill.Rectangle(dx, static_cast<int>(cy - 1), 2, 2, true);
+            ctx.fill.Rectangle(dx, Math::toInt(cy - 1), 2, 2, true);
         }
     }
 }

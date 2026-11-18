@@ -86,6 +86,17 @@ inline float sane(float v, float keep, float lo, float hi)
     if (isNaN(v)) return keep;
     return v < lo ? lo : (v > hi ? hi : v);
 }
+/// A float as an int without the undefined cast of a number that does not fit one: NaN gives `keep`, everything outside
+/// [lo, hi] is clamped to the nearest end (a float holds the bounds exactly when they are within a few hundred millions), and a
+/// number inside the range is cut towards zero, as static_cast<int> does. For the counts and pixel positions that come out of
+/// coordinates a widget was given.
+inline int toInt(float v, int keep = 0, int lo = -1000000000, int hi = 1000000000)
+{
+    if (isNaN(v)) return keep;
+    if (v <= static_cast<float>(lo)) return lo;
+    if (v >= static_cast<float>(hi)) return hi;
+    return static_cast<int>(v);
+}
 inline float min2(float a, float b)
 {
     return a < b ? a : b;

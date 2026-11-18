@@ -59,7 +59,7 @@ ThumbnailGrid::Metrics ThumbnailGrid::metrics() const
     auto layOut = [&](float viewW)
     {
         m.viewW = viewW;
-        m.cols = std::max(1, static_cast<int>((viewW - spacing_) / m.cellW));
+        m.cols = Math::max2(1, Math::toInt((viewW - spacing_) / m.cellW, 1, 1, 1000000)); // (a width that is not a number is one column)
         const int rows = (count + m.cols - 1) / m.cols;
         m.contentH = rows == 0 ? 0.f : spacing_ + rows * m.cellH;
     };
