@@ -1395,6 +1395,7 @@ void PianoRoll::removeNote(int idx)
     if (draggingNote_ == idx) draggingNote_ = -1;
     else if (draggingNote_ > idx)
         --draggingNote_; // (the note being dragged is still the same one, one place down)
+    if (idx < static_cast<int>(laneOrig_.size())) laneOrig_.erase(laneOrig_.begin() + idx); // (and so are the notes the lane has touched)
     markDirty();
 }
 
@@ -1402,6 +1403,7 @@ void PianoRoll::clearNotes()
 {
     notes_.clear();
     draggingNote_ = -1;
+    laneOrig_.clear();
     markDirty();
 }
 
@@ -1486,9 +1488,29 @@ float PianoRoll::beatToX(float beat, const Rect& ga) const
 
 float PianoRoll::xToBeat(float x) const
 {
-    const Rect ga = gridArea();
+    return xToBeat(x, gridArea());
+}
+
+float PianoRoll::xToBeat(float x, const Rect& ga) const
+{
     return viewStart_ + (x - ga.x) / ga.w * (viewEnd_ - viewStart_);
 }
+
+// The velocity lane: the strip along the bottom of the grid, as tall as asked but never more than half the roll, and
+// not at all when what is left would be too small to draw bars in.
+float PianoRoll::laneHeight(const Rect& ga) const
+{
+    if (!showLane_ || !(ga.h > 0.0f)) return 0.0f;
+    const float h = Math::min2(laneH_, ga.h * 0.5f);
+    return h >= 10.0f ? h : 0.0f;
+}
+
+// Where the bars of the lane stand: their feet 2 pixels over the bottom of the lane, the top of the tallest one 4 under
+// its top edge (the lane is at least 10 pixels, so there are at least 4 pixels of velocity).
+static constexpr float kLaneFoot = 2.0f;
+static constexpr float kLaneHead = 4.0f;
+// How many pixels from the pointer a bar is still under it.
+static constexpr float kLaneReach = 2.0f;
 
 Rect PianoRoll::noteRect(const PianoNote& n) const
 {
@@ -1617,6 +1639,53 @@ void PianoRoll::paintPlayhead(PaintContext& ctx, const Rect& ga) const
     ctx.fillRect(x, ga.y, 2, ga.h);
 }
 
+// The lane: its background, a line along its top and one half way up, and a bar at the start of each note that is in
+// view in time. The notes the gesture in progress has touched are drawn in the colour of a note being dragged.
+void PianoRoll::paintVelocityLane(PaintContext& ctx, const Rect& ga, float laneH) const
+{
+    const Rect lr(ga.x, ga.y + ga.h - laneH, ga.w, laneH);
+    ctx.pushClip(lr);
+    ctx.fill.SetColor(20, 22, 26, 255);
+    ctx.fillRect(lr.x, lr.y, lr.w, lr.h);
+    const float foot = lr.y + lr.h - kLaneFoot;
+    const float usable = lr.h - kLaneFoot - kLaneHead;
+    ctx.fill.SetColor(34, 36, 40, 255);
+    ctx.fillRect(lr.x, foot - usable * 0.5f, lr.w, 1);
+    ctx.fill.SetColor(55, 58, 65, 255);
+    ctx.fillRect(lr.x, lr.y, lr.w, 1);
+
+    const size_t touched = laneDrag_ ? laneOrig_.size() : 0;
+    for (size_t i = 0; i < notes_.size(); ++i)
+    {
+        const PianoNote& n = notes_[i];
+        const float x = beatToX(n.start, ga);
+        if (!(x >= ga.x - 2.0f && x <= ga.x + ga.w + 2.0f)) continue;
+        const float h = Math::max2(2.0f, Math::clamp(n.velocity, 0.0f, 1.0f) * usable);
+        const Color c = i < touched && laneOrig_[i] >= 0.0f ? noteSelColor_ : noteColor_;
+        ctx.fill.SetColor(c.r, c.g, c.b, 255);
+        ctx.fillRect(x - 1.0f, foot - h, 3.0f, h);
+        ctx.fill.SetColor(static_cast<uint8_t>(c.r + (255 - c.r) / 2), static_cast<uint8_t>(c.g + (255 - c.g) / 2),
+                static_cast<uint8_t>(c.b + (255 - c.b) / 2), 255);
+        ctx.fillRect(x - 1.0f, foot - h, 3.0f, 2.0f);
+    }
+    ctx.popClip();
+}
+
+// The part of the key column beside the lane: no keys there, the name of the lane.
+void PianoRoll::paintLaneKeys(PaintContext& ctx, const Rect& ka, float laneH) const
+{
+    const Rect lr(ka.x, ka.y + ka.h - laneH, ka.w, laneH);
+    ctx.pushClip(lr);
+    ctx.fill.SetColor(30, 32, 36, 255);
+    ctx.fillRect(lr.x, lr.y, lr.w, lr.h);
+    ctx.fill.SetColor(55, 58, 65, 255);
+    ctx.fillRect(lr.x, lr.y, lr.w, 1);
+    ctx.fillRect(lr.x + lr.w - 1, lr.y, 1, lr.h);
+    const float asc = setupFont(ctx, Color(150, 154, 160, 255), 9.f);
+    ctx.font.Print("Vel", lr.x + 4, lr.y + 4 + asc);
+    ctx.popClip();
+}
+
 void PianoRoll::paint(PaintContext& ctx)
 {
     if (!visible_) return;
@@ -1628,14 +1697,25 @@ void PianoRoll::paint(PaintContext& ctx)
     ctx.fill.SetColor(24, 26, 30, 255);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
+    const float laneH = laneHeight(ga);
     ctx.pushClip(ga);
     paintGrid(ctx, ga);
-    paintNotes(ctx, ga);
+    if (laneH > 0.0f)
+    {
+        // the notes stop where the lane begins
+        ctx.pushClip(Rect(ga.x, ga.y, ga.w, ga.h - laneH));
+        paintNotes(ctx, ga);
+        ctx.popClip();
+        paintVelocityLane(ctx, ga, laneH);
+    }
+    else
+        paintNotes(ctx, ga);
     paintPlayhead(ctx, ga);
     ctx.popClip();
 
     ctx.pushClip(ka);
     paintKeys(ctx, ka);
+    if (laneH > 0.0f) paintLaneKeys(ctx, ka, laneH);
     ctx.popClip();
 
     // Border
@@ -1654,6 +1734,22 @@ void PianoRoll::onMousePress(MouseEvent& e)
     const Rect ga = gridArea();
     if (!(ga.w > 0.0f)) return; // no grid to point at (the keys take the whole width): a beat is a division by it
     if (e.x < ga.x || e.x > ga.x + ga.w || e.y < ga.y || e.y > ga.y + ga.h) return;
+
+    // the velocity lane: the left button sets velocities, the middle one still pans, the notes' buttons do nothing there
+    const float laneH = laneHeight(ga);
+    if (laneH > 0.0f && e.y >= ga.y + ga.h - laneH && e.button != 2)
+    {
+        if (e.button == 0)
+        {
+            laneDrag_ = true;
+            laneOrig_.clear();
+            sweepLane(e.x, e.y, e.x, e.y);
+            laneLastX_ = e.x;
+            laneLastY_ = e.y;
+            e.consumed = true;
+        }
+        return;
+    }
 
     if (e.button == 1) // right: removes the note under the pointer
     {
@@ -1740,7 +1836,7 @@ void PianoRoll::updateEdgeCursor(float x, float y)
 {
     CursorType want = CursorType::Arrow;
     const Rect ga = gridArea();
-    if (ga.w > 0.0f && x >= ga.x && x <= ga.x + ga.w && y >= ga.y && y <= ga.y + ga.h)
+    if (ga.w > 0.0f && x >= ga.x && x <= ga.x + ga.w && y >= ga.y && y <= ga.y + ga.h - laneHeight(ga))
     {
         // only the notes of the row under the pointer can be under it (compared as floats: the row is never made an int)
         const float row = floorf((y - ga.y) / rowH_);
@@ -1768,6 +1864,14 @@ void PianoRoll::onMouseLeave()
 void PianoRoll::onMouseMove(MouseEvent& e)
 {
     if (!Math::isFinite(e.x) || !Math::isFinite(e.y)) return;
+    if (laneDrag_)
+    {
+        sweepLane(laneLastX_, laneLastY_, e.x, e.y);
+        laneLastX_ = e.x;
+        laneLastY_ = e.y;
+        e.consumed = true;
+        return;
+    }
     if (panning_)
     {
         const Rect ga = gridArea();
@@ -1810,8 +1914,56 @@ void PianoRoll::onMouseMove(MouseEvent& e)
     updateEdgeCursor(e.x, e.y);
 }
 
+// The pointer went from (x0, y0) to (x1, y1) with the button down in the lane: every note whose bar is within reach of
+// that path gets the velocity of the pointer's height at the bar's place on it.
+void PianoRoll::sweepLane(float x0, float y0, float x1, float y1)
+{
+    const Rect ga = gridArea();
+    if (!(ga.w > 0.0f)) return;
+    const float laneH = laneHeight(ga);
+    if (!(laneH > 0.0f)) return; // (the lane was hidden under the gesture)
+    const float foot = ga.y + ga.h - kLaneFoot;
+    const float usable = laneH - kLaneFoot - kLaneHead;
+    // only the bars in view can be reached, whatever the pointer does outside the lane
+    const float xa = Math::clamp(Math::min2(x0, x1), ga.x, ga.x + ga.w) - kLaneReach;
+    const float xb = Math::clamp(Math::max2(x0, x1), ga.x, ga.x + ga.w) + kLaneReach;
+    const float beatA = xToBeat(xa, ga), beatB = xToBeat(xb, ga);
+    bool changed = false;
+    for (size_t i = 0; i < notes_.size(); ++i)
+    {
+        const float start = notes_[i].start;
+        if (!(start >= beatA && start <= beatB)) continue;
+        // the pointer's height where the path is at the bar (the end of the path for a path that goes nowhere across)
+        const float bx = beatToX(start, ga);
+        const float t = x1 != x0 ? Math::clamp((bx - x0) / (x1 - x0), 0.0f, 1.0f) : 1.0f;
+        const float v = Math::clamp((foot - (y0 + (y1 - y0) * t)) / usable, 0.0f, 1.0f);
+        if (notes_[i].velocity == v) continue;
+        if (laneOrig_.size() < notes_.size()) laneOrig_.resize(notes_.size(), -1.0f);
+        if (laneOrig_[i] < 0.0f) laneOrig_[i] = notes_[i].velocity;
+        notes_[i].velocity = v;
+        changed = true;
+    }
+    if (changed) markDirty();
+}
+
+// The button went up after a gesture in the lane: one signal for each note that ended with another velocity than it had.
+void PianoRoll::endLaneGesture()
+{
+    laneDrag_ = false;
+    ct::Vector<float> orig;
+    orig.swap(laneOrig_); // (the memory goes at the end of this function)
+    ct::Vector<int> changed;
+    const size_t n = orig.size() < notes_.size() ? orig.size() : notes_.size();
+    for (size_t i = 0; i < n; ++i)
+        if (orig[i] >= 0.0f && notes_[i].velocity != orig[i]) changed.push_back(static_cast<int>(i));
+    // from the highest index down, and each checked against the notes as the handlers before it left them
+    for (size_t k = changed.size(); k > 0; --k)
+        if (changed[k - 1] < static_cast<int>(notes_.size())) onNoteVelocityChanged.emit(changed[k - 1]);
+}
+
 void PianoRoll::onMouseRelease(MouseEvent& e)
 {
+    if (laneDrag_) endLaneGesture();
     // what the gesture was, before the handlers of the signals get to change the notes
     const int index = draggingNote_;
     const bool created = newNotePitch_ >= 0;

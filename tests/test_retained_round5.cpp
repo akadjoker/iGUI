@@ -20,7 +20,8 @@ namespace
 struct RollRig
 {
     explicit RollRig(float width = 480.0f, float height = 260.0f)
-            : h(width, height, false),
+            : screen(width, height),
+              h(screen.h),
               app(WidgetApp::instance())
     {
         roll = h.root()->createChild<PianoRoll>();
@@ -50,7 +51,8 @@ struct RollRig
     {
         app.feedMouseButton(button, false);
     }
-    Harness h;
+    Screen screen;
+    Harness& h;
     WidgetApp& app;
     PianoRoll* roll = nullptr;
 };
@@ -277,6 +279,379 @@ void testPianoRollNoteIndexStaysRightWhenANoteBeforeItGoes()
     check(log.resized == 1 && log.resizedIndex == 0, "and says index 0");
 }
 
+// ---- item 2: the velocity lane ----
+
+// With the default lane (60 pixels) in this roll: it begins at y = 160, the feet of the bars are at y = 218 and a velocity of 1 is
+// 54 pixels of bar, so the pointer at y = 218 - 54 v sets velocity v.
+float yVelocity(float v)
+{
+    return 218.0f - 54.0f * v;
+}
+
+struct VelocityLog
+{
+    int changed[16] = {};
+    int total = 0;
+    int order[16] = {};
+    void connect(PianoRoll* roll)
+    {
+        roll->onNoteVelocityChanged.connect([this](int i)
+                {
+                    if (i >= 0 && i < 16) ++changed[i];
+                    if (total < 16) order[total] = i;
+                    ++total;
+                });
+    }
+    void reset()
+    {
+        for (int& c: changed) c = 0;
+        total = 0;
+    }
+};
+
+bool near(float a, float b, float tolerance)
+{
+    return fabsf(a - b) <= tolerance;
+}
+
+void testPianoRollVelocityLaneSetsVelocities()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    check(!roll->showVelocityLane(), "the velocity lane is off by default");
+    check(roll->velocityLaneHeight() == 60.0f, "and 60 pixels high by default");
+    const float beats[5] = { 1.0f, 2.0f, 3.0f, 4.0f, 6.0f };
+    for (int i = 0; i < 5; ++i) roll->addNote(50 + i, beats[i], 0.5f); // velocity 0.8
+    roll->setShowVelocityLane(true);
+    check(roll->showVelocityLane(), "setShowVelocityLane(true) is kept");
+    rig.h.frame();
+    VelocityLog log;
+    log.connect(roll);
+    SignalLog signals;
+    signals.connect(roll);
+
+    // a click at half the height of the lane, on the bar of the second note
+    rig.move(RollRig::xBeat(2.0f), yVelocity(0.5f));
+    rig.down();
+    check(roll->notes()[1].velocity == 0.5f, "pressing in the lane at half height sets the velocity of the note whose bar is there to 0.5");
+    check(roll->notes()[0].velocity == 0.8f && roll->notes()[2].velocity == 0.8f && roll->notes()[3].velocity == 0.8f && roll->notes()[4].velocity == 0.8f,
+            "and no other note's");
+    check(log.total == 0, "nothing is emitted while the button is down");
+    rig.up();
+    check(log.total == 1 && log.changed[1] == 1, "onNoteVelocityChanged says note 1, once, when the button goes up");
+    check(roll->notes().size() == 5 && signals.created == 0 && signals.clicked == 0 && signals.added == 0, "a press in the lane puts no note, picks none and emits none of the note signals");
+
+    // the same click again changes nothing: no signal
+    log.reset();
+    rig.move(RollRig::xBeat(2.0f), yVelocity(0.5f));
+    rig.down();
+    rig.up();
+    check(log.total == 0, "a click that leaves the velocity as it is emits nothing");
+
+    // the top of the lane is 1, the bottom is 0, and outside is the nearest of them
+    log.reset();
+    rig.move(RollRig::xBeat(3.0f), 161.0f);
+    rig.down();
+    check(roll->notes()[2].velocity == 1.0f, "at the top of the lane the velocity is 1");
+    rig.move(RollRig::xBeat(3.0f), 400.0f); // below the window
+    check(roll->notes()[2].velocity == 0.0f, "a pointer far under the lane sets 0");
+    rig.move(RollRig::xBeat(3.0f), -400.0f);
+    check(roll->notes()[2].velocity == 1.0f, "and far over it 1");
+    rig.move(RollRig::xBeat(3.0f), yVelocity(0.25f));
+    rig.up();
+    check(roll->notes()[2].velocity == 0.25f && log.total == 1 && log.changed[2] == 1, "the gesture ends with the last value, and the note is said once however many times it was set");
+    // a gesture that goes back to the velocity the note had says nothing
+    log.reset();
+    rig.move(RollRig::xBeat(3.0f), yVelocity(0.25f));
+    rig.down();
+    rig.move(RollRig::xBeat(3.0f), yVelocity(0.9f));
+    rig.move(RollRig::xBeat(3.0f), yVelocity(0.25f));
+    rig.up();
+    check(log.total == 0, "a gesture that ends with the velocity it started with says nothing");
+
+    // a chord: two notes with the same start are both under the pointer
+    roll->addNote(57, 2.0f, 1.0f); // index 5, the same start as note 1
+    log.reset();
+    rig.move(RollRig::xBeat(2.0f), yVelocity(1.0f));
+    rig.down();
+    rig.up();
+    check(roll->notes()[1].velocity == 1.0f && roll->notes()[5].velocity == 1.0f, "notes that start together are both set");
+    check(log.total == 2 && log.changed[1] == 1 && log.changed[5] == 1, "and both are said");
+    check(log.order[0] == 5 && log.order[1] == 1, "from the highest index to the lowest");
+
+    // the right and the middle buttons: the right one does nothing in the lane (it is not a note), the middle one pans
+    signals = SignalLog();
+    log.reset();
+    const size_t count = roll->notes().size();
+    rig.move(RollRig::xBeat(2.0f), yVelocity(0.3f));
+    rig.down(1);
+    rig.up(1);
+    check(roll->notes().size() == count && signals.deleted == 0 && roll->notes()[1].velocity == 1.0f && log.total == 0, "the right button in the lane removes nothing and sets nothing");
+    rig.move(RollRig::xBeat(2.0f), 190.0f);
+    rig.down(2);
+    rig.move(RollRig::xBeat(2.0f) - 91.0f, 190.0f); // two beats to the left: the view moves two beats on
+    rig.up(2);
+    // the note that started at beat 4 is now where the one at beat 2 was
+    rig.move(RollRig::xBeat(2.0f), yVelocity(0.4f));
+    rig.down();
+    rig.up();
+    check(near(roll->notes()[3].velocity, 0.4f, 0.0001f) && roll->notes()[1].velocity == 1.0f, "the middle button pans in the lane, and the bars are where the roll shows them after");
+}
+
+void testPianoRollVelocityLanePaintsAcrossBars()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    const float beats[6] = { 1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 7.0f };
+    for (int i = 0; i < 6; ++i) roll->addNote(50 + i, beats[i], 0.5f);
+    roll->setShowVelocityLane(true);
+    rig.h.frame();
+    VelocityLog log;
+    log.connect(roll);
+    // from beat 1 at 0.2 to beat 6 at 0.9 along a straight line, in many small steps of the mouse
+    const float x0 = RollRig::xBeat(1.0f), x1 = RollRig::xBeat(6.0f);
+    rig.move(x0, yVelocity(0.2f));
+    rig.down();
+    float lastThird = 0.0f;
+    for (int step = 1; step <= 40; ++step)
+    {
+        const float t = static_cast<float>(step) / 40.0f;
+        rig.move(x0 + (x1 - x0) * t, yVelocity(0.2f + 0.7f * t));
+        if (step == 20) lastThird = roll->notes()[2].velocity; // beat 3.5 has been passed: beat 3 is set
+    }
+    check(near(lastThird, 0.2f + 0.7f * 0.4f, 0.02f), "while the button is down the notes passed already have their velocity (note 2 at beat 3: 0.48)");
+    check(log.total == 0, "and nothing is emitted");
+    rig.up();
+    const float want[5] = { 0.2f, 0.34f, 0.48f, 0.62f, 0.9f };
+    bool right = true;
+    for (int i = 0; i < 5; ++i)
+        if (!near(roll->notes()[i].velocity, want[i], 0.02f)) right = false;
+    check(right, "a drag across five bars gives each the height the pointer had at its place (0.2, 0.34, 0.48, 0.62, 0.9)");
+    if (!right)
+        for (int i = 0; i < 5; ++i) printf("    note %d: %g (wanted %g)\n", i, static_cast<double>(roll->notes()[i].velocity), static_cast<double>(want[i]));
+    check(roll->notes()[5].velocity == 0.8f, "a note past the end of the path is left alone");
+    check(log.total == 5 && log.changed[0] == 1 && log.changed[1] == 1 && log.changed[2] == 1 && log.changed[3] == 1 && log.changed[4] == 1 && log.changed[5] == 0,
+            "each of the five is said once, the sixth not");
+    check(log.order[0] == 4 && log.order[4] == 0, "from the highest index down");
+
+    // one big jump of the mouse (two events only) does not skip the bars between: the path is followed
+    for (int i = 0; i < 6; ++i) roll->setNoteVelocity(i, 0.8f);
+    log.reset();
+    rig.move(x0, yVelocity(0.0f));
+    rig.down();
+    rig.move(x1, yVelocity(1.0f));
+    rig.up();
+    bool ramp = true;
+    for (int i = 0; i < 5; ++i)
+    {
+        const float expect = (RollRig::xBeat(beats[i]) - x0) / (x1 - x0);
+        if (!near(roll->notes()[i].velocity, expect, 0.02f)) ramp = false;
+    }
+    check(ramp, "one fast move from the first bar to the fifth still sets the three between, on the line the pointer went along");
+    check(log.total == 5, "(five notes said)");
+
+    // a drag from outside the roll, over the key column, sets only what is in view
+    for (int i = 0; i < 6; ++i) roll->setNoteVelocity(i, 0.8f);
+    roll->setTimeRange(2.0f, 6.0f); // bars of beats 2, 3, 4 and 6 at x = 56, 147, 238, 420
+    rig.h.frame();
+    log.reset();
+    rig.move(30.0f, yVelocity(0.5f)); // over the keys: not the lane
+    rig.down();
+    check(roll->notes()[0].velocity == 0.8f && roll->notes()[1].velocity == 0.8f, "(the press over the key column is nothing)");
+    rig.up();
+    rig.move(150.0f, yVelocity(0.5f));
+    rig.down();
+    rig.move(10.0f, yVelocity(0.5f)); // out over the keys, far left of the bars in view and the one off the left edge
+    rig.up();
+    check(roll->notes()[0].velocity == 0.8f, "a pointer dragged out to the left does not reach the bar of a note scrolled out of view (beat 1)");
+    check(roll->notes()[1].velocity == 0.5f && roll->notes()[2].velocity == 0.5f, "the bars in view on the way are set (beats 2 and 3)");
+}
+
+// the x of the centre of each run of pixels that is not the background, along one row of a shot
+ct::Vector<float> barCentres(const Shot& shot, int y, int x0, int x1)
+{
+    ct::Vector<float> out;
+    int runStart = -1;
+    for (int x = x0; x <= x1; ++x)
+    {
+        bool bar = false;
+        if (x < x1)
+        {
+            const uint32_t v = shot.px[static_cast<size_t>(y) * static_cast<size_t>(shot.w) + static_cast<size_t>(x)];
+            bar = (v & 0xffffffu) != 0x14161au; // (20, 22, 26): the lane
+        }
+        if (bar && runStart < 0) runStart = x;
+        else if (!bar && runStart >= 0)
+        {
+            out.push_back(0.5f * static_cast<float>(runStart + x - 1) + 0.5f);
+            runStart = -1;
+        }
+    }
+    return out;
+}
+
+// the first row from y0 down where the column at x is not the lane's background
+int firstBarRow(const Shot& shot, int x, int y0, int y1)
+{
+    for (int y = y0; y < y1; ++y)
+        if ((shot.px[static_cast<size_t>(y) * static_cast<size_t>(shot.w) + static_cast<size_t>(x)] & 0xffffffu) != 0x14161au) return y;
+    return -1;
+}
+
+void testPianoRollVelocityLaneDrawsOneBarPerNote()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    roll->addNote(55, 2.0f, 2.0f, 1.0f);
+    roll->addNote(52, 4.0f, 1.0f, 0.5f);
+    rig.h.frame();
+    const Shot plain = rig.screen.take();
+    roll->setShowVelocityLane(true);
+    rig.h.frames(2);
+    const Shot lane = rig.screen.take();
+    check(differing(lane, plain, 0, 0, 480, 260) > 500, "the lane is drawn when it is on");
+    check(differing(lane, plain, 0, 0, 480, 150) < differing(lane, plain, 0, 150, 480, 260), "mostly in the strip along the bottom (and not over the notes)");
+    const ct::Vector<float> bars = barCentres(lane, 217, 60, 419);
+    check(bars.size() == 2, "one bar for each note at the foot of the lane");
+    if (bars.size() == 2)
+    {
+        check(near(bars[0], RollRig::xBeat(2.0f), 1.0f) && near(bars[1], RollRig::xBeat(4.0f), 1.0f), "at the start of each note (beats 2 and 4)");
+        const int tall = firstBarRow(lane, static_cast<int>(bars[0]), 162, 219);
+        const int half = firstBarRow(lane, static_cast<int>(bars[1]), 162, 219);
+        check(tall >= 163 && tall <= 165, "the bar of a note of velocity 1 reaches the top of the lane");
+        check(half >= 190 && half <= 192, "and the bar of a note of velocity 0.5 half way up");
+    }
+    // the bars follow the velocity
+    roll->setNoteVelocity(1, 1.0f);
+    rig.h.frames(2);
+    const Shot taller = rig.screen.take();
+    const ct::Vector<float> again = barCentres(taller, 217, 60, 419);
+    check(again.size() == 2 && firstBarRow(taller, static_cast<int>(again[1]), 162, 219) <= 165, "the bar follows the velocity of its note");
+    // the lowest row of notes does not draw over the lane
+    roll->addNote(48, 3.0f, 2.0f);
+    rig.h.frames(2);
+    const Shot low = rig.screen.take();
+    const uint32_t under = low.px[static_cast<size_t>(162) * static_cast<size_t>(low.w) + static_cast<size_t>(RollRig::xBeat(3.5f))] & 0xffffffu;
+    check(under == 0x14161au, "a note in the lowest row, half under the lane, is cut at the lane");
+    // off again: the picture of before
+    roll->clearNotes();
+    roll->addNote(55, 2.0f, 2.0f, 1.0f);
+    roll->addNote(52, 4.0f, 1.0f, 0.5f);
+    roll->setShowVelocityLane(false);
+    rig.h.frames(2);
+    check(differing(rig.screen.take(), plain, 0, 0, 480, 260) == 0, "with the lane off again the picture is the one it was before");
+
+    // while a gesture is in progress the bars of the notes it has touched are drawn in the colour of a dragged note
+    roll->setShowVelocityLane(true);
+    rig.h.frames(2);
+    const Shot before = rig.screen.take();
+    rig.move(RollRig::xBeat(2.0f), yVelocity(0.2f));
+    rig.down();
+    rig.h.frames(2);
+    const Shot during = rig.screen.take();
+    rig.up();
+    check(differing(during, before, 60, 162, 420, 219) > 20, "a bar being set is drawn changed");
+}
+
+void testPianoRollVelocityLaneFollowsTheView()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    const float beats[4] = { 2.0f, 3.0f, 4.0f, 5.0f };
+    for (int i = 0; i < 4; ++i) roll->addNote(50 + i, beats[i], 0.5f);
+    roll->setShowVelocityLane(true);
+    rig.h.frame();
+
+    // scrolled: beats 3 to 7, 91 pixels a beat... no, 4 beats to 364 pixels
+    roll->setTimeRange(3.0f, 7.0f);
+    rig.h.frames(2);
+    // the bar of the note at beat 4 is one beat in: x = 56 + 91
+    rig.move(56.0f + 91.0f, yVelocity(0.5f));
+    rig.down();
+    rig.up();
+    check(roll->notes()[2].velocity == 0.5f && roll->notes()[1].velocity == 0.8f && roll->notes()[0].velocity == 0.8f && roll->notes()[3].velocity == 0.8f,
+            "after the view is scrolled the bar of the note at beat 4 is one beat in from the left, and that is the one a click there sets");
+
+    // zoomed with the wheel: look at where the bars are drawn, and click on them
+    roll->setTimeRange(0.0f, 8.0f);
+    for (int i = 0; i < 4; ++i) roll->setNoteVelocity(i, 0.8f);
+    rig.move(250.0f, 100.0f);
+    rig.app.feedMouseWheel(0.0f, 1.0f); // zoom in around the pointer
+    rig.h.frames(2);
+    const Shot zoomed = rig.screen.take();
+    const ct::Vector<float> bars = barCentres(zoomed, 217, 60, 419);
+    check(bars.size() >= 2 && bars.size() <= 4, "after a zoom the bars of the notes in view are where the roll puts them");
+    int setByClick = 0;
+    for (size_t k = 0; k < bars.size(); ++k)
+    {
+        rig.move(bars[k], yVelocity(0.1f));
+        rig.down();
+        rig.up();
+    }
+    for (int i = 0; i < 4; ++i)
+        if (near(roll->notes()[i].velocity, 0.1f, 0.0001f)) ++setByClick;
+    check(static_cast<size_t>(setByClick) == bars.size(), "and a click on each drawn bar sets one note: what is drawn is what is hit");
+}
+
+void testPianoRollVelocityLaneHeightAndHitAreas()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    roll->addNote(50, 2.0f, 1.0f);
+    roll->addNote(48, 4.0f, 1.0f); // the lowest row, y 153 to 163: its last pixels are under the lane
+    roll->setShowVelocityLane(true);
+    rig.h.frame();
+    SignalLog signals;
+    signals.connect(roll);
+
+    // a press over the lane's top edge (y = 160) is the lane's, not the note's
+    rig.move(RollRig::xBeat(4.0f) + 10.0f, 162.0f);
+    rig.down();
+    rig.up();
+    check(signals.clicked == 0 && signals.added == 0, "a press on the part of a note that is under the lane does not pick the note");
+    rig.move(RollRig::xBeat(4.0f) + 10.0f, 156.0f);
+    rig.down();
+    rig.up();
+    check(signals.clicked == 1, "and one over the lane does");
+    // a press on an empty place in the lane puts no note; the same place without the lane does
+    const size_t count = roll->notes().size();
+    rig.move(RollRig::xBeat(6.0f), 190.0f);
+    rig.down();
+    rig.up();
+    check(roll->notes().size() == count, "with the lane on a left click in it puts no note");
+    roll->setShowVelocityLane(false);
+    rig.h.frame();
+    rig.move(RollRig::xBeat(6.0f), 190.0f);
+    rig.down();
+    rig.up();
+    check(roll->notes().size() == count + 1, "with the lane off the same click puts one: the lane takes nothing when it is off");
+    roll->removeNote(static_cast<int>(roll->notes().size()) - 1);
+    roll->setShowVelocityLane(true);
+
+    // the height
+    roll->setVelocityLaneHeight(100.0f);
+    check(roll->velocityLaneHeight() == 100.0f, "the height is kept");
+    roll->setVelocityLaneHeight(NAN);
+    check(roll->velocityLaneHeight() == 100.0f, "NaN keeps the old one");
+    rig.h.frame();
+    // lane from y = 120 now, feet at 218, 94 pixels of velocity
+    rig.move(RollRig::xBeat(2.0f), 218.0f - 47.0f);
+    rig.down();
+    rig.up();
+    check(near(roll->notes()[0].velocity, 0.5f, 0.0001f), "with a lane of 100 pixels the middle of it is 0.5");
+    roll->setVelocityLaneHeight(1.0e9f);
+    check(roll->velocityLaneHeight() == 10000.0f, "an enormous height is clamped");
+    roll->setVelocityLaneHeight(-5.0f);
+    check(roll->velocityLaneHeight() == 10.0f, "a height under 10 is 10");
+    roll->setVelocityLaneHeight(10000.0f);
+    rig.h.frame();
+    // never more than half of the roll: from y = 120 whatever is asked
+    rig.move(RollRig::xBeat(2.0f), 218.0f - 47.0f);
+    rig.down();
+    rig.up();
+    check(near(roll->notes()[0].velocity, 0.5f, 0.0001f), "however high it is asked, the lane is half of the roll at most");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -287,6 +662,11 @@ int main(int argc, char** argv)
     RUN(testPianoRollResizeWithTheMouse);
     RUN(testPianoRollNewNoteTakesItsLengthFromTheDrag);
     RUN(testPianoRollNoteIndexStaysRightWhenANoteBeforeItGoes);
+    RUN(testPianoRollVelocityLaneSetsVelocities);
+    RUN(testPianoRollVelocityLanePaintsAcrossBars);
+    RUN(testPianoRollVelocityLaneDrawsOneBarPerNote);
+    RUN(testPianoRollVelocityLaneFollowsTheView);
+    RUN(testPianoRollVelocityLaneHeightAndHitAreas);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

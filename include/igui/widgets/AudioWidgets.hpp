@@ -922,6 +922,35 @@ public:
     {
         return showVelocity_;
     }
+    /// @brief Show a velocity lane: a strip along the bottom of the roll, under the notes, with one bar at the
+    ///        start of each note (in view in time, whatever its pitch) as high as the note's velocity. The
+    ///        mouse sets velocities in it: pressing or dragging sets the velocity of the notes whose bar is under
+    ///        the pointer, the height of the pointer in the lane being the value (the top is 1, the bottom 0),
+    ///        and a drag across several bars paints them, each with the height the pointer had at its place
+    ///        (the pointer's path between two mouse events is followed, so a fast drag skips none). While the
+    ///        button is down the velocities in notes() are already the new ones and the roll shows them, and
+    ///        nothing is emitted; when the button goes up onNoteVelocityChanged says each note that ended with
+    ///        another velocity, once. Default false: the roll is drawn and answers exactly as without it.
+    void setShowVelocityLane(bool on)
+    {
+        showLane_ = on;
+        markDirty();
+    }
+    bool showVelocityLane() const
+    {
+        return showLane_;
+    }
+    /// @brief The height of the velocity lane in pixels (10 to 10000, 60 by default; NaN keeps the old one).
+    ///        It is never more than half the height of the roll (and none at all when that is under 10 pixels).
+    void setVelocityLaneHeight(float h)
+    {
+        laneH_ = Math::sane(h, laneH_, 10.0f, 10000.0f);
+        markDirty();
+    }
+    float velocityLaneHeight() const
+    {
+        return laneH_;
+    }
     /// @brief Remove a note by index.
     void removeNote(int idx);
     /// @brief Remove all notes.
@@ -1002,6 +1031,12 @@ public:
     /// @brief A note was dragged to another pitch or start and the button went up: its index in notes().
     ///        Not emitted for a click that left it where it was.
     Signal<int> onNoteMoved;
+    /// @brief The velocity of a note was set with the mouse in the velocity lane and the button went up: its
+    ///        index in notes(), once for each note that ended the gesture with another velocity than it
+    ///        started it with, from the highest index to the lowest (so a handler that removes the note it is
+    ///        told about leaves the indices still to come right). The new velocity is in notes() already, and
+    ///        has been since the pointer set it: nothing is emitted while the button is down.
+    Signal<int> onNoteVelocityChanged;
     /// @brief A note's length was changed with the mouse (the last few pixels of its right end dragged, the
     ///        pointer turns into the horizontal resize cursor there) and the button went up: its index in
     ///        notes(). Not emitted when the length ended as it was, nor for a note that was just put (that
@@ -1035,10 +1070,16 @@ private:
     float beatToX(float beat) const;
     float beatToX(float beat, const Rect& ga) const;
     float xToBeat(float x) const;
+    float xToBeat(float x, const Rect& ga) const;
     Rect noteRect(const PianoNote& n) const;
     Rect noteRect(const PianoNote& n, const Rect& ga) const;
     bool isBlackKey(int pitch) const;
     void updateEdgeCursor(float x, float y);
+    float laneHeight(const Rect& ga) const; // 0 when the lane is off or the roll too short for it
+    void paintVelocityLane(PaintContext& ctx, const Rect& ga, float laneH) const;
+    void paintLaneKeys(PaintContext& ctx, const Rect& ka, float laneH) const;
+    void sweepLane(float x0, float y0, float x1, float y1);
+    void endLaneGesture();
     void paintKeys(PaintContext& ctx, const Rect& ka) const;
     void paintGrid(PaintContext& ctx, const Rect& ga) const;
     void paintNotes(PaintContext& ctx, const Rect& ga) const;
@@ -1065,6 +1106,11 @@ private:
     float dragStartLen_ = 0.f;   // and its length, to tell a resize from a click
     bool showVelocity_ = false;
     bool resizing_ = false;      // draggingNote_ is having its right end dragged (a note just put is too)
+    bool showLane_ = false;
+    bool laneDrag_ = false;      // the button went down in the velocity lane and has not gone up
+    float laneH_ = 60.f;
+    float laneLastX_ = 0.f, laneLastY_ = 0.f; // where the pointer was at the last mouse event of the gesture
+    ct::Vector<float> laneOrig_; // by note index: the velocity it had before the gesture touched it, -1 for the untouched
 };
 
 } // namespace retained
