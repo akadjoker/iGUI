@@ -149,7 +149,7 @@ void Timeline::syncScrollBar()
 
 void Timeline::layout()
 {
-    const float thick = ScrollBar::kBarThickness;
+    const float thick = ScrollBar::thickness();
     vbar_->setRect({ rect_.w - thick - 2.0f, kRulerH + 1.0f, thick,
         std::max(0.0f, rect_.h - kRulerH - 2.0f) });
     syncScrollBar();

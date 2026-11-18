@@ -6775,7 +6775,7 @@ static void test_scroll_view_wheel_reaches_the_end_with_both_bars()
     DrawData data;
     app.paint(data);
 
-    const float bar = ScrollBar::kBarThickness + 2.0f;
+    const float bar = ScrollBar::thickness() + 2.0f;
     MouseEvent down;
     down.scrollY = -1000.0f;
     view->onMouseScroll(down);

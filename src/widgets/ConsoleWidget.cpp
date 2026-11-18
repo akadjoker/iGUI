@@ -1,4 +1,5 @@
 #include "ConsoleWidget.hpp"
+#include "ScrollWidgets.hpp"
 #include "Utf8.hpp"
 #include <cstdarg>
 
@@ -529,7 +530,7 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
 
 void ConsoleWidget::paintScrollbar(PaintContext& ctx, const Rect& logArea, float totalH)
 {
-    float sbW = 8.f;
+    float sbW = ScrollBar::thickness();
     float sbX = logArea.right() - sbW;
     float ratio = totalH > 0.f ? logArea.h / totalH : 1.f;
     float thumbH = std::max(20.f, logArea.h * ratio);

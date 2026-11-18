@@ -1,4 +1,5 @@
 #include "TextInputWidgets.hpp"
+#include "ScrollWidgets.hpp"
 #include "Utf8.hpp"
 #include "WidgetApp.hpp"
 #include "pch.hpp"
@@ -1758,7 +1759,7 @@ void TextEdit::paint(PaintContext& ctx)
     }
 
     // Scrollbar — inside same clip so it merges
-    float barW = t.scrollbarWidth;
+    float barW = ScrollBar::thickness();
     float totalH = totalVRows * lineHeight();
     bool needVBar = totalH > abs.h;
     if (needVBar)

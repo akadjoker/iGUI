@@ -88,6 +88,14 @@ public:
     /// @brief Emitted when scroll value changes.
     Signal<float> scrolled;
 
+    /// @brief The thickness of a scroll bar, from the theme (Theme::scrollbarWidth, 8 in every preset, kept to 4 to 100,
+    ///        NaN gives 8): what the scroll views, the lists, the grids, the timeline, the thumbnail grid, the tree view,
+    ///        the console and the text edit all use. An application that draws a bar of its own, or reserves room for one,
+    ///        should read this, so that its bars follow the theme with the library's.
+    static float thickness();
+    /// @brief Deprecated: the thickness the bars had before they followed the theme, always 8. It is no longer what the
+    ///        library's bars use (they use thickness(), which is 8 until the theme says otherwise); kept so code that
+    ///        reads it still compiles and still gets 8.
     static constexpr float kBarThickness = 8.0f;
     static constexpr float kMinThumbLen = 20.0f;
 

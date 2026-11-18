@@ -9,6 +9,13 @@
 //  ScrollBar
 // ═════════════════════════════════════════════════════════════════════════════
 
+// The theme's thickness, kept to what a bar can be: a number that is not one (NaN) gives the old 8, an infinite or
+// enormous one 100, one under 4 gives 4 (the thumb is drawn a pixel in from each side).
+float ScrollBar::thickness()
+{
+    return Math::sane(Theme::instance().scrollbarWidth, kBarThickness, 4.0f, 100.0f);
+}
+
 ScrollBar::ScrollBar(ScrollBarOrientation orientation)
         : orientation_(orientation)
 {
@@ -16,8 +23,9 @@ ScrollBar::ScrollBar(ScrollBarOrientation orientation)
 
 Widget::Vec2f ScrollBar::sizeHint() const
 {
-    if (orientation_ == ScrollBarOrientation::Vertical) return { kBarThickness, 60.0f };
-    return { 60.0f, kBarThickness };
+    const float thick = thickness();
+    if (orientation_ == ScrollBarOrientation::Vertical) return { thick, 60.0f };
+    return { 60.0f, thick };
 }
 
 void ScrollBar::clampScroll()
@@ -181,21 +189,22 @@ void ScrollView::updateBars()
     bool needV = vbar_ && contentH_ > vh + 0.5f;
     bool needH = hbar_ && contentW_ > vw + 0.5f;
 
-    float barThick = ScrollBar::kBarThickness + kBarGap;
+    const float thick = ScrollBar::thickness();
+    float barThick = thick + kBarGap;
     float viewW = needV ? vw - barThick : vw;
     float viewH = needH ? vh - barThick : vh;
 
     if (vbar_)
     {
         vbar_->setVisible(needV);
-        vbar_->setRect({ viewW + kBarGap, 0, ScrollBar::kBarThickness, viewH });
+        vbar_->setRect({ viewW + kBarGap, 0, thick, viewH });
         vbar_->setContentSize(contentH_);
         vbar_->setViewSize(viewH);
     }
     if (hbar_)
     {
         hbar_->setVisible(needH);
-        hbar_->setRect({ 0, viewH + kBarGap, viewW, ScrollBar::kBarThickness });
+        hbar_->setRect({ 0, viewH + kBarGap, viewW, thick });
         hbar_->setContentSize(contentW_);
         hbar_->setViewSize(viewW);
     }
@@ -231,7 +240,7 @@ void ScrollView::layout()
 
     // Second pass: content rect = viewport dimensions (excluding scrollbar areas).
     // The scroll offset handles showing the overflowing content.
-    float barThick = ScrollBar::kBarThickness + kBarGap;
+    float barThick = ScrollBar::thickness() + kBarGap;
     bool needV = vbar_ && vbar_->isVisible();
     bool needH = hbar_ && hbar_->isVisible();
     float viewW = needV ? rect_.w - barThick : rect_.w;
@@ -249,7 +258,7 @@ void ScrollView::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     // Clip to view area (exclude scrollbar region)
-    float barThick = ScrollBar::kBarThickness + kBarGap;
+    float barThick = ScrollBar::thickness() + kBarGap;
     bool needV = vbar_ && vbar_->isVisible();
     bool needH = hbar_ && hbar_->isVisible();
     float viewW = needV ? abs.w - barThick : abs.w;
@@ -382,11 +391,12 @@ void ListBox::layout()
                 });
     }
 
-    float barThick = ScrollBar::kBarThickness + 2.0f;
+    const float thick = ScrollBar::thickness();
+    float barThick = thick + 2.0f;
     float viewW = rect_.w - barThick;
     float total = static_cast<float>(items_.size()) * itemHeight();
 
-    vbar_->setRect({ viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h });
+    vbar_->setRect({ viewW + 2.0f, 0, thick, rect_.h });
     vbar_->setContentSize(total);
     vbar_->setViewSize(rect_.h);
     clampScroll();
@@ -408,7 +418,7 @@ void ListBox::paint(PaintContext& ctx)
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
     float ih = itemHeight();
-    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
+    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
     float viewW = abs.w - barW;
 
     // Paint scrollbar first — same scissor as background, merges without clip change
@@ -480,7 +490,7 @@ bool ListBox::itemRect(int index, Rect& out)
     scrollToItem(index);
     const Rect abs = absoluteRect();
     const float ih = itemHeight();
-    const float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
+    const float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
     out = { abs.x, abs.y + static_cast<float>(index) * ih - scrollOffset_, abs.w - barW, ih };
     return true;
 }
@@ -539,7 +549,7 @@ void ListWidget::syncScrollBar()
 void ListWidget::placeRow(int index)
 {
     const float rh = rowH();
-    const float viewW = rect_.w - (ScrollBar::kBarThickness + 2.0f);
+    const float viewW = rect_.w - (ScrollBar::thickness() + 2.0f);
     Widget* row = rows_[static_cast<size_t>(index)];
     row->setRect({ kRowPad, static_cast<float>(index) * rh + kRowPad, viewW - kRowPad * 2,
         rh - kRowPad * 2 });
@@ -621,12 +631,13 @@ void ListWidget::layout()
                 });
     }
 
-    float barThick = ScrollBar::kBarThickness + 2.0f;
+    const float thick = ScrollBar::thickness();
+    float barThick = thick + 2.0f;
     float viewW = rect_.w - barThick;
     float rh = rowH();
     float total = static_cast<float>(rows_.size()) * rh;
 
-    vbar_->setRect({ viewW + 2.0f, 0, ScrollBar::kBarThickness, rect_.h });
+    vbar_->setRect({ viewW + 2.0f, 0, thick, rect_.h });
     vbar_->setContentSize(total);
     vbar_->setViewSize(rect_.h);
     clampScroll();
@@ -650,7 +661,7 @@ void ListWidget::paint(PaintContext& ctx)
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
     float rh = rowH();
-    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::kBarThickness + 2.0f : 0.0f;
+    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
     float viewW = abs.w - barW;
 
     // Paint scrollbar first — same scissor as background, merges without clip change

@@ -252,6 +252,7 @@ private:
     mutable float colGridH_ = -1.f; // header colW_ and the view were worked out for
     mutable float colContentH_ = -1.f;
     mutable float colHeaderH_ = -1.f;
+    mutable float colBarW_ = 8.f; // and the thickness of the scroll bars (ScrollBar::thickness())
     mutable float viewW_ = 0.f;     // the part of the grid that shows cells: what the scroll bars leave
     mutable float viewH_ = 0.f;
     mutable bool vbar_ = false;     // the scroll bars that are shown (the content is bigger than the view)
@@ -512,6 +513,7 @@ private:
     mutable float colGridH_ = -1.f; // header colW_ and the view were worked out for
     mutable float colContentH_ = -1.f;
     mutable float colHeaderH_ = -1.f;
+    mutable float colBarW_ = 8.f; // and the thickness of the scroll bars (ScrollBar::thickness())
     mutable float viewW_ = 0.f;     // the part of the grid that shows cells: what the scroll bars leave
     mutable float viewH_ = 0.f;
     mutable bool vbar_ = false;     // the scroll bars that are shown (the content is bigger than the view)

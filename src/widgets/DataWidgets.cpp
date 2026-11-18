@@ -1,5 +1,6 @@
 #include "DataWidgets.hpp"
 #include "EditText.hpp"
+#include "ScrollWidgets.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
 #include "pch.hpp"
@@ -98,9 +99,8 @@ void layoutColumns(const ct::Vector<ColumnT>& cols, bool stretchLast, float grid
     for (size_t i = 0; i < n; ++i) total += widths[i];
 }
 
-// The thickness of the scroll bars of a grid: the vertical one at the right of the rows, the horizontal one
-// under them.
-const float kBarW = 8.0f;
+// The thickness of the scroll bars of a grid (ScrollBar::thickness(), the theme's): the vertical one at the right of
+// the rows, the horizontal one under them. A grid keeps the one its layout was worked out with (colBarW_).
 
 // The part of a grid that shows cells (the grid less its header and the bars that are needed) and which bars
 // are needed: the vertical one when the rows are taller than the body, the horizontal one when the columns
@@ -119,18 +119,18 @@ struct GridView
 // which bars are shown. `contentH` is the height of all the rows.
 template<class ColumnT>
 GridView layoutGrid(const ct::Vector<ColumnT>& cols, bool stretchLast, float gridW, float gridH, float headerH, float contentH,
-        float leading, ct::Vector<float>& widths, float& total)
+        float leading, float barW, ct::Vector<float>& widths, float& total)
 {
     GridView v;
     const float bodyH = gridH - headerH > 0.0f ? gridH - headerH : 0.0f;
     v.vbar = contentH > bodyH && bodyH > 0.0f;
     for (int pass = 0; pass < 3; ++pass)
     {
-        v.viewW = gridW - (v.vbar ? kBarW : 0.0f);
+        v.viewW = gridW - (v.vbar ? barW : 0.0f);
         if (v.viewW < 0.0f) v.viewW = 0.0f;
         layoutColumns(cols, stretchLast, v.viewW, leading, widths, total);
         v.hbar = total > v.viewW && v.viewW > 0.0f;
-        v.viewH = bodyH - (v.hbar ? kBarW : 0.0f);
+        v.viewH = bodyH - (v.hbar ? barW : 0.0f);
         if (v.viewH < 0.0f) v.viewH = 0.0f;
         const bool needV = contentH > v.viewH && bodyH > 0.0f;
         if (needV == v.vbar) break;
@@ -232,15 +232,17 @@ void DataGrid::ensureColumns() const
     const float gridW = layoutWidth(rect_.w);
     const float gridH = layoutWidth(rect_.h);
     const float contentH = static_cast<float>(modelRowCount()) * rowHeight_;
+    const float barW = ScrollBar::thickness();
     if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW && colGridH_ == gridH && colContentH_ == contentH &&
-            colHeaderH_ == headerHeight_)
+            colHeaderH_ == headerHeight_ && colBarW_ == barW)
         return;
     colDirty_ = false;
     colGridW_ = gridW;
     colGridH_ = gridH;
     colContentH_ = contentH;
     colHeaderH_ = headerHeight_;
-    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, contentX(), colW_, colTotal_);
+    colBarW_ = barW;
+    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, contentX(), barW, colW_, colTotal_);
     viewW_ = v.viewW;
     viewH_ = v.viewH;
     vbar_ = v.vbar;
@@ -805,30 +807,30 @@ void DataGrid::paint(PaintContext& ctx)
     const float contentW = totalColumnsWidth();
     if (vbar_)
     {
-        const float sbX = abs.x + abs.w - kBarW;
+        const float sbX = abs.x + abs.w - colBarW_;
         const float thumbH = thumbLength(viewH_, viewH_, contentH);
         const float maxSY = contentH - viewH_;
         const float thumbY = bodyY + (maxSY > 0.0f && viewH_ > thumbH ? (scrollY_ / maxSY) * (viewH_ - thumbH) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(sbX, bodyY, kBarW, viewH_);
+        ctx.fillRect(sbX, bodyY, colBarW_, viewH_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(sbX + 1, thumbY, kBarW - 2, thumbH);
+        ctx.fillRect(sbX + 1, thumbY, colBarW_ - 2, thumbH);
     }
 
     if (hbar_)
     {
-        const float sbY = abs.y + abs.h - kBarW;
+        const float sbY = abs.y + abs.h - colBarW_;
         const float thumbW = thumbLength(viewW_, viewW_, contentW);
         const float maxSX = contentW - viewW_;
         const float thumbX = abs.x + (maxSX > 0.0f && viewW_ > thumbW ? (scrollX_ / maxSX) * (viewW_ - thumbW) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(abs.x, sbY, viewW_, kBarW);
+        ctx.fillRect(abs.x, sbY, viewW_, colBarW_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(thumbX, sbY + 1, thumbW, kBarW - 2);
+        ctx.fillRect(thumbX, sbY + 1, thumbW, colBarW_ - 2);
     }
 
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
@@ -852,7 +854,7 @@ void DataGrid::onMousePress(MouseEvent& e)
 
     // ── Scroll bars: a press on a thumb starts a drag, one on a track scrolls a page toward it ──
     ensureColumns();
-    if (vbar_ && localX >= abs.w - kBarW && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
+    if (vbar_ && localX >= abs.w - colBarW_ && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
     {
         if (barPress(localY - headerHeight_, viewH_, viewH_, colContentH_, scrollY_))
         {
@@ -863,7 +865,7 @@ void DataGrid::onMousePress(MouseEvent& e)
         markDirty();
         return;
     }
-    if (hbar_ && localY >= abs.h - kBarW && localX < viewW_)
+    if (hbar_ && localY >= abs.h - colBarW_ && localX < viewW_)
     {
         if (barPress(localX, viewW_, viewW_, colTotal_, scrollX_))
         {
@@ -1513,15 +1515,17 @@ void TreeGrid::ensureColumns() const
     const float gridW = layoutWidth(rect_.w);
     const float gridH = layoutWidth(rect_.h);
     const float contentH = static_cast<float>(flatList_.size()) * rowHeight_;
+    const float barW = ScrollBar::thickness();
     if (!colDirty_ && colW_.size() == columns_.size() && colGridW_ == gridW && colGridH_ == gridH && colContentH_ == contentH &&
-            colHeaderH_ == headerHeight_)
+            colHeaderH_ == headerHeight_ && colBarW_ == barW)
         return;
     colDirty_ = false;
     colGridW_ = gridW;
     colGridH_ = gridH;
     colContentH_ = contentH;
     colHeaderH_ = headerHeight_;
-    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, 0.0f, colW_, colTotal_);
+    colBarW_ = barW;
+    const GridView v = layoutGrid(columns_, stretchLast_, gridW, gridH, headerHeight_, contentH, 0.0f, barW, colW_, colTotal_);
     viewW_ = v.viewW;
     viewH_ = v.viewH;
     vbar_ = v.vbar;
@@ -2017,30 +2021,30 @@ void TreeGrid::paint(PaintContext& ctx)
     const float contentW = totalColumnsWidth();
     if (vbar_)
     {
-        const float sbX = abs.x + abs.w - kBarW;
+        const float sbX = abs.x + abs.w - colBarW_;
         const float thumbH = thumbLength(viewH_, viewH_, contentH);
         const float maxSY = contentH - viewH_;
         const float thumbY = bodyY + (maxSY > 0.0f && viewH_ > thumbH ? (scrollY_ / maxSY) * (viewH_ - thumbH) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(sbX, bodyY, kBarW, viewH_);
+        ctx.fillRect(sbX, bodyY, colBarW_, viewH_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(sbX + 1, thumbY, kBarW - 2, thumbH);
+        ctx.fillRect(sbX + 1, thumbY, colBarW_ - 2, thumbH);
     }
 
     if (hbar_)
     {
-        const float sbY = abs.y + abs.h - kBarW;
+        const float sbY = abs.y + abs.h - colBarW_;
         const float thumbW = thumbLength(viewW_, viewW_, contentW);
         const float maxSX = contentW - viewW_;
         const float thumbX = abs.x + (maxSX > 0.0f && viewW_ > thumbW ? (scrollX_ / maxSX) * (viewW_ - thumbW) : 0.0f);
         ctx.fill.SetColor(static_cast<uint8_t>(std::min(255, t.panelColor.r + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.g + 20)),
                 static_cast<uint8_t>(std::min(255, t.panelColor.b + 20)), 150);
-        ctx.fillRect(abs.x, sbY, viewW_, kBarW);
+        ctx.fillRect(abs.x, sbY, viewW_, colBarW_);
         ctx.fill.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, 80);
-        ctx.fillRect(thumbX, sbY + 1, thumbW, kBarW - 2);
+        ctx.fillRect(thumbX, sbY + 1, thumbW, colBarW_ - 2);
     }
 
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
@@ -2064,7 +2068,7 @@ void TreeGrid::onMousePress(MouseEvent& e)
 
     // ── Scroll bars: a press on a thumb starts a drag, one on a track scrolls a page toward it ──
     ensureColumns();
-    if (vbar_ && localX >= abs.w - kBarW && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
+    if (vbar_ && localX >= abs.w - colBarW_ && localY >= headerHeight_ && localY < headerHeight_ + viewH_)
     {
         if (barPress(localY - headerHeight_, viewH_, viewH_, colContentH_, scrollY_))
         {
@@ -2075,7 +2079,7 @@ void TreeGrid::onMousePress(MouseEvent& e)
         markDirty();
         return;
     }
-    if (hbar_ && localY >= abs.h - kBarW && localX < viewW_)
+    if (hbar_ && localY >= abs.h - colBarW_ && localX < viewW_)
     {
         if (barPress(localX, viewW_, viewW_, colTotal_, scrollX_))
         {

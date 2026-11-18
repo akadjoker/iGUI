@@ -65,7 +65,7 @@ ThumbnailGrid::Metrics ThumbnailGrid::metrics() const
     };
     layOut(rect_.w);
     m.bar = ScrollBar::neededFor(m.contentH, rect_.h);
-    if (m.bar) layOut(rect_.w - (ScrollBar::kBarThickness + 2.f));
+    if (m.bar) layOut(rect_.w - (ScrollBar::thickness() + 2.f));
     m.scroll = std::max(0.f, std::min(scrollY_, m.contentH - rect_.h));
     return m;
 }
@@ -75,7 +75,7 @@ void ThumbnailGrid::syncScroll()
     const Metrics m = metrics();
     scrollY_ = m.scroll;
     vbar_->setVisible(m.bar);
-    vbar_->setRect({ m.viewW + 2.f, 0.f, ScrollBar::kBarThickness, rect_.h });
+    vbar_->setRect({ m.viewW + 2.f, 0.f, ScrollBar::thickness(), rect_.h });
     vbar_->setContentSize(m.contentH);
     vbar_->setViewSize(rect_.h);
     vbar_->setValue(scrollY_);

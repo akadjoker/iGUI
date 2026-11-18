@@ -7,8 +7,16 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/AudioWidgets.hpp>
+#include <igui/widgets/ConsoleWidget.hpp>
+#include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ScrollWidgets.hpp>
+#include <igui/widgets/TextInputWidgets.hpp>
+#include <igui/widgets/Theme.hpp>
+#include <igui/widgets/ThumbnailGrid.hpp>
+#include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/ToolBar.hpp>
+#include <igui/widgets/TreePropertyColorWidgets.hpp>
 #include <igui/widgets/WidgetSerializer.hpp>
 
 using namespace rh;
@@ -810,6 +818,286 @@ void testToolBarLoadsWhatAFileCanHold()
     check(second && second->itemCount() == 0, "a list that is not a list is no items");
 }
 
+// ---- item 5: the scroll bar thickness comes from the theme ----
+
+// The theme with another thickness for as long as this lives (the whole theme is put back, the way a test of themes does).
+struct ThicknessScope
+{
+    explicit ThicknessScope(float thickness) : saved(Theme::instance())
+    {
+        Theme::instance().scrollbarWidth = thickness;
+    }
+    ~ThicknessScope()
+    {
+        Theme::instance() = saved;
+    }
+    Theme saved;
+};
+
+// A widget that asks for a size.
+class Wants : public Widget
+{
+public:
+    IG_WIDGET_CLASS(Wants, Widget);
+    Wants(float w, float h) : w_(w), h_(h) {}
+    Vec2f sizeHint() const override
+    {
+        return { w_, h_ };
+    }
+    float w_, h_;
+};
+
+ScrollBar* findBar(Widget* w, ScrollBarOrientation o)
+{
+    for (Widget* c: w->children())
+        if (ScrollBar* bar = widget_cast<ScrollBar>(c))
+            if (bar->orientation() == o) return bar;
+    return nullptr;
+}
+
+// The grids of the grid tests, a window of 640x360 with one grid that stretches.
+struct GridRig
+{
+    GridRig(bool tree_, int rows, int columns, float width = 640.0f, float height = 360.0f)
+            : h(width, height, false),
+              tree(tree_)
+    {
+        BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+        box->setPadding(0.0f);
+        if (tree)
+        {
+            tg = box->createChild<TreeGrid>();
+            tg->setStretch(1.0f);
+            for (int c = 0; c < columns; ++c) tg->addColumn(String("C") + String::number(c), 100.0f);
+            tg->selectionChanged.connect([this](TreeGrid::Node* n) { selected = n && n->cells.size() > 0 ? atoi(n->cells[0].c_str()) : -1; });
+            tg->setStretchLastColumn(true);
+        }
+        else
+        {
+            dg = box->createChild<DataGrid>();
+            dg->setStretch(1.0f);
+            for (int c = 0; c < columns; ++c) dg->addColumn(String("C") + String::number(c), 100.0f);
+            dg->selectionChanged.connect([this](int row) { selected = row; });
+            dg->setStretchLastColumn(true);
+        }
+        for (int r = 0; r < rows; ++r)
+        {
+            ct::Vector<String> cells;
+            for (int c = 0; c < columns; ++c) cells.push_back(String::number(r));
+            if (tree) tg->addRoot(cells);
+            else
+                dg->addRow(cells);
+        }
+        relayout();
+    }
+    void relayout()
+    {
+        if (tree) tg->rebuild();
+        h.relayout();
+        h.frames(2);
+    }
+    Rect rect() const
+    {
+        return tree ? tg->absoluteRect() : dg->absoluteRect();
+    }
+    float columnsWidth(int columns) const
+    {
+        float sum = 0.0f;
+        for (int c = 0; c < columns; ++c) sum += tree ? tg->columnWidth(c) : dg->columnWidth(c);
+        return sum;
+    }
+    Harness h;
+    DataGrid* dg = nullptr;
+    TreeGrid* tg = nullptr;
+    bool tree;
+    int selected = -1;
+};
+
+void testScrollBarThicknessIsTheThemes()
+{
+    // by default, in every preset, 8: the look the library always had
+    check(ScrollBar::thickness() == 8.0f, "ScrollBar::thickness() is 8 by default");
+    check(ScrollBar::kBarThickness == 8.0f, "and the old constant is still 8");
+    bool allEight = Theme().scrollbarWidth == 8.0f;
+    for (int i = 0; i < Theme::kPresetCount; ++i)
+    {
+        const Theme preset = Theme::byName(Theme::presetName(i));
+        if (preset.scrollbarWidth != 8.0f)
+        {
+            printf("    the preset %s has %g\n", Theme::presetName(i), static_cast<double>(preset.scrollbarWidth));
+            allEight = false;
+        }
+    }
+    check(allEight, "scrollbarWidth is 8 in the default theme and in all five presets");
+
+    const ThicknessScope scope(14.0f);
+    check(ScrollBar::thickness() == 14.0f, "with the theme at 14, ScrollBar::thickness() is 14");
+    check(ScrollBar::kBarThickness == 8.0f, "and the constant stays 8, for the code that reads it");
+    ScrollBar vertical(ScrollBarOrientation::Vertical), horizontal(ScrollBarOrientation::Horizontal);
+    check(vertical.sizeHint().x == 14.0f && horizontal.sizeHint().y == 14.0f, "a ScrollBar asks for the theme's thickness");
+
+    // a ScrollView with content past both edges: both bars 14 thick, the content ends where the vertical one begins and
+    // the horizontal one is under it
+    {
+        Harness h(700.0f, 500.0f, false);
+        Widget* holder = h.root()->createChild<Widget>();
+        ScrollView* view = holder->createChild<ScrollView>();
+        view->setRect({ 10.0f, 10.0f, 200.0f, 150.0f });
+        Wants* content = view->setContent<Wants>(500.0f, 600.0f);
+        h.relayout();
+        ScrollBar* vbar = findBar(view, ScrollBarOrientation::Vertical);
+        ScrollBar* hbar = findBar(view, ScrollBarOrientation::Horizontal);
+        check(vbar && vbar->isVisible() && vbar->rect().w == 14.0f, "ScrollView: the vertical bar is 14 thick");
+        check(hbar && hbar->isVisible() && hbar->rect().h == 14.0f, "ScrollView: the horizontal bar is 14 thick");
+        if (vbar && hbar)
+        {
+            check(vbar->rect().x + vbar->rect().w == 200.0f && hbar->rect().y + hbar->rect().h == 150.0f, "ScrollView: they are at the right and bottom edges");
+            check(vbar->rect().y + vbar->rect().h <= hbar->rect().y, "ScrollView: the vertical bar ends where the horizontal one begins");
+            check(vbar->rect().x - 2.0f == 200.0f - 16.0f, "ScrollView: the view the content sees is 16 less than the window (the bar and the 2 pixels gap)");
+            check(content->rect().h == 600.0f && content->rect().w >= 500.0f, "ScrollView: the content keeps what it asked for");
+        }
+        // the theme changes with the view on screen: the next layout takes it
+        Theme::instance().scrollbarWidth = 20.0f;
+        h.relayout();
+        check(vbar && vbar->rect().w == 20.0f && hbar && hbar->rect().h == 20.0f, "ScrollView: a new thickness is taken at the next layout");
+        Theme::instance().scrollbarWidth = 14.0f;
+    }
+
+    // ListBox
+    {
+        Harness h(700.0f, 500.0f, false);
+        Widget* holder = h.root()->createChild<Widget>();
+        ListBox* list = holder->createChild<ListBox>();
+        list->setRect({ 10.0f, 10.0f, 240.0f, 160.0f });
+        for (int i = 0; i < 40; ++i) list->addItem(String("item ") + String::number(i));
+        h.relayout();
+        ScrollBar* bar = findBar(list, ScrollBarOrientation::Vertical);
+        check(bar && bar->isVisible() && bar->rect().w == 14.0f, "ListBox: the bar is 14 thick");
+        Rect item;
+        check(list->itemRect(0, item), "(ListBox: item 0 has a rectangle)");
+        if (bar) check(item.x + item.w <= bar->absoluteRect().x && bar->absoluteRect().x + bar->absoluteRect().w == 10.0f + 240.0f, "ListBox: the items end where the bar begins, and the bar is at the right edge");
+    }
+
+    // ListWidget
+    {
+        Harness h(700.0f, 500.0f, false);
+        Widget* holder = h.root()->createChild<Widget>();
+        ListWidget* list = holder->createChild<ListWidget>();
+        list->setRect({ 10.0f, 10.0f, 240.0f, 160.0f });
+        for (int i = 0; i < 20; ++i) list->addRow<Label>(String("row ") + String::number(i));
+        h.relayout();
+        ScrollBar* bar = findBar(list, ScrollBarOrientation::Vertical);
+        check(bar && bar->isVisible() && bar->rect().w == 14.0f, "ListWidget: the bar is 14 thick");
+        Widget* row = list->children().empty() ? nullptr : list->children()[0];
+        for (Widget* c: list->children())
+            if (!widget_cast<ScrollBar>(c)) { row = c; break; }
+        if (bar && row) check(row->rect().x + row->rect().w <= bar->rect().x, "ListWidget: the rows end where the bar begins");
+    }
+
+    // DataGrid and TreeGrid
+    for (int tree = 0; tree < 2; ++tree)
+    {
+        const char* name = tree ? "TreeGrid" : "DataGrid";
+        GridRig g(tree != 0, 100, 3);
+        const Rect r = g.rect();
+        const float sum = g.columnsWidth(3);
+        check(fabsf(sum - (r.w - 14.0f)) < 0.01f, (String(name) + ": with a vertical bar the columns end where it begins, 14 before the edge").c_str());
+        if (fabsf(sum - (r.w - 14.0f)) >= 0.01f) printf("    %g of %g\n", static_cast<double>(sum), static_cast<double>(r.w));
+        g.selected = -1;
+        g.h.click(r.x + r.w - 12.0f, r.y + 60.0f); // 12 from the edge: the bar if it is 14 thick, a cell if it is 8
+        check(g.selected == -1, (String(name) + ": a press 12 pixels from the edge is on the bar, not on a cell").c_str());
+        g.h.click(r.x + r.w - 20.0f, r.y + 60.0f);
+        check(g.selected != -1, (String(name) + ": and one 20 pixels from it is on a cell").c_str());
+        // the theme changes: the grid lays itself out again with the new thickness, without being resized
+        Theme::instance().scrollbarWidth = 20.0f;
+        g.h.frames(2);
+        check(fabsf(g.columnsWidth(3) - (r.w - 20.0f)) < 0.01f, (String(name) + ": a new thickness moves the end of the columns without the grid being resized").c_str());
+        Theme::instance().scrollbarWidth = 14.0f;
+        g.h.frames(2);
+    }
+
+    // ThumbnailGrid
+    {
+        Harness h(700.0f, 500.0f, false);
+        Widget* holder = h.root()->createChild<Widget>();
+        ThumbnailGrid* grid = holder->createChild<ThumbnailGrid>();
+        grid->setRect({ 10.0f, 10.0f, 300.0f, 200.0f });
+        grid->setThumbSize(60.0f, 60.0f);
+        for (int i = 0; i < 60; ++i) grid->addItem(String("t") + String::number(i));
+        h.relayout();
+        ScrollBar* bar = findBar(grid, ScrollBarOrientation::Vertical);
+        check(bar && bar->isVisible() && bar->rect().w == 14.0f, "ThumbnailGrid: the bar is 14 thick");
+        if (bar)
+        {
+            check(bar->absoluteRect().x + bar->absoluteRect().w == 10.0f + 300.0f, "ThumbnailGrid: the bar is at the right edge");
+            int hit = -2;
+            for (float y = 12.0f; y < 208.0f; y += 6.0f)
+                if (grid->itemAt(bar->absoluteRect().x + 1.0f, y) >= 0) hit = grid->itemAt(bar->absoluteRect().x + 1.0f, y);
+            check(hit == -2, "ThumbnailGrid: no thumbnail is under the bar (they end where it begins)");
+        }
+    }
+
+    // Timeline
+    {
+        Harness h(700.0f, 500.0f, false);
+        Widget* holder = h.root()->createChild<Widget>();
+        Timeline* line = holder->createChild<Timeline>();
+        line->setRect({ 10.0f, 10.0f, 600.0f, 200.0f });
+        for (int i = 0; i < 20; ++i) line->addTrack(String("track ") + String::number(i), TrackKind::Video);
+        h.relayout();
+        ScrollBar* bar = findBar(line, ScrollBarOrientation::Vertical);
+        check(bar && bar->isVisible() && bar->rect().w == 14.0f, "Timeline: the bar is 14 thick");
+        if (bar) check(bar->rect().x == 600.0f - 14.0f - 2.0f, "Timeline: and 2 pixels from the right edge, as it was with 8");
+    }
+
+    // The bars that are drawn by their widget and not made of a ScrollBar: what changes when the thickness goes from 8
+    // to 14 is in the last 14 pixels at the right of the widget, and only there
+    struct DrawnBar
+    {
+        const char* name;
+        Widget* widget;
+    };
+    {
+        Screen screen(500.0f, 300.0f);
+        Widget* holder = screen.h.root()->createChild<Widget>();
+        TextEdit* edit = holder->createChild<TextEdit>();
+        edit->setRect({ 10.0f, 10.0f, 220.0f, 120.0f });
+        String text;
+        for (int i = 0; i < 60; ++i) text = text + "line " + String::number(i) + "\n";
+        edit->setText(text);
+        ConsoleWidget* console = holder->createChild<ConsoleWidget>();
+        console->setRect({ 250.0f, 10.0f, 240.0f, 120.0f });
+        for (int i = 0; i < 60; ++i) console->log(LogLevel::Info, String("message ") + String::number(i));
+        TreeView* tree = holder->createChild<TreeView>();
+        tree->setRect({ 10.0f, 150.0f, 220.0f, 120.0f });
+        for (int i = 0; i < 40; ++i) tree->addRoot(String("node ") + String::number(i));
+        screen.h.relayout();
+        screen.h.frames(2);
+        Theme::instance().scrollbarWidth = 8.0f;
+        screen.h.frames(2);
+        const Shot eight = screen.take();
+        Theme::instance().scrollbarWidth = 14.0f;
+        screen.h.frames(2);
+        const Shot fourteen = screen.take();
+        const DrawnBar bars[] = { { "TextEdit", edit }, { "ConsoleWidget", console }, { "TreeView", tree } };
+        for (const DrawnBar& b: bars)
+        {
+            const Rect r = b.widget->absoluteRect();
+            int left = 1 << 30;
+            for (int x = static_cast<int>(r.x) + 1; x < static_cast<int>(r.x + r.w) - 1; ++x)
+                if (differing(eight, fourteen, x, static_cast<int>(r.y) + 2, x + 1, static_cast<int>(r.y + r.h) - 2) > 0)
+                {
+                    left = x;
+                    break;
+                }
+            const int want = static_cast<int>(r.x + r.w) - 14;
+            const bool ok = left >= want - 1 && left <= want + 1;
+            check(ok, (String(b.name) + ": the bar it draws starts 14 pixels from its right edge with the theme at 14").c_str());
+            if (!ok) printf("    first column that changes: %d, wanted %d\n", left, want);
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -828,6 +1116,7 @@ int main(int argc, char** argv)
     RUN(testSerializerKeepsToolBar);
     RUN(testSerializerKeepsTheOrderOfAToolBarAfterADrag);
     RUN(testToolBarLoadsWhatAFileCanHold);
+    RUN(testScrollBarThicknessIsTheThemes);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

@@ -160,7 +160,11 @@ struct Theme
     float sliderTrackWidth = 4.0f;
     float sliderThumbRadius = 6.5f; // the round thumb of a Slider; never more than half of the slider's thickness
     float inputHeight = 26.0f;
-    float scrollbarWidth = 12.0f;
+    /// Thickness of every scroll bar the library draws: ScrollView, ListBox, ListWidget, DataGrid, TreeGrid, ThumbnailGrid,
+    /// Timeline, TreeView, ConsoleWidget and TextEdit. 8 in every preset (what the bars always were). Read it through
+    /// ScrollBar::thickness(), which keeps it to what a bar can be (4 to 100; NaN gives 8). The bars take a new value at
+    /// the next layout (WidgetApp::requestLayout() after changing it with widgets on screen).
+    float scrollbarWidth = 8.0f;
     float scrollbarMinThumb = 16.0f;
     float textEditPadding = 4.0f;
     float gutterPadding = 8.0f;
@@ -401,7 +405,7 @@ struct Theme
         t.borderRadius = 6.0f;
         t.buttonHeight = 28.0f;
         t.inputHeight = 28.0f;
-        t.scrollbarWidth = 10.0f;
+        t.scrollbarWidth = 8.0f; // (it was 10 here, read by the TextEdit alone; now every bar of the library follows it)
         t.menuBarHeight = 24.0f;
         t.menuItemHeight = 24.0f;
         t.menuShadowSize = 8.0f;
@@ -642,7 +646,7 @@ struct Theme
         t.borderRadius = 3.0f;
         t.buttonHeight = 24.0f;
         t.inputHeight = 24.0f;
-        t.scrollbarWidth = 16.0f;
+        t.scrollbarWidth = 8.0f; // (it was 16 here, read by the TextEdit alone)
         t.menuBarHeight = 22.0f;
         t.menuItemHeight = 22.0f;
         t.menuShadowSize = 2.0f;

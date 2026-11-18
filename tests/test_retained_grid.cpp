@@ -12,6 +12,7 @@
 #include <igui/widgets/IconAtlas.hpp>
 #include <igui/widgets/ItemModel.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
+#include <igui/widgets/ScrollWidgets.hpp>
 #include <igui_zen/SoftRaster.hpp>
 
 using namespace rh;
@@ -1175,8 +1176,8 @@ void testGridColumnsEndWhereTheBarBegins()
             many.stretchLast();
             const Rect r = many.rect();
             const float sum = many.columnWidth(0) + many.columnWidth(1) + many.columnWidth(2);
-            check(within(sum, r.w - 8.0f), (String(name) + ": with a vertical bar the columns end where it begins").c_str());
-            if (!within(sum, r.w - 8.0f)) printf("    %g of %g\n", sum, r.w);
+            check(within(sum, r.w - ScrollBar::thickness()), (String(name) + ": with a vertical bar the columns end where it begins").c_str());
+            if (!within(sum, r.w - ScrollBar::thickness())) printf("    %g of %g\n", sum, r.w);
             // and the bar is where the last column was: its pixels are the track, not the cells
             many.selected = -1;
             many.h.click(r.x + r.w - 4.0f, r.y + kHeaderH + 100.0f);
