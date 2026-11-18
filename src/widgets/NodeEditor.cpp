@@ -360,7 +360,6 @@ void NodeEditor::onMousePress(MouseEvent& e)
     {
         for (auto& n: nodes_) n.selected = false;
         nodes_[hit.node].selected = true;
-        onNodeSelected.emit(hit.node);
 
         dragMode_ = DragMode::MoveNode;
         dragNode_ = hit.node;
@@ -369,6 +368,7 @@ void NodeEditor::onMousePress(MouseEvent& e)
         nodeStartX_ = nodes_[hit.node].x;
         nodeStartY_ = nodes_[hit.node].y;
         e.consumed = true;
+        onNodeSelected.emit(hit.node); // (last: a handler may take the editor out of the tree, see WidgetApp::hasGone)
         return;
     }
 

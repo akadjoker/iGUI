@@ -127,6 +127,9 @@ protected:
     void notifyValueChanged();
 
 private:
+    // setValue(value_) again, after the range moved; true when a handler of valueChanged took the widget out of the tree
+    bool valueSetGone();
+
     double value_ = 0.0;
     double min_ = 0.0;
     double max_ = 100.0;

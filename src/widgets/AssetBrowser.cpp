@@ -325,15 +325,11 @@ void AssetBrowser::onMousePress(MouseEvent& e)
     if (idx < 0) return;
 
     selected_ = idx;
-    onSelect.emit(items_[idx]);
 
     // Double-click detection using accumulated time
     float now = timeAcc_;
-    if (lastClick_ == idx && (now - lastClickT_) < 0.5f)
-    {
-        onOpen.emit(items_[idx]);
-        lastClick_ = -1;
-    }
+    const bool open = lastClick_ == idx && (now - lastClickT_) < 0.5f;
+    if (open) lastClick_ = -1;
     else
     {
         lastClick_ = idx;
@@ -342,6 +338,10 @@ void AssetBrowser::onMousePress(MouseEvent& e)
 
     markDirty();
     e.consumed = true;
+    // (the item is copied: the signal's argument is the browser's own, and a handler may take the browser out of the tree)
+    const AssetItem item = items_[idx];
+    if (WidgetApp::instance().emitGone(this, onSelect, item)) return;
+    if (open) onOpen.emit(item);
 }
 
 void AssetBrowser::onMouseScroll(MouseEvent& e)

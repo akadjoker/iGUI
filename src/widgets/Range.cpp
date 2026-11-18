@@ -166,6 +166,16 @@ void Range::setValue(double value)
     if (value_ != previous && !(std::isnan(value_) && std::isnan(previous))) notifyValueChanged();
 }
 
+// setValue(value_) again, after the range moved: true when a handler of valueChanged took the widget out of the tree (the
+// caller then touches nothing of it, see WidgetApp::hasGone)
+bool Range::valueSetGone()
+{
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
+    setValue(value_);
+    return app.hasGone(this, seen);
+}
+
 void Range::setValueNoSignal(double value)
 {
     const double previous = value_;
@@ -180,8 +190,8 @@ void Range::setValueNoSignal(double value)
 void Range::notifyValueChanged()
 {
     onValueChanged(value_);
-    valueChanged.emit(value_);
     markDirty();
+    valueChanged.emit(value_); // (last: a handler may take the widget out of the tree, see WidgetApp::hasGone)
 }
 
 void Range::setMin(double minimum)
@@ -190,9 +200,9 @@ void Range::setMin(double minimum)
     min_ = minimum;
     max_ = maxOf(max_, min_);
     page_ = clampValue(page_, 0, max_ - min_);
-    setValue(value_);
-    changed.emit();
     markDirty();
+    if (valueSetGone()) return;
+    changed.emit();
 }
 
 void Range::setMax(double maximum)
@@ -201,17 +211,17 @@ void Range::setMax(double maximum)
     if (max_ == validated) return;
     max_ = validated;
     page_ = clampValue(page_, 0, max_ - min_);
-    setValue(value_);
-    changed.emit();
     markDirty();
+    if (valueSetGone()) return;
+    changed.emit();
 }
 
 void Range::setStep(double step)
 {
     if (step_ == step) return;
     step_ = step;
-    changed.emit();
     markDirty();
+    changed.emit();
 }
 
 void Range::setPage(double page)
@@ -219,9 +229,9 @@ void Range::setPage(double page)
     const double validated = clampValue(page, 0, max_ - min_);
     if (page_ == validated) return;
     page_ = validated;
-    setValue(value_);
-    changed.emit();
     markDirty();
+    if (valueSetGone()) return;
+    changed.emit();
 }
 
 void Range::setAsRatio(double ratio)

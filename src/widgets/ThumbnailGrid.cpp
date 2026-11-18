@@ -362,8 +362,11 @@ void ThumbnailGrid::onMousePress(MouseEvent& e)
     if (e.button == 1)
     {
         const int idx = itemAt(e.x, e.y);
-        setSelected(idx);
         e.consumed = true;
+        WidgetApp& app = WidgetApp::instance();
+        const uint32_t seen = app.deletions();
+        setSelected(idx);
+        if (app.hasGone(this, seen)) return; // (a handler of selectionChanged took the grid out of the tree: see WidgetApp::hasGone)
         onItemContextMenu.emit(idx, e.x, e.y);
         return;
     }
@@ -373,10 +376,13 @@ void ThumbnailGrid::onMousePress(MouseEvent& e)
     if (idx >= 0)
     {
         const bool again = e.clickCount == 2 && idx == selected_;
-        setSelected(idx);
-        onItemClicked.emit(idx);
-        if (again) onItemDoubleClicked.emit(idx);
         e.consumed = true;
+        WidgetApp& app = WidgetApp::instance();
+        const uint32_t seen = app.deletions();
+        setSelected(idx);
+        if (app.hasGone(this, seen)) return;
+        if (app.emitGone(this, onItemClicked, idx)) return;
+        if (again) onItemDoubleClicked.emit(idx);
     }
 }
 

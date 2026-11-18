@@ -34,6 +34,7 @@ void MenuAction::setSubmenu(Menu* m, bool owned)
 
 Menu::~Menu()
 {
+    if (deletedFlag_) *deletedFlag_ = true;
     // activeSubmenu_ is not touched: a caller's submenu may be gone already
     for (auto* a: actions_) delete a;
 }
@@ -154,7 +155,13 @@ Widget::Vec2f Menu::sizeHint() const
 
 void Menu::exec(float x, float y, Widget* owner)
 {
-    aboutToShow.emit(); // the items are up to date before the size is worked out
+    // The items are up to date before the size is worked out. A menu is no widget in a parent: its owner deletes it, from a
+    // handler of this signal too (a menu rebuilt, or dropped, when it is about to show): then nothing of it is touched.
+    bool deleted = false;
+    deletedFlag_ = &deleted;
+    aboutToShow.emit();
+    if (deleted) return;
+    deletedFlag_ = nullptr;
     Vec2f sz = sizeHint();
     float sw = static_cast<float>(WidgetApp::instance().width());
     float sh = static_cast<float>(WidgetApp::instance().height());

@@ -246,6 +246,7 @@ private:
     int hoveredIdx_ = -1;
     Menu* activeSubmenu_ = nullptr; // not owned (belongs to MenuAction)
     int activeSubmenuIdx_ = -1;
+    bool* deletedFlag_ = nullptr; // exec(): set by the destructor, so a handler of aboutToShow that deletes the menu is seen
 
     float rowY_(int idx) const;
     int hitItem_(float screenY) const;

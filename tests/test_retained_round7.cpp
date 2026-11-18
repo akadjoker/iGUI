@@ -849,6 +849,147 @@ void testApp()
             });
 }
 
+// ---- Range (SpinSlider), ThumbnailGrid, AssetBrowser, NodeEditor, Chart, Menu ----
+
+ct::Vector<String> labelsOf(const char* a, const char* b, const char* c)
+{
+    ct::Vector<String> v;
+    v.push_back(a);
+    v.push_back(b);
+    v.push_back(c);
+    return v;
+}
+
+ct::Vector<float> valuesOf(float a, float b, float c)
+{
+    ct::Vector<float> v;
+    v.push_back(a);
+    v.push_back(b);
+    v.push_back(c);
+    return v;
+}
+
+void testRangeGridsEditors()
+{
+    auto spin = [](Stage& st) {
+        SpinSlider* w = put<SpinSlider>(st, 20.0f, 20.0f, 160.0f, 28.0f);
+        w->setMin(0.0);
+        w->setMax(100.0);
+        w->setValue(50.0);
+        return w;
+    };
+    victim<SpinSlider>("Range.valueChanged by setValue", spin,
+            [](SpinSlider* w, auto kill, auto) { w->valueChanged.connect(kill); },
+            [](Stage& st, SpinSlider* w) { st.act([w]() { w->setValue(60.0); }); });
+    victim<SpinSlider>("Range.valueChanged by setMax below the value", spin,
+            [](SpinSlider* w, auto kill, auto late) { w->valueChanged.connect(kill); w->changed.connect(late); },
+            [](Stage& st, SpinSlider* w) { st.act([w]() { w->setMax(20.0); }); }, 1);
+    victim<SpinSlider>("Range.changed by setStep", spin,
+            [](SpinSlider* w, auto kill, auto) { w->changed.connect(kill); },
+            [](Stage& st, SpinSlider* w) { st.act([w]() { w->setStep(5.0); }); });
+    victim<SpinSlider>("Range.changed by setPage", spin,
+            [](SpinSlider* w, auto kill, auto) { w->changed.connect(kill); },
+            [](Stage& st, SpinSlider* w) { st.act([w]() { w->setPage(10.0); }); });
+    auto grid = [](Stage& st) {
+        ThumbnailGrid* w = put<ThumbnailGrid>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        w->addItem("one");
+        w->addItem("two");
+        w->addItem("three");
+        st.h.frames(2);
+        return w;
+    };
+    victim<ThumbnailGrid>("ThumbnailGrid.selectionChanged by setSelected", grid,
+            [](ThumbnailGrid* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, ThumbnailGrid* w) { st.act([w]() { w->setSelected(1); }); });
+    victim<ThumbnailGrid>("ThumbnailGrid.selectionChanged by a click on an item", grid,
+            [](ThumbnailGrid* w, auto kill, auto late) { w->selectionChanged.connect(kill); w->onItemClicked.connect(late); },
+            [](Stage& st, ThumbnailGrid* w) { st.click(w, 20.0f, 20.0f); }, 1);
+    victim<ThumbnailGrid>("ThumbnailGrid.onItemClicked by a click on an item", grid,
+            [](ThumbnailGrid* w, auto kill, auto late) { w->onItemClicked.connect(kill); w->onItemDoubleClicked.connect(late); },
+            [](Stage& st, ThumbnailGrid* w) {
+                st.moveTo(w, 20.0f, 20.0f);
+                MouseEvent dbl = st.event(w, 0);
+                dbl.clickCount = 2;
+                st.down(w);
+                if (st.mode == 1 && !st.gone()) w->onMousePress(dbl); // the second press of a double click
+                st.up(w);
+            });
+    victim<ThumbnailGrid>("ThumbnailGrid.onItemContextMenu by a right click on an item", grid,
+            [](ThumbnailGrid* w, auto kill, auto) { w->onItemContextMenu.connect(kill); },
+            [](Stage& st, ThumbnailGrid* w) { st.click(w, 20.0f, 20.0f, 1); });
+    auto assets = [](Stage& st) {
+        AssetBrowser* w = put<AssetBrowser>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        AssetItem a;
+        a.name = "clip";
+        w->addItem(a);
+        AssetItem b;
+        b.name = "other";
+        w->addItem(b);
+        st.h.frames(2);
+        return w;
+    };
+    victim<AssetBrowser>("AssetBrowser.onSelect by a click on an item", assets,
+            [](AssetBrowser* w, auto kill, auto) { w->onSelect.connect(kill); },
+            [](Stage& st, AssetBrowser* w) { st.click(w, 30.0f, 50.0f); });
+    victim<AssetBrowser>("AssetBrowser.onOpen by a second click on the same item", assets,
+            [](AssetBrowser* w, auto kill, auto) { w->onOpen.connect(kill); },
+            [](Stage& st, AssetBrowser* w) {
+                st.click(w, 30.0f, 50.0f);
+                st.click(w, 30.0f, 50.0f);
+            });
+    auto nodes = [](Stage& st) {
+        NodeEditor* w = put<NodeEditor>(st, 0.0f, 0.0f, 480.0f, 260.0f);
+        w->addNode("Add", 60.0f, 60.0f);
+        w->addNode("Mul", 260.0f, 60.0f);
+        st.h.frames(2);
+        return w;
+    };
+    victim<NodeEditor>("NodeEditor.onNodeSelected by a click on a node", nodes,
+            [](NodeEditor* w, auto kill, auto) { w->onNodeSelected.connect(kill); },
+            [](Stage& st, NodeEditor* w) {
+                st.moveTo(w, 120.0f, 90.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<Chart>("Chart.hoverChanged by moving onto a bar",
+            [](Stage& st) {
+                Chart* w = put<Chart>(st, 20.0f, 20.0f, 400.0f, 220.0f);
+                w->bars(labelsOf("a", "b", "c"), valuesOf(1.0f, 2.0f, 3.0f));
+                st.h.frames(2);
+                return w;
+            },
+            [](Chart* w, auto kill, auto) { w->hoverChanged.connect(kill); },
+            [](Stage& st, Chart* w) {
+                const Rect r = w->barRect(0, 2);
+                st.move(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+                st.drag(w, r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+            });
+    {
+        // a menu is no widget in a parent: its owner deletes it, from the handler of aboutToShow too (before it is shown)
+        for (int control = 1; control >= 0; --control)
+        {
+            if (!wanted("Menu.aboutToShow deleting the menu")) break;
+            ++gCases;
+            Harness h(300.0f, 200.0f, false);
+            Menu* menu = new Menu();
+            menu->addAction("Go");
+            int shown = 0;
+            menu->aboutToShow.connect([&]() {
+                ++shown;
+                if (!control)
+                {
+                    delete menu;
+                    menu = nullptr;
+                }
+            });
+            menu->exec(10.0f, 10.0f);
+            h.frames(3);
+            check(shown == 1, (String("Menu.aboutToShow deleting the menu") + (control ? " (control)" : "")).c_str());
+            delete menu;
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -879,6 +1020,7 @@ int main(int argc, char** argv)
     testAutomotive();
     testViews();
     testApp();
+    testRangeGridsEditors();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)

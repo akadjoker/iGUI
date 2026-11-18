@@ -1934,8 +1934,8 @@ void Chart::setHovered(Item item)
     if (item == hovered_)
         return;
     hovered_ = item;
-    hoverChanged.emit(item);
     markDirty();
+    hoverChanged.emit(item); // (last: a handler may take the chart out of the tree, see WidgetApp::hasGone)
 }
 
 void Chart::onMousePress(MouseEvent& e)
@@ -1963,9 +1963,12 @@ void Chart::onMousePress(MouseEvent& e)
     {
         // The pressed item is the hovered one while the handlers run, even
         // when no move came first (a touch, a synthetic press).
-        setHovered(item);
-        itemPressed.emit(item.series, item.index);
         e.consumed = true;
+        WidgetApp& app = WidgetApp::instance();
+        const uint32_t seen = app.deletions();
+        setHovered(item);
+        if (app.hasGone(this, seen)) return;
+        itemPressed.emit(item.series, item.index);
     }
 }
 
@@ -1981,7 +1984,10 @@ void Chart::onMouseMove(MouseEvent& e)
     mouseY_ = ly;
     if (overLegend != wasOverLegend)
         markDirty();
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     setHovered(hitTest(lx, ly));
+    if (app.hasGone(this, seen)) return;
     if (hovered_.valid())
         markDirty();   // the tooltip follows the mouse
 }
