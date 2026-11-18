@@ -895,6 +895,7 @@ struct PianoNote
     int pitch;
     float start;
     float length;
+    float velocity = 0.8f; ///< 0 to 1, how hard the note is played; the notes added without one have 0.8
 };
 
 class PianoRoll : public Widget
@@ -904,8 +905,23 @@ public:
 
     PianoRoll();
 
-    /// @brief Add a note to the roll.
+    /// @brief Add a note to the roll (velocity 0.8).
     void addNote(int pitch, float start, float length);
+    /// @brief Add a note with a velocity (0 to 1; NaN gives the default 0.8).
+    void addNote(int pitch, float start, float length, float velocity);
+    /// @brief Set the velocity of a note, 0 to 1 (NaN and bad indices do nothing).
+    void setNoteVelocity(int idx, float velocity);
+    /// @brief Draw the notes more or less opaque by their velocity (a note of velocity 1 as it is drawn
+    ///        now, one of 0 at about a third of its opacity). Default false: all the notes alike.
+    void setShowVelocity(bool on)
+    {
+        showVelocity_ = on;
+        markDirty();
+    }
+    bool showVelocity() const
+    {
+        return showVelocity_;
+    }
     /// @brief Remove a note by index.
     void removeNote(int idx);
     /// @brief Remove all notes.
@@ -970,12 +986,25 @@ public:
         markDirty();
     }
 
-    /// @brief Emitted when a note is added (pitch, start, length).
+    /// @brief Emitted when the button goes up after a note was put or picked up and dragged (pitch, start,
+    ///        length): also after a click on a note that did not move it, and after a move; it does not
+    ///        say which note. The signals below do.
     Signal<int, float, float> onNoteAdded;
-    /// @brief Emitted when a note is removed.
+    /// @brief Emitted when a note is removed by the right button, just BEFORE it goes (the index it has, the
+    ///        note is still in notes()).
     Signal<int> onNoteRemoved;
     /// @brief Emitted when a note is clicked.
     Signal<int> onNoteClicked;
+    /// @brief A note was put with the left button on an empty place and the button went up: its index in
+    ///        notes() (the last), and the note, as it ended up, can be read there (onNoteAdded is emitted
+    ///        just before this one).
+    Signal<int> onNoteCreated;
+    /// @brief A note was dragged to another pitch or start and the button went up: its index in notes().
+    ///        Not emitted for a click that left it where it was.
+    Signal<int> onNoteMoved;
+    /// @brief A note was removed by the right button: the index it had, and the note (copied: it is
+    ///        gone from notes() by now). onNoteRemoved was emitted just before.
+    Signal<int, const PianoNote&> onNoteDeleted;
     /// @brief Emitted when the user scrubs the playhead.
     Signal<float> onScrub;
 
@@ -1023,6 +1052,9 @@ private:
     float panStartX_ = 0.f, panVS_ = 0.f, panVE_ = 0.f;
     int newNotePitch_ = -1;
     float newNoteStart_ = 0.f;
+    int dragStartPitch_ = 0;     // where a picked up note was when the button went down, to tell a move from a click
+    float dragStartBeat_ = 0.f;
+    bool showVelocity_ = false;
 };
 
 } // namespace retained

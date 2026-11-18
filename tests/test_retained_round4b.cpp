@@ -7,6 +7,7 @@
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
 
+#include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
@@ -543,6 +544,151 @@ void testTimelineBarRulerHostile()
     check(worst > 0 && worst < 60000, "a frame with the bar ruler draws a bounded number of vertices for any range and tempo");
 }
 
+// ---- item 19: the piano roll's velocity, and the signals that say which note ----
+
+struct RollLog
+{
+    char order[32] = {};
+    int n = 0;
+    int created = -1, moved = -1, deleted = -1, removed = -1;
+    int createdCount = 0, movedCount = 0, deletedCount = 0, addedCount = 0;
+    int sizeAtRemoved = -1, sizeAtDeleted = -1;
+    PianoNote gone = { 0, 0.0f, 0.0f };
+    void add(char c)
+    {
+        if (n < 31) order[n++] = c;
+    }
+};
+
+void testPianoRollVelocityAndSignals()
+{
+    Harness h(480.0f, 260.0f, false);
+    WidgetApp& app = WidgetApp::instance();
+    PianoRoll* roll = h.root()->createChild<PianoRoll>();
+    roll->setRect(Rect(20.0f, 20.0f, 400.0f, 200.0f));
+    roll->setPitchRange(48, 60); // 12 rows of 12 pixels
+    roll->setTimeRange(0.0f, 8.0f);
+    h.frame();
+    // the grid starts 36 pixels in (the keys): 8 beats in 364 pixels, 45.5 pixels a beat; the top row is pitch 59
+    const float x2 = 56.0f + 91.0f + 3.0f; // beat 2, a little in
+    const float y55 = 20.0f + 4 * 12.0f + 6.0f; // the row of pitch 55
+
+    RollLog log;
+    roll->onNoteAdded.connect([&](int, float, float) { log.add('A'); ++log.addedCount; });
+    roll->onNoteCreated.connect([&](int i) { log.add('C'); log.created = i; ++log.createdCount; });
+    roll->onNoteMoved.connect([&](int i) { log.add('M'); log.moved = i; ++log.movedCount; });
+    roll->onNoteRemoved.connect([&](int i) { log.add('R'); log.removed = i; log.sizeAtRemoved = static_cast<int>(roll->notes().size()); });
+    roll->onNoteDeleted.connect([&](int i, const PianoNote& note) { log.add('D'); log.deleted = i; ++log.deletedCount; log.gone = note; log.sizeAtDeleted = static_cast<int>(roll->notes().size()); });
+    auto click = [&](float x, float y, int button = 0)
+    {
+        app.feedMouseMove(x, y);
+        app.feedMouseButton(button, true);
+        app.feedMouseButton(button, false);
+    };
+
+    // put a note: the left button on an empty place
+    click(x2, y55);
+    check(roll->notes().size() == 1 && roll->notes()[0].pitch == 55 && roll->notes()[0].start == 2.0f, "a click on an empty place puts a note (pitch 55, beat 2)");
+    check(roll->notes()[0].velocity == 0.8f, "with the default velocity, 0.8");
+    check(log.createdCount == 1 && log.created == 0 && log.movedCount == 0, "onNoteCreated says which note, once");
+    check(log.n == 2 && log.order[0] == 'A' && log.order[1] == 'C', "after onNoteAdded, which is emitted as it always was");
+
+    // a click on the note that does not move it: onNoteAdded as before, nothing new
+    roll->setNoteVelocity(0, 0.3f);
+    log = RollLog();
+    click(x2, y55);
+    check(log.addedCount == 1 && log.createdCount == 0 && log.movedCount == 0, "a click on a note emits onNoteAdded as it did, and no created or moved");
+    // drag it to a quarter of a beat it is already on: still not moved
+    log = RollLog();
+    app.feedMouseMove(x2, y55);
+    app.feedMouseButton(0, true);
+    app.feedMouseMove(x2 + 3.0f, y55);
+    app.feedMouseButton(0, false);
+    check(log.movedCount == 0 && roll->notes()[0].start == 2.0f, "a drag that ends where the note was is not a move");
+    // drag it two beats right and two rows up
+    app.feedMouseMove(x2, y55);
+    app.feedMouseButton(0, true);
+    app.feedMouseMove(x2 + 91.0f, y55 - 24.0f);
+    check(log.movedCount == 0, "(nothing is said while the button is down)");
+    app.feedMouseButton(0, false);
+    check(log.movedCount == 1 && log.moved == 0, "onNoteMoved says which note, once, when the button goes up");
+    check(roll->notes()[0].start == 4.0f && roll->notes()[0].pitch == 57, "(it is at beat 4, pitch 57)");
+    check(roll->notes()[0].velocity == 0.3f, "and keeps its velocity");
+    check(log.createdCount == 0, "a move is not a creation");
+    check(log.order[log.n - 1] == 'M', "(onNoteMoved comes last)");
+
+    // a second note, to see that the index is the note's
+    const float x6 = 56.0f + 6 * 45.5f + 3.0f, y50 = 20.0f + 9 * 12.0f + 6.0f; // beat 6, pitch 50
+    log = RollLog();
+    click(x6, y50);
+    check(roll->notes().size() == 2 && log.created == 1, "the second note is index 1");
+    log = RollLog();
+    click(56.0f + 4 * 45.5f + 3.0f, 20.0f + 2 * 12.0f + 6.0f); // the first note again, at beat 4, pitch 57
+    // right click on the first: removed before, deleted after, with the note
+    log = RollLog();
+    click(56.0f + 4 * 45.5f + 3.0f, 20.0f + 2 * 12.0f + 6.0f, 1);
+    check(roll->notes().size() == 1, "(the first note is gone)");
+    check(log.removed == 0 && log.sizeAtRemoved == 2, "onNoteRemoved is emitted before the note is gone (two notes then)");
+    check(log.deleted == 0 && log.deletedCount == 1 && log.sizeAtDeleted == 1, "onNoteDeleted is emitted after it (one note then), with its index");
+    check(log.gone.pitch == 57 && log.gone.start == 4.0f && log.gone.velocity == 0.3f, "and the note it was, with its velocity");
+    check(log.n == 2 && log.order[0] == 'R' && log.order[1] == 'D', "removed, then deleted");
+    check(roll->notes()[0].pitch == 50, "(what is left is the second note, now index 0)");
+
+    // velocity
+    roll->clearNotes();
+    roll->addNote(60, 1.0f, 1.0f);
+    roll->addNote(61, 1.0f, 1.0f, 0.5f);
+    roll->addNote(62, 1.0f, 1.0f, 1.7f);
+    roll->addNote(63, 1.0f, 1.0f, -3.0f);
+    roll->addNote(64, 1.0f, 1.0f, NAN);
+    roll->addNote(65, NAN, 1.0f, 0.5f);
+    check(roll->notes().size() == 5, "a note with a start that is not a number is not added, with a velocity or without");
+    check(roll->notes()[0].velocity == 0.8f && roll->notes()[1].velocity == 0.5f && roll->notes()[2].velocity == 1.0f &&
+                    roll->notes()[3].velocity == 0.0f && roll->notes()[4].velocity == 0.8f,
+            "addNote takes a velocity: 0.8 by default, kept, clamped to 1 and to 0, 0.8 for NaN");
+    roll->setNoteVelocity(0, 0.25f);
+    roll->setNoteVelocity(1, NAN);
+    roll->setNoteVelocity(2, 9.0f);
+    roll->setNoteVelocity(-1, 0.1f);
+    roll->setNoteVelocity(77, 0.1f);
+    check(roll->notes()[0].velocity == 0.25f && roll->notes()[1].velocity == 0.5f && roll->notes()[2].velocity == 1.0f && roll->notes().size() == 5,
+            "setNoteVelocity sets it, clamps it, and ignores NaN and bad indices");
+    // the aggregate of before still works
+    PianoNote old = { 60, 1.0f, 2.0f };
+    check(old.velocity == 0.8f, "a PianoNote made with three values has the default velocity");
+}
+
+void testPianoRollShowVelocity()
+{
+    Screen screen(480.0f, 260.0f);
+    PianoRoll* roll = screen.h.root()->createChild<PianoRoll>();
+    roll->setRect(Rect(20.0f, 20.0f, 400.0f, 200.0f));
+    roll->setPitchRange(48, 60);
+    roll->setTimeRange(0.0f, 8.0f);
+    roll->addNote(55, 2.0f, 2.0f, 1.0f);
+    roll->addNote(52, 2.0f, 2.0f, 0.0f);
+    screen.h.frames(2);
+    const Shot plain = screen.take();
+    check(!roll->showVelocity(), "the velocity is not shown by default");
+    roll->setShowVelocity(true);
+    check(roll->showVelocity(), "setShowVelocity(true) is kept");
+    screen.h.frames(2);
+    const Shot shown = screen.take();
+    // the note of velocity 1 is drawn as it was; the one of velocity 0 is fainter
+    const int xn = 56 + 91 + 20; // inside both notes, a good way from their edges
+    const int yHigh = 20 + 4 * 12 + 6, yLow = 20 + 7 * 12 + 6;
+    check(pixelAt(shown, xn, yHigh).r == pixelAt(plain, xn, yHigh).r && pixelAt(shown, xn, yHigh).b == pixelAt(plain, xn, yHigh).b,
+            "a note of velocity 1 is drawn as without the velocity");
+    check(pixelAt(shown, xn, yLow).b < pixelAt(plain, xn, yLow).b - 20, "a note of velocity 0 is drawn fainter");
+    roll->setNoteVelocity(1, 1.0f);
+    screen.h.frames(2);
+    check(differing(screen.take(), plain, 0, 0, 480, 260) == 0, "with every velocity at 1 the picture is the one without the velocity");
+    roll->setShowVelocity(false);
+    roll->setNoteVelocity(1, 0.0f);
+    screen.h.frames(2);
+    check(differing(screen.take(), plain, 0, 0, 480, 260) == 0, "and with it off the velocity changes nothing in the picture");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -555,6 +701,8 @@ int main(int argc, char** argv)
     RUN(testToolBarColoredIconsAndTheme);
     RUN(testTimelineBarRuler);
     RUN(testTimelineBarRulerHostile);
+    RUN(testPianoRollVelocityAndSignals);
+    RUN(testPianoRollShowVelocity);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

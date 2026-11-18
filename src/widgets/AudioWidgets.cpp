@@ -1355,6 +1355,21 @@ void PianoRoll::addNote(int pitch, float start, float length)
     markDirty();
 }
 
+void PianoRoll::addNote(int pitch, float start, float length, float velocity)
+{
+    const size_t before = notes_.size();
+    addNote(pitch, start, length);
+    if (notes_.size() == before) return; // (a note that is not a number is not added)
+    notes_.back().velocity = Math::sane(velocity, 0.8f, 0.0f, 1.0f);
+}
+
+void PianoRoll::setNoteVelocity(int idx, float velocity)
+{
+    if (idx < 0 || idx >= static_cast<int>(notes_.size()) || Math::isNaN(velocity)) return;
+    notes_[idx].velocity = Math::sane(velocity, notes_[idx].velocity, 0.0f, 1.0f);
+    markDirty();
+}
+
 void PianoRoll::removeNote(int idx)
 {
     if (idx < 0 || idx >= static_cast<int>(notes_.size())) return;
@@ -1554,7 +1569,8 @@ void PianoRoll::paintNotes(PaintContext& ctx, const Rect& ga) const
 
         bool active = (i == draggingNote_);
         Color c = active ? noteSelColor_ : noteColor_;
-        ctx.fill.SetColor(c.r, c.g, c.b, c.a);
+        const float opacity = showVelocity_ ? 0.35f + 0.65f * n.velocity : 1.0f;
+        ctx.fill.SetColor(c.r, c.g, c.b, showVelocity_ ? static_cast<uint8_t>(c.a * opacity) : c.a);
         ctx.fillRect(nr.x, nr.y, nr.w, nr.h);
 
         // Top highlight
@@ -1624,8 +1640,10 @@ void PianoRoll::onMousePress(MouseEvent& e)
             Rect nr = noteRect(notes_[i]);
             if (e.x >= nr.x && e.x <= nr.x + nr.w && e.y >= nr.y && e.y <= nr.y + nr.h)
             {
+                const PianoNote gone = notes_[i];
                 onNoteRemoved.emit(i);
                 removeNote(i);
+                onNoteDeleted.emit(i, gone);
                 e.consumed = true;
                 return;
             }
@@ -1641,6 +1659,8 @@ void PianoRoll::onMousePress(MouseEvent& e)
             if (e.x >= nr.x && e.x <= nr.x + nr.w && e.y >= nr.y && e.y <= nr.y + nr.h)
             {
                 draggingNote_ = i;
+                dragStartPitch_ = notes_[i].pitch;
+                dragStartBeat_ = notes_[i].start;
                 dragOffBeat_ = xToBeat(e.x) - notes_[i].start;
                 dragOffPitch_ = yToPitch(e.y) - notes_[i].pitch;
                 onNoteClicked.emit(i);
@@ -1697,12 +1717,25 @@ void PianoRoll::onMouseMove(MouseEvent& e)
 
 void PianoRoll::onMouseRelease(MouseEvent&)
 {
-    if (draggingNote_ >= 0)
-        onNoteAdded.emit(notes_[draggingNote_].pitch, notes_[draggingNote_].start,
-                notes_[draggingNote_].length);
+    // what the gesture was, before the handlers of the signals get to change the notes
+    const int index = draggingNote_;
+    const bool created = newNotePitch_ >= 0;
+    bool moved = false;
+    if (index >= 0 && index < static_cast<int>(notes_.size()))
+    {
+        moved = !created && (notes_[index].pitch != dragStartPitch_ || notes_[index].start != dragStartBeat_);
+        onNoteAdded.emit(notes_[index].pitch, notes_[index].start, notes_[index].length);
+    }
     draggingNote_ = -1;
     newNotePitch_ = -1;
     panning_ = false;
+    // after the roll is idle again; the notes may have changed under the first handler
+    if (index >= 0 && index < static_cast<int>(notes_.size()))
+    {
+        if (created) onNoteCreated.emit(index);
+        else if (moved)
+            onNoteMoved.emit(index);
+    }
 }
 
 void PianoRoll::onMouseScroll(MouseEvent& e)
