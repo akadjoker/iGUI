@@ -854,7 +854,8 @@ void testChartDoubleData()
     d->bars(chartLabels(3), ys, String("d"));
     check(d->kind() == ChartKind::Bars && d->seriesCount() == 1 && d->series(0).values.size() == 3, "bars() takes a vector of double");
     check(d->series(0).values[0] == 1.5f && d->series(0).values[2] == -0.25f, "the values are the doubles, as floats");
-    check(d->series(0).values[1] == 16777216.0f, "what a float cannot hold is lost: 16777217 is 16777216 (the chart draws floats)");
+    check(d->series(0).values[1] == 16777217.0, "what a float cannot hold is kept: 16777217 stays 16777217");
+    check(d->valueD(0, 1) == 16777217.0 && d->value(0, 1) == 16777216.0f, "valueD() gives it whole, value() rounds it to float");
     const int second = d->addSeries(String("e"), ys);
     check(second == 1 && d->series(1).values.size() == 3, "addSeries takes doubles");
     d->addSeries(String("f"), ys, Color(10, 20, 30));
@@ -875,7 +876,7 @@ void testChartDoubleData()
     fx.push_back(1.5f);
     fx.push_back(2.5f);
     line->plot(fx, ys, String("mixed"));
-    check(line->seriesCount() == 2 && line->series(1).xs[2] == 2.5f && line->series(1).values[1] == 16777216.0f, "plot() takes floats for x and doubles for y");
+    check(line->seriesCount() == 2 && line->series(1).xs[2] == 2.5f && line->series(1).values[1] == 16777217.0, "plot() takes floats for x and doubles for y");
     Chart* scatter = screen.h.root()->createChild<Chart>();
     scatter->scatter(xs, ys);
     check(scatter->kind() == ChartKind::Scatter && scatter->series(0).values.size() == 3, "scatter() takes doubles");
@@ -1157,6 +1158,274 @@ void testSliderReadoutAsksForLayoutOnlyWhenTheHintChanges()
     check(plain->sizeHint().x == 120.0f, "(and keeps its hint)");
 }
 
+// ---- item 20 done whole: the chart stores and draws double ----
+
+void testChartTimestamps()
+{
+    // 100 samples a millisecond apart, around 1.7e9 (seconds since 1970): in float they are all one number (a float of that size
+    // is a multiple of 128)
+    Screen screen(500.0f, 300.0f);
+    WidgetApp& app = WidgetApp::instance();
+    Chart* c = screen.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 500.0f, 300.0f));
+    ct::Vector<double> xs, ys;
+    const double t0 = 1700000000.0;
+    for (int i = 0; i < 100; ++i)
+    {
+        xs.push_back(t0 + static_cast<double>(i) * 0.001);
+        ys.push_back(static_cast<double>(i % 10));
+    }
+    c->plot(xs, ys, String("log"));
+    screen.h.frames(2);
+    check(c->seriesCount() == 1 && c->series(0).xs[99] - c->series(0).xs[0] > 0.0989 && c->series(0).xs[99] - c->series(0).xs[0] < 0.0991,
+            "the series keeps the milliseconds");
+    check(c->xD(0, 1) - c->xD(0, 0) > 0.00099 && c->xD(0, 1) - c->xD(0, 0) < 0.00101, "xD() has them (x() is the float)");
+
+    // the points sit a pixel fraction apart, in order, evenly
+    float prev = -1.0f;
+    int distinct = 0;
+    int lastPixel = -1;
+    bool increasing = true;
+    for (int i = 0; i < 100; ++i)
+    {
+        const float px = c->pointAt(0, i).x;
+        if (px <= prev) increasing = false;
+        prev = px;
+        if (static_cast<int>(px) != lastPixel) ++distinct;
+        lastPixel = static_cast<int>(px);
+    }
+    check(increasing, "the x of the points grows with the time: no two points are at one place");
+    check(distinct >= 95, "and they fall on distinct pixels (100 points over about 400 pixels)");
+    const float span = c->pointAt(0, 99).x - c->pointAt(0, 0).x;
+    bool even = span > 100.0f;
+    for (int i = 1; i < 100 && even; ++i)
+        even = fabsf((c->pointAt(0, i).x - c->pointAt(0, 0).x) / span - static_cast<float>(i) / 99.0f) < 0.0005f;
+    if (!even) printf("    the points are not evenly spaced (span %g)\n", span);
+    check(even, "evenly spaced, as the times are");
+
+    // the axis: a step of 20 milliseconds, ticks at exact multiples of it, labels with two decimals that read the time
+    check(fabs(c->xAxisStepD() - 0.02) < 1e-12, "the x axis steps 20 milliseconds");
+    check(c->xAxisMinD() <= t0 + 1e-6 && c->xAxisMinD() > t0 - 0.02 && c->xAxisMaxD() >= t0 + 0.099 - 1e-6, "and holds the samples, to the millisecond");
+    bool labelsRight = true;
+    String lastLabel;
+    for (int k = 0; k <= 6; ++k)
+    {
+        const double v = c->xAxisMinD() + c->xAxisStepD() * static_cast<double>(k);
+        const String label = c->xTickText(v);
+        char* end = nullptr;
+        const double back = strtod(label.c_str(), &end);
+        const char* dot = strchr(label.c_str(), '.');
+        if (fabs(back - v) > 0.0051 || !dot || strlen(dot + 1) != 2 || label == lastLabel) labelsRight = false;
+        if (!labelsRight) printf("    tick %d: %s for %.6f\n", k, label.c_str(), v);
+        lastLabel = label;
+    }
+    check(labelsRight, "the tick labels have two decimals, differ from one tick to the next, and read the time");
+    check(c->xTickText(1700000000.02) == "1700000000.02" && c->xTickText(1700000000.1) == "1700000000.10", "(for instance)");
+
+    // hovering a point finds that point, and the tooltip reads its time
+    const int picks[] = { 0, 1, 2, 37, 50, 98, 99 };
+    bool found = true;
+    for (int i: picks)
+    {
+        const Widget::Vec2f p = c->pointAt(0, i);
+        app.feedMouseMove(p.x, p.y);
+        const Chart::Item hot = c->hoveredItem();
+        if (hot.series != 0 || hot.index != i) found = false;
+        if (!found) printf("    hover at point %d found series %d index %d\n", i, hot.series, hot.index);
+    }
+    check(found, "the pointer over a point finds that point, whichever of the 100 it is");
+    app.feedMouseMove(c->pointAt(0, 37).x, c->pointAt(0, 37).y);
+    const String tip = c->tooltipText(c->hoveredItem());
+    if (tip != "log - 1700000000.037: 7") printf("    the tooltip says: %s\n", tip.c_str());
+    check(tip == "log - 1700000000.037: 7", "and the tooltip says the series, the time to the millisecond and the value");
+}
+
+void testChartLargeCounts()
+{
+    // counts above 2^24, one apart
+    Screen screen(500.0f, 300.0f);
+    Chart* c = screen.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 500.0f, 300.0f));
+    ct::Vector<double> ys, xs;
+    for (int i = 0; i <= 10; ++i)
+    {
+        xs.push_back(static_cast<double>(i));
+        ys.push_back(16777216.0 + static_cast<double>(i));
+    }
+    c->plot(xs, ys, String("count"));
+    screen.h.frames(2);
+    check(c->valueD(0, 1) == 16777217.0 && c->valueD(0, 3) == 16777219.0, "the counts are kept to the unit");
+    check(c->axisMinD() == 16777216.0 && c->axisMaxD() == 16777226.0 && c->axisStepD() == 2.0, "the value axis runs 16777216 to 16777226 by 2");
+    check(c->yTickText(16777218.0) == "16777218", "its labels are whole numbers, exact");
+    float gap = c->pointAt(0, 0).y - c->pointAt(0, 1).y;
+    bool even = gap > 5.0f;
+    for (int i = 1; i < 11 && even; ++i)
+        even = fabsf((c->pointAt(0, i - 1).y - c->pointAt(0, i).y) - gap) < 0.001f;
+    if (!even) printf("    the steps of the counts are %g px, not even\n", gap);
+    check(even, "the points rise a pixel step for each unit, all equal (in float the odd counts are the even ones)");
+    char text[64];
+    c->formatValueD(16777217.0, text, sizeof(text));
+    check(strcmp(text, "16777217") == 0, "formatValueD prints 16777217");
+    c->formatValue(16777217.0f, text, sizeof(text));
+    check(strcmp(text, "16777216") == 0, "formatValue (the float one) prints what a float holds: 16777216");
+    ct::Vector<String> names;
+    names.push_back("a");
+    names.push_back("b");
+    names.push_back("c");
+    ct::Vector<double> parts;
+    parts.push_back(16777216.0);
+    parts.push_back(1.0);
+    parts.push_back(1.0);
+    c->pie(names, parts);
+    check(c->totalD(0) == 16777218.0 && c->total(0) == 16777218.0f, "the total of a pie adds the units that a float sum would drop (16777218)");
+    c->bars(names, parts, String("n"));
+    c->setShowValues(true);
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 0 }) == "a - n: 16777216" && c->tooltipText(Chart::Item{ 0, 1 }) == "b - n: 1", "a bar's tooltip reads its count");
+    ct::Vector<double> odd;
+    odd.push_back(16777217.0);
+    odd.push_back(16777219.0);
+    odd.push_back(16777221.0);
+    c->bars(names, odd, String());
+    check(c->tooltipText(Chart::Item{ 0, 0 }) == "a: 16777217" && c->tooltipText(Chart::Item{ 0, 2 }) == "c: 16777221", "odd counts are printed as they are");
+}
+
+// NaN and the infinities in the data: the double data are treated as the float data always were (what the chart did before
+// it stored doubles, recorded from that chart): the same axes, a picture, no crash. Float and double data of the same
+// numbers give the same chart.
+void testChartNonFiniteData()
+{
+    const double nan = NAN, inf = INFINITY;
+    struct Case
+    {
+        const char* name;
+        double ys[5], xs[5];
+        bool numericX;
+        bool yAxisIsNumber;
+        double yMin, yMax;
+    };
+    const Case cases[] = {
+        { "NaN in the middle of a line", { 1, nan, 3, 4, 5 }, { 0, 1, 2, 3, 4 }, true, true, 1, 5 },
+        { "NaN first", { nan, 2, 3, 4, 5 }, { 0, 1, 2, 3, 4 }, true, false, 0, 0 },
+        { "an infinity", { 1, 2, inf, 4, 5 }, { 0, 1, 2, 3, 4 }, true, false, 0, 0 },
+        { "x NaN", { 1, 2, 3, 4, 5 }, { 0, 1, nan, 3, 4 }, true, true, 1, 5 },
+        { "x infinity", { 1, 2, 3, 4, 5 }, { 0, 1, inf, 3, 4 }, true, true, 1, 5 },
+    };
+    for (const Case& k: cases)
+    {
+        Screen a(400.0f, 260.0f), b(400.0f, 260.0f);
+        Chart* cd = a.h.root()->createChild<Chart>();
+        cd->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+        Chart* cf = b.h.root()->createChild<Chart>();
+        cf->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+        ct::Vector<double> xd, yd;
+        ct::Vector<float> xf, yf;
+        for (int i = 0; i < 5; ++i)
+        {
+            xd.push_back(k.xs[i]);
+            yd.push_back(k.ys[i]);
+            xf.push_back(static_cast<float>(k.xs[i]));
+            yf.push_back(static_cast<float>(k.ys[i]));
+        }
+        cd->plot(xd, yd, String("s"));
+        cf->plot(xf, yf, String("s"));
+        a.h.frames(2);
+        b.h.frames(2);
+        char what[160];
+        snprintf(what, sizeof what, "%s: double data give the same axes as float data", k.name);
+        auto same = [](double p, double q) { return (p != p && q != q) || p == q; };
+        check(same(cd->axisMinD(), cf->axisMinD()) && same(cd->axisMaxD(), cf->axisMaxD()) && same(cd->axisStepD(), cf->axisStepD()) &&
+                        same(cd->xAxisMinD(), cf->xAxisMinD()) && same(cd->xAxisMaxD(), cf->xAxisMaxD()),
+                what);
+        snprintf(what, sizeof what, "%s: and the same picture", k.name);
+        check(differing(a.take(), b.take(), 0, 0, 400, 260) == 0, what);
+        // what the chart did with these numbers before it kept doubles (recorded then)
+        snprintf(what, sizeof what, "%s: the value axis is what it always was", k.name);
+        if (k.yAxisIsNumber) check(cd->axisMinD() == k.yMin && cd->axisMaxD() == k.yMax, what);
+        else
+            check(cd->axisMinD() != cd->axisMinD() || cd->axisStepD() == INFINITY, what);
+    }
+    // bars with NaN and infinity, a pie, a histogram: they paint, as before
+    ct::Vector<String> names;
+    for (int i = 0; i < 5; ++i) names.push_back(String("c") + String::number(i));
+    ct::Vector<double> v;
+    for (int i = 0; i < 5; ++i) v.push_back(static_cast<double>(i + 1));
+    ct::Vector<double> withNan = v, withInf = v;
+    withNan[2] = nan;
+    withInf[2] = inf;
+    for (int which = 0; which < 3; ++which)
+    {
+        Screen screen(400.0f, 260.0f);
+        Chart* c = screen.h.root()->createChild<Chart>();
+        c->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+        c->bars(names, which == 0 ? withNan : which == 1 ? withInf : v, String("b"));
+        c->setShowValues(true);
+        screen.h.frames(2);
+        c->pie(names, which == 0 ? withNan : which == 1 ? withInf : v);
+        screen.h.frames(2);
+        ct::Vector<double> samples;
+        for (int i = 0; i < 20; ++i) samples.push_back(static_cast<double>(i));
+        samples.push_back(which == 0 ? nan : inf);
+        c->hist(samples, 5, String("h"));
+        screen.h.frames(2);
+    }
+    check(true, "bars, pie and histogram with NaN and infinity paint without a crash");
+    {
+        Screen screen(400.0f, 260.0f);
+        Chart* c = screen.h.root()->createChild<Chart>();
+        c->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+        c->bars(names, withNan, String("b"));
+        screen.h.frames(2);
+        check(c->axisMinD() == 0.0 && c->axisMaxD() == 5.0 && c->axisStepD() == 1.0, "a NaN bar does not move the axis (it was 0 to 5 by 1 with the float data)");
+    }
+    char x[64];
+    Chart::formatX(NAN, x, sizeof x);
+    check(strcmp(x, "nan") == 0 || strcmp(x, "-nan") == 0, "formatX prints NaN as nan");
+    Chart::formatX(INFINITY, x, sizeof x);
+    check(strcmp(x, "inf") == 0, "and the infinity as inf");
+}
+
+void testChartTooltipText()
+{
+    Screen screen(400.0f, 260.0f);
+    Chart* c = screen.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+    char x[64];
+    Chart::formatX(0.5, x, sizeof x);
+    check(strcmp(x, "0.5") == 0, "formatX: 0.5 is 0.5");
+    Chart::formatX(1700000000.001, x, sizeof x);
+    check(strcmp(x, "1700000000.001") == 0, "1700000000.001 is that");
+    Chart::formatX(static_cast<double>(0.1f), x, sizeof x);
+    check(strcmp(x, "0.1") == 0, "a float widened (0.1f) prints as the float always did: 0.1");
+    Chart::formatX(16777217.0, x, sizeof x);
+    check(strcmp(x, "16777217") == 0, "a count above 2^24 is whole");
+    Chart::formatX(-2.25, x, sizeof x);
+    check(strcmp(x, "-2.25") == 0, "and a negative number with decimals");
+    Chart::formatX(1.0e300, x, sizeof x);
+    check(strcmp(x, "1e+300") == 0, "a huge one keeps its exponent");
+
+    // the tooltip of a bar and of a point: the series by its name, the category or x, the value
+    ct::Vector<String> names;
+    names.push_back("jan");
+    names.push_back("feb");
+    ct::Vector<float> a, b;
+    a.push_back(10.0f);
+    a.push_back(20.0f);
+    b.push_back(3.0f);
+    b.push_back(4.0f);
+    c->bars(names, a, String("sales"));
+    c->addSeries(String("costs"), b);
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 1 }) == "feb - sales: 20" && c->tooltipText(Chart::Item{ 1, 0 }) == "jan - costs: 3", "a bar: the category, the series and the value");
+    ct::Vector<float> xs;
+    xs.push_back(0.0f);
+    xs.push_back(1.5f);
+    c->plot(xs, a, String("up"));
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 1 }) == "up - 1.5: 20", "a point of a line: the series, the x and the value");
+    check(c->tooltipText(Chart::Item{ -1, 0 }).empty() && c->tooltipText(Chart::Item{ 7, 0 }).empty(), "an item that is not there has no tooltip");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1173,6 +1442,10 @@ int main(int argc, char** argv)
     RUN(testPianoRollShowVelocity);
     RUN(testChartAxisTitles);
     RUN(testChartDoubleData);
+    RUN(testChartTimestamps);
+    RUN(testChartLargeCounts);
+    RUN(testChartNonFiniteData);
+    RUN(testChartTooltipText);
     RUN(testSliderValueReadout);
     RUN(testSliderReadoutAsksForLayoutOnlyWhenTheHintChanges);
     shutdown();

@@ -38,12 +38,16 @@ enum class LegendPosition
     Hidden
 };
 
+// The numbers of a series are doubles: a float holds 24 bits, which is a count of 16 777 217 rounded to ...216 and a
+// timestamp of 1.7e9 seconds in steps of 128. The chart works in double from the numbers to the labels of its axes
+// and turns to float only for the pixel, relative to the start of the visible range. (They were ct::Vector<float>:
+// code that reads them as floats, element by element, compiles as before.)
 struct ChartSeries
 {
     String            name;
-    ct::Vector<float> values;   // one per category; missing entries read as 0
-    ct::Vector<float> xs;       // line/scatter: the x of each value; empty means the index
-    ct::Vector<float> samples;  // histogram: the raw values its bins count
+    ct::Vector<double> values;  // one per category; missing entries read as 0
+    ct::Vector<double> xs;      // line/scatter: the x of each value; empty means the index
+    ct::Vector<double> samples; // histogram: the raw values its bins count
     Color             color;
     bool              visible = true;
     bool              line    = true;   // line/scatter: join the points
@@ -95,66 +99,66 @@ public:
     int  seriesCount() const { return static_cast<int>(series_.size()); }
     const ChartSeries& series(int idx) const { return series_[static_cast<size_t>(idx)]; }
 
-    // ── Data in other number types ────────────────────────────────────────
-    // The same calls with vectors of double (or int, or any number type): each value is converted to float on
-    // the way in, the chart keeps and draws floats. What a float cannot hold is lost at that point (a value
-    // above 16 777 216 is no longer exact to the unit, an x of 1.7e9 seconds is 128 seconds wide): for numbers
-    // like that give the chart values relative to a start you print in the title. Calls with brace lists and
-    // with vectors of float are not affected (they use the overloads above).
+    // ── Data in double (and in any other number type) ─────────────────────
+    // The same calls with vectors of double, int, ...: the chart keeps doubles (the float overloads above widen
+    // their numbers to double, which is exact, straight into the series: no copy in between). These are templates so
+    // that a call with a brace list or with vectors of float keeps picking the overloads above, whatever the types of
+    // its elements.
     template<typename T>
     int addSeries(const String& name, const ct::Vector<T>& values)
     {
-        return addSeries(name, toFloats(values));
+        return addSeriesT(name, toDoubles(values), nullptr);
     }
     template<typename T>
     int addSeries(const String& name, const ct::Vector<T>& values, const Color& color)
     {
-        return addSeries(name, toFloats(values), color);
+        return addSeriesT(name, toDoubles(values), &color);
     }
     template<typename TX, typename TY>
     int addSeries(const String& name, const ct::Vector<TX>& xs, const ct::Vector<TY>& ys)
     {
-        return addSeries(name, toFloats(xs), toFloats(ys));
+        return addSeriesXYT(name, toDoubles(xs), toDoubles(ys));
     }
     template<typename T>
     void setSeriesValues(int series, const ct::Vector<T>& values)
     {
-        setSeriesValues(series, toFloats(values));
+        setSeriesValuesT(series, toDoubles(values));
     }
     template<typename T>
     void setSeriesX(int series, const ct::Vector<T>& xs)
     {
-        setSeriesX(series, toFloats(xs));
+        setSeriesXT(series, toDoubles(xs));
     }
     template<typename T>
     void pie(const ct::Vector<String>& labels, const ct::Vector<T>& values)
     {
-        pie(labels, toFloats(values));
+        pieT(labels, toDoubles(values));
     }
     template<typename T>
     void donut(const ct::Vector<String>& labels, const ct::Vector<T>& values)
     {
-        donut(labels, toFloats(values));
+        pieT(labels, toDoubles(values));
+        kind_ = ChartKind::Donut;
     }
     template<typename T>
     void bars(const ct::Vector<String>& labels, const ct::Vector<T>& values, const String& name = String())
     {
-        bars(labels, toFloats(values), name);
+        barsT(labels, toDoubles(values), name);
     }
     template<typename TX, typename TY>
     int plot(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name = String())
     {
-        return plot(toFloats(xs), toFloats(ys), name);
+        return plotT(toDoubles(xs), toDoubles(ys), name);
     }
     template<typename TX, typename TY>
     int scatter(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name = String())
     {
-        return scatter(toFloats(xs), toFloats(ys), name);
+        return scatterT(toDoubles(xs), toDoubles(ys), name);
     }
     template<typename T>
     int hist(const ct::Vector<T>& samples, int bins = 10, const String& name = String())
     {
-        return hist(toFloats(samples), bins, name);
+        return histT(toDoubles(samples), bins, name);
     }
 
     /// @brief Show or hide one category (a slice, a bar group).
@@ -179,21 +183,25 @@ public:
     /// @brief Number of bins of a histogram; the bins are rebuilt.
     void setBins(int bins);
     int  bins() const { return bins_; }
-    /// @brief The bin edges of the last histogram build (bins + 1 numbers).
-    const ct::Vector<float>& binEdges() const { return edges_; }
+    /// @brief The bin edges of the last histogram build (bins + 1 numbers), as floats; binEdgesD() has them whole.
+    const ct::Vector<float>& binEdges() const { return edgesF_; }
+    const ct::Vector<double>& binEdgesD() const { return edges_; }
 
-    /// @brief Value of a series at a category; 0 when the series is shorter.
-    float value(int series, int index) const;
-    /// @brief x of a series at an index: its xs, or the index itself.
-    float x(int series, int index) const;
+    /// @brief Value of a series at a category; 0 when the series is shorter. value() rounds to float, valueD() does not.
+    float  value(int series, int index) const;
+    double valueD(int series, int index) const;
+    /// @brief x of a series at an index: its xs, or the index itself (x() rounds to float, xD() does not).
+    float  x(int series, int index) const;
+    double xD(int series, int index) const;
     /// @brief Number of points of a series (its values).
     int   pointCount(int series) const;
     /// @brief Line and scatter charts draw over an x axis.
     bool  isXY() const { return kind_ == ChartKind::Line || kind_ == ChartKind::Scatter; }
     /// @brief Bars and histograms draw bars per category.
     bool  isBars() const { return kind_ == ChartKind::Bars || kind_ == ChartKind::Histogram; }
-    /// @brief Sum of the visible categories of a series.
-    float total(int series) const;
+    /// @brief Sum of the visible categories of a series (summed in double; total() rounds the sum to float).
+    float  total(int series) const;
+    double totalD(int series) const;
 
     // ── Looks ─────────────────────────────────────────────────────────────
     void setTitle(const String& title);
@@ -270,17 +278,37 @@ public:
     float pieRadius() const { return pieR_; }
     /// @brief Where a point of a line or scatter series was drawn (widget coordinates); negative when it was not.
     Vec2f pointAt(int series, int index) const;
-    /// @brief Value (y) range of the last bars, line or scatter axis.
-    float axisMin() const { return axisMin_; }
-    float axisMax() const { return axisMax_; }
-    float axisStep() const { return axisStep_; }
+    /// @brief Value (y) range of the last bars, line or scatter axis (the D ones are not rounded to float).
+    float axisMin() const { return static_cast<float>(axisMin_); }
+    float axisMax() const { return static_cast<float>(axisMax_); }
+    float axisStep() const { return static_cast<float>(axisStep_); }
+    double axisMinD() const { return axisMin_; }
+    double axisMaxD() const { return axisMax_; }
+    double axisStepD() const { return axisStep_; }
     /// @brief x range of the last line or scatter axis (the indices when the series have no xs).
-    float xAxisMin() const { return xAxisMin_; }
-    float xAxisMax() const { return xAxisMax_; }
-    float xAxisStep() const { return xAxisStep_; }
+    float xAxisMin() const { return static_cast<float>(xAxisMin_); }
+    float xAxisMax() const { return static_cast<float>(xAxisMax_); }
+    float xAxisStep() const { return static_cast<float>(xAxisStep_); }
+    double xAxisMinD() const { return xAxisMin_; }
+    double xAxisMaxD() const { return xAxisMax_; }
+    double xAxisStepD() const { return xAxisStep_; }
+
+    /// @brief The text of the tooltip of an item (what the chart shows when the pointer is over it): the series by its name,
+    ///        the category or x, and the value.
+    String tooltipText(const Item& item) const;
+    /// @brief The text of an x as the tooltip prints it: the shortest decimal (6 to 15 digits) that reads back as the same
+    ///        number, so 1700000000.001 is that and 0.5 is 0.5; a number with no such decimal (a float widened to double,
+    ///        0.1f) is printed with 6 digits.
+    static void formatX(double v, char* out, int outSize);
+    /// @brief The label of an x tick of a numeric x axis (the decimals of its step, from the last paint), and of a tick of the
+    ///        value axis (with the suffix): what the axes print at that number.
+    String xTickText(double v) const;
+    String yTickText(double v) const;
 
     /// @brief Format a value the way the chart prints it.
     void formatValue(float v, char* out, int outSize) const;
+    /// @brief The same for a double, without rounding it to float first (a count of 16 777 217 prints as such).
+    void formatValueD(double v, char* out, int outSize) const;
     /// @brief The text of the last paint on or beside the slice of a category: its percent ("<1%" for a slice that is a
     ///        fraction of a percent), its value, or both; empty when the category has no slice.
     String sliceText(int category) const;
@@ -311,14 +339,14 @@ private:
         int   index = -1;
         float start = 0.0f;  // radians, clockwise from the top
         float sweep = 0.0f;
-        float value = 0.0f;
+        double value = 0.0;
     };
     struct Bar
     {
         int  series = -1;
         int  index  = -1;
         Rect rect;           // widget coordinates
-        float value = 0.0f;
+        double value = 0.0;
     };
     struct Point
     {
@@ -348,7 +376,8 @@ private:
     float              markerSize_ = 3.5f;
     float              lineWidth_  = 2.0f;
     int                bins_ = 10;
-    ct::Vector<float>  edges_;
+    ct::Vector<double> edges_;
+    ct::Vector<float>  edgesF_;   // the same, as floats, for binEdges()
 
     // Geometry of the last paint, in widget coordinates.
     Rect   plot_ = {};
@@ -358,8 +387,8 @@ private:
     ct::Vector<Bar>         bars_;
     ct::Vector<Point>       points_;
     float  pieCx_ = 0.0f, pieCy_ = 0.0f, pieR_ = 0.0f;
-    float  axisMin_ = 0.0f, axisMax_ = 1.0f, axisStep_ = 0.25f;
-    float  xAxisMin_ = 0.0f, xAxisMax_ = 1.0f, xAxisStep_ = 0.25f;
+    double axisMin_ = 0.0, axisMax_ = 1.0, axisStep_ = 0.25;
+    double xAxisMin_ = 0.0, xAxisMax_ = 1.0, xAxisStep_ = 0.25;
 
     Item   hovered_;
     float  mouseX_ = -1.0f, mouseY_ = -1.0f;   // widget coordinates
@@ -367,25 +396,48 @@ private:
     ct::Vector<Vec2> quad_;
     ct::Vector<Vec2> polyline_;
 
+    // The numbers as doubles (a vector of double is used as it is, without a copy).
     template<typename T>
-    static ct::Vector<float> toFloats(const ct::Vector<T>& v)
+    static ct::Vector<double> toDoubles(const ct::Vector<T>& v)
     {
-        ct::Vector<float> out;
+        ct::Vector<double> out;
         out.reserve(v.size());
-        for (size_t i = 0; i < v.size(); ++i) out.push_back(static_cast<float>(v[i]));
+        for (size_t i = 0; i < v.size(); ++i) out.push_back(static_cast<double>(v[i]));
         return out;
     }
+    static const ct::Vector<double>& toDoubles(const ct::Vector<double>& v) { return v; }
+    // What the overloads end up calling: defined in ChartWidget.cpp for float and for double (a float is widened to double
+    // as it is copied into the series).
+    template<typename T>
+    int  addSeriesT(const String& name, const ct::Vector<T>& values, const Color* color);
+    template<typename TX, typename TY>
+    int  addSeriesXYT(const String& name, const ct::Vector<TX>& xs, const ct::Vector<TY>& ys);
+    template<typename T>
+    void setSeriesValuesT(int series, const ct::Vector<T>& values);
+    template<typename T>
+    void setSeriesXT(int series, const ct::Vector<T>& xs);
+    template<typename T>
+    void pieT(const ct::Vector<String>& labels, const ct::Vector<T>& values);
+    template<typename T>
+    void barsT(const ct::Vector<String>& labels, const ct::Vector<T>& values, const String& name);
+    template<typename TX, typename TY>
+    int  plotT(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name);
+    template<typename TX, typename TY>
+    int  scatterT(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name);
+    template<typename T>
+    int  histT(const ct::Vector<T>& samples, int bins, const String& name);
     int  firstVisibleSeries() const;
     bool legendOnRight(const Rect& b) const;
     void buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea, Rect& plot);
     void buildSlices();
     void buildHistogram();
-    void sliceLabel(const Slice& slice, float sum, char* out, int outSize) const;
+    void sliceLabel(const Slice& slice, double sum, char* out, int outSize) const;
     bool isPie() const { return kind_ == ChartKind::Pie || kind_ == ChartKind::Donut; }
-    void buildAxis(float& lo, float& hi, float& step) const;
-    static void niceAxis(float vmin, float vmax, float& lo, float& hi, float& step);
-    float valueAxisGutter(PaintContext& ctx, float lo, float hi, float step, int decimals) const;
-    void  paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, float ah, float lo, float hi, float step, int decimals);
+    void buildAxis(double& lo, double& hi, double& step) const;
+    static void niceAxis(double vmin, double vmax, double& lo, double& hi, double& step);
+    float valueAxisGutter(PaintContext& ctx, double lo, double hi, double step, int decimals) const;
+    void  paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, float ah, double lo, double hi, double step, int decimals);
+    void tooltipInto(const Item& item, char* text, int size) const;
     void paintAxisTitles(PaintContext& ctx, const Rect& b, Rect& plot);
     void paintBackground(PaintContext& ctx, const Rect& b);
     float paintTitle(PaintContext& ctx, const Rect& b);
