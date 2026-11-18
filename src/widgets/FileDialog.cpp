@@ -765,7 +765,9 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
         ctx.font.Print(date.c_str(), cx + 4, textY);
     }
 
-    // Scrollbar
+    // Scrollbar. Not a ScrollBar: an indicator drawn over the right edge of the rows (a thumb of 4 pixels at a quarter of the
+    // opacity, no track, no room kept for it, nothing to press: the wheel and the keys scroll), so it is thinner than
+    // ScrollBar::thickness() on purpose and does not follow Theme::scrollbarWidth; at 8 it would cover the end of the date column.
     float contentH = total * rowHeight_;
     if (contentH > area.h)
     {
@@ -870,7 +872,7 @@ void FileDialog::paintIcons(PaintContext& ctx, const Rect& area)
         ctx.font.Print(disp.c_str(), tx, ty);
     }
 
-    // Scrollbar
+    // Scrollbar: the indicator of the detail view (see paintDetail), thin on purpose
     int totalRows = (total + cols - 1) / cols;
     float contentH = totalRows * cell;
     if (contentH > area.h)

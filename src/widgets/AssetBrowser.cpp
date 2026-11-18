@@ -270,6 +270,8 @@ void AssetBrowser::paint(PaintContext& ctx)
     ctx.popClip(); // content area
 
     // ── Scrollbar ────────────────────────────────────────────────────────
+    // An indicator, not a ScrollBar: a thumb of 4 pixels drawn over the right edge of the items (no track, no room kept for it,
+    // nothing to press: the wheel scrolls), thinner than ScrollBar::thickness() on purpose; it does not follow Theme::scrollbarWidth.
     float totalH = 0.f;
     if (viewMode_ == ViewMode::Grid)
     {
