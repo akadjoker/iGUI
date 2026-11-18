@@ -293,8 +293,8 @@ public:
     double xAxisMaxD() const { return xAxisMax_; }
     double xAxisStepD() const { return xAxisStep_; }
 
-    /// @brief The text of the tooltip of an item (what the chart shows when the pointer is over it): the series by its name,
-    ///        the category or x, and the value.
+    /// @brief The text of the tooltip of an item (what the chart shows when the pointer is over it): the series by the name the
+    ///        legend gives it ("Series 2" for one with no name that has others beside it), the category or x, and the value.
     String tooltipText(const Item& item) const;
     /// @brief The text of an x as the tooltip prints it: the shortest decimal (6 to 15 digits) that reads back as the same
     ///        number, so 1700000000.001 is that and 0.5 is 0.5; a number with no such decimal (a float widened to double,
@@ -438,6 +438,7 @@ private:
     float valueAxisGutter(PaintContext& ctx, double lo, double hi, double step, int decimals) const;
     void  paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, float ah, double lo, double hi, double step, int decimals);
     void tooltipInto(const Item& item, char* text, int size) const;
+    String seriesLabel(int series) const;
     void paintAxisTitles(PaintContext& ctx, const Rect& b, Rect& plot);
     void paintBackground(PaintContext& ctx, const Rect& b);
     float paintTitle(PaintContext& ctx, const Rect& b);

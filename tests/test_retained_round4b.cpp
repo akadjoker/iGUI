@@ -1426,6 +1426,48 @@ void testChartTooltipText()
     check(c->tooltipText(Chart::Item{ -1, 0 }).empty() && c->tooltipText(Chart::Item{ 7, 0 }).empty(), "an item that is not there has no tooltip");
 }
 
+// the tooltip of a series with no name: the name the legend gives it (item 10 of docs/ROUND4.md left this for later)
+void testChartTooltipNamesUnnamedSeries()
+{
+    Screen screen(400.0f, 260.0f);
+    Chart* c = screen.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 400.0f, 260.0f));
+    ct::Vector<String> names;
+    names.push_back("jan");
+    names.push_back("feb");
+    ct::Vector<float> a, b;
+    a.push_back(10.0f);
+    a.push_back(20.0f);
+    b.push_back(3.0f);
+    b.push_back(4.0f);
+    c->bars(names, a, String());
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 1 }) == "feb: 20", "a single series with no name: no name in the tooltip (and no legend)");
+    c->addSeries(String("costs"), b);
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 1 }) == "feb - Series 1: 20", "with another beside it the unnamed one is Series 1");
+    check(c->tooltipText(Chart::Item{ 1, 0 }) == "jan - costs: 3", "a named one by its name");
+    check(c->legendLabel(0) == "Series 1" && c->legendLabel(1) == "costs", "(the legend says the same)");
+    ct::Vector<float> xs;
+    xs.push_back(0.0f);
+    xs.push_back(1.5f);
+    c->plot(xs, a, String());
+    c->plot(xs, b, String("named"));
+    screen.h.frames(2);
+    check(c->tooltipText(Chart::Item{ 0, 1 }) == "Series 1 - 1.5: 20", "the same in a line chart: the series, the x and the value");
+    check(c->tooltipText(Chart::Item{ 1, 1 }) == "named - 1.5: 4", "and a named one");
+    // the picture: the tooltip of the pointer over a bar of the unnamed series
+    c->bars(names, a, String());
+    c->addSeries(String("costs"), b);
+    screen.h.frames(2);
+    const Rect bar = c->barRect(0, 1);
+    const Shot before = screen.take();
+    WidgetApp::instance().feedMouseMove(bar.x + bar.w * 0.5f, bar.y + bar.h * 0.5f);
+    screen.h.frames(2);
+    check(c->hoveredItem().series == 0 && c->hoveredItem().index == 1, "(the pointer is over the bar)");
+    check(differing(before, screen.take(), 0, 0, 400, 260) > 100, "the tooltip is drawn");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1446,6 +1488,7 @@ int main(int argc, char** argv)
     RUN(testChartLargeCounts);
     RUN(testChartNonFiniteData);
     RUN(testChartTooltipText);
+    RUN(testChartTooltipNamesUnnamedSeries);
     RUN(testSliderValueReadout);
     RUN(testSliderReadoutAsksForLayoutOnlyWhenTheHintChanges);
     shutdown();

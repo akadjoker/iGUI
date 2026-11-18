@@ -1020,9 +1020,7 @@ void Chart::buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea,
             LegendEntry e;
             // A series with no name next to others (a histogram added without one) still needs a line the eye can tell
             // from its neighbours: "Series 2", counted from one. (A single series with no name has no legend at all.)
-            e.label = series_[static_cast<size_t>(s)].name;
-            if (e.label.empty())
-                e.label = String("Series ") + String::number(s + 1);
+            e.label = seriesLabel(s);
             e.color = series_[static_cast<size_t>(s)].color;
             e.visible = series_[static_cast<size_t>(s)].visible;
             e.target = s;
@@ -1814,7 +1812,7 @@ void Chart::tooltipInto(const Item& item, char* text, int size) const
             snprintf(xText, sizeof(xText), "%s", category);
         else
             formatX(xD(item.series, item.index), xText, sizeof(xText));
-        const String& name = se.name;
+        const String name = seriesLabel(item.series);
         if (name.empty())
             snprintf(text, static_cast<size_t>(size), "%s: %s", xText, valueText);
         else
@@ -1822,7 +1820,7 @@ void Chart::tooltipInto(const Item& item, char* text, int size) const
     }
     else if (isBars())
     {
-        const String& name = series_[static_cast<size_t>(item.series)].name;
+        const String name = seriesLabel(item.series);
         if (name.empty())
             snprintf(text, static_cast<size_t>(size), "%s: %s", category, valueText);
         else
@@ -1841,6 +1839,18 @@ String Chart::tooltipText(const Item& item) const
     char text[1024];
     tooltipInto(item, text, sizeof(text));
     return String(text);
+}
+
+// A series by the name the legend gives it: its own, or "Series N" (counted from one) for one with no name that has
+// others beside it. A single series with no name has none (it has no legend either).
+String Chart::seriesLabel(int series) const
+{
+    if (series < 0 || series >= seriesCount())
+        return String();
+    const String& name = series_[static_cast<size_t>(series)].name;
+    if (!name.empty() || seriesCount() == 1)
+        return name;
+    return String("Series ") + String::number(series + 1);
 }
 
 String Chart::xTickText(double v) const
