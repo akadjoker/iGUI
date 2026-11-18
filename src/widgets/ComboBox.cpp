@@ -151,28 +151,72 @@ ComboBox::ComboBox()
     setCursor(CursorType::Hand);
 }
 
+// The width sizeHint counts for an item: as the font measures it (the estimate of 0.6 em a letter where there is no font).
+float ComboBox::itemWidth(const String& item) const
+{
+    float tw = item.empty() ? 0.0f : WidgetApp::instance().textWidth(item.c_str(), overrideFont_);
+    if (!(tw > 0.0f)) tw = item.size() * Theme::instance().fontSize * 0.6f;
+    return tw;
+}
+
+// The width sizeHint asks for when the widest item is `widest` wide.
+float ComboBox::hintWidth(float widest) const
+{
+    const float w = widest + Theme::instance().padding * 3 + 16;
+    return w < 100.0f ? 100.0f : w;
+}
+
+// Whether the widest item is remembered for this font and text height (sizeHint() has worked it out and nothing since
+// has made it unknown). While it is not, the layout has not asked for the hint yet, or the items have changed too much to
+// follow: a change asks for a layout pass, and sizeHint() measures when the layout does.
+bool ComboBox::widestKnown() const
+{
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
+    return widestItem_ >= 0.0f && widestFont_ == font && widestHeight_ == Theme::instance().fontSize;
+}
+
+// An item left (width `leaving`) and one arrived (`arriving`), a negative width for none, both measured only when `known`
+// (widestKnown() before the change): asks for a layout pass only when the width of the hint changes, which it does not
+// when the widest item stays the same (the common case of a list that is filled or renamed). When the widest item may
+// have left it asks, and sizeHint() measures again. A list that nothing has laid out yet is not measured here: it is the
+// layout that measures, in the order of the tree.
+void ComboBox::itemsChanged(bool known, float leaving, float arriving)
+{
+    if (!known || leaving >= widestItem_)
+    {
+        widestItem_ = -1.0f;
+        invalidateLayout();
+        return;
+    }
+    const float before = hintWidth(widestItem_);
+    if (arriving > widestItem_) widestItem_ = arriving;
+    if (hintWidth(widestItem_) != before) invalidateLayout();
+}
+
 void ComboBox::addItem(const String& text)
 {
+    const bool known = widestKnown();
     items_.push_back(text);
-    widestItem_ = -1.0f;
     markDirty();
-    invalidateLayout();
+    itemsChanged(known, -1.0f, known ? itemWidth(text) : -1.0f);
 }
 
 void ComboBox::insertItem(int index, const String& text)
 {
     if (index < 0) index = 0;
     if (index > static_cast<int>(items_.size())) index = static_cast<int>(items_.size());
+    const bool known = widestKnown();
     items_.insert(items_.begin() + index, text);
     if (selectedIndex_ >= index) ++selectedIndex_;
-    widestItem_ = -1.0f;
     markDirty();
-    invalidateLayout();
+    itemsChanged(known, -1.0f, known ? itemWidth(text) : -1.0f);
 }
 
 void ComboBox::removeItem(int index)
 {
     if (index < 0 || index >= static_cast<int>(items_.size())) return;
+    const bool known = widestKnown();
+    const float leaving = known ? itemWidth(items_[index]) : -1.0f;
     items_.erase(items_.begin() + index);
     if (selectedIndex_ == index)
     {
@@ -181,18 +225,18 @@ void ComboBox::removeItem(int index)
     }
     else if (selectedIndex_ > index)
         --selectedIndex_;
-    widestItem_ = -1.0f;
     markDirty();
-    invalidateLayout();
+    itemsChanged(known, leaving, -1.0f);
 }
 
 void ComboBox::clear()
 {
+    const bool had = !items_.empty();
     items_.clear();
     selectedIndex_ = -1;
     widestItem_ = -1.0f;
     markDirty();
-    invalidateLayout();
+    if (had) invalidateLayout();
 }
 
 const String& ComboBox::itemText(int index) const
@@ -205,10 +249,12 @@ void ComboBox::setItemText(int index, const String& text)
 {
     if (index >= 0 && index < static_cast<int>(items_.size()))
     {
+        if (items_[index] == text) return;
+        const bool known = widestKnown();
+        const float leaving = known ? itemWidth(items_[index]) : -1.0f;
         items_[index] = text;
-        widestItem_ = -1.0f;
         markDirty();
-        invalidateLayout();
+        itemsChanged(known, leaving, known ? itemWidth(text) : -1.0f);
     }
 }
 
@@ -239,17 +285,14 @@ Widget::Vec2f ComboBox::sizeHint() const
         float widest = 0.0f;
         for (auto& it: items_)
         {
-            float tw = it.empty() ? 0.0f : WidgetApp::instance().textWidth(it.c_str(), overrideFont_);
-            if (!(tw > 0.0f)) tw = it.size() * t.fontSize * 0.6f;
+            const float tw = itemWidth(it);
             if (tw > widest) widest = tw;
         }
         widestItem_ = widest;
         widestFont_ = font;
         widestHeight_ = t.fontSize;
     }
-    float w = widestItem_ + t.padding * 3 + 16;
-    if (w < 100.0f) w = 100.0f;
-    return { w, t.inputHeight };
+    return { hintWidth(widestItem_), t.inputHeight };
 }
 
 void ComboBox::paint(PaintContext& ctx)

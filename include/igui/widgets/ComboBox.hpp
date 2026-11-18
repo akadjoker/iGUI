@@ -85,6 +85,11 @@ public:
     bool isOpen() const;
 
 private:
+    float itemWidth(const String& item) const;
+    float hintWidth(float widest) const;
+    bool widestKnown() const;
+    void itemsChanged(bool known, float leaving, float arriving);
+
     ct::Vector<String> items_;
     int selectedIndex_ = -1;
     int maxVisible_ = 8;

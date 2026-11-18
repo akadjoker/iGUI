@@ -749,6 +749,52 @@ void testLayoutSettersWithTheirValueAskForNothing()
     check(probe->laidOut == steady + 2, "a child that moves takes one");
 }
 
+// ---- the items of a ComboBox ----
+
+void testComboBoxItemsAskForLayoutOnlyWhenTheWidestChanges()
+{
+    Harness h(900.0f, 400.0f);
+    LayoutProbe* probe = h.root()->createChild<LayoutProbe>();
+    BoxLayout* row = h.root()->createChild<BoxLayout>(LayoutDir::Horizontal);
+    row->createChild<Label>(String("a combo"));
+    h.frames(6);
+
+    ComboBox* combo = row->createChild<ComboBox>();
+    combo->addItem("Cut and a longer one");
+    combo->addItem("Cut");
+    h.frames(3);
+    const int combos = probe->laidOut;
+    combo->addItem("Fade");
+    combo->insertItem(0, "Dip"); // Dip, Cut and a longer one, Cut, Fade
+    combo->setItemText(2, "Cut two");
+    combo->removeItem(3);
+    combo->setItemText(0, "Dip"); // the same text
+    h.frame();
+    if (probe->laidOut != combos) printf("    %d layout passes for items that keep the widest\n", probe->laidOut - combos);
+    check(probe->laidOut == combos, "items that come and go without changing the widest ask for no layout pass");
+    const float narrowCombo = combo->sizeHint().x;
+    check(narrowCombo > 100.0f, "(the widest item is what the hint follows)");
+    combo->addItem("An item that is a good deal wider than every other one the list has");
+    h.frame();
+    check(probe->laidOut == combos + 1 && combo->sizeHint().x > narrowCombo, "a wider item takes one");
+    const int wider = probe->laidOut;
+    combo->removeItem(combo->itemCount() - 1);
+    h.frame();
+    check(probe->laidOut == wider + 1 && combo->sizeHint().x == narrowCombo, "and taking it out, one");
+    // the widest item itself replaced by a narrower one: the hint shrinks, by a layout pass
+    const int widest = probe->laidOut;
+    combo->setItemText(1, "Short");
+    h.frame();
+    check(probe->laidOut == widest + 1 && combo->sizeHint().x < narrowCombo, "renaming the widest item to a narrow one takes one");
+    const int plain = probe->laidOut;
+    combo->clear();
+    h.frame();
+    check(probe->laidOut == plain + 1, "clearing a list takes one");
+    combo->clear();
+    h.frame();
+    check(probe->laidOut == plain + 1, "clearing an empty one does not");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -770,6 +816,7 @@ int main(int argc, char** argv)
     RUN(testOpenPolylineHasTheSameWidthAtItsEnds);
     RUN(testTextChangeAsksForLayoutOnlyWhenTheHintChanges);
     RUN(testLayoutSettersWithTheirValueAskForNothing);
+    RUN(testComboBoxItemsAskForLayoutOnlyWhenTheWidestChanges);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
