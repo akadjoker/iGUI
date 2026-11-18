@@ -95,6 +95,68 @@ public:
     int  seriesCount() const { return static_cast<int>(series_.size()); }
     const ChartSeries& series(int idx) const { return series_[static_cast<size_t>(idx)]; }
 
+    // ── Data in other number types ────────────────────────────────────────
+    // The same calls with vectors of double (or int, or any number type): each value is converted to float on
+    // the way in, the chart keeps and draws floats. What a float cannot hold is lost at that point (a value
+    // above 16 777 216 is no longer exact to the unit, an x of 1.7e9 seconds is 128 seconds wide): for numbers
+    // like that give the chart values relative to a start you print in the title. Calls with brace lists and
+    // with vectors of float are not affected (they use the overloads above).
+    template<typename T>
+    int addSeries(const String& name, const ct::Vector<T>& values)
+    {
+        return addSeries(name, toFloats(values));
+    }
+    template<typename T>
+    int addSeries(const String& name, const ct::Vector<T>& values, const Color& color)
+    {
+        return addSeries(name, toFloats(values), color);
+    }
+    template<typename TX, typename TY>
+    int addSeries(const String& name, const ct::Vector<TX>& xs, const ct::Vector<TY>& ys)
+    {
+        return addSeries(name, toFloats(xs), toFloats(ys));
+    }
+    template<typename T>
+    void setSeriesValues(int series, const ct::Vector<T>& values)
+    {
+        setSeriesValues(series, toFloats(values));
+    }
+    template<typename T>
+    void setSeriesX(int series, const ct::Vector<T>& xs)
+    {
+        setSeriesX(series, toFloats(xs));
+    }
+    template<typename T>
+    void pie(const ct::Vector<String>& labels, const ct::Vector<T>& values)
+    {
+        pie(labels, toFloats(values));
+    }
+    template<typename T>
+    void donut(const ct::Vector<String>& labels, const ct::Vector<T>& values)
+    {
+        donut(labels, toFloats(values));
+    }
+    template<typename T>
+    void bars(const ct::Vector<String>& labels, const ct::Vector<T>& values, const String& name = String())
+    {
+        bars(labels, toFloats(values), name);
+    }
+    template<typename TX, typename TY>
+    int plot(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name = String())
+    {
+        return plot(toFloats(xs), toFloats(ys), name);
+    }
+    template<typename TX, typename TY>
+    int scatter(const ct::Vector<TX>& xs, const ct::Vector<TY>& ys, const String& name = String())
+    {
+        return scatter(toFloats(xs), toFloats(ys), name);
+    }
+    template<typename T>
+    int hist(const ct::Vector<T>& samples, int bins = 10, const String& name = String())
+    {
+        return hist(toFloats(samples), bins, name);
+    }
+
     /// @brief Show or hide one category (a slice, a bar group).
     void setCategoryVisible(int index, bool visible);
     bool categoryVisible(int index) const;
@@ -136,6 +198,15 @@ public:
     // ── Looks ─────────────────────────────────────────────────────────────
     void setTitle(const String& title);
     const String& title() const { return title_; }
+    /// @brief A title under the x axis of a bars, histogram, line or scatter chart, centred under the plot
+    ///        (cut with "..." when it does not fit). It takes a line of the chart's height, which the plot
+    ///        gives up. Pies and donuts have no axes and ignore it. Empty (the default): none.
+    void setXAxisTitle(const String& title);
+    const String& xAxisTitle() const { return xTitle_; }
+    /// @brief A title for the y axis, on the line above it, at its left edge (there is no rotated text). It
+    ///        takes a line of the chart's height, which the plot gives up. Pies and donuts ignore it.
+    void setYAxisTitle(const String& title);
+    const String& yAxisTitle() const { return yTitle_; }
     void setShowLegend(bool show);
     bool showLegend() const { return legendPosition_ != LegendPosition::Hidden; }
     void setLegendPosition(LegendPosition position);
@@ -258,6 +329,7 @@ private:
 
     ChartKind          kind_ = ChartKind::Pie;
     String             title_;
+    String             xTitle_, yTitle_;
     ct::Vector<String> categories_;
     ct::Vector<bool>   categoryHidden_;
     ct::Vector<ChartSeries> series_;
@@ -295,6 +367,14 @@ private:
     ct::Vector<Vec2> quad_;
     ct::Vector<Vec2> polyline_;
 
+    template<typename T>
+    static ct::Vector<float> toFloats(const ct::Vector<T>& v)
+    {
+        ct::Vector<float> out;
+        out.reserve(v.size());
+        for (size_t i = 0; i < v.size(); ++i) out.push_back(static_cast<float>(v[i]));
+        return out;
+    }
     int  firstVisibleSeries() const;
     bool legendOnRight(const Rect& b) const;
     void buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea, Rect& plot);
@@ -306,6 +386,7 @@ private:
     static void niceAxis(float vmin, float vmax, float& lo, float& hi, float& step);
     float valueAxisGutter(PaintContext& ctx, float lo, float hi, float step, int decimals) const;
     void  paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, float ah, float lo, float hi, float step, int decimals);
+    void paintAxisTitles(PaintContext& ctx, const Rect& b, Rect& plot);
     void paintBackground(PaintContext& ctx, const Rect& b);
     float paintTitle(PaintContext& ctx, const Rect& b);
     void paintLegend(PaintContext& ctx, const Rect& b);

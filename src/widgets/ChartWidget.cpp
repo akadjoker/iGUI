@@ -443,6 +443,22 @@ void Chart::setTitle(const String& title)
     markDirty();
 }
 
+void Chart::setXAxisTitle(const String& title)
+{
+    if (xTitle_ == title)
+        return;
+    xTitle_ = title;
+    markDirty();
+}
+
+void Chart::setYAxisTitle(const String& title)
+{
+    if (yTitle_ == title)
+        return;
+    yTitle_ = title;
+    markDirty();
+}
+
 void Chart::setShowLegend(bool show)
 {
     setLegendPosition(show ? LegendPosition::Auto : LegendPosition::Hidden);
@@ -840,6 +856,30 @@ float Chart::paintTitle(PaintContext& ctx, const Rect& b)
     const float tw = ctx.font.GetTextWidth(buf);
     ctx.font.Print(buf, b.x + (b.w - tw) * 0.5f, b.y + kPad + asc);
     return lineHeight(ctx) + 4.0f;
+}
+
+// The titles of the axes: a line under the plot for the x one, a line above it for the y one, both taken from the plot.
+void Chart::paintAxisTitles(PaintContext& ctx, const Rect& b, Rect& plot)
+{
+    const Theme& t = Theme::instance();
+    const float line = lineHeight(ctx) + 2.0f;
+    char buf[256];
+    if (!yTitle_.empty() && plot.h > line * 2.0f)
+    {
+        const float asc = setupFont(ctx, t.textDisabled);
+        fitText(ctx, yTitle_.c_str(), plot.w, buf, sizeof(buf));
+        ctx.font.Print(buf, b.x + plot.x, b.y + plot.y + asc);
+        plot.y += line;
+        plot.h -= line;
+    }
+    if (!xTitle_.empty() && plot.h > line * 2.0f)
+    {
+        const float asc = setupFont(ctx, t.textDisabled);
+        fitText(ctx, xTitle_.c_str(), plot.w, buf, sizeof(buf));
+        const float tw = ctx.font.GetTextWidth(buf);
+        ctx.font.Print(buf, b.x + plot.x + (plot.w - tw) * 0.5f, b.y + plot.y + plot.h - line + 2.0f + asc);
+        plot.h -= line;
+    }
 }
 
 // Lays the legend entries out and takes their space from the plot.
@@ -1685,6 +1725,8 @@ void Chart::paint(PaintContext& ctx)
     buildLegend(ctx, b, titleArea, plot);
     if (plot.w < 0.0f) plot.w = 0.0f;
     if (plot.h < 0.0f) plot.h = 0.0f;
+    if ((isBars() || isXY()) && (!xTitle_.empty() || !yTitle_.empty()))
+        paintAxisTitles(ctx, b, plot);
     plot_ = plot;
 
     if (isBars())

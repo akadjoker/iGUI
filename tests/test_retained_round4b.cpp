@@ -9,6 +9,7 @@
 
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
+#include <igui/widgets/ChartWidget.hpp>
 #include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/Timeline.hpp>
@@ -689,6 +690,240 @@ void testPianoRollShowVelocity()
     check(differing(screen.take(), plain, 0, 0, 480, 260) == 0, "and with it off the velocity changes nothing in the picture");
 }
 
+// ---- item 20: the chart's axis titles, and its data in double ----
+
+ct::Vector<String> chartLabels(int n)
+{
+    ct::Vector<String> out;
+    for (int i = 0; i < n; ++i) out.push_back(String("c") + String::number(i));
+    return out;
+}
+
+template<typename T>
+ct::Vector<T> chartValues(int n, T first, T step)
+{
+    ct::Vector<T> out;
+    for (int i = 0; i < n; ++i) out.push_back(first + step * static_cast<T>(i));
+    return out;
+}
+
+// the leftmost and rightmost column in rows [y0, y1) where the shots differ; false when they do not
+bool differingColumns(const Shot& a, const Shot& b, int y0, int y1, int& left, int& right)
+{
+    left = 1 << 30;
+    right = -1;
+    for (int x = 0; x < a.w; ++x)
+        if (differing(a, b, x, y0, x + 1, y1))
+        {
+            if (x < left) left = x;
+            if (x > right) right = x;
+        }
+    return right >= 0;
+}
+
+Chart* makeAxesChart(Screen& screen, ChartKind kind)
+{
+    Chart* c = screen.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+    switch (kind)
+    {
+        case ChartKind::Bars:
+            c->bars(chartLabels(5), chartValues<float>(5, 2.0f, 3.0f), String("s"));
+            break;
+        case ChartKind::Line:
+            c->plot(chartValues<float>(6, 0.0f, 1.0f), chartValues<float>(6, 1.0f, 2.0f), String("l"));
+            break;
+        case ChartKind::Scatter:
+            c->scatter(chartValues<float>(6, 0.0f, 1.0f), chartValues<float>(6, 1.0f, 2.0f), String("p"));
+            break;
+        case ChartKind::Histogram:
+            c->hist(chartValues<float>(40, 0.0f, 0.5f), 8, String("h"));
+            break;
+        case ChartKind::Pie:
+            c->pie(chartLabels(4), chartValues<float>(4, 1.0f, 1.0f));
+            break;
+        case ChartKind::Donut:
+            c->donut(chartLabels(4), chartValues<float>(4, 1.0f, 1.0f));
+            break;
+    }
+    return c;
+}
+
+void testChartAxisTitles()
+{
+    const ChartKind withAxes[] = { ChartKind::Bars, ChartKind::Line, ChartKind::Scatter, ChartKind::Histogram };
+    for (ChartKind kind: withAxes)
+    {
+        Screen screen(400.0f, 300.0f);
+        Chart* c = makeAxesChart(screen, kind);
+        screen.h.frames(2);
+        const Rect p0 = c->plotRect();
+        const Shot none = screen.take();
+        check(c->xAxisTitle().empty() && c->yAxisTitle().empty(), "(a chart has no axis titles at first)");
+
+        // an x title takes a line from the bottom of the plot, and is written there, centred
+        c->setXAxisTitle(String(" "));
+        screen.h.frames(2);
+        const Rect p1 = c->plotRect();
+        const Shot blank = screen.take();
+        const float line = p0.h - p1.h;
+        if (line < 10.0f || line > 30.0f || p1.y != p0.y || p1.w != p0.w) printf("    plot %g,%g %gx%g -> %g,%g %gx%g\n", p0.x, p0.y, p0.w, p0.h, p1.x, p1.y, p1.w, p1.h);
+        check(line >= 10.0f && line <= 30.0f && p1.y == p0.y && p1.w == p0.w, "an x axis title takes a line from the bottom of the plot");
+        c->setXAxisTitle(String("Time (s)"));
+        screen.h.frames(2);
+        const Shot titled = screen.take();
+        check(c->xAxisTitle() == "Time (s)" && c->plotRect().h == p1.h, "(the same space, whatever the title)");
+        int left = 0, right = 0;
+        const int bandY0 = static_cast<int>(p1.y + p1.h), bandY1 = static_cast<int>(p1.y + p1.h + line);
+        check(differingColumns(blank, titled, bandY0, bandY1, left, right), "the title is drawn in the line under the plot");
+        check(differing(blank, titled, 0, 0, 400, bandY0) == 0 && differing(blank, titled, 0, bandY1, 400, 300) == 0, "and nowhere else");
+        const float centre = p1.x + p1.w * 0.5f;
+        if (!near(static_cast<int>((left + right) * 0.5f), static_cast<int>(centre), 3)) printf("    the title spans %d to %d, the plot's centre is %g\n", left, right, centre);
+        check(near(static_cast<int>((left + right) * 0.5f), static_cast<int>(centre), 3), "centred under the plot");
+
+        // a y title takes a line from the top and is written at the left edge of the plot
+        c->setYAxisTitle(String(" "));
+        screen.h.frames(2);
+        const Rect p2 = c->plotRect();
+        const Shot yblank = screen.take();
+        check(near(static_cast<int>(p2.y - p1.y), static_cast<int>(line), 1) && p2.h < p1.h && p2.x == p1.x, "a y axis title takes a line from the top of the plot");
+        c->setYAxisTitle(String("Level"));
+        screen.h.frames(2);
+        const Shot ytitled = screen.take();
+        check(differingColumns(yblank, ytitled, static_cast<int>(p1.y), static_cast<int>(p2.y), left, right), "the y title is drawn in the line above the plot");
+        check(left >= static_cast<int>(p2.x) && left < static_cast<int>(p2.x) + 6, "at its left edge");
+        check(differing(yblank, ytitled, 0, static_cast<int>(p2.y) + 1, 400, 300) == 0, "and nowhere else");
+
+        // a title too long for the chart is cut and stays inside the plot
+        c->setXAxisTitle(String("A title so long that it cannot possibly fit in the width of this chart however small the font is"));
+        screen.h.frames(2);
+        const Shot longTitle = screen.take();
+        int l2 = 0, r2 = 0;
+        const Rect p3 = c->plotRect();
+        const int band2 = static_cast<int>(p3.y + p3.h);
+        differingColumns(yblank, longTitle, band2, band2 + static_cast<int>(line), l2, r2);
+        check(l2 >= static_cast<int>(p3.x) - 1 && r2 <= static_cast<int>(p3.x + p3.w) + 1, "a title that is too long is cut to the width of the plot");
+
+        // taking the titles away gives the chart of before
+        c->setXAxisTitle(String());
+        c->setYAxisTitle(String());
+        screen.h.frames(2);
+        check(differing(screen.take(), none, 0, 0, 400, 300) == 0 && c->plotRect().h == p0.h, "and no titles is the chart as it was");
+    }
+
+    // pies and donuts have no axes
+    const ChartKind round[] = { ChartKind::Pie, ChartKind::Donut };
+    for (ChartKind kind: round)
+    {
+        Screen screen(400.0f, 300.0f);
+        Chart* c = makeAxesChart(screen, kind);
+        screen.h.frames(2);
+        const Shot none = screen.take();
+        c->setXAxisTitle(String("x"));
+        c->setYAxisTitle(String("y"));
+        screen.h.frames(2);
+        check(differing(screen.take(), none, 0, 0, 400, 300) == 0, "a pie or a donut ignores the axis titles");
+    }
+
+    // a chart too small for the titles does not draw them, and does not fail
+    Screen small(60.0f, 40.0f);
+    Chart* c = small.h.root()->createChild<Chart>();
+    c->setRect(Rect(0.0f, 0.0f, 60.0f, 40.0f));
+    c->bars(chartLabels(3), chartValues<float>(3, 1.0f, 1.0f));
+    c->setXAxisTitle(String("x"));
+    c->setYAxisTitle(String("y"));
+    small.h.frames(2);
+    check(c->plotRect().h >= 0.0f, "a chart too small for its titles still paints");
+}
+
+void testChartDoubleData()
+{
+    Screen screen(400.0f, 300.0f);
+    Chart* d = screen.h.root()->createChild<Chart>();
+    d->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+    ct::Vector<double> ys;
+    ys.push_back(1.5);
+    ys.push_back(16777217.0);
+    ys.push_back(-0.25);
+    ct::Vector<double> xs;
+    xs.push_back(0.5);
+    xs.push_back(1.5);
+    xs.push_back(2.5);
+
+    d->bars(chartLabels(3), ys, String("d"));
+    check(d->kind() == ChartKind::Bars && d->seriesCount() == 1 && d->series(0).values.size() == 3, "bars() takes a vector of double");
+    check(d->series(0).values[0] == 1.5f && d->series(0).values[2] == -0.25f, "the values are the doubles, as floats");
+    check(d->series(0).values[1] == 16777216.0f, "what a float cannot hold is lost: 16777217 is 16777216 (the chart draws floats)");
+    const int second = d->addSeries(String("e"), ys);
+    check(second == 1 && d->series(1).values.size() == 3, "addSeries takes doubles");
+    d->addSeries(String("f"), ys, Color(10, 20, 30));
+    check(d->series(2).color.r == 10, "and with a colour");
+    d->setSeriesValues(0, xs);
+    check(d->series(0).values[0] == 0.5f && d->series(0).values[2] == 2.5f, "setSeriesValues takes doubles");
+    d->setSeriesX(0, ys);
+    check(d->series(0).xs.size() == 3 && d->series(0).xs[0] == 1.5f, "setSeriesX takes doubles");
+    const int xy = d->addSeries(String("xy"), xs, ys);
+    check(d->series(xy).xs.size() == 3 && d->series(xy).values[2] == -0.25f, "and a series with its xs");
+
+    Chart* line = screen.h.root()->createChild<Chart>();
+    line->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+    const int l = line->plot(xs, ys, String("p"));
+    check(l == 0 && line->kind() == ChartKind::Line && line->series(0).xs[1] == 1.5f && line->series(0).values[0] == 1.5f, "plot() takes doubles");
+    ct::Vector<float> fx;
+    fx.push_back(0.5f);
+    fx.push_back(1.5f);
+    fx.push_back(2.5f);
+    line->plot(fx, ys, String("mixed"));
+    check(line->seriesCount() == 2 && line->series(1).xs[2] == 2.5f && line->series(1).values[1] == 16777216.0f, "plot() takes floats for x and doubles for y");
+    Chart* scatter = screen.h.root()->createChild<Chart>();
+    scatter->scatter(xs, ys);
+    check(scatter->kind() == ChartKind::Scatter && scatter->series(0).values.size() == 3, "scatter() takes doubles");
+    Chart* pie = screen.h.root()->createChild<Chart>();
+    ct::Vector<double> parts;
+    parts.push_back(1.0);
+    parts.push_back(2.0);
+    parts.push_back(3.0);
+    pie->pie(chartLabels(3), parts);
+    check(pie->kind() == ChartKind::Pie && pie->total(0) == 6.0f, "pie() takes doubles");
+    pie->donut(chartLabels(3), parts);
+    check(pie->kind() == ChartKind::Donut, "donut() takes doubles");
+    Chart* hist = screen.h.root()->createChild<Chart>();
+    ct::Vector<double> samples;
+    for (int i = 0; i < 100; ++i) samples.push_back(static_cast<double>(i) * 0.1);
+    hist->hist(samples, 5, String("h"));
+    check(hist->kind() == ChartKind::Histogram && hist->bins() == 5 && hist->categoryCount() == 5, "hist() takes doubles");
+    ct::Vector<int> whole;
+    whole.push_back(3);
+    whole.push_back(1);
+    whole.push_back(2);
+    Chart* ints = screen.h.root()->createChild<Chart>();
+    ints->bars(chartLabels(3), whole);
+    check(ints->series(0).values[0] == 3.0f, "and so does any number type: ints");
+
+    // the picture of a chart made of doubles is the picture of the chart made of the same numbers as floats
+    Screen a(400.0f, 300.0f), b(400.0f, 300.0f);
+    Chart* ca = a.h.root()->createChild<Chart>();
+    ca->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+    Chart* cb = b.h.root()->createChild<Chart>();
+    cb->setRect(Rect(0.0f, 0.0f, 400.0f, 300.0f));
+    ct::Vector<double> px;
+    ct::Vector<float> pxf;
+    ct::Vector<double> py;
+    ct::Vector<float> pyf;
+    for (int i = 0; i < 20; ++i)
+    {
+        px.push_back(i * 0.5);
+        pxf.push_back(i * 0.5f);
+        py.push_back((i % 7) * 1.25 + 1.0);
+        pyf.push_back((i % 7) * 1.25f + 1.0f);
+    }
+    ca->plot(px, py, String("v"));
+    cb->plot(pxf, pyf, String("v"));
+    a.h.frames(2);
+    b.h.frames(2);
+    check(differing(a.take(), b.take(), 0, 0, 400, 300) == 0, "a chart of doubles is drawn as the chart of the same numbers in float");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -703,6 +938,8 @@ int main(int argc, char** argv)
     RUN(testTimelineBarRulerHostile);
     RUN(testPianoRollVelocityAndSignals);
     RUN(testPianoRollShowVelocity);
+    RUN(testChartAxisTitles);
+    RUN(testChartDoubleData);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
