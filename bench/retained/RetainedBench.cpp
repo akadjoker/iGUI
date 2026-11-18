@@ -167,6 +167,48 @@ void editorScene(const char* scene, int clips)
     RUN_IF(scene, "layout_only", 200, [&] { h.root()->layout(); });
     RUN_IF(scene, "layout_frame", 100, [&] { h.relayout(); });
 
+    // A text that changes every frame, as a clock, a timecode or a meter value do while a project plays: the frame that follows
+    // a setText. Same width: the digits all have one width, so nothing moves and the tree must not be laid out again; the
+    // label that cuts asks for its dots whatever it says. Wider: the width changes each time, so the layout must run (the
+    // _requestlayout row asks for it by hand too, as an application did before the tree asked for it by itself).
+    {
+        Label* timecode = ed.labels[2]; // the transport's timecode
+        Label* status = ed.labels[3];   // cuts with "...", takes the room the stretch gives it
+        const String digits[2] = { String("00:00:01:00"), String("00:00:02:00") };
+        const String messages[2] = { String("Rendering 12%"), String("Rendering 13%") };
+        const String widths[2] = { String("00:00:00:00"), String("00:00:00:00 +12 frames") };
+        int n = 0;
+        RUN_IF(scene, "frame_settext_same_width", 200,
+                [&]
+                {
+                    timecode->setText(digits[n++ & 1]);
+                    h.frame();
+                });
+        RUN_IF(scene, "frame_settext_cut_label", 200,
+                [&]
+                {
+                    status->setText(messages[n++ & 1]);
+                    h.frame();
+                });
+        RUN_IF(scene, "frame_settext_wider", 200,
+                [&]
+                {
+                    timecode->setText(widths[n++ & 1]);
+                    h.frame();
+                });
+        RUN_IF(scene, "frame_settext_wider_requestlayout", 200,
+                [&]
+                {
+                    timecode->setText(widths[n++ & 1]);
+                    h.app.requestLayout();
+                    h.frame();
+                });
+        timecode->setText("00:00:00:00");
+        status->setText("Ready");
+        h.relayout();
+        h.frames(2);
+    }
+
     // Text: the widths of the side panel's labels, as sizeHint and paint ask for them.
     RUN_IF(scene, "label_sizehints", 500,
             [&]
