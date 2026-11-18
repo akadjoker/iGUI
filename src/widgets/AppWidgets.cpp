@@ -873,15 +873,17 @@ void Outliner::onMousePress(MouseEvent& e)
     }
 
     // Select
-    if (selected_ != fr.node)
+    TreeNode* const pressed = fr.node; // (read before any handler runs: a handler may change the rows)
+    if (selected_ != pressed)
     {
-        selected_ = fr.node;
-        selectionChanged.emit(selected_);
+        selected_ = pressed;
         markDirty();
+        e.consumed = true;
+        if (WidgetApp::instance().emitGone(this, selectionChanged, pressed)) return; // (a handler took the outliner out of the tree)
     }
-    if (e.button == 0 && e.clickCount == 2) nodeActivated.emit(fr.node);
-    dragCandidate_ = fr.node;
+    dragCandidate_ = pressed;
     e.consumed = true;
+    if (e.button == 0 && e.clickCount == 2) nodeActivated.emit(pressed);
 }
 
 void Outliner::onMouseScroll(MouseEvent& e)
@@ -1616,9 +1618,9 @@ void Viewport3D::onMouseMove(MouseEvent& e)
         yaw_ = dragYaw_ + dx * orbitSpeed_;
         pitch_ = dragPitch_ + dy * orbitSpeed_;
         pitch_ = std::max(-89.0f, std::min(89.0f, pitch_));
-        onOrbit.emit(yaw_, pitch_);
         markDirty();
         e.consumed = true;
+        onOrbit.emit(yaw_, pitch_); // (last: a handler may take the viewport out of the tree)
     }
     else if (dragMode_ == DragMode::Pan)
     {
@@ -1626,9 +1628,9 @@ void Viewport3D::onMouseMove(MouseEvent& e)
         float dy = e.y - dragStartY_;
         dragStartX_ = e.x;
         dragStartY_ = e.y;
-        onPan.emit(dx * panSpeed_, dy * panSpeed_);
         markDirty();
         e.consumed = true;
+        onPan.emit(dx * panSpeed_, dy * panSpeed_);
     }
 }
 
@@ -1636,8 +1638,8 @@ void Viewport3D::onMouseScroll(MouseEvent& e)
 {
     if (e.scrollY != 0.0f)
     {
-        onZoom.emit(e.scrollY * zoomSpeed_);
         markDirty();
         e.consumed = true;
+        onZoom.emit(e.scrollY * zoomSpeed_);
     }
 }

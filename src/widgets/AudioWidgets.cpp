@@ -86,8 +86,8 @@ Knob::Knob()
 void Knob::setValue(float v)
 {
     value_ = std::clamp(v, min_, max_);
-    onChanged.emit(value_);
     markDirty();
+    onChanged.emit(value_); // (last: a handler may take the knob out of the tree, see WidgetApp::hasGone)
 }
 
 void Knob::paint(PaintContext& ctx)
@@ -222,8 +222,8 @@ void Fader::setValue(float v)
     const float clamped = std::clamp(v, min_, max_);
     if (clamped == value_) return;
     value_ = clamped;
-    onChanged.emit(value_);
     markDirty();
+    onChanged.emit(value_); // (last: a handler may take the fader out of the tree)
 }
 
 Widget::Vec2f Fader::sizeHint() const
@@ -441,8 +441,8 @@ LinearKnob::LinearKnob()
 void LinearKnob::setValue(float v)
 {
     value_ = std::clamp(v, min_, max_);
-    onChanged.emit(value_);
     markDirty();
+    onChanged.emit(value_); // (last: a handler may take the knob out of the tree)
 }
 
 Widget::Vec2f LinearKnob::sizeHint() const
@@ -546,10 +546,11 @@ void LinearKnob::onMousePress(MouseEvent& e)
     Rect tr = trackRect();
     float norm = vertical_ ? 1.f - std::clamp((e.y - tr.y) / tr.h, 0.f, 1.f)
                            : std::clamp((e.x - tr.x) / tr.w, 0.f, 1.f);
-    setValue(std::clamp(min_ + norm * (max_ - min_), min_, max_));
+    const float picked = clamp(min_ + norm * (max_ - min_), min_, max_);
     dragStart_ = vertical_ ? e.y : e.x;
-    dragStartV_ = value_;
+    dragStartV_ = picked;
     e.consumed = true;
+    setValue(picked); // (last: a handler may take the knob out of the tree)
 }
 
 void LinearKnob::onMouseMove(MouseEvent& e)
@@ -754,9 +755,9 @@ void ADSRWidget::onMouseMove(MouseEvent& e)
         float nx = std::clamp(e.x, x3 + 2, ax0 + aw - 2);
         r_ = std::max(0.001f, (nx - x3) / scale);
     }
-    onChanged.emit(a_, d_, s_, r_);
     markDirty();
     e.consumed = true;
+    onChanged.emit(a_, d_, s_, r_); // (last: a handler may take the widget out of the tree)
 }
 
 void ADSRWidget::onMouseRelease(MouseEvent&)
@@ -1259,9 +1260,9 @@ void WaveformView::onMousePress(MouseEvent& e)
         float t = std::clamp(viewStart_ + (e.x - b.x) / b.w * (viewEnd_ - viewStart_), 0.f, 1.f);
         playhead_ = t;
         dragging_ = true;
-        onScrub.emit(t);
         markDirty();
         e.consumed = true;
+        onScrub.emit(t); // (last: a handler may take the widget out of the tree)
     }
     else if (e.button == 1 || e.button == 2) // right or middle: pans the view
     {
@@ -1280,8 +1281,8 @@ void WaveformView::onMouseMove(MouseEvent& e)
     {
         float t = std::clamp(viewStart_ + (e.x - b.x) / b.w * (viewEnd_ - viewStart_), 0.f, 1.f);
         playhead_ = t;
-        onScrub.emit(t);
         markDirty();
+        onScrub.emit(t);
     }
     else if (panning_)
     {

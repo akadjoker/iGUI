@@ -735,9 +735,9 @@ void PageView::setPage(int idx, Transition tr)
     for (int i = 0; i < static_cast<int>(pages_.size()); ++i)
         pages_[i]->setVisible(i == currentIdx_ || i == prevIdx_);
 
-    pageChanged.emit(currentIdx_);
     markDirty();
     WidgetApp::instance().requestLayout();
+    pageChanged.emit(currentIdx_); // (last: a handler may take the view out of the tree, see WidgetApp::hasGone)
 }
 
 void PageView::setPage(Widget* pg, Transition tr)

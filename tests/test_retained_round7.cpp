@@ -95,8 +95,10 @@ struct Witness
 // Builds the widget in the holder of the stage.
 // make(Stage&) -> W*; hook(W*, kill, late) connects kill to the signal under test and late to the later signals (may do neither);
 // drive(Stage&, W*) makes the signal come. events: a global event counter that must come in the control and not in the case.
+// killOn: the handler takes the widget out the killOn-th time the signal comes (a drag emits at each move, the first one may be
+// the press); the widget must not emit again after it.
 template<class W, class Make, class Hook, class Drive>
-void victim(const char* name, Make make, Hook hook, Drive drive, int witnesses = 0, const int* events = nullptr)
+void victim(const char* name, Make make, Hook hook, Drive drive, int witnesses = 0, const int* events = nullptr, int killOn = 1)
 {
     if (!wanted(name)) return;
     ++gCases;
@@ -111,7 +113,7 @@ void victim(const char* name, Make make, Hook hook, Drive drive, int witnesses =
         hook(w, [&calls](auto&&...) { ++calls; }, [&late](auto&&...) { ++late; });
         drive(st, w);
         st.h.frames(3);
-        const bool ok = calls >= 1 && (witnesses == 0 || late >= 1) && (!events || *events > e0);
+        const bool ok = calls >= killOn && (witnesses == 0 || late >= 1) && (!events || *events > e0);
         check(ok, say((String("CONTROL ") + name + " (the signal comes, and what follows it)").c_str(), mode).c_str());
         if (!ok)
         {
@@ -129,13 +131,17 @@ void victim(const char* name, Make make, Hook hook, Drive drive, int witnesses =
         int calls = 0, late = 0;
         const int e0 = events ? *events : 0;
         Widget* parent = w->parent();
-        hook(w, [&calls, &st, w, parent](auto&&...) {
-                    if (++calls == 1) parent->removeChild(w);
+        FloatWindow* floating = parent ? nullptr : widget_cast<FloatWindow>(w); // (a float window is not in a parent: the app removes it)
+        hook(w, [&calls, &st, w, parent, floating, killOn](auto&&...) {
+                    if (++calls != killOn) return;
+                    if (floating) st.app.removeFloat(floating);
+                    else
+                        parent->removeChild(w);
                 }, [&late](auto&&...) { ++late; });
         drive(st, w);
         st.h.frames(3);
         const bool out = st.app.hasGone(w, seen);
-        const bool ok = calls == 1 && out && late == 0 && (!events || *events == e0);
+        const bool ok = calls == killOn && out && late == 0 && (!events || *events == e0);
         check(ok, say(name, mode).c_str());
         if (!ok) printf("    handler ran %d times, out of the tree %d, later signals %d, global events %d\n", calls, out, late, events ? *events - e0 : 0);
     }
@@ -551,6 +557,298 @@ void testText()
             [](Stage& st, TextEdit* w) { st.act([w]() { w->setCursorPos(2, 1); }); });
 }
 
+// ---- AudioWidgets (the piano roll is the round 6's) and AutomotiveWidgets ----
+
+void testAudio()
+{
+    victim<Knob>("Knob.onChanged by setValue",
+            [](Stage& st) { return put<Knob>(st, 20.0f, 20.0f, 64.0f, 64.0f); },
+            [](Knob* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, Knob* w) { st.act([w]() { w->setValue(0.8f); }); });
+    victim<Knob>("Knob.onChanged by dragging",
+            [](Stage& st) { return put<Knob>(st, 20.0f, 20.0f, 64.0f, 64.0f); },
+            [](Knob* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, Knob* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 32.0f, r.y + 32.0f);
+                st.down(w);
+                st.drag(w, r.x + 32.0f, r.y + 2.0f);
+                st.up(w);
+            });
+    victim<Knob>("Knob.onChanged by the wheel",
+            [](Stage& st) { return put<Knob>(st, 20.0f, 20.0f, 64.0f, 64.0f); },
+            [](Knob* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, Knob* w) {
+                st.moveTo(w, 32.0f, 32.0f);
+                st.wheel(w, 1.0f);
+            });
+    victim<Fader>("Fader.onChanged by setValue",
+            [](Stage& st) { return put<Fader>(st, 20.0f, 20.0f, 40.0f, 160.0f); },
+            [](Fader* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, Fader* w) { st.act([w]() { w->setValue(0.3f); }); });
+    victim<Fader>("Fader.onChanged by a press on the track and a drag",
+            [](Stage& st) { return put<Fader>(st, 20.0f, 20.0f, 40.0f, 160.0f); },
+            [](Fader* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, Fader* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 20.0f, r.y + 100.0f);
+                st.down(w);
+                st.drag(w, r.x + 20.0f, r.y + 40.0f);
+                st.up(w);
+            });
+    victim<LinearKnob>("LinearKnob.onChanged by setValue",
+            [](Stage& st) { return put<LinearKnob>(st, 20.0f, 20.0f, 160.0f, 24.0f); },
+            [](LinearKnob* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, LinearKnob* w) { st.act([w]() { w->setValue(0.3f); }); });
+    victim<LinearKnob>("LinearKnob.onChanged by a press on the track",
+            [](Stage& st) { return put<LinearKnob>(st, 20.0f, 20.0f, 160.0f, 24.0f); },
+            [](LinearKnob* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, LinearKnob* w) {
+                st.moveTo(w, 120.0f, 12.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<ADSRWidget>("ADSRWidget.onChanged by dragging the attack handle",
+            [](Stage& st) {
+                ADSRWidget* w = put<ADSRWidget>(st, 20.0f, 20.0f, 300.0f, 120.0f);
+                w->setADSR(1.0f, 1.0f, 0.5f, 1.0f);
+                return w;
+            },
+            [](ADSRWidget* w, auto kill, auto) { w->onChanged.connect(kill); },
+            [](Stage& st, ADSRWidget* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 8.0f + 66.27f, r.y + 8.0f + 1.0f);
+                st.down(w);
+                st.drag(w, r.x + 8.0f + 100.0f, r.y + 20.0f);
+                st.up(w);
+            });
+    victim<WaveformView>("WaveformView.onScrub by a press",
+            [](Stage& st) { return put<WaveformView>(st, 20.0f, 20.0f, 300.0f, 100.0f); },
+            [](WaveformView* w, auto kill, auto) { w->onScrub.connect(kill); },
+            [](Stage& st, WaveformView* w) {
+                st.moveTo(w, 100.0f, 50.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<WaveformView>("WaveformView.onScrub by a drag (the second signal: the press scrubs too)",
+            [](Stage& st) { return put<WaveformView>(st, 20.0f, 20.0f, 300.0f, 100.0f); },
+            [](WaveformView* w, auto kill, auto) { w->onScrub.connect(kill); },
+            [](Stage& st, WaveformView* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 100.0f, r.y + 50.0f);
+                st.down(w);
+                st.drag(w, r.x + 120.0f, r.y + 50.0f);
+                st.up(w);
+            }, 0, nullptr, 2);
+}
+
+void testAutomotive()
+{
+    victim<RadialGauge>("RadialGauge.onValueChanged by setValue",
+            [](Stage& st) { return put<RadialGauge>(st, 20.0f, 20.0f, 160.0f, 160.0f); },
+            [](RadialGauge* w, auto kill, auto) { w->onValueChanged.connect(kill); },
+            [](Stage& st, RadialGauge* w) { st.act([w]() { w->setValue(120.0f); }); });
+    victim<PowerBar>("PowerBar.onValueChanged by setValue",
+            [](Stage& st) { return put<PowerBar>(st, 20.0f, 20.0f, 160.0f, 24.0f); },
+            [](PowerBar* w, auto kill, auto) { w->onValueChanged.connect(kill); },
+            [](Stage& st, PowerBar* w) { st.act([w]() { w->setValue(50.0f); }); });
+    victim<DriveMode>("DriveMode.onModeChanged by setMode",
+            [](Stage& st) {
+                DriveMode* w = put<DriveMode>(st, 20.0f, 20.0f, 200.0f, 28.0f);
+                w->addMode("Eco", Color(60, 200, 80, 255));
+                w->addMode("Sport", Color(220, 60, 60, 255));
+                return w;
+            },
+            [](DriveMode* w, auto kill, auto) { w->onModeChanged.connect(kill); },
+            [](Stage& st, DriveMode* w) { st.act([w]() { w->setMode(1); }); });
+    victim<DigitalSpeed>("DigitalSpeed.onValueChanged by setValue",
+            [](Stage& st) { return put<DigitalSpeed>(st, 20.0f, 20.0f, 160.0f, 60.0f); },
+            [](DigitalSpeed* w, auto kill, auto) { w->onValueChanged.connect(kill); },
+            [](Stage& st, DigitalSpeed* w) { st.act([w]() { w->setValue(88.0f); }); });
+    victim<BatteryGauge>("BatteryGauge.onPercentChanged by setPercent",
+            [](Stage& st) { return put<BatteryGauge>(st, 20.0f, 20.0f, 80.0f, 24.0f); },
+            [](BatteryGauge* w, auto kill, auto) { w->onPercentChanged.connect(kill); },
+            [](Stage& st, BatteryGauge* w) { st.act([w]() { w->setPercent(40.0f); }); });
+}
+
+// ---- ViewWidgets, AppWidgets, GizmoWidgets ----
+
+void testViews()
+{
+    auto floatWindow = [](Stage& st) {
+        FloatWindow* w = st.app.addFloat<FloatWindow>("window");
+        w->setFloatPos(40.0f, 40.0f);
+        w->setFloatSize(200.0f, 120.0f);
+        w->setClosable(true);
+        w->setMinimizable(true);
+        st.h.frames(2);
+        return w;
+    };
+    victim<FloatWindow>("FloatWindow.minimizedChanged by setMinimized", floatWindow,
+            [](FloatWindow* w, auto kill, auto) { w->minimizedChanged.connect(kill); },
+            [](Stage& st, FloatWindow* w) { st.act([w]() { w->setMinimized(true); }); });
+    victim<FloatWindow>("FloatWindow.minimizedChanged by a click on the minimize button", floatWindow,
+            [](FloatWindow* w, auto kill, auto) { w->minimizedChanged.connect(kill); },
+            [](Stage& st, FloatWindow* w) {
+                const float tb = w->titleBarHeight(); // (the window is at 40, 40 and 200 wide; the close button is the last one in the bar)
+                st.move(40.0f + 200.0f - tb * 1.5f, 40.0f + tb * 0.5f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<FloatWindow>("FloatWindow.closed by a click on the close button", floatWindow,
+            [](FloatWindow* w, auto kill, auto) { w->closed.connect(kill); },
+            [](Stage& st, FloatWindow* w) {
+                const float tb = w->titleBarHeight();
+                st.move(40.0f + 200.0f - tb * 0.5f, 40.0f + tb * 0.5f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<PageView>("PageView.pageChanged by setPage",
+            [](Stage& st) {
+                PageView* w = put<PageView>(st, 20.0f, 20.0f, 200.0f, 100.0f);
+                w->addPage<Label>("a");
+                w->addPage<Label>("b");
+                st.h.relayout();
+                return w;
+            },
+            [](PageView* w, auto kill, auto) { w->pageChanged.connect(kill); },
+            [](Stage& st, PageView* w) { st.act([w]() { w->setPage(1); }); });
+    victim<VideoCanvas>("VideoCanvas.viewChanged by setViewTransform",
+            [](Stage& st) { return put<VideoCanvas>(st, 20.0f, 20.0f, 300.0f, 200.0f); },
+            [](VideoCanvas* w, auto kill, auto) { w->viewChanged.connect(kill); },
+            [](Stage& st, VideoCanvas* w) { st.act([w]() { w->setViewTransform(2.0f, 10.0f, 10.0f); }); });
+}
+
+void testApp()
+{
+    victim<Breadcrumbs>("Breadcrumbs.itemClicked by a click on a segment",
+            [](Stage& st) {
+                Breadcrumbs* w = put<Breadcrumbs>(st, 20.0f, 20.0f, 300.0f, 28.0f);
+                ct::Vector<String> path;
+                path.push_back("home");
+                path.push_back("music");
+                path.push_back("album");
+                w->setPath(path);
+                st.h.frames(2);
+                return w;
+            },
+            [](Breadcrumbs* w, auto kill, auto) { w->itemClicked.connect(kill); },
+            [](Stage& st, Breadcrumbs* w) { st.click(w, 10.0f, 14.0f); });
+    auto search = [](Stage& st) {
+        SearchBar* w = put<SearchBar>(st, 20.0f, 20.0f, 240.0f, 28.0f);
+        w->setText("abc");
+        return w;
+    };
+    victim<SearchBar>("SearchBar.onTextChanged by typing", search,
+            [](SearchBar* w, auto kill, auto) { w->onTextChanged.connect(kill); },
+            [](Stage& st, SearchBar* w) { st.type(w, "d"); });
+    victim<SearchBar>("SearchBar.onTextChanged by Backspace", search,
+            [](SearchBar* w, auto kill, auto) { w->onTextChanged.connect(kill); },
+            [](Stage& st, SearchBar* w) { st.key(w, Key::Backspace); });
+    victim<SearchBar>("SearchBar.onSearch by Return", search,
+            [](SearchBar* w, auto kill, auto) { w->onSearch.connect(kill); },
+            [](Stage& st, SearchBar* w) { st.key(w, Key::Return); });
+    victim<SplitButton>("SplitButton.clicked by a click on the main button",
+            [](Stage& st) { return put<SplitButton>(st, 20.0f, 20.0f, 160.0f, 28.0f, "Go"); },
+            [](SplitButton* w, auto kill, auto) { w->clicked.connect(kill); },
+            [](Stage& st, SplitButton* w) { st.click(w, 20.0f, 14.0f); });
+    auto outliner = [](Stage& st) {
+        Outliner* w = put<Outliner>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        TreeNode* root = w->addRoot("scene");
+        root->addChild("child");
+        w->addRoot("other");
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    victim<Outliner>("Outliner.selectionChanged by a click on a row", outliner,
+            [](Outliner* w, auto kill, auto late) { w->selectionChanged.connect(kill); w->nodeActivated.connect(late); },
+            [](Stage& st, Outliner* w) {
+                st.moveTo(w, 80.0f, 11.0f);
+                MouseEvent unused;
+                (void) unused;
+                st.down(w);
+                st.up(w);
+            });
+    victim<Outliner>("Outliner.visibilityChanged by a click on the eye", outliner,
+            [](Outliner* w, auto kill, auto) { w->visibilityChanged.connect(kill); },
+            [](Stage& st, Outliner* w) { st.click(w, 300.0f - 40.0f + 4.0f, 11.0f); });
+    victim<Outliner>("Outliner.lockChanged by a click on the lock", outliner,
+            [](Outliner* w, auto kill, auto) { w->lockChanged.connect(kill); },
+            [](Stage& st, Outliner* w) { st.click(w, 300.0f - 20.0f + 4.0f, 11.0f); });
+    victim<RichText>("RichText.linkClicked by a click on a link",
+            [](Stage& st) {
+                RichText* w = put<RichText>(st, 20.0f, 20.0f, 300.0f, 100.0f);
+                w->setMarkdown("[a link](https://example.org/x) and text");
+                st.h.relayout();
+                st.h.frames(2);
+                return w;
+            },
+            [](RichText* w, auto kill, auto) { w->linkClicked.connect(kill); },
+            [](Stage& st, RichText* w) { st.click(w, 14.0f, 10.0f); });
+    victim<Viewport3D>("Viewport3D.onResize by the first paint",
+            [](Stage& st) { return put<Viewport3D>(st, 20.0f, 20.0f, 300.0f, 200.0f); },
+            [](Viewport3D* w, auto kill, auto) { w->onResize.connect(kill); },
+            [](Stage& st, Viewport3D* w) { w->setRect(Rect(20.0f, 20.0f, 320.0f, 210.0f)); st.h.frames(2); });
+    auto viewport = [](Stage& st) {
+        Viewport3D* w = put<Viewport3D>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        st.h.frames(2);
+        return w;
+    };
+    victim<Viewport3D>("Viewport3D.onOrbit by a drag", viewport,
+            [](Viewport3D* w, auto kill, auto) { w->onOrbit.connect(kill); },
+            [](Stage& st, Viewport3D* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 100.0f, r.y + 100.0f);
+                st.down(w, 1);
+                st.drag(w, r.x + 140.0f, r.y + 110.0f);
+                st.up(w, 1);
+            });
+    victim<Viewport3D>("Viewport3D.onPan by a right drag", viewport,
+            [](Viewport3D* w, auto kill, auto) { w->onPan.connect(kill); },
+            [](Stage& st, Viewport3D* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 100.0f, r.y + 100.0f);
+                st.down(w, 2);
+                st.drag(w, r.x + 140.0f, r.y + 110.0f);
+                st.up(w, 2);
+            });
+    victim<Viewport3D>("Viewport3D.onZoom by the wheel", viewport,
+            [](Viewport3D* w, auto kill, auto) { w->onZoom.connect(kill); },
+            [](Stage& st, Viewport3D* w) {
+                st.moveTo(w, 100.0f, 100.0f);
+                st.wheel(w, 1.0f);
+            });
+    auto gizmo = [](Stage& st) {
+        Gizmo2D* w = put<Gizmo2D>(st, 0.0f, 0.0f, 300.0f, 200.0f);
+        w->setPosition(100.0f, 100.0f);
+        st.h.frames(2);
+        return w;
+    };
+    victim<Gizmo2D>("Gizmo2D.onDragStart by a press on the handle", gizmo,
+            [](Gizmo2D* w, auto kill, auto) { w->onDragStart.connect(kill); },
+            [](Stage& st, Gizmo2D* w) {
+                st.move(100.0f, 100.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<Gizmo2D>("Gizmo2D.onTranslate by a drag", gizmo,
+            [](Gizmo2D* w, auto kill, auto) { w->onTranslate.connect(kill); },
+            [](Stage& st, Gizmo2D* w) {
+                st.move(100.0f, 100.0f);
+                st.down(w);
+                st.drag(w, 130.0f, 110.0f);
+                st.up(w);
+            });
+    victim<Gizmo2D>("Gizmo2D.onDragEnd by the release", gizmo,
+            [](Gizmo2D* w, auto kill, auto) { w->onDragEnd.connect(kill); },
+            [](Stage& st, Gizmo2D* w) {
+                st.move(100.0f, 100.0f);
+                st.down(w);
+                st.up(w);
+            });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -577,6 +875,10 @@ int main(int argc, char** argv)
     testLayout();
     testTabsToolsDock();
     testText();
+    testAudio();
+    testAutomotive();
+    testViews();
+    testApp();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)
