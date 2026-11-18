@@ -1,4 +1,75 @@
-# fonts-gl: the commit 1d57c00 (zenhtml-fonts-gl) brought onto main 1a77b1f
+# fonts-gl: the commit 1d57c00 (zenhtml-fonts-gl) brought onto main 1a77b1f (and, below, onto round 4)
+
+## fonts-gl-r4: the branch on top of round 4 (2e023fd), 2026-11-18
+
+`fonts-gl-r4` is `fonts-gl` (8a11320) rebased onto `igui-round4b` 2e023fd (47 commits over origin/main 1a77b1f). `fonts-gl` itself is untouched (it is the pushed one). The hashes in every section below this one are those of `fonts-gl`; here they are, old to new:
+
+| `fonts-gl` | `fonts-gl-r4` | what |
+|---|---|---|
+| d95866b | 0182b7a | FontAtlas page crop, `releasePixels`, `ZEN_SCREENSHOT_BACKEND=gl`, `defaultDynamicPage` |
+| cf3db2a | b57ae34 | tests that draw text with the baked pixels released |
+| fb89898 | 72166db | the offscreen target made and checked in `App::create` |
+| d3b325e | 9fde2c5 | `test_zen_screenshot_gl` |
+| 07e2a69 | 463d009 | the first version of this note |
+| eb5cfb8 | 75cfecc | RetainedBench: two comment notes |
+| 8a11320 | e0f8ab4 | the first bench answer (main 1a77b1f against the branch) |
+| (new) | c187aab | `testNewGlyphsAreMeasuredAndDrawnAfterTheAtlasPixelsAreReleased` and `Screen::useDynamicPage()` |
+| (new) | this note | the rebase and its results |
+
+### The rebase
+
+`git rebase --onto 2e023fd 1a77b1f`: all seven commits applied with no textual conflict (the places git was expected to flag did not overlap: round 4 added its two test targets next to `igui_retained_menus` and the branch's `igui_zen_screenshot_gl` block sits after the lifecycle one; round 4 added rows to `RetainedBench.cpp` in other places than the branch's 12 comment lines). Checked by hand that both sides are in the result: `git diff 2e023fd HEAD -- CMakeLists.txt` is only the 9 lines of the screenshot block (so `igui_retained_menus4b` and `igui_retained_round4b` are there, from round 4), `git diff 2e023fd HEAD -- bench` is only the two comment notes (the `frame_settext_*` and `chart/*` rows are there, they ran in the bench below), and `bench/retained/draw.hash` is not touched by the branch (it keeps round 4's `87b1fe59ac36adb1` for the editor and its charts line). Nothing was dropped from either side.
+
+### The draw hash
+
+`tools/check.sh` hash stage: PASS, the recorded values (editor `87b1fe59ac36adb1` with 300 and with 3000 clips, piano roll `7956122198be0670`, charts `957c5363d01cdd4a`) are what the tip draws; no recorded value was edited. This is expected and the reason is checked in the code: the checksum folds in the vertices (position, UV, colour), but the bench's `Harness` draws all text from the dynamic page (`Font::atHeight` gives a font of the page whenever the page exists, and the page is 1024x1024 whatever the baked page is) and never calls `SetWhitePixel`, so no baked-page UV (the glyphs of the baked font, the white pixel `0.5/height`) reaches the checksum. What the crop does change is those baked UVs (`v = y / height`, halved for a 512-row page), which the draw checksum cannot see; the software rasteriser samples the same texels (`v * height` is exact for a power of two), which is what the application screenshots below check, pixel by pixel.
+
+### Round 4's size hints and the atlas changes
+
+Round 4 made `Label`, `Button`, `ComboBox` (and `TextInput`) measure their text in `sizeHint()` (`WidgetApp::textWidth` -> `font->atHeight(Theme::fontSize)` -> `DrawList::calcTextSize` -> `Font::findGlyph`), i.e. during layout and before the first paint, so a glyph now enters the dynamic page when it is first measured, not when it is first drawn. With this branch that is safe, by these paths:
+
+- `releasePixels()` frees only `FontAtlas::pixels_`, the RAM copy of the baked page. `pixels_` is written in `FontAtlas::build()` and read by nothing but `pixels()` / `pixelSize()` (the host's upload); neither measuring nor drawing reads it. A hint measured after the release therefore needs nothing that was released.
+- A glyph whose first use is after the release goes `Font::findGlyph` (src/widgets/Retained.cpp:425) -> table miss -> `FontAtlas::bakeGlyph` (:302), which rasterises it from the face data (`stbtt` on `fc.info`, the TTF bytes the atlas keeps) into the dynamic page (`impl_->rgba`), sets `dirty`, and stores the glyph (UV in the 1024x1024 dynamic page) in the sized font's table. The page goes up in the same frame: `WidgetApp::paint` (for atlases added with `addDynamicAtlas`) and `ZenApp::frame` (for its own atlas) call `updateTexture(dynamicPixels())` after the paint and before the frame is drawn. A glyph measured during layout is therefore uploaded before it is drawn, in the same frame. A codepoint the face lacks becomes the question mark's glyph, as it always did.
+- The dynamic page is independent of the crop: its size (1024x1024) and the order glyphs enter it are the same as on round 4, so the UVs of dynamic glyphs are the same too (the only UV that moves is the baked page's, see the hash above).
+- `Config::defaultDynamicPage = false` (no dynamic page): `atHeight` returns the baked font itself, a hint measures with the baked font and a glyph that is not in a baked range is the question mark, measured and drawn alike, as before this branch; nothing is rasterised on demand.
+- A face added with `addFont` + `build()` after the release rebuilds `pixels_` from scratch and the host uploads again, as before (not used by ZenApp).
+
+The test that did not exist: `testNewGlyphsAreMeasuredAndDrawnAfterTheAtlasPixelsAreReleased` (tests/test_retained_textbounds.cpp, c187aab). The existing release test drew baked fonts only (`Screen(..., dynamicFonts=false)`, the software rasteriser could not read the dynamic page). `Screen::useDynamicPage()` (tests/RasterScreen.hpp) now makes the dynamic page a texture of the rasteriser, kept up to date by `WidgetApp::addDynamicAtlas` as in an application, called after the constructor that releases the baked pixels, which is ZenApp's order. The test builds a Label, a Button, a ComboBox and a TextInput with Cyrillic Zhe, Ef, Greek Omega and Latin Extended-A letters (in no baked range), asks all four for their `sizeHint()` before anything is painted (checks that this put the glyphs in the dynamic font, and that they were in no baked font before), runs the frames, and compares the window with the same window built with the baked pixels kept: equal hints, equal ink, and zero differing pixels. It has teeth: with the page update switched off (glyph pixels never reach the rasteriser) the check on the ink of the Label's rectangle fails. It passes in the Release and ASan+UBSan builds.
+
+### tools/check.sh --base 2e023fd --jobs 3 at c187aab
+
+nostd PASS (nothing new from the standard library, namespace or headers, in src, include and adapters since 2e023fd; the count in RasterScreen.hpp and in test_retained_textbounds.cpp is 0 before and after); release PASS 44/44; asan PASS 44/44; hash PASS. The same four PASS again on the tip that carries this note (it only adds this text). Dependencies: containers 34169bc, zen_plataform db76a13.
+
+### Bench: 2e023fd against fonts-gl-r4 (plain)
+
+`igui_retained_bench`, same method as below (bench source: round 4's, plus the 12 comment lines; Release, `-ffile-prefix-map`; core 8 with its sibling and the other cores idle before every run; 6 alternating runs per side; minima; 136 rows; the bench-only tip binary is byte-identical to the one in the check.sh Release tree). The runs were quiet this time (spread of most rows under 3%).
+
+- Text, idle and frame rows, tip against 2e023fd: `editor300/text_width_x100` +0.2%, `editor3000/text_width_x100` +0.2%, `bigtext/field100000_frame` 0.0%, `_type` +0.4%, `_key_left` +0.3%, `bigtext/line200000_key_left` +1.8%, `editor300/idle_frame` +0.5%, `editor3000/idle_frame` +0.3%, `timeline300/idle_frame` +0.2%, `timeline3000/idle_frame` +0.1%, all 36 editor-window rows (idle and its variants, paint, update, layout, resize, clip drag, hover and round 4's `frame_settext_*`) between -0.3% and +0.5%, `input/` and `text/` rows -1.1% to 0.0%, the grids -2.3% to +1.9%, `chart/*` -0.6% to +0.2% (except `bars_1000_frame` -3.4%), `loops/pianoroll_32_beats` -1.1%.
+- Rows over 3% (the 10 of 136): slower on the branch: `timeline300/idle_frame_all_visible` 100.89 -> 104.57 (+3.6%), `timeline3000/idle_frame_all_visible` 445.62 -> 465.78 (+4.5%), `softraster/cached_frame` 1166.4 -> 1221.8 (+4.7%). Faster: `editor*/label_sizehints` 1.14 -> 0.96 (-15.8%), `editor300/layout_only` -4.5%, `bigtext/doc20000_type` -4.8%, `chart/bars_1000_frame` -3.4%, `widget/checkbox_per_widget` 0.47 -> 0.45 and `widget/listbox_per_widget` 0.29 -> 0.28 (one printed digit).
+- Reading, `timeline*/idle_frame_all_visible` (idle frames, so checked further): placement, not code. (1) The same 6.67 million instructions: a ptrace single-stepper counted one frame of the 3000-clip timeline zoomed on all of it at 6668799 instructions on 2e023fd and 6668801 on the branch (1294595 and 1294597 for 300 clips). (2) The aligned pair (`-falign-functions/loops/jumps/labels=64`, 6 alternating runs): `timeline300/idle_frame_all_visible` 110.03 -> 106.32 (-3.4%, the sign flips), `timeline3000/idle_frame_all_visible` 475.35 -> 493.76 (+3.9%), `timeline300/idle_frame` 83.10 -> 79.51 and `timeline3000/idle_frame` 91.70 -> 88.49 (faster). (3) 2e023fd alone with 0, 16, 32, 48, 64, 128, 256, 400 NOP bytes appended to `BasicWidgets.o`: `timeline3000/idle_frame_all_visible` spans 446.14 to 487.64 (9.3%) and `timeline300/idle_frame_all_visible` 100.71 to 108.21 (7.4%); the branch (465.8, 104.6) sits inside both ranges. (4) Function bytes: eight functions differ between the two binaries: `FontAtlas::build` (the crop) and, because GCC makes different inlining choices in the same translation unit, `DrawList::appendIndices`, `DrawList::addTriangleFilled` and the growth paths `ct::Vector<TransformEntry/ClipEntry/DrawVertex>::grow` (`HeapAlloc::allocate/reallocate` inlined or not on the cold growth path; the instruction counts above show the work in the frame is the same); everything else, including all the text code (`findGlyph`, `calcTextSize`, `textWidth`, the HashMap functions, the `Label`/`Button` hints), is equal.
+- `softraster/cached_frame`: the same effect as before (the cropped baked page frees 4 MB blocks instead of 8 MB, which lowers glibc's dynamic `mmap` threshold, so the two 5.76 MB buffers are `mmap` chunks instead of heap): with `GLIBC_TUNABLES=glibc.malloc.mmap_threshold=33554432` on both sides 1231.8 against 1245.9 (+1.1%); default 1251.4 against 1308.6 (+4.6%), 5 alternating runs on a busier machine.
+- `label_sizehints` -15.8%: faster, and the functions it runs are byte-equal, so it is placement in the favourable direction.
+
+### ZenDAW and ZenVideo against the round 4 screenshots
+
+Copies under `SP/igf/apps/{base,tip}/{ZenDAW,ZenVideo}` (rsync from the real folders without `build`/`.git`, which are identical to round 4's copies; `third_party/iGUI` replaced by `git archive` of 2e023fd and of fonts-gl-r4), built Release, run the way round 4's agent did: ZenDAW through the same environment as `tools/run_hidden.sh --size 1280x800` (private Xvfb through `xvfb-run -a`, capped scope, scratch HOME/XDG/`ZENDAW_DATA`, `ZENDAW_AUDIO=null`) with `--null-audio`, and once with `examples/house.zdp`; ZenVideo in `xvfb-run -a` with `ZENVIDEO_NULL_AUDIO=1` and HOME/XDG/`ZENVIDEO_DATA` redirected; `ZEN_SCREENSHOT=file.ppm ZEN_SCREENSHOT_FRAME=60`. Both apps use the default atlas of `ZenApp` (the crop, `releasePixels` and the dynamic page).
+
+| screenshot | 2e023fd build against round 4's file | fonts-gl-r4 build against round 4's file | fonts-gl-r4 against the 2e023fd build |
+|---|---|---|---|
+| ZenDAW 1280x800 | 0 differing pixels | 0 | 0 |
+| ZenDAW `house.zdp` 1280x800 | 0 | 0 | 0 |
+| ZenVideo 1440x860 | 0 | 0 | 0 |
+
+(The first column shows the method reproduces round 4's files exactly, so a difference would have been the branch's.) Resident memory of the app process (`VmRSS` read from /proc every 0.2 s until it exits; the last sample is at the screenshot frame, the app closes right after it; three runs each, MB):
+
+| app | 2e023fd | fonts-gl-r4 | |
+|---|---|---|---|
+| ZenDAW | 188.0, 188.1, 188.2 | 172.3, 175.7, 175.8 | about -12 to -16 |
+| ZenDAW `house.zdp` (1 run) | 194.7 | 182.2 | -12.5 |
+| ZenVideo | 271.6, 271.6, 271.8 | 254.4, 254.6, 259.6 | about -12 to -17 |
+
+What is left: a window with a real OpenGL context was not compared (the screenshots are drawn by the software rasteriser; the GL path is covered by `igui_zen_screenshot_gl` and by the offscreen `ZEN_SCREENSHOT_BACKEND=gl`).
+
 
 Branch `fonts-gl`, based on `origin/main` 1a77b1f, fast-forwardable (origin/main is an ancestor). Commits:
 
