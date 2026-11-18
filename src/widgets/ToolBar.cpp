@@ -136,6 +136,25 @@ int ToolBar::addSpacer()
     return items_.back().id;
 }
 
+int ToolBar::addItemWithId(int id, ItemType type, int iconIndex, IconId icon, const String& tooltip, bool checked)
+{
+    constexpr int kMaxId = 1 << 30; // (so that the next id cannot overflow)
+    Item it;
+    it.id = (id >= 1 && id < kMaxId && !findItem(id)) ? id : nextId_;
+    it.type = type;
+    if (type == ItemType::Button || type == ItemType::Toggle)
+    {
+        it.iconIndex = iconIndex;
+        it.iconId = icon;
+        it.tooltip = tooltip;
+        it.checked = type == ItemType::Toggle && checked;
+    }
+    if (it.id >= nextId_) nextId_ = it.id + 1;
+    items_.push_back(it); // (a copy: Item is small)
+    markDirty();
+    return items_.back().id;
+}
+
 void ToolBar::removeItem(int id)
 {
     items_.erase(std::remove_if(items_.begin(), items_.end(),

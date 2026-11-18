@@ -870,6 +870,128 @@ void testHandlerDeletesTheSlider()
     }
 }
 
+// ---- item 6: a loaded tool bar keeps the ids it was saved with ----
+
+ToolBar* firstToolBar(Widget* loaded)
+{
+    if (!loaded) return nullptr;
+    for (Widget* c: loaded->children())
+        if (ToolBar* bar = widget_cast<ToolBar>(c)) return bar;
+    return nullptr;
+}
+
+// What an application keeps of a bar: the id of each of its items by what they say (the tooltip).
+int idOf(const ToolBar& bar, const char* tooltip)
+{
+    for (int i = 0; i < bar.itemCount(); ++i)
+        if (bar.itemTooltip(bar.itemIdAt(i)) == String(tooltip)) return bar.itemIdAt(i);
+    return -1;
+}
+
+void testToolBarKeepsItsIdsAfterRemovalsAndDrags()
+{
+    WidgetSerializer::registerBuiltinTypes();
+    {
+        // items removed: the ids that are left are not 1, 2, 3 in the order of the bar, and the application's handlers know them
+        BoxLayout root(LayoutDir::Vertical);
+        ToolBar* bar = root.createChild<ToolBar>();
+        const int a = bar->addButton(IconId::Gear, "A");
+        const int b = bar->addButton(IconId::Folder, "B");
+        const int c = bar->addToggle(IconId::File, "C", true);
+        const int d = bar->addButton(3, "D");
+        bar->addSeparator();
+        const int f = bar->addToggle(IconId::Gear, "F");
+        bar->removeItem(b);
+        bar->removeItem(d);
+        const int g = bar->addButton(IconId::Folder, "G");
+        const json saved = WidgetSerializer::save(&root);
+        BoxLayout destination(LayoutDir::Vertical);
+        ToolBar* copy = firstToolBar(WidgetSerializer::load(saved, &destination));
+        check(copy != nullptr && copy->itemCount() == bar->itemCount(), "(the bar with items removed is loaded)");
+        if (!copy) return;
+        bool same = true;
+        for (int i = 0; i < bar->itemCount(); ++i)
+            if (copy->itemIdAt(i) != bar->itemIdAt(i)) same = false;
+        check(same, "a bar that had items removed is loaded with the ids it was saved with");
+        if (!same)
+            for (int i = 0; i < copy->itemCount(); ++i) printf("    item %d: id %d, saved with %d\n", i, copy->itemIdAt(i), bar->itemIdAt(i));
+        check(idOf(*copy, "A") == a && idOf(*copy, "C") == c && idOf(*copy, "F") == f && idOf(*copy, "G") == g, "so the id an application kept for \"C\" is still the id of \"C\"");
+        check(copy->itemType(c) == ToolBar::ItemType::Toggle && copy->isItemChecked(c), "(and the item that has it is the toggle that was checked)");
+        // the next one added to the loaded bar does not take an id that is in use
+        const int next = copy->addButton(IconId::Gear, "new");
+        bool free = true;
+        for (int i = 0; i < copy->itemCount(); ++i)
+            if (copy->itemIdAt(i) == next && copy->itemTooltip(next) != String("new")) free = false;
+        check(free && next > g, "and the next item added to the loaded bar gets an id past all of them");
+    }
+    {
+        // dragged: the order changed and each id went with its item
+        Harness h(480.0f, 120.0f, false);
+        ToolBar* bar = h.root()->createChild<ToolBar>();
+        bar->setRect(Rect(0.0f, 0.0f, 300.0f, 34.0f));
+        const int a = bar->addButton(IconId::Gear, "A");
+        const int b = bar->addButton(IconId::Folder, "B");
+        const int c = bar->addButton(IconId::File, "C");
+        h.relayout();
+        Rect ra, rb;
+        check(bar->itemRect(a, ra) && bar->itemRect(b, rb), "(the items have rectangles)");
+        WidgetApp& app = h.app;
+        app.feedMouseMove(ra.x + ra.w * 0.5f, ra.y + ra.h * 0.5f);
+        app.feedMouseButton(0, true);
+        app.feedMouseMove(rb.x + rb.w * 0.5f + 6.0f, rb.y + rb.h * 0.5f);
+        app.feedMouseMove(rb.x + rb.w * 0.5f + 12.0f, rb.y + rb.h * 0.5f);
+        app.feedMouseButton(0, false);
+        check(bar->itemIdAt(0) == b && bar->itemIdAt(1) == a && bar->itemIdAt(2) == c, "(the drag put B first: the ids are 2, 1, 3)");
+        const json saved = WidgetSerializer::save(h.root());
+        BoxLayout destination(LayoutDir::Vertical);
+        Widget* loaded = WidgetSerializer::load(saved, &destination);
+        ToolBar* copy = firstToolBar(loaded);
+        check(copy && copy->itemIdAt(0) == b && copy->itemIdAt(1) == a && copy->itemIdAt(2) == c, "a bar that was dragged is loaded with the ids 2, 1, 3, each with its item");
+        check(copy && copy->itemTooltip(copy->itemIdAt(0)) == String("B") && copy->itemTooltip(copy->itemIdAt(1)) == String("A"), "(B and A, in that order)");
+    }
+}
+
+void testToolBarLoadsFilesWithoutIdsAndWithBadOnes()
+{
+    WidgetSerializer::registerBuiltinTypes();
+    // a file saved before the ids were in it: given again from 1, in the order of the list
+    const char* old = "{\"type\":\"BoxLayout\",\"children\":[{\"type\":\"ToolBar\",\"items\":[{\"type\":\"Button\",\"icon\":1,\"tooltip\":\"A\"},"
+                      "{\"type\":\"Separator\"},{\"type\":\"Toggle\",\"cell\":2,\"tooltip\":\"C\",\"checked\":true}]}]}";
+    json::Error error;
+    const json oldFile = json::parse(String(old), &error);
+    check(!error, "(the old file parses)");
+    BoxLayout destination(LayoutDir::Vertical);
+    ToolBar* bar = firstToolBar(WidgetSerializer::load(oldFile, &destination));
+    check(bar && bar->itemCount() == 3 && bar->itemIdAt(0) == 1 && bar->itemIdAt(1) == 2 && bar->itemIdAt(2) == 3, "a file saved before round 6, with no ids, loads with the ids 1, 2, 3 as it always did");
+    check(bar && bar->itemType(3) == ToolBar::ItemType::Toggle && bar->isItemChecked(3) && bar->itemCell(3) == 2, "(and every other thing of the items as it was)");
+    // a file made by hand: ids that are repeated, zero, negative, enormous, not numbers, and one that is fine
+    const char* odd = "{\"type\":\"BoxLayout\",\"children\":[{\"type\":\"ToolBar\",\"items\":[{\"id\":5,\"tooltip\":\"one\"},{\"id\":5,\"tooltip\":\"two\"},"
+                      "{\"id\":0,\"tooltip\":\"three\"},{\"id\":-3,\"tooltip\":\"four\"},{\"id\":99999999999,\"tooltip\":\"five\"},{\"id\":\"x\",\"tooltip\":\"six\"},"
+                      "{\"id\":2,\"type\":\"Spacer\"},{\"id\":1.5,\"tooltip\":\"seven\"}]}]}";
+    const json oddFile = json::parse(String(odd), &error);
+    check(!error, "(the odd file parses)");
+    BoxLayout destination2(LayoutDir::Vertical);
+    ToolBar* odd2 = firstToolBar(WidgetSerializer::load(oddFile, &destination2));
+    check(odd2 && odd2->itemCount() == 8, "every item of a file with bad ids is an item");
+    if (!odd2) return;
+    bool distinct = true, positive = true;
+    for (int i = 0; i < odd2->itemCount(); ++i)
+    {
+        if (odd2->itemIdAt(i) < 1) positive = false;
+        for (int j = i + 1; j < odd2->itemCount(); ++j)
+            if (odd2->itemIdAt(i) == odd2->itemIdAt(j)) distinct = false;
+    }
+    check(distinct && positive, "and their ids are all different and from 1 up (the repeated, zero, negative, enormous and not numbers get the next one)");
+    check(odd2->itemIdAt(0) == 5 && odd2->itemIdAt(6) == 2, "the ones that were fine (5, and 2 on the spacer) are kept");
+    // the new API on its own
+    ToolBar bar2;
+    check(bar2.addItemWithId(7, ToolBar::ItemType::Button, -1, IconId::Gear, "seven") == 7, "addItemWithId gives the id asked for");
+    check(bar2.addButton(IconId::Folder, "next") == 8, "and the next id of addButton goes on past it");
+    check(bar2.addItemWithId(7, ToolBar::ItemType::Toggle, 3, IconId::None, "again", true) == 9, "an id that is taken gives the next one");
+    check(bar2.addItemWithId(0, ToolBar::ItemType::Separator) == 10 && bar2.addItemWithId(-4, ToolBar::ItemType::Spacer) == 11, "zero and a negative one give the next one too");
+    check(bar2.itemType(9) == ToolBar::ItemType::Toggle && bar2.isItemChecked(9) && bar2.itemCell(9) == 3 && bar2.itemTooltip(7) == String("seven"), "(with what the kind has: cell, tooltip, checked)");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -888,6 +1010,8 @@ int main(int argc, char** argv)
     RUN(testHandlerDeletesTheMenu);
     RUN(testHandlerDeletesTheListBox);
     RUN(testHandlerDeletesTheSlider);
+    RUN(testToolBarKeepsItsIdsAfterRemovalsAndDrags);
+    RUN(testToolBarLoadsFilesWithoutIdsAndWithBadOnes);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

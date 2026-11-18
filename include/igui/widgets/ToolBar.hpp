@@ -91,6 +91,16 @@ public:
     /// @brief Add a flexible spacer.
     int addSpacer();
 
+    /// @brief Add an item with the id it is to have: what a bar that is loaded does, so that the ids it was saved with (after
+    ///        items were removed or dragged to another place they are not 1, 2, 3 in the order of the bar) are the ids the
+    ///        application's handlers know. @p id is kept when it is from 1 to 2^30 and no item has it; otherwise (zero,
+    ///        negative, huge, or taken) the item gets the next id, as addButton does, and that is what is returned. The next
+    ///        id of addButton and the others goes on from the biggest there is. @p iconIndex (a grid cell, -1 for none) or
+    ///        @p icon, @p tooltip and @p checked are used by the kinds that have them (Button, Toggle); a Separator or Spacer
+    ///        takes only the id.
+    int addItemWithId(int id, ItemType type, int iconIndex = -1, IconId icon = IconId::None, const String& tooltip = "",
+            bool checked = false);
+
     /// @brief Remove an item by id.
     void removeItem(int id);
 

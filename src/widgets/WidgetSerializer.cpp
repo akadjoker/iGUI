@@ -585,13 +585,15 @@ json WidgetSerializer::save(const Widget* root)
         j["spacing"] = w->spacing();
         // The items, in the order they are drawn (a drag may have moved them). What is left out is what a file cannot
         // hold: the sprite sheet (image or texture, and its cell size), the images registered at run time (only the
-        // built-in icons survive, as in the SideTabBar), the connections to buttonClicked and toggleChanged, and the
-        // ids (they are given again, from 1, in this order when the bar is loaded).
+        // built-in icons survive, as in the SideTabBar) and the connections to buttonClicked and toggleChanged. The id of
+        // every item is saved (a bar that had items removed or dragged has ids that are not 1, 2, 3 in this order): a file
+        // without them (saved before round 6) is loaded with the ids given again, from 1, in the order of the list.
         json items = json::array();
         for (int i = 0; i < w->itemCount(); ++i)
         {
             const int id = w->itemIdAt(i);
             json ij = json::object();
+            ij["id"] = id;
             const ToolBar::ItemType kind = w->itemType(id);
             ij["type"] = kind == ToolBar::ItemType::Toggle ? "Toggle"
                     : kind == ToolBar::ItemType::Separator ? "Separator"
@@ -1073,25 +1075,33 @@ void WidgetSerializer::registerBuiltinTypes()
                         const String tooltip = ij.contains("tooltip") ? jsonValue<String>(ij["tooltip"]) : String();
                         const bool toggle = kind == "Toggle";
                         const bool checked = toggle && ij.contains("checked") && jsonValue<bool>(ij["checked"]);
-                        int id = -1;
-                        if (kind == "Separator") id = w->addSeparator();
-                        else if (kind == "Spacer")
-                            id = w->addSpacer();
-                        else if (ij.contains("cell"))
+                        // the id the item was saved with (none, or one that cannot be: the next one)
+                        int wantedId = -1;
+                        if (ij.contains("id"))
                         {
-                            const int cell = jsonValue<int>(ij["cell"]);
-                            id = toggle ? w->addToggle(cell, tooltip, checked) : w->addButton(cell, tooltip);
+                            const long long raw = static_cast<long long>(ij["id"].as_int(-1));
+                            wantedId = raw >= 1 && raw < (1ll << 30) ? static_cast<int>(raw) : -1;
                         }
+                        int id = -1;
+                        if (kind == "Separator") id = w->addItemWithId(wantedId, ToolBar::ItemType::Separator);
+                        else if (kind == "Spacer")
+                            id = w->addItemWithId(wantedId, ToolBar::ItemType::Spacer);
                         else
                         {
-                            // Only the built-in icons survive a save: image icons are textures registered at run time.
-                            IconId icon = IconId::None;
-                            if (ij.contains("icon"))
+                            const ToolBar::ItemType itemType = toggle ? ToolBar::ItemType::Toggle : ToolBar::ItemType::Button;
+                            if (ij.contains("cell"))
+                                id = w->addItemWithId(wantedId, itemType, jsonValue<int>(ij["cell"]), IconId::None, tooltip, checked);
+                            else
                             {
-                                const int raw = jsonValue<int>(ij["icon"]);
-                                if (raw > 0 && raw < static_cast<int>(IconId::COUNT)) icon = static_cast<IconId>(raw);
+                                // Only the built-in icons survive a save: image icons are textures registered at run time.
+                                IconId icon = IconId::None;
+                                if (ij.contains("icon"))
+                                {
+                                    const int raw = jsonValue<int>(ij["icon"]);
+                                    if (raw > 0 && raw < static_cast<int>(IconId::COUNT)) icon = static_cast<IconId>(raw);
+                                }
+                                id = w->addItemWithId(wantedId, itemType, -1, icon, tooltip, checked);
                             }
-                            id = toggle ? w->addToggle(icon, tooltip, checked) : w->addButton(icon, tooltip);
                         }
                         if (ij.contains("enabled")) w->setItemEnabled(id, jsonValue<bool>(ij["enabled"]));
                         if (ij.contains("visible")) w->setItemVisible(id, jsonValue<bool>(ij["visible"]));
