@@ -88,6 +88,11 @@ private:
     ct::Vector<String> items_;
     int selectedIndex_ = -1;
     int maxVisible_ = 8;
+    // the width of the widest item as measured, for sizeHint: worked out once and kept while the items, the font and
+    // the text height stay the same (a hint that measured every item would cost that for each layout pass)
+    mutable float widestItem_ = -1.0f;
+    mutable const ig::retained::Font* widestFont_ = nullptr;
+    mutable float widestHeight_ = 0.0f;
 
     friend class ComboPopup_;
 };

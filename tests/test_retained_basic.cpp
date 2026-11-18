@@ -8,6 +8,7 @@
 #include <igui/widgets/AppWidgets.hpp>
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
+#include <igui/widgets/ComboBox.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 #include <igui/widgets/ViewWidgets.hpp>
 
@@ -453,6 +454,63 @@ void testAutomaticLayoutKeepsHandPlacedWidgets()
     check(late->rect().w == 640.0f && late->rect().h == 480.0f, "a widget just added to the stage takes the window");
 }
 
+// ---- Label and ComboBox ask for the width of their text as measured ----
+
+void testLabelAndComboHintsAreMeasured()
+{
+    Harness h(640.0f, 480.0f); // with dynamic fonts: the text height changes what is measured
+    h.frames(2);
+    const Theme& t = Theme::instance();
+    WidgetApp& app = h.app;
+    BoxLayout* box = h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    String narrow, wide, longText;
+    for (int i = 0; i < 24; ++i) narrow += "i";
+    for (int i = 0; i < 12; ++i) wide += "W";
+    for (int i = 0; i < 400; ++i) longText += "Entrevista com Acao ";
+    Label* a = box->createChild<Label>(narrow);
+    Label* b = box->createChild<Label>(wide);
+    Label* elided = box->createChild<Label>(longText);
+    elided->setElide(true);
+    Label* shortElided = box->createChild<Label>(String("ok"));
+    shortElided->setElide(true);
+    h.relayout();
+    const float narrowReal = app.textWidth(narrow.c_str()), wideReal = app.textWidth(wide.c_str());
+    check(narrowReal < narrow.size() * t.fontSize * 0.6f - 20.0f, "(the narrow text really is narrower than its estimate)");
+    check(fabsf(a->sizeHint().x - (narrowReal + t.padding * 2)) < 0.01f, "a Label asks for the measured width of a narrow text");
+    check(fabsf(b->sizeHint().x - (wideReal + t.padding * 2)) < 0.01f, "and of a wide one");
+    const float dots = app.textWidth("...") + t.padding * 2;
+    check(fabsf(elided->sizeHint().x - dots) < 0.01f, "an eliding Label with a long text asks for the width of its dots");
+    check(shortElided->sizeHint().x <= dots + 0.01f && shortElided->sizeHint().x > t.padding * 2, "an eliding Label never asks for more than its text");
+    // a scroll area's content is not widened by an eliding label (the hint of a column of them is the hint of the widest
+    // thing that does not elide)
+    check(box->sizeHint().x < 4.0f * t.fontSize * 12.0f, "a column with an eliding long label stays narrow");
+
+    ComboBox* combo = box->createChild<ComboBox>();
+    for (int i = 0; i < 3; ++i) combo->addItem(narrow);
+    const float narrowCombo = combo->sizeHint().x;
+    check(narrowCombo > 100.0f && fabsf(narrowCombo - (narrowReal + t.padding * 3 + 16.0f)) < 0.01f,
+            "a ComboBox of narrow items asks for the measured width of the widest");
+    combo->addItem(wide + wide + wide);
+    const float wideReal3 = app.textWidth((wide + wide + wide).c_str());
+    check(fabsf(combo->sizeHint().x - (wideReal3 + t.padding * 3 + 16.0f)) < 0.01f, "an item added afterwards is in the hint");
+    combo->clear();
+    check(combo->sizeHint().x == 100.0f, "an emptied ComboBox asks for 100");
+    Theme saved = Theme::instance();
+    combo->addItem(wide);
+    const float before = combo->sizeHint().x;
+    Theme::instance().fontSize = t.fontSize * 1.5f;
+    check(combo->sizeHint().x > before, "the hint follows the text height");
+    Theme::instance() = saved;
+    // a ComboBox with a font of its own is measured with it, and the remembered width follows a change of font
+    const float withTheme = combo->sizeHint().x;
+    const Font* big = h.font()->atHeight(t.fontSize * 2.0f);
+    combo->setFont(big);
+    const float bigWidth = app.textWidth(wide.c_str(), big) + t.padding * 3 + 16.0f;
+    check(bigWidth > withTheme && fabsf(combo->sizeHint().x - bigWidth) < 0.01f, "a ComboBox measures its items with its own font");
+    combo->setFont(nullptr);
+    check(fabsf(combo->sizeHint().x - withTheme) < 0.01f, "and with the theme's again when the font is taken off");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -469,6 +527,7 @@ int main(int argc, char** argv)
     RUN(testLayoutRunsByItself);
     RUN(testAutomaticLayoutKeepsHandPlacedWidgets);
     RUN(testImageButtonStates);
+    RUN(testLabelAndComboHintsAreMeasured);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

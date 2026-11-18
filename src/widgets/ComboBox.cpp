@@ -154,7 +154,9 @@ ComboBox::ComboBox()
 void ComboBox::addItem(const String& text)
 {
     items_.push_back(text);
+    widestItem_ = -1.0f;
     markDirty();
+    invalidateLayout();
 }
 
 void ComboBox::insertItem(int index, const String& text)
@@ -163,7 +165,9 @@ void ComboBox::insertItem(int index, const String& text)
     if (index > static_cast<int>(items_.size())) index = static_cast<int>(items_.size());
     items_.insert(items_.begin() + index, text);
     if (selectedIndex_ >= index) ++selectedIndex_;
+    widestItem_ = -1.0f;
     markDirty();
+    invalidateLayout();
 }
 
 void ComboBox::removeItem(int index)
@@ -177,14 +181,18 @@ void ComboBox::removeItem(int index)
     }
     else if (selectedIndex_ > index)
         --selectedIndex_;
+    widestItem_ = -1.0f;
     markDirty();
+    invalidateLayout();
 }
 
 void ComboBox::clear()
 {
     items_.clear();
     selectedIndex_ = -1;
+    widestItem_ = -1.0f;
     markDirty();
+    invalidateLayout();
 }
 
 const String& ComboBox::itemText(int index) const
@@ -198,7 +206,9 @@ void ComboBox::setItemText(int index, const String& text)
     if (index >= 0 && index < static_cast<int>(items_.size()))
     {
         items_[index] = text;
+        widestItem_ = -1.0f;
         markDirty();
+        invalidateLayout();
     }
 }
 
@@ -222,12 +232,23 @@ void ComboBox::setSelectedIndex(int idx)
 Widget::Vec2f ComboBox::sizeHint() const
 {
     const auto& t = Theme::instance();
-    float w = 100.0f;
-    for (auto& it: items_)
+    // the widest item as the font measures it (the estimate of 0.6 em a letter where there is no font), remembered
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
+    if (widestItem_ < 0.0f || widestFont_ != font || widestHeight_ != t.fontSize)
     {
-        float tw = it.size() * t.fontSize * 0.6f + t.padding * 3 + 16;
-        if (tw > w) w = tw;
+        float widest = 0.0f;
+        for (auto& it: items_)
+        {
+            float tw = it.empty() ? 0.0f : WidgetApp::instance().textWidth(it.c_str(), overrideFont_);
+            if (!(tw > 0.0f)) tw = it.size() * t.fontSize * 0.6f;
+            if (tw > widest) widest = tw;
+        }
+        widestItem_ = widest;
+        widestFont_ = font;
+        widestHeight_ = t.fontSize;
     }
+    float w = widestItem_ + t.padding * 3 + 16;
+    if (w < 100.0f) w = 100.0f;
     return { w, t.inputHeight };
 }
 

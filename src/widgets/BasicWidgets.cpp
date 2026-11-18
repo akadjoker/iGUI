@@ -45,8 +45,25 @@ void Label::setAlign(TextAlign a)
 Widget::Vec2f Label::sizeHint() const
 {
     const auto& t = Theme::instance();
-    // paint cuts the text at the label's rectangle, so a rectangle of this size must hold all of it.
-    const float w = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
+    // The width of the text as the font measures it (the estimate of 0.6 em a letter only where there is no font to measure
+    // with). An eliding label asks for no more than a few dots: paint cuts it to whatever room the layout gives it, and a
+    // long text must not widen what it sits in (a scroll area's content, a row of a panel); give it room with a stretch.
+    float w = 0.0f;
+    if (!text_.empty())
+    {
+        const float estimate = text_.size() * t.fontSize * 0.6f;
+        const float room = elide_ ? WidgetApp::instance().textWidth("...", overrideFont_) : 0.0f;
+        if (elide_ && room > 0.0f && estimate > room)
+        {
+            w = room; // measuring a long text to ask for less than that would be the cost for nothing
+        }
+        else
+        {
+            w = WidgetApp::instance().textWidth(text_.c_str(), overrideFont_);
+            if (!(w > 0.0f)) w = estimate;
+            if (elide_ && room > 0.0f && w > room) w = room;
+        }
+    }
     return { w + t.padding * 2, t.fontSize + t.padding * 2 };
 }
 

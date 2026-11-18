@@ -38,10 +38,14 @@ public:
         return align_;
     }
     /// @brief Cut the text with "..." when it is wider than the widget (off by default: a label
-    /// normally takes the size of its text).
+    /// normally takes the size of its text). An eliding label asks for no more than a few dots as
+    /// its size hint, so a long text does not widen what it sits in: give it room with setStretch()
+    /// (in a horizontal row) or the width of its parent (in a vertical one).
     void setElide(bool on)
     {
+        if (elide_ == on) return;
         elide_ = on;
+        invalidateLayout();
     }
     bool elide() const
     {
