@@ -6,6 +6,7 @@
 
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
+#include "StageHarness.hpp"
 
 #include <unistd.h>
 
@@ -496,90 +497,6 @@ void testPianoRollLaneDrawsOneBarForEachColumn()
 // setValue(): the removal deletes at once, and a widget that touches itself after the signal reads freed memory: AddressSanitizer
 // stops the program there). The widget must go no further than the signal (WidgetApp::hasGone): nothing more is emitted, nothing
 // of it is read.
-
-const char* modeName(int mode)
-{
-    return mode == 0 ? "in a frame" : "outside a frame";
-}
-
-String say(const char* what, int mode)
-{
-    return String(what) + ", " + modeName(mode);
-}
-
-// A holder widget that fills a window, and what is needed to point at it by feeding events (mode 0) or by calling the widget (mode 1).
-struct Stage
-{
-    explicit Stage(int mode_) : screen(480.0f, 260.0f), h(screen.h), app(WidgetApp::instance()), mode(mode_)
-    {
-        holder = h.root()->createChild<Widget>();
-        holder->setRect(Rect(0.0f, 0.0f, 480.0f, 260.0f));
-    }
-    Harness& harness()
-    {
-        return h;
-    }
-    bool gone() const
-    {
-        return holder->children().empty();
-    }
-    // the pointer: moved (a frame), or just remembered (the widget is called directly)
-    void move(float x, float y)
-    {
-        px = x;
-        py = y;
-        if (mode == 0) app.feedMouseMove(x, y);
-    }
-    // a button down and up on a widget, as an event of the app (mode 0) or as a call of its handlers (mode 1)
-    void down(Widget* target, int button = 0)
-    {
-        if (mode == 0)
-        {
-            app.feedMouseButton(button, true);
-            return;
-        }
-        if (gone()) return;
-        MouseEvent e = event(target, button);
-        target->onMousePress(e);
-    }
-    void up(Widget* target, int button = 0)
-    {
-        if (mode == 0)
-        {
-            app.feedMouseButton(button, false);
-            return;
-        }
-        if (gone()) return;
-        MouseEvent e = event(target, button);
-        target->onMouseRelease(e);
-    }
-    void drag(Widget* target, float x, float y)
-    {
-        move(x, y);
-        if (mode == 1 && !gone())
-        {
-            MouseEvent e = event(target, 0);
-            target->onMouseMove(e);
-        }
-    }
-    MouseEvent event(Widget* target, int button) const
-    {
-        MouseEvent e;
-        e.x = px;
-        e.y = py;
-        e.button = button;
-        const Rect r = target->absoluteRect();
-        e.localX = px - r.x;
-        e.localY = py - r.y;
-        return e;
-    }
-    Screen screen;
-    Harness& h;
-    WidgetApp& app;
-    int mode;
-    Widget* holder = nullptr;
-    float px = 0.0f, py = 0.0f;
-};
 
 // The piano roll in the holder: 400x200 at (20, 20), keys 36 wide, 12 rows of 12 pixels (48 to 59), 8 beats over 364 pixels.
 struct RollStage : Stage

@@ -664,9 +664,10 @@ CheckBox::CheckBox(const String& text)
             [this]()
             {
                 checked_ = !checked_;
-                toggled.emit(checked_);
-                WidgetApp::instance().fireEvent("toggle", this);
                 markDirty();
+                WidgetApp& app = WidgetApp::instance();
+                if (app.emitGone(this, toggled, checked_)) return; // (a handler took the box out of the tree: see WidgetApp::hasGone)
+                app.fireEvent("toggle", this);
             });
 }
 
@@ -801,8 +802,8 @@ RadioButton::RadioButton(const String& text, RadioGroup* group)
                 else
                 {
                     selected_ = true;
-                    toggled.emit(true);
                     markDirty();
+                    toggled.emit(true);
                 }
             });
 }
@@ -818,8 +819,8 @@ void RadioButton::setSelected(bool s)
     else if (!s && selected_)
     {
         selected_ = false;
-        toggled.emit(false);
         markDirty();
+        toggled.emit(false);
     }
 }
 
@@ -892,8 +893,8 @@ Switch::Switch(const String& text)
             [this]()
             {
                 on_ = !on_;
-                toggled.emit(on_);
                 markDirty();
+                toggled.emit(on_);
             });
 }
 
@@ -902,8 +903,8 @@ void Switch::setOn(bool v)
     if (on_ != v)
     {
         on_ = v;
-        toggled.emit(on_);
         markDirty();
+        toggled.emit(on_);
     }
 }
 

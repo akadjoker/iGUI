@@ -670,7 +670,11 @@ void ToolBar::onMouseRelease(MouseEvent& e)
         const int id = items_[i].id;
         if (items_[i].type == ItemType::Button)
         {
-            buttonClicked.emit(id);
+            if (WidgetApp::instance().emitGone(this, buttonClicked, id)) // (a handler took the bar out of the tree: see WidgetApp::hasGone)
+            {
+                e.consumed = true;
+                return;
+            }
         }
         else if (items_[i].type == ItemType::Toggle)
         {
@@ -681,7 +685,11 @@ void ToolBar::onMouseRelease(MouseEvent& e)
                     items_[k].checked = checked;
                     break;
                 }
-            toggleChanged.emit(id, checked);
+            if (WidgetApp::instance().emitGone(this, toggleChanged, id, checked))
+            {
+                e.consumed = true;
+                return;
+            }
         }
     }
 

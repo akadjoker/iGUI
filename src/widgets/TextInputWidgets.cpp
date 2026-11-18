@@ -494,9 +494,9 @@ void TextInput::onTextInput(KeyEvent& e)
     }
     String t(e.text);
     if (t.empty()) return;
-    insertText(t);
     blinkTimer_ = 0;
     e.consumed = true;
+    insertText(t); // (last: a handler of textChanged may take the input out of the tree, see WidgetApp::hasGone)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -656,8 +656,7 @@ void TextEdit::cut()
         WidgetApp::instance().setClipboardText(sel.c_str());
         deleteSelection();
         markDirty();
-        textChanged.emit();
-        cursorMoved.emit(cursor_);
+        notifyEdited();
     }
 }
 
@@ -1078,8 +1077,17 @@ void TextEdit::insertTextAtCursor(const String& t)
     else
         linesChanged(firstLine, 1, added + 1);
     markDirty();
+    notifyEdited();
+}
+
+bool TextEdit::notifyEdited()
+{
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     textChanged.emit();
+    if (app.hasGone(this, seen)) return true;
     cursorMoved.emit(cursor_);
+    return false;
 }
 
 void TextEdit::splitLine()
@@ -1101,8 +1109,7 @@ void TextEdit::splitLine()
     else
         linesChanged(line, 1, 2);
     markDirty();
-    textChanged.emit();
-    cursorMoved.emit(cursor_);
+    notifyEdited();
 }
 
 void TextEdit::mergeWithPrevLine()
@@ -2070,19 +2077,25 @@ void TextEdit::onKeyPress(KeyEvent& e)
 
         case ig::retained::Key::Return:
         case ig::retained::Key::KPEnter:
+        {
+            const uint32_t seen = WidgetApp::instance().deletions();
             splitLine();
-            ensureCursorVisible();
             e.consumed = true;
+            if (WidgetApp::instance().hasGone(this, seen)) return; // (a handler took the editor out of the tree)
+            ensureCursorVisible();
             break;
+        }
 
         case ig::retained::Key::Tab:
         {
+            e.consumed = true;
             if (!readOnly_)
             {
+                const uint32_t seen = WidgetApp::instance().deletions();
                 insertTextAtCursor("\t");
+                if (WidgetApp::instance().hasGone(this, seen)) return;
                 ensureCursorVisible();
             }
-            e.consumed = true;
             break;
         }
 
@@ -2108,8 +2121,8 @@ void TextEdit::onKeyPress(KeyEvent& e)
                 }
                 ensureCursorVisible();
                 markDirty();
-                textChanged.emit();
-                cursorMoved.emit(cursor_);
+                e.consumed = true;
+                if (notifyEdited()) return;
             }
             e.consumed = true;
             break;
@@ -2134,8 +2147,8 @@ void TextEdit::onKeyPress(KeyEvent& e)
                     mergeWithNextLine();
                 }
                 markDirty();
-                textChanged.emit();
-                cursorMoved.emit(cursor_);
+                e.consumed = true;
+                if (notifyEdited()) return;
             }
             e.consumed = true;
             break;
@@ -2160,10 +2173,12 @@ void TextEdit::onTextInput(KeyEvent& e)
     }
     String t(e.text);
     if (t.empty()) return;
-    insertTextAtCursor(t);
-    ensureCursorVisible();
     blinkTimer_ = 0;
     e.consumed = true;
+    const uint32_t seen = WidgetApp::instance().deletions();
+    insertTextAtCursor(t);
+    if (WidgetApp::instance().hasGone(this, seen)) return; // (a handler of textChanged took the editor out of the tree)
+    ensureCursorVisible();
 }
 
 void TextEdit::layout()

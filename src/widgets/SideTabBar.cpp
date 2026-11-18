@@ -145,7 +145,7 @@ void SideTabBar::expand()
 
 void SideTabBar::pressButton(int index)
 {
-    buttonClicked.emit(index);
+    if (WidgetApp::instance().emitGone(this, buttonClicked, index)) return; // (a handler took the bar out of the tree)
     if (index == currentIndex_)
     {
         if (collapsible_) showPage(-1);

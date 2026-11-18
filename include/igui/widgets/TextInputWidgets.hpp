@@ -391,6 +391,9 @@ protected:
     void clampPos(TextPos& p) const;
     void deleteSelection();
     void insertTextAtCursor(const String& t);
+    // textChanged, then cursorMoved; true (and no cursorMoved) when a handler of the first took the editor out of the tree
+    // (WidgetApp::hasGone): the caller touches nothing of the editor after it
+    bool notifyEdited();
     void splitLine();
     void mergeWithPrevLine();
     void mergeWithNextLine();

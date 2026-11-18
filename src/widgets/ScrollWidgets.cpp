@@ -112,8 +112,8 @@ void ScrollBar::onMousePress(MouseEvent& e)
             scrollValue_ = ratio * maxV;
         }
         clampScroll();
-        scrolled.emit(scrollValue_);
         markDirty();
+        scrolled.emit(scrollValue_);
     }
 }
 
@@ -148,8 +148,8 @@ void ScrollBar::onMouseMove(MouseEvent& e)
         scrollValue_ = dragOrigin_ + delta * maxV / travel;
     }
     clampScroll();
-    scrolled.emit(scrollValue_);
     markDirty();
+    scrolled.emit(scrollValue_);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

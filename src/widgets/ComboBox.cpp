@@ -86,9 +86,15 @@ public:
         Rect abs = absoluteRect();
         float localY = e.y - abs.y + scrollOff_;
         int idx = static_cast<int>(localY / rowHeight_);
-        if (idx >= 0 && idx < static_cast<int>(items_.size())) owner_->setSelectedIndex(idx);
-        owner_->closeDropdown();
+        // The handler of the selection may take the box out of the tree, which closes this popup and, outside a frame, deletes
+        // it: nothing of the popup is read after the call (WidgetApp::hasGone).
+        ComboBox* owner = owner_;
+        WidgetApp& app = WidgetApp::instance();
+        const uint32_t seen = app.deletions();
         e.consumed = true;
+        if (idx >= 0 && idx < static_cast<int>(items_.size())) owner->setSelectedIndex(idx);
+        if (app.hasGone(owner, seen)) return;
+        owner->closeDropdown();
     }
 
     void onMouseMove(MouseEvent& e) override
@@ -218,15 +224,13 @@ void ComboBox::removeItem(int index)
     const bool known = widestKnown();
     const float leaving = known ? itemWidth(items_[index]) : -1.0f;
     items_.erase(items_.begin() + index);
-    if (selectedIndex_ == index)
-    {
-        selectedIndex_ = -1;
-        selectionChanged.emit(-1);
-    }
+    const bool lostSelection = selectedIndex_ == index;
+    if (lostSelection) selectedIndex_ = -1;
     else if (selectedIndex_ > index)
         --selectedIndex_;
     markDirty();
     itemsChanged(known, leaving, -1.0f);
+    if (lostSelection) selectionChanged.emit(-1); // (last: a handler may take the box out of the tree, see WidgetApp::hasGone)
 }
 
 void ComboBox::clear()
@@ -270,8 +274,8 @@ void ComboBox::setSelectedIndex(int idx)
     if (selectedIndex_ != idx)
     {
         selectedIndex_ = idx;
-        selectionChanged.emit(idx);
         markDirty();
+        selectionChanged.emit(idx); // (last: a handler may take the box out of the tree, see WidgetApp::hasGone)
     }
 }
 

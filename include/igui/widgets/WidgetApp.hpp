@@ -607,6 +607,16 @@ public:
     {
         return deletions_ != seen && !isWidgetInTrees(w);
     }
+    /// @brief Emits @p signal of the widget @p w with @p args and says whether a handler took @p w out of the tree (hasGone):
+    ///        true, and the widget touches nothing of its own after it, emits nothing more. For a signal that is not the last
+    ///        thing a method does; one that is last needs none of this (`markDirty();` and the like go BEFORE it).
+    template<typename... Params, typename... Args>
+    bool emitGone(const Widget* w, const Signal<Params...>& signal, Args&&... args)
+    {
+        const uint32_t seen = deletions_;
+        signal.emit(static_cast<Args&&>(args)...);
+        return hasGone(w, seen);
+    }
 
     // ── Float windows ───────────────────────────────────────────────────
     // Floating windows always render on top of the stage (below popups).

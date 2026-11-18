@@ -168,8 +168,8 @@ void DockPanel::closePanel(const String& nameRef)
 
     removeChild(w); // deletes it, and clears the app's pointers into it
     pruneNode(root_);
-    panelClosed.emit(name);
     markDirty();
+    panelClosed.emit(name); // (last: a handler may take the panel out of the tree, see WidgetApp::hasGone)
 }
 
 void DockPanel::moveTabToLeaf(const String& sourceName, const String& targetName)
@@ -207,10 +207,10 @@ void DockPanel::showPanel(const String& name)
     for (auto& t: leaf->tabs) t.content->setVisible(false);
     leaf->currentTab = idx;
     leaf->tabs[idx].content->setVisible(true);
-    panelActivated.emit(name);
     markDirty();
     // A tab hidden until now was never laid out: without this it stays 0x0.
     WidgetApp::instance().requestLayout();
+    panelActivated.emit(name);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -899,9 +899,13 @@ void DockPanel::onMousePress(MouseEvent& e)
             for (auto& t: leaf->tabs) t.content->setVisible(false);
             leaf->currentTab = tabIdx;
             leaf->tabs[tabIdx].content->setVisible(true);
-            panelActivated.emit(leaf->tabs[tabIdx].name);
             markDirty();
             layout();
+            if (WidgetApp::instance().emitGone(this, panelActivated, leaf->tabs[tabIdx].name)) // (a handler took the dock out of the tree)
+            {
+                e.consumed = true;
+                return;
+            }
         }
 
         // Begin drag (allow even on active tab for rearranging)

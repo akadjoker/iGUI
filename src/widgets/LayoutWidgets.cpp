@@ -270,9 +270,9 @@ void Collapsible::setExpanded(bool e)
     if (expanded_ != e)
     {
         expanded_ = e;
-        expandedChanged.emit(expanded_);
         markDirty();
         WidgetApp::instance().requestLayout();
+        expandedChanged.emit(expanded_); // (last: a handler may take the widget out of the tree, see WidgetApp::hasGone)
     }
 }
 
@@ -301,10 +301,10 @@ void Collapsible::onMousePress(MouseEvent& e)
     if (checkable_ && e.button == 0 && checkRect().contains(e.x, e.y))
     {
         checked_ = !checked_;
-        checkedChanged.emit(checked_);
         e.consumed = true;
         markDirty();
         WidgetApp::instance().requestLayout();
+        checkedChanged.emit(checked_);
         return;
     }
 
@@ -315,9 +315,9 @@ void Collapsible::onMousePress(MouseEvent& e)
     Rect header = { abs.x, abs.y, abs.w, headerH_ };
     if (header.contains(e.x, e.y))
     {
-        setExpanded(!expanded_);
         e.consumed = true;
         markDirty();
+        setExpanded(!expanded_);
     }
 }
 
@@ -601,9 +601,9 @@ void StackLayout::setCurrentIndex(int idx)
             animating_ = false;
             animProgress_ = 1.0f;
         }
-        currentChanged.emit(idx);
         markDirty();
         WidgetApp::instance().requestLayout();
+        currentChanged.emit(idx);
     }
 }
 
@@ -919,9 +919,9 @@ void Splitter::setRatio(float r)
     if (ratio_ != r)
     {
         ratio_ = r;
-        ratioChanged.emit(ratio_);
         markDirty();
         WidgetApp::instance().requestLayout();
+        ratioChanged.emit(ratio_);
     }
 }
 
@@ -1242,9 +1242,9 @@ void TabLayout::setCurrentIndex(int idx)
     if (currentIndex_ != idx)
     {
         currentIndex_ = idx;
-        currentChanged.emit(idx);
         markDirty();
         WidgetApp::instance().requestLayout();
+        currentChanged.emit(idx);
     }
 }
 
@@ -1561,9 +1561,9 @@ void TabLayout::onMousePress(MouseEvent& e)
             Rect absCr = { abs.x + cr.x, abs.y + cr.y, cr.w, cr.h };
             if (absCr.contains(e.x, e.y))
             {
-                tabClosed.emit(i);
-                removeTab(i);
                 e.consumed = true;
+                if (WidgetApp::instance().emitGone(this, tabClosed, i)) return; // (a handler took the tabs out of the tree)
+                removeTab(i);
                 return;
             }
         }
@@ -2042,9 +2042,9 @@ void SlidePanel::open()
     animating_ = true;
     visible_ = true; // make hittable
     // animProgress_ keeps its current value so reverse is smooth
-    openChanged.emit(true);
     WidgetApp::instance().requestLayout();
     markDirty();
+    openChanged.emit(true);
 }
 
 void SlidePanel::close()
@@ -2052,8 +2052,8 @@ void SlidePanel::close()
     if (!open_ && !animating_) return;
     open_ = false;
     animating_ = true;
-    openChanged.emit(false);
     markDirty();
+    openChanged.emit(false);
 }
 
 void SlidePanel::toggle()

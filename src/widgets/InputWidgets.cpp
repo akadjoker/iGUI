@@ -347,9 +347,10 @@ void ProgressBar::setValue(float v)
     if (v != value_)
     {
         value_ = v;
-        onValueChanged.emit(value_);
-        WidgetApp::instance().fireEvent("change", this);
         markDirty();
+        WidgetApp& app = WidgetApp::instance();
+        if (app.emitGone(this, onValueChanged, value_)) return; // (a handler took the bar out of the tree: see WidgetApp::hasGone)
+        app.fireEvent("change", this);
     }
 }
 
