@@ -775,6 +775,13 @@ Chart::Item Chart::hitTest(float localX, float localY) const
     return hit;
 }
 
+String Chart::legendLabel(int entry) const
+{
+    if (entry < 0 || entry >= legendEntryCount())
+        return String();
+    return legend_[static_cast<size_t>(entry)].label;
+}
+
 int Chart::legendHitTest(float localX, float localY) const
 {
     for (size_t i = 0; i < legend_.size(); ++i)
@@ -853,7 +860,11 @@ void Chart::buildLegend(PaintContext& ctx, const Rect& b, const Rect& titleArea,
         for (int s = 0; s < seriesCount(); ++s)
         {
             LegendEntry e;
+            // A series with no name next to others (a histogram added without one) still needs a line the eye can tell
+            // from its neighbours: "Series 2", counted from one. (A single series with no name has no legend at all.)
             e.label = series_[static_cast<size_t>(s)].name;
+            if (e.label.empty())
+                e.label = String("Series ") + String::number(s + 1);
             e.color = series_[static_cast<size_t>(s)].color;
             e.visible = series_[static_cast<size_t>(s)].visible;
             e.target = s;

@@ -473,6 +473,41 @@ void testLegendPlacement()
     }
 }
 
+void testLegendNamesUnnamedSeries()
+{
+    // Two histograms, the second added without a name: its legend entry must not be blank.
+    Bench b;
+    Chart& c = *b.chart;
+    ct::Vector<float> samples;
+    for (int i = 0; i < 40; ++i)
+        samples.push_back(static_cast<float>(i % 8));
+    c.hist(samples, 4, String("measured"));
+    c.hist(samples, 0);
+    b.frame();
+    check(c.legendEntryCount() == 2, "two series, one of them unnamed, make the legend");
+    check(strcmp(c.legendLabel(0).c_str(), "measured") == 0, "a named series keeps its name");
+    check(strcmp(c.legendLabel(1).c_str(), "Series 2") == 0, "an unnamed one reads Series 2, counted from one");
+    check(c.legendLabel(2).size() == 0 && c.legendLabel(-1).size() == 0, "out of range reads nothing");
+
+    // The same for the other kinds, and for a third one.
+    c.clear();
+    c.bars(labels("a", "b", "c"), values(1.0f, 2.0f, 3.0f));
+    b.frame();
+    check(c.legendEntryCount() == 0, "a single unnamed series has no legend");
+    c.plot(values(0.0f, 1.0f, 2.0f), values(1.0f, 4.0f, 9.0f));
+    c.plot(values(0.0f, 1.0f, 2.0f), values(2.0f, 3.0f, 4.0f), String("named"));
+    c.plot(values(0.0f, 1.0f, 2.0f), values(3.0f, 2.0f, 1.0f));
+    b.frame();
+    check(c.legendEntryCount() == 3 && strcmp(c.legendLabel(0).c_str(), "Series 1") == 0 && strcmp(c.legendLabel(1).c_str(), "named") == 0 &&
+                    strcmp(c.legendLabel(2).c_str(), "Series 3") == 0,
+            "lines: the unnamed ones are counted by their place among the series");
+
+    // A pie's legend is its categories.
+    c.pie(labels("x", "y", "z"), values(1.0f, 2.0f, 3.0f));
+    b.frame();
+    check(strcmp(c.legendLabel(1).c_str(), "y") == 0, "a pie's entries are its categories");
+}
+
 void testSmallSliceLabel()
 {
     // A slice that is a fraction of a percent is drawn, so its label must not say 0%.
@@ -552,6 +587,7 @@ int main()
     testLegendPlacement();
     testManyThinSlices();
     testSmallSliceLabel();
+    testLegendNamesUnnamedSeries();
     if (gFailures == 0)
         printf("chart tests passed\n");
     return gFailures == 0 ? 0 : 1;

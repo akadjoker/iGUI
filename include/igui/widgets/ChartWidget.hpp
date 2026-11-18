@@ -188,6 +188,9 @@ public:
     Rect plotRect() const { return plot_; }
     /// @brief Rectangle of one legend entry (widget coordinates).
     Rect legendEntryRect(int entry) const;
+    /// @brief The text of one legend entry of the last paint: a category of a pie, a series otherwise (a series with no
+    ///        name reads "Series N", counted from one, when there is more than one); empty out of range.
+    String legendLabel(int entry) const;
     int  legendEntryCount() const { return static_cast<int>(legend_.size()); }
     /// @brief Rectangle of one bar (widget coordinates); empty when hidden.
     Rect barRect(int series, int index) const;
