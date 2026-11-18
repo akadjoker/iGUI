@@ -20,7 +20,7 @@ struct Shot
 };
 
 // A window whose font atlas is a texture of the software rasteriser (baked sizes only: the dynamic
-// page is not a texture it can read), so what a frame draws can be compared pixel by pixel.
+// page is not a texture it can read, unless useDynamicPage() is called), so what a frame draws can be compared pixel by pixel.
 class Screen
 {
 public:
@@ -42,7 +42,28 @@ public:
     }
     ~Screen()
     {
+        if (dynamic_)
+        {
+            // the page is the rasteriser's texture: let go of it (and of the callbacks that point at this object) first
+            h.app.removeDynamicAtlas(h.atlas());
+            h.app.setTextureUpload(ct::Function<TextureHandle(const unsigned char*, int, int)>());
+            h.app.setTextureUpdate(ct::Function<bool(TextureHandle, const unsigned char*, int, int)>());
+            h.app.setTextureDestroy(ct::Function<void(TextureHandle)>());
+        }
         raster_.destroyTexture(atlasTexture_);
+    }
+    // The dynamic page of the atlas as a texture of the rasteriser too, kept up to date the way an application's extra
+    // atlas is (WidgetApp::addDynamicAtlas: a glyph rasterised while measuring or painting goes up before the frame is
+    // drawn), so text at a size the baked page does not have, and glyphs it lacks, can be compared pixel by pixel. Call it
+    // after the constructor, which is where ZenApp releases the baked pixels: its default atlas gets the page after that.
+    bool useDynamicPage()
+    {
+        h.app.setTextureUpload([this](const unsigned char* rgba, int w, int hh) { return raster_.createTexture(w, hh, rgba); });
+        h.app.setTextureUpdate([this](TextureHandle t, const unsigned char* rgba, int w, int hh)
+                { return raster_.updateTexture(t, rgba, w, hh); });
+        h.app.setTextureDestroy([this](TextureHandle t) { raster_.destroyTexture(t); });
+        dynamic_ = h.app.addDynamicAtlas(h.atlas());
+        return dynamic_;
     }
     Screen(const Screen&) = delete;
     Screen& operator=(const Screen&) = delete;
@@ -71,6 +92,7 @@ private:
     IconAtlas icons_;
     int w_;
     int h_;
+    bool dynamic_ = false;
 };
 
 // The pixels of a rectangle (x0, y0 inclusive, x1, y1 exclusive) that are not the same in two shots.

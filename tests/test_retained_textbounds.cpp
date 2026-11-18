@@ -824,6 +824,85 @@ void testTextIsDrawnWithTheAtlasPixelsReleased()
 #endif
 }
 
+// The default atlas of ZenApp has a dynamic page and every text of a widget is drawn from it (Font::atHeight), so a Label, a
+// Button, a ComboBox and a TextInput measure their text for their size hints during layout, before the first paint, and that
+// is when the glyphs go into the page. With the baked pixels already released that must change nothing: the glyphs below are
+// in no baked range (Cyrillic Zhe and Ef, Greek Omega, Latin Extended-A) and are first measured and drawn after the release,
+// and the window comes out pixel for pixel as when the pixels are kept.
+struct DynamicReleaseRun
+{
+    Shot shot;
+    bool released = false;
+    bool dynamic = false;
+    bool neverBaked = false;      // the codepoints are not in the baked font before the first measure
+    bool madeByTheHint = false;   // the first sizeHint put them in the dynamic font, before any paint
+    bool madeAfterTheHint = false; // ... and the frames did not leave the page dirty
+    int ink = 0;
+    int labelInk = 0; // the Label has no background: what is not the window's colour in its rectangle is glyph pixels
+    float hintW[4] = { 0, 0, 0, 0 };
+    float hintH[4] = { 0, 0, 0, 0 };
+};
+
+DynamicReleaseRun dynamicReleaseRun(bool release)
+{
+    DynamicReleaseRun run;
+    Screen screen(kWindowW, kWindowH, false, release);
+    run.dynamic = screen.useDynamicPage();
+    run.released = screen.h.atlas().pixels() == nullptr;
+    run.neverBaked = !screen.h.atlas().defaultFont().hasBakedGlyph(0x0416) && !screen.h.atlas().defaultFont().hasBakedGlyph(0x03a9) &&
+                     !screen.h.atlas().defaultFont().hasBakedGlyph(0x0141);
+    BoxLayout* box = screen.h.root()->createChild<BoxLayout>(LayoutDir::Vertical);
+    box->setPadding(20.0f);
+    Label* label = box->createChild<Label>(String("\xd0\x96\xd0\xb0\xd0\xb1\xd0\xb0 \xd0\xa4\xd0\xb8\xd0\xbb\xd1\x8c\xd0\xbc \xce\xa9\xce\xbc\xce\xad\xce\xb3\xce\xb1 \xc5\x81\xc3\xb3" "d\xc5\xba"));
+    Button* button = box->createChild<Button>(String("\xd0\x96 \xd0\xa4 \xce\xa9 \xc5\x81 button"));
+    ComboBox* combo = box->createChild<ComboBox>();
+    combo->addItem(String("\xd0\xa4\xd0\xb0\xd0\xb9\xd0\xbb"));
+    combo->addItem(String("\xce\xa9\xce\xbc\xce\xad\xce\xb3\xce\xb1"));
+    TextInput* input = box->createChild<TextInput>(String("\xd0\x96\xd1\x83\xd0\xba \xc5\x81\xc3\xb3" "d\xc5\xba"));
+    // the hints, asked for before anything was painted
+    const Widget::Vec2f hints[4] = { label->sizeHint(), button->sizeHint(), combo->sizeHint(), input->sizeHint() };
+    for (int i = 0; i < 4; ++i)
+    {
+        run.hintW[i] = hints[i].x;
+        run.hintH[i] = hints[i].y;
+    }
+    const Font* sized = screen.h.atlas().defaultFont().atHeight(Theme::instance().fontSize);
+    run.madeByTheHint = sized && sized->isDynamic() && sized->hasBakedGlyph(0x0416) && sized->hasBakedGlyph(0x03a9) && sized->hasBakedGlyph(0x0141);
+    screen.h.relayout();
+    screen.h.frames(2);
+    run.madeAfterTheHint = !screen.h.atlas().dynamicDirty();
+    run.shot = screen.take();
+    for (size_t i = 0; i < run.shot.px.size(); ++i)
+        if (run.shot.px[i] != run.shot.px[0]) ++run.ink;
+    const Rect lr = label->absoluteRect();
+    for (int y = static_cast<int>(lr.y); y < static_cast<int>(lr.y + lr.h) && y < run.shot.h; ++y)
+        for (int x = static_cast<int>(lr.x); x < static_cast<int>(lr.x + lr.w) && x < run.shot.w; ++x)
+            if (run.shot.px[static_cast<size_t>(y) * static_cast<size_t>(run.shot.w) + static_cast<size_t>(x)] != run.shot.px[0]) ++run.labelInk;
+    return run;
+}
+
+void testNewGlyphsAreMeasuredAndDrawnAfterTheAtlasPixelsAreReleased()
+{
+#ifdef IGUI_FONTATLAS_RELEASE_PIXELS
+    const DynamicReleaseRun kept = dynamicReleaseRun(false);
+    const DynamicReleaseRun released = dynamicReleaseRun(true);
+    check(kept.dynamic && released.dynamic, "the dynamic page is a texture of the rasteriser (the comparison draws from it)");
+    check(!kept.released && released.released, "the baked pixels are kept in one run and released in the other");
+    check(kept.neverBaked && released.neverBaked, "the codepoints used are in no baked range of the atlas");
+    check(kept.madeByTheHint && released.madeByTheHint, "the size hints rasterised the glyphs into the dynamic page, before any paint");
+    check(kept.madeAfterTheHint && released.madeAfterTheHint, "the page was uploaded by the frames (nothing left dirty)");
+    bool sameHints = true;
+    for (int i = 0; i < 4; ++i)
+        if (kept.hintW[i] != released.hintW[i] || kept.hintH[i] != released.hintH[i]) sameHints = false;
+    check(sameHints, "a Label, a Button, a ComboBox and a TextInput hint the same size with the pixels released");
+    check(kept.labelInk > 300 && released.labelInk == kept.labelInk,
+            "the glyphs of the Label are drawn from the dynamic page (ink in its rectangle) and as many with the pixels released");
+    check(kept.ink > 3000 && released.ink == kept.ink, "the window has as much ink with the pixels released");
+    check(differing(kept.shot, released.shot, 0, 0, kept.shot.w, kept.shot.h) == 0,
+            "glyphs first measured and drawn after the release come out pixel for pixel as with the pixels kept");
+#endif
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -846,6 +925,7 @@ int main(int argc, char** argv)
     RUN(testTabsPastTheEndOfTheBarAreNotDrawnOrHit);
     RUN(testIconWithoutAGlyphIsNotAQuestionMark);
     RUN(testTextIsDrawnWithTheAtlasPixelsReleased);
+    RUN(testNewGlyphsAreMeasuredAndDrawnAfterTheAtlasPixelsAreReleased);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
