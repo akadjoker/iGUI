@@ -122,6 +122,33 @@ public:
     /// -1 if none.
     int itemByTooltip(const String& text) const;
 
+    /// @brief Draw the icons in their own colours, as they are, instead of tinting them with the
+    ///        theme's toolbarIcon colour: for an application's coloured tiles (registerImageIcon,
+    ///        or the sprite sheet). The state shows in how faint they are drawn (a toggle that is off
+    ///        and not hovered a little, a disabled button a lot) instead of in their colour. Default
+    ///        false.
+    void setColoredIcons(bool c)
+    {
+        coloredIcons_ = c;
+        markDirty();
+    }
+    bool coloredIcons() const
+    {
+        return coloredIcons_;
+    }
+
+    /// @brief Draw (default) or leave out the line along the bottom edge of the bar, in the theme's
+    ///        border colour: a bar inside a panel of its own, or above another bar, has no use for it.
+    void setBottomBorder(bool on)
+    {
+        bottomBorder_ = on;
+        markDirty();
+    }
+    bool bottomBorder() const
+    {
+        return bottomBorder_;
+    }
+
     /// @brief Set whether an item can be reordered by drag.
     void setItemDraggable(int id, bool draggable);
     /// @brief Check if an item is draggable.
@@ -218,7 +245,7 @@ private:
     bool texDirty_ = true;
 
     void ensureTexture(PaintContext& ctx);
-    void drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, float sz);
+    void drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, float sz, const Color& tint = Color(255, 255, 255, 255));
 
     // Items
     ct::Vector<Item> items_;
@@ -229,6 +256,8 @@ private:
     float iconPad_ = 4.f;
     float spacing_ = 2.f;
     bool draggable_ = true;
+    bool coloredIcons_ = false;
+    bool bottomBorder_ = true;
 
     // Drag reorder
     struct DragState

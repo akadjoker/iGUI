@@ -265,6 +265,13 @@ void SideTabBar::setShowLabels(bool show)
     WidgetApp::instance().requestLayout();
 }
 
+void SideTabBar::setColoredIcons(bool c)
+{
+    if (coloredIcons_ == c) return;
+    coloredIcons_ = c;
+    markDirty();
+}
+
 void SideTabBar::setRailWidth(float w)
 {
     if (w < 0.0f) w = 0.0f;
@@ -509,7 +516,9 @@ void SideTabBar::paint(PaintContext& ctx)
         ctx.pushClip(visibleBr);
         if (p.icon != IconId::None)
         {
-            ctx.drawIcon(p.icon, br.x + (br.w - iconSize_) * 0.5f, top, iconSize_, fg);
+            // coloured icons: their own colours, fainter when the button is idle or disabled
+            const Color tint = coloredIcons_ ? Color(255, 255, 255, !p.enabled ? 80 : (active || hovered) ? 255 : 200) : fg;
+            ctx.drawIcon(p.icon, br.x + (br.w - iconSize_) * 0.5f, top, iconSize_, tint);
         }
         else if (!p.label.empty())
         {

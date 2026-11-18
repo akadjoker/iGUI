@@ -137,6 +137,11 @@ struct Theme
     float titleGradient = 0.0f;                     // title bars (Dialog, FloatWindow) shade from lighter to darker by this much, 0..1
     Color tabAccent = Color(60, 140, 255, 255);     // the line on top of the selected tab (zenforms Tabs)
     bool sliderThumbBox = false;                    // the Slider's thumb is a small box, not a circle
+    // ToolBar: what used to be fixed in its paint. The defaults are those values, so a ToolBar looks as it did.
+    Color toolbarChecked = Color(60, 100, 160, 255);     // the background of a checked toggle button
+    Color toolbarCheckedDot = Color(100, 200, 255, 255); // the small dot in the corner of a checked toggle (alpha 0: none)
+    Color toolbarIcon = Color(220, 220, 225, 255);       // the tint of the icons of IconId buttons (not of coloured icons)
+    Color toolbarIconDisabled = Color(100, 100, 110, 255); // the same, for a disabled button
 
     /// @brief @p c moved toward @p target (0 black .. 255 white) by @p k (0..1).
     static Color shade(const Color& c, int target, float k)

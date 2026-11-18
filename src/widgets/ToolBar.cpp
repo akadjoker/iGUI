@@ -351,7 +351,7 @@ void ToolBar::ensureTexture(PaintContext& /*ctx*/)
     if (ownsRgba) delete rgba;
 }
 
-void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, float sz)
+void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, float sz, const Color& tint)
 {
     if (!gridTex_ || gridCols_ <= 0) return;
 
@@ -366,7 +366,7 @@ void ToolBar::drawGridIcon(PaintContext& ctx, int cellIdx, float x, float y, flo
 
     ig::retained::Rect uv{ srcX / tw, srcY / th, static_cast<float>(cellW_) / tw,
         static_cast<float>(cellH_) / th };
-    ctx.drawImage(gridTex_, { x, y, sz, sz }, uv);
+    ctx.drawImage(gridTex_, { x, y, sz, sz }, uv, tint);
 }
 
 // ── Hit test ─────────────────────────────────────────────────────────────────
@@ -457,7 +457,7 @@ void ToolBar::paint(PaintContext& ctx)
 
                 // Background
                 Color bg;
-                if (it.type == ItemType::Toggle && it.checked) bg = Color(60, 100, 160, 255);
+                if (it.type == ItemType::Toggle && it.checked) bg = t.toolbarChecked;
                 else if (it.pressed)
                     bg = t.buttonPressed;
                 else if (it.hovered)
@@ -485,11 +485,19 @@ void ToolBar::paint(PaintContext& ctx)
                 float ix = ir.x + (ir.w - iconSz) * 0.5f;
                 float iy = ir.y + (ir.h - iconSz) * 0.5f;
 
-                Color iconTint = it.enabled ? Color(220, 220, 225, 255) : Color(100, 100, 110, 255);
+                Color iconTint = it.enabled ? t.toolbarIcon : t.toolbarIconDisabled;
+                if (coloredIcons_)
+                {
+                    // their own colours; how faint they are says the state
+                    const bool idleToggle = it.type == ItemType::Toggle && !it.checked && !it.hovered;
+                    iconTint = Color(255, 255, 255, !it.enabled ? 80 : idleToggle ? 190 : 255);
+                }
 
                 if (it.iconIndex >= 0 && gridTex_)
                 {
-                    drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz);
+                    if (coloredIcons_) drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz, iconTint);
+                    else
+                        drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz);
                 }
                 else if (it.iconId != IconId::None)
                 {
@@ -497,9 +505,9 @@ void ToolBar::paint(PaintContext& ctx)
                 }
 
                 // Toggle check indicator (small dot in bottom-right)
-                if (it.type == ItemType::Toggle && it.checked)
+                if (it.type == ItemType::Toggle && it.checked && t.toolbarCheckedDot.a > 0)
                 {
-                    ctx.fill.SetColor(100, 200, 255, 255);
+                    ctx.fill.SetColor(t.toolbarCheckedDot.r, t.toolbarCheckedDot.g, t.toolbarCheckedDot.b, t.toolbarCheckedDot.a);
                     float dotR = 2.5f;
                     ctx.fill.Circle(ir.x + ir.w - 5.f, ir.y + ir.h - 5.f, dotR, true);
                 }
@@ -544,9 +552,12 @@ void ToolBar::paint(PaintContext& ctx)
     }
 
     // Bottom border line
-    ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
-    ctx.line.Line2D(static_cast<int>(abs.x), static_cast<int>(abs.y + abs.h - 1),
-            static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y + abs.h - 1));
+    if (bottomBorder_)
+    {
+        ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);
+        ctx.line.Line2D(static_cast<int>(abs.x), static_cast<int>(abs.y + abs.h - 1),
+                static_cast<int>(abs.x + abs.w), static_cast<int>(abs.y + abs.h - 1));
+    }
 }
 
 // ── Mouse events ─────────────────────────────────────────────────────────────

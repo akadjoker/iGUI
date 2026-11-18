@@ -115,6 +115,13 @@ public:
     void setShowLabels(bool show);
     bool showLabels() const { return showLabels_; }
 
+    /// @brief Draw the icons in their own colours, as they are, instead of tinting them with the colour of the
+    ///        button's state: for an application's coloured tiles (registerImageIcon). The state shows
+    ///        in how faint they are drawn (inactive a little, disabled a lot) and in the button itself
+    ///        (the theme's sideTab colours). Default false.
+    void setColoredIcons(bool c);
+    bool coloredIcons() const { return coloredIcons_; }
+
     /// @brief Fixed rail width in pixels; 0 (default) fits the widest label.
     void  setRailWidth(float w);
     float railWidth() const { return railWidth_; }
@@ -177,6 +184,7 @@ private:
     Side  side_         = Side::Left;
     bool  collapsible_  = true;
     bool  showLabels_   = true;
+    bool  coloredIcons_ = false;
     float railWidth_    = 0.0f;
     float buttonHeight_ = 56.0f;
     float iconSize_     = 20.0f;

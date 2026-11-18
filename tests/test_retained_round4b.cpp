@@ -8,7 +8,9 @@
 #include "RetainedHarness.hpp"
 
 #include <igui/widgets/BasicWidgets.hpp>
+#include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
+#include <igui/widgets/ToolBar.hpp>
 
 using namespace rh;
 
@@ -198,6 +200,204 @@ void testSyntheticInput()
     check(input->text() == "Ol", "and a key reaches it too");
 }
 
+// ---- item 17: SideTabBar and ToolBar with the application's own icons, and Theme values ----
+
+// A headless window drawn by the software rasteriser, like rh::Screen, that can also make textures of its own: the
+// application's icons.
+class IconScreen
+{
+public:
+    IconScreen(float width, float height)
+            : h(width, height, false),
+              w_(static_cast<int>(width)),
+              h_(static_cast<int>(height))
+    {
+        raster_.setSamples(1);
+        atlasTexture_ = raster_.createTexture(h.atlas().width(), h.atlas().height(), h.atlas().pixels());
+        h.atlas().setTexture(atlasTexture_);
+    }
+    ~IconScreen()
+    {
+        raster_.destroyTexture(atlasTexture_);
+        raster_.destroyTexture(iconTexture_);
+    }
+    IconScreen(const IconScreen&) = delete;
+    IconScreen& operator=(const IconScreen&) = delete;
+
+    // The application's icon: a 16 by 16 picture of one colour, registered as an icon every widget that takes an IconId shows.
+    IconId solidIcon(unsigned r, unsigned g, unsigned b)
+    {
+        unsigned char px[16 * 16 * 4];
+        for (int i = 0; i < 16 * 16; ++i)
+        {
+            px[i * 4 + 0] = static_cast<unsigned char>(r);
+            px[i * 4 + 1] = static_cast<unsigned char>(g);
+            px[i * 4 + 2] = static_cast<unsigned char>(b);
+            px[i * 4 + 3] = 255;
+        }
+        iconTexture_ = raster_.createTexture(16, 16, px);
+        return registerImageIcon(iconTexture_, Rect(0.0f, 0.0f, 1.0f, 1.0f));
+    }
+    Shot take()
+    {
+        Shot shot;
+        shot.w = w_;
+        shot.h = h_;
+        shot.px.resize(static_cast<size_t>(w_) * static_cast<size_t>(h_));
+        raster_.render(*GetDrawData(), shot.px.data(), w_, h_, w_, 0xff000000u);
+        return shot;
+    }
+    Harness h;
+
+private:
+    ig::zen::SoftRaster raster_;
+    TextureHandle atlasTexture_, iconTexture_;
+    int w_, h_;
+};
+
+struct Pixel
+{
+    int r, g, b;
+};
+
+Pixel pixelAt(const Shot& s, int x, int y)
+{
+    const uint32_t v = s.px[static_cast<size_t>(y) * static_cast<size_t>(s.w) + static_cast<size_t>(x)];
+    return { static_cast<int>((v >> 16) & 255u), static_cast<int>((v >> 8) & 255u), static_cast<int>(v & 255u) };
+}
+
+// The reddest pixel of a rectangle: where a red icon is, whatever the rectangle holds around it.
+Pixel reddest(const Shot& s, const Rect& r)
+{
+    Pixel best = { 0, 255, 255 };
+    for (int y = static_cast<int>(r.y); y < static_cast<int>(r.y + r.h); ++y)
+        for (int x = static_cast<int>(r.x); x < static_cast<int>(r.x + r.w); ++x)
+        {
+            const Pixel p = pixelAt(s, x, y);
+            if (p.r - p.g > best.r - best.g) best = p;
+        }
+    return best;
+}
+
+bool near(int a, int b, int slack)
+{
+    return a >= b - slack && a <= b + slack;
+}
+
+void testSideTabBarColoredIcons()
+{
+    IconScreen screen(300.0f, 300.0f);
+    const IconId red = screen.solidIcon(255, 0, 0);
+    SideTabBar* side = screen.h.root()->createChild<SideTabBar>(SideTabBar::Side::Left);
+    side->setRect(Rect(0.0f, 0.0f, 300.0f, 300.0f));
+    side->addPage<Widget>(red, "One");
+    side->addPage<Widget>(red, "Two");
+    side->addPage<Widget>(red, "Three");
+    side->setPageEnabled(2, false);
+    side->setCurrentIndex(0);
+    screen.h.frames(2);
+    Rect b0, b1, b2;
+    check(side->buttonRect(0, b0) && side->buttonRect(1, b1) && side->buttonRect(2, b2), "(the three buttons have rectangles)");
+
+    check(!side->coloredIcons(), "icons are tinted by default");
+    Shot tinted = screen.take();
+    const Pixel t0 = reddest(tinted, b0), t1 = reddest(tinted, b1);
+    check(t0.r < 200 && t1.r < 200, "a registered icon is tinted with the colour of the button by default (it comes out dark)");
+    const Shot beforeShot = tinted;
+
+    side->setColoredIcons(true);
+    check(side->coloredIcons(), "setColoredIcons(true) is kept");
+    screen.h.frames(2);
+    const Shot shot = screen.take();
+    const Pixel c0 = reddest(shot, b0), c1 = reddest(shot, b1), c2 = reddest(shot, b2);
+    if (!near(c0.r, 255, 1)) printf("    the open page's icon is %d %d %d\n", c0.r, c0.g, c0.b);
+    check(near(c0.r, 255, 1) && c0.g <= 2 && c0.b <= 2, "the icon of the open page is drawn in its own colour, whole");
+    if (!near(c1.r, 206, 8)) printf("    the idle icon is %d %d %d\n", c1.r, c1.g, c1.b);
+    check(near(c1.r, 206, 8) && c1.g < 20 && c1.b < 20, "the icon of an idle page is a little fainter");
+    if (!near(c2.r, 99, 10)) printf("    the disabled icon is %d %d %d\n", c2.r, c2.g, c2.b);
+    check(near(c2.r, 99, 10), "the icon of a disabled page is much fainter");
+
+    side->setColoredIcons(false);
+    screen.h.frames(2);
+    const Shot back = screen.take();
+    check(differing(back, beforeShot, 0, 0, back.w, back.h) == 0, "and false is the picture of before");
+}
+
+void testToolBarColoredIconsAndTheme()
+{
+    IconScreen screen(300.0f, 120.0f);
+    const IconId red = screen.solidIcon(255, 0, 0);
+    ToolBar* bar = screen.h.root()->createChild<ToolBar>();
+    bar->setRect(Rect(0.0f, 20.0f, 300.0f, 40.0f));
+    const int a = bar->addButton(red, "plain");
+    const int off = bar->addToggle(red, "off", false);
+    const int on = bar->addToggle(red, "on", true);
+    const int dis = bar->addButton(red, "disabled");
+    bar->setItemEnabled(dis, false);
+    screen.h.frames(2);
+    Rect ra, roff, ron, rdis;
+    check(bar->itemRect(a, ra) && bar->itemRect(off, roff) && bar->itemRect(on, ron) && bar->itemRect(dis, rdis), "(the four items have rectangles)");
+    Theme& theme = Theme::instance();
+    const Theme saved = theme;
+
+    // the defaults are the colours that were fixed in the paint
+    check(theme.toolbarChecked.r == 60 && theme.toolbarChecked.g == 100 && theme.toolbarChecked.b == 160, "the default checked background is the one it always was");
+    check(!bar->coloredIcons() && bar->bottomBorder(), "icons are tinted and the border is drawn by default");
+    const Shot plain = screen.take();
+    const Pixel checkedBg = pixelAt(plain, static_cast<int>(ron.x) + 2, static_cast<int>(ron.y + ron.h * 0.5f));
+    check(checkedBg.r == 60 && checkedBg.g == 100 && checkedBg.b == 160, "a checked toggle has the background of the theme (the default one)");
+    const Pixel dot = pixelAt(plain, static_cast<int>(ron.x + ron.w) - 5, static_cast<int>(ron.y + ron.h) - 5);
+    check(dot.r == 100 && dot.g == 200 && dot.b == 255, "and its dot (the default one)");
+    const Pixel tintedA = reddest(plain, ra);
+    check(near(tintedA.r, 220, 4) && tintedA.g < 10, "an icon is tinted with the toolbarIcon colour by default");
+
+    // Theme values: the background and the dot of a checked toggle, the tint of the icons
+    theme.toolbarChecked = Color(10, 200, 30, 255);
+    theme.toolbarCheckedDot = Color(0, 0, 0, 0);
+    theme.toolbarIcon = Color(120, 255, 255, 255);
+    screen.h.frames(2);
+    const Shot themed = screen.take();
+    const Pixel bg2 = pixelAt(themed, static_cast<int>(ron.x) + 2, static_cast<int>(ron.y + ron.h * 0.5f));
+    check(bg2.r == 10 && bg2.g == 200 && bg2.b == 30, "a checked toggle takes the toolbarChecked colour of the theme");
+    const Pixel dot2 = pixelAt(themed, static_cast<int>(ron.x + ron.w) - 5, static_cast<int>(ron.y + ron.h) - 5);
+    check(!(dot2.r == 100 && dot2.g == 200 && dot2.b == 255), "with no dot when the theme's dot has no alpha (the icon is where the dot was)");
+    const Pixel tintedA2 = reddest(themed, ra);
+    check(near(tintedA2.r, 120, 4), "the icons take the toolbarIcon tint of the theme");
+    theme = saved;
+
+    // coloured icons: their own colours, the state in how faint they are
+    bar->setColoredIcons(true);
+    check(bar->coloredIcons(), "setColoredIcons(true) is kept");
+    screen.h.frames(2);
+    const Shot colored = screen.take();
+    const Pixel pa = reddest(colored, ra), poff = reddest(colored, roff), pon = reddest(colored, ron), pdis = reddest(colored, rdis);
+    check(near(pa.r, 255, 1) && pa.g <= 2, "a coloured icon is drawn whole");
+    if (!near(poff.r, 202, 8)) printf("    the idle toggle is %d %d %d\n", poff.r, poff.g, poff.b);
+    check(near(poff.r, 202, 8), "a toggle that is off and not hovered is a little fainter");
+    check(near(pon.r, 255, 1) && pon.g <= 2, "a checked toggle is whole, on the background of the theme");
+    if (!near(pdis.r, 111, 10)) printf("    the disabled button is %d %d %d\n", pdis.r, pdis.g, pdis.b);
+    check(near(pdis.r, 111, 10), "a disabled button is much fainter");
+    bar->setColoredIcons(false);
+
+    // the line along the bottom edge
+    const Rect abs = bar->absoluteRect();
+    const int lineY = static_cast<int>(abs.y + abs.h) - 1;
+    screen.h.frames(2);
+    const Shot withLine = screen.take();
+    bar->setBottomBorder(false);
+    check(!bar->bottomBorder(), "setBottomBorder(false) is kept");
+    screen.h.frames(2);
+    const Shot noLine = screen.take();
+    const int row = differing(withLine, noLine, 0, lineY, withLine.w, lineY + 1);
+    check(row > 200, "the line along the bottom edge is the bar's width, and goes away");
+    // (the line is drawn a few pixels thick by the rasteriser, soft at its edges: a band around its row)
+    const int above = differing(withLine, noLine, 0, 0, withLine.w, lineY - 4), below = differing(withLine, noLine, 0, lineY + 5, withLine.w, withLine.h);
+    check(above == 0 && below == 0, "and nothing else changes, away from the line");
+    bar->setBottomBorder(true);
+    screen.h.frames(2);
+    check(differing(screen.take(), withLine, 0, 0, withLine.w, withLine.h) == 0, "true brings it back");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -206,6 +406,8 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testSyntheticInput);
+    RUN(testSideTabBarColoredIcons);
+    RUN(testToolBarColoredIconsAndTheme);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
