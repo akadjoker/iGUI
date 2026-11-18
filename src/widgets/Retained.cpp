@@ -1016,6 +1016,19 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
             dy2 /= l2;
         }
         float nx2 = -dy2, ny2 = dx2;
+        // An end of an open path (or a repeated point) has no segment on one side: its normal is the other's. With a
+        // zero there the miter offset came out twice as long, and the first and the last segment of every open
+        // polyline were drawn twice as thick at their end (a tapering band, as if each were drawn twice).
+        if (!(l1 > 0.0001f))
+        {
+            nx1 = nx2;
+            ny1 = ny2;
+        }
+        if (!(l2 > 0.0001f))
+        {
+            nx2 = nx1;
+            ny2 = ny1;
+        }
 
         float mx = nx1 + nx2, my = ny1 + ny2;
         float d2 = mx * mx + my * my;

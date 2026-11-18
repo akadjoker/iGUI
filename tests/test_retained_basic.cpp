@@ -577,6 +577,45 @@ void testScrollViewHorizontalBar()
     check(wants->rect().w == 800.0f && wideBar && !wideBar->isVisible(), "in a view of 800 it takes the view and the bar goes");
 }
 
+// ---- polylines: the first and the last segment are as thick as the others ----
+
+void testOpenPolylineHasTheSameWidthAtItsEnds()
+{
+    DrawList list;
+    ct::Vector<Vec2> points;
+    points.push_back({ 10.0f, 10.0f });
+    points.push_back({ 60.0f, 10.0f });
+    points.push_back({ 110.0f, 10.0f });
+    list.setAntiAliasing(false);
+    list.addPolyline(points, Color(255, 255, 255, 255), 4.0f, false);
+    const ct::Vector<DrawVertex>& v = list.vertices();
+    float far = 0.0f;
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        const float d = v[i].y > 10.0f ? v[i].y - 10.0f : 10.0f - v[i].y;
+        if (d > far) far = d;
+    }
+    if (far > 2.01f) printf("    a vertex is %.2f from the line of a 4 pixel stroke\n", static_cast<double>(far));
+    check(far <= 2.01f, "an open polyline is as thick at its ends as along it");
+    // a bent one: the ends are not wider than the half width either (the elbow may be, by its miter)
+    points.clear();
+    points.push_back({ 10.0f, 10.0f });
+    points.push_back({ 60.0f, 40.0f });
+    points.push_back({ 110.0f, 10.0f });
+    DrawList list2;
+    list2.setAntiAliasing(false);
+    list2.addPolyline(points, Color(255, 255, 255, 255), 4.0f, false);
+    const ct::Vector<DrawVertex>& w = list2.vertices();
+    float endOffset = 0.0f;
+    for (size_t i = 0; i < 2; ++i) // the two vertices of the first point
+    {
+        const float dx = w[i].x - 10.0f, dy = w[i].y - 10.0f;
+        const float d = sqrtf(dx * dx + dy * dy);
+        if (d > endOffset) endOffset = d;
+    }
+    check(endOffset <= 2.01f, "the first point of a bent polyline is half the width from its centre");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -595,6 +634,7 @@ int main(int argc, char** argv)
     RUN(testImageButtonStates);
     RUN(testLabelAndComboHintsAreMeasured);
     RUN(testScrollViewHorizontalBar);
+    RUN(testOpenPolylineHasTheSameWidthAtItsEnds);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
