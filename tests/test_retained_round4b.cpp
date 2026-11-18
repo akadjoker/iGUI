@@ -1065,6 +1065,98 @@ void testSliderValueReadout()
     check(rest == 0, "no readout is the slider as it was");
 }
 
+// ---- item 21 and the hint recipe of docs/ROUND4.md: the readout asks for a layout pass only when the hint changes ----
+
+class PassCounter : public Widget
+{
+public:
+    IG_WIDGET_CLASS(PassCounter, Widget);
+    void layout() override
+    {
+        ++laidOut;
+        Widget::layout();
+    }
+    int laidOut = 0;
+};
+
+void testSliderReadoutAsksForLayoutOnlyWhenTheHintChanges()
+{
+    Harness h(600.0f, 300.0f);
+    WidgetApp& app = WidgetApp::instance();
+    PassCounter* probe = h.root()->createChild<PassCounter>();
+    BoxLayout* row = h.root()->createChild<BoxLayout>(LayoutDir::Horizontal);
+    Slider* s = row->createChild<Slider>(0.0f, 1.0f, 0.5f);
+    s->setStretch(1.0f);
+    Slider* plain = row->createChild<Slider>(0.0f, 1.0f, 0.5f); // a slider that shows nothing
+    plain->setStretch(1.0f);
+    s->setShowValue(true);
+    h.frames(6);
+    int settled = probe->laidOut;
+    check(settled > 0, "(the counter is laid out)");
+
+    // the value changes every frame, by code and by the mouse: no layout pass at all
+    for (int i = 1; i <= 60; ++i)
+    {
+        s->setValue(static_cast<float>(i % 17) / 17.0f);
+        h.frame();
+    }
+    const Rect r = s->absoluteRect();
+    app.feedMouseMove(r.x + 30.0f, r.y + r.h * 0.5f);
+    app.feedMouseButton(0, true);
+    for (int i = 0; i < 40; ++i)
+    {
+        app.feedMouseMove(r.x + 30.0f + static_cast<float>(i) * 2.0f, r.y + r.h * 0.5f);
+        h.frame();
+    }
+    app.feedMouseButton(0, false);
+    if (probe->laidOut != settled) printf("    %d layout passes for a value that changes every frame\n", probe->laidOut - settled);
+    check(probe->laidOut == settled, "a value that changes every frame, by code and by the mouse, asks for no layout pass");
+
+    // setters given what they already have, or what makes the same hint
+    s->setShowValue(true);
+    s->setValueSuffix(String());
+    s->setValueDecimals(2); // the automatic decimals of a range of 1 are two: the same texts
+    s->setRange(0.0f, 1.0f);
+    s->setRange(0.0f, 1.0f);
+    h.frames(2);
+    if (probe->laidOut != settled) printf("    %d layout passes for setters that keep the hint\n", probe->laidOut - settled);
+    check(probe->laidOut == settled, "setters given the value they have, or one that makes the same hint, ask for nothing");
+    s->setValueSuffix(String(" 1"));
+    h.frames(2);
+    settled = probe->laidOut;
+    s->setValueSuffix(String(" 2")); // the digits of the font all have one width
+    h.frames(2);
+    check(probe->laidOut == settled, "a suffix of the same width asks for nothing");
+
+    // what changes the room: one pass each
+    const float before = s->sizeHint().x;
+    s->setValueSuffix(String(" 1 dB per octave"));
+    h.frames(2);
+    check(s->sizeHint().x > before && probe->laidOut == settled + 1, "a wider suffix takes one layout pass");
+    s->setValueDecimals(5);
+    h.frames(2);
+    check(probe->laidOut == settled + 2, "more decimals take one");
+    s->setRange(0.0f, 100000.0f);
+    h.frames(2);
+    check(probe->laidOut == settled + 3, "a range with wider ends takes one");
+    s->setShowValue(false);
+    h.frames(2);
+    check(probe->laidOut == settled + 4, "hiding the readout takes one (the hint shrinks)");
+    s->setShowValue(true);
+    h.frames(2);
+    check(probe->laidOut == settled + 5, "and showing it again");
+
+    // a slider that shows no readout: the setters of the readout do nothing at all to the layout
+    settled = probe->laidOut;
+    plain->setValueSuffix(String(" dB"));
+    plain->setValueDecimals(3);
+    plain->setRange(0.0f, 100000.0f);
+    plain->setValueSuffix(String(" something much longer"));
+    h.frames(2);
+    check(probe->laidOut == settled, "a slider with no readout asks for no layout pass for the setters of the readout");
+    check(plain->sizeHint().x == 120.0f, "(and keeps its hint)");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1082,6 +1174,7 @@ int main(int argc, char** argv)
     RUN(testChartAxisTitles);
     RUN(testChartDoubleData);
     RUN(testSliderValueReadout);
+    RUN(testSliderReadoutAsksForLayoutOnlyWhenTheHintChanges);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

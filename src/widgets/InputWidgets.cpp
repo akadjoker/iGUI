@@ -23,6 +23,7 @@ void Slider::setRange(float minVal, float maxVal)
     // the range itself); left outside it, the thumb was drawn off the track.
     value_ = value_ < min_ ? min_ : (value_ > max_ ? max_ : value_);
     markDirty();
+    if (showValue_) invalidateLayoutIfHintChanged(hint_); // the texts of the ends are the room of the readout
 }
 
 void Slider::setValue(float v)
@@ -101,19 +102,19 @@ Widget::Vec2f Slider::sizeHint() const
     const auto& t = Theme::instance();
     if (!showValue_)
     {
-        if (orientation_ == LayoutDir::Vertical) return { t.sliderHeight, 120.0f };
-        return { 120.0f, t.sliderHeight };
+        if (orientation_ == LayoutDir::Vertical) return hint_.note(Vec2f{ t.sliderHeight, 120.0f });
+        return hint_.note(Vec2f{ 120.0f, t.sliderHeight });
     }
     if (orientation_ == LayoutDir::Vertical)
     {
         const float a = WidgetApp::instance().textWidth(valueText(min_).c_str());
         const float b = WidgetApp::instance().textWidth(valueText(max_).c_str());
         const float w = (a > b ? a : b) + 4.0f;
-        return { w > t.sliderHeight ? w : t.sliderHeight, 120.0f + t.fontSize + 4.0f };
+        return hint_.note(Vec2f{ w > t.sliderHeight ? w : t.sliderHeight, 120.0f + t.fontSize + 4.0f });
     }
     const float a = WidgetApp::instance().textWidth(valueText(min_).c_str());
     const float b = WidgetApp::instance().textWidth(valueText(max_).c_str());
-    return { 120.0f + kReadoutGap + (a > b ? a : b), t.sliderHeight };
+    return hint_.note(Vec2f{ 120.0f + kReadoutGap + (a > b ? a : b), t.sliderHeight });
 }
 
 void Slider::paintReadout(PaintContext& ctx, const Rect& full, float extent)

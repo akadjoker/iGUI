@@ -54,12 +54,16 @@ public:
     /// @brief Show the value as text at the end of the slider: to the right of a horizontal one, under a
     ///        vertical one (the track is shorter by the room the text takes, which is that of the widest of
     ///        the texts of the minimum and the maximum, so the track does not move as the value changes,
-    ///        and sizeHint() asks for the room). A slider too short to keep a track of 24 pixels or so
+    ///        and sizeHint() asks for the room). A value that changes every frame (a meter, a slider being
+    ///        dragged) asks for no layout pass: the room does not depend on it. What does change the room (the
+    ///        decimals, the suffix, the range, showing it) asks for a pass only if sizeHint() really is
+    ///        another. A slider too short to keep a track of 24 pixels or so
     ///        beside the text shows no text. Default false.
     void setShowValue(bool on)
     {
+        if (showValue_ == on) return;
         showValue_ = on;
-        invalidateLayout();
+        invalidateLayoutIfHintChanged(hint_); // (the hint only grows by the room of the text: one pass, once)
         markDirty();
     }
     bool showValue() const
@@ -70,8 +74,10 @@ public:
     ///        from a range of 100, one from 10, two below.
     void setValueDecimals(int decimals)
     {
-        valueDecimals_ = decimals < -1 ? -1 : (decimals > 6 ? 6 : decimals);
-        invalidateLayout();
+        decimals = decimals < -1 ? -1 : (decimals > 6 ? 6 : decimals);
+        if (valueDecimals_ == decimals) return;
+        valueDecimals_ = decimals;
+        if (showValue_) invalidateLayoutIfHintChanged(hint_);
         markDirty();
     }
     int valueDecimals() const
@@ -81,8 +87,9 @@ public:
     /// @brief Text after the value, e.g. " dB" or "%".
     void setValueSuffix(const String& suffix)
     {
+        if (valueSuffix_ == suffix) return;
         valueSuffix_ = suffix;
-        invalidateLayout();
+        if (showValue_) invalidateLayoutIfHintChanged(hint_);
         markDirty();
     }
     const String& valueSuffix() const
@@ -113,6 +120,7 @@ private:
     bool showValue_ = false;
     int valueDecimals_ = -1;
     String valueSuffix_;
+    mutable HintMemo hint_; // what sizeHint() was last time: the setters of the readout ask for a layout only when it changes
 
     // The room the readout takes at the end of the slider, along it (0 when it is not shown, or when the slider is
     // too short for it).
