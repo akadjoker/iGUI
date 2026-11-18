@@ -211,8 +211,8 @@ void Timeline::setTrackMuted(int trackId, bool muted)
             tracks_[trackId].muted == muted)
         return;
     tracks_[trackId].muted = muted;
-    onTrackMuteChanged.emit(trackId, muted);
     markDirty();
+    onTrackMuteChanged.emit(trackId, muted); // (last: a handler may take the timeline out of the tree, see WidgetApp::hasGone)
 }
 
 void Timeline::setHeaderWidth(float width)
@@ -306,8 +306,8 @@ void Timeline::setSelectedTrack(int trackId)
     if (trackId < -1 || trackId >= trackCount()) trackId = -1;
     if (trackId == selectedTrack_) return;
     selectedTrack_ = trackId;
-    onTrackSelected.emit(trackId);
     markDirty();
+    onTrackSelected.emit(trackId); // (last: a handler may take the timeline out of the tree)
 }
 
 void Timeline::removeTrack(int trackId)
@@ -811,11 +811,13 @@ void Timeline::onMousePress(MouseEvent& e)
             if (!clip.selected) {
                 clearSelection();
                 tracks_[rt].clips[ci].selected = true;
-                onClipSelected.emit(rt, ci);
+                markDirty();
+                e.consumed = true;
+                if (WidgetApp::instance().emitGone(this, onClipSelected, rt, ci)) return; // (a handler took the timeline out of the tree)
             }
-            onClipContextMenu.emit(rt, ci, e.x, e.y);
             markDirty();
             e.consumed = true;
+            onClipContextMenu.emit(rt, ci, e.x, e.y);
             return;
         }
         return;
@@ -827,9 +829,9 @@ void Timeline::onMousePress(MouseEvent& e)
     {
         dragMode_ = DragMode::Scrub;
         playhead_ = xToTime(e.x);
-        onPlayheadChanged.emit(playhead_);
         markDirty();
         e.consumed = true;
+        onPlayheadChanged.emit(playhead_); // (last: a handler may take the timeline out of the tree)
         return;
     }
 
@@ -850,8 +852,10 @@ void Timeline::onMousePress(MouseEvent& e)
         else if (hitsButton(lockButton(b.x, kHeaderW, hy, kTrackH), e.x, e.y))
         {
             trk.locked = !trk.locked;
-            onTrackLockChanged.emit(ti, trk.locked);
             markDirty();
+            e.consumed = true;
+            onTrackLockChanged.emit(ti, trk.locked); // (last: a handler may take the timeline out of the tree)
+            return;
         }
         else
         {
@@ -990,7 +994,11 @@ void Timeline::onMousePress(MouseEvent& e)
                 clearSelection();
                 trk.clips[ci].selected = true;
             }
-            onClipSelected.emit(ti, ci);
+            if (WidgetApp::instance().emitGone(this, onClipSelected, ti, ci))
+            {
+                e.consumed = true; // (a handler took the timeline out of the tree: nothing of it is touched, see WidgetApp::hasGone)
+                return;
+            }
 
             // The volume curve inside the bar: a point is grabbed, a double-click adds or removes
             // one. The first and last points sit on the edges of the bar, where a drag would resize
@@ -1293,9 +1301,9 @@ void Timeline::onMouseMove(MouseEvent& e)
     {
         case DragMode::Scrub:
             playhead_ = xToTime(e.x);
-            onPlayheadChanged.emit(playhead_);
             markDirty();
             e.consumed = true;
+            onPlayheadChanged.emit(playhead_); // (last: a handler may take the timeline out of the tree)
             break;
 
         case DragMode::Pan:
@@ -1393,9 +1401,9 @@ void Timeline::onMouseMove(MouseEvent& e)
             clip.start = start;
             clip.end = start + len;
             dragMoved_ = true;
-            onClipChanged.emit(dragTrack_, dragIndex_);
             markDirty();
             e.consumed = true;
+            onClipChanged.emit(dragTrack_, dragIndex_);
             break;
         }
         case DragMode::ResizeClipL:

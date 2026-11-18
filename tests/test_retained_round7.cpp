@@ -1303,6 +1303,61 @@ void testGrids()
             [](Stage& st, TreeGrid* w) { st.key(w, Key::Left); });
 }
 
+// ---- Timeline ----
+
+void testTimeline()
+{
+    auto timeline = [](Stage& st) {
+        Timeline* w = put<Timeline>(st, 20.0f, 20.0f, 440.0f, 200.0f);
+        const int track = w->addTrack("track");
+        w->addClip(track, 1.0f, 9.0f, "clip");
+        w->addTrack("other");
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    victim<Timeline>("Timeline.onTrackMuteChanged by setTrackMuted", timeline,
+            [](Timeline* w, auto kill, auto) { w->onTrackMuteChanged.connect(kill); },
+            [](Stage& st, Timeline* w) { st.act([w]() { w->setTrackMuted(0, true); }); });
+    victim<Timeline>("Timeline.onTrackSelected by setSelectedTrack", timeline,
+            [](Timeline* w, auto kill, auto) { w->onTrackSelected.connect(kill); },
+            [](Stage& st, Timeline* w) { st.act([w]() { w->setSelectedTrack(1); }); });
+    victim<Timeline>("Timeline.onPlayheadChanged by a click on the ruler", timeline,
+            [](Timeline* w, auto kill, auto) { w->onPlayheadChanged.connect(kill); },
+            [](Stage& st, Timeline* w) { st.click(w, 300.0f, 10.0f); });
+    victim<Timeline>("Timeline.onPlayheadChanged by dragging along the ruler (the second signal)", timeline,
+            [](Timeline* w, auto kill, auto) { w->onPlayheadChanged.connect(kill); },
+            [](Stage& st, Timeline* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 300.0f, r.y + 10.0f);
+                st.down(w);
+                st.drag(w, r.x + 330.0f, r.y + 10.0f);
+                st.up(w);
+            }, 0, nullptr, 2);
+    victim<Timeline>("Timeline.onClipSelected by a click on a clip", timeline,
+            [](Timeline* w, auto kill, auto late) { w->onClipSelected.connect(kill); w->onClipGrabbed.connect(late); },
+            [](Stage& st, Timeline* w) { st.click(w, 300.0f, 38.0f); });
+    victim<Timeline>("Timeline.onClipSelected by a right click on a clip", timeline,
+            [](Timeline* w, auto kill, auto late) { w->onClipSelected.connect(kill); w->onClipContextMenu.connect(late); },
+            [](Stage& st, Timeline* w) { st.click(w, 300.0f, 38.0f, 1); }, 1);
+    victim<Timeline>("Timeline.onClipChanged by dragging a clip",
+            timeline,
+            [](Timeline* w, auto kill, auto) { w->onClipChanged.connect(kill); },
+            [](Stage& st, Timeline* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 300.0f, r.y + 38.0f);
+                st.down(w);
+                st.drag(w, r.x + 330.0f, r.y + 38.0f);
+                st.up(w);
+            });
+    victim<Timeline>("Timeline.onTrackLockChanged by a click on the lock button", timeline,
+            [](Timeline* w, auto kill, auto) { w->onTrackLockChanged.connect(kill); },
+            [](Stage& st, Timeline* w) {
+                // the lock button is the second of the header's two, at its right end
+                st.click(w, 160.0f - 14.0f, 24.0f + 14.0f);
+            });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1336,6 +1391,7 @@ int main(int argc, char** argv)
     testRangeGridsEditors();
     testTreeProperty();
     testGrids();
+    testTimeline();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)
