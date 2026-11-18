@@ -9,6 +9,14 @@
 //
 //   igui_retained_bench [--reps=7] [--scale=1] [--only=substring] [--trace-allocs] [--profile] [--profile-only] [--hash]
 //   --profile-only samples the timed loops of the scenes --only selects and prints the program counters (PC lines)
+//
+// Comparing two builds (A/B of a change): a row is not only what its code does but where the linker put that code and where
+// malloc put its buffers. With the code of a row unchanged, 400 bytes of NOP appended to an unrelated object file moved
+// loops/pianoroll_32_beats between 16.10 and 17.61 us (9%), and a change that only resizes a big buffer moved
+// softraster/cached_frame by 5% (see the note above it). So a difference under ~10% on one row, with the functions it runs
+// byte-for-byte equal in both binaries (compare them with objdump), is placement until shown otherwise: bench at least six
+// alternating runs per side pinned to one core, compare the minima, and repeat with -falign-functions=64 -falign-loops=64.
+// docs/FONTS-GL.md has the numbers and the sweep.
 #include "../../tests/EditorTree.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
@@ -341,6 +349,10 @@ void softRasterScene()
     const uint32_t bg = 0xff181a1eu;
     raster.render(*GetDrawData(), pixels.data(), 1600, 900, 1600, bg);
     // render() reads the draw data of the last frame; the frame itself is not repeated here
+    // cached_frame is a hash of the draw data and a copy of 1600x900 pixels (5.76 MB) from the rasteriser's cache to `pixels`.
+    // Its time moves by about 5% with where glibc puts those two buffers, on the brk heap or in mmap chunks, which the dynamic mmap
+    // threshold decides (freeing a big block raises it to that block's size, so the sizes of the atlas buffers the earlier scenes
+    // free change it). To compare two builds, pin it for both: GLIBC_TUNABLES=glibc.malloc.mmap_threshold=33554432.
     RUN_IF("softraster", "cached_frame", 100, [&] { raster.render(*GetDrawData(), pixels.data(), 1600, 900, 1600, bg); });
     RUN_IF("softraster", "full_render_aa2", 5,
             [&]
