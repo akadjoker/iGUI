@@ -45,7 +45,7 @@ public:
     {
         if (elide_ == on) return;
         elide_ = on;
-        invalidateLayout();
+        invalidateLayoutIfHintChanged(hint_); // a label with no text, or a short one, asks for the same either way
     }
     bool elide() const
     {
@@ -56,10 +56,17 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
+    // the width of "..." in the font and the text height it was measured at: an eliding label asks for that much
+    float dotsWidth() const;
+
     String text_;
     Color color_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's text colour
     TextAlign align_ = TextAlign::LEFT;
     bool elide_ = false;
+    mutable HintMemo hint_;               // what sizeHint() was last time: setText asks for a layout only when it changes
+    mutable float dots_ = -1.0f;
+    mutable const ig::retained::Font* dotsFont_ = nullptr;
+    mutable float dotsHeight_ = 0.0f;
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -179,6 +186,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
+    mutable HintMemo hint_; // what sizeHint() was last time (see Label)
     String text_;
     TextAlign align_ = TextAlign::CENTER;
     Color bgColor_ = Color(0, 0, 0, 0);
@@ -416,6 +424,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
+    mutable HintMemo hint_; // what sizeHint() was last time (see Label)
     String text_;
     bool checked_ = false;
 };

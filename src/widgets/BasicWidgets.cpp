@@ -30,7 +30,7 @@ void Label::setText(const String& t)
     if (text_ == t) return;
     text_ = t;
     markDirty();
-    invalidateLayout();
+    invalidateLayoutIfHintChanged(hint_); // "00:00:01" after "00:00:00" asks for the same width: no layout pass
 }
 void Label::setColor(const Color& c)
 {
@@ -40,6 +40,19 @@ void Label::setAlign(TextAlign a)
 {
     align_ = a;
     markDirty();
+}
+
+float Label::dotsWidth() const
+{
+    const auto& t = Theme::instance();
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
+    if (dots_ < 0.0f || dotsFont_ != font || dotsHeight_ != t.fontSize)
+    {
+        dots_ = WidgetApp::instance().textWidth("...", overrideFont_);
+        dotsFont_ = font;
+        dotsHeight_ = t.fontSize;
+    }
+    return dots_;
 }
 
 Widget::Vec2f Label::sizeHint() const
@@ -52,7 +65,7 @@ Widget::Vec2f Label::sizeHint() const
     if (!text_.empty())
     {
         const float estimate = text_.size() * t.fontSize * 0.6f;
-        const float room = elide_ ? WidgetApp::instance().textWidth("...", overrideFont_) : 0.0f;
+        const float room = elide_ ? dotsWidth() : 0.0f;
         if (elide_ && room > 0.0f && estimate > room)
         {
             w = room; // measuring a long text to ask for less than that would be the cost for nothing
@@ -64,7 +77,7 @@ Widget::Vec2f Label::sizeHint() const
             if (elide_ && room > 0.0f && w > room) w = room;
         }
     }
-    return { w + t.padding * 2, t.fontSize + t.padding * 2 };
+    return hint_.note(Vec2f{ w + t.padding * 2, t.fontSize + t.padding * 2 });
 }
 
 void Label::paint(PaintContext& ctx)
@@ -190,7 +203,7 @@ void Button::setText(const String& t)
     if (text_ == t) return;
     text_ = t;
     markDirty();
-    invalidateLayout();
+    invalidateLayoutIfHintChanged(hint_);
 }
 void Button::setAlign(TextAlign a)
 {
@@ -204,7 +217,7 @@ Widget::Vec2f Button::sizeHint() const
     // paint cuts a label wider than the width less its four paddings and the icon, so the hint holds all of it
     const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
     float iconW = (iconId_ != IconId::None) ? (t.fontSize + 2.f) : 0.f;
-    return { textW + iconW + t.padding * 4, t.buttonHeight };
+    return hint_.note(Vec2f{ textW + iconW + t.padding * 4, t.buttonHeight });
 }
 
 void Button::paint(PaintContext& ctx)
@@ -662,7 +675,7 @@ void CheckBox::setText(const String& t)
     if (text_ == t) return;
     text_ = t;
     markDirty();
-    invalidateLayout();
+    invalidateLayoutIfHintChanged(hint_);
 }
 void CheckBox::setChecked(bool c)
 {
@@ -675,7 +688,7 @@ Widget::Vec2f CheckBox::sizeHint() const
     const auto& t = Theme::instance();
     float boxSize = t.fontSize;
     const float textW = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
-    return { boxSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 };
+    return hint_.note(Vec2f{ boxSize + t.padding * 2 + textW, t.fontSize + t.padding * 2 });
 }
 
 void CheckBox::paint(PaintContext& ctx)

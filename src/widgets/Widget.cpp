@@ -829,6 +829,22 @@ void Widget::invalidateLayout()
     if (WidgetApp* app = WidgetApp::existing()) app->requestRelayout();
 }
 
+void Widget::invalidateLayoutIfHintChanged(const HintMemo& seen)
+{
+    // out of a tree (or with no application) there is no layout to ask for: addChild asks when it goes in
+    if (!parent_ || !WidgetApp::existing()) return;
+    // no layout has asked for the hint yet: nothing to compare with, and it is the layout that measures the text (in the
+    // order of the tree) when it first does
+    if (seen.w < 0.0f)
+    {
+        invalidateLayout();
+        return;
+    }
+    const HintMemo before = seen; // sizeHint() writes it
+    const Vec2f now = sizeHint();
+    if (now.x != before.w || now.y != before.h) invalidateLayout();
+}
+
 void Widget::moveChild(Widget* child, int toIndex)
 {
     auto it = std::find(children_.begin(), children_.end(), child);

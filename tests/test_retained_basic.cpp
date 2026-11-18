@@ -616,6 +616,102 @@ void testOpenPolylineHasTheSameWidthAtItsEnds()
     check(endOffset <= 2.01f, "the first point of a bent polyline is half the width from its centre");
 }
 
+// ---- a change of text asks for a layout pass only when the size hint changes ----
+
+// What the apps do every frame during playback: a clock label whose digits change, a name that is cut with "...", a meter
+// value. The digits all have the same width, so none of it moves anything and the tree must not be laid out again for it.
+void testTextChangeAsksForLayoutOnlyWhenTheHintChanges()
+{
+    Harness h(900.0f, 400.0f);
+    LayoutProbe* probe = h.root()->createChild<LayoutProbe>();
+    BoxLayout* row = h.root()->createChild<BoxLayout>(LayoutDir::Horizontal);
+    Label* clock = row->createChild<Label>(String("00:00:00:00"));
+    Label* name = row->createChild<Label>(String("Parametro numero 1"));
+    name->setElide(true);
+    name->setStretch(1.0f);
+    Label* last = row->createChild<Label>(String("end"));
+    Button* play = row->createChild<Button>(String("Play"));
+    CheckBox* check1 = row->createChild<CheckBox>(String("Loop"));
+    h.frames(6);
+    const float digitsWidth = clock->sizeHint().x;
+    const int settled = probe->laidOut;
+    check(settled > 0, "(the probe is laid out)");
+
+    // the same width: no layout pass at all, however many times and however many frames
+    for (int i = 1; i <= 20; ++i)
+    {
+        String t = String("00:00:") + String::number(10 + i % 40) + ":" + String::number(10 + (i * 7) % 40);
+        clock->setText(t);
+        name->setText(String("Parametro numero ") + String::number(i)); // an eliding label asks for the dots whatever it says
+        play->setText(i % 2 ? "Stop" : "Play");                          // as many letters, the same hint
+        check1->setText(i % 2 ? "Loop" : "Rows");
+        h.frame();
+    }
+    check(clock->sizeHint().x == digitsWidth, "(the digits of the font all have one width)");
+    if (probe->laidOut != settled) printf("    %d layout passes for texts of the same width\n", probe->laidOut - settled);
+    check(probe->laidOut == settled, "a text that keeps the size hint asks for no layout pass");
+
+    // the hint changes: the layout runs by itself, once, and the widget takes the new width
+    const float before = clock->rect().w;
+    clock->setText("00:00:00:00 and some more");
+    h.frame();
+    check(probe->laidOut == settled + 1, "a wider text takes one layout pass");
+    check(clock->rect().w > before, "and the label is laid out at its new width");
+    clock->setText("00:00:00:00");
+    h.frame();
+    check(probe->laidOut == settled + 2 && fabsf(clock->rect().w - before) < 0.01f, "the same for a narrower one");
+    play->setText("Play something long");
+    h.frame();
+    check(probe->laidOut == settled + 3, "a Button whose text is longer takes one");
+    check1->setText("Loop the whole project");
+    h.frame();
+    check(probe->laidOut == settled + 4, "and so does a CheckBox");
+
+    // from nothing to something and back, in a label that does not cut and in one that does
+    const int base = probe->laidOut;
+    last->setText("");
+    h.frame();
+    check(probe->laidOut == base + 1, "a text that becomes empty takes one layout pass");
+    last->setText("x");
+    h.frame();
+    check(probe->laidOut == base + 2, "and one that stops being empty");
+    name->setText("");
+    h.frame();
+    check(probe->laidOut == base + 3, "an eliding label that becomes empty takes one");
+    name->setText("Parametro numero 2");
+    h.frame();
+    check(probe->laidOut == base + 4, "and one that stops being empty");
+    name->setText("Another parametro");
+    h.frame();
+    check(probe->laidOut == base + 4, "but not one that goes from a text to another");
+
+    // cutting on and off: it moves the hint of a long text, and nothing of an empty one
+    const int mid = probe->laidOut;
+    last->setElide(true);
+    h.frame();
+    check(probe->laidOut == mid, "a one letter label that cuts asks for the same width (a letter is narrower than the dots)");
+    last->setText("a long text that a label that cuts asks no room for");
+    h.frame();
+    const int widened = probe->laidOut;
+    check(widened == mid + 1, "(a long text in a label that cuts takes its dots)");
+    last->setElide(false);
+    h.frame();
+    check(probe->laidOut == widened + 1, "a label that stops cutting asks for the room of its whole text");
+    last->setElide(true);
+    h.frame();
+    check(probe->laidOut == widened + 2, "and one that starts takes it back");
+    last->setElide(true);
+    h.frame();
+    check(probe->laidOut == widened + 2, "cutting on again does nothing");
+    last->setText("");
+    h.frame();
+    const int emptied = probe->laidOut;
+    last->setElide(false);
+    last->setElide(true);
+    h.frame();
+    check(probe->laidOut == emptied, "cutting on and off with no text asks for nothing");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -635,6 +731,7 @@ int main(int argc, char** argv)
     RUN(testLabelAndComboHintsAreMeasured);
     RUN(testScrollViewHorizontalBar);
     RUN(testOpenPolylineHasTheSameWidthAtItsEnds);
+    RUN(testTextChangeAsksForLayoutOnlyWhenTheHintChanges);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

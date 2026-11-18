@@ -477,6 +477,23 @@ struct Edges
     }
 };
 
+// The size hint a widget had the last time it was worked out: what lets the setter of a text tell a change that moves the
+// layout from one that does not (a clock label whose digits change every frame has the same width every time, and asking
+// for a layout pass for it would cost the whole tree a layout pass every frame). A widget with such a setter keeps one
+// (mutable, in the widget), ends its sizeHint() with `return memo.note({ w, h })`, and its setter calls
+// Widget::invalidateLayoutIfHintChanged(memo) after it changed the text.
+struct HintMemo
+{
+    float w = -1.0f, h = -1.0f; // negative: never worked out, so the first change asks for a layout
+    template<typename V>
+    V note(V v)
+    {
+        w = v.x;
+        h = v.y;
+        return v;
+    }
+};
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  Text alignment
 // ═════════════════════════════════════════════════════════════════════════════
@@ -731,6 +748,10 @@ public:
     ///        containers out again and never resets the rectangle of a widget the application placed
     ///        directly on the stage; WidgetApp::requestLayout() is the one that applies the window size.
     void invalidateLayout();
+    /// @brief For the setter of something the size hint follows (a text): asks for a layout pass only when sizeHint() is not
+    ///        what `seen` (the widget's own HintMemo, written by its sizeHint()) says it was the last time it was worked
+    ///        out. Costs one sizeHint(); a widget that is not in a tree, or no application, asks for nothing.
+    void invalidateLayoutIfHintChanged(const HintMemo& seen);
 
     // ── Scroll offset (overridden by ScrollView) ──────────────────────────
     // Returns how much this widget's children are scrolled (dx, dy).
