@@ -260,8 +260,25 @@ void Menu::paint(PaintContext& ctx)
                 ctx.fill.RoundedRectangle(abs.x + 2, y, abs.w - 4, itemH, t.borderRadius, 6, true);
             }
 
-            // Checkmark
-            if (a->isCheckable() && a->isChecked())
+            Color tc = !a->isEnabled() ? t.menuItemDisabled
+                       : hov           ? t.menuItemTextHover
+                                       : t.menuItemText;
+
+            // Icon, or checkmark, in the left column
+            if (a->icon() != IconId::None)
+            {
+                const float cx = abs.x + kIconW * 0.5f;
+                const float cy = y + itemH * 0.5f;
+                ctx.drawIcon(a->icon(), cx - kIconSize * 0.5f, cy - kIconSize * 0.5f, kIconSize, tc);
+                // checked: a frame around the icon, where an item with no icon has the tick
+                if (a->isCheckable() && a->isChecked())
+                {
+                    ctx.line.SetColor(t.menuCheckMark.r, t.menuCheckMark.g, t.menuCheckMark.b, 255);
+                    ctx.line.RoundedRectangle(cx - kIconSize * 0.5f - 2.0f, cy - kIconSize * 0.5f - 2.0f,
+                            kIconSize + 4.0f, kIconSize + 4.0f, t.borderRadius, 6, false);
+                }
+            }
+            else if (a->isCheckable() && a->isChecked())
             {
                 float cx = abs.x + kIconW * 0.5f;
                 float cy = y + itemH * 0.5f;
@@ -271,9 +288,6 @@ void Menu::paint(PaintContext& ctx)
             }
 
             // Item text
-            Color tc = !a->isEnabled() ? t.menuItemDisabled
-                       : hov           ? t.menuItemTextHover
-                                       : t.menuItemText;
             ctx.font.SetColor(tc);
             float ty = y + (itemH + asc) * 0.5f;
             ctx.font.Print(a->text().c_str(), abs.x + kIconW + kPadX, ty);

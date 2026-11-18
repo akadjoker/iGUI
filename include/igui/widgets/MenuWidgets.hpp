@@ -15,6 +15,7 @@ namespace retained
 //  MenuAction — a single item in a Menu
 //    auto* act = menu->addAction("Open");
 //    act->setShortcut("Ctrl+O");
+//    act->setIcon(IconId::Folder);
 //    act->triggered.connect([]() { /* ... */ });
 // ═════════════════════════════════════════════════════════════════════════════
 
@@ -47,6 +48,11 @@ public:
     bool isChecked() const
     {
         return checked_;
+    }
+    /// @brief The icon drawn in the left column, where a check mark goes (IconId::None: no icon).
+    IconId icon() const
+    {
+        return icon_;
     }
     /// @brief Check if this is a separator item.
     bool isSeparator() const
@@ -84,6 +90,16 @@ public:
     {
         checked_ = c;
     }
+    /// @brief Put an icon in the left column of the item (the column of the check mark, which is
+    ///        22 pixels wide: the icon is drawn 16 pixels square and takes the colour of the item's
+    ///        text). Any IconId does: the built-in ones, or an application's own picture made with
+    ///        registerImageIcon(). A checked checkable action with an icon shows a frame around the
+    ///        icon where the others show the tick. IconId::None takes the icon away. The width of
+    ///        the menu does not change (the column was always there).
+    void setIcon(IconId id)
+    {
+        icon_ = id;
+    }
     /// @brief Attach a submenu the caller owns: nothing here deletes it (the actions of a Menu are
     ///        deleted by it, the submenu they point to is not unless it was given as owned). The
     ///        caller keeps it alive while the action exists and deletes it, after the menu that
@@ -114,6 +130,7 @@ private:
     bool checkable_ = false;
     bool checked_ = false;
     bool separator_ = false;
+    IconId icon_ = IconId::None;
     Menu* submenu_ = nullptr;
 };
 
@@ -194,6 +211,7 @@ public:
 private:
     static constexpr float kSepH = 9.0f;
     static constexpr float kIconW = 22.0f;
+    static constexpr float kIconSize = 16.0f; // an action's icon, centred in the kIconW column
     static constexpr float kPadX = 12.0f;
     static constexpr float kArrowW = 16.0f; // what an item with a submenu adds on the right for its arrow
 
