@@ -11,7 +11,7 @@ systemd com MemoryMax=4G, `-j3`, os testes que abrem janelas so por `tools/xvfb-
 
 Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=<ct em 34169bc> IGUI_ZEN_PLATFORM_DIR=<zen_plataform em db76a13> tools/check.sh --build <dir> --jobs 3`.
 
-## Estado (2026-11-18; a ultima alteracao de codigo de igui-round4 e e2138e5; sobre ela so este ficheiro)
+## Estado (2026-11-18; a ultima alteracao de codigo de igui-round4 e 31f9bb6; sobre ela so este ficheiro)
 
 | # | Item | Estado | Commit | Teste |
 |---|------|--------|--------|-------|
@@ -23,8 +23,8 @@ Como construir e correr (a partir da raiz do repositorio): `IGUI_CONTAINERS_DIR=
 | 6 | ScrollView::layout (barra horizontal presa) e espessura das barras no Theme | metade feita: ScrollView::layout (a barra horizontal presa e o conteudo mais largo arrumado apertado) esta na igui-round4 (43743db, hash igual). A ESPESSURA das barras NAO entrou: esta no ramo igui-round4-scrollbar-theme (7a48f94, em cima de e2138e5) porque muda o aspecto de todas as aplicacoes e o wip rebentava 2 testes que ja existiam (ver abaixo) | 43743db (e 7a48f94 no ramo a parte) | testScrollViewHorizontalBar (2 verificacoes falham sem o src) |
 | 7 | FloatWindow::setFloatPos nao faz layout | feito | 602345d | testFloatWindowSettersLayOut |
 | 8 | PianoRoll::onMousePress com botoes 1/2/3 (a janela da 0/1/2) | feito (e o mesmo engano no WaveformView; os outros widgets estao certos) | 8dea1b8 | testPianoRollButtons, testWaveformViewButtons |
-| 9 | WidgetApp: layout so no resize / requestLayout() | feito em dois commits: invalidateLayout (2bf456d) e a correcao de nao repor filhos postos a mao (e5ba9a7); ver a nota abaixo | 2bf456d, e5ba9a7 | testLayoutRunsByItself, testAutomaticLayoutKeepsHandPlacedWidgets, igui_retained_idle testIdleFrameDoesNoLayout |
-| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | formatValue feito (57941ab, testFormatValue). Segmentos duplicados: feito (DrawList::pathStroke, e2138e5, ver abaixo; muda o desenho de todas as polilinhas abertas). Faltam o rotulo da fatia pequena e o nome do histograma na legenda | 57941ab, e2138e5 | testFormatValue, testOpenPolylineHasTheSameWidthAtItsEnds (2 verificacoes falham sem o src) |
+| 9 | WidgetApp: layout so no resize / requestLayout() | feito em dois commits: invalidateLayout (2bf456d) e a correcao de nao repor filhos postos a mao (e5ba9a7); e afinado para nao custar nada num texto que muda a cada frame sem mudar o hint: so pede layout quando o size hint muda (setText do Label, do Button e da CheckBox, setElide: ef923ee; os setters de layout com o valor que ja tem e o moveChild: 30e3f28; os itens do ComboBox: 48ca394); ver a nota abaixo | 2bf456d, e5ba9a7, ef923ee, 30e3f28, 48ca394 | testLayoutRunsByItself, testAutomaticLayoutKeepsHandPlacedWidgets, igui_retained_idle testIdleFrameDoesNoLayout, testTextChangeAsksForLayoutOnlyWhenTheHintChanges (9 falham sem o src), testLayoutSettersWithTheirValueAskForNothing (3), testComboBoxItemsAskForLayoutOnlyWhenTheWidestChanges (3) |
+| 10 | Chart: segmentos duplicados, rotulo de fatia pequena, histograma sem nome na legenda, formatValue >= 1e9 | feito: formatValue (57941ab), segmentos duplicados (DrawList::pathStroke, e2138e5, ver abaixo; muda o desenho de todas as polilinhas abertas), o rotulo de uma fatia de menos de 1% que lia 0% e agora le <1% (85a5e57; o texto do defeito e do zenMCAP e nao o tive: ver abaixo), a serie sem nome na legenda que passa a Series N (31f9bb6). Falta o tooltip de uma serie sem nome | 57941ab, e2138e5, 85a5e57, 31f9bb6 | testFormatValue, testOpenPolylineHasTheSameWidthAtItsEnds (2 falham sem o src), testSmallSliceLabel (4), testLegendNamesUnnamedSeries (2) |
 | 11 | Fuga de Menu ao sair | feito: contrato escrito no cabecalho, Menu::addSubmenu e setSubmenu(m, owned) novos; setSubmenu(m) continua sem apagar | f79a949 | igui_retained_menus testMenuOwnership (ASan limpo; com o destrutor mutilado o LSan apanha) |
 | 12-17 | MenuAction icone; Menu toggled e auto-toggle; aboutToShow; popup com widgets; API de input sintetico; SideTabBar/ToolBar com icones da aplicacao e Theme | por fazer | | |
 | 18 | ImageButton: desactivado, hover, premido, tooltip como o IconButton | ja existiam (fixados por teste); a imagem desactivada passa a esbatida | e8e406e | testImageButtonStates |
@@ -54,6 +54,33 @@ conhecido onde o layout automatico mova o que a aplicacao pos. A verificar: o ze
 de `designW_/designH_` aos filhos em cada layout, agora mais vezes: idempotente, mas o designer arrasta controlos com setRect;
 ver se o arrastar sobrevive a um addChild ou setText).
 
+## Item 9: o custo num texto que muda a cada frame (ef923ee, 30e3f28, 48ca394)
+
+Desde 2bf456d o `Label::setText` pedia layout sempre; um relogio, um timecode ou o valor de um medidor posto a cada frame
+(ZenDAW, ZenVideo) custava a arvore toda uma passagem de layout por frame: no editor do bench a frame a seguir a um setText custava
+96,5 us contra 89,6 na main. Agora o texto so pede layout quando o size hint muda:
+- `HintMemo` (Widget.hpp) guarda o hint da ultima vez que se calculou; o `sizeHint()` do Label, do Button e da CheckBox acaba em
+  `return hint_.note({...})` e o setter chama `invalidateLayoutIfHintChanged(hint_)`, que calcula o hint uma vez (uma medicao do
+  texto novo: 94 ns contra 6 num texto de 11 letras; num Label que corta nenhuma: 18 ns, pede as reticencias para qualquer texto
+  comprido e a largura delas fica guardada com a fonte e o corpo) e pede layout so se for outro. Enquanto nenhum layout pediu o hint
+  (HintMemo ainda negativo) pede sempre e nao mede, para ser o layout a medir pela ordem da arvore: medir num setter da
+  construcao mudava a ordem em que os glifos entram no atlas dinamico e com ela os UV, e o hash do desenho (visto duas vezes a
+  fazer isto, no Label e no ComboBox; so os UV mexiam, as posicoes e as cores nao). Um widget fora de uma arvore nao pede nada.
+- ficam a pedir sempre: o texto que passa de vazio a nao vazio ou o contrario, o que muda a largura, ligar e desligar o corte quando
+  muda o hint, e o que muda a estrutura (addChild, removeChild, setVisible com outro valor).
+- o resto das chamadas de 2bf456d/05b75ea: `setStretch`, `setMargins`, `setLayoutAlign`, `BoxLayout::setSpacing/setPadding/setMainAlign`
+  e `moveChild` saem sem fazer nada se o valor (ou o indice) e o que ja tem; o ComboBox (addItem, insertItem, removeItem,
+  setItemText, clear) mantem a largura do item mais largo ao longo das mutacoes e so pede layout quando a largura do hint muda.
+- um widget da aplicacao cujo hint segue um texto faz o mesmo: um `mutable HintMemo`, `return memo.note({w, h})` no sizeHint e
+  `invalidateLayoutIfHintChanged(memo)` no setter. Os outros widgets cujo hint segue o texto (RadioButton, Switch, Tabs...) continuam
+  sem pedir layout no setText.
+- medido (bench, 6 corridas alternadas, `taskset -c 2`): `frame_settext_same_width` (timecode com digitos que mudam) +0,0% e +0,2% a
+  frame da main nas duas cenas (editor300 e editor3000; alinhado +0,4% e +0,3%), `frame_settext_cut_label` (a etiqueta de estado, que
+  corta) +0,2% e +0,5% (alinhado +0,8% e +0,6%); `frame_settext_wider` (a largura muda de cada vez, o layout tem de correr) +8% contra a main,
+  que nao faz layout e deixa os rectangulos velhos, e a `frame_settext_wider_requestlayout` (o mesmo com o `requestLayout()` que a
+  aplicacao punha a mao antes) -3,9% e -3,3%: o layout ficou mais barato (o Label que corta ja nao mede o texto comprido).
+  O ZenDAW e o ZenVideo, reconstruidos contra a ponta, dao os mesmos ecras que antes (ver abaixo).
+
 ## Item 10: o achado do pathStroke (feito, e2138e5)
 
 `DrawList::pathStroke` (Retained.cpp): numa polilinha aberta o primeiro e o ultimo ponto tinham a normal de um dos lados a zero,
@@ -68,6 +95,18 @@ metade da espessura que tinham e os icones de traco (o X, o +, o -, o caixote do
 ficam mais finos e mais nitidos. Quem escolheu a espessura a olho contra o desenho antigo vai ver as linhas mais leves: se for
 demais, sobe-se a espessura pedida na aplicacao, nao se volta ao desenho com o dobro. Uma linha de espessura 1 centrada numa
 coordenada inteira fica a meio de duas linhas de pixels (a 50%), como qualquer traco com anti-aliasing.
+
+## Item 10: o resto (85a5e57, 31f9bb6)
+
+O texto do que o zenMCAP viu nao esta no docs/LIBRARY-NOTES.md da ZenDAW (nao fala de graficos) nem aqui; o que se fez vem de ler o
+Chart:
+- rotulo de uma fatia pequena (pie e donut): uma fatia de menos de 1% (0,2%, 0,05%) saia com 0% (o %.0f do `sliceLabel`) quando
+  o tooltip da mesma fatia diz 0.2%; agora le <1% (4 (<1%) com os valores) e `Chart::sliceText(categoria)` (novo) devolve o
+  texto da ultima pintura para se poder testar. A colocacao dos rotulos de fora (linha de ligacao, empurrados para nao se
+  sobreporem) ja estava bem. Se o que o dono viu era outra coisa (um rotulo cortado ou em cima de outro), dizer.
+- serie sem nome na legenda: com mais de uma serie, a que nao tem nome (um `hist(amostras, 0)` sem nome) entrava na legenda com o
+  texto vazio; agora le Series N, com N contado a partir de um pela posicao da serie; `Chart::legendLabel(entrada)` (novo). Uma
+  serie so sem nome continua sem legenda. Falta o tooltip de uma serie sem nome, que continua a nao dizer o nome.
 
 ## Item 6: o que ficou de fora e porque (ramo igui-round4-scrollbar-theme)
 
@@ -105,15 +144,25 @@ novos; onde a corrida punha os widgets dependia do que o malloc devolvia, e a ve
 falhava (sementes 5 e 6, sempre) assim que o ComboBox::sizeHint passou a medir os itens (so mexe no padrao de alocacoes). Agora o
 `forget()` poe o `scratch_` a nulo antes de cada removeChild do teste. So teste.
 
-## O que se verificou em 2026-11-18 (a ponta de codigo e e2138e5)
+## O que se verificou em 2026-11-18
 
-`tools/check.sh --build <dir> --jobs 3` completo, com `IGUI_CONTAINERS_DIR` em ct 34169bc e `IGUI_ZEN_PLATFORM_DIR` em zen_plataform
+`tools/check.sh --build <dir> --jobs 3` completo, feito duas vezes (em e2138e5 e em 31f9bb6, a ponta de codigo; as duas com tudo PASS), com `IGUI_CONTAINERS_DIR` em ct 34169bc e `IGUI_ZEN_PLATFORM_DIR` em zen_plataform
 db76a13: PASS nostd (nada novo com std:: nem #include <...> em src, include e adapters desde origin/main), PASS release (40 de
 40), PASS asan (ASan e UBSan, 40 de 40), PASS hash (os tres somas de bench/retained/draw.hash: editor 87b1fe59ac36adb1, as duas
-vezes, e piano roll 7956122198be0670; o do editor mudou em 05b75ea e em e2138e5, ver acima, o do piano roll nao).
+vezes, e piano roll 7956122198be0670; o do editor mudou em 05b75ea e em e2138e5, ver acima, o do piano roll nao; os commits
+seguintes nao o mexem).
 
 Benches (`igui_retained_bench`, origin/main 1a77b1f contra a ponta, a mesma fonte do bench dos dois lados, `taskset -c 2`, 6 corridas
-alternadas de cada lado, minimo; a maquina estava com carga de outro processo parte do tempo, por isso so contam os minimos):
+alternadas de cada lado, minimo; a maquina estava com carga de outro processo parte do tempo, por isso so contam os minimos). A ponta de
+codigo 31f9bb6, com as linhas novas frame_settext (bench de 6afea06 nos dois lados, 6 corridas plain e 5 alinhadas), da: idle_frame
+editor300 89,97 -> 89,47 us (-0,6%; alinhado +0,1%), editor3000 98,00 -> 98,02 (0,0%; +0,1%), update_only 0,03 -> 0,03, as linhas de
+input -0,4% a +0,1% (alinhado -0,7% a 0,0%), as de grelhas -0,5% a +1,8% (alinhado 0,0% a +2,2%), layout_only -40% (alinhado -38%),
+label_sizehints -58% (-62%), layout_frame e resize_frame -4,5%; as linhas idle_frame_no_* como se explica abaixo e text_width_x100
++4,8% e +4,1% (alinhado +4,4% e +4,0%: a mesma sensibilidade a posicao do codigo, que ja deu +10% e agora da +4%);
+text/elided_8000_chars_frame +3,2% (+3,2%); bigtext/doc20000_type +9,3% plain e -0,2% alinhado e loops/pianoroll_32_beats -4,7%
+e -3,4% (nada a ver com estas mudancas); timeline*/idle_frame_all_visible +0,2% e -0,7% plain mas +3,8% e +8,2% so no binario alinhado (os
+cinco em 489 a 506 us contra 452; o plain da 442,5 contra 443,4): posicao do codigo, nao codigo (nao se mexeu no Timeline, e uma
+lentidao real veria-se nos dois binarios). Os numeros que seguem sao os da primeira volta (ponta e2138e5):
 - frame ociosa: editor300 89,97 -> 89,01 us (-1,1%), editor3000 97,82 -> 97,05 (-0,8%); update_only 0,03 -> 0,03; paint_only -0,9%;
   timeline300/3000 idle_frame -0,3% e -0,2%; as linhas de input (rato por cima de cada widget, teclas, escrever) +0,2% a +0,8%
   (alinhado: -0,1% a +0,3%); as de grelhas (datagrid, treegrid, propgrid) -0,2% a +2,1% (alinhado: -0,2% a +1,8%); as
@@ -150,6 +199,8 @@ ZENDAW_DATA/ZENVIDEO_DATA em scratch) com `ZEN_SCREENSHOT` e `ZEN_SCREENSHOT_FRA
   rebordo e os icones das barras de ferramentas (importar, tesoura, caixote, X, cadeado, +, -, o separador vertical), a linha por
   baixo dos botoes de transporte e a seta da ComboBox "Media files": mais finos e nitidos na ponta (item 10). Nao se viu o painel
   de propriedades com um clip escolhido (o ecra de arranque diz "No clip selected").
+- as duas aplicacoes reconstruidas e corridas outra vez contra a ponta de codigo 31f9bb6: os ecras do ZenDAW continuam iguais aos da main (0 pixeis
+  diferentes) e o do ZenVideo e igual ao que se viu em e2138e5 (0 pixeis diferentes) e difere da main so nos tracos (14025 pixeis).
 
 ## Por verificar
 
@@ -164,8 +215,8 @@ ZENDAW_DATA/ZENVIDEO_DATA em scratch) com `ZEN_SCREENSHOT` e `ZEN_SCREENSHOT_FRA
 1. Decidir o item 6 (espessura das barras): ver "Item 6: o que ficou de fora" acima. O ramo igui-round4-scrollbar-theme esta pronto
    para um merge ou cherry-pick se se aceitar o aspecto; o ramo igui-round4-wip (5f59819) fica obsoleto (os itens 3, 6a e 10
    passaram para a igui-round4 com os seus testes, a espessura para o ramo a parte) e pode apagar-se.
-2. Resto do item 10 (rotulo da fatia pequena do pie/donut; nome do histograma na legenda: sugestao `Series N` para uma serie sem
-   nome quando ha mais de uma, mais um acessor `legendLabel(i)` para testar).
+2. Resto do item 10 (feito em 85a5e57 e 31f9bb6; falta o tooltip de uma serie sem nome e confirmar com o dono que o rotulo da fatia
+   pequena era o 0%).
 3. Stage B por ordem (12 a 17, 19 a 21), um commit por item com o seu teste. Pontos a decidir: 13 (Menu::onMousePress vira o
    checked_ antes de emitir triggered: sinal `toggled(bool)` e `setAutoToggle(false)` por accao), 15 (popup com widgets: reutilizar
    showPopup com owned=false e o lendFocus), 16 (envolver o IO de WidgetApp::update: `feedMouseMove/Button/Wheel/Key/Text`).
@@ -180,7 +231,9 @@ ZENDAW_DATA/ZENVIDEO_DATA em scratch) com `ZEN_SCREENSHOT` e `ZEN_SCREENSHOT_FRA
    (2bf456d, e5ba9a7); ImageButton desactivado esbatido (e8e406e); Chart::formatValue sem %.3g (57941ab); Label com a largura
    medida e o Label que corta com so as reticencias como hint (05b75ea); ScrollView com o conteudo tao largo como pede quando a
    barra horizontal aparece (43743db); polilinhas abertas e linhas de dois pontos com a espessura pedida e nao o dobro (e2138e5:
-   icones e rebordos mais finos em todas as aplicacoes).
+   icones e rebordos mais finos em todas as aplicacoes); uma fatia de menos de 1% de um pie ou donut le <1% em vez de 0% (85a5e57);
+   uma serie sem nome ao lado de outras le Series N na legenda (31f9bb6); o texto de um Label, Button ou CheckBox que mantem o hint ja nao
+   pede layout (ef923ee), como os setters de layout com o valor que tem (30e3f28) e os itens do ComboBox que nao mexem no mais largo (48ca394).
 6. O que a ZenDAW pode apagar quando os itens estiverem feitos: a traducao de botoes do `Roll::onMousePress` (ja), os
    `requestLayout()` a mao em `App::refreshAll`/`showPage` (ja, com o item 9), e depois dos itens 17, 19: `PageRail` e `TileBar`
    (icones da aplicacao e Theme na SideTabBar/ToolBar) e o `RollPane::pushNotes` (sinais com o indice e a velocidade por nota).
@@ -197,7 +250,8 @@ ZENDAW_DATA/ZENVIDEO_DATA em scratch) com `ZEN_SCREENSHOT` e `ZEN_SCREENSHOT_FRA
   os `setText` e afins de outros widgets cujo hint depende do texto (RadioButton, Switch, ComboBox::addItem, Tabs...): cada
   um e uma linha `invalidateLayout();`. Os widgets que mostram e escondem um filho sem que ninguem o posicione (overlays)
   marcam `layoutNeutral_` (membro protegido), como o grabber do SpinSlider; sem isso cada entrada do rato pedia layout.
-  O teste de frame ociosa (test_retained_idle) conta as passagens de layout na janela do editor.
+  O teste de frame ociosa (test_retained_idle) conta as passagens de layout na janela do editor. Os que ja pedem so quando o hint muda
+  (Label, Button, CheckBox, ComboBox, setters de layout): ver a seccao do item 9 mais acima.
 - 11 (feito): ver o commit f79a949 e o comentario da classe Menu em MenuWidgets.hpp. Aplicacoes do dono com setSubmenu: coco,
   deform, ZenHuman, ZenStage (src/app/MainWindow.cpp), todas com `setSubmenu(recentMenu_.get())` e o submenu em ct::unique_ptr
   da aplicacao (o ZenStage tambem `clipTransition_->setSubmenu(transitionMenu_.get())`): por isso a posse por omissao nao
