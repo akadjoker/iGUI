@@ -990,6 +990,198 @@ void testRangeGridsEditors()
     }
 }
 
+// ---- TreeView, PropertyGrid, ColorPicker and ColorButton ----
+
+void testTreeProperty()
+{
+    // a tree whose first root is open (a node is open when it is made) or closed
+    auto openTree = [](Stage& st) {
+        TreeView* w = put<TreeView>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        TreeNode* root = w->addRoot("root");
+        root->addChild("a");
+        root->addChild("b");
+        w->addRoot("other");
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    auto tree = [&](Stage& st) {
+        TreeView* w = openTree(st);
+        w->roots()[0]->setExpanded(false);
+        st.h.frames(2);
+        return w;
+    };
+    auto rowCentre = [](Stage& st, TreeView* w, TreeNode* n, float dx) {
+        Rect r;
+        if (!w->rowRect(n, r)) return;
+        st.move(r.x + dx, r.y + r.h * 0.5f);
+    };
+    victim<TreeView>("TreeView.selectionChanged by setSelectedNode", tree,
+            [](TreeView* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, TreeView* w) { st.act([w]() { w->setSelectedNode(w->roots()[1]); }); });
+    victim<TreeView>("TreeView.selectionChanged by a click on a row", tree,
+            [](TreeView* w, auto kill, auto late) { w->selectionChanged.connect(kill); w->nodeActivated.connect(late); },
+            [&](Stage& st, TreeView* w) {
+                rowCentre(st, w, w->roots()[1], 80.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<TreeView>("TreeView.nodeActivated by a double click", tree,
+            [](TreeView* w, auto kill, auto) { w->nodeActivated.connect(kill); },
+            [&](Stage& st, TreeView* w) {
+                w->setSelectedNode(w->roots()[1]);
+                rowCentre(st, w, w->roots()[1], 80.0f);
+                MouseEvent dbl = st.event(w, 0);
+                dbl.clickCount = 2;
+                if (st.mode == 1) w->onMousePress(dbl);
+                else
+                {
+                    st.app.feedMouseButton(0, true);
+                    st.app.feedMouseButton(0, false);
+                    st.app.feedMouseButton(0, true);
+                }
+            });
+    victim<TreeView>("TreeView.nodeExpanded by a click on the triangle", tree,
+            [](TreeView* w, auto kill, auto) { w->nodeExpanded.connect(kill); },
+            [&](Stage& st, TreeView* w) {
+                rowCentre(st, w, w->roots()[0], 8.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<TreeView>("TreeView.nodeCollapsed by a click on the triangle", openTree,
+            [](TreeView* w, auto kill, auto) { w->nodeCollapsed.connect(kill); },
+            [&](Stage& st, TreeView* w) {
+                rowCentre(st, w, w->roots()[0], 8.0f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<TreeView>("TreeView.nodeExpanded by the Right key",
+            [&](Stage& st) {
+                TreeView* w = tree(st);
+                w->setSelectedNode(w->roots()[0]);
+                st.h.frames(2);
+                return w;
+            },
+            [](TreeView* w, auto kill, auto) { w->nodeExpanded.connect(kill); },
+            [](Stage& st, TreeView* w) { st.key(w, Key::Right); });
+    victim<TreeView>("TreeView.nodeCollapsed by the Left key",
+            [&](Stage& st) {
+                TreeView* w = openTree(st);
+                w->setSelectedNode(w->roots()[0]);
+                st.h.frames(2);
+                return w;
+            },
+            [](TreeView* w, auto kill, auto) { w->nodeCollapsed.connect(kill); },
+            [](Stage& st, TreeView* w) { st.key(w, Key::Left); });
+    victim<TreeView>("TreeView.selectionChanged by the Down key",
+            [&](Stage& st) {
+                TreeView* w = openTree(st);
+                w->setSelectedNode(w->roots()[0]);
+                st.h.frames(2);
+                return w;
+            },
+            [](TreeView* w, auto kill, auto) { w->selectionChanged.connect(kill); },
+            [](Stage& st, TreeView* w) { st.key(w, Key::Down); });
+    victim<TreeView>("TreeView.selectionSetChanged by a ctrl click in a multi selection",
+            [&](Stage& st) {
+                TreeView* w = openTree(st);
+                w->setMultiSelect(true);
+                w->setSelectedNode(w->roots()[0]);
+                st.h.frames(2);
+                return w;
+            },
+            [](TreeView* w, auto kill, auto) { w->selectionSetChanged.connect(kill); },
+            [&](Stage& st, TreeView* w) {
+                rowCentre(st, w, w->roots()[1], 80.0f);
+                MouseEvent e = st.event(w, 0);
+                e.ctrl = true;
+                if (st.mode == 1) w->onMousePress(e);
+                else
+                {
+                    st.app.feedMouseButton(0, true, false, true);
+                    st.app.feedMouseButton(0, false, false, true);
+                }
+            });
+    auto props = [](Stage& st) {
+        PropertyGrid* w = put<PropertyGrid>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+        w->addBool("visible", false);
+        w->addButton("apply", ct::Function<void()>());
+        st.h.relayout();
+        st.h.frames(2);
+        return w;
+    };
+    victim<PropertyGrid>("PropertyGrid.propertyChanged by a click on a bool", props,
+            [](PropertyGrid* w, auto kill, auto) { w->propertyChanged.connect(kill); },
+            [](Stage& st, PropertyGrid* w) { st.click(w, 225.0f, 12.0f); });
+    if (wanted("PropertyGrid.onChange callback of a bool row taking the grid out"))
+    {
+        // the callback of a row (a ct::Function the application gave) is a handler too: propertyChanged does not follow the one
+        // that took the grid out; the control is the same grid with a callback that does nothing
+        ++gCases;
+        for (int remove = 0; remove < 2; ++remove)
+            for (int mode = 0; mode < 2; ++mode)
+            {
+                Stage st(mode);
+                PropertyGrid* w = put<PropertyGrid>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+                int callbacks = 0, signals = 0;
+                w->addBool("visible", false, [&, w](bool) {
+                    ++callbacks;
+                    if (remove) st.holder->removeChild(w);
+                });
+                w->propertyChanged.connect([&](int) { ++signals; });
+                st.h.relayout();
+                st.h.frames(2);
+                st.watch(w);
+                st.click(w, 225.0f, 12.0f);
+                st.h.frames(3);
+                const bool ok = callbacks == 1 && signals == (remove ? 0 : 1) && st.gone() == (remove != 0);
+                check(ok, say(remove ? "PropertyGrid.onChange callback of a bool row taking the grid out" : "CONTROL PropertyGrid.onChange callback of a bool row", mode).c_str());
+                if (!ok) printf("    callback %d times, propertyChanged %d times, gone %d\n", callbacks, signals, st.gone());
+            }
+    }
+    victim<ColorPicker>("ColorPicker.colorChanged by a press on the value bar",
+            [](Stage& st) {
+                ColorPicker* w = put<ColorPicker>(st, 20.0f, 20.0f, 220.0f, 200.0f);
+                st.h.frames(2);
+                return w;
+            },
+            [](ColorPicker* w, auto kill, auto) { w->colorChanged.connect(kill); },
+            [](Stage& st, ColorPicker* w) { st.click(w, 179.0f, 60.0f); });
+    victim<ColorPicker>("ColorPicker.colorChanged by a press on the alpha bar",
+            [](Stage& st) {
+                ColorPicker* w = put<ColorPicker>(st, 20.0f, 20.0f, 220.0f, 200.0f);
+                w->setShowAlpha(true);
+                st.h.frames(2);
+                return w;
+            },
+            [](ColorPicker* w, auto kill, auto) { w->colorChanged.connect(kill); },
+            [](Stage& st, ColorPicker* w) { st.click(w, 205.0f, 60.0f); });
+    victim<ColorPicker>("ColorPicker.colorChanged by a press on the wheel",
+            [](Stage& st) {
+                ColorPicker* w = put<ColorPicker>(st, 20.0f, 20.0f, 220.0f, 200.0f);
+                st.h.frames(2);
+                return w;
+            },
+            [](ColorPicker* w, auto kill, auto) { w->colorChanged.connect(kill); },
+            [](Stage& st, ColorPicker* w) {
+                st.click(w, 90.0f, 80.0f);
+            });
+    victim<ColorPicker>("ColorPicker.colorCommitted by a drag",
+            [](Stage& st) {
+                ColorPicker* w = put<ColorPicker>(st, 20.0f, 20.0f, 220.0f, 200.0f);
+                st.h.frames(2);
+                return w;
+            },
+            [](ColorPicker* w, auto kill, auto) { w->colorCommitted.connect(kill); },
+            [](Stage& st, ColorPicker* w) {
+                const Rect r = w->absoluteRect();
+                st.move(r.x + 90.0f, r.y + 80.0f);
+                st.down(w);
+                st.drag(w, r.x + 60.0f, r.y + 70.0f);
+                st.up(w);
+            });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1021,6 +1213,7 @@ int main(int argc, char** argv)
     testViews();
     testApp();
     testRangeGridsEditors();
+    testTreeProperty();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)

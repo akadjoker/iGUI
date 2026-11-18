@@ -491,8 +491,8 @@ void TreeView::setSelectedNode(TreeNode* n)
     if (selected_ != n)
     {
         selected_ = n;
-        selectionChanged.emit(n);
         markDirty();
+        selectionChanged.emit(n); // (last: a handler may take the tree out of the tree, see WidgetApp::hasGone)
     }
 }
 
@@ -827,12 +827,13 @@ void TreeView::onMousePress(MouseEvent& e)
         float triEnd = indX + 11.f;
         if ((e.x - abs.x) < triEnd)
         {
-            row.node->setExpanded(!row.node->isExpanded());
-            if (row.node->isExpanded()) nodeExpanded.emit(row.node);
-            else
-                nodeCollapsed.emit(row.node);
+            TreeNode* const toggled = row.node;
+            toggled->setExpanded(!toggled->isExpanded());
             flatDirty_ = true;
             markDirty();
+            if (toggled->isExpanded()) nodeExpanded.emit(toggled); // (last: a handler may take the tree out of the tree)
+            else
+                nodeCollapsed.emit(toggled);
             return;
         }
     }
@@ -852,7 +853,8 @@ void TreeView::onMousePress(MouseEvent& e)
             TreeNode* next = extra_.empty() ? nullptr : extra_[0];
             if (!extra_.empty()) extra_.erase(extra_.begin());
             selected_ = next;
-            selectionChanged.emit(next);
+            markDirty();
+            if (WidgetApp::instance().emitGone(this, selectionChanged, next)) return; // (a handler took the tree out of the tree)
         }
         else
         {
@@ -870,8 +872,11 @@ void TreeView::onMousePress(MouseEvent& e)
         return;
     }
     const bool hadExtra = !extra_.empty();
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     setSelectedNode(pressed);
-    if (hadExtra) selectionSetChanged.emit();
+    if (app.hasGone(this, seen)) return; // (a handler of selectionChanged took the tree out of the tree: see WidgetApp::hasGone)
+    if (hadExtra && app.emitGone(this, selectionSetChanged)) return;
     // The selection handler may have rebuilt the tree.
     if (selected_ == pressed) dragCandidate_ = pressed;
     if (selected_ == pressed && e.button == 0 && e.clickCount >= 2) nodeActivated.emit(pressed);
@@ -1104,6 +1109,8 @@ void TreeView::onKeyPress(KeyEvent& e)
     // deleted behind the view's back.
     TreeNode* node = cur >= 0 ? flatRows_[cur].node : nullptr;
     TreeNode* const before = selected_;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
 
     const int target = listKeyTarget(e.key, cur, count, static_cast<int>(rect_.h / rowHeight_));
     if (target != cur)
@@ -1117,9 +1124,9 @@ void TreeView::onKeyPress(KeyEvent& e)
         if (node->isExpanded() && node->hasChildren())
         {
             node->setExpanded(false);
-            nodeCollapsed.emit(node);
             flatDirty_ = true;
             markDirty();
+            nodeCollapsed.emit(node);
         }
         else if (node->parent())
             setSelectedNode(node->parent());
@@ -1130,13 +1137,14 @@ void TreeView::onKeyPress(KeyEvent& e)
         if (!node->isExpanded() && node->hasChildren())
         {
             node->setExpanded(true);
-            nodeExpanded.emit(node);
             flatDirty_ = true;
             markDirty();
+            nodeExpanded.emit(node);
         }
         else if (node->hasChildren())
             setSelectedNode(node->children()[0]);
     }
+    if (app.hasGone(this, seen)) return; // (a handler took the tree out of the tree: nothing of it is touched)
 
     if (selected_ != before && selected_)
     {
@@ -2092,9 +2100,12 @@ void PropertyGrid::onMousePress(MouseEvent& e)
         {
             auto& d = std::get<PropBool>(row.data);
             d.value = !d.value;
-            if (d.onChange) d.onChange(d.value);
-            propertyChanged.emit(idx);
             markDirty();
+            WidgetApp& app = WidgetApp::instance();
+            const uint32_t seen = app.deletions();
+            if (d.onChange) d.onChange(d.value);
+            if (app.hasGone(this, seen)) return; // (the row's callback took the grid out of the tree: see WidgetApp::hasGone)
+            propertyChanged.emit(idx);
             break;
         }
         case PropType::Float:
@@ -2160,8 +2171,8 @@ void PropertyGrid::onMousePress(MouseEvent& e)
         case PropType::Button:
         {
             auto& d = std::get<PropButton>(row.data);
-            if (d.onClick) d.onClick();
             markDirty();
+            if (d.onClick) d.onClick(); // (last: the callback may take the grid out of the tree)
             break;
         }
         case PropType::Range:
@@ -2840,8 +2851,8 @@ void ColorPicker::onMousePress(MouseEvent& e)
     {
         dragTarget_ = DragValueBar;
         updateFromValueBar(e.y, abs);
-        colorChanged.emit(color());
         markDirty();
+        colorChanged.emit(color()); // (last: a handler may take the picker out of the tree, see WidgetApp::hasGone)
         return;
     }
     if (showAlpha_)
@@ -2851,8 +2862,8 @@ void ColorPicker::onMousePress(MouseEvent& e)
         {
             dragTarget_ = DragAlphaBar;
             updateFromAlphaBar(e.y, abs);
-            colorChanged.emit(color());
             markDirty();
+            colorChanged.emit(color());
             return;
         }
     }
@@ -2860,8 +2871,8 @@ void ColorPicker::onMousePress(MouseEvent& e)
     {
         dragTarget_ = DragWheel;
         updateFromWheel(e.x, e.y, abs);
-        colorChanged.emit(color());
         markDirty();
+        colorChanged.emit(color());
     }
 }
 

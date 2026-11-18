@@ -110,9 +110,9 @@ struct Stage
     // a key down and up: the widget takes the focus first (mode 0) or is called (mode 1)
     void key(Widget* target, int k, bool shift = false, bool ctrl = false)
     {
+        app.setFocused(target); // (a widget that takes keys only with the focus is called with it in mode 1 too)
         if (mode == 0)
         {
-            app.setFocused(target);
             app.feedKey(k, true, shift, ctrl);
             app.feedKey(k, false, shift, ctrl);
             return;
