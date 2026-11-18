@@ -1139,6 +1139,30 @@ void testTreeProperty()
                 if (!ok) printf("    callback %d times, propertyChanged %d times, gone %d\n", callbacks, signals, st.gone());
             }
     }
+    if (wanted("PropertyGrid.onClick callback of a button row taking the grid out"))
+    {
+        // the callback of a button row removes the grid: nothing of the grid is touched after it (the control: a callback that does nothing)
+        ++gCases;
+        for (int remove = 0; remove < 2; ++remove)
+            for (int mode = 0; mode < 2; ++mode)
+            {
+                Stage st(mode);
+                PropertyGrid* w = put<PropertyGrid>(st, 20.0f, 20.0f, 300.0f, 200.0f);
+                int callbacks = 0;
+                w->addButton("apply", [&, w]() {
+                    ++callbacks;
+                    if (remove) st.holder->removeChild(w);
+                });
+                st.h.relayout();
+                st.h.frames(2);
+                st.watch(w);
+                st.click(w, 225.0f, 12.0f);
+                st.h.frames(3);
+                const bool ok = callbacks == 1 && st.gone() == (remove != 0);
+                check(ok, say(remove ? "PropertyGrid.onClick callback of a button row taking the grid out" : "CONTROL PropertyGrid.onClick callback of a button row", mode).c_str());
+                if (!ok) printf("    callback %d times, gone %d\n", callbacks, st.gone());
+            }
+    }
     victim<ColorPicker>("ColorPicker.colorChanged by a press on the value bar",
             [](Stage& st) {
                 ColorPicker* w = put<ColorPicker>(st, 20.0f, 20.0f, 220.0f, 200.0f);
