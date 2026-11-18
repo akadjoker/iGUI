@@ -16,6 +16,7 @@
 #include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/AssetBrowser.hpp>
 #include <igui/widgets/AudioWidgets.hpp>
+#include <igui/widgets/ChartWidget.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/InputWidgets.hpp>
@@ -742,6 +743,101 @@ void loopScenes()
     }
 }
 
+// The Chart with many points: one idle frame (the chart repaints everything it has), a mouse move over it (the frame and
+// the search for the point under the pointer), and the cost of giving it the data (a copy of the numbers) and of binning a
+// histogram. Only the calls that exist with floats, so that the same source measures a Chart that stores floats and one
+// that stores doubles.
+void chartScenes()
+{
+    const int n = 100000;
+    ct::Vector<float> xs, ys, samples;
+    for (int i = 0; i < n; ++i)
+    {
+        xs.push_back(static_cast<float>(i) * 0.01f);
+        ys.push_back(50.0f * sinf(static_cast<float>(i) * 0.001f) + static_cast<float>(i % 7));
+        samples.push_back(static_cast<float>((i * 37) % 1000) * 0.1f);
+    }
+    {
+        Harness h(900.0f, 500.0f);
+        Chart* c = h.root()->createChild<Chart>();
+        c->plot(xs, ys, String("signal"));
+        h.relayout();
+        h.frames(3);
+        RUN_IF("chart", "line_100k_frame", 20, [&] { h.frame(); });
+        const Rect r = c->plotRect();
+        RUN_IF("chart", "line_100k_hover", 20, [&] { h.moveTo(r.x + r.w * 0.5f, r.y + r.h * 0.5f); });
+        RUN_IF("chart", "line_100k_set_values", 20, [&] { c->setSeriesValues(0, ys); });
+        RUN_IF("chart", "line_100k_set_xs", 20, [&] { c->setSeriesX(0, xs); });
+    }
+    {
+        Harness h(900.0f, 500.0f);
+        Chart* c = h.root()->createChild<Chart>();
+        ct::Vector<float> fewX, fewY;
+        for (int i = 0; i < 20000; ++i)
+        {
+            fewX.push_back(xs[static_cast<size_t>(i)]);
+            fewY.push_back(ys[static_cast<size_t>(i)]);
+        }
+        c->scatter(fewX, fewY, String("points"));
+        h.relayout();
+        h.frames(3);
+        RUN_IF("chart", "scatter_20k_frame", 10, [&] { h.frame(); });
+    }
+    {
+        Harness h(900.0f, 500.0f);
+        Chart* c = h.root()->createChild<Chart>();
+        ct::Vector<String> names;
+        ct::Vector<float> heights;
+        for (int i = 0; i < 1000; ++i)
+        {
+            names.push_back(String("c") + String::number(i));
+            heights.push_back(static_cast<float>((i * 13) % 97));
+        }
+        c->bars(names, heights, String("bars"));
+        h.relayout();
+        h.frames(3);
+        RUN_IF("chart", "bars_1000_frame", 20, [&] { h.frame(); });
+    }
+    {
+        Harness h(900.0f, 500.0f);
+        Chart* c = h.root()->createChild<Chart>();
+        c->hist(samples, 40, String("hist"));
+        h.relayout();
+        h.frames(3);
+        RUN_IF("chart", "hist_100k_frame", 20, [&] { h.frame(); });
+        int k = 0;
+        RUN_IF("chart", "hist_100k_rebin", 20, [&] { c->setBins(40 + (++k & 1)); });
+    }
+    {
+        // the small charts of an ordinary window: what the Chart costs when it has little to draw
+        Harness h(900.0f, 500.0f);
+        Chart* c = h.root()->createChild<Chart>();
+        ct::Vector<float> a, b;
+        for (int i = 0; i < 100; ++i)
+        {
+            a.push_back(static_cast<float>(i));
+            b.push_back(static_cast<float>((i * 7) % 31));
+        }
+        c->plot(a, b, String("small"));
+        h.relayout();
+        h.frames(3);
+        RUN_IF("chart", "line_100_frame", 200, [&] { h.frame(); });
+        ct::Vector<String> names;
+        ct::Vector<float> heights;
+        for (int i = 0; i < 12; ++i)
+        {
+            names.push_back(String("m") + String::number(i));
+            heights.push_back(static_cast<float>(10 + (i * 5) % 17));
+        }
+        c->bars(names, heights, String("bars"));
+        h.frames(3);
+        RUN_IF("chart", "bars_12_frame", 200, [&] { h.frame(); });
+        c->pie(names, heights);
+        h.frames(3);
+        RUN_IF("chart", "pie_12_frame", 200, [&] { h.frame(); });
+    }
+}
+
 // The vertices, indices and commands of the draw list folded into a checksum (FNV-1a).
 void mixDrawList(const DrawList& dl, unsigned long long& hv)
 {
@@ -853,6 +949,67 @@ int main(int argc, char** argv)
             printf("draw checksum of the piano roll in %d views: %016llx (%u vertices, %u indices, %u commands)\n", scenes, hv,
                     vertices, indices, commands);
         }
+        // The charts (bars with values and a legend, negative bars, a line with numeric x and one over the indices, a scatter,
+        // a histogram, a pie and a donut) with titles and axis titles, at two sizes: the geometry of every kind of chart, and
+        // the labels of its axes.
+        {
+            unsigned long long hv = 1469598103934665603ull;
+            unsigned vertices = 0, indices = 0, commands = 0;
+            int scenes = 0;
+            const float sizes[][2] = { { 640.0f, 400.0f }, { 300.0f, 260.0f } };
+            for (const auto& size: sizes)
+                for (int kind = 0; kind < 8; ++kind)
+                {
+                    Harness h(size[0], size[1]);
+                    Chart* c = h.root()->createChild<Chart>();
+                    ct::Vector<String> names;
+                    ct::Vector<float> a, b, xs;
+                    for (int i = 0; i < 6; ++i)
+                    {
+                        names.push_back(String("cat") + String::number(i));
+                        a.push_back(static_cast<float>((i * 5) % 11) * (kind == 1 ? -1.5f : 1.0f) + 1.0f);
+                        b.push_back(static_cast<float>((i * 3) % 7) * 12.5f + 0.25f);
+                        xs.push_back(static_cast<float>(i) * 0.75f + 2.0f);
+                    }
+                    switch (kind)
+                    {
+                        case 0:
+                            c->bars(names, a, String("first"));
+                            c->addSeries(String("second"), b);
+                            c->setShowValues(true);
+                            break;
+                        case 1: c->bars(names, a, String("negative")); break;
+                        case 2:
+                            c->plot(xs, b, String("numeric"));
+                            c->plot(xs, a, String("other"));
+                            break;
+                        case 3: c->plot(ct::Vector<float>(), a, String("indexed")); break;
+                        case 4: c->scatter(xs, b, String("scatter")); break;
+                        case 5:
+                        {
+                            ct::Vector<float> samples;
+                            for (int i = 0; i < 400; ++i) samples.push_back(static_cast<float>((i * 37) % 101) * 0.37f);
+                            c->hist(samples, 9, String("hist"));
+                            break;
+                        }
+                        case 6: c->pie(names, b); break;
+                        default: c->donut(names, b); break;
+                    }
+                    c->setTitle(String("Chart ") + String::number(kind));
+                    c->setXAxisTitle(String("x axis"));
+                    c->setYAxisTitle(String("y axis"));
+                    h.relayout();
+                    h.frames(2);
+                    const DrawList& dl = GetDrawList();
+                    mixDrawList(dl, hv);
+                    vertices += static_cast<unsigned>(dl.vertices().size());
+                    indices += static_cast<unsigned>(dl.indices().size());
+                    commands += static_cast<unsigned>(dl.commands().size());
+                    ++scenes;
+                }
+            printf("draw checksum of the charts in %d scenes: %016llx (%u vertices, %u indices, %u commands)\n", scenes, hv,
+                    vertices, indices, commands);
+        }
         shutdown();
         return 0;
     }
@@ -871,6 +1028,13 @@ int main(int argc, char** argv)
         return 0;
     }
     printf("igui_retained_bench: best of %d, CPU time per iteration\n", gReps);
+    if (gOnly && !strncmp(gOnly, "chart", 5))
+    {
+        // only the chart scenes
+        chartScenes();
+        shutdown();
+        return 0;
+    }
     if (gOnly && !strncmp(gOnly, "loops", 5))
     {
         // only the loop scenes: the other scenes take seconds to build and are not measured then
@@ -965,6 +1129,7 @@ int main(int argc, char** argv)
     inputScene();
     bigTextScene();
     loopScenes();
+    chartScenes();
     shutdown();
     return 0;
 }
