@@ -987,8 +987,8 @@ public:
     }
 
     /// @brief Emitted when the button goes up after a note was put or picked up and dragged (pitch, start,
-    ///        length): also after a click on a note that did not move it, and after a move; it does not
-    ///        say which note. The signals below do.
+    ///        length): also after a click on a note that did not move it, after a move and after a resize;
+    ///        it does not say which note. The signals below do.
     Signal<int, float, float> onNoteAdded;
     /// @brief Emitted when a note is removed by the right button, just BEFORE it goes (the index it has, the
     ///        note is still in notes()).
@@ -1002,6 +1002,12 @@ public:
     /// @brief A note was dragged to another pitch or start and the button went up: its index in notes().
     ///        Not emitted for a click that left it where it was.
     Signal<int> onNoteMoved;
+    /// @brief A note's length was changed with the mouse (the last few pixels of its right end dragged, the
+    ///        pointer turns into the horizontal resize cursor there) and the button went up: its index in
+    ///        notes(). Not emitted when the length ended as it was, nor for a note that was just put (that
+    ///        one is onNoteCreated, with the length the drag gave it). The end snaps to the nearest quarter
+    ///        of a beat, the length is never under that quarter. onNoteAdded is emitted just before.
+    Signal<int> onNoteResized;
     /// @brief A note was removed by the right button: the index it had, and the note (copied: it is
     ///        gone from notes() by now). onNoteRemoved was emitted just before.
     Signal<int, const PianoNote&> onNoteDeleted;
@@ -1018,6 +1024,7 @@ public:
     void onMouseMove(MouseEvent& e) override;
     void onMouseRelease(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
+    void onMouseLeave() override;
 
 private:
     Rect gridArea() const;
@@ -1031,6 +1038,7 @@ private:
     Rect noteRect(const PianoNote& n) const;
     Rect noteRect(const PianoNote& n, const Rect& ga) const;
     bool isBlackKey(int pitch) const;
+    void updateEdgeCursor(float x, float y);
     void paintKeys(PaintContext& ctx, const Rect& ka) const;
     void paintGrid(PaintContext& ctx, const Rect& ga) const;
     void paintNotes(PaintContext& ctx, const Rect& ga) const;
@@ -1054,7 +1062,9 @@ private:
     float newNoteStart_ = 0.f;
     int dragStartPitch_ = 0;     // where a picked up note was when the button went down, to tell a move from a click
     float dragStartBeat_ = 0.f;
+    float dragStartLen_ = 0.f;   // and its length, to tell a resize from a click
     bool showVelocity_ = false;
+    bool resizing_ = false;      // draggingNote_ is having its right end dragged (a note just put is too)
 };
 
 } // namespace retained

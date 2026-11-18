@@ -1347,6 +1347,24 @@ PianoRoll::PianoRoll()
 // out only makes coordinates that overflow.
 static constexpr float kMaxBeat = 1.0e9f;
 
+// The grid the notes snap to, in beats: a note is put and moved on quarters of a beat, and its length is never under one.
+static constexpr float kSnapStep = 0.25f;
+// The pixels at the right end of a note that resize it instead of moving it (a very short note keeps two thirds
+// of its width for moving).
+static constexpr float kResizeEdge = 6.0f;
+
+// The nearest line of the grid (the end of a note being resized goes to it).
+static float snapNearest(float beat)
+{
+    return floorf(beat * 4.0f + 0.5f) * kSnapStep;
+}
+
+static bool inResizeEdge(const Rect& noteRect, float x)
+{
+    const float zone = Math::min2(kResizeEdge, noteRect.w * (1.0f / 3.0f));
+    return x >= noteRect.x + noteRect.w - zone;
+}
+
 void PianoRoll::addNote(int pitch, float start, float length)
 {
     // a note with a start or a length that is not a number would be a rectangle that is not a number
@@ -1375,6 +1393,8 @@ void PianoRoll::removeNote(int idx)
     if (idx < 0 || idx >= static_cast<int>(notes_.size())) return;
     notes_.erase(notes_.begin() + idx);
     if (draggingNote_ == idx) draggingNote_ = -1;
+    else if (draggingNote_ > idx)
+        --draggingNote_; // (the note being dragged is still the same one, one place down)
     markDirty();
 }
 
@@ -1449,7 +1469,8 @@ float PianoRoll::pitchToY(int pitch, const Rect& ga) const
 int PianoRoll::yToPitch(float y) const
 {
     const Rect ga = gridArea();
-    int row = static_cast<int>((y - ga.y) / rowH_);
+    // (a pointer far out, or a rect that is not a number, must not make a float that does not fit an int)
+    const int row = static_cast<int>(Math::sane((y - ga.y) / rowH_, 0.0f, -1.0e6f, 1.0e6f));
     return std::clamp(pitchHi_ - 1 - row, pitchLo_, pitchHi_ - 1);
 }
 
@@ -1629,6 +1650,7 @@ void PianoRoll::paint(PaintContext& ctx)
 
 void PianoRoll::onMousePress(MouseEvent& e)
 {
+    if (!Math::isFinite(e.x) || !Math::isFinite(e.y)) return; // (a position that is not a number is no place in the grid)
     const Rect ga = gridArea();
     if (!(ga.w > 0.0f)) return; // no grid to point at (the keys take the whole width): a beat is a division by it
     if (e.x < ga.x || e.x > ga.x + ga.w || e.y < ga.y || e.y > ga.y + ga.h) return;
@@ -1637,7 +1659,7 @@ void PianoRoll::onMousePress(MouseEvent& e)
     {
         for (int i = static_cast<int>(notes_.size()) - 1; i >= 0; --i)
         {
-            Rect nr = noteRect(notes_[i]);
+            Rect nr = noteRect(notes_[i], ga);
             if (e.x >= nr.x && e.x <= nr.x + nr.w && e.y >= nr.y && e.y <= nr.y + nr.h)
             {
                 const PianoNote gone = notes_[i];
@@ -1651,18 +1673,31 @@ void PianoRoll::onMousePress(MouseEvent& e)
         return;
     }
 
-    if (e.button == 0) // left: picks a note to drag, or adds one
+    if (e.button == 0) // left: picks a note to drag (or its right end to resize), or adds one
     {
         for (int i = static_cast<int>(notes_.size()) - 1; i >= 0; --i)
         {
-            Rect nr = noteRect(notes_[i]);
+            Rect nr = noteRect(notes_[i], ga);
             if (e.x >= nr.x && e.x <= nr.x + nr.w && e.y >= nr.y && e.y <= nr.y + nr.h)
             {
                 draggingNote_ = i;
                 dragStartPitch_ = notes_[i].pitch;
                 dragStartBeat_ = notes_[i].start;
-                dragOffBeat_ = xToBeat(e.x) - notes_[i].start;
-                dragOffPitch_ = yToPitch(e.y) - notes_[i].pitch;
+                dragStartLen_ = notes_[i].length;
+                if (inResizeEdge(nr, e.x))
+                {
+                    // the end follows the pointer from where it was grabbed, not from where the pointer is
+                    resizing_ = true;
+                    dragOffBeat_ = xToBeat(e.x) - (notes_[i].start + notes_[i].length);
+                    dragOffPitch_ = 0;
+                    cursor_ = CursorType::SizeH;
+                }
+                else
+                {
+                    resizing_ = false;
+                    dragOffBeat_ = xToBeat(e.x) - notes_[i].start;
+                    dragOffPitch_ = yToPitch(e.y) - notes_[i].pitch;
+                }
                 onNoteClicked.emit(i);
                 e.consumed = true;
                 return;
@@ -1670,12 +1705,22 @@ void PianoRoll::onMousePress(MouseEvent& e)
         }
         int pitch = yToPitch(e.y);
         float beat = std::floor(xToBeat(e.x) * 4.f) / 4.f;
+        const size_t before = notes_.size();
+        addNote(pitch, beat, kSnapStep);
+        if (notes_.size() == before) // (a place that is not a beat: nothing was put)
+        {
+            e.consumed = true;
+            return;
+        }
         newNotePitch_ = pitch;
         newNoteStart_ = beat;
-        addNote(pitch, beat, 0.25f);
         draggingNote_ = static_cast<int>(notes_.size()) - 1;
+        // the rest of the gesture gives the new note its length: its end follows the pointer
+        dragStartLen_ = kSnapStep;
         dragOffBeat_ = 0.f;
         dragOffPitch_ = 0;
+        resizing_ = true;
+        cursor_ = CursorType::SizeH;
         e.consumed = true;
     }
 
@@ -1689,8 +1734,40 @@ void PianoRoll::onMousePress(MouseEvent& e)
     }
 }
 
+// The cursor for a pointer at (x, y) with no button down: the horizontal resize cursor over the right end of a
+// note (the topmost one under the pointer, as a press would take it), the arrow elsewhere.
+void PianoRoll::updateEdgeCursor(float x, float y)
+{
+    CursorType want = CursorType::Arrow;
+    const Rect ga = gridArea();
+    if (ga.w > 0.0f && x >= ga.x && x <= ga.x + ga.w && y >= ga.y && y <= ga.y + ga.h)
+    {
+        // only the notes of the row under the pointer can be under it (compared as floats: the row is never made an int)
+        const float row = floorf((y - ga.y) / rowH_);
+        for (int i = static_cast<int>(notes_.size()) - 1; i >= 0; --i)
+        {
+            const PianoNote& n = notes_[i];
+            if (static_cast<float>(pitchHi_ - 1 - n.pitch) != row) continue;
+            const Rect nr = noteRect(n, ga);
+            if (x >= nr.x && x <= nr.x + nr.w && y >= nr.y && y <= nr.y + nr.h)
+            {
+                if (inResizeEdge(nr, x)) want = CursorType::SizeH;
+                break;
+            }
+        }
+    }
+    cursor_ = want;
+}
+
+void PianoRoll::onMouseLeave()
+{
+    cursor_ = CursorType::Arrow;
+    Widget::onMouseLeave();
+}
+
 void PianoRoll::onMouseMove(MouseEvent& e)
 {
+    if (!Math::isFinite(e.x) || !Math::isFinite(e.y)) return;
     if (panning_)
     {
         const Rect ga = gridArea();
@@ -1706,33 +1783,59 @@ void PianoRoll::onMouseMove(MouseEvent& e)
     }
     if (draggingNote_ >= 0 && draggingNote_ < static_cast<int>(notes_.size()))
     {
+        if (resizing_)
+        {
+            const Rect ga = gridArea();
+            if (!(ga.w > 0.0f)) return;
+            PianoNote& n = notes_[draggingNote_];
+            // the end goes to the nearest line of the grid, the length is never under one step
+            const float end = snapNearest(xToBeat(e.x) - dragOffBeat_);
+            const float len = Math::sane(end - n.start, n.length, kSnapStep, kMaxBeat);
+            if (len != n.length)
+            {
+                n.length = len;
+                markDirty();
+            }
+            e.consumed = true;
+            return;
+        }
         float beat = std::max(0.f, std::floor((xToBeat(e.x) - dragOffBeat_) * 4.f) / 4.f);
         int pitch = std::clamp(yToPitch(e.y) - dragOffPitch_, pitchLo_, pitchHi_ - 1);
         notes_[draggingNote_].start = beat;
         notes_[draggingNote_].pitch = pitch;
         markDirty();
         e.consumed = true;
+        return;
     }
+    updateEdgeCursor(e.x, e.y);
 }
 
-void PianoRoll::onMouseRelease(MouseEvent&)
+void PianoRoll::onMouseRelease(MouseEvent& e)
 {
     // what the gesture was, before the handlers of the signals get to change the notes
     const int index = draggingNote_;
     const bool created = newNotePitch_ >= 0;
-    bool moved = false;
+    const bool resizing = resizing_;
+    bool moved = false, resized = false;
     if (index >= 0 && index < static_cast<int>(notes_.size()))
     {
-        moved = !created && (notes_[index].pitch != dragStartPitch_ || notes_[index].start != dragStartBeat_);
-        onNoteAdded.emit(notes_[index].pitch, notes_[index].start, notes_[index].length);
+        const PianoNote& n = notes_[index];
+        if (resizing) resized = !created && n.length != dragStartLen_;
+        else
+            moved = !created && (n.pitch != dragStartPitch_ || n.start != dragStartBeat_);
+        onNoteAdded.emit(n.pitch, n.start, n.length);
     }
     draggingNote_ = -1;
     newNotePitch_ = -1;
+    resizing_ = false;
     panning_ = false;
+    updateEdgeCursor(e.x, e.y);
     // after the roll is idle again; the notes may have changed under the first handler
     if (index >= 0 && index < static_cast<int>(notes_.size()))
     {
         if (created) onNoteCreated.emit(index);
+        else if (resized)
+            onNoteResized.emit(index);
         else if (moved)
             onNoteMoved.emit(index);
     }

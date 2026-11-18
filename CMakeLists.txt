@@ -438,6 +438,15 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_include_directories(igui_retained_round4b_tests PRIVATE adapters/zen/include)
         target_link_libraries(igui_retained_round4b_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_round4b COMMAND igui_retained_round4b_tests)
+        # Round 5 (docs/ROUND5.md): the piano roll's note length and velocity lane with the mouse, hostile inputs for them, the
+        # tool bar in the serializer, the scroll bar thickness from the theme. The heap requests of every frame of the hostile
+        # cases are counted through a wrapped malloc, as in igui_retained_hostile.
+        add_executable(igui_retained_round5_tests tests/test_retained_round5.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_round5_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_round5_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_round5_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_round5 COMMAND igui_retained_round5_tests)
+        set_tests_properties(igui_retained_round5 PROPERTIES TIMEOUT 180)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)
