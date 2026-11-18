@@ -547,6 +547,7 @@ json WidgetSerializer::save(const Widget* root)
         if (w->side() == SideTabBar::Side::Right) j["side"] = "Right";
         if (!w->collapsible()) j["collapsible"] = false;
         if (!w->showLabels()) j["showLabels"] = false;
+        if (w->coloredIcons()) j["coloredIcons"] = true;
         if (w->railWidth() > 0.0f) j["railWidth"] = w->railWidth();
         j["buttonHeight"] = w->buttonHeight();
         j["iconSize"] = w->iconSize();
@@ -971,6 +972,7 @@ void WidgetSerializer::registerBuiltinTypes()
                     w->setSide(SideTabBar::Side::Right);
                 if (j.contains("collapsible")) w->setCollapsible(jsonValue<bool>(j["collapsible"]));
                 if (j.contains("showLabels")) w->setShowLabels(jsonValue<bool>(j["showLabels"]));
+                if (j.contains("coloredIcons")) w->setColoredIcons(jsonValue<bool>(j["coloredIcons"]));
                 if (j.contains("railWidth")) w->setRailWidth(jsonValue<float>(j["railWidth"]));
                 if (j.contains("buttonHeight"))
                     w->setButtonHeight(jsonValue<float>(j["buttonHeight"]));

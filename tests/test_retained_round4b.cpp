@@ -15,6 +15,7 @@
 #include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/ToolBar.hpp>
+#include <igui/widgets/WidgetSerializer.hpp>
 
 using namespace rh;
 
@@ -1468,6 +1469,33 @@ void testChartTooltipNamesUnnamedSeries()
     check(differing(before, screen.take(), 0, 0, 400, 260) > 100, "the tooltip is drawn");
 }
 
+// ---- the serializer keeps the SideTabBar's new flag with the comparable ones it already kept ----
+
+void testSerializerKeepsSideTabBarColoredIcons()
+{
+    WidgetSerializer::registerBuiltinTypes();
+    BoxLayout root(LayoutDir::Horizontal);
+    SideTabBar* bar = root.createChild<SideTabBar>(SideTabBar::Side::Right);
+    bar->setShowLabels(false);
+    bar->setColoredIcons(true);
+    bar->addPage<Label>(IconId::Gear, "Settings", "settings");
+    bar->addPage<Label>(IconId::None, "Help", "help");
+    const json saved = WidgetSerializer::save(&root);
+    check(saved["children"][0]["coloredIcons"].as_bool(false), "the saved bar says its icons are coloured");
+    BoxLayout destination(LayoutDir::Vertical);
+    Widget* loaded = WidgetSerializer::load(saved, &destination);
+    SideTabBar* copy = loaded && !loaded->children().empty() ? widget_cast<SideTabBar>(loaded->children()[0]) : nullptr;
+    check(copy && copy->coloredIcons() && !copy->showLabels() && copy->side() == SideTabBar::Side::Right, "and the copy has them coloured, with the flags it already kept");
+    // a bar with plain icons saves nothing new, and loads plain
+    bar->setColoredIcons(false);
+    const json plain = WidgetSerializer::save(&root);
+    check(!plain["children"][0].contains("coloredIcons"), "a bar with plain icons saves nothing for the flag (files of before are the same)");
+    BoxLayout other(LayoutDir::Vertical);
+    Widget* again = WidgetSerializer::load(plain, &other);
+    SideTabBar* plainCopy = again && !again->children().empty() ? widget_cast<SideTabBar>(again->children()[0]) : nullptr;
+    check(plainCopy && !plainCopy->coloredIcons(), "and loads plain");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1478,6 +1506,7 @@ int main(int argc, char** argv)
     RUN(testSyntheticInput);
     RUN(testSideTabBarColoredIcons);
     RUN(testToolBarColoredIconsAndTheme);
+    RUN(testSerializerKeepsSideTabBarColoredIcons);
     RUN(testTimelineBarRuler);
     RUN(testTimelineBarRulerHostile);
     RUN(testPianoRollVelocityAndSignals);
