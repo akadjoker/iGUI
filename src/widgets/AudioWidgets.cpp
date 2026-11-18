@@ -1904,6 +1904,7 @@ void PianoRoll::onMouseMove(MouseEvent& e)
             return;
         }
         float beat = std::max(0.f, std::floor((xToBeat(e.x) - dragOffBeat_) * 4.f) / 4.f);
+        beat = Math::sane(beat, notes_[draggingNote_].start, 0.0f, kMaxBeat); // (a pointer far out is not a start of 1e30)
         int pitch = std::clamp(yToPitch(e.y) - dragOffPitch_, pitchLo_, pitchHi_ - 1);
         notes_[draggingNote_].start = beat;
         notes_[draggingNote_].pitch = pitch;

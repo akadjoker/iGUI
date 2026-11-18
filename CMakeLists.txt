@@ -446,6 +446,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_include_directories(igui_retained_round5_tests PRIVATE adapters/zen/include)
         target_link_libraries(igui_retained_round5_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_round5 COMMAND igui_retained_round5_tests)
+        target_link_options(igui_retained_round5_tests PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
         set_tests_properties(igui_retained_round5 PROPERTIES TIMEOUT 180)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)

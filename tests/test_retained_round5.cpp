@@ -6,6 +6,8 @@
 #include "RasterScreen.hpp"
 #include "RetainedHarness.hpp"
 
+#include <unistd.h>
+
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
 #include <igui/widgets/DataWidgets.hpp>
@@ -20,6 +22,63 @@
 #include <igui/widgets/WidgetSerializer.hpp>
 
 using namespace rh;
+
+// ---- the ceiling on what a frame may ask of the heap (the hostile cases, below) ----
+//
+// The heap requests of a frame are counted through the wrapped malloc, calloc and realloc (ct allocates with them; the
+// link options of the target say so) and a frame of a hostile case that asks for more than kMaxFrameBytes stops the
+// program there, naming the case: a loop that does not stop or a size that is not bounded fails here, small and fast,
+// and never by taking the memory of the machine. Counting is on only while a hostile frame is being made.
+
+namespace
+{
+
+constexpr unsigned long long kMaxFrameBytes = 64ull << 20;
+unsigned long long gAskedBytes = 0;
+bool gCounting = false;
+const char* gCurrentCase = "(none)";
+
+[[noreturn]] void frameAskedTooMuch(unsigned long long bytes)
+{
+    gCounting = false;
+    char text[256];
+    const int n = snprintf(text, sizeof text, "\n    FAIL %s: one frame asked the heap for more than %llu MiB (%llu so far): a loop that does not stop\n",
+            gCurrentCase, kMaxFrameBytes >> 20, bytes >> 20);
+    if (n > 0)
+    {
+        const ssize_t written = write(2, text, static_cast<size_t>(n < static_cast<int>(sizeof text) ? n : static_cast<int>(sizeof text) - 1));
+        (void) written;
+    }
+    _exit(3);
+}
+
+void asked(size_t bytes)
+{
+    if (!gCounting) return;
+    gAskedBytes += bytes;
+    if (gAskedBytes > kMaxFrameBytes) frameAskedTooMuch(gAskedBytes);
+}
+
+} // namespace
+
+extern "C" void* __real_malloc(size_t);
+extern "C" void* __real_calloc(size_t, size_t);
+extern "C" void* __real_realloc(void*, size_t);
+extern "C" void* __wrap_malloc(size_t n)
+{
+    asked(n);
+    return __real_malloc(n);
+}
+extern "C" void* __wrap_calloc(size_t a, size_t b)
+{
+    asked(a * b);
+    return __real_calloc(a, b);
+}
+extern "C" void* __wrap_realloc(void* p, size_t n)
+{
+    asked(n);
+    return __real_realloc(p, n);
+}
 
 namespace
 {
@@ -1098,6 +1157,623 @@ void testScrollBarThicknessIsTheThemes()
     }
 }
 
+// ---- item 3: hostile inputs for the new code ----
+
+// A frame of a 480x260 window never needs more than this (a roll with three thousand notes and their velocity bars is about
+// a hundred thousand vertices); a frame over it is a loop that did not stop where it should.
+constexpr size_t kMaxVertices = 200000;
+
+bool finiteNumber(float v)
+{
+    return v == v && v - v == 0.0f;
+}
+
+bool treeFinite(const Widget* w)
+{
+    const Rect& r = w->rect();
+    if (!finiteNumber(r.x) || !finiteNumber(r.y) || !finiteNumber(r.w) || !finiteNumber(r.h)) return false;
+    for (const Widget* c: w->children())
+        if (!treeFinite(c)) return false;
+    return true;
+}
+
+bool verticesFinite()
+{
+    const DrawList& dl = GetDrawList();
+    for (size_t i = 0; i < dl.vertices().size(); ++i)
+        if (!finiteNumber(dl.vertices()[i].x) || !finiteNumber(dl.vertices()[i].y)) return false;
+    return true;
+}
+
+// What a case does to a roll, frame by frame: every frame is made with the heap counted and then looked at (the vertices
+// are under the bound and finite, so are the rectangles of the tree). The first thing wrong is printed with what had just
+// been done, and counted as one failure; the case goes on with the checks that cannot be spoiled by it.
+struct Watch
+{
+    explicit Watch(Harness& harness, const char* caseName) : h(harness), name(caseName)
+    {
+        gCurrentCase = caseName;
+    }
+    bool frame(const char* what)
+    {
+        gAskedBytes = 0;
+        gCounting = true;
+        h.frame();
+        gCounting = false;
+        const size_t n = GetDrawList().vertices().size();
+        if (n > kMaxVertices) return fail(what, "more vertices than the bound", static_cast<double>(n));
+        if (!treeFinite(h.root())) return fail(what, "a rectangle is not finite", 0.0);
+        if (!verticesFinite()) return fail(what, "a vertex is not finite", 0.0);
+        if (gAskedBytes > mostAsked) mostAsked = gAskedBytes;
+        return true;
+    }
+    // an event of the synthetic input, counted like a frame, then a frame
+    void move(float x, float y, const char* what)
+    {
+        gAskedBytes = 0;
+        gCounting = true;
+        WidgetApp::instance().feedMouseMove(x, y);
+        gCounting = false;
+        if (gAskedBytes > mostAsked) mostAsked = gAskedBytes;
+        if (drawAfterEvents) frame(what);
+    }
+    void button(int b, bool down, const char* what)
+    {
+        gAskedBytes = 0;
+        gCounting = true;
+        WidgetApp::instance().feedMouseButton(b, down);
+        gCounting = false;
+        if (gAskedBytes > mostAsked) mostAsked = gAskedBytes;
+        if (drawAfterEvents) frame(what);
+    }
+    bool fail(const char* what, const char* why, double number)
+    {
+        if (ok) printf("    %s: %s after %s (%g)\n", name, why, what, number);
+        ok = false;
+        return false;
+    }
+    Harness& h;
+    const char* name;
+    bool ok = true;
+    bool drawAfterEvents = true; // false: the events alone are counted (for a roll too full to draw)
+    unsigned long long mostAsked = 0;
+};
+
+const float kOdd[] = { 0.0f / 0.0f, 1.0f / 0.0f, -1.0f / 0.0f, 1.0e30f, -1.0e30f, 3.0e38f, -3.0e38f, 0.0f, -1.0f, 1.0e-30f, 16777216.0f,
+    2147483648.0f, 1.0e9f, -1.0e9f, 0.5f, 100000.0f };
+
+// every note of a roll is a number in the ranges the roll keeps them to
+bool notesSane(const PianoRoll* roll)
+{
+    for (size_t i = 0; i < roll->notes().size(); ++i)
+    {
+        const PianoNote& n = roll->notes()[i];
+        if (!finiteNumber(n.start) || n.start < -1.0e9f || n.start > 1.0e9f) return false;
+        if (!finiteNumber(n.length) || !(n.length >= 0.01f) || n.length > 1.0e9f) return false;
+        if (!(n.velocity >= 0.0f && n.velocity <= 1.0f)) return false;
+    }
+    return true;
+}
+
+void testHostileRollSettersAndNotes()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    Watch watch(rig.h, "the roll's setters and notes");
+    roll->addNote(55, 2.0f, 2.0f);
+    roll->addNote(57, 3.0f, 1.0f);
+    roll->setShowVelocityLane(true);
+    char what[96];
+    for (float v: kOdd)
+    {
+        snprintf(what, sizeof what, "the value %g", static_cast<double>(v));
+        roll->setVelocityLaneHeight(v);
+        watch.frame(what);
+        roll->setNoteVelocity(0, v);
+        roll->setNoteVelocity(1, v);
+        roll->addNote(60, v, 1.0f, v);
+        roll->addNote(61, 1.0f, v, v);
+        roll->addNote(62, v, v, v);
+        roll->setShowVelocityLane(true);
+        watch.frame(what);
+        roll->setTimeRange(v, v);
+        watch.frame(what);
+        roll->setTimeRange(0.0f, v);
+        watch.frame(what);
+        roll->setKeyWidth(v);
+        watch.frame(what);
+        roll->setRowHeight(v);
+        watch.frame(what);
+        roll->setPlayhead(v);
+        roll->setTimeRange(0.0f, 8.0f);
+        roll->setKeyWidth(36.0f);
+        roll->setRowHeight(12.0f);
+        watch.frame(what);
+    }
+    check(watch.ok, "the lane's height, velocities, notes, ranges and sizes that are not numbers leave the frames small and finite");
+    check(notesSane(roll), "and the notes are numbers in their ranges (a velocity 0 to 1, a start and a length that are finite)");
+    check(roll->velocityLaneHeight() >= 10.0f && roll->velocityLaneHeight() <= 10000.0f, "and the lane's height is one the roll keeps to");
+    // the lane at every height that is asked, in this view and in a hostile one
+    const float heights[] = { 10.0f, 11.0f, 59.0f, 60.0f, 99.0f, 100.0f, 101.0f, 5000.0f, 10000.0f };
+    for (float hgt: heights)
+    {
+        roll->setVelocityLaneHeight(hgt);
+        snprintf(what, sizeof what, "a lane of %g", static_cast<double>(hgt));
+        watch.frame(what);
+    }
+    check(watch.ok, "a lane at every height from 10 to 10000 draws a bounded, finite frame");
+    check(watch.mostAsked < 16ull << 20, "and a frame asks the heap for little (under 16 MiB)");
+}
+
+// A gesture of each kind with the pointer sent to places that are numbers of no use: not a number, infinite, enormous.
+void testHostilePointerInGestures()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    Watch watch(rig.h, "the pointer in gestures");
+    roll->setShowVelocityLane(true);
+    char what[96];
+    // where to press for each gesture: the end of a note, the middle of one, an empty place, the lane, and (the middle button) the grid
+    struct Gesture
+    {
+        const char* name;
+        float x, y;
+        int button;
+    };
+    const Gesture gestures[] = {
+        { "resize", RollRig::xBeat(3.0f) - 2.5f, RollRig::yPitch(55), 0 },
+        { "move", RollRig::xBeat(2.5f), RollRig::yPitch(55), 0 },
+        { "create", RollRig::xBeat(5.0f) + 3.0f, RollRig::yPitch(52), 0 },
+        { "lane", RollRig::xBeat(2.0f), yVelocity(0.5f), 0 },
+        { "pan", RollRig::xBeat(2.0f), RollRig::yPitch(57), 2 },
+        { "delete", RollRig::xBeat(2.5f), RollRig::yPitch(55), 1 },
+    };
+    for (const Gesture& g: gestures)
+        for (float bad: kOdd)
+            for (int axis = 0; axis < 3; ++axis) // x, y, both
+            {
+                roll->clearNotes();
+                roll->addNote(55, 2.0f, 1.0f);
+                roll->addNote(58, 4.0f, 2.0f);
+                roll->setTimeRange(0.0f, 8.0f);
+                watch.frame("(setting up)");
+                snprintf(what, sizeof what, "a %s with the pointer sent to %g (%s)", g.name, static_cast<double>(bad), axis == 0 ? "x" : axis == 1 ? "y" : "both");
+                watch.move(g.x, g.y, what);
+                watch.button(g.button, true, what);
+                watch.move(axis != 1 ? bad : g.x + 20.0f, axis != 0 ? bad : g.y, what);
+                watch.move(g.x + 30.0f, g.y - 5.0f, what);
+                watch.move(axis != 1 ? bad : g.x, axis != 0 ? bad : g.y, what);
+                watch.button(g.button, false, what);
+                watch.move(bad, bad, what);
+                if (!notesSane(roll))
+                {
+                    printf("    %s: a note is not sane\n", what);
+                    watch.ok = false;
+                }
+            }
+    check(watch.ok, "a resize, a move, a put, a lane drag, a pan and a delete with the pointer at NaN, infinity or 1e30 leave finite frames and sane notes");
+    // after all that the roll still does its job
+    roll->clearNotes();
+    roll->setTimeRange(0.0f, 8.0f);
+    rig.h.frame();
+    rig.move(RollRig::xBeat(2.0f) + 3.0f, RollRig::yPitch(55));
+    rig.down();
+    rig.move(RollRig::xBeat(4.0f) + 3.0f, RollRig::yPitch(55));
+    rig.up();
+    check(roll->notes().size() == 1 && roll->notes()[0].length == 2.0f, "(and the roll still puts a note of two beats afterwards)");
+}
+
+// Notes of enormous starts and lengths, resized and set in the lane in a view where they are
+void testHostileNotesInGestures()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    Watch watch(rig.h, "enormous notes in gestures");
+    roll->setShowVelocityLane(true);
+    const float centres[] = { 1.0e9f, -1.0e9f, 16777216.0f, 2147483648.0f, 1.0e30f, 0.0f };
+    const float spans[] = { 0.01f, 8.0f, 1.0e6f };
+    char what[96];
+    for (float centre: centres)
+        for (float span: spans)
+        {
+            roll->clearNotes();
+            roll->addNote(55, centre, 1.0f);
+            roll->addNote(56, centre, 1.0e9f);
+            roll->addNote(57, centre + 1.0f, 0.01f);
+            roll->setTimeRange(centre - span * 0.5f, centre + span * 0.5f);
+            snprintf(what, sizeof what, "view %g + %g", static_cast<double>(centre), static_cast<double>(span));
+            watch.frame(what);
+            // every kind of gesture over the middle of the grid and the lane, in steps across the width
+            for (int gesture = 0; gesture < 3; ++gesture)
+            {
+                const float y = gesture == 0 ? RollRig::yPitch(55) : gesture == 1 ? yVelocity(0.5f) : RollRig::yPitch(51);
+                watch.move(150.0f, y, what);
+                watch.button(0, true, what);
+                for (float x = 60.0f; x < 420.0f; x += 40.0f) watch.move(x, y - 3.0f, what);
+                watch.button(0, false, what);
+            }
+            if (!notesSane(roll))
+            {
+                printf("    %s: a note is not sane\n", what);
+                watch.ok = false;
+            }
+        }
+    check(watch.ok, "gestures over notes and views at 1e9, 2^24, 2^31 and 1e30 leave finite frames and sane notes");
+}
+
+void testHostileHandlersChangeTheNotes()
+{
+    // (a) the handler of onNoteResized removes every note
+    {
+        RollRig rig;
+        PianoRoll* roll = rig.roll;
+        roll->addNote(55, 2.0f, 1.0f);
+        roll->addNote(58, 4.0f, 1.0f);
+        int calls = 0;
+        roll->onNoteResized.connect([&](int) { ++calls; roll->clearNotes(); });
+        const float y = RollRig::yPitch(55);
+        rig.move(RollRig::xBeat(3.0f) - 2.5f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(5.0f) + 1.0f, y);
+        rig.up();
+        check(calls == 1 && roll->notes().empty(), "a handler of onNoteResized that removes all the notes is called once and the roll goes on with none");
+        rig.h.frame();
+        // and the roll still works afterwards
+        rig.move(RollRig::xBeat(2.0f) + 3.0f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(3.0f) + 3.0f, y);
+        rig.up();
+        check(roll->notes().size() == 1 && roll->notes()[0].length == 1.0f, "(a note put afterwards is there, a beat long)");
+        rig.h.frame();
+    }
+    // (b) the handler of onNoteAdded, which is emitted first, removes every note: the signals that say which note do not come
+    {
+        RollRig rig;
+        PianoRoll* roll = rig.roll;
+        roll->addNote(55, 2.0f, 1.0f);
+        SignalLog log;
+        log.connect(roll);
+        roll->onNoteAdded.connect([&](int, float, float) { roll->clearNotes(); });
+        const float y = RollRig::yPitch(55);
+        rig.move(RollRig::xBeat(3.0f) - 2.5f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(5.0f) + 1.0f, y);
+        rig.up();
+        check(roll->notes().empty() && log.resized == 0 && log.moved == 0 && log.created == 0, "notes removed by the handler of onNoteAdded: no signal about a note that is not there");
+        // a note put with the drag, the same
+        rig.move(RollRig::xBeat(2.0f) + 3.0f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(4.0f) + 3.0f, y);
+        rig.up();
+        check(roll->notes().empty() && log.created == 0, "and for a note that was just put");
+        rig.h.frame();
+    }
+    // (c) a handler of onNoteClicked, emitted at the press, removes the first note (the dragged one is index 0 from then on), or all
+    {
+        RollRig rig;
+        PianoRoll* roll = rig.roll;
+        roll->addNote(50, 0.0f, 1.0f);
+        roll->addNote(55, 2.0f, 1.0f);
+        SignalLog log;
+        log.connect(roll);
+        int clicks = 0;
+        roll->onNoteClicked.connect([&](int) { if (++clicks == 1) roll->removeNote(0); });
+        const float y = RollRig::yPitch(55);
+        rig.move(RollRig::xBeat(3.0f) - 2.5f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(4.0f) + 1.0f, y);
+        rig.up();
+        check(roll->notes().size() == 1 && roll->notes()[0].pitch == 55 && roll->notes()[0].length == 2.0f, "a handler that removes the note before the dragged one at the press: the drag goes on with the dragged note");
+        check(log.resized == 1 && log.resizedIndex == 0, "and says index 0");
+        roll->onNoteClicked.disconnectAll();
+        roll->onNoteClicked.connect([&](int) { roll->clearNotes(); });
+        rig.move(RollRig::xBeat(4.0f) - 2.5f, y);
+        rig.down();
+        rig.move(RollRig::xBeat(6.0f), y);
+        rig.up();
+        check(roll->notes().empty(), "a handler that removes all the notes at the press: the drag has nothing to drag and nothing happens");
+        rig.h.frame();
+    }
+    // (d) the handler of onNoteVelocityChanged
+    {
+        const int kNotes = 8;
+        auto build = [&](RollRig& rig)
+        {
+            for (int i = 0; i < kNotes; ++i) rig.roll->addNote(50 + (i % 5), 1.0f + static_cast<float>(i) * 0.5f, 0.25f); // beats 1 to 4.5
+            rig.roll->setShowVelocityLane(true);
+            rig.h.frame();
+        };
+        auto drag = [&](RollRig& rig)
+        {
+            // from beat 0.9 to 3.1 along the middle of the lane: the notes at beats 1 to 3 (five of them)
+            rig.move(RollRig::xBeat(0.9f), yVelocity(0.5f));
+            rig.down();
+            rig.move(RollRig::xBeat(3.1f), yVelocity(0.5f));
+            rig.up();
+        };
+        {
+            RollRig rig;
+            build(rig);
+            int told[16], count = 0;
+            bool valid = true;
+            rig.roll->onNoteVelocityChanged.connect([&](int i)
+                    {
+                        if (i < 0 || i >= static_cast<int>(rig.roll->notes().size())) valid = false;
+                        else
+                            rig.roll->removeNote(i);
+                        if (count < 16) told[count] = i;
+                        ++count;
+                    });
+            drag(rig);
+            check(count == 5 && valid, "a handler that removes the note it is told: five notes changed, five calls, every index right when it came");
+            check(static_cast<int>(rig.roll->notes().size()) == kNotes - 5, "and the three notes that were not under the pointer are what is left");
+            bool leftAreThoseNotTouched = true;
+            for (size_t i = 0; i < rig.roll->notes().size(); ++i)
+                if (rig.roll->notes()[i].start < 3.4f) leftAreThoseNotTouched = false;
+            check(leftAreThoseNotTouched, "(the ones from beat 3.5 on)");
+            rig.h.frame();
+        }
+        {
+            RollRig rig;
+            build(rig);
+            int count = 0;
+            rig.roll->onNoteVelocityChanged.connect([&](int) { ++count; rig.roll->clearNotes(); });
+            drag(rig);
+            check(count == 1 && rig.roll->notes().empty(), "a handler that removes all the notes: called once, the other four are not said");
+            rig.h.frame();
+            rig.move(RollRig::xBeat(2.0f), yVelocity(0.3f));
+            rig.down();
+            rig.up();
+            check(rig.roll->notes().empty(), "(and a lane gesture on a roll with no notes does nothing)");
+        }
+        {
+            RollRig rig;
+            build(rig);
+            int count = 0;
+            rig.roll->onNoteVelocityChanged.connect([&](int)
+                    {
+                        ++count;
+                        rig.roll->addNote(60, 7.0f, 1.0f);
+                        rig.roll->setShowVelocityLane(false);
+                        rig.roll->setVelocityLaneHeight(0.0f / 0.0f);
+                    });
+            drag(rig);
+            check(count == 5 && rig.roll->notes().size() == static_cast<size_t>(kNotes + 5), "a handler that adds notes and hides the lane: five calls, the notes are added, nothing breaks");
+            check(notesSane(rig.roll), "(and the notes are sane)");
+            rig.h.frames(2);
+        }
+    }
+    // (e) the application changes the notes between two events of the mouse, in each kind of gesture
+    {
+        const char* names[] = { "resize", "move", "put", "lane" };
+        for (int gesture = 0; gesture < 4; ++gesture)
+            for (int change = 0; change < 4; ++change)
+            {
+                RollRig rig;
+                PianoRoll* roll = rig.roll;
+                for (int i = 0; i < 4; ++i) roll->addNote(52 + i, 1.0f + static_cast<float>(i), 1.0f);
+                roll->setShowVelocityLane(true);
+                rig.h.frame();
+                float px = RollRig::xBeat(2.0f) - 2.5f, py = RollRig::yPitch(53);
+                if (gesture == 1) px = RollRig::xBeat(1.5f);
+                if (gesture == 2) { px = RollRig::xBeat(6.0f) + 3.0f; py = RollRig::yPitch(50); }
+                if (gesture == 3) { px = RollRig::xBeat(2.0f); py = yVelocity(0.4f); }
+                rig.move(px, py);
+                rig.down();
+                rig.move(px + 20.0f, py);
+                // the change
+                if (change == 0) roll->clearNotes();
+                else if (change == 1)
+                    while (!roll->notes().empty()) roll->removeNote(0);
+                else if (change == 2)
+                    roll->removeNote(0);
+                else
+                    for (int i = 0; i < 100; ++i) roll->addNote(60, static_cast<float>(i) * 0.1f, 0.5f);
+                rig.move(px + 60.0f, py - 4.0f);
+                rig.move(px + 100.0f, py + 4.0f);
+                rig.up();
+                rig.h.frame();
+                const bool ok = notesSane(roll);
+                String text = String("notes changed by the application under a ") + names[gesture] + " gesture (change " + String::number(change) + "): the roll stays sane";
+                check(ok, text.c_str());
+                // and a new gesture works
+                const size_t before = roll->notes().size();
+                rig.move(RollRig::xBeat(7.0f), RollRig::yPitch(49));
+                rig.down();
+                rig.up();
+                check(roll->notes().size() == before + 1, "(and the next click puts a note)");
+            }
+    }
+    // (f) removal with the right button, the handler of onNoteRemoved removes everything
+    {
+        RollRig rig;
+        PianoRoll* roll = rig.roll;
+        roll->addNote(55, 2.0f, 1.0f);
+        roll->addNote(56, 4.0f, 1.0f);
+        int deleted = 0;
+        roll->onNoteRemoved.connect([&](int) { roll->clearNotes(); });
+        roll->onNoteDeleted.connect([&](int, const PianoNote&) { ++deleted; });
+        rig.move(RollRig::xBeat(2.5f), RollRig::yPitch(55));
+        rig.down(1);
+        rig.up(1);
+        check(roll->notes().empty() && deleted == 1, "a handler of onNoteRemoved that removes everything: the note is gone once and the roll goes on");
+        rig.h.frame();
+    }
+}
+
+void testHostileZeroAndTinyRolls()
+{
+    const Rect sizes[] = { Rect(20.0f, 20.0f, 0.0f, 0.0f), Rect(20.0f, 20.0f, 36.0f, 200.0f), Rect(20.0f, 20.0f, 400.0f, 0.0f),
+        Rect(20.0f, 20.0f, 400.0f, 15.0f), Rect(20.0f, 20.0f, 400.0f, 19.0f), Rect(20.0f, 20.0f, 400.0f, 21.0f), Rect(20.0f, 20.0f, 0.5f, 0.5f),
+        Rect(20.0f, 20.0f, 37.0f, 30.0f), Rect(20.0f, 20.0f, -10.0f, -10.0f), Rect(20.0f, 20.0f, 400.0f, 1.0e9f), Rect(20.0f, 20.0f, 1.0e9f, 200.0f) };
+    char what[96];
+    for (int lane = 0; lane < 2; ++lane)
+        for (const Rect& r: sizes)
+        {
+            RollRig rig;
+            PianoRoll* roll = rig.roll;
+            Watch watch(rig.h, "zero-size rolls");
+            roll->setRect(r);
+            roll->addNote(55, 2.0f, 2.0f);
+            roll->addNote(56, 3.0f, 0.25f);
+            roll->setShowVelocityLane(lane != 0);
+            roll->setKeyWidth(36.0f);
+            snprintf(what, sizeof what, "a roll of %g x %g with the lane %s", static_cast<double>(r.w), static_cast<double>(r.h), lane ? "on" : "off");
+            watch.frame(what);
+            // every kind of gesture at points across and around the roll
+            for (int button = 0; button < 3; ++button)
+                for (float fx = -0.2f; fx < 1.3f; fx += 0.25f)
+                    for (float fy = -0.2f; fy < 1.3f; fy += 0.25f)
+                    {
+                        const float x = r.x + r.w * fx, y = r.y + r.h * fy;
+                        watch.move(x, y, what);
+                        watch.button(button, true, what);
+                        watch.move(x + 30.0f, y - 10.0f, what);
+                        watch.move(x - 30.0f, y + 10.0f, what);
+                        watch.button(button, false, what);
+                    }
+            roll->setVelocityLaneHeight(10.0f);
+            watch.frame(what);
+            if (!notesSane(roll))
+            {
+                printf("    %s: a note is not sane\n", what);
+                watch.ok = false;
+            }
+            check(watch.ok, (String("a zero-size or tiny roll, ") + what + ": finite frames, sane notes, no crash").c_str());
+            roll->setRect(Rect(20.0f, 20.0f, 400.0f, 200.0f));
+            watch.frame(what);
+        }
+}
+
+void testHostileManyNotes()
+{
+    RollRig rig;
+    PianoRoll* roll = rig.roll;
+    Watch watch(rig.h, "many notes");
+    roll->setShowVelocityLane(true);
+    // three thousand notes in view: one lane drag across all of them
+    for (int i = 0; i < 3000; ++i) roll->addNote(50 + i % 9, static_cast<float>(i) * (8.0f / 3000.0f), 0.05f, 0.5f);
+    watch.frame("3000 notes in view");
+    int told = 0;
+    roll->onNoteVelocityChanged.connect([&](int) { ++told; });
+    watch.move(60.0f, yVelocity(0.9f), "3000 notes");
+    watch.button(0, true, "3000 notes");
+    watch.move(415.0f, yVelocity(0.1f), "3000 notes");
+    watch.button(0, false, "3000 notes");
+    check(watch.ok && notesSane(roll), "three thousand notes in view and a lane drag across all of them: bounded frames, sane notes");
+    check(told > 2500 && told <= 3000, "(nearly every note says it was set, once)");
+    check(watch.mostAsked < 16ull << 20, "and no frame or event asked the heap for more than 16 MiB");
+    // two hundred thousand notes out of view (the view is eight beats): the lane draws and answers in a bounded time
+    roll->clearNotes();
+    for (int i = 0; i < 200000; ++i) roll->addNote(50 + i % 9, 100.0f + static_cast<float>(i), 0.5f);
+    watch.frame("200000 notes out of view");
+    watch.move(150.0f, yVelocity(0.5f), "200000 notes out of view");
+    watch.button(0, true, "200000 notes out of view");
+    watch.move(300.0f, yVelocity(0.2f), "200000 notes out of view");
+    watch.button(0, false, "200000 notes out of view");
+    watch.move(150.0f, RollRig::yPitch(52), "200000 notes out of view");
+    check(watch.ok, "two hundred thousand notes out of view: bounded frames and events");
+    // four thousand in view, the lane's bars drawn for each: the frame is the roll's own (it draws every note) plus a bar each
+    roll->clearNotes();
+    for (int i = 0; i < 4000; ++i) roll->addNote(50 + i % 9, static_cast<float>(i) * 0.002f, 0.002f, static_cast<float>(i % 10) * 0.1f);
+    watch.frame("4000 notes in view");
+    check(watch.ok, "four thousand notes of a quarter of a pixel each in view: a bounded frame");
+    // two hundred thousand in view at once, so many that the roll's own drawing of notes is not what is looked at: the events of a
+    // lane drag over all of them, without a frame, keep the heap bounded and say each note once
+    roll->clearNotes();
+    for (int i = 0; i < 200000; ++i) roll->addNote(50 + i % 9, static_cast<float>(i) * 0.00004f, 0.00004f, 0.5f);
+    told = 0;
+    watch.drawAfterEvents = false;
+    watch.move(60.0f, yVelocity(0.9f), "200000 notes in view");
+    watch.button(0, true, "200000 notes in view");
+    watch.move(415.0f, yVelocity(0.1f), "200000 notes in view");
+    watch.button(0, false, "200000 notes in view");
+    check(told > 100000 && told <= 200000, "a lane drag over two hundred thousand notes in view says each note once");
+    check(watch.mostAsked < 16ull << 20, "and no event of it asked the heap for more than 16 MiB");
+    check(notesSane(roll), "(the notes are sane)");
+}
+
+// the thickness of the bars that is not a number, infinite, enormous, zero or negative, with every kind of bar in the window
+void testHostileScrollBarThickness()
+{
+    Harness h(480.0f, 320.0f, false);
+    Watch watch(h, "the scroll bar thickness");
+    Widget* holder = h.root()->createChild<Widget>();
+    ScrollView* view = holder->createChild<ScrollView>();
+    view->setRect({ 0.0f, 0.0f, 150.0f, 100.0f });
+    view->setContent<Wants>(400.0f, 400.0f);
+    ListBox* list = holder->createChild<ListBox>();
+    list->setRect({ 160.0f, 0.0f, 150.0f, 100.0f });
+    for (int i = 0; i < 30; ++i) list->addItem(String("item ") + String::number(i));
+    ListWidget* rows = holder->createChild<ListWidget>();
+    rows->setRect({ 320.0f, 0.0f, 150.0f, 100.0f });
+    for (int i = 0; i < 12; ++i) rows->addRow<Label>(String("row ") + String::number(i));
+    DataGrid* data = holder->createChild<DataGrid>();
+    data->setRect({ 0.0f, 110.0f, 150.0f, 100.0f });
+    for (int c = 0; c < 3; ++c) data->addColumn(String("C") + String::number(c), 80.0f);
+    for (int r = 0; r < 50; ++r)
+    {
+        ct::Vector<String> cells;
+        for (int c = 0; c < 3; ++c) cells.push_back(String::number(r));
+        data->addRow(cells);
+    }
+    TreeGrid* treeGrid = holder->createChild<TreeGrid>();
+    treeGrid->setRect({ 160.0f, 110.0f, 150.0f, 100.0f });
+    for (int c = 0; c < 3; ++c) treeGrid->addColumn(String("C") + String::number(c), 80.0f);
+    for (int r = 0; r < 50; ++r)
+    {
+        ct::Vector<String> cells;
+        for (int c = 0; c < 3; ++c) cells.push_back(String::number(r));
+        treeGrid->addRoot(cells);
+    }
+    treeGrid->rebuild();
+    ThumbnailGrid* thumbs = holder->createChild<ThumbnailGrid>();
+    thumbs->setRect({ 320.0f, 110.0f, 150.0f, 100.0f });
+    thumbs->setThumbSize(40.0f, 40.0f);
+    for (int i = 0; i < 40; ++i) thumbs->addItem(String("t") + String::number(i));
+    Timeline* line = holder->createChild<Timeline>();
+    line->setRect({ 0.0f, 220.0f, 150.0f, 100.0f });
+    for (int i = 0; i < 12; ++i) line->addTrack(String("track ") + String::number(i), TrackKind::Video);
+    TreeView* tree = holder->createChild<TreeView>();
+    tree->setRect({ 160.0f, 220.0f, 150.0f, 100.0f });
+    for (int i = 0; i < 30; ++i) tree->addRoot(String("node ") + String::number(i));
+    ConsoleWidget* console = holder->createChild<ConsoleWidget>();
+    console->setRect({ 320.0f, 220.0f, 150.0f, 100.0f });
+    for (int i = 0; i < 40; ++i) console->log(LogLevel::Info, String("message ") + String::number(i));
+    h.relayout();
+    const Theme saved = Theme::instance();
+    char what[96];
+    for (float v: kOdd)
+    {
+        Theme::instance().scrollbarWidth = v;
+        snprintf(what, sizeof what, "the thickness %g", static_cast<double>(v));
+        h.app.requestLayout();
+        watch.frame(what);
+        watch.frame(what);
+        // the bars are as thick as the library keeps them to, and the one a widget asks of the theme is the one it draws
+        const float thick = ScrollBar::thickness();
+        if (!(thick >= 4.0f && thick <= 100.0f))
+        {
+            printf("    %s: ScrollBar::thickness() is %g\n", what, static_cast<double>(thick));
+            watch.ok = false;
+        }
+        // presses on the bars and wheel turns on the widgets
+        const Rect cells[] = { data->absoluteRect(), treeGrid->absoluteRect(), thumbs->absoluteRect(), line->absoluteRect(), tree->absoluteRect(), view->absoluteRect(), list->absoluteRect() };
+        for (const Rect& r: cells)
+        {
+            watch.move(r.x + r.w - 3.0f, r.y + 50.0f, what);
+            watch.button(0, true, what);
+            watch.move(r.x + r.w - 3.0f, r.y + 80.0f, what);
+            watch.button(0, false, what);
+            h.app.feedMouseWheel(0.0f, -3.0f);
+            watch.frame(what);
+        }
+    }
+    Theme::instance() = saved;
+    check(watch.ok, "a scroll bar thickness that is not a number, infinite, enormous, zero or negative leaves every kind of bar (ScrollView, lists, grids, ThumbnailGrid, Timeline, TreeView, ConsoleWidget) with finite, bounded frames");
+    check(ScrollBar::thickness() == 8.0f, "(and the theme is back to 8)");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1117,6 +1793,13 @@ int main(int argc, char** argv)
     RUN(testSerializerKeepsTheOrderOfAToolBarAfterADrag);
     RUN(testToolBarLoadsWhatAFileCanHold);
     RUN(testScrollBarThicknessIsTheThemes);
+    RUN(testHostileRollSettersAndNotes);
+    RUN(testHostilePointerInGestures);
+    RUN(testHostileNotesInGestures);
+    RUN(testHostileHandlersChangeTheNotes);
+    RUN(testHostileZeroAndTinyRolls);
+    RUN(testHostileManyNotes);
+    RUN(testHostileScrollBarThickness);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
