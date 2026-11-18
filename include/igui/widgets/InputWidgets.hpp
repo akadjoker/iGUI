@@ -51,6 +51,52 @@ public:
         return orientation_;
     }
 
+    /// @brief Show the value as text at the end of the slider: to the right of a horizontal one, under a
+    ///        vertical one (the track is shorter by the room the text takes, which is that of the widest of
+    ///        the texts of the minimum and the maximum, so the track does not move as the value changes,
+    ///        and sizeHint() asks for the room). A slider too short to keep a track of 24 pixels or so
+    ///        beside the text shows no text. Default false.
+    void setShowValue(bool on)
+    {
+        showValue_ = on;
+        invalidateLayout();
+        markDirty();
+    }
+    bool showValue() const
+    {
+        return showValue_;
+    }
+    /// @brief Decimals of the text of the value (0 to 6); -1, the default, picks them from the range: none
+    ///        from a range of 100, one from 10, two below.
+    void setValueDecimals(int decimals)
+    {
+        valueDecimals_ = decimals < -1 ? -1 : (decimals > 6 ? 6 : decimals);
+        invalidateLayout();
+        markDirty();
+    }
+    int valueDecimals() const
+    {
+        return valueDecimals_;
+    }
+    /// @brief Text after the value, e.g. " dB" or "%".
+    void setValueSuffix(const String& suffix)
+    {
+        valueSuffix_ = suffix;
+        invalidateLayout();
+        markDirty();
+    }
+    const String& valueSuffix() const
+    {
+        return valueSuffix_;
+    }
+    /// @brief The text of a value as the readout writes it (a value that rounds to zero is "0", not "-0").
+    String valueText(float v) const;
+    /// @brief The text of the current value.
+    String valueText() const
+    {
+        return valueText(value_);
+    }
+
     /// @brief Emitted when the value changes.
     Signal<float> onValueChanged;
 
@@ -64,10 +110,19 @@ private:
     float min_, max_, value_;
     LayoutDir orientation_ = LayoutDir::Horizontal;
     bool dragging_ = false;
+    bool showValue_ = false;
+    int valueDecimals_ = -1;
+    String valueSuffix_;
+
+    // The room the readout takes at the end of the slider, along it (0 when it is not shown, or when the slider is
+    // too short for it).
+    float readoutExtent() const;
+    void paintReadout(PaintContext& ctx, const Rect& full, float extent);
 
     // The thumb's centre travels this far in from each end, so the whole thumb
     // and a small gap stay inside the slider (0 when the slider is too short).
-    float thumbInset() const;
+    // @p extent is the room the readout takes from the length (readoutExtent()).
+    float thumbInset(float extent = 0.0f) const;
     // Radius of the round thumb: the theme's sliderThumbRadius, but never more than half of the
     // slider's thickness, so the thumb stays inside the slider's rectangle.
     float thumbRadius() const;

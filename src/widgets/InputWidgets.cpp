@@ -48,12 +48,12 @@ float Slider::thumbRadius() const
     return fitting > 0.0f ? fitting : 0.0f;
 }
 
-float Slider::thumbInset() const
+float Slider::thumbInset(float extent) const
 {
     const bool vert = orientation_ == LayoutDir::Vertical;
     // The XP box is 11 px long along the slider, whatever the radius.
     const float half = Theme::instance().sliderThumbBox ? 5.5f : thumbRadius();
-    const float length = vert ? rect_.h : rect_.w;
+    const float length = (vert ? rect_.h : rect_.w) - extent;
     const float inset = half + 2.0f;
     if (length > inset * 2.0f) return inset;
     // Too short for the gap: the thumb still stays inside while it fits; too short for the thumb
@@ -61,11 +61,78 @@ float Slider::thumbInset() const
     return length > half * 2.0f ? half : 0.0f;
 }
 
+// The readout: the value as text. Its room is that of the widest text the slider can show (the minimum's or the
+// maximum's), so that the track does not change length as the value does.
+static constexpr float kReadoutGap = 6.0f;
+static constexpr float kReadoutMinTrack = 24.0f;
+
+String Slider::valueText(float v) const
+{
+    const float range = max_ - min_;
+    int decimals = valueDecimals_ >= 0 ? valueDecimals_ : (range >= 100.0f ? 0 : (range >= 10.0f ? 1 : 2));
+    float unit = 1.0f;
+    for (int i = 0; i < decimals; ++i) unit *= 10.0f;
+    if (v < 0.0f && v > -0.5f / unit) v = 0.0f; // "-0.00" is "0.00"
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.*f", decimals, static_cast<double>(v));
+    return String(buf) + valueSuffix_;
+}
+
+float Slider::readoutExtent() const
+{
+    if (!showValue_) return 0.0f;
+    const bool vert = orientation_ == LayoutDir::Vertical;
+    const auto& t = Theme::instance();
+    float extent;
+    if (vert)
+        extent = t.fontSize + 4.0f;
+    else
+    {
+        const float a = WidgetApp::instance().textWidth(valueText(min_).c_str());
+        const float b = WidgetApp::instance().textWidth(valueText(max_).c_str());
+        extent = kReadoutGap + (a > b ? a : b);
+    }
+    const float length = vert ? rect_.h : rect_.w;
+    return length - extent >= kReadoutMinTrack ? extent : 0.0f;
+}
+
 Widget::Vec2f Slider::sizeHint() const
 {
     const auto& t = Theme::instance();
-    if (orientation_ == LayoutDir::Vertical) return { t.sliderHeight, 120.0f };
-    return { 120.0f, t.sliderHeight };
+    if (!showValue_)
+    {
+        if (orientation_ == LayoutDir::Vertical) return { t.sliderHeight, 120.0f };
+        return { 120.0f, t.sliderHeight };
+    }
+    if (orientation_ == LayoutDir::Vertical)
+    {
+        const float a = WidgetApp::instance().textWidth(valueText(min_).c_str());
+        const float b = WidgetApp::instance().textWidth(valueText(max_).c_str());
+        const float w = (a > b ? a : b) + 4.0f;
+        return { w > t.sliderHeight ? w : t.sliderHeight, 120.0f + t.fontSize + 4.0f };
+    }
+    const float a = WidgetApp::instance().textWidth(valueText(min_).c_str());
+    const float b = WidgetApp::instance().textWidth(valueText(max_).c_str());
+    return { 120.0f + kReadoutGap + (a > b ? a : b), t.sliderHeight };
+}
+
+void Slider::paintReadout(PaintContext& ctx, const Rect& full, float extent)
+{
+    const auto& t = Theme::instance();
+    const String text = valueText();
+    ctx.font.SetFontSize(t.fontSize);
+    ctx.font.SetBatch(&ctx.text);
+    ctx.font.SetColor(isEnabledInTree() ? t.textColor : t.textDisabled);
+    const float asc = ctx.font.GetAscender();
+    ctx.pushClip(full);
+    if (orientation_ == LayoutDir::Vertical)
+    {
+        const float w = ctx.font.GetTextWidth(text.c_str());
+        ctx.font.Print(text.c_str(), full.x + (full.w - w) * 0.5f, full.y + full.h - extent + (extent + asc) * 0.5f);
+    }
+    else
+        ctx.font.Print(text.c_str(), full.x + full.w - extent + kReadoutGap, full.y + (full.h + asc) * 0.5f);
+    ctx.popClip();
 }
 
 // The Windows XP style thumb: a small box with the button's shading and border.
@@ -92,7 +159,16 @@ void Slider::paint(PaintContext& ctx)
     const auto& t = Theme::instance();
     float ratio = (max_ > min_) ? (value_ - min_) / (max_ - min_) : 0.0f;
     bool vert = (orientation_ == LayoutDir::Vertical);
-    const float inset = thumbInset();
+    // with the value as text the track is what is left of the slider
+    const Rect full = abs;
+    const float readout = readoutExtent();
+    if (readout > 0.0f)
+    {
+        if (vert) abs.h -= readout;
+        else
+            abs.w -= readout;
+    }
+    const float inset = thumbInset(readout);
 
     if (vert)
     {
@@ -203,6 +279,8 @@ void Slider::paint(PaintContext& ctx)
         }
     }
 
+    if (readout > 0.0f) paintReadout(ctx, full, readout);
+
     Widget::paint(ctx);
 }
 
@@ -234,11 +312,12 @@ void Slider::onMouseMove(MouseEvent& e)
 void Slider::updateFromMouse(float localX, float localY)
 {
     const bool vert = orientation_ == LayoutDir::Vertical;
-    const float length = vert ? rect_.h : rect_.w;
+    const float readout = readoutExtent();
+    const float length = (vert ? rect_.h : rect_.w) - readout; // the track, without the text
     if (length <= 0.0f) return;
     // The thumb's travel, as paint draws it.
-    const float inset = thumbInset();
-    const float along = ((vert ? rect_.h - localY : localX) - inset) / (length - inset * 2.0f);
+    const float inset = thumbInset(readout);
+    const float along = ((vert ? length - localY : localX) - inset) / (length - inset * 2.0f);
     const float ratio = std::clamp(along, 0.0f, 1.0f);
     setValue(min_ + ratio * (max_ - min_));
 }

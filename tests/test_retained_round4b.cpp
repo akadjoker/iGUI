@@ -10,6 +10,7 @@
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/ChartWidget.hpp>
+#include <igui/widgets/InputWidgets.hpp>
 #include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
 #include <igui/widgets/Timeline.hpp>
@@ -924,6 +925,146 @@ void testChartDoubleData()
     check(differing(a.take(), b.take(), 0, 0, 400, 300) == 0, "a chart of doubles is drawn as the chart of the same numbers in float");
 }
 
+// ---- item 21: the slider's value readout ----
+
+void testSliderValueReadout()
+{
+    Screen screen(260.0f, 200.0f);
+    WidgetApp& app = WidgetApp::instance();
+    Slider* s = screen.h.root()->createChild<Slider>(0.0f, 1.0f, 0.5f);
+    s->setRect(Rect(10.0f, 10.0f, 200.0f, 22.0f));
+    screen.h.frames(2);
+    const Shot off = screen.take();
+
+    // the text
+    check(!s->showValue() && s->valueDecimals() == -1 && s->valueSuffix().empty(), "no readout by default");
+    check(s->valueText() == "0.50" && s->valueText(1.0f) == "1.00", "a range of 1 is written with two decimals");
+    s->setValueSuffix(String(" dB"));
+    check(s->valueText() == "0.50 dB" && s->valueSuffix() == " dB", "with the suffix");
+    s->setValueSuffix(String());
+    s->setValueDecimals(0);
+    check(s->valueText(0.75f) == "1" && s->valueText(0.25f) == "0" && s->valueDecimals() == 0, "with the decimals asked for");
+    s->setValueDecimals(3);
+    check(s->valueText(0.5f) == "0.500", "three decimals");
+    s->setValueDecimals(99);
+    check(s->valueDecimals() == 6, "at most six");
+    s->setValueDecimals(-7);
+    check(s->valueDecimals() == -1, "and -1 is the automatic ones");
+    s->setRange(-1.0f, 1.0f);
+    check(s->valueText(-0.0004f) == "0.00" && s->valueText(-0.004f) == "0.00", "a value that rounds to zero is 0.00, not -0.00");
+    check(s->valueText(-0.006f) == "-0.01" && s->valueText(-0.5f) == "-0.50", "and the others keep their sign");
+    s->setRange(0.0f, 200.0f);
+    check(s->valueText(50.0f) == "50", "a range of 200 is written with no decimals");
+    s->setRange(0.0f, 50.0f);
+    check(s->valueText(25.0f) == "25.0", "a range of 50 with one");
+    s->setRange(0.0f, 1.0e30f);
+    check(s->valueText(1.0e30f).size() > 20, "a huge range is written in full, whole");
+    s->setRange(0.0f, 1.0f);
+    s->setValue(0.5f);
+
+    // the room the text takes: the size hint grows, the track is shorter
+    const Widget::Vec2f plainHint = s->sizeHint();
+    s->setShowValue(true);
+    check(s->showValue(), "setShowValue(true) is kept");
+    const float extent = s->sizeHint().x - plainHint.x;
+    check(extent > 20.0f && extent < 80.0f && s->sizeHint().y == plainHint.y, "sizeHint asks for the room of the text");
+    screen.h.frames(2);
+    const Shot on = screen.take();
+
+    // the text is drawn at the right end, in the room the hint asked for; and the track is shorter
+    const int right = 10 + 200, left = right - static_cast<int>(extent);
+    const int bandDiff = differing(off, on, left, 10, right, 32);
+    if (bandDiff < 20) printf("    %d pixels differ in the readout band\n", bandDiff);
+    check(bandDiff >= 20, "the readout is drawn at the right end of the slider");
+    const int below = differing(off, on, 0, 32, 260, 200), above = differing(off, on, 0, 0, 260, 10), beside = differing(off, on, right + 2, 0, 260, 200);
+    if (below || above || beside) printf("    outside the slider: %d below, %d above, %d to the right\n", below, above, beside);
+    check(below == 0 && above == 0 && beside == 0, "and nothing outside the slider changes");
+    // it follows the value
+    s->setValue(0.9f);
+    screen.h.frames(2);
+    const Shot moved = screen.take();
+    s->setValue(0.5f);
+    screen.h.frames(2);
+    check(differing(on, moved, left, 10, right, 32) >= 10, "the text follows the value");
+    check(differing(screen.take(), on, 0, 0, 260, 200) == 0, "and is the same for the same value");
+    // the mouse maps to the shorter track: a click on the text end of the slider is the maximum
+    s->setShowValue(true);
+    screen.h.frames(2);
+    const float trackLen = 200.0f - extent, inset = 6.5f + 2.0f;
+    app.feedMouseMove(10.0f + 80.0f, 21.0f);
+    app.feedMouseButton(0, true);
+    app.feedMouseButton(0, false);
+    const float expected = (80.0f - inset) / (trackLen - inset * 2.0f);
+    if (fabsf(s->value() - expected) > 0.002f) printf("    the click at 80 gave %g, expected %g\n", s->value(), expected);
+    check(fabsf(s->value() - expected) < 0.002f, "a click maps to the track without the text");
+    app.feedMouseMove(10.0f + 195.0f, 21.0f);
+    app.feedMouseButton(0, true);
+    app.feedMouseButton(0, false);
+    check(s->value() == 1.0f, "a click over the text is the end of the track: the maximum");
+    app.feedMouseMove(10.0f + 2.0f, 21.0f);
+    app.feedMouseButton(0, true);
+    app.feedMouseButton(0, false);
+    check(s->value() == 0.0f, "and at the other end the minimum");
+
+    // a slider too short for the text and a track shows no text, and is the slider it was
+    Slider* shortOne = screen.h.root()->createChild<Slider>(0.0f, 1.0f, 0.5f);
+    shortOne->setRect(Rect(10.0f, 60.0f, 40.0f, 22.0f));
+    screen.h.frames(2);
+    const Shot shortOff = screen.take();
+    shortOne->setShowValue(true);
+    screen.h.frames(2);
+    check(differing(screen.take(), shortOff, 0, 0, 260, 200) == 0, "a slider too short for the text draws as without it");
+
+    // a vertical slider: the text under it, the track above
+    Slider* v = screen.h.root()->createChild<Slider>(0.0f, 100.0f, 50.0f);
+    v->setOrientation(LayoutDir::Vertical);
+    v->setRect(Rect(220.0f, 10.0f, 34.0f, 160.0f));
+    screen.h.frames(2);
+    const Shot vOff = screen.take();
+    check(v->valueText() == "50", "a range of 100 has no decimals");
+    v->setShowValue(true);
+    check(v->sizeHint().y > 120.0f && v->sizeHint().x >= 20.0f, "the vertical slider asks for the line of text under it");
+    screen.h.frames(2);
+    const Shot vOn = screen.take();
+    check(differing(vOff, vOn, 220, 10 + 160 - 20, 254, 170) >= 15, "the text is drawn under the vertical slider");
+    check(differing(vOff, vOn, 0, 0, 215, 200) == 0, "and not elsewhere");
+    app.feedMouseMove(237.0f, 11.0f);
+    app.feedMouseButton(0, true);
+    app.feedMouseButton(0, false);
+    check(v->value() == 100.0f, "a click at the top of a vertical slider is the maximum");
+    const float vExtent = Theme::instance().fontSize + 4.0f;
+    app.feedMouseMove(237.0f, 10.0f + 160.0f - vExtent);
+    app.feedMouseButton(0, true);
+    app.feedMouseButton(0, false);
+    check(v->value() == 0.0f, "and at the bottom of its track, above the text, the minimum");
+
+    // taking it away gives the slider of before
+    s->setShowValue(false);
+    s->setValue(0.5f);
+    screen.h.frames(2);
+    shortOne->setShowValue(false);
+    v->setShowValue(false);
+    v->setValue(50.0f);
+    screen.h.frames(2);
+    const Shot after = screen.take();
+    const int rest = differing(after, off, 0, 0, 216, 55); // (the focus ring of the vertical slider is at 219)
+    if (rest)
+    {
+        int l = 9999, t = 9999, r = -1, b = -1;
+        for (int y = 0; y < 55; ++y)
+            for (int x = 0; x < 216; ++x)
+                if (differing(after, off, x, y, x + 1, y + 1))
+                {
+                    if (x < l) l = x;
+                    if (y < t) t = y;
+                    if (x > r) r = x;
+                    if (y > b) b = y;
+                }
+        printf("    %d pixels differ from the slider as it was, inside %d,%d to %d,%d\n", rest, l, t, r, b);
+    }
+    check(rest == 0, "no readout is the slider as it was");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -940,6 +1081,7 @@ int main(int argc, char** argv)
     RUN(testPianoRollShowVelocity);
     RUN(testChartAxisTitles);
     RUN(testChartDoubleData);
+    RUN(testSliderValueReadout);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
