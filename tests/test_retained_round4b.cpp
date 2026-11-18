@@ -10,6 +10,7 @@
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/SideTabBar.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
+#include <igui/widgets/Timeline.hpp>
 #include <igui/widgets/ToolBar.hpp>
 
 using namespace rh;
@@ -398,6 +399,150 @@ void testToolBarColoredIconsAndTheme()
     check(differing(screen.take(), withLine, 0, 0, withLine.w, withLine.h) == 0, "true brings it back");
 }
 
+// ---- item 19: the bars and beats ruler of the Timeline ----
+
+// The pixel at (x, y) is this colour exactly.
+bool isColour(const Shot& s, int x, int y, int r, int g, int b)
+{
+    const Pixel p = pixelAt(s, x, y);
+    return p.r == r && p.g == g && p.b == b;
+}
+
+// The pixels of a w by h window of `a` at (xa, y) are those of `b` at (xb, y).
+bool sameCrop(const Shot& a, int xa, const Shot& b, int xb, int y, int w, int h)
+{
+    for (int j = 0; j < h; ++j)
+        for (int i = 0; i < w; ++i)
+        {
+            const Pixel p = pixelAt(a, xa + i, y + j), q = pixelAt(b, xb + i, y + j);
+            if (p.r != q.r || p.g != q.g || p.b != q.b) return false;
+        }
+    return true;
+}
+
+void testTimelineBarRuler()
+{
+    // 160 pixels of header, 16 of padding each side and 400 of time: 50 pixels for each second, so every tick is on a pixel
+    Screen screen(592.0f, 120.0f);
+    Timeline* tl = screen.h.root()->createChild<Timeline>();
+    tl->setRect(Rect(0.0f, 0.0f, 592.0f, 120.0f));
+    tl->setTimeRange(0.0f, 8.0f);
+    tl->setPlayhead(100.0f); // out of the view: at 0 it would be drawn over the first tick
+    screen.h.frames(2);
+    const int rowMajor = 15, rowMinor = 21; // a major tick covers the last 10 rows of the 24 of the ruler, a minor one the last 5
+    const int bgR = 38, bgG = 40, bgB = 46;
+    const Shot seconds = screen.take();
+
+    check(!tl->barRuler() && tl->barRulerBeats() == 0, "the ruler is in seconds by default");
+    tl->setBarRuler(120.0f, 4); // a bar is 2 seconds: 100 pixels
+    check(tl->barRuler() && tl->barRulerTempo() == 120.0f && tl->barRulerBeats() == 4, "setBarRuler turns the bars and beats ruler on");
+    screen.h.frames(2);
+    const Shot bars = screen.take();
+    check(differing(seconds, bars, 160, 0, 592, 24) > 100, "and the ruler is drawn differently");
+    check(differing(seconds, bars, 0, 25, 592, 120) == 0 && differing(seconds, bars, 0, 0, 160, 25) == 0, "nothing else changes");
+    // a major tick at each bar line (0, 2, 4, 6, 8 seconds: x 176, 276, 376, 476, 576), none between
+    bool majors = true;
+    for (int bar = 0; bar <= 4; ++bar) majors = majors && isColour(bars, 176 + bar * 100, rowMajor, 80, 82, 90);
+    check(majors, "a major tick at each bar line");
+    check(isColour(bars, 226, rowMajor, bgR, bgG, bgB) && isColour(bars, 326, rowMajor, bgR, bgG, bgB), "and none at the beats");
+    // a small tick at each beat (half a second: 25 pixels): 201, 226, 251, then the same in the next bar
+    bool beats = true;
+    for (int k = 1; k < 4; ++k) beats = beats && isColour(bars, 176 + k * 25, rowMinor, 55, 57, 63) && isColour(bars, 276 + k * 25, rowMinor, 55, 57, 63);
+    check(beats, "a small tick at each beat of a bar");
+    check(isColour(bars, 189, rowMinor, bgR, bgG, bgB), "and none anywhere else");
+    // the label is the number of the bar, counted from 1: the tick of 4 seconds is the third bar, and its label is the
+    // same picture as the label of the tick of 4 seconds in a view that starts there
+    tl->setTimeRange(4.0f, 12.0f);
+    screen.h.frames(2);
+    const Shot shifted = screen.take();
+    check(isColour(shifted, 176, rowMajor, 80, 82, 90), "(the bar of 4 seconds is at the left edge of the shifted view)");
+    check(sameCrop(bars, 376 + 2, shifted, 176 + 2, 3, 12, 11), "the label of the third bar is the same wherever the bar is");
+    check(!sameCrop(bars, 176 + 2, shifted, 176 + 2, 3, 12, 11), "and it is not the label of the first");
+    tl->setTimeRange(0.0f, 8.0f);
+
+    // a faster tempo and another time signature move the bar lines: 60 bpm, 4 beats is 4 seconds a bar; 120 bpm, 3 beats 1.5 s
+    tl->setBarRuler(60.0f, 4);
+    screen.h.frames(2);
+    const Shot slow = screen.take();
+    check(isColour(slow, 376, rowMajor, 80, 82, 90) && isColour(slow, 276, rowMajor, bgR, bgG, bgB) && isColour(slow, 576, rowMajor, 80, 82, 90),
+            "at 60 bpm a bar is 4 seconds: the major ticks are at 0, 4 and 8");
+    tl->setBarRuler(120.0f, 3);
+    screen.h.frames(2);
+    const Shot waltz = screen.take();
+    check(isColour(waltz, 251, rowMajor, 80, 82, 90) && isColour(waltz, 326, rowMajor, 80, 82, 90) && isColour(waltz, 276, rowMajor, bgR, bgG, bgB),
+            "in 3 beats to the bar the bar is 1.5 seconds: the major ticks are at 0, 1.5, 3 ...");
+
+    // zoomed out so that the bars are 25 pixels apart: a label for every second bar, the bars between as small ticks, no beats
+    tl->setBarRuler(120.0f, 4);
+    tl->setTimeRange(0.0f, 32.0f);
+    screen.h.frames(2);
+    const Shot far = screen.take();
+    check(isColour(far, 176, rowMajor, 80, 82, 90) && isColour(far, 226, rowMajor, 80, 82, 90) && isColour(far, 276, rowMajor, 80, 82, 90),
+            "zoomed out, the major ticks are at every second bar (4 seconds)");
+    check(isColour(far, 201, rowMajor, bgR, bgG, bgB) && isColour(far, 201, rowMinor, 55, 57, 63), "the bar between is a small tick");
+    check(isColour(far, 189, rowMinor, bgR, bgG, bgB), "and the beats are left out");
+    tl->setTimeRange(0.0f, 8.0f);
+
+    // zoomed in so that there is room for the beats to be numbered: the beat 2 of the first bar is "1.2"
+    tl->setTimeRange(0.0f, 2.0f);
+    screen.h.frames(2);
+    const Shot near = screen.take();
+    // (a beat is 100 pixels: a small tick at 276 and a label right of it)
+    check(isColour(near, 176 + 100, rowMinor, 55, 57, 63), "zoomed in, the beats are small ticks 100 pixels apart");
+    check(differing(near, bars, 176 + 100 + 2, 3, 176 + 100 + 30, 14) > 10, "and are numbered");
+    tl->setTimeRange(0.0f, 8.0f);
+
+    // back to seconds: the picture is the first one, exactly
+    tl->clearBarRuler();
+    check(!tl->barRuler(), "clearBarRuler turns it off");
+    screen.h.frames(2);
+    check(differing(screen.take(), seconds, 0, 0, 592, 120) == 0, "and the ruler is as it was");
+
+    // a tempo that is not a number, or not positive, is no bar ruler; the others are brought into range
+    tl->setBarRuler(120.0f, 4);
+    tl->setBarRuler(0.0f, 4);
+    check(!tl->barRuler(), "a tempo of 0 turns it off");
+    tl->setBarRuler(120.0f, 4);
+    tl->setBarRuler(-5.0f, 4);
+    check(!tl->barRuler(), "so does a negative one");
+    tl->setBarRuler(120.0f, 4);
+    tl->setBarRuler(NAN, 4);
+    check(!tl->barRuler(), "so does NaN");
+    tl->setBarRuler(INFINITY, 4);
+    check(!tl->barRuler(), "and infinity");
+    tl->setBarRuler(5000.0f, 100);
+    check(tl->barRuler() && tl->barRulerTempo() == 999.0f && tl->barRulerBeats() == 64, "a tempo of 5000 and 100 beats are brought to 999 and 64");
+    tl->setBarRuler(0.001f, 0);
+    check(tl->barRulerTempo() == 1.0f && tl->barRulerBeats() == 1, "a tempo under 1 and no beats are brought to 1 and 1");
+    screen.h.frames(2);
+}
+
+// Whatever the view and the tempo, painting the ruler ends and draws a bounded number of ticks (the number of vertices of a
+// frame is counted: it must not grow with the range).
+void testTimelineBarRulerHostile()
+{
+    Screen screen(592.0f, 120.0f);
+    Timeline* tl = screen.h.root()->createChild<Timeline>();
+    tl->setRect(Rect(0.0f, 0.0f, 592.0f, 120.0f));
+    int worst = 0;
+    const float ranges[][2] = { { 0.0f, 8.0f }, { 0.0f, 1.0e9f }, { -1.0e9f, 1.0e9f }, { 1.0e8f, 1.0e8f + 3.0f }, { 0.0f, 0.001f }, { 0.0f, 3600.0f * 100.0f } };
+    const float tempos[] = { 1.0f, 60.0f, 120.0f, 999.0f };
+    const int beatsPerBar[] = { 1, 4, 64 };
+    for (const auto& r: ranges)
+        for (float tempo: tempos)
+            for (int beats: beatsPerBar)
+            {
+                tl->setTimeRange(r[0], r[1]);
+                tl->setBarRuler(tempo, beats);
+                screen.h.frames(2);
+                const int vertices = static_cast<int>(GetDrawData()->passes.empty() ? 0 : GetDrawData()->passes[0].list->vertices().size());
+                if (vertices > worst) worst = vertices;
+            }
+    // a bar of 64 beats at 1000 pixels is nothing to draw but 64 + 1 ticks and their labels; the ceiling is far from that
+    if (worst >= 60000) printf("    a frame drew %d vertices\n", worst);
+    check(worst > 0 && worst < 60000, "a frame with the bar ruler draws a bounded number of vertices for any range and tempo");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -408,6 +553,8 @@ int main(int argc, char** argv)
     RUN(testSyntheticInput);
     RUN(testSideTabBarColoredIcons);
     RUN(testToolBarColoredIconsAndTheme);
+    RUN(testTimelineBarRuler);
+    RUN(testTimelineBarRulerHostile);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

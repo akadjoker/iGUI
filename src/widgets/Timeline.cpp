@@ -1639,6 +1639,34 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
     ctx.fill.SetColor(38, 40, 46, 255);
     ctx.fillRect(b.x, b.y, b.w, kRulerH);
 
+    if (barBeats_ > 0) paintBarTicks(ctx, b);
+    else
+        paintTimeTicks(ctx, b);
+
+    // The markers: a flag with the name, wherever the tracks are scrolled to
+    for (const auto& trk: tracks_)
+    {
+        if (!trk.rulerMarks) continue;
+        const float ascLabel = setupFont(ctx, trk.color, 9.0f);
+        for (const auto& kf: trk.keyframes)
+        {
+            const float x = timeToX(kf.time);
+            if (x < b.x + kHeaderW || x > b.x + b.w) continue;
+            ctx.fill.SetColor(trk.color.r, trk.color.g, trk.color.b, 230);
+            ctx.fillRect(x, b.y + 1, 1, kRulerH - 2);
+            ctx.fillTriangle(x, b.y + 1, x + 6, b.y + 4, x, b.y + 7);
+            if (!kf.label.empty()) ctx.font.Print(kf.label.c_str(), x + 8, b.y + 1 + ascLabel);
+        }
+    }
+
+    // Separator line at ruler bottom
+    ctx.fill.SetColor(60, 62, 68, 255);
+    ctx.fillRect(b.x, b.y + kRulerH, b.w, 1);
+}
+
+// The ticks and labels of the ruler in seconds or frames.
+void Timeline::paintTimeTicks(PaintContext& ctx, const Rect& b)
+{
     // Compute nice tick step
     float range = viewEnd_ - viewStart_;
     float rough = range / 10.0f;
@@ -1695,26 +1723,98 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
             ctx.fillRect(mx, b.y + kRulerH - 5, 1, 5);
         }
     }
+}
 
-    // The markers: a flag with the name, wherever the tracks are scrolled to
-    for (const auto& trk: tracks_)
+void Timeline::setBarRuler(float bpm, int beatsPerBar)
+{
+    if (!(bpm > 0.0f) || !Math::isFinite(bpm))
     {
-        if (!trk.rulerMarks) continue;
-        const float ascLabel = setupFont(ctx, trk.color, 9.0f);
-        for (const auto& kf: trk.keyframes)
+        clearBarRuler();
+        return;
+    }
+    barTempo_ = bpm < 1.0f ? 1.0f : (bpm > 999.0f ? 999.0f : bpm);
+    barBeats_ = beatsPerBar < 1 ? 1 : (beatsPerBar > 64 ? 64 : beatsPerBar);
+    markDirty();
+}
+
+void Timeline::clearBarRuler()
+{
+    barTempo_ = 0.0f;
+    barBeats_ = 0;
+    markDirty();
+}
+
+// The ticks and labels of the ruler in bars and beats: a bar number at each bar line that has room for it (every
+// 2nd, 4th, 8th... bar when they are close together), the bars between them as small ticks, the beats of a bar as
+// small ticks when there are 8 pixels for each, numbered "bar.beat" when there are 40. The count of ticks is bound
+// by the pixels there are (GridSteps.hpp), whatever the range of the view and the tempo.
+void Timeline::paintBarTicks(PaintContext& ctx, const Rect& b)
+{
+    const float range = viewEnd_ - viewStart_;
+    if (!(range > 0.0f) || !Math::isFinite(range)) return;
+    const float beatSec = 60.0f / barTempo_;
+    const float barSec = beatSec * static_cast<float>(barBeats_);
+    const float pxBar = fabsf(timeToX(barSec) - timeToX(0.0f));
+    const float pxBeat = pxBar / static_cast<float>(barBeats_);
+    int every = 1;
+    while (pxBar * static_cast<float>(every) < 36.0f && every < (1 << 24)) every *= 2;
+    const float step = barSec * static_cast<float>(every);
+    const bool barLines = every > 1 && pxBar >= 4.0f;
+    const bool beatTicks = every == 1 && pxBeat >= 8.0f;
+    const bool beatLabels = every == 1 && pxBeat >= 40.0f;
+
+    const float asc = setupFont(ctx, Color(150, 152, 160, 200), 10.0f);
+    const float tStart = floorf(viewStart_ / step) * step;
+    int ticks = stepLimit(tStart, viewEnd_, step, pixelCap(b.w));
+    const float far = fabsf(tStart) > fabsf(viewEnd_) ? fabsf(tStart) : fabsf(viewEnd_);
+    if (ticks > 1 && !(far + step > far)) ticks = 1;
+    const float left = b.x + kHeaderW, right = b.x + b.w;
+    for (int tick = 0; tick < ticks; ++tick)
+    {
+        const float t = tStart + static_cast<float>(tick) * step;
+        if (t > viewEnd_) break;
+        const double bar = floor(static_cast<double>(t) / static_cast<double>(barSec) + 0.5) + 1.0;
+        const float x = timeToX(t);
+        if (x >= left && x <= right)
         {
-            const float x = timeToX(kf.time);
-            if (x < b.x + kHeaderW || x > b.x + b.w) continue;
-            ctx.fill.SetColor(trk.color.r, trk.color.g, trk.color.b, 230);
-            ctx.fillRect(x, b.y + 1, 1, kRulerH - 2);
-            ctx.fillTriangle(x, b.y + 1, x + 6, b.y + 4, x, b.y + 7);
-            if (!kf.label.empty()) ctx.font.Print(kf.label.c_str(), x + 8, b.y + 1 + ascLabel);
+            ctx.fill.SetColor(80, 82, 90, 255);
+            ctx.fillRect(x, b.y + kRulerH - 10, 1, 10);
+            if (bar > -1.0e9 && bar < 1.0e9)
+            {
+                char buf[16];
+                snprintf(buf, sizeof(buf), "%d", static_cast<int>(bar));
+                ctx.font.SetColor(Color(150, 152, 160, 200));
+                ctx.font.Print(buf, x + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
+            }
+        }
+        if (barLines)
+        {
+            ctx.fill.SetColor(55, 57, 63, 255);
+            for (int m = 1; m < every; ++m)
+            {
+                const float mx = timeToX(t + static_cast<float>(m) * barSec);
+                if (mx < left || mx > right) continue;
+                ctx.fillRect(mx, b.y + kRulerH - 5, 1, 5);
+            }
+        }
+        if (beatTicks)
+        {
+            for (int k = 1; k < barBeats_; ++k)
+            {
+                const float bx = timeToX(t + static_cast<float>(k) * beatSec);
+                if (bx < left || bx > right) continue;
+                ctx.fill.SetColor(55, 57, 63, 255);
+                ctx.fillRect(bx, b.y + kRulerH - 5, 1, 5);
+                if (beatLabels && bar > -1.0e9 && bar < 1.0e9)
+                {
+                    char buf[24];
+                    snprintf(buf, sizeof(buf), "%d.%d", static_cast<int>(bar), k + 1);
+                    ctx.font.SetColor(Color(110, 112, 120, 200));
+                    ctx.font.Print(buf, bx + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
+                }
+            }
         }
     }
-
-    // Separator line at ruler bottom
-    ctx.fill.SetColor(60, 62, 68, 255);
-    ctx.fillRect(b.x, b.y + kRulerH, b.w, 1);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -407,6 +407,31 @@ public:
         return fps_;
     }
 
+    /// @brief Show the ruler in bars and beats instead of seconds or frames: the bar number (from 1) at each
+    ///        bar line, every 2nd, 4th, 8th... one when the bars are close together, the beats of a bar as small
+    ///        ticks when there is room, numbered "bar.beat" when there is more. @p bpm is the tempo in
+    ///        beats per minute (1 to 999), which turns the seconds of the timeline into beats, and
+    ///        @p beatsPerBar the top of the time signature (1 to 64). A tempo that is not a number or not
+    ///        positive turns the bar ruler off, as clearBarRuler() does. Only the ruler changes: the
+    ///        times of clips, keyframes and the playhead stay in seconds, and a tempo change is a new
+    ///        call.
+    void setBarRuler(float bpm, int beatsPerBar = 4);
+    /// @brief Back to the ruler in seconds or frames (the default).
+    void clearBarRuler();
+    /// @brief True while the ruler is in bars and beats.
+    bool barRuler() const
+    {
+        return barBeats_ > 0;
+    }
+    float barRulerTempo() const
+    {
+        return barTempo_;
+    }
+    int barRulerBeats() const
+    {
+        return barBeats_;
+    }
+
     /// @brief Where the loudness of a clip's sound comes from, to draw its waveform: media, the
     /// part of the media (seconds), and the answer, 0 to 1 (or negative when it is not known yet).
     void setPeakProvider(ct::Function<float(int, float, float)> provider)
@@ -477,6 +502,8 @@ private:
     float viewStart_ = 0;
     float viewEnd_ = 5;
     float fps_ = 30.0f;
+    float barTempo_ = 0.0f; // the ruler in bars and beats (setBarRuler): the tempo, and the beats of a bar; 0 beats: off
+    int barBeats_ = 0;
     float rangeIn_ = 0.0f;
     float rangeOut_ = -1.0f;
 
@@ -586,6 +613,8 @@ private:
     int trackAtY(float y) const;
 
     void paintRuler(PaintContext& ctx, const Rect& b);
+    void paintTimeTicks(PaintContext& ctx, const Rect& b);
+    void paintBarTicks(PaintContext& ctx, const Rect& b);
     void paintTracks(PaintContext& ctx, const Rect& b);
     void paintMarkedRange(PaintContext& ctx, const Rect& b);
     void paintPlayhead(PaintContext& ctx, const Rect& b);
