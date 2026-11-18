@@ -1472,8 +1472,10 @@ void WidgetApp::returnFocus(Widget* holder)
 
 void WidgetApp::retirePopup(Widget* popup, bool owned)
 {
-    popup->resetPopupState();
+    // The references to the popup go first (notifyWidgetRemoved), then it is told: what resetPopupState() does (a PopupPanel
+    // asks for a call of the application to be made after the frame) is not undone by the references being dropped.
     notifyWidgetRemoved(popup);
+    popup->resetPopupState();
     if (owned) queuePopupDelete(popup);
 }
 

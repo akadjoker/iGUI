@@ -556,6 +556,106 @@ void testPopupPanelPaints()
     delete panel;
 }
 
+// the closed handler of a panel opens another popup: whichever way the panel was let go of, the popup the handler opened is
+// the one that is open afterwards, nothing is lost and nothing is shown twice (meant to run under the address sanitizer)
+void testPopupPanelClosedHandlerOpensAPopup()
+{
+    // 1. the panel is closed by a click outside it; after its fade the handler opens a menu
+    {
+        PanelRig r;
+        Menu* menu = new Menu();
+        menu->addAction("one");
+        int menuOpens = 0;
+        r.panel->closed.connect(
+                [&]()
+                {
+                    ++menuOpens;
+                    menu->exec(200.0f, 150.0f);
+                });
+        r.panel->open(30.0f, 120.0f, r.anchor);
+        r.settle();
+        r.h.click(380.0f, 250.0f); // outside
+        r.settle();
+        check(menuOpens == 1, "the handler of closed ran once");
+        check(WidgetApp::instance().popup() == menu, "and the menu it opened is the popup");
+        check(!r.panel->isOpen(), "the panel is not");
+        r.h.frames(20);
+        check(WidgetApp::instance().popup() == menu && r.closedCount == 1, "later too, and closed went out once");
+        WidgetApp::instance().closePopup();
+        r.settle();
+        delete menu;
+    }
+    // 2. the panel is let go of because the application opens another popup over it; the handler opens a third
+    {
+        PanelRig r;
+        Menu* chosen = new Menu();
+        chosen->addAction("chosen");
+        Menu* fromHandler = new Menu();
+        fromHandler->addAction("from the handler");
+        r.panel->closed.connect([&]() { fromHandler->exec(220.0f, 160.0f); });
+        r.panel->open(30.0f, 120.0f, r.anchor);
+        r.settle();
+        chosen->exec(200.0f, 50.0f);
+        r.settle();
+        check(r.closedCount == 1, "closed went out once");
+        check(WidgetApp::instance().popup() == fromHandler, "the menu the handler opened came after the application's, so it is the popup");
+        // it works: it closes and the next popup opens as usual
+        WidgetApp::instance().closePopup();
+        r.settle();
+        check(WidgetApp::instance().popup() == nullptr, "and closes");
+        fromHandler->exec(10.0f, 10.0f);
+        r.settle();
+        check(WidgetApp::instance().popup() == fromHandler, "the next popup opens as usual");
+        WidgetApp::instance().closePopup();
+        r.settle();
+        delete chosen;
+        delete fromHandler;
+    }
+    // 3. the handler opens the panel again (a panel that stays open): one opening for each closing
+    {
+        PanelRig r;
+        int reopened = 0;
+        r.panel->closed.connect(
+                [&]()
+                {
+                    if (reopened++ < 2) r.panel->open(40.0f, 130.0f, r.anchor);
+                });
+        r.panel->open(30.0f, 120.0f, r.anchor);
+        r.settle();
+        r.h.click(380.0f, 250.0f);
+        r.settle();
+        check(r.panel->isOpen(), "a handler that opens the panel again leaves it open");
+        r.panel->close();
+        r.settle();
+        check(r.panel->isOpen(), "(a second time)");
+        r.panel->close();
+        r.settle();
+        check(!r.panel->isOpen() && reopened == 3, "and the third time it stays closed");
+    }
+    // 4. the handler opens a popup and deletes the panel
+    {
+        PanelRig r;
+        PopupPanel* doomed = new PopupPanel();
+        doomed->createChild<Button>("x");
+        Menu* menu = new Menu();
+        menu->addAction("m");
+        doomed->closed.connect(
+                [&]()
+                {
+                    menu->exec(100.0f, 100.0f);
+                    delete doomed;
+                });
+        doomed->open(30.0f, 120.0f);
+        r.settle();
+        r.h.click(380.0f, 250.0f);
+        r.settle();
+        check(WidgetApp::instance().popup() == menu, "a handler that opens a menu and deletes the panel: the menu is the popup");
+        WidgetApp::instance().closePopup();
+        r.settle();
+        delete menu;
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -573,6 +673,7 @@ int main(int argc, char** argv)
     RUN(testPopupPanelFocusKeysAndClicks);
     RUN(testPopupPanelWithOtherPopupsAndDelete);
     RUN(testPopupPanelPaints);
+    RUN(testPopupPanelClosedHandlerOpensAPopup);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

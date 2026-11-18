@@ -310,11 +310,12 @@ public:
         return focusTarget_;
     }
 
-    /// @brief Emitted once for each opening, when the popup system lets the panel go: a tenth of a
-    ///        second after close() or the click that closed it (the fade out), or at once when
-    ///        another popup takes its place. isOpen() is false by then (and from the moment of
-    ///        close()). The handler may delete the panel, and should not open a popup. Not emitted
-    ///        when the panel is deleted while it is open.
+    /// @brief Emitted once for each opening, in the update() after the popup system let the panel go: a
+    ///        tenth of a second after close() or the click that closed it (the fade out), or in the next
+    ///        frame when another popup took its place. isOpen() is false from the moment of close() (if the
+    ///        panel was opened again in between it is true again, and that opening's closed comes later).
+    ///        The handler may do anything: open a popup (it is the last one opened, so it is the popup),
+    ///        open the panel again, delete the panel. Not emitted when the panel is deleted before then.
     Signal<> closed;
 
     void paint(PaintContext& ctx) override;

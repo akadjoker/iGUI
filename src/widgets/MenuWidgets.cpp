@@ -658,11 +658,13 @@ bool PopupPanel::isOpen() const
 
 void PopupPanel::resetPopupState()
 {
-    // Called when the popup system is done with the panel (retirePopup, which only compares the pointer to the panel
-    // afterwards, so a handler may delete it: nothing here touches the panel after the emit).
+    // Called when the popup system is done with the panel, in the middle of retiring it (and perhaps of showing another
+    // popup): the signal does not go out from in here, where a handler that opens a popup, or the panel itself, would be
+    // undone by the rest of the retirement. It goes out in the next update(), as a call the application makes after its
+    // events (deferred calls are dropped if the panel is deleted before then).
     if (!shown_) return;
     shown_ = false;
-    closed.emit();
+    WidgetApp::instance().callDeferred(this, [this]() { closed.emit(); });
 }
 
 void PopupPanel::onKeyPress(KeyEvent& e)
