@@ -682,12 +682,36 @@ void Chart::sliceLabel(const Slice& slice, float sum, char* out, int outSize) co
     if (showValues_)
         formatValue(slice.value, valueText, sizeof(valueText));
     const float pct = sum > 0.0f ? slice.value / sum * 100.0f : 0.0f;
+    // A slice that is a fraction of a percent is there, and "0%" would say it is not: it reads "<1%" (the tooltip, which
+    // has the room, prints the tenth of a percent).
+    char pctText[16];
+    if (pct > 0.0f && pct < 1.0f)
+        snprintf(pctText, sizeof(pctText), "<1%%");
+    else
+        snprintf(pctText, sizeof(pctText), "%.0f%%", static_cast<double>(pct));
     if (showPercent_ && showValues_)
-        snprintf(out, static_cast<size_t>(outSize), "%s (%.0f%%)", valueText, static_cast<double>(pct));
+        snprintf(out, static_cast<size_t>(outSize), "%s (%s)", valueText, pctText);
     else if (showPercent_)
-        snprintf(out, static_cast<size_t>(outSize), "%.0f%%", static_cast<double>(pct));
+        snprintf(out, static_cast<size_t>(outSize), "%s", pctText);
     else
         snprintf(out, static_cast<size_t>(outSize), "%s", valueText);
+}
+
+String Chart::sliceText(int category) const
+{
+    const int s = firstVisibleSeries();
+    if (s < 0)
+        return String();
+    const float sum = total(s);
+    for (const Slice& slice : slices_)
+    {
+        if (slice.index != category)
+            continue;
+        char text[64];
+        sliceLabel(slice, sum, text, sizeof(text));
+        return String(text);
+    }
+    return String();
 }
 
 Chart::Item Chart::hitTest(float localX, float localY) const

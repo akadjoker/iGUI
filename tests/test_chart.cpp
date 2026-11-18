@@ -473,6 +473,38 @@ void testLegendPlacement()
     }
 }
 
+void testSmallSliceLabel()
+{
+    // A slice that is a fraction of a percent is drawn, so its label must not say 0%.
+    Bench b;
+    Chart& c = *b.chart;
+    c.pie(labels("big", "small", "tiny", "rest"), values(1000.0f, 4.0f, 1.0f, 995.0f));
+    b.frame();
+    check(strcmp(c.sliceText(0).c_str(), "50%") == 0, "a big slice prints its percent");
+    check(strcmp(c.sliceText(1).c_str(), "<1%") == 0, "a slice of two tenths of a percent reads <1%");
+    check(strcmp(c.sliceText(2).c_str(), "<1%") == 0, "so does one of five hundredths");
+    check(strcmp(c.sliceText(3).c_str(), "50%") == 0, "and a big one next to them rounds as before");
+    check(c.sliceText(9).size() == 0, "a category with no slice has no text");
+
+    c.pie(labels("a", "b", "c"), values(99.0f, 1.0f, 0.0f));
+    b.frame();
+    check(strcmp(c.sliceText(1).c_str(), "1%") == 0, "one percent exactly reads 1%");
+    check(c.sliceText(2).size() == 0, "a value of zero has no slice");
+
+    c.pie(labels("a", "b", "c", "d"), values(1000.0f, 4.0f, 1.0f, 995.0f));
+    c.setShowValues(true);
+    b.frame();
+    check(strcmp(c.sliceText(1).c_str(), "4 (<1%)") == 0, "with the values it reads 4 (<1%)");
+    c.setShowPercent(false);
+    b.frame();
+    check(strcmp(c.sliceText(1).c_str(), "4") == 0, "and with the values only, 4");
+
+    c.setKind(ChartKind::Donut);
+    c.setShowPercent(true);
+    b.frame();
+    check(strcmp(c.sliceText(2).c_str(), "1 (<1%)") == 0, "a donut says the same");
+}
+
 void testManyThinSlices()
 {
     // Thirty slices with labels: the outside labels must not crash and the
@@ -519,6 +551,7 @@ int main()
     testHistogram();
     testLegendPlacement();
     testManyThinSlices();
+    testSmallSliceLabel();
     if (gFailures == 0)
         printf("chart tests passed\n");
     return gFailures == 0 ? 0 : 1;

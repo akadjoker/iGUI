@@ -207,6 +207,9 @@ public:
 
     /// @brief Format a value the way the chart prints it.
     void formatValue(float v, char* out, int outSize) const;
+    /// @brief The text of the last paint on or beside the slice of a category: its percent ("<1%" for a slice that is a
+    ///        fraction of a percent), its value, or both; empty when the category has no slice.
+    String sliceText(int category) const;
 
     // ── Signals ───────────────────────────────────────────────────────────
     Signal<int, int> itemPressed;    // (series, index) left press on a slice, a bar or a point
