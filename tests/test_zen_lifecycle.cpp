@@ -100,12 +100,19 @@ int main()
 {
     // first of all: no window on a display that is not a throwaway one
     if (!igui_test::onThrowawayDisplay("test_zen_lifecycle")) return 77;
-    // The application made and destroyed again and again (the software and the GL path).
+    // The application made and destroyed again and again (the software and the GL path). Only the FIRST create may say "no window
+    // here" (skipped): once one window was made on this display, a later create that fails is a failure of what is tested (or of
+    // the display going away mid-test), not a reason to skip: it must not turn a failed run into a skipped one.
     for (int cycle = 0; cycle < 8; ++cycle)
     {
         ig::zen::App zen;
         if (!createApp(zen, cycle % 2 == 0))
         {
+            if (cycle > 0)
+            {
+                printf("test_zen_lifecycle: FAIL: create number %d failed after %d worked\n", cycle + 1, cycle);
+                return 1;
+            }
             printf("test_zen_lifecycle: no window here, skipped\n");
             return 77;
         }
@@ -118,8 +125,8 @@ int main()
     ig::zen::App zen;
     if (!createApp(zen, true))
     {
-        printf("test_zen_lifecycle: no window here, skipped\n");
-        return 77;
+        printf("test_zen_lifecycle: FAIL: create number 9 failed after 8 worked\n");
+        return 1;
     }
     buildMain(zen);
     frames(zen, 3);

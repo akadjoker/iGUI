@@ -25,6 +25,10 @@ if ! command -v xvfb-run > /dev/null 2>&1 || ! command -v Xvfb > /dev/null 2>&1;
     exit 77
 fi
 
+# -noreset: by default an X server resets itself when its LAST client disconnects, and for that moment it refuses new
+# connections ("cannot open the X display"). A test that makes and destroys its application over and over (igui_zen_lifecycle:
+# platform_shutdown closes the connection, the next create opens one again) hit that window about every second run and came out
+# as "no window here, skipped". With -noreset the server stays up for the whole test.
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/igui-xvfb-test.XXXXXX") || exit 1
 trap 'rm -rf "$scratch"' EXIT
 trap 'exit 130' INT TERM HUP
@@ -32,7 +36,7 @@ mkdir -p "$scratch/data" "$scratch/cfg" "$scratch/cache" || exit 1
 
 env -u WAYLAND_DISPLAY -u XDG_RUNTIME_DIR -u DISPLAY -u XAUTHORITY -u XDG_SESSION_TYPE \
     XDG_DATA_HOME="$scratch/data" XDG_CONFIG_HOME="$scratch/cfg" XDG_CACHE_HOME="$scratch/cache" \
-    xvfb-run -a -s "-screen 0 1280x800x24" \
+    xvfb-run -a -s "-screen 0 1280x800x24 -noreset" \
     sh -c 'IGUI_TEST_THROWAWAY_DISPLAY="$DISPLAY" exec "$@"' igui-xvfb-test "$@"
 code=$?
 exit $code
