@@ -183,6 +183,7 @@ private:
     // ── Scroll ───────────────────────────────────────────────────────────
     float scrollY_ = 0;
     bool scrollLocked_ = false; // user scrolled up manually
+    float barW_ = 8.0f;         // the thickness of its bar: the theme's (ScrollBar::thickness()) at the last layout, 8 before
 
     // ── Selection ────────────────────────────────────────────────────────
     int selectedLine_ = -1;

@@ -191,6 +191,7 @@ void ScrollView::updateBars()
 
     const float thick = ScrollBar::thickness();
     float barThick = thick + kBarGap;
+    barRoom_ = barThick; // (paint uses this one: the theme is asked at layout, not at every paint)
     float viewW = needV ? vw - barThick : vw;
     float viewH = needH ? vh - barThick : vh;
 
@@ -257,12 +258,11 @@ void ScrollView::paint(PaintContext& ctx)
     Rect abs = absoluteRect();
     if (ctx.isClipped(abs)) return;
 
-    // Clip to view area (exclude scrollbar region)
-    float barThick = ScrollBar::thickness() + kBarGap;
+    // Clip to view area (exclude scrollbar region). The room of the bars is the one the layout took from the theme.
     bool needV = vbar_ && vbar_->isVisible();
     bool needH = hbar_ && hbar_->isVisible();
-    float viewW = needV ? abs.w - barThick : abs.w;
-    float viewH = needH ? abs.h - barThick : abs.h;
+    float viewW = needV ? abs.w - barRoom_ : abs.w;
+    float viewH = needH ? abs.h - barRoom_ : abs.h;
 
     Rect viewRect = { abs.x, abs.y, viewW, viewH };
 
@@ -393,6 +393,7 @@ void ListBox::layout()
 
     const float thick = ScrollBar::thickness();
     float barThick = thick + 2.0f;
+    barRoom_ = barThick; // (paint and itemRect use this one: the theme is asked at layout, not at every paint)
     float viewW = rect_.w - barThick;
     float total = static_cast<float>(items_.size()) * itemHeight();
 
@@ -418,11 +419,15 @@ void ListBox::paint(PaintContext& ctx)
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
     float ih = itemHeight();
-    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
-    float viewW = abs.w - barW;
+    float viewW = abs.w;
 
-    // Paint scrollbar first — same scissor as background, merges without clip change
-    if (vbar_ && vbar_->needed()) vbar_->paint(ctx);
+    // Paint scrollbar first — same scissor as background, merges without clip change. (The room it takes is read after it
+    // is painted: that is where the compiler needs no register kept across the call.)
+    if (vbar_ && vbar_->needed())
+    {
+        vbar_->paint(ctx);
+        viewW -= barRoom_;
+    }
 
     ctx.pushClip({ abs.x, abs.y, viewW, abs.h });
 
@@ -490,7 +495,7 @@ bool ListBox::itemRect(int index, Rect& out)
     scrollToItem(index);
     const Rect abs = absoluteRect();
     const float ih = itemHeight();
-    const float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
+    const float barW = (vbar_ && vbar_->needed()) ? barRoom_ : 0.0f;
     out = { abs.x, abs.y + static_cast<float>(index) * ih - scrollOffset_, abs.w - barW, ih };
     return true;
 }
@@ -633,6 +638,7 @@ void ListWidget::layout()
 
     const float thick = ScrollBar::thickness();
     float barThick = thick + 2.0f;
+    barRoom_ = barThick; // (paint uses this one: the theme is asked at layout, not at every paint)
     float viewW = rect_.w - barThick;
     float rh = rowH();
     float total = static_cast<float>(rows_.size()) * rh;
@@ -661,11 +667,15 @@ void ListWidget::paint(PaintContext& ctx)
     ctx.line.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, t.borderRadius, 6, false);
 
     float rh = rowH();
-    float barW = (vbar_ && vbar_->needed()) ? ScrollBar::thickness() + 2.0f : 0.0f;
-    float viewW = abs.w - barW;
+    float viewW = abs.w;
 
-    // Paint scrollbar first — same scissor as background, merges without clip change
-    if (vbar_ && vbar_->needed()) vbar_->paint(ctx);
+    // Paint scrollbar first — same scissor as background, merges without clip change. (The room it takes is read after it
+    // is painted: that is where the compiler needs no register kept across the call.)
+    if (vbar_ && vbar_->needed())
+    {
+        vbar_->paint(ctx);
+        viewW -= barRoom_;
+    }
 
     ctx.pushClip({ abs.x, abs.y, viewW, abs.h });
 

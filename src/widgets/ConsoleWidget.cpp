@@ -292,6 +292,7 @@ const char* ConsoleWidget::levelTag(LogLevel l) const
 void ConsoleWidget::layout()
 {
     Widget::layout();
+    barW_ = ScrollBar::thickness(); // (painting uses this one: the theme is asked at layout)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -530,7 +531,7 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
 
 void ConsoleWidget::paintScrollbar(PaintContext& ctx, const Rect& logArea, float totalH)
 {
-    float sbW = ScrollBar::thickness();
+    float sbW = barW_;
     float sbX = logArea.right() - sbW;
     float ratio = totalH > 0.f ? logArea.h / totalH : 1.f;
     float thumbH = std::max(20.f, logArea.h * ratio);

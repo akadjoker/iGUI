@@ -1132,10 +1132,13 @@ void testScrollBarThicknessIsTheThemes()
         for (int i = 0; i < 40; ++i) tree->addRoot(String("node ") + String::number(i));
         screen.h.relayout();
         screen.h.frames(2);
+        // (a new thickness is taken at the next layout, as for every other bar: round 6 made these three read it there)
         Theme::instance().scrollbarWidth = 8.0f;
+        screen.h.relayout();
         screen.h.frames(2);
         const Shot eight = screen.take();
         Theme::instance().scrollbarWidth = 14.0f;
+        screen.h.relayout();
         screen.h.frames(2);
         const Shot fourteen = screen.take();
         const DrawnBar bars[] = { { "TextEdit", edit }, { "ConsoleWidget", console }, { "TreeView", tree } };

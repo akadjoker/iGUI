@@ -570,12 +570,18 @@ float TreeView::maxScroll() const
     return (total > visible) ? total - visible : 0.f;
 }
 
+void TreeView::layout()
+{
+    Widget::layout();
+    barW_ = ScrollBar::thickness(); // (the bar uses this one: the theme is asked at layout, not at every paint and mouse move)
+}
+
 bool TreeView::scrollbar(Rect& track, Rect& thumb) const
 {
     const float range = maxScroll();
     if (range <= 0.f) return false;
     const Rect abs = absoluteRect();
-    const float barW = ScrollBar::thickness();
+    const float barW = barW_;
     const float total = static_cast<float>(flatRows_.size()) * rowHeight_;
     const float thumbH = std::max(20.f, abs.h * (abs.h / total));
     const float thumbY = abs.y + (scrollOffset_ / range) * (abs.h - thumbH);

@@ -1759,7 +1759,7 @@ void TextEdit::paint(PaintContext& ctx)
     }
 
     // Scrollbar — inside same clip so it merges
-    float barW = ScrollBar::thickness();
+    const float barW = barW_; // (the theme's, taken at layout: painting does not ask the theme)
     float totalH = totalVRows * lineHeight();
     bool needVBar = totalH > abs.h;
     if (needVBar)
@@ -2164,6 +2164,12 @@ void TextEdit::onTextInput(KeyEvent& e)
     ensureCursorVisible();
     blinkTimer_ = 0;
     e.consumed = true;
+}
+
+void TextEdit::layout()
+{
+    Widget::layout();
+    barW_ = ScrollBar::thickness(); // (paint draws the bars with this one: the theme is asked at layout)
 }
 
 Widget::Vec2f TextEdit::sizeHint() const

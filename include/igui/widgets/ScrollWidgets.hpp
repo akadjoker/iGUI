@@ -173,6 +173,7 @@ private:
     float scrollY_ = 0.0f;
     float contentW_ = 0.0f;
     float contentH_ = 0.0f;
+    float barRoom_ = ScrollBar::kBarThickness + 2.0f; // the room a bar takes (its thickness and the gap), the theme's at the last layout
 
     static constexpr float kBarGap = 2.0f;
 };
@@ -239,6 +240,7 @@ private:
     ct::Vector<String> items_;
     int selectedIdx_ = -1;
     float scrollOffset_ = 0.0f;
+    float barRoom_ = ScrollBar::kBarThickness + 2.0f; // the room of the bar (its thickness and the 2 pixel gap): the theme's at the last layout
     ScrollBar* vbar_ = nullptr;
 };
 
@@ -320,6 +322,7 @@ private:
     ct::Vector<Widget*> rows_;
     int selectedIdx_ = -1;
     float scrollOffset_ = 0.0f;
+    float barRoom_ = ScrollBar::kBarThickness + 2.0f; // the room of the bar (its thickness and the 2 pixel gap): the theme's at the last layout
     ScrollBar* vbar_ = nullptr;
 
     static constexpr float kRowPad = 4.0f;

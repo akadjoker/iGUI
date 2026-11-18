@@ -343,6 +343,7 @@ public:
     Signal<TextPos> cursorMoved;
 
     Vec2f sizeHint() const override;
+    void layout() override;
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
     void onMouseRelease(MouseEvent& e) override;
@@ -370,6 +371,7 @@ protected:
     float blinkTimer_ = 0;
     bool dragging_ = false;
     float extraGutterW_ = 0; // extra gutter space (e.g. fold icons)
+    float barW_ = 8.0f;      // the thickness of the bars it draws: the theme's (ScrollBar::thickness()) at the last layout, 8 before
 
     SyntaxCallback syntaxCb_;
 

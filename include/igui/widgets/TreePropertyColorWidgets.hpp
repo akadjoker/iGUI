@@ -273,6 +273,7 @@ public:
     Signal<const DragPayload&, TreeNode*> externalDropped;
 
     Vec2f sizeHint() const override;
+    void layout() override;
     void paint(PaintContext& ctx) override;
     void onMousePress(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
@@ -331,6 +332,7 @@ private:
     float scrollOffset_ = 0.0f;
     float rowHeight_ = 24.0f;
     float indent_ = 16.0f;
+    float barW_ = 8.0f;             // the thickness of its bar: the theme's (ScrollBar::thickness()) at the last layout, 8 before
     unsigned int revisionSeen_ = 0; // revision the rows were built from
     bool flatDirty_ = true;
     bool draggingBar_ = false;
