@@ -1400,6 +1400,49 @@ void testEditors()
             });
 }
 
+// ---- the signals every widget has (Widget::pressed, released, clicked, moved), in the widgets that call the base handler and go on ----
+
+void testBaseSignals()
+{
+    auto chart = [](Stage& st) {
+        Chart* w = put<Chart>(st, 20.0f, 20.0f, 400.0f, 220.0f);
+        w->bars(labelsOf("a", "b", "c"), valuesOf(1.0f, 2.0f, 3.0f));
+        st.h.frames(2);
+        return w;
+    };
+    victim<Chart>("Chart.pressed (the base signal) by a click on a bar", chart,
+            [](Chart* w, auto kill, auto late) { w->pressed.connect(kill); w->itemPressed.connect(late); },
+            [](Stage& st, Chart* w) {
+                const Rect r = w->barRect(0, 2);
+                st.move(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+                st.down(w);
+                st.up(w);
+            });
+    victim<Chart>("Chart.moved (the base signal) by moving over the chart", chart,
+            [](Chart* w, auto kill, auto) { w->moved.connect(kill); },
+            [](Stage& st, Chart* w) {
+                const Rect r = w->barRect(0, 2);
+                st.move(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+                st.drag(w, r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+            });
+    victim<SideTabBar>("SideTabBar.moved (the base signal) by moving over the bar",
+            [](Stage& st) {
+                SideTabBar* w = put<SideTabBar>(st, 0.0f, 0.0f, 480.0f, 260.0f);
+                w->addPage<Label>(IconId::Folder, "One", "a");
+                w->addPage<Label>(IconId::File, "Two", "b");
+                st.h.relayout();
+                st.h.frames(2);
+                return w;
+            },
+            [](SideTabBar* w, auto kill, auto) { w->moved.connect(kill); },
+            [](Stage& st, SideTabBar* w) {
+                Rect r;
+                if (!w->buttonRect(1, r)) return;
+                st.move(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+                st.drag(w, r.x + r.w * 0.5f + 1.0f, r.y + r.h * 0.5f);
+            });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1435,6 +1478,7 @@ int main(int argc, char** argv)
     testGrids();
     testTimeline();
     testEditors();
+    testBaseSignals();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)

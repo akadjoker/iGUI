@@ -623,7 +623,10 @@ void SideTabBar::onMouseRelease(MouseEvent& e)
 
 void SideTabBar::onMouseMove(MouseEvent& e)
 {
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     Widget::onMouseMove(e);
+    if (app.hasGone(this, seen)) return; // (a handler of moved took the bar out of the tree: see WidgetApp::hasGone)
     if (!isEnabledInTree()) return;
     updateHover(e.x, e.y);
 }

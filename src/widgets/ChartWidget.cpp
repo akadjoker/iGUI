@@ -1940,7 +1940,10 @@ void Chart::setHovered(Item item)
 
 void Chart::onMousePress(MouseEvent& e)
 {
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t pressedSeen = app.deletions();
     Widget::onMousePress(e);
+    if (app.hasGone(this, pressedSeen)) return; // (a handler of pressed took the chart out of the tree: see WidgetApp::hasGone)
     if (e.button != 0)
         return;
     const Rect b = absoluteRect();
@@ -1964,7 +1967,6 @@ void Chart::onMousePress(MouseEvent& e)
         // The pressed item is the hovered one while the handlers run, even
         // when no move came first (a touch, a synthetic press).
         e.consumed = true;
-        WidgetApp& app = WidgetApp::instance();
         const uint32_t seen = app.deletions();
         setHovered(item);
         if (app.hasGone(this, seen)) return;
@@ -1974,7 +1976,10 @@ void Chart::onMousePress(MouseEvent& e)
 
 void Chart::onMouseMove(MouseEvent& e)
 {
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     Widget::onMouseMove(e);
+    if (app.hasGone(this, seen)) return; // (a handler of moved took the chart out of the tree)
     const Rect b = absoluteRect();
     const float lx = e.x - b.x;
     const float ly = e.y - b.y;
@@ -1984,8 +1989,6 @@ void Chart::onMouseMove(MouseEvent& e)
     mouseY_ = ly;
     if (overLegend != wasOverLegend)
         markDirty();
-    WidgetApp& app = WidgetApp::instance();
-    const uint32_t seen = app.deletions();
     setHovered(hitTest(lx, ly));
     if (app.hasGone(this, seen)) return;
     if (hovered_.valid())

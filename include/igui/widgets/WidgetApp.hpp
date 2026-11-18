@@ -600,9 +600,10 @@ public:
     ///        hasGone() after it and touch nothing of their own, emit nothing more, when it says gone: every signal of
     ///        Widget (pressed, released, clicked, moved, hover), PianoRoll's onNote*, the selectionChanged of ListBox and
     ///        ListWidget, Slider's onValueChanged, and the actions of a Menu (which is not in a parent: it is a popup, and
-    ///        its owner deletes it; the action's own `gone_` says the action went). The signals of other widgets are
-    ///        emitted by code that may still read its widget afterwards: a handler that must remove the widget there asks
-    ///        for it to be done after the frame's events (WidgetApp::callDeferred).
+    ///        its owner deletes it; the action's own `gone_` says the action went). Round 7 went through the rest (docs/ROUND7.md
+    ///        says which signals were run, and which were not): most widgets now emit as the LAST thing a method does
+    ///        (emitGone() where it is not), the CodeEditor holds the deletion (DeletionHold). Where a widget is not on that
+    ///        list, a handler that must remove it asks for it to be done after the frame's events (WidgetApp::callDeferred).
     bool hasGone(const Widget* w, uint32_t seen) const
     {
         return deletions_ != seen && !isWidgetInTrees(w);
