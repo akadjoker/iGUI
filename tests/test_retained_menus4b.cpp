@@ -85,6 +85,124 @@ void testMenuActionIcon()
             "the frame stays in the column of the icon");
 }
 
+// ---- item 13: toggled and the automatic toggle ----
+
+// Opens `menu` in the harness and clicks the centre of its item `idx`, as a person does.
+void clickItem(Harness& h, Menu* menu, int idx)
+{
+    menu->exec(10.0f, 10.0f);
+    h.frames(12); // the popup opens in a tenth of a second
+    const Rect r = menu->actionRect(idx);
+    h.click(r.x + r.w * 0.5f, r.y + r.h * 0.5f);
+    h.frames(2);
+}
+
+// What the signals of one action saw, in order: 'T' for toggled (with its state in `states`), 'G' for triggered.
+struct Log
+{
+    char order[16] = {};
+    int n = 0;
+    bool states[8] = {};
+    int nStates = 0;
+    bool checkedInTriggered = false;
+    void add(char c)
+    {
+        if (n < 15) order[n++] = c;
+    }
+};
+
+void testMenuToggled()
+{
+    Harness h(420.0f, 300.0f, false);
+    Menu* menu = new Menu();
+    MenuAction* plain = menu->addAction("Plain");
+    MenuAction* box = menu->addCheckable("Box", false);
+    Log plainLog, boxLog;
+    plain->triggered.connect([&]() { plainLog.add('G'); });
+    plain->toggled.connect([&](bool) { plainLog.add('T'); });
+    box->toggled.connect(
+            [&](bool on)
+            {
+                boxLog.add('T');
+                if (boxLog.nStates < 8) boxLog.states[boxLog.nStates++] = on;
+            });
+    box->triggered.connect(
+            [&]()
+            {
+                boxLog.add('G');
+                boxLog.checkedInTriggered = box->isChecked();
+            });
+
+    check(box->autoToggle() && plain->autoToggle(), "a click flips a checkable action unless told not to (the default)");
+
+    // a checkable action flips, tells toggled with the new state, then triggered, which sees the new state too
+    clickItem(h, menu, 1);
+    check(box->isChecked(), "a click checks a checkable action");
+    check(boxLog.n == 2 && boxLog.order[0] == 'T' && boxLog.order[1] == 'G', "toggled comes first, then triggered, once each");
+    check(boxLog.nStates == 1 && boxLog.states[0], "toggled says the new state: checked");
+    check(boxLog.checkedInTriggered, "triggered sees the new state, as it always did");
+    clickItem(h, menu, 1);
+    check(!box->isChecked() && boxLog.nStates == 2 && !boxLog.states[1], "the second click unchecks it, and toggled says so");
+
+    // an action that is not checkable only triggers
+    clickItem(h, menu, 0);
+    check(plainLog.n == 1 && plainLog.order[0] == 'G', "an action that is not checkable emits triggered only");
+
+    // setChecked is silent
+    box->setChecked(true);
+    check(boxLog.nStates == 2, "setChecked does not emit toggled");
+
+    // setAutoToggle(false): the click leaves the state to the application, and emits triggered only
+    box->setChecked(false);
+    box->setAutoToggle(false);
+    check(!box->autoToggle(), "setAutoToggle(false) is kept");
+    boxLog = Log();
+    clickItem(h, menu, 1);
+    check(!box->isChecked(), "with no auto toggle a click does not flip the action");
+    check(boxLog.n == 1 && boxLog.order[0] == 'G', "with no auto toggle only triggered is emitted");
+    // and the application can answer the click itself
+    box->triggered.connect([&]() { box->setChecked(true); });
+    clickItem(h, menu, 1);
+    check(box->isChecked() && boxLog.nStates == 0, "the application sets the state from triggered; toggled stays silent");
+    delete menu;
+}
+
+// a handler of toggled that rebuilds the menu, or deletes it, takes the action away: triggered must not be emitted on it
+// (meant to run under the address sanitizer)
+void testMenuToggledHandlerRebuildsMenu()
+{
+    Harness h(420.0f, 300.0f, false);
+    {
+        Menu* menu = new Menu();
+        MenuAction* box = menu->addCheckable("Box", false);
+        int triggered = 0;
+        box->toggled.connect([&](bool) { menu->clearActions(); });
+        box->triggered.connect([&]() { ++triggered; });
+        clickItem(h, menu, 0);
+        check(menu->actionCount() == 0, "the handler of toggled cleared the menu");
+        check(triggered == 0, "triggered is not emitted on an action a handler of toggled deleted");
+        delete menu;
+    }
+    {
+        Menu* menu = new Menu();
+        MenuAction* box = menu->addCheckable("Box", false);
+        int triggered = 0;
+        box->toggled.connect([&](bool) { delete menu; });
+        box->triggered.connect([&]() { ++triggered; });
+        clickItem(h, menu, 0);
+        check(triggered == 0, "nor on one whose whole menu a handler of toggled deleted");
+        h.frames(20);
+    }
+    {
+        // the same for triggered, as before: the last thing the click does
+        Menu* menu = new Menu();
+        MenuAction* box = menu->addCheckable("Box", false);
+        box->triggered.connect([&]() { delete menu; });
+        clickItem(h, menu, 0);
+        h.frames(20);
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -93,6 +211,8 @@ int main(int argc, char** argv)
 #define RUN(fn) \
     if (!only || strcmp(only, #fn) == 0) fn()
     RUN(testMenuActionIcon);
+    RUN(testMenuToggled);
+    RUN(testMenuToggledHandlerRebuildsMenu);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

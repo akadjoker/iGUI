@@ -85,10 +85,23 @@ public:
     {
         checkable_ = c;
     }
-    /// @brief Set the checked state.
+    /// @brief Set the checked state. Silent: toggled is for the clicks of the person (as CheckBox's).
     void setChecked(bool c)
     {
         checked_ = c;
+    }
+    /// @brief Whether a click on a checkable action flips it (default true, as it always did). With
+    ///        false the click does not touch the checked state: the action only emits triggered()
+    ///        (and not toggled()), and the application decides, with setChecked(): a command that can
+    ///        be refused, or one that comes back to the menu from a model that owns the state.
+    void setAutoToggle(bool a)
+    {
+        autoToggle_ = a;
+    }
+    /// @brief True when a click flips a checkable action (the default).
+    bool autoToggle() const
+    {
+        return autoToggle_;
     }
     /// @brief Put an icon in the left column of the item (the column of the check mark, which is
     ///        22 pixels wide: the icon is drawn 16 pixels square and takes the colour of the item's
@@ -116,6 +129,10 @@ public:
 
     /// @brief Emitted when the action is triggered.
     Signal<> triggered;
+    /// @brief Emitted when a click flipped a checkable action, with the new state, just before
+    ///        triggered() (which then sees the new state too, as it always did). Not emitted by
+    ///        setChecked(), nor when setAutoToggle(false) left the state to the application.
+    Signal<bool> toggled;
 
 private:
     friend class Menu;
@@ -130,8 +147,10 @@ private:
     bool checkable_ = false;
     bool checked_ = false;
     bool separator_ = false;
+    bool autoToggle_ = true;
     IconId icon_ = IconId::None;
     Menu* submenu_ = nullptr;
+    bool* gone_ = nullptr; // set by the click that is emitting: becomes true if a handler deletes the action
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

@@ -16,6 +16,7 @@ Menu::Menu()
 
 MenuAction::~MenuAction()
 {
+    if (gone_) *gone_ = true;
     if (submenuOwned_) delete submenu_;
 }
 
@@ -361,9 +362,24 @@ void Menu::onMousePress(MouseEvent& e)
         return;
     }
 
-    if (a->isCheckable()) a->checked_ = !a->checked_;
+    const bool flipped = a->isCheckable() && a->autoToggle_;
+    if (flipped) a->checked_ = !a->checked_;
     WidgetApp::instance().closePopup();
-    a->triggered.emit();
+    if (!flipped)
+    {
+        a->triggered.emit();
+        e.consumed = true;
+        return;
+    }
+    // two signals in a row: a handler of the first may rebuild the menu or delete it, and the action with it
+    bool gone = false;
+    a->gone_ = &gone;
+    a->toggled.emit(a->checked_);
+    if (!gone)
+    {
+        a->gone_ = nullptr;
+        a->triggered.emit();
+    }
     e.consumed = true;
 }
 
