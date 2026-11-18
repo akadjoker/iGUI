@@ -1022,6 +1022,11 @@ public:
         markDirty();
     }
 
+    /// A handler of any of these signals may take the roll out of its parent (removeChild; see WidgetApp::hasGone): the roll
+    /// emits nothing more and touches nothing of itself after it (onNoteCreated does not follow an onNoteAdded that removed it,
+    /// onNoteDeleted does not follow an onNoteRemoved that did, the velocity lane's signals stop at the first), whether the frame
+    /// phase is running or not.
+    ///
     /// @brief Emitted when the button goes up after a note was put or picked up and dragged (pitch, start,
     ///        length): also after a click on a note that did not move it, after a move and after a resize;
     ///        it does not say which note. The signals below do.
@@ -1086,7 +1091,7 @@ private:
     void paintVelocityLane(PaintContext& ctx, const Rect& ga, float laneH) const;
     void paintLaneKeys(PaintContext& ctx, const Rect& ka, float laneH) const;
     void sweepLane(float x0, float y0, float x1, float y1);
-    void endLaneGesture();
+    bool endLaneGesture(); // true when a handler of what it emitted deleted the roll
     void paintKeys(PaintContext& ctx, const Rect& ka) const;
     void paintGrid(PaintContext& ctx, const Rect& ga) const;
     void paintNotes(PaintContext& ctx, const Rect& ga) const;

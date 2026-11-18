@@ -11,6 +11,9 @@
 
 #include <igui/widgets/AudioWidgets.hpp>
 #include <igui/widgets/ConsoleWidget.hpp>
+#include <igui/widgets/InputWidgets.hpp>
+#include <igui/widgets/MenuWidgets.hpp>
+#include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/DataWidgets.hpp>
 #include <igui/widgets/LayoutWidgets.hpp>
 #include <igui/widgets/ScrollWidgets.hpp>
@@ -479,6 +482,394 @@ void testPianoRollLaneDrawsOneBarForEachColumn()
     if (missing) printf("    %d notes have no bar under them\n", missing);
 }
 
+// ---- item 3: a handler that deletes the widget it runs in ----
+//
+// The library's way to get rid of a widget is parent->removeChild(widget): it deletes the widget when the frame phase that is
+// running (update(), paint()) is over, or at once when none is (WidgetApp::deleteLater); `delete` of a widget that is still
+// in its parent leaves a pointer to freed memory in the parent and is not a way. What a widget does after a signal whose
+// handler took it out is the point of these cases. Each runs twice: IN A FRAME (the mouse events come from
+// WidgetApp::feedMouse*, so the deletion waits for the end of update() and the memory is still there when the widget goes on)
+// and OUTSIDE ONE (the widget's own method called by the program, as an application does with setSelectedIndex() or
+// setValue(): the removal deletes at once, and a widget that touches itself after the signal reads freed memory: AddressSanitizer
+// stops the program there). The widget must go no further than the signal (WidgetApp::hasGone): nothing more is emitted, nothing
+// of it is read.
+
+const char* modeName(int mode)
+{
+    return mode == 0 ? "in a frame" : "outside a frame";
+}
+
+String say(const char* what, int mode)
+{
+    return String(what) + ", " + modeName(mode);
+}
+
+// A holder widget that fills a window, and what is needed to point at it by feeding events (mode 0) or by calling the widget (mode 1).
+struct Stage
+{
+    explicit Stage(int mode_) : screen(480.0f, 260.0f), h(screen.h), app(WidgetApp::instance()), mode(mode_)
+    {
+        holder = h.root()->createChild<Widget>();
+        holder->setRect(Rect(0.0f, 0.0f, 480.0f, 260.0f));
+    }
+    Harness& harness()
+    {
+        return h;
+    }
+    bool gone() const
+    {
+        return holder->children().empty();
+    }
+    // the pointer: moved (a frame), or just remembered (the widget is called directly)
+    void move(float x, float y)
+    {
+        px = x;
+        py = y;
+        if (mode == 0) app.feedMouseMove(x, y);
+    }
+    // a button down and up on a widget, as an event of the app (mode 0) or as a call of its handlers (mode 1)
+    void down(Widget* target, int button = 0)
+    {
+        if (mode == 0)
+        {
+            app.feedMouseButton(button, true);
+            return;
+        }
+        if (gone()) return;
+        MouseEvent e = event(target, button);
+        target->onMousePress(e);
+    }
+    void up(Widget* target, int button = 0)
+    {
+        if (mode == 0)
+        {
+            app.feedMouseButton(button, false);
+            return;
+        }
+        if (gone()) return;
+        MouseEvent e = event(target, button);
+        target->onMouseRelease(e);
+    }
+    void drag(Widget* target, float x, float y)
+    {
+        move(x, y);
+        if (mode == 1 && !gone())
+        {
+            MouseEvent e = event(target, 0);
+            target->onMouseMove(e);
+        }
+    }
+    MouseEvent event(Widget* target, int button) const
+    {
+        MouseEvent e;
+        e.x = px;
+        e.y = py;
+        e.button = button;
+        const Rect r = target->absoluteRect();
+        e.localX = px - r.x;
+        e.localY = py - r.y;
+        return e;
+    }
+    Screen screen;
+    Harness& h;
+    WidgetApp& app;
+    int mode;
+    Widget* holder = nullptr;
+    float px = 0.0f, py = 0.0f;
+};
+
+// The piano roll in the holder: 400x200 at (20, 20), keys 36 wide, 12 rows of 12 pixels (48 to 59), 8 beats over 364 pixels.
+struct RollStage : Stage
+{
+    explicit RollStage(int mode_) : Stage(mode_)
+    {
+        roll = holder->createChild<PianoRoll>();
+        roll->setRect(Rect(20.0f, 20.0f, 400.0f, 200.0f));
+        roll->setPitchRange(48, 60);
+        roll->setTimeRange(0.0f, 8.0f);
+        h.frame();
+    }
+    // a note put with a click and a drag: onNoteAdded, then onNoteCreated
+    void putNote()
+    {
+        move(RollRig::xBeat(2.0f), RollRig::yPitch(55));
+        down(roll);
+        drag(roll, RollRig::xBeat(3.0f), RollRig::yPitch(55));
+        up(roll);
+    }
+    void takeOut()
+    {
+        holder->removeChild(roll);
+    }
+    PianoRoll* roll = nullptr;
+};
+
+void testHandlerDeletesThePianoRoll()
+{
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        {
+            // onNoteAdded, the first signal of a note that was put: the roll stops there (nothing of it is touched, and
+            // onNoteCreated, which comes after, is not emitted by a roll that is gone)
+            RollStage r(mode);
+            int added = 0, created = 0;
+            r.roll->onNoteAdded.connect([&](int, float, float) { ++added; r.takeOut(); });
+            r.roll->onNoteCreated.connect([&](int) { ++created; });
+            r.putNote();
+            r.h.frames(2);
+            const bool ok = added == 1 && created == 0 && r.gone();
+            check(ok, say("PianoRoll: onNoteAdded taking the roll out ends the gesture there", mode).c_str());
+            if (!ok) printf("    added %d, created %d, gone %d\n", added, created, r.gone());
+        }
+        {
+            // onNoteCreated, the last signal
+            RollStage r(mode);
+            int created = 0;
+            r.roll->onNoteCreated.connect([&](int) { ++created; r.takeOut(); });
+            r.putNote();
+            r.h.frames(2);
+            check(created == 1 && r.gone(), say("PianoRoll: onNoteCreated taking the roll out", mode).c_str());
+        }
+        {
+            // a note picked up and moved
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            int moved = 0;
+            r.roll->onNoteMoved.connect([&](int) { ++moved; r.takeOut(); });
+            r.h.frame();
+            r.move(RollRig::xBeat(3.0f), RollRig::yPitch(55)); // the middle of the note
+            r.down(r.roll);
+            r.drag(r.roll, RollRig::xBeat(4.0f), RollRig::yPitch(56));
+            r.up(r.roll);
+            r.h.frames(2);
+            check(moved == 1 && r.gone(), say("PianoRoll: onNoteMoved taking the roll out", mode).c_str());
+        }
+        {
+            // a note resized by its end
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            int resized = 0;
+            r.roll->onNoteResized.connect([&](int) { ++resized; r.takeOut(); });
+            r.h.frame();
+            r.move(RollRig::xBeat(4.0f) - 2.0f, RollRig::yPitch(55)); // the end of the note
+            r.down(r.roll);
+            r.drag(r.roll, RollRig::xBeat(5.0f), RollRig::yPitch(55));
+            r.up(r.roll);
+            r.h.frames(2);
+            check(resized == 1 && r.gone(), say("PianoRoll: onNoteResized taking the roll out", mode).c_str());
+        }
+        {
+            // onNoteClicked, at the press: the button is still down when the roll goes; the release that follows finds no roll
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            int clicked = 0;
+            r.roll->onNoteClicked.connect([&](int) { ++clicked; r.takeOut(); });
+            r.h.frame();
+            r.move(RollRig::xBeat(3.0f), RollRig::yPitch(55));
+            r.down(r.roll);
+            r.up(r.roll);
+            r.h.frames(2);
+            check(clicked == 1 && r.gone(), say("PianoRoll: onNoteClicked taking the roll out", mode).c_str());
+        }
+        {
+            // onNoteRemoved, emitted BEFORE the note goes and followed by code that works on the note and on the roll:
+            // onNoteDeleted does not come from a roll that is gone
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            int removed = 0, deleted = 0;
+            r.roll->onNoteRemoved.connect([&](int) { ++removed; r.takeOut(); });
+            r.roll->onNoteDeleted.connect([&](int, const PianoNote&) { ++deleted; });
+            r.h.frame();
+            r.move(RollRig::xBeat(3.0f), RollRig::yPitch(55));
+            r.down(r.roll, 1);
+            r.up(r.roll, 1);
+            r.h.frames(2);
+            const bool ok = removed == 1 && deleted == 0 && r.gone();
+            check(ok, say("PianoRoll: onNoteRemoved taking the roll out", mode).c_str());
+            if (!ok) printf("    removed %d, deleted %d, gone %d\n", removed, deleted, r.gone());
+        }
+        {
+            // onNoteDeleted, the last
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            int deleted = 0;
+            r.roll->onNoteDeleted.connect([&](int, const PianoNote&) { ++deleted; r.takeOut(); });
+            r.h.frame();
+            r.move(RollRig::xBeat(3.0f), RollRig::yPitch(55));
+            r.down(r.roll, 1);
+            r.up(r.roll, 1);
+            r.h.frames(2);
+            check(deleted == 1 && r.gone(), say("PianoRoll: onNoteDeleted taking the roll out", mode).c_str());
+        }
+        {
+            // the velocity lane: one signal for each note that changed, from the last; the first handler takes the roll out and
+            // the rest are not told
+            RollStage r(mode);
+            r.roll->setShowVelocityLane(true);
+            for (int i = 0; i < 5; ++i) r.roll->addNote(50 + i, 0.5f + static_cast<float>(i), 0.5f, 0.5f);
+            int told = 0;
+            r.roll->onNoteVelocityChanged.connect([&](int) { ++told; r.takeOut(); });
+            r.h.frame();
+            r.move(RollRig::xBeat(0.5f), 200.0f);
+            r.down(r.roll);
+            r.drag(r.roll, RollRig::xBeat(5.0f), 170.0f);
+            r.up(r.roll);
+            r.h.frames(2);
+            const bool ok = told == 1 && r.gone();
+            check(ok, say("PianoRoll: onNoteVelocityChanged taking the roll out in the first of five signals", mode).c_str());
+            if (!ok) printf("    told %d, gone %d\n", told, r.gone());
+        }
+        {
+            // a handler that takes some OTHER widget out leaves the roll to finish what it was doing: the note still goes, and says so
+            RollStage r(mode);
+            r.roll->addNote(55, 2.0f, 2.0f);
+            Widget* other = r.holder->createChild<Widget>();
+            int removed = 0, deleted = 0;
+            r.roll->onNoteRemoved.connect([&](int) { ++removed; r.holder->removeChild(other); });
+            r.roll->onNoteDeleted.connect([&](int, const PianoNote&) { ++deleted; });
+            r.h.frame();
+            r.move(RollRig::xBeat(3.0f), RollRig::yPitch(55));
+            r.down(r.roll, 1);
+            r.up(r.roll, 1);
+            r.h.frames(2);
+            check(removed == 1 && deleted == 1 && r.roll->notes().empty(), say("PianoRoll: a handler that takes another widget out does not stop the roll (the note goes, onNoteDeleted comes)", mode).c_str());
+        }
+    }
+}
+
+void testHandlerDeletesTheButton()
+{
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        Stage st(mode);
+        Button* button = st.holder->createChild<Button>("close");
+        button->setRect(Rect(20.0f, 20.0f, 100.0f, 30.0f));
+        st.h.frame();
+        int clicks = 0, released = 0;
+        button->released.connect([&](int) { ++released; });
+        button->clicked.connect([&]() { ++clicks; st.holder->removeChild(button); });
+        st.move(60.0f, 35.0f);
+        st.down(button);
+        st.up(button);
+        st.h.frames(2);
+        check(clicks == 1 && st.gone(), say("Button: clicked taking the button out", mode).c_str());
+    }
+}
+
+void testHandlerDeletesTheMenu()
+{
+    // a menu is not in a parent: it is shown as a popup (exec) and its owner deletes it, from the handler of one of its actions too
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        Harness h(300.0f, 200.0f, false);
+        Menu* menu = new Menu();
+        MenuAction* act = menu->addAction("Go");
+        menu->addAction("Other");
+        int fired = 0;
+        act->triggered.connect([&]()
+                {
+                    ++fired;
+                    if (mode == 0) menu->clearActions(); // the action that is running goes
+                    else
+                        delete menu; // the menu goes, and the action with it
+                });
+        menu->exec(10.0f, 10.0f);
+        h.frames(12);
+        const Rect row = menu->actionRect(0);
+        WidgetApp& app = WidgetApp::instance();
+        app.feedMouseMove(row.x + row.w * 0.5f, row.y + row.h * 0.5f);
+        app.feedMouseButton(0, true);
+        app.feedMouseButton(0, false);
+        h.frames(3);
+        check(fired == 1, (String("Menu: an action's handler that ") + (mode == 0 ? "clears the actions (the running action goes)" : "deletes the menu") + " runs once and nothing reads what is gone").c_str());
+        if (mode == 0) delete menu;
+    }
+}
+
+void testHandlerDeletesTheListBox()
+{
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        // the selection by a click, by the arrow key (in a frame) and by the program (outside one)
+        for (int how = 0; how < 3; ++how)
+        {
+            if ((how == 2) != (mode == 1)) continue; // setSelectedIndex is the program's call; the click and the key are events
+            Stage st(mode);
+            ListBox* list = st.holder->createChild<ListBox>();
+            list->setRect(Rect(10.0f, 10.0f, 200.0f, 150.0f));
+            for (int i = 0; i < 40; ++i) list->addItem(String("item ") + String::number(i));
+            st.h.relayout();
+            int changed = 0;
+            list->selectionChanged.connect([&](int) { ++changed; st.holder->removeChild(list); });
+            if (how == 2) list->setSelectedIndex(3);
+            else if (how == 0)
+            {
+                st.move(60.0f, 10.0f + Theme::instance().fontSize + Theme::instance().padding * 3.0f);
+                st.down(list);
+                st.up(list);
+            }
+            else
+            {
+                st.app.setFocused(list);
+                st.app.feedKey(Key::Down, true);
+                st.app.feedKey(Key::Down, false);
+            }
+            st.h.frames(2);
+            const char* names[] = { "a click", "the arrow key", "setSelectedIndex" };
+            const bool ok = changed == 1 && st.gone();
+            check(ok, say((String("ListBox: selectionChanged taking the list out, selection by ") + names[how]).c_str(), mode).c_str());
+            if (!ok) printf("    changed %d, gone %d\n", changed, st.gone());
+        }
+        {
+            Stage st(mode);
+            ListWidget* list = st.holder->createChild<ListWidget>();
+            list->setRect(Rect(10.0f, 10.0f, 200.0f, 150.0f));
+            for (int i = 0; i < 20; ++i) list->addRow<Label>(String("row ") + String::number(i));
+            st.h.relayout();
+            int changed = 0;
+            list->selectionChanged.connect([&](int) { ++changed; st.holder->removeChild(list); });
+            if (mode == 1) list->setSelectedIndex(2);
+            else
+            {
+                st.move(60.0f, 10.0f + 40.0f);
+                st.down(list);
+                st.up(list);
+            }
+            st.h.frames(2);
+            check(changed == 1 && st.gone(), say("ListWidget: selectionChanged taking the list out", mode).c_str());
+        }
+    }
+}
+
+void testHandlerDeletesTheSlider()
+{
+    for (int mode = 0; mode < 2; ++mode)
+    {
+        for (int how = 0; how < 2; ++how)
+        {
+            if ((how == 0) != (mode == 1)) continue; // setValue is the program's call, the press on the track is an event
+            Stage st(mode);
+            Slider* slider = st.holder->createChild<Slider>(0.0f, 1.0f, 0.5f);
+            slider->setRect(Rect(20.0f, 20.0f, 200.0f, 24.0f));
+            st.h.relayout();
+            int changed = 0;
+            slider->onValueChanged.connect([&](float) { ++changed; st.holder->removeChild(slider); });
+            if (how == 0) slider->setValue(0.9f);
+            else
+            {
+                st.move(30.0f, 32.0f);
+                st.down(slider);
+                st.drag(slider, 40.0f, 32.0f);
+                st.up(slider);
+            }
+            st.h.frames(2);
+            const bool ok = changed == 1 && st.gone();
+            check(ok, say(how == 0 ? "Slider: onValueChanged taking the slider out, setValue" : "Slider: onValueChanged taking the slider out, a press on the track", mode).c_str());
+            if (!ok) printf("    changed %d, gone %d\n", changed, st.gone());
+        }
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -492,6 +883,11 @@ int main(int argc, char** argv)
     RUN(testPianoRollManyNotesAreDrawnAsWhatTheyCover);
     RUN(testPianoRollManyNotesLookLikeLongNotes);
     RUN(testPianoRollLaneDrawsOneBarForEachColumn);
+    RUN(testHandlerDeletesThePianoRoll);
+    RUN(testHandlerDeletesTheButton);
+    RUN(testHandlerDeletesTheMenu);
+    RUN(testHandlerDeletesTheListBox);
+    RUN(testHandlerDeletesTheSlider);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

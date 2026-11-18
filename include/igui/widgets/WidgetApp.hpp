@@ -586,6 +586,27 @@ public:
     {
         return deletions_;
     }
+    /// @brief The question a widget asks after it ran a signal and has more to do: with @p seen being deletions() as it was
+    ///        before the signal, true when something went away meanwhile and @p w is no longer in the tree that is drawn (a
+    ///        float window, a popup) - a handler deleted it, or removed it (Widget::removeChild), or the panel it is on. The
+    ///        widget must then touch nothing of its own and return; with nothing deleted it costs the comparison. @p w is
+    ///        only compared, never read.
+    ///
+    ///        THE RULE for a handler that removes the widget it runs in (a button that closes its own panel, a list that
+    ///        rebuilds itself on a selection): it does it with parent->removeChild(w), the only way to delete a widget that
+    ///        is in a tree (a plain `delete` leaves a pointer to freed memory in the parent). The memory goes when the
+    ///        frame phase that is running (update(), paint()) is over, or at once when none is (the program calling
+    ///        list->setSelectedIndex(), slider->setValue()). The widgets that run a handler and then have more to do ask
+    ///        hasGone() after it and touch nothing of their own, emit nothing more, when it says gone: every signal of
+    ///        Widget (pressed, released, clicked, moved, hover), PianoRoll's onNote*, the selectionChanged of ListBox and
+    ///        ListWidget, Slider's onValueChanged, and the actions of a Menu (which is not in a parent: it is a popup, and
+    ///        its owner deletes it; the action's own `gone_` says the action went). The signals of other widgets are
+    ///        emitted by code that may still read its widget afterwards: a handler that must remove the widget there asks
+    ///        for it to be done after the frame's events (WidgetApp::callDeferred).
+    bool hasGone(const Widget* w, uint32_t seen) const
+    {
+        return deletions_ != seen && !isWidgetInTrees(w);
+    }
 
     // ── Float windows ───────────────────────────────────────────────────
     // Floating windows always render on top of the stage (below popups).

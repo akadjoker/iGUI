@@ -104,7 +104,8 @@ public:
         return valueText(value_);
     }
 
-    /// @brief Emitted when the value changes.
+    /// @brief Emitted when the value changes. The handler may take the slider out of its parent (removeChild): it touches
+    ///        nothing of itself after that (see WidgetApp::hasGone).
     Signal<float> onValueChanged;
 
     Vec2f sizeHint() const override;

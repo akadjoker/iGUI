@@ -1,6 +1,7 @@
 #include "AudioWidgets.hpp"
 #include "GridSteps.hpp"
 #include "Theme.hpp"
+#include "WidgetApp.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -2011,10 +2012,13 @@ void PianoRoll::onMousePress(MouseEvent& e)
             if (e.x >= nr.x && e.x <= nr.x + nr.w && e.y >= nr.y && e.y <= nr.y + nr.h)
             {
                 const PianoNote gone = notes_[i];
+                WidgetApp& app = WidgetApp::instance();
+                const uint32_t seen = app.deletions();
                 onNoteRemoved.emit(i);
+                e.consumed = true;
+                if (app.hasGone(this, seen)) return; // (a handler deleted the roll, or took it out of the tree: nothing of it is touched)
                 removeNote(i);
                 onNoteDeleted.emit(i, gone);
-                e.consumed = true;
                 return;
             }
         }
@@ -2200,7 +2204,7 @@ void PianoRoll::sweepLane(float x0, float y0, float x1, float y1)
 }
 
 // The button went up after a gesture in the lane: one signal for each note that ended with another velocity than it had.
-void PianoRoll::endLaneGesture()
+bool PianoRoll::endLaneGesture()
 {
     laneDrag_ = false;
     ct::Vector<float> orig;
@@ -2209,31 +2213,48 @@ void PianoRoll::endLaneGesture()
     const size_t n = orig.size() < notes_.size() ? orig.size() : notes_.size();
     for (size_t i = 0; i < n; ++i)
         if (orig[i] >= 0.0f && notes_[i].velocity != orig[i]) changed.push_back(static_cast<int>(i));
-    // from the highest index down, and each checked against the notes as the handlers before it left them
+    // from the highest index down, and each checked against the notes as the handlers before it left them; a handler that
+    // deleted the roll (or took it out of the tree) ends it: true
+    WidgetApp& app = WidgetApp::instance();
     for (size_t k = changed.size(); k > 0; --k)
-        if (changed[k - 1] < static_cast<int>(notes_.size())) onNoteVelocityChanged.emit(changed[k - 1]);
+        if (changed[k - 1] < static_cast<int>(notes_.size()))
+        {
+            const uint32_t seen = app.deletions();
+            onNoteVelocityChanged.emit(changed[k - 1]);
+            if (app.hasGone(this, seen)) return true;
+        }
+    return false;
 }
 
 void PianoRoll::onMouseRelease(MouseEvent& e)
 {
-    if (laneDrag_) endLaneGesture();
+    if (laneDrag_ && endLaneGesture()) return;
     // what the gesture was, before the handlers of the signals get to change the notes
     const int index = draggingNote_;
     const bool created = newNotePitch_ >= 0;
     const bool resizing = resizing_;
     bool moved = false, resized = false;
-    if (index >= 0 && index < static_cast<int>(notes_.size()))
+    const bool valid = index >= 0 && index < static_cast<int>(notes_.size());
+    PianoNote told = {};
+    if (valid)
     {
-        const PianoNote& n = notes_[index];
-        if (resizing) resized = !created && n.length != dragStartLen_;
+        told = notes_[index];
+        if (resizing) resized = !created && told.length != dragStartLen_;
         else
-            moved = !created && (n.pitch != dragStartPitch_ || n.start != dragStartBeat_);
-        onNoteAdded.emit(n.pitch, n.start, n.length);
+            moved = !created && (told.pitch != dragStartPitch_ || told.start != dragStartBeat_);
     }
+    // the roll is idle again before any handler runs: one that deletes the roll leaves nothing half done
     draggingNote_ = -1;
     newNotePitch_ = -1;
     resizing_ = false;
     panning_ = false;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
+    if (valid)
+    {
+        onNoteAdded.emit(told.pitch, told.start, told.length);
+        if (app.hasGone(this, seen)) return;
+    }
     updateEdgeCursor(e.x, e.y);
     // after the roll is idle again; the notes may have changed under the first handler
     if (index >= 0 && index < static_cast<int>(notes_.size()))

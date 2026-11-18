@@ -33,8 +33,11 @@ void Slider::setValue(float v)
     if (v != value_)
     {
         value_ = v;
+        WidgetApp& app = WidgetApp::instance();
+        const uint32_t seen = app.deletions();
         onValueChanged.emit(value_);
-        WidgetApp::instance().fireEvent("change", this);
+        if (app.hasGone(this, seen)) return; // (the handler deleted the slider: see WidgetApp::hasGone)
+        app.fireEvent("change", this);
         markDirty();
     }
 }
@@ -289,8 +292,11 @@ void Slider::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
     dragging_ = true;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     updateFromMouse(e.localX, e.localY);
     e.consumed = true;
+    if (app.hasGone(this, seen)) return; // (the value's handler deleted the slider)
     Widget::onMousePress(e);
 }
 

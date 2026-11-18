@@ -227,8 +227,11 @@ public:
     void onMouseScroll(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
 
-    /// @brief Emitted when the selected item changes.
-    Signal<int> selectionChanged; // -1 = deselected
+    /// @brief Emitted when the selected item changes (-1 = deselected). The handler may take the list out of its parent
+    ///        (removeChild): it touches nothing of itself after that (see WidgetApp::hasGone).
+    /// @brief Emitted when the selected row changes. The handler may take the list out of its parent (removeChild): it touches
+    ///        nothing of itself after that (see WidgetApp::hasGone).
+    Signal<int> selectionChanged;
 
 private:
     void clampScroll();

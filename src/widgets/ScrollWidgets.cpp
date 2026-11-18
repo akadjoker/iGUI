@@ -335,7 +335,10 @@ void ListBox::setSelectedIndex(int idx)
 {
     if (idx < -1 || idx >= static_cast<int>(items_.size())) return;
     selectedIdx_ = idx;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     selectionChanged.emit(selectedIdx_);
+    if (app.hasGone(this, seen)) return; // (the handler deleted the list: see WidgetApp::hasGone)
     markDirty();
 }
 
@@ -470,12 +473,7 @@ void ListBox::onMousePress(MouseEvent& e)
 {
     if (e.button != 0) return;
     int idx = itemAtY(e.y);
-    if (idx >= 0)
-    {
-        selectedIdx_ = idx;
-        selectionChanged.emit(selectedIdx_);
-        markDirty();
-    }
+    if (idx >= 0) setSelectedIndex(idx);
 }
 
 void ListBox::onMouseScroll(MouseEvent& e)
@@ -519,7 +517,10 @@ void ListBox::onKeyPress(KeyEvent& e)
     const int next = listKeyTarget(e.key, selectedIdx_, itemCount(), page);
     if (next == selectedIdx_) return;
     e.consumed = true;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     setSelectedIndex(next);
+    if (app.hasGone(this, seen)) return;
     scrollToItem(next);
 }
 
@@ -574,7 +575,10 @@ void ListWidget::setSelectedIndex(int idx)
 {
     if (idx < -1 || idx >= static_cast<int>(rows_.size())) return;
     selectedIdx_ = idx;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     selectionChanged.emit(selectedIdx_);
+    if (app.hasGone(this, seen)) return; // (the handler deleted the list: see WidgetApp::hasGone)
     markDirty();
 }
 
@@ -740,6 +744,9 @@ void ListWidget::onKeyPress(KeyEvent& e)
     const int next = listKeyTarget(e.key, selectedIdx_, rowCount(), page);
     if (next == selectedIdx_) return;
     e.consumed = true;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     setSelectedIndex(next);
+    if (app.hasGone(this, seen)) return;
     scrollToRow(next);
 }
