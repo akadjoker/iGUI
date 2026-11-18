@@ -388,6 +388,95 @@ void WidgetApp::update(ig::retained::IO& io)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Synthetic input
+// ═════════════════════════════════════════════════════════════════════════════
+
+void WidgetApp::makeSyntheticIO(ig::retained::IO& io, bool shift, bool ctrl, bool alt) const
+{
+    // what update() compares the IO with, so that it finds nothing to do but the one event that is added
+    io.deltaTime = 0.0f;
+    io.displayWidth = static_cast<float>(s_.width_);
+    io.displayHeight = static_cast<float>(s_.height_);
+    io.mouseX = s_.prevMouseX_;
+    io.mouseY = s_.prevMouseY_;
+    for (int i = 0; i < 5; ++i) io.mouseDown[i] = s_.prevMouseDown_[i];
+    io.keyShift = shift;
+    io.keyCtrl = ctrl;
+    io.keyAlt = alt;
+    // update() keeps these from the IO it is given: a feed must not lose the backend's
+    io.setClipboardText = clipSet_;
+    io.getClipboardText = clipGet_;
+    io.setMouseCaptured = mouseCapture_;
+    io.warpMouse = mouseWarp_;
+}
+
+// The pointer the events left, written where a backend writes it: the next frame, update(GetIO()), then finds the state
+// it already has and does not move the pointer back to the position GetIO() had.
+void WidgetApp::syncPointerToGlobalIO()
+{
+    ig::retained::IO& global = ig::retained::GetIO();
+    global.mouseX = s_.prevMouseX_;
+    global.mouseY = s_.prevMouseY_;
+    for (int i = 0; i < 5; ++i) global.mouseDown[i] = s_.prevMouseDown_[i];
+}
+
+void WidgetApp::feedMouseMove(float x, float y)
+{
+    ig::retained::IO io;
+    makeSyntheticIO(io, ioKeyShift_, ioKeyCtrl_, ioKeyAlt_);
+    io.mouseX = x;
+    io.mouseY = y;
+    io.addMouseMoveEvent(x, y);
+    update(io);
+    syncPointerToGlobalIO();
+}
+
+void WidgetApp::feedMouseButton(int button, bool down, bool shift, bool ctrl, bool alt)
+{
+    if (button < 0 || button >= 5) return;
+    ig::retained::IO io;
+    makeSyntheticIO(io, shift, ctrl, alt);
+    io.mouseDown[button] = down;
+    io.addMouseButtonEvent(io.mouseX, io.mouseY, button, down);
+    update(io);
+    syncPointerToGlobalIO();
+}
+
+void WidgetApp::feedMouseWheel(float dx, float dy, bool shift, bool ctrl, bool alt)
+{
+    ig::retained::IO io;
+    makeSyntheticIO(io, shift, ctrl, alt);
+    io.mouseWheelX = dx;
+    io.mouseWheelY = dy;
+    update(io);
+    syncPointerToGlobalIO();
+}
+
+void WidgetApp::feedKey(int key, bool down, bool shift, bool ctrl, bool alt)
+{
+    ig::retained::IO io;
+    makeSyntheticIO(io, shift, ctrl, alt);
+    io.addKeyEvent(key, key, shift, ctrl, alt, down);
+    update(io);
+    syncPointerToGlobalIO();
+}
+
+void WidgetApp::feedText(const char* utf8)
+{
+    if (!utf8 || !*utf8) return;
+    ig::retained::IO io;
+    makeSyntheticIO(io, ioKeyShift_, ioKeyCtrl_, ioKeyAlt_);
+    while (*utf8)
+    {
+        int len = 1;
+        io.addInputCharacter(utf8Decode(utf8, len));
+        utf8 += len > 0 ? len : 1;
+    }
+    update(io);
+    syncPointerToGlobalIO();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Input dispatch helpers (formerly SDL event handlers)
 // ═════════════════════════════════════════════════════════════════════════════
 

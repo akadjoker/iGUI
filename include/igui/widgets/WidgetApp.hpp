@@ -224,6 +224,40 @@ public:
     ///        nothing this update walks can be changed by a handler.
     void update(ig::retained::IO& io);
 
+    // ── Synthetic input ───────────────────────────────────────────────────
+    // Drive the widgets with no window and no backend: a test, a script, a tool that clicks for a model. Each call
+    // delivers ONE event now, through update() as a backend's frame would have (the same dispatch, the same
+    // hit test, drag, focus and popup rules), with the state of the pointer and of the buttons that update() last
+    // saw, the size of the window as it is, and no time passing (the delta time of that update is zero: popups do
+    // not advance their fade, tooltips do not count, and two clicks on the same spot with no frame between them
+    // are a double click). The layout is what the last paint() made of it: paint a frame (or call requestLayout()
+    // and paint) before the first event, and after a change that moves widgets. The IO of the backend, if
+    // there is one, is not given events; only its polled pointer and buttons are brought up to date, as a backend
+    // would, so that the next frame's update(GetIO()) finds the state the events left and does not move the pointer
+    // back. Nothing here costs anything when it is not called.
+    //
+    //     app.feedMouseMove(x, y);
+    //     app.feedMouseButton(0, true);   // press the left button where the pointer is
+    //     app.feedMouseButton(0, false);  // and let go: a click
+    //     app.feedKey(Key::Return, true); app.feedKey(Key::Return, false);
+    //     app.feedText("Música");         // UTF-8
+    //
+    // Buttons number as the widgets' MouseEvent::button: 0 left, 1 right, 2 middle. A press of a button that is
+    // already down, or a release of one that is not, does nothing (as in update()).
+
+    /// @brief The pointer moved to (x, y), window coordinates.
+    void feedMouseMove(float x, float y);
+    /// @brief A button was pressed (down) or released, with the pointer where it was last put.
+    void feedMouseButton(int button, bool down, bool shift = false, bool ctrl = false, bool alt = false);
+    /// @brief The wheel turned (dx, dy as the backend reports them, positive up), with the pointer where
+    ///        it was last put.
+    void feedMouseWheel(float dx, float dy, bool shift = false, bool ctrl = false, bool alt = false);
+    /// @brief A key went down or up (@p key as ig::retained::Key::..., the platform key code), with the modifiers
+    ///        given held for this event only. Typing text is feedText(): a key press does not type.
+    void feedKey(int key, bool down = true, bool shift = false, bool ctrl = false, bool alt = false);
+    /// @brief Text was typed (UTF-8, any length: each character goes in as one typed character).
+    void feedText(const char* utf8);
+
     /// @brief Layout and paint the widget tree into draw data.
     void paint(ig::retained::DrawData& data, const ig::retained::Font* font = nullptr,
             IconAtlas* icons = nullptr);
@@ -685,6 +719,10 @@ private:
 
     WidgetApp(const WidgetApp&) = delete;
     WidgetApp& operator=(const WidgetApp&) = delete;
+
+    // The IO of one synthetic event (see feedMouseMove): the state update() last saw, no time, no events yet.
+    void makeSyntheticIO(ig::retained::IO& io, bool shift, bool ctrl, bool alt) const;
+    void syncPointerToGlobalIO();
 
     // Input dispatch helpers
     void dispatchMouseMove(float x, float y);

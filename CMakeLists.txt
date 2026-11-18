@@ -430,6 +430,14 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_include_directories(igui_retained_menus4b_tests PRIVATE adapters/zen/include)
         target_link_libraries(igui_retained_menus4b_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_menus4b COMMAND igui_retained_menus4b_tests)
+        # The rest of the second half of round 4 (docs/ROUND4B.md): synthetic input, tool and tab bars with the
+        # application's own icons, the timeline's bars and beats, piano roll velocities, chart double data and axis
+        # titles, the slider readout.
+        add_executable(igui_retained_round4b_tests tests/test_retained_round4b.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_round4b_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_round4b_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_round4b_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_round4b COMMAND igui_retained_round4b_tests)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)
