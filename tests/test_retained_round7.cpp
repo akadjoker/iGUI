@@ -1358,6 +1358,48 @@ void testTimeline()
             });
 }
 
+// ---- CodeEditor ----
+
+void testEditors()
+{
+    auto code = [](Stage& st) {
+        CodeEditor* w = put<CodeEditor>(st, 20.0f, 20.0f, 400.0f, 200.0f);
+        w->setText("void f()\n{\n    int a;\n}\n");
+        st.h.frames(2);
+        return w;
+    };
+    victim<CodeEditor>("CodeEditor.textChanged by typing", code,
+            [](CodeEditor* w, auto kill, auto) { w->textChanged.connect(kill); },
+            [](Stage& st, CodeEditor* w) { st.type(w, "d"); });
+    victim<CodeEditor>("CodeEditor.undoRedoChanged by typing", code,
+            [](CodeEditor* w, auto kill, auto) { w->undoRedoChanged.connect(kill); },
+            [](Stage& st, CodeEditor* w) { st.type(w, "d"); });
+    victim<CodeEditor>("CodeEditor.textChanged by undo",
+            [&](Stage& st) {
+                CodeEditor* w = code(st);
+                KeyEvent typed; // (typed with a direct call: the editor has an edit to undo before the handler is connected)
+                typed.text[0] = 'x';
+                w->onTextInput(typed);
+                return w;
+            },
+            [](CodeEditor* w, auto kill, auto) { w->textChanged.connect(kill); },
+            [](Stage& st, CodeEditor* w) { st.key(w, Key::Z, false, true); });
+    victim<CodeEditor>("CodeEditor.textChanged by Return", code,
+            [](CodeEditor* w, auto kill, auto) { w->textChanged.connect(kill); },
+            [](Stage& st, CodeEditor* w) { st.key(w, Key::Return); });
+    victim<CodeEditor>("CodeEditor.breakpointToggled by a click in the gutter",
+            [&](Stage& st) {
+                CodeEditor* w = code(st);
+                w->setShowBreakpoints(true);
+                st.h.frames(2);
+                return w;
+            },
+            [](CodeEditor* w, auto kill, auto) { w->breakpointToggled.connect(kill); },
+            [](Stage& st, CodeEditor* w) {
+                for (float x = 6.0f; x < 80.0f && !st.gone(); x += 8.0f) st.click(w, x, 8.0f); // (somewhere along the gutter is the breakpoint column)
+            });
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -1392,6 +1434,7 @@ int main(int argc, char** argv)
     testTreeProperty();
     testGrids();
     testTimeline();
+    testEditors();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else if (!gList)

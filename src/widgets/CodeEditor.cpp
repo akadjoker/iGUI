@@ -580,6 +580,7 @@ void CodeEditor::clearUndoHistory()
 
 void CodeEditor::undo()
 {
+    WidgetApp::DeletionHold hold; // (a handler of what the undo emits may take the editor out of the tree)
     if (undoStack_.empty()) return;
     // The actions of a group (a replace-all, an indent of several lines) go
     // back together.
@@ -600,6 +601,7 @@ void CodeEditor::undo()
 
 void CodeEditor::redo()
 {
+    WidgetApp::DeletionHold hold; // (a handler of what the redo emits may take the editor out of the tree)
     if (redoStack_.empty()) return;
     const int group = redoStack_.back().group;
     do
@@ -2204,6 +2206,7 @@ void CodeEditor::handleTextInput(KeyEvent& e)
 
 void CodeEditor::onMousePress(MouseEvent& e)
 {
+    WidgetApp::DeletionHold hold; // (see WidgetApp::DeletionHold)
     if (!isEnabledInTree()) return;
     if (completionVisible_)
     {
@@ -3352,6 +3355,7 @@ bool CodeEditor::acceptCompletion()
 
 void CodeEditor::onTextInput(KeyEvent& e)
 {
+    WidgetApp::DeletionHold hold;
     if (bar_ != Bar::None && !e.ctrl && !e.alt)
     {
         barInput(e.text);
@@ -3371,6 +3375,7 @@ void CodeEditor::onTextInput(KeyEvent& e)
 
 void CodeEditor::onKeyPress(KeyEvent& e)
 {
+    WidgetApp::DeletionHold hold;
     namespace Key = ig::retained::Key;
     if (bar_ != Bar::None && barKey(e)) return;
     if (e.key == Key::Escape && sigVisible_ && !completionVisible_ && extraCursors_.empty())

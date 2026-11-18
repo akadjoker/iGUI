@@ -607,6 +607,29 @@ public:
     {
         return deletions_ != seen && !isWidgetInTrees(w);
     }
+    /// @brief For a widget whose work after a signal is too long to check step by step (a code editor: a hundred paths from a
+    ///        key to the text, each emitting from the middle of a sequence): while one of these is alive, a widget taken out of a
+    ///        tree (Widget::removeChild) is not deleted, it waits, as in a frame phase, until the last one ends. The widget holds
+    ///        one in each of its entry points (a key, a click, text, undo) and the handler that removes it, in a signal of the
+    ///        editor or in what the editor was running, can no longer pull the memory from under the rest of the entry point.
+    ///        What it does not do is stop the work: the editor may emit what comes next, for a widget that is already out.
+    class DeletionHold
+    {
+    public:
+        DeletionHold() : app_(WidgetApp::instance())
+        {
+            ++app_.busy_;
+        }
+        ~DeletionHold()
+        {
+            if (--app_.busy_ == 0) app_.flushWidgetDeletes();
+        }
+        DeletionHold(const DeletionHold&) = delete;
+        DeletionHold& operator=(const DeletionHold&) = delete;
+
+    private:
+        WidgetApp& app_;
+    };
     /// @brief Emits @p signal of the widget @p w with @p args and says whether a handler took @p w out of the tree (hasGone):
     ///        true, and the widget touches nothing of its own after it, emits nothing more. For a signal that is not the last
     ///        thing a method does; one that is last needs none of this (`markDirty();` and the like go BEFORE it).
