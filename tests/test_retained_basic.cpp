@@ -712,6 +712,43 @@ void testTextChangeAsksForLayoutOnlyWhenTheHintChanges()
     check(probe->laidOut == emptied, "cutting on and off with no text asks for nothing");
 }
 
+// ---- the layout setters called again with the value they have ----
+
+void testLayoutSettersWithTheirValueAskForNothing()
+{
+    Harness h(900.0f, 400.0f);
+    LayoutProbe* probe = h.root()->createChild<LayoutProbe>();
+    BoxLayout* row = h.root()->createChild<BoxLayout>(LayoutDir::Horizontal);
+    Label* clock = row->createChild<Label>(String("00:00:00:00"));
+    row->createChild<Label>(String("middle"));
+    row->createChild<Label>(String("end"));
+    h.frames(6);
+    const int settled = probe->laidOut;
+    check(settled > 0, "(the probe is laid out)");
+
+    // the other setters that were asked for every frame with the value they already had
+    const int steady = probe->laidOut;
+    for (int i = 0; i < 5; ++i)
+    {
+        row->setStretch(row->stretch());
+        row->setMargins(row->margins());
+        row->setLayoutAlign(row->layoutAlign());
+        row->setSpacing(row->spacing());
+        row->setPadding(row->padding());
+        row->setMainAlign(row->mainAlign());
+        row->moveChild(clock, 0);
+        h.frame();
+    }
+    if (probe->laidOut != steady) printf("    %d layout passes for setters with the value they had\n", probe->laidOut - steady);
+    check(probe->laidOut == steady, "setters called again with the value they had ask for no layout pass");
+    row->setSpacing(row->spacing() + 3.0f);
+    h.frame();
+    check(probe->laidOut == steady + 1, "and with another value, one");
+    row->moveChild(clock, 2);
+    h.frame();
+    check(probe->laidOut == steady + 2, "a child that moves takes one");
+}
+
 } // namespace
 
 int main(int argc, char** argv)
@@ -732,6 +769,7 @@ int main(int argc, char** argv)
     RUN(testScrollViewHorizontalBar);
     RUN(testOpenPolylineHasTheSameWidthAtItsEnds);
     RUN(testTextChangeAsksForLayoutOnlyWhenTheHintChanges);
+    RUN(testLayoutSettersWithTheirValueAskForNothing);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

@@ -850,6 +850,9 @@ void Widget::moveChild(Widget* child, int toIndex)
     auto it = std::find(children_.begin(), children_.end(), child);
     if (it == children_.end())
         return;
+    const int last = static_cast<int>(children_.size()) - 1;
+    const int to = toIndex < 0 ? 0 : (toIndex > last ? last : toIndex);
+    if (static_cast<int>(it - children_.begin()) == to) return; // already there: nothing moves
     children_.erase(it);
     if (toIndex < 0) toIndex = 0;
     if (toIndex > static_cast<int>(children_.size())) toIndex = static_cast<int>(children_.size());

@@ -475,6 +475,10 @@ struct Edges
     {
         return top + bottom;
     }
+    bool operator==(const Edges& o) const
+    {
+        return top == o.top && right == o.right && bottom == o.bottom && left == o.left;
+    }
 };
 
 // The size hint a widget had the last time it was worked out: what lets the setter of a text tell a change that moves the
@@ -1054,6 +1058,7 @@ public:
     /// @brief Set margins for layout positioning.
     void setMargins(const Edges& m)
     {
+        if (margins_ == m) return;
         margins_ = m;
         markDirty();
         invalidateLayout();
@@ -1061,23 +1066,17 @@ public:
     /// @brief Set uniform margins.
     void setMargins(float all)
     {
-        margins_ = Edges(all);
-        markDirty();
-        invalidateLayout();
+        setMargins(Edges(all));
     }
     /// @brief Set vertical and horizontal margins.
     void setMargins(float tb, float lr)
     {
-        margins_ = Edges(tb, lr);
-        markDirty();
-        invalidateLayout();
+        setMargins(Edges(tb, lr));
     }
     /// @brief Set individual margins.
     void setMargins(float t, float r, float b, float l)
     {
-        margins_ = Edges(t, r, b, l);
-        markDirty();
-        invalidateLayout();
+        setMargins(Edges(t, r, b, l));
     }
     /// @brief Get the current margins.
     const Edges& margins() const
@@ -1088,6 +1087,7 @@ public:
     /// @brief Set cross-axis alignment within parent layout.
     void setLayoutAlign(Align a)
     {
+        if (layoutAlign_ == a) return;
         layoutAlign_ = a;
         markDirty();
         invalidateLayout();
@@ -1101,6 +1101,7 @@ public:
     /// @brief Set stretch factor for parent layout expansion.
     void setStretch(float s)
     {
+        if (stretch_ == s) return;
         stretch_ = s;
         markDirty();
         invalidateLayout();
@@ -1207,6 +1208,7 @@ public:
 
     void setSpacing(float s)
     {
+        if (spacing_ == s) return;
         spacing_ = s;
         invalidateLayout();
     }
@@ -1221,23 +1223,21 @@ public:
 
     void setPadding(const Edges& e)
     {
+        if (padding_ == e) return;
         padding_ = e;
         invalidateLayout();
     }
     void setPadding(float all)
     {
-        padding_ = Edges(all);
-        invalidateLayout();
+        setPadding(Edges(all));
     }
     void setPadding(float tb, float lr)
     {
-        padding_ = Edges(tb, lr);
-        invalidateLayout();
+        setPadding(Edges(tb, lr));
     }
     void setPadding(float t, float r, float b, float l)
     {
-        padding_ = Edges(t, r, b, l);
-        invalidateLayout();
+        setPadding(Edges(t, r, b, l));
     }
     const Edges& padding() const
     {
@@ -1246,6 +1246,7 @@ public:
 
     void setMainAlign(MainAlign a)
     {
+        if (mainAlign_ == a) return;
         mainAlign_ = a;
         invalidateLayout();
     }
