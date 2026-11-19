@@ -33,6 +33,7 @@ The library never talks to a window system or a GPU directly. It produces a list
 | Compiler | C++14 (GCC, Clang, or MSVC) |
 | Build system | CMake 3.14 or newer (Ninja recommended) |
 | Submodule | [`containers`](https://github.com/akadjoker/containers) in `third_party/containers` |
+| zen adapter (optional) | [`zen_plataform`](https://github.com/akadjoker/zen_plataform) a62dd5c or newer, a checkout found by `IGUI_ZEN_PLATFORM_DIR` (default `../zen_plataform`; it is not a submodule, and CMake says so if it is older: `platform_wait_events`, `clipboard_get_primary`) |
 | SDL2 backend (optional) | SDL2 development files, found through the `SDL2::SDL2` target or `pkg-config` |
 | Raylib backend (optional) | A system-installed Raylib (header and static library) |
 
@@ -61,6 +62,8 @@ git submodule update --init --remote --recursive
 CI always builds against the latest `containers` `main`, and Dependabot opens a pull request daily when the recorded submodule commit falls behind.
 
 CMake stops with a clear error if `third_party/containers` is empty.
+
+Tested against `containers` 63793ca (the submodule pointer) and `zen_plataform` a62dd5c (docs/ROUND11.md). One rule from `containers` 63793ca on: every file of a program has to agree on `NDEBUG`, because that decides whether `ct::HashMap` and `ct::HashSet` keep a table version for their checked iterators (`CT_DEBUG_ITERATORS`): a program that builds the library in Release and one of its own files without `NDEBUG` (to keep `assert`) crashes. The tests that keep `assert` do it through `tests/KeepAsserts.hpp`, which is the way to do it.
 
 ## Building
 

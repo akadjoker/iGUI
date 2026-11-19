@@ -721,6 +721,17 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     add_library(igui_zen STATIC adapters/zen/SoftRaster.cpp adapters/zen/GlRaster.cpp adapters/zen/ZenApp.cpp)
     add_library(igui::zen ALIAS igui_zen)
     target_compile_features(igui_zen PUBLIC cxx_std_17)
+    # The adapter needs zen_plataform a62dd5c or newer (the version this was tested against, docs/ROUND11.md): platform_wait_events and
+    # platform_wake (the loop sleeps in them), clipboard_has_primary_support / clipboard_get_primary / clipboard_set_primary (the PRIMARY
+    # selection), and the rule that Ctrl or Super held makes no text. The checkout is not a submodule (IGUI_ZEN_PLATFORM_DIR, ../zen_plataform
+    # by default), so an older one is told here and not by a compiler error.
+    if(EXISTS "${IGUI_ZEN_PLATFORM_DIR}/include/platform.h")
+        file(READ "${IGUI_ZEN_PLATFORM_DIR}/include/platform.h" _igui_zp_header)
+        if(NOT _igui_zp_header MATCHES "platform_wait_events" OR NOT _igui_zp_header MATCHES "clipboard_has_primary_support")
+            message(FATAL_ERROR "igui_zen needs zen_plataform a62dd5c or newer (platform_wait_events, clipboard_has_primary_support): "
+                "${IGUI_ZEN_PLATFORM_DIR} is older. Update it (git -C ${IGUI_ZEN_PLATFORM_DIR} pull) or point IGUI_ZEN_PLATFORM_DIR at a newer checkout.")
+        endif()
+    endif()
     target_include_directories(igui_zen PUBLIC adapters/zen/include)
     target_link_libraries(igui_zen PUBLIC igui_widgets platform)
 
