@@ -754,6 +754,17 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     endif()
 endif()
 
+# The comparison programs (iGUI, Dear ImGui, FLTK, GTK 3 side by side: docs/COMPARACAO.md). Off by default, and outside the
+# no-std rule on purpose: cmake/CheckNoStd.cmake and tools/check.sh look at src/, include/ and adapters/ only, and
+# bench/compare holds the code for the other libraries (which need the C++ library) next to a copy of the scenes for iGUI.
+option(IGUI_BUILD_COMPARE "Build the comparison programs of bench/compare (needs IGUI_BUILD_ZEN_ADAPTER=ON); outside the no-std rule" OFF)
+if(IGUI_BUILD_COMPARE)
+    if(NOT TARGET igui_zen)
+        message(FATAL_ERROR "IGUI_BUILD_COMPARE=ON needs IGUI_BUILD_ZEN_ADAPTER=ON")
+    endif()
+    add_subdirectory(bench/compare)
+endif()
+
 if(IGUI_BUILD_SDL2_DEMO OR IGUI_BUILD_WEB)
     # SDL2 arrives one of two ways: a parent project already built or found
     # it (target SDL2::SDL2 - e.g. a vendored submodule), or it is installed
