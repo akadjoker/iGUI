@@ -243,7 +243,7 @@ void SearchBar::paint(PaintContext& ctx)
         blinkTimer_ = app.blinkTime(blinkTimer_, blinkClock_); // (by the application's clock: see TextInput::paint)
         if (isFocused())
         {
-            const float phase = std::fmod(blinkTimer_, 1.0f);
+            const float phase = fmodf(blinkTimer_, 1.0f);
             app.requestFrameIn((phase < 0.5f ? 0.5f - phase : 1.0f - phase) + 0.001f);
             if (phase < 0.5f)
             {

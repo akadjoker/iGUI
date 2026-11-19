@@ -80,7 +80,7 @@ static void test_round_rect_corner_is_a_curve()
         // The chord is at most 0.15 px from the arc (its middle): radius * (1 - cos(half the step)); the old 30 degree table
         // stepped 6.2 px and was 0.8 px from it, and that is what read as a bevel.
         const float halfStep = 3.14159265f * 0.25f / static_cast<float>(steps);
-        assert(radius * (1.0f - std::cos(halfStep)) <= 0.151f);
+        assert(radius * (1.0f - cosf(halfStep)) <= 0.151f);
         assert(maxGap < 4.0f);
     }
 }

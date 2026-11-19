@@ -1251,7 +1251,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
             reused = measureLine(ctx, line, textW);
             entry = &reused;
         }
-        else if (wrapCache_.erase(line, reused)) entry = &cache.put(line, std::move(reused));
+        else if (wrapCache_.erase(line, reused)) entry = &cache.put(line, static_cast<WrapLine&&>(reused));
         else if (!(entry = cache.find(line)))
             entry = &cache.put(line, measureLine(ctx, line, textW));
         lineWidths_[i] = entry->width;
@@ -1261,7 +1261,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
         if (lineFilterCb_ && !lineFilterCb_(i)) continue;
         wrapRows_[i] = entry->rows;
     }
-    if (keepCache) wrapCache_ = std::move(cache);
+    if (keepCache) wrapCache_ = static_cast<ct::HashMap<String, WrapLine>&&>(cache);
     wrapDirty_ = false;
     rowStartsDirty_ = true;
 }

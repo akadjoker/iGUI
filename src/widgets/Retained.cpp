@@ -54,7 +54,7 @@ constexpr float kCornerTolerance = 0.15f;
 // floorf for what a window holds (a float that fits an int, 2^31 and more is left to floorf).
 inline float floorOf(float v)
 {
-    if (!(v > -1.0e9f && v < 1.0e9f)) return std::floor(v);
+    if (!(v > -1.0e9f && v < 1.0e9f)) return floorf(v);
     const float truncated = static_cast<float>(static_cast<int>(v));
     return truncated > v ? truncated - 1.0f : truncated;
 }
@@ -75,7 +75,7 @@ int cornerSegments(float radius, int requested)
         lastRadius = radius;
         lastSegments = fromError;
     }
-    if (requested > 0 && requested < fromError) return std::max(requested, 3);
+    if (requested > 0 && requested < fromError) return requested > 3 ? requested : 3;
     return fromError;
 }
 
@@ -379,7 +379,7 @@ void FontAtlas::setPixelScale(float scale)
     // every size is baked again at the new scale
     if (!impl_->alpha.empty())
     {
-        std::fill(impl_->alpha.begin(), impl_->alpha.end(), static_cast<unsigned char>(0));
+        memset(impl_->alpha.data(), 0, impl_->alpha.size());
         impl_->alpha[0] = 255; // (the white texel stays)
         impl_->rgbaFresh = false;
         impl_->penX = impl_->penY = 1;
@@ -443,7 +443,7 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
         if (impl_->penY + gh + 1 > impl_->height)
         {
             // Full: start the page again; every size bakes its glyphs anew.
-            std::fill(impl_->alpha.begin(), impl_->alpha.end(), static_cast<unsigned char>(0));
+            memset(impl_->alpha.data(), 0, impl_->alpha.size());
             impl_->alpha[0] = 255; // (the white texel stays)
             impl_->rgbaFresh = false;
             impl_->penX = impl_->penY = 1;
@@ -1217,7 +1217,7 @@ void DrawList::addRect(const Rect& rect, const Color& color)
     vp[1] = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, color };
     vp[2] = { q2.x, q2.y, whiteUV_.x, whiteUV_.y, color };
     vp[3] = { q3.x, q3.y, whiteUV_.x, whiteUV_.y, color };
-    note(4, std::min(rect.x, rect.x + rect.w), std::min(rect.y, rect.y + rect.h), std::max(rect.x, rect.x + rect.w), std::max(rect.y, rect.y + rect.h));
+    note(4, fminf(rect.x, rect.x + rect.w), fminf(rect.y, rect.y + rect.h), fmaxf(rect.x, rect.x + rect.w), fmaxf(rect.y, rect.y + rect.h));
 
     uint32_t* ix = appendIndices(6);
     ix[0] = v0;
@@ -1383,8 +1383,8 @@ bool DrawList::strokeRoundRectFast(float x0, float y0, float x1, float y1, float
 {
     if (!roundRectFits(antiAliasing_, x0, y0, x1, y1, radius, steps)) return false;
     const RoundMitre& m = roundMitre(steps);
-    thickness = std::max(1.0f, thickness);
-    const float core = std::max(1.0f, thickness - 1.0f);
+    thickness = fmaxf(1.0f, thickness);
+    const float core = fmaxf(1.0f, thickness - 1.0f);
     const float hw = core * 0.5f, ow = hw + 1.0f;
     const uint32_t n = static_cast<uint32_t>(4 * (steps + 1));
     const uint32_t idxCount = n * 18;
@@ -2168,8 +2168,8 @@ void DrawList::addLine(Vec2 a, Vec2 b, const Color& color, float thickness)
     {
         // a segment of two points (what pathStroke makes of it, without the tables of directions it works out for a polyline): the
         // normal at both ends is the one of the segment, a band of the core width and a fringe of one pixel on each side
-        thickness = std::max(1.0f, thickness);
-        const float hw = std::max(1.0f, thickness - 1.0f) * 0.5f, ow = hw + 1.0f;
+        thickness = fmaxf(1.0f, thickness);
+        const float hw = fmaxf(1.0f, thickness - 1.0f) * 0.5f, ow = hw + 1.0f;
         const float ux = -(dy / length), uy = dx / length;
         const uint32_t offset = static_cast<uint32_t>(indices_.size());
         const uint32_t base = static_cast<uint32_t>(vertices_.size());
@@ -2196,7 +2196,7 @@ void DrawList::addLine(Vec2 a, Vec2 b, const Color& color, float thickness)
             *ix++ = base + 4 + q + 1;
             *ix++ = base + q + 1;
         }
-        note(8, std::min(a.x, b.x) - ow, std::min(a.y, b.y) - ow, std::max(a.x, b.x) + ow, std::max(a.y, b.y) + ow);
+        note(8, fminf(a.x, b.x) - ow, fminf(a.y, b.y) - ow, fmaxf(a.x, b.x) + ow, fmaxf(a.y, b.y) + ow);
         addCmd(offset, 18, fontTexture_, true);
         return;
     }
@@ -2236,8 +2236,8 @@ inline bool rectHolds(const Rect& outer, const Rect& inner)
 
 inline Rect rectUnion(const Rect& a, const Rect& b)
 {
-    const float x0 = std::min(a.x, b.x), y0 = std::min(a.y, b.y);
-    const float x1 = std::max(a.x + a.w, b.x + b.w), y1 = std::max(a.y + a.h, b.y + b.h);
+    const float x0 = fminf(a.x, b.x), y0 = fminf(a.y, b.y);
+    const float x1 = fmaxf(a.x + a.w, b.x + b.w), y1 = fmaxf(a.y + a.h, b.y + b.h);
     return { x0, y0, x1 - x0, y1 - y0 };
 }
 
