@@ -1960,7 +1960,9 @@ void TreeGrid::paint(PaintContext& ctx)
 
                     if (hasIcon)
                     {
-                        ctx.drawIcon(node->iconId, textX, ry + 3, iconS);
+                        if (node->iconColor.a > 0) ctx.drawIcon(node->iconId, textX, ry + 3, iconS, node->iconColor);
+                        else
+                            ctx.drawIcon(node->iconId, textX, ry + 3, iconS);
                         textX += iconS + 2;
                     }
                     if (spills) ctx.popClip();
@@ -2161,9 +2163,10 @@ void TreeGrid::onMousePress(MouseEvent& e)
 
     if (node == lastClickNode_ && (now - lastClickTime_) < 400 && col >= 0)
     {
-        startEdit(node, col);
         lastClickTime_ = 0;
         lastClickNode_ = nullptr;
+        startEdit(node, col);
+        if (!editing_) nodeActivated.emit(node, col); // (last: a handler may take the grid out of the tree)
         return;
     }
     lastClickTime_ = now;
@@ -2417,6 +2420,12 @@ void TreeGrid::onKeyPress(KeyEvent& e)
         {
             e.consumed = true;
             startEdit(selectedNode_, 0);
+            if (!editing_)
+            {
+                Node* const activated = selectedNode_;
+                nodeActivated.emit(activated, 0);
+                if (WidgetApp::instance().hasGone(this, seen)) return; // (a handler took the grid out of the tree)
+            }
         }
         else if (e.key == ig::retained::Key::C && e.ctrl && selectedNode_)
         {

@@ -768,7 +768,10 @@ void Outliner::paint(PaintContext& ctx)
         // Icon (if any)
         if (fr.node->iconId() != IconId::None)
         {
-            ctx.drawIcon(fr.node->iconId(), tx - 16, ry + 3, 16);
+            const Color& tint = fr.node->iconColor();
+            if (tint.a > 0) ctx.drawIcon(fr.node->iconId(), tx - 16, ry + 3, 16, tint);
+            else
+                ctx.drawIcon(fr.node->iconId(), tx - 16, ry + 3, 16);
         }
 
         // Node text

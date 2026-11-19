@@ -271,6 +271,40 @@ TreeNode::~TreeNode()
     if (view_) view_->forgetNode(this);
 }
 
+// What a node shows changed (not its place in the tree): the view that shows it paints again.
+void TreeNode::setText(const String& text)
+{
+    if (text_ == text) return;
+    text_ = text;
+    if (view_) view_->markDirty();
+}
+
+void TreeNode::setDimmed(bool dim)
+{
+    if (dimmed_ == dim) return;
+    dimmed_ = dim;
+    if (view_) view_->markDirty();
+}
+
+void TreeNode::setIconColor(const Color& color)
+{
+    if (iconColor_.r == color.r && iconColor_.g == color.g && iconColor_.b == color.b && iconColor_.a == color.a) return;
+    iconColor_ = color;
+    if (view_) view_->markDirty();
+}
+
+void TreeNode::clearIconColor()
+{
+    setIconColor(Color(0, 0, 0, 0));
+}
+
+void TreeNode::setSecondaryText(const String& text)
+{
+    if (secondary_ == text) return;
+    secondary_ = text;
+    if (view_) view_->markDirty();
+}
+
 TreeNode* TreeNode::addChild(const String& text)
 {
     auto* n = new TreeNode(text);
@@ -611,6 +645,11 @@ void TreeView::paint(PaintContext& ctx)
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
+    // the texts of the rows in sight are measured once: a slot of the memos for each row of the window (and a few spare)
+    memos_.reserve(last - first + 4, 2);
+    const uint32_t fontId = ctx.fontStamp().id;
+    Rect barTrack, barThumb;
+    const bool hasBar = scrollbar(barTrack, barThumb);
 
     for (int i = first; i < last; ++i)
     {
@@ -647,17 +686,45 @@ void TreeView::paint(PaintContext& ctx)
         if (row.node->iconId() != IconId::None)
         {
             float isz = t.fontSize;
-            ctx.drawIcon(row.node->iconId(), indX, rowY + (rowHeight_ - isz) * 0.5f, isz);
+            const Color& tint = row.node->iconColor();
+            if (tint.a > 0) ctx.drawIcon(row.node->iconId(), indX, rowY + (rowHeight_ - isz) * 0.5f, isz, tint);
+            else
+                ctx.drawIcon(row.node->iconId(), indX, rowY + (rowHeight_ - isz) * 0.5f, isz);
             indX += isz + 3.f;
         }
 
+        // the room of the texts: from here to the toggles of the row, or to the edge (and the bar)
+        const int toggles = row.node->toggleCount();
+        float textRight = abs.x + abs.w - (hasBar ? barW_ + 4.f : 4.f);
+        if (toggles > 0) textRight = toggleEdge(abs) - toggleSlot() * toggles - 4.f;
+        float labelRight = textRight;
+
         Color labelColor = t.textColor;
         if (row.node->dimmed()) labelColor.a = uint8_t(labelColor.a * 0.5f);
-        ctx.font.SetColor(row.node == selected_ ? t.selectionText : labelColor);
         float ty = rowY + (rowHeight_ - t.fontSize) * 0.5f + asc;
-        ctx.font.Print(row.node->text().c_str(), indX, ty);
+        ElideMemo* memo = memos_.row(i);
 
-        const int toggles = row.node->toggleCount();
+        // the second text: dim, right-aligned, first in line for room (at most half of what is left of the row)
+        const String& second = row.node->secondaryText();
+        if (!second.empty() && textRight > indX)
+        {
+            const ElideMemo& shown = ctx.fitTextMemo(second, (textRight - indX) * 0.5f, memo[1]);
+            if (shown.shownWidth > 0.0f)
+            {
+                const float sx = textRight - shown.shownWidth;
+                Color sc = row.node == selected_ ? t.selectionText : t.textSecondary;
+                if (row.node == selected_) sc.a = 210;
+                ctx.font.SetColor(sc);
+                ctx.font.Print((shown.elided ? shown.shown : second).c_str(), sx, ty);
+                labelRight = sx - 6.f;
+            }
+        }
+
+        // the label: all of it when it fits, else cut with "..." (measured once, kept in the memo of the row)
+        ctx.font.SetColor(row.node == selected_ ? t.selectionText : labelColor);
+        if (labelRight > indX)
+            ctx.printElided({ indX, rowY, labelRight - indX, rowHeight_ }, row.node->text(), ty, asc, memo[0], fontId);
+
         if (toggles > 0)
         {
             const float slot = toggleSlot();

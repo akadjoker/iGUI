@@ -84,6 +84,32 @@ public:
     /// @brief Prefill the file name field (what Save proposes).
     void setFileName(const String& name);
 
+    /// @brief Save mode: a name typed with no extension gets one when it is accepted: setDefaultExtension's, or else the first of the
+    ///        filter's ("*.png;*.jpg" gives ".png"). On by default; a name that has an extension is left as it is. The overwrite
+    ///        question is asked about the name with the extension.
+    void setAppendExtension(bool on)
+    {
+        appendExtension_ = on;
+    }
+    bool appendExtension() const
+    {
+        return appendExtension_;
+    }
+    /// @brief The extension a Save appends to a name that has none (".png" or "png"); empty: the first of the filter's.
+    void setDefaultExtension(const String& ext);
+
+    /// @brief Opt in to remembering the folder: with an id the dialog starts in the folder that a dialog of the same id was last
+    ///        accepted in (when it still exists), and remembers the one it is accepted in (the file's folder, or the folder
+    ///        chosen in SelectFolder mode). The memory is the process's: lastFolder / setLastFolder let the application keep it in
+    ///        its own settings. An empty id turns it off.
+    void setRememberFolder(const String& id);
+    const String& rememberFolderId() const
+    {
+        return rememberId_;
+    }
+    static String lastFolder(const String& id);
+    static void setLastFolder(const String& id, const String& path);
+
     /// @brief Set extension filter (e.g. "*.cpp;*.hpp").
     void setFilter(const String& filter);
     /// @brief Get the extension filter.
@@ -151,6 +177,11 @@ private:
     String currentPath_;
     String selectedPath_;
     String overwritePath_; // Save mode: the existing file the user was asked about
+    bool appendExtension_ = true;
+    String defaultExt_;
+    String rememberId_;
+    void rememberFolder();
+    void forgetOverwriteQuestion();
     String filter_;
     bool showHidden_ = false;
     bool multiSelect_ = false;

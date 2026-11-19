@@ -154,6 +154,58 @@ void FileDialog::setFileName(const String& name)
     if (fileNameInput_) fileNameInput_->setText(name);
 }
 
+void FileDialog::setDefaultExtension(const String& ext)
+{
+    defaultExt_ = ext;
+    if (!defaultExt_.empty() && defaultExt_[0] != '.') defaultExt_ = String(".") + defaultExt_;
+}
+
+namespace
+{
+// The folders remembered by dialog id, for the life of the process.
+ct::HashMap<String, String>& folderMemory()
+{
+    static ct::HashMap<String, String> memory;
+    return memory;
+}
+} // namespace
+
+String FileDialog::lastFolder(const String& id)
+{
+    const String* found = id.empty() ? nullptr : folderMemory().find(id);
+    return found ? *found : String();
+}
+
+void FileDialog::setLastFolder(const String& id, const String& path)
+{
+    if (!id.empty()) folderMemory()[id] = path;
+}
+
+void FileDialog::setRememberFolder(const String& id)
+{
+    rememberId_ = id;
+    if (id.empty()) return;
+    const String last = lastFolder(id);
+    if (!last.empty() && FileSystem::isDir(last)) navigateTo(last);
+}
+
+void FileDialog::rememberFolder()
+{
+    if (rememberId_.empty()) return;
+    const String folder = mode_ == Mode::SelectFolder ? selectedPath_ : FileSystem::parentPath(selectedPath_);
+    if (!folder.empty()) setLastFolder(rememberId_, folder);
+}
+
+// The name changed after the dialog asked about replacing a file: the question is about the old name, not this one.
+void FileDialog::forgetOverwriteQuestion()
+{
+    if (overwritePath_.empty()) return;
+    overwritePath_.clear();
+    if (okButton_ && mode_ == Mode::Save) okButton_->setText("Save");
+    if (statusLabel_) statusLabel_->setText("");
+    markDirty();
+}
+
 void FileDialog::newFolderPrompt()
 {
     String parent = currentPath_;
@@ -472,6 +524,7 @@ void FileDialog::buildUI()
     fileNameInput_->setStretch(1);
     fileNameInput_->setPlaceholder("filename");
     fileNameInput_->submitted.connect([this](const String&) { onOk(); });
+    fileNameInput_->textChanged.connect([this](const String&) { forgetOverwriteQuestion(); });
 
     cancelButton_ = bottomBar_->createChild<Button>("Cancel");
     cancelButton_->setSize(70, 0);
@@ -1265,6 +1318,7 @@ void FileDialog::onOk()
     if (mode_ == Mode::SelectFolder)
     {
         selectedPath_ = currentPath_;
+        rememberFolder();
         accepted.emit(selectedPath_);
         WidgetApp::instance().removeFloat(this);
         return;
@@ -1287,6 +1341,15 @@ void FileDialog::onOk()
 
     selectedPath_ = FileSystem::isAbsolute(fname) ? FileSystem::normalizePath(fname)
                                                   : FileSystem::joinPath(currentPath_, fname);
+    if (mode_ == Mode::Save && appendExtension_ && !FileSystem::isDir(selectedPath_) && FileSystem::extension(selectedPath_).empty())
+    {
+        // a name with no extension gets the one the dialog was asked to save (or the first of the filter's)
+        String ext = defaultExt_;
+        for (size_t i = 0; ext.empty() && i < filterExts_.size(); ++i)
+            if (!filterExts_[i].empty() && filterExts_[i].find('*') == String::npos) ext = filterExts_[i];
+        if (!ext.empty() && ext[0] != '.') ext = String(".") + ext;
+        if (!ext.empty() && selectedPath_.back() != '.') selectedPath_ += ext;
+    }
     if (FileSystem::isDir(selectedPath_) && mode_ != Mode::Save)
     {
         navigateTo(selectedPath_);
@@ -1311,6 +1374,7 @@ void FileDialog::onOk()
         return;
     }
 
+    rememberFolder();
     accepted.emit(selectedPath_);
     WidgetApp::instance().removeFloat(this);
 }

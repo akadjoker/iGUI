@@ -1,4 +1,5 @@
 #pragma once
+#include "DataWidgets.hpp"
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
 #include "Widget.hpp"
@@ -44,6 +45,26 @@ public:
         bumpRevision();
     }
 
+    /// @brief Tint of the icon of the row (setIconId, setIcon): without one (alpha 0, the default) the icon follows the theme's iconColor,
+    ///        so a sprite icon recolours when the theme changes and an application need not bake one icon per colour. An explicit
+    ///        colour wins over the theme.
+    void setIconColor(const Color& color);
+    /// @brief Go back to following the theme's iconColor.
+    void clearIconColor();
+    /// @brief The tint set with setIconColor (alpha 0: none, the theme's).
+    const Color& iconColor() const
+    {
+        return iconColor_;
+    }
+
+    /// @brief A second text on the row, dim and right-aligned (a type, a count, a shortcut). It keeps its room first (at most
+    ///        half of what is left of the row); the label gives way with an ellipsis. Empty: none.
+    void setSecondaryText(const String& text);
+    const String& secondaryText() const
+    {
+        return secondary_;
+    }
+
     /// @brief Get the node's display text.
     const String& text() const
     {
@@ -51,15 +72,9 @@ public:
     }
 
     /// @brief Change the label of the node in place; the rows and the expansion stay as they are.
-    void setText(const String& text)
-    {
-        text_ = text;
-    }
+    void setText(const String& text);
     /// @brief Draw the label dimmed (a value that is a default, for example).
-    void setDimmed(bool dim)
-    {
-        dimmed_ = dim;
-    }
+    void setDimmed(bool dim);
     bool dimmed() const
     {
         return dimmed_;
@@ -139,6 +154,8 @@ private:
     friend class TreeView;
 
     String text_;
+    String secondary_;
+    Color iconColor_ = Color(0, 0, 0, 0); // alpha 0: the theme's iconColor
     ct::Vector<Toggle> toggles_;
     String iconStr_;
     IconId iconId_ = IconId::None;
@@ -347,6 +364,7 @@ private:
     DropSpot dropSpot_;
     int hoverRow_ = -1;
     float hoverX_ = 0.0f;
+    ElideMemos memos_; // the label (column 0) and the second text (column 1) of the rows in sight: measured once, kept while text, room and font hold
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

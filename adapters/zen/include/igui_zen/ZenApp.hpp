@@ -227,6 +227,7 @@ public:
 private:
     static void frameThunk(PlatformWindow *w, void *user);
     bool frameWindow(Window *w, bool driven); // false: nothing changed, the frame was not painted
+    void idleWait(int ms);                    // where pump() waits when no window painted (ZenApp.cpp: the one place to change)
     void renderGl(Window *w);
     void framePixels();
     void destroyWindow(Window *w);

@@ -339,6 +339,8 @@ public:
         bool expanded = true;
         bool readOnly = false;
         IconId iconId = IconId::None;
+        /// Tint of the icon: alpha 0 (the default) follows the theme's iconColor, so a sprite icon recolours with the theme; a colour wins.
+        Color iconColor = Color(0, 0, 0, 0);
 
         /// @brief Add a child node with cell data.
         Node* addChild(const ct::Vector<String>& cellData);
@@ -452,6 +454,11 @@ public:
     Signal<int> columnSorted;
     /// @brief Emitted when a tree cell is edited.
     Signal<Node*, int> cellEdited; // node, col
+    /// @brief Emitted on a double click or on Enter that does not start an edit: the grid, the column or the node is read-only
+    ///        (a file list, a tree of results), where an editable cell edits as before. The node says which row (its identity
+    ///        does not change when the rows are sorted or expanded); the column is the one clicked, 0 for Enter. The handler
+    ///        may take the grid out of the tree.
+    Signal<Node*, int> nodeActivated; // node, col
 
     Vec2f sizeHint() const override;
     void paint(PaintContext& ctx) override;

@@ -458,10 +458,9 @@ bool App::pump(bool skipBlocked)
         else if (idleWaitMs_ < sleepMs)
             sleepMs = idleWaitMs_;
     }
-    // Nothing was painted: the window is idle. Sleep in short steps (until the platform has a wait for events with a timeout, which
-    // wakes at once on an event: docs/ROUND9.md), so that a loop with nothing to do does not burn a core.
+    // Nothing was painted: the window is idle.
     if (!painted && sleepMs > 0 && windows_.size() > 0)
-        time_sleep(static_cast<uint32_t>(sleepMs));
+        idleWait(sleepMs);
     for (size_t i = windows_.size(); i-- > 1;)
     {
         Window *w = windows_[i];
@@ -551,6 +550,16 @@ void App::feedInput(PlatformWindow *pw)
                     e.data.key.down);
         }
     }
+}
+
+// The one place the loop waits when no window painted: up to `ms` milliseconds (the soonest a window said it needs a frame, 8 at most).
+// A short sleep today, so that a loop with nothing to do does not burn a core, at the price of up to 8 ms of latency for an event
+// and ~120 wake-ups a second (docs/ROUND9.md). When zen_plataform has its wait for events with a timeout (platform_wait_events(seconds),
+// which returns at once on an event, and platform_wake() for requestFrameFromAnyThread), this is the function to change: wait
+// ms / 1000.0 seconds (negative when nothing waits for time: no limit), and window_begin_frame of every window after it returns.
+void App::idleWait(int ms)
+{
+    time_sleep(static_cast<uint32_t>(ms));
 }
 
 bool App::frameWindow(Window *w, bool driven)

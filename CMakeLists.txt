@@ -498,6 +498,15 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_frames_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_frames COMMAND igui_retained_frames_tests)
         set_tests_properties(igui_retained_frames PROPERTIES TIMEOUT 300)
+        # Round 10, part 2 (docs/ROUND10.md): TreeView labels cut with an ellipsis, a second text and an icon tint on the rows, TreeGrid
+        # activation, FileDialog in Save mode (the question before replacing, the extension, the folder by id), list selection text.
+        add_executable(igui_retained_round10_tests tests/test_retained_round10.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_round10_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_round10_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_round10_tests PRIVATE igui_widgets)
+        target_link_options(igui_retained_round10_tests PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
+        add_test(NAME igui_retained_round10 COMMAND igui_retained_round10_tests)
+        set_tests_properties(igui_retained_round10 PROPERTIES TIMEOUT 300)
         # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks without a GL context: availability, the fallback of a
         # NativeView, the place in the draw order, nothing merged across one, the software rasteriser skipping it, idle.
         add_executable(igui_native_callback_tests tests/test_native_callback.cpp adapters/zen/SoftRaster.cpp)
@@ -745,6 +754,15 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         add_executable(igui_zen_screenshot_gl_tests tests/test_zen_screenshot_gl.cpp)
         target_link_libraries(igui_zen_screenshot_gl_tests PRIVATE igui_zen)
         igui_add_window_test(igui_zen_screenshot_gl igui_zen_screenshot_gl_tests)
+    endif()
+
+    # Round 10: the cost per frame of long lines (PaintContext::drawPolyline) and of the interactive chart in a real window, on OpenGL
+    # and on the software rasteriser (bench/retained/PlotBench.cpp). Run it on a private Xvfb: sh tools/xvfb-test.sh igui_plot_bench
+    if(IGUI_BUILD_RETAINED_BENCH)
+        add_executable(igui_plot_bench bench/retained/PlotBench.cpp)
+        target_compile_features(igui_plot_bench PRIVATE cxx_std_17)
+        target_link_libraries(igui_plot_bench PRIVATE igui_zen)
+        target_link_options(igui_plot_bench PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
     endif()
 
     if(IGUI_BUILD_TESTS)
