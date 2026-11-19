@@ -432,9 +432,13 @@ bool App::pump(bool skipBlocked)
         }
         if (skipBlocked && blockedByModal(w))
             continue;
+        if (probe_ && w == main_)
+            probe_(0, probeUser_);
         window_begin_frame(w->platform);
         frameWindow(w, false);
         window_swap(w->platform);
+        if (probe_ && w == main_)
+            probe_(3, probeUser_);
     }
     for (size_t i = windows_.size(); i-- > 1;)
     {
@@ -599,6 +603,8 @@ void App::frameWindow(Window *w, bool driven)
         atlas_.clearDynamicDirty();
     }
     rt::Render();
+    if (probe_ && w == main_)
+        probe_(1, probeUser_);
     if (!blocked)
         mouse_set_cursor(pw, cursorShape(io.wantedCursor));
 
@@ -606,6 +612,8 @@ void App::frameWindow(Window *w, bool driven)
         renderGl(w);
     else
         framePixels();
+    if (probe_ && w == main_)
+        probe_(2, probeUser_);
     (void)driven;
 }
 

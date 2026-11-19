@@ -147,6 +147,14 @@ public:
     {
         afterRenderCallback_ = std::move(callback);
     }
+    /// For a host that profiles the frame of the main window (bench/compare): fn(phase, user) is called with phase 0 before
+    /// the platform events are read, 1 when the widgets have painted and the draw data is built (Render() returned), 2 after
+    /// the rasteriser or the GL submit, 3 after the present. Unset: four tests of a null pointer per frame, nothing else.
+    void setFrameProbe(void (*fn)(int phase, void *user), void *user)
+    {
+        probe_ = fn;
+        probeUser_ = user;
+    }
     /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the
     /// after-render callback.
     bool readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height);
@@ -235,6 +243,8 @@ private:
     ct::Function<void(int, ig::retained::IO&)> inputHook_;
     ct::Function<void(const Event&)> eventHook_;
     int frameIndex_ = 0;
+    void (*probe_)(int, void *) = nullptr;
+    void *probeUser_ = nullptr;
 };
 
 } // namespace zen
