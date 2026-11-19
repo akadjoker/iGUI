@@ -475,6 +475,14 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_round8_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_round8 COMMAND igui_retained_round8_tests)
         set_tests_properties(igui_retained_round8 PROPERTIES TIMEOUT 900)
+        # Round 9 (docs/ROUND9.md): the theme switched at run time on a window with most of the widget types: the dark preset draws
+        # as before, no dark fill under the light presets, themeChanged once per change, legible text in every preset.
+        add_executable(igui_retained_round9_tests tests/test_retained_round9.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_round9_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_round9_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_round9_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_round9 COMMAND igui_retained_round9_tests)
+        set_tests_properties(igui_retained_round9 PROPERTIES TIMEOUT 300)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)

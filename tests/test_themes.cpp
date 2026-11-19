@@ -91,6 +91,32 @@ void testPreset(const char* name, const Theme& t)
     readable(name, "disabled tool bar icon / panel", t.toolbarIconDisabled, t.panelColor, 1.4f);
     check(contrast(t.toolbarIconDisabled, t.panelColor) < contrast(t.toolbarIcon, t.panelColor), "a disabled tool bar icon is dimmer than an enabled one");
 
+    // The text of a selected row, over the selection as it is painted: the selection colour (translucent) over the panel (a tree, a
+    // list) and over the input background (a grid, a property grid).
+    {
+        const auto over = [](const Color& top, const Color& under)
+        {
+            const float a = top.a / 255.0f;
+            return Color(static_cast<unsigned char>(top.r * a + under.r * (1 - a) + 0.5f), static_cast<unsigned char>(top.g * a + under.g * (1 - a) + 0.5f),
+                    static_cast<unsigned char>(top.b * a + under.b * (1 - a) + 0.5f), 255);
+        };
+        readable(name, "selected text / selection over a panel", t.selectionText, over(t.selectionColor, t.panelColor), 4.5f);
+        readable(name, "selected text / selection over an input", t.selectionText, over(t.selectionColor, t.inputBg), 4.5f);
+        readable(name, "text typed in an input / input", t.inputText, t.inputBg, 4.5f);
+    }
+    // Panels painted by widgets of their own (colours in groups: see Theme.hpp).
+    readable(name, "dock: tab name / tab", t.dock.tabText, t.dock.tabBg, 4.5f);
+    readable(name, "dock: current tab name / tab", t.dock.tabTextActive, t.dock.tabActiveBg, 4.5f);
+    readable(name, "console: text / log", t.console.text, t.console.bg, 4.5f);
+    readable(name, "console: trace / log", t.console.trace, t.console.bg, 4.5f);
+    readable(name, "console: warning / log", t.console.warn, t.console.bg, 4.5f);
+    readable(name, "console: error / log", t.console.error, t.console.bg, 4.5f);
+    readable(name, "console: input text / input row", t.console.text, t.console.inputBg, 4.5f);
+    readable(name, "console: prompt / input row", t.console.prompt, t.console.inputBg, 4.5f);
+    readable(name, "tab layout: inactive tab name / tab", t.layout.tabTextInactive.a > 0 ? t.layout.tabTextInactive : t.textDisabled, t.layout.tabBg, 1.5f);
+    readable(name, "property grid: string value / input", t.prop.stringValue, t.inputBg, 4.5f);
+    readable(name, "property grid: combo value / input", t.prop.comboValue, t.inputBg, 4.5f);
+
     // Marks and fills against what they sit in.
     readable(name, "check mark / input", t.checkMark, t.inputBg, 2.0f);
     readable(name, "progress fill / track", t.progressFill, t.progressTrack.a > 0 ? t.progressTrack : t.sliderTrack, 1.3f);
