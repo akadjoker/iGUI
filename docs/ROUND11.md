@@ -199,3 +199,55 @@ pretendido. Shift+Insert, Ctrl+Insert e Shift+Delete ja chegam como `Key::Insert
 - **Os campos de cor, data e hora** nao foram tocados (nao leem numeros com `to_int`/`strtod`).
 - **PRIMARY**: so ligado; nao ha teste do adaptador com `clipboard_has_primary_support()` (a zen_plataform testa o seu lado).
 - **Um aquecimento do banco para a abertura do metodo de entrada** (ver 5).
+
+## 7. A regressao do web: todos os widgets a vermelho (WebGL 2)
+
+**O defeito** (publicado desde a ronda 9, commit `48c3ced`): num navegador com WebGL 2 todos os widgets saiam a vermelho (so o canal vermelho sobrevivia) e a consola dizia `WebGL: INVALID_ENUM: texParameter: invalid parameter name`.
+**Causa**: a ronda 9 passou as paginas brancas do atlas a um byte por pixel (`GL_R8`) e lia-as com `GL_TEXTURE_SWIZZLE_R/G/B/A` (`swizzleAlphaOnly`, em `uploadRgba`, `createTextureA8` e no caminho de `updateTexture` que volta a RGBA);
+o WebGL 2 nao tem swizzle de texturas (o GLES 3.0 nativo tem; o WebGL 2 nao o expoe). Cada pagina lia-se entao como `(r, 0, 0, 1)`, e como **as formas cheias usam o texel branco da mesma pagina**, a janela inteira ficava vermelha.
+
+**A correccao** (`adapters/zen/GlRaster.cpp`): nenhum swizzle em nenhuma plataforma. O fragment shader tem `uniform int uAlphaOnly` e, quando e 1, le a textura como `vec4(1, 1, 1, texel.r)`; o renderizador poe-no por comando a partir
+de `Size::alphaOnly` da textura (com uma memoria da ultima textura, e so escreve o uniform quando muda; depois de um callback nativo volta a escrever). As paginas de um byte e as RGBA nunca se fundem num comando (a fusao e por
+textura). O caminho de desktop usa o mesmo uniform (uma so via, testada em llvmpipe: `igui_zen_screenshot_gl`, `_native_callback_gl`, `_plot_gl` passam); o custo por fragmento e um salto por um uniform.
+
+**O que se verificou contra o WebGL 2 / GLES 3.0** (rondas 9 a 11, `GlRaster.cpp` inteiro; o `glGetError` da frame inteira dá 0 no navegador, nas duas presets):
+
+| chamada ou constante | no WebGL 2 |
+|---|---|
+| `glTexParameteri(GL_TEXTURE_SWIZZLE_*)` | **nao existe** (a causa): removido |
+| `GL_R8` + `GL_RED` + `GL_UNSIGNED_BYTE`, `glTexImage2D` / `glTexSubImage2D`, `GL_UNPACK_ALIGNMENT`; `GL_RGBA8` | valido (R8 filtravel) |
+| `glBufferData` (`GL_STATIC_DRAW`, `GL_STREAM_DRAW`), VAO por malha (`glGenVertexArrays`), `glDrawElements` com `GL_UNSIGNED_INT` | valido (a `Mesh` do grafico e o `NativeView`) |
+| `glDrawElementsBaseVertex`, `glMapBuffer`, `glGetTexImage`, `GL_BGRA`, `GL_UNSIGNED_INT_8_8_8_8_REV`, `glPolygonMode` | **nao se usam**, salvo o `readPixels` com BGRA, que ja esta atras de `#ifdef __EMSCRIPTEN__` (nao se corre no navegador) |
+| `glBlendFuncSeparate`, `glBlendEquation`, `glColorMask`, `GL_SCISSOR_TEST`, `GL_DEPTH_TEST`, `GL_CULL_FACE`, `GL_STENCIL_TEST`, `GL_POLYGON_OFFSET_FILL`, `GL_SAMPLE_ALPHA_TO_COVERAGE` (o estado do callback nativo) | validos |
+| `glRenderbufferStorage(Multisample)`, `glBlitFramebuffer`, `glCheckFramebufferStatus` (o alvo fora do ecra) | validos (nao usados pela pagina de prova, `msaa = 0`) |
+| `glGetIntegerv(GL_MAJOR_VERSION / GL_MINOR_VERSION / GL_MAX_SAMPLES)` | validos (a Emscripten responde os dois primeiros) |
+| shaders: `#version 300 es`, `precision mediump float`, `highp` nos varyings e uniforms, ciclo de limite constante com `break`, `uniform highp vec4 [4]`, `uniform int` | validos (compilam no navegador) |
+
+**O estagio `web` de `tools/check.sh`** (para isto nao poder voltar a publicar-se): `examples/web_probe/main.cpp` (o adaptador em WebGL 2 com tres paineis de uma cor propria, um por canal, o painel do tema, uma etiqueta, um botao, um grafico: a `Mesh`) e
+`tests/web/run_web_gl.js` (Node + Chrome sem cabeca, por DevTools, WebGL em SwiftShader, como o `run_clip_web.js` da zen_plataform): **(a)** a consola nao tem nenhum erro de WebGL nem excepcao, `glGetError` da 0 depois da frame, o programa
+desenhou com OpenGL e nao com o rasterizador por software; **(b)** a imagem nao e de um canal so: os centros dos tres paineis e do painel do tema (lidos do framebuffer pela propria pagina, `glReadPixels`) tem as cores esperadas a 10 de tolerancia
+nas presets escura e clara, os tres paineis variam em todos os canais, a etiqueta tem texto (>= 20 pixeis de tinta) e o grafico desenha-se. Sem `emcc` (no PATH, ou em `IGUI_EMSDK_DIR`, `$EMSDK`, `$HOME/emsdk`, `/media/projectos/projects/emsdk`),
+sem Chrome ou sem Node, o estagio sai com uma linha `SKIP` e a razao. **Vermelho em `origin/main`** (o `GlRaster.cpp` de antes, o estagio sozinho: `tools/check.sh --skip nostd --skip release --skip asan --skip hash`):
+
+```
+FAIL web: FAIL: 7 checks held, 13 did not
+  FAIL  "orange" is 215,100,30 within 10   got 215,0,0,255
+  FAIL  "green" is 40,170,90 within 10   got 40,0,0,255
+  FAIL  "blue" is 50,90,225 within 10   got 50,0,0,255
+  FAIL  "theme panel" is 45,45,48 within 10   got 45,0,0,255
+  FAIL  the picture is not single-channel (each channel varies across the three panels)   [175,0,0]
+  FAIL  the label draws text (0 of 14400 pixels are ink)
+  FAIL  the console has no WebGL error   ["log.warning: WebGL: INVALID_ENUM: texParameter: invalid parameter name ..."]
+```
+
+**Verde com a correccao**: `PASS web: PASS: 22 checks held, 0 did not` (2 presets, 11 verificacoes cada).
+
+## 8. Duas coisas pequenas, da mesma equipa
+
+- **Os toggles de um `TreeNode`** (`addToggle(iconeLigado, iconeDesligado, ligado, dica, dica)`) nao tinham cor: eram sempre `Theme::iconColor`. Agora `Toggle::color` (alfa 0: o `iconColor` do tema, **segue uma mudanca de tema** como o icone de uma
+  linha sem `setIconColor`), `addToggle(..., const Color& cor = {})`, `setToggleColor(i, cor)`, `clearToggleColor(i)`, `toggleColor(i)`; desligado sem icone proprio desenha-se esmaecido (alfa 80) na mesma cor. Teste (`igui_retained_round11`,
+  vertices de cada cor no sitio dos toggles): por omissao o `iconColor` do tema, depois de mudar de preset a do novo, `setToggleColor` a sua, desligado continua, `clearToggleColor` volta ao tema, `addToggle` com cor.
+- **`TextEdit::scrollToLine` e o `CodeEditor` com dobras**: `scrollToLine(n)` fazia `scrollY = n * alturaDaLinha` e limitava com o numero de LINHAS: com blocos dobrados por cima (as linhas escondidas nao tem fila) a vista ia para alem da
+  ultima fila e o editor ficava em branco. Agora `scrollToLine(n)` vai para a **fila** onde a linha esta (`logicalToVisualRow`) e limita pelo numero de filas (`totalVisualRows`), e ha `scrollToRow(fila)` (o que
+  `firstVisibleLine()` conta); o `CodeEditor` (ir para a linha, revelar) usa `scrollToRow`. Teste: 100 funcoes todas dobradas (101 filas): `scrollToLine(120)` ficava na fila 120 de 101 (em branco) e fica na 30; `scrollToLine(0)`, uma linha
+  depois do fim (a ultima pagina), e com uma dobra aberta. **Vermelho antes** (a funcao antiga): `first row is 120, want 30, 101 rows in all`.
