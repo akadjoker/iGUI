@@ -707,7 +707,7 @@ int listKeyTarget(int key, int current, int count, int page)
 
 void PaintContext::drawIcon(IconId id, float x, float y, float size)
 {
-    drawIcon(id, x, y, size, Color(255, 255, 255, 255));
+    drawIcon(id, x, y, size, Theme::instance().iconColor); // white in the dark presets, which is what the icon sheet is made of
 }
 
 void PaintContext::drawIcon(IconId id, float x, float y, float size, const Color& tint)

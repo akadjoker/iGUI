@@ -239,22 +239,24 @@ void ConsoleWidget::updateCount(LogLevel l, int delta)
 
 Color ConsoleWidget::levelColor(LogLevel l) const
 {
+    const ConsoleColors& c = colors();
     switch (l)
     {
         case LogLevel::Trace:
-            return { 140, 140, 150, 255 };
+            return c.trace;
         case LogLevel::Info:
-            return { 200, 210, 220, 255 };
+            return c.text;
         case LogLevel::Warn:
-            return { 240, 200, 80, 255 };
+            return c.warn;
         case LogLevel::Error:
-            return { 240, 80, 80, 255 };
+            return c.error;
     }
-    return { 200, 200, 200, 255 };
+    return c.text;
 }
 
 Color ConsoleWidget::levelBgColor(LogLevel l) const
 {
+    const ConsoleColors& c = colors();
     switch (l)
     {
         case LogLevel::Trace:
@@ -262,9 +264,9 @@ Color ConsoleWidget::levelBgColor(LogLevel l) const
         case LogLevel::Info:
             return { 0, 0, 0, 0 };
         case LogLevel::Warn:
-            return { 60, 50, 20, 40 };
+            return c.warnBg;
         case LogLevel::Error:
-            return { 80, 25, 25, 50 };
+            return c.errorBg;
     }
     return { 0, 0, 0, 0 };
 }
@@ -306,7 +308,7 @@ void ConsoleWidget::paint(PaintContext& ctx)
     ctx.pushClip(r);
 
     // Background
-    ctx.fill.SetColor(bgColor_);
+    ctx.fill.SetColor(bgColor_.a > 0 ? bgColor_ : colors().bg);
     ctx.fillRect(r.x, r.y, r.w, r.h);
 
     // Sub-areas
@@ -332,12 +334,13 @@ constexpr float kClearWidth = 24.f;
 
 void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
 {
+    const ConsoleColors& cc = colors();
     // Toolbar bg
-    ctx.fill.SetColor(30, 32, 38, 255);
+    ctx.fill.SetColor(cc.toolbarBg);
     ctx.fillRect(area.x, area.y, area.w, area.h);
 
     // Separator line
-    ctx.line.SetColor(50, 52, 60, 255);
+    ctx.line.SetColor(cc.line);
     ctx.drawLine(area.x, area.bottom(), area.right(), area.bottom());
 
     float asc = setupFont(ctx, { 180, 180, 190, 255 }, 12.f);
@@ -353,10 +356,10 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         int count;
     };
     FilterBtn btns[] = {
-        { "T", &showTrace_, { 140, 140, 150, 255 }, countTrace_ },
-        { "I", &showInfo_, { 120, 180, 255, 255 }, countInfo_ },
-        { "W", &showWarn_, { 240, 200, 80, 255 }, countWarn_ },
-        { "E", &showError_, { 240, 80, 80, 255 }, countError_ },
+        { "T", &showTrace_, cc.trace, countTrace_ },
+        { "I", &showInfo_, cc.infoTag, countInfo_ },
+        { "W", &showWarn_, cc.warn, countWarn_ },
+        { "E", &showError_, cc.error, countError_ },
     };
 
     for (auto& b: btns)
@@ -372,14 +375,14 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         }
         else
         {
-            ctx.fill.SetColor(40, 42, 48, 255);
+            ctx.fill.SetColor(cc.buttonOff);
         }
         ctx.fillRoundedRect(px, by, bw, bh, 3.f);
 
         // Label + count
         char buf[32];
         snprintf(buf, sizeof(buf), "%s%d", b.label, b.count);
-        Color tc = *b.active ? b.onColor : Color(80, 80, 90, 255);
+        Color tc = *b.active ? b.onColor : cc.buttonOffText;
         setupFont(ctx, tc, 11.f);
         float tw = ctx.font.GetTextWidth(buf);
         ctx.font.Print(buf, px + (bw - tw) * 0.5f,
@@ -392,11 +395,10 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
     {
         float bw = kClearWidth, bh = 18.f;
         float by = area.y + (area.h - bh) * 0.5f;
-        ctx.fill.SetColor(50, 52, 60, 255);
+        ctx.fill.SetColor(cc.clearBg);
         ctx.fillRoundedRect(px, by, bw, bh, 3.f);
         const float isz = 14.f;
-        ctx.drawIcon(IconId::Trash, px + (bw - isz) * 0.5f, by + (bh - isz) * 0.5f, isz,
-                Color(170, 170, 180, 255));
+        ctx.drawIcon(IconId::Trash, px + (bw - isz) * 0.5f, by + (bh - isz) * 0.5f, isz, cc.clearIcon);
         px += bw + 8.f;
     }
 
@@ -408,16 +410,16 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
         {
             float bh = 18.f;
             float by = area.y + (area.h - bh) * 0.5f;
-            ctx.fill.SetColor(20, 22, 26, 255);
+            ctx.fill.SetColor(cc.searchBg);
             ctx.fillRoundedRect(px, by, sw, bh, 3.f);
-            ctx.line.SetColor(70, 120, 200, 255);
+            ctx.line.SetColor(cc.searchBorder);
             ctx.lineRoundedRect(px, by, sw, bh, 3.f);
 
-            setupFont(ctx, { 200, 210, 220, 255 }, 12.f);
+            setupFont(ctx, cc.text, 12.f);
             String disp = searchBuf_;
             if (disp.empty())
             {
-                setupFont(ctx, { 80, 80, 90, 255 }, 12.f);
+                setupFont(ctx, cc.searchHint, 12.f);
                 disp = "Search...";
             }
             ctx.pushClip({ px + 4.f, by, sw - 8.f, bh });
@@ -433,6 +435,7 @@ void ConsoleWidget::paintToolbar(PaintContext& ctx, const Rect& area)
 void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
 {
     ctx.pushClip(area);
+    const ConsoleColors& cc = colors();
 
     const ct::Deque<size_t>& visible = visibleLines();
     const int visCount = static_cast<int>(visible.size());
@@ -475,7 +478,7 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         // Selection highlight
         if (visIdx == selectedLine_)
         {
-            ctx.fill.SetColor(50, 70, 120, 80);
+            ctx.fill.SetColor(cc.selection);
             ctx.fillRect(area.x, lineY, area.w, kLineH);
         }
 
@@ -487,7 +490,7 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         {
             char ts[16];
             snprintf(ts, sizeof(ts), "%.2f", e.timestamp);
-            setupFont(ctx, { 90, 90, 100, 255 }, 11.f);
+            setupFont(ctx, cc.timestamp, 11.f);
             ctx.font.Print(ts, px, textY + ctx.font.GetAscender());
             px += 50.f;
         }
@@ -508,11 +511,11 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
             snprintf(badge, sizeof(badge), "x%d", e.count);
             float msgW = ctx.font.GetTextWidth(e.message.c_str());
             float bx = px + msgW + 8.f;
-            setupFont(ctx, { 100, 140, 200, 255 }, 10.f);
+            setupFont(ctx, cc.badgeText, 10.f);
             float bw = ctx.font.GetTextWidth(badge) + 8.f;
             float bh = 14.f;
             float by = lineY + (kLineH - bh) * 0.5f;
-            ctx.fill.SetColor(40, 60, 100, 120);
+            ctx.fill.SetColor(cc.badgeBg);
             ctx.fillRoundedRect(bx, by, bw, bh, 3.f);
             ctx.font.Print(badge, bx + 4.f, by + (bh - 10.f) * 0.5f + ctx.font.GetAscender());
         }
@@ -539,12 +542,11 @@ void ConsoleWidget::paintScrollbar(PaintContext& ctx, const Rect& logArea, float
     float t = (maxScroll > 0) ? scrollY_ / maxScroll : 0.f;
     float thumbY = logArea.y + t * (logArea.h - thumbH);
 
-    // Track
-    ctx.fill.SetColor(25, 27, 32, 200);
+    // Track and thumb: the colours of every other scroll bar
+    ctx.fill.SetColor(ScrollBar::trackColor());
     ctx.fillRect(sbX, logArea.y, sbW, logArea.h);
 
-    // Thumb
-    ctx.fill.SetColor(70, 75, 85, 180);
+    ctx.fill.SetColor(ScrollBar::thumbColor());
     ctx.fillRoundedRect(sbX + 1.f, thumbY, sbW - 2.f, thumbH, 3.f);
 }
 
@@ -552,23 +554,24 @@ void ConsoleWidget::paintScrollbar(PaintContext& ctx, const Rect& logArea, float
 
 void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
 {
+    const ConsoleColors& cc = colors();
     // Background
-    ctx.fill.SetColor(26, 28, 34, 255);
+    ctx.fill.SetColor(cc.inputBg);
     ctx.fillRect(area.x, area.y, area.w, area.h);
 
     // Top separator
-    ctx.line.SetColor(50, 52, 60, 255);
+    ctx.line.SetColor(cc.line);
     ctx.drawLine(area.x, area.y, area.right(), area.y);
 
     // Prompt
     float px = area.x + 6.f;
     float textY = area.y + (area.h - 13.f) * 0.5f;
-    setupFont(ctx, { 100, 160, 240, 255 }, 13.f);
+    setupFont(ctx, cc.prompt, 13.f);
     ctx.font.Print(">", px, textY + ctx.font.GetAscender());
     px += 14.f;
 
     // Input text
-    setupFont(ctx, { 200, 210, 220, 255 }, 13.f);
+    setupFont(ctx, cc.text, 13.f);
     float asc = ctx.font.GetAscender();
     ctx.pushClip({ px, area.y, area.w - 20.f, area.h });
     ctx.font.Print(inputBuf_.c_str(), px, textY + asc);
@@ -582,7 +585,7 @@ void ConsoleWidget::paintInput(PaintContext& ctx, const Rect& area)
             String sub = inputBuf_.substr(0, cursorPos_);
             cw = ctx.font.GetTextWidth(sub.c_str());
         }
-        ctx.fill.SetColor(180, 200, 240, 200);
+        ctx.fill.SetColor(cc.caret);
         ctx.fillRect(px + cw, area.y + 4.f, 1.5f, area.h - 8.f);
     }
     ctx.popClip();

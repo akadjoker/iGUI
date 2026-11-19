@@ -164,7 +164,7 @@ public:
                 ctx.fillRect(abs.x + 1, ry, abs.w - 2, rowH);
             }
 
-            ctx.font.SetColor(isHov ? Color(255, 255, 255, 255) : t.textColor);
+            ctx.font.SetColor(isHov ? t.selectionText : t.textColor);
             ctx.font.Print(items_[i].c_str(), abs.x + 6,
                     ry + (rowH - t.fontSize) * 0.5f + ctx.font.GetAscender());
         }
@@ -653,7 +653,7 @@ void TreeView::paint(PaintContext& ctx)
 
         Color labelColor = t.textColor;
         if (row.node->dimmed()) labelColor.a = uint8_t(labelColor.a * 0.5f);
-        ctx.font.SetColor(row.node == selected_ ? Color(255, 255, 255, 255) : labelColor);
+        ctx.font.SetColor(row.node == selected_ ? t.selectionText : labelColor);
         float ty = rowY + (rowHeight_ - t.fontSize) * 0.5f + asc;
         ctx.font.Print(row.node->text().c_str(), indX, ty);
 
@@ -679,7 +679,7 @@ void TreeView::paint(PaintContext& ctx)
                 const bool dim = off && toggle.iconOff == IconId::None;
                 ctx.drawIcon(icon, left + slot * k + (slot - isz) * 0.5f,
                         rowY + (rowHeight_ - isz) * 0.5f, isz,
-                        dim ? Color(255, 255, 255, 80) : Color(255, 255, 255, 255));
+                        dim ? Color(t.iconColor.r, t.iconColor.g, t.iconColor.b, 80) : t.iconColor);
             }
         }
     }
@@ -713,10 +713,9 @@ void TreeView::paint(PaintContext& ctx)
     Rect track, thumb;
     if (scrollbar(track, thumb))
     {
-        ctx.fill.SetColor(25, 27, 32, 200);
+        ctx.fill.SetColor(ScrollBar::trackColor());
         ctx.fillRect(track.x, track.y, track.w, track.h);
-        ctx.fill.SetColor(draggingBar_ ? 100 : 70, draggingBar_ ? 106 : 75, draggingBar_ ? 118 : 85,
-                200);
+        ctx.fill.SetColor(ScrollBar::thumbColor(draggingBar_));
         ctx.fillRoundedRect(thumb.x, thumb.y, thumb.w, thumb.h, 3.f);
     }
 
@@ -1776,7 +1775,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
     }
 
     // Label
-    ctx.font.SetColor(idx == selectedRow_ ? Color(255, 255, 255, 255) : t.textColor);
+    ctx.font.SetColor(idx == selectedRow_ ? t.selectionText : t.textColor);
     ctx.printElided({ abs.x + 8.f, y, labelW - 8.f - kTextPad, rowHeight_ }, row.name, textY, asc, memo[kName], fontId);
 
     // Column separator
@@ -1799,7 +1798,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         ctx.fillRect(valTextX, y + 1, valW, rowHeight_ - 2);
         ctx.line.SetColor(t.focusColor.r, t.focusColor.g, t.focusColor.b, t.focusColor.a);
         ctx.lineRect(valTextX, y + 1, valW, rowHeight_ - 2);
-        ctx.font.SetColor(Color(255, 255, 255, 255));
+        ctx.font.SetColor(t.inputText);
         // the text is cut at the box and moved to the left as far as the cursor needs to stay in it
         paintEditText(ctx, editBuf_, editCursor_, editScroll_, valTextX, valW, y, rowHeight_, textY, asc);
         return;
@@ -1816,7 +1815,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
         ctx.fillRect(sx, sy, sw * ratio, sh);
         ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
         ctx.lineRect(sx, sy, sw, sh);
-        ctx.font.SetColor(Color(230, 230, 230, 255));
+        ctx.font.SetColor(t.prop.sliderText);
         ctx.printElided({ sx + 3, sy, sw - 6, sh }, label, sy + (sh - t.fontSize) * 0.5f + asc, asc, labelMemo, fontId);
     };
 
@@ -1829,7 +1828,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.fillRect(valTextX, y + 2, valW, rowHeight_ - 4);
             ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
             ctx.lineRect(valTextX, y + 2, valW, rowHeight_ - 4);
-            ctx.font.SetColor(Color(200, 220, 255, 255));
+            ctx.font.SetColor(t.prop.stringValue);
             ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, d.value, textY, asc, memo[kValue], fontId);
             break;
         }
@@ -1862,7 +1861,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.lineRect(valTextX, sy2, sw2, sh2);
             char buf[20];
             snprintf(buf, 20, "#%02X%02X%02X", d.value.r, d.value.g, d.value.b);
-            ctx.font.SetColor(Color(180, 180, 180, 255));
+            ctx.font.SetColor(t.prop.colorHex);
             const float hexX = valTextX + sw2 + 4.f;
             ctx.printElided({ hexX, y, valTextX + valW - hexX, rowHeight_ }, String(buf), textY, asc, memo[kValue], fontId);
             break;
@@ -1876,7 +1875,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.lineRect(valTextX, y + 2, valW, rowHeight_ - 4);
             const String& txt =
                     (d.index >= 0 && d.index < (int) d.options.size()) ? d.options[d.index] : "";
-            ctx.font.SetColor(Color(180, 220, 180, 255));
+            ctx.font.SetColor(t.prop.comboValue);
             float ax = valueX + valueW - 14.f, ay = y + rowHeight_ * 0.5f;
             // the text ends before the arrow
             ctx.printElided({ valTextX + 3, y, ax - 4.f - (valTextX + 3), rowHeight_ }, txt, textY, asc, memo[kValue], fontId);
@@ -1953,7 +1952,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.lineRect(valTextX, barY2, valW, barH2);
             char buf[48];
             snprintf(buf, 48, "%.1f - %.1f", d.lo, d.hi);
-            ctx.font.SetColor(Color(230, 230, 230, 255));
+            ctx.font.SetColor(t.prop.sliderText);
             ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, String(buf), textY, asc, memo[kValue], fontId);
             break;
         }
@@ -1978,11 +1977,11 @@ void PropertyGrid::paintDescPanel(PaintContext& ctx, const Rect& abs)
     float asc = ctx.font.GetAscender();
     const uint32_t fontId = ctx.fontStamp().id;
     const float descW = abs.w - 6.f - kTextPad;
-    ctx.font.SetColor(Color(220, 220, 225, 255));
+    ctx.font.SetColor(t.prop.descName);
     ctx.printElided({ abs.x + 6, descY + 4, descW, t.fontSize }, row.name, descY + 4 + asc, asc, descNameMemo_, fontId);
     if (!row.description.empty())
     {
-        ctx.font.SetColor(Color(150, 150, 155, 255));
+        ctx.font.SetColor(t.textSecondary);
         ctx.printElided({ abs.x + 6, descY + 4 + t.fontSize + 2, descW, t.fontSize }, row.description,
                 descY + 4 + t.fontSize + 2 + asc, asc, descTextMemo_, fontId);
     }

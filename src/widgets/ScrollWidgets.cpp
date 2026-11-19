@@ -16,6 +16,25 @@ float ScrollBar::thickness()
     return Math::sane(Theme::instance().scrollbarWidth, kBarThickness, 4.0f, 100.0f);
 }
 
+Color ScrollBar::trackColor()
+{
+    const Color& p = Theme::instance().panelColor;
+    return Color(p.r, p.g, p.b, 80);
+}
+
+Color ScrollBar::thumbColor(bool active)
+{
+    Color tc = Theme::instance().scrollbarThumb;
+    if (active)
+    {
+        int alpha = (int) tc.a + 80;
+        if (alpha > 255) alpha = 255;
+        tc = tc.Shifted(40);
+        tc.a = static_cast<u8>(alpha);
+    }
+    return tc;
+}
+
 ScrollBar::ScrollBar(ScrollBarOrientation orientation)
         : orientation_(orientation)
 {
@@ -65,22 +84,14 @@ void ScrollBar::paint(PaintContext& ctx)
 
     Rect abs = absoluteRect();
     Rect thumb = thumbRect();
-    const auto& t = Theme::instance();
 
     // Track (very subtle)
-    ctx.fill.SetColor(t.panelColor.r, t.panelColor.g, t.panelColor.b, 80);
+    const Color track = trackColor();
+    ctx.fill.SetColor(track.r, track.g, track.b, track.a);
     ctx.fill.RoundedRectangle(abs.x, abs.y, abs.w, abs.h, 4.0f, 4, true);
 
     // Thumb
-    bool hovered = isHovered();
-    Color tc = t.scrollbarThumb;
-    if (hovered || dragging_)
-    {
-        const int alpha = std::min(255, (int) tc.a + 80);
-        tc = tc.Shifted(40);
-        tc.a = static_cast<u8>(alpha);
-    }
-
+    const Color tc = thumbColor(isHovered() || dragging_);
     ctx.fill.SetColor(tc.r, tc.g, tc.b, tc.a);
     ctx.fill.RoundedRectangle(thumb.x, thumb.y, thumb.w, thumb.h, 4.0f, 4, true);
 }

@@ -538,9 +538,9 @@ void ToolBar::paint(PaintContext& ctx)
 
                 if (it.iconIndex >= 0 && gridTex_)
                 {
-                    if (coloredIcons_) drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz, iconTint);
-                    else
-                        drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz);
+                    // sprite-sheet icons are tinted too (the sheet is white): with the theme's icon colour, or
+                    // faint or full when the sheet has colours of its own (coloredIcons_)
+                    drawGridIcon(ctx, it.iconIndex, ix, iy, iconSz, iconTint);
                 }
                 else if (it.iconId != IconId::None)
                 {

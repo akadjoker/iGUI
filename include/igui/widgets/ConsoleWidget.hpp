@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Signal.hpp"
+#include "Theme.hpp"
 #include "Widget.hpp"
 #include <ct/deque.hpp>
 
@@ -119,10 +120,29 @@ public:
     /// @brief Messages of @p level still in the log, repeats included.
     int messageCount(LogLevel level) const;
 
-    /// @brief Set the console background color.
+    /// @brief Set the console background color (alpha 0: follow the theme again).
     void setBgColor(const Color& c)
     {
         bgColor_ = c;
+    }
+
+    /// @brief Give this console colours of its own for the toolbar, the log, the level colours and the input row, in
+    ///        place of the theme's (Theme::console). A theme change then leaves them alone: WidgetApp::themeChanged
+    ///        is the place to set them again.
+    void setColors(const ConsoleColors& c)
+    {
+        colors_ = c;
+        ownColors_ = true;
+    }
+    /// @brief Follow the theme's colours again (the default).
+    void useThemeColors()
+    {
+        ownColors_ = false;
+    }
+    /// @brief The colours this console paints with.
+    const ConsoleColors& colors() const
+    {
+        return ownColors_ ? colors_ : Theme::instance().console;
     }
 
     /// @brief Emitted when a command is submitted.
@@ -206,7 +226,9 @@ private:
     static constexpr float kInputH = 26.f;
     static constexpr float kLineH = 18.f;
 
-    Color bgColor_ = Color(22, 24, 28, 255);
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the console colours' background
+    ConsoleColors colors_;
+    bool ownColors_ = false;
 
     // ── Helpers ──────────────────────────────────────────────────────────
     Color levelColor(LogLevel l) const;

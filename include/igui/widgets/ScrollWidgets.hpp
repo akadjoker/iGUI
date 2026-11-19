@@ -93,6 +93,11 @@ public:
     ///        the console and the text edit all use. An application that draws a bar of its own, or reserves room for one,
     ///        should read this, so that its bars follow the theme with the library's.
     static float thickness();
+    /// @brief The colour a scroll bar paints its track in: the theme's panel colour, faint. Widgets that draw a bar of their
+    ///        own (TreeView, ConsoleWidget) use this and thumbColor(), so that every bar follows the theme the same way.
+    static Color trackColor();
+    /// @brief The colour of a scroll bar's thumb: the theme's scrollbarThumb, brighter while @p active (under the pointer or dragged).
+    static Color thumbColor(bool active = false);
     /// @brief Deprecated: the thickness the bars had before they followed the theme, always 8. It is no longer what the
     ///        library's bars use (they use thickness(), which is 8 until the theme says otherwise); kept so code that
     ///        reads it still compiles and still gets 8.

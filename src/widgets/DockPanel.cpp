@@ -554,12 +554,13 @@ void DockPanel::paintNode(DockNode* node, PaintContext& ctx)
 {
     if (!node) return;
     Rect sr = toScreen(node->rect);
+    const DockColors& dc = Theme::instance().dock;
 
     if (node->isSplit)
     {
         // Splitter handle
         bool hovered = (hoveredSplit_ == node || (splitDrag_.active && splitDrag_.node == node));
-        Color hc = hovered ? Color(90, 90, 95, 255) : Color(50, 50, 53, 255);
+        Color hc = hovered ? dc.handleHover : dc.handle;
         ctx.fill.SetColor(hc);
         if (node->splitDir == LayoutDir::Horizontal)
         {
@@ -577,7 +578,7 @@ void DockPanel::paintNode(DockNode* node, PaintContext& ctx)
     }
 
     // Leaf background
-    ctx.fill.SetColor(38, 38, 42, 255);
+    ctx.fill.SetColor(dc.leafBg);
     ctx.fillRect(sr.x, sr.y, sr.w, sr.h);
 
     // Tab bar
@@ -598,7 +599,7 @@ void DockPanel::paintNode(DockNode* node, PaintContext& ctx)
     }
 
     // Border
-    ctx.line.SetColor(60, 60, 65, 255);
+    ctx.line.SetColor(dc.border);
     ctx.lineRect(sr.x, sr.y, sr.w, sr.h);
 }
 
@@ -606,8 +607,9 @@ static constexpr float kTabCloseW = 16.f; // room for the close cross in a tab
 
 void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
 {
+    const DockColors& dc = Theme::instance().dock;
     // Bar background
-    ctx.fill.SetColor(30, 30, 33, 255);
+    ctx.fill.SetColor(dc.barBg);
     ctx.fillRect(barR.x, barR.y, barR.w, barR.h);
 
     const float padX = 10.f;
@@ -627,25 +629,18 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
         if (!dragging)
         {
             // Tab bg
-            if (active)
-            {
-                ctx.fill.SetColor(45, 45, 50, 255);
-            }
-            else
-            {
-                ctx.fill.SetColor(35, 35, 38, 255);
-            }
+            ctx.fill.SetColor(active ? dc.tabActiveBg : dc.tabBg);
             ctx.fillRect(tx, barR.y, tw, barR.h);
 
             // Active indicator line
             if (active)
             {
-                ctx.line.SetColor(120, 160, 220, 255);
+                ctx.line.SetColor(dc.accent);
                 ctx.drawLine(tx, barR.y + barR.h - 1, tx + tw, barR.y + barR.h - 1);
             }
 
             // Label
-            Color tc = active ? Color(220, 220, 220, 255) : Color(150, 150, 155, 255);
+            Color tc = active ? dc.tabTextActive : dc.tabText;
             float asc = setupFont(ctx, tc, 12.f);
             ctx.pushClip(barR);
             ctx.font.Print(tab.name.c_str(), tx + padX, barR.y + (barR.h - 12.f) * 0.5f + asc);
@@ -658,12 +653,10 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
             const float r = 3.5f;
             if (hot)
             {
-                ctx.fill.SetColor(90, 90, 96, 255);
+                ctx.fill.SetColor(dc.closeHotBg);
                 ctx.fillRect(cx - 7.f, cy - 7.f, 14.f, 14.f);
             }
-            ctx.line.SetColor(
-                    hot ? Color(235, 235, 235, 255)
-                        : (active ? Color(170, 170, 175, 255) : Color(110, 110, 115, 255)));
+            ctx.line.SetColor(hot ? dc.closeIconHot : (active ? dc.closeIconActive : dc.closeIcon));
             ctx.drawLine(cx - r, cy - r, cx + r, cy + r);
             ctx.drawLine(cx - r, cy + r, cx + r, cy - r);
         }
@@ -671,7 +664,7 @@ void DockPanel::paintTabBar(DockNode* leaf, const Rect& barR, PaintContext& ctx)
     }
 
     // Bottom border
-    ctx.line.SetColor(55, 55, 60, 255);
+    ctx.line.SetColor(dc.barBorder);
     ctx.drawLine(barR.x, barR.y + barR.h, barR.x + barR.w, barR.y + barR.h);
 }
 
@@ -685,6 +678,7 @@ void DockPanel::paintDraggedTab(PaintContext& ctx)
     float dy = drag_.curY - drag_.startY;
     if (dx * dx + dy * dy < 36.f) return;
 
+    const DockColors& dc = Theme::instance().dock;
     auto& tab = drag_.srcNode->tabs[drag_.srcIdx];
     setupFont(ctx, { 220, 220, 220, 255 }, 12.f);
     float tw = ctx.font.GetTextWidth(tab.name.c_str()) + 20.f;
@@ -698,15 +692,15 @@ void DockPanel::paintDraggedTab(PaintContext& ctx)
     ctx.fillRoundedRect(fx + 3, fy + 3, tw, th, 4.f);
 
     // Tab body
-    ctx.fill.SetColor(50, 55, 65, 230);
+    ctx.fill.SetColor(dc.dragBg);
     ctx.fillRoundedRect(fx, fy, tw, th, 4.f);
 
     // Border
-    ctx.line.SetColor(100, 140, 220, 180);
+    ctx.line.SetColor(dc.dragBorder);
     ctx.lineRoundedRect(fx, fy, tw, th, 4.f);
 
     // Label
-    float asc = setupFont(ctx, { 220, 230, 240, 255 }, 12.f);
+    float asc = setupFont(ctx, dc.dragText, 12.f);
     ctx.font.Print(tab.name.c_str(), fx + 10.f, fy + (th - 12.f) * 0.5f + asc);
 }
 
