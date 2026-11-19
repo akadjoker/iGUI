@@ -58,6 +58,7 @@ struct Job
     int what = 0;           // 0: wake (App::wake), 1: requestFrameFromAnyThread, 2: a pointer move by XTEST
     double doneAt = 0.0;    // time_seconds() when the worker did it
     volatile int cancel = 0; // set by the main thread: the worker has nothing left to do
+    int targetX = 0, targetY = 0; // what == 2: where the pointer goes, on the screen
 };
 
 int worker(void* user)
@@ -71,12 +72,7 @@ int worker(void* user)
         Display* dpy = XOpenDisplay(nullptr);
         if (dpy)
         {
-            // somewhere other than where the pointer is: a move to the same place is no event
-            ::Window rootReturn, childReturn;
-            int rootX = 0, rootY = 0, winX = 0, winY = 0;
-            unsigned int mask = 0;
-            XQueryPointer(dpy, DefaultRootWindow(dpy), &rootReturn, &childReturn, &rootX, &rootY, &winX, &winY, &mask);
-            XTestFakeMotionEvent(dpy, DefaultScreen(dpy), (rootX + 37) % 250 + 10, (rootY + 23) % 150 + 10, 0);
+            XTestFakeMotionEvent(dpy, DefaultScreen(dpy), job->targetX, job->targetY, 0);
             job->doneAt = time_seconds();
             XFlush(dpy);
             XCloseDisplay(dpy);
@@ -213,6 +209,14 @@ int main()
         Job job;
         job.delay = 0.4;
         job.what = 2;
+        {
+            // a place inside the window that is not where the pointer is (a move to the same place is no event)
+            int wx = 0, wy = 0, mx = 0, my = 0;
+            window_get_position(zen.window(), &wx, &wy);
+            mouse_position(zen.window(), &mx, &my);
+            job.targetX = wx + (mx + 40) % 250 + 10;
+            job.targetY = wy + (my + 30) % 150 + 10;
+        }
         const int painted = zen.paintedFrames();
         PlatformThread* t = create_thread(worker, &job, "idle-xtest");
         const double done = untilPainted(zen, painted, 5.0);
