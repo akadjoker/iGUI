@@ -683,7 +683,8 @@ void CodeEditor::paintList(PaintContext& ctx, const Rect& abs, const ct::Vector<
     ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
     ctx.line.SetColor(t.borderColor);
     ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
-    const float textOffset = (lh - ctx.font.GetFontSize()) * 0.5f;
+    // Print() takes the baseline: the top of the text (half what the row has over the font) plus the ascender (the text sat an ascender above its row)
+    const float textOffset = (lh - ctx.font.GetFontSize()) * 0.5f + ctx.font.GetAscender();
     for (int i = 0; i < shown; ++i)
     {
         const int index = first + i;
@@ -694,11 +695,15 @@ void CodeEditor::paintList(PaintContext& ctx, const Rect& abs, const ct::Vector<
             ctx.fill.SetColor(t.selectionColor);
             ctx.fill.Rectangle(x + 2.0f, rowY, width - 4.0f, lh, true);
         }
-        ctx.font.SetColor(t.textColor);
+        // the selected row is read over the selection: selectionText, as in the other lists (textColor was 3.5:1 on it in the dark preset, and the
+        // dimmed detail, textDisabled, 1.4:1 in the xp one)
+        const bool isSelected = index == selected;
+        ctx.font.SetColor(isSelected ? t.selectionText : t.textColor);
         ctx.font.Print(row.text.c_str(), x + 8.0f, rowY + textOffset);
         if (!row.detail.empty())
         {
-            ctx.font.SetColor(t.textDisabled);
+            const Color detailColor = isSelected ? t.selectionText : t.textDisabled;
+            ctx.font.SetColor(detailColor);
             const float dw = ctx.font.GetTextWidth(row.detail.c_str());
             ctx.font.Print(row.detail.c_str(), x + width - dw - 8.0f, rowY + textOffset);
         }
@@ -725,7 +730,8 @@ void CodeEditor::paintBar(PaintContext& ctx, const Rect& abs)
 
     const char* label = bar_ == Bar::Find ? "Find" : bar_ == Bar::Replace ? "Find" : bar_ == Bar::GotoLine ? "Go to line" : "Symbol";
     char buffer[256];
-    const float textY = barY + 4.0f + (rowH - ctx.font.GetFontSize()) * 0.5f;
+    const float textTop = barY + 4.0f + (rowH - ctx.font.GetFontSize()) * 0.5f;
+    const float textY = textTop + ctx.font.GetAscender(); // (the baseline)
     ctx.font.SetColor(t.textDisabled);
     snprintf(buffer, sizeof buffer, "%s:", label);
     ctx.font.Print(buffer, barX + 8.0f, textY);
@@ -739,7 +745,7 @@ void CodeEditor::paintBar(PaintContext& ctx, const Rect& abs)
     {
         const float cx = fieldX + ctx.font.GetTextWidth(barText_.c_str()) + 1.0f;
         ctx.line.SetColor(t.textColor);
-        ctx.line.Line2D(cx, textY, cx, textY + ctx.font.GetFontSize());
+        ctx.line.Line2D(cx, textTop, cx, textTop + ctx.font.GetFontSize());
     }
     // The right side: flags and the count for a find, a hint otherwise.
     String right;
@@ -780,7 +786,7 @@ void CodeEditor::paintBar(PaintContext& ctx, const Rect& abs)
         {
             const float cx = fieldX + ctx.font.GetTextWidth(barReplace_.c_str()) + 1.0f;
             ctx.line.SetColor(t.textColor);
-            ctx.line.Line2D(cx, y2, cx, y2 + ctx.font.GetFontSize());
+            ctx.line.Line2D(cx, y2 - ctx.font.GetAscender(), cx, y2 - ctx.font.GetAscender() + ctx.font.GetFontSize());
         }
         ctx.font.SetColor(t.textDisabled);
         const char* hint = "Enter one, Ctrl+Enter all, Tab field";
@@ -948,7 +954,7 @@ void CodeEditor::paintSignature(PaintContext& ctx, const Rect& abs)
     ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
     ctx.line.SetColor(t.borderColor);
     ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
-    const float textY = y + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f;
+    const float textY = y + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f + ctx.font.GetAscender(); // (the baseline)
     // The active parameter: the n-th comma-separated piece inside the parens.
     const size_t open = sigText_.find('(');
     if (open != String::npos)

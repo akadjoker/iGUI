@@ -228,6 +228,10 @@ struct PaintContext
 
     Color textColor_ = { 220, 220, 220, 255 };
 
+    /// The colour a container asks the Labels it paints to use for their text when they have none of their own (alpha 0: none): a
+    /// ListWidget sets the theme's selectionText while it paints the selected row, so the text of the row is read over the selection.
+    Color rowText = { 0, 0, 0, 0 };
+
     // The text height asked for with ctx.font.SetFontSize; 0 is the theme's.
     float fontHeight_ = 0.0f;
     /// @brief The text height in force: what SetFontSize asked, else the theme's.

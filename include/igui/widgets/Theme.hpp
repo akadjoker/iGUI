@@ -376,6 +376,15 @@ struct EditorColors
     }
 };
 
+/// What of a preset a WidgetApp::setTheme / setThemePreset takes: everything (the default, as always), only its colours and looks
+/// (the application keeps the sizes its layouts were made with), or only its sizes.
+enum class ThemeParts
+{
+    All,
+    Colors,
+    Metrics
+};
+
 struct Theme
 {
     // Window / Panel
@@ -414,8 +423,11 @@ struct Theme
     Color inputBorderHover = Color(110, 110, 118, 255);
     Color checkMark = Color(200, 200, 205, 255);
 
-    // Switch
+    // Switch: the thumb, and the track when it is on and when it is off (a Switch's own setOnColor / setOffColor win). In every preset but
+    // dark the thumb has 3:1 or more against both tracks (the dark one's on track, 2.4:1, is how it always was).
     Color switchThumb = Color(220, 220, 225, 255);
+    Color switchOn = Color(80, 160, 80, 255);
+    Color switchOff = Color(70, 70, 75, 255);
 
     // Tooltip
     Color tooltipBg = Color(20, 20, 22, 230);
@@ -613,6 +625,8 @@ struct Theme
         t.checkMark = Color(0, 120, 215, 255);
         // Switch
         t.switchThumb = Color(255, 255, 255, 255);
+        t.switchOn = Color(0, 120, 215, 255);
+        t.switchOff = Color(130, 130, 138, 255);
         // Tooltip
         t.tooltipBg = Color(255, 255, 255, 240);
         t.tooltipBorder = Color(180, 180, 185, 255);
@@ -735,6 +749,8 @@ struct Theme
         t.checkMark = accent;
         // Switch
         t.switchThumb = Color(255, 255, 255, 255);
+        t.switchOn = accent;
+        t.switchOff = Color(140, 140, 148, 255);
         // Tooltip
         t.tooltipBg = Color(246, 246, 246, 245);
         t.tooltipBorder = Color(200, 200, 200, 255);
@@ -783,7 +799,7 @@ struct Theme
         t.menuItemTextHover = Color(255, 255, 255, 255);
         t.menuItemDisabled = Color(170, 170, 170, 255);
         t.menuSeparator = Color(220, 220, 220, 255);
-        t.menuShortcutText = Color(120, 120, 125, 255);
+        t.menuShortcutText = Color(105, 105, 110, 255); // (120,120,125 was 4.06 on the menu)
         t.menuShortcutHover = Color(225, 235, 255, 255);
         t.menuCheckMark = accent;
         t.menuSubmenuArrow = Color(90, 90, 95, 255);
@@ -859,6 +875,8 @@ struct Theme
         t.checkMark = accent;
         // Switch
         t.switchThumb = Color(240, 240, 242, 255);
+        t.switchOn = accent;
+        t.switchOff = Color(110, 110, 116, 255);
         // Tooltip
         t.tooltipBg = Color(54, 54, 56, 245);
         t.tooltipBorder = Color(80, 80, 84, 255);
@@ -1000,6 +1018,8 @@ struct Theme
         t.checkMark = Color(33, 161, 33, 255);
         // Switch
         t.switchThumb = Color(255, 255, 255, 255);
+        t.switchOn = blue;
+        t.switchOff = Color(128, 124, 110, 255);
         // Tooltip
         t.tooltipBg = Color(255, 255, 225, 255);
         t.tooltipBorder = Color(0, 0, 0, 255);
@@ -1133,6 +1153,57 @@ struct Theme
     void apply(const Theme& preset)
     {
         *this = preset;
+    }
+
+    /// @brief The sizes of the theme: font size, paddings, heights, bar thickness, menu metrics. What the layout of the widgets depends
+    ///        on, as opposed to the colours and the looks (gradients, blocks, boxes) that only change what is drawn.
+    void copyMetricsFrom(const Theme& o)
+    {
+        fontSize = o.fontSize;
+        padding = o.padding;
+        borderRadius = o.borderRadius;
+        buttonHeight = o.buttonHeight;
+        sliderHeight = o.sliderHeight;
+        sliderTrackWidth = o.sliderTrackWidth;
+        sliderThumbRadius = o.sliderThumbRadius;
+        inputHeight = o.inputHeight;
+        scrollbarWidth = o.scrollbarWidth;
+        scrollbarMinThumb = o.scrollbarMinThumb;
+        textEditPadding = o.textEditPadding;
+        gutterPadding = o.gutterPadding;
+        lineSpacing = o.lineSpacing;
+        tooltipPadX = o.tooltipPadX;
+        tooltipPadY = o.tooltipPadY;
+        menuBarHeight = o.menuBarHeight;
+        menuItemHeight = o.menuItemHeight;
+        menuItemPadX = o.menuItemPadX;
+        menuMinWidth = o.menuMinWidth;
+        menuShadowSize = o.menuShadowSize;
+    }
+    /// @brief Whether the metrics (see copyMetricsFrom) of two themes are the same.
+    bool sameMetricsAs(const Theme& o) const
+    {
+        return fontSize == o.fontSize && padding == o.padding && borderRadius == o.borderRadius && buttonHeight == o.buttonHeight &&
+               sliderHeight == o.sliderHeight && sliderTrackWidth == o.sliderTrackWidth && sliderThumbRadius == o.sliderThumbRadius &&
+               inputHeight == o.inputHeight && scrollbarWidth == o.scrollbarWidth && scrollbarMinThumb == o.scrollbarMinThumb &&
+               textEditPadding == o.textEditPadding && gutterPadding == o.gutterPadding && lineSpacing == o.lineSpacing &&
+               tooltipPadX == o.tooltipPadX && tooltipPadY == o.tooltipPadY && menuBarHeight == o.menuBarHeight &&
+               menuItemHeight == o.menuItemHeight && menuItemPadX == o.menuItemPadX && menuMinWidth == o.menuMinWidth &&
+               menuShadowSize == o.menuShadowSize;
+    }
+    /// @brief Take the colours (and the looks: gradients, blocks, boxes) of @p preset and keep this theme's own metrics: a macOS
+    ///        or XP palette on the sizes the application has laid its windows out with. Nothing that a layout reads changes.
+    void applyColors(const Theme& preset)
+    {
+        Theme own;
+        own.copyMetricsFrom(*this);
+        *this = preset;
+        copyMetricsFrom(own);
+    }
+    /// @brief Take the metrics of @p preset and keep this theme's colours.
+    void applyMetrics(const Theme& preset)
+    {
+        copyMetricsFrom(preset);
     }
 
     /// @brief Get the global Theme singleton.

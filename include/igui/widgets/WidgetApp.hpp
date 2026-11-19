@@ -776,10 +776,14 @@ public:
     ///        themeChanged is emitted once and the containers are laid out again (the sizes that come from the theme:
     ///        font size, padding, bar thickness). Colours an application set explicitly on a widget (setBgColor,
     ///        ConsoleWidget::setColors, ...) are left as they are; themeChanged is where the application sets them again.
-    void setTheme(const Theme& theme);
+    ///        @p parts: ThemeParts::All takes the whole theme (the default); ThemeParts::Colors takes its colours and looks and
+    ///        keeps the sizes the application's layouts were made with (Theme::applyColors): themeChanged is emitted once and NO
+    ///        layout is asked for, because nothing a layout reads changed (a macOS palette over the metrics of the dark theme: the
+    ///        rectangles of every widget stay where they are); ThemeParts::Metrics takes only the sizes.
+    void setTheme(const Theme& theme, ThemeParts parts = ThemeParts::All);
     /// @brief setTheme() with a preset by name (Theme::presetName: "dark", "light", "xp", "macos", "macos-dark").
     /// @return false, with the theme left alone, when @p name is not a preset.
-    bool setThemePreset(const char* name);
+    bool setThemePreset(const char* name, ThemeParts parts = ThemeParts::All);
     /// @brief Tell the manager that Theme::instance() was changed by hand (a field written, the whole theme assigned): the
     ///        same as setTheme() after the fact. update() also finds such a change by comparing the theme with the one it
     ///        saw last, so a frame after an assignment emits themeChanged even when this was not called; a change that
@@ -923,6 +927,8 @@ private:
         WidgetApp& app;
     };
 
+    // notifyThemeChanged(), with or without the layout it asks for (a change of colours only asks for none)
+    void themeNotify(bool relayout);
     // The theme as update() last saw it (see notifyThemeChanged).
     Theme themeSeen_;
     bool themeSeenSet_ = false;

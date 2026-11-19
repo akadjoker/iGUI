@@ -694,6 +694,32 @@ static int dayOfWeek(int year, int month, int day)
     return (year + year / 4 - year / 100 + year / 400 + t[month - 1] + day) % 7;
 }
 
+// The selected day or year of the calendar: the accent over the popup, and the text on it. In the dark presets as it always was (the
+// focus colour at alpha 200 with white on it); in the light ones the accent is darkened and opaque, so that white on it has 4.5:1 (white on
+// the bare accent was 3.1 to 4.0: the light presets' accents are bright).
+// The colour of text that is a link or an active part (the month and the year of the calendar, the segment being edited of a time): the
+// focus colour in the dark presets, as it always was; in the light ones the focus colour is a bright accent that is 3.7 to 4.3 on the
+// panel, so the darker link colour of the theme (app.richLink, 6:1) takes its place.
+static Color accentText(const Theme& t)
+{
+    return t.isLight() ? t.app.richLink : t.focusColor;
+}
+
+static void selectedCell(const Theme& t, Color& fill, Color& text)
+{
+    if (t.isLight())
+    {
+        fill = Theme::shade(t.focusColor, 0, 0.3f);
+        fill.a = 255;
+    }
+    else
+    {
+        fill = t.focusColor;
+        fill.a = 200;
+    }
+    text = Color(255, 255, 255, 255);
+}
+
 class CalendarPopup_ : public Widget
 {
 public:
@@ -760,7 +786,7 @@ public:
 
         // Left arrow  — prev month
         arrowLeftRect_ = { hx, hy, cellW, headerH };
-        ctx.font.SetColor(t.focusColor);
+        ctx.font.SetColor(accentText(t));
         float tw = ctx.font.GetTextWidth("<");
         ctx.font.Print("<", hx + (cellW - tw) * 0.5f, hy + (headerH + asc) * 0.5f);
 
@@ -775,7 +801,7 @@ public:
             "Sep", "Oct", "Nov", "Dec" };
         char label[32];
         std::snprintf(label, sizeof(label), "%s %d", months[viewMonth_], viewYear_);
-        ctx.font.SetColor(t.focusColor); // hint it's clickable
+        ctx.font.SetColor(accentText(t)); // hint it's clickable
         tw = ctx.font.GetTextWidth(label);
         float lx = abs.x + (abs.w - tw) * 0.5f;
         float ly = hy + (headerH + asc) * 0.5f;
@@ -824,7 +850,9 @@ public:
                 Rect rc;
                 if (ctx.clipRectIntersect(cellR, rc))
                 {
-                    ctx.fill.SetColor(t.focusColor.r, t.focusColor.g, t.focusColor.b, 200);
+                    Color selFill, selText;
+                    selectedCell(t, selFill, selText);
+                    ctx.fill.SetColor(selFill.r, selFill.g, selFill.b, selFill.a);
                     ctx.fill.RoundedRectangle(static_cast<int>(rc.x + 2),
                             static_cast<int>(rc.y + 1), static_cast<int>(rc.w - 4),
                             static_cast<int>(rc.h - 2), 3, 4, true);
@@ -834,7 +862,11 @@ public:
             char buf[16];
             std::snprintf(buf, sizeof(buf), "%d", d);
             tw = ctx.font.GetTextWidth(buf);
-            ctx.font.SetColor(isSel ? Color(255, 255, 255, 255) : t.textColor);
+            {
+                Color selFill, selText;
+                selectedCell(t, selFill, selText);
+                ctx.font.SetColor(isSel ? selText : t.textColor);
+            }
             ctx.font.Print(buf, gx + (cellW - tw) * 0.5f, cy2 + (cellH + asc) * 0.5f);
 
             col++;
@@ -870,7 +902,7 @@ public:
 
         // Left arrow — prev 12 years
         arrowLeftRect_ = { hx, hy, cellW, headerH };
-        ctx.font.SetColor(t.focusColor);
+        ctx.font.SetColor(accentText(t));
         float tw = ctx.font.GetTextWidth("<");
         ctx.font.Print("<", hx + (cellW - tw) * 0.5f, hy + (headerH + asc) * 0.5f);
 
@@ -910,7 +942,9 @@ public:
                 Rect rc;
                 if (ctx.clipRectIntersect(cellR, rc))
                 {
-                    ctx.fill.SetColor(t.focusColor.r, t.focusColor.g, t.focusColor.b, 200);
+                    Color selFill, selText;
+                    selectedCell(t, selFill, selText);
+                    ctx.fill.SetColor(selFill.r, selFill.g, selFill.b, selFill.a);
                     ctx.fill.RoundedRectangle(static_cast<int>(rc.x + 2),
                             static_cast<int>(rc.y + 1), static_cast<int>(rc.w - 4),
                             static_cast<int>(rc.h - 2), 3, 4, true);
@@ -920,7 +954,11 @@ public:
             char buf[8];
             std::snprintf(buf, sizeof(buf), "%d", yr);
             tw = ctx.font.GetTextWidth(buf);
-            ctx.font.SetColor(isSel ? Color(255, 255, 255, 255) : t.textColor);
+            {
+                Color selFill, selText;
+                selectedCell(t, selFill, selText);
+                ctx.font.SetColor(isSel ? selText : t.textColor);
+            }
             ctx.font.Print(buf, gx + (cellW - tw) * 0.5f, cy2 + (cellH + asc) * 0.5f);
         }
     }
@@ -1428,7 +1466,7 @@ void TimePicker::paint(PaintContext& ctx)
                         static_cast<int>(hlC.w), static_cast<int>(hlC.h), 2, 4, true);
             }
         }
-        ctx.font.SetColor(active ? t.focusColor : t.textColor);
+        ctx.font.SetColor(active ? accentText(t) : t.textColor);
         ctx.font.Print(text, fx, cy);
     };
 

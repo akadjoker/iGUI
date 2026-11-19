@@ -8,6 +8,12 @@
 //      composited, read from the draw list) is 4.5 or more, in every preset,
 // plus what the ConsoleWidget, the TreeView and the ToolBar were asked to do with their scroll bars and sprite-sheet icons.
 // With ROUND9_SHOTS=<directory> it writes a picture of the window in each preset there (PPM). No standard library: ct and C only.
+//
+// Round 10 adds to it (docs/ROUND10.md): the draw list of the window in EVERY preset and the pixels of a docked splitter against
+// goldens (macOSDark and the split dock were not looked at before); ThemeParts::Colors (a palette over the application's own sizes: no
+// layout, the same rectangles); the Switch's theme colours; the popups (menu, combo list, tooltip, colour popup, date popup, context
+// menu, completion list) in every preset: no dark fill under the light ones, text legible; and the selected row of a list in the dark
+// preset at 4.5 now. With ROUND10_SHOTS=<directory> it writes a sheet of the popups of each preset (PPM).
 
 #include "RasterScreen.hpp"
 #include "Round9Window.hpp"
@@ -23,9 +29,18 @@ constexpr int kPresetCount = 5;
 // The checksum of what the window draws in the dark preset, taken with the library of origin/main (0d86927), before any colour
 // moved into the theme: the dark preset must go on drawing exactly this, whatever theme was set before. It was 0x2710448eb3ee6e18
 // (7722 vertices) until the corners of rounded rectangles began to take the number of segments the error asks for, shapes made
-// from tables, and commands merged (docs/ROUND9.md section 2.1): the same window, a fifth fewer vertices and fewer commands.
-constexpr uint64_t kDarkGolden = 0xb5c94cffdf3657d9ull;
+// from tables, and commands merged (docs/ROUND9.md section 2.1): the same window, a fifth fewer vertices and fewer commands. Then it was
+// 0xb5c94cffdf3657d9 (6354 vertices) until round 10 gave the selected row of a ListBox and of a ListWidget the text colour selectionText, like the
+// trees (the text over the selection was 3.8:1 in the dark preset): the same vertices, one text colour changed.
+constexpr uint64_t kDarkGolden = 0xf05be51a369160b1ull;
 constexpr uint32_t kDarkGoldenVertices = 6354;
+// Round 10: the same window in each preset (dark, light, xp, macos, macos-dark), taken at the start of the round: a change that moves
+// what one of them draws has to say so (update the constant with the reason, as for the dark one above). 0 = not set yet.
+constexpr uint64_t kPresetGolden[5] = { 0, 0xfcf6b2b959485339ull, 0x833a96055847bc72ull, 0x3b05a2c45f63cc44ull, 0xe763b10d01e4cee4ull };
+// The pixels (software rasteriser, 1 sample) of a dock with a split, 400 by 220, in the dark preset (identical before and after round 9:
+// checked against the library of 0d86927) and in macos-dark.
+constexpr uint64_t kDockSplitGoldenDark = 0xd5b9fa6f2817d9b3ull;
+constexpr uint64_t kDockSplitGoldenMacDark = 0x14561e934f096fffull;
 
 float channel(unsigned char v)
 {
@@ -158,6 +173,7 @@ struct Legibility
     float worst = 1000.0f;
     Color worstText;
     Color worstBg;
+    float failX = 0.0f, failY = 0.0f; // where the first glyph under the floor is
 };
 
 Legibility legibility(const ct::Vector<Tri>& tris, const Rect& region, float atLeast, const ct::Vector<Color>& exempt)
@@ -190,6 +206,27 @@ Legibility legibility(const ct::Vector<Tri>& tris, const Rect& region, float atL
             if (exempt[e].r == g.c[0].r && exempt[e].g == g.c[0].g && exempt[e].b == g.c[0].b) skip = true;
         ++out.glyphs;
         const float need = skip ? 1.5f : atLeast;
+        if (ratio < need && out.failed == 0)
+        {
+            out.failX = px;
+            out.failY = py;
+            if (getenv("ROUND9_DEBUG"))
+                for (size_t q = 0; q < tris.size(); ++q)
+                    if (!tris[q].solid && fabsf((tris[q].x[0] + tris[q].x[1] + tris[q].x[2]) / 3.0f - px) < 200.0f && fabsf((tris[q].y[0] + tris[q].y[1] + tris[q].y[2]) / 3.0f - py) < 40.0f)
+                        printf("      glyph tri %zu colour %d,%d,%d at %.1f,%.1f\n", q, tris[q].c[0].r, tris[q].c[0].g, tris[q].c[0].b, (tris[q].x[0] + tris[q].x[1] + tris[q].x[2]) / 3.0f, (tris[q].y[0] + tris[q].y[1] + tris[q].y[2]) / 3.0f);
+            if (getenv("ROUND9_DEBUG"))
+                for (size_t q = 0; q < i; ++q)
+                {
+                    float rr, gg2, bb, aa;
+                    if (tris[q].solid && colourAt(tris[q], px, py, rr, gg2, bb, aa) && aa > 0.01f)
+                        printf("      fill tri %zu colour %.0f,%.0f,%.0f a %.2f area %.0f\n", q, rr, gg2, bb, aa, areaOf(tris[q]));
+                }
+            if (getenv("ROUND9_DEBUG"))
+                for (size_t q = 960; q < 1030 && q < tris.size(); ++q)
+                    printf("      tri %zu %s colour %d,%d,%d,%d at %.1f,%.1f\n", q, tris[q].solid ? "fill" : "glyph", tris[q].c[0].r, tris[q].c[0].g, tris[q].c[0].b, tris[q].c[0].a,
+                            (tris[q].x[0] + tris[q].x[1] + tris[q].x[2]) / 3.0f, (tris[q].y[0] + tris[q].y[1] + tris[q].y[2]) / 3.0f);
+            if (getenv("ROUND9_DEBUG")) printf("   first failing glyph triangle %zu of %zu: colour %d,%d,%d,%d at %.1f,%.1f, bg %.0f,%.0f,%.0f ratio %.2f\n", i, tris.size(), g.c[0].r, g.c[0].g, g.c[0].b, g.c[0].a, px, py, bg.r, bg.g, bg.b, ratio);
+        }
         if (ratio < need) ++out.failed;
         if (!skip && ratio < out.worst)
         {
@@ -217,7 +254,7 @@ const Region kRegions[] = {
     { "splitter", { 952, 36, 320, 100 }, true, true },
     { "search bar", { 852, 208, 200, 26 }, false, true },
     { "text input, combo box", { 646, 208, 410, 26 }, false, true },
-    { "controls", { 646, 144, 630, 56 }, false, false }, // (a switch has a dark track in every preset)
+    { "controls", { 646, 144, 630, 56 }, false, true }, // (a switch follows the theme since round 10)
     { "text edit", { 646, 242, 200, 70 }, false, true },
     { "list box (a selected row)", { 852, 242, 140, 70 }, true, true },
     { "collapsible", { 998, 242, 270, 70 }, false, false }, // (its arrow is a fill of the text colour)
@@ -374,6 +411,7 @@ void exemptions(int preset, ct::Vector<Color>& out)
     const Theme& t = Theme::instance();
     out.push_back(t.textDisabled);
     out.push_back(t.lineNumberColor);
+    out.push_back(t.menuItemDisabled);       // a disabled entry of a menu (inactive: exempt from the ratio, as in the web guidelines)
     out.push_back(Color(90, 150, 220, 255));  // the colour of a video track
     out.push_back(Color(220, 145, 75, 255));  // ... of an audio track
     if (preset == 0 || preset == 4) out.push_back(Color(106, 115, 125, 255)); // a comment
@@ -430,8 +468,8 @@ void testPresetLooks()
                             first.g, first.b, first.a);
                     check(n == 0, what);
                 }
-                // the selected row of a list in the dark preset is the colour it always was: textColor over the selection (3.8)
-                const float floor = (i == 0 && r == 8) ? 3.5f : 4.5f;
+                // (the selected row of a list was textColor over the selection, 3.8 in the dark preset; it is selectionText now, like the trees)
+                const float floor = 4.5f;
                 const Legibility l = legibility(tris, region.rect, floor, exempt);
                 snprintf(what, sizeof what, "%s: text in the %s%s is legible (%d of %d glyph triangles under %.1f, worst %.2f: %d,%d,%d on %d,%d,%d)",
                         kPresets[i], region.name, tab == 1 ? " (tree tab)" : "", l.failed, l.glyphs, floor, l.worst, l.worstText.r, l.worstText.g,
@@ -573,16 +611,521 @@ void testPictures(const char* dir)
     Theme::instance() = Theme::dark();
 }
 
+
+// ── Round 10 ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+uint64_t pixelHash(const Shot& s)
+{
+    uint64_t hash = 1469598103934665603ull;
+    for (size_t i = 0; i < s.px.size(); ++i)
+        for (int k = 0; k < 4; ++k) hash = (hash ^ ((s.px[i] >> (8 * k)) & 0xffu)) * 1099511628211ull;
+    return hash;
+}
+
+// a dock of two tabs with a third panel split off to the right and the first split below: what a docked splitter is
+Shot dockSplitShot(const char* preset)
+{
+    Theme::instance() = Theme::byName(preset);
+    Screen screen(400.0f, 220.0f);
+    Harness& h = screen.h;
+    Widget* holder = h.root()->createChild<Widget>();
+    holder->setRect({ 0, 0, 400, 220 });
+    DockPanel* dock = holder->createChild<DockPanel>();
+    dock->setRect({ 0, 10, 400, 200 });
+    dock->addPanel("Alpha", new Label("a"));
+    dock->addPanel("Beta", new Label("b"));
+    dock->splitOff("Beta", DockSide::Right, 0.4f);
+    h.relayout();
+    h.frames(2);
+    return screen.take();
+}
+
+void testGoldens()
+{
+    printf("-- the window of every preset, and a docked splitter, against goldens\n");
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        Theme::instance() = Theme::byName(kPresets[i]);
+        Harness h(1280, 720);
+        EveryWidget w = buildEveryWidget(h, false);
+        h.frames(3);
+        uint32_t vertices = 0;
+        const uint64_t hash = drawChecksum(&vertices);
+        printf("  %s: %016llx (%u vertices)\n", kPresets[i], static_cast<unsigned long long>(hash), vertices);
+        char what[140];
+        snprintf(what, sizeof what, "%s: the draw list of the window is the golden one (kPresetGolden[%d])", kPresets[i], i);
+        if (i == 0) check(hash == kDarkGolden, what);
+        else if (kPresetGolden[i] != 0)
+            check(hash == kPresetGolden[i], what);
+    }
+    const Shot dark = dockSplitShot("dark");
+    const Shot mac = dockSplitShot("macos-dark");
+    printf("  dock split pixels: dark %016llx, macos-dark %016llx\n", static_cast<unsigned long long>(pixelHash(dark)),
+            static_cast<unsigned long long>(pixelHash(mac)));
+    if (kDockSplitGoldenDark) check(pixelHash(dark) == kDockSplitGoldenDark, "a split dock in the dark preset draws the pixels it drew before round 9");
+    if (kDockSplitGoldenMacDark) check(pixelHash(mac) == kDockSplitGoldenMacDark, "a split dock in macos-dark draws the golden pixels");
+    // the splitter of the dark dock is the dock's own handle colour and the line round the leaves; nothing in the dock is a colour
+    // that is not one of its fields (the app that saw a line of 54,54,59 and 41,41,46 was looking at a blend of the border at a
+    // fractional position: none of those colours is drawn here)
+    const Theme d = Theme::dark();
+    bool handleSeen = false;
+    for (size_t i = 0; i < dark.px.size(); ++i)
+        if (dark.px[i] == (0xff000000u | (static_cast<uint32_t>(d.dock.handle.r) << 16) | (static_cast<uint32_t>(d.dock.handle.g) << 8) | d.dock.handle.b))
+            handleSeen = true;
+    check(handleSeen, "the dark dock draws its splitter handle in dock.handle (50,50,53)");
+    Theme::instance() = Theme::dark();
+}
+
+void collectRects(const Widget* w, ct::Vector<Rect>& out)
+{
+    out.push_back(w->absoluteRect());
+    for (size_t i = 0; i < w->children().size(); ++i) collectRects(w->children()[i], out);
+}
+
+bool sameRects(const ct::Vector<Rect>& a, const ct::Vector<Rect>& b)
+{
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i].x != b[i].x || a[i].y != b[i].y || a[i].w != b[i].w || a[i].h != b[i].h) return false;
+    return true;
+}
+
+void testThemeParts()
+{
+    printf("-- a preset's colours without its metrics\n");
+    check(!Theme::macOS().sameMetricsAs(Theme::dark()), "(the macOS preset has metrics of its own, or this test says nothing)");
+    Theme::instance() = Theme::dark();
+    Harness h(1280, 720);
+    EveryWidget w = buildEveryWidget(h, false);
+    h.app.setFocused(nullptr);
+    h.frames(3);
+    ct::Vector<Rect> before;
+    collectRects(h.root(), before);
+    Counter changed;
+    const auto slot = h.app.themeChanged.connect([&changed] { ++changed.n; });
+    const Theme dark = Theme::dark();
+    const Theme mac = Theme::macOS();
+
+    int layouts = layoutCalls();
+    check(h.app.setThemePreset("macos", ThemeParts::Colors), "a preset by name, colours only");
+    h.frames(3);
+    check(changed.n == 1, "themeChanged is emitted once");
+    check(layoutCalls() == layouts, "no layout is done (nothing a layout reads changed)");
+    ct::Vector<Rect> after;
+    collectRects(h.root(), after);
+    check(sameRects(before, after), "the rectangle of every widget is the same before and after");
+    const Theme& now = Theme::instance();
+    check(now.sameMetricsAs(dark), "the metrics are the dark theme's");
+    check(now.bgColor.r == mac.bgColor.r && now.focusColor.r == mac.focusColor.r && now.textColor.r == mac.textColor.r &&
+                    now.dock.accent.r == mac.dock.accent.r && now.switchOn.r == mac.switchOn.r,
+            "the colours (the groups included) are macOS's");
+    check(now.controlGradient == mac.controlGradient && now.progressBlocks == mac.progressBlocks, "and so are its looks (gradients, blocks)");
+    uint32_t v = 0;
+    const uint64_t coloursOnly = drawChecksum(&v);
+
+    // whole: the metrics change, and with them some rectangle
+    Theme::instance() = dark;
+    h.app.notifyThemeChanged();
+    h.frames(3);
+    changed.n = 0;
+    layouts = layoutCalls();
+    h.app.setThemePreset("macos");
+    h.frames(3);
+    ct::Vector<Rect> whole;
+    collectRects(h.root(), whole);
+    check(changed.n == 1 && layoutCalls() > layouts, "the whole preset asks for the layout, as always");
+    check(!sameRects(before, whole), "... and it moves a rectangle (the metrics of the preset)");
+    check(drawChecksum(&v) != coloursOnly, "... so the window draws differently from the colours-only one");
+
+    // metrics only: the colours stay
+    Theme::instance() = dark;
+    h.app.notifyThemeChanged();
+    h.frames(3);
+    changed.n = 0;
+    h.app.setThemePreset("macos", ThemeParts::Metrics);
+    h.frames(3);
+    check(changed.n == 1 && Theme::instance().bgColor.r == dark.bgColor.r && Theme::instance().sameMetricsAs(mac), "ThemeParts::Metrics takes the sizes and keeps the colours");
+    // colours only, again and from a hand-written theme: the same, with the unknown name refused
+    check(!h.app.setThemePreset("no such", ThemeParts::Colors), "an unknown name is refused in every mode");
+    Theme custom = Theme::light();
+    custom.fontSize = 22.0f;
+    Theme::instance() = dark;
+    h.app.notifyThemeChanged();
+    h.frames(2);
+    changed.n = 0;
+    h.app.setTheme(custom, ThemeParts::Colors);
+    check(changed.n == 1 && Theme::instance().fontSize == dark.fontSize && Theme::instance().bgColor.r == custom.bgColor.r, "setTheme(theme, Colors): the colours of the theme, the sizes of the window");
+    h.app.themeChanged.disconnect(slot);
+    Theme::instance() = Theme::dark();
+    h.frames(2);
+}
+
+float contrast(const Color& a, const Color& b)
+{
+    return contrastOf(luminance(a.r, a.g, a.b), luminance(b.r, b.g, b.b));
+}
+
+void testSwitchColours()
+{
+    printf("-- the Switch follows the theme\n");
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        Theme::instance() = Theme::byName(kPresets[i]);
+        const Theme& t = Theme::instance();
+        char what[160];
+        const float on = contrast(t.switchThumb, t.switchOn), off = contrast(t.switchThumb, t.switchOff);
+        snprintf(what, sizeof what, "%s: the thumb against the track, on %.2f and off %.2f, is 3 or more (the dark on track keeps its 2.4)", kPresets[i], on, off);
+        check(off >= 3.0f && (on >= 3.0f || i == 0), what);
+        const float dr = static_cast<float>(t.switchOn.r) - t.switchOff.r, dg = static_cast<float>(t.switchOn.g) - t.switchOff.g,
+                    db = static_cast<float>(t.switchOn.b) - t.switchOff.b;
+        snprintf(what, sizeof what, "%s: the on and off tracks are told apart (colour distance %.0f)", kPresets[i], sqrtf(dr * dr + dg * dg + db * db));
+        check(sqrtf(dr * dr + dg * dg + db * db) >= 80.0f, what);
+
+        Harness h(300, 120);
+        Widget* holder = h.root()->createChild<Widget>();
+        holder->setRect({ 0, 0, 300, 120 });
+        Switch* a = holder->createChild<Switch>("on");
+        a->setOn(true);
+        a->setRect({ 10, 10, 120, 24 });
+        Switch* b = holder->createChild<Switch>("off");
+        b->setRect({ 10, 50, 120, 24 });
+        Switch* c = holder->createChild<Switch>("own");
+        c->setOnColor(Color(200, 10, 10, 255));
+        c->setOn(true);
+        c->setRect({ 10, 90, 120, 24 });
+        h.relayout();
+        h.frames(2);
+        const DrawList& dl = GetDrawList();
+        auto seen = [&](const Color& col, float y0, float y1)
+        {
+            for (size_t k = 0; k < dl.vertices().size(); ++k)
+            {
+                const DrawVertex& v = dl.vertices()[k];
+                if (v.y >= y0 && v.y <= y1 && v.x < 100 && v.color.r == col.r && v.color.g == col.g && v.color.b == col.b && v.color.a == 255) return true;
+            }
+            return false;
+        };
+        // (the track of a hovered switch is a little lighter: the pointer is away here)
+        snprintf(what, sizeof what, "%s: an on switch has the theme's switchOn track", kPresets[i]);
+        check(seen(t.switchOn, 10, 34), what);
+        snprintf(what, sizeof what, "%s: an off switch has the theme's switchOff track", kPresets[i]);
+        check(seen(t.switchOff, 50, 74), what);
+        check(seen(Color(200, 10, 10, 255), 90, 114), "a colour set with setOnColor wins over the theme");
+        Theme::instance() = Theme::dark();
+    }
+}
+
+// the popups of the library, one at a time
+struct PopupScene
+{
+    Harness h;
+    Button* button = nullptr;
+    ComboBox* combo = nullptr;
+    DatePicker* date = nullptr;
+    ColorButton* colour = nullptr;
+    Label* context = nullptr;
+    CodeEditor* code = nullptr;
+    Menu* menu = nullptr;
+    Menu* contextMenu = nullptr;
+    PopupScene() : h(1280, 720)
+    {
+        Widget* holder = h.root()->createChild<Widget>();
+        holder->setRect({ 0, 0, 1280, 720 });
+        button = holder->createChild<Button>("A button with a tip");
+        button->setRect({ 20, 20, 200, 28 });
+        button->setTooltip("A tooltip, long enough to read");
+        combo = holder->createChild<ComboBox>();
+        for (int i = 0; i < 5; ++i) combo->addItem(String("combo item ") + String::number(i));
+        combo->setSelectedIndex(1);
+        combo->setRect({ 240, 20, 160, 26 });
+        date = holder->createChild<DatePicker>();
+        date->setRect({ 420, 20, 180, 26 });
+        colour = holder->createChild<ColorButton>(Color(200, 80, 40, 255));
+        colour->setRect({ 620, 20, 60, 26 });
+        context = holder->createChild<Label>("A label with a context menu");
+        context->setRect({ 700, 20, 260, 26 });
+        contextMenu = new Menu();
+        contextMenu->addAction("Cut");
+        contextMenu->addAction("Copy")->setShortcut("Ctrl+C");
+        contextMenu->addSeparator();
+        contextMenu->addCheckable("Checked", true);
+        context->setContextMenu(contextMenu);
+        code = holder->createChild<CodeEditor>();
+        code->setHighlighter<CppHighlighter>();
+        code->setCompletionProvider(
+                [](const CodeEditor::CompletionContext&, ct::Vector<CodeEditor::CompletionItem>& out)
+                {
+                    const char* names[] = { "printf", "println", "process" };
+                    for (int i = 0; i < 3; ++i)
+                    {
+                        CodeEditor::CompletionItem item;
+                        item.text = names[i];
+                        item.detail = "int (const char*)";
+                        item.doc = "Writes text to the output";
+                        out.push_back(item);
+                    }
+                });
+        code->setRect({ 20, 300, 500, 140 });
+        menu = new Menu();
+        menu->addAction("New");
+        menu->addAction("Open")->setShortcut("Ctrl+O");
+        menu->addSeparator();
+        menu->addCheckable("Auto save", true);
+        MenuAction* off = menu->addAction("Disabled entry");
+        off->setEnabled(false);
+        Menu* sub = menu->addSubmenu("Recent");
+        sub->addAction("one.txt");
+        h.relayout();
+        h.frames(3);
+    }
+    ~PopupScene()
+    {
+        WidgetApp::instance().closePopup();
+        h.frames(2);
+        delete menu;
+    }
+    void closeAll()
+    {
+        WidgetApp::instance().closePopup();
+        h.io().mouseX = 900.0f;
+        h.io().mouseY = 600.0f;
+        h.frames(14);
+    }
+};
+
+struct PopupCase
+{
+    const char* name;
+    Rect region; // where it was drawn
+    bool opened;
+};
+
+// opens popup number n (0..6); the region of the popup, drawn after 12 frames
+PopupCase openPopup(PopupScene& s, int n)
+{
+    PopupCase c = { "", { 0, 0, 0, 0 }, false };
+    WidgetApp& app = WidgetApp::instance();
+    switch (n)
+    {
+        case 0:
+            c.name = "menu";
+            s.menu->exec(30.0f, 70.0f);
+            break;
+        case 1:
+            c.name = "combo box list";
+            s.combo->openDropdown();
+            break;
+        case 2:
+            c.name = "tooltip";
+            s.h.moveTo(120.0f, 34.0f);
+            s.h.frames(70);
+            c.region = { 100, 30, 360, 60 };
+            c.opened = true;
+            return c;
+        case 3:
+            c.name = "colour popup";
+            s.colour->openPicker();
+            break;
+        case 4:
+            c.name = "date popup";
+            s.date->openCalendar();
+            break;
+        case 5:
+            c.name = "context menu";
+            s.h.click(800.0f, 33.0f, 1);
+            break;
+        default:
+            c.name = "completion list";
+            app.setFocused(s.code);
+            s.code->setText("printf print println\nprocess\n");
+            s.h.clickWidget(s.code);
+            s.h.key(ig::retained::Key::End, false, true); // Ctrl+End: the cursor at the end of the text
+            s.h.type("pr");
+            s.h.moveTo(900.0f, 650.0f); // (the pointer away: a row of the list under it is a row selected by hovering)
+            s.code->requestCompletion();
+            s.h.frames(12);
+            c.region = { 20, 300, 500, 140 };
+            c.opened = s.code->completionVisible();
+            return c;
+    }
+    s.h.frames(14);
+    if (Widget* popup = app.popup())
+    {
+        c.region = popup->absoluteRect();
+        c.opened = true;
+    }
+    return c;
+}
+
+void testPopups()
+{
+    printf("-- the popups, in every preset\n");
+    ct::Vector<Tri> tris;
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        Theme::instance() = Theme::byName(kPresets[i]);
+        const bool dark = i == 0 || i == 4;
+        ct::Vector<Color> exempt;
+        exemptions(i, exempt);
+        ct::Vector<Color> content;
+        content.push_back(Color(200, 80, 40, 255)); // the colour of the colour button
+        content.push_back(Theme::shade(Theme::instance().focusColor, 0, 0.3f)); // the selected day of the calendar in the light presets (opaque, darkened)
+        PopupScene s;
+        for (int n = 0; n < 7; ++n)
+        {
+            const PopupCase c = openPopup(s, n);
+            char what[220];
+            snprintf(what, sizeof what, "%s: the %s opens", kPresets[i], c.name);
+            check(c.opened, what);
+            if (!c.opened || c.region.w <= 0.0f)
+            {
+                s.closeAll();
+                continue;
+            }
+            trianglesOf(s.h, tris);
+            // a popup is a region of its own over the window: its fills are the theme's; (the colour picker's gradients and swatches, the
+            // calendar's today mark and the highlighted line of the code are content)
+            if (!dark && n != 3 && n != 6)
+            {
+                Color first;
+                const int dk = darkFills(tris, c.region, 90.0f, content, &first);
+                snprintf(what, sizeof what, "%s: no dark fill in the %s (%d found, first %d,%d,%d,%d)", kPresets[i], c.name, dk, first.r, first.g, first.b, first.a);
+                check(dk == 0, what);
+            }
+            // the date popup in the dark preset keeps its white day on the grey focus colour (as it always was)
+            const float floor = (i == 0 && n == 4) ? 1.5f : 4.5f;
+            const Legibility l = legibility(tris, c.region, floor, exempt);
+            snprintf(what, sizeof what, "%s: text in the %s is legible (%d of %d glyph triangles under %.1f, worst %.2f: %d,%d,%d on %d,%d,%d; first at %.0f,%.0f)", kPresets[i], c.name,
+                    l.failed, l.glyphs, floor, l.worst, l.worstText.r, l.worstText.g, l.worstText.b, l.worstBg.r, l.worstBg.g, l.worstBg.b, l.failX, l.failY);
+            check(l.failed == 0 && l.glyphs > 0, what);
+            s.closeAll();
+        }
+    }
+    Theme::instance() = Theme::dark();
+}
+
+// a sheet of the popups of a preset, side by side (ROUND10_SHOTS)
+void testPopupSheets(const char* dir)
+{
+    printf("-- a sheet of the popups of each preset, into %s\n", dir);
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        Theme::instance() = Theme::byName(kPresets[i]);
+        Shot sheet;
+        sheet.w = 4 * 330;
+        sheet.h = 2 * 190;
+        sheet.px.resize(static_cast<size_t>(sheet.w) * static_cast<size_t>(sheet.h));
+        for (size_t k = 0; k < sheet.px.size(); ++k) sheet.px[k] = 0xff000000u | (static_cast<uint32_t>(Theme::instance().bgColor.r) << 16) |
+                                                                  (static_cast<uint32_t>(Theme::instance().bgColor.g) << 8) | Theme::instance().bgColor.b;
+        // the shots need the rasteriser's window (Screen), whose harness is the scene's: a scene made on a Screen
+        for (int n = 0; n < 7; ++n)
+        {
+            Screen screen(1280, 720);
+            screen.useDynamicPage();
+            Widget* holder = screen.h.root()->createChild<Widget>();
+            holder->setRect({ 0, 0, 1280, 720 });
+            Harness& h = screen.h;
+            Button* button = holder->createChild<Button>("A button with a tip");
+            button->setRect({ 20, 20, 200, 28 });
+            button->setTooltip("A tooltip, long enough to read");
+            ComboBox* combo = holder->createChild<ComboBox>();
+            for (int k = 0; k < 5; ++k) combo->addItem(String("combo item ") + String::number(k));
+            combo->setSelectedIndex(1);
+            combo->setRect({ 240, 20, 160, 26 });
+            DatePicker* date = holder->createChild<DatePicker>();
+            date->setRect({ 420, 20, 180, 26 });
+            ColorButton* colour = holder->createChild<ColorButton>(Color(200, 80, 40, 255));
+            colour->setRect({ 620, 20, 60, 26 });
+            Label* context = holder->createChild<Label>("A label with a context menu");
+            context->setRect({ 700, 20, 260, 26 });
+            Menu* contextMenu = new Menu();
+            contextMenu->addAction("Cut");
+            contextMenu->addAction("Copy")->setShortcut("Ctrl+C");
+            contextMenu->addSeparator();
+            contextMenu->addCheckable("Checked", true);
+            context->setContextMenu(contextMenu);
+            CodeEditor* code = holder->createChild<CodeEditor>();
+            code->setHighlighter<CppHighlighter>();
+            code->setCompletionProvider(
+                    [](const CodeEditor::CompletionContext&, ct::Vector<CodeEditor::CompletionItem>& out)
+                    {
+                        const char* names[] = { "printf", "println", "process" };
+                        for (int k = 0; k < 3; ++k)
+                        {
+                            CodeEditor::CompletionItem item;
+                            item.text = names[k];
+                            item.detail = "int (const char*)";
+                            out.push_back(item);
+                        }
+                    });
+            code->setRect({ 20, 300, 500, 140 });
+            Menu* menu = new Menu();
+            menu->addAction("New");
+            menu->addAction("Open")->setShortcut("Ctrl+O");
+            menu->addSeparator();
+            menu->addCheckable("Auto save", true);
+            menu->addAction("Disabled entry")->setEnabled(false);
+            menu->addSubmenu("Recent")->addAction("one.txt");
+            h.relayout();
+            h.frames(3);
+            Rect crop = { 0, 0, 0, 0 };
+            switch (n)
+            {
+                case 0: menu->exec(30.0f, 70.0f); break;
+                case 1: combo->openDropdown(); break;
+                case 2: h.moveTo(120.0f, 34.0f); h.frames(70); crop = { 20, 10, 320, 90 }; break;
+                case 3: colour->openPicker(); break;
+                case 4: date->openCalendar(); break;
+                case 5: h.click(800.0f, 33.0f, 1); break;
+                default:
+                    WidgetApp::instance().setFocused(code);
+                    code->setText("printf print println\nprocess\n");
+                    h.clickWidget(code);
+                    h.key(ig::retained::Key::End, false, true);
+                    h.type("pr");
+                    h.moveTo(900.0f, 650.0f);
+                    code->requestCompletion();
+                    crop = { 20, 300, 320, 150 };
+                    break;
+            }
+            h.frames(14);
+            if (crop.w == 0.0f)
+                if (Widget* popup = WidgetApp::instance().popup()) crop = popup->absoluteRect();
+            if (crop.w == 0.0f) crop = { 0, 0, 320, 180 };
+            const Shot shot = screen.take();
+            const int cx = static_cast<int>(crop.x) - 4, cy = static_cast<int>(crop.y) - 4;
+            const int ox = (n % 4) * 330, oy = (n / 4) * 190;
+            for (int y = 0; y < 186 && cy + y < shot.h; ++y)
+                for (int x = 0; x < 326 && cx + x < shot.w; ++x)
+                    if (cx + x >= 0 && cy + y >= 0)
+                        sheet.px[static_cast<size_t>(oy + y) * static_cast<size_t>(sheet.w) + static_cast<size_t>(ox + x)] =
+                                shot.px[static_cast<size_t>(cy + y) * static_cast<size_t>(shot.w) + static_cast<size_t>(cx + x)];
+            WidgetApp::instance().closePopup();
+            h.frames(2);
+            delete menu;
+        }
+        char name[64];
+        snprintf(name, sizeof name, "popups-%s", kPresets[i]);
+        writePicture(dir, name, sheet);
+    }
+    Theme::instance() = Theme::dark();
+}
+
 } // namespace
 
 int main()
 {
     testGolden();
+    testGoldens();
     testSwitching();
+    testThemeParts();
+    testSwitchColours();
     testPresetLooks();
+    testPopups();
     testSelectedTextIsSeen();
     testScrollBarsAndIcons();
     if (const char* dir = getenv("ROUND9_SHOTS")) testPictures(dir);
+    if (const char* dir = getenv("ROUND10_SHOTS")) testPopupSheets(dir);
     Theme::instance() = Theme::dark();
     shutdown();
     if (failures() == 0) printf("PASS\n");

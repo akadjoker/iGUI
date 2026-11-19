@@ -546,7 +546,7 @@ public:
     /// @brief Set the switch on/off state.
     void setOn(bool v);
 
-    /// @brief Set the color when switch is on.
+    /// @brief Set the color when switch is on (without one, the theme's switchOn).
     void setOnColor(const Color& c)
     {
         onColor_ = c;
@@ -568,8 +568,8 @@ public:
 private:
     String text_;
     bool on_ = false;
-    Color onColor_ = Color(80, 160, 80, 255);
-    Color offColor_ = Color(70, 70, 75, 255);
+    Color onColor_ = Color(0, 0, 0, 0);  // alpha 0: the theme's switchOn
+    Color offColor_ = Color(0, 0, 0, 0); // alpha 0: the theme's switchOff
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

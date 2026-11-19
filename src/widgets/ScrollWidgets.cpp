@@ -472,7 +472,9 @@ void ListBox::paint(PaintContext& ctx)
         float ty = iy + t.padding + asc;
         float tx = abs.x + t.padding;
 
-        ctx.font.SetColor(t.textColor.r, t.textColor.g, t.textColor.b, t.textColor.a);
+        // the text of the selected row is selectionText, as in the trees and the grids (textColor over the selection was 3.8:1 in the dark preset)
+        const Color& tc = i == selectedIdx_ ? t.selectionText : t.textColor;
+        ctx.font.SetColor(tc.r, tc.g, tc.b, tc.a);
         ctx.font.Print(items_[static_cast<size_t>(i)].c_str(), tx, ty);
     }
 
@@ -709,7 +711,15 @@ void ListWidget::paint(PaintContext& ctx)
             ctx.fill.Rectangle(abs.x + 1, ry, viewW - 2, rh, true);
         }
 
-        rows_[static_cast<size_t>(i)]->paint(ctx);
+        if (i == selectedIdx_)
+        {
+            // the Labels of the selected row print selectionText (a widget of the row with a colour of its own keeps it)
+            ctx.rowText = t.selectionText;
+            rows_[static_cast<size_t>(i)]->paint(ctx);
+            ctx.rowText = Color(0, 0, 0, 0);
+        }
+        else
+            rows_[static_cast<size_t>(i)]->paint(ctx);
     }
 
     ctx.popClip();

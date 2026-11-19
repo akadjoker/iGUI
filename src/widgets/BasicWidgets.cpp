@@ -88,7 +88,7 @@ void Label::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
 
     const auto& t = Theme::instance();
-    const Color& c = isEnabledInTree() ? (color_.a > 0 ? color_ : t.textColor) : t.textDisabled;
+    const Color& c = isEnabledInTree() ? (color_.a > 0 ? color_ : (ctx.rowText.a > 0 ? ctx.rowText : t.textColor)) : t.textDisabled;
 
     if (overrideFont_) ctx.pushFont(overrideFont_);
     ctx.font.SetFontSize(t.fontSize);
@@ -933,7 +933,7 @@ void Switch::paint(PaintContext& ctx)
     float swy = abs.y + (abs.h - trackH) * 0.5f;
     float thumbR = trackH * 0.5f - 2.0f;
 
-    Color trackCol = on_ ? onColor_ : offColor_;
+    Color trackCol = on_ ? (onColor_.a ? onColor_ : t.switchOn) : (offColor_.a ? offColor_ : t.switchOff);
     if (hovered_)
     {
         trackCol.r = static_cast<u8>(std::min(255, trackCol.r + 15));

@@ -71,7 +71,7 @@ public:
                 }
             }
 
-            ctx.font.SetColor(t.textColor);
+            ctx.font.SetColor(isSel ? t.selectionText : t.textColor);
             float ty = ry + (rowHeight_ + asc) * 0.5f;
             Rect textClipR{ abs.x + t.padding, abs.y, abs.w - t.padding * 2, abs.h };
             ctx.pushClip(textClipR);

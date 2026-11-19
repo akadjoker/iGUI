@@ -139,19 +139,32 @@ void WidgetApp::shutdown()
 //  Init
 // ═════════════════════════════════════════════════════════════════════════════
 
-void WidgetApp::setTheme(const Theme& theme)
+void WidgetApp::setTheme(const Theme& theme, ThemeParts parts)
 {
-    Theme::instance() = theme;
+    switch (parts)
+    {
+        case ThemeParts::Colors:
+            // the colours only: no size a layout reads changes, so no layout is asked for
+            Theme::instance().applyColors(theme);
+            themeNotify(false);
+            return;
+        case ThemeParts::Metrics:
+            Theme::instance().applyMetrics(theme);
+            break;
+        case ThemeParts::All:
+            Theme::instance() = theme;
+            break;
+    }
     notifyThemeChanged();
 }
 
-bool WidgetApp::setThemePreset(const char* name)
+bool WidgetApp::setThemePreset(const char* name, ThemeParts parts)
 {
     if (!name) return false;
     for (int i = 0; i < Theme::kPresetCount; ++i)
     {
         if (strcmp(name, Theme::presetName(i)) != 0) continue;
-        setTheme(Theme::byName(name));
+        setTheme(Theme::byName(name), parts);
         return true;
     }
     return false;
@@ -159,12 +172,17 @@ bool WidgetApp::setThemePreset(const char* name)
 
 void WidgetApp::notifyThemeChanged()
 {
+    themeNotify(true);
+}
+
+void WidgetApp::themeNotify(bool relayout)
+{
     // the copy first: a handler that changes the theme again is a change of its own
     memcpy(static_cast<void*>(&themeSeen_), static_cast<const void*>(&Theme::instance()), sizeof(Theme));
     themeSeenSet_ = true;
     s_.forcePaint_ = true;
     // sizes that come from the theme (font size, padding, bars) are worked out again at the next layout
-    requestRelayout();
+    if (relayout) requestRelayout();
     themeChanged.emit();
 }
 

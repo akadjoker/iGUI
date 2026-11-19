@@ -3553,6 +3553,6 @@ void CodeEditor::paintCompletion(PaintContext& ctx, const Rect& abs)
     ctx.line.SetColor(t.borderColor);
     ctx.line.RoundedRectangle(docX, docY, width, lh + 6.0f, 4, 6, false);
     ctx.font.SetColor(t.textDisabled);
-    ctx.font.Print(doc.c_str(), docX + 8.0f, docY + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f);
+    ctx.font.Print(doc.c_str(), docX + 8.0f, docY + 3.0f + (lh - ctx.font.GetFontSize()) * 0.5f + ctx.font.GetAscender());
     ctx.popClip();
 }
