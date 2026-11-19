@@ -235,6 +235,48 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  NativeView - a rectangle the application draws into with its own GL calls
+//
+//    auto* view = parent->createChild<NativeView>();
+//    view->setNativeDraw([](const NativeDrawInfo& info) { /* glViewport(info.rectGl...), glDrawArrays... */ }, &state);
+//    view->setFallback([](PaintContext& ctx, const Rect& bounds) { /* the same thing with ctx.drawLine... */ });
+//
+//  When the renderer runs native draw callbacks (NativeDrawAvailable(): the OpenGL renderer does, the software rasteriser and a
+//  test with no renderer do not) the callback is called where the widget is drawn, with the widget's clip as the scissor
+//  (docs/DRAW-CALLBACK.md); otherwise the fallback paints, so the application picks nothing up front: the widget asks the
+//  renderer when it paints. The callback runs only in frames that are painted and calling it marks nothing dirty: a view whose
+//  native content changes calls requestRepaint() (or WidgetApp::requestFrame()) itself.
+// ═════════════════════════════════════════════════════════════════════════════
+
+class NativeView : public Widget
+{
+public:
+    IG_WIDGET_CLASS(NativeView, Widget);
+
+    NativeView() = default;
+
+    /// @brief The native callback and the pointer it is given back (NativeDrawInfo::user). restoreState: iGUI puts back the GL
+    /// state it relies on after the call (the default); false: the callback leaves the state as it found it.
+    void setNativeDraw(NativeDrawFn fn, void* user = nullptr, bool restoreState = true);
+    /// @brief What the widget draws where the renderer cannot run the callback (a PaintContext drawing, an image of what the
+    /// callback draws...). Given the widget's absolute rectangle; the clip is already pushed. Unset: the widget draws nothing there.
+    using FallbackPaint = ct::Function<void(PaintContext& ctx, const Rect& bounds)>;
+    void setFallback(FallbackPaint paint);
+    /// @brief Whether paint() uses the native callback now: there is one, and the renderer runs it. False: the fallback paints.
+    bool isNative() const;
+    /// @brief The native content changed: the next frame is painted (it does not mark the widget dirty).
+    void requestRepaint();
+
+    void paint(PaintContext& ctx) override;
+
+private:
+    NativeDrawFn fn_ = nullptr;
+    void* user_ = nullptr;
+    bool restore_ = true;
+    FallbackPaint fallback_;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  ImageView - draws a TextureHandle with offset (pure display widget)
 //
 //    auto* iv = parent->createChild<ImageView>();

@@ -328,6 +328,47 @@ void Canvas::paint(PaintContext& ctx)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  NativeView
+// ═════════════════════════════════════════════════════════════════════════════
+
+void NativeView::setNativeDraw(NativeDrawFn fn, void* user, bool restoreState)
+{
+    fn_ = fn;
+    user_ = user;
+    restore_ = restoreState;
+    markDirty();
+}
+
+void NativeView::setFallback(FallbackPaint paint)
+{
+    fallback_ = std::move(paint);
+    markDirty();
+}
+
+bool NativeView::isNative() const
+{
+    return fn_ != nullptr && NativeDrawAvailable();
+}
+
+void NativeView::requestRepaint()
+{
+    if (WidgetApp* app = WidgetApp::existing()) app->requestFrame();
+}
+
+void NativeView::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+    const Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+    ctx.pushClip(abs);
+    if (isNative())
+        ctx.drawList.addNativeCallback(fn_, user_, abs, restore_);
+    else if (fallback_)
+        fallback_(ctx, abs);
+    ctx.popClip();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  ImageView
 // ═════════════════════════════════════════════════════════════════════════════
 

@@ -238,6 +238,9 @@ bool App::create(const Config &config)
     context_ = rt::CreateContext();
     rt::SetCurrentContext(context_);
     rt::IO& io = rt::GetIO();
+    // what the renderer can do, known before the first widget is made (see ig::retained::NativeDrawAvailable)
+    io.nativeBackend = useGl_ ? static_cast<int>(gl_.nativeBackend()) : 0;
+    io.nativeSamples = useGl_ ? gl_.targetSamples() : 0;
     io.setClipboardText = [](const char* text) { clipboard_set(text); };
     io.getClipboardText = [] { return rt::String(clipboard_get()); };
 
@@ -571,6 +574,8 @@ bool App::frameWindow(Window *w, bool driven)
     io.deltaTime = static_cast<float>(dt > 0.1 ? 0.1 : dt);
     io.displayWidth = static_cast<float>(sw) / k;
     io.displayHeight = static_cast<float>(sh) / k;
+    io.nativeBackend = useGl_ ? static_cast<int>(gl_.nativeBackend()) : 0;
+    io.nativeSamples = useGl_ ? gl_.targetSamples() : 0;
     if (useGl_ && w == main_ && io.displayWidth > 0.0f)
     {
         // Device pixels per UI unit (the screen's content scale times the UI scale): the text is

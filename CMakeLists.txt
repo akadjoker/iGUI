@@ -498,6 +498,14 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_frames_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_frames COMMAND igui_retained_frames_tests)
         set_tests_properties(igui_retained_frames PROPERTIES TIMEOUT 300)
+        # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks without a GL context: availability, the fallback of a
+        # NativeView, the place in the draw order, nothing merged across one, the software rasteriser skipping it, idle.
+        add_executable(igui_native_callback_tests tests/test_native_callback.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_native_callback_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_native_callback_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_native_callback_tests PRIVATE igui_widgets)
+        add_test(NAME igui_native_callback COMMAND igui_native_callback_tests)
+        set_tests_properties(igui_native_callback PROPERTIES TIMEOUT 300)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)
@@ -737,6 +745,15 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         add_executable(igui_zen_screenshot_gl_tests tests/test_zen_screenshot_gl.cpp)
         target_link_libraries(igui_zen_screenshot_gl_tests PRIVATE igui_zen)
         igui_add_window_test(igui_zen_screenshot_gl igui_zen_screenshot_gl_tests)
+    endif()
+
+    if(IGUI_BUILD_TESTS)
+        # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks on the OpenGL renderer: what they are given, a triangle read
+        # back inside the widget's rectangle and nothing outside, a scroll area's clip, the order between overlapping widgets, the GL
+        # state after a callback that trashes it, idle frames. Needs an X server with OpenGL (77, skipped, without one).
+        add_executable(igui_zen_native_callback_gl_tests tests/test_zen_native_callback_gl.cpp)
+        target_link_libraries(igui_zen_native_callback_gl_tests PRIVATE igui_zen)
+        igui_add_window_test(igui_zen_native_callback_gl igui_zen_native_callback_gl_tests)
     endif()
 
     # Mouse and keyboard through the adapter, with real events made by the XTEST extension of an X server

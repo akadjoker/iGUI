@@ -56,6 +56,19 @@ public:
     // Reads the framebuffer back as 0xAARRGGBB, top row first.
     void readPixels(uint32_t* dst, int width, int height) const;
 
+    // Native draw callbacks (ig::retained::DrawList::addNativeCallback) are run by render() at their place in the draw order,
+    // with the GL state described in docs/DRAW-CALLBACK.md. The multisample count of the target they draw into: the offscreen
+    // target's, or the window framebuffer's as the context reported it at init().
+    int targetSamples() const
+    {
+        return offscreen_ ? samples_ : windowSamples_;
+    }
+    ig::retained::NativeBackend nativeBackend() const
+    {
+        return program_ ? (es_ ? ig::retained::NativeBackend::OpenGLES3 : ig::retained::NativeBackend::OpenGL33Core)
+                        : ig::retained::NativeBackend::None;
+    }
+
     const char* renderer() const;
     // The context version that init() found, and whether it is an OpenGL ES context.
     int versionMajor() const
@@ -90,6 +103,11 @@ private:
     int fboWidth_ = 0;
     int fboHeight_ = 0;
     bool bindTarget(int width, int height); // false: no offscreen target could be made
+    int windowSamples_ = 0;
+    // One native draw callback: the clean state it is entered with, the call, and the state put back.
+    void runNative(const ig::retained::DrawList::Special& special, const ig::retained::DrawCmd& command, const float fbRect[4],
+            const float fbClip[4], const int scissor[4], const float camera[4], int width, int height,
+            ig::retained::DrawData& data);
     int major_ = 0;
     int minor_ = 0;
     bool es_ = false;
@@ -98,6 +116,7 @@ private:
     unsigned vbo_ = 0;
     unsigned ibo_ = 0;
     unsigned whiteTexture_ = 0;
+    unsigned cbVao_ = 0; // the empty vertex array a native draw callback is entered with
     int uRotation_ = -1;
     int uTranslate_ = -1;
     int uInvDisplay_ = -1;

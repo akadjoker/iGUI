@@ -129,6 +129,14 @@ struct IO
     //                     4=SizeH 5=SizeV 6=SizeAll 7=No
     int wantedCursor = 0;
 
+    // ── What the renderer can do (set by backend) ────────────────────────
+    // Read BEFORE painting, by a widget that chooses how to draw (see NativeDrawAvailable()). A fresh IO, and a backend that
+    // sets nothing (the software rasteriser, a test with no renderer), say "no native drawing".
+    // nativeBackend: a NativeBackend value (0: draw callbacks are not run by this renderer).
+    // nativeSamples: the multisample count of the target the callbacks draw into (0 or 1: none).
+    int nativeBackend = 0;
+    int nativeSamples = 0;
+
     // ── Clipboard (set by backend) ───────────────────────────────────
     // Assign captureless lambdas or plain function pointers.
     void (*setClipboardText)(const char*) = nullptr;
@@ -232,6 +240,40 @@ struct RoundClip
     float radii[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
 
+/// Which GL a renderer that runs native draw callbacks speaks. WebGL 2 is OpenGLES3 (the calls a callback may make there are
+/// the ES 3.0 ones, which a 3.3 core context accepts too).
+enum class NativeBackend
+{
+    None = 0,
+    OpenGL33Core = 1,
+    OpenGLES3 = 2
+};
+
+/// What a native draw callback is given (DrawList::addNativeCallback, docs/DRAW-CALLBACK.md). Rectangles are in framebuffer
+/// pixels with the origin at the TOP LEFT of the target and y growing downward (the convention of every other coordinate in
+/// the library, multiplied by the pixel scale); the *Gl members are the same boxes as OpenGL wants them: integers, origin at the
+/// BOTTOM LEFT.
+struct NativeDrawInfo
+{
+    void* user = nullptr; // what addNativeCallback was given
+    int backend = 0;      // a NativeBackend
+    int framebufferWidth = 0;
+    int framebufferHeight = 0;
+    int samples = 0;                       // multisample count of the target (0 or 1: none)
+    float pixelScaleX = 1.0f;              // framebuffer pixels per logical unit
+    float pixelScaleY = 1.0f;
+    Rect rect = { 0, 0, 0, 0 };            // the widget's rectangle, framebuffer pixels, top left origin (not cut to the clip)
+    Rect clip = { 0, 0, 0, 0 };            // the clip in force, the same convention; it is already the scissor
+    int rectGl[4] = { 0, 0, 0, 0 };        // rect as x, y, w, h for glViewport (rounded outward; may reach past the target)
+    int scissorGl[4] = { 0, 0, 0, 0 };     // the box glScissor was given: x, y, w, h, origin bottom left
+    float projection[16] = {};             // column major: logical units (the widgets' coordinates) to clip space, the camera in
+    float pixelProjection[16] = {};        // column major: framebuffer pixels, top left origin, to clip space
+    bool restoreState = true;              // what addNativeCallback was asked for
+};
+
+/// A native draw callback: it runs on the thread of the frame, with the context current, at its place in the draw order.
+using NativeDrawFn = void (*)(const NativeDrawInfo& info);
+
 struct DrawCmd
 {
     /// How many rounded clips one command can carry. Nested rounded clips beyond it lose the
@@ -240,6 +282,14 @@ struct DrawCmd
     {
         MaxRoundClips = 4
     };
+
+    /// True for a command that is not triangles (a native draw callback; DrawList::special() has it): `roundClipCount` is -1 and
+    /// `indexOffset` is the place of its entry in DrawList::specials(), `indexCount` is 0. A renderer that does not know the
+    /// kind skips it like any command with no indices; nothing merges with it.
+    bool isSpecial() const
+    {
+        return roundClipCount < 0;
+    }
 
     TextureHandle texture;
     /// Scissor rectangle: the intersection of every clip rectangle pushed, rounded or not.
@@ -611,6 +661,34 @@ public:
             float scale = 1.0f);
 
 
+    /// A native draw callback at this place of the draw order (docs/DRAW-CALLBACK.md): a renderer that can issue GL calls of its
+    /// own (NativeDrawAvailable()) calls `fn(info)` between the commands drawn before and after this call, with the clip in force
+    /// already its scissor; `rect` (the widget's rectangle, in the units of this list, under the transform in force) is given to it
+    /// in framebuffer pixels. Nothing happens when the clip is empty or `rect` does not touch it. A renderer that cannot run it
+    /// skips it (the command is a no-op to it). The callback is called only in frames that are painted, and calling it marks
+    /// nothing dirty: a widget whose native content changes asks for a frame (WidgetApp::requestFrame). `restoreState`: iGUI puts
+    /// back every piece of GL state it relies on after the call (the exact list is in the document); false: the callback promises to
+    /// have left the state as it found it. Not run under a camera that rotates; rounded clips do not apply to it (the scissor does).
+    void addNativeCallback(NativeDrawFn fn, void* user, const Rect& rect, bool restoreState = true);
+
+    /// What a special command (DrawCmd::isSpecial) is: a native draw callback.
+    struct Special
+    {
+        NativeDrawFn fn = nullptr;
+        void* user = nullptr;
+        Rect rect = { 0, 0, 0, 0 };
+        bool restoreState = true;
+    };
+    const ct::Vector<Special>& specials() const
+    {
+        return specials_;
+    }
+    /// The entry of a special command.
+    const Special& special(const DrawCmd& command) const
+    {
+        return specials_[command.indexOffset];
+    }
+
     Vec2 calcTextSize(const Font& font, const char* text, float scale = 1.0f);
 
     void addTextAligned(const Font& font, const Rect& bounds, const Color& color, const char* text,
@@ -815,6 +893,7 @@ private:
     ct::Vector<DrawVertex> vertices_;
     ct::Vector<uint32_t> indices_;
     ct::Vector<DrawCmd> commands_;
+    ct::Vector<Special> specials_;
     int pushClipCount_ = 0;
     ct::HashMap<uint32_t, FontGlyph> glyphs_;
     // last, so the members the drawing calls use all the time keep their place: the outlines addIcon
@@ -853,6 +932,7 @@ struct RenderStats
     int triangles = 0;
     int textureSwitches = 0;
     int clipChanges = 0; // pushClip calls per frame
+    int nativeCallbacks = 0; // native draw callbacks run (a renderer that cannot run them leaves it 0)
 
     void reset()
     {
@@ -861,6 +941,7 @@ struct RenderStats
         triangles = 0;
         textureSwitches = 0;
         clipChanges = 0;
+        nativeCallbacks = 0;
     }
 };
 
@@ -916,6 +997,13 @@ void SetCurrentContext(Context* ctx);
 Context* GetCurrentContext();
 
 IO& GetIO();
+/// Whether the renderer of this window runs native draw callbacks (DrawList::addNativeCallback): the OpenGL renderer does, the
+/// software rasteriser and a test with no renderer do not. Meant to be asked BEFORE painting, by a widget that picks a texture or
+/// PaintContext fallback up front; a callback added where it is false is skipped, never a crash. Same as GetIO().nativeBackend != 0.
+inline bool NativeDrawAvailable()
+{
+    return GetIO().nativeBackend != 0;
+}
 DrawList& GetDrawList();        // current / new-stage DrawList
 DrawList& GetTransDrawList();   // old-stage DrawList (valid during transitions)
 DrawList& GetOverlayDrawList(); // always rendered last, on top of all stages

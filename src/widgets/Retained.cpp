@@ -789,6 +789,7 @@ void DrawList::clear()
     vertices_.clear();
     indices_.clear();
     commands_.clear();
+    specials_.clear();
     pushClipCount_ = 0;
     newVertices_ = 0;
     lastStart_ = 0;
@@ -2430,6 +2431,50 @@ void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle t
     for (int i = 0; i < roundCount; ++i) command.roundClips[i] = rounds[i];
     commands_.push_back(command);
 }
+void DrawList::addNativeCallback(NativeDrawFn fn, void* user, const Rect& source, bool restoreState)
+{
+    if (!fn) return;
+    Rect rect = source;
+    if (!transformStack_.empty())
+    {
+        const Vec2 p0 = mapPoint(source.x, source.y);
+        const Vec2 p1 = mapPoint(source.x + source.w, source.y);
+        const Vec2 p2 = mapPoint(source.x + source.w, source.y + source.h);
+        const Vec2 p3 = mapPoint(source.x, source.y + source.h);
+        const float x0 = fminf(fminf(p0.x, p1.x), fminf(p2.x, p3.x));
+        const float x1 = fmaxf(fmaxf(p0.x, p1.x), fmaxf(p2.x, p3.x));
+        const float y0 = fminf(fminf(p0.y, p1.y), fminf(p2.y, p3.y));
+        const float y1 = fmaxf(fmaxf(p0.y, p1.y), fmaxf(p2.y, p3.y));
+        rect = { x0, y0, x1 - x0, y1 - y0 };
+    }
+    // The clip in force; nothing to draw when it is empty or the rectangle is outside it
+    const Rect clip = clipStack_.empty() ? Rect{ 0.0f, 0.0f, 100000.0f, 100000.0f } : clipStack_.back().rect;
+    if (clip.w <= 0.0f || clip.h <= 0.0f || rect.w <= 0.0f || rect.h <= 0.0f) return;
+    if (rect.x >= clip.x + clip.w || rect.x + rect.w <= clip.x || rect.y >= clip.y + clip.h || rect.y + rect.h <= clip.y) return;
+
+    // Vertices added since the last command belong to no command (a dropped one): they stay where they are, and the next
+    // command starts after them. Nothing merges with this one (roundClipCount < 0 fails every merge test of addCmd).
+    newVertices_ = vertices_.size();
+    noted_ = 0;
+    lastStart_ = newVertices_;
+    lastBoundsValid_ = false;
+    lastSolidOnly_ = false;
+    mergedClipValid_ = false;
+
+    Special special;
+    special.fn = fn;
+    special.user = user;
+    special.rect = rect;
+    special.restoreState = restoreState;
+    DrawCmd command;
+    command.clip = clip;
+    command.indexOffset = static_cast<uint32_t>(specials_.size());
+    command.indexCount = 0;
+    command.roundClipCount = -1;
+    specials_.push_back(special);
+    commands_.push_back(command);
+}
+
 namespace
 {
 

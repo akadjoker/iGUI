@@ -155,6 +155,8 @@ void GlRaster::shutdown()
     glDeleteBuffers(1, &vbo_);
     glDeleteBuffers(1, &ibo_);
     glDeleteVertexArrays(1, &vao_);
+    if (cbVao_) glDeleteVertexArrays(1, &cbVao_);
+    cbVao_ = 0;
     glDeleteProgram(program_);
     if (fbo_)
     {
@@ -197,6 +199,7 @@ bool GlRaster::init(void* (*procAddress)(const char* name))
 #endif
     glGetIntegerv(GL_MAJOR_VERSION, &major_);
     glGetIntegerv(GL_MINOR_VERSION, &minor_);
+    glGetIntegerv(GL_SAMPLES, &windowSamples_); // of the window's own framebuffer (the one bound now)
     const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
     es_ = version && strncmp(version, "OpenGL ES", 9) == 0;
     if (major_ < 3 || (!es_ && major_ == 3 && minor_ < 3)) return false;
@@ -418,6 +421,85 @@ bool GlRaster::prepareOffscreen(int width, int height)
     return bindTarget(width, height);
 }
 
+// A native draw callback (docs/DRAW-CALLBACK.md). Entered with: the target bound and its viewport (0, 0, width, height); the
+// scissor test on with the box of the clip; blend on (source alpha, one minus source alpha; colour and alpha as iGUI draws them);
+// depth, stencil and face culling off; every colour channel written; and NOTHING of iGUI's objects bound: program 0, a vertex array
+// of its own that is empty (made new for each call), no array buffer, texture unit 0 with no 2D texture. Left: with restoreState,
+// all of that put back (and the callback may have changed any of it); without it the callback must have left the target, the viewport,
+// the scissor, the blend, depth, stencil, culling and colour mask states, and the active texture unit as it found them. The program,
+// vertex array, buffer and texture bindings iGUI uses it always binds again (they were cleared to enter).
+void GlRaster::runNative(const ig::retained::DrawList::Special& special, const ig::retained::DrawCmd& command, const float fbRect[4],
+        const float fbClip[4], const int scissor[4], const float camera[4], int width, int height, ig::retained::DrawData& data)
+{
+    (void) command;
+    ig::retained::NativeDrawInfo info;
+    info.user = special.user;
+    info.backend = static_cast<int>(nativeBackend());
+    info.framebufferWidth = width;
+    info.framebufferHeight = height;
+    info.samples = targetSamples();
+    info.pixelScaleX = static_cast<float>(width) / data.displayWidth;
+    info.pixelScaleY = static_cast<float>(height) / data.displayHeight;
+    info.rect = { fbRect[0], fbRect[1], fbRect[2] - fbRect[0], fbRect[3] - fbRect[1] };
+    info.clip = { fbClip[0], fbClip[1], fbClip[2] - fbClip[0], fbClip[3] - fbClip[1] };
+    const int rx0 = static_cast<int>(floorf(fbRect[0])), rx1 = static_cast<int>(ceilf(fbRect[2]));
+    const int ry0 = static_cast<int>(floorf(fbRect[1])), ry1 = static_cast<int>(ceilf(fbRect[3]));
+    info.rectGl[0] = rx0;
+    info.rectGl[1] = height - ry1;
+    info.rectGl[2] = rx1 - rx0;
+    info.rectGl[3] = ry1 - ry0;
+    for (int i = 0; i < 4; ++i) info.scissorGl[i] = scissor[i];
+    // logical units to clip space, with the camera (scale and translation; a rotating camera never gets here)
+    const float invW = 1.0f / data.displayWidth, invH = 1.0f / data.displayHeight;
+    info.projection[0] = 2.0f * camera[0] * invW;
+    info.projection[5] = -2.0f * camera[0] * invH;
+    info.projection[10] = 1.0f;
+    info.projection[12] = 2.0f * camera[1] * invW - 1.0f;
+    info.projection[13] = 1.0f - 2.0f * camera[2] * invH;
+    info.projection[15] = 1.0f;
+    // framebuffer pixels (top left origin) to clip space
+    info.pixelProjection[0] = 2.0f / static_cast<float>(width);
+    info.pixelProjection[5] = -2.0f / static_cast<float>(height);
+    info.pixelProjection[10] = 1.0f;
+    info.pixelProjection[12] = -1.0f;
+    info.pixelProjection[13] = 1.0f;
+    info.pixelProjection[15] = 1.0f;
+    info.restoreState = special.restoreState;
+
+    // the clean state it is entered with
+    if (cbVao_) glDeleteVertexArrays(1, &cbVao_);
+    glGenVertexArrays(1, &cbVao_);
+    glUseProgram(0);
+    glBindVertexArray(cbVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    special.fn(info);
+    ++data.stats.nativeCallbacks;
+
+    if (special.restoreState)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, offscreen_ ? fbo_ : 0u);
+        glViewport(0, 0, width, height);
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scissor[0], scissor[1], scissor[2], scissor[3]);
+        glEnable(GL_BLEND);
+        glBlendEquation(GL_FUNC_ADD);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_STENCIL_TEST);
+        glDisable(GL_SAMPLE_ALPHA_TO_COVERAGE);
+        glDisable(GL_POLYGON_OFFSET_FILL);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glActiveTexture(GL_TEXTURE0);
+    }
+    glUseProgram(program_);
+    glBindVertexArray(vao_);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_);
+}
+
 void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint32_t background)
 {
     data.stats.reset();
@@ -478,10 +560,14 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
 
         for (const ig::retained::DrawCmd& command: pass.list->commands())
         {
-            if (command.indexCount == 0 ||
-                    command.indexOffset + command.indexCount > indices.size())
+            const bool special = command.isSpecial();
+            if (!special && (command.indexCount == 0 ||
+                                    command.indexOffset + command.indexCount > indices.size()))
                 continue;
+            if (special && (pass.camera.angle != 0.0f || command.indexOffset >= pass.list->specials().size()))
+                continue; // (a native callback is not run under a camera that rotates)
             int sx = 0, sy = 0, sw = width, sh = height;
+            float fbClip[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
             if (pass.camera.angle == 0.0f)
             {
                 float x0 = (cosine * command.clip.x + translateX) * scaleX;
@@ -511,8 +597,25 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
                 sw = ix1 - ix0;
                 sy = height - iy1; // GL's origin is the bottom left
                 sh = iy1 - iy0;
+                fbClip[0] = static_cast<float>(ix0);
+                fbClip[1] = static_cast<float>(iy0);
+                fbClip[2] = static_cast<float>(ix1);
+                fbClip[3] = static_cast<float>(iy1);
             }
             glScissor(sx, sy, sw, sh);
+            if (special)
+            {
+                const ig::retained::DrawList::Special& entry = pass.list->special(command);
+                const float rx0 = (cosine * entry.rect.x + translateX) * scaleX;
+                const float ry0 = (cosine * entry.rect.y + translateY) * scaleY;
+                const float rx1 = (cosine * (entry.rect.x + entry.rect.w) + translateX) * scaleX;
+                const float ry1 = (cosine * (entry.rect.y + entry.rect.h) + translateY) * scaleY;
+                const float fbRect[4] = { rx0 < rx1 ? rx0 : rx1, ry0 < ry1 ? ry0 : ry1, rx0 < rx1 ? rx1 : rx0, ry0 < ry1 ? ry1 : ry0 };
+                const int scissor[4] = { sx, sy, sw, sh };
+                const float cameraXf[4] = { cosine, translateX, translateY, 0.0f };
+                runNative(entry, command, fbRect, fbClip, scissor, cameraXf, width, height, data);
+                continue;
+            }
             if (command.roundClipCount > 0 || roundsSet > 0)
             {
                 float rects[ig::retained::DrawCmd::MaxRoundClips * 4] = {};

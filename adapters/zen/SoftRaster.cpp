@@ -384,6 +384,7 @@ uint64_t SoftRaster::signature(const ig::retained::DrawData& data, int width, in
         mix(ix.data(), ix.size() * sizeof ix[0]);
         for (const ig::retained::DrawCmd& cmd: pass.list->commands())
         {
+            if (cmd.isSpecial()) continue; // (a native draw callback: this rasteriser skips it, so it draws nothing)
             mix(&cmd.texture.value, sizeof cmd.texture.value);
             if (cmd.texture)
                 mix(&reinterpret_cast<const Texture*>(cmd.texture.value)->version,
@@ -481,6 +482,7 @@ bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, 
 
         for (const ig::retained::DrawCmd& command: pass.list->commands())
         {
+            if (command.isSpecial()) continue; // (a native draw callback: only a GL renderer runs it)
             int cx0 = 0, cy0 = 0, cx1 = bufW, cy1 = bufH;
             if (pass.camera.angle == 0.0f)
             {

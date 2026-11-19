@@ -69,6 +69,7 @@ bool SdlWidgetBridge::render(ig::retained::DrawData& data)
 
         for (const ig::retained::DrawCmd& command: pass.list->commands())
         {
+            if (command.isSpecial()) continue; // (a native draw callback: SDL has no GL to give it)
             SDL_Rect clip;
             if (pass.camera.angle == 0.0f)
             {
