@@ -1089,6 +1089,8 @@ void DataGrid::onKeyPress(KeyEvent& e)
     if (editing_)
     {
         e.consumed = true;
+        // the clipboard keys of the line being edited (TextClip.hpp: Ctrl+V / Shift+Insert paste, Ctrl+C / Ctrl+Insert copy the line, Ctrl+X / Shift+Delete cut it)
+        if (textclip::onKey(*this, e)) return;
         switch (e.key)
         {
             case ig::retained::Key::Return:
@@ -1156,26 +1158,6 @@ void DataGrid::onKeyPress(KeyEvent& e)
                     startEdit(displayRow(cell / cols), cell % cols);
                 return;
             }
-            case ig::retained::Key::C:
-                if (e.ctrl)
-                {
-                    WidgetApp::instance().setClipboardText(editBuf_.c_str());
-                    return;
-                }
-                break;
-            case ig::retained::Key::V:
-                if (e.ctrl)
-                {
-                    String clip = WidgetApp::instance().getClipboardText();
-                    if (!clip.empty())
-                    {
-                        editBuf_.insert(editCursor_, clip);
-                        editCursor_ += static_cast<int>(clip.size());
-                        markDirty();
-                    }
-                    return;
-                }
-                break;
             default:
                 break;
         }
@@ -2286,6 +2268,8 @@ void TreeGrid::onKeyPress(KeyEvent& e)
     if (editing_)
     {
         e.consumed = true;
+        // the clipboard keys of the line being edited (TextClip.hpp: Ctrl+V / Shift+Insert paste, Ctrl+C / Ctrl+Insert copy the line, Ctrl+X / Shift+Delete cut it)
+        if (textclip::onKey(*this, e)) return;
         switch (e.key)
         {
             case ig::retained::Key::Return:
@@ -2334,26 +2318,6 @@ void TreeGrid::onKeyPress(KeyEvent& e)
                 editCursor_ = static_cast<int>(editBuf_.size());
                 markDirty();
                 return;
-            case ig::retained::Key::C:
-                if (e.ctrl)
-                {
-                    WidgetApp::instance().setClipboardText(editBuf_.c_str());
-                    return;
-                }
-                break;
-            case ig::retained::Key::V:
-                if (e.ctrl)
-                {
-                    String clip = WidgetApp::instance().getClipboardText();
-                    if (!clip.empty())
-                    {
-                        editBuf_.insert(editCursor_, clip);
-                        editCursor_ += static_cast<int>(clip.size());
-                        markDirty();
-                    }
-                    return;
-                }
-                break;
             default:
                 break;
         }

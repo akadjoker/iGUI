@@ -1,6 +1,7 @@
 #pragma once
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
+#include "TextClip.hpp"
 #include "Widget.hpp"
 #include <ct/function.hpp>
 #include <ct/hashset.hpp>
@@ -67,7 +68,7 @@ private:
 //  DataGrid — spreadsheet table with sortable columns, inline edit,
 //             checkboxes, multi-select, zebra stripes
 // ═════════════════════════════════════════════════════════════════════════════
-class DataGrid : public Widget
+class DataGrid : public Widget, public LineClipTarget
 {
 public:
     IG_WIDGET_CLASS(DataGrid, Widget);
@@ -287,6 +288,7 @@ private:
     int editCol_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+    IG_LINE_CLIP(editBuf_, editCursor_) // the clipboard keys of the cell being edited (TextClip.hpp)
     float editScroll_ = 0.f; // how far the text of the edited cell is moved left to keep the cursor in sight
 
     int resizeCol_ = -1;
@@ -324,7 +326,7 @@ private:
 // ═════════════════════════════════════════════════════════════════════════════
 //  TreeGrid — hierarchical table (tree + columns)
 // ═════════════════════════════════════════════════════════════════════════════
-class TreeGrid : public Widget
+class TreeGrid : public Widget, public LineClipTarget
 {
 public:
     IG_WIDGET_CLASS(TreeGrid, Widget);
@@ -555,6 +557,7 @@ private:
     int editCol_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+    IG_LINE_CLIP(editBuf_, editCursor_)
     float editScroll_ = 0.f; // how far the text of the edited cell is moved left to keep the cursor in sight
 
     int resizeCol_ = -1;

@@ -529,6 +529,134 @@ void testPadKeys(bool code)
     }
 }
 
+// ── the other fields ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+void testSearchBar()
+{
+    printf("-- SearchBar: the keys, the menu and the middle button\n");
+    Harness h(500.0f, 220.0f);
+    Widget* holder = h.root()->createChild<Widget>();
+    holder->setRect({ 0, 0, 500, 220 });
+    SearchBar* bar = holder->createChild<SearchBar>();
+    bar->setRect({ 20, 20, 300, 28 });
+    h.relayout();
+    h.clickWidget(bar);
+    int changes = 0;
+    bar->onTextChanged.connect([&changes](const String&) { ++changes; });
+    clipboardText() = "query";
+    h.key(Key::V, false, true);
+    check(bar->text() == "query" && changes == 1, "Ctrl+V pastes in the search field");
+    bar->clear();
+    clipboardText() = "more\nlines";
+    h.key(Key::Insert, true, false);
+    check(bar->text() == "morelines", "Shift+Insert pastes too, on one line");
+    clipboardText() = "";
+    h.key(Key::Insert, false, true);
+    check(clipboardText() == "morelines" && bar->text() == "morelines", "Ctrl+Insert copies its text");
+    clipboardText() = "";
+    h.key(Key::Delete, true, false);
+    check(bar->text().empty() && clipboardText() == "morelines", "Shift+Delete cuts its text");
+    withPrimary(h);
+    primaryText() = "prim";
+    clipboardText() = "clip";
+    const Rect r = bar->absoluteRect();
+    h.click(r.x + r.w * 0.5f, r.y + r.h * 0.5f, 2);
+    check(bar->text() == "prim", "a middle click pastes the PRIMARY selection");
+    Menu* menu = openMenu(h, r.x + 200.0f, r.y + r.h * 0.5f);
+    check(menu != nullptr && menu->actionCount() == 6 && WidgetApp::instance().popupOwner() == bar, "a right click opens the menu");
+    check(flagsAre(menu, { true, true, true, true, false }), "Cut, Copy, Paste and Delete work on the whole text; there is nothing to select");
+    clickItem(h, menu, 2);
+    check(bar->text() == "primclip", "Paste in the menu goes in at the cursor");
+    menu = openMenu(h, r.x + 200.0f, r.y + r.h * 0.5f);
+    clickItem(h, menu, 0);
+    check(bar->text().empty() && clipboardText() == "primclip", "Cut in the menu takes the text out");
+}
+
+void testConsoleInput()
+{
+    printf("-- ConsoleWidget: the input line\n");
+    Harness h(500.0f, 300.0f);
+    Widget* holder = h.root()->createChild<Widget>();
+    holder->setRect({ 0, 0, 500, 300 });
+    ConsoleWidget* console = holder->createChild<ConsoleWidget>();
+    console->setRect({ 0, 0, 500, 300 });
+    h.relayout();
+    h.frames(2);
+    String command;
+    console->onCommand.connect([&command](const String& c) { command = c; });
+    h.click(100.0f, 290.0f, 0); // the input line is at the bottom
+    clipboardText() = "ls -l";
+    h.key(Key::V, false, true);
+    h.key(Key::Insert, true, false);
+    h.key(Key::Return);
+    check(command == "ls -lls -l", "Ctrl+V and Shift+Insert paste in the input line");
+    clipboardText() = "";
+    h.type("abc");
+    h.key(Key::Insert, false, true);
+    check(clipboardText() == "abc", "Ctrl+Insert copies the line");
+    h.key(Key::Delete, true, false);
+    command = "";
+    h.key(Key::Insert, true, false);
+    h.key(Key::Return);
+    check(command == "abc", "Shift+Delete cut the line, and Shift+Insert gives it back (not \"abcabc\")");
+}
+
+void testGridEditors()
+{
+    printf("-- the cell editor of a DataGrid (TreeGrid and PropertyGrid run the same line of code)\n");
+    {
+        Harness h(500.0f, 300.0f);
+        Widget* holder = h.root()->createChild<Widget>();
+        holder->setRect({ 0, 0, 500, 300 });
+        DataGrid* grid = holder->createChild<DataGrid>();
+        grid->setRect({ 0, 0, 500, 300 });
+        grid->addColumn("A", 200.0f);
+        ct::Vector<String> row;
+        row.push_back("one");
+        grid->addRow(row);
+        h.relayout();
+        h.frames(2);
+        h.click(60.0f, 44.0f, 0); // the first row, below the header
+        h.key(Key::Return);       // Enter starts editing the cell
+        clipboardText() = "X";
+        h.key(Key::Insert, true, false);
+        clipboardText() = "";
+        h.key(Key::Insert, false, true);
+        check(clipboardText() == "oneX", "DataGrid: Shift+Insert pastes into the cell being edited, Ctrl+Insert copies its text");
+        clipboardText() = "Y\nZ";
+        h.key(Key::V, false, true);
+        h.key(Key::Return);
+        check(grid->cell(0, 0) == "oneXYZ", "DataGrid: Ctrl+V pastes on one line, Enter commits");
+        h.key(Key::Return);
+        h.key(Key::Delete, true, false);
+        h.key(Key::Return);
+        check(grid->cell(0, 0).empty() && clipboardText() == "oneXYZ", "DataGrid: Shift+Delete cuts the cell's text");
+    }
+}
+
+void testFindBar()
+{
+    printf("-- CodeEditor: the find bar\n");
+    Pad p("alpha beta", true);
+    CodeEditor* editor = static_cast<CodeEditor*>(p.edit);
+    editor->showBar(CodeEditor::Bar::Find);
+    p.h.frames(2);
+    clipboardText() = "bet";
+    p.h.key(Key::V, false, true);
+    check(editor->barText() == "bet" && editor->text() == "alpha beta", "Ctrl+V pastes in the find bar, not in the text");
+    p.h.key(Key::Insert, true, false);
+    check(editor->barText() == "betbet" && editor->text() == "alpha beta", "Shift+Insert too");
+    clipboardText() = "";
+    p.h.key(Key::Insert, false, true);
+    check(clipboardText() == "betbet", "Ctrl+Insert copies the bar's text");
+    p.h.key(Key::Delete, true, false);
+    check(editor->barText().empty(), "Shift+Delete cuts it");
+    editor->showBar(CodeEditor::Bar::GotoLine);
+    clipboardText() = "a12b3";
+    p.h.key(Key::Insert, true, false);
+    check(editor->barText() == "123", "the go to line bar takes the digits of a paste");
+}
+
 // ── pictures ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 void writePicture(const char* dir, const char* name, const Shot& shot)
@@ -579,7 +707,7 @@ void testPictures(const char* dir)
             for (int k = 0; k < 7; ++k) h.key(Key::Right, true);
             if (pass == 1) input->selectAll();
             clipboardText() = "clipboard";
-            h.click(input->absoluteRect().x + 40.0f, input->absoluteRect().y + 8.0f, 1);
+            h.click(input->absoluteRect().x + (pass == 0 ? 75.0f : 40.0f), input->absoluteRect().y + 8.0f, 1); // inside the selection: it stays
             h.frames(14);
             const Shot shot = screen.take();
             for (int y = 0; y < 190; ++y)
@@ -606,6 +734,10 @@ int main()
     testInputMiddleAndPrimary();
     testPadKeys(false);
     testPadKeys(true);
+    testSearchBar();
+    testConsoleInput();
+    testGridEditors();
+    testFindBar();
     if (const char* dir = getenv("ROUND10_SHOTS")) testPictures(dir);
     Theme::instance() = Theme::dark();
     shutdown();

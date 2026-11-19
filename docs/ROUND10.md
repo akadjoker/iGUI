@@ -221,6 +221,41 @@ grafico pede frames.
 - **containers (`ct`)**: continua o `Vector::resize_for_overwrite(n)` pedido em `ROUND9.md` 2.1 (um redimensionar que nao escreve zeros: o `appendIndices` do desenho e `Mesh` do grafico escrevem tudo a seguir).
   Nada mais.
 
+## 7. A area de transferencia dos campos de texto
+
+Pedido da equipa da aplicacao ("nem Ctrl+V nem o rato"): colar so funcionava com Ctrl+V e, em varios campos, nem isso. Agora **um so sitio** decide o que cada tecla e o menu fazem:
+`include/igui/widgets/TextClip.hpp` e `src/widgets/TextClip.cpp` (`TextClipTarget`: o que o widget diz que pode, e `textclip::onKey` / `onMouse` / `publishSelection`); os campos
+nao tem nenhuma tecla de copiar ou colar escrita a mao. Uma aplicacao que faca o seu proprio campo deriva de `TextClipTarget` e chama as duas funcoes.
+
+- **Teclas** (junto de Ctrl+V, Ctrl+C e Ctrl+X): **Shift+Insert** cola, **Ctrl+Insert** copia, **Shift+Delete** corta (`Key::Insert` e novo; o Delete simples e o Insert simples ficam como eram). Ctrl+A selecciona tudo.
+  **Cmd nos presets do macOS: nao**: o `KeyEvent` do iGUI nao tem a tecla de comando (`Super`); a zen_plataform tem `KEYMOD_SUPER` e acrescentar um `meta` ao `IO::KeyEvent` e ao `KeyEvent` e uma
+  mudanca pequena (ZenApp.cpp, `addKeyEvent`), nao feita aqui.
+- **Regras**: so de leitura copia mas nao corta nem cola (a tecla e gasta: Shift+Delete nao apaga); **uma palavra-passe nao copia nem corta** (o `Ctrl+C` copiava a palavra-passe: corrigido), e cola;
+  um campo de uma linha deixa cair as quebras de linha do que cola; `NumberOnly` recusa uma colagem com letras (como com Ctrl+V); colar sobre uma seleccao substitui-a.
+- **Menu do botao direito**: Cut, Copy, Paste, Delete, uma linha, Select All (os atalhos escritos); cada item **desactivado** onde nao se aplica (sem seleccao: Cut, Copy e Delete; so de leitura: tudo menos Copy e
+  Select All; palavra-passe: Cut e Copy; area de transferencia vazia: Paste; sem texto: Select All). E um `Menu` feito para aquele clique, do popup (`Menu::execOwned`), com o campo como dono: **um campo que
+  sai da janela com o menu aberto fecha-o** (`WidgetApp::notifyWidgetRemoved`, o protector de apagamentos da biblioteca), e um tratador de `textChanged` que tira o campo ao colar ou apagar pelo menu nao
+  deixa nada aberto (testado sob ASan). Tema como os outros popups: imagens `docs/img/round10/textmenu-<preset>.png` (esquerda: campo com seleccao, todos os itens; direita: palavra-passe seleccionada,
+  Cut e Copy desactivados). Um clique direito dentro da seleccao mantem-na; fora, poe o cursor ali. O widget diz `ownsContextMenu()` (novo, em `Widget`): o menu de um pai nao tapa o do campo, e um
+  `setContextMenu` posto no proprio campo continua a ganhar.
+- **Botao do meio**: cola no ponto do clique a seleccao **PRIMARY**; seleccionar com o rato (ao largar) ou Ctrl+A / "Select All" poe a seleccao nela (uma palavra-passe nunca).
+  **Onde esta o gancho do PRIMARY**: `IO::getPrimaryText` / `IO::setPrimaryText` (`include/igui/widgets/Retained.hpp`, ponteiros para funcoes como os da area de transferencia), lidos por
+  `WidgetApp::getPrimaryText()` (**sem PRIMARY cai na area de transferencia normal**: o botao do meio cola) e `WidgetApp::setPrimaryText()` (sem PRIMARY nao faz nada); no adaptador zen,
+  **`ig::zen::App::setPrimaryHooks(get, set)`** (`adapters/zen/include/igui_zen/ZenApp.hpp`; `create()` em `ZenApp.cpp` leva-os ao IO). Hoje nao ha nenhum, por isso o botao do meio cola a area de
+  transferencia. Quando a zen_plataforma tiver `clipboard_get_primary` / `clipboard_set_primary` (e a pergunta de suporte) a ligacao e uma linha onde a aplicacao arranca:
+  `zen.setPrimaryHooks([] { return ig::retained::String(clipboard_get_primary()); }, [](const char* t) { clipboard_set_primary(t); });` (ou dentro de `create()`, ao lado de `io.getClipboardText`).
+- **Que campos**: `TextInput` (e com ele o campo de texto do `SpinSlider`, o `FileDialog`, o seletor de cor...), `TextEdit` e o `CodeEditor` (cortar e colar sao **um passo de undo**: `replaceRange`; o undo
+  e o redo restauram o que a colagem substituiu), `SearchBar`: teclas, menu e botao do meio. Sem seleccao (uma linha com um cursor): Copy, Cut e Delete trabalham na linha toda, Paste entra no cursor
+  (`LineClipTarget`). Os que so tem **teclas** (sem menu nem botao do meio, o rato destes widgets ja faz outras coisas): a linha de entrada da `ConsoleWidget` (Ctrl+C continua a copiar a linha seleccionada
+  do registo: a linha copia-se com Ctrl+Insert), o editor de celulas da `DataGrid`, da `TreeGrid` e da `PropertyGrid` (que antes nao colava nada), e as **barras do `CodeEditor`** (procurar, substituir, ir
+  para a linha: o Ctrl+V ia para o texto do editor, por baixo da barra; agora cola na barra, e a barra "ir para a linha" so toma os digitos).
+- **Testes** (`igui_retained_textclip`, entrada injectada): cada atalho e cada item do menu em `TextInput`, `TextEdit` e `CodeEditor`; a seleccao substituida ao colar; undo e redo no `CodeEditor`; so de leitura
+  recusa cortar e colar e deixa copiar; palavra-passe recusa copiar e cortar; so numeros; o menu com cada combinacao de estados; clique fora fecha o menu; o campo que sai com o menu aberto e o
+  tratador que o tira; o botao do meio com e sem PRIMARY (a area de transferencia nao e tocada com PRIMARY); a seleccao pelo rato, o duplo clique e Ctrl+A como PRIMARY; `SearchBar`, a linha da consola, uma
+  celula da `DataGrid` e as barras do editor. Nao ha teste da `TreeGrid` nem da `PropertyGrid` (a mesma linha de codigo que a `DataGrid`) nem das teclas com varios cursores do `CodeEditor` (a colagem
+  vai para o cursor principal, como com Ctrl+V).
+- **Nao feito**: Escape nao fecha o menu (nenhum menu da biblioteca tem teclado: fecha com um clique fora); `meta`/Cmd (acima).
+
 ## 6. Verificacao
 
 Instrucoes por cena do banco de comparacao (`tools/bench_compare.sh`, so contagem de instrucoes, rasteriador por software, antes = `origin/main` `fd8863d`; depois = esta ronda inteira, com a parte 3):

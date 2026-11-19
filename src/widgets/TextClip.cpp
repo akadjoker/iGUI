@@ -7,6 +7,26 @@ namespace ig
 {
 namespace retained
 {
+void LineClipTarget::clipReplaceSelection(const String& text)
+{
+    String& line = clipLineRef();
+    if (text.empty())
+    {
+        if (line.empty()) return;
+        line.clear();
+        clipSetCursor(0);
+    }
+    else
+    {
+        int at = clipCursor();
+        if (at < 0) at = 0;
+        if (at > static_cast<int>(line.size())) at = static_cast<int>(line.size());
+        line.insert(static_cast<size_t>(at), text);
+        clipSetCursor(at + static_cast<int>(text.size()));
+    }
+    clipChanged();
+}
+
 namespace textclip
 {
 
@@ -32,6 +52,15 @@ Action keyAction(const KeyEvent& e)
 namespace
 {
 
+String oneLine(const String& from)
+{
+    String text;
+    text.reserve(from.size());
+    for (size_t i = 0; i < from.size(); ++i)
+        if (from[i] != '\n' && from[i] != '\r') text += from[i];
+    return text;
+}
+
 // What a paste puts in: a one line widget drops the line breaks.
 void paste(TextClipTarget& t, const String& from)
 {
@@ -41,14 +70,16 @@ void paste(TextClipTarget& t, const String& from)
         t.clipReplaceSelection(from);
         return;
     }
-    String text;
-    text.reserve(from.size());
-    for (size_t i = 0; i < from.size(); ++i)
-        if (from[i] != '\n' && from[i] != '\r') text += from[i];
+    const String text = oneLine(from);
     if (!text.empty()) t.clipReplaceSelection(text);
 }
 
 } // namespace
+
+String clipboardLine()
+{
+    return oneLine(WidgetApp::instance().getClipboardText());
+}
 
 void publishSelection(TextClipTarget& t)
 {

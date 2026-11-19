@@ -2491,6 +2491,7 @@ void PropertyGrid::onKeyPress(KeyEvent& e)
     if (editing_)
     {
         e.consumed = true;
+        if (textclip::onKey(*this, e)) return; // the clipboard keys of the value being edited (TextClip.hpp)
         switch (e.key)
         {
             case ig::retained::Key::Return:

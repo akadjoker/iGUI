@@ -814,6 +814,14 @@ void ConsoleWidget::onKeyPress(KeyEvent& e)
     // Input focused — command line keys
     if (inputFocused_)
     {
+        // the clipboard keys act on the input line (TextClip.hpp); Ctrl+C is above: it copies the selected line of the log, so the line is copied with Ctrl+Insert
+        const textclip::Action clip = textclip::keyAction(e);
+        if (clip == textclip::Action::Paste || clip == textclip::Action::Cut || (clip == textclip::Action::Copy && e.key == ig::retained::Key::Insert))
+        {
+            e.consumed = true;
+            textclip::run(*this, clip);
+            return;
+        }
         switch (e.key)
         {
             case ig::retained::Key::Return:

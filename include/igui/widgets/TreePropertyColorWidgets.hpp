@@ -2,6 +2,7 @@
 #include "DataWidgets.hpp"
 #include "IconAtlas.hpp"
 #include "ItemModel.hpp"
+#include "TextClip.hpp"
 #include "Widget.hpp"
 #include <ct/function.hpp>
 #include <ct/vector.hpp>
@@ -374,7 +375,7 @@ private:
 // ═════════════════════════════════════════════════════════════════════════════
 class SpinSlider;
 
-class PropertyGrid : public Widget
+class PropertyGrid : public Widget, public LineClipTarget
 {
 public:
     IG_WIDGET_CLASS(PropertyGrid, Widget);
@@ -605,6 +606,7 @@ private:
     int activeRow_ = -1;
     String editBuf_;
     int editCursor_ = 0;
+    IG_LINE_CLIP(editBuf_, editCursor_) // the clipboard keys of the value being edited (TextClip.hpp)
     float editScroll_ = 0.f; // how far the text being edited is moved to the left (kept between frames)
 
     // What paint worked out for the texts it prints (PaintContext::printElided): a few for each row, and

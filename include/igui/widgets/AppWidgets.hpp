@@ -2,6 +2,7 @@
 
 #include "MenuWidgets.hpp"
 #include "Signal.hpp"
+#include "TextClip.hpp"
 #include "Theme.hpp"
 #include "Widget.hpp"
 #include <ct/function.hpp>
@@ -75,7 +76,7 @@ private:
 //      sb->onSearch.connect([](const String& q) { /* filter */ });
 // ═════════════════════════════════════════════════════════════════════════════
 
-class SearchBar : public Widget
+class SearchBar : public Widget, public LineClipTarget
 {
 public:
     IG_WIDGET_CLASS(SearchBar, Widget);
@@ -113,6 +114,40 @@ public:
     void onMousePress(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
     void onTextInput(KeyEvent& e) override;
+
+    // The clipboard and the right click menu (TextClip.hpp): the field has no selection, so Copy, Cut and Delete work on the whole text.
+    bool ownsContextMenu() const override
+    {
+        return true;
+    }
+    Widget* clipWidget() override
+    {
+        return this;
+    }
+    bool clipEditable() const override
+    {
+        return true;
+    }
+    void clipPlaceCursor(const MouseEvent& e) override;
+
+protected:
+    const String& clipLine() const override
+    {
+        return text_;
+    }
+    String& clipLineRef() override
+    {
+        return text_;
+    }
+    int clipCursor() const override
+    {
+        return cursorPos_;
+    }
+    void clipSetCursor(int offset) override
+    {
+        cursorPos_ = offset;
+    }
+    void clipChanged() override;
 
 private:
     String text_;

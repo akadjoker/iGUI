@@ -231,6 +231,27 @@ void CodeEditor::refilterPalette()
 bool CodeEditor::barKey(KeyEvent& e)
 {
     namespace Key = ig::retained::Key;
+    // The clipboard keys (TextClip.hpp) act on the field of the bar that has the cursor, not on the text under it: a paste goes in at the end (as typed:
+    // a go to line bar takes the digits), a copy takes the field, a cut empties it.
+    {
+        const textclip::Action action = textclip::keyAction(e);
+        if (action == textclip::Action::Paste || action == textclip::Action::Copy || action == textclip::Action::Cut)
+        {
+            String& field = bar_ == Bar::Replace && barField_ == 1 ? barReplace_ : barText_;
+            if (action == textclip::Action::Paste) barInput(textclip::clipboardLine().c_str());
+            else if (!field.empty())
+            {
+                WidgetApp::instance().setClipboardText(field.c_str());
+                if (action == textclip::Action::Cut)
+                {
+                    field.clear();
+                    barChanged();
+                }
+            }
+            e.consumed = true;
+            return true;
+        }
+    }
     switch (e.key)
     {
         case Key::Escape:

@@ -285,8 +285,14 @@ void SearchBar::onMousePress(MouseEvent& e)
         }
     }
 
-    // Position cursor
-    // Simple approximation: use text width
+    if (textclip::onMouse(*this, e)) return; // the right button: the menu; the middle one: paste at the click
+    clipPlaceCursor(e);
+    e.consumed = true;
+}
+
+// The cursor goes to the character boundary nearest to the click (an approximation from the width of the text before each).
+void SearchBar::clipPlaceCursor(const MouseEvent& e)
+{
     float taX = textAreaX();
     float clickX = e.localX - taX + scrollX_;
     int best = 0;
@@ -304,11 +310,18 @@ void SearchBar::onMousePress(MouseEvent& e)
     cursorPos_ = best;
     blinkTimer_ = 0;
     markDirty();
-    e.consumed = true;
+}
+
+void SearchBar::clipChanged()
+{
+    blinkTimer_ = 0;
+    markDirty();
+    onTextChanged.emit(text_); // (last)
 }
 
 void SearchBar::onKeyPress(KeyEvent& e)
 {
+    if (textclip::onKey(*this, e)) return; // Ctrl+V / Shift+Insert paste, Ctrl+C / Ctrl+Insert copy the text, Ctrl+X / Shift+Delete cut it (TextClip.hpp)
     if (e.key == ig::retained::Key::Return || e.key == ig::retained::Key::KPEnter)
     {
         onSearch.emit(text_);

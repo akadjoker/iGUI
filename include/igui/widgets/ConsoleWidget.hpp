@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Signal.hpp"
+#include "TextClip.hpp"
 #include "Theme.hpp"
 #include "Widget.hpp"
 #include <ct/deque.hpp>
@@ -46,7 +47,7 @@ struct LogEntry
     int count = 1;       // collapse duplicate consecutive messages
 };
 
-class ConsoleWidget : public Widget
+class ConsoleWidget : public Widget, public LineClipTarget
 {
 public:
     IG_WIDGET_CLASS(ConsoleWidget, Widget);
@@ -212,6 +213,7 @@ private:
     String inputBuf_;
     bool inputFocused_ = false;
     int cursorPos_ = 0;
+    IG_LINE_CLIP(inputBuf_, cursorPos_) // the clipboard keys of the input line (TextClip.hpp); Ctrl+C is still the copy of the selected line of the log
 
     // ── Command history ──────────────────────────────────────────────────
     ct::Vector<String> history_;

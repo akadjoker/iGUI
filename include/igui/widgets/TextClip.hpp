@@ -48,6 +48,78 @@ protected:
     ~TextClipTarget() = default;
 };
 
+/// For a widget that edits one line with a cursor and no selection (a search field, the cell of a grid, the input line of a console): derive from this
+/// and give the line, the cursor (a byte offset) and what to do when the line changed. With no selection Copy, Cut and Delete work on the whole line,
+/// and Paste goes in at the cursor; there is nothing to Select.
+class LineClipTarget : public TextClipTarget
+{
+public:
+    bool clipHasSelection() const override
+    {
+        return !clipLine().empty();
+    }
+    bool clipHasText() const override
+    {
+        return false;
+    }
+    String clipSelection() const override
+    {
+        return clipLine();
+    }
+    void clipReplaceSelection(const String& text) override;
+    void clipSelectAll() override
+    {
+    }
+    bool clipPointInSelection(const MouseEvent&) const override
+    {
+        return false;
+    }
+
+protected:
+    virtual const String& clipLine() const = 0;
+    virtual String& clipLineRef() = 0;
+    virtual int clipCursor() const = 0;
+    virtual void clipSetCursor(int offset) = 0;
+    /// The line changed: mark the widget dirty, then emit whatever it emits (the LAST thing: a handler may delete the widget).
+    virtual void clipChanged() = 0;
+};
+
+/// The members of a LineClipTarget for a widget whose line and cursor are the members `buffer` and `cursor` (a byte offset) and that changes nothing but
+/// its own look when the line changes (the cell of a grid, the input line of a console: the line is taken when Enter is pressed). Write it in the class,
+/// where the widget is the editor of one line.
+#define IG_LINE_CLIP(buffer, cursor)                      \
+    Widget* clipWidget() override                         \
+    {                                                     \
+        return this;                                      \
+    }                                                     \
+    bool clipEditable() const override                    \
+    {                                                     \
+        return true;                                      \
+    }                                                     \
+    void clipPlaceCursor(const MouseEvent&) override      \
+    {                                                     \
+    }                                                     \
+    const String& clipLine() const override               \
+    {                                                     \
+        return buffer;                                    \
+    }                                                     \
+    String& clipLineRef() override                        \
+    {                                                     \
+        return buffer;                                    \
+    }                                                     \
+    int clipCursor() const override                       \
+    {                                                     \
+        return cursor;                                    \
+    }                                                     \
+    void clipSetCursor(int offset) override               \
+    {                                                     \
+        cursor = offset;                                  \
+    }                                                     \
+    void clipChanged() override                           \
+    {                                                     \
+        markDirty();                                      \
+    }
+
 namespace textclip
 {
 
@@ -73,6 +145,9 @@ bool onKey(TextClipTarget& t, KeyEvent& e);
 /// A press of the right button (the context menu: Cut, Copy, Paste, Delete, Select All) or of the middle one (the PRIMARY selection is pasted at the
 /// click, or the clipboard where there is no PRIMARY). True when the press was one of those (e.consumed is set): the widget starts no selection.
 bool onMouse(TextClipTarget& t, MouseEvent& e);
+
+/// What the clipboard holds as one line: the line breaks dropped. For a one line field that is not a TextClipTarget (the bars of the code editor).
+String clipboardLine();
 
 /// A selection that a person made is the PRIMARY selection (the release of the mouse that selected, Select All): a no-op where there is none.
 void publishSelection(TextClipTarget& t);
