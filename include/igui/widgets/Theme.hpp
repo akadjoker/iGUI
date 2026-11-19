@@ -295,6 +295,13 @@ struct EditorColors
     Color thumbEdge = Color(50, 52, 58, 255);
     Color thumbLabel = Color(180, 182, 190, 255);
     Color thumbLabelSelected = Color(255, 220, 80, 255);
+    // CodeEditor (the colours of the code come from the syntax highlighter; this is the rest)
+    Color codeCurrentLine = Color(45, 50, 60, 255); // the line of the cursor, while the editor has the focus
+    Color minimapBg = Color(25, 28, 34, 240);
+    Color minimapSlider = Color(180, 195, 220, 30); // the part of the minimap that is on screen
+    Color minimapSliderEdge = Color(140, 160, 190, 60);
+    Color minimapLine = Color(255, 255, 255, 15);   // the line of the cursor in the minimap
+    Color minimapEdge = Color(50, 55, 65, 255);     // the line between the text and the minimap
     // Timeline
     Color tlBg = Color(30, 32, 36, 255);
     Color tlBorder = Color(50, 52, 58, 255);
@@ -342,6 +349,12 @@ struct EditorColors
         c.thumbEdge = Color(200, 200, 206, 255);
         c.thumbLabel = Color(60, 60, 66, 255);
         c.thumbLabelSelected = Color(150, 90, 0, 255);
+        c.codeCurrentLine = Color(222, 232, 248, 255);
+        c.minimapBg = Color(238, 238, 242, 240);
+        c.minimapSlider = Color(60, 80, 120, 40);
+        c.minimapSliderEdge = Color(60, 80, 120, 90);
+        c.minimapLine = Color(0, 0, 0, 18);
+        c.minimapEdge = Color(206, 206, 212, 255);
         c.tlBg = Color(244, 244, 247, 255);
         c.tlBorder = Color(200, 200, 206, 255);
         c.tlRulerBg = Color(228, 228, 233, 255);

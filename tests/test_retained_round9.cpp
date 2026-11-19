@@ -23,8 +23,8 @@ constexpr int kPresetCount = 5;
 // The checksum of what the window draws in the dark preset, taken with the library of origin/main (0d86927), before any colour
 // moved into the theme: the dark preset must go on drawing exactly this. (Updated, with the reason, when a later change to the
 // geometry changes what is drawn.)
-constexpr uint64_t kDarkGolden = 0x7dbc291651f34c6cull;
-constexpr uint32_t kDarkGoldenVertices = 7414;
+constexpr uint64_t kDarkGolden = 0xf27843ce1bf20784ull;
+constexpr uint32_t kDarkGoldenVertices = 7542;
 
 float channel(unsigned char v)
 {
@@ -257,6 +257,7 @@ void testSwitching()
     Theme::instance() = Theme::dark();
     Harness h(1280, 720);
     EveryWidget w = buildEveryWidget(h, true);
+    h.app.setFocused(nullptr); // the focus off the code editor: its caret blinks with the time, and a picture that comes back must match
     h.frames(2);
 
     Counter changed;

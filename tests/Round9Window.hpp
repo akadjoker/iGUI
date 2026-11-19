@@ -182,6 +182,7 @@ inline EveryWidget buildEveryWidget(Harness& h, bool crowded)
     // editors
     CodeEditor* code = holder->createChild<CodeEditor>();
     code->setHighlighter<CppHighlighter>();
+    code->setShowMinimap(true);
     code->setText("#include <stdio.h>\nint main() { return 42; } // done\nconst char* s = \"text\";");
     at(code, 0, 488, 420, 100);
     Timeline* tl = holder->createChild<Timeline>();
@@ -202,7 +203,9 @@ inline EveryWidget buildEveryWidget(Harness& h, bool crowded)
     {
         const Rect g = grid->absoluteRect();
         if (g.w > 20.0f && g.h > 60.0f) h.click(g.x + 10.0f, g.y + 40.0f);
-        h.moveTo(5.0f, 700.0f); // the pointer away from everything
+        // the code editor focused: its current line is highlighted, which it is only while it has the focus
+    h.clickWidget(code);
+    h.moveTo(5.0f, 700.0f); // the pointer away from everything
     }
     h.frames(2);
     return w;

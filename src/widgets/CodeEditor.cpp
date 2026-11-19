@@ -961,7 +961,7 @@ void CodeEditor::paintCurrentLineHighlight(PaintContext& ctx, const Rect& abs)
 
     if (y + lh < abs.y || y > abs.y + abs.h) return;
 
-    ctx.fill.SetColor(45, 50, 60, 255);
+    ctx.fill.SetColor(Theme::instance().editor.codeCurrentLine);
     ctx.fill.Rectangle(abs.x + gutterW_, y, abs.w - gutterW_, lh, true);
 }
 
@@ -1495,7 +1495,8 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
     ctx.pushClip({ mmX, mmY, mmW, mmH });
 
     // ── Background ───────────────────────────────────────────────────────
-    ctx.fill.SetColor(25, 28, 34, 240);
+    const EditorColors& ec = Theme::instance().editor;
+    ctx.fill.SetColor(ec.minimapBg);
     ctx.fill.Rectangle(mmX, mmY, mmW, mmH, true);
 
     // ── Count visible lines (fold-aware) ─────────────────────────────────
@@ -1556,10 +1557,10 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
 
         if (sliderH > 0)
         {
-            ctx.fill.SetColor(180, 195, 220, 30);
+            ctx.fill.SetColor(ec.minimapSlider);
             ctx.fill.Rectangle(mmX, sliderY, mmW, sliderH, true);
             // Top/bottom border lines
-            ctx.line.SetColor(140, 160, 190, 60);
+            ctx.line.SetColor(ec.minimapSliderEdge);
             ctx.drawLine(mmX + 2, sliderY, mmX + mmW - 2, sliderY);
             ctx.drawLine(mmX + 2, sliderY + sliderH, mmX + mmW - 2, sliderY + sliderH);
         }
@@ -1589,7 +1590,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
         // Current-line highlight in minimap
         if (logLine == cursor_.line)
         {
-            ctx.fill.SetColor(255, 255, 255, 15);
+            ctx.fill.SetColor(ec.minimapLine);
             ctx.fill.Rectangle(mmX, ly, mmW, lineH, true);
         }
 
@@ -1696,7 +1697,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
     }
 
     // ── Separator line ───────────────────────────────────────────────────
-    ctx.line.SetColor(50, 55, 65, 255);
+    ctx.line.SetColor(ec.minimapEdge);
     ctx.drawLine(mmX, mmY, mmX, mmY + mmH);
 
     ctx.popClip();
