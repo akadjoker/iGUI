@@ -31,8 +31,9 @@ bool parseDecimal(const char* text, size_t length, double& out)
 {
     size_t begin = 0;
     size_t end = length;
-    while (begin < end && isBlank(text[begin])) ++begin;
-    while (end > begin && isBlank(text[end - 1])) --end;
+    // (what is around the number: blanks and any other control byte, as a field has always trimmed them: a stray \x01 from a paste is not part of it)
+    while (begin < end && static_cast<unsigned char>(text[begin]) <= ' ') ++begin;
+    while (end > begin && static_cast<unsigned char>(text[end - 1]) <= ' ') --end;
     const size_t n = end - begin;
     if (n == 0 || n > 100) return false;
 

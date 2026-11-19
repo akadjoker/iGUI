@@ -59,6 +59,7 @@ void testParseRule()
 {
     check(parses("12", 12), "12");
     check(parses("  -1.5  ", -1.5), "blanks around, a sign, a point");
+    check(parses("\x01" "8\x02", 8), "control bytes around the number are trimmed like blanks");
     check(parses("1,5", 1.5), "a comma is the decimal point");
     check(parses("-1,5", -1.5), "a signed comma number");
     check(parses("+2,25", 2.25), "a plus sign");
