@@ -696,6 +696,13 @@ private:
     ct::Vector<TransformEntry> transformStack_;
     float transform_[6] = { 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f };
     ct::Vector<Vec2> path_;
+    // the unit direction of each edge of path_, worked out once when the outline is built (an edge is the "next" of one point and the
+    // "previous" of the following: it used to be worked out, with its square root, for both), and kept to not allocate every frame
+    struct EdgeDir
+    {
+        float x = 0.0f, y = 0.0f, len = 0.0f;
+    };
+    ct::Vector<EdgeDir> edgeScratch_;
     bool antiAliasing_ = true;
     bool textSnapping_ = true;
     // Whether addText / calcTextSize kern this font, by the mode: All, or Dynamic for a font made

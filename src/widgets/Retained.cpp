@@ -55,10 +55,45 @@ int cornerSegments(float radius, int requested)
 
 // Appends one corner arc, both endpoints included, in the same order and
 // winding the fixed table produced.
+//
+// A rounded rectangle is four of these with the same number of segments (and its fill and its border make eight), and a window has
+// hundreds of them with the same few radii: the cosines and sines of an arc are worked out once per (corner, segments) and kept.
+// They are the same expression as before, float for float, so the points do not change.
+constexpr int kArcCacheMax = 32; // (a corner of a radius up to about 58 px; a bigger one is worked out as before)
+struct ArcCache
+{
+    float cosv[kArcCacheMax + 1];
+    float sinv[kArcCacheMax + 1];
+    bool done; // (no initialiser: the table is zero at the start and needs no constructor to run)
+};
+
 void pushCornerArc(ct::Vector<Vec2>& path, Vec2 centre, float radius, float startAngle,
         int segments)
 {
     const float step = (Pi * 0.5f) / static_cast<float>(segments);
+    int corner = -1;
+    if (startAngle == -Pi * 0.5f) corner = 0;
+    else if (startAngle == 0.0f) corner = 1;
+    else if (startAngle == Pi * 0.5f) corner = 2;
+    else if (startAngle == Pi) corner = 3;
+    if (corner >= 0 && segments <= kArcCacheMax)
+    {
+        static ArcCache cache[4][kArcCacheMax + 1];
+        ArcCache& c = cache[corner][segments];
+        if (!c.done)
+        {
+            for (int i = 0; i <= segments; ++i)
+            {
+                const float angle = startAngle + step * static_cast<float>(i);
+                c.cosv[i] = cosf(angle); // (the float cosine and sine, as before)
+                c.sinv[i] = sinf(angle);
+            }
+            c.done = true;
+        }
+        for (int i = 0; i <= segments; ++i)
+            path.push_back({ centre.x + c.cosv[i] * radius, centre.y + c.sinv[i] * radius });
+        return;
+    }
     for (int i = 0; i <= segments; ++i)
     {
         const float angle = startAngle + step * static_cast<float>(i);
@@ -912,26 +947,29 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
     }
     const float side = area >= 0.0f ? 1.0f : -1.0f;
 
+    // The unit direction of every edge, once (the edge from point i to the next one is the "next" edge of i and the "previous" of i + 1).
+    edgeScratch_.resize(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i)
+    {
+        const Vec2& p = path_[static_cast<size_t>(i)];
+        const Vec2& next = path_[static_cast<size_t>(i + 1 == n ? 0 : i + 1)];
+        float dx = next.x - p.x, dy = next.y - p.y;
+        const float l = sqrtf(dx * dx + dy * dy);
+        if (l > 0.0001f)
+        {
+            dx /= l;
+            dy /= l;
+        }
+        edgeScratch_[static_cast<size_t>(i)] = { dx, dy, l };
+    }
+
     DrawVertex* vp = appendVertices(static_cast<size_t>(n) * 2);
     for (int i = 0; i < n; ++i)
     {
         const Vec2& p = path_[static_cast<size_t>(i)];
-        const Vec2& prev = path_[static_cast<size_t>((i - 1 + n) % n)];
-        const Vec2& next = path_[static_cast<size_t>((i + 1) % n)];
-        float dx1 = p.x - prev.x, dy1 = p.y - prev.y;
-        float l1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
-        if (l1 > 0.0001f)
-        {
-            dx1 /= l1;
-            dy1 /= l1;
-        }
-        float dx2 = next.x - p.x, dy2 = next.y - p.y;
-        float l2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
-        if (l2 > 0.0001f)
-        {
-            dx2 /= l2;
-            dy2 /= l2;
-        }
+        const EdgeDir& e1 = edgeScratch_[static_cast<size_t>(i == 0 ? n - 1 : i - 1)];
+        const EdgeDir& e2 = edgeScratch_[static_cast<size_t>(i)];
+        const float dx1 = e1.x, dy1 = e1.y, dx2 = e2.x, dy2 = e2.y;
         float nx = (-dy1 - dy2) * side, ny = (dx1 + dx2) * side;
         float d2 = nx * nx + ny * ny;
         if (d2 < 0.000001f)
@@ -943,9 +981,13 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
         float inv = 1.0f / d2;
         // The mitre at an acute corner would run far past the vertex (a thin pie slice grew a
         // hair at its tip), so it is capped at twice the fringe: the join loses a little
-        // anti-aliasing, not its shape.
-        const float maxInv = 2.0f / std::sqrt(d2);
-        if (inv > maxInv) inv = maxInv;
+        // anti-aliasing, not its shape. (1 / d2 is past 2 / sqrt(d2) only below d2 = 0.25: above 0.3 there is nothing to cap,
+        // and the square root is not taken.)
+        if (d2 < 0.3f)
+        {
+            const float maxInv = 2.0f / sqrtf(d2);
+            if (inv > maxInv) inv = maxInv;
+        }
         nx *= inv * 2.0f * fringe * 0.5f;
         ny *= inv * 2.0f * fringe * 0.5f;
         Color inner = colorAt(i);
@@ -1012,30 +1054,33 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
         *vp++ = { q.x, q.y, whiteUV_.x, whiteUV_.y, c };
     };
 
+    // The unit direction of every segment, once: segment i runs from point i to the next (the first of a closed path comes after the last).
+    edgeScratch_.resize(static_cast<size_t>(segs));
+    for (int i = 0; i < segs; ++i)
+    {
+        const Vec2& p = path_[static_cast<size_t>(i)];
+        const Vec2& next = path_[static_cast<size_t>(i + 1 == n ? 0 : i + 1)];
+        float dx = next.x - p.x, dy = next.y - p.y;
+        const float l = sqrtf(dx * dx + dy * dy);
+        if (l > 0.0001f)
+        {
+            dx /= l;
+            dy /= l;
+        }
+        edgeScratch_[static_cast<size_t>(i)] = { dx, dy, l };
+    }
+
     for (int i = 0; i < n; ++i)
     {
         const Vec2& p = path_[static_cast<size_t>(i)];
-        int iPrev = closed ? ((i - 1 + n) % n) : std::max(0, i - 1);
-        int iNext = closed ? ((i + 1) % n) : std::min(n - 1, i + 1);
-
-        float dx1 = p.x - path_[static_cast<size_t>(iPrev)].x,
-              dy1 = p.y - path_[static_cast<size_t>(iPrev)].y;
-        float l1 = std::sqrt(dx1 * dx1 + dy1 * dy1);
-        if (l1 > 0.0001f)
-        {
-            dx1 /= l1;
-            dy1 /= l1;
-        }
+        // the segment that ends at this point and the one that starts at it; an end of an open path has only one of them (the other
+        // is a zero vector of length zero, as the point minus itself was)
+        const EdgeDir zero;
+        const EdgeDir& prevEdge = closed ? edgeScratch_[static_cast<size_t>(i == 0 ? n - 1 : i - 1)] : (i == 0 ? zero : edgeScratch_[static_cast<size_t>(i - 1)]);
+        const EdgeDir& nextEdge = (closed || i < n - 1) ? edgeScratch_[static_cast<size_t>(i)] : zero;
+        const float dx1 = prevEdge.x, dy1 = prevEdge.y, l1 = prevEdge.len;
+        const float dx2 = nextEdge.x, dy2 = nextEdge.y, l2 = nextEdge.len;
         float nx1 = -dy1, ny1 = dx1;
-
-        float dx2 = path_[static_cast<size_t>(iNext)].x - p.x,
-              dy2 = path_[static_cast<size_t>(iNext)].y - p.y;
-        float l2 = std::sqrt(dx2 * dx2 + dy2 * dy2);
-        if (l2 > 0.0001f)
-        {
-            dx2 /= l2;
-            dy2 /= l2;
-        }
         float nx2 = -dy2, ny2 = dx2;
         // An end of an open path (or a repeated point) has no segment on one side: its normal is the other's. With a
         // zero there the miter offset came out twice as long, and the first and the last segment of every open
