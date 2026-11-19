@@ -9,9 +9,12 @@
 #include "EditorTree.hpp"
 
 #include <igui/widgets/AppWidgets.hpp>
+#include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/InputWidgets.hpp>
+#include <igui/widgets/LayoutWidgets.hpp>
 #include <igui/widgets/SpinSlider.hpp>
 #include <igui/widgets/TextInputWidgets.hpp>
+#include <igui/widgets/ViewWidgets.hpp>
 
 using namespace rh;
 
@@ -151,6 +154,26 @@ void testSpinSliderLabelDoesNotAllocate()
     check(allocsOfAFrame(h) == 0, "a SpinSlider whose label is wider than the widget");
 }
 
+// A window lays its content out every frame: a box in it used to make two heap calls each time (the arrays of its layout pass).
+void testBoxesInFloatWindowsDoNotAllocate()
+{
+    printf("an idle frame of fifty windows, each with a box of widgets, does not allocate\n");
+    Harness h(800.0f, 600.0f);
+    for (int k = 0; k < 50; ++k)
+    {
+        FloatWindow* fw = h.app.addFloat<FloatWindow>("window");
+        BoxLayout* box = fw->setContent<BoxLayout>(LayoutDir::Vertical);
+        box->createChild<Label>("a label");
+        box->createChild<Button>("a button");
+        box->createChild<CheckBox>("a check box");
+        fw->setFloatSize(260.0f, 120.0f);
+        fw->setFloatPos(12.0f + 14.0f * static_cast<float>(k % 25), 12.0f + 18.0f * static_cast<float>(k % 25));
+    }
+    h.relayout();
+    h.frames(5);
+    check(allocsOfAFrame(h) == 0, "fifty windows with a box each");
+}
+
 // A widget that counts how many times a layout pass reaches it.
 class LayoutProbe : public Widget
 {
@@ -198,6 +221,7 @@ int main()
     testProgressBarTextDoesNotAllocate();
     testSpinBoxTextDoesNotAllocate();
     testSpinSliderLabelDoesNotAllocate();
+    testBoxesInFloatWindowsDoNotAllocate();
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

@@ -1047,7 +1047,29 @@ void BoxLayout::layout()
         float crossMargin;
     };
 
-    ct::Vector<Item> items;
+    struct Placed
+    {
+        float pos;
+        float size;
+    };
+
+    // The two arrays of a pass (one entry for each visible child) live in a pool, one pair for each level of nesting (a layout runs the
+    // layout of its children, still holding its own arrays): a box that is laid out every frame, like the content of a window, used to
+    // make two heap calls each time, and takes none once its level of the pool has the room. Deeper than the pool: local arrays.
+    constexpr int kPoolDepth = 8;
+    static ct::Vector<Item> itemPool[kPoolDepth];
+    static ct::Vector<Placed> placedPool[kPoolDepth];
+    static int poolDepth = 0;
+    struct PoolSlot
+    {
+        int slot;
+        PoolSlot() : slot(poolDepth++) {}
+        ~PoolSlot() { --poolDepth; }
+    } pool;
+    ct::Vector<Item> localItems;
+    ct::Vector<Placed> localPlaced;
+    ct::Vector<Item>& items = pool.slot < kPoolDepth ? itemPool[pool.slot] : localItems;
+    items.clear();
     items.reserve(children_.size());
 
     float totalFixed = 0;
@@ -1112,12 +1134,9 @@ void BoxLayout::layout()
     if (mainAvail < 0) mainAvail = 0;
 
     // ── Pass 2: compute main-axis sizes ──────────────────────────────────
-    struct Placed
-    {
-        float pos;
-        float size;
-    };
-    ct::Vector<Placed> mainPlaced(count);
+    ct::Vector<Placed>& mainPlaced = pool.slot < kPoolDepth ? placedPool[pool.slot] : localPlaced;
+    mainPlaced.clear();
+    mainPlaced.resize(static_cast<size_t>(count)); // (zeroed, as ct::Vector<Placed>(count) was)
 
     float usedMain = 0;
     for (int i = 0; i < count; ++i)
