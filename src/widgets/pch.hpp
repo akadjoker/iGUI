@@ -10,6 +10,7 @@
 // ── ig::retained public API ─────────────────────────────────────────────────────────
 #include "BuImage.hpp"      // ig::retained::BuImage — CPU pixel buffer
 #include "FileSystem.hpp"   // FileSystem::listDir, joinPath, exists…
+#include "NumberText.hpp"  // numtext::: typed numbers in, numbers out, '.' always
 #include "Retained.hpp"     // DrawList, IO, NewFrame/Render, TextureHandle
 #include "RetainedBase.hpp" // Vec2f/3f/4f, Mat4f, Color, Math, Rect, types
 #include "Theme.hpp"        // Theme struct (colors, sizes)

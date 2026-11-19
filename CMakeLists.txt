@@ -268,6 +268,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/LayoutWidgets.cpp
         src/widgets/MenuWidgets.cpp
         src/widgets/NodeEditor.cpp
+        src/widgets/NumberText.cpp
         src/widgets/Range.cpp
         src/widgets/ScrollWidgets.cpp
         src/widgets/SideTabBar.cpp
@@ -519,6 +520,13 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_textclip_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_textclip COMMAND igui_retained_textclip_tests)
         set_tests_properties(igui_retained_textclip PROPERTIES TIMEOUT 300)
+        # Round 11 (docs/ROUND11.md): numeric entry and display in a locale with a comma, the clock that counts the sleep of the loop, Super in a key,
+        # the hook that wakes a sleeping loop.
+        add_executable(igui_retained_round11_tests tests/test_retained_round11.cpp)
+        target_compile_features(igui_retained_round11_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_retained_round11_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_round11 COMMAND igui_retained_round11_tests)
+        set_tests_properties(igui_retained_round11 PROPERTIES TIMEOUT 300)
         # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks without a GL context: availability, the fallback of a
         # NativeView, the place in the draw order, nothing merged across one, the software rasteriser skipping it, idle.
         add_executable(igui_native_callback_tests tests/test_native_callback.cpp adapters/zen/SoftRaster.cpp)
@@ -713,14 +721,6 @@ option(IGUI_BUILD_ZEN_DEMO "Build the retained widgets demo on zen_plataform" OF
 set(IGUI_ZEN_PLATFORM_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../zen_plataform" CACHE PATH
     "Path to the zen_plataform checkout (used when the parent has no platform target)")
 if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
-    if(NOT TARGET platform)
-        enable_language(C)
-        set(PLATFORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-        add_subdirectory(${IGUI_ZEN_PLATFORM_DIR} zen_plataform EXCLUDE_FROM_ALL)
-    endif()
-    add_library(igui_zen STATIC adapters/zen/SoftRaster.cpp adapters/zen/GlRaster.cpp adapters/zen/ZenApp.cpp)
-    add_library(igui::zen ALIAS igui_zen)
-    target_compile_features(igui_zen PUBLIC cxx_std_17)
     # The adapter needs zen_plataform a62dd5c or newer (the version this was tested against, docs/ROUND11.md): platform_wait_events and
     # platform_wake (the loop sleeps in them), clipboard_has_primary_support / clipboard_get_primary / clipboard_set_primary (the PRIMARY
     # selection), and the rule that Ctrl or Super held makes no text. The checkout is not a submodule (IGUI_ZEN_PLATFORM_DIR, ../zen_plataform
@@ -732,6 +732,14 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
                 "${IGUI_ZEN_PLATFORM_DIR} is older. Update it (git -C ${IGUI_ZEN_PLATFORM_DIR} pull) or point IGUI_ZEN_PLATFORM_DIR at a newer checkout.")
         endif()
     endif()
+    if(NOT TARGET platform)
+        enable_language(C)
+        set(PLATFORM_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        add_subdirectory(${IGUI_ZEN_PLATFORM_DIR} zen_plataform EXCLUDE_FROM_ALL)
+    endif()
+    add_library(igui_zen STATIC adapters/zen/SoftRaster.cpp adapters/zen/GlRaster.cpp adapters/zen/ZenApp.cpp)
+    add_library(igui::zen ALIAS igui_zen)
+    target_compile_features(igui_zen PUBLIC cxx_std_17)
     target_include_directories(igui_zen PUBLIC adapters/zen/include)
     target_link_libraries(igui_zen PUBLIC igui_widgets platform)
 
@@ -827,6 +835,13 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
             target_include_directories(igui_zen_input_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
             target_link_libraries(igui_zen_input_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
             igui_add_window_test(igui_zen_input igui_zen_input_tests)
+
+            # Round 11 (docs/ROUND11.md): the loop with nothing to do waits for an event, a wake or a timer, with no limit: passes and
+            # wake-ups with nothing happening, a blinking caret on time, the clock, a worker's requestFrameFromAnyThread, a real event.
+            add_executable(igui_zen_idle_tests tests/test_zen_idle.cpp)
+            target_include_directories(igui_zen_idle_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
+            target_link_libraries(igui_zen_idle_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
+            igui_add_window_test(igui_zen_idle igui_zen_idle_tests)
         endif()
     endif()
 
@@ -835,13 +850,6 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE AND NOT PLATFORM_USE_FAKE)
         add_executable(igui_throwaway_display_tests tests/test_throwaway_display.cpp)
         add_test(NAME igui_throwaway_display
-
-            # Round 11 (docs/ROUND11.md): the loop with nothing to do waits for an event, a wake or a timer, with no limit: passes and
-            # wake-ups with nothing happening, a blinking caret on time, the clock, a worker's requestFrameFromAnyThread, a real event.
-            add_executable(igui_zen_idle_tests tests/test_zen_idle.cpp)
-            target_include_directories(igui_zen_idle_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
-            target_link_libraries(igui_zen_idle_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
-            igui_add_window_test(igui_zen_idle igui_zen_idle_tests)
             COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/xvfb-test.sh" $<TARGET_FILE:igui_throwaway_display_tests>)
         set_tests_properties(igui_throwaway_display PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60 RESOURCE_LOCK igui_xvfb)
     endif()

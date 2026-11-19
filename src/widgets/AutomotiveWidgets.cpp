@@ -222,7 +222,7 @@ void RadialGauge::paint(PaintContext& ctx)
         char buf[32];
         if (decimals_ == 0) std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(value_));
         else
-            std::snprintf(buf, sizeof(buf), "%.*f", decimals_, static_cast<double>(value_));
+            numtext::cformat(buf, sizeof(buf), "%.*f", decimals_, static_cast<double>(value_));
 
         // Draw big — we'll use multiple prints to simulate larger font
         // since we only have one font size. Scale with the widget

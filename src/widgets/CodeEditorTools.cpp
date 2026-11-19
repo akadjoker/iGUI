@@ -307,7 +307,7 @@ bool CodeEditor::barKey(KeyEvent& e)
             }
             else if (bar_ == Bar::GotoLine)
             {
-                const int line = std::atoi(barText_.c_str());
+                const int line = barText_.to_int(); // (saturates: "99999999999" is the last line, atoi of it was undefined)
                 hideBar();
                 if (line >= 1) reveal(std::min(line, lineCount()) - 1);
             }

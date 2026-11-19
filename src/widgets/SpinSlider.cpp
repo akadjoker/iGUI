@@ -546,22 +546,11 @@ void SpinSlider::evaluateInputText()
         setValue(0);
         return;
     }
-    for (size_t i = 0; i < text.size(); ++i)
-    {
-        if (text[i] == ',') text[i] = '.';
-        else if (text[i] == ';')
-            text[i] = ',';
-    }
-
-    size_t begin = 0;
-    size_t end = text.size();
-    while (begin < end && static_cast<unsigned char>(text[begin]) <= 32) ++begin;
-    while (end > begin && static_cast<unsigned char>(text[end - 1]) <= 32) --end;
-    if (begin == end) return;
-    const String number = text.substr(begin, end - begin);
-    char* stop = nullptr;
-    const double v = std::strtod(number.c_str(), &stop);
-    if (stop != number.c_str() + number.size() || !std::isfinite(v)) return;
+    // One rule for every numeric field (docs/ROUND11.md): '.' or ',' is the decimal point, whatever the locale of the program is; a text
+    // that is not a number (or that could be read two ways) leaves the value as it was. A number outside [min, max] is brought to the
+    // limit by setValue (it is never wrapped and never refused), and the field shows the limit.
+    double v = 0.0;
+    if (!numtext::parseDecimal(text, v)) return;
     setValue(v);
 }
 

@@ -249,7 +249,7 @@ void GradientEditor::paint(PaintContext& ctx)
     {
         const auto& s = stops_[selected_];
         char buf[32];
-        snprintf(buf, sizeof(buf), "%.2f  #%02X%02X%02X", s.pos, s.color.r, s.color.g, s.color.b);
+        numtext::cformat(buf, sizeof(buf), "%.2f  #%02X%02X%02X", s.pos, s.color.r, s.color.g, s.color.b);
         float asc = setupFont(ctx, Color(180, 180, 180, 255));
         ctx.font.Print(buf, b.x + kHandleW, b.y + 2.0f + barHeight_ + 2.0f + kHandleH + 4.0f + asc);
     }
@@ -449,7 +449,7 @@ void HistogramWidget::paint(PaintContext& ctx)
         if (showValues_ && val > 0)
         {
             char buf[32];
-            snprintf(buf, sizeof(buf), "%g", val);
+            numtext::cformat(buf, sizeof(buf), "%g", val);
             float asc = setupFont(ctx, Color(220, 220, 220, 200));
             ctx.font.Print(buf, bx + 1, by - 12 + asc);
         }
@@ -479,8 +479,8 @@ void HistogramWidget::paint(PaintContext& ctx)
     // X axis labels
     float ascX = setupFont(ctx, Color(130, 130, 130, 255));
     char bufMin[16], bufMax[16];
-    snprintf(bufMin, sizeof(bufMin), "%.4g", rangeMin_);
-    snprintf(bufMax, sizeof(bufMax), "%.4g", rangeMax_);
+    numtext::cformat(bufMin, sizeof(bufMin), "%.4g", rangeMin_);
+    numtext::cformat(bufMax, sizeof(bufMax), "%.4g", rangeMax_);
     float maxW = ctx.font.GetTextWidth(bufMax);
     ctx.font.Print(bufMin, pa.x, pa.y + pa.h + 4 + ascX);
     ctx.font.Print(bufMax, pa.x + pa.w - maxW, pa.y + pa.h + 4 + ascX);
@@ -488,7 +488,7 @@ void HistogramWidget::paint(PaintContext& ctx)
     if (!rawData_.empty())
     {
         char statBuf[48];
-        snprintf(statBuf, sizeof(statBuf), "u=%.3g  s=%.3g", mean_, stddev_);
+        numtext::cformat(statBuf, sizeof(statBuf), "u=%.3g  s=%.3g", mean_, stddev_);
         float ascS = setupFont(ctx, Color(180, 180, 120, 255));
         ctx.font.Print(statBuf, pa.x + pa.w * 0.3f, pa.y + pa.h + 4 + ascS);
     }
@@ -652,9 +652,9 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
         ctx.fillRect(pa.x, sy, pa.w, 1);
 
         char buf[16];
-        if (std::fabs(y) < 1e4f && std::fabs(y) >= 0.01f) snprintf(buf, sizeof(buf), "%.4g", y);
+        if (fabsf(y) < 1e4f && fabsf(y) >= 0.01f) numtext::cformat(buf, sizeof(buf), "%.4g", y);
         else
-            snprintf(buf, sizeof(buf), "%.2e", y);
+            numtext::cformat(buf, sizeof(buf), "%.2e", y);
         float ascY = setupFont(ctx, Color(140, 140, 140, 255));
         ctx.font.Print(buf, pa.x - kPlotPadL + 2, sy - 6 + ascY);
     }
@@ -673,7 +673,7 @@ void PlotWidget::paintGrid(PaintContext& ctx, const Rect& pa)
         ctx.fillRect(sx, pa.y, 1, pa.h);
 
         char buf[16];
-        snprintf(buf, sizeof(buf), "%.4g", x);
+        numtext::cformat(buf, sizeof(buf), "%.4g", x);
         float ascXl = setupFont(ctx, Color(140, 140, 140, 255));
         ctx.font.Print(buf, sx - 10, pa.y + pa.h + 4 + ascXl);
     }
@@ -1409,7 +1409,7 @@ void CurveEditor::paintGrid(PaintContext& ctx, const Rect& b)
         ctx.fillRect(x, b.y, 1, b.h - 24);
 
         char buf[16];
-        snprintf(buf, sizeof(buf), "%.2g", t);
+        numtext::cformat(buf, sizeof(buf), "%.2g", t);
         float ascG = setupFont(ctx, Color(120, 122, 128, 200), 10.0f);
         ctx.font.Print(buf, x - 8, b.y + b.h - 4);
     }
@@ -1426,7 +1426,7 @@ void CurveEditor::paintGrid(PaintContext& ctx, const Rect& b)
         ctx.fillRect(b.x + 40, y, b.w - 80, 1);
 
         char buf[16];
-        snprintf(buf, sizeof(buf), "%.2g", v);
+        numtext::cformat(buf, sizeof(buf), "%.2g", v);
         float ascV = setupFont(ctx, Color(120, 122, 128, 200), 10.0f);
         ctx.font.Print(buf, b.x + 4, y - 5 + ascV);
     }

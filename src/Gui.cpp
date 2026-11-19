@@ -6842,7 +6842,9 @@ bool isDecimalLiteral(const String& text)
 bool parseDoubleText(const String& text, double& result)
 {
     if (!isDecimalLiteral(text)) return false;
-    const double parsed = strtod(text.c_str(), nullptr);
+    // (not strtod: with a comma for the decimal point in the program's locale it read "1.5" as 1; ct reads '.' in every locale)
+    double parsed = 0.0;
+    ct::parse_double(text.c_str(), text.c_str() + text.size(), parsed);
     if (!(parsed == parsed) || parsed > DBL_MAX || parsed < -DBL_MAX) return false;
     result = parsed;
     return true;

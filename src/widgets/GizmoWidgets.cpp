@@ -255,11 +255,11 @@ void Gizmo2D::paint(PaintContext& ctx)
 
     // Info text with shadow
     char buf[64];
-    if (mode_ == GizmoMode::Translate) std::snprintf(buf, sizeof(buf), "%.0f, %.0f", posX_, posY_);
+    if (mode_ == GizmoMode::Translate) numtext::cformat(buf, sizeof(buf), "%.0f, %.0f", posX_, posY_);
     else if (mode_ == GizmoMode::Rotate)
-        std::snprintf(buf, sizeof(buf), "%.1f\xC2\xB0", rotation_);
+        numtext::cformat(buf, sizeof(buf), "%.1f\xC2\xB0", rotation_);
     else
-        std::snprintf(buf, sizeof(buf), "%.2f, %.2f", scaleX_, scaleY_);
+        numtext::cformat(buf, sizeof(buf), "%.2f, %.2f", scaleX_, scaleY_);
 
     ctx.font.SetFontSize(11.0f);
     ctx.font.SetBatch(&ctx.text);
@@ -967,13 +967,13 @@ void Gizmo3D::paint(PaintContext& ctx)
     Pt2 c = project(targetPos_);
     char buf[80];
     if (mode_ == GizmoMode3D::Translate)
-        std::snprintf(buf, sizeof(buf), "%.1f, %.1f, %.1f", targetPos_.x, targetPos_.y,
+        numtext::cformat(buf, sizeof(buf), "%.1f, %.1f, %.1f", targetPos_.x, targetPos_.y,
                 targetPos_.z);
     else if (mode_ == GizmoMode3D::Rotate)
-        std::snprintf(buf, sizeof(buf), "%.1f\xC2\xB0, %.1f\xC2\xB0, %.1f\xC2\xB0", targetRot_.x,
+        numtext::cformat(buf, sizeof(buf), "%.1f\xC2\xB0, %.1f\xC2\xB0, %.1f\xC2\xB0", targetRot_.x,
                 targetRot_.y, targetRot_.z);
     else
-        std::snprintf(buf, sizeof(buf), "%.2f, %.2f, %.2f", targetScale_.x, targetScale_.y,
+        numtext::cformat(buf, sizeof(buf), "%.2f, %.2f, %.2f", targetScale_.x, targetScale_.y,
                 targetScale_.z);
 
     ctx.font.SetFontSize(11.0f);

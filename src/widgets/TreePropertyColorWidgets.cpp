@@ -1733,6 +1733,7 @@ void PropertyGrid::startEdit(int row)
         {
             char b[48];
             snprintf(b, sizeof(b), "%.9g", std::get<PropVec>(r.data).value[dragComponent_]);
+            numtext::pointToDot(b, strlen(b)); // (what is edited has a '.', whatever the locale of the program writes)
             editBuf_ = b;
             break;
         }
@@ -1751,12 +1752,10 @@ void PropertyGrid::commitEdit()
     WidgetApp& app = WidgetApp::instance();
     const uint32_t seen = app.deletions();
     auto& r = rows_[activeRow_];
-    if (r.type != PropType::String)
-    {
-        char* end = nullptr;
-        const double number = std::strtod(editBuf_.c_str(), &end);
-        if (end == editBuf_.c_str() || *end != '\0' || !std::isfinite(number)) return;
-    }
+    // The number as a person typed it ('.' or ',' for the decimal point, see numtext::parseDecimal); text that is not one keeps the editor open. It is
+    // brought into the row's own [min, max] below, so a value that is too big or too small for the row (or for an int) shows the limit.
+    double typed = 0.0;
+    if (r.type != PropType::String && !numtext::parseDecimal(editBuf_, typed)) return;
     switch (r.type)
     {
         case PropType::String:
@@ -1769,16 +1768,16 @@ void PropertyGrid::commitEdit()
         case PropType::Float:
         {
             auto& d = std::get<PropFloat>(r.data);
-            float v = editBuf_.to_float();
-            d.value = clamp(v, d.min, d.max);
+            d.value = static_cast<float>(typed < d.min ? d.min : (typed > d.max ? d.max : typed)); // (limited as a double: 1e300 is not a float)
             if (d.onChange) d.onChange(d.value);
             break;
         }
         case PropType::Int:
         {
             auto& d = std::get<PropInt>(r.data);
-            int v = editBuf_.to_int();
-            d.value = clamp(v, d.min, d.max);
+            // (cut toward zero, in the double: a number past the int is the limit of the row, not a wrapped int)
+            const double limited = typed < static_cast<double>(d.min) ? static_cast<double>(d.min) : (typed > static_cast<double>(d.max) ? static_cast<double>(d.max) : typed);
+            d.value = clamp(static_cast<int>(limited), d.min, d.max);
             if (d.onChange) d.onChange(d.value);
             break;
         }
@@ -1787,7 +1786,7 @@ void PropertyGrid::commitEdit()
         case PropType::Vec4:
         {
             auto& d = std::get<PropVec>(r.data);
-            d.value[dragComponent_] = clamp(editBuf_.to_float(), d.min, d.max);
+            d.value[dragComponent_] = static_cast<float>(typed < d.min ? d.min : (typed > d.max ? d.max : typed));
             if (r.type == PropType::Vec2 && d.onChange2) d.onChange2(d.value[0], d.value[1]);
             if (r.type == PropType::Vec3 && d.onChange3)
                 d.onChange3(d.value[0], d.value[1], d.value[2]);
@@ -2001,7 +2000,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             {
                 float cx2 = valTextX + c * (compW + gap);
                 char buf[32];
-                snprintf(buf, 32, "%s %.1f", cls[c], d.value[c]);
+                numtext::cformat(buf, 32, "%s %.1f", cls[c], d.value[c]);
                 Color bc = ccs[c];
                 if (draggingSlider_ && activeRow_ == idx && dragComponent_ == c)
                     bc = Color(std::min(255, bc.r + 30), std::min(255, bc.g + 30),
@@ -2055,7 +2054,7 @@ void PropertyGrid::paintRow(PaintContext& ctx, const Rect& abs, int idx, float y
             ctx.line.SetColor(t.inputBorder.r, t.inputBorder.g, t.inputBorder.b, t.inputBorder.a);
             ctx.lineRect(valTextX, barY2, valW, barH2);
             char buf[48];
-            snprintf(buf, 48, "%.1f - %.1f", d.lo, d.hi);
+            numtext::cformat(buf, 48, "%.1f - %.1f", d.lo, d.hi);
             ctx.font.SetColor(t.prop.sliderText);
             ctx.printElided({ valTextX + 3, y, valW - 6, rowHeight_ }, String(buf), textY, asc, memo[kValue], fontId);
             break;

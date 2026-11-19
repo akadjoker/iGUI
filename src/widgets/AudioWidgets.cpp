@@ -159,7 +159,7 @@ void Knob::paint(PaintContext& ctx)
         char buf[32];
         if (!valueText_.empty()) snprintf(buf, sizeof(buf), "%s", valueText_.c_str());
         else
-            snprintf(buf, sizeof(buf), "%.2f", value_);
+            numtext::cformat(buf, sizeof(buf), "%.2f", value_);
         float asc = setupFont(ctx, Color(228, 234, 244, 255), 10.f);
         float tw = ctx.font.GetTextWidth(buf);
         ctx.font.Print(buf, cx - tw * 0.5f, b.y + knobH + (valH - 10.f) * 0.5f + asc);
@@ -377,7 +377,7 @@ void Fader::paint(PaintContext& ctx)
         char buf[32];
         if (!valueText_.empty()) snprintf(buf, sizeof(buf), "%s", valueText_.c_str());
         else
-            snprintf(buf, sizeof(buf), "%.2f", value_);
+            numtext::cformat(buf, sizeof(buf), "%.2f", value_);
         const float asc = setupFont(ctx, Color(228, 234, 244, 255), 10.f);
         const float tw = ctx.font.GetTextWidth(buf);
         ctx.font.Print(buf, cx - tw * 0.5f, b.y + b.h + (valH - 10.f) * 0.5f + asc);
@@ -523,7 +523,7 @@ void LinearKnob::paint(PaintContext& ctx)
     if (showValue_)
     {
         char buf[16];
-        snprintf(buf, sizeof(buf), "%.2f", value_);
+        numtext::cformat(buf, sizeof(buf), "%.2f", value_);
         float asc = setupFont(ctx, Color(160, 165, 175, 255), 10.f);
         ctx.font.Print(buf, b.x + 2.f, b.y + b.h - labelH - valH + (valH - 10.f) * 0.5f + asc);
     }
@@ -692,16 +692,16 @@ void ADSRWidget::paint(PaintContext& ctx)
     {
         float asc = setupFont(ctx, Color(160, 165, 170, 255), 9.f);
         char buf[32];
-        snprintf(buf, sizeof(buf), "A:%.0fms", a_ * 1000.f);
+        numtext::cformat(buf, sizeof(buf), "A:%.0fms", a_ * 1000.f);
         ctx.font.Print(buf, p.x0 + 2, b.y + 4 + asc);
 
-        snprintf(buf, sizeof(buf), "D:%.0fms", d_ * 1000.f);
+        numtext::cformat(buf, sizeof(buf), "D:%.0fms", d_ * 1000.f);
         ctx.font.Print(buf, p.x2 + 4, b.y + 4 + asc);
 
-        snprintf(buf, sizeof(buf), "S:%.0f%%", s_ * 100.f);
+        numtext::cformat(buf, sizeof(buf), "S:%.0f%%", s_ * 100.f);
         ctx.font.Print(buf, p.x2 + 4, p.y2 - 14 + asc);
 
-        snprintf(buf, sizeof(buf), "R:%.0fms", r_ * 1000.f);
+        numtext::cformat(buf, sizeof(buf), "R:%.0fms", r_ * 1000.f);
         ctx.font.Print(buf, p.x3 + 4, b.y + 4 + asc);
     }
 
@@ -1083,9 +1083,9 @@ void SpectrumAnalyzer::paint(PaintContext& ctx)
             float xi = areaX + i * (barW + barSpacing_);
             float hz = (i < static_cast<int>(freqLabels_.size())) ? freqLabels_[i]
                                                                   : (sampleRate_ * 0.5f * i / n);
-            if (hz >= 1000.f) snprintf(tmp, sizeof(tmp), "%.0fk", hz / 1000.f);
+            if (hz >= 1000.f) numtext::cformat(tmp, sizeof(tmp), "%.0fk", hz / 1000.f);
             else
-                snprintf(tmp, sizeof(tmp), "%.0f", hz);
+                numtext::cformat(tmp, sizeof(tmp), "%.0f", hz);
             ctx.font.Print(tmp, xi, b.y + b.h - labelH + asc);
         }
     }

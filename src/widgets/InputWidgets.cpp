@@ -78,7 +78,7 @@ String Slider::valueText(float v) const
     for (int i = 0; i < decimals; ++i) unit *= 10.0f;
     if (v < 0.0f && v > -0.5f / unit) v = 0.0f; // "-0.00" is "0.00"
     char buf[64];
-    snprintf(buf, sizeof(buf), "%.*f", decimals, static_cast<double>(v));
+    numtext::fixedInto(buf, sizeof(buf), static_cast<double>(v), decimals);
     return String(buf) + valueSuffix_;
 }
 
@@ -516,7 +516,7 @@ float SpinBox::buttonWidth() const
 const String& SpinBox::formatValue() const
 {
     char buf[64];
-    snprintf(buf, sizeof(buf), "%.*f", decimals_, static_cast<double>(value_));
+    numtext::fixedInto(buf, sizeof(buf), static_cast<double>(value_), decimals_);
     valueText_.clear(); // keeps its room: a value that does not fit the small string is not allocated again in each frame
     if (!prefix_.empty()) valueText_ += prefix_;
     valueText_ += buf;

@@ -1755,7 +1755,7 @@ void Timeline::paintTimeTicks(PaintContext& ctx, const Rect& b)
             snprintf(buf, sizeof(buf), "%d:%02d", static_cast<int>(t) / 60,
                     static_cast<int>(t) % 60);
         else
-            snprintf(buf, sizeof(buf), "%gs", std::round(t * 100.0f) / 100.0f);
+            numtext::cformat(buf, sizeof(buf), "%gs", roundf(t * 100.0f) / 100.0f);
 
         ctx.font.SetColor(ec().tlRulerText);
         ctx.font.Print(buf, x + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);

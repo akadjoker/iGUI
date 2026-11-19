@@ -489,7 +489,7 @@ void ConsoleWidget::paintLog(PaintContext& ctx, const Rect& area)
         if (showTimestamp_)
         {
             char ts[16];
-            snprintf(ts, sizeof(ts), "%.2f", e.timestamp);
+            numtext::cformat(ts, sizeof(ts), "%.2f", e.timestamp);
             setupFont(ctx, cc.timestamp, 11.f);
             ctx.font.Print(ts, px, textY + ctx.font.GetAscender());
             px += 50.f;

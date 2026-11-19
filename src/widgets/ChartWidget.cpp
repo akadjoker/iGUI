@@ -476,7 +476,7 @@ void Chart::buildHistogram()
     }
     for (int i = 0; i < n; ++i)
     {
-        snprintf(buf, sizeof(buf), "%.*f-%.*f", decimals, edges_[static_cast<size_t>(i)], decimals, edges_[static_cast<size_t>(i) + 1]);
+        numtext::cformat(buf, sizeof(buf), "%.*f-%.*f", decimals, edges_[static_cast<size_t>(i)], decimals, edges_[static_cast<size_t>(i) + 1]);
         categories_.push_back(String(buf));
         categoryHidden_.push_back(false);
     }
@@ -688,7 +688,7 @@ void Chart::formatValueD(double v, char* out, int outSize) const
     // a whole number is printed in full (a float above 1e9 is a whole number): there was a %.3g here that
     // turned 1234567890 into 1.23e+09
     char number[400]; // (%f of 1e308 is 309 digits)
-    snprintf(number, sizeof(number), "%.*f", decimals, v);
+    numtext::cformat(number, sizeof(number), "%.*f", decimals, v);
     char grouped[512];
     const char* text = number;
     if (thousandsSeparator_ != '\0')
@@ -826,7 +826,7 @@ void Chart::sliceLabel(const Slice& slice, double sum, char* out, int outSize) c
     if (pct > 0.0 && pct < 1.0)
         snprintf(pctText, sizeof(pctText), "<1%%");
     else
-        snprintf(pctText, sizeof(pctText), "%.0f%%", pct);
+        numtext::cformat(pctText, sizeof(pctText), "%.0f%%", pct);
     if (showPercent_ && showValues_)
         snprintf(out, static_cast<size_t>(outSize), "%s (%s)", valueText, pctText);
     else if (showPercent_)
@@ -1418,7 +1418,7 @@ float Chart::valueAxisGutter(PaintContext& ctx, double lo, double hi, double ste
     const int ticks = Math::toInt(roundf((hi - lo) / step), 0, 0, 10000); // (data that is not a number: no ticks)
     for (int k = 0; k <= ticks; ++k)
     {
-        snprintf(buf, sizeof(buf), "%.*f%s", decimals, lo + step * static_cast<double>(k), valueSuffix_.c_str());
+        numtext::cformat(buf, sizeof(buf), "%.*f%s", decimals, lo + step * static_cast<double>(k), valueSuffix_.c_str());
         const float w = ctx.font.GetTextWidth(buf);
         if (w > gutter) gutter = w;
     }
@@ -1444,7 +1444,7 @@ void Chart::paintValueAxis(PaintContext& ctx, float ax, float ay, float aw, floa
             ctx.line.SetColor(c.r, c.g, c.b, zero ? 255 : 160);
             ctx.drawLine(ax, y, ax + aw, y);
         }
-        snprintf(buf, sizeof(buf), "%.*f%s", decimals, v, valueSuffix_.c_str());
+        numtext::cformat(buf, sizeof(buf), "%.*f%s", decimals, v, valueSuffix_.c_str());
         const float w = ctx.font.GetTextWidth(buf);
         const float asc = setupFont(ctx, t.textDisabled);
         ctx.font.Print(buf, ax - kAxisPad - w, y - lh * 0.5f + asc);
@@ -1568,7 +1568,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
         const int n = static_cast<int>(cats.size());
         const double width = edges_[1] - edges_[0];
         const int decimals = decimalsFor(width) > 3 ? 3 : decimalsFor(width);
-        snprintf(buf, sizeof(buf), "%.*f", decimals, edges_.back());
+        numtext::cformat(buf, sizeof(buf), "%.*f", decimals, edges_.back());
         const float labelW = ctx.font.GetTextWidth(buf) + 10.0f;
         int every = 1;
         while (n / every > 0 && groupW * static_cast<float>(every) < labelW)
@@ -1578,7 +1578,7 @@ void Chart::paintBars(PaintContext& ctx, const Rect& b, const Rect& plot)
             const float px = ax + groupW * static_cast<float>(i);
             ctx.line.SetColor(t.textDisabled.r, t.textDisabled.g, t.textDisabled.b, 255);
             ctx.drawLine(floorf(px) + 0.5f, ay + area.h, floorf(px) + 0.5f, ay + area.h + 4.0f);
-            snprintf(buf, sizeof(buf), "%.*f", decimals, edges_[static_cast<size_t>(i)]);
+            numtext::cformat(buf, sizeof(buf), "%.*f", decimals, edges_[static_cast<size_t>(i)]);
             const float w = ctx.font.GetTextWidth(buf);
             const float asc = setupFont(ctx, t.textDisabled);
             ctx.font.Print(buf, px - w * 0.5f, ay + area.h + kAxisPad + asc);
@@ -1675,7 +1675,7 @@ void Chart::paintXY(PaintContext& ctx, const Rect& b, const Rect& plot)
         const int xdecimals = decimalsFor(xstep);
         const int xticks = Math::toInt(roundf((xhi - xlo) / xstep), 0, 0, 10000);
         // Skip ticks when their labels would touch.
-        snprintf(buf, sizeof(buf), "%.*f", xdecimals, xhi);
+        numtext::cformat(buf, sizeof(buf), "%.*f", xdecimals, xhi);
         const float labelW = ctx.font.GetTextWidth(buf) + 10.0f;
         int every = 1;
         while (xticks / every > 0 && area.w / static_cast<float>(xticks / every) < labelW)
@@ -1689,7 +1689,7 @@ void Chart::paintXY(PaintContext& ctx, const Rect& b, const Rect& plot)
                 ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, 110);
                 ctx.drawLine(px, ay, px, ay + area.h);
             }
-            snprintf(buf, sizeof(buf), "%.*f", xdecimals, v);
+            numtext::cformat(buf, sizeof(buf), "%.*f", xdecimals, v);
             const float w = ctx.font.GetTextWidth(buf);
             const float asc = setupFont(ctx, t.textDisabled);
             ctx.font.Print(buf, px - w * 0.5f, ay + area.h + kAxisPad + asc);
@@ -1792,11 +1792,14 @@ void Chart::formatX(double v, char* out, int outSize)
 {
     for (int digits = 6; digits <= 15; ++digits)
     {
-        snprintf(out, static_cast<size_t>(outSize), "%.*g", digits, v);
-        if (strtod(out, nullptr) == v)
+        numtext::generalInto(out, static_cast<size_t>(outSize), v, digits);
+        double back = 0.0;
+        const char* const end = out + strnlen(out, static_cast<size_t>(outSize));
+        ct::parse_double(out, end, back); // (not strtod: with a comma for the decimal point in the program's locale it read "0.1" as 0)
+        if (back == v)
             return;
     }
-    snprintf(out, static_cast<size_t>(outSize), "%g", v);
+    numtext::generalInto(out, static_cast<size_t>(outSize), v, 6);
 }
 
 // The text of the tooltip of an item: what the last paint would show for it.
@@ -1834,7 +1837,7 @@ void Chart::tooltipInto(const Item& item, char* text, int size) const
     {
         const double sum = totalD(item.series);
         const double pct = sum > 0.0 ? valueD(item.series, item.index) / sum * 100.0 : 0.0;
-        snprintf(text, static_cast<size_t>(size), "%s: %s (%.1f%%)", category, valueText, pct);
+        numtext::cformat(text, static_cast<size_t>(size), "%s: %s (%.1f%%)", category, valueText, pct);
     }
 }
 
@@ -1860,14 +1863,14 @@ String Chart::seriesLabel(int series) const
 String Chart::xTickText(double v) const
 {
     char buf[400];
-    snprintf(buf, sizeof(buf), "%.*f", decimalsFor(xAxisStep_), v);
+    numtext::cformat(buf, sizeof(buf), "%.*f", decimalsFor(xAxisStep_), v);
     return String(buf);
 }
 
 String Chart::yTickText(double v) const
 {
     char buf[400];
-    snprintf(buf, sizeof(buf), "%.*f%s", valueDecimals_ >= 0 ? valueDecimals_ : decimalsFor(axisStep_), v, valueSuffix_.c_str());
+    numtext::cformat(buf, sizeof(buf), "%.*f%s", valueDecimals_ >= 0 ? valueDecimals_ : decimalsFor(axisStep_), v, valueSuffix_.c_str());
     return String(buf);
 }
 

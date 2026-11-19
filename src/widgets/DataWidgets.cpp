@@ -435,11 +435,8 @@ void DataGrid::sortByColumn(int col) const
                 {
                     auto sa = model_->data(model_->index(a, col));
                     auto sb = model_->data(model_->index(b, col));
-                    char* endA;
-                    char* endB;
-                    double da = strtod(sa.c_str(), &endA);
-                    double db = strtod(sb.c_str(), &endB);
-                    if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
+                    double da = 0.0, db = 0.0;
+                    if (numtext::leadingNumber(sa, da) && numtext::leadingNumber(sb, db)) return asc ? da < db : da > db;
                     return asc ? sa < sb : sa > sb;
                 });
     }
@@ -450,11 +447,8 @@ void DataGrid::sortByColumn(int col) const
                 {
                     const String& sa = rows_[a].cells[col];
                     const String& sb = rows_[b].cells[col];
-                    char* endA;
-                    char* endB;
-                    double da = strtod(sa.c_str(), &endA);
-                    double db = strtod(sb.c_str(), &endB);
-                    if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
+                    double da = 0.0, db = 0.0;
+                    if (numtext::leadingNumber(sa, da) && numtext::leadingNumber(sb, db)) return asc ? da < db : da > db;
                     return asc ? sa < sb : sa > sb;
                 });
     }
@@ -1618,11 +1612,8 @@ void TreeGrid::sortChildren(Node* parent)
     {
         const String& sa = (col < static_cast<int>(a->cells.size())) ? a->cells[col] : "";
         const String& sb = (col < static_cast<int>(b->cells.size())) ? b->cells[col] : "";
-        char* endA;
-        char* endB;
-        double da = strtod(sa.c_str(), &endA);
-        double db = strtod(sb.c_str(), &endB);
-        if (endA != sa.c_str() && endB != sb.c_str()) return asc ? da < db : da > db;
+        double da = 0.0, db = 0.0;
+        if (numtext::leadingNumber(sa, da) && numtext::leadingNumber(sb, db)) return asc ? da < db : da > db;
         return asc ? sa < sb : sa > sb;
     };
 

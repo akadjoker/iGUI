@@ -74,8 +74,10 @@ int formatTimeInto(char* out, int capacity, double seconds, double step)
         const double days = floor(seconds / 86400.0 + 1e-9);
         const double rest = seconds - days * 86400.0;
         const int hh = static_cast<int>(rest / 3600.0 + 1e-9), mm = static_cast<int>(fmod(rest, 3600.0) / 60.0 + 1e-9);
-        if (hh == 0 && mm == 0) return snprintf(out, cap, "%.0fd", days);
-        return snprintf(out, cap, "%.0fd %02d:%02d", days, hh, mm);
+        char number[32];
+        numtext::fixedInto(number, sizeof number, days, 0);
+        if (hh == 0 && mm == 0) return snprintf(out, cap, "%sd", number);
+        return snprintf(out, cap, "%sd %02d:%02d", number, hh, mm);
     }
     if (step >= 60.0)
     {
@@ -91,7 +93,7 @@ int formatTimeInto(char* out, int capacity, double seconds, double step)
     if (decimals < 0) decimals = 0;
     if (decimals > 9) decimals = 9;
     if (seconds == 0.0) seconds = 0.0; // (no "-0.000")
-    return snprintf(out, cap, "%.*f", decimals, seconds);
+    return numtext::fixedInto(out, cap, seconds, decimals);
 }
 
 String formatTime(double seconds, double step)
@@ -107,13 +109,13 @@ int formatValueInto(char* out, int capacity, double value, double step)
     const size_t cap = static_cast<size_t>(capacity);
     if (value != value) return snprintf(out, cap, "nan");
     const double a = fabs(value);
-    if ((a >= 1.0e7) || (a != 0.0 && a < 1.0e-4)) return snprintf(out, cap, "%.3g", value);
+    if ((a >= 1.0e7) || (a != 0.0 && a < 1.0e-4)) return numtext::generalInto(out, cap, value, 3);
     int decimals = 0;
     if (step > 0.0 && step < 1.0) decimals = static_cast<int>(ceil(-log10(step) - 1e-9));
     if (decimals < 0) decimals = 0;
     if (decimals > 8) decimals = 8;
     if (value == 0.0) value = 0.0;
-    return snprintf(out, cap, "%.*f", decimals, value);
+    return numtext::fixedInto(out, cap, value, decimals);
 }
 
 String formatValue(double value, double step)
@@ -1874,7 +1876,7 @@ void PlotChart::Impl::pick(float px, float py)
         dot.px = bpx;
         dot.py = bpy;
         dot.color = colourOf(s);
-        snprintf(dot.text, sizeof dot.text, "%.6g", s.y[bestIndex]);
+        numtext::generalInto(dot.text, sizeof dot.text, s.y[bestIndex], 6);
         dots.push_back(dot);
         const float dd = (bpx - px) * (bpx - px) + (bpy - py) * (bpy - py);
         if (dd < best)

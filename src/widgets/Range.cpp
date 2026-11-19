@@ -68,9 +68,7 @@ String Range::numberText(double value, int decimals)
     if (decimals > 32) decimals = 32;
 
     char buf[325];
-    if (decimals < 0) std::snprintf(buf, sizeof(buf), "%lf", value);
-    else
-        std::snprintf(buf, sizeof(buf), "%.*lf", decimals, value);
+    numtext::fixedInto(buf, sizeof(buf), value, decimals < 0 ? 6 : decimals); // (decimals is never negative here: it is "%lf", 6 decimals, if it were)
     buf[324] = 0;
 
     bool period = false;
