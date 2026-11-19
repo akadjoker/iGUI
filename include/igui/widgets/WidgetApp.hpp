@@ -778,6 +778,13 @@ public:
     ///        saw last, so a frame after an assignment emits themeChanged even when this was not called; a change that
     ///        has been notified (by this, by setTheme() or by update()) is not emitted again.
     void notifyThemeChanged();
+    /// @brief Whether update() looks for a theme that was changed by hand (default: yes). An application that writes a field of
+    ///        the theme every frame (an accent that pulses) and does not want a layout for each, turns it off and calls
+    ///        notifyThemeChanged() when it wants the widgets told; setTheme() and setThemePreset() always do.
+    void watchTheme(bool on)
+    {
+        watchTheme_ = on;
+    }
     /// @brief Emitted once for each change of the theme, after the change and before the layout it asks for (see setTheme).
     Signal<> themeChanged;
 
@@ -859,6 +866,7 @@ private:
     // The theme as update() last saw it (see notifyThemeChanged).
     Theme themeSeen_;
     bool themeSeenSet_ = false;
+    bool watchTheme_ = true;
 
     // State
     bool inited_ = false;

@@ -188,11 +188,12 @@ void WidgetApp::update(ig::retained::IO& io)
 {
     BusyScope busy(*this);
     // A theme changed by hand since the last frame: tell the widgets (one memcmp of the theme, a kilobyte, a frame).
-    if (!themeSeenSet_) {
+    if (!themeSeenSet_)
+    {
         memcpy(static_cast<void*>(&themeSeen_), static_cast<const void*>(&Theme::instance()), sizeof(Theme));
         themeSeenSet_ = true;
     }
-    else if (memcmp(static_cast<const void*>(&Theme::instance()), static_cast<const void*>(&themeSeen_), sizeof(Theme)) != 0)
+    else if (watchTheme_ && memcmp(static_cast<const void*>(&Theme::instance()), static_cast<const void*>(&themeSeen_), sizeof(Theme)) != 0)
         notifyThemeChanged();
     dt_ = io.deltaTime;
     elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;

@@ -322,6 +322,17 @@ void testSwitching()
     before = changed.n;
     h.frames(30);
     check(changed.n == before, "frames that change nothing emit nothing");
+    // an application that animates a theme field turns the looking off: nothing is found, and notifyThemeChanged still tells
+    before = changed.n;
+    h.app.watchTheme(false);
+    Theme::instance().padding = 7.0f;
+    h.frames(3);
+    check(changed.n == before, "with watchTheme(false) a field written by hand is not looked for");
+    h.app.notifyThemeChanged();
+    check(changed.n == before + 1, "...and notifyThemeChanged tells all the same");
+    h.app.watchTheme(true);
+    h.frames(2);
+    check(changed.n == before + 1, "...and turning the looking on again finds nothing more");
     // explicit: setTheme, then the frame that follows does not emit it again
     before = changed.n;
     h.app.setTheme(Theme::macOS());

@@ -92,12 +92,18 @@ namespace
 {
 
 // The theme as it was, put back at the end of a case that changes it.
+// (and a theme written by hand is not looked for by update() meanwhile: these cases are about what painting does when a theme
+// changes and nothing laid out again, which update() would otherwise do for it, WidgetApp::watchTheme)
 struct ThemeScope
 {
-    ThemeScope() : saved(Theme::instance()) {}
+    ThemeScope() : saved(Theme::instance())
+    {
+        WidgetApp::instance().watchTheme(false);
+    }
     ~ThemeScope()
     {
         Theme::instance() = saved;
+        WidgetApp::instance().watchTheme(true);
     }
     Theme saved;
 };
