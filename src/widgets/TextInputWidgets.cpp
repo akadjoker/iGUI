@@ -1777,8 +1777,9 @@ void TextEdit::paint(PaintContext& ctx)
         float thumbY = (maxSc > 0) ? abs.y + (scrollY_ / maxSc) * (trackH - thumbH) : abs.y;
         ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b,
                 t.scrollbarThumb.a);
-        ctx.fill.Rectangle(static_cast<int>(abs.x + abs.w - barW), static_cast<int>(thumbY),
-                static_cast<int>(barW), static_cast<int>(thumbH), true);
+        // (a widget of an enormous or not-a-number size: the positions come out of its rectangle, and a float that does not fit an int is
+        // not a cast to write)
+        ctx.fill.Rectangle(Math::toInt(abs.x + abs.w - barW), Math::toInt(thumbY), Math::toInt(barW), Math::toInt(thumbH), true);
     }
     const float maxSx = maxScrollX();
     if (maxSx > 0.0f)
@@ -1788,8 +1789,7 @@ void TextEdit::paint(PaintContext& ctx)
         float thumbX = textArea.x + (scrollX_ / maxSx) * (trackW - thumbW);
         ctx.fill.SetColor(t.scrollbarThumb.r, t.scrollbarThumb.g, t.scrollbarThumb.b,
                 t.scrollbarThumb.a);
-        ctx.fill.Rectangle(static_cast<int>(thumbX), static_cast<int>(abs.y + abs.h - barW),
-                static_cast<int>(thumbW), static_cast<int>(barW), true);
+        ctx.fill.Rectangle(Math::toInt(thumbX), Math::toInt(abs.y + abs.h - barW), Math::toInt(thumbW), Math::toInt(barW), true);
     }
 
     ctx.popClip();
