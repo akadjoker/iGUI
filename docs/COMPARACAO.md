@@ -30,6 +30,10 @@ Onde o iGUI perde (seccao 4, cada uma com a causa e a prova):
 6. **Binario**: 2,0 MB sem simbolos contra 0,78 (ImGui) e 0,85 (FLTK); 760 KB sao a fonte embebida.
 7. **Rasteriador por software**: 15 a 47 ms de CPU por frame que muda numa janela de 1000x700, contra 0,25 a 0,9 ms do FLTK (mais o servidor X) e 1,7 a 3,7 ms do GTK.
 
+**Depois da ronda 9** (`docs/ROUND9.md`): as perdas 1, 2, 3 e 5 foram atacadas e a seccao 10 tem os numeros de antes e depois; a 4, a 6 e a 7 nao se tocaram. Em duas palavras: B 2,71 -> 1,72 milhoes de
+instrucoes e 281 -> 1 chamadas de desenho (1,10x o ImGui no mesmo aspecto), F 2,96 -> 1,82 milhoes e 401 -> 1 (1,198x); PSS por software 42,5 -> 24,9 MB; CPU parado 70% -> 0,8% (por software) e 173% -> 0,7% (GL);
+editor de texto 428 -> 200 bytes por linha; clique em GL 2 -> 1 frame. **Nao se atingiu**: memoria de base em GL abaixo do ImGui, menos de 100 bytes por linha, 1 a 2 acordares por segundo (118 a 119).
+
 Bugs achados pelos casos limite (seccao 6, cada um com o teste que falhou antes e passa agora): `TextEdit` com tamanhos enormes (conversao de float fora do intervalo),
 `Timeline` (um grupo de clips depois de o tratador a tirar da arvore: leitura de memoria libertada), `PropertyGrid` (tres: `commitEdit`, `spinChanged`, `spinStep`),
 `CodeEditor` (uma linha de 64 KB com uma palavra repetida: segundos por frame), `BoxLayout` (100 chamadas ao heap por frame com 50 janelas).
@@ -150,6 +154,8 @@ Chamadas ao heap por frame parada do iGUI na cena F: 103 antes, 3 depois (as 3 q
 
 ### 4.1 Cenas densas de widgets (B e F): 4x as instrucoes do ImGui
 
+*(Ronda 9: (a), (b) e (c) abaixo fizeram-se, e mais; B 2,71 -> 1,72 milhoes, F 2,96 -> 1,82, 1 chamada de desenho em B e em F: seccao 10.1.)*
+
 **Prova.** Frame parada da cena B, instrucoes por funcao (o contador por passo com o endereco de cada instrucao, `ICPROF=`; antes da mudanca): `DrawList::fillConvexPath` 26,5%,
 `pathStroke` 16,1%, `sin`/`cos`/`sqrt` da `libm` 10,7%, `addText` 10,5%, `appendVertices` (o `resize` poe a zero o que a seguir se escreve) 7,2%, `pushCornerArc` 6,6%,
 `findGlyph` 3,4%, `appendIndices` 2,9%, `calcTextSize` 2,5%, `addCmd` 2,1%. Ou seja, 70% e o desenho de cantos redondos: cada botao e um preenchimento e uma borda de
@@ -173,6 +179,8 @@ chamada; primeira corrida); num GPU real e barato. Pede os limites da geometria 
 
 ### 4.2 Uma frame parada, e o ciclo parado
 
+*(Ronda 9: feito do lado da biblioteca, 70% -> 0,8% de CPU parado; faltam os acordares por segundo, que pedem uma espera por eventos na zen_plataform: seccao 10.4 e `docs/ROUND9.md` 2.3.)*
+
 O FLTK e o GTK nao fazem nada sem eventos: 942 instrucoes (FLTK), 30 mil (GTK, cena A; nas outras o passo lento deixa disparar a pintura da frame clock) e 0,0% de CPU, 0,1 a 0,6 acordares por segundo (o temporizador de 10 s). O iGUI repinta e entrega tudo todas as frames
 (2,7 milhoes em B) e o `App::run`/`pump` nunca espera: 36% a 90% de CPU (por software) e 100% a 222% (GL) para nada, 440 a 1500 acordares por segundo (o ImGui 2000 a 7000). O ImGui e igual de ciclo
 (115% a 400%). Com um monitor real a sincronia vertical limitava isto a 60 frames por segundo; no Xvfb nao ha vblank e o ciclo gira.
@@ -187,6 +195,8 @@ com `MC_BIG`/`CMP_TRACE_ALLOCS` (o `malloc_count` escreve a pilha de cada chamad
 
 ### 4.3 Memoria de base
 
+*(Ronda 9: por software 42,5 -> 24,9 MB; em GL o heap 55,0 -> 46,0 MB, ainda 4 MB acima do ImGui: seccao 10.2.)*
+
 PSS numa janela vazia: iGUI por software 43 MB, GL 55 MB, ImGui 46 MB (GL), GTK 23 MB, FLTK 1,6 MB. Chamadas ao heap de 500 KB ou mais no arranque do iGUI (por software): 11,2 MB (o buffer
 do rasteriador com 2x2 amostras: 1000x700x4 bytes x 4), 4 paginas de 4,2 MB (o atlas de serie e a pagina dinamica de glifos 1024x1024 RGBA, e a copia de cada uma na textura do rasteriador),
 2 x 2,8 MB (a imagem da janela). Medido por opcao (`cmp_igui`): `Config::defaultDynamicPage=false` (so o tamanho de glifo cozido) tira 8,7 MB de PSS (por software) e 7,8 MB (GL: 48,8 MB, empate
@@ -199,6 +209,8 @@ arquitectura): pagina dinamica de 1 byte por pixel (R8) e so criada quando se pe
 `startup_init_ms` do iGUI e do ImGui e igual (110 contra 107): nao ha um sitio do iGUI que domine. Nao se contaram instrucoes de arranque (seccao 8).
 
 ### 4.5 Editor de texto: 428 bytes por linha
+
+*(Ronda 9: 428 -> 200 bytes por linha, sem o `wrapCache_`; o alvo de 100 nao se atingiu: seccao 10.3.)*
 
 O `TextEdit` guarda cada linha num `String` (32 bytes e um bloco de heap) e, por cima, `wrapRows_` (um `Vector` de linhas visuais por linha), `lineWidths_`, `rowStarts_` e um
 `wrapCache_` (`HashMap<String, WrapLine>`: **uma segunda copia de cada linha distinta** como chave, com as linhas visuais) que sobrevive entre reconstrucoes. 273 mil chamadas ao heap e 37,8 MB
@@ -287,7 +299,8 @@ escreve de onde vem). Os testes: `tools/check.sh`.
 
 - **Instrucoes de arranque**: nao se contaram (o passo a passo leva dias a um arranque de GL; so ha tempo e CPU do processo).
 - **Qt**: nao esta instalado, ficou de fora. **GTK por software de GL**: nao tem (cairo).
-- **As perdas 4.1(a)(b)(c), 4.2, 4.3, 4.5, 4.7** ficam como propostas com a estimativa; nenhuma se fez por mexer no desenho (hash) ou fora da biblioteca (zen_plataform).
+- **As perdas 4.1(a)(b)(c), 4.2, 4.3, 4.5, 4.7** ficavam como propostas com a estimativa; a ronda 9 fez a 4.1 (a)(b)(c), a 4.2 (do lado da biblioteca), a 4.3 e a 4.5 (a medias): seccao 10. A 4.7 (rasteriador
+  por software, so o rectangulo sujo) e a espera por eventos da zen_plataform continuam por fazer.
 - Os numeros de tempo (`*_us`) foram tomados com a maquina carregada (carga 8 a 25 em 12 CPUs): leiam-se as razoes grandes, nao as decimas. O CPU parado e as latencias em milissegundos variam entre corridas (as tabelas
   sao da segunda corrida, com mais carga; a primeira deu 90%/222%/400% de CPU parado).
 - O ImGui sem o `ListClipper` e sem tipo de letra proprio (13 px) e o iGUI a 16 px: o texto nao tem o mesmo tamanho.
@@ -786,3 +799,89 @@ Primeira corrida (carga 11 a 15, mais calma; e a dos numeros da seccao 1):
 | min_gtk | 14 472 | 67 | 29 225 944 |
 | min_igui | 2 035 520 | 16 | 3 219 320 |
 | min_imgui | 780 984 | 50 | 15 041 384 |
+
+## 10. Depois da ronda 9
+
+Os mesmos programas (`tools/bench_compare.sh`, as cenas A a F, soft e GL por software, o ImGui 1.92.5, o Xvfb privado), medidos na ponta do ramo `igui-round9` e em `origin/main` (0d86927, construido
+com os mesmos `-O2` e medido com o mesmo `cmp_igui`). As instrucoes de utilizador (contadas passo a passo), as chamadas de desenho, os vertices e o heap em uso **nao dependem da carga da maquina**; os
+tempos e o PSS em GL dependem (a maquina esta partilhada: o ImGui deu 46,1 e 50,2 MB na cena A, o mesmo binario). Nao se comparam os tempos de arranque entre as duas corridas (foram tomados com cargas
+muito diferentes). A explicacao de cada mudanca e as imagens de antes e depois (`docs/img/round9/`) estao em `docs/ROUND9.md`.
+
+### 10.1 Instrucoes, chamadas de desenho e vertices (iGUI por software; por GL a diferenca e uma centena de instrucoes)
+
+| frame | cena | antes | depois | depois / antes | ImGui |
+|---|---|---:|---:|---:|---:|
+| parada | A | 6 990 | 3 860 | 0,55 | 19 618 |
+| parada | B | 2 705 611 | 1 720 593 | 0,64 | 666 793 |
+| parada | C | 238 396 | 209 330 | 0,88 | 252 858 |
+| parada | D | 162 889 | 128 943 | 0,79 | 21 202 425 |
+| parada | E | 1 003 526 | 813 745 | 0,81 | 4 733 558 |
+| parada | F | 2 957 230 | 1 818 398 | 0,61 | 750 460 |
+| rato (hover) | B | 2 731 016 | 1 746 861 | 0,64 | 674 783 |
+| rato (hover) | F | 2 961 500 | 1 823 525 | 0,62 | 759 165 |
+| roda | C | 243 922 | 215 156 | 0,88 | 267 211 |
+| roda | D | 612 769 | 578 110 | 0,94 | 21 204 350 |
+| roda | E | 1 008 517 | 818 688 | 0,81 | 4 756 627 |
+| clique | B | 2 782 052 | 1 796 921 | 0,65 | 688 444 |
+| escrever | E | 3 943 924 | 3 745 267 | 0,95 | 7 255 506 |
+
+Nenhuma cena ficou mais lenta. Contra o ImGui **com o mesmo aspecto** (`cmp_imgui --rounded`, cantos de 4 px e borda de 1 px nos dois; frame parada): B 1 720 593 contra 1 567 272 (**1,10x**, era 1,73x),
+F 1 818 398 contra 1 517 630 (**1,198x**, era 1,95x); o alvo era 1,2x. Contra o ImGui de serie (sem cantos) o iGUI ainda faz 2,6x em B e 2,4x em F: e a diferenca de aspecto de 4.1.
+
+| cena | chamadas de desenho antes | depois | ImGui | vertices antes | depois | ImGui |
+|---|---:|---:|---:|---:|---:|---:|
+| A | 1 | 1 | 0 | 4 | 4 | 0 |
+| B | 281 | **1** | 1 | 24 932 | 18 532 | 5 732 |
+| C | 2 | 2 | 2 | 2 020 | 1 932 | 2 900 |
+| D | 4 | 1 | 2 | 1 338 | 1 298 | 1 722 |
+| E | 5 | 4 | 2 | 7 320 | 7 248 | 9 548 |
+| F | 401 | **1** | 100 | 25 764 | 20 564 | 7 160 |
+
+Tempo de CPU do lado do GUI de uma frame parada, microsegundos (mediana; depende da carga, leem-se as razoes): por software A 50 -> 23, B 729 -> 221, C 108 -> 51, D 88 -> 49, E 260 -> 124, F 760 -> 242;
+GL B 756 -> 262, F 816 -> 319 (ImGui B 187, F 215).
+
+### 10.2 Memoria de base (cena A, janela vazia) e por cena
+
+| MB | A | B | C | D | E | F |
+|---|---:|---:|---:|---:|---:|---:|
+| PSS por software, antes | 42,5 | 44,8 | 45,1 | 44,1 | 81,7 | 45,0 |
+| PSS por software, depois | **24,9** | 26,4 | 27,7 | 25,9 | 42,4 | 26,0 |
+| heap por software, antes | 28,92 | 30,79 | 32,06 | 30,67 | 66,09 | 31,12 |
+| heap por software, depois | **10,25** | 12,07 | 13,39 | 11,99 | 27,62 | 12,00 |
+| PSS GL, antes | 55,1 | 71,8 | 57,6 | 56,1 | 94,8 | 78,2 |
+| PSS GL, depois | 56,8 | 63,2 | 60,0 | 52,2 | 69,0 | 57,0 |
+| heap GL, antes | 54,97 | 74,50 | 58,52 | 57,06 | 93,20 | 88,30 |
+| heap GL, depois | **46,01** | 53,32 | 49,49 | 47,97 | 64,31 | 53,48 |
+| PSS ImGui (corrida final) | 50,2 | 60,8 | 53,4 | 53,3 | 59,0 | 53,8 |
+| heap ImGui | 41,94 | 44,04 | 43,58 | 43,39 | 49,54 | 44,32 |
+
+O PSS em GL oscila de corrida para corrida (o do ImGui, o mesmo binario, 46,1 -> 50,2 em A e 49,7 -> 60,8 em B), por isso so se pode ler o heap (que nao varia). Por software o PSS desceu 41% em A (o rasteriador por
+faixas, as paginas do atlas de um byte, a copia da ultima frame so quando ha frames iguais); a meta "abaixo do GTK (23 MB)" cumpre-se com o ciclo da biblioteca que salta frames (21,9 MB, medida a parte) e
+**nao** na linha acima (24,9 MB, a pintar todas as frames). **Em GL ficou 4 MB de heap acima do ImGui** (46,0 contra 41,9): meta nao atingida. Por item (iGUI por software, heap; PSS entre parenteses): widget em B 9 819 -> 9 533 bytes (12 334 -> 7 690),
+nos de D 181 -> 181 (168 -> 102), janela de F 46 197 -> 36 700 (52 470 -> 24 125).
+
+### 10.3 Editor de texto (E, 91 000 linhas de 55 bytes)
+
+| | antes | depois | ImGui | FLTK |
+|---|---:|---:|---:|---:|
+| bytes por linha, heap | 428 | **200** | 88 | 60 |
+| bytes por linha, PSS | 453 | 202 | 101 | |
+| instrucoes de uma frame parada | 1 003 526 | 813 745 | 4 733 558 | |
+| instrucoes a escrever uma tecla | 3 943 924 | 3 745 267 | 7 255 506 | |
+
+Alvo de menos de 100 bytes por linha: **nao atingido** (o que resta e `wrapRows_`, `lineWidths_`, `rowStarts_`; ver `docs/ROUND9.md` 2.4).
+
+### 10.4 Parado e latencia (cena B, o ciclo da biblioteca, 10 s sem nada a acontecer; o Xvfb nao tem vblank)
+
+| | antes | depois | ImGui |
+|---|---:|---:|---:|
+| por software, CPU parado | 70,2% | **0,8%** (0,61% numa corrida minha) | 412,9% |
+| por software, acordares por segundo | 898 | 118 | 7 733 |
+| GL, CPU parado | 172,9% | **0,7%** (0,63% numa corrida minha) | |
+| GL, acordares por segundo | 1 210 | 119 | |
+| latencia do clique, por GL (frames, ms) | 2, 73,4 | **1**, 26,2 (18,0 na corrida final) | 3, 18,7 |
+| latencia do clique, por software (frames, ms) | 1, 45,2 | 1, 50,1 (37,9 na corrida final) | |
+
+Os "antes" desta tabela sao de uma corrida de `cmp_igui` com o ciclo de `origin/main` (a corrida de `bench_compare.sh` sobre `origin/main` nao deixou as medidas); os "depois" e o ImGui, da corrida final de
+`bench_compare.sh` (o ImGui, 187 frames por segundo, nunca espera). 118 acordares por segundo e o `pump()` a dormir 8 ms: falta a espera por eventos da zen_plataform (pedido em `docs/ROUND9.md` 2.3) para chegar a 1 a 2.
+Uma aplicacao com funcao por frame (`setFrameCallback`) continua a pintar todas as frames ate ligar `setIdleSkipWithCallbacks(true)`.

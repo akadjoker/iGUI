@@ -351,3 +351,207 @@ Custo de instrucoes da procura do tema (um `memcmp` de cerca de 1,5 KB por frame
 | F | hover | 2 961 473 | 2 961 653 | +180 |
 
 Os ~200 de mais sao a comparacao do tema; so se notam numa janela vazia (cena A), e o item 3 da parte 2 (nada mudou: nao pintar) tira-os com folga.
+
+## 2. As perdas medidas (docs/COMPARACAO.md seccao 4)
+
+Medido como na ronda anterior (`tools/bench_compare.sh`, as mesmas cenas A a F, o ImGui 1.92.5 e o mesmo Xvfb privado, a maquina partilhada com carga de 15 a 40): as
+**instrucoes de utilizador do lado do GUI de uma frame** (contadas passo a passo, nao dependem da carga), a memoria (PSS) e as chamadas de desenho nao dependem do ruido; o CPU parado e a latencia
+(tempos) dependem, leem-se pelas razoes grandes. "Antes" e a biblioteca de `origin/main` (0d86927), construida com os mesmos `-O2` e medida com o mesmo `cmp_igui`; "depois" e a ponta deste ramo.
+A tabela completa de depois esta em `docs/COMPARACAO.md` seccao 10.
+
+### 2.1 Cenas densas de widgets (B: 200 widgets, F: 50 janelas)
+
+**O que se fez** (um commit; cada passo medido, instrucoes de uma frame parada, `cmp_igui --soft`):
+
+| passo | B (form de 200 widgets) | F (50 janelas) |
+|---|---:|---:|
+| `origin/main` | 2 705 611 | 2 957 230 |
+| + procura do tema por frame (parte 1) | 2 705 313 | 2 957 439 |
+| cantos pelo erro de 0,15 px (3 segmentos num raio 4, eram 5 a 6) | 2 229 687 | 2 563 094 |
+| `DrawVertex` sem valores iniciais (`resize` deixa de os escrever) | 2 129 476 | |
+| preenchimento e borda de um rectangulo redondo a partir de tabelas | 1 829 994 | 1 985 676 |
+| `mapPoint` em linha, `floor` sem chamada no texto | 1 746 337 | 1 864 447 |
+| uma linha de dois pontos sem a maquinaria do `pathStroke` | 1 744 610 | 1 799 156 |
+| comandos fundidos, a primeira versao (mede os vertices de cada comando) | 1 784 636 | 2 117 392 |
+| ... com os limites que cada forma diz ter, em vez de os medir | 1 801 530 | 1 949 440 |
+| tabela dos glifos ASCII em cada `Font` | 1 744 239 | 1 850 072 |
+| UTF-8 ASCII sem chamada, texto sem `mapPoint` quando nao ha transformacao | 1 723 386 | 1 818 534 |
+| (item 3: os modificadores sem `key_mods`) | **1 720 593** | **1 818 398** |
+
+- **Cantos pelo erro.** `cornerSegments(raio, dica)`: o menor numero de segmentos para que nenhuma corda fique a mais de 0,15 px do arco (`r * (1 - cos(passo/2))`), nunca abaixo dos 3 da tabela antiga;
+  a dica de quem chama so torna o canto mais grosseiro quando e menor. O valor por omissao da dica passou de 8 a 0 (`addRoundRectFilled`, `addRoundRect`): quem nao diz nada tem o erro. Um raio 4:
+  3 segmentos a 0,14 px (era 5 ou 6); um raio 12: 5. Vertices de B: 24 932 -> 18 532.
+- **Formas a partir de tabelas.** `fillRoundRectFast` e `strokeRoundRectFast`: o desvio de franja de cada ponto de um rectangulo redondo depende so dos angulos do arco, nao do raio nem do tamanho;
+  calcula-se uma vez por numero de segmentos (pelas mesmas expressoes do `fillConvexPath` e do `pathStroke`) e cada rectangulo escreve os seus pontos sem raizes quadradas nem divisoes. O que as tabelas nao
+  cobrem (sem anti-aliasing, um lado que nao e maior que os cantos: pilulas e circulos) segue o caminho de antes. `addLine` de dois pontos tem o seu. O teste compara vertices e indices com o caminho
+  generico (`pathLineTo` + `pathFillConvex`/`pathStroke`) a um milesimo de pixel, com e sem transformacao.
+- **`DrawVertex` sem valores iniciais.** A estrutura passou a ter construtores (o de omissao deixa o que la estava: a cor esta numa uniao anonima para que nem o construtor de `Color` corra) e o `resize`
+  de `appendVertices` deixa de escrever cinco palavras por vertice que a seguir se escrevem por inteiro. **Mudanca de comportamento**: um `DrawVertex v;` ou `DrawVertex v{};` ja nao vem a branco com zeros;
+  `DrawVertex{x, y, u, v, cor}` (a forma que a biblioteca usa) e o construtor de cinco valores continuam. O `resize` de `ct::Vector` (so le) nao tem uma versao que deixe o espaco como esta: ficam os indices
+  (`appendIndices`, 4% de B) a escrever zeros; **pedido ao `ct`**: `resize_for_overwrite(n)`.
+- **Comandos fundidos** (`DrawList::addCmd`; `setCommandMerging(false)` volta ao de antes). (a) No adaptador `zen` o texto de um janela esta na pagina dinamica do atlas e as formas na pagina de serie: cada
+  texto fechava um comando (281 em B). A pagina dinamica passou a ter o texel branco no pixel (0, 0), onde a de serie o tem (o passo de empacotamento comeca em (1, 1): nenhum glifo mudou de sitio), e
+  `DrawList::setSolidAlternate(pagina, uv)` / `SetSolidAlternate` (o `ZenApp` chama-o) faz as formas desenharem-se nela; as que ficam ao lado de texto da outra pagina mudam as coordenadas e passam para essa.
+  (b) Comandos com clips diferentes juntam-se quando o clip nao importa ao que se desenha: os vertices de cada um (os limites que cada forma diz ter, `note()`, ou, se nao os diz, medidos) estao dentro do seu clip,
+  ou dentro do clip sob o qual se juntam, e com as mesmas pontas de clips redondos. Desenhar sob o outro clip, ou sob a uniao dos dois, nao muda um pixel. **Chamadas de desenho de B: 281 -> 1; de F: 401 -> 1** (o ImGui:
+  1 e 100). O teste (`tests/test_retained_drawlist.cpp`) desenha 320 cenas ao acaso (formas sob clips ao acaso, redondos tambem, texto das duas paginas) com a fusao ligada e desligada no rasteriador por software:
+  **os mesmos pixels em todas**, e 15% menos comandos em conjunto.
+- **Glifos ASCII.** `Font` guarda uma tabela com os 128 primeiros glifos: `findGlyph` de uma letra e uma leitura (o texto pede cada letra duas vezes, para medir e para desenhar).
+
+**Resultado contra o ImGui no mesmo aspecto** (cantos de 4 px com borda de 1 px nos dois: `cmp_imgui --rounded`; instrucoes de uma frame parada):
+
+| cena | iGUI antes | iGUI depois | ImGui (mesmo aspecto) | iGUI / ImGui antes | depois | alvo |
+|---|---:|---:|---:|---:|---:|---|
+| B | 2 705 611 | 1 720 593 | 1 567 272 | 1,73 | **1,10** | 1,2 |
+| F | 2 957 230 | 1 818 398 | 1 517 630 | 1,95 | **1,20** (1,198) | 1,2 |
+
+| cena | chamadas de desenho antes | depois | vertices antes | depois |
+|---|---:|---:|---:|---:|
+| B | 281 | **1** | 24 932 | 18 532 |
+| F | 401 | **1** | 25 764 | 20 564 |
+
+O alvo de 1,2x do ImGui no mesmo aspecto e atingido em B e, por pouco (1,198), em F; o de menos de 10 chamadas em B (1) tambem. A de-serie do ImGui (sem cantos): B 666 790 instrucoes
+(a iGUI faz 2,6x) e F 750 464: a diferenca de aspecto continua a ser a de 4.1 da ronda anterior.
+
+**Nenhuma cena ficou mais lenta** (instrucoes de uma frame, antes -> depois): A idle 6 990 -> 3 860; B 2 705 611 -> 1 720 593; C idle 238 396 -> 209 330; D idle 162 889 -> 128 943; E idle 1 003 526 -> 813 745,
+E a escrever 3 943 924 -> 3 745 267; F 2 957 230 -> 1 818 398 (todos os passos, a roda, o rato e o clique: COMPARACAO.md seccao 10, da corrida final de `bench_compare.sh`).
+
+**O desenho muda, o aspecto nao** (a regra: o que muda o desenho muda `bench/retained/draw.hash`, com imagens antes e depois). Os cantos pelo erro mudam os vertices, os comandos fundidos mudam os comandos:
+`bench/retained/draw.hash` passa de (janela do editor) 9096 vertices e 201 comandos a 8432 e 197, (piano roll) 338 comandos a 298 com os mesmos vertices, (graficos) 20 430 vertices e 428 comandos a 16 622 e 416; e a
+soma da janela de teste da ronda 9 (`kDarkGolden`) tem o motivo no comentario. As imagens da cena B e da F, antes e depois, a 1x e com a ampliacao a 8x do canto superior esquerdo:
+`docs/img/round9/B-before-1x.png`, `B-after-1x.png`, `B-before-4x.png`, `B-after-4x.png` (as de `-4x` sao do recorte de 180x75 px ampliado 8 vezes sem filtro) e as mesmas com `F-`. Pixels que mudam, antes -> depois, por software:
+B 6 022 de 700 000 (0,86%), 80 deles por mais de 6% (a franja de um canto), PSNR 56,4 dB; F 2 390, nenhum por mais de 6%, 66,5 dB; **por OpenGL** (llvmpipe): B 6 673, nenhum por mais de 6%, 59,8 dB; F 2 407, 65,0 dB.
+Os numeros de pixeis sao os mesmos antes e depois dos comandos fundidos e das paginas de um byte: so os cantos mudam o que se ve.
+
+### 2.2 Memoria de base
+
+**O que se fez.** (a) O rasteriador por software faz a imagem por faixas de 128 linhas de amostras (`SoftRaster::setBandRows`): o buffer de amostras passa de 11,2 MB (1000x700 com 2x2) a 1 MB;
+os mesmos pixels para qualquer tamanho de faixa (o teste desenha cenas ao acaso com uma faixa, 128 e 8 linhas, com 2 e 3 amostras). (b) As paginas do atlas que sao brancas com a cobertura em alfa ficam num byte por pixel:
+a de serie e as texturas (`SoftRaster::createTexture` e `GlRaster::createTexture` detectam-no, `createTextureA8` pede-o; o GL guarda `GL_R8` com a troca `(1, 1, 1, R)`: o mesmo texel), e a pagina dinamica
+vive num byte por pixel no proprio `FontAtlas` (`dynamicAlpha()`; `dynamicPixels()` faz uma copia RGBA so se alguem a pedir). O teste compara os pixeis de uma textura de um byte com os da inteira. (c) A copia da
+ultima frame do rasteriador (2,8 MB) so se guarda quando uma frame sai igual a anterior (uma aplicacao que pinta sempre coisas diferentes, ou que salta as iguais, nunca a tem).
+
+PSS da cena A (janela vazia), MB. Duas medidas, que dao coisas diferentes: (i) **`bench_compare.sh`** (a pintar todas as frames, sem o salto das iguais), a de COMPARACAO.md; (ii) uma medida minha **com o ciclo
+da biblioteca como uma aplicacao o corre** (as frames sem mudancas nao se pintam, a copia da ultima frame nao se faz):
+
+| cena A | antes | depois | ImGui | GTK 3 |
+|---|---:|---:|---:|---:|
+| por software, `bench_compare` | 42,5 | **24,9** | | 23 |
+| por software, com o salto de frames (ii) | 43,6 | **21,9** | | 23 |
+| GL, `bench_compare` (a mesma corrida do ImGui) | 55,1 | 56,8 | 50,2 | |
+| GL, `bench_compare`, o ImGui da corrida de antes | | | 46,1 | |
+| GL, com o salto de frames (ii) | 58,0 | 48,9 | 46,1 | |
+| heap em uso, GL (malloc: **nao varia** de corrida a corrida) | 54,97 | **46,01** | 41,94 | |
+| heap em uso, por software | 28,92 | **10,25** | | |
+
+**Por software: abaixo do GTK so na medida (ii) (21,9 contra 23); na do `bench_compare` ficam 24,9 (1,9 acima do GTK): a diferenca e a copia da ultima frame (2,8 MB), que existe porque ha frames iguais seguidas
+e que o ciclo com salto nunca faz. A meta "abaixo do GTK" cumpre-se por isso para uma aplicacao que corre o ciclo da biblioteca, e nao na tabela do `bench_compare`.** Em GL **a meta (abaixo do ImGui) nao se cumpriu**: o
+heap, que e exacto, desce 9 MB (54,97 -> 46,01) mas o ImGui fica a 41,94, 4 MB abaixo; o PSS (56,8 contra 50,2 na mesma corrida; 48,9 contra 46,1 na medida (ii)) oscila 4 a 10 MB de corrida para corrida com o mesmo binario (o ImGui:
+46,1 -> 50,2 na A, 49,7 -> 60,8 na B, sem se ter mexido nele), por isso a comparacao de PSS em GL entre duas corridas nao prova nada (o heap prova). O que se viu na pilha das alocacoes: 2,8 MB so no `driBindContext` da janela (Mesa);
+a parte da biblioteca (a pagina de serie, a dinamica e a sua copia em memoria) ja e de um byte por pixel; os 4 MB que faltam ao heap em GL nao se analisaram mais. Sem mudar o aspecto (as imagens de B e F acima
+sao as mesmas depois das paginas de um byte).
+
+### 2.3 Parado
+
+**A biblioteca.** `WidgetApp::needsFrame()`, `nextFrameInMs()`, `requestFrame()`, `requestFrameIn(s)`, `requestFrameFromAnyThread()`, `clockSeconds()`. Uma frame e precisa quando, desde a ultima que se pintou:
+- um widget mudou (`Widget::markDirty()` incrementa um contador global; todos os setters da biblioteca o chamam; `setRect`, `setPosition`, `setSize` e as barras de rolar so o chamam se o valor mudou, e a grelha de
+  propriedades deixou de esconder e mostrar os seus spins em cada pintura: era o que mantinha acordada uma janela parada) ou pediu uma arrumacao, trocou o tema, mudou de tamanho, ganhou ou perdeu o foco;
+- chegou um evento (o rato mexeu, um botao, uma tecla, texto, a roda, um ficheiro largado);
+- corre uma animacao (`Animator`), uma transicao de palcos, a abertura ou o fecho de um menu, uma notificacao, ou ha uma funcao de sobreposicao;
+- uma dica apareceu ou desapareceu, e o prazo dela esta em `nextFrameInMs`;
+- um widget pediu para daqui a pouco: a mira de `TextInput`, `TextEdit`/`CodeEditor` e `SearchBar` pisca a cada meio segundo **pelo relogio da aplicacao** (a soma dos tempos que `update()` recebeu, que continua a contar
+  nas frames que nao se pintam), e cada pintura pede a seguinte para quando ela vira (`requestFrameIn`); as animacoes dentro do `paint` de `PageView`, `Carousel`, `StackLayout`, `SlidePanel` marcam-se sujas
+  enquanto correm e `AnimatedIcon` pede `requestFrame()`.
+Uma aplicacao que muda o que se desenha sem passar por um widget (a textura de um `VideoCanvas`, uma funcao de sobreposicao) chama `requestFrame()`; de outra thread, `requestFrameFromAnyThread()`.
+
+**O adaptador `zen`.** `Config::skipIdleFrames` (ligado por omissao) / `App::setSkipIdleFrames`: depois do `update()` o `frameWindow` so pinta e apresenta se `needsFrame()`; o `pump()` dorme `min(nextFrameInMs, 8)` ms quando
+nenhuma janela pintou. Os eventos continuam a ler-se e a despachar-se em cada passagem. **Nao se salta** com o sistema a ser dono do ciclo (web, Android), com uma captura ou `ZEN_SCREENSHOT` a espera, e **com uma funcao
+por frame (`setFrameCallback`) ou de depois do desenho (`setAfterRenderCallback`)**: mudam o que se mostra sem avisar os widgets; quem as usa e sabe que elas pedem frame (`requestFrame()` ou
+widgets sujos) liga `App::setIdleSkipWithCallbacks(true)`. As aplicacoes de hoje com funcao por frame (ZenVideo, ZenMix...) continuam a pintar todas as frames ate o fazerem: e o preco de nao poder
+saber, e uma frame antiga e pior do que um ciclo quente.
+
+Tambem: `feedInput` deixou de chamar `key_mods()` (uma ida ao servidor X, `XkbGetState`, a que a frame esperava, e tres alocacoes) e le o estado dos modificadores das teclas que a plataforma ja sabe premidas
+(`key_down`): era o `key_mods` por frame da frame parada. `mouse_position` e so a leitura de uma estrutura; nada mais de X por frame parada na iGUI.
+
+**CPU parado** (`cmp_igui B idlecpu`, 10 s, a janela do formulario B e nada a acontecer; "antes" corre o ciclo de antes, "depois" com o salto de frames, a maquina com carga de 18; a corrida final de `bench_compare.sh`
+deu 0,8% e 0,7% e 118 e 119 acordares por segundo; a do `origin/main` na mesma ferramenta nao saiu (a pasta `raw` ficou vazia), os "antes" sao da minha corrida de `cmp_igui` com o ciclo de antes):
+
+| | antes | depois |
+|---|---:|---:|
+| por software, CPU | 70,2% | **0,61%** |
+| por software, acordares por segundo | 898 | 119 |
+| OpenGL (llvmpipe), CPU | 172,9% | **0,63%** |
+| OpenGL, acordares por segundo | 1 210 | 119 |
+
+O FLTK e o GTK ficam a 0,0% e 0,1 a 0,6 acordares por segundo. A diferenca que resta, 119 acordares por segundo contra 0,1 a 0,6, e a espera: o `pump()` dorme 8 ms com `time_sleep` porque a
+zen_plataform nao tem uma espera por eventos com tempo limite (ver abaixo).
+
+**Pedido a zen_plataform** (para a ronda dela; nao se mexeu na zen_plataform):
+
+```c
+/* Espera por trabalho: bloqueia a thread ate haver pelo menos um evento do sistema por tratar para alguma janela do processo (o proximo
+   window_begin_frame tem entao o que despejar), ou window_wake() ter sido chamado, ou passarem timeout_ms. Devolve true se acordou por um
+   evento ou por window_wake, false por tempo. timeout_ms == 0: nao bloqueia (devolve se ha algo na fila); UINT32_MAX: sem tempo limite. */
+PLATFORM_API bool window_wait_event(PlatformWindow *w, uint32_t timeout_ms);
+
+/* Acorda um window_wait_event de qualquer thread. Se nenhuma espera esta a correr, a proxima volta de imediato (o acordar nao se perde), uma vez. */
+PLATFORM_API void window_wake(PlatformWindow *w);
+```
+
+No X11: `XFlush`, `XPending > 0` volta logo (os eventos ja lidos para o buffer do Xlib), senao `poll()` no `ConnectionNumber(dpy)` e num `eventfd` (o do `window_wake`) com o tempo limite; no Windows
+`MsgWaitForMultipleObjectsEx` com um evento; no Cocoa `nextEventMatchingMask:untilDate:` com `postEvent` para acordar. O adaptador troca `time_sleep(min(nextFrameInMs, 8))` por
+`window_wait_event(pw, nextFrameInMs < 0 ? 1000 : nextFrameInMs)`, e `App::wake()` chama `window_wake` (a aplicacao liga-o a `requestFrameFromAnyThread`). Ganho: 1 a 2 acordares por segundo e a latencia
+de um evento sem os 8 ms. Dois achados da leitura da zen_plataform: `key_mods()` chama `backend_lock_state()`, que faz um `XkbGetState` (ida e volta) e alocacoes de cada vez que e chamado: guardar o estado
+das teclas de bloqueio a partir de `XkbStateNotify` e nao perguntar; e `sync_stuck_keys` faz um `XQueryKeymap` de 0,1 em 0,1 s enquanto ha uma tecla premida (aceitavel).
+
+**Testes** (`tests/test_retained_frames.cpp`, alvo `igui_retained_frames_tests`, uma passagem do ciclo = `NewFrame`, `update` e so se `needsFrame()` `paint` e `Render`): numa janela de uns 50 widgets assentada,
+100 frames sem nada sujo pintam 0; cada tipo de mudanca (uma propriedade, um tamanho, esconder e mostrar, arrumar, uma arrumacao, `requestFrame`, de outra thread, o tema por nome e por atribuicao, o rato,
+um botao, a roda, o tamanho da janela, um widget novo) pinta **exactamente uma** frame e a seguir nenhuma; uma animacao de meio segundo pinta as suas 30 frames e depois nenhuma; a mira vira 6 vezes em 190 frames,
+nas frames 27, 57, 87, 117, 147 e 177 (meio segundo e 30 frames, a tolerancia 3); a dica aparece no prazo; `requestFrameIn(0,25)` pinta na frame 15; `nextFrameInMs` diz cerca de 500 para meio segundo; e **as
+mesmas 60 mudancas ao acaso, correndo a pintar todas as frames e a saltar, acabam todas na mesma imagem**.
+
+### 2.4 Editor de texto: 428 bytes por linha
+
+`TextEdit` sem quebra de linha deixa de guardar o `wrapCache_` (uma segunda copia de cada linha, a chave, com as suas linhas visuais): sem quebra uma linha e uma linha visual e a largura, e medi-la de novo, na
+remedicao completa (um texto novo, um tipo de letra ou escala novos), custa menos do que guardar a copia. Com quebra a cache fica como estava. **428 -> 200 bytes por linha** (5 005 000 bytes em 91 000 linhas de 55:
+heap 69,3 MB -> 29,0 MB, PSS 84,6 -> 44,3 MB, esta parte tambem com as paginas e as faixas da 2.2); sem mudar as instrucoes de uma frame de E (idle 813 745, roda 818 688, a escrever 3 745 267: as mesmas, a menos de uma dezena de instrucoes de ruido, antes e depois da mudanca
+da cache; as de `origin/main` eram 1 003 526, 1 008 517 e 3 943 924, a diferenca e das outras mudancas desta ronda). **O alvo de menos de 100 bytes por linha nao se atingiu**: o resto sao `wrapRows_` (um `Vector` de `Vector<WrapRow>`: 24 bytes e um bloco
+de heap por linha), `lineWidths_` e `rowStarts_`; representar a linha visual unica como implicita pede mexer em todos os sitios que leem `wrapRows_` (a pintura, o cursor, a seleccao, a rolagem, o `CodeEditor`): ficou para outra ronda.
+
+### 2.5 Latencia do clique
+
+Medida: o clique injectado numa caixa da cena B ate a frame que a mostra mudada estar apresentada. **Em GL: 2 frames (73,4 ms) -> 1 frame (26,2 ms; 18,0 ms na corrida final de `bench_compare.sh`, em que o ImGui deu 3 frames e 18,7 ms); por software: 1 frame nas duas (45,2 -> 50,1 ms, 37,9 ms na corrida final: a frame de
+40 ms do rasteriador e a do clique, mais ate 8 ms de espera).** A frame a mais era do ciclo sem espera: o clique chegava a meio de uma frame ja comecada, que se pintava sem ele, e a seguinte e que o mostrava; com a
+espera de 8 ms o ciclo esta parado a espera quando o evento chega, le-o ao acordar e pinta-o nessa frame. (Os eventos sao lidos no inicio da frame, antes do `update` e do desenho: nao ha atraso de estado para
+a frame seguinte.) Com a espera por eventos da zen_plataform (acima) os 8 ms de espera desaparecem.
+
+## 3. O que ainda se perde, e porque
+
+- **Acordares por segundo parado: 119, nao 1 a 2** (falta a espera por eventos da zen_plataform, pedido em 2.3). CPU parado: 0,6% (era 70% e 173%).
+- **Frames com funcao por frame** (`setFrameCallback`, `setAfterRenderCallback`): continuam a pintar todas as frames ate a aplicacao ligar `setIdleSkipWithCallbacks(true)` (nao se pode saber se mudam o que se mostra).
+- **Memoria de base em GL: heap de 46,0 MB contra 41,9 do ImGui** (PSS 56,8 contra 50,2 no `bench_compare`; 48,9 contra 46,1 na medida com salto): a meta de ficar abaixo nao se cumpriu; parte e do Mesa (2,8 MB no
+  `driBindContext`), os 4 MB restantes de heap nao se analisaram. **Por software, abaixo do GTK so com o ciclo que salta frames** (21,9 contra 23; 24,9 no `bench_compare`). Texto do editor de 5 MB: 200 bytes por linha (FLTK 60, ImGui 88), alvo de 100.
+- **O rasteriador por software rasteriza a janela toda numa frame que muda** (4.7): nao se fez o rectangulo sujo; as faixas cortaram o buffer, nao o trabalho.
+- **Arranque (4.4) e binario (4.6)**: nao se mexeu.
+- **Cena F a 1,198x do ImGui no mesmo aspecto** (por 0,2%): o texto (`addText`, `calcTextSize`, `findGlyph`) e a pintura dos cantos ainda levam 60% das instrucoes; `appendIndices` (os zeros de `resize`) 5% e fica ate o `ct`
+  ter `resize_for_overwrite`.
+- **O tema escuro**: o texto seleccionado de uma `ListBox`, `ListWidget` e `ComboBox` (e uns textos fracos da consola, da regua da linha de tempo e dos comentarios do codigo) fica abaixo de 4,5 de contraste no preset escuro
+  (1.5): mexer-lhes mudava o que o escuro desenha. O `Switch`, os instrumentos de `AudioWidgets`, `AutomotiveWidgets`, os graficos, os gizmos, a `Viewport3D` e a `VideoCanvas` tem a sua propria paleta e nao seguem o tema por
+  omissao (1.4).
+
+## 4. Verificacao final
+
+`tools/check.sh` (com `IGUI_CONTAINERS_DIR` e `IGUI_ZEN_PLATFORM_DIR` das rondas anteriores, `--jobs 3`, `--base origin/main`), na ponta do ramo `igui-round9` (o commit `a9ac906`; a seguir so mudaram estes documentos):
+
+```
+PASS nostd: nothing new with std:: or #include <...> in src, include and adapters since origin/main
+PASS release: 100% tests passed, 0 tests failed out of 51
+PASS asan: 100% tests passed, 0 tests failed out of 51
+PASS hash: what the bench draws is what bench/retained/draw.hash says
+----
+check.sh: 4 stages, 0 failed
+```
+
+51 testes (os 48 de antes e `igui_retained_round9`, `igui_retained_drawlist` e `igui_retained_frames`), nenhum Skipped; Release 73 s, ASan+UBSan 713 s. Entretanto o `origin/main` do repositorio andou para `b25280e`
+(o fim da parte 1, empurrado por quem coordena), por isso o `nostd` acima so olha para as linhas desta parte; contra `0d86927` (o inicio da ronda) correu-se so essa fase: `PASS nostd: nothing new with std:: or
+#include <...> in src, include and adapters since 0d86927`. `tools/nostd.baseline` nao cresceu. O `bench/retained/draw.hash` mudou (2.1, com o motivo e as imagens) e a fase `hash` confirma o valor novo.
