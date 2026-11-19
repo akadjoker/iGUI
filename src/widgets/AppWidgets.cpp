@@ -239,10 +239,13 @@ void SearchBar::paint(PaintContext& ctx)
         ctx.font.Print(text_.c_str(), taX - scrollX_, ty);
 
         // Cursor
+        WidgetApp& app = WidgetApp::instance();
+        blinkTimer_ = app.blinkTime(blinkTimer_, blinkClock_); // (by the application's clock: see TextInput::paint)
         if (isFocused())
         {
-            blinkTimer_ += WidgetApp::instance().deltaTime();
-            if (std::fmod(blinkTimer_, 1.0f) < 0.5f)
+            const float phase = std::fmod(blinkTimer_, 1.0f);
+            app.requestFrameIn((phase < 0.5f ? 0.5f - phase : 1.0f - phase) + 0.001f);
+            if (phase < 0.5f)
             {
                 String beforeCursor = text_.substr(0, cursorPos_);
                 float curX = taX - scrollX_ + ctx.font.GetTextWidth(beforeCursor.c_str());

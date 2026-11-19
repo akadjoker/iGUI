@@ -79,7 +79,7 @@ void ThumbnailGrid::syncScroll()
     vbar_->setContentSize(m.contentH);
     vbar_->setViewSize(rect_.h);
     vbar_->setValue(scrollY_);
-    markDirty();
+    markDirty(); // (the grid asks for a frame whenever its scroll is synced: layout and the setters that change it; not paint)
 }
 
 void ThumbnailGrid::setScrollY(float y)

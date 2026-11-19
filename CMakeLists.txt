@@ -491,6 +491,13 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_drawlist_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_drawlist COMMAND igui_retained_drawlist_tests)
         set_tests_properties(igui_retained_drawlist PROPERTIES TIMEOUT 300)
+        # Round 9, part 2: frames that are not painted: nothing dirty paints nothing, each change paints one frame, what runs on time
+        # keeps on time, and skipping leaves no stale picture.
+        add_executable(igui_retained_frames_tests tests/test_retained_frames.cpp)
+        target_compile_features(igui_retained_frames_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_retained_frames_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_frames COMMAND igui_retained_frames_tests)
+        set_tests_properties(igui_retained_frames PROPERTIES TIMEOUT 300)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)

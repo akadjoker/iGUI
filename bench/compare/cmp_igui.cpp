@@ -14,6 +14,8 @@ struct IguiLib
     bool vsync = false;
     bool noDynamicPage = false; // --nodyn: Config::defaultDynamicPage = false (no 1024 x 1024 RGBA page of glyphs at the exact size asked)
     int samples = 2; // --samples=N: the software rasteriser's anti-aliasing samples per axis (the library's default is 2)
+    bool idleSkip = false; // --idleskip: frames in which nothing changed are not painted or presented, and the loop sleeps (the library's default; the
+                           // measures of a frame leave it off, so that every frame is one that is painted)
     bool flat = false; // --flat: the theme's corner radius 0 (squared frames), the one setting ImGui's shipped look shares
     cmp::FrameStats* cur = nullptr;
     cmp::Span gui, tot;
@@ -96,6 +98,7 @@ struct IguiLib
         }
         if (flat) rt::Theme::instance().borderRadius = 0.0f;
         app.setFrameProbe(&IguiLib::probe, this);
+        app.setSkipIdleFrames(idleSkip);
         return true;
     }
 
@@ -245,6 +248,7 @@ int main(int argc, char** argv)
     for (int i = 3; i < argc; ++i)
         if (!strcmp(argv[i], "--gl")) lib.gl = true;
         else if (!strcmp(argv[i], "--flat")) lib.flat = true;
+        else if (!strcmp(argv[i], "--idleskip")) lib.idleSkip = true;
         else if (!strcmp(argv[i], "--nodyn")) lib.noDynamicPage = true;
         else if (!strncmp(argv[i], "--samples=", 10)) lib.samples = atoi(argv[i] + 10);
     lib.vsync = argc > 2 && !strcmp(argv[2], "idlecpu");

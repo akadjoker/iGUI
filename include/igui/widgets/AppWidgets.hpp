@@ -119,6 +119,7 @@ private:
     String placeholder_ = "Search...";
     int cursorPos_ = 0;
     float blinkTimer_ = 0;
+    double blinkClock_ = -1.0; // (see TextInput)
     float scrollX_ = 0;
 
     float iconW() const;     // search icon area width

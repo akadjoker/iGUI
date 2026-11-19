@@ -469,6 +469,7 @@ void IconButton::paint(PaintContext& ctx)
     if (animated_ && animProgress_ < 1.0f)
     {
         float dt = WidgetApp::instance().deltaTime();
+        WidgetApp::instance().requestFrame(); // (animating: the next frame too)
         animProgress_ += dt * 4.0f;
         if (animProgress_ >= 1.0f)
         {

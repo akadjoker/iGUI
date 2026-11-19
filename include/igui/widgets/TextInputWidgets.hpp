@@ -107,6 +107,7 @@ private:
     int selEnd_ = 0;
     float scrollX_ = 0;
     float blinkTimer_ = 0;
+    double blinkClock_ = -1.0; // the application clock at the last paint (WidgetApp::clockSince), so that a caret blinks on time however far apart the paints are
     bool dragging_ = false;
 
     String displayText() const;
@@ -369,6 +370,7 @@ protected:
 
     float scrollX_ = 0, scrollY_ = 0;
     float blinkTimer_ = 0;
+    double blinkClock_ = -1.0; // the application clock at the last paint (WidgetApp::clockSince), so that a caret blinks on time however far apart the paints are
     bool dragging_ = false;
     float extraGutterW_ = 0; // extra gutter space (e.g. fold icons)
     float barW_ = 8.0f;      // the thickness of the bars it draws: the theme's (ScrollBar::thickness()) at the last layout, 8 before

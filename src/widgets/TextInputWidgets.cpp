@@ -178,8 +178,11 @@ void TextInput::paint(PaintContext& ctx)
     Rect clipped;
     float pad = t.padding;
 
-    blinkTimer_ += WidgetApp::instance().deltaTime();
-    if (blinkTimer_ > 1.0f) blinkTimer_ -= 1.0f;
+    {
+        WidgetApp& app = WidgetApp::instance();
+        blinkTimer_ = app.blinkTime(blinkTimer_, blinkClock_);
+        if (isFocused() && mode_ != Mode::ReadOnly) app.requestFrameIn((blinkTimer_ < 0.5f ? 0.5f - blinkTimer_ : 1.0f - blinkTimer_) + 0.001f);
+    }
 
     const bool enabled = isEnabledInTree();
 
@@ -1503,8 +1506,13 @@ void TextEdit::paint(PaintContext& ctx)
     if (ctx.isClipped(abs)) return;
     Rect clipped;
 
-    blinkTimer_ += WidgetApp::instance().deltaTime();
-    if (blinkTimer_ > 1.0f) blinkTimer_ -= 1.0f;
+    {
+        // the caret blinks by the application's clock, not by the number of frames painted: frames are skipped when nothing
+        // changes, and the paint asks for the next one when the caret is due to flip
+        WidgetApp& app = WidgetApp::instance();
+        blinkTimer_ = app.blinkTime(blinkTimer_, blinkClock_);
+        if (isFocused() && !readOnly_) app.requestFrameIn((blinkTimer_ < 0.5f ? 0.5f - blinkTimer_ : 1.0f - blinkTimer_) + 0.001f);
+    }
 
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.scale = fontScale_;

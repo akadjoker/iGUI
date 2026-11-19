@@ -72,6 +72,11 @@ public:
         // The default font's page of glyphs at the exact size asked for (1024x1024 RGBA, 4 MB of RAM and as much texture). false: the
         // default font is drawn at its baked size only; for a host that draws its text with faces of its own (zenhtml's HtmlView).
         bool defaultDynamicPage = true;
+        // Paint and present a frame only when something changed (WidgetApp::needsFrame), and sleep in short steps in between: a window
+        // that nothing happens in costs almost no CPU. Not with the system owning the loop (web, Android), and not while the application
+        // has a frame callback, an after-render callback or a capture pending (they change what is drawn without telling the widgets),
+        // unless setIdleSkipWithCallbacks(true) says its callbacks call WidgetApp::requestFrame() (or mark widgets dirty) when they do.
+        bool skipIdleFrames = true;
     };
 
     class Window;
@@ -104,6 +109,24 @@ public:
     // Calls fn once with the main window's next rendered frame (0xAARRGGBB
     // pixels, top row first), for screenshots and tests. OpenGL only.
     void requestCapture(ct::Function<void(const uint32_t *pixels, int width, int height)> fn);
+
+    /// Skip the paint and the present of frames in which nothing changed (Config::skipIdleFrames); the loop (pump) then sleeps a few
+    /// milliseconds when no window painted. The events are still read and dispatched every pass.
+    void setSkipIdleFrames(bool on)
+    {
+        skipIdle_ = on;
+    }
+    /// With a frame callback or an after-render callback set, skipping is off unless the application says its callbacks request
+    /// a frame (WidgetApp::requestFrame, or marking a widget dirty) whenever they change what is drawn.
+    void setIdleSkipWithCallbacks(bool on)
+    {
+        skipWithCallbacks_ = on;
+    }
+    /// How many frames were painted (and presented) in all: what a test or a host looks at to see that idle frames were skipped.
+    int paintedFrames() const
+    {
+        return paintedFrames_;
+    }
 
     ig::retained::WidgetApp& widgets()
     {
@@ -203,7 +226,7 @@ public:
 
 private:
     static void frameThunk(PlatformWindow *w, void *user);
-    void frameWindow(Window *w, bool driven);
+    bool frameWindow(Window *w, bool driven); // false: nothing changed, the frame was not painted
     void renderGl(Window *w);
     void framePixels();
     void destroyWindow(Window *w);
@@ -243,6 +266,10 @@ private:
     ct::Function<void(int, ig::retained::IO&)> inputHook_;
     ct::Function<void(const Event&)> eventHook_;
     int frameIndex_ = 0;
+    bool skipIdle_ = true;
+    bool skipWithCallbacks_ = false;
+    int paintedFrames_ = 0;
+    int idleWaitMs_ = 8; // how long pump() may sleep, from what the windows that were not painted said
     void (*probe_)(int, void *) = nullptr;
     void *probeUser_ = nullptr;
 };

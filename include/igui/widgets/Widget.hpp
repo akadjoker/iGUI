@@ -20,6 +20,11 @@ namespace retained
 
 class Menu;
 
+/// How many times something that is drawn changed (Widget::markDirty, and what a widget does that asks for a layout), counted for
+/// the whole library: WidgetApp::needsFrame compares it with the count at the last frame it painted, which is how a frame knows
+/// whether anything happened since. Only the difference matters; it wraps.
+inline uint32_t gWidgetChanges = 1;
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  PaintContext
 //
@@ -629,22 +634,28 @@ public:
     /// @brief Set position (top-left corner) in parent space.
     void setPosition(float x, float y)
     {
+        const bool changed = rect_.x != x || rect_.y != y;
         rect_.x = x;
         rect_.y = y;
-        markDirty();
+        dirty_ = true;
+        if (changed) ++gWidgetChanges; // (a layout that sets the rectangles it already had changes nothing)
     }
     /// @brief Set the width and height.
     void setSize(float w, float h)
     {
+        const bool changed = rect_.w != w || rect_.h != h;
         rect_.w = w;
         rect_.h = h;
-        markDirty();
+        dirty_ = true;
+        if (changed) ++gWidgetChanges;
     }
     /// @brief Set the full rectangle (position + size).
     void setRect(const Rect& r)
     {
+        const bool changed = rect_.x != r.x || rect_.y != r.y || rect_.w != r.w || rect_.h != r.h;
         rect_ = r;
-        markDirty();
+        dirty_ = true;
+        if (changed) ++gWidgetChanges;
     }
     /// @brief Get the widget's rectangle in parent space.
     const Rect& rect() const
@@ -733,6 +744,7 @@ public:
     void markDirty()
     {
         dirty_ = true;
+        ++gWidgetChanges;
     }
     /// @brief Clear the dirty flag after painting.
     void clearDirty()

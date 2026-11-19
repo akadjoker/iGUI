@@ -425,6 +425,8 @@ bool App::pump(bool skipBlocked)
         return false;
     // Windows may be opened or closed by widget handlers during the frame:
     // go by index, and destroy only afterwards.
+    bool painted = false;
+    int sleepMs = 8;
     for (size_t i = 0; i < windows_.size(); ++i)
     {
         Window *w = windows_[i];
@@ -440,11 +442,21 @@ bool App::pump(bool skipBlocked)
         if (probe_ && w == main_)
             probe_(0, probeUser_);
         window_begin_frame(w->platform);
-        frameWindow(w, false);
-        window_swap(w->platform);
-        if (probe_ && w == main_)
-            probe_(3, probeUser_);
+        idleWaitMs_ = 8;
+        if (frameWindow(w, false))
+        {
+            window_swap(w->platform);
+            painted = true;
+            if (probe_ && w == main_)
+                probe_(3, probeUser_);
+        }
+        else if (idleWaitMs_ < sleepMs)
+            sleepMs = idleWaitMs_;
     }
+    // Nothing was painted: the window is idle. Sleep in short steps (until the platform has a wait for events with a timeout, which
+    // wakes at once on an event: docs/ROUND9.md), so that a loop with nothing to do does not burn a core.
+    if (!painted && sleepMs > 0 && windows_.size() > 0)
+        time_sleep(static_cast<uint32_t>(sleepMs));
     for (size_t i = windows_.size(); i-- > 1;)
     {
         Window *w = windows_[i];
@@ -474,10 +486,11 @@ float App::scaleOf(PlatformWindow *pw) const
 void App::feedInput(PlatformWindow *pw)
 {
     rt::IO &io = rt::GetIO();
-    const int mods = key_mods(pw);
-    io.keyShift = (mods & KEYMOD_SHIFT) != 0;
-    io.keyCtrl = (mods & KEYMOD_CTRL) != 0;
-    io.keyAlt = (mods & KEYMOD_ALT) != 0;
+    // The modifiers from the keys the platform says are down (a read of memory): key_mods() also asks the X server for the lock keys
+    // (XkbGetState, a round trip that the frame waits for, and allocations), which nothing here uses.
+    io.keyShift = key_down(pw, KEY_LEFT_SHIFT) || key_down(pw, KEY_RIGHT_SHIFT);
+    io.keyCtrl = key_down(pw, KEY_LEFT_CONTROL) || key_down(pw, KEY_RIGHT_CONTROL);
+    io.keyAlt = key_down(pw, KEY_LEFT_ALT) || key_down(pw, KEY_RIGHT_ALT);
 
     Event e;
     while (poll_event(pw, &e))
@@ -535,7 +548,7 @@ void App::feedInput(PlatformWindow *pw)
     }
 }
 
-void App::frameWindow(Window *w, bool driven)
+bool App::frameWindow(Window *w, bool driven)
 {
     makeCurrent(w);
     PlatformWindow *pw = w->platform;
@@ -600,6 +613,20 @@ void App::frameWindow(Window *w, bool driven)
         if (useGl_) window_make_current(main_->platform);
         frameCallback_(io.deltaTime);
     }
+    // A frame in which nothing changed is not painted or presented: what the window shows is what the last one drew. Not when the
+    // application changes what is drawn behind the widgets' back (callbacks), when a capture or a screenshot waits for a frame, or
+    // when the system owns the loop.
+    static const bool shotWanted = getenv("ZEN_SCREENSHOT") != nullptr;
+    const bool skippable = skipIdle_ && !systemLoop_ && !capture_ && !shotWanted && (skipWithCallbacks_ || (!frameCallback_ && !afterRenderCallback_));
+    if (skippable && !widgets().needsFrame())
+    {
+        rt::Render(); // (it clears what the frame consumed of the input: the wheel, the typed text)
+        const int wait = widgets().nextFrameInMs();
+        const int step = wait < 0 || wait > 8 ? 8 : wait;
+        if (step < idleWaitMs_) idleWaitMs_ = step;
+        (void)driven;
+        return false;
+    }
     widgets().paint(*rt::GetDrawData(), font_, nullptr);
     if (atlas_.dynamicDirty())
     {
@@ -619,7 +646,9 @@ void App::frameWindow(Window *w, bool driven)
         framePixels();
     if (probe_ && w == main_)
         probe_(2, probeUser_);
+    ++paintedFrames_;
     (void)driven;
+    return true;
 }
 
 void App::updateStats()

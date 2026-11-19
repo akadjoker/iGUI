@@ -40,23 +40,28 @@ public:
     /// @brief Set the total content size.
     void setContentSize(float cs)
     {
+        const float before = scrollValue_;
+        const bool changed = contentSize_ != cs;
         contentSize_ = cs;
         clampScroll();
-        markDirty();
+        if (changed || scrollValue_ != before) markDirty(); // (what asks for a frame: setting what the bar already has asks for none)
     }
     /// @brief Set the visible viewport size.
     void setViewSize(float vs)
     {
+        const float before = scrollValue_;
+        const bool changed = viewSize_ != vs;
         viewSize_ = vs;
         clampScroll();
-        markDirty();
+        if (changed || scrollValue_ != before) markDirty();
     }
     /// @brief Set the scroll position.
     void setValue(float v)
     {
+        const float before = scrollValue_;
         scrollValue_ = v;
         clampScroll();
-        markDirty();
+        if (scrollValue_ != before) markDirty();
     }
     /// @brief Get the current scroll position.
     float value() const

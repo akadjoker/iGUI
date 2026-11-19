@@ -162,6 +162,7 @@ void WidgetApp::notifyThemeChanged()
     // the copy first: a handler that changes the theme again is a change of its own
     memcpy(static_cast<void*>(&themeSeen_), static_cast<const void*>(&Theme::instance()), sizeof(Theme));
     themeSeenSet_ = true;
+    s_.forcePaint_ = true;
     // sizes that come from the theme (font size, padding, bars) are worked out again at the next layout
     requestRelayout();
     themeChanged.emit();
@@ -208,10 +209,21 @@ void WidgetApp::update(ig::retained::IO& io)
     mouseCapture_ = io.setMouseCaptured;
     mouseWarp_ = io.warpMouse;
 
+    // Whether this frame has anything for the widgets to do: an event, the pointer moved or a button changed since the last one, the
+    // wheel, a request from another thread. A frame with none draws what the last one drew, unless time or a widget says otherwise
+    // (needsFrame).
+    if (!io.mouseEvents.empty() || !io.keyEvents.empty() || !io.inputChars.empty() || !io.dropEvents.empty() || io.mouseX != s_.prevMouseX_ ||
+            io.mouseY != s_.prevMouseY_ || io.mouseWheelX != 0.0f || io.mouseWheelY != 0.0f)
+        s_.inputSeen_ = true;
+    for (int i = 0; i < 5; ++i)
+        if (io.mouseDown[i] != s_.prevMouseDown_[i]) s_.inputSeen_ = true;
+    if (__atomic_exchange_n(&wakeFromThread_, 0, __ATOMIC_ACQ_REL) != 0) s_.forcePaint_ = true;
+
     int newW = static_cast<int>(io.displayWidth);
     int newH = static_cast<int>(io.displayHeight);
     if (newW != s_.width_ || newH != s_.height_)
     {
+        s_.forcePaint_ = true;
         s_.width_ = newW;
         s_.height_ = newH;
         if (s_.width_ != 0 && s_.height_ != 0)
@@ -1711,6 +1723,7 @@ void WidgetApp::updateHover(Widget* newLeaf)
 
 void WidgetApp::setFocused(Widget* w)
 {
+    ++gWidgetChanges; // (the focus ring, the caret: what is drawn changes with it)
     if (s_.focused_)
     {
         s_.focused_->setFocused(false);
@@ -1984,10 +1997,42 @@ void WidgetApp::removeDynamicAtlas(ig::retained::FontAtlas& atlas)
     }
 }
 
+bool WidgetApp::needsFrame() const
+{
+    if (s_.forcePaint_ || s_.inputSeen_ || s_.needsLayout_ || s_.relayout_ || gWidgetChanges != s_.paintedChanges_) return true;
+    if (s_.transActive_ || s_.popupAnimOpening_ || s_.popupAnimClosing_ || s_.overlay_) return true;
+    if (s_.tooltipVisible_ != s_.tooltipPainted_) return true;
+    if (Toast::hasActive()) return true;
+    if (const Animator* animator = Animator::existing())
+        if (animator->count() > 0) return true;
+    if (__atomic_load_n(&wakeFromThread_, __ATOMIC_ACQUIRE) != 0) return true;
+    return elapsedSeconds_ >= s_.wakeAt_;
+}
+
+int WidgetApp::nextFrameInMs() const
+{
+    if (needsFrame()) return 0;
+    double soonest = s_.wakeAt_ - elapsedSeconds_;
+    if (s_.hovered_ && s_.hovered_->hasTooltip() && !s_.tooltipVisible_)
+    {
+        const double due = static_cast<double>(s_.hovered_->tooltipDelay() - s_.tooltipTimer_);
+        if (due < soonest) soonest = due;
+    }
+    if (soonest > 1.0e200) return -1;
+    const double ms = soonest * 1000.0 + 0.999;
+    return ms < 1.0 ? 1 : (ms > 2.0e9 ? 2000000000 : static_cast<int>(ms));
+}
+
 void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* font,
         IconAtlas* icons)
 {
     BusyScope busy(*this);
+    // what this frame draws: from here on, what changes (or asks for time) is for the next one. (The layout below is part of this
+    // frame: the rectangles it sets are not a change.)
+    s_.forcePaint_ = false;
+    s_.inputSeen_ = false;
+    s_.tooltipPainted_ = s_.tooltipVisible_;
+    s_.wakeAt_ = 1.0e300;
     float w = static_cast<float>(s_.width_);
     float h = static_cast<float>(s_.height_);
     if (w <= 0 || h <= 0) return;
@@ -2023,6 +2068,7 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
         s_.needsLayout_ = false;
         s_.relayout_ = false;
     }
+    s_.paintedChanges_ = gWidgetChanges;
 
     // Transition
     if (s_.transActive_)

@@ -1997,17 +1997,12 @@ void PropertyGrid::placeSpins(float gridY, float gh)
     const int first = static_cast<int>(scrollOffset_ / rowHeight_);
     const int last = std::min(first + static_cast<int>(gh / rowHeight_) + 2, count);
     const float labelW = rect_.w * labelRatio_, pad = 4.f;
-    for (auto& row: rows_)
+    // One pass over the rows, each spin shown or hidden once (hiding them all and showing the visible ones again made every frame
+    // ask for a layout: a widget that is hidden and shown in the same call has changed twice).
+    int vi = first;
+    for (size_t r = 0; r < rows_.size(); ++r)
     {
-        SpinSlider* spin = nullptr;
-        if (row.type == PropType::Float) spin = std::get<PropFloat>(row.data).spin;
-        else if (row.type == PropType::Int)
-            spin = std::get<PropInt>(row.data).spin;
-        if (spin) spin->setVisible(false);
-    }
-    for (int vi = first; vi < last; ++vi)
-    {
-        auto& row = rows_[vis[vi]];
+        auto& row = rows_[r];
         SpinSlider* spin = nullptr;
         double value = 0.0;
         if (row.type == PropType::Float)
@@ -2023,7 +2018,10 @@ void PropertyGrid::placeSpins(float gridY, float gh)
             value = d.value;
         }
         if (!spin) continue;
-        spin->setVisible(true);
+        while (vi < last && static_cast<size_t>(vis[vi]) < r) ++vi;
+        const bool shown = vi < last && static_cast<size_t>(vis[vi]) == r;
+        spin->setVisible(shown);
+        if (!shown) continue;
         spin->setRect({ labelW + pad, vi * rowHeight_ - scrollOffset_ + 1.f,
             rect_.w - labelW - pad * 2, rowHeight_ - 2.f });
         if (!spin->isGrabbing() && spin->value() != value) spin->setValueNoSignal(value);

@@ -169,6 +169,13 @@ public:
         bool tooltipVisible_ = false;
         Widget* tooltipWidget_ = nullptr;
 
+        // What the next frame needs (WidgetApp::needsFrame): the state of what was last painted
+        uint32_t paintedChanges_ = 0;   // gWidgetChanges when the last frame was painted
+        bool forcePaint_ = true;        // a frame must be painted whatever else says: the first, a resize, requestFrame()
+        bool inputSeen_ = false;        // update() dispatched an event, or the pointer or a button had moved, since the last paint
+        bool tooltipPainted_ = false;   // whether the last frame painted the tooltip
+        double wakeAt_ = 1.0e300;       // the application clock at which time alone needs a frame (requestFrameIn), 1e300 for never
+
         // Stage system
         ct::HashMap<String, Widget*> stages_;                      // name → root widget
         ct::HashMap<String, ig::retained::Camera2D> stageCameras_; // per-stage camera
@@ -778,6 +785,59 @@ public:
     ///        saw last, so a frame after an assignment emits themeChanged even when this was not called; a change that
     ///        has been notified (by this, by setTheme() or by update()) is not emitted again.
     void notifyThemeChanged();
+    // ── Frames that are not needed ───────────────────────────────────
+    /// @brief Whether a frame has to be painted (and presented) now: something changed since the last one that was painted, or time
+    ///        alone asks for one. A frame that is not needed draws what the last one drew, so an application that loops
+    ///        (NewFrame, update, paint, present) can skip the paint and the present of the others, and sleep (see nextFrameInMs).
+    ///        Counts as a change: any property set on a widget that marks it dirty (every setter of the library does), a layout
+    ///        asked for, a theme replaced, a window resized, every event update() dispatched (the pointer moving, a button, a
+    ///        key, text, the wheel, a drop), an animation or a transition running, a popup opening or closing, a toast, a
+    ///        tooltip that appeared or went, a widget that asked (a caret to blink: requestFrameIn), and requestFrame().
+    ///        An application that changes what is drawn without going through a widget (an overlay callback paints: while one is
+    ///        set every frame is needed; a texture a VideoCanvas shows, a value only it keeps) calls requestFrame().
+    bool needsFrame() const;
+    /// @brief 0 when a frame is needed now (needsFrame); otherwise the milliseconds until time alone needs one (a caret that blinks, a
+    ///        tooltip that is due), at least 1; -1 when nothing is waiting for time: only an event or a requestFrame() will.
+    int nextFrameInMs() const;
+    /// @brief The next frame is painted, whatever else says. From the thread that drives the window.
+    void requestFrame()
+    {
+        s_.forcePaint_ = true;
+    }
+    /// @brief A frame is needed in @p seconds (earlier if something else asks): what a widget that changes with time and not with
+    ///        input does at each paint it is shown in (a caret: until the next time it flips).
+    void requestFrameIn(float seconds)
+    {
+        const double at = elapsedSeconds_ + static_cast<double>(seconds > 0.0f ? seconds : 0.0f);
+        if (at < s_.wakeAt_) s_.wakeAt_ = at;
+    }
+    /// @brief requestFrame() from any thread (a worker that finished, a network callback): the next update() on the thread that
+    ///        drives the window sees it. The loop has to be awake to see it: it sleeps in short steps, or until the platform's
+    ///        wait is woken (see docs/ROUND9.md for the call zen_plataform lacks).
+    void requestFrameFromAnyThread()
+    {
+        __atomic_store_n(&wakeFromThread_, 1, __ATOMIC_RELEASE);
+    }
+    /// @brief The application's clock, in seconds: the time update() has been given (the sum of the delta times), which keeps
+    ///        running while frames are skipped. What a blink is counted by.
+    double clockSeconds() const
+    {
+        return elapsedSeconds_;
+    }
+    /// @brief A caret's blink timer (seconds since it was last made visible, 0 right after an edit or the first paint) brought to
+    ///        now: @p last is the clock at the last call, which paints that may be far apart (skipped frames) leave behind.
+    float blinkTime(float timer, double& last) const
+    {
+        const double was = last;
+        last = elapsedSeconds_;
+        // just made visible (the edit that did it set the timer to 0): counted from now. The timer is left a hair above 0, so that the
+        // next paint does not take it for another reset
+        if (timer == 0.0f || was < 0.0) return 1.0e-6f;
+        float t = timer + static_cast<float>(elapsedSeconds_ - was);
+        if (t > 1.0f) t -= static_cast<float>(static_cast<int>(t));
+        return t;
+    }
+
     /// @brief Whether update() looks for a theme that was changed by hand (default: yes). An application that writes a field of
     ///        the theme every frame (an accent that pulses) and does not want a layout for each, turns it off and calls
     ///        notifyThemeChanged() when it wants the widgets told; setTheme() and setThemePreset() always do.
@@ -867,6 +927,7 @@ private:
     Theme themeSeen_;
     bool themeSeenSet_ = false;
     bool watchTheme_ = true;
+    int wakeFromThread_ = 0; // set by requestFrameFromAnyThread, taken by update()
 
     // State
     bool inited_ = false;

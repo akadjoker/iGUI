@@ -80,6 +80,8 @@ command -v xvfb-run > /dev/null 2>&1 || { echo "bench_compare.sh: xvfb-run (Xvfb
 # the program and flags of a library
 prog() { case "$1" in igui-soft|igui-gl) echo "$bin/cmp_igui" ;; imgui) echo "$bin/cmp_imgui" ;; fltk) echo "$bin/cmp_fltk" ;; gtk) echo "$bin/cmp_gtk" ;; esac; }
 flags() { case "$1" in igui-soft) echo "--soft" ;; igui-gl) echo "--gl" ;; *) echo "" ;; esac; }
+# the idle and latency stages run the library as an application would: frames in which nothing changed are not painted (--idleskip)
+loopflags() { case "$1" in igui-soft) echo "--soft --idleskip" ;; igui-gl) echo "--gl --idleskip" ;; *) echo "" ;; esac; }
 have() { [ -x "$(prog "$1")" ]; }
 want() { case "$skip" in *" $1 "*) return 1 ;; esac; return 0; }
 
@@ -102,7 +104,7 @@ fi
 if want idle; then
     for l in $libs_ok; do
         for r in 1 2 3; do
-            xrun env LD_PRELOAD="$preload" "$(prog "$l")" B idlecpu $(flags "$l") --seconds=10 \
+            xrun env LD_PRELOAD="$preload" "$(prog "$l")" B idlecpu $(loopflags "$l") --seconds=10 \
                 > "$out/raw/$l/idlecpu.B.$r.txt" 2> "$out/raw/$l/idlecpu.B.$r.err"
         done
         echo "idlecpu $l done"
@@ -112,7 +114,7 @@ fi
 if want latency; then
     for l in $libs_ok; do
         for r in 1 2 3; do
-            xrun env LD_PRELOAD="$preload" "$(prog "$l")" B latency $(flags "$l") --n=40 \
+            xrun env LD_PRELOAD="$preload" "$(prog "$l")" B latency $(loopflags "$l") --n=40 \
                 > "$out/raw/$l/latency.B.$r.txt" 2> "$out/raw/$l/latency.B.$r.err"
         done
         echo "latency $l done"
