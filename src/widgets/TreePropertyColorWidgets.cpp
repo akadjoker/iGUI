@@ -1236,6 +1236,8 @@ SpinSlider* PropertyGrid::makeSpin(int row, double value, double minimum, double
 void PropertyGrid::spinChanged(int row, double value)
 {
     if (row < 0 || row >= (int) rows_.size()) return;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     auto& r = rows_[row];
     if (r.type == PropType::Float)
     {
@@ -1251,8 +1253,11 @@ void PropertyGrid::spinChanged(int row, double value)
     }
     else
         return;
-    propertyChanged.emit(row);
+    // (the row's callback is a handler that may take the grid out of the tree: nothing of it is touched after that, and
+    // propertyChanged is not emitted for a grid that is gone, see WidgetApp::hasGone)
+    if (app.hasGone(this, seen)) return;
     markDirty();
+    propertyChanged.emit(row); // (last)
 }
 
 void PropertyGrid::setSuffix(int row, const String& suffix)
@@ -1585,6 +1590,8 @@ Widget::Vec2f PropertyGrid::sizeHint() const
 void PropertyGrid::spinStep(int row, int dir)
 {
     if (row < 0 || row >= (int) rows_.size()) return;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     auto& r = rows_[row];
     if (r.type == PropType::Int)
     {
@@ -1600,8 +1607,9 @@ void PropertyGrid::spinStep(int row, int dir)
         d.value = clamp(d.value + dir * step, d.min, d.max);
         if (d.onChange) d.onChange(d.value);
     }
-    propertyChanged.emit(row);
+    if (app.hasGone(this, seen)) return; // (the row's callback took the grid out of the tree: see WidgetApp::hasGone)
     markDirty();
+    propertyChanged.emit(row); // (last)
 }
 
 void PropertyGrid::startEdit(int row)
@@ -1637,6 +1645,8 @@ void PropertyGrid::startEdit(int row)
 void PropertyGrid::commitEdit()
 {
     if (!editing_ || activeRow_ < 0) return;
+    WidgetApp& app = WidgetApp::instance();
+    const uint32_t seen = app.deletions();
     auto& r = rows_[activeRow_];
     if (r.type != PropType::String)
     {
@@ -1685,7 +1695,10 @@ void PropertyGrid::commitEdit()
         default:
             break;
     }
-    propertyChanged.emit(activeRow_);
+    // (the row's callback and propertyChanged are handlers that may take the grid out of the tree: nothing of it is touched
+    // after one that did, see WidgetApp::hasGone)
+    if (app.hasGone(this, seen)) return;
+    if (app.emitGone(this, propertyChanged, activeRow_)) return;
     editing_ = false;
     activeRow_ = -1;
     markDirty();
