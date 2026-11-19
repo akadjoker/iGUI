@@ -258,16 +258,16 @@ nao tem nenhuma tecla de copiar ou colar escrita a mao. Uma aplicacao que faca o
 
 ## 6. Verificacao
 
-Instrucoes por cena do banco de comparacao (`tools/bench_compare.sh`, so contagem de instrucoes, rasteriador por software, antes = `origin/main` `fd8863d`; depois = esta ronda inteira, com a parte 3):
+Instrucoes por cena do banco de comparacao (`tools/bench_compare.sh`, so contagem de instrucoes, rasteriador por software, antes = `origin/main` `fd8863d`; depois = esta ronda inteira, com a parte 3 e a area de transferencia da seccao 7):
 
 | cena | antes | depois | |
 |---|---|---|---|
-| A (parado / rato) | 3 912 / 7 645 | 3 970 / 7 536 | +58 (+1,5 por cento, ~4 mil instrucoes no total) / -109 |
-| B (parado / rato / clique) | 1 730 241 / 1 756 509 / 1 806 692 | 1 730 459 / 1 756 561 / 1 806 482 | +0,01 / 0,00 / -0,01 por cento |
-| C (parado / rato / roda) | 209 487 / 214 100 / 215 342 | 209 659 / 213 831 / 215 294 | +0,08 / -0,13 / -0,02 por cento |
-| D (arvore: parado / rato / roda) | 131 325 / 135 656 / 137 576 | 132 563 / 136 728 / 138 787 | +0,9 por cento (a arvore pinta reticencias e o segundo texto) |
-| E (editor: parado / rato / roda / escrever) | 818 554 / 822 694 / 823 570 / 3 750 363 | 818 624 / 822 571 / 823 466 / 3 749 951 | +0,01 / -0,01 / -0,01 / -0,01 por cento |
-| F (parado / rato) | 1 911 986 / 1 917 086 | 1 912 294 / 1 917 228 | +0,02 / +0,01 por cento |
+| A (parado / rato) | 3 912 / 7 645 | 3 979 / 7 518 | +67 (+1,7 por cento, ~4 mil instrucoes no total) / -127 |
+| B (parado / rato / clique) | 1 730 241 / 1 756 509 / 1 806 692 | 1 730 468 / 1 756 570 / 1 806 451 | +0,01 / 0,00 / -0,01 por cento |
+| C (parado / rato / roda) | 209 487 / 214 100 / 215 342 | 209 668 / 213 840 / 215 356 | +0,09 / -0,12 / 0,00 por cento |
+| D (arvore: parado / rato / roda) | 131 325 / 135 656 / 137 576 | 132 572 / 136 737 / 138 794 | +0,9 por cento (a arvore pinta reticencias e o segundo texto) |
+| E (editor: parado / rato / roda / escrever) | 818 554 / 822 694 / 823 570 / 3 750 363 | 818 685 / 822 632 / 823 527 / 3 750 032 | +0,02 / -0,01 / -0,01 / -0,01 por cento |
+| F (parado / rato) | 1 911 986 / 1 917 086 | 1 912 303 / 1 917 237 | +0,02 / +0,01 por cento |
 
 Duas coisas custaram instrucoes a meio da ronda e foram corrigidas: um chamador novo de `DrawList::mapPoint` e de `commands_.push_back` (para o callback e para a malha) fez o compilador deixar de os pôr em linha dentro de
 `addLine`/`addCmd` (+1,3 por cento na cena F, +38 na A): o callback e a malha usam agora uma funcao propria e `resize`; e a `TreeView` media o texto de todas as linhas visiveis em cada frame: so mede o que talvez nao caiba e guarda a largura no no.
