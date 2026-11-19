@@ -632,7 +632,12 @@ void CodeEditor::paintOccurrences(PaintContext& ctx, const Rect& abs)
         if (vRow < first) continue;
         const String& text = lineAt(line);
         size_t at = 0;
-        while ((at = text.find(word, at)) != String::npos)
+        // Each hit costs the length of the line up to it (the column and the pixel position are worked out from the start of the line):
+        // a line of 64 KB with the word 16000 times, which a minified file has, took seconds for each frame. A line shows the first
+        // kMaxHitsPerLine of its hits.
+        constexpr int kMaxHitsPerLine = 64;
+        int hits = 0;
+        while ((at = text.find(word, at)) != String::npos && hits++ < kMaxHitsPerLine)
         {
             const size_t after = at + word.size();
             const bool boundary = !wholeWord || ((at == 0 || !isWord(text[at - 1])) && (after >= text.size() || !isWord(text[after])));
