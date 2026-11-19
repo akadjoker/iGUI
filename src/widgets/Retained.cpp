@@ -2438,6 +2438,90 @@ static Vec2 mapBy(const float* m, float x, float y)
     return { m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5] };
 }
 
+namespace
+{
+uint64_t gMeshIds = 0;
+ct::Vector<uint64_t>& releasedMeshes()
+{
+    static ct::Vector<uint64_t> list;
+    return list;
+}
+} // namespace
+
+Mesh::Mesh()
+        : id_(++gMeshIds)
+{
+}
+
+Mesh::~Mesh()
+{
+    releasedMeshes().push_back(id_);
+}
+
+void TakeReleasedMeshes(ct::Vector<uint64_t>& out)
+{
+    ct::Vector<uint64_t>& list = releasedMeshes();
+    for (size_t i = 0; i < list.size(); ++i) out.push_back(list[i]);
+    list.clear();
+}
+
+void DrawList::addMesh(const Mesh& mesh, float dx, float dy)
+{
+    if (mesh.vertices.empty() || mesh.indices.empty()) return;
+    const Rect clip = clipStack_.empty() ? Rect{ 0.0f, 0.0f, 100000.0f, 100000.0f } : clipStack_.back().rect;
+    if (clip.w <= 0.0f || clip.h <= 0.0f) return;
+    const int roundCount = clipStack_.empty() ? 0 : clipStack_.back().roundCount;
+    if (meshByReference_ && transformStack_.empty() && roundCount == 0)
+    {
+        // a command of its own, like a native callback: nothing merges with it
+        newVertices_ = vertices_.size();
+        noted_ = 0;
+        lastStart_ = newVertices_;
+        lastBoundsValid_ = false;
+        lastSolidOnly_ = false;
+        mergedClipValid_ = false;
+        Special special;
+        special.mesh = &mesh;
+        special.dx = dx;
+        special.dy = dy;
+        DrawCmd command;
+        command.clip = clip;
+        command.texture = mesh.texture;
+        command.indexOffset = static_cast<uint32_t>(specials_.size());
+        command.indexCount = 0;
+        command.roundClipCount = -1;
+        specials_.push_back(special);
+        commands_.resize(commands_.size() + 1);
+        commands_.back() = command;
+        return;
+    }
+    // copied: the vertices mapped by the transform and moved by (dx, dy), the indices after the ones already there
+    const uint32_t offset = static_cast<uint32_t>(indices_.size());
+    const uint32_t base = static_cast<uint32_t>(vertices_.size());
+    const size_t nv = mesh.vertices.size(), ni = mesh.indices.size();
+    DrawVertex* vp = appendVertices(nv);
+    if (transformStack_.empty())
+    {
+        for (size_t i = 0; i < nv; ++i)
+        {
+            const DrawVertex& v = mesh.vertices[i];
+            vp[i] = DrawVertex(v.x + dx, v.y + dy, v.u, v.v, v.color);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < nv; ++i)
+        {
+            const DrawVertex& v = mesh.vertices[i];
+            const Vec2 p = mapBy(transform_, v.x + dx, v.y + dy);
+            vp[i] = DrawVertex(p.x, p.y, v.u, v.v, v.color);
+        }
+    }
+    uint32_t* ix = appendIndices(ni);
+    for (size_t i = 0; i < ni; ++i) ix[i] = base + mesh.indices[i];
+    addCmd(offset, static_cast<uint32_t>(ni), mesh.texture, true);
+}
+
 void DrawList::addNativeCallback(NativeDrawFn fn, void* user, const Rect& source, bool restoreState)
 {
     if (!fn) return;

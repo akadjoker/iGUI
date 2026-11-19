@@ -117,6 +117,32 @@ private:
     unsigned ibo_ = 0;
     unsigned whiteTexture_ = 0;
     unsigned cbVao_ = 0; // the empty vertex array a native draw callback is entered with
+    // Meshes drawn by reference (ig::retained::Mesh): the geometry of each on the GPU, sent again when its revision is not the one kept, forgotten when
+    // the mesh is destroyed or has not been drawn for a while.
+    struct GpuMesh
+    {
+        unsigned vao = 0, vbo = 0, ibo = 0;
+        uint32_t revision = 0;
+        uint32_t indexCount = 0;
+        uint64_t lastFrame = 0;
+    };
+    ct::HashMap<uint64_t, GpuMesh> meshes_;
+    uint64_t renderFrame_ = 0;
+    GpuMesh* gpuMesh(const ig::retained::Mesh& mesh);
+    void dropMesh(uint64_t id);
+    void dropMeshes();
+public:
+    /// How many meshes the renderer keeps on the GPU, and how many bytes of vertices and indices were sent for them in the last frame (a test or a host looks at them).
+    int meshCount() const
+    {
+        return static_cast<int>(meshes_.size());
+    }
+    size_t meshBytesSent() const
+    {
+        return meshBytesSent_;
+    }
+private:
+    size_t meshBytesSent_ = 0;
     int uRotation_ = -1;
     int uTranslate_ = -1;
     int uInvDisplay_ = -1;

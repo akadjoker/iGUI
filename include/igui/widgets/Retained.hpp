@@ -136,6 +136,9 @@ struct IO
     // nativeSamples: the multisample count of the target the callbacks draw into (0 or 1: none).
     int nativeBackend = 0;
     int nativeSamples = 0;
+    // true: the renderer draws a Mesh (DrawList::addMesh) by reference, keeping its geometry between frames (the OpenGL renderer does, as a
+    // buffer on the GPU sent again only when the mesh changed); false: addMesh copies the geometry into the frame's draw list.
+    bool retainedMeshes = false;
 
     // ── Clipboard (set by backend) ───────────────────────────────────
     // Assign captureless lambdas or plain function pointers.
@@ -609,6 +612,45 @@ private:
     ct::Vector<unsigned char> pixels_;
 };
 
+/// Geometry that a widget keeps from frame to frame and draws by reference (DrawList::addMesh): the vertices and indices are in the widget's own
+/// coordinates, the place it is drawn at is given by each addMesh. A renderer that keeps it on the GPU (the OpenGL one) sends it when its
+/// `revision()` is not the one it has, and draws it again for nothing in the frames that follow; one that does not has the draw list copy it. The
+/// widget calls changed() after it writes the vertices (what a PlotChart does when the data, the view, the size or the theme changed), and
+/// the mesh must not be written while a frame is being drawn. A mesh that is destroyed is forgotten by the renderer's cache.
+class Mesh
+{
+public:
+    Mesh();
+    ~Mesh();
+    Mesh(const Mesh&) = delete;
+    Mesh& operator=(const Mesh&) = delete;
+
+    ct::Vector<DrawVertex> vertices;
+    ct::Vector<uint32_t> indices;
+    /// The texture its vertices sample (the white texel of the font atlas for a solid colour: DrawList::solidTexture() and solidUV()).
+    TextureHandle texture;
+
+    void changed()
+    {
+        ++revision_;
+    }
+    uint64_t id() const
+    {
+        return id_;
+    }
+    uint32_t revision() const
+    {
+        return revision_;
+    }
+
+private:
+    uint64_t id_;
+    uint32_t revision_ = 1;
+};
+
+/// The ids of the meshes destroyed since the last call, appended to `out`: a renderer that caches meshes frees what it kept for them.
+void TakeReleasedMeshes(ct::Vector<uint64_t>& out);
+
 class DrawList
 {
 public:
@@ -671,13 +713,34 @@ public:
     /// have left the state as it found it. Not run under a camera that rotates; rounded clips do not apply to it (the scissor does).
     void addNativeCallback(NativeDrawFn fn, void* user, const Rect& rect, bool restoreState = true);
 
-    /// What a special command (DrawCmd::isSpecial) is: a native draw callback.
+    /// A mesh at this place of the draw order, at (dx, dy) in the units of this list, under the clip in force: drawn by reference when the renderer
+    /// keeps meshes (setMeshByReference, which WidgetApp::paint sets from IO::retainedMeshes), else its geometry is copied into the list (mapped by the
+    /// transform in force) as an ordinary command. Nothing happens for an empty mesh or an empty clip. The mesh must outlive the frame.
+    void addMesh(const Mesh& mesh, float dx, float dy);
+    void setMeshByReference(bool on)
+    {
+        meshByReference_ = on;
+    }
+    /// The texture and the texel that shapes are drawn with (the white texel of the font atlas page): what a mesh of solid colours puts on its vertices.
+    TextureHandle solidTexture() const
+    {
+        return fontTexture_;
+    }
+    Vec2 solidUV() const
+    {
+        return whiteUV_;
+    }
+
+    /// What a special command (DrawCmd::isSpecial) is: a native draw callback, or a mesh drawn by reference.
     struct Special
     {
         NativeDrawFn fn = nullptr;
         void* user = nullptr;
         Rect rect = { 0, 0, 0, 0 };
         bool restoreState = true;
+        const Mesh* mesh = nullptr; // not null: a mesh at (dx, dy)
+        float dx = 0.0f;
+        float dy = 0.0f;
     };
     const ct::Vector<Special>& specials() const
     {
@@ -896,6 +959,7 @@ private:
     ct::Vector<uint32_t> indices_;
     ct::Vector<DrawCmd> commands_;
     ct::Vector<Special> specials_;
+    bool meshByReference_ = false;
     int pushClipCount_ = 0;
     ct::HashMap<uint32_t, FontGlyph> glyphs_;
     // last, so the members the drawing calls use all the time keep their place: the outlines addIcon

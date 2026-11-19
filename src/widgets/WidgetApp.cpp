@@ -918,11 +918,25 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
 
 void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
 {
-    ct::Vector<Widget*> chain;
-    for (Widget* w = s_.focused_; w; w = w->parent()) chain.push_back(w);
+    // the ancestors: on the stack (a tree is not deeper than a few dozen; deeper ones go to the heap), so that an event allocates nothing
+    Widget* stack[32];
+    ct::Vector<Widget*> deep;
+    size_t count = 0;
+    for (Widget* w = s_.focused_; w; w = w->parent())
+    {
+        if (count < 32) stack[count++] = w;
+        else
+        {
+            if (deep.empty())
+                for (size_t k = 0; k < 32; ++k) deep.push_back(stack[k]);
+            deep.push_back(w);
+        }
+    }
+    Widget** chain = deep.empty() ? stack : deep.data();
+    if (!deep.empty()) count = deep.size();
 
     uint32_t seen = deletions_;
-    for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
+    for (size_t i = 0; i < count && !e.consumed; ++i)
     {
         Widget* w = chain[i];
         if (seen != deletions_)
@@ -1634,11 +1648,24 @@ void WidgetApp::bubble(Widget* target, MouseEvent& e, Func handler)
 {
     // The parents are read before any handler runs: a handler may delete the
     // widget it was called with, and `w->parent()` would then read freed memory.
-    ct::Vector<Widget*> chain;
-    for (Widget* w = target; w; w = w->parent()) chain.push_back(w);
+    Widget* stack[32]; // (on the stack: a tree is not deeper than a few dozen; deeper ones go to the heap, so that an event allocates nothing)
+    ct::Vector<Widget*> deep;
+    size_t count = 0;
+    for (Widget* w = target; w; w = w->parent())
+    {
+        if (count < 32) stack[count++] = w;
+        else
+        {
+            if (deep.empty())
+                for (size_t k = 0; k < 32; ++k) deep.push_back(stack[k]);
+            deep.push_back(w);
+        }
+    }
+    Widget** chain = deep.empty() ? stack : deep.data();
+    if (!deep.empty()) count = deep.size();
 
     uint32_t seen = deletions_;
-    for (ct::Vector<Widget*>::size_type i = 0; i < chain.size() && !e.consumed; ++i)
+    for (size_t i = 0; i < count && !e.consumed; ++i)
     {
         Widget* w = chain[i];
         if (seen != deletions_)
@@ -2056,6 +2083,9 @@ void WidgetApp::paint(ig::retained::DrawData& data, const ig::retained::Font* fo
     if (w <= 0 || h <= 0) return;
     font_ = font; // cache for text measurement in mouse events
     drawList_ = &ig::retained::GetDrawList();
+    // a mesh a widget keeps (a PlotChart's layer) is drawn by reference where the renderer keeps meshes, else copied into the list
+    drawList_->setMeshByReference(ig::retained::GetIO().retainedMeshes);
+    ig::retained::GetTransDrawList().setMeshByReference(ig::retained::GetIO().retainedMeshes);
 
     // Layout pass
     if ((s_.needsLayout_ || s_.relayout_) && s_.root_)

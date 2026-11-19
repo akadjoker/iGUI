@@ -151,6 +151,7 @@ GlRaster::~GlRaster()
 void GlRaster::shutdown()
 {
     if (!program_) return;
+    dropMeshes();
     glDeleteTextures(1, &whiteTexture_);
     glDeleteBuffers(1, &vbo_);
     glDeleteBuffers(1, &ibo_);
@@ -500,9 +501,77 @@ void GlRaster::runNative(const ig::retained::DrawList::Special& special, const i
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
 }
 
+GlRaster::GpuMesh* GlRaster::gpuMesh(const ig::retained::Mesh& mesh)
+{
+    GpuMesh* g = meshes_.find(mesh.id());
+    if (!g)
+    {
+        GpuMesh fresh;
+        glGenVertexArrays(1, &fresh.vao);
+        glGenBuffers(1, &fresh.vbo);
+        glGenBuffers(1, &fresh.ibo);
+        glBindVertexArray(fresh.vao);
+        glBindBuffer(GL_ARRAY_BUFFER, fresh.vbo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, fresh.ibo);
+        const GLsizei stride = sizeof(ig::retained::DrawVertex);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(ig::retained::DrawVertex, x)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void*>(offsetof(ig::retained::DrawVertex, u)));
+        glEnableVertexAttribArray(2);
+        glVertexAttribPointer(2, 4, GL_UNSIGNED_BYTE, GL_TRUE, stride, reinterpret_cast<void*>(offsetof(ig::retained::DrawVertex, color)));
+        meshes_[mesh.id()] = fresh;
+        g = meshes_.find(mesh.id());
+    }
+    if (g->revision != mesh.revision() || g->indexCount != mesh.indices.size())
+    {
+        glBindVertexArray(g->vao);
+        glBindBuffer(GL_ARRAY_BUFFER, g->vbo);
+        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.vertices.size() * sizeof(ig::retained::DrawVertex)), mesh.vertices.data(), GL_STATIC_DRAW);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g->ibo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(mesh.indices.size() * sizeof(uint32_t)), mesh.indices.data(), GL_STATIC_DRAW);
+        g->revision = mesh.revision();
+        g->indexCount = static_cast<uint32_t>(mesh.indices.size());
+        meshBytesSent_ += mesh.vertices.size() * sizeof(ig::retained::DrawVertex) + mesh.indices.size() * sizeof(uint32_t);
+    }
+    return g;
+}
+
+void GlRaster::dropMesh(uint64_t id)
+{
+    GpuMesh* g = meshes_.find(id);
+    if (!g) return;
+    glDeleteVertexArrays(1, &g->vao);
+    glDeleteBuffers(1, &g->vbo);
+    glDeleteBuffers(1, &g->ibo);
+    meshes_.erase(id);
+}
+
+void GlRaster::dropMeshes()
+{
+    ct::Vector<uint64_t> ids;
+    for (auto it = meshes_.begin(); it != meshes_.end(); ++it) ids.push_back(it->key);
+    for (size_t i = 0; i < ids.size(); ++i) dropMesh(ids[i]);
+}
+
 void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint32_t background)
 {
     data.stats.reset();
+    meshBytesSent_ = 0;
+    ++renderFrame_;
+    {
+        // the meshes that were destroyed since the last frame, and the ones that were not drawn for two seconds of frames
+        ct::Vector<uint64_t> released;
+        ig::retained::TakeReleasedMeshes(released);
+        for (size_t i = 0; i < released.size(); ++i) dropMesh(released[i]);
+        if (!meshes_.empty() && renderFrame_ % 64 == 0)
+        {
+            ct::Vector<uint64_t> stale;
+            for (auto it = meshes_.begin(); it != meshes_.end(); ++it)
+                if (renderFrame_ - it->value.lastFrame > 600) stale.push_back(it->key);
+            for (size_t i = 0; i < stale.size(); ++i) dropMesh(stale[i]);
+        }
+    }
     if (!bindTarget(width, height)) return;
     glViewport(0, 0, width, height);
     glDisable(GL_SCISSOR_TEST);
@@ -606,6 +675,25 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
             if (special)
             {
                 const ig::retained::DrawList::Special& entry = pass.list->special(command);
+                if (entry.mesh)
+                {
+                    // a mesh drawn by reference: its own buffers, moved by (dx, dy) (through the translation of the pass), no rounded clip
+                    GpuMesh* g = gpuMesh(*entry.mesh);
+                    g->lastFrame = renderFrame_;
+                    glUniform2f(uTranslate_, translateX + cosine * entry.dx - sine * entry.dy, translateY + sine * entry.dx + cosine * entry.dy);
+                    if (roundsSet > 0)
+                    {
+                        glUniform1i(uRoundCount_, 0);
+                        roundsSet = 0;
+                    }
+                    glBindTexture(GL_TEXTURE_2D, entry.mesh->texture ? static_cast<unsigned>(entry.mesh->texture.value) : whiteTexture_);
+                    glBindVertexArray(g->vao);
+                    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(g->indexCount), GL_UNSIGNED_INT, nullptr);
+                    glBindVertexArray(vao_);
+                    glUniform2f(uTranslate_, translateX, translateY);
+                    data.stats.drawCalls++;
+                    continue;
+                }
                 const float rx0 = (cosine * entry.rect.x + translateX) * scaleX;
                 const float ry0 = (cosine * entry.rect.y + translateY) * scaleY;
                 const float rx1 = (cosine * (entry.rect.x + entry.rect.w) + translateX) * scaleX;

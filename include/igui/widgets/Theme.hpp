@@ -376,6 +376,37 @@ struct EditorColors
     }
 };
 
+/// PlotChart: its plot, grid, axis lines, cursor, selection band, the clock line, and the palette that series take their colours from. Every series colour
+/// has 3:1 or more against the plot background (a line is a graphic: tests/test_plot_chart.cpp). The text of a chart is the theme's own.
+struct PlotColors
+{
+    Color bg = Color(22, 24, 28, 255);
+    Color grid = Color(255, 255, 255, 26);
+    Color axis = Color(96, 98, 106, 255);
+    Color cursor = Color(230, 230, 235, 170);
+    Color band = Color(90, 140, 230, 56);
+    Color bandEdge = Color(120, 165, 245, 220);
+    Color clock = Color(255, 196, 64, 255);
+    Color series[8] = { Color(86, 180, 233, 255), Color(230, 159, 0, 255), Color(80, 200, 140, 255), Color(240, 228, 66, 255), Color(214, 140, 190, 255),
+        Color(240, 110, 60, 255), Color(120, 150, 240, 255), Color(190, 190, 196, 255) };
+
+    static PlotColors light()
+    {
+        PlotColors c;
+        c.bg = Color(255, 255, 255, 255);
+        c.grid = Color(0, 0, 0, 28);
+        c.axis = Color(140, 140, 146, 255);
+        c.cursor = Color(30, 30, 34, 150);
+        c.band = Color(0, 120, 215, 46);
+        c.bandEdge = Color(0, 100, 200, 220);
+        c.clock = Color(190, 110, 0, 255);
+        const Color s[8] = { Color(0, 114, 178, 255), Color(200, 80, 0, 255), Color(0, 130, 95, 255), Color(160, 120, 0, 255), Color(170, 60, 130, 255),
+            Color(200, 40, 40, 255), Color(80, 90, 200, 255), Color(90, 90, 96, 255) };
+        for (int i = 0; i < 8; ++i) c.series[i] = s[i];
+        return c;
+    }
+};
+
 /// What of a preset a WidgetApp::setTheme / setThemePreset takes: everything (the default, as always), only its colours and looks
 /// (the application keeps the sizes its layouts were made with), or only its sizes.
 enum class ThemeParts
@@ -521,6 +552,7 @@ struct Theme
     FileColors file;
     PropColors prop;
     EditorColors editor;
+    PlotColors plot;
 
     // Look: how some controls are drawn beyond their colours. The dark and
     // light presets leave these at their defaults, so they paint as they
@@ -707,6 +739,7 @@ struct Theme
         t.file = FileColors::light();
         t.prop = PropColors::light();
         t.editor = EditorColors::light();
+        t.plot = PlotColors::light();
         return t;
     }
 
