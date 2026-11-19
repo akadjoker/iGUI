@@ -233,7 +233,11 @@ struct FontAtlas::Impl
     TextureHandle texture;
     int width = 1024;
     int height = 1024;
-    ct::Vector<unsigned char> rgba;
+    // The dynamic page: a byte of coverage for each pixel (it is white wherever it is drawn: a quarter of the memory of an RGBA page),
+    // and the RGBA form of it, made only when something asks for it (dynamicPixels) and kept until the page changes.
+    ct::Vector<unsigned char> alpha;
+    ct::Vector<unsigned char> rgbaCache;
+    bool rgbaFresh = false;
     bool dirty = false;
     int penX = 1, penY = 1, rowHeight = 0;
 
@@ -266,21 +270,22 @@ FontAtlas::~FontAtlas()
 bool FontAtlas::prepareDynamic()
 {
     if (!impl_ || impl_->faces.empty()) return false;
-    impl_->rgba.assign(static_cast<size_t>(impl_->width) * static_cast<size_t>(impl_->height) * 4,
-            0);
+    impl_->alpha.assign(static_cast<size_t>(impl_->width) * static_cast<size_t>(impl_->height), 0);
+    impl_->rgbaCache.clear();
+    impl_->rgbaFresh = false;
     impl_->penX = impl_->penY = 1;
     impl_->rowHeight = 0;
     impl_->enabled = false;
     impl_->dirty = false;
     // pixel (0, 0), where the baked page has its white texel (whitePixelUV), is white here too (nothing is packed at it: the pen
     // starts at 1, 1): shapes can be drawn with this page as well (DrawList::setSolidAlternate)
-    impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255;
+    impl_->alpha[0] = 255;
     return true;
 }
 
 bool FontAtlas::enableDynamic(TextureHandle texture)
 {
-    if (!impl_ || impl_->rgba.empty() || !texture) return false;
+    if (!impl_ || impl_->alpha.empty() || !texture) return false;
     impl_->texture = texture;
     impl_->enabled = true;
     return true;
@@ -309,7 +314,24 @@ int FontAtlas::dynamicHeight() const
 }
 const unsigned char* FontAtlas::dynamicPixels() const
 {
-    return impl_ ? impl_->rgba.data() : nullptr;
+    if (!impl_ || impl_->alpha.empty()) return nullptr;
+    if (!impl_->rgbaFresh)
+    {
+        // white with the coverage in alpha, for whoever makes the texture from RGBA (an adapter with dynamicAlpha() does not ask)
+        impl_->rgbaCache.resize(impl_->alpha.size() * 4u);
+        for (size_t i = 0; i < impl_->alpha.size(); ++i)
+        {
+            unsigned char* px = &impl_->rgbaCache[i * 4u];
+            px[0] = px[1] = px[2] = 255;
+            px[3] = impl_->alpha[i];
+        }
+        impl_->rgbaFresh = true;
+    }
+    return impl_->rgbaCache.data();
+}
+const unsigned char* FontAtlas::dynamicAlpha() const
+{
+    return impl_ && !impl_->alpha.empty() ? impl_->alpha.data() : nullptr;
 }
 bool FontAtlas::dynamicDirty() const
 {
@@ -355,10 +377,11 @@ void FontAtlas::setPixelScale(float scale)
     if (scale == impl_->pixelScale) return;
     impl_->pixelScale = scale;
     // every size is baked again at the new scale
-    if (!impl_->rgba.empty())
+    if (!impl_->alpha.empty())
     {
-        std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
-        impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255; // (the white texel stays)
+        std::fill(impl_->alpha.begin(), impl_->alpha.end(), static_cast<unsigned char>(0));
+        impl_->alpha[0] = 255; // (the white texel stays)
+        impl_->rgbaFresh = false;
         impl_->penX = impl_->penY = 1;
         impl_->rowHeight = 0;
         impl_->dirty = true;
@@ -420,25 +443,20 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
         if (impl_->penY + gh + 1 > impl_->height)
         {
             // Full: start the page again; every size bakes its glyphs anew.
-            std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
-            impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255; // (the white texel stays)
+            std::fill(impl_->alpha.begin(), impl_->alpha.end(), static_cast<unsigned char>(0));
+            impl_->alpha[0] = 255; // (the white texel stays)
+            impl_->rgbaFresh = false;
             impl_->penX = impl_->penY = 1;
             impl_->rowHeight = 0;
             for (Font* f: impl_->sized) f->clearGlyphs();
         }
         ct::Vector<unsigned char> alpha(static_cast<size_t>(gw) * static_cast<size_t>(gh), 0);
         stbtt_MakeGlyphBitmap(&fc.info, alpha.data(), gw, gh, gw, scale, scale, gi);
+        impl_->rgbaFresh = false;
         for (int y = 0; y < gh; ++y)
             for (int x = 0; x < gw; ++x)
-            {
-                unsigned char* px = &impl_->rgba[(static_cast<size_t>(impl_->penY + y) *
-                                                                 static_cast<size_t>(impl_->width) +
-                                                         static_cast<size_t>(impl_->penX + x)) *
-                                                 4];
-                px[0] = px[1] = px[2] = 255;
-                px[3] = alpha[static_cast<size_t>(y) * static_cast<size_t>(gw) +
-                              static_cast<size_t>(x)];
-            }
+                impl_->alpha[static_cast<size_t>(impl_->penY + y) * static_cast<size_t>(impl_->width) + static_cast<size_t>(impl_->penX + x)] =
+                        alpha[static_cast<size_t>(y) * static_cast<size_t>(gw) + static_cast<size_t>(x)];
         glyph.uv = { static_cast<float>(impl_->penX) / static_cast<float>(impl_->width),
             static_cast<float>(impl_->penY) / static_cast<float>(impl_->height),
             static_cast<float>(gw) / static_cast<float>(impl_->width),

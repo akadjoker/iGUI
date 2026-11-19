@@ -92,13 +92,48 @@ unsigned compile(unsigned type, const char* source, bool es)
     return shader;
 }
 
-unsigned uploadRgba(int width, int height, const unsigned char* rgba)
+// Whether every pixel is white (what the font atlas is: white, the coverage in alpha).
+bool allWhite(const unsigned char* rgba, size_t pixels)
+{
+    for (size_t i = 0; i < pixels; ++i)
+        if ((rgba[i * 4u] & rgba[i * 4u + 1u] & rgba[i * 4u + 2u]) != 255u) return false;
+    return true;
+}
+
+// Such a texture is kept in the driver as one byte a pixel (a quarter of the memory), read as (1, 1, 1, red): the same texel.
+void swizzleAlphaOnly(bool on)
+{
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, on ? GL_ONE : GL_RED);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, on ? GL_ONE : GL_GREEN);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, on ? GL_ONE : GL_BLUE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, on ? GL_RED : GL_ALPHA);
+}
+
+// The alpha of every pixel, in a buffer of its own (freed by the caller).
+unsigned char* alphaBytes(const unsigned char* rgba, size_t pixels)
+{
+    unsigned char* out = new unsigned char[pixels];
+    for (size_t i = 0; i < pixels; ++i) out[i] = rgba[i * 4u + 3u];
+    return out;
+}
+
+unsigned uploadRgba(int width, int height, const unsigned char* rgba, bool* alphaOnly = nullptr)
 {
     unsigned texture = 0;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    const size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (alphaOnly && allWhite(rgba, pixels))
+    {
+        unsigned char* alpha = alphaBytes(rgba, pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, alpha);
+        delete[] alpha;
+        swizzleAlphaOnly(true);
+        *alphaOnly = true;
+    }
+    else
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -232,13 +267,48 @@ ig::retained::TextureHandle GlRaster::createTexture(int width, int height,
 {
     ig::retained::TextureHandle handle;
     if (width <= 0 || height <= 0) return handle;
-    const unsigned texture = uploadRgba(width, height, rgba);
+    bool alphaOnly = false;
+    const unsigned texture = uploadRgba(width, height, rgba, &alphaOnly);
     handle.value = texture;
     Size size;
     size.width = width;
     size.height = height;
+    size.alphaOnly = alphaOnly;
     sizes_[handle.value] = size;
     return handle;
+}
+
+ig::retained::TextureHandle GlRaster::createTextureA8(int width, int height, const unsigned char* alpha)
+{
+    ig::retained::TextureHandle handle;
+    if (width <= 0 || height <= 0) return handle;
+    unsigned texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, alpha);
+    swizzleAlphaOnly(true);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    handle.value = texture;
+    Size size;
+    size.width = width;
+    size.height = height;
+    size.alphaOnly = true;
+    sizes_[handle.value] = size;
+    return handle;
+}
+
+bool GlRaster::updateTextureA8(ig::retained::TextureHandle handle, const unsigned char* alpha, int width, int height)
+{
+    Size* size = handle ? sizes_.find(handle.value) : nullptr;
+    if (!size || !size->alphaOnly || size->width != width || size->height != height) return false;
+    glBindTexture(GL_TEXTURE_2D, static_cast<unsigned>(handle.value));
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, alpha);
+    return true;
 }
 
 void GlRaster::destroyTexture(ig::retained::TextureHandle handle)
@@ -256,14 +326,31 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
     if (!size || width <= 0 || height <= 0) return false;
     glBindTexture(GL_TEXTURE_2D, static_cast<unsigned>(handle.value));
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    if (size->width == width && size->height == height)
+    const size_t pixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    const bool white = allWhite(rgba, pixels);
+    if (size->alphaOnly && white)
+    {
+        // still white: one byte a pixel, as it was made
+        unsigned char* alpha = alphaBytes(rgba, pixels);
+        if (size->width == width && size->height == height)
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RED, GL_UNSIGNED_BYTE, alpha);
+        else
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, alpha);
+        delete[] alpha;
+    }
+    else if (size->alphaOnly)
+    {
+        // no longer white: whole pixels, read as they are
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        swizzleAlphaOnly(false);
+        size->alphaOnly = false;
+    }
+    else if (size->width == width && size->height == height)
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     else
-    {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-        size->width = width;
-        size->height = height;
-    }
+    size->width = width;
+    size->height = height;
     return true;
 }
 

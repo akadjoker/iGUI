@@ -29,6 +29,9 @@ public:
     }
 
     ig::retained::TextureHandle createTexture(int width, int height, const unsigned char* rgba);
+    // A texture that is white with a coverage in alpha (a font page) from one byte a pixel: kept by the driver as one byte too.
+    ig::retained::TextureHandle createTextureA8(int width, int height, const unsigned char* alpha);
+    bool updateTextureA8(ig::retained::TextureHandle texture, const unsigned char* alpha, int width, int height);
     void destroyTexture(ig::retained::TextureHandle texture);
     bool updateTexture(ig::retained::TextureHandle texture, const unsigned char* rgba, int width,
             int height);
@@ -73,6 +76,7 @@ private:
     {
         int width = 0;
         int height = 0;
+        bool alphaOnly = false; // a one-byte texture read as white with that alpha (the font atlas pages)
     };
 
     bool offscreen_ = false;

@@ -309,6 +309,18 @@ void randomScene(DrawList& list, Pages& pages, int operations, bool withSecondPa
 
 void render(Pages& pages, DrawList& list, ct::Vector<uint32_t>& pixels)
 {
+    // (the rasteriser keeps the picture of its last call and gives it back for the same draw data: an empty frame in between
+    // makes sure that this one is drawn)
+    {
+        DrawList empty;
+        DrawData blank;
+        blank.passes.push_back({ &empty, Camera2D{} });
+        blank.displayWidth = 400.0f;
+        blank.displayHeight = 300.0f;
+        ct::Vector<uint32_t> scrap;
+        scrap.resize(400u * 300u);
+        pages.raster.render(blank, scrap.data(), 400, 300, 400, 0xff123456u);
+    }
     DrawData data;
     data.passes.push_back({ &list, Camera2D{} });
     data.displayWidth = 400.0f;
@@ -357,6 +369,66 @@ void testMergingChangesNoPixel()
     check(differing == 0, "no random scene has a pixel that merging changed");
     check(notMore == scenes, "merging never makes more commands");
     check(commandsMerged * 10 < commandsApart * 9, "merging makes at least a tenth fewer commands in all");
+}
+
+// The sample buffer is a band of the window: the picture is the same whatever the band is, with the samples of every setting, and
+// a texture that is white is kept as its alpha alone and gives the same pixels as the whole one.
+void testBandsAndAlphaTextures()
+{
+    printf("-- bands of the sample buffer, alpha-only textures\n");
+    Pages pages;
+    if (!pages.ok) return;
+    int scenes = 0, differing = 0;
+    for (int samples = 2; samples <= 3; ++samples)
+    {
+        for (int s = 0; s < 40; ++s)
+        {
+            gSeed = 0x2545f491u + static_cast<uint32_t>(s * 6151 + samples * 977);
+            DrawList list;
+            randomScene(list, pages, 40 + s % 60, s % 2 == 0);
+            pages.raster.setSamples(samples);
+            ct::Vector<uint32_t> whole, banded, tiny;
+            pages.raster.setBandRows(100000);
+            render(pages, list, whole);
+            pages.raster.setBandRows(128);
+            pages.raster.setSamples(samples + 0); // (a new signature is not needed: the cache holds the picture of the last call, so ask for a different size first)
+            render(pages, list, banded);
+            pages.raster.setBandRows(8);
+            render(pages, list, tiny);
+            ++scenes;
+            if (whole.size() != banded.size() || whole.size() != tiny.size() ||
+                    memcmp(whole.data(), banded.data(), whole.size() * sizeof(uint32_t)) != 0 || memcmp(whole.data(), tiny.data(), whole.size() * sizeof(uint32_t)) != 0)
+                ++differing;
+        }
+    }
+    pages.raster.setSamples(1);
+    char what[100];
+    snprintf(what, sizeof what, "%d scenes drawn with one band, with 128 rows and with 8 give the same pixels (%d differ)", scenes, differing);
+    check(differing == 0, what);
+
+    // an alpha-only texture and a whole one with the same pixels draw the same
+    {
+        DrawList list;
+        list.setWhitePixel(pages.page1, pages.atlas.whitePixelUV());
+        list.addRect({ 0, 0, 400, 300 }, Color(30, 30, 34, 255));
+        list.addText(pages.atlas.defaultFont(), { 10, 40 }, Color(240, 200, 100, 255), "Same pixels, a quarter of the memory", 1.0f);
+        ct::Vector<uint32_t> a, b;
+        render(pages, list, a);
+        // the same atlas page with one pixel that is not white (a texel no glyph uses): a whole texture
+        ct::Vector<unsigned char> page(static_cast<size_t>(pages.atlas.width()) * static_cast<size_t>(pages.atlas.height()) * 4u);
+        memcpy(page.data(), pages.atlas.pixels(), page.size());
+        const size_t last = page.size() - 4u;
+        page[last] = 200; // (its rgb is not white now)
+        page[last + 3] = 0;
+        TextureHandle whole = pages.raster.createTexture(pages.atlas.width(), pages.atlas.height(), page.data());
+        DrawList list2;
+        list2.setWhitePixel(whole, pages.atlas.whitePixelUV());
+        list2.addRect({ 0, 0, 400, 300 }, Color(30, 30, 34, 255));
+        list2.addText(pages.atlas.defaultFont(), { 10, 40 }, Color(240, 200, 100, 255), "Same pixels, a quarter of the memory", 1.0f);
+        render(pages, list2, b);
+        check(a.size() == b.size() && memcmp(a.data(), b.data(), a.size() * sizeof(uint32_t)) == 0, "an alpha-only texture gives the pixels of the whole one");
+        pages.raster.destroyTexture(whole);
+    }
 }
 
 void testMergedCounts()
@@ -474,6 +546,7 @@ int main()
     testWhiteTexelOfThePages();
     testMergedCounts();
     testMergingChangesNoPixel();
+    testBandsAndAlphaTextures();
     if (failures() == 0) printf("PASS\n");
     return failures() == 0 ? 0 : 1;
 }

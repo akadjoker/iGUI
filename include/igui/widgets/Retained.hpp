@@ -476,6 +476,10 @@ public:
     int dynamicWidth() const;
     int dynamicHeight() const;
     const unsigned char* dynamicPixels() const;
+    /// The same page as one byte of coverage a pixel (the page is white wherever it is drawn), what it is kept as: an adapter that can
+    /// make a one-byte texture (ig::zen::SoftRaster, GlRaster: createTextureA8) uses this, and the page costs a quarter of the memory
+    /// (dynamicPixels() makes an RGBA copy of it only when it is asked for). null while there is no page.
+    const unsigned char* dynamicAlpha() const;
     bool dynamicDirty() const;
     void clearDynamicDirty();
     // Device pixels per unit of the sizes asked for (a window on a 2x screen with the UI in

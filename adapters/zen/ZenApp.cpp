@@ -250,7 +250,9 @@ bool App::create(const Config &config)
         // Glyphs at the size a widget asks for, rasterised when first drawn.
         if (config.defaultDynamicPage && atlas_.prepareDynamic())
         {
-            atlas_.enableDynamic(createTexture(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicPixels()));
+            // (the page as one byte a pixel: a quarter of the memory, in the atlas and in the texture; no RGBA copy is ever made)
+            atlas_.enableDynamic(useGl_ ? gl_.createTextureA8(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicAlpha())
+                                        : raster_.createTextureA8(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicAlpha()));
             // the page has the white texel too: the shapes between the texts of a window, which are on this page, ride on it
             rt::SetSolidAlternate(atlas_.dynamicTexture(),
                     { 0.5f / static_cast<float>(atlas_.dynamicWidth()), 0.5f / static_cast<float>(atlas_.dynamicHeight()) });
@@ -631,7 +633,9 @@ bool App::frameWindow(Window *w, bool driven)
     if (atlas_.dynamicDirty())
     {
         // A glyph was rasterised while painting: the page goes up before the frame is drawn.
-        updateTexture(atlas_.dynamicTexture(), atlas_.dynamicPixels(), atlas_.dynamicWidth(), atlas_.dynamicHeight());
+        if (useGl_) gl_.updateTextureA8(atlas_.dynamicTexture(), atlas_.dynamicAlpha(), atlas_.dynamicWidth(), atlas_.dynamicHeight());
+        else
+            raster_.updateTextureA8(atlas_.dynamicTexture(), atlas_.dynamicAlpha(), atlas_.dynamicWidth(), atlas_.dynamicHeight());
         atlas_.clearDynamicDirty();
     }
     rt::Render();
