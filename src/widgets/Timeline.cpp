@@ -1215,7 +1215,11 @@ void Timeline::onMouseRelease(MouseEvent& e)
     dragTrack_ = -1;
     dragIndex_ = -1;
     e.consumed = true;
-    if (grabbed) onClipGrabReleased.emit(e.x, xToTime(e.x));
+    // Each signal below may come from a handler that takes the timeline out of the tree (a group of clips reports each of them, one
+    // signal after the other): after one that did, nothing of the timeline is touched and nothing more is emitted
+    // (WidgetApp::hasGone). A group's later members are lost with it, as everything else the widget was going to say.
+    WidgetApp& app = WidgetApp::instance();
+    if (grabbed && app.emitGone(this, onClipGrabReleased, e.x, xToTime(e.x))) return;
     if (marquee)
     {
         markDirty();
@@ -1223,30 +1227,35 @@ void Timeline::onMouseRelease(MouseEvent& e)
         selectedClips(picked);
         ct::Vector<TimelineKeyRef> keys;
         selectedKeys(keys);
-        if (!picked.empty()) onClipSelected.emit(picked[0].track, picked[0].clip);
+        if (!picked.empty())
+        {
+            if (app.emitGone(this, onClipSelected, picked[0].track, picked[0].clip)) return;
+        }
         else if (!keys.empty())
-            onKeyframeSelected.emit(keys[0].track, keys[0].key);
+        {
+            if (app.emitGone(this, onKeyframeSelected, keys[0].track, keys[0].key)) return;
+        }
     }
     if (edited && group.size() > 1)
     {
-        for (size_t i = 0; i < group.size(); ++i) onClipEdited.emit(group[i].track, group[i].clip);
+        for (size_t i = 0; i < group.size(); ++i)
+            if (app.emitGone(this, onClipEdited, group[i].track, group[i].clip)) return;
     }
     else if (edited)
     {
-        onClipEdited.emit(editedTrack, editedClip);
+        if (app.emitGone(this, onClipEdited, editedTrack, editedClip)) return;
     }
     if (keyDragged && keyGroup.size() > 1)
     {
         for (size_t i = 0; i < keyGroup.size(); ++i)
         {
             const float now = tracks_[keyGroup[i].track].keyframes[keyGroup[i].key].time;
-            if (now != keyGroup[i].time)
-                onKeyframeDropped.emit(keyGroup[i].track, keyGroup[i].key, keyGroup[i].time, now);
+            if (now != keyGroup[i].time && app.emitGone(this, onKeyframeDropped, keyGroup[i].track, keyGroup[i].key, keyGroup[i].time, now)) return;
         }
     }
     else if (keyDragged && droppedTime != startTime)
     {
-        onKeyframeDropped.emit(editedTrack, editedClip, startTime, droppedTime);
+        app.emitGone(this, onKeyframeDropped, editedTrack, editedClip, startTime, droppedTime);
     }
 }
 
