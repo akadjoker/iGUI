@@ -37,6 +37,7 @@ struct EveryWidget
     TreeView* tree = nullptr;
     ToolBar* toolbar = nullptr;
     Widget* probe = nullptr;
+    IconButton* menuIcon = nullptr; // the animated menu icon: it used to keep the text colour of the theme it was made in
 };
 
 // How many times the probe widget of the window was laid out (one counter for the process).
@@ -192,6 +193,9 @@ inline EveryWidget buildEveryWidget(Harness& h, bool crowded)
     NodeEditor* nodes = holder->createChild<NodeEditor>();
     nodes->addNode("Node", 20, 20);
     at(nodes, 872, 488, 400, 100);
+
+    w.menuIcon = holder->createChild<IconButton>();
+    at(w.menuIcon, 1100, 600, 36, 36);
 
     LayoutCounter* probe = holder->createChild<LayoutCounter>();
     at(probe, 0, 600, 10, 10);

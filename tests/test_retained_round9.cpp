@@ -23,8 +23,8 @@ constexpr int kPresetCount = 5;
 // The checksum of what the window draws in the dark preset, taken with the library of origin/main (0d86927), before any colour
 // moved into the theme: the dark preset must go on drawing exactly this. (Updated, with the reason, when a later change to the
 // geometry changes what is drawn.)
-constexpr uint64_t kDarkGolden = 0xf27843ce1bf20784ull;
-constexpr uint32_t kDarkGoldenVertices = 7542;
+constexpr uint64_t kDarkGolden = 0x2710448eb3ee6e18ull;
+constexpr uint32_t kDarkGoldenVertices = 7722;
 
 float channel(unsigned char v)
 {
@@ -284,6 +284,27 @@ void testSwitching()
     }
     check(!h.app.setThemePreset("no such preset") && !h.app.setThemePreset(nullptr), "an unknown preset name is refused");
     check(firstHash[0] != firstHash[1] && firstHash[1] != firstHash[3] && firstHash[0] != firstHash[4], "the presets draw different windows");
+
+    // a widget that kept a colour of the theme it was made in: the menu icon follows the text colour of each preset
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        h.app.setThemePreset(kPresets[i]);
+        h.frames(2);
+        const Color text = Theme::instance().textColor;
+        const Rect r = w.menuIcon->absoluteRect();
+        const DrawList& dl = GetDrawList();
+        bool seen = false;
+        for (size_t k = 0; k < dl.vertices().size(); ++k)
+        {
+            const DrawVertex& v = dl.vertices()[k];
+            if (v.x >= r.x && v.x <= r.x + r.w && v.y >= r.y && v.y <= r.y + r.h && v.color.r == text.r && v.color.g == text.g && v.color.b == text.b &&
+                    v.color.a > 0)
+                seen = true;
+        }
+        char what[100];
+        snprintf(what, sizeof what, "%s: the menu icon is drawn in the text colour of the preset", kPresets[i]);
+        check(seen, what);
+    }
 
     // what an application does today: assign the theme, or write a field; update() finds it, once
     int before = changed.n;

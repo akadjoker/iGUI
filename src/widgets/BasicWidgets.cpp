@@ -496,10 +496,10 @@ void IconButton::paint(PaintContext& ctx)
     float progress = animProgress_;
     if (animated_ && progress < 1.0f)
     {
-        Color oldColor = iconColor_;
-        oldColor.a = static_cast<unsigned char>(iconColor_.a * (1.0f - progress));
-        Color newColor = iconColor_;
-        newColor.a = static_cast<unsigned char>(iconColor_.a * progress);
+        Color oldColor = iconColor();
+        oldColor.a = static_cast<unsigned char>(iconColor().a * (1.0f - progress));
+        Color newColor = iconColor();
+        newColor.a = static_cast<unsigned char>(iconColor().a * progress);
 
         ctx.line.SetColor(oldColor.r, oldColor.g, oldColor.b, oldColor.a);
         drawIcon(ctx, abs, icon_, 1.0f - progress);
@@ -508,7 +508,7 @@ void IconButton::paint(PaintContext& ctx)
     }
     else
     {
-        ctx.line.SetColor(iconColor_.r, iconColor_.g, iconColor_.b, iconColor_.a);
+        ctx.line.SetColor(iconColor().r, iconColor().g, iconColor().b, iconColor().a);
         drawIcon(ctx, abs, targetIcon_, 1.0f);
     }
 
@@ -531,8 +531,8 @@ void IconButton::drawIcon(PaintContext& ctx, const Rect& abs, Icon icon, float t
             float y0 = cy - hs + 1;
             float y1 = cy;
             float y2 = cy + hs - 1;
-            ctx.fill.SetColor(iconColor_.r, iconColor_.g, iconColor_.b,
-                    static_cast<unsigned char>(iconColor_.a * t));
+            ctx.fill.SetColor(iconColor().r, iconColor().g, iconColor().b,
+                    static_cast<unsigned char>(iconColor().a * t));
             ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y0 - lw * 0.5f),
                     static_cast<int>(iconSize), static_cast<int>(lw), true);
             ctx.fill.Rectangle(static_cast<int>(left), static_cast<int>(y1 - lw * 0.5f),

@@ -336,7 +336,7 @@ public:
     /// @brief Get the icon color.
     const Color& iconColor() const
     {
-        return iconColor_;
+        return iconColor_.a > 0 ? iconColor_ : Theme::instance().textColor;
     }
 
     /// @brief Set the icon stroke width.
@@ -359,7 +359,7 @@ private:
     Icon targetIcon_ = Hamburger;
     bool animated_ = false;
     float animProgress_ = 1.0f;
-    Color iconColor_ = Theme::instance().textColor;
+    Color iconColor_ = Color(0, 0, 0, 0); // alpha 0: the theme's text colour, whichever the theme is
     float lineWidth_ = 2.0f;
 
     void drawIcon(PaintContext& ctx, const Rect& abs, Icon icon, float t);
