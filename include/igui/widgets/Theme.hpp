@@ -11,6 +11,358 @@ namespace retained
 //  Theme - centralized colors/sizes for all widgets
 // ═════════════════════════════════════════════════════════════════════════════
 
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  Colours of the widgets that paint their own panels (a dock, a console, a tab bar). Each group's defaults are the
+//  values these widgets always painted, which is the dark preset; light() gives the light one. Presets built on
+//  those two (macOS, Windows XP) change only what their look needs.
+// ═════════════════════════════════════════════════════════════════════════════
+
+/// DockPanel: the tab bars, the tabs, the splitter handles and the leaf background.
+struct DockColors
+{
+    Color leafBg = Color(38, 38, 42, 255);          // behind the content of a leaf
+    Color border = Color(60, 60, 65, 255);          // the frame round a leaf
+    Color handle = Color(50, 50, 53, 255);          // the splitter handle between two leaves
+    Color handleHover = Color(90, 90, 95, 255);     // ... under the pointer or dragged
+    Color barBg = Color(30, 30, 33, 255);           // the tab bar
+    Color barBorder = Color(55, 55, 60, 255);       // the line under the tab bar
+    Color tabBg = Color(35, 35, 38, 255);           // a tab that is not the current one
+    Color tabActiveBg = Color(45, 45, 50, 255);     // the current tab
+    Color accent = Color(120, 160, 220, 255);       // the line under the current tab
+    Color tabText = Color(150, 150, 155, 255);      // the name on a tab that is not the current one
+    Color tabTextActive = Color(220, 220, 220, 255); // the name on the current tab
+    Color closeIcon = Color(110, 110, 115, 255);    // the cross of a tab that is not the current one
+    Color closeIconActive = Color(170, 170, 175, 255); // the cross of the current tab
+    Color closeIconHot = Color(235, 235, 235, 255); // the cross under the pointer
+    Color closeHotBg = Color(90, 90, 96, 255);      // the square behind the cross under the pointer
+    Color dragBg = Color(50, 55, 65, 230);          // the tab that follows the pointer while it is dragged
+    Color dragBorder = Color(100, 140, 220, 180);
+    Color dragText = Color(220, 230, 240, 255);
+
+    static DockColors light()
+    {
+        DockColors c;
+        c.leafBg = Color(250, 250, 252, 255);
+        c.border = Color(200, 200, 205, 255);
+        c.handle = Color(214, 214, 220, 255);
+        c.handleHover = Color(176, 176, 186, 255);
+        c.barBg = Color(232, 232, 236, 255);
+        c.barBorder = Color(206, 206, 212, 255);
+        c.tabBg = Color(222, 222, 228, 255);
+        c.tabActiveBg = Color(250, 250, 252, 255);
+        c.accent = Color(0, 120, 215, 255);
+        c.tabText = Color(80, 80, 86, 255);
+        c.tabTextActive = Color(30, 30, 30, 255);
+        c.closeIcon = Color(120, 120, 126, 255);
+        c.closeIconActive = Color(90, 90, 96, 255);
+        c.closeIconHot = Color(20, 20, 24, 255);
+        c.closeHotBg = Color(196, 196, 204, 255);
+        c.dragBg = Color(238, 242, 250, 235);
+        c.dragBorder = Color(0, 120, 215, 200);
+        c.dragText = Color(30, 30, 36, 255);
+        return c;
+    }
+};
+
+/// ConsoleWidget: the tool bar, the log, the input row and the colour of each level. ConsoleWidget::setBgColor still
+/// sets the background of one console; the scroll bar follows scrollbarThumb and panelColor, like every other scroll bar.
+struct ConsoleColors
+{
+    Color bg = Color(22, 24, 28, 255);          // the log
+    Color toolbarBg = Color(30, 32, 38, 255);
+    Color inputBg = Color(26, 28, 34, 255);
+    Color line = Color(50, 52, 60, 255);        // the lines between the three parts
+    Color buttonOff = Color(40, 42, 48, 255);   // a level filter that is off
+    Color buttonOffText = Color(80, 80, 90, 255);
+    Color clearBg = Color(50, 52, 60, 255);
+    Color clearIcon = Color(170, 170, 180, 255);
+    Color searchBg = Color(20, 22, 26, 255);
+    Color searchBorder = Color(70, 120, 200, 255);
+    Color searchHint = Color(80, 80, 90, 255);  // "Search..." in the empty box
+    Color text = Color(200, 210, 220, 255);     // an Info message, what is typed in the search box and in the input row
+    Color trace = Color(140, 140, 150, 255);    // a Trace message
+    Color warn = Color(240, 200, 80, 255);
+    Color error = Color(240, 80, 80, 255);
+    Color infoTag = Color(120, 180, 255, 255);  // the "I" filter, when on (the others take the colours of their level)
+    Color warnBg = Color(60, 50, 20, 40);       // the row of a warning
+    Color errorBg = Color(80, 25, 25, 50);
+    Color selection = Color(50, 70, 120, 80);   // the selected row
+    Color timestamp = Color(90, 90, 100, 255);
+    Color badgeText = Color(100, 140, 200, 255); // the "x3" of a repeated message
+    Color badgeBg = Color(40, 60, 100, 120);
+    Color prompt = Color(100, 160, 240, 255);   // the ">" of the input row
+    Color caret = Color(180, 200, 240, 200);
+
+    static ConsoleColors light()
+    {
+        ConsoleColors c;
+        c.bg = Color(250, 250, 252, 255);
+        c.toolbarBg = Color(238, 238, 242, 255);
+        c.inputBg = Color(244, 244, 247, 255);
+        c.line = Color(210, 210, 216, 255);
+        c.buttonOff = Color(228, 228, 232, 255);
+        c.buttonOffText = Color(96, 96, 102, 255);
+        c.clearBg = Color(222, 222, 228, 255);
+        c.clearIcon = Color(80, 80, 90, 255);
+        c.searchBg = Color(255, 255, 255, 255);
+        c.searchBorder = Color(0, 120, 215, 255);
+        c.searchHint = Color(110, 110, 118, 255);
+        c.text = Color(30, 34, 40, 255);
+        c.trace = Color(84, 84, 94, 255);
+        c.warn = Color(120, 75, 0, 255);
+        c.error = Color(170, 20, 20, 255);
+        c.infoTag = Color(0, 80, 160, 255);
+        c.warnBg = Color(255, 235, 170, 120);
+        c.errorBg = Color(255, 200, 200, 90);
+        c.selection = Color(0, 120, 215, 60);
+        c.timestamp = Color(96, 96, 106, 255);
+        c.badgeText = Color(30, 90, 170, 255);
+        c.badgeBg = Color(180, 210, 245, 120);
+        c.prompt = Color(0, 100, 190, 255);
+        c.caret = Color(30, 60, 120, 220);
+        return c;
+    }
+};
+
+/// Tabs (TabLayout) and Splitter.
+struct LayoutColors
+{
+    Color tabBarBg = Color(38, 40, 44, 255);
+    Color tabBg = Color(42, 44, 50, 255);        // a tab that is not the current one
+    Color tabActiveBg = Color(55, 58, 65, 255);
+    Color tabAccent = Color(100, 160, 220, 255); // the line on the edge of the current tab
+    Color tabTextInactive = Color(0, 0, 0, 0);   // alpha 0: textDisabled
+    Color tabCloseIcon = Color(100, 100, 105, 150);
+    Color tabCloseIconActive = Color(160, 160, 165, 200);
+    Color splitHandle = Color(65, 65, 70, 255);
+    Color splitHandleHover = Color(80, 80, 90, 255);
+    Color splitHandleDrag = Color(100, 100, 110, 255);
+    Color splitGrip = Color(130, 130, 138, 200);    // the dots in the middle of the handle
+    Color splitGripHot = Color(180, 180, 190, 230);
+
+    static LayoutColors light()
+    {
+        LayoutColors c;
+        c.tabBarBg = Color(232, 232, 236, 255);
+        c.tabBg = Color(222, 222, 228, 255);
+        c.tabActiveBg = Color(250, 250, 252, 255);
+        c.tabAccent = Color(0, 120, 215, 255);
+        c.tabTextInactive = Color(80, 80, 86, 255);
+        c.tabCloseIcon = Color(120, 120, 126, 200);
+        c.tabCloseIconActive = Color(90, 90, 96, 255);
+        c.splitHandle = Color(214, 214, 220, 255);
+        c.splitHandleHover = Color(190, 190, 200, 255);
+        c.splitHandleDrag = Color(160, 160, 172, 255);
+        c.splitGrip = Color(130, 130, 138, 200);
+        c.splitGripHot = Color(70, 70, 80, 230);
+        return c;
+    }
+};
+
+/// SearchBar, Breadcrumbs, Outliner, RichText, ProgressBar, StatusBar and the pickers: the small colours they paint with.
+struct AppColors
+{
+    Color crumbHover = Color(120, 170, 220, 255);      // a breadcrumb link under the pointer
+    Color crumbSeparator = Color(100, 100, 105, 255);
+    Color searchIcon = Color(140, 140, 145, 255);      // the magnifying glass and the clear cross of a SearchBar
+    Color rowHover = Color(255, 255, 255, 15);         // the row of an Outliner under the pointer
+    Color outlinerArrow = Color(180, 180, 185, 255);
+    Color eyeOn = Color(180, 180, 185, 255);
+    Color eyeOff = Color(80, 80, 85, 255);
+    Color lockOn = Color(200, 150, 50, 255);
+    Color lockOff = Color(100, 100, 105, 255);
+    Color richCodeBg = Color(25, 25, 28, 255);         // inline code and code blocks of a RichText
+    Color richCode = Color(180, 210, 180, 255);
+    Color richBold = Color(255, 255, 255, 255);
+    Color richItalic = Color(200, 200, 205, 255);
+    Color richLink = Color(100, 170, 230, 255);
+    Color gridCellDim = Color(170, 170, 175, 255);     // the cells after the first of an unselected TreeGrid row
+    Color progressText = Color(220, 220, 220, 255);    // the text a ProgressBar shows (when it was not given a colour)
+    Color dateHeader = Color(140, 140, 160, 255);      // the day names of a DatePicker
+    Color timeSeparator = Color(120, 120, 130, 255);   // the colons of a TimePicker
+    Color statusBg = Color(35, 36, 40, 255);           // a StatusBar (when it was not given a colour)
+
+    static AppColors light()
+    {
+        AppColors c;
+        c.crumbHover = Color(0, 100, 190, 255);
+        c.crumbSeparator = Color(130, 130, 136, 255);
+        c.searchIcon = Color(110, 110, 116, 255);
+        c.rowHover = Color(0, 0, 0, 15);
+        c.outlinerArrow = Color(80, 80, 86, 255);
+        c.eyeOn = Color(80, 80, 86, 255);
+        c.eyeOff = Color(170, 170, 176, 255);
+        c.lockOn = Color(170, 110, 0, 255);
+        c.lockOff = Color(150, 150, 156, 255);
+        c.richCodeBg = Color(235, 235, 240, 255);
+        c.richCode = Color(30, 100, 40, 255);
+        c.richBold = Color(0, 0, 0, 255);
+        c.richItalic = Color(60, 60, 66, 255);
+        c.richLink = Color(0, 90, 190, 255);
+        c.gridCellDim = Color(90, 90, 96, 255);
+        c.progressText = Color(30, 30, 30, 255);
+        c.dateHeader = Color(90, 90, 110, 255);
+        c.timeSeparator = Color(90, 90, 100, 255);
+        c.statusBg = Color(232, 232, 236, 255);
+        return c;
+    }
+};
+
+/// FileDialog: its dividers, its rows and the colours of what is listed.
+struct FileColors
+{
+    Color divider = Color(60, 62, 66, 255);     // the lines round the sidebar and the preview
+    Color headerLine = Color(55, 58, 65, 255);  // the lines round the column headers
+    Color columnSeparator = Color(105, 110, 122, 180);
+    Color sortArrow = Color(150, 155, 165, 200);
+    Color selectionBg = Color(40, 70, 120, 200);
+    Color hoverBg = Color(50, 55, 65, 100);
+    Color dirText = Color(120, 180, 255, 255);  // the name of a folder
+    Color sizeText = Color(160, 160, 165, 255);
+    Color dateText = Color(140, 140, 145, 255);
+    Color previewHint = Color(100, 100, 110, 255); // "No preview"
+    Color previewSize = Color(130, 130, 140, 255); // the size of the image under the preview
+
+    static FileColors light()
+    {
+        FileColors c;
+        c.divider = Color(206, 206, 212, 255);
+        c.headerLine = Color(214, 214, 220, 255);
+        c.columnSeparator = Color(176, 176, 186, 180);
+        c.sortArrow = Color(90, 90, 100, 200);
+        c.selectionBg = Color(190, 215, 245, 255);
+        c.hoverBg = Color(0, 0, 0, 20);
+        c.dirText = Color(0, 80, 170, 255);
+        c.sizeText = Color(90, 90, 96, 255);
+        c.dateText = Color(90, 90, 96, 255);
+        c.previewHint = Color(110, 110, 118, 255);
+        c.previewSize = Color(100, 100, 108, 255);
+        return c;
+    }
+};
+
+/// The property grid: the text of a value over its input box, and the description under the grid.
+struct PropColors
+{
+    Color stringValue = Color(200, 220, 255, 255);
+    Color colorHex = Color(180, 180, 180, 255);
+    Color comboValue = Color(180, 220, 180, 255);
+    Color sliderText = Color(230, 230, 230, 255);   // over the filled bar of a slider or a range
+    Color descName = Color(220, 220, 225, 255);
+
+    static PropColors light()
+    {
+        PropColors c;
+        c.stringValue = Color(0, 70, 150, 255);
+        c.colorHex = Color(80, 80, 86, 255);
+        c.comboValue = Color(20, 100, 40, 255);
+        c.sliderText = Color(20, 20, 24, 255);
+        c.descName = Color(30, 30, 34, 255);
+        return c;
+    }
+};
+
+/// The editors that paint a canvas of their own: the node editor, the asset browser, the thumbnail grid and the timeline
+/// (its clips and tracks keep the colours of the project; this is what is behind and between them).
+struct EditorColors
+{
+    // NodeEditor
+    Color nodeBg = Color(32, 34, 38, 255);
+    Color nodeBorder = Color(50, 52, 58, 255);
+    Color nodeGridMinor = Color(40, 42, 48, 255);
+    Color nodeGridMajor = Color(50, 52, 58, 255);
+    Color nodeBody = Color(40, 42, 48, 240);
+    Color nodeBodySelected = Color(50, 55, 65, 240);
+    Color nodeEdge = Color(60, 62, 70, 255);        // the frame of a node that is not selected
+    Color nodePinLabel = Color(190, 192, 200, 220);
+    // AssetBrowser
+    Color assetBg = Color(22, 24, 28, 255);
+    Color assetBar = Color(30, 33, 38, 255);
+    Color assetLine = Color(45, 48, 55, 255);
+    Color assetPath = Color(160, 165, 175, 255);
+    Color assetName = Color(170, 175, 185, 255);    // the name under a thumbnail that is not selected
+    Color assetNameSelected = Color(220, 225, 235, 255);
+    Color assetRowName = Color(180, 185, 195, 255); // the name in the list view
+    Color assetRowNameSelected = Color(230, 235, 245, 255);
+    Color assetButtonOff = Color(40, 44, 52, 255);  // the view button that is not the current one
+    Color assetRowSelected = Color(50, 80, 130, 255);
+    Color assetRowEven = Color(26, 28, 34, 255);
+    Color assetRowOdd = Color(30, 33, 38, 255);
+    Color assetScrollThumb = Color(60, 65, 75, 200);
+    // ThumbnailGrid
+    Color thumbBg = Color(24, 26, 30, 255);
+    Color thumbEdge = Color(50, 52, 58, 255);
+    Color thumbLabel = Color(180, 182, 190, 255);
+    Color thumbLabelSelected = Color(255, 220, 80, 255);
+    // Timeline
+    Color tlBg = Color(30, 32, 36, 255);
+    Color tlBorder = Color(50, 52, 58, 255);
+    Color tlRulerBg = Color(38, 40, 46, 255);
+    Color tlRulerLine = Color(60, 62, 68, 255);
+    Color tlTickMajor = Color(80, 82, 90, 255);
+    Color tlTickMinor = Color(55, 57, 63, 255);
+    Color tlRulerText = Color(150, 152, 160, 200);
+    Color tlRulerTextMinor = Color(110, 112, 120, 200);
+    Color tlTrackName = Color(180, 180, 180, 255);
+    Color tlRowEven = Color(34, 36, 40, 255);
+    Color tlRowOdd = Color(30, 32, 36, 255);
+    Color tlHeader = Color(36, 38, 44, 255);
+    Color tlHeaderSelected = Color(52, 60, 80, 255);
+    Color tlButtonOff = Color(56, 58, 66, 255);     // the mute and lock buttons when they are off
+    Color tlButtonText = Color(235, 235, 240, 255);
+    Color tlTrackLine = Color(45, 47, 52, 255);
+    Color tlHeaderLine = Color(50, 52, 58, 255);
+
+    static EditorColors light()
+    {
+        EditorColors c;
+        c.nodeBg = Color(240, 240, 243, 255);
+        c.nodeBorder = Color(200, 200, 206, 255);
+        c.nodeGridMinor = Color(228, 228, 233, 255);
+        c.nodeGridMajor = Color(210, 210, 216, 255);
+        c.nodeBody = Color(250, 250, 252, 240);
+        c.nodeBodySelected = Color(232, 240, 252, 240);
+        c.nodeEdge = Color(186, 186, 194, 255);
+        c.nodePinLabel = Color(60, 60, 66, 230);
+        c.assetBg = Color(250, 250, 252, 255);
+        c.assetBar = Color(238, 238, 242, 255);
+        c.assetLine = Color(210, 210, 216, 255);
+        c.assetPath = Color(80, 80, 88, 255);
+        c.assetName = Color(60, 60, 66, 255);
+        c.assetNameSelected = Color(0, 0, 0, 255);
+        c.assetRowName = Color(50, 50, 56, 255);
+        c.assetRowNameSelected = Color(0, 0, 0, 255);
+        c.assetButtonOff = Color(222, 222, 228, 255);
+        c.assetRowSelected = Color(190, 215, 245, 255);
+        c.assetRowEven = Color(250, 250, 252, 255);
+        c.assetRowOdd = Color(244, 244, 247, 255);
+        c.assetScrollThumb = Color(150, 150, 158, 200);
+        c.thumbBg = Color(244, 244, 247, 255);
+        c.thumbEdge = Color(200, 200, 206, 255);
+        c.thumbLabel = Color(60, 60, 66, 255);
+        c.thumbLabelSelected = Color(150, 90, 0, 255);
+        c.tlBg = Color(244, 244, 247, 255);
+        c.tlBorder = Color(200, 200, 206, 255);
+        c.tlRulerBg = Color(228, 228, 233, 255);
+        c.tlRulerLine = Color(200, 200, 206, 255);
+        c.tlTickMajor = Color(120, 120, 128, 255);
+        c.tlTickMinor = Color(170, 170, 178, 255);
+        c.tlRulerText = Color(70, 70, 78, 230);
+        c.tlRulerTextMinor = Color(90, 90, 98, 230);
+        c.tlTrackName = Color(50, 50, 56, 255);
+        c.tlRowEven = Color(246, 246, 249, 255);
+        c.tlRowOdd = Color(238, 238, 242, 255);
+        c.tlHeader = Color(232, 232, 236, 255);
+        c.tlHeaderSelected = Color(200, 218, 244, 255);
+        c.tlButtonOff = Color(206, 206, 212, 255);
+        c.tlButtonText = Color(40, 40, 46, 255);
+        c.tlTrackLine = Color(214, 214, 220, 255);
+        c.tlHeaderLine = Color(200, 200, 206, 255);
+        return c;
+    }
+};
+
 struct Theme
 {
     // Window / Panel
@@ -125,6 +477,26 @@ struct Theme
     Color sideTabTextActive = Color(220, 240, 238, 255);
     Color sideTabBadge = Color(255, 160, 40, 255);
 
+    // Text on a selected row (TreeView, DataGrid, TreeGrid, PropertyGrid, FileDialog, ListBox): white over the dark
+    // presets' selection, dark over the light ones' pale selection.
+    Color selectionText = Color(255, 255, 255, 255);
+    // The tint of the icons that a widget draws without a colour of its own (the icon of a tree node, the toggle icons of a
+    // row): white, which the icon sheet is made of, in the dark presets; dark in the light ones.
+    Color iconColor = Color(255, 255, 255, 255);
+    // Text that is a step dimmer than textColor and still has to be read (the links of a breadcrumb, a description).
+    Color textSecondary = Color(150, 150, 155, 255);
+    // The text typed into an input box that has the focus (a cell being edited in a grid, a value in the property grid).
+    Color inputText = Color(255, 255, 255, 255);
+
+    // The panels of the widgets that paint their own (see the structs above).
+    DockColors dock;
+    ConsoleColors console;
+    LayoutColors layout;
+    AppColors app;
+    FileColors file;
+    PropColors prop;
+    EditorColors editor;
+
     // Look: how some controls are drawn beyond their colours. The dark and
     // light presets leave these at their defaults, so they paint as they
     // always did; xp and macos switch them on.
@@ -142,6 +514,13 @@ struct Theme
     Color toolbarCheckedDot = Color(100, 200, 255, 255); // the small dot in the corner of a checked toggle (alpha 0: none)
     Color toolbarIcon = Color(220, 220, 225, 255);       // the tint of the icons of IconId buttons (not of coloured icons)
     Color toolbarIconDisabled = Color(100, 100, 110, 255); // the same, for a disabled button
+
+    /// @brief Whether the window background is light (a luminance above the middle): what widgets that have a palette of
+    ///        their own for each (the syntax colours of a CodeEditor) look at to pick one.
+    bool isLight() const
+    {
+        return bgColor.r * 299 + bgColor.g * 587 + bgColor.b * 114 > 128 * 1000;
+    }
 
     /// @brief @p c moved toward @p target (0 black .. 255 white) by @p k (0..1).
     static Color shade(const Color& c, int target, float k)
@@ -289,6 +668,18 @@ struct Theme
         t.toolbarCheckedDot = Color(0, 120, 215, 255);
         t.toolbarIcon = Color(60, 60, 65, 255);
         t.toolbarIconDisabled = Color(165, 165, 170, 255);
+        // Selection, icons, secondary text, panels
+        t.selectionText = Color(20, 20, 24, 255);
+        t.iconColor = Color(52, 52, 58, 255);
+        t.textSecondary = Color(90, 90, 96, 255);
+        t.dock = DockColors::light();
+        t.console = ConsoleColors::light();
+        t.layout = LayoutColors::light();
+        t.inputText = Color(20, 20, 24, 255);
+        t.app = AppColors::light();
+        t.file = FileColors::light();
+        t.prop = PropColors::light();
+        t.editor = EditorColors::light();
         return t;
     }
 
@@ -396,6 +787,11 @@ struct Theme
         t.toolbarChecked = Color(206, 224, 250, 255);
         t.toolbarCheckedDot = accent;
         t.toolbarIcon = Color(70, 70, 75, 255);
+        // Panels in the system blue
+        t.dock.accent = accent;
+        t.dock.dragBorder = Color(0, 122, 255, 200);
+        t.console.searchBorder = accent;
+        t.layout.tabAccent = accent;
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(214, 214, 218, 255);
@@ -516,6 +912,32 @@ struct Theme
         t.toolbarCheckedDot = accent;
         t.toolbarIcon = Color(214, 214, 220, 255);
         t.toolbarIconDisabled = Color(110, 110, 116, 255);
+        // Selection, icons, secondary text, panels: the dark ones, in the system blue, with the dim texts of the console
+        // a step brighter than the dark preset's (they are read here)
+        t.selectionText = Color(255, 255, 255, 255);
+        t.iconColor = Color(255, 255, 255, 255);
+        t.textSecondary = Color(150, 150, 155, 255);
+        t.dock = DockColors();
+        t.dock.accent = accent;
+        t.dock.dragBorder = Color(10, 132, 255, 200);
+        t.console = ConsoleColors();
+        t.console.searchBorder = accent;
+        t.console.error = Color(255, 120, 110, 255);
+        t.console.trace = Color(165, 165, 175, 255);
+        t.console.badgeText = Color(130, 170, 230, 255);
+        t.console.buttonOffText = Color(132, 132, 142, 255);
+        t.console.searchHint = Color(132, 132, 142, 255);
+        t.console.timestamp = Color(132, 132, 142, 255);
+        t.layout = LayoutColors();
+        t.layout.tabAccent = accent;
+        t.layout.tabTextInactive = Color(150, 150, 156, 255);
+        t.inputText = Color(255, 255, 255, 255);
+        t.app = AppColors();
+        t.file = FileColors();
+        t.prop = PropColors();
+        t.editor = EditorColors();
+        t.editor.tlRulerText = Color(190, 192, 200, 230);
+        t.editor.tlRulerTextMinor = Color(150, 152, 160, 230);
         // Look
         t.progressFill = accent;
         t.progressTrack = Color(78, 78, 82, 255);
@@ -631,6 +1053,20 @@ struct Theme
         t.toolbarCheckedDot = blue;
         t.toolbarIcon = Color(30, 30, 30, 255);
         t.toolbarIconDisabled = Color(161, 161, 146, 255);
+        // Selection, icons, secondary text, panels
+        t.selectionText = Color(0, 0, 0, 255);
+        t.iconColor = Color(30, 30, 30, 255);
+        t.textSecondary = Color(90, 90, 80, 255);
+        t.inputText = Color(0, 0, 0, 255);
+        t.dock.accent = blue;
+        t.dock.dragBorder = Color(49, 106, 197, 200);
+        t.dock.barBg = Color(214, 223, 247, 255);
+        t.dock.tabBg = Color(198, 211, 247, 255);
+        t.dock.tabActiveBg = Color(255, 255, 255, 255);
+        t.console.searchBorder = blue;
+        t.layout.tabAccent = blue;
+        t.layout.tabBarBg = Color(214, 223, 247, 255);
+        t.layout.tabBg = Color(198, 211, 247, 255);
         // Look
         t.progressFill = Color(60, 205, 60, 255);
         t.progressTrack = Color(255, 255, 255, 255);
