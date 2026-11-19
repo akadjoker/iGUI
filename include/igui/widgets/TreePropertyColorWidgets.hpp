@@ -156,6 +156,8 @@ private:
     String text_;
     String secondary_;
     Color iconColor_ = Color(0, 0, 0, 0); // alpha 0: the theme's iconColor
+    float textW_ = -1.0f;                 // the width of the text for the font textWFont_ (a FontStamp id), measured when a row needs to know; < 0: not yet
+    uint32_t textWFont_ = 0;
     ct::Vector<Toggle> toggles_;
     String iconStr_;
     IconId iconId_ = IconId::None;

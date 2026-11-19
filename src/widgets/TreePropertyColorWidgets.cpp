@@ -276,6 +276,7 @@ void TreeNode::setText(const String& text)
 {
     if (text_ == text) return;
     text_ = text;
+    textW_ = -1.0f;
     if (view_) view_->markDirty();
 }
 
@@ -645,11 +646,32 @@ void TreeView::paint(PaintContext& ctx)
     ctx.font.SetFontSize(t.fontSize);
     ctx.font.SetBatch(&ctx.text);
     float asc = ctx.font.GetAscender();
-    // the texts of the rows in sight are measured once: a slot of the memos for each row of the window (and a few spare)
-    memos_.reserve(last - first + 4, 2);
-    const uint32_t fontId = ctx.fontStamp().id;
+    // a text that is surely short enough is printed as it always was, with no measure; one that may not be is measured once for each node and
+    // font (kept in the node), and a label that does not fit, or has a second text, is worked out once in the memo of its row
+    uint32_t fontIdValue = 0;
+    bool haveFontId = false;
+    auto fontOf = [&]() -> uint32_t
+    {
+        if (!haveFontId)
+        {
+            fontIdValue = ctx.fontStamp().id; // (a probe text is measured the first time a context is asked: only a row that has to be measured asks)
+            haveFontId = true;
+        }
+        return fontIdValue;
+    };
+    const float emBound = ctx.fontHeight() * 1.1f; // no glyph of a face is wider than this (bytes are at least as many as the characters)
     Rect barTrack, barThumb;
     const bool hasBar = scrollbar(barTrack, barThumb);
+    bool memosReady = false;
+    auto memoOf = [&](int rowIndex) -> ElideMemo*
+    {
+        if (!memosReady)
+        {
+            memos_.reserve(last - first + 4, 2); // (a slot for each row of the window and a few spare: what it holds is lost when it has to grow)
+            memosReady = true;
+        }
+        return memos_.row(rowIndex);
+    };
 
     for (int i = first; i < last; ++i)
     {
@@ -702,13 +724,12 @@ void TreeView::paint(PaintContext& ctx)
         Color labelColor = t.textColor;
         if (row.node->dimmed()) labelColor.a = uint8_t(labelColor.a * 0.5f);
         float ty = rowY + (rowHeight_ - t.fontSize) * 0.5f + asc;
-        ElideMemo* memo = memos_.row(i);
 
         // the second text: dim, right-aligned, first in line for room (at most half of what is left of the row)
         const String& second = row.node->secondaryText();
         if (!second.empty() && textRight > indX)
         {
-            const ElideMemo& shown = ctx.fitTextMemo(second, (textRight - indX) * 0.5f, memo[1]);
+            const ElideMemo& shown = ctx.fitTextMemo(second, (textRight - indX) * 0.5f, memoOf(i)[1]);
             if (shown.shownWidth > 0.0f)
             {
                 const float sx = textRight - shown.shownWidth;
@@ -723,7 +744,24 @@ void TreeView::paint(PaintContext& ctx)
         // the label: all of it when it fits, else cut with "..." (measured once, kept in the memo of the row)
         ctx.font.SetColor(row.node == selected_ ? t.selectionText : labelColor);
         if (labelRight > indX)
-            ctx.printElided({ indX, rowY, labelRight - indX, rowHeight_ }, row.node->text(), ty, asc, memo[0], fontId);
+        {
+            const String& label = row.node->text();
+            const float room = labelRight - indX;
+            bool fits = static_cast<float>(label.size()) * emBound <= room;
+            if (!fits)
+            {
+                TreeNode* node = row.node;
+                if (node->textW_ < 0.0f || node->textWFont_ != fontOf())
+                {
+                    node->textW_ = ctx.font.GetTextWidth(label.c_str());
+                    node->textWFont_ = fontOf();
+                }
+                fits = node->textW_ <= room;
+            }
+            if (fits) ctx.font.Print(label.c_str(), indX, ty);
+            else
+                ctx.printElided({ indX, rowY, room, rowHeight_ }, label, ty, asc, memoOf(i)[0], fontOf());
+        }
 
         if (toggles > 0)
         {
@@ -777,13 +815,12 @@ void TreeView::paint(PaintContext& ctx)
         }
     }
 
-    Rect track, thumb;
-    if (scrollbar(track, thumb))
+    if (hasBar)
     {
         ctx.fill.SetColor(ScrollBar::trackColor());
-        ctx.fillRect(track.x, track.y, track.w, track.h);
+        ctx.fillRect(barTrack.x, barTrack.y, barTrack.w, barTrack.h);
         ctx.fill.SetColor(ScrollBar::thumbColor(draggingBar_));
-        ctx.fillRoundedRect(thumb.x, thumb.y, thumb.w, thumb.h, 3.f);
+        ctx.fillRoundedRect(barThumb.x, barThumb.y, barThumb.w, barThumb.h, 3.f);
     }
 
     ctx.line.SetColor(t.borderColor.r, t.borderColor.g, t.borderColor.b, t.borderColor.a);

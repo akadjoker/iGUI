@@ -2472,7 +2472,9 @@ void DrawList::addNativeCallback(NativeDrawFn fn, void* user, const Rect& source
     command.indexCount = 0;
     command.roundClipCount = -1;
     specials_.push_back(special);
-    commands_.push_back(command);
+    // (through resize, not push_back: a push_back called from here too stopped the compiler from inlining it into addCmd, +49 instructions a frame)
+    commands_.resize(commands_.size() + 1);
+    commands_.back() = command;
 }
 
 namespace

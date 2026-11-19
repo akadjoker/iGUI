@@ -813,7 +813,12 @@ private:
     };
 
     Rect currentClip() const;
-    Vec2 mapPoint(float x, float y) const
+    // always inlined: a new function that called it (the native callback's rectangle) made the compiler stop inlining it into addLine and the
+    // other shape builders, +9% instructions in a window of 50 buttons
+#if defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline))
+#endif
+    inline Vec2 mapPoint(float x, float y) const
     {
         if (transformStack_.empty()) return { x, y };
         return { transform_[0] * x + transform_[2] * y + transform_[4], transform_[1] * x + transform_[3] * y + transform_[5] };
