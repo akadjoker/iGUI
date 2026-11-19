@@ -521,6 +521,7 @@ void App::feedInput(PlatformWindow *pw)
             ct::Vector<rt::String> paths;
             for (int i = 0; i < e.data.drop.count; ++i)
                 paths.push_back(rt::String(e.data.drop.paths[i]));
+    io.keySuper = key_down(pw, KEY_LEFT_SUPER) || key_down(pw, KEY_RIGHT_SUPER);
             int dx = 0, dy = 0;
             mouse_position(pw, &dx, &dy);
             io.addDropEvent(static_cast<float>(dx) / scaleOf(pw), static_cast<float>(dy) / scaleOf(pw), paths);
@@ -558,7 +559,7 @@ void App::feedInput(PlatformWindow *pw)
             // miss a Ctrl+A whose Ctrl was pressed and released inside it
             const int keyMods = e.data.key.mods;
             io.addKeyEvent(key, scancode, (keyMods & KEYMOD_SHIFT) != 0, (keyMods & KEYMOD_CTRL) != 0, (keyMods & KEYMOD_ALT) != 0,
-                    e.data.key.down);
+                    e.data.key.down, (keyMods & KEYMOD_SUPER) != 0);
         }
     }
 }

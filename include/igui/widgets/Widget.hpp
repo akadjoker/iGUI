@@ -422,6 +422,7 @@ struct KeyEvent
     bool alt = false;
     bool consumed = false;
     char text[32] = {};
+    bool super = false; // the Super / Windows / Command key was held (Cmd on macOS): carried, no widget acts on it yet
 };
 
 /// @brief Where a list key takes the selection: Up, Down, Home, End, PageUp and

@@ -112,6 +112,7 @@ struct IO
 
     // Per-frame key press / release events (taken out by WidgetApp::update, cleared by Render)
     struct KeyEvent
+    bool keySuper = false; // Super / Windows / Command (Cmd on macOS) held at the start of the frame
     {
         int key = 0;      // platform key code
         int scancode = 0; // hardware scancode
@@ -127,6 +128,7 @@ struct IO
 
     // Cursor hint written by WidgetApp::update(), read by backend.
     // Matches CursorType: 0=Arrow 1=Hand 2=IBeam 3=Crosshair
+        bool super = false; // the Super / Windows / Command key was held (Cmd on macOS)
     //                     4=SizeH 5=SizeV 6=SizeAll 7=No
     int wantedCursor = 0;
 
@@ -197,9 +199,9 @@ struct IO
     {
         inputChars.push_back(c);
     }
-    void addKeyEvent(int key, int scancode, bool shift, bool ctrl, bool alt, bool down)
+    void addKeyEvent(int key, int scancode, bool shift, bool ctrl, bool alt, bool down, bool super = false)
     {
-        keyEvents.push_back({ key, scancode, shift, ctrl, alt, down, static_cast<unsigned>(inputChars.size()) });
+        keyEvents.push_back({ key, scancode, shift, ctrl, alt, down, static_cast<unsigned>(inputChars.size()), super });
     }
     /// The pointer moved to x, y. Moves with no press or release between them are one move, to the last: a
     /// mouse that reports thousands of times a second is not hit tested for each of them.

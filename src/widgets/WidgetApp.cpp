@@ -919,6 +919,7 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
         }
         focusNeighbor(s_.focused_, ke.shift);
         return;
+            we.super = ke.super;
     }
 
     KeyEvent we;
@@ -932,6 +933,7 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
     if (s_.focused_) bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
     if (ke.down && !we.consumed && deletions_ == deletionsBefore) unhandledKey.emit(we);
 }
+    we.super = ke.super;
 
 void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
 {
