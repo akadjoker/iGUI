@@ -23,6 +23,9 @@
 #include <X11/Xlib.h>
 #include <X11/extensions/XTest.h>
 
+#undef None // (Xlib's None is a macro: TransitionType::None is not)
+#undef Bool
+
 #include <stdio.h>
 
 using namespace ig::retained;
