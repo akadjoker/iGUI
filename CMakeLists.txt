@@ -246,6 +246,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/Retained.cpp
         src/widgets/BuImage.cpp
         src/widgets/ChartWidget.cpp
+        src/widgets/PlotChart.cpp
         src/widgets/ChartWidgets.cpp
         src/widgets/CodeEditor.cpp
         src/widgets/CodeEditorTools.cpp
@@ -515,6 +516,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_native_callback_tests PRIVATE igui_widgets)
         add_test(NAME igui_native_callback COMMAND igui_native_callback_tests)
         set_tests_properties(igui_native_callback PROPERTIES TIMEOUT 300)
+        # Round 10, part 3 (docs/ROUND10.md): the interactive chart, PlotChart: the pyramid and the search, the gestures and signals, hover,
+        # decimation, the ticks, when the layer is rebuilt, the presets, idle (and no heap in a frame that moves a clock and a pointer), handlers
+        # that destroy the chart, a series of a million points. ROUND10_SHOTS=<dir> writes the pictures of the docs.
+        add_executable(igui_plot_chart_tests tests/test_plot_chart.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_plot_chart_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_plot_chart_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_plot_chart_tests PRIVATE igui_widgets)
+        target_link_options(igui_plot_chart_tests PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
+        add_test(NAME igui_plot_chart COMMAND igui_plot_chart_tests)
+        set_tests_properties(igui_plot_chart PROPERTIES TIMEOUT 900)
+        # the layer of the chart as a mesh kept on the GPU, on the OpenGL renderer (pixels read back; the bytes sent each frame)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)
@@ -766,6 +778,14 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     endif()
 
     if(IGUI_BUILD_TESTS)
+        # Round 10, part 3: the chart's layer as a mesh kept on the GPU (drawn by reference), on the OpenGL renderer: what is drawn, what
+        # goes to the GPU each frame, the mesh dropped with the chart. Needs an X server with OpenGL (77, skipped, without one).
+        add_executable(igui_zen_plot_gl_tests tests/test_zen_plot_gl.cpp)
+        target_link_libraries(igui_zen_plot_gl_tests PRIVATE igui_zen)
+        igui_add_window_test(igui_zen_plot_gl igui_zen_plot_gl_tests)
+    endif()
+
+    if(IGUI_BUILD_TESTS)
         # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks on the OpenGL renderer: what they are given, a triangle read
         # back inside the widget's rectangle and nothing outside, a scroll area's clip, the order between overlapping widgets, the GL
         # state after a callback that trashes it, idle frames. Needs an X server with OpenGL (77, skipped, without one).
@@ -800,6 +820,9 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     if(IGUI_BUILD_ZEN_DEMO)
         add_executable(igui_zen_windows examples/zen_windows/main.cpp)
         target_link_libraries(igui_zen_windows PRIVATE igui_zen)
+        # a time-series chart that zooms, pans, selects a range and shows statistics (PlotChart)
+        add_executable(igui_zen_plot examples/zen_plot/main.cpp)
+        target_link_libraries(igui_zen_plot PRIVATE igui_zen)
         add_executable(igui_zen_widgets
             examples/zen_widgets/main.cpp
             examples/sdl2_original_widgets/stage_advanced.cpp
