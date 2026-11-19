@@ -1223,8 +1223,15 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
         wrapKey_ = key;
     }
 
+    // Without wrapping a line is one row and its width: measuring it again, on the rare full rebuild (a new text, a new font or scale,
+    // a width of wrapping), costs less than keeping a second copy of every line to find it by (the cache was a string, a hash entry and a
+    // list of rows for each distinct line: half of what a line of 55 characters held). With wrapping the lines that did not change
+    // are not measured again, as before.
+    const bool keepCache = wordWrap_;
     ct::HashMap<String, WrapLine> cache;
-    cache.reserve(lines_.size());
+    if (keepCache) cache.reserve(lines_.size());
+    else
+        wrapCache_.clear();
     wrapRows_.clear();
     wrapRows_.resize(lines_.size());
     lineWidths_.clear();
@@ -1239,7 +1246,12 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
         const String& line = lines_[i];
         WrapLine reused;
         WrapLine* entry = nullptr;
-        if (wrapCache_.erase(line, reused)) entry = &cache.put(line, std::move(reused));
+        if (!keepCache)
+        {
+            reused = measureLine(ctx, line, textW);
+            entry = &reused;
+        }
+        else if (wrapCache_.erase(line, reused)) entry = &cache.put(line, std::move(reused));
         else if (!(entry = cache.find(line)))
             entry = &cache.put(line, measureLine(ctx, line, textW));
         lineWidths_[i] = entry->width;
@@ -1249,7 +1261,7 @@ void TextEdit::rebuildWrap(PaintContext& ctx)
         if (lineFilterCb_ && !lineFilterCb_(i)) continue;
         wrapRows_[i] = entry->rows;
     }
-    wrapCache_ = std::move(cache);
+    if (keepCache) wrapCache_ = std::move(cache);
     wrapDirty_ = false;
     rowStartsDirty_ = true;
 }
