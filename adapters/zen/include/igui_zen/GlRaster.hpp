@@ -151,6 +151,11 @@ private:
     int uRoundRect_ = -1;
     int uRoundRadii_ = -1;
     int uAaWidth_ = -1;
+    int uAlphaOnly_ = -1;
+    // the last texture looked up for uAlphaOnly (a frame's commands go through a few textures): reset when a texture is updated or destroyed
+    uintptr_t lastTexture_ = 0;
+    int lastAlphaOnly_ = 0;
+    void setAlphaOnly(ig::retained::TextureHandle texture, int& current);
     ct::HashMap<uintptr_t, Size> sizes_;
 };
 

@@ -52,6 +52,9 @@ uniform int uRoundCount;
 uniform highp vec4 uRoundRect[4];
 uniform highp vec4 uRoundRadii[4];
 uniform highp float uAaWidth;
+// 1: the texture is a one-byte page (GL_R8: the font atlas pages) that holds only coverage, and the texel is white with that alpha. Not a
+// texture swizzle: WebGL 2 has none (GL_TEXTURE_SWIZZLE_* is an INVALID_ENUM there, and every page then read as (r, 0, 0, 1): a window drawn all in red).
+uniform int uAlphaOnly;
 out vec4 fragColor;
 void main()
 {
@@ -66,7 +69,9 @@ void main()
         highp float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
         coverage *= clamp(0.5 - d / uAaWidth, 0.0, 1.0);
     }
-    fragColor = vColor * texture(uTexture, vUv);
+    vec4 texel = texture(uTexture, vUv);
+    if (uAlphaOnly != 0) texel = vec4(1.0, 1.0, 1.0, texel.r);
+    fragColor = vColor * texel;
     fragColor.a *= coverage;
 }
 )";
@@ -100,14 +105,8 @@ bool allWhite(const unsigned char* rgba, size_t pixels)
     return true;
 }
 
-// Such a texture is kept in the driver as one byte a pixel (a quarter of the memory), read as (1, 1, 1, red): the same texel.
-void swizzleAlphaOnly(bool on)
-{
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, on ? GL_ONE : GL_RED);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, on ? GL_ONE : GL_GREEN);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, on ? GL_ONE : GL_BLUE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, on ? GL_RED : GL_ALPHA);
-}
+// (Such a texture is kept in the driver as one byte a pixel, a quarter of the memory, and the fragment shader reads it as (1, 1, 1, red), the
+// same texel: uAlphaOnly, set for each command from Size::alphaOnly. There is no texture swizzle here: WebGL 2 does not have one.)
 
 // The alpha of every pixel, in a buffer of its own (freed by the caller).
 unsigned char* alphaBytes(const unsigned char* rgba, size_t pixels)
@@ -129,7 +128,6 @@ unsigned uploadRgba(int width, int height, const unsigned char* rgba, bool* alph
         unsigned char* alpha = alphaBytes(rgba, pixels);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, alpha);
         delete[] alpha;
-        swizzleAlphaOnly(true);
         *alphaOnly = true;
     }
     else
@@ -237,6 +235,7 @@ bool GlRaster::init(void* (*procAddress)(const char* name))
     uRoundRect_ = glGetUniformLocation(program_, "uRoundRect");
     uRoundRadii_ = glGetUniformLocation(program_, "uRoundRadii");
     uAaWidth_ = glGetUniformLocation(program_, "uAaWidth");
+    uAlphaOnly_ = glGetUniformLocation(program_, "uAlphaOnly");
 
     glGenVertexArrays(1, &vao_);
     glGenBuffers(1, &vbo_);
@@ -279,6 +278,7 @@ ig::retained::TextureHandle GlRaster::createTexture(int width, int height,
     size.height = height;
     size.alphaOnly = alphaOnly;
     sizes_[handle.value] = size;
+    lastTexture_ = 0;
     return handle;
 }
 
@@ -291,7 +291,6 @@ ig::retained::TextureHandle GlRaster::createTextureA8(int width, int height, con
     glBindTexture(GL_TEXTURE_2D, texture);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, alpha);
-    swizzleAlphaOnly(true);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -302,6 +301,7 @@ ig::retained::TextureHandle GlRaster::createTextureA8(int width, int height, con
     size.height = height;
     size.alphaOnly = true;
     sizes_[handle.value] = size;
+    lastTexture_ = 0;
     return handle;
 }
 
@@ -321,6 +321,7 @@ void GlRaster::destroyTexture(ig::retained::TextureHandle handle)
     const unsigned texture = static_cast<unsigned>(handle.value);
     glDeleteTextures(1, &texture);
     sizes_.erase(handle.value);
+    lastTexture_ = 0;
 }
 
 bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned char* rgba,
@@ -346,7 +347,6 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
     {
         // no longer white: whole pixels, read as they are
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-        swizzleAlphaOnly(false);
         size->alphaOnly = false;
     }
     else if (size->width == width && size->height == height)
@@ -355,6 +355,7 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
     size->width = width;
     size->height = height;
+    lastTexture_ = 0; // (the page may have stopped being a one-byte one)
     return true;
 }
 
@@ -501,6 +502,28 @@ void GlRaster::runNative(const ig::retained::DrawList::Special& special, const i
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
 }
 
+// uAlphaOnly for the texture the next draw samples (a one-byte page or not), written only when it changes
+void GlRaster::setAlphaOnly(ig::retained::TextureHandle texture, int& current)
+{
+    int want = 0;
+    if (texture)
+    {
+        if (texture.value == lastTexture_) want = lastAlphaOnly_;
+        else
+        {
+            const Size* size = sizes_.find(texture.value);
+            want = size && size->alphaOnly ? 1 : 0;
+            lastTexture_ = texture.value;
+            lastAlphaOnly_ = want;
+        }
+    }
+    if (want != current)
+    {
+        glUniform1i(uAlphaOnly_, want);
+        current = want;
+    }
+}
+
 GlRaster::GpuMesh* GlRaster::gpuMesh(const ig::retained::Mesh& mesh)
 {
     GpuMesh* g = meshes_.find(mesh.id());
@@ -597,6 +620,8 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
 
     glUniform1i(uRoundCount_, 0);
     int roundsSet = 0; // rounded clips currently in the uniforms
+    glUniform1i(uAlphaOnly_, 0);
+    int alphaSet = 0; // uAlphaOnly as it is now; -1: unknown (a native callback has run)
     for (const ig::retained::DrawPass& pass: data.passes)
     {
         if (!pass.list || pass.list->commands().empty()) continue;
@@ -687,6 +712,7 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
                         roundsSet = 0;
                     }
                     glBindTexture(GL_TEXTURE_2D, entry.mesh->texture ? static_cast<unsigned>(entry.mesh->texture.value) : whiteTexture_);
+                    setAlphaOnly(entry.mesh->texture, alphaSet);
                     glBindVertexArray(g->vao);
                     glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(g->indexCount), GL_UNSIGNED_INT, nullptr);
                     glBindVertexArray(vao_);
@@ -702,6 +728,7 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
                 const int scissor[4] = { sx, sy, sw, sh };
                 const float cameraXf[4] = { cosine, translateX, translateY, 0.0f };
                 runNative(entry, command, fbRect, fbClip, scissor, cameraXf, width, height, data);
+                alphaSet = -1;
                 continue;
             }
             if (command.roundClipCount > 0 || roundsSet > 0)
@@ -728,6 +755,7 @@ void GlRaster::render(ig::retained::DrawData& data, int width, int height, uint3
             }
             glBindTexture(GL_TEXTURE_2D,
                     command.texture ? static_cast<unsigned>(command.texture.value) : whiteTexture_);
+            setAlphaOnly(command.texture, alphaSet);
             glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(command.indexCount), GL_UNSIGNED_INT,
                     reinterpret_cast<void*>(
                             static_cast<uintptr_t>(command.indexOffset) * sizeof(uint32_t)));
