@@ -467,6 +467,14 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_round7_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_round7 COMMAND igui_retained_round7_tests)
         set_tests_properties(igui_retained_round7 PROPERTIES TIMEOUT 600)
+        # Round 8 (docs/COMPARACAO.md, part 2): the signals that rounds 5 to 7 left alone, rectangles of no size and of enormous size,
+        # no items and a million, hostile strings, widgets shown and hidden in a hurry, the pixel scale changed at run time.
+        add_executable(igui_retained_round8_tests tests/test_retained_round8.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_round8_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_round8_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_round8_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_round8 COMMAND igui_retained_round8_tests)
+        set_tests_properties(igui_retained_round8 PROPERTIES TIMEOUT 900)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)
