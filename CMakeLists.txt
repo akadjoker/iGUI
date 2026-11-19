@@ -166,14 +166,17 @@ if(IGUI_BUILD_TESTS)
         igui_item_status_tests
         igui_zen_sidetabs_tests
         igui_sdl2_tests)
+    # Not -UNDEBUG alone: ct decides what its HashMap and HashSet are from NDEBUG (CT_DEBUG_ITERATORS), and that must be the same in every
+    # file of the program, so the library (built with NDEBUG in Release) and a test that took it away would disagree on the size of
+    # every class that holds a HashSet. tests/KeepAsserts.hpp reads ct first and then brings assert() back.
     function(igui_test_keep_asserts target)
         if(NOT TARGET ${target})
             return()
         endif()
         if(MSVC)
-            target_compile_options(${target} PRIVATE /UNDEBUG)
+            target_compile_options(${target} PRIVATE /FI "${CMAKE_CURRENT_SOURCE_DIR}/tests/KeepAsserts.hpp")
         else()
-            target_compile_options(${target} PRIVATE -UNDEBUG)
+            target_compile_options(${target} PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/tests/KeepAsserts.hpp")
         endif()
     endfunction()
 
