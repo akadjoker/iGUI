@@ -2,6 +2,7 @@
 
 #include "Retained.hpp"
 #include "RetainedBase.hpp"
+#include "Theme.hpp"
 #include "Widget.hpp"
 #include <cstdint>
 #include <ct/function.hpp>
@@ -99,7 +100,7 @@ public:
         bool relayout_ = false;
         int width_ = 0;
         int height_ = 0;
-        Color bgColor_ = Color(30, 30, 30, 255);
+        Color bgColor_ = Color(0, 0, 0, 0); // alpha 0 (until setBgColor): the theme's bgColor, whichever the theme is
 
         // Cursor hint (set by applyCursor, read by backend via wantedCursor())
         CursorType wantedCursor_ = CursorType::Arrow;
@@ -271,7 +272,7 @@ public:
     /// @brief Get the background color.
     const Color& bgColor() const
     {
-        return s_.bgColor_;
+        return s_.bgColor_.a > 0 ? s_.bgColor_ : Theme::instance().bgColor;
     }
     /// @brief Set the background color.
     void setBgColor(const Color& c)
@@ -763,6 +764,23 @@ public:
     /// @brief Get the shared icon atlas.
     IconAtlas& iconAtlas();
 
+    // ── Theme ────────────────────────────────────────────────────────
+    /// @brief Replace the theme (Theme::instance()) with @p theme, then tell everything that depends on it:
+    ///        themeChanged is emitted once and the containers are laid out again (the sizes that come from the theme:
+    ///        font size, padding, bar thickness). Colours an application set explicitly on a widget (setBgColor,
+    ///        ConsoleWidget::setColors, ...) are left as they are; themeChanged is where the application sets them again.
+    void setTheme(const Theme& theme);
+    /// @brief setTheme() with a preset by name (Theme::presetName: "dark", "light", "xp", "macos", "macos-dark").
+    /// @return false, with the theme left alone, when @p name is not a preset.
+    bool setThemePreset(const char* name);
+    /// @brief Tell the manager that Theme::instance() was changed by hand (a field written, the whole theme assigned): the
+    ///        same as setTheme() after the fact. update() also finds such a change by comparing the theme with the one it
+    ///        saw last, so a frame after an assignment emits themeChanged even when this was not called; a change that
+    ///        has been notified (by this, by setTheme() or by update()) is not emitted again.
+    void notifyThemeChanged();
+    /// @brief Emitted once for each change of the theme, after the change and before the layout it asks for (see setTheme).
+    Signal<> themeChanged;
+
     /// @brief Key presses that no widget consumed, or that came while nothing had
     ///        the focus: where an application puts its shortcuts (Ctrl+S, Delete...).
     Signal<KeyEvent&> unhandledKey;
@@ -837,6 +855,10 @@ private:
         }
         WidgetApp& app;
     };
+
+    // The theme as update() last saw it (see notifyThemeChanged).
+    Theme themeSeen_;
+    bool themeSeenSet_ = false;
 
     // State
     bool inited_ = false;

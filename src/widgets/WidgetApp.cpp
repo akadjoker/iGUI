@@ -139,6 +139,34 @@ void WidgetApp::shutdown()
 //  Init
 // ═════════════════════════════════════════════════════════════════════════════
 
+void WidgetApp::setTheme(const Theme& theme)
+{
+    Theme::instance() = theme;
+    notifyThemeChanged();
+}
+
+bool WidgetApp::setThemePreset(const char* name)
+{
+    if (!name) return false;
+    for (int i = 0; i < Theme::kPresetCount; ++i)
+    {
+        if (strcmp(name, Theme::presetName(i)) != 0) continue;
+        setTheme(Theme::byName(name));
+        return true;
+    }
+    return false;
+}
+
+void WidgetApp::notifyThemeChanged()
+{
+    // the copy first: a handler that changes the theme again is a change of its own
+    memcpy(static_cast<void*>(&themeSeen_), static_cast<const void*>(&Theme::instance()), sizeof(Theme));
+    themeSeenSet_ = true;
+    // sizes that come from the theme (font size, padding, bars) are worked out again at the next layout
+    requestRelayout();
+    themeChanged.emit();
+}
+
 bool WidgetApp::init()
 {
     if (inited_) return true;
@@ -159,6 +187,13 @@ bool WidgetApp::init()
 void WidgetApp::update(ig::retained::IO& io)
 {
     BusyScope busy(*this);
+    // A theme changed by hand since the last frame: tell the widgets (one memcmp of the theme, a kilobyte, a frame).
+    if (!themeSeenSet_) {
+        memcpy(static_cast<void*>(&themeSeen_), static_cast<const void*>(&Theme::instance()), sizeof(Theme));
+        themeSeenSet_ = true;
+    }
+    else if (memcmp(static_cast<const void*>(&Theme::instance()), static_cast<const void*>(&themeSeen_), sizeof(Theme)) != 0)
+        notifyThemeChanged();
     dt_ = io.deltaTime;
     elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;
     elapsedMs_ = static_cast<uint32_t>(fmod(elapsedSeconds_ * 1000.0, 4294967296.0));
@@ -1863,7 +1898,7 @@ void WidgetApp::setStageBgColor(const String& name, const Color& c)
 Color WidgetApp::stageBgColor(const String& name) const
 {
     const Color* color = s_.stageBgColors_.find(name);
-    return color ? *color : s_.bgColor_;
+    return color ? *color : bgColor();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
