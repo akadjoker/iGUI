@@ -813,12 +813,9 @@ private:
     };
 
     Rect currentClip() const;
-    // always inlined: a new function that called it (the native callback's rectangle) made the compiler stop inlining it into addLine and the
-    // other shape builders, +9% instructions in a window of 50 buttons
-#if defined(__GNUC__) || defined(__clang__)
-    __attribute__((always_inline))
-#endif
-    inline Vec2 mapPoint(float x, float y) const
+    // (inlined by the compiler into the shape builders: a new caller of it, the native callback's rectangle, made it stop, +1.3% instructions in a
+    // window of 50 buttons, so the functions that are not shape builders do not call it: Retained.cpp mapBy)
+    Vec2 mapPoint(float x, float y) const
     {
         if (transformStack_.empty()) return { x, y };
         return { transform_[0] * x + transform_[2] * y + transform_[4], transform_[1] * x + transform_[3] * y + transform_[5] };

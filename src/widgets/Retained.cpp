@@ -2431,16 +2431,23 @@ void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle t
     for (int i = 0; i < roundCount; ++i) command.roundClips[i] = rounds[i];
     commands_.push_back(command);
 }
+// The matrix of DrawList::pushTransform applied to a point (the same as mapPoint, which the shape builders call: a function that is not one calls this,
+// so that mapPoint keeps the callers that make the compiler inline it)
+static Vec2 mapBy(const float* m, float x, float y)
+{
+    return { m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5] };
+}
+
 void DrawList::addNativeCallback(NativeDrawFn fn, void* user, const Rect& source, bool restoreState)
 {
     if (!fn) return;
     Rect rect = source;
     if (!transformStack_.empty())
     {
-        const Vec2 p0 = mapPoint(source.x, source.y);
-        const Vec2 p1 = mapPoint(source.x + source.w, source.y);
-        const Vec2 p2 = mapPoint(source.x + source.w, source.y + source.h);
-        const Vec2 p3 = mapPoint(source.x, source.y + source.h);
+        const Vec2 p0 = mapBy(transform_, source.x, source.y);
+        const Vec2 p1 = mapBy(transform_, source.x + source.w, source.y);
+        const Vec2 p2 = mapBy(transform_, source.x + source.w, source.y + source.h);
+        const Vec2 p3 = mapBy(transform_, source.x, source.y + source.h);
         const float x0 = fminf(fminf(p0.x, p1.x), fminf(p2.x, p3.x));
         const float x1 = fmaxf(fmaxf(p0.x, p1.x), fmaxf(p2.x, p3.x));
         const float y0 = fminf(fminf(p0.y, p1.y), fminf(p2.y, p3.y));
