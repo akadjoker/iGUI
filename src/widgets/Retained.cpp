@@ -2750,16 +2750,13 @@ void ClipToRoundClips(const DrawVertex* vertices, size_t vertexCount, const uint
 // of one for each (a frame writes twenty thousand).
 DrawVertex* DrawList::appendVertices(size_t count)
 {
-    const size_t at = vertices_.size();
-    vertices_.resize(at + count);
-    return vertices_.data() + at;
+    // (not resize: the zeros were 4 to 5 per cent of a dense frame, and the caller writes every vertex it asks room for)
+    return vertices_.append_uninitialized(count);
 }
 
 uint32_t* DrawList::appendIndices(size_t count)
 {
-    const size_t at = indices_.size();
-    indices_.resize(at + count);
-    return indices_.data() + at;
+    return indices_.append_uninitialized(count);
 }
 
 uint32_t DrawList::addVertex(float x, float y, const Color& color)

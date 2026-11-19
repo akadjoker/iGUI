@@ -768,8 +768,8 @@ void PlotChart::Impl::addEnvelope(Series& s, const Color& c, const Vec2& uv)
     const float minThick = s.info.lineWidth;
     // room for the most a column adds (two vertices, six indices), written through pointers: the numbers of a whole layer are in the millions
     const size_t v0 = mesh.vertices.size(), i0 = mesh.indices.size();
-    mesh.vertices.resize(v0 + 2 * static_cast<size_t>(cols));
-    mesh.indices.resize(i0 + 6 * static_cast<size_t>(cols));
+    mesh.vertices.resize_for_overwrite(v0 + 2 * static_cast<size_t>(cols));
+    mesh.indices.resize_for_overwrite(i0 + 6 * static_cast<size_t>(cols));
     DrawVertex* vp = mesh.vertices.data() + v0;
     uint32_t* ip = mesh.indices.data() + i0;
     uint32_t nv = 0, ni = 0;
@@ -1176,8 +1176,8 @@ void PlotChart::setSeriesDataCopy(int id, const double* x, const double* y, size
         setSeries(info);
         s = d.find(id);
     }
-    s->ownX.resize(x ? count : 0);
-    s->ownY.resize(y ? count : 0);
+    s->ownX.resize_for_overwrite(x ? count : 0); // (both are copied whole just below)
+    s->ownY.resize_for_overwrite(y ? count : 0);
     for (size_t i = 0; x && i < count; ++i) s->ownX[i] = x[i];
     for (size_t i = 0; y && i < count; ++i) s->ownY[i] = y[i];
     s->owns = true;

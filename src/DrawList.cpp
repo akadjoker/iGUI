@@ -313,7 +313,7 @@ void DrawList::QuadBatch::flush()
     }
     ct::Vector<DrawIndex>& indices = drawList_.geometry_->indices;
     const uint32_t firstIndex = static_cast<uint32_t>(indices.size());
-    indices.resize(firstIndex + quadCount_ * 6u);
+    indices.resize_for_overwrite(firstIndex + quadCount_ * 6u); // (every index is written below)
     DrawIndex* out = indices.data() + firstIndex;
     for (uint32_t quad = 0u; quad < quadCount_; ++quad, out += 6)
     {
@@ -361,18 +361,18 @@ void DrawList::append(const DrawList& other)
     // Whole-array copies: a frame's worth of glyph quads goes through here once
     // per window, and one element at a time it was a measurable share of the
     // frame.
-    geometry_->vertices.resize(vertexOffset + other.geometry_->vertices.size());
+    geometry_->vertices.resize_for_overwrite(vertexOffset + other.geometry_->vertices.size()); // (copied whole below)
     if (!other.geometry_->vertices.empty())
         memcpy(geometry_->vertices.data() + vertexOffset, other.geometry_->vertices.data(),
                 other.geometry_->vertices.size() * sizeof(DrawVertex));
-    geometry_->indices.resize(indexOffset + other.geometry_->indices.size());
+    geometry_->indices.resize_for_overwrite(indexOffset + other.geometry_->indices.size());
     {
         DrawIndex* out = geometry_->indices.data() + indexOffset;
         const DrawIndex* in = other.geometry_->indices.data();
         const ct::Vector<DrawIndex>::size_type count = other.geometry_->indices.size();
         for (ct::Vector<DrawIndex>::size_type i = 0; i < count; ++i) out[i] = in[i] + vertexOffset;
     }
-    geometry_->textBytes.resize(textOffset + other.geometry_->textBytes.size());
+    geometry_->textBytes.resize_for_overwrite(textOffset + other.geometry_->textBytes.size());
     if (!other.geometry_->textBytes.empty())
         memcpy(geometry_->textBytes.data() + textOffset, other.geometry_->textBytes.data(),
                 other.geometry_->textBytes.size());
