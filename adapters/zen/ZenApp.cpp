@@ -244,7 +244,15 @@ bool App::create(const Config &config)
     io.retainedMeshes = useGl_;
     io.setClipboardText = [](const char* text) { clipboard_set(text); };
     io.getClipboardText = [] { return rt::String(clipboard_get()); };
-    io.getPrimaryText = primaryGet_; // (null until setPrimaryHooks: no PRIMARY selection, see ZenApp.hpp)
+    // The PRIMARY selection (select to copy, middle button to paste) where the platform has one (X11, a Wayland compositor that offers
+    // it, the fake backend of the tests): the platform's own, unless the application set its own hooks before create(). Without one
+    // (Windows, the web, Android) there are none, and a middle click pastes the normal clipboard.
+    if (!primaryGet_ && !primarySet_ && clipboard_has_primary_support())
+    {
+        primaryGet_ = [] { return rt::String(clipboard_get_primary()); };
+        primarySet_ = [](const char* text) { clipboard_set_primary(text); };
+    }
+    io.getPrimaryText = primaryGet_;
     io.setPrimaryText = primarySet_;
 
     if (atlas_.buildDefault())

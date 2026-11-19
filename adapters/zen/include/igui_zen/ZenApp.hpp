@@ -179,10 +179,10 @@ public:
         probeUser_ = user;
     }
     /// The PRIMARY selection (X11 and Wayland: selecting text sets it, a middle click pastes it), as two plain functions: get() returns it, set(text)
-    /// takes the text a person has just selected. Unset (the default): there is none, a middle click in a text field pastes the normal clipboard and
-    /// selecting text sets nothing. zen_plataform does not give it yet; when it has clipboard_get_primary / clipboard_set_primary (and its query for
-    /// whether the platform has one) the wiring is these lines, wherever the application sets the app up (or in create(), ZenApp.cpp, next to the clipboard):
-    ///     zen.setPrimaryHooks([] { return ig::retained::String(clipboard_get_primary()); }, [](const char* text) { clipboard_set_primary(text); });
+    /// takes the text a person has just selected. create() wires them to zen_plataform's clipboard_get_primary / clipboard_set_primary when
+    /// clipboard_has_primary_support() says the platform has a PRIMARY selection, so an application gets it with no code; this is for one that wants
+    /// its own (before create(): kept and not replaced; after it: replaces them). Without a PRIMARY selection (Windows, the web, Android, a Wayland compositor
+    /// that has none) a middle click in a text field pastes the normal clipboard and selecting text sets nothing.
     void setPrimaryHooks(ig::retained::String (*get)(), void (*set)(const char *))
     {
         primaryGet_ = get;
@@ -199,6 +199,8 @@ public:
         return main_ ? main_->platform : nullptr;
     }
 
+        if (!context_)
+            return; // before create(): kept, and put in the IO there
     // ── several windows ──────────────────────────────────────────────────
     bool supportsWindows() const;
     Window *mainWindow() { return main_; }
