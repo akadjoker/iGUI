@@ -29,6 +29,7 @@ constexpr int Escape = 27;
 constexpr int Backspace = 8;
 constexpr int Tab = 9;
 constexpr int Delete = 127;
+constexpr int Insert = 1073741897;
 constexpr int Right = 1073741903;
 constexpr int Left = 1073741904;
 constexpr int Down = 1073741905;
@@ -144,6 +145,10 @@ struct IO
     // Assign captureless lambdas or plain function pointers.
     void (*setClipboardText)(const char*) = nullptr;
     String (*getClipboardText)() = nullptr;
+    // The PRIMARY selection (X11 and Wayland: select text, paste it with the middle button): optional. A backend that has one sets both; one that has not
+    // leaves them null, and then a middle click pastes the normal clipboard and selecting text sets nothing.
+    void (*setPrimaryText)(const char*) = nullptr;
+    String (*getPrimaryText)() = nullptr;
 
     // ── File I/O (set by backend) ────────────────────────────────────
     // readFile:  path → file contents (empty string on failure)

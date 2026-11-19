@@ -270,6 +270,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/SideTabBar.cpp
         src/widgets/SpinSlider.cpp
         src/widgets/SymbolOutline.cpp
+        src/widgets/TextClip.cpp
         src/widgets/TextInputWidgets.cpp
         src/widgets/ThumbnailGrid.cpp
         src/widgets/Timeline.cpp
@@ -508,6 +509,13 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_options(igui_retained_round10_tests PRIVATE -Wl,--wrap=malloc -Wl,--wrap=calloc -Wl,--wrap=realloc)
         add_test(NAME igui_retained_round10 COMMAND igui_retained_round10_tests)
         set_tests_properties(igui_retained_round10 PROPERTIES TIMEOUT 300)
+        # Round 10 (docs/ROUND10.md, section 7): the clipboard of the text fields: Shift+Insert / Ctrl+Insert / Shift+Delete, the context menu, the middle button, PRIMARY.
+        add_executable(igui_retained_textclip_tests tests/test_retained_textclip.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_textclip_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_textclip_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_textclip_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_textclip COMMAND igui_retained_textclip_tests)
+        set_tests_properties(igui_retained_textclip PROPERTIES TIMEOUT 300)
         # Round 10, part 1 (docs/DRAW-CALLBACK.md): native draw callbacks without a GL context: availability, the fallback of a
         # NativeView, the place in the draw order, nothing merged across one, the software rasteriser skipping it, idle.
         add_executable(igui_native_callback_tests tests/test_native_callback.cpp adapters/zen/SoftRaster.cpp)

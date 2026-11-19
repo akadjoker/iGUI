@@ -594,6 +594,8 @@ public:
     void onMousePress(MouseEvent& e) override;
     void onMouseRelease(MouseEvent& e) override;
     void onMouseMove(MouseEvent& e) override;
+    /// The clipboard's way of changing the text (TextClip.hpp): a cut, a paste or a Delete from the menu is one step of undo.
+    void clipReplaceSelection(const String& text) override;
 
 private:
     // ── Highlighter ──────────────────────────────────────────────────────

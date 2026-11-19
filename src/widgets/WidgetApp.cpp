@@ -224,6 +224,8 @@ void WidgetApp::update(ig::retained::IO& io)
     ioKeyAlt_ = io.keyAlt;
     clipSet_ = io.setClipboardText;
     clipGet_ = io.getClipboardText;
+    primarySet_ = io.setPrimaryText;
+    primaryGet_ = io.getPrimaryText;
     mouseCapture_ = io.setMouseCaptured;
     mouseWarp_ = io.warpMouse;
 
@@ -472,6 +474,8 @@ void WidgetApp::makeSyntheticIO(ig::retained::IO& io, bool shift, bool ctrl, boo
     // update() keeps these from the IO it is given: a feed must not lose the backend's
     io.setClipboardText = clipSet_;
     io.getClipboardText = clipGet_;
+    io.setPrimaryText = primarySet_;
+    io.getPrimaryText = primaryGet_;
     io.setMouseCaptured = mouseCapture_;
     io.warpMouse = mouseWarp_;
 }
@@ -688,6 +692,8 @@ void WidgetApp::dispatchMousePress(float x, float y, int btn)
                     ContextMenu::show(w->contextMenu(), x, y, w);
                     return;
                 }
+                // a widget with a menu of its own (a text field's Cut, Copy, Paste...) gets the press, which opens it: a menu of one of its parents does not
+                if (w->ownsContextMenu()) break;
                 w = w->parent();
             }
         }
@@ -809,6 +815,17 @@ String WidgetApp::getClipboardText() const
 {
     if (clipGet_) return clipGet_();
     return {};
+}
+
+void WidgetApp::setPrimaryText(const char* text)
+{
+    if (primarySet_) primarySet_(text);
+}
+
+String WidgetApp::getPrimaryText() const
+{
+    if (primaryGet_) return primaryGet_();
+    return getClipboardText();
 }
 
 // The widget the buttons went to stops being shown: it gets the release of

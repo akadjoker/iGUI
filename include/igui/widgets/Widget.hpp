@@ -1054,6 +1054,13 @@ public:
     {
         return contextMenu_;
     }
+    /// @brief True for a widget that opens a menu of its own on a right click (a text field: Cut, Copy, Paste, Delete, Select All, see TextClip.hpp). Its
+    ///        press is delivered to it, and a context menu of one of its parents is not shown instead; a menu set with setContextMenu() on the widget
+    ///        itself still wins.
+    virtual bool ownsContextMenu() const
+    {
+        return false;
+    }
 
     /// @brief Get user data by key, with type cast.
     template<typename T>

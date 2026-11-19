@@ -1,5 +1,6 @@
 #pragma once
 
+#include "TextClip.hpp"
 #include "Theme.hpp"
 #include "Utf8.hpp"
 #include "Widget.hpp"
@@ -17,7 +18,7 @@ namespace retained
 //  Modes: Normal, Password (•), NumberOnly (digits/-.+), ReadOnly
 // ═════════════════════════════════════════════════════════════════════════════
 
-class TextInput : public Widget
+class TextInput : public Widget, public TextClipTarget
 {
 public:
     IG_WIDGET_CLASS(TextInput, Widget);
@@ -97,6 +98,44 @@ public:
     void onKeyPress(KeyEvent& e) override;
     void onTextInput(KeyEvent& e) override;
 
+    // The clipboard and the right click menu are TextClip.hpp's: Ctrl+C / Ctrl+Insert, Ctrl+X / Shift+Delete, Ctrl+V / Shift+Insert, the menu (Cut, Copy,
+    // Paste, Delete, Select All), the paste of the middle button and the PRIMARY selection. A password is not copied or cut; a read only field only copies.
+    bool ownsContextMenu() const override
+    {
+        return true;
+    }
+    Widget* clipWidget() override
+    {
+        return this;
+    }
+    bool clipHasSelection() const override
+    {
+        return selStart_ != selEnd_;
+    }
+    bool clipHasText() const override
+    {
+        return !text_.empty();
+    }
+    bool clipEditable() const override
+    {
+        return mode_ != Mode::ReadOnly;
+    }
+    bool clipCanCopy() const override
+    {
+        return mode_ != Mode::Password;
+    }
+    String clipSelection() const override
+    {
+        return selectedText();
+    }
+    void clipReplaceSelection(const String& text) override;
+    void clipSelectAll() override
+    {
+        selectAll();
+    }
+    void clipPlaceCursor(const MouseEvent& e) override;
+    bool clipPointInSelection(const MouseEvent& e) const override;
+
 private:
     String text_;
     String placeholder_;
@@ -128,7 +167,7 @@ private:
 //            tab-to-spaces, clipboard, syntax highlight callback
 // ═════════════════════════════════════════════════════════════════════════════
 
-class TextEdit : public Widget
+class TextEdit : public Widget, public TextClipTarget
 {
 public:
     IG_WIDGET_CLASS(TextEdit, Widget);
@@ -352,6 +391,43 @@ public:
     void onMouseScroll(MouseEvent& e) override;
     void onKeyPress(KeyEvent& e) override;
     void onTextInput(KeyEvent& e) override;
+
+    // The clipboard and the right click menu are TextClip.hpp's (see TextInput). Cut and paste are one step of undo in a CodeEditor.
+    bool ownsContextMenu() const override
+    {
+        return true;
+    }
+    Widget* clipWidget() override
+    {
+        return this;
+    }
+    bool clipHasSelection() const override
+    {
+        return hasSelection();
+    }
+    bool clipHasText() const override
+    {
+        return lines_.size() > 1 || (!lines_.empty() && !lines_[0].empty());
+    }
+    bool clipEditable() const override
+    {
+        return !readOnly_;
+    }
+    bool clipOneLine() const override
+    {
+        return false;
+    }
+    String clipSelection() const override
+    {
+        return selectedText();
+    }
+    void clipReplaceSelection(const String& text) override;
+    void clipSelectAll() override
+    {
+        selectAll();
+    }
+    void clipPlaceCursor(const MouseEvent& e) override;
+    bool clipPointInSelection(const MouseEvent& e) const override;
 
 protected:
     static const String emptyLine_;

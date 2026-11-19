@@ -155,6 +155,16 @@ Widget::Vec2f Menu::sizeHint() const
 
 void Menu::exec(float x, float y, Widget* owner)
 {
+    place_(x, y, owner, false);
+}
+
+void Menu::execOwned(float x, float y, Widget* owner)
+{
+    place_(x, y, owner, true);
+}
+
+void Menu::place_(float x, float y, Widget* owner, bool owned)
+{
     // The items are up to date before the size is worked out. A menu is no widget in a parent: its owner deletes it, from a
     // handler of this signal too (a menu rebuilt, or dropped, when it is about to show): then nothing of it is touched.
     bool deleted = false;
@@ -172,7 +182,7 @@ void Menu::exec(float x, float y, Widget* owner)
     setPosition(x, y);
     setSize(sz.x, sz.y);
     hoveredIdx_ = -1;
-    WidgetApp::instance().showPopup(this, owner, false);
+    WidgetApp::instance().showPopup(this, owner, owned);
 }
 
 void Menu::resetPopupState()

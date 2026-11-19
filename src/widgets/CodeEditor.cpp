@@ -2079,6 +2079,10 @@ void CodeEditor::handleKeyPress(KeyEvent& e)
         return;
     }
 
+    // The clipboard keys (Ctrl+C / X / V / A, Ctrl+Insert, Shift+Insert, Shift+Delete) are TextClip.hpp's, and one undo step (clipReplaceSelection); they do
+    // not go through the recording of Backspace and Delete below (with extra cursors they are TextEdit's, as before, and act on the main cursor)
+    if (extraCursors_.empty() && textclip::onKey(*this, e)) return;
+
     // Record edits for undo
     if (!readOnly_ && !e.ctrl)
     {
@@ -2206,6 +2210,15 @@ void CodeEditor::handleTextInput(KeyEvent& e)
     }
 }
 
+void CodeEditor::clipReplaceSelection(const String& text)
+{
+    if (readOnly_) return;
+    WidgetApp::DeletionHold hold; // (a handler of what the edit emits may take the editor out of the tree)
+    if (hasSelection()) replaceRange(selectionStart(), selectionEnd(), text);
+    else if (!text.empty())
+        replaceRange(cursor_, cursor_, text);
+}
+
 void CodeEditor::onMousePress(MouseEvent& e)
 {
     WidgetApp::DeletionHold hold; // (see WidgetApp::DeletionHold)
@@ -2226,6 +2239,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
         }
         closeCompletion();
     }
+    if (e.button != 0 && textclip::onMouse(*this, e)) return; // the right button: the menu; the middle one: paste at the click
     // Check minimap click — use full rect (before width shrink)
     if (showMinimap_)
     {

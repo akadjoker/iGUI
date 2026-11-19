@@ -55,7 +55,7 @@ no escuro. O `bench/retained/draw.hash` nao mudou (a janela do editor do bench n
 
 ### 2.5 O que a equipa do ZenVideo juntou
 
-1. **O desenho do escuro depois da ronda 9.** (a) *O separador entre dois paineis do dock:* **nao se reproduz**. A janela do dock com divisao (3 paineis, divisor a 40%, rectangulos inteiros e
+1. **O desenho do escuro depois da ronda 9** (pergunta da coordenacao: a causa, o que a `main` desenha hoje, o teste que o fixa). Causa dos dois: a ronda 9 passou os literais do dock para `Theme::dock` (`DockColors`, commit `003321c`) e fez o `DockPanel` pintar com ele (`012e3ba`); o escuro ficou com os valores de sempre (`handle` 50,50,53, `border` 60,60,65, `leafBg` 38,38,42, `accent` 120,160,220), o macos-dark herda os do macOS (azul do sistema). **Escuro: a `main` desenha o aspecto ANTIGO** (pixeis iguais; teste `kDockSplitGoldenDark` em `testGoldens()` de `tests/test_retained_round9.cpp`). **macos-dark: desenha o aspecto NOVO, de proposito** (teste `kDockSplitGoldenMacDark`, na mesma funcao). (a) *O separador entre dois paineis do dock:* **nao se reproduz**. A janela do dock com divisao (3 paineis, divisor a 40%, rectangulos inteiros e
    fraccionarios, o separador sob o rato) desenhada no escuro pela biblioteca de antes da ronda 9 (`0d86927`, construida a parte) e pela de agora da **os mesmos pixeis** (soma de controlo `d5b9fa6f2817d9b3`
    nos dois); os campos `Theme::dock` do escuro (`handle` 50,50,53, `border` 60,60,65, `leafBg` 38,38,42, ...) sao os literais de antes. As cores 54,54,59 e 41,41,46 nao sao nenhuma do dock: sao
    60,60,65 (a moldura de uma folha, desenhada ha muito) a cobrir 0,73 e 0,14 de dois pixeis sobre 38,38,42, ou seja uma linha de um pixel numa posicao fraccionaria; pedimos-lhes o rectangulo do dock e

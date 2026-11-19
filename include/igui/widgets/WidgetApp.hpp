@@ -315,6 +315,10 @@ public:
     void setClipboardText(const char* text);
     /// @brief Get clipboard text.
     String getClipboardText() const;
+    /// @brief Set the PRIMARY selection (what a selection of text is, to a middle click): a no-op where the backend has none (IO::setPrimaryText).
+    void setPrimaryText(const char* text);
+    /// @brief The PRIMARY selection; where the backend has none, the normal clipboard (so a middle click pastes something).
+    String getPrimaryText() const;
 
     // ── Mouse mode (set by backend via IO) ───────────────────────────────
     /// @brief Hide the pointer and keep reporting its motion past the window
@@ -947,6 +951,8 @@ private:
     bool ioKeyAlt_ = false;
     void (*clipSet_)(const char*) = nullptr;
     String (*clipGet_)() = nullptr;
+    void (*primarySet_)(const char*) = nullptr;
+    String (*primaryGet_)() = nullptr;
     void (*mouseCapture_)(bool) = nullptr;
     void (*mouseWarp_)(float, float) = nullptr;
     // Subsystems

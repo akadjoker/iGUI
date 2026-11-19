@@ -204,6 +204,9 @@ public:
 
     /// @brief Show the menu as a popup at screen coordinates.
     void exec(float x, float y, Widget* owner = nullptr);
+    /// @brief Like exec(), for a menu made for this one showing (`new Menu()`): the popup owns it and deletes it when it closes. A widget that is the
+    ///        @p owner and goes while the menu is open closes it.
+    void execOwned(float x, float y, Widget* owner);
 
     /// @brief Emitted when the menu is about to be shown, before its size is worked out: by exec()
     ///        (a click on the title in a MenuBar, a context menu) and when the menu is about to
@@ -253,6 +256,7 @@ private:
     float computeWidth_() const;
     void showSubmenu_(int idx);
     void hideSubmenu_();
+    void place_(float x, float y, Widget* owner, bool owned);
 };
 
 // ═════════════════════════════════════════════════════════════════════════════

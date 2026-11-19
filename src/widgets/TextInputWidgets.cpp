@@ -271,6 +271,7 @@ void TextInput::paint(PaintContext& ctx)
 void TextInput::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
+    if (textclip::onMouse(*this, e)) return; // the right button: the menu; the middle one: paste at the click
     const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
     cursor_ = hitTestChar(font, e.localX);
     selStart_ = selEnd_ = cursor_;
@@ -286,7 +287,39 @@ void TextInput::onMouseRelease(MouseEvent& e)
     {
         dragging_ = false;
         e.consumed = true;
+        textclip::publishSelection(*this); // (last) a selection made with the mouse is the PRIMARY selection
     }
+}
+
+void TextInput::clipReplaceSelection(const String& text)
+{
+    if (mode_ == Mode::ReadOnly) return;
+    if (!text.empty())
+    {
+        insertText(text);
+        return;
+    }
+    if (selStart_ == selEnd_) return;
+    deleteSelection();
+    markDirty();
+    textChanged.emit(text_);
+}
+
+void TextInput::clipPlaceCursor(const MouseEvent& e)
+{
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
+    cursor_ = hitTestChar(font, e.localX);
+    selStart_ = selEnd_ = cursor_;
+    blinkTimer_ = 0;
+    markDirty();
+}
+
+bool TextInput::clipPointInSelection(const MouseEvent& e) const
+{
+    if (selStart_ == selEnd_) return false;
+    const ig::retained::Font* font = overrideFont_ ? overrideFont_ : WidgetApp::instance().font();
+    const int at = hitTestChar(font, e.localX);
+    return at >= min2(selStart_, selEnd_) && at <= max2(selStart_, selEnd_);
 }
 
 void TextInput::onMouseMove(MouseEvent& e)
@@ -307,65 +340,11 @@ void TextInput::onMouseMove(MouseEvent& e)
 void TextInput::onKeyPress(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
-    if (mode_ == Mode::ReadOnly && !(e.ctrl && e.key == ig::retained::Key::C)) return;
+    if (textclip::onKey(*this, e)) return; // the clipboard keys, and Ctrl+A (before the read only check: a read only field copies)
+    if (mode_ == Mode::ReadOnly) return;
 
     int len = utf8Length(text_);
     blinkTimer_ = 0;
-
-    if (e.ctrl)
-    {
-        switch (e.key)
-        {
-            case ig::retained::Key::A:
-                selectAll();
-                e.consumed = true;
-                return;
-            case ig::retained::Key::C:
-            {
-                String sel = selectedText();
-                if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
-                e.consumed = true;
-                return;
-            }
-            case ig::retained::Key::X:
-            {
-                if (mode_ == Mode::ReadOnly)
-                {
-                    e.consumed = true;
-                    return;
-                }
-                String sel = selectedText();
-                if (!sel.empty())
-                {
-                    WidgetApp::instance().setClipboardText(sel.c_str());
-                    deleteSelection();
-                    markDirty();
-                    textChanged.emit(text_);
-                }
-                e.consumed = true;
-                return;
-            }
-            case ig::retained::Key::V:
-            {
-                if (mode_ == Mode::ReadOnly)
-                {
-                    e.consumed = true;
-                    return;
-                }
-                String clip = WidgetApp::instance().getClipboardText();
-                if (!clip.empty())
-                {
-                    clip.erase(std::remove(clip.begin(), clip.end(), '\n'), clip.end());
-                    clip.erase(std::remove(clip.begin(), clip.end(), '\r'), clip.end());
-                    insertText(clip);
-                }
-                e.consumed = true;
-                return;
-            }
-            default:
-                break;
-        }
-    }
 
     switch (e.key)
     {
@@ -646,28 +625,48 @@ void TextEdit::setSelection(TextPos start, TextPos end)
 
 void TextEdit::copy()
 {
-    String sel = selectedText();
-    if (!sel.empty()) WidgetApp::instance().setClipboardText(sel.c_str());
+    textclip::run(*this, textclip::Action::Copy);
 }
 
 void TextEdit::cut()
 {
-    if (readOnly_) return;
-    String sel = selectedText();
-    if (!sel.empty())
-    {
-        WidgetApp::instance().setClipboardText(sel.c_str());
-        deleteSelection();
-        markDirty();
-        notifyEdited();
-    }
+    textclip::run(*this, textclip::Action::Cut);
 }
 
 void TextEdit::paste()
 {
+    textclip::run(*this, textclip::Action::Paste);
+}
+
+void TextEdit::clipReplaceSelection(const String& text)
+{
     if (readOnly_) return;
-    String clip = WidgetApp::instance().getClipboardText();
-    if (!clip.empty()) insertTextAtCursor(clip);
+    if (!text.empty())
+    {
+        insertTextAtCursor(text);
+        return;
+    }
+    if (!hasSelection()) return;
+    deleteSelection();
+    markDirty();
+    notifyEdited(); // (last)
+}
+
+void TextEdit::clipPlaceCursor(const MouseEvent& e)
+{
+    cursor_ = hitTestMouse(e.localX, e.localY);
+    clampPos(cursor_);
+    selAnchor_ = cursor_;
+    blinkTimer_ = 0;
+    markDirty();
+}
+
+bool TextEdit::clipPointInSelection(const MouseEvent& e) const
+{
+    if (!hasSelection()) return false;
+    TextPos at = hitTestMouse(e.localX, e.localY);
+    clampPos(at);
+    return at >= selectionStart() && at <= selectionEnd();
 }
 
 void TextEdit::insertTextAt(TextPos pos, const String& text)
@@ -1832,6 +1831,7 @@ void TextEdit::paint(PaintContext& ctx)
 void TextEdit::onMousePress(MouseEvent& e)
 {
     if (!isEnabledInTree()) return;
+    if (e.button != 0 && textclip::onMouse(*this, e)) return; // the right button: the menu; the middle one: paste at the click
     // Gutter click → toggle breakpoint / emit markerClicked
     if (showLineNumbers_ && e.localX < gutterW_)
     {
@@ -1918,6 +1918,7 @@ void TextEdit::onMouseRelease(MouseEvent& e)
     {
         dragging_ = false;
         e.consumed = true;
+        textclip::publishSelection(*this); // (last) a selection made with the mouse is the PRIMARY selection
     }
 }
 
@@ -1955,6 +1956,7 @@ void TextEdit::onMouseScroll(MouseEvent& e)
 void TextEdit::onKeyPress(KeyEvent& e)
 {
     if (!isEnabledInTree()) return;
+    if (textclip::onKey(*this, e)) return; // the clipboard keys and Ctrl+A (before the read only check: Shift+Insert is refused there, Ctrl+Insert copies)
     if (readOnly_ && !e.ctrl) return;
     blinkTimer_ = 0;
     int lc = static_cast<int>(lines_.size());
@@ -1963,22 +1965,6 @@ void TextEdit::onKeyPress(KeyEvent& e)
     {
         switch (e.key)
         {
-            case ig::retained::Key::A:
-                selectAll();
-                e.consumed = true;
-                return;
-            case ig::retained::Key::C:
-                copy();
-                e.consumed = true;
-                return;
-            case ig::retained::Key::X:
-                cut();
-                e.consumed = true;
-                return;
-            case ig::retained::Key::V:
-                paste();
-                e.consumed = true;
-                return;
             case ig::retained::Key::Home:
                 cursor_ = { 0, 0 };
                 if (!e.shift) selAnchor_ = cursor_;

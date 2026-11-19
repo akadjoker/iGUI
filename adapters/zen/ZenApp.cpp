@@ -244,6 +244,8 @@ bool App::create(const Config &config)
     io.retainedMeshes = useGl_;
     io.setClipboardText = [](const char* text) { clipboard_set(text); };
     io.getClipboardText = [] { return rt::String(clipboard_get()); };
+    io.getPrimaryText = primaryGet_; // (null until setPrimaryHooks: no PRIMARY selection, see ZenApp.hpp)
+    io.setPrimaryText = primarySet_;
 
     if (atlas_.buildDefault())
     {

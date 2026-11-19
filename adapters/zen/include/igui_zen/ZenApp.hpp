@@ -178,6 +178,19 @@ public:
         probe_ = fn;
         probeUser_ = user;
     }
+    /// The PRIMARY selection (X11 and Wayland: selecting text sets it, a middle click pastes it), as two plain functions: get() returns it, set(text)
+    /// takes the text a person has just selected. Unset (the default): there is none, a middle click in a text field pastes the normal clipboard and
+    /// selecting text sets nothing. zen_plataform does not give it yet; when it has clipboard_get_primary / clipboard_set_primary (and its query for
+    /// whether the platform has one) the wiring is these lines, wherever the application sets the app up (or in create(), ZenApp.cpp, next to the clipboard):
+    ///     zen.setPrimaryHooks([] { return ig::retained::String(clipboard_get_primary()); }, [](const char* text) { clipboard_set_primary(text); });
+    void setPrimaryHooks(ig::retained::String (*get)(), void (*set)(const char *))
+    {
+        primaryGet_ = get;
+        primarySet_ = set;
+        ig::retained::IO &io = ig::retained::GetIO();
+        io.getPrimaryText = get;
+        io.setPrimaryText = set;
+    }
     /// Reads the window as drawn this frame, top row first, 0xAARRGGBB. Valid inside the
     /// after-render callback.
     bool readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height);
@@ -273,6 +286,8 @@ private:
     int idleWaitMs_ = 8; // how long pump() may sleep, from what the windows that were not painted said
     void (*probe_)(int, void *) = nullptr;
     void *probeUser_ = nullptr;
+    ig::retained::String (*primaryGet_)() = nullptr; // setPrimaryHooks
+    void (*primarySet_)(const char *) = nullptr;
 };
 
 } // namespace zen
