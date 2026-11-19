@@ -65,6 +65,11 @@ public:
         dynamic_ = h.app.addDynamicAtlas(h.atlas());
         return dynamic_;
     }
+    // Samples per axis of the rasteriser (the constructor sets 1: no anti-aliasing, the default of the application is 2)
+    void setSamples(int perAxis)
+    {
+        raster_.setSamples(perAxis);
+    }
     Screen(const Screen&) = delete;
     Screen& operator=(const Screen&) = delete;
     // withIcons: the frame is painted again with an icon atlas (an empty one: icons come out as vector
