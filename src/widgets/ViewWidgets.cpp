@@ -341,7 +341,7 @@ void NativeView::setNativeDraw(NativeDrawFn fn, void* user, bool restoreState)
 
 void NativeView::setFallback(FallbackPaint paint)
 {
-    fallback_ = std::move(paint);
+    fallback_ = static_cast<FallbackPaint&&>(paint);
     markDirty();
 }
 
