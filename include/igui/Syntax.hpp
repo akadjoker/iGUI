@@ -107,6 +107,11 @@ public:
     /// @brief Get the color for a token type.
     Color colorFor(TokenType type) const;
 
+    /// @brief The colour for a token type on a light or on a dark background: colorFor() on a dark one; on a light one the
+    ///        light palette (the dark one is made for dark backgrounds: pale text on white cannot be read), except for a
+    ///        token whose colour was set with setColor(), which is the application's choice for both.
+    Color colorFor(TokenType type, bool lightBackground) const;
+
     /// @brief Override the color for a specific token type.
     void setColor(TokenType type, const Color& c);
 
@@ -156,6 +161,8 @@ protected:
 
     /// @brief Set the constant list for this language.
     void setConstants(const ct::Vector<const char*>& words);
+
+    unsigned customColors_ = 0; ///< bit n: setColor() was called for token n
 
     ct::HashSet<String> keywords_;
     ct::HashSet<String> types_;

@@ -142,32 +142,33 @@ void AssetBrowser::paint(PaintContext& ctx)
     ctx.pushClip(b);
 
     const auto& th = Theme::instance();
+    const EditorColors& ec = th.editor;
 
     // Background
-    ctx.fill.SetColor(22, 24, 28, 255);
+    ctx.fill.SetColor(ec.assetBg);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     // ── Top bar: path + view toggle ──────────────────────────────────────
-    ctx.fill.SetColor(30, 33, 38, 255);
+    ctx.fill.SetColor(ec.assetBar);
     ctx.fillRect(b.x, b.y, b.w, 26.f);
-    ctx.line.SetColor(45, 48, 55, 255);
+    ctx.line.SetColor(ec.assetLine);
     ctx.drawLine(b.x, b.y + 26.f, b.x + b.w, b.y + 26.f);
 
     // View mode toggle buttons (top-right)
     float bx = b.x + b.w - 52.f;
 
     // the path ends in "..." before the buttons
-    float asc = setupFont(ctx, Color(160, 165, 175, 255), th.fontSize * 0.85f);
+    float asc = setupFont(ctx, ec.assetPath, th.fontSize * 0.85f);
     ctx.printElided({ b.x + 8.f, b.y, bx - 6.f - (b.x + 8.f), 26.f }, path_, b.y + 7.f + asc, asc, pathMemo_);
 
     float by = b.y + 3.f;
     bool isGrid = (viewMode_ == ViewMode::Grid);
 
-    ctx.fill.SetColor(isGrid ? 60 : 40, isGrid ? 120 : 44, isGrid ? 200 : 52, 255);
+    ctx.fill.SetColor(isGrid ? Color(60, 120, 200, 255) : ec.assetButtonOff);
     ctx.fillRect(bx, by, 22.f, 20.f);
     ctx.drawIcon(IconId::ViewGrid, bx + 3.f, by + 3.f, 14.f);
 
-    ctx.fill.SetColor(!isGrid ? 60 : 40, !isGrid ? 120 : 44, !isGrid ? 200 : 52, 255);
+    ctx.fill.SetColor(!isGrid ? Color(60, 120, 200, 255) : ec.assetButtonOff);
     ctx.fillRect(bx + 26.f, by, 22.f, 20.f);
     ctx.drawIcon(IconId::ViewList, bx + 29.f, by + 3.f, 14.f);
 
@@ -218,8 +219,7 @@ void AssetBrowser::paint(PaintContext& ctx)
             // Label
             float ly = cy + thumbSize_ + 2.f;
             ctx.pushClip({ cx, ly, g.cellW, 16.f });
-            asc = setupFont(ctx, Color(sel ? 220 : 170, sel ? 225 : 175, sel ? 235 : 185, 255),
-                    th.fontSize * 0.8f);
+            asc = setupFont(ctx, sel ? ec.assetNameSelected : ec.assetName, th.fontSize * 0.8f);
             ctx.font.Print(it.name.c_str(), cx + 2.f, ly + asc);
             ctx.popClip();
         }
@@ -237,8 +237,7 @@ void AssetBrowser::paint(PaintContext& ctx)
             bool sel = (selected_ == i);
             bool even = (i % 2 == 0);
 
-            ctx.fill.SetColor(sel ? 50 : (even ? 26 : 30), sel ? 80 : (even ? 28 : 33),
-                    sel ? 130 : (even ? 34 : 38), 255);
+            ctx.fill.SetColor(sel ? ec.assetRowSelected : (even ? ec.assetRowEven : ec.assetRowOdd));
             ctx.fillRect(b.x, ry, b.w, rowH);
 
             Color ic = typeToColor(it.type);
@@ -254,8 +253,7 @@ void AssetBrowser::paint(PaintContext& ctx)
                 ctx.fillRect(b.x + 6.f, ry + 5.f, 12.f, 12.f);
             }
 
-            asc = setupFont(ctx, Color(sel ? 230 : 180, sel ? 235 : 185, sel ? 245 : 195, 255),
-                    th.fontSize * 0.85f);
+            asc = setupFont(ctx, sel ? ec.assetRowNameSelected : ec.assetRowName, th.fontSize * 0.85f);
             ctx.font.Print(it.name.c_str(), b.x + 26.f, ry + 5.f + asc);
 
             if (sel)
@@ -288,7 +286,7 @@ void AssetBrowser::paint(PaintContext& ctx)
         float ratio = viewH / totalH;
         float sbH = std::max(20.f, viewH * ratio);
         float sbY = ca.y + (scrollY_ / (totalH - viewH)) * (viewH - sbH);
-        ctx.fill.SetColor(60, 65, 75, 200);
+        ctx.fill.SetColor(ec.assetScrollThumb);
         ctx.fillRect(b.x + b.w - 6.f, sbY, 4.f, sbH);
     }
 

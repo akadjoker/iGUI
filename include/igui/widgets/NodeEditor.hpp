@@ -166,7 +166,7 @@ public:
 private:
     ct::Vector<Node> nodes_;
     ct::Vector<Link> links_;
-    Color bgColor_ = Color(32, 34, 38, 255);
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's editor.nodeBg
 
     // View transform
     float panX_ = 0, panY_ = 0;

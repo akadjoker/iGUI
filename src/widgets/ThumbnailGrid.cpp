@@ -221,7 +221,9 @@ void ThumbnailGrid::paint(PaintContext& ctx)
     ctx.pushClip(b);
 
     // Background
-    ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
+    const EditorColors& ec = Theme::instance().editor;
+    const Color& gridBg = bgColor_.a > 0 ? bgColor_ : ec.thumbBg;
+    ctx.fill.SetColor(gridBg.r, gridBg.g, gridBg.b, gridBg.a);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     const Metrics m = metrics();
@@ -311,7 +313,7 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         }
 
         // Border
-        Color brd = item.selected ? Color(255, 200, 60, 255) : Color(50, 52, 58, 255);
+        Color brd = item.selected ? Color(255, 200, 60, 255) : ec.thumbEdge;
         ctx.fill.SetColor(brd.r, brd.g, brd.b, brd.a);
         ctx.fillRect(x, y, thumbW_, 1);
         ctx.fillRect(x, y + thumbH_ - 1, thumbW_, 1);
@@ -329,7 +331,7 @@ void ThumbnailGrid::paint(PaintContext& ctx)
         // Label (truncated to thumb width)
         if (showLabels_ && !item.label.empty())
         {
-            ctx.font.SetColor(item.selected ? Color(255, 220, 80, 255) : Color(180, 182, 190, 255));
+            ctx.font.SetColor(item.selected ? ec.thumbLabelSelected : ec.thumbLabel);
             const String shown = ctx.fitText(item.label, thumbW_);
             ctx.font.Print(shown.c_str(), x, y + thumbH_ + (labelH - 9.f) * 0.5f + asc);
         }

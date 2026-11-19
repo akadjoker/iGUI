@@ -601,7 +601,7 @@ void FileDialog::paint(PaintContext& ctx)
     if (sidebarLayout_)
     {
         Rect sr = sidebarLayout_->absoluteRect();
-        ctx.line.SetColor(60, 62, 66, 255);
+        ctx.line.SetColor(Theme::instance().file.divider);
         ctx.drawLine(sr.x + sr.w, sr.y, sr.x + sr.w, sr.y + sr.h);
     }
 
@@ -613,7 +613,7 @@ void FileDialog::paint(PaintContext& ctx)
         const Color shade = t.panelColor.Shifted(15);
         ctx.fill.SetColor(shade.r, shade.g, shade.b, 255);
         ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
-        ctx.line.SetColor(60, 62, 66, 255);
+        ctx.line.SetColor(t.file.divider);
         ctx.drawLine(pr.x, pr.y, pr.x, pr.y + pr.h);
         paintPreview(ctx, pr);
     }
@@ -650,7 +650,7 @@ void FileDialog::paintFileArea(PaintContext& ctx, const Rect& area)
             break;
     }
 
-    ctx.line.SetColor(55, 58, 65, 255);
+    ctx.line.SetColor(Theme::instance().file.headerLine);
     ctx.lineRect(area.x, area.y, area.w, area.h);
 }
 
@@ -678,14 +678,14 @@ void FileDialog::paintHeader(PaintContext& ctx, const Rect& area)
         x += columns_[c].width;
         if (c + 1 < kColCount)
         {
-            ctx.line.SetColor(105, 110, 122, 180);
+            ctx.line.SetColor(Theme::instance().file.columnSeparator);
             ctx.drawLine(x, area.y + 3, x, area.y + area.h - 3);
-            ctx.fill.SetColor(150, 155, 165, 200);
+            ctx.fill.SetColor(Theme::instance().file.sortArrow);
             ctx.fillRect(x - 2, area.y + area.h * 0.5f - 4, 1, 8);
             ctx.fillRect(x + 1, area.y + area.h * 0.5f - 4, 1, 8);
         }
     }
-    ctx.line.SetColor(55, 58, 65, 255);
+    ctx.line.SetColor(Theme::instance().file.headerLine);
     ctx.drawLine(area.x, area.y + area.h, area.x + area.w, area.y + area.h);
 }
 
@@ -718,12 +718,12 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
                    (multiSelect_ && i < static_cast<int>(multiSel_.size()) && multiSel_[i]);
         if (sel)
         {
-            ctx.fill.SetColor(40, 70, 120, 200);
+            ctx.fill.SetColor(t.file.selectionBg);
             ctx.fillRect(area.x, ry, area.w, rowHeight_);
         }
         else if (i == hoveredIndex_)
         {
-            ctx.fill.SetColor(50, 55, 65, 100);
+            ctx.fill.SetColor(t.file.hoverBg);
             ctx.fillRect(area.x, ry, area.w, rowHeight_);
         }
 
@@ -741,8 +741,7 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
         else
             cx += 4;
 
-        ctx.font.SetColor(fe.isDir ? Color(120, 180, 255, 255)
-                                   : (sel ? Color(255, 255, 255, 255) : t.textColor));
+        ctx.font.SetColor(fe.isDir ? t.file.dirText : (sel ? t.selectionText : t.textColor));
         const float nameAvailable = std::max(0.f, area.x + nameW - cx - 4.f);
         const String name = ctx.fitText(fe.name, nameAvailable);
         ctx.font.Print(name.c_str(), cx, textY);
@@ -751,7 +750,7 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
         // Size
         if (!fe.isDir)
         {
-            ctx.font.SetColor(Color(160, 160, 165, 255));
+            ctx.font.SetColor(t.file.sizeText);
             const String size = ctx.fitText(FileSystem::humanSize(fe.size),
                     std::max(0.f, columns_[1].width - 8.f));
             ctx.font.Print(size.c_str(), cx + 4, textY);
@@ -759,7 +758,7 @@ void FileDialog::paintDetail(PaintContext& ctx, const Rect& area)
         cx += columns_[1].width;
 
         // Date
-        ctx.font.SetColor(Color(140, 140, 145, 255));
+        ctx.font.SetColor(t.file.dateText);
         const String date = ctx.fitText(FileSystem::humanDate(fe.mtime),
                 std::max(0.f, columns_[2].width - 8.f));
         ctx.font.Print(date.c_str(), cx + 4, textY);
@@ -803,12 +802,12 @@ void FileDialog::paintCompact(PaintContext& ctx, const Rect& area)
                    (multiSelect_ && i < static_cast<int>(multiSel_.size()) && multiSel_[i]);
         if (sel)
         {
-            ctx.fill.SetColor(40, 70, 120, 200);
+            ctx.fill.SetColor(t.file.selectionBg);
             ctx.fillRect(rx, ry, colW, rh);
         }
         else if (i == hoveredIndex_)
         {
-            ctx.fill.SetColor(50, 55, 65, 100);
+            ctx.fill.SetColor(t.file.hoverBg);
             ctx.fillRect(rx, ry, colW, rh);
         }
 
@@ -823,7 +822,7 @@ void FileDialog::paintCompact(PaintContext& ctx, const Rect& area)
             cx += 4;
 
         float textY = ry + (rh - t.fontSize * 0.9f) * 0.5f + asc;
-        ctx.font.SetColor(fe.isDir ? Color(120, 180, 255, 255) : t.textColor);
+        ctx.font.SetColor(fe.isDir ? t.file.dirText : t.textColor);
         ctx.font.Print(fe.name.c_str(), cx, textY);
     }
 }
@@ -850,12 +849,12 @@ void FileDialog::paintIcons(PaintContext& ctx, const Rect& area)
                    (multiSelect_ && i < static_cast<int>(multiSel_.size()) && multiSel_[i]);
         if (sel)
         {
-            ctx.fill.SetColor(40, 70, 120, 200);
+            ctx.fill.SetColor(t.file.selectionBg);
             ctx.fillRect(cx + 2, cy + 2, cell - 4, cell - 4);
         }
         else if (i == hoveredIndex_)
         {
-            ctx.fill.SetColor(50, 55, 65, 80);
+            ctx.fill.SetColor(t.file.hoverBg.r, t.file.hoverBg.g, t.file.hoverBg.b, 80);
             ctx.fillRect(cx + 2, cy + 2, cell - 4, cell - 4);
         }
 
@@ -868,7 +867,7 @@ void FileDialog::paintIcons(PaintContext& ctx, const Rect& area)
         float tw = ctx.font.GetTextWidth(disp.c_str());
         float tx = cx + (cell - tw) * 0.5f;
         float ty = cy + cell - 20 + asc;
-        ctx.font.SetColor(fe.isDir ? Color(120, 180, 255, 255) : t.textColor);
+        ctx.font.SetColor(fe.isDir ? t.file.dirText : t.textColor);
         ctx.font.Print(disp.c_str(), tx, ty);
     }
 
@@ -891,7 +890,7 @@ void FileDialog::paintPreview(PaintContext& ctx, const Rect& area)
     auto& t = Theme::instance();
     if (!previewTex_)
     {
-        float asc = setupFont(ctx, Color(100, 100, 110, 255), t.fontSize * 0.8f);
+        float asc = setupFont(ctx, t.file.previewHint, t.fontSize * 0.8f);
         ctx.font.Print("No preview", area.x + 10, area.y + area.h * 0.5f + asc);
         return;
     }
@@ -909,7 +908,7 @@ void FileDialog::paintPreview(PaintContext& ctx, const Rect& area)
 
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%dx%d", previewW_, previewH_);
-    float asc = setupFont(ctx, Color(130, 130, 140, 255), t.fontSize * 0.75f);
+    float asc = setupFont(ctx, t.file.previewSize, t.fontSize * 0.75f);
     ctx.font.Print(buf, area.x + 6, dy + dh + 4 + asc);
 }
 

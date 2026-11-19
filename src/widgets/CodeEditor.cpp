@@ -126,6 +126,7 @@ void CodeEditor::installSyntaxCallback()
                     prevState = lineStates_[lineIndex - 1];
 
                 auto result = highlighter_->highlightLine(lineIndex, lineText, prevState);
+                const bool light = Theme::instance().isLight(); // (read at every paint: nothing here is kept)
 
                 // Cache state
                 if (lineIndex >= static_cast<int>(lineStates_.size()))
@@ -143,7 +144,7 @@ void CodeEditor::installSyntaxCallback()
                             utf8Length(lineText.substr(0, static_cast<size_t>(sp.startCol))));
                     const int end = static_cast<int>(
                             utf8Length(lineText.substr(0, static_cast<size_t>(sp.endCol))));
-                    out.push_back({ start, end, highlighter_->colorFor(sp.type) });
+                    out.push_back({ start, end, highlighter_->colorFor(sp.type, light) });
                 }
                 return out;
             });
@@ -1667,7 +1668,7 @@ void CodeEditor::paintMinimap(PaintContext& ctx, const Rect& abs)
                 {
                     if (byteIdx >= sp.startCol && byteIdx < sp.endCol)
                     {
-                        c = highlighter_->colorFor(sp.type);
+                        c = highlighter_->colorFor(sp.type, Theme::instance().isLight());
                         c.a = 200;
                         break;
                     }

@@ -776,7 +776,7 @@ void DataGrid::paint(PaintContext& ctx)
                     ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
                             t.inputBorderHover.b, 255);
                     ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
-                    ctx.font.SetColor(Color(255, 255, 255, 255));
+                    ctx.font.SetColor(t.inputText);
                     paintEditText(ctx, editBuf_, editCursor_, editScroll_, cx + 1, colW - 2, ry, rowHeight_, textY, asc);
                 }
                 else
@@ -786,7 +786,7 @@ void DataGrid::paint(PaintContext& ctx)
                     if (!cellText.empty())
                     {
                         ctx.font.SetColor(
-                                isSelected(dataIdx) ? Color(255, 255, 255, 255) : t.textColor);
+                                isSelected(dataIdx) ? t.selectionText : t.textColor);
                         printCell(ctx, { cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, cellText, textY, asc,
                                 memoRow[memoCol], fontId);
                     }
@@ -1977,7 +1977,7 @@ void TreeGrid::paint(PaintContext& ctx)
                             ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
                                     t.inputBorderHover.b, 255);
                             ctx.lineRect(fieldX, ry + 1, fieldW, rowHeight_ - 2);
-                            ctx.font.SetColor(Color(255, 255, 255, 255));
+                            ctx.font.SetColor(t.inputText);
                             paintEditText(ctx, editBuf_, editCursor_, editScroll_, fieldX, fieldW, ry, rowHeight_, textY, asc);
                         }
                     }
@@ -1986,7 +1986,7 @@ void TreeGrid::paint(PaintContext& ctx)
                         if (!node->cells.empty())
                         {
                             ctx.font.SetColor(
-                                    isSelected(node) ? Color(255, 255, 255, 255) : t.textColor);
+                                    isSelected(node) ? t.selectionText : t.textColor);
                             const float textLeft = textX + 2;
                             printCell(ctx, { textLeft, ry, cx + colW - kCellPad - textLeft, rowHeight_ }, node->cells[0], textY,
                                     asc, memoRow[memoCol], fontId);
@@ -2002,15 +2002,14 @@ void TreeGrid::paint(PaintContext& ctx)
                         ctx.line.SetColor(t.inputBorderHover.r, t.inputBorderHover.g,
                                 t.inputBorderHover.b, 255);
                         ctx.lineRect(cx + 1, ry + 1, colW - 2, rowHeight_ - 2);
-                        ctx.font.SetColor(Color(255, 255, 255, 255));
+                        ctx.font.SetColor(t.inputText);
                         paintEditText(ctx, editBuf_, editCursor_, editScroll_, cx + 1, colW - 2, ry, rowHeight_, textY, asc);
                     }
                     else
                     {
                         if (ci < static_cast<int>(node->cells.size()))
                         {
-                            ctx.font.SetColor(isSelected(node) ? Color(255, 255, 255, 255)
-                                                               : Color(170, 170, 175, 255));
+                            ctx.font.SetColor(isSelected(node) ? t.selectionText : t.app.gridCellDim);
                             printCell(ctx, { cx + kCellPad, ry, colW - 2.0f * kCellPad, rowHeight_ }, node->cells[ci], textY, asc,
                                     memoRow[memoCol], fontId);
                         }

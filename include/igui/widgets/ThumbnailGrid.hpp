@@ -170,7 +170,7 @@ private:
     float thumbH_ = 80.f;
     float spacing_ = 8.f;
     bool showLabels_ = true;
-    Color bgColor_ = Color(24, 26, 30, 255);
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's editor.thumbBg
     ScrollBar* vbar_ = nullptr;
     float scrollY_ = 0.f;
 

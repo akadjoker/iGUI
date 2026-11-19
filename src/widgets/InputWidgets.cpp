@@ -447,7 +447,7 @@ void ProgressBar::paint(PaintContext& ctx)
         const float asc = ctx.font.GetAscender();
         float tx, ty = abs.y + (abs.h + asc) * 0.5f;
 
-        ctx.font.SetColor(textColor_);
+        ctx.font.SetColor(textColor());
         if (textW > abs.w - 8.0f)
         {
             // a text wider than the bar is cut with "..." inside it, from the left whatever the alignment
@@ -785,7 +785,7 @@ public:
         // Day-of-week headers
         float dy = hy + headerH + 4;
         static const char* dow[] = { "Su", "Mo", "Tu", "We", "Th", "Fr", "Sa" };
-        ctx.font.SetColor(Color(140, 140, 160, 255));
+        ctx.font.SetColor(t.app.dateHeader);
         for (int i = 0; i < 7; ++i)
         {
             float dx = abs.x + pad + i * cellW;
@@ -1441,7 +1441,7 @@ void TimePicker::paint(PaintContext& ctx)
     x += fw;
 
     // Separator ":"
-    ctx.font.SetColor(Color(120, 120, 130, 255));
+    ctx.font.SetColor(t.app.timeSeparator);
     float stw = ctx.font.GetTextWidth(":");
     ctx.font.Print(":", x + (sw - stw) * 0.5f, cy);
     x += sw;
@@ -1451,7 +1451,7 @@ void TimePicker::paint(PaintContext& ctx)
 
     if (showSeconds_)
     {
-        ctx.font.SetColor(Color(120, 120, 130, 255));
+        ctx.font.SetColor(t.app.timeSeparator);
         ctx.font.Print(":", x + (sw - stw) * 0.5f, cy);
         x += sw;
         drawField(ss, Second, x);

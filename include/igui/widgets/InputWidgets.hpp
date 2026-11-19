@@ -225,7 +225,7 @@ public:
     /// @brief Get the text color.
     const Color& textColor() const
     {
-        return textColor_;
+        return textColor_.a > 0 ? textColor_ : Theme::instance().app.progressText;
     }
 
     Signal<float> onValueChanged;
@@ -239,7 +239,7 @@ private:
     String text_;
     TextAlign textAlign_ = TextAlign::CENTER;
     Color barColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's progressFill
-    Color textColor_ = Color(220, 220, 220, 255);
+    Color textColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's app.progressText
     ElideMemo textMemo_; // what paint worked out for a text wider than the bar (cut to its room)
 };
 

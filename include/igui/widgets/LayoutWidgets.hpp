@@ -344,7 +344,7 @@ public:
     /// @brief Get the background color.
     const Color& bgColor() const
     {
-        return bgColor_;
+        return bgColor_.a > 0 ? bgColor_ : Theme::instance().app.statusBg;
     }
 
     /// @brief Set spacing between children.
@@ -376,7 +376,7 @@ public:
     void paint(PaintContext& ctx) override;
 
 private:
-    Color bgColor_ = Color(35, 36, 40, 255);
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's app.statusBg
     float spacing_ = 6.0f;
     String text_;
     ElideMemo textMemo_; // what paint worked out for the text (cut to its room)

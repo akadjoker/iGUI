@@ -496,7 +496,7 @@ public:
 
 private:
     ct::Vector<TimelineTrack> tracks_;
-    Color bgColor_ = Color(30, 32, 36, 255);
+    Color bgColor_ = Color(0, 0, 0, 0); // alpha 0: follow the theme's editor.tlBg
 
     float playhead_ = 0;
     float viewStart_ = 0;

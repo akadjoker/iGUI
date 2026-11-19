@@ -68,14 +68,14 @@ void Breadcrumbs::paint(PaintContext& ctx)
         // Clickable segments (not last) are styled as links
         if (!isLast && isHov)
         {
-            ctx.font.SetColor(Color(120, 170, 220, 255));
+            ctx.font.SetColor(t.app.crumbHover);
             // Underline
-            ctx.line.SetColor(Color(120, 170, 220, 255));
+            ctx.line.SetColor(t.app.crumbHover);
             ctx.line.Line2D(cx, ty + 2, cx + tw < right ? cx + tw : right, ty + 2);
         }
         else if (!isLast)
         {
-            ctx.font.SetColor(Color(150, 150, 155, 255));
+            ctx.font.SetColor(t.textSecondary);
         }
         else
         {
@@ -90,7 +90,7 @@ void Breadcrumbs::paint(PaintContext& ctx)
             float sepW = ctx.font.GetTextWidth(separator_.c_str());
             float sepPad = t.fontSize * 0.3f;
             cx += sepPad;
-            ctx.font.SetColor(Color(100, 100, 105, 255));
+            ctx.font.SetColor(t.app.crumbSeparator);
             if (cx < right) ctx.printWithin(room, separator_, cx, sepW, ty, asc);
             cx += sepW + sepPad;
         }
@@ -216,7 +216,7 @@ void SearchBar::paint(PaintContext& ctx)
     // Search icon (magnifying glass)
     float icX = abs.x + 8;
     float icY = abs.y + abs.h * 0.5f;
-    ctx.line.SetColor(Color(140, 140, 145, 255));
+    ctx.line.SetColor(t.app.searchIcon);
     ctx.line.Circle(icX + 5, icY - 1, 5, false);
     ctx.line.Line2D(icX + 9, icY + 3, icX + 13, icY + 7);
 
@@ -259,7 +259,7 @@ void SearchBar::paint(PaintContext& ctx)
     {
         float cbX = abs.x + abs.w - clearBtnW() - 4;
         float cbY = abs.y + abs.h * 0.5f;
-        Color xCol = Color(140, 140, 145, 255);
+        Color xCol = t.app.searchIcon;
         ctx.line.SetColor(xCol);
         ctx.line.Line2D(cbX, cbY - 4, cbX + 8, cbY + 4);
         ctx.line.Line2D(cbX + 8, cbY - 4, cbX, cbY + 4);
@@ -739,7 +739,7 @@ void Outliner::paint(PaintContext& ctx)
         // Hover highlight
         if (i == hoveredRow_ && fr.node != selected_)
         {
-            ctx.fill.SetColor(Color(255, 255, 255, 15));
+            ctx.fill.SetColor(t.app.rowHover);
             ctx.fill.Rectangle(abs.x, ry, abs.w, rowHeight_, true);
         }
 
@@ -751,7 +751,7 @@ void Outliner::paint(PaintContext& ctx)
         {
             float triX = abs.x + 4 + indent_ * fr.depth;
             float triY = ry + rowHeight_ * 0.5f;
-            ctx.fill.SetColor(Color(180, 180, 185, 255));
+            ctx.fill.SetColor(t.app.outlinerArrow);
             if (fr.node->isExpanded())
             {
                 ctx.fill.Triangle(triX, triY - 3, triX + 7, triY - 3, triX + 3.5f, triY + 3, true);
@@ -777,7 +777,7 @@ void Outliner::paint(PaintContext& ctx)
         ctx.popClip();
 
         // Eye icon (visibility toggle)
-        Color eyeCol = vis ? Color(180, 180, 185, 255) : Color(80, 80, 85, 255);
+        Color eyeCol = vis ? t.app.eyeOn : t.app.eyeOff;
         ctx.fill.SetColor(eyeCol);
         // Simple eye: circle + dot
         ctx.line.SetColor(eyeCol);
@@ -787,7 +787,7 @@ void Outliner::paint(PaintContext& ctx)
         // Lock icon
         bool locked = isNodeLocked(fr.node);
         float lockX = abs.x + lockColX();
-        Color lockCol = locked ? Color(200, 150, 50, 255) : Color(100, 100, 105, 255);
+        Color lockCol = locked ? t.app.lockOn : t.app.lockOff;
         ctx.line.SetColor(lockCol);
         // Simple lock: rect + arc
         ctx.line.Rectangle(lockX + 3, ry + rowHeight_ * 0.5f - 4, 10, 8, false);
@@ -1358,11 +1358,11 @@ void RichText::paint(PaintContext& ctx)
                 for (char c: sp.text)
                     if (c == '\n') codeLines++;
             float codeH = codeLines * lineH + 8;
-            ctx.fill.SetColor(Color(25, 25, 28, 255));
+            ctx.fill.SetColor(t.app.richCodeBg);
             ctx.fill.RoundedRectangle(cx - 4, cy, maxW + 8, codeH, 3, 4, true);
 
             // Render code line by line
-            ctx.font.SetColor(Color(180, 210, 180, 255));
+            ctx.font.SetColor(t.app.richCode);
             float codeTy = cy + ctx.font.GetAscender() + 4;
             size_t pos = 0;
             for (auto& sp: block.spans)
@@ -1404,22 +1404,22 @@ void RichText::paint(PaintContext& ctx)
             switch (span.style)
             {
                 case SpanStyle::Bold:
-                    col = Color(255, 255, 255, 255);
+                    col = t.app.richBold;
                     break;
                 case SpanStyle::Italic:
-                    col = Color(200, 200, 205, 255);
+                    col = t.app.richItalic;
                     break;
                 case SpanStyle::Code:
-                    col = Color(180, 210, 180, 255);
+                    col = t.app.richCode;
                     // Code bg
                     {
                         float cw = ctx.font.GetTextWidth(span.text.c_str()) * scale;
-                        ctx.fill.SetColor(Color(25, 25, 28, 255));
+                        ctx.fill.SetColor(t.app.richCodeBg);
                         ctx.fill.RoundedRectangle(spanX - 2, cy + 1, cw + 4, lineH - 2, 2, 4, true);
                     }
                     break;
                 case SpanStyle::Link:
-                    col = Color(100, 170, 230, 255);
+                    col = t.app.richLink;
                     {
                         float lw = ctx.font.GetTextWidth(span.text.c_str()) * scale;
                         linkRects_.push_back({ spanX, cy, lw, lineH, span.url });

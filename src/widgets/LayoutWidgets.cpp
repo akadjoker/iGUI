@@ -528,7 +528,8 @@ void StatusBar::paint(PaintContext& ctx)
     Rect clipped;
     if (ctx.clipRectIntersect(abs, clipped))
     {
-        ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
+        const Color& bg = bgColor();
+        ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.Rectangle(static_cast<int>(clipped.x), static_cast<int>(clipped.y),
                 static_cast<int>(clipped.w), static_cast<int>(clipped.h), true);
 
@@ -1047,15 +1048,13 @@ void Splitter::paint(PaintContext& ctx)
     }
 
     // Handle background
-    Color hc = dragging_        ? Color(100, 100, 110, 255)
-               : handleHovered_ ? Color(80, 80, 90, 255)
-                                : Color(65, 65, 70, 255);
+    const LayoutColors& lc = t.layout;
+    Color hc = dragging_ ? lc.splitHandleDrag : handleHovered_ ? lc.splitHandleHover : lc.splitHandle;
     ctx.fill.SetColor(hc.r, hc.g, hc.b, hc.a);
     ctx.fill.Rectangle(Math::toInt(hx), Math::toInt(hy), Math::toInt(hw), Math::toInt(hh), true);
 
     // Center dots/line indicator on the handle
-    Color dc =
-            (dragging_ || handleHovered_) ? Color(180, 180, 190, 230) : Color(130, 130, 138, 200);
+    Color dc = (dragging_ || handleHovered_) ? lc.splitGripHot : lc.splitGrip;
     ctx.line.SetColor(dc.r, dc.g, dc.b, dc.a);
     if (dir_ == LayoutDir::Horizontal)
     {
@@ -1430,7 +1429,7 @@ void TabLayout::paint(PaintContext& ctx)
     Rect clippedBar;
     if (ctx.clipRectIntersect(absBar, clippedBar))
     {
-        ctx.fill.SetColor(38, 40, 44, 255);
+        ctx.fill.SetColor(t.layout.tabBarBg);
         ctx.fill.Rectangle(static_cast<int>(clippedBar.x), static_cast<int>(clippedBar.y),
                 static_cast<int>(clippedBar.w), static_cast<int>(clippedBar.h), true);
     }
@@ -1450,7 +1449,7 @@ void TabLayout::paint(PaintContext& ctx)
         bool active = (i == currentIndex_);
 
         // Tab background
-        Color bg = active ? Color(55, 58, 65, 255) : Color(42, 44, 50, 255);
+        Color bg = active ? t.layout.tabActiveBg : t.layout.tabBg;
 
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fill.Rectangle(static_cast<int>(absTr.x), static_cast<int>(absTr.y),
@@ -1459,7 +1458,7 @@ void TabLayout::paint(PaintContext& ctx)
         // Active indicator line
         if (active)
         {
-            ctx.fill.SetColor(100, 160, 220, 255);
+            ctx.fill.SetColor(t.layout.tabAccent);
             if (tabPosition_ == TabPosition::Top)
                 ctx.fill.Rectangle(static_cast<int>(absTr.x),
                         static_cast<int>(absTr.y + absTr.h - 2), static_cast<int>(absTr.w), 2,
@@ -1477,7 +1476,7 @@ void TabLayout::paint(PaintContext& ctx)
 
         // Tab label
         ctx.font.SetFontSize(t.fontSize * 0.9f);
-        ctx.font.SetColor(active ? t.textColor : t.textDisabled);
+        ctx.font.SetColor(active ? t.textColor : (t.layout.tabTextInactive.a > 0 ? t.layout.tabTextInactive : t.textDisabled));
         ctx.font.SetBatch(&ctx.text);
 
         float asc = ctx.font.GetAscender();
@@ -1495,7 +1494,7 @@ void TabLayout::paint(PaintContext& ctx)
             Rect absCr = { abs.x + cr.x, abs.y + cr.y, cr.w, cr.h };
 
             // X lines
-            Color xc = active ? Color(160, 160, 165, 200) : Color(100, 100, 105, 150);
+            Color xc = active ? t.layout.tabCloseIconActive : t.layout.tabCloseIcon;
             ctx.line.SetColor(xc.r, xc.g, xc.b, xc.a);
             float m = 3.0f;
             ctx.line.Line2D(static_cast<int>(absCr.x + m), static_cast<int>(absCr.y + m),

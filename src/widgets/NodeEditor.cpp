@@ -469,7 +469,9 @@ void NodeEditor::paint(PaintContext& ctx)
     ctx.pushClip(b);
 
     // Background
-    ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
+    const EditorColors& ec = Theme::instance().editor;
+    const Color& canvas = bgColor_.a > 0 ? bgColor_ : ec.nodeBg;
+    ctx.fill.SetColor(canvas.r, canvas.g, canvas.b, canvas.a);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     paintGrid(ctx, b);
@@ -478,7 +480,7 @@ void NodeEditor::paint(PaintContext& ctx)
     if (dragMode_ == DragMode::ConnectPin) paintDragLink(ctx);
 
     // Thin border
-    ctx.fill.SetColor(50, 52, 58, 255);
+    ctx.fill.SetColor(ec.nodeBorder);
     ctx.fillRect(b.x, b.y, b.w, 1);
     ctx.fillRect(b.x, b.y + b.h - 1, b.w, 1);
     ctx.fillRect(b.x, b.y, 1, b.h);
@@ -504,7 +506,7 @@ void NodeEditor::paintGrid(PaintContext& ctx, const Rect& b)
     if (offY < 0) offY += step;
 
     // Minor grid
-    ctx.fill.SetColor(40, 42, 48, 255);
+    ctx.fill.SetColor(Theme::instance().editor.nodeGridMinor);
     for (float x = b.x + offX; x < b.x + b.w; x += step) ctx.fillRect(x, b.y, 1, b.h);
     for (float y = b.y + offY; y < b.y + b.h; y += step) ctx.fillRect(b.x, y, b.w, 1);
 
@@ -515,7 +517,7 @@ void NodeEditor::paintGrid(PaintContext& ctx, const Rect& b)
     if (mOffX < 0) mOffX += major;
     if (mOffY < 0) mOffY += major;
 
-    ctx.fill.SetColor(50, 52, 58, 255);
+    ctx.fill.SetColor(Theme::instance().editor.nodeGridMajor);
     for (float x = b.x + mOffX; x < b.x + b.w; x += major) ctx.fillRect(x, b.y, 1, b.h);
     for (float y = b.y + mOffY; y < b.y + b.h; y += major) ctx.fillRect(b.x, y, b.w, 1);
 }
@@ -588,7 +590,8 @@ void NodeEditor::paintNodes(PaintContext& ctx)
         ctx.fillRect(nx + 3, ny + 3, nw, nhz);
 
         // ── Body ─────────────────────────────────────────────────────────
-        Color body = n.selected ? Color(50, 55, 65, 240) : Color(40, 42, 48, 240);
+        const EditorColors& ec = Theme::instance().editor;
+        Color body = n.selected ? ec.nodeBodySelected : ec.nodeBody;
         ctx.fill.SetColor(body.r, body.g, body.b, body.a);
         ctx.fillRect(nx, ny, nw, nhz);
 
@@ -612,7 +615,7 @@ void NodeEditor::paintNodes(PaintContext& ctx)
         }
 
         // ── Border ───────────────────────────────────────────────────────
-        Color border = n.selected ? Color(255, 200, 60, 255) : Color(60, 62, 70, 255);
+        Color border = n.selected ? Color(255, 200, 60, 255) : ec.nodeEdge;
         ctx.fill.SetColor(border.r, border.g, border.b, border.a);
         ctx.fillRect(nx, ny, nw, 1);
         ctx.fillRect(nx, ny + nhz - 1, nw, 1);
@@ -633,7 +636,7 @@ void NodeEditor::paintNodes(PaintContext& ctx)
             ctx.fillCircle(px, py, kPinRadius * zoom_);
 
             // Pin label — vertically centred on pin, baseline-aware
-            ctx.font.SetColor(Color(190, 192, 200, 220));
+            ctx.font.SetColor(ec.nodePinLabel);
             float labelY = py - ctx.font.GetFontSize() * 0.5f + asc;
 
             if (n.pins[pi].dir == PinDir::Input)

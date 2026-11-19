@@ -50,10 +50,38 @@ Color SyntaxHighlighter::colorFor(TokenType type) const
     return colors_[0];
 }
 
+Color SyntaxHighlighter::colorFor(TokenType type, bool lightBackground) const
+{
+    // for a white background (WCAG contrast 4.5 or more against it)
+    static const Color light[TokenTypeCount] = {
+        { 30, 30, 30, 255 },   // Default
+        { 150, 40, 150, 255 }, // Keyword
+        { 0, 110, 160, 255 },  // Type
+        { 40, 120, 40, 255 },  // String
+        { 150, 95, 0, 255 },   // Number
+        { 100, 108, 118, 255 }, // Comment
+        { 190, 50, 40, 255 },  // Preprocessor
+        { 120, 90, 0, 255 },   // Operator
+        { 0, 92, 197, 255 },   // Function
+        { 150, 95, 0, 255 },   // Constant
+        { 40, 120, 40, 255 },  // Attribute
+        { 30, 30, 30, 255 },   // Bracket
+        { 170, 90, 0, 255 },   // MatchedBracket
+        { 190, 20, 20, 255 },  // Error
+    };
+    const int idx = static_cast<int>(type);
+    if (lightBackground && idx >= 0 && idx < TokenTypeCount && !(customColors_ & (1u << idx))) return light[idx];
+    return colorFor(type);
+}
+
 void SyntaxHighlighter::setColor(TokenType type, const Color& c)
 {
     int idx = static_cast<int>(type);
-    if (idx >= 0 && idx < TokenTypeCount) colors_[idx] = c;
+    if (idx >= 0 && idx < TokenTypeCount)
+    {
+        colors_[idx] = c;
+        customColors_ |= 1u << idx;
+    }
 }
 
 bool SyntaxHighlighter::isKeyword(const String& word) const

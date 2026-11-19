@@ -195,6 +195,35 @@ bool hitsButton(const Rect& r, float x, float y)
 {
     return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
 }
+
+const ig::retained::EditorColors& ec()
+{
+    return ig::retained::Theme::instance().editor;
+}
+
+float relativeLuminance(float r, float g, float b)
+{
+    auto lin = [](float v)
+    {
+        v /= 255.0f;
+        return v <= 0.03928f ? v / 12.92f : powf((v + 0.055f) / 1.055f, 2.4f);
+    };
+    return 0.2126f * lin(r) + 0.7152f * lin(g) + 0.0722f * lin(b);
+}
+
+// The colour of the label on a clip: white, as it always was; in a light theme, where the fill of a clip (a colour with some
+// transparency over a pale row) is often pale, dark when that reads better against what the fill leaves.
+ig::retained::Color clipLabelColor(const ig::retained::Color& fill, const ig::retained::Color& row)
+{
+    using ig::retained::Color;
+    const Color white(240, 242, 250, 230);
+    if (!ig::retained::Theme::instance().isLight()) return white;
+    const float a = fill.a / 255.0f;
+    const float lum = relativeLuminance(fill.r * a + row.r * (1 - a), fill.g * a + row.g * (1 - a), fill.b * a + row.b * (1 - a));
+    const float lumWhite = relativeLuminance(240.0f, 242.0f, 250.0f), lumDark = relativeLuminance(20.0f, 22.0f, 28.0f);
+    const float vsWhite = (lumWhite + 0.05f) / (lum + 0.05f), vsDark = (lum + 0.05f) / (lumDark + 0.05f);
+    return vsWhite >= vsDark ? white : Color(20, 22, 28, 230);
+}
 } // namespace
 
 int Timeline::addTrack(const String& name, TrackKind kind)
@@ -1623,7 +1652,8 @@ void Timeline::paint(PaintContext& ctx)
     ctx.pushClip(b);
 
     // Background
-    ctx.fill.SetColor(bgColor_.r, bgColor_.g, bgColor_.b, bgColor_.a);
+    const Color& canvas = bgColor_.a > 0 ? bgColor_ : ec().tlBg;
+    ctx.fill.SetColor(canvas.r, canvas.g, canvas.b, canvas.a);
     ctx.fillRect(b.x, b.y, b.w, b.h);
 
     paintRuler(ctx, b);
@@ -1635,7 +1665,7 @@ void Timeline::paint(PaintContext& ctx)
     paintPlayhead(ctx, b);
 
     // Border (4 edges)
-    ctx.fill.SetColor(50, 52, 58, 255);
+    ctx.fill.SetColor(ec().tlBorder);
     ctx.fillRect(b.x, b.y, b.w, 1);
     ctx.fillRect(b.x, b.y + b.h - 1, b.w, 1);
     ctx.fillRect(b.x, b.y, 1, b.h);
@@ -1653,7 +1683,7 @@ void Timeline::paint(PaintContext& ctx)
 void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
 {
     // Ruler background
-    ctx.fill.SetColor(38, 40, 46, 255);
+    ctx.fill.SetColor(ec().tlRulerBg);
     ctx.fillRect(b.x, b.y, b.w, kRulerH);
 
     if (barBeats_ > 0) paintBarTicks(ctx, b);
@@ -1677,7 +1707,7 @@ void Timeline::paintRuler(PaintContext& ctx, const Rect& b)
     }
 
     // Separator line at ruler bottom
-    ctx.fill.SetColor(60, 62, 68, 255);
+    ctx.fill.SetColor(ec().tlRulerLine);
     ctx.fillRect(b.x, b.y + kRulerH, b.w, 1);
 }
 
@@ -1698,7 +1728,7 @@ void Timeline::paintTimeTicks(PaintContext& ctx, const Rect& b)
     else
         step = 10 * mag;
 
-    float asc = setupFont(ctx, Color(150, 152, 160, 200), 10.0f);
+    float asc = setupFont(ctx, ec().tlRulerText, 10.0f);
 
     float tStart = std::floor(viewStart_ / step) * step;
     // The ticks are counted before they are drawn: a range that is empty or not a number has none, and one so
@@ -1714,7 +1744,7 @@ void Timeline::paintTimeTicks(PaintContext& ctx, const Rect& b)
         if (x < b.x + kHeaderW || x > b.x + b.w) continue;
 
         // Major tick line
-        ctx.fill.SetColor(80, 82, 90, 255);
+        ctx.fill.SetColor(ec().tlTickMajor);
         ctx.fillRect(x, b.y + kRulerH - 10, 1, 10);
 
         // Label
@@ -1727,12 +1757,12 @@ void Timeline::paintTimeTicks(PaintContext& ctx, const Rect& b)
         else
             snprintf(buf, sizeof(buf), "%gs", std::round(t * 100.0f) / 100.0f);
 
-        ctx.font.SetColor(Color(150, 152, 160, 200));
+        ctx.font.SetColor(ec().tlRulerText);
         ctx.font.Print(buf, x + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
 
         // Minor ticks (4 subdivisions)
         float minor = step / 4;
-        ctx.fill.SetColor(55, 57, 63, 255);
+        ctx.fill.SetColor(ec().tlTickMinor);
         for (int m = 1; m < 4; ++m)
         {
             float mx = timeToX(t + m * minor);
@@ -1780,7 +1810,7 @@ void Timeline::paintBarTicks(PaintContext& ctx, const Rect& b)
     const bool beatTicks = every == 1 && pxBeat >= 8.0f;
     const bool beatLabels = every == 1 && pxBeat >= 40.0f;
 
-    const float asc = setupFont(ctx, Color(150, 152, 160, 200), 10.0f);
+    const float asc = setupFont(ctx, ec().tlRulerText, 10.0f);
     const float tStart = floorf(viewStart_ / step) * step;
     int ticks = stepLimit(tStart, viewEnd_, step, pixelCap(b.w));
     const float far = fabsf(tStart) > fabsf(viewEnd_) ? fabsf(tStart) : fabsf(viewEnd_);
@@ -1794,19 +1824,19 @@ void Timeline::paintBarTicks(PaintContext& ctx, const Rect& b)
         const float x = timeToX(t);
         if (x >= left && x <= right)
         {
-            ctx.fill.SetColor(80, 82, 90, 255);
+            ctx.fill.SetColor(ec().tlTickMajor);
             ctx.fillRect(x, b.y + kRulerH - 10, 1, 10);
             if (bar > -1.0e9 && bar < 1.0e9)
             {
                 char buf[16];
                 snprintf(buf, sizeof(buf), "%d", static_cast<int>(bar));
-                ctx.font.SetColor(Color(150, 152, 160, 200));
+                ctx.font.SetColor(ec().tlRulerText);
                 ctx.font.Print(buf, x + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
             }
         }
         if (barLines)
         {
-            ctx.fill.SetColor(55, 57, 63, 255);
+            ctx.fill.SetColor(ec().tlTickMinor);
             for (int m = 1; m < every; ++m)
             {
                 const float mx = timeToX(t + static_cast<float>(m) * barSec);
@@ -1820,13 +1850,13 @@ void Timeline::paintBarTicks(PaintContext& ctx, const Rect& b)
             {
                 const float bx = timeToX(t + static_cast<float>(k) * beatSec);
                 if (bx < left || bx > right) continue;
-                ctx.fill.SetColor(55, 57, 63, 255);
+                ctx.fill.SetColor(ec().tlTickMinor);
                 ctx.fillRect(bx, b.y + kRulerH - 5, 1, 5);
                 if (beatLabels && bar > -1.0e9 && bar < 1.0e9)
                 {
                     char buf[24];
                     snprintf(buf, sizeof(buf), "%d.%d", static_cast<int>(bar), k + 1);
-                    ctx.font.SetColor(Color(110, 112, 120, 200));
+                    ctx.font.SetColor(ec().tlRulerTextMinor);
                     ctx.font.Print(buf, bx + 2, b.y + (kRulerH - 10.0f) * 0.5f + asc);
                 }
             }
@@ -1867,7 +1897,7 @@ void Timeline::sortByStart(ct::Vector<int>& order, const ct::Vector<TimelineClip
 
 void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 {
-    float ascName = setupFont(ctx, Color(180, 180, 180, 255), 10.0f);
+    float ascName = setupFont(ctx, ec().tlTrackName, 10.0f);
     const TimeMap tm = timeMap(b);
 
     collectVisibleTracks(paintRows_);
@@ -1880,14 +1910,14 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         if (ty + kTrackH <= b.y + kRulerH || ty >= b.bottom()) continue;
 
         // Track background (alternating)
-        Color bg = (ti % 2 == 0) ? Color(34, 36, 40, 255) : Color(30, 32, 36, 255);
+        Color bg = (ti % 2 == 0) ? ec().tlRowEven : ec().tlRowOdd;
         ctx.fill.SetColor(bg.r, bg.g, bg.b, bg.a);
         ctx.fillRect(b.x, ty, b.w, kTrackH);
 
         // Header area
-        if (ti == selectedTrack_) ctx.fill.SetColor(52, 60, 80, 255);
+        if (ti == selectedTrack_) ctx.fill.SetColor(ec().tlHeaderSelected);
         else
-            ctx.fill.SetColor(36, 38, 44, 255);
+            ctx.fill.SetColor(ec().tlHeader);
         ctx.fillRect(b.x, ty, kHeaderW, kTrackH);
 
         // Track name — vertically centred in track header
@@ -1909,19 +1939,21 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
         ctx.pushClip({ b.x, std::max(ty, b.y + kRulerH), kHeaderW, kTrackH });
         const Rect mb = muteButton(b.x, kHeaderW, ty, kTrackH);
         const Rect lb = lockButton(b.x, kHeaderW, ty, kTrackH);
-        ctx.fill.SetColor(trk.muted ? Color(200, 70, 70, 255) : Color(56, 58, 66, 255));
+        ctx.fill.SetColor(trk.muted ? Color(200, 70, 70, 255) : ec().tlButtonOff);
         ctx.fillRect(mb.x, mb.y, mb.w, mb.h);
-        ctx.fill.SetColor(trk.locked ? Color(210, 170, 60, 255) : Color(56, 58, 66, 255));
+        ctx.fill.SetColor(trk.locked ? Color(210, 170, 60, 255) : ec().tlButtonOff);
         ctx.fillRect(lb.x, lb.y, lb.w, lb.h);
-        const float asc9 = setupFont(ctx, Color(235, 235, 240, 255), 9.0f);
+        // white on the lit buttons, the theme's text on the dark or light face of an unlit one
+        const float asc9 = setupFont(ctx, trk.muted ? Color(235, 235, 240, 255) : ec().tlButtonText, 9.0f);
         ctx.font.Print("M", mb.x + 3.5f, mb.y + (kBtn - 9.0f) * 0.5f + asc9);
+        ctx.font.SetColor(trk.locked ? Color(235, 235, 240, 255) : ec().tlButtonText);
         ctx.font.Print("L", lb.x + 4.5f, lb.y + (kBtn - 9.0f) * 0.5f + asc9);
         ctx.popClip();
         ctx.pushClip({ b.x + kHeaderW, b.y + kRulerH, std::max(0.0f, b.w - kHeaderW),
             std::max(0.0f, b.h - kRulerH) });
 
         // Header separator
-        ctx.fill.SetColor(50, 52, 58, 255);
+        ctx.fill.SetColor(ec().tlHeaderLine);
         ctx.fillRect(b.x + kHeaderW, ty, 1, kTrackH);
 
         // ── Clips ────────────────────────────────────────────────────────
@@ -2108,7 +2140,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
             }
             if (!clip.label.empty() && cx1 - cx0 > 30)
             {
-                float ascClip = setupFont(ctx, Color(240, 242, 250, 230), 9.0f);
+                float ascClip = setupFont(ctx, clipLabelColor(cc, bg), 9.0f);
                 ctx.font.Print(clip.label.c_str(), labelX,
                         clipY + (clipH - 9.0f) * 0.5f + ascClip);
             }
@@ -2227,7 +2259,7 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
 
         ctx.popClip();
         // Track separator
-        ctx.fill.SetColor(45, 47, 52, 255);
+        ctx.fill.SetColor(ec().tlTrackLine);
         ctx.fillRect(b.x, ty + kTrackH, b.w, 1);
     }
 }
