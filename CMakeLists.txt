@@ -483,6 +483,14 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         target_link_libraries(igui_retained_round9_tests PRIVATE igui_widgets)
         add_test(NAME igui_retained_round9 COMMAND igui_retained_round9_tests)
         set_tests_properties(igui_retained_round9 PROPERTIES TIMEOUT 300)
+        # Round 9, part 2 (docs/ROUND9.md): the corners of a rounded rectangle by the error, its fast paths against the generic path, commands
+        # merged across clips and across the two pages of the font atlas (same pixels as unmerged), the white texel of the dynamic page.
+        add_executable(igui_retained_drawlist_tests tests/test_retained_drawlist.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_retained_drawlist_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_retained_drawlist_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_retained_drawlist_tests PRIVATE igui_widgets)
+        add_test(NAME igui_retained_drawlist COMMAND igui_retained_drawlist_tests)
+        set_tests_properties(igui_retained_drawlist PROPERTIES TIMEOUT 300)
         # the layout test also feeds the software rasteriser odd geometry
         target_sources(igui_retained_layout_tests PRIVATE adapters/zen/SoftRaster.cpp)
         target_include_directories(igui_retained_layout_tests PRIVATE adapters/zen/include)

@@ -1,4 +1,4 @@
-draw checksum with 300 clips: 87b1fe59ac36adb1 (9096 vertices, 22290 indices, 201 commands)
-draw checksum with 3000 clips: 87b1fe59ac36adb1 (9096 vertices, 22290 indices, 201 commands)
-draw checksum of the piano roll in 20 views: 7956122198be0670 (68656 vertices, 102984 indices, 338 commands)
-draw checksum of the charts in 16 scenes: 957c5363d01cdd4a (20430 vertices, 74325 indices, 428 commands)
+draw checksum with 300 clips: 735bd9c06b9f3874 (8432 vertices, 19302 indices, 197 commands)
+draw checksum with 3000 clips: 735bd9c06b9f3874 (8432 vertices, 19302 indices, 197 commands)
+draw checksum of the piano roll in 20 views: 0dd8d620ec8be1f3 (68656 vertices, 102984 indices, 298 commands)
+draw checksum of the charts in 16 scenes: 41c426661162f35e (16622 vertices, 57189 indices, 416 commands)

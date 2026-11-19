@@ -37,9 +37,13 @@ static void test_round_rect_corner_is_a_curve()
     const ig::Rect rect = { 0.0f, 0.0f, 100.0f, 40.0f };
     list.addRoundRectFilled(rect, radius, ig::Color(255u, 255u, 255u, 255u), 8);
 
-    // Outline plus the fringe ring the anti-aliasing adds, 4 * (8 + 1) each.
+    // Outline plus the fringe ring the anti-aliasing adds, 4 * (steps + 1) each. The number of steps is the one the error asks for
+    // (no chord more than 0.15 px from the arc: five for a radius of 12; the hint of eight is only a ceiling that is not reached), and
+    // never fewer than the three of the old 30 degree table.
     const ct::Vector<ig::retained::DrawVertex>& vertices = list.vertices();
-    assert(vertices.size() == 2u * 4u * 9u);
+    assert(vertices.size() % 8u == 0u);
+    const int steps = static_cast<int>(vertices.size() / 8u) - 1;
+    assert(steps >= 3 && steps <= 8);
 
     const ig::Vec2 centres[4] = { { rect.x + rect.w - radius, rect.y + radius },
         { rect.x + rect.w - radius, rect.y + rect.h - radius },
@@ -50,12 +54,12 @@ static void test_round_rect_corner_is_a_curve()
         float maxDistance = 0.0f;
         float maxGap = 0.0f;
         ig::Vec2 previous;
-        for (int i = 0; i <= 8; ++i)
+        for (int i = 0; i <= steps; ++i)
         {
             // Odd vertices are the transparent fringe; the solid corner points
             // are the even ones.
             const ig::retained::DrawVertex& vertex =
-                    vertices[static_cast<size_t>(2 * (corner * 9 + i))];
+                    vertices[static_cast<size_t>(2 * (corner * (steps + 1) + i))];
             const float dx = vertex.x - centres[corner].x;
             const float dy = vertex.y - centres[corner].y;
             const float distance = std::sqrt(dx * dx + dy * dy);
@@ -70,12 +74,14 @@ static void test_round_rect_corner_is_a_curve()
             }
             previous = { vertex.x, vertex.y };
         }
-        // The nine points lie on one circle centred on the corner.
+        // The points lie on one circle centred on the corner.
         assert(maxDistance - minDistance < 0.01f);
         assert(minDistance > radius - 1.0f && maxDistance < radius + 1.0f);
-        // Eight steps of 11.25 degrees: a chord of 2 * 12 * sin(5.625) = 2.35 px.
-        // The old 30 degree table stepped 6.2 px, and that is what read as a bevel.
-        assert(maxGap < 3.0f);
+        // The chord is at most 0.15 px from the arc (its middle): radius * (1 - cos(half the step)); the old 30 degree table
+        // stepped 6.2 px and was 0.8 px from it, and that is what read as a bevel.
+        const float halfStep = 3.14159265f * 0.25f / static_cast<float>(steps);
+        assert(radius * (1.0f - std::cos(halfStep)) <= 0.151f);
+        assert(maxGap < 4.0f);
     }
 }
 

@@ -206,11 +206,20 @@ struct IO
 
 struct DrawVertex
 {
-    float x = 0.0f;
-    float y = 0.0f;
-    float u = 0.0f;
-    float v = 0.0f;
-    Color color = Color(255, 255, 255, 255);
+    float x;
+    float y;
+    float u;
+    float v;
+    union
+    {
+        Color color; // (in a union only so that making a vertex with no values does not run the constructor of Color, which sets white)
+    };
+
+    // A vertex made with no values has none (position, texture coordinates and colour are whatever the memory held): DrawList makes
+    // room for the vertices of a shape in one go and writes every one of them in full straight away, so the writing of initial
+    // values into that room, which a vertex with initial values asks for, was a twelfth of the cost of a window full of buttons.
+    DrawVertex() {}
+    DrawVertex(float px, float py, float pu, float pv, const Color& c) : x(px), y(py), u(pu), v(pv), color(c) {}
 };
 
 /// A rounded rectangle a draw command is clipped to (see DrawList::pushClipRoundedRect). The
@@ -399,6 +408,24 @@ private:
     int face_ = -1;              // its index there
     bool dynamic_ = false;       // glyphs come from the dynamic page, on demand
     mutable ct::HashMap<uint32_t, FontGlyph> glyphs_;
+    // The glyphs of the first 128 code points again, in a table, so that finding the glyph of a letter is a load and not a search of
+    // the map (a text asks twice for every letter in it, once to measure it and once to draw it). Kept with glyphs_ by storeGlyph.
+    mutable FontGlyph ascii_[128];
+    mutable bool asciiHas_[128] = {};
+    void storeGlyph(uint32_t codepoint, const FontGlyph& glyph) const
+    {
+        glyphs_[codepoint] = glyph;
+        if (codepoint < 128)
+        {
+            ascii_[codepoint] = glyph;
+            asciiHas_[codepoint] = true;
+        }
+    }
+    void clearGlyphs() const
+    {
+        glyphs_.clear();
+        for (int i = 0; i < 128; ++i) asciiHas_[i] = false;
+    }
     mutable ct::HashMap<uint64_t, float> kern_;
     float pairKerningFromFace(uint64_t key, uint32_t left, uint32_t right) const;
 };
@@ -566,9 +593,9 @@ public:
 
     void addRect(const Rect& rect, const Color& color);
     void addRectOutline(const Rect& rect, const Color& color, float thickness = 1.0f);
-    void addRoundRectFilled(const Rect& rect, float radius, const Color& color, int segments = 8);
+    void addRoundRectFilled(const Rect& rect, float radius, const Color& color, int segments = 0);
     void addRoundRect(const Rect& rect, float radius, const Color& color, float thickness = 1.0f,
-            int segments = 8);
+            int segments = 0);
     void addCircleFilled(Vec2 center, float radius, const Color& color, int segments = 32);
     void addCircle(Vec2 center, float radius, const Color& color, float thickness = 1.0f,
             int segments = 32);
@@ -604,6 +631,27 @@ public:
     // reuse the same texture handle (sampling the white pixel), so that
     // geometry and text commands can be merged into one draw call.
     void setWhitePixel(TextureHandle atlas, Vec2 whiteUV);
+    /// A second page of the font atlas that has a white texel too, at @p whiteUV (the dynamic page, which reserves its pixel (0, 0)
+    /// for it): the text of a window is on that page, so shapes are drawn with it from now on (setWhitePixel's page stays their
+    /// other one), and a shape between texts of that page is one draw command with them instead of three. Text of the first page
+    /// (a size the atlas baked), and images, are not affected: shapes next to them go to the first page, with its coordinates.
+    /// Call after setWhitePixel (which forgets it). Off (a null handle) by default.
+    void setSolidAlternate(TextureHandle texture, Vec2 whiteUV)
+    {
+        altTexture_ = fontTexture_;
+        altUV_ = whiteUV_;
+        fontTexture_ = texture;
+        whiteUV_ = whiteUV;
+    }
+    /// Whether commands that can be one are one (on by default). A command is added to the one before it when it has the same
+    /// texture (a shape on either page of the atlas counts as having both) and the same rounded clips, and either the same clip, or a
+    /// clip that does not matter: the vertices of each lie inside its own clip, or inside the clip it is merged under, so
+    /// drawing them under the other clip, or under both clips united, changes no pixel. Switched off, every change of clip, texture
+    /// or rounded clip starts a command, as it used to (the pictures of both must be the same: tests/test_retained_drawlist.cpp).
+    void setCommandMerging(bool on)
+    {
+        mergeCommands_ = on;
+    }
 
     // ── Path builder (accumulate → flush) ─────────────────────────────
     // pathArcToFast: aMinOf12 / aMaxOf12 are indices into a 12-step
@@ -683,10 +731,44 @@ private:
     };
 
     Rect currentClip() const;
-    Vec2 mapPoint(float x, float y) const;
+    Vec2 mapPoint(float x, float y) const
+    {
+        if (transformStack_.empty()) return { x, y };
+        return { transform_[0] * x + transform_[2] * y + transform_[4], transform_[1] * x + transform_[3] * y + transform_[5] };
+    }
     void pushClipScreen(const Rect& rect);
     void fillConvexPath(const Color* colors, const Color& color);
-    void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {});
+    // A rounded rectangle (corner radius `radius`, `steps` segments a corner), filled or stroked, with anti-aliased edges, from
+    // tables of the directions of its outline (the same shape fillConvexPath and pathStroke make of the same points, without
+    // working the directions out again for every one of them). False when the shape is one the tables do not cover (no
+    // anti-aliasing, a side no longer than the corners, a corner of a size the tables do not have): the caller then builds it as a path.
+    bool fillRoundRectFast(float x0, float y0, float x1, float y1, float radius, int steps, const Color& color);
+    bool strokeRoundRectFast(float x0, float y0, float x1, float y1, float radius, int steps, const Color& color, float thickness);
+    // `solid`: the vertices of the command are shapes (the white texel of the atlas), which any page that has one can draw.
+    void addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture = {}, bool solid = false);
+    // The bounds of the vertices from..to (false when one is not a number): what clip merging looks at.
+    bool boundsOf(size_t from, size_t to, Rect& out) const;
+    // A shape that knows its bounds says so (`count` vertices inside x0, y0, x1, y1), so that addCmd does not have to look at each
+    // vertex; one that does not say, or is drawn under a transform, is looked at by addCmd when it has to be.
+    void note(size_t count, float x0, float y0, float x1, float y1)
+    {
+        if (!transformStack_.empty()) return;
+        if (noted_ == 0)
+        {
+            pendBounds_[0] = x0;
+            pendBounds_[1] = y0;
+            pendBounds_[2] = x1;
+            pendBounds_[3] = y1;
+        }
+        else
+        {
+            if (x0 < pendBounds_[0]) pendBounds_[0] = x0;
+            if (y0 < pendBounds_[1]) pendBounds_[1] = y0;
+            if (x1 > pendBounds_[2]) pendBounds_[2] = x1;
+            if (y1 > pendBounds_[3]) pendBounds_[3] = y1;
+        }
+        noted_ += count;
+    }
     DrawVertex* appendVertices(size_t count);
     uint32_t* appendIndices(size_t count);
     uint32_t addVertex(float x, float y, const Color& color);
@@ -713,6 +795,18 @@ private:
         return kerning_ == Kerning::All || (kerning_ == Kerning::Dynamic && font.isDynamic());
     }
     TextureHandle fontTexture_;
+    TextureHandle altTexture_; // the page shapes had before setSolidAlternate, and its white texel
+    Vec2 altUV_ = { 0.0f, 0.0f };
+    bool mergeCommands_ = true;
+    bool lastSolidOnly_ = false; // the last command holds shapes and nothing else
+    size_t newVertices_ = 0;     // the vertices after this one belong to the command being added
+    size_t lastStart_ = 0;       // the first vertex of the last command
+    Rect lastBounds_ = { 0, 0, 0, 0 };
+    bool lastBoundsValid_ = false; // lastBounds_ is the bounds of every vertex of the last command
+    Rect mergedClip_ = { 0, 0, 0, 0 };  // a clip that the last command has taken vertices under (inside both it and the command's clip)
+    bool mergedClipValid_ = false;
+    float pendBounds_[4] = { 0, 0, 0, 0 }; // x0, y0, x1, y1 of the vertices noted since the last command
+    size_t noted_ = 0;                     // how many vertices were noted
     Vec2 whiteUV_;
     ct::Vector<DrawVertex> vertices_;
     ct::Vector<uint32_t> indices_;
@@ -825,6 +919,9 @@ DrawList& GetOverlayDrawList(); // always rendered last, on top of all stages
 // Call once after uploading the font atlas texture.
 // Sets the white pixel on ALL DrawLists (stage, trans, overlay).
 void SetWhitePixel(TextureHandle atlas, Vec2 whiteUV);
+// The alternate texture of shapes (see DrawList::setSolidAlternate), on ALL DrawLists: the dynamic page of the font atlas, after
+// it was made and uploaded.
+void SetSolidAlternate(TextureHandle texture, Vec2 whiteUV);
 
 void NewFrame();
 void Render();

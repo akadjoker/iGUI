@@ -21,10 +21,11 @@ const char* const kPresets[] = { "dark", "light", "xp", "macos", "macos-dark" };
 constexpr int kPresetCount = 5;
 
 // The checksum of what the window draws in the dark preset, taken with the library of origin/main (0d86927), before any colour
-// moved into the theme: the dark preset must go on drawing exactly this. (Updated, with the reason, when a later change to the
-// geometry changes what is drawn.)
-constexpr uint64_t kDarkGolden = 0x2710448eb3ee6e18ull;
-constexpr uint32_t kDarkGoldenVertices = 7722;
+// moved into the theme: the dark preset must go on drawing exactly this, whatever theme was set before. It was 0x2710448eb3ee6e18
+// (7722 vertices) until the corners of rounded rectangles began to take the number of segments the error asks for, shapes made
+// from tables, and commands merged (docs/ROUND9.md section 2.1): the same window, a fifth fewer vertices and fewer commands.
+constexpr uint64_t kDarkGolden = 0xb5c94cffdf3657d9ull;
+constexpr uint32_t kDarkGoldenVertices = 6354;
 
 float channel(unsigned char v)
 {

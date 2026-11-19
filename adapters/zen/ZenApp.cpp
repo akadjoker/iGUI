@@ -249,7 +249,12 @@ bool App::create(const Config &config)
         rt::SetWhitePixel(atlas_.texture(), atlas_.whitePixelUV());
         // Glyphs at the size a widget asks for, rasterised when first drawn.
         if (config.defaultDynamicPage && atlas_.prepareDynamic())
+        {
             atlas_.enableDynamic(createTexture(atlas_.dynamicWidth(), atlas_.dynamicHeight(), atlas_.dynamicPixels()));
+            // the page has the white texel too: the shapes between the texts of a window, which are on this page, ride on it
+            rt::SetSolidAlternate(atlas_.dynamicTexture(),
+                    { 0.5f / static_cast<float>(atlas_.dynamicWidth()), 0.5f / static_cast<float>(atlas_.dynamicHeight()) });
+        }
     }
 
     rt::WidgetApp& app = widgets();

@@ -43,14 +43,40 @@ int circleSegments(float radius, int requested)
     return std::max(std::max(12, saneSegments(requested)), std::min(fromRadius, 512));
 }
 
-// Segments for one 90 degree corner of a rounded rectangle. The caller's
-// hint is honoured, but never below the three steps of the fixed 30
-// degree table this used to draw with, which left any radius above a few
-// pixels visibly faceted next to the immediate-mode rectangles.
+// Segments for one 90 degree corner of a rounded rectangle: the fewest for which no chord of the arc strays more than
+// kCornerTolerance pixels from it (a chord of angle t on radius r is r * (1 - cos(t / 2)) away from the arc at its middle), and
+// never below the three steps of the fixed 30 degree table this used to draw with. A corner of radius 4 is three segments (0,14 px
+// off, invisible) where it used to be five or six: a fifth of the points of every button, check box and text box of a window.
+// The caller's hint, a segment count, only makes the corner coarser than the error asks for when it is lower.
+constexpr float kCornerTolerance = 0.15f;
+
+// floorf without the call: the glyph positions of a text are rounded down to a pixel two at a time per glyph. The same value as
+// floorf for what a window holds (a float that fits an int, 2^31 and more is left to floorf).
+inline float floorOf(float v)
+{
+    if (!(v > -1.0e9f && v < 1.0e9f)) return std::floor(v);
+    const float truncated = static_cast<float>(static_cast<int>(v));
+    return truncated > v ? truncated - 1.0f : truncated;
+}
 int cornerSegments(float radius, int requested)
 {
-    if (requested > 0) return std::max(requested, 3);
-    return std::max(static_cast<int>(radius * 0.5f) + 3, 3);
+    static float lastRadius = -1.0f; // (the radii of a window are a handful: the last answer is nearly always the one asked for)
+    static int lastSegments = 3;
+    int fromError = lastSegments;
+    if (radius != lastRadius)
+    {
+        fromError = 3;
+        if (radius > kCornerTolerance)
+        {
+            const float chordAngle = 2.0f * acosf(1.0f - kCornerTolerance / radius);
+            fromError = chordAngle > 0.0245f ? static_cast<int>(ceilf(1.57079633f / chordAngle)) : 64; // (a radius of millions of pixels: 64)
+            if (fromError < 3) fromError = 3;
+        }
+        lastRadius = radius;
+        lastSegments = fromError;
+    }
+    if (requested > 0 && requested < fromError) return std::max(requested, 3);
+    return fromError;
 }
 
 // Appends one corner arc, both endpoints included, in the same order and
@@ -67,6 +93,29 @@ struct ArcCache
     bool done; // (no initialiser: the table is zero at the start and needs no constructor to run)
 };
 
+const float kCornerStart[4] = { -Pi * 0.5f, 0.0f, Pi * 0.5f, Pi }; // top right, bottom right, bottom left, top left
+
+// The cosines and sines of the arc of a corner (0 to 3, in the order above) in `segments` steps, worked out once; null for a corner
+// of more steps than the cache has.
+const ArcCache* arcTable(int corner, int segments)
+{
+    if (segments > kArcCacheMax) return nullptr;
+    static ArcCache cache[4][kArcCacheMax + 1];
+    ArcCache& c = cache[corner][segments];
+    if (!c.done)
+    {
+        const float step = (Pi * 0.5f) / static_cast<float>(segments);
+        for (int i = 0; i <= segments; ++i)
+        {
+            const float angle = kCornerStart[corner] + step * static_cast<float>(i);
+            c.cosv[i] = cosf(angle); // (the float cosine and sine, as before)
+            c.sinv[i] = sinf(angle);
+        }
+        c.done = true;
+    }
+    return &c;
+}
+
 void pushCornerArc(ct::Vector<Vec2>& path, Vec2 centre, float radius, float startAngle,
         int segments)
 {
@@ -78,18 +127,7 @@ void pushCornerArc(ct::Vector<Vec2>& path, Vec2 centre, float radius, float star
     else if (startAngle == Pi) corner = 3;
     if (corner >= 0 && segments <= kArcCacheMax)
     {
-        static ArcCache cache[4][kArcCacheMax + 1];
-        ArcCache& c = cache[corner][segments];
-        if (!c.done)
-        {
-            for (int i = 0; i <= segments; ++i)
-            {
-                const float angle = startAngle + step * static_cast<float>(i);
-                c.cosv[i] = cosf(angle); // (the float cosine and sine, as before)
-                c.sinv[i] = sinf(angle);
-            }
-            c.done = true;
-        }
+        const ArcCache& c = *arcTable(corner, segments);
         for (int i = 0; i <= segments; ++i)
             path.push_back({ centre.x + c.cosv[i] * radius, centre.y + c.sinv[i] * radius });
         return;
@@ -234,6 +272,9 @@ bool FontAtlas::prepareDynamic()
     impl_->rowHeight = 0;
     impl_->enabled = false;
     impl_->dirty = false;
+    // pixel (0, 0), where the baked page has its white texel (whitePixelUV), is white here too (nothing is packed at it: the pen
+    // starts at 1, 1): shapes can be drawn with this page as well (DrawList::setSolidAlternate)
+    impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255;
     return true;
 }
 
@@ -317,6 +358,7 @@ void FontAtlas::setPixelScale(float scale)
     if (!impl_->rgba.empty())
     {
         std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
+        impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255; // (the white texel stays)
         impl_->penX = impl_->penY = 1;
         impl_->rowHeight = 0;
         impl_->dirty = true;
@@ -324,7 +366,7 @@ void FontAtlas::setPixelScale(float scale)
     for (Font* f: impl_->sized)
     {
         f->pixelScale_ = scale;
-        f->glyphs_.clear();
+        f->clearGlyphs();
         f->kern_.clear();
     }
 }
@@ -349,7 +391,7 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
         if (!q) return false;
         FontGlyph copy = *q;
         copy.codepoint = codepoint;
-        font.glyphs_[codepoint] = copy;
+        font.storeGlyph(codepoint, copy);
         return true;
     }
 
@@ -379,9 +421,10 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
         {
             // Full: start the page again; every size bakes its glyphs anew.
             std::fill(impl_->rgba.begin(), impl_->rgba.end(), static_cast<unsigned char>(0));
+            impl_->rgba[0] = impl_->rgba[1] = impl_->rgba[2] = impl_->rgba[3] = 255; // (the white texel stays)
             impl_->penX = impl_->penY = 1;
             impl_->rowHeight = 0;
-            for (Font* f: impl_->sized) f->glyphs_.clear();
+            for (Font* f: impl_->sized) f->clearGlyphs();
         }
         ct::Vector<unsigned char> alpha(static_cast<size_t>(gw) * static_cast<size_t>(gh), 0);
         stbtt_MakeGlyphBitmap(&fc.info, alpha.data(), gw, gh, gw, scale, scale, gi);
@@ -404,7 +447,7 @@ bool FontAtlas::bakeGlyph(const Font& font, uint32_t codepoint)
         impl_->rowHeight = std::max(impl_->rowHeight, gh);
         impl_->dirty = true;
     }
-    font.glyphs_[codepoint] = glyph;
+    font.storeGlyph(codepoint, glyph);
     return true;
 }
 
@@ -459,6 +502,7 @@ bool Font::hasGlyph(uint32_t codepoint) const
 
 const FontGlyph* Font::findGlyph(uint32_t codepoint) const
 {
+    if (codepoint < 128 && asciiHas_[codepoint]) return &ascii_[codepoint];
     const FontGlyph* glyph = glyphs_.find(codepoint);
     if (glyph) return glyph;
 
@@ -659,7 +703,7 @@ bool FontAtlas::build()
                 glyph.size = { pc.xoff2 - pc.xoff, pc.yoff2 - pc.yoff };
                 glyph.offset = { pc.xoff, pc.yoff };
                 glyph.advanceX = pc.xadvance;
-                fnt.glyphs_[cp] = glyph;
+                fnt.storeGlyph(cp, glyph);
             }
         }
     }
@@ -728,6 +772,11 @@ void DrawList::clear()
     indices_.clear();
     commands_.clear();
     pushClipCount_ = 0;
+    newVertices_ = 0;
+    lastStart_ = 0;
+    lastBoundsValid_ = false;
+    lastSolidOnly_ = false;
+    mergedClipValid_ = false;
 }
 
 void DrawList::pushTransform(const float matrix[6])
@@ -751,13 +800,6 @@ void DrawList::popTransform()
     const TransformEntry& saved = transformStack_.back();
     for (int i = 0; i < 6; ++i) transform_[i] = saved.m[i];
     transformStack_.pop_back();
-}
-
-Vec2 DrawList::mapPoint(float x, float y) const
-{
-    if (transformStack_.empty()) return { x, y };
-    return { transform_[0] * x + transform_[2] * y + transform_[4],
-        transform_[1] * x + transform_[3] * y + transform_[5] };
 }
 
 void DrawList::pushClip(const Rect& source)
@@ -856,6 +898,7 @@ void DrawList::setWhitePixel(TextureHandle atlas, Vec2 whiteUV)
 {
     fontTexture_ = atlas;
     whiteUV_ = whiteUV;
+    altTexture_ = TextureHandle();
 }
 
 // ── Path builder API ──────────────────────────────────────────────────────
@@ -933,7 +976,7 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
             *ix++ = base + i - 1;
             *ix++ = base + i;
         }
-        addCmd(offset, idxCount, fontTexture_);
+        addCmd(offset, idxCount, fontTexture_, true);
         path_.clear();
         return;
     }
@@ -1017,7 +1060,7 @@ void DrawList::fillConvexPath(const Color* colors, const Color& color)
         *ix++ = base + i * 2 + 1;
     }
 
-    addCmd(offset, idxCount, fontTexture_);
+    addCmd(offset, idxCount, fontTexture_, true);
     path_.clear();
 }
 
@@ -1141,7 +1184,7 @@ void DrawList::pathStroke(const Color& color, float thickness, bool closed)
         }
     }
 
-    addCmd(offset, idxCount, fontTexture_);
+    addCmd(offset, idxCount, fontTexture_, true);
     path_.clear();
 }
 
@@ -1156,6 +1199,7 @@ void DrawList::addRect(const Rect& rect, const Color& color)
     vp[1] = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, color };
     vp[2] = { q2.x, q2.y, whiteUV_.x, whiteUV_.y, color };
     vp[3] = { q3.x, q3.y, whiteUV_.x, whiteUV_.y, color };
+    note(4, std::min(rect.x, rect.x + rect.w), std::min(rect.y, rect.y + rect.h), std::max(rect.x, rect.x + rect.w), std::max(rect.y, rect.y + rect.h));
 
     uint32_t* ix = appendIndices(6);
     ix[0] = v0;
@@ -1164,7 +1208,7 @@ void DrawList::addRect(const Rect& rect, const Color& color)
     ix[3] = v0;
     ix[4] = v2;
     ix[5] = v3;
-    addCmd(offset, 6, fontTexture_);
+    addCmd(offset, 6, fontTexture_, true);
 }
 void DrawList::addRectOutline(const Rect& rect, const Color& color, float thickness)
 {
@@ -1178,6 +1222,198 @@ void DrawList::addRectOutline(const Rect& rect, const Color& color, float thickn
                 rect.h - thickness * 2.0f },
             color);
 }
+
+namespace
+{
+// The directions of the outline of a rounded rectangle, for the tables of fillRoundRectFast and strokeRoundRectFast. The mitre
+// offset of each point of the outline (the arc points of four corners, in the order of pushCornerArc) depends only on the angles
+// of the arcs, not on the radius or the size of the rectangle (as long as the straight sides are longer than nothing), so it is
+// worked out once for a unit corner, by the same expressions fillConvexPath and pathStroke use, and kept per number of steps.
+struct RoundMitre
+{
+    float fx[4 * (kArcCacheMax + 1)], fy[4 * (kArcCacheMax + 1)]; // offset of the anti-aliasing fringe of a fill (towards outside)
+    float ux[4 * (kArcCacheMax + 1)], uy[4 * (kArcCacheMax + 1)]; // mitre of a stroke for a half width of one
+    bool done;
+};
+
+const RoundMitre& roundMitre(int steps)
+{
+    static RoundMitre tables[kArcCacheMax + 1];
+    RoundMitre& m = tables[steps];
+    if (m.done) return m;
+    const int n = 4 * (steps + 1);
+    Vec2 p[4 * (kArcCacheMax + 1)];
+    float ex[4 * (kArcCacheMax + 1)], ey[4 * (kArcCacheMax + 1)];
+    const float centreX[4] = { 5.0f, 5.0f, -5.0f, -5.0f }, centreY[4] = { -5.0f, 5.0f, 5.0f, -5.0f }; // a rectangle of 12 by 12, corners of radius 1
+    int k = 0;
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const ArcCache& c = *arcTable(corner, steps);
+        for (int i = 0; i <= steps; ++i) p[k++] = { centreX[corner] + c.cosv[i], centreY[corner] + c.sinv[i] };
+    }
+    float area = 0.0f;
+    for (int i = 0; i < n; ++i)
+    {
+        const Vec2 &a = p[i], &b = p[(i + 1) % n];
+        area += a.x * b.y - b.x * a.y;
+        float dx = b.x - a.x, dy = b.y - a.y;
+        const float l = sqrtf(dx * dx + dy * dy);
+        if (l > 0.0001f)
+        {
+            dx /= l;
+            dy /= l;
+        }
+        ex[i] = dx;
+        ey[i] = dy;
+    }
+    const float side = area >= 0.0f ? 1.0f : -1.0f;
+    for (int i = 0; i < n; ++i)
+    {
+        const int before = i == 0 ? n - 1 : i - 1;
+        const float dx1 = ex[before], dy1 = ey[before], dx2 = ex[i], dy2 = ey[i];
+        // the fill: as fillConvexPath
+        float nx = (-dy1 - dy2) * side, ny = (dx1 + dx2) * side;
+        float d2 = nx * nx + ny * ny;
+        if (d2 < 0.000001f)
+        {
+            nx = -dy1 * side;
+            ny = dx1 * side;
+            d2 = 1.0f;
+        }
+        float inv = 1.0f / d2;
+        if (d2 < 0.3f)
+        {
+            const float maxInv = 2.0f / sqrtf(d2);
+            if (inv > maxInv) inv = maxInv;
+        }
+        m.fx[i] = nx * inv * 2.0f * 0.5f;
+        m.fy[i] = ny * inv * 2.0f * 0.5f;
+        // the stroke: as pathStroke
+        float mx = -dy1 + -dy2, my = dx1 + dx2;
+        float e2 = mx * mx + my * my;
+        if (e2 < 0.000001f)
+        {
+            mx = -dy1;
+            my = dx1;
+            e2 = 1.0f;
+        }
+        float inv2 = 1.0f / e2;
+        if (inv2 > 100.0f) inv2 = 100.0f;
+        m.ux[i] = mx * inv2 * 2.0f;
+        m.uy[i] = my * inv2 * 2.0f;
+    }
+    m.done = true;
+    return m;
+}
+
+// Whether a rectangle (and its corners) is one the tables cover: the sides between the corners are longer than nothing.
+inline bool roundRectFits(bool aa, float x0, float y0, float x1, float y1, float radius, int steps)
+{
+    return aa && steps <= kArcCacheMax && x1 - x0 > radius * 2.0f + 0.01f && y1 - y0 > radius * 2.0f + 0.01f;
+}
+} // namespace
+
+bool DrawList::fillRoundRectFast(float x0, float y0, float x1, float y1, float radius, int steps, const Color& color)
+{
+    if (!roundRectFits(antiAliasing_, x0, y0, x1, y1, radius, steps)) return false;
+    const RoundMitre& m = roundMitre(steps);
+    const uint32_t n = static_cast<uint32_t>(4 * (steps + 1));
+    const uint32_t idxCount = (n - 2) * 3 + n * 6;
+    const uint32_t offset = static_cast<uint32_t>(indices_.size());
+    const uint32_t base = static_cast<uint32_t>(vertices_.size());
+    DrawVertex* vp = appendVertices(static_cast<size_t>(n) * 2);
+    const float centreX[4] = { x1 - radius, x1 - radius, x0 + radius, x0 + radius };
+    const float centreY[4] = { y0 + radius, y1 - radius, y1 - radius, y0 + radius };
+    Color outer = color;
+    outer.a = 0;
+    int k = 0;
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const ArcCache& c = *arcTable(corner, steps);
+        for (int i = 0; i <= steps; ++i, ++k)
+        {
+            const float px = centreX[corner] + c.cosv[i] * radius, py = centreY[corner] + c.sinv[i] * radius;
+            const Vec2 q0 = mapPoint(px - m.fx[k], py - m.fy[k]);
+            const Vec2 q1 = mapPoint(px + m.fx[k], py + m.fy[k]);
+            *vp++ = { q0.x, q0.y, whiteUV_.x, whiteUV_.y, color };
+            *vp++ = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, outer };
+        }
+    }
+    uint32_t* ix = appendIndices(idxCount);
+    for (uint32_t i = 2; i < n; ++i)
+    {
+        *ix++ = base;
+        *ix++ = base + (i - 1) * 2;
+        *ix++ = base + i * 2;
+    }
+    for (uint32_t i = 0; i < n; ++i)
+    {
+        const uint32_t j = i + 1 == n ? 0 : i + 1;
+        *ix++ = base + i * 2;
+        *ix++ = base + j * 2;
+        *ix++ = base + j * 2 + 1;
+        *ix++ = base + i * 2;
+        *ix++ = base + j * 2 + 1;
+        *ix++ = base + i * 2 + 1;
+    }
+    note(static_cast<size_t>(n) * 2, x0 - 1.0f, y0 - 1.0f, x1 + 1.0f, y1 + 1.0f); // (the fringe is half a pixel out, a mitre at these corners 0.52)
+    addCmd(offset, idxCount, fontTexture_, true);
+    return true;
+}
+
+bool DrawList::strokeRoundRectFast(float x0, float y0, float x1, float y1, float radius, int steps, const Color& color, float thickness)
+{
+    if (!roundRectFits(antiAliasing_, x0, y0, x1, y1, radius, steps)) return false;
+    const RoundMitre& m = roundMitre(steps);
+    thickness = std::max(1.0f, thickness);
+    const float core = std::max(1.0f, thickness - 1.0f);
+    const float hw = core * 0.5f, ow = hw + 1.0f;
+    const uint32_t n = static_cast<uint32_t>(4 * (steps + 1));
+    const uint32_t idxCount = n * 18;
+    const uint32_t offset = static_cast<uint32_t>(indices_.size());
+    const uint32_t base = static_cast<uint32_t>(vertices_.size());
+    DrawVertex* vp = appendVertices(static_cast<size_t>(n) * 4);
+    const float centreX[4] = { x1 - radius, x1 - radius, x0 + radius, x0 + radius };
+    const float centreY[4] = { y0 + radius, y1 - radius, y1 - radius, y0 + radius };
+    Color transparent = color;
+    transparent.a = 0;
+    int k = 0;
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const ArcCache& c = *arcTable(corner, steps);
+        for (int i = 0; i <= steps; ++i, ++k)
+        {
+            const float px = centreX[corner] + c.cosv[i] * radius, py = centreY[corner] + c.sinv[i] * radius;
+            const float ux = m.ux[k], uy = m.uy[k];
+            const Vec2 q0 = mapPoint(px + ux * ow, py + uy * ow), q1 = mapPoint(px + ux * hw, py + uy * hw);
+            const Vec2 q2 = mapPoint(px - ux * hw, py - uy * hw), q3 = mapPoint(px - ux * ow, py - uy * ow);
+            *vp++ = { q0.x, q0.y, whiteUV_.x, whiteUV_.y, transparent };
+            *vp++ = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, color };
+            *vp++ = { q2.x, q2.y, whiteUV_.x, whiteUV_.y, color };
+            *vp++ = { q3.x, q3.y, whiteUV_.x, whiteUV_.y, transparent };
+        }
+    }
+    uint32_t* ix = appendIndices(idxCount);
+    for (uint32_t i = 0; i < n; ++i)
+    {
+        const uint32_t a = base + i * 4;
+        const uint32_t b = base + (i + 1 == n ? 0 : i + 1) * 4;
+        for (uint32_t q = 0; q < 3; ++q)
+        {
+            *ix++ = a + q;
+            *ix++ = b + q;
+            *ix++ = b + q + 1;
+            *ix++ = a + q;
+            *ix++ = b + q + 1;
+            *ix++ = a + q + 1;
+        }
+    }
+    const float reach = ow * 1.1f + 0.01f; // (the mitre of the corners: at most 1 / cos(15 degrees) of the half width)
+    note(static_cast<size_t>(n) * 4, x0 - reach, y0 - reach, x1 + reach, y1 + reach);
+    addCmd(offset, idxCount, fontTexture_, true);
+    return true;
+}
+
 void DrawList::addRoundRectFilled(const Rect& rect, float radius, const Color& color, int segments)
 {
     if (rect.w <= 0.0f || rect.h <= 0.0f) return;
@@ -1191,6 +1427,7 @@ void DrawList::addRoundRectFilled(const Rect& rect, float radius, const Color& c
 
     float x0 = rect.x, y0 = rect.y, x1 = rect.x + rect.w, y1 = rect.y + rect.h;
     const int steps = cornerSegments(radius, segments);
+    if (fillRoundRectFast(x0, y0, x1, y1, radius, steps, color)) return;
     // TR: 270°→360°  BR: 0°→90°  BL: 90°→180°  TL: 180°→270°
     pushCornerArc(path_, { x1 - radius, y0 + radius }, radius, -Pi * 0.5f, steps);
     pushCornerArc(path_, { x1 - radius, y1 - radius }, radius, 0.0f, steps);
@@ -1217,6 +1454,7 @@ void DrawList::addRoundRect(const Rect& rect, float radius, const Color& color, 
 
     float x0 = r2.x, y0 = r2.y, x1 = r2.x + r2.w, y1 = r2.y + r2.h;
     const int steps = cornerSegments(radius, segments);
+    if (strokeRoundRectFast(x0, y0, x1, y1, radius, steps, color, thickness)) return;
     pushCornerArc(path_, { x1 - radius, y0 + radius }, radius, -Pi * 0.5f, steps);
     pushCornerArc(path_, { x1 - radius, y1 - radius }, radius, 0.0f, steps);
     pushCornerArc(path_, { x0 + radius, y1 - radius }, radius, Pi * 0.5f, steps);
@@ -1282,6 +1520,7 @@ void DrawList::addImage(TextureHandle texture, const Rect& rect, const Rect& uv,
     ix[3] = v0;
     ix[4] = v2;
     ix[5] = v3;
+    note(4, rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
     addCmd(offset, 6, texture);
 }
 
@@ -1294,10 +1533,14 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
     Vec2 pen = pos;
     uint32_t previous = 0;
     const bool kern = kerns(font); // decided once for the text, not for every pair
+    float bx0 = 1.0e30f, by0 = 1.0e30f, bx1 = -1.0e30f, by1 = -1.0e30f; // the bounds of the glyph quads, for addCmd
+    size_t quads = 0;
+    const bool plain = transformStack_.empty(); // (no transform: the points are not mapped)
 
     while (*text)
     {
-        uint32_t codepoint = decodeUtf8(text);
+        // (an ASCII letter without the call)
+        const uint32_t codepoint = static_cast<unsigned char>(*text) < 0x80 ? static_cast<unsigned char>(*text++) : decodeUtf8(text);
         if (codepoint == '\n')
         {
             pen.x = pos.x;
@@ -1320,17 +1563,23 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
                 glyph->size.x * scale, glyph->size.y * scale };
             if (textSnapping_)
             {
-                rect.x = std::floor(rect.x * ps + 0.5f) / ps;
-                rect.y = std::floor(rect.y * ps + 0.5f) / ps;
+                rect.x = floorOf(rect.x * ps + 0.5f) / ps;
+                rect.y = floorOf(rect.y * ps + 0.5f) / ps;
             }
             Rect uv = glyph->uv;
+            if (rect.x < bx0) bx0 = rect.x;
+            if (rect.y < by0) by0 = rect.y;
+            if (rect.x + rect.w > bx1) bx1 = rect.x + rect.w;
+            if (rect.y + rect.h > by1) by1 = rect.y + rect.h;
+            ++quads;
 
             const uint32_t v0 = static_cast<uint32_t>(vertices_.size()), v1 = v0 + 1, v2 = v0 + 2,
                            v3 = v0 + 3;
             DrawVertex* vp = appendVertices(4);
-            const Vec2 q0 = mapPoint(rect.x, rect.y), q1 = mapPoint(rect.x + rect.w, rect.y),
-                       q2 = mapPoint(rect.x + rect.w, rect.y + rect.h),
-                       q3 = mapPoint(rect.x, rect.y + rect.h);
+            const Vec2 q0 = plain ? Vec2{ rect.x, rect.y } : mapPoint(rect.x, rect.y),
+                       q1 = plain ? Vec2{ rect.x + rect.w, rect.y } : mapPoint(rect.x + rect.w, rect.y),
+                       q2 = plain ? Vec2{ rect.x + rect.w, rect.y + rect.h } : mapPoint(rect.x + rect.w, rect.y + rect.h),
+                       q3 = plain ? Vec2{ rect.x, rect.y + rect.h } : mapPoint(rect.x, rect.y + rect.h);
             vp[0] = { q0.x, q0.y, uv.x, uv.y, color };
             vp[1] = { q1.x, q1.y, uv.x + uv.w, uv.y, color };
             vp[2] = { q2.x, q2.y, uv.x + uv.w, uv.y + uv.h, color };
@@ -1347,6 +1596,7 @@ void DrawList::addText(const Font& font, Vec2 pos, const Color& color, const cha
         pen.x += glyph->advanceX * scale;
     }
 
+    if (quads > 0) note(quads * 4, bx0, by0, bx1, by1);
     addCmd(offset, static_cast<uint32_t>(indices_.size()) - offset, font.texture());
 }
 
@@ -1363,7 +1613,7 @@ Vec2 DrawList::calcTextSize(const Font& font, const char* text, float scale)
 
     while (*cursor)
     {
-        uint32_t codepoint = decodeUtf8(cursor);
+        const uint32_t codepoint = static_cast<unsigned char>(*cursor) < 0x80 ? static_cast<unsigned char>(*cursor++) : decodeUtf8(cursor);
         if (codepoint == '\n')
         {
             maxLineWidth = std::max(maxLineWidth, lineWidth);
@@ -1895,6 +2145,43 @@ void DrawList::addLine(Vec2 a, Vec2 b, const Color& color, float thickness)
     float dx = b.x - a.x;
     float dy = b.y - a.y;
     if (dx * dx + dy * dy <= 0.00000001f) return;
+    const float length = sqrtf(dx * dx + dy * dy);
+    if (antiAliasing_ && length > 0.0001f)
+    {
+        // a segment of two points (what pathStroke makes of it, without the tables of directions it works out for a polyline): the
+        // normal at both ends is the one of the segment, a band of the core width and a fringe of one pixel on each side
+        thickness = std::max(1.0f, thickness);
+        const float hw = std::max(1.0f, thickness - 1.0f) * 0.5f, ow = hw + 1.0f;
+        const float ux = -(dy / length), uy = dx / length;
+        const uint32_t offset = static_cast<uint32_t>(indices_.size());
+        const uint32_t base = static_cast<uint32_t>(vertices_.size());
+        Color transparent = color;
+        transparent.a = 0;
+        DrawVertex* vp = appendVertices(8);
+        const Vec2 ends[2] = { a, b };
+        for (int e = 0; e < 2; ++e)
+        {
+            const Vec2 q0 = mapPoint(ends[e].x + ux * ow, ends[e].y + uy * ow), q1 = mapPoint(ends[e].x + ux * hw, ends[e].y + uy * hw);
+            const Vec2 q2 = mapPoint(ends[e].x - ux * hw, ends[e].y - uy * hw), q3 = mapPoint(ends[e].x - ux * ow, ends[e].y - uy * ow);
+            *vp++ = { q0.x, q0.y, whiteUV_.x, whiteUV_.y, transparent };
+            *vp++ = { q1.x, q1.y, whiteUV_.x, whiteUV_.y, color };
+            *vp++ = { q2.x, q2.y, whiteUV_.x, whiteUV_.y, color };
+            *vp++ = { q3.x, q3.y, whiteUV_.x, whiteUV_.y, transparent };
+        }
+        uint32_t* ix = appendIndices(18);
+        for (uint32_t q = 0; q < 3; ++q)
+        {
+            *ix++ = base + q;
+            *ix++ = base + 4 + q;
+            *ix++ = base + 4 + q + 1;
+            *ix++ = base + q;
+            *ix++ = base + 4 + q + 1;
+            *ix++ = base + q + 1;
+        }
+        note(8, std::min(a.x, b.x) - ow, std::min(a.y, b.y) - ow, std::max(a.x, b.x) + ow, std::max(a.y, b.y) + ow);
+        addCmd(offset, 18, fontTexture_, true);
+        return;
+    }
     path_.clear();
     path_.push_back(a);
     path_.push_back(b);
@@ -1922,21 +2209,114 @@ Rect DrawList::currentClip() const
     return { 0.0f, 0.0f, 100000.0f, 100000.0f };
 }
 
-void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture)
+namespace
 {
+inline bool rectHolds(const Rect& outer, const Rect& inner)
+{
+    return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+}
+
+inline Rect rectUnion(const Rect& a, const Rect& b)
+{
+    const float x0 = std::min(a.x, b.x), y0 = std::min(a.y, b.y);
+    const float x1 = std::max(a.x + a.w, b.x + b.w), y1 = std::max(a.y + a.h, b.y + b.h);
+    return { x0, y0, x1 - x0, y1 - y0 };
+}
+
+// A command this big has its bounds worked out only when it is cheap to say they are not needed (see addCmd).
+constexpr size_t kMergeScanMax = 4096;
+} // namespace
+
+bool DrawList::boundsOf(size_t from, size_t to, Rect& out) const
+{
+    if (to <= from || to > vertices_.size()) return false;
+    float x0 = vertices_[from].x, y0 = vertices_[from].y, x1 = x0, y1 = y0;
+    if (x0 - x0 != 0.0f || y0 - y0 != 0.0f) return false; // (a first vertex that is not a number: not known)
+    for (size_t i = from + 1; i < to; ++i)
+    {
+        const float x = vertices_[i].x, y = vertices_[i].y;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+    }
+    out = { x0, y0, x1 - x0, y1 - y0 };
+    return true;
+}
+
+void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle texture, bool solid)
+{
+    const size_t from = newVertices_; // the vertices of this command (or of nothing, if it is dropped) are from..here
+    newVertices_ = vertices_.size();
+    // the bounds the shapes of this command noted, when they noted all of its vertices
+    Rect nb = { 0, 0, 0, 0 };
+    bool haveNb = noted_ > 0 && noted_ == newVertices_ - from;
+    if (haveNb) nb = { pendBounds_[0], pendBounds_[1], pendBounds_[2] - pendBounds_[0], pendBounds_[3] - pendBounds_[1] };
+    noted_ = 0;
     if (indexCount == 0) return;
 
-    Rect clip = currentClip();
+    const Rect clip = clipStack_.empty() ? Rect{ 0.0f, 0.0f, 100000.0f, 100000.0f } : clipStack_.back().rect;
     if (clip.w <= 0.0f || clip.h <= 0.0f) return;
     const int roundCount = clipStack_.empty() ? 0 : clipStack_.back().roundCount;
+
+    // The common case, a shape or a text like the one before it (same texture, same clip, no rounded clip): it is part of it.
+    if (!commands_.empty())
+    {
+        DrawCmd& last = commands_.back();
+        if (roundCount == 0 && last.roundClipCount == 0 && last.texture.value == texture.value && last.indexOffset + last.indexCount == indexOffset &&
+                last.clip.x == clip.x && last.clip.y == clip.y && last.clip.w == clip.w && last.clip.h == clip.h)
+        {
+            last.indexCount += indexCount;
+            if (lastBoundsValid_ && haveNb) lastBounds_ = rectUnion(lastBounds_, nb);
+            else
+                lastBoundsValid_ = false;
+            lastSolidOnly_ = lastSolidOnly_ && solid;
+            return;
+        }
+        // The next of a run under a clip that did not matter to the first of the run (see below): the same decision, for the
+        // same clip, by the bounds alone.
+        if (mergedClipValid_ && haveNb && roundCount == 0 && last.roundClipCount == 0 && last.texture.value == texture.value &&
+                last.indexOffset + last.indexCount == indexOffset && mergedClip_.x == clip.x && mergedClip_.y == clip.y &&
+                mergedClip_.w == clip.w && mergedClip_.h == clip.h && rectHolds(clip, nb) && rectHolds(last.clip, nb))
+        {
+            last.indexCount += indexCount;
+            if (lastBoundsValid_) lastBounds_ = rectUnion(lastBounds_, nb);
+            lastSolidOnly_ = lastSolidOnly_ && solid;
+            return;
+        }
+    }
     const RoundClip* rounds = clipStack_.empty() ? nullptr : clipStack_.back().rounds;
 
     if (!commands_.empty())
     {
         DrawCmd& prev = commands_.back();
-        const bool sameTexture = (prev.texture.value == texture.value);
-        const bool sameClip = (prev.clip.x == clip.x && prev.clip.y == clip.y &&
-                               prev.clip.w == clip.w && prev.clip.h == clip.h);
+        bool sameTexture = (prev.texture.value == texture.value);
+        if (!sameTexture && mergeCommands_ && altTexture_.value != 0)
+        {
+            // shapes have a white texel on both pages of the atlas: shapes that come after text of the other page ride on that
+            // page, and the shapes before text of the other page move to it (they are shapes alone, whatever page they were put on)
+            if (solid && texture.value == fontTexture_.value && prev.texture.value == altTexture_.value)
+            {
+                for (size_t i = from; i < newVertices_; ++i)
+                {
+                    vertices_[i].u = altUV_.x;
+                    vertices_[i].v = altUV_.y;
+                }
+                texture = altTexture_;
+                sameTexture = true;
+            }
+            else if (!solid && texture.value == altTexture_.value && lastSolidOnly_ && prev.texture.value == fontTexture_.value)
+            {
+                for (size_t i = lastStart_; i < from; ++i)
+                {
+                    vertices_[i].u = altUV_.x;
+                    vertices_[i].v = altUV_.y;
+                }
+                prev.texture = altTexture_;
+                sameTexture = true;
+            }
+        }
+        const bool sameClip = (prev.clip.x == clip.x && prev.clip.y == clip.y && prev.clip.w == clip.w && prev.clip.h == clip.h);
         // Só faz merge se os índices forem mesmo contíguos
         const bool contiguous = (prev.indexOffset + prev.indexCount == indexOffset);
 
@@ -1951,13 +2331,78 @@ void DrawList::addCmd(uint32_t indexOffset, uint32_t indexCount, TextureHandle t
                          a.radii[3] == b.radii[3];
         }
 
-        if (sameTexture && sameClip && sameRounds && contiguous)
+        if (sameTexture && sameRounds && contiguous && (sameClip || mergeCommands_))
         {
-            prev.indexCount += indexCount;
-            return;
+            if (sameClip)
+            {
+                prev.indexCount += indexCount;
+                if (lastBoundsValid_ && haveNb) lastBounds_ = rectUnion(lastBounds_, nb);
+                else
+                    lastBoundsValid_ = false; // (the vertices of the new part are not known)
+                lastSolidOnly_ = lastSolidOnly_ && solid;
+                return;
+            }
+            // A different clip: the two can be one command when the clip does not matter to what is drawn. The vertices of the new
+            // command are looked at (and those of the one before, when they are not many, or already known).
+            if (!haveNb && newVertices_ - from <= kMergeScanMax) haveNb = boundsOf(from, newVertices_, nb);
+            if (haveNb)
+            {
+                const bool newClean = rectHolds(clip, nb);
+                bool merged = false;
+                Rect united = nb;
+                bool unitedKnown = false;
+                if (newClean && rectHolds(prev.clip, nb))
+                {
+                    merged = true; // the new vertices are inside both clips: the old clip serves
+                    mergedClip_ = clip;
+                    mergedClipValid_ = true;
+                    if (lastBoundsValid_)
+                    {
+                        united = rectUnion(lastBounds_, nb);
+                        unitedKnown = true;
+                    }
+                }
+                else
+                {
+                    Rect pb = lastBounds_;
+                    bool havePb = lastBoundsValid_;
+                    if (!havePb && from > lastStart_ && from - lastStart_ <= kMergeScanMax) havePb = boundsOf(lastStart_, from, pb);
+                    if (havePb && rectHolds(prev.clip, pb))
+                    {
+                        if (newClean)
+                        {
+                            prev.clip = rectUnion(prev.clip, clip); // both inside their own: any clip that holds both will do
+                            merged = true;
+                        }
+                        else if (rectHolds(clip, pb))
+                        {
+                            prev.clip = clip; // the old vertices are inside the new clip: the new clip serves
+                            merged = true;
+                        }
+                        if (merged)
+                        {
+                            united = rectUnion(pb, nb);
+                            unitedKnown = true;
+                        }
+                    }
+                }
+                if (merged)
+                {
+                    prev.indexCount += indexCount;
+                    lastBounds_ = united;
+                    lastBoundsValid_ = unitedKnown;
+                    lastSolidOnly_ = lastSolidOnly_ && solid;
+                    return;
+                }
+            }
         }
     }
 
+    lastStart_ = from;
+    lastBounds_ = nb;
+    lastBoundsValid_ = haveNb;
+    lastSolidOnly_ = solid;
+    mergedClipValid_ = false;
     DrawCmd command;
     command.texture = texture;
     command.clip = clip;
@@ -2216,6 +2661,13 @@ DrawList& GetTransDrawList()
 DrawList& GetOverlayDrawList()
 {
     return current().overlayList;
+}
+
+void SetSolidAlternate(TextureHandle texture, Vec2 whiteUV)
+{
+    current().drawList.setSolidAlternate(texture, whiteUV);
+    current().transDrawList.setSolidAlternate(texture, whiteUV);
+    current().overlayList.setSolidAlternate(texture, whiteUV);
 }
 
 void SetWhitePixel(TextureHandle atlas, Vec2 whiteUV)
