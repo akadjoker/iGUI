@@ -334,7 +334,7 @@ void TreeNode::clear()
 }
 
 int TreeNode::addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn,
-        const String& tipOff)
+        const String& tipOff, const Color& color)
 {
     Toggle toggle;
     toggle.iconOn = iconOn;
@@ -342,9 +342,19 @@ int TreeNode::addToggle(IconId iconOn, IconId iconOff, bool on, const String& ti
     toggle.on = on;
     toggle.tipOn = tipOn;
     toggle.tipOff = tipOff;
+    toggle.color = color;
     toggles_.push_back(toggle);
     if (view_) view_->markDirty();
     return static_cast<int>(toggles_.size()) - 1;
+}
+
+void TreeNode::setToggleColor(int index, const Color& color)
+{
+    if (index < 0 || index >= toggleCount()) return;
+    Color& have = toggles_[index].color;
+    if (have.r == color.r && have.g == color.g && have.b == color.b && have.a == color.a) return;
+    have = color;
+    if (view_) view_->markDirty();
 }
 
 void TreeNode::setToggleState(int index, bool on)
@@ -782,9 +792,10 @@ void TreeView::paint(PaintContext& ctx)
                 const IconId icon =
                         off && toggle.iconOff != IconId::None ? toggle.iconOff : toggle.iconOn;
                 const bool dim = off && toggle.iconOff == IconId::None;
+                const Color& tint = toggle.color.a != 0 ? toggle.color : t.iconColor; // (its own, else the theme's: it follows a theme change)
                 ctx.drawIcon(icon, left + slot * k + (slot - isz) * 0.5f,
                         rowY + (rowHeight_ - isz) * 0.5f, isz,
-                        dim ? Color(t.iconColor.r, t.iconColor.g, t.iconColor.b, 80) : t.iconColor);
+                        dim ? Color(tint.r, tint.g, tint.b, 80) : tint);
             }
         }
     }

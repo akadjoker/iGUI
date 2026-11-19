@@ -1778,7 +1778,8 @@ void CodeEditor::paint(PaintContext& ctx)
     {
         // The line a third of the way down, so what follows it is in view.
         const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight()));
-        scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
+        const int top = logicalToVisualRow(pendingRevealLine_) - rows / 3;
+        scrollToRow(top > 0 ? top : 0);
         pendingRevealLine_ = -1;
         markDirty();
     }
@@ -3149,7 +3150,8 @@ void CodeEditor::reveal(int line, int col)
     if (lineHeight() > 0.0f)
     {
         const int rows = std::max(1, static_cast<int>(rect_.h / lineHeight()));
-        scrollToLine(std::max(0, logicalToVisualRow(pendingRevealLine_) - rows / 3));
+        const int top = logicalToVisualRow(pendingRevealLine_) - rows / 3;
+        scrollToRow(top > 0 ? top : 0);
         pendingRevealLine_ = -1;
     }
     markDirty();

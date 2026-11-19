@@ -374,8 +374,12 @@ public:
     int firstVisibleLine() const;
     /// @brief Get the number of visible lines.
     int visibleLineCount() const;
-    /// @brief Scroll the view to show a given line.
+    /// @brief Scroll the view so that line @p n (a line of the text, from 0) is the first one shown. A line that is hidden (inside a collapsed
+    ///        fold) or that wraps counts for the rows it really has: the view goes to the row where that line is, and never past the last row.
     void scrollToLine(int n);
+    /// @brief Scroll the view to a visual row (the lines that are hidden by a fold have none, a wrapped line has several): what firstVisibleLine()
+    ///        counts in.
+    void scrollToRow(int row);
 
     /// @brief Emitted when text content changes.
     Signal<> textChanged;

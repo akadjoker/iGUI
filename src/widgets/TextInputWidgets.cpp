@@ -729,10 +729,19 @@ int TextEdit::visibleLineCount() const
 void TextEdit::scrollToLine(int n)
 {
     if (lineHeight() <= 0) return;
+    // by the row the line is at: the lines above it may be hidden (a fold) and have none, or wrap and have several
+    scrollToRow(n <= 0 ? 0 : logicalToVisualRow(n));
+}
+
+void TextEdit::scrollToRow(int row)
+{
+    if (lineHeight() <= 0) return;
     revealCursor_ = false;
-    scrollY_ = n * lineHeight();
-    float maxY = std::max(0.0f, static_cast<int>(lines_.size()) * lineHeight() - rect_.h);
-    scrollY_ = std::max(0.0f, std::min(scrollY_, maxY));
+    scrollY_ = static_cast<float>(row) * lineHeight();
+    float maxY = static_cast<float>(totalVisualRows()) * lineHeight() - rect_.h;
+    if (maxY < 0.0f) maxY = 0.0f;
+    if (scrollY_ > maxY) scrollY_ = maxY;
+    if (scrollY_ < 0.0f) scrollY_ = 0.0f;
     markDirty();
 }
 

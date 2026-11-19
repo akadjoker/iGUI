@@ -134,10 +134,25 @@ public:
         bool on = false;
         String tipOn;
         String tipOff;
+        Color color = Color(0, 0, 0, 0); // alpha 0: the theme's iconColor (it follows a theme change, as the icon of a row does)
     };
-    /// @brief Add a toggle to the row; returns its index. The first one is the leftmost.
+    /// @brief Add a toggle to the row; returns its index. The first one is the leftmost. @p color tints the icon (alpha 0, the default: the
+    ///        theme's iconColor, so the toggle follows the theme like the icon of a row without setIconColor); while off with no off icon it is
+    ///        drawn dimmed, in the same tint.
     int addToggle(IconId iconOn, IconId iconOff, bool on, const String& tipOn = "",
-            const String& tipOff = "");
+            const String& tipOff = "", const Color& color = Color(0, 0, 0, 0));
+    /// @brief The tint of a toggle (alpha 0: the theme's iconColor).
+    void setToggleColor(int index, const Color& color);
+    /// @brief Go back to following the theme's iconColor.
+    void clearToggleColor(int index)
+    {
+        setToggleColor(index, Color(0, 0, 0, 0));
+    }
+    /// @brief The tint set for a toggle (alpha 0: none, the theme's).
+    Color toggleColor(int index) const
+    {
+        return index >= 0 && index < toggleCount() ? toggles_[index].color : Color(0, 0, 0, 0);
+    }
     /// @brief Number of toggles on the row.
     int toggleCount() const
     {

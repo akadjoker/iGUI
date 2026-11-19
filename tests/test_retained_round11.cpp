@@ -11,6 +11,8 @@
 #include <igui/widgets/SpinSlider.hpp>
 #include <igui/widgets/BasicWidgets.hpp>
 #include <igui/widgets/InputWidgets.hpp>
+#include <igui/widgets/TreePropertyColorWidgets.hpp>
+#include <igui/widgets/CodeEditor.hpp>
 #include <string.h>
 
 #include <locale.h>
@@ -395,6 +397,107 @@ void testWakeHook()
     check(gWakes == 1, "a host that has no hook: no call");
 }
 
+
+// A TreeView toggle (an eye, a padlock) is drawn in the theme's iconColor by default, and follows a theme change; setToggleColor tints it.
+int verticesOfColor(const Color& c, float xFrom)
+{
+    int n = 0;
+    for (const DrawPass& pass: GetDrawData()->passes)
+        if (pass.list)
+            for (const DrawVertex& v: pass.list->vertices())
+                if (v.x >= xFrom && v.color.r == c.r && v.color.g == c.g && v.color.b == c.b) ++n;
+    return n;
+}
+
+void testToggleTint()
+{
+    Harness h;
+    Theme::instance() = Theme::byName("dark");
+    auto* tree = h.root()->createChild<TreeView>();
+    tree->setRect({ 10, 10, 300, 200 });
+    TreeNode* node = tree->addRoot("row");
+    const int eye = node->addToggle(IconId::Eye, IconId::EyeOff, true, "hide", "show");
+    h.relayout();
+    h.frames(2);
+    const float slot = 250.0f; // the toggles are at the right edge of the row
+    const Color dark = Theme::instance().iconColor;
+    check(verticesOfColor(dark, slot) > 0, "a toggle with no tint is drawn in the theme's iconColor");
+    check(node->toggleColor(eye).a == 0, "and says it has none of its own");
+    // a theme change: the toggle follows
+    Theme::instance() = Theme::byName("light");
+    h.frames(2);
+    const Color light = Theme::instance().iconColor;
+    check(!(light.r == dark.r && light.g == dark.g && light.b == dark.b), "(the light preset's icon colour is another one)");
+    check(verticesOfColor(light, slot) > 0 && verticesOfColor(dark, slot) == 0, "after a theme change the toggle is in the new iconColor");
+    // its own tint
+    node->setToggleColor(eye, Color(200, 40, 40, 255));
+    h.frames(2);
+    check(verticesOfColor(Color(200, 40, 40, 255), slot) > 0 && verticesOfColor(light, slot) == 0, "setToggleColor: the toggle is in that colour");
+    node->setToggleState(eye, false);
+    h.frames(2);
+    check(verticesOfColor(Color(200, 40, 40, 255), slot) > 0, "and still when it is off");
+    node->clearToggleColor(eye);
+    h.frames(2);
+    check(verticesOfColor(light, slot) > 0 && verticesOfColor(Color(200, 40, 40, 255), slot) == 0, "clearToggleColor: back to the theme's");
+    const int second = node->addToggle(IconId::Lock, IconId::None, true, "", "", Color(30, 160, 80, 255));
+    h.frames(2);
+    check(node->toggleColor(second).g == 160 && verticesOfColor(Color(30, 160, 80, 255), slot) > 0, "addToggle takes the tint too");
+    Theme::instance() = Theme::byName("dark");
+}
+
+// scrollToLine by the row the line is at: with folds above the line (hidden lines have no row) the view used to go past the last row: blank
+struct EditorProbe : CodeEditor
+{
+    int rowOf(int line) const
+    {
+        return logicalToVisualRow(line);
+    }
+    int rows() const
+    {
+        return logicalToVisualRow(lineCount());
+    }
+};
+
+void testScrollToLineWithFolds()
+{
+    Harness h;
+    auto* ed = h.root()->createChild<EditorProbe>();
+    ed->setRect({ 0, 0, 500, 240 });
+    String text;
+    for (int k = 0; k < 100; ++k)
+    {
+        text += String("void f") + String::number(k) + "() {\n    int a = " + String::number(k) + ";\n    int b = a;\n}\n";
+    }
+    ed->setHighlighter<ig::syntax::CppHighlighter>(); // (the highlighter says what opens and closes a fold)
+    ed->setText(text);
+    ed->setShowFolding(true);
+    h.relayout();
+    h.frames(3);
+    check(ed->rows() == ed->lineCount(), "(unfolded: a row for each line)");
+    ed->foldAll();
+    h.frames(3);
+    const int rows = ed->rows();
+    check(rows < ed->lineCount() / 2, "(everything folded: far fewer rows than lines)");
+    ed->scrollToLine(120); // line 120 is the head of the 31st function; above it, 30 folded ones (30 rows, not 120)
+    h.frames(2);
+    const int first = ed->firstVisibleLine();
+    const int want = ed->rowOf(120);
+    char what[160];
+    snprintf(what, sizeof what, "scrollToLine(120) with folds above: the first row is the row of that line (%d, want %d, %d rows in all)", first, want, rows);
+    check(first == want && first < rows, what);
+    ed->scrollToLine(0);
+    h.frames(2);
+    check(ed->firstVisibleLine() == 0, "scrollToLine(0) goes to the top");
+    ed->scrollToLine(100000);
+    h.frames(2);
+    check(ed->firstVisibleLine() < rows, "a line past the end: the last page, not past the last row");
+    ed->unfoldAt(0);
+    h.frames(2);
+    ed->scrollToLine(60);
+    h.frames(2);
+    check(ed->firstVisibleLine() == ed->rowOf(60) && ed->rowOf(60) > 14, "with one fold open: still by row");
+}
+
 } // namespace
 
 int main()
@@ -406,6 +509,8 @@ int main()
     testSpinSliderIntegers();
     testSuperKey();
     testWakeHook();
+    testToggleTint();
+    testScrollToLineWithFolds();
     testIdleSeconds();
     testLocaleIndependence();
     if (commaLocale())
