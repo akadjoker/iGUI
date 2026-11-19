@@ -1315,14 +1315,28 @@ Shot chartShot(const char* preset, int variant)
         rows.push_back("max");
         rows.push_back("mean");
         ct::Vector<PlotStatsColumn> cols;
+        Data* d[] = { &demo.speed, &demo.torque, &demo.noise, &demo.temp };
         for (int k = 0; k < 4; ++k)
         {
+            // the statistics of the series over the range, as an application would work them out
+            double lo = 1e300, hi = -1e300, sum = 0.0;
+            size_t count = 0;
+            for (size_t i = 0; i < d[k]->x.size(); ++i)
+            {
+                if (d[k]->x[i] < 12.0 || d[k]->x[i] > 31.0 || d[k]->y[i] != d[k]->y[i]) continue;
+                if (d[k]->y[i] < lo) lo = d[k]->y[i];
+                if (d[k]->y[i] > hi) hi = d[k]->y[i];
+                sum += d[k]->y[i];
+                ++count;
+            }
+            char text[3][32];
+            snprintf(text[0], 32, "%.2f", lo);
+            snprintf(text[1], 32, "%.2f", hi);
+            snprintf(text[2], 32, "%.2f", count ? sum / static_cast<double>(count) : 0.0);
             PlotStatsColumn c;
             c.seriesId = k + 1;
             c.header = k == 0 ? "speed" : k == 1 ? "torque" : k == 2 ? "noise" : "temp";
-            c.cells.push_back("-1.40");
-            c.cells.push_back("1.41");
-            c.cells.push_back("0.02");
+            for (int r = 0; r < 3; ++r) c.cells.push_back(text[r]);
             cols.push_back(c);
         }
         chart->setStats(rows, cols);

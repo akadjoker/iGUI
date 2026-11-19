@@ -1111,6 +1111,44 @@ void testPopupSheets(const char* dir)
     Theme::instance() = Theme::dark();
 }
 
+// the selected row of a list, before round 10 (the text colour over the selection) and now (selectionText), side by side, in each preset (ROUND10_SHOTS)
+void testSelectionPictures(const char* dir)
+{
+    printf("-- the selected row of a list, before and after, into %s\n", dir);
+    for (int i = 0; i < kPresetCount; ++i)
+    {
+        Shot sheet;
+        sheet.w = 2 * 250;
+        sheet.h = 120;
+        sheet.px.resize(static_cast<size_t>(sheet.w) * static_cast<size_t>(sheet.h));
+        for (int pass = 0; pass < 2; ++pass)
+        {
+            Theme::instance() = Theme::byName(kPresets[i]);
+            if (pass == 0) Theme::instance().selectionText = Theme::instance().textColor; // what a list drew before
+            Screen screen(1280, 720);
+            screen.useDynamicPage();
+            Widget* holder = screen.h.root()->createChild<Widget>();
+            holder->setRect({ 0, 0, 1280, 720 });
+            ListBox* list = holder->createChild<ListBox>();
+            const char* names[] = { "Oscillator", "Filter cutoff", "Envelope", "Reverb send", "Master" };
+            for (int k = 0; k < 5; ++k) list->addItem(names[k]);
+            list->setSelectedIndex(1);
+            list->setRect({ 10, 10, 230, 100 });
+            screen.h.relayout();
+            screen.h.frames(6);
+            const Shot shot = screen.take();
+            for (int y = 0; y < 120; ++y)
+                for (int x = 0; x < 250; ++x)
+                    sheet.px[static_cast<size_t>(y) * static_cast<size_t>(sheet.w) + static_cast<size_t>(pass * 250 + x)] =
+                            shot.px[static_cast<size_t>(y) * static_cast<size_t>(shot.w) + static_cast<size_t>(x)];
+        }
+        char name[64];
+        snprintf(name, sizeof name, "list-selection-%s", kPresets[i]);
+        writePicture(dir, name, sheet);
+    }
+    Theme::instance() = Theme::dark();
+}
+
 } // namespace
 
 int main()
@@ -1125,7 +1163,11 @@ int main()
     testSelectedTextIsSeen();
     testScrollBarsAndIcons();
     if (const char* dir = getenv("ROUND9_SHOTS")) testPictures(dir);
-    if (const char* dir = getenv("ROUND10_SHOTS")) testPopupSheets(dir);
+    if (const char* dir = getenv("ROUND10_SHOTS"))
+    {
+        testPopupSheets(dir);
+        testSelectionPictures(dir);
+    }
     Theme::instance() = Theme::dark();
     shutdown();
     if (failures() == 0) printf("PASS\n");
