@@ -854,6 +854,16 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         set_tests_properties(igui_throwaway_display PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60 RESOURCE_LOCK igui_xvfb)
     endif()
 
+    # The page the web stage of tools/check.sh loads in a browser (tests/web/run_web_gl.js): the adapter on WebGL 2 with widgets of known
+    # colours, read back from the framebuffer. Only for Emscripten.
+    option(IGUI_BUILD_WEB_PROBE "Build the web probe page (Emscripten only; tools/check.sh stage web)" OFF)
+    if(IGUI_BUILD_WEB_PROBE AND EMSCRIPTEN)
+        add_executable(igui_web_probe examples/web_probe/main.cpp)
+        target_link_libraries(igui_web_probe PRIVATE igui_zen)
+        set_target_properties(igui_web_probe PROPERTIES SUFFIX ".html"
+            LINK_FLAGS "-sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2 -sFULL_ES3=1 -sALLOW_MEMORY_GROWTH=1 --shell-file ${CMAKE_CURRENT_SOURCE_DIR}/tests/web/shell.html")
+    endif()
+
     if(IGUI_BUILD_ZEN_DEMO)
         add_executable(igui_zen_windows examples/zen_windows/main.cpp)
         target_link_libraries(igui_zen_windows PRIVATE igui_zen)

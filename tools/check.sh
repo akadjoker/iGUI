@@ -14,6 +14,12 @@
 #   4. hash     the checksum of what the bench draws for the editor window and for the piano roll (igui_retained_bench --hash)
 #               against the reference in bench/retained/draw.hash: a change that is only meant to make
 #               drawing faster, or to fix something outside the editor window, must not move it
+#   5. web      the zen adapter in a browser: examples/web_probe built with Emscripten (WebGL 2) and loaded in a headless Chrome
+#               (tests/web/run_web_gl.js, through the DevTools protocol, WebGL on SwiftShader): no WebGL error in the console, and the picture
+#               is not single-channel (the widgets that have known colours have them, in the dark and the light preset). SKIP, with the reason,
+#               when there is no emcc (on PATH, or in IGUI_EMSDK_DIR / $EMSDK / $HOME/emsdk / /media/projectos/projects/emsdk), no Chrome or
+#               Chromium, or no Node. A desktop OpenGL build does not run the browser's GL: a call that WebGL 2 does not have (a texture
+#               swizzle, which drew every widget in red) was published because nothing built the web.
 #
 # Nothing here touches the machine or the session of whoever runs it:
 #   - every build, test and program runs in a memory-capped scope of its own (systemd-run --user --scope
@@ -30,9 +36,10 @@
 # Options (environment variables in capitals):
 #   --base REV          the revision the work is compared with for `nostd` (default origin/main)
 #   --build DIR         where the build trees and logs go (default $IGUI_CHECK_BUILD, else <repo>/../igui-check-build)
-#   --skip STAGE        leave a stage out (nostd, release, asan, hash); repeatable
+#   --skip STAGE        leave a stage out (nostd, release, asan, hash, web); repeatable
 #   --jobs N            compiler jobs (default 4); the tests always run one at a time
 #   --update-hash       write bench/retained/draw.hash with the checksum of this tree instead of comparing
+#   IGUI_EMSDK_DIR      the Emscripten SDK, for the web stage (the folder that has emsdk_env.sh)
 #   IGUI_CONTAINERS_DIR, IGUI_ZEN_PLATFORM_DIR   the dependencies, as the CMake options of the same name
 #                       (without them CMake uses third_party/containers and ../zen_plataform)
 set -u
@@ -183,6 +190,47 @@ if ! skipped hash; then
         else
             diff <(cat "$ref") <(echo "$got") > "$build/hash.diff"
             report FAIL hash "the draw data of the editor window changed (see $build/hash.diff; --update-hash if it is meant to)"
+        fi
+    fi
+fi
+
+# ── 5. the web ───────────────────────────────────────────────────────────────
+if ! skipped web; then
+    emsdk=""
+    for d in "${IGUI_EMSDK_DIR:-}" "${EMSDK:-}" "$HOME/emsdk" /media/projectos/projects/emsdk; do
+        [ -n "$d" ] && [ -f "$d/emsdk_env.sh" ] && { emsdk=$d; break; }
+    done
+    emcc_ok=0
+    command -v emcc > /dev/null 2>&1 && emcc_ok=1
+    [ -n "$emsdk" ] && emcc_ok=1
+    chrome=""
+    for c in google-chrome chromium chromium-browser; do command -v "$c" > /dev/null 2>&1 && { chrome=$c; break; }; done
+    node=$(command -v node 2> /dev/null)
+    [ -z "$node" ] && [ -n "$emsdk" ] && node=$(ls -d "$emsdk"/node/*/bin/node 2> /dev/null | tail -1)
+    if [ $emcc_ok -eq 0 ]; then
+        report SKIP web "no emcc (not on PATH; set IGUI_EMSDK_DIR to the folder of emsdk_env.sh)"
+    elif [ -z "$chrome" ]; then
+        report SKIP web "no headless browser (google-chrome, chromium or chromium-browser)"
+    elif [ -z "$node" ]; then
+        report SKIP web "no node (it drives the browser through the DevTools protocol)"
+    else
+        weblog="$build/web.log"
+        : > "$weblog"
+        envsetup=":"
+        [ -n "$emsdk" ] && envsetup="source '$emsdk/emsdk_env.sh' > /dev/null 2>&1"
+        # emsdk_env.sh and the emcmake run in a shell of their own: nothing of it stays in this one
+        if ! capped "${scrub[@]}" bash -c "$envsetup; emcmake cmake -S '$repo' -B '$build/web' -G Ninja -DCMAKE_BUILD_TYPE=Release -DIGUI_BUILD_TESTS=OFF \
+                -DIGUI_BUILD_RAYLIB_BACKEND=OFF -DIGUI_BUILD_IMMEDIATE=OFF -DIGUI_BUILD_LEGACY=OFF -DIGUI_BUILD_ZEN_ADAPTER=ON -DIGUI_BUILD_WEB_PROBE=ON ${cmake_deps[*]}" >> "$weblog" 2>&1; then
+            report FAIL web "emcmake did not configure (see $weblog)"
+        elif ! capped "${scrub[@]}" bash -c "$envsetup; cmake --build '$build/web' -j $jobs" >> "$weblog" 2>&1; then
+            report FAIL web "the build with Emscripten failed (see $weblog)"
+        else
+            capped "${scrub[@]}" "$node" "$repo/tests/web/run_web_gl.js" "$build/web" --chrome="$(command -v "$chrome")" >> "$weblog" 2>&1
+            code=$?
+            line=$(grep -E '^(PASS|FAIL): ' "$weblog" | tail -1)
+            if [ $code -eq 0 ]; then report PASS web "${line:-the page held}"
+            elif [ $code -eq 77 ]; then report SKIP web "$(grep SKIP "$weblog" | tail -1) (see $weblog)"
+            else report FAIL web "${line:-the page failed} (see $weblog)"; fi
         fi
     fi
 fi
