@@ -835,6 +835,13 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
     if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE AND NOT PLATFORM_USE_FAKE)
         add_executable(igui_throwaway_display_tests tests/test_throwaway_display.cpp)
         add_test(NAME igui_throwaway_display
+
+            # Round 11 (docs/ROUND11.md): the loop with nothing to do waits for an event, a wake or a timer, with no limit: passes and
+            # wake-ups with nothing happening, a blinking caret on time, the clock, a worker's requestFrameFromAnyThread, a real event.
+            add_executable(igui_zen_idle_tests tests/test_zen_idle.cpp)
+            target_include_directories(igui_zen_idle_tests PRIVATE "${IGUI_XTEST_INCLUDE_DIR}")
+            target_link_libraries(igui_zen_idle_tests PRIVATE igui_zen "${IGUI_XTEST_LIBRARY}" "${IGUI_X11_LIBRARY}")
+            igui_add_window_test(igui_zen_idle igui_zen_idle_tests)
             COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/tools/xvfb-test.sh" $<TARGET_FILE:igui_throwaway_display_tests>)
         set_tests_properties(igui_throwaway_display PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 60 RESOURCE_LOCK igui_xvfb)
     endif()

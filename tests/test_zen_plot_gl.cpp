@@ -68,6 +68,7 @@ int main()
     config.showStats = false;
     config.msaa = 0;
     config.defaultDynamicPage = false;
+    zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
     if (!zen.create(config) || !zen.usesOpenGL())
     {
         fprintf(stderr, "test_zen_plot_gl: no OpenGL context here: skipped\n");

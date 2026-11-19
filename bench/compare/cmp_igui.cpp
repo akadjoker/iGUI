@@ -99,6 +99,10 @@ struct IguiLib
         if (flat) rt::Theme::instance().borderRadius = 0.0f;
         app.setFrameProbe(&IguiLib::probe, this);
         app.setSkipIdleFrames(idleSkip);
+        // pump() waits for an event with no limit when nothing is scheduled (the library's default); the harness loops that look at the clock
+        // or pump a fixed number of times need it to come back: 50 ms bounds a wait that no event ends, and costs an event nothing (the wait
+        // returns when it arrives). natural() waits exactly until the end of the run instead (the idle stage, which counts the wake-ups).
+        app.setMaxIdleWait(50);
         return true;
     }
 
@@ -213,7 +217,13 @@ struct IguiLib
     void natural(int seconds, long long& frames)
     {
         const double end = cmp::wallMs() + seconds * 1000.0;
-        while (cmp::wallMs() < end && app.pump()) ++frames;
+        for (double left; (left = end - cmp::wallMs()) > 0.0;)
+        {
+            app.setMaxIdleWait(static_cast<int>(left) + 1); // no wake-up before the end unless an event or a timer of the widgets asks for one
+            if (!app.pump()) break;
+            ++frames;
+        }
+        app.setMaxIdleWait(50);
     }
     // FNV-1a of what the last frame handed the backend (vertices, indices, number of commands): two builds of the library that draw
     // the same thing give the same number, so a faster build can be shown to draw exactly what the slower one did.

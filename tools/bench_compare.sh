@@ -17,7 +17,9 @@
 # then writes $OUT/tables.md (the tables of the document) next to the raw outputs.
 #
 # The programs are built with  cmake -DIGUI_BUILD_ZEN_ADAPTER=ON -DIGUI_BUILD_COMPARE=ON -DIGUI_COMPARE_IMGUI_DIR=<Dear ImGui>
-#   -DIGUI_COMPARE_FLTK_CONFIG=<fltk-config> -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE=-O2 ...  (one -O2 for all of them);
+#   -DIGUI_COMPARE_FLTK_CONFIG=<fltk-config> -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS_RELEASE="-O2 -DNDEBUG" ...  (one -O2 for all of them; the NDEBUG is not optional since
+# containers 63793ca: without it ct is built with CT_DEBUG_ITERATORS, whose HashMap and HashSet are bigger and check their iterators, and the
+# counts are those of a debug build);
 # bench/compare is outside the no-std rule (the programs of the other libraries use their C++ library); see bench/compare/CMakeLists.txt.
 #
 # Options:

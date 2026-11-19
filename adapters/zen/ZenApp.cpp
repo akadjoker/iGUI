@@ -254,6 +254,8 @@ bool App::create(const Config &config)
     }
     io.getPrimaryText = primaryGet_;
     io.setPrimaryText = primarySet_;
+    // WidgetApp::requestFrameFromAnyThread() ends the platform's wait for events (platform_wake is for any thread, at any time)
+    io.wakeLoop = [] { platform_wake(); };
 
     if (atlas_.buildDefault())
     {
@@ -442,7 +444,7 @@ bool App::pump(bool skipBlocked)
     // Windows may be opened or closed by widget handlers during the frame:
     // go by index, and destroy only afterwards.
     bool painted = false;
-    int sleepMs = 8;
+    int sleepMs = -1; // how long the loop may sleep: the soonest any window needs a frame; -1: no time limit, only an event or a wake
     for (size_t i = 0; i < windows_.size(); ++i)
     {
         Window *w = windows_[i];
@@ -458,7 +460,7 @@ bool App::pump(bool skipBlocked)
         if (probe_ && w == main_)
             probe_(0, probeUser_);
         window_begin_frame(w->platform);
-        idleWaitMs_ = 8;
+        idleWaitMs_ = -1;
         if (frameWindow(w, false))
         {
             window_swap(w->platform);
@@ -466,12 +468,25 @@ bool App::pump(bool skipBlocked)
             if (probe_ && w == main_)
                 probe_(3, probeUser_);
         }
-        else if (idleWaitMs_ < sleepMs)
+        else if (idleWaitMs_ >= 0 && (sleepMs < 0 || idleWaitMs_ < sleepMs))
             sleepMs = idleWaitMs_;
     }
-    // Nothing was painted: the window is idle.
-    if (!painted && sleepMs > 0 && windows_.size() > 0)
-        idleWait(sleepMs);
+    // Nothing was painted: the window is idle. Wait for an event of any window, for a wake from another thread, or for the time the
+    // widgets asked a frame for; what the wait took is handed to every window's next frame (IO::idleSeconds: it is not animation time).
+    if (!painted && windows_.size() > 0)
+    {
+        if (showStats_ && (sleepMs < 0 || sleepMs > 1000)) sleepMs = 1000; // the title with the frame rate is written once a second
+        if (maxIdleMs_ >= 0 && (sleepMs < 0 || sleepMs > maxIdleMs_)) sleepMs = maxIdleMs_;
+        if (sleepMs != 0)
+        {
+            const double before = time_seconds();
+            idleWait(sleepMs);
+            const double slept = time_seconds() - before;
+            if (slept > 0.0)
+                for (Window *w : windows_)
+                    w->idleSlept += slept;
+        }
+    }
     for (size_t i = windows_.size(); i-- > 1;)
     {
         Window *w = windows_[i];
@@ -506,6 +521,7 @@ void App::feedInput(PlatformWindow *pw)
     io.keyShift = key_down(pw, KEY_LEFT_SHIFT) || key_down(pw, KEY_RIGHT_SHIFT);
     io.keyCtrl = key_down(pw, KEY_LEFT_CONTROL) || key_down(pw, KEY_RIGHT_CONTROL);
     io.keyAlt = key_down(pw, KEY_LEFT_ALT) || key_down(pw, KEY_RIGHT_ALT);
+    io.keySuper = key_down(pw, KEY_LEFT_SUPER) || key_down(pw, KEY_RIGHT_SUPER);
 
     Event e;
     while (poll_event(pw, &e))
@@ -521,7 +537,6 @@ void App::feedInput(PlatformWindow *pw)
             ct::Vector<rt::String> paths;
             for (int i = 0; i < e.data.drop.count; ++i)
                 paths.push_back(rt::String(e.data.drop.paths[i]));
-    io.keySuper = key_down(pw, KEY_LEFT_SUPER) || key_down(pw, KEY_RIGHT_SUPER);
             int dx = 0, dy = 0;
             mouse_position(pw, &dx, &dy);
             io.addDropEvent(static_cast<float>(dx) / scaleOf(pw), static_cast<float>(dy) / scaleOf(pw), paths);
@@ -564,14 +579,21 @@ void App::feedInput(PlatformWindow *pw)
     }
 }
 
-// The one place the loop waits when no window painted: up to `ms` milliseconds (the soonest a window said it needs a frame, 8 at most).
-// A short sleep today, so that a loop with nothing to do does not burn a core, at the price of up to 8 ms of latency for an event
-// and ~120 wake-ups a second (docs/ROUND9.md). When zen_plataform has its wait for events with a timeout (platform_wait_events(seconds),
-// which returns at once on an event, and platform_wake() for requestFrameFromAnyThread), this is the function to change: wait
-// ms / 1000.0 seconds (negative when nothing waits for time: no limit), and window_begin_frame of every window after it returns.
+// The one place the loop waits when no window painted: until the platform has an event for one of its windows, or platform_wake() was
+// called (WidgetApp::requestFrameFromAnyThread does, through IO::wakeLoop), or `ms` milliseconds have passed (the soonest a window said
+// it needs a frame: a caret to flip, a tooltip that is due; negative: nothing waits for time, no limit). Before platform_wait_events
+// (zen_plataform 743ea31) this was a sleep of 8 ms at most: ~120 wake-ups a second with nothing happening, and up to 8 ms of latency for
+// an event (docs/ROUND9.md); it is now 1 or 2 wake-ups a second (a flipping caret) or none, and an event is served as it arrives
+// (docs/ROUND11.md). The wait may return early (a signal, a key held down, the backend's own work): pump() goes round again and asks
+// the widgets how long is left.
 void App::idleWait(int ms)
 {
-    time_sleep(static_cast<uint32_t>(ms));
+    platform_wait_events(ms < 0 ? -1.0 : static_cast<double>(ms) / 1000.0);
+}
+
+void App::wake()
+{
+    platform_wake();
 }
 
 bool App::frameWindow(Window *w, bool driven)
@@ -588,11 +610,18 @@ bool App::frameWindow(Window *w, bool driven)
     // rasteriser stretches the draw data to the framebuffer.
     const float k = useGl_ && w->scale > 0 ? w->scale : 1.0f;
 
+    // The time since this window's last frame, less what the loop spent asleep (pump(): IO::idleSeconds, for the application's clock and
+    // the tooltip delay, not for animations); what is left is capped, so a stall (a window being dragged) does not make an animation jump.
     const double now = time_seconds();
-    double dt = now - lastFrame_;
+    const double dt = now - (w->lastFrame > 0.0 ? w->lastFrame : lastFrame_);
+    const double slept = w->idleSlept < dt ? w->idleSlept : (dt > 0.0 ? dt : 0.0);
+    w->idleSlept = 0.0;
+    w->lastFrame = now;
     if (w == main_)
         lastFrame_ = now;
-    io.deltaTime = static_cast<float>(dt > 0.1 ? 0.1 : dt);
+    const double awake = dt - slept;
+    io.deltaTime = static_cast<float>(awake > 0.1 ? 0.1 : (awake > 0.0 ? awake : 0.0));
+    io.idleSeconds = static_cast<float>(slept);
     io.displayWidth = static_cast<float>(sw) / k;
     io.displayHeight = static_cast<float>(sh) / k;
     io.nativeBackend = useGl_ ? static_cast<int>(gl_.nativeBackend()) : 0;
@@ -650,9 +679,8 @@ bool App::frameWindow(Window *w, bool driven)
     if (skippable && !widgets().needsFrame())
     {
         rt::Render(); // (it clears what the frame consumed of the input: the wheel, the typed text)
-        const int wait = widgets().nextFrameInMs();
-        const int step = wait < 0 || wait > 8 ? 8 : wait;
-        if (step < idleWaitMs_) idleWaitMs_ = step;
+        // when time alone needs the next frame (-1: nothing does: pump() may wait for an event without a limit)
+        idleWaitMs_ = widgets().nextFrameInMs();
         (void)driven;
         return false;
     }

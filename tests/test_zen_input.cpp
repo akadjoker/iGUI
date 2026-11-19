@@ -198,6 +198,7 @@ struct Scene
         config.preferOpenGL = false; // the software rasteriser: no GL, and nothing waits for a vertical sync
         config.vsync = false;
         config.showStats = false;
+        zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
         if (!zen.create(config)) return false;
         WidgetApp& app = zen.widgets();
         Widget* root = app.addStage("input");

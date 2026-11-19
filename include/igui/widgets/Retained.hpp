@@ -92,6 +92,11 @@ struct TextureHandle
 struct IO
 {
     float deltaTime = 1.0f / 60.0f;
+    // Seconds the loop spent asleep (waiting for an event or for the time a widget asked a frame for) since the last update(), which are NOT in
+    // deltaTime: a loop that sleeps for half a second between two frames hands over deltaTime of a few microseconds (an animation that starts
+    // with the event that woke the loop must not begin half a second in) and the sleep here. update() adds it to the application's clock (the
+    // blink of a caret, the time between two clicks, the tooltip delay) and zeroes it. A host that never sleeps leaves it at 0.
+    float idleSeconds = 0.0f;
     float displayWidth = 0.0f;
     float displayHeight = 0.0f;
     float framebufferScaleX = 1.0f;
@@ -107,12 +112,12 @@ struct IO
     bool keyCtrl = false;
     bool keyShift = false;
     bool keyAlt = false;
+    bool keySuper = false; // Super / Windows / Command (Cmd on macOS) held at the start of the frame
 
     ct::Vector<uint32_t> inputChars;
 
     // Per-frame key press / release events (taken out by WidgetApp::update, cleared by Render)
     struct KeyEvent
-    bool keySuper = false; // Super / Windows / Command (Cmd on macOS) held at the start of the frame
     {
         int key = 0;      // platform key code
         int scancode = 0; // hardware scancode
@@ -123,12 +128,12 @@ struct IO
         // How many of inputChars were added before this event: the letters of the frame that were typed
         // before the key are put in before it acts (addKeyEvent fills it in).
         unsigned charsBefore = 0;
+        bool super = false; // the Super / Windows / Command key was held (Cmd on macOS)
     };
     ct::Vector<KeyEvent> keyEvents;
 
     // Cursor hint written by WidgetApp::update(), read by backend.
     // Matches CursorType: 0=Arrow 1=Hand 2=IBeam 3=Crosshair
-        bool super = false; // the Super / Windows / Command key was held (Cmd on macOS)
     //                     4=SizeH 5=SizeV 6=SizeAll 7=No
     int wantedCursor = 0;
 
@@ -151,6 +156,11 @@ struct IO
     // leaves them null, and then a middle click pastes the normal clipboard and selecting text sets nothing.
     void (*setPrimaryText)(const char*) = nullptr;
     String (*getPrimaryText)() = nullptr;
+
+    // ── Waking the loop (set by backend) ─────────────────────────────
+    // Wakes the loop that sleeps while nothing changes (the zen adapter: platform_wake()). Called by WidgetApp::requestFrameFromAnyThread() from whatever
+    // thread that was, so it must be callable from any thread, at any time; null: nothing sleeps, or the host polls.
+    void (*wakeLoop)() = nullptr;
 
     // ── File I/O (set by backend) ────────────────────────────────────
     // readFile:  path → file contents (empty string on failure)

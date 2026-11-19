@@ -91,6 +91,7 @@ bool createApp(ig::zen::App& zen, bool openGl)
     config.showStats = false;
     config.preferOpenGL = openGl;
     config.vsync = false;
+    zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
     return zen.create(config);
 }
 

@@ -279,6 +279,7 @@ bool makeApp(ig::zen::App& zen, int msaa = 0)
     config.showStats = false;
     config.msaa = msaa;
     config.defaultDynamicPage = false;
+    zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
     if (!zen.create(config)) return false;
     gProgram = gVao = gVbo = gColourLoc = gTrashProgram = gTrashTex = gTrashFbo = gTrashVao = gTrashVbo = 0; // (objects of a context that is gone)
     const Color bg = zen.widgets().bgColor();

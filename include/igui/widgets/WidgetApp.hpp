@@ -819,12 +819,18 @@ public:
         const double at = elapsedSeconds_ + static_cast<double>(seconds > 0.0f ? seconds : 0.0f);
         if (at < s_.wakeAt_) s_.wakeAt_ = at;
     }
-    /// @brief requestFrame() from any thread (a worker that finished, a network callback): the next update() on the thread that
-    ///        drives the window sees it. The loop has to be awake to see it: it sleeps in short steps, or until the platform's
-    ///        wait is woken (see docs/ROUND9.md for the call zen_plataform lacks).
+    /// @brief requestFrame() from any thread (a worker that finished, a network callback, a timer thread): the next update() on the
+    ///        thread that drives the window sees it, and the loop is woken if it is asleep: it calls IO::wakeLoop (the zen adapter
+    ///        sets it to platform_wake(), which ends the platform's wait for events at once), so a loop that sleeps with nothing to do
+    ///        and no time limit still paints within a frame of this call. This is the ONLY function of the library that may be called
+    ///        from another thread (requestFrame(), requestFrameIn() and every widget call are for the thread that drives the window:
+    ///        write the data first, then call this; the loop reads it on its next frame). Not before the first update() (the hook is
+    ///        read there; the first frame is painted anyway), not after the application is destroyed.
     void requestFrameFromAnyThread()
     {
         __atomic_store_n(&wakeFromThread_, 1, __ATOMIC_RELEASE);
+        void (*const wake)() = __atomic_load_n(&wakeLoop_, __ATOMIC_ACQUIRE);
+        if (wake) wake();
     }
     /// @brief The application's clock, in seconds: the time update() has been given (the sum of the delta times), which keeps
     ///        running while frames are skipped. What a blink is counted by.
@@ -938,6 +944,8 @@ private:
     bool themeSeenSet_ = false;
     bool watchTheme_ = true;
     int wakeFromThread_ = 0; // set by requestFrameFromAnyThread, taken by update()
+    void (*wakeLoop_)() = nullptr; // IO::wakeLoop as update() last saw it (an atomic: requestFrameFromAnyThread reads it from other threads)
+    float idle_ = 0.0f;            // IO::idleSeconds of this update()
 
     // State
     bool inited_ = false;

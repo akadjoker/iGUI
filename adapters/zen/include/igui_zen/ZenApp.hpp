@@ -72,8 +72,9 @@ public:
         // The default font's page of glyphs at the exact size asked for (1024x1024 RGBA, 4 MB of RAM and as much texture). false: the
         // default font is drawn at its baked size only; for a host that draws its text with faces of its own (zenhtml's HtmlView).
         bool defaultDynamicPage = true;
-        // Paint and present a frame only when something changed (WidgetApp::needsFrame), and sleep in short steps in between: a window
-        // that nothing happens in costs almost no CPU. Not with the system owning the loop (web, Android), and not while the application
+        // Paint and present a frame only when something changed (WidgetApp::needsFrame), and sleep in between (pump() waits in
+        // platform_wait_events for an event, a wake() or the time a caret or a tooltip asked a frame for): a window that nothing happens in
+        // costs no CPU and no wake-ups. Not with the system owning the loop (web, Android), and not while the application
         // has a frame callback, an after-render callback or a capture pending (they change what is drawn without telling the widgets),
         // unless setIdleSkipWithCallbacks(true) says its callbacks call WidgetApp::requestFrame() (or mark widgets dirty) when they do.
         bool skipIdleFrames = true;
@@ -110,8 +111,8 @@ public:
     // pixels, top row first), for screenshots and tests. OpenGL only.
     void requestCapture(ct::Function<void(const uint32_t *pixels, int width, int height)> fn);
 
-    /// Skip the paint and the present of frames in which nothing changed (Config::skipIdleFrames); the loop (pump) then sleeps a few
-    /// milliseconds when no window painted. The events are still read and dispatched every pass.
+    /// Skip the paint and the present of frames in which nothing changed (Config::skipIdleFrames); the loop (pump) then waits
+    /// for an event, a wake() or the time the widgets asked for when no window painted. The events are still read and dispatched every pass.
     void setSkipIdleFrames(bool on)
     {
         skipIdle_ = on;
@@ -121,6 +122,17 @@ public:
     void setIdleSkipWithCallbacks(bool on)
     {
         skipWithCallbacks_ = on;
+    }
+    /// Wakes the loop from any thread, at any time (platform_wake): the pump() that is asleep waiting for an event returns and goes round once
+    /// (it paints only if the widgets say a frame is needed: WidgetApp::requestFrameFromAnyThread() is this plus that, and is what a worker
+    /// that has data for the interface calls). Before create() it is remembered and ends the first wait.
+    static void wake();
+    /// The longest pump() sleeps when no window needs a frame, in milliseconds; -1 (the default): until an event, a wake() or the time a widget
+    /// asked for. For an application that does its own work between two pump() calls and cannot call wake(): 8 is what the loop did before
+    /// zen_plataform had its wait for events.
+    void setMaxIdleWait(int ms)
+    {
+        maxIdleMs_ = ms;
     }
     /// How many frames were painted (and presented) in all: what a test or a host looks at to see that idle frames were skipped.
     int paintedFrames() const
@@ -187,6 +199,8 @@ public:
     {
         primaryGet_ = get;
         primarySet_ = set;
+        if (!context_)
+            return; // before create(): kept, and put in the IO there
         ig::retained::IO &io = ig::retained::GetIO();
         io.getPrimaryText = get;
         io.setPrimaryText = set;
@@ -199,8 +213,6 @@ public:
         return main_ ? main_->platform : nullptr;
     }
 
-        if (!context_)
-            return; // before create(): kept, and put in the IO there
     // ── several windows ──────────────────────────────────────────────────
     bool supportsWindows() const;
     Window *mainWindow() { return main_; }
@@ -232,6 +244,8 @@ public:
         bool closing = false;
         uint32_t background = 0;
         float scale = 1.0f;   // UI zoom: widgets think the window is this many times smaller
+        double lastFrame = 0.0;  // when its last frame began (time_seconds); 0: none yet
+        double idleSlept = 0.0;  // seconds the loop slept since then (pump hands them to the next frame as IO::idleSeconds)
         void *user = nullptr; // for the application
         // The state while this window is not the current one.
         ig::retained::WidgetApp::Surface surface;
@@ -242,7 +256,7 @@ public:
 private:
     static void frameThunk(PlatformWindow *w, void *user);
     bool frameWindow(Window *w, bool driven); // false: nothing changed, the frame was not painted
-    void idleWait(int ms);                    // where pump() waits when no window painted (ZenApp.cpp: the one place to change)
+    void idleWait(int ms);                    // where pump() waits when no window painted (ZenApp.cpp: the one place the adapter sleeps)
     void renderGl(Window *w);
     void framePixels();
     void destroyWindow(Window *w);
@@ -285,7 +299,8 @@ private:
     bool skipIdle_ = true;
     bool skipWithCallbacks_ = false;
     int paintedFrames_ = 0;
-    int idleWaitMs_ = 8; // how long pump() may sleep, from what the windows that were not painted said
+    int idleWaitMs_ = -1; // how long pump() may sleep, from what the window that was not painted said (-1: no time limit)
+    int maxIdleMs_ = -1;  // setMaxIdleWait
     void (*probe_)(int, void *) = nullptr;
     void *probeUser_ = nullptr;
     ig::retained::String (*primaryGet_)() = nullptr; // setPrimaryHooks

@@ -215,7 +215,12 @@ void WidgetApp::update(ig::retained::IO& io)
     else if (watchTheme_ && memcmp(static_cast<const void*>(&Theme::instance()), static_cast<const void*>(&themeSeen_), sizeof(Theme)) != 0)
         notifyThemeChanged();
     dt_ = io.deltaTime;
-    elapsedSeconds_ += dt_ > 0.0f ? static_cast<double>(dt_) : 0.0;
+    // The time the loop slept is for the clock (a blink, the time between two clicks) and the tooltip delay, not for animations (IO::idleSeconds).
+    idle_ = io.idleSeconds > 0.0f ? io.idleSeconds : 0.0f;
+    io.idleSeconds = 0.0f;
+    elapsedSeconds_ += (dt_ > 0.0f ? static_cast<double>(dt_) : 0.0) + static_cast<double>(idle_);
+    // Where requestFrameFromAnyThread() wakes the loop (read from other threads: see there).
+    __atomic_store_n(&wakeLoop_, io.wakeLoop, __ATOMIC_RELEASE);
     elapsedMs_ = static_cast<uint32_t>(fmod(elapsedSeconds_ * 1000.0, 4294967296.0));
 
     // Cache modifier keys & clipboard callbacks from IO
@@ -385,7 +390,7 @@ void WidgetApp::update(ig::retained::IO& io)
     // Tooltip timer
     if (s_.hovered_ && s_.hovered_->hasTooltip())
     {
-        s_.tooltipTimer_ += dt_;
+        s_.tooltipTimer_ += dt_ + idle_;
         if (!s_.tooltipVisible_ && s_.tooltipTimer_ >= s_.hovered_->tooltipDelay())
         {
             s_.tooltipVisible_ = true;
@@ -914,12 +919,12 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
             we.shift = ke.shift;
             we.ctrl = ke.ctrl;
             we.alt = ke.alt;
+            we.super = ke.super;
             s_.focused_->onKeyPress(we);
             if (we.consumed) return;
         }
         focusNeighbor(s_.focused_, ke.shift);
         return;
-            we.super = ke.super;
     }
 
     KeyEvent we;
@@ -928,12 +933,12 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
     we.shift = ke.shift;
     we.ctrl = ke.ctrl;
     we.alt = ke.alt;
+    we.super = ke.super;
     // A key that made a widget go away was handled, consumed or not.
     const uint32_t deletionsBefore = deletions_;
     if (s_.focused_) bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
     if (ke.down && !we.consumed && deletions_ == deletionsBefore) unhandledKey.emit(we);
 }
-    we.super = ke.super;
 
 void WidgetApp::bubbleKey(KeyEvent& e, void (Widget::*handler)(KeyEvent&))
 {

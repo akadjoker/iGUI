@@ -254,6 +254,7 @@ int main()
     config.samples = 1;
 
     ig::zen::App zen;
+    zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
     if (!zen.create(config))
     {
         fprintf(stderr, "test_zen_sidetabs: no window (no display?), skipped\n");

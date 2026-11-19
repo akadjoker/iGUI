@@ -48,6 +48,7 @@ static void dynamicText()
     config.defaultDynamicPage = true;
 
     ig::zen::App zen;
+    zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
     if (!zen.create(config))
     {
         fprintf(stderr, "test_zen_screenshot_gl: the second application could not be made, skipped\n");
@@ -106,6 +107,7 @@ int main()
 
     { // the first application is gone before the second one is made
         ig::zen::App zen;
+        zen.setMaxIdleWait(4); // the tests pump a number of frames: pump() must come back when nothing happens (its default waits for an event)
         if (!zen.create(config))
         {
             fprintf(stderr, "test_zen_screenshot_gl: no OpenGL context, or no offscreen framebuffer, on this X server: skipped\n");
