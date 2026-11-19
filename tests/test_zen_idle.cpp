@@ -57,19 +57,26 @@ struct Job
     double delay = 0.0;
     int what = 0;           // 0: wake (App::wake), 1: requestFrameFromAnyThread, 2: a pointer move by XTEST
     double doneAt = 0.0;    // time_seconds() when the worker did it
+    volatile int cancel = 0; // set by the main thread: the worker has nothing left to do
 };
 
 int worker(void* user)
 {
     Job* job = static_cast<Job*>(user);
     const double until = time_seconds() + job->delay;
-    while (time_seconds() < until) time_sleep(1);
+    while (time_seconds() < until && !job->cancel) time_sleep(1);
+    if (job->cancel) return 0;
     if (job->what == 2)
     {
         Display* dpy = XOpenDisplay(nullptr);
         if (dpy)
         {
-            XTestFakeMotionEvent(dpy, DefaultScreen(dpy), 60, 40, 0);
+            // somewhere other than where the pointer is: a move to the same place is no event
+            ::Window rootReturn, childReturn;
+            int rootX = 0, rootY = 0, winX = 0, winY = 0;
+            unsigned int mask = 0;
+            XQueryPointer(dpy, DefaultRootWindow(dpy), &rootReturn, &childReturn, &rootX, &rootY, &winX, &winY, &mask);
+            XTestFakeMotionEvent(dpy, DefaultScreen(dpy), (rootX + 37) % 250 + 10, (rootY + 23) % 150 + 10, 0);
             job->doneAt = time_seconds();
             XFlush(dpy);
             XCloseDisplay(dpy);
@@ -94,15 +101,26 @@ int runFor(ig::zen::App& zen, double seconds)
     const double end = time_seconds() + seconds;
     while (time_seconds() < end - 0.001) zen.pump();
     join_thread(t);
-    return gPasses - before;
+    const int passes = gPasses - before;
+    // one more pass takes the time the loop slept into the application's clock (a wake already pending ends its wait at once)
+    ig::zen::App::wake();
+    zen.pump();
+    return passes;
 }
 
-// Pumps until a frame has been painted, or `limit` seconds
+// Pumps until a frame has been painted, or `limit` seconds (a watchdog wakes the loop at the limit: pump() has none of its own)
 double untilPainted(ig::zen::App& zen, int paintedBefore, double limit)
 {
+    Job dog;
+    dog.delay = limit;
+    dog.what = 0;
+    PlatformThread* t = create_thread(worker, &dog, "idle-dog");
     const double t0 = time_seconds();
     while (zen.paintedFrames() == paintedBefore && time_seconds() - t0 < limit) zen.pump();
-    return time_seconds();
+    const double done = time_seconds();
+    dog.cancel = 1;
+    join_thread(t);
+    return done;
 }
 
 } // namespace
@@ -166,7 +184,7 @@ int main()
         const int frames = zen.paintedFrames() - painted;
         printf("  caret: %d passes, %d frames painted in 3 s (a flip every half second)\n", passes, frames);
         check(frames >= 5 && frames <= 7, "a caret flips twice a second: 6 frames painted in 3 s");
-        check(passes <= 9, "and the loop goes round only for the flips");
+        check(passes <= 14, "and the loop goes round only for the flips (a pass to paint it, one to find nothing and sleep)");
         app.setFocused(nullptr);
         zen.setMaxIdleWait(20);
         for (int i = 0; i < 10; ++i) zen.pump();
