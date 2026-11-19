@@ -236,8 +236,9 @@ public:
             if (*s >= 0xF0) { cp = *s & 0x07u; n = 4; }
             else if (*s >= 0xE0) { cp = *s & 0x0Fu; n = 3; }
             else if (*s >= 0xC0) { cp = *s & 0x1Fu; n = 2; }
-            for (int i = 1; i < n && s[i]; ++i) cp = (cp << 6) | (s[i] & 0x3Fu);
-            s += n;
+            int used = 1; // (a sequence cut short by the end of the text takes what is there, and the walk stops at the NUL)
+            for (int i = 1; i < n && s[i]; ++i, ++used) cp = (cp << 6) | (s[i] & 0x3Fu);
+            s += used;
             io().addInputCharacter(cp);
         }
         frame();
