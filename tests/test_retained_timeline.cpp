@@ -961,6 +961,269 @@ void testClipLinesHostile()
     }
 }
 
+// ---- boxes over the clips (TimelineSpan, setSpans, onSpanPressed, onSpanEdgeDragged, onSpanEdgeReleased) ----
+
+TimelineSpan spanOf(int id, int trackA, int trackB, float start, float end)
+{
+    TimelineSpan span;
+    span.id = id;
+    span.trackA = trackA;
+    span.trackB = trackB;
+    span.start = start;
+    span.end = end;
+    span.label = "Crossfade";
+    span.tooltip = "what the span is";
+    span.color = Color(77, 211, 193, 255);
+    span.mark = 2;
+    TimelineSpan::Line line;
+    line.color = Color(201, 37, 41, 255);
+    line.points.push_back({ 0.0f, 0.0f });
+    line.points.push_back({ 0.5f, 0.8f });
+    line.points.push_back({ 1.0f, 1.0f });
+    span.lines.push_back(line);
+    return span;
+}
+
+// Window points of a span over tracks 0 and 1: the middle of its tab, and the grip of an edge.
+void spanTabPoint(Rig& r, const TimelineSpan& span, float& x, float& y)
+{
+    r.tl->pointAt(span.trackA < span.trackB ? span.trackA : span.trackB, (span.start + span.end) * 0.5f, x, y);
+    y += -r.tl->trackHeight() * 0.5f + 1.0f + 7.0f;
+}
+void spanGripPoint(Rig& r, const TimelineSpan& span, bool end, float& x, float& y)
+{
+    r.tl->pointAt(span.trackA < span.trackB ? span.trackA : span.trackB, end ? span.end : span.start, x, y);
+    y += -r.tl->trackHeight() * 0.5f + 1.0f + 7.0f;
+}
+
+struct SpanRig : Rig
+{
+    int pressed = 0, pressedId = -9, pressedButton = -9;
+    int dragged = 0, draggedId = -9;
+    bool draggedEnd = false;
+    float draggedTime = -1.0f;
+    int released = 0, releasedId = -9;
+    int selected = 0;
+    SpanRig()
+    {
+        tl->setSnapping(false);
+        tl->setTrackHeight(60.0f);
+        tl->addClip(0, 2.0f, 9.0f, "out");
+        tl->addClip(1, 5.0f, 15.0f, "in");
+        ct::Vector<TimelineSpan> spans;
+        spans.push_back(spanOf(7, 0, 1, 5.0f, 9.0f));
+        tl->setSpans(spans);
+        tl->onSpanPressed.connect([this](int id, float, float, int button) { ++pressed; pressedId = id; pressedButton = button; });
+        tl->onSpanEdgeDragged.connect([this](int id, bool end, float time) { ++dragged; draggedId = id; draggedEnd = end; draggedTime = time; });
+        tl->onSpanEdgeReleased.connect([this](int id) { ++released; releasedId = id; });
+        tl->onClipSelected.connect([this](int, int) { ++selected; });
+        h.relayout();
+    }
+    float second()
+    {
+        return (tl->absoluteRect().w - 160.0f - 32.0f) / 20.0f;
+    }
+};
+
+void testSpans()
+{
+    printf("a box over two clips: drawn, its tab pressed, its grips dragged, the rest lets the mouse through\n");
+    SpanRig r;
+    const TimelineSpan span = r.tl->spans()[0];
+    check(verticesOfRgb(r, 77, 211, 193) >= 4 * 8, "the box is drawn in its colour: a tint, a frame, two grips, the line under the tab");
+    check(verticesOfRgb(r, 201, 37, 41) > 0, "with the line the application gave it");
+    check(verticesOf(r, 90, 200, 110, 255) == 4, "and the dot of its mark in the tab");
+    float x = 0, y = 0;
+    // the tab
+    spanTabPoint(r, span, x, y);
+    r.h.moveTo(x, y);
+    check(r.tl->tooltip() == "what the span is", "the tab says what the span is");
+    r.h.down();
+    r.h.up();
+    check(r.pressed == 1 && r.pressedId == 7 && r.pressedButton == 0, "a press on the tab goes to the application with the id of the span");
+    r.h.down(1);
+    r.h.up(1);
+    check(r.pressed == 2 && r.pressedButton == 1, "also with the right button");
+    check(r.selected == 0 && r.changed == 0 && r.edited == 0 && !r.tl->track(0).clips[0].selected, "and the clip under the tab is not selected or moved");
+    // a grip
+    spanGripPoint(r, span, false, x, y);
+    r.press(x + 3.0f, y);
+    r.h.moveTo(x + r.second(), y);
+    check(r.dragged == 1 && r.draggedId == 7 && !r.draggedEnd && fabsf(r.draggedTime - 6.0f) < 0.05f, "dragging the grip of the start reports the time under the pointer");
+    r.h.moveTo(x - 2.0f * r.second(), y + 200.0f);
+    check(r.dragged == 2 && fabsf(r.draggedTime - 3.0f) < 0.05f, "on every step, wherever the pointer goes");
+    check(r.released == 0, "no release while it is dragged");
+    r.h.up();
+    check(r.released == 1 && r.releasedId == 7, "the drag ends with onSpanEdgeReleased, once");
+    r.h.moveTo(x + 50.0f, y + 20.0f);
+    check(r.dragged == 2 && r.released == 1, "and nothing more after it");
+    spanGripPoint(r, span, true, x, y);
+    r.press(x - 3.0f, y);
+    r.h.moveTo(x + r.second(), y);
+    r.h.up();
+    check(r.dragged == 3 && r.draggedEnd && fabsf(r.draggedTime - 10.0f) < 0.05f && r.released == 2, "the grip of the end says it is the end");
+    check(r.changed == 0 && r.edited == 0, "the timeline moved no clip: the application decides what a grip does");
+    check(r.tl->spans()[0].start == 5.0f && r.tl->spans()[0].end == 9.0f, "nor the span");
+    // the time of a grip snaps as the edge of a clip does
+    r.tl->setSnapping(true);
+    r.tl->addClip(2, 11.0f, 12.0f, "edge");
+    r.h.relayout();
+    spanGripPoint(r, span, true, x, y);
+    float ex = 0, ey = 0;
+    r.tl->pointAt(2, 12.0f, ex, ey);
+    r.press(x, y);
+    r.h.moveTo(ex + 2.0f, y);
+    r.h.up();
+    check(r.draggedTime == 12.0f, "the time of a grip snaps to the edge of a clip");
+    r.tl->setSnapping(false);
+    // the rest of the box lets the mouse through
+    r.changed = 0;
+    r.tl->pointAt(1, 7.0f, x, y);
+    r.press(x, y);
+    r.h.moveTo(x + 30.0f, y);
+    r.h.up();
+    check(r.changed > 0 && r.pressed == 2 && r.tl->track(1).clips[0].start != 5.0f, "a press inside the box, under the tab, moves the clip that is there");
+    // a span that cannot be shown is not there: its tracks, its times
+    const int before = r.pressed;
+    for (int variant = 0; variant < 5; ++variant)
+    {
+        ct::Vector<TimelineSpan> spans;
+        spans.push_back(spanOf(8, variant == 0 ? 99 : 0, variant == 1 ? -1 : 1, variant == 2 ? 9.0f : 5.0f, variant == 3 ? nanf("") : (variant == 4 ? 5.0f : 9.0f)));
+        r.tl->setSpans(spans);
+        check(verticesOfRgb(r, 77, 211, 193) == 0, "a span of a track that is not there, backwards, of no length or with a time that is not a number is not drawn");
+        spanTabPoint(r, span, x, y);
+        r.h.moveTo(x, y);
+        r.h.down();
+        r.h.up();
+    }
+    check(r.pressed == before, "and has no tab to press");
+    ct::Vector<TimelineSpan> none;
+    r.tl->setSpans(none);
+    check(r.tl->spans().empty() && verticesOfRgb(r, 77, 211, 193) == 0, "no spans, nothing drawn");
+    check(r.badIndex == 0, "no signal named a clip that is not there");
+}
+
+void testSpansHostile()
+{
+    printf("spans set again, emptied or the timeline gone from their signals; numbers that are not numbers\n");
+    // The application sets the spans again at every step of a drag (the box follows the clips it trims), takes them all
+    // away, or takes the timeline out of the tree, from inside each signal.
+    for (int signal = 0; signal < 3; ++signal)
+        for (int what = 0; what < 3; ++what)
+        {
+            SpanRig r;
+            const TimelineSpan span = r.tl->spans()[0];
+            Timeline* self = r.tl;
+            auto act = [&]
+            {
+                if (!self) return;
+                if (what == 0)
+                {
+                    ct::Vector<TimelineSpan> spans;
+                    spans.push_back(spanOf(7, 0, 1, 6.0f, 9.0f));
+                    spans.push_back(spanOf(8, 1, 2, 1.0f, 2.0f));
+                    self->setSpans(spans);
+                }
+                else if (what == 1)
+                {
+                    ct::Vector<TimelineSpan> none;
+                    self->setSpans(none);
+                    self->clearTracks();
+                }
+                else
+                {
+                    Timeline* dead = self;
+                    self = nullptr;
+                    r.box->removeChild(dead);
+                }
+            };
+            if (signal == 0) r.tl->onSpanPressed.connect([&](int, float, float, int) { act(); });
+            else if (signal == 1)
+                r.tl->onSpanEdgeDragged.connect([&](int, bool, float) { act(); });
+            else
+                r.tl->onSpanEdgeReleased.connect([&](int) { act(); });
+            float x = 0, y = 0;
+            if (signal == 0) spanTabPoint(r, span, x, y);
+            else
+                spanGripPoint(r, span, true, x, y);
+            r.press(x, y);
+            r.h.moveTo(x + 20.0f, y);
+            r.h.moveTo(x + 40.0f, y + 5.0f);
+            r.h.up();
+            r.h.frames(2);
+            r.h.moveTo(x + 60.0f, y);
+            if (signal == 0) check(r.pressed == 1 && r.dragged == 0, "the tab was pressed once");
+            else if (what == 2 && signal == 1)
+                check(r.dragged == 1 && r.released == 0, "a timeline taken out of the tree at the first step says nothing more");
+            else if (what == 1 && signal == 1)
+                check(r.dragged == 1 && r.released == 0, "clearTracks ends the drag of a grip as it ends every drag, with no release");
+            else
+                check(r.dragged == 2 && r.released == 1 && r.releasedId == 7, "the drag goes on to its release with the id it started with, whatever the spans are now");
+            if (what == 2) check(self == nullptr, "the handler removed the timeline");
+            check(r.badIndex == 0, "no signal named a clip that is not there");
+        }
+    // Numbers that are not numbers, in the times, the points of the lines, the thickness and the mark.
+    const float odd[] = { nanf(""), INFINITY, -INFINITY, -1e30f, 1e30f, 0.0f, 1e-30f };
+    const size_t n = sizeof(odd) / sizeof(odd[0]);
+    for (size_t i = 0; i < n; ++i)
+        for (size_t j = 0; j < n; ++j)
+        {
+            SpanRig r;
+            ct::Vector<TimelineSpan> spans;
+            spans.push_back(spanOf(1, 0, 1, odd[i], odd[j]));
+            spans.push_back(spanOf(2, 1, 0, 5.0f, 9.0f));
+            spans[1].lines[0].points[0] = { odd[i], odd[j] };
+            spans[1].lines[0].points[1] = { odd[j], 0.5f };
+            spans[1].lines[0].points[2] = { 0.5f, odd[i] };
+            spans[1].lines[0].thickness = odd[j];
+            spans[1].mark = static_cast<int>(i) * 40 - 60;
+            spans.push_back(spanOf(3, static_cast<int>(i) - 3, static_cast<int>(j) * 1000, -1e30f, 1e30f));
+            spans.push_back(spanOf(4, 2, 2, 4.0f, odd[i]));
+            spans[3].lines.clear();
+            spans[3].label = "";
+            r.tl->setSpans(spans);
+            check(frameIsFinite(r), "every vertex is a number");
+            float x = 0, y = 0;
+            r.tl->pointAt(0, 2.0f, x, y);
+            y += -r.tl->trackHeight() * 0.5f + 8.0f;
+            for (float dx = -200.0f; dx < 900.0f; dx += 61.0f)
+            {
+                r.press(x + dx, y);
+                r.h.moveTo(x + dx + 30.0f, y);
+                r.h.moveTo(x + dx - 700.0f, y + 90.0f);
+                r.h.up();
+            }
+            check(r.released <= r.dragged && r.badIndex == 0, "a release only after a drag, and no clip that is not there");
+            r.tl->setTimeRange(0.0f, 1e-5f);
+            check(frameIsFinite(r), "zoomed in to ten microseconds");
+            r.tl->setTimeRange(-1e9f, 1e9f);
+            check(frameIsFinite(r), "and out to sixty years");
+            r.h.resize(1.0f, 1.0f);
+            r.h.frames(2);
+        }
+    // a thousand spans, and a line of a hundred thousand points
+    {
+        SpanRig r;
+        ct::Vector<TimelineSpan> spans;
+        for (int i = 0; i < 1000; ++i) spans.push_back(spanOf(i, i % 3, (i / 3) % 3, static_cast<float>(i % 40) * 0.5f, static_cast<float>(i % 40) * 0.5f + 1.0f + static_cast<float>(i % 7)));
+        spans[0].lines[0].points.clear();
+        for (int k = 0; k < 100000; ++k) spans[0].lines[0].points.push_back({ static_cast<float>(k) / 100000.0f, (k % 2) ? 1.0f : 0.0f });
+        r.tl->setSpans(spans);
+        check(frameIsFinite(r), "a thousand spans");
+        Rng rng(11);
+        for (int i = 0; i < 200; ++i)
+        {
+            r.h.moveTo(rng.range(0.0f, 1280.0f), rng.range(0.0f, 300.0f));
+            r.h.down(rng.below(3));
+            r.h.moveTo(rng.range(0.0f, 1280.0f), rng.range(0.0f, 300.0f));
+            r.h.up(0);
+            r.h.up(1);
+            r.h.up(2);
+        }
+        r.h.frames(2);
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -988,6 +1251,8 @@ int main(int argc, char** argv)
     RUN(testFadeHostile);
     RUN(testClipLines);
     RUN(testClipLinesHostile);
+    RUN(testSpans);
+    RUN(testSpansHostile);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

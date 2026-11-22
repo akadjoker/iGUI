@@ -143,6 +143,34 @@ struct TimelineClip
     bool editableFades = false;
 };
 
+/// A box the application lays over a stretch of time, from the row of one track to the row of
+/// another (or over one row): what two clips do together, like a transition. The timeline draws
+/// it over the clips: a tinted box, the lines the application gives (x from 0 at its start to 1 at
+/// its end, y from 0 at its bottom to 1 at its top), and along its top a tab with a dot and the
+/// label. A press on the tab goes to the application (onSpanPressed); the two grips at the top
+/// corners are dragged to move its edges (onSpanEdgeDragged, with the time snapped like a clip's
+/// edge: the application decides what that does). The rest of the box lets the mouse through to the
+/// clips under it.
+struct TimelineSpan
+{
+    int id = -1;
+    int trackA = 0;
+    int trackB = 0;
+    float start = 0;
+    float end = 0;
+    String label;
+    String tooltip; // shown after a moment over the tab
+    Color color = Color(255, 255, 255, 255);
+    int mark = -1; // a dot before the label: 0 red, 1 amber, 2 green; -1 none
+    struct Line
+    {
+        ct::Vector<Vec2> points;
+        Color color = Color(255, 255, 255, 255);
+        float thickness = 1.5f;
+    };
+    ct::Vector<Line> lines;
+};
+
 /// @brief The candidate nearest to t when it lies within threshold of it (false when none does).
 bool findSnap(const ct::Vector<float>& candidates, float t, float threshold, float& out);
 /// @brief t moved to the nearest candidate within threshold, or t itself when none is that close.
@@ -465,6 +493,29 @@ public:
         markDirty();
     }
 
+    /// @brief The boxes laid over the clips (see TimelineSpan). The application sets them again
+    /// whenever what they show changes.
+    void setSpans(const ct::Vector<TimelineSpan>& spans)
+    {
+        spans_ = spans;
+        markDirty();
+    }
+    const ct::Vector<TimelineSpan>& spans() const
+    {
+        return spans_;
+    }
+    /// @brief A press on the tab of a span: its id, the pointer in window pixels, the button (0
+    /// left, 1 right).
+    Signal<int, float, float, int> onSpanPressed;
+    /// @brief A grip of a span is being dragged, on every step: its id, false for its start and
+    /// true for its end, and the time under the pointer, snapped like the edge of a clip.
+    Signal<int, bool, float> onSpanEdgeDragged;
+    /// @brief The drag of a grip ended: the id of the span. The drag holds the id and not the span: when the
+    /// application sets the spans again while a grip is dragged (it usually does, at every step) the drag goes on,
+    /// also when no span has that id any more, and it ends with this signal (clearTracks ends it without one, as
+    /// it ends every drag).
+    Signal<int> onSpanEdgeReleased;
+
     /// @brief Set the background color.
     void setBgColor(const Color& c)
     {
@@ -561,7 +612,8 @@ private:
         MoveFadeIn,
         MoveFadeOut,
         Marquee,
-        Grab
+        Grab,
+        SpanEdge
     };
     struct DragMember
     {
@@ -660,6 +712,15 @@ private:
     void paintMarkedRange(PaintContext& ctx, const Rect& b);
     void paintPlayhead(PaintContext& ctx, const Rect& b);
     void paintMarquee(PaintContext& ctx, const Rect& b);
+    void paintSpans(PaintContext& ctx, const Rect& b);
+    // The box of a span in window pixels; false when its tracks are not shown.
+    bool spanRect(const TimelineSpan& span, Rect& out) const;
+    // What of a span is under a point: 0 nothing, 1 its tab, 2 the grip of its start, 3 of its end.
+    int spanPartAt(float x, float y, int& index) const;
+    ct::Vector<TimelineSpan> spans_;
+    ct::Vector<Rect> spanTabs_; // where each span's tab was drawn last
+    int dragSpan_ = -1;
+    bool dragSpanEnd_ = false;
     void clearKeySelection();
     void updateMarquee();
     ct::Vector<int> paintVisible_; // the clips of a track that paintTracks drew

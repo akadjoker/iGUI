@@ -847,6 +847,29 @@ void Timeline::onMousePress(MouseEvent& e)
     Rect b = absoluteRect();
     if (!tooltip().empty()) setTooltip("");
 
+    // A span over the clips: its grips and its tab take the press before the clips do.
+    if (e.button == 0 || e.button == 1)
+    {
+        int index = -1;
+        const int part = spanPartAt(e.x, e.y, index);
+        if (part == 1)
+        {
+            e.consumed = true;
+            // (last: a handler may set the spans again, or take the timeline out of the tree)
+            onSpanPressed.emit(spans_[index].id, e.x, e.y, e.button);
+            return;
+        }
+        if (part >= 2 && e.button == 0)
+        {
+            dragMode_ = DragMode::SpanEdge;
+            dragSpan_ = spans_[index].id;
+            dragSpanEnd_ = part == 3;
+            dragMoved_ = false;
+            e.consumed = true;
+            return;
+        }
+    }
+
     // Middle button → pan
     if (e.button == 2)
     {
@@ -1241,6 +1264,17 @@ void Timeline::updateMarquee()
 
 void Timeline::onMouseRelease(MouseEvent& e)
 {
+    if (dragMode_ == DragMode::SpanEdge)
+    {
+        dragMode_ = DragMode::None;
+        const int id = dragSpan_;
+        dragSpan_ = -1;
+        dragMoved_ = false;
+        markDirty();
+        e.consumed = true;
+        onSpanEdgeReleased.emit(id); // (last: a handler may take the timeline out of the tree)
+        return;
+    }
     if (!dragTargetExists())
     {
         dragMode_ = DragMode::None;
@@ -1382,9 +1416,29 @@ void Timeline::onMouseMove(MouseEvent& e)
         dragGroup_.clear();
         keyGroup_.clear();
     }
-    if (dragMode_ == DragMode::None) updateClipTooltip(e.x, e.y);
+    if (dragMode_ == DragMode::None)
+    {
+        // The tab of a span says what the span is; elsewhere the clip under the pointer does.
+        int index = -1;
+        if (spanPartAt(e.x, e.y, index) == 1)
+        {
+            if (spans_[index].tooltip != tooltip()) setTooltip(spans_[index].tooltip);
+        }
+        else
+            updateClipTooltip(e.x, e.y);
+    }
     switch (dragMode_)
     {
+        case DragMode::SpanEdge:
+            // The time under the pointer, snapped as the edge of a clip is (to the edges of the
+            // other clips, the bars, the playhead).
+            dragMoved_ = true;
+            markDirty();
+            e.consumed = true;
+            // (last: a handler may set the spans again, or take the timeline out of the tree)
+            onSpanEdgeDragged.emit(dragSpan_, dragSpanEnd_, snap(xToTime(e.x), -1, -1));
+            break;
+
         case DragMode::Scrub:
             playhead_ = xToTime(e.x);
             markDirty();
@@ -1726,6 +1780,12 @@ void Timeline::paint(PaintContext& ctx)
     paintRuler(ctx, b);
     ctx.pushClip({ b.x, b.y + kRulerH, b.w, std::max(0.0f, b.h - kRulerH) });
     paintTracks(ctx, b);
+    if (!spans_.empty())
+    {
+        ctx.pushClip({ b.x + kHeaderW, b.y + kRulerH, fmaxf(0.0f, b.w - kHeaderW), fmaxf(0.0f, b.h - kRulerH) });
+        paintSpans(ctx, b);
+        ctx.popClip();
+    }
     ctx.popClip();
     paintMarkedRange(ctx, b);
     paintMarquee(ctx, b);
@@ -1741,6 +1801,128 @@ void Timeline::paint(PaintContext& ctx)
     ctx.popClip();
 
     Widget::paint(ctx);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Spans: the boxes the application lays over the clips
+// ─────────────────────────────────────────────────────────────────────────────
+
+static constexpr float kSpanTabH = 15.0f;
+static constexpr float kSpanGripW = 7.0f;
+
+bool Timeline::spanRect(const TimelineSpan& span, Rect& out) const
+{
+    // (a span whose times are not numbers, or that ends before it starts, is not there; the infinities and
+    // the enormous are as far as a time of the timeline goes)
+    const float start = Math::sane(span.start, 0.0f, -kTimelineMaxTime, kTimelineMaxTime);
+    const float end = Math::sane(span.end, 0.0f, -kTimelineMaxTime, kTimelineMaxTime);
+    if (Math::isNaN(span.start) || Math::isNaN(span.end) || !(end > start)) return false;
+    const Rect b = absoluteRect();
+    const auto rows = visibleTracks();
+    int rowA = -1, rowB = -1;
+    for (int r = 0; r < static_cast<int>(rows.size()); ++r)
+    {
+        if (rows[r] == span.trackA) rowA = r;
+        if (rows[r] == span.trackB) rowB = r;
+    }
+    if (rowA < 0 || rowB < 0) return false;
+    const int top = rowA < rowB ? rowA : rowB, bottom = rowA < rowB ? rowB : rowA;
+    const float x0 = timeToX(start), x1 = timeToX(end);
+    out = { x0, b.y + kRulerH + top * kTrackH - verticalScroll_ + 1.0f, x1 - x0,
+        (bottom - top + 1) * kTrackH - 2.0f };
+    return Math::isFinite(out.x) && Math::isFinite(out.w) && Math::isFinite(out.y) && Math::isFinite(out.h);
+}
+
+int Timeline::spanPartAt(float x, float y, int& index) const
+{
+    if (spans_.empty()) return 0;
+    const Rect b = absoluteRect();
+    if (x < b.x + kHeaderW || y < b.y + kRulerH) return 0;
+    for (int i = static_cast<int>(spans_.size()) - 1; i >= 0; --i)
+    {
+        Rect box;
+        if (!spanRect(spans_[i], box)) continue;
+        index = i;
+        if (i < static_cast<int>(spanTabs_.size()) && spanTabs_[i].w > 0.0f &&
+                x >= spanTabs_[i].x && x <= spanTabs_[i].x + spanTabs_[i].w && y >= spanTabs_[i].y &&
+                y <= spanTabs_[i].y + spanTabs_[i].h)
+            return 1;
+        if (y < box.y || y > box.y + kSpanTabH + 3.0f) continue;
+        if (fabsf(x - box.x) <= kSpanGripW) return 2;
+        if (fabsf(x - (box.x + box.w)) <= kSpanGripW) return 3;
+    }
+    return 0;
+}
+
+void Timeline::paintSpans(PaintContext& ctx, const Rect& b)
+{
+    spanTabs_.resize(spans_.size());
+    for (size_t i = 0; i < spans_.size(); ++i)
+    {
+        const TimelineSpan& span = spans_[i];
+        spanTabs_[i] = { 0.0f, 0.0f, 0.0f, 0.0f };
+        Rect box;
+        if (!spanRect(span, box) || box.x > b.x + b.w || box.x + box.w < b.x + kHeaderW) continue;
+        const Color c = span.color;
+        const bool dragged = dragMode_ == DragMode::SpanEdge && dragSpan_ == span.id;
+        // The box: a tint over the clips and a frame.
+        ctx.fill.SetColor(c.r, c.g, c.b, 30);
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.fill.SetColor(c.r, c.g, c.b, dragged ? 255 : 190);
+        ctx.fillRect(box.x, box.y, box.w, 1.0f);
+        ctx.fillRect(box.x, box.y + box.h - 1.0f, box.w, 1.0f);
+        ctx.fillRect(box.x, box.y, 1.0f, box.h);
+        ctx.fillRect(box.x + box.w - 1.0f, box.y, 1.0f, box.h);
+        // The lines, inside the frame and under the tab.
+        const float top = box.y + kSpanTabH + 3.0f, height = box.h - kSpanTabH - 6.0f;
+        if (height > 6.0f && box.w > 4.0f)
+        {
+            ctx.pushClip({ fmaxf(box.x, b.x + kHeaderW), box.y, box.w, box.h });
+            for (size_t l = 0; l < span.lines.size(); ++l)
+            {
+                const TimelineSpan::Line& line = span.lines[l];
+                if (line.points.size() < 2) continue;
+                curvePath_.clear();
+                // (a point that is not a number is left out, and one outside the box is on its edge)
+                for (size_t k = 0; k < line.points.size(); ++k)
+                    if (!Math::isNaN(line.points[k].x) && !Math::isNaN(line.points[k].y))
+                        curvePath_.push_back({ box.x + Math::sane(line.points[k].x, 0.0f, 0.0f, 1.0f) * box.w,
+                            top + (1.0f - Math::sane(line.points[k].y, 0.0f, 0.0f, 1.0f)) * height });
+                if (curvePath_.size() < 2) continue;
+                ctx.line.SetColor(line.color);
+                ctx.drawPolyline(curvePath_, Math::sane(line.thickness, 1.5f, 0.25f, 16.0f), false);
+            }
+            ctx.popClip();
+        }
+        // The grips: the top corners, dragged to move the edges.
+        ctx.fill.SetColor(c.r, c.g, c.b, 255);
+        ctx.fillRect(box.x, box.y, 4.0f, kSpanTabH);
+        ctx.fillRect(box.x + box.w - 4.0f, box.y, 4.0f, kSpanTabH);
+        // The tab: a dot and the label, in the middle of the top (cut to the box when it is narrow).
+        const float asc = setupFont(ctx, Color(245, 246, 250, 255), 9.5f);
+        const float dot = span.mark >= 0 ? 11.0f : 0.0f;
+        const float textW = ctx.font.GetTextWidth(span.label.c_str());
+        const float room = box.w - 12.0f;
+        if (room < 14.0f) continue;
+        const float tabW = fminf(room, textW + dot + 12.0f);
+        const Rect tab = { box.x + (box.w - tabW) * 0.5f, box.y, tabW, kSpanTabH };
+        spanTabs_[i] = tab;
+        ctx.fill.SetColor(24, 26, 32, 235);
+        ctx.fillRect(tab.x, tab.y, tab.w, tab.h);
+        ctx.fill.SetColor(c.r, c.g, c.b, 255);
+        ctx.fillRect(tab.x, tab.y + tab.h - 1.0f, tab.w, 1.0f);
+        ctx.pushClip(tab);
+        if (span.mark >= 0)
+        {
+            static const Color marks[3] = { Color(225, 80, 80, 255), Color(235, 180, 60, 255),
+                Color(90, 200, 110, 255) };
+            const Color m = marks[span.mark > 2 ? 2 : span.mark];
+            ctx.fill.SetColor(m.r, m.g, m.b, 255);
+            ctx.fillRect(tab.x + 5.0f, tab.y + 4.0f, 7.0f, 7.0f);
+        }
+        ctx.font.Print(span.label.c_str(), tab.x + 6.0f + dot, tab.y + (kSpanTabH - 9.5f) * 0.5f + asc);
+        ctx.popClip();
+    }
 }
 
 // A curve across the bar of a clip, from x0 to x1: one stroke through its value at every other
