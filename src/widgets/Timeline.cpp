@@ -1743,6 +1743,60 @@ void Timeline::paint(PaintContext& ctx)
     Widget::paint(ctx);
 }
 
+// A curve across the bar of a clip, from x0 to x1: one stroke through its value at every other
+// pixel where it bends, and through the ends alone of a stretch where it is flat (before the first
+// key, after the last, between two keys of the same value). The keys are in the media's own time.
+// Nothing is drawn when a number it needs is not one (the range of the curve, the speed of the
+// clip); a key whose time is not a number ends the walk over the keys, and the pen never goes back
+// (keys out of order), so the points of the stroke are never more than one for each key and one
+// for every other pixel.
+void Timeline::paintClipCurve(PaintContext& ctx, const TimeMap& tm, const TimelineClip& clip,
+        const ct::Vector<CurveKey>& keys, float min, float max, const Color& color, float thickness,
+        float x0, float x1, float clipY, float clipH) const
+{
+    if (keys.empty() || !(max > min) || !(x1 > x0) || !Math::isFinite(max - min)) return;
+    // Time is a straight line of x, so the media time of a pixel needs no xToTime each step.
+    const float t0 = clip.offset + (tm.t(x0) - clip.start) * clip.speed;
+    const float perPixel = (tm.t(x0 + 1.0f) - tm.t(x0)) * clip.speed;
+    if (!(perPixel > 0.0f) || !Math::isFinite(perPixel) || !Math::isFinite(t0)) return;
+    const float scale = (clipH - 4.0f) / (max - min), bottom = clipY + clipH - 2.0f;
+    // (fmaxf and fminf drop a NaN: a value that is not a number is drawn at the top)
+    const auto yOf = [&](float v)
+    { return bottom - fmaxf(0.0f, fminf(max - min, v - min)) * scale; };
+    const auto xOf = [&](float t) { return x0 + (t - t0) / perPixel; };
+    curvePath_.clear();
+    const int count = static_cast<int>(keys.size());
+    float x = x0;
+    curvePath_.push_back({ x, yOf(CurveEditor::evaluateKeys(keys, t0)) });
+    // The key the pen is before: the stretch up to it is flat or bends.
+    int next = 0;
+    while (next < count && xOf(keys[next].time) <= x) ++next;
+    while (x < x1)
+    {
+        const float keyX = next < count ? xOf(keys[next].time) : x1;
+        const float end = next < count ? fmaxf(x, fminf(x1, keyX)) : x1;
+        const bool flat = next == 0 || next >= count || keys[next - 1].value == keys[next].value;
+        if (!flat)
+        {
+            const int turns = pixelCap(end - x);
+            float s = x + 2.0f;
+            for (int turn = 0; turn < turns && s < end - 0.5f; ++turn, s += 2.0f)
+                curvePath_.push_back(
+                        { s, yOf(CurveEditor::evaluateKeys(keys, t0 + (s - x0) * perPixel)) });
+        }
+        // at a key the curve has the key's value: no walk over the keys to find it (a walk for each key is the
+        // square of their number)
+        curvePath_.push_back({ end, yOf(next < count && end == keyX ? keys[next].value
+                                                : CurveEditor::evaluateKeys(keys, t0 + (end - x0) * perPixel)) });
+        x = end;
+        if (next < count) ++next;
+        else
+            break;
+    }
+    ctx.line.SetColor(color);
+    ctx.drawPolyline(curvePath_, thickness, false);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Ruler — time ticks with auto-scaled step
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2137,37 +2191,16 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                     }
             }
 
-            // Envelope: the curve of the clip (volume), over the media's time
-            if (!clip.envelope.empty() && clip.envelopeMax > clip.envelopeMin)
+            // The curves of the clip, over the media's time: the lines that are only looked at,
+            // thin, and over them the envelope, the one that is edited
             {
-                ctx.fill.SetColor(255, 255, 255, 230);
-                const float x0 = std::max(cx0, b.x + kHeaderW);
-                const float x1 = std::min(cx1, b.x + b.w);
-                float px = 0, py = 0;
-                for (float x = x0; x <= x1 + 2.0f; x += 2.0f)
-                {
-                    const float xs = std::min(x, x1);
-                    const float t = tm.t(xs);
-                    const float v = CurveEditor::evaluateKeys(clip.envelope,
-                            clip.offset + (t - clip.start) * clip.speed);
-                    const float f = std::max(0.0f,
-                            std::min(1.0f, (v - clip.envelopeMin) /
-                                                   (clip.envelopeMax - clip.envelopeMin)));
-                    const float y = clipY + clipH - 2.0f - f * (clipH - 4.0f);
-                    if (x > x0)
-                    {
-                        const float dx = xs - px, dy = y - py;
-                        const float len = std::sqrt(dx * dx + dy * dy);
-                        if (len > 0.1f)
-                        {
-                            const float nx = -dy / len * 0.6f, ny = dx / len * 0.6f;
-                            ctx.fillTriangle(px + nx, py + ny, px - nx, py - ny, xs - nx, y - ny);
-                            ctx.fillTriangle(px + nx, py + ny, xs - nx, y - ny, xs + nx, y + ny);
-                        }
-                    }
-                    px = xs;
-                    py = y;
-                }
+                const float x0 = fmaxf(cx0, b.x + kHeaderW);
+                const float x1 = fminf(cx1, b.x + b.w);
+                for (size_t l = 0; l < clip.lines.size(); ++l)
+                    paintClipCurve(ctx, tm, clip, clip.lines[l].keys, clip.lines[l].min,
+                            clip.lines[l].max, clip.lines[l].color, 1.0f, x0, x1, clipY, clipH);
+                paintClipCurve(ctx, tm, clip, clip.envelope, clip.envelopeMin, clip.envelopeMax,
+                        clip.envelopeColor, 1.5f, x0, x1, clipY, clipH);
             }
 
             // The points of the curve
@@ -2238,6 +2271,31 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                     px = x;
                     py = y;
                 }
+                ctx.popClip();
+            }
+
+            // What the curves are: a legend along the top of the bar, the envelope first. Left
+            // out of a bar too low or too narrow for it, and of a clip that shows one curve only.
+            if (!clip.lines.empty() && clipH >= 34.0f && cx1 - cx0 > 70.0f)
+            {
+                const float left = fmaxf(cx0, b.x + kHeaderW), right = fminf(cx1, b.x + b.w);
+                ctx.pushClip({ left, clipY, fmaxf(0.0f, right - left - 14.0f), clipH });
+                float lx = left + 16.0f;
+                const float ly = clipY + 3.0f;
+                auto entry = [&](const String& label, const Color& color, bool strong)
+                {
+                    if (label.empty()) return;
+                    ctx.fill.SetColor(color.r, color.g, color.b, 255);
+                    ctx.fillRect(lx, ly + 2.0f, 7.0f, strong ? 5.0f : 2.0f);
+                    const float asc = setupFont(ctx,
+                            strong ? Color(250, 250, 255, 255) : Color(225, 228, 238, 200), 8.5f);
+                    ctx.font.Print(label.c_str(), lx + 10.0f, ly + asc);
+                    lx += 10.0f + ctx.font.GetTextWidth(label.c_str()) + 9.0f;
+                };
+                if (clip.editableEnvelope) entry(clip.envelopeLabel, clip.envelopeColor, true);
+                for (size_t l = 0; l < clip.lines.size(); ++l)
+                    if (!clip.lines[l].keys.empty())
+                        entry(clip.lines[l].label, clip.lines[l].color, false);
                 ctx.popClip();
             }
 

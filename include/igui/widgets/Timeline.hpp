@@ -98,6 +98,23 @@ struct TimelineClip
     float envelopeRest = 0; // the value a new curve starts flat at
     float envelopeMin = -40;
     float envelopeMax = 12;
+    // The colour of the envelope's line, and its name in the legend of the clip (below).
+    Color envelopeColor = Color(255, 255, 255, 230);
+    String envelopeLabel;
+    // More curves of the clip, to look at while the envelope is the one being edited. Each is
+    // drawn like the envelope (over the media's own time, between its own min and max), thinner
+    // and in its own colour, under the envelope; it has no points and never takes the mouse: a
+    // press on it is a press on the clip. With a tall enough bar the clip names what it shows
+    // along its top: the envelope's label first, then the label of every line that has keys.
+    struct Line
+    {
+        ct::Vector<CurveKey> keys;
+        float min = 0;
+        float max = 1;
+        Color color = Color(255, 255, 255, 150);
+        String label;
+    };
+    ct::Vector<Line> lines;
     float params[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0 }; // free for the application (effects, volume); copied when a clip is split
     // A curve per entry of params over the media's own time (seconds); when there is one it
@@ -629,6 +646,11 @@ private:
         }
     };
     TimeMap timeMap(const Rect& b) const;
+    // One curve of a clip as a line across its bar (the envelope, or one of its lines).
+    void paintClipCurve(PaintContext& ctx, const TimeMap& tm, const TimelineClip& clip,
+            const ct::Vector<CurveKey>& keys, float min, float max, const Color& color, float thickness,
+            float x0, float x1, float clipY, float clipH) const;
+    mutable ct::Vector<Vec2> curvePath_; // the points of the stroke, kept between curves
     int trackAtY(float y) const;
 
     void paintRuler(PaintContext& ctx, const Rect& b);

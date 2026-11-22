@@ -773,6 +773,194 @@ void testFadeHostile()
     }
 }
 
+// ---- more curves on a clip (TimelineClip::lines, envelopeColor, envelopeLabel) ----
+
+// The vertices of a colour whatever their alpha (the edge of a stroke fades to nothing).
+int verticesOfRgb(Rig& r, uint8_t red, uint8_t green, uint8_t blue)
+{
+    r.h.frame();
+    const DrawList& dl = GetDrawList();
+    int n = 0;
+    for (size_t i = 0; i < dl.vertices().size(); ++i)
+    {
+        const Color c = dl.vertices()[i].color;
+        if (c.r == red && c.g == green && c.b == blue) ++n;
+    }
+    return n;
+}
+
+CurveKey keyAt(float time, float value)
+{
+    CurveKey k;
+    k.time = time;
+    k.value = value;
+    return k;
+}
+
+TimelineClip::Line lineOf(float v0, float v1, const Color& color, const char* label)
+{
+    TimelineClip::Line line;
+    line.keys.push_back(keyAt(0.0f, v0));
+    line.keys.push_back(keyAt(10.0f, v1));
+    line.color = color;
+    line.label = label;
+    return line;
+}
+
+void testClipLines()
+{
+    printf("more curves on a clip: drawn, each in its colour, named in a legend, and never under the mouse\n");
+    const Color red(201, 37, 41, 255), green(33, 197, 43, 255), gold(203, 171, 31, 255);
+    Rig r;
+    r.tl->setSnapping(false);
+    r.tl->addClip(0, 4.0f, 14.0f, "a");
+    r.h.relayout();
+    check(verticesOfRgb(r, 201, 37, 41) == 0, "no line, nothing in its colour");
+    r.tl->track(0).clips[0].lines.push_back(lineOf(0.2f, 0.9f, red, "Low cut"));
+    r.tl->track(0).clips[0].lines.push_back(lineOf(0.5f, 0.5f, green, "Pan"));
+    r.tl->markDirty();
+    const int bending = verticesOfRgb(r, 201, 37, 41), flat = verticesOfRgb(r, 33, 197, 43);
+    check(bending > 0 && flat > 0, "each line is drawn in its own colour");
+    check(flat < bending && flat <= 16, "a flat line is one stretch between two points, not a point for every other pixel");
+    // the envelope has its colour too
+    TimelineClip& c = r.tl->track(0).clips[0];
+    c.envelope.push_back(keyAt(0.0f, -40.0f));
+    c.envelope.push_back(keyAt(10.0f, 12.0f));
+    r.tl->markDirty();
+    check(verticesOfRgb(r, 203, 171, 31) == 0, "the envelope is white until it is given a colour");
+    r.tl->track(0).clips[0].envelopeColor = gold;
+    r.tl->markDirty();
+    check(verticesOfRgb(r, 203, 171, 31) > 0, "envelopeColor is the colour of the envelope's line");
+    // a line with no keys, or with a range of nothing, draws nothing
+    r.tl->track(0).clips[0].lines[0].keys.clear();
+    r.tl->track(0).clips[0].lines[1].max = r.tl->track(0).clips[0].lines[1].min;
+    r.tl->markDirty();
+    check(verticesOfRgb(r, 201, 37, 41) == 0 && verticesOfRgb(r, 33, 197, 43) == 0, "a line with no keys or with max == min draws nothing");
+    // the legend: only on a bar tall enough for it
+    r.tl->track(0).clips[0].lines[0] = lineOf(0.2f, 0.9f, red, "Low cut");
+    r.tl->track(0).clips[0].lines[1] = lineOf(0.5f, 0.5f, green, "Pan");
+    r.tl->markDirty();
+    const int low = verticesOfRgb(r, 201, 37, 41);
+    r.tl->setTrackHeight(60.0f);
+    r.h.relayout();
+    r.tl->track(0).clips[0].lines[0].keys.clear(); // only the legend could be in this colour now
+    r.tl->markDirty();
+    check(verticesOfRgb(r, 201, 37, 41) == 0, "a line with no keys is not in the legend");
+    r.tl->track(0).clips[0].lines[0] = lineOf(0.2f, 0.2f, red, "Low cut");
+    r.tl->markDirty();
+    const int tall = verticesOfRgb(r, 201, 37, 41);
+    r.tl->track(0).clips[0].lines[0].label = "";
+    r.tl->markDirty();
+    check(tall - verticesOfRgb(r, 201, 37, 41) == 4, "the legend of a tall bar has a swatch in the colour of each line that has a label");
+    check(low > 0, "a low bar draws the lines without a legend");
+
+    // The lines never take the mouse: the same presses do the same with and without them.
+    for (int editable = 0; editable < 2; ++editable)
+    {
+        float starts[2] = { 0, 0 };
+        size_t points[2] = { 0, 0 };
+        int envelopeSignals[2] = { 0, 0 };
+        for (int withLines = 0; withLines < 2; ++withLines)
+        {
+            Rig q;
+            q.tl->setSnapping(false);
+            q.tl->setTrackHeight(60.0f);
+            q.tl->addClip(0, 4.0f, 14.0f, "a");
+            TimelineClip& clip = q.tl->track(0).clips[0];
+            clip.editableEnvelope = editable != 0;
+            clip.envelope.push_back(keyAt(0.0f, 0.0f));
+            clip.envelope.push_back(keyAt(10.0f, 0.0f));
+            if (withLines)
+            {
+                // a line through the middle of the bar, where the presses go, and its ends on the bar's edges
+                clip.lines.push_back(lineOf(0.5f, 0.5f, red, "mid"));
+                clip.lines.push_back(lineOf(0.0f, 1.0f, green, "ramp"));
+            }
+            q.tl->onEnvelopeChanged.connect([&, withLines](int, int) { ++envelopeSignals[withLines]; });
+            q.h.relayout();
+            float x = 0, y = 0;
+            q.clipPoint(0, 0, x, y); // on the flat line and on the middle of the ramp
+            q.press(x, y);
+            q.h.moveTo(x + 40.0f, y);
+            q.h.up();
+            q.h.moveTo(x - 100.0f, y);
+            q.h.down();
+            q.h.up();
+            q.h.down(); // a double click away from the envelope: a point of the envelope when it is editable
+            q.h.up();
+            starts[withLines] = q.tl->track(0).clips[0].start;
+            points[withLines] = q.tl->track(0).clips[0].envelope.size();
+            check(q.badIndex == 0, "no signal named a clip that is not there");
+        }
+        check(starts[0] == starts[1] && points[0] == points[1] && envelopeSignals[0] == envelopeSignals[1],
+                "the clip moved and the envelope changed the same with the lines as without");
+        check(starts[0] != 4.0f, "the press on a line moved the clip under it");
+    }
+}
+
+void testClipLinesHostile()
+{
+    printf("curves with keys, ranges and speeds that are not numbers\n");
+    const float odd[] = { nanf(""), INFINITY, -INFINITY, -1e30f, 1e30f, 0.0f };
+    const size_t n = sizeof(odd) / sizeof(odd[0]);
+    for (size_t i = 0; i < n; ++i)
+        for (size_t j = 0; j < n; ++j)
+        {
+            Rig r;
+            r.tl->setTrackHeight(60.0f);
+            r.tl->addClip(0, 2.0f, 12.0f, "a");
+            r.tl->addClip(1, 2.0f, 12.0f, "speed");
+            r.tl->addClip(2, 2.0f, 12.0f, "range");
+            TimelineClip::Line line;
+            line.label = "odd";
+            line.keys.push_back(keyAt(1.0f, 0.2f));
+            line.keys.push_back(keyAt(odd[i], odd[j])); // a time and a value that are not numbers
+            line.keys.push_back(keyAt(0.5f, 0.9f));     // and a key out of order after it
+            line.keys.push_back(keyAt(odd[j], 0.4f));
+            line.keys.push_back(keyAt(8.0f, odd[i]));
+            r.tl->track(0).clips[0].lines.push_back(line);
+            r.tl->track(0).clips[0].envelope = line.keys;
+            r.tl->track(0).clips[0].envelopeLabel = "env";
+            // (not editable: the squares of the points of an envelope are drawn where the keys are, and a key
+            // whose time is not a number is a square that is not one; that is the envelope's, not the lines')
+            r.tl->track(1).clips[0].lines.push_back(lineOf(0.0f, 1.0f, Color(9, 9, 9, 255), "s"));
+            r.tl->track(1).clips[0].speed = odd[i];
+            r.tl->track(1).clips[0].offset = odd[j];
+            r.tl->track(2).clips[0].lines.push_back(lineOf(0.0f, 1.0f, Color(9, 9, 9, 255), "r"));
+            r.tl->track(2).clips[0].lines[0].min = odd[i];
+            r.tl->track(2).clips[0].lines[0].max = odd[j];
+            r.tl->track(2).clips[0].envelope.push_back(keyAt(0.0f, 0.0f));
+            r.tl->track(2).clips[0].envelopeMin = odd[j];
+            r.tl->track(2).clips[0].envelopeMax = odd[i];
+            r.h.relayout();
+            check(frameIsFinite(r), "every vertex is a number");
+            r.tl->setTimeRange(0.0f, 1e-5f);
+            check(frameIsFinite(r), "zoomed in to ten microseconds");
+            r.tl->setTimeRange(-1e9f, 1e9f);
+            check(frameIsFinite(r), "and out to sixty years");
+        }
+    // a hundred thousand keys in one clip, in a window of any size: the points of a stroke are bounded by the keys and the pixels
+    {
+        Rig r;
+        r.tl->addClip(0, 0.0f, 20.0f, "many");
+        TimelineClip::Line line;
+        line.color = Color(201, 37, 41, 255);
+        for (int k = 0; k < 100000; ++k) line.keys.push_back(keyAt(static_cast<float>(k) * 0.0002f, (k % 2) ? 1.0f : 0.0f));
+        r.tl->track(0).clips[0].lines.push_back(line);
+        r.h.relayout();
+        check(frameIsFinite(r), "100000 keys");
+        r.tl->track(0).clips[0].lines[0].keys.resize(40);
+        // keys that go back and forth in time: the pen does not go back, so the stroke is no longer than the bar
+        for (size_t k = 0; k < 40; ++k) r.tl->track(0).clips[0].lines[0].keys[k].time = (k % 2) ? 19.0f : 1.0f;
+        r.tl->markDirty();
+        check(verticesOfRgb(r, 201, 37, 41) < 40 * 8 + 1300 * 4, "keys out of order do not multiply the points of the stroke");
+        r.h.resize(1.0f, 1.0f);
+        r.h.frames(2);
+        r.h.resize(30000.0f, 40.0f);
+        check(frameIsFinite(r), "a window 30000 pixels wide");
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -798,6 +986,8 @@ int main(int argc, char** argv)
     RUN(testKeyframeLabelEdit);
     RUN(testFadeLinesAndHandles);
     RUN(testFadeHostile);
+    RUN(testClipLines);
+    RUN(testClipLinesHostile);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else
