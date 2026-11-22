@@ -116,6 +116,14 @@ struct TimelineClip
     ct::Vector<TracePoint> trace;
     Color traceColor = Color(255, 70, 170, 255);
     float traceBaseline = -1; // a height 0..1 drawn as a thin line across the tinted stretch; < 0 none
+    // The fades the application says the clip has, in seconds of the timeline from its start and
+    // to its end. They are drawn as the line the loudness follows over them (equal power, like the
+    // mixer's), with the bar above the line darkened. With editableFades a handle sits at the top
+    // end of each line: dragging it asks for another length (onFadeChanged) and the application
+    // gives back the length it kept (a crossfade can make it longer than asked).
+    float fadeIn = 0;
+    float fadeOut = 0;
+    bool editableFades = false;
 };
 
 /// @brief The candidate nearest to t when it lies within threshold of it (false when none does).
@@ -423,6 +431,10 @@ public:
     Signal<int, int> onClipChanged;
     /// @brief The curve of a clip changed (a point added, moved or removed): track and clip index.
     Signal<int, int> onEnvelopeChanged;
+    /// @brief A fade handle of a clip was dragged (see TimelineClip::editableFades), on every step:
+    /// track, clip index, false for the fade in and true for the fade out, the length asked for
+    /// in seconds (0 to the length of the clip). The drag ends with onClipEdited.
+    Signal<int, int, bool, float> onFadeChanged;
     /// @brief The drag that moved or trimmed a clip ended. Track and clip index.
     Signal<int, int> onClipEdited;
     /// @brief In grab mode (setClipGrab), a press on a clip: track, clip index, the pointer's x in
@@ -489,6 +501,8 @@ private:
         ResizeClipR,
         StretchClipR,
         MoveEnvelopeKey,
+        MoveFadeIn,
+        MoveFadeOut,
         Marquee,
         Grab
     };
@@ -510,6 +524,7 @@ private:
     float dragOrigEnd_ = 0;
     float dragOrigOffset_ = 0;
     float dragOrigSpeed_ = 1;
+    float dragOrigFade_ = 0; // the fade a handle was grabbed at
     bool dragMoved_ = false;
     bool snapping_ = true;
     bool grabClips_ = false;
@@ -552,6 +567,10 @@ private:
     float envelopeX(const TimelineClip& clip, const CurveKey& key) const;
     float envelopeY(const TimelineClip& clip, float value, float clipY, float clipH) const;
     int envelopeKeyAt(const TimelineClip& clip, float mx, float my, float clipY, float clipH) const;
+    // The handle of a fade sits on the top edge of the bar at the end of the fade line, kept off
+    // the edge of the bar so that the edge can still be dragged to trim.
+    float fadeHandleX(const TimelineClip& clip, bool out) const;
+    int fadeHandleAt(const TimelineClip& clip, float mx, float my, float clipY) const; // 0 none, 1 in, 2 out
 
     // ── Helpers ──────────────────────────────────────────────────────────
     float timeToX(float t) const;
