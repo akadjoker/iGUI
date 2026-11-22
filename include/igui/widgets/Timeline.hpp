@@ -98,6 +98,23 @@ struct TimelineClip
     float envelopeRest = 0; // the value a new curve starts flat at
     float envelopeMin = -40;
     float envelopeMax = 12;
+    // The colour of the envelope's line, and its name in the legend of the clip (below).
+    Color envelopeColor = Color(255, 255, 255, 230);
+    String envelopeLabel;
+    // More curves of the clip, to look at while the envelope is the one being edited. Each is
+    // drawn like the envelope (over the media's own time, between its own min and max), thinner
+    // and in its own colour, under the envelope; it has no points and never takes the mouse: a
+    // press on it is a press on the clip. With a tall enough bar the clip names what it shows
+    // along its top: the envelope's label first, then the label of every line that has keys.
+    struct Line
+    {
+        ct::Vector<CurveKey> keys;
+        float min = 0;
+        float max = 1;
+        Color color = Color(255, 255, 255, 150);
+        String label;
+    };
+    ct::Vector<Line> lines;
     float params[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0 }; // free for the application (effects, volume); copied when a clip is split
     // A curve per entry of params over the media's own time (seconds); when there is one it
@@ -410,6 +427,13 @@ public:
         markDirty();
     }
 
+    /// @brief How long the last paint() of the timeline took on the CPU (building the geometry of
+    /// the ruler, the tracks and the clips; not the GPU's work), in seconds.
+    double lastPaintSeconds() const
+    {
+        return paintSeconds_;
+    }
+
     /// @brief Set the background color.
     void setBgColor(const Color& c)
     {
@@ -472,6 +496,7 @@ private:
     ct::Vector<TimelineTrack> tracks_;
     Color bgColor_ = Color(30, 32, 36, 255);
 
+    double paintSeconds_ = 0;
     float playhead_ = 0;
     float viewStart_ = 0;
     float viewEnd_ = 5;
@@ -569,6 +594,11 @@ private:
     int envelopeKeyAt(const TimelineClip& clip, float mx, float my, float clipY, float clipH) const;
     // The handle of a fade sits on the top edge of the bar at the end of the fade line, kept off
     // the edge of the bar so that the edge can still be dragged to trim.
+    // One curve of a clip as a line across its bar (the envelope, or one of its lines).
+    void paintClipCurve(PaintContext& ctx, const TimelineClip& clip, const ct::Vector<CurveKey>& keys,
+            float min, float max, const Color& color, float thickness, float x0, float x1, float clipY,
+            float clipH) const;
+    mutable ct::Vector<Vec2> curvePath_; // the points of the stroke, kept between curves
     float fadeHandleX(const TimelineClip& clip, bool out) const;
     int fadeHandleAt(const TimelineClip& clip, float mx, float my, float clipY) const; // 0 none, 1 in, 2 out
 
