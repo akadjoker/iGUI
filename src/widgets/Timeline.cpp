@@ -781,6 +781,53 @@ int Timeline::fadeHandleAt(const TimelineClip& clip, float mx, float my, float c
     return dIn <= dOut ? 1 : 2;
 }
 
+// How far inside a bar its edge is grabbed to trim it: the pixels the application asked for, and
+// never more than a third of a narrow bar (so that its middle still moves it), nor less than the
+// six pixels it always was.
+float Timeline::clipEdgeZone(float barWidth) const
+{
+    if (!(barWidth > 0.0f)) return 6.0f;
+    return fmaxf(6.0f, fminf(clipEdgeGrab_, barWidth / 3.0f));
+}
+
+void Timeline::setClipEdgeGrab(float pixels)
+{
+    if (std::isfinite(pixels)) clipEdgeGrab_ = fmaxf(6.0f, fminf(pixels, 64.0f));
+}
+
+// True when the pointer is where a press would trim a clip: on the edge of a bar, and not on a
+// fade handle, a point of its curve or a span over it.
+bool Timeline::overClipEdge(float mx, float my) const
+{
+    if (grabClips_) return false;
+    int span = -1;
+    if (spanPartAt(mx, my, span) != 0) return false;
+    const Rect b = absoluteRect();
+    if (mx < b.x + kHeaderW || my < b.y + kRulerH) return false;
+    const int ti = trackAtY(my);
+    if (ti < 0) return false;
+    const TimelineTrack& trk = tracks_[ti];
+    if (trk.locked) return false;
+    const auto visible = visibleTracks();
+    int row = 0;
+    while (row < static_cast<int>(visible.size()) && visible[row] != ti) ++row;
+    const float cy = b.y + kRulerH + row * kTrackH - verticalScroll_ + 3;
+    const float ch = kTrackH - 6;
+    if (my < cy || my > cy + ch) return false;
+    for (int ci = 0; ci < static_cast<int>(trk.clips.size()); ++ci)
+    {
+        const TimelineClip& clip = trk.clips[ci];
+        const float cx0 = timeToX(clip.start), cx1 = timeToX(clip.end);
+        if (!(mx >= cx0 && mx <= cx1)) continue;
+        const float grip = clipEdgeZone(cx1 - cx0);
+        if (!(mx < cx0 + grip || mx > cx1 - grip)) return false;
+        if (clip.editableFades && fadeHandleAt(clip, mx, my, cy) != 0) return false;
+        if (clip.editableEnvelope && envelopeKeyAt(clip, mx, my, cy, ch) >= 0) return false;
+        return true;
+    }
+    return false;
+}
+
 float Timeline::snapLimit() const
 {
     Rect b = absoluteRect();
@@ -1053,7 +1100,8 @@ void Timeline::onMousePress(MouseEvent& e)
             // plain click on a clip that is already selected keeps the others, so they can be
             // dragged together (a click without a drag keeps only that clip). The edges of the bar
             // resize and stretch, they do not change the selection.
-            const bool edge = e.x < cx0 + 6 || e.x > cx1 - 6;
+            const float grip = clipEdgeZone(cx1 - cx0);
+            const bool edge = e.x < cx0 + grip || e.x > cx1 - grip;
             bool collapse = false;
             if (!edge && e.ctrl)
             {
@@ -1160,8 +1208,8 @@ void Timeline::onMousePress(MouseEvent& e)
                 }
             }
 
-            if (e.x < cx0 + 6) dragMode_ = DragMode::ResizeClipL;
-            else if (e.x > cx1 - 6)
+            if (e.x < cx0 + grip) dragMode_ = DragMode::ResizeClipL;
+            else if (e.x > cx1 - grip)
                 dragMode_ = e.ctrl ? DragMode::StretchClipR
                                    : DragMode::ResizeClipR; // Ctrl: change the speed
             else
@@ -1426,6 +1474,8 @@ void Timeline::onMouseMove(MouseEvent& e)
         }
         else
             updateClipTooltip(e.x, e.y);
+        // The edge of a bar says that a drag there trims it.
+        setCursor(overClipEdge(e.x, e.y) ? CursorType::SizeH : CursorType::Arrow);
     }
     switch (dragMode_)
     {

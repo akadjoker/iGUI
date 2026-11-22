@@ -244,6 +244,13 @@ public:
     {
         return edgePadding_;
     }
+    /// @brief How many pixels inside each end of a clip bar a drag trims it instead of moving it
+    /// (6 by default, at most a third of the bar). The pointer shows a resize cursor there.
+    void setClipEdgeGrab(float pixels);
+    float clipEdgeGrab() const
+    {
+        return clipEdgeGrab_;
+    }
     /// Header buttons: M toggles mute, L toggles lock. Emitted with the track id and new state.
     Signal<int, bool> onTrackMuteChanged;
     Signal<int, bool> onTrackLockChanged;
@@ -590,6 +597,7 @@ private:
     float kTrackH = 28;
     float kHeaderW = 160;
     float edgePadding_ = 16;
+    float clipEdgeGrab_ = 6;
     float verticalScroll_ = 0;
     bool wheelScrollsTracks_ = false;
     ScrollBar* vbar_ = nullptr;
@@ -663,6 +671,8 @@ private:
     // candidates.
     void snapCandidates(int track, int clip, int keyTrack, int key, ct::Vector<float>& out) const;
     float snapLimit() const;
+    float clipEdgeZone(float barWidth) const;
+    bool overClipEdge(float mx, float my) const;
     bool snapToEdges(float t, int track, int clip, int keyTrack, int key, float& out) const;
     float snap(float t, int track, int clip, int keyTrack = -1, int key = -1) const;
     bool clipAtPoint(float x, float y, int& track, int& clip) const;
