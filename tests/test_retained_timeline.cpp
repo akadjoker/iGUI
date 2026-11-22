@@ -549,6 +549,230 @@ void testKeyframeLabelEdit()
     r.h.frames(2);
 }
 
+// ---- fades (TimelineClip::fadeIn, fadeOut, editableFades, onFadeChanged) ----
+
+// The vertices of one colour in the frame just drawn.
+int verticesOf(Rig& r, uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha)
+{
+    r.h.frame();
+    const DrawList& dl = GetDrawList();
+    int n = 0;
+    for (size_t i = 0; i < dl.vertices().size(); ++i)
+    {
+        const Color c = dl.vertices()[i].color;
+        if (c.r == red && c.g == green && c.b == blue && c.a == alpha) ++n;
+    }
+    return n;
+}
+
+bool frameIsFinite(Rig& r)
+{
+    r.h.frame();
+    const DrawList& dl = GetDrawList();
+    for (size_t i = 0; i < dl.vertices().size(); ++i)
+    {
+        const float x = dl.vertices()[i].x, y = dl.vertices()[i].y;
+        if (!(x - x == 0.0f) || !(y - y == 0.0f)) return false;
+    }
+    return true;
+}
+
+// The window point of a fade handle: the top of the bar of the clip, at the end of the fade line.
+void fadeHandlePoint(Rig& r, int track, int clip, bool out, float& x, float& y)
+{
+    const TimelineClip& c = r.tl->track(track).clips[clip];
+    r.tl->pointAt(track, out ? c.end - c.fadeOut : c.start + c.fadeIn, x, y);
+    y += -r.tl->trackHeight() * 0.5f + 3.0f + 5.0f;
+}
+
+void testFadeLinesAndHandles()
+{
+    printf("fade lines: drawn, dragged by their handles, the edge of the bar still trims\n");
+    Rig r;
+    r.tl->setSnapping(false);
+    r.tl->addClip(0, 4.0f, 14.0f, "a");
+    r.h.relayout();
+    check(verticesOf(r, 120, 225, 255, 240) == 0, "a clip with no fade has no fade line");
+    check(verticesOf(r, 70, 190, 235, 255) == 0, "and no handle");
+    r.tl->track(0).clips[0].fadeIn = 3.0f;
+    r.tl->track(0).clips[0].fadeOut = 2.0f;
+    r.tl->markDirty();
+    check(verticesOf(r, 120, 225, 255, 240) > 0, "the fades are drawn as lines");
+    check(verticesOf(r, 0, 0, 0, 70) > 0, "with the bar above them darkened");
+    check(verticesOf(r, 70, 190, 235, 255) == 0, "fades that cannot be dragged have no handle");
+    // Not editable: a press where the handle would be moves the clip.
+    int fades = 0;
+    bool lastOut = false;
+    float lastLength = -1.0f;
+    r.tl->onFadeChanged.connect(
+            [&](int t, int c, bool out, float length)
+            {
+                ++fades;
+                lastOut = out;
+                lastLength = length;
+                r.checkIndex(t, c);
+            });
+    float x = 0, y = 0;
+    fadeHandlePoint(r, 0, 0, false, x, y);
+    r.press(x, y);
+    r.h.moveTo(x + 53.0f, y);
+    r.h.up();
+    check(fades == 0 && r.tl->track(0).clips[0].start != 4.0f, "without editableFades the press there moves the clip");
+    r.tl->track(0).clips[0].start = 4.0f;
+    r.tl->track(0).clips[0].end = 14.0f;
+    r.tl->track(0).clips[0].editableFades = true;
+    r.tl->markDirty();
+    check(verticesOf(r, 70, 190, 235, 255) == 8, "editable fades have two handles");
+    // The fade in grows to the right by what the pointer moved.
+    const float second = (r.tl->absoluteRect().w - 160.0f - 32.0f) / 20.0f; // pixels of one second
+    r.changed = r.edited = 0;
+    fadeHandlePoint(r, 0, 0, false, x, y);
+    r.press(x, y);
+    r.h.moveTo(x + second, y);
+    r.h.moveTo(x + 2.0f * second, y);
+    check(fades == 2 && !lastOut && fabsf(lastLength - 5.0f) < 0.05f, "dragging the handle of the fade in asks for a longer fade");
+    check(fabsf(r.tl->track(0).clips[0].fadeIn - 5.0f) < 0.05f, "and the clip has it while the drag goes on");
+    r.h.moveTo(x + 40.0f * second, y);
+    check(lastLength == 10.0f, "a fade is never longer than its clip");
+    r.h.moveTo(x - 40.0f * second, y);
+    check(lastLength == 0.0f, "nor shorter than nothing");
+    r.h.up();
+    check(r.edited == 1 && r.changed == 0, "the drag ends with onClipEdited, once, and the clip did not move");
+    check(r.tl->track(0).clips[0].start == 4.0f && r.tl->track(0).clips[0].end == 14.0f, "its times are the same");
+    // The fade out grows to the left.
+    r.tl->track(0).clips[0].fadeIn = 3.0f;
+    fades = 0;
+    fadeHandlePoint(r, 0, 0, true, x, y);
+    r.press(x, y);
+    r.h.moveTo(x - second, y);
+    r.h.up();
+    check(fades == 1 && lastOut && fabsf(lastLength - 3.0f) < 0.05f, "the handle of the fade out, dragged left, asks for a longer fade out");
+    // A fade of nothing keeps its handle off the edge, and the edge still trims.
+    r.tl->track(0).clips[0].fadeIn = 0.0f;
+    r.tl->track(0).clips[0].fadeOut = 0.0f;
+    fades = r.changed = 0;
+    r.tl->pointAt(0, 4.0f, x, y);
+    r.press(x + 1.0f, y);
+    r.h.moveTo(x + 1.0f + second, y);
+    r.h.up();
+    check(fades == 0 && r.changed > 0 && fabsf(r.tl->track(0).clips[0].start - 5.0f) < 0.05f, "the left edge of the bar trims the clip, with the handle next to it");
+    fadeHandlePoint(r, 0, 0, false, x, y);
+    r.press(x + 9.0f, y);
+    r.h.moveTo(x + 9.0f + second, y);
+    r.h.up();
+    check(fades == 1 && fabsf(lastLength - 1.0f) < 0.05f, "and the handle of a fade of nothing is 9 pixels inside it");
+    // The application answers with the length it keeps (a crossfade makes it longer than asked).
+    r.tl->onFadeChanged.connect([&](int t, int c, bool out, float) { (out ? r.tl->track(t).clips[c].fadeOut : r.tl->track(t).clips[c].fadeIn) = 2.5f; });
+    fadeHandlePoint(r, 0, 0, false, x, y);
+    r.press(x, y);
+    r.h.moveTo(x + second, y);
+    r.h.up();
+    check(r.tl->track(0).clips[0].fadeIn == 2.5f, "the length the application gave back in the signal is the one that stays");
+    check(r.badIndex == 0, "no signal named a clip that is not there");
+}
+
+void testFadeHostile()
+{
+    printf("fades that are not numbers, a clip or the timeline gone from onFadeChanged\n");
+    const float odd[] = { nanf(""), INFINITY, -INFINITY, -3.0f, 1e30f, 0.0f, 1e-30f };
+    for (size_t i = 0; i < sizeof(odd) / sizeof(odd[0]); ++i)
+        for (size_t j = 0; j < sizeof(odd) / sizeof(odd[0]); ++j)
+        {
+            Rig r;
+            r.tl->addClip(0, 2.0f, 9.0f, "a");
+            r.tl->addClip(1, 3.0f, 3.0f, "zero");
+            r.tl->addClip(1, 9.0f, 4.0f, "backwards");
+            for (int t = 0; t < 2; ++t)
+                for (size_t c = 0; c < r.tl->track(t).clips.size(); ++c)
+                {
+                    r.tl->track(t).clips[c].fadeIn = odd[i];
+                    r.tl->track(t).clips[c].fadeOut = odd[j];
+                    r.tl->track(t).clips[c].editableFades = true;
+                }
+            r.h.relayout();
+            check(frameIsFinite(r), "every vertex is a number");
+            // press and drag where the handles are, and all along the top of the bars
+            float x = 0, y = 0;
+            r.tl->pointAt(0, 2.0f, x, y);
+            y += -r.tl->trackHeight() * 0.5f + 8.0f;
+            for (float dx = -4.0f; dx < 400.0f; dx += 37.0f)
+            {
+                r.press(x + dx, y);
+                r.h.moveTo(x + dx + 30.0f, y);
+                r.h.moveTo(x + dx - 500.0f, y + 3.0f);
+                r.h.up();
+            }
+            for (int t = 0; t < 2; ++t)
+                for (size_t c = 0; c < r.tl->track(t).clips.size(); ++c)
+                {
+                    const TimelineClip& clip = r.tl->track(t).clips[c];
+                    // a fade the drag wrote is a length; one it did not touch is the one given
+                    check(clip.fadeIn == odd[i] || (odd[i] != odd[i] && clip.fadeIn != clip.fadeIn) || (clip.fadeIn >= 0.0f && clip.fadeIn < 1e13f), "no drag left a fade in that is not a length");
+                }
+            check(frameIsFinite(r), "also after the drags");
+        }
+    // a window of one pixel, and a view of nothing
+    {
+        Rig r;
+        r.tl->addClip(0, 2.0f, 9.0f, "a");
+        r.tl->track(0).clips[0].fadeIn = 2.0f;
+        r.tl->track(0).clips[0].fadeOut = 2.0f;
+        r.tl->track(0).clips[0].editableFades = true;
+        r.h.resize(1.0f, 1.0f);
+        r.h.frames(2);
+        r.h.resize(1280.0f, 720.0f);
+        r.tl->setTimeRange(5.0f, 5.0f);
+        r.h.frames(2);
+        r.tl->setTimeRange(0.0f, 1e-6f);
+        check(frameIsFinite(r), "a view of a microsecond");
+        r.tl->setTimeRange(-1e9f, 1e9f);
+        check(frameIsFinite(r), "a view of sixty years");
+    }
+    // the handler takes the clip away, the application does between two moves, the handler takes the timeline out of the tree
+    for (int variant = 0; variant < 3; ++variant)
+    {
+        Rig r;
+        r.tl->setSnapping(false);
+        r.tl->addClip(0, 4.0f, 14.0f, "a");
+        r.tl->addClip(0, 15.0f, 18.0f, "b");
+        r.tl->track(0).clips[0].fadeIn = 3.0f;
+        r.tl->track(0).clips[0].editableFades = true;
+        r.h.relayout();
+        Timeline* self = r.tl;
+        int fades = 0;
+        r.tl->onFadeChanged.connect(
+                [&](int t, int c, bool, float)
+                {
+                    ++fades;
+                    r.checkIndex(t, c);
+                    if (variant == 0) r.tl->removeClip(t, c);
+                    if (variant == 2 && self)
+                    {
+                        Timeline* dead = self;
+                        self = nullptr;
+                        r.box->removeChild(dead);
+                    }
+                });
+        float x = 0, y = 0;
+        fadeHandlePoint(r, 0, 0, false, x, y);
+        r.press(x, y);
+        r.h.moveTo(x + 20.0f, y);
+        if (variant == 1) r.tl->removeClip(0, 0);
+        r.h.moveTo(x + 40.0f, y);
+        r.h.moveTo(x + 60.0f, y);
+        r.h.up();
+        r.h.frames(2);
+        check(fades == 1, "the drag ended with its clip (or its timeline): one signal and no more");
+        check(r.badIndex == 0, "no signal named a clip that is not there");
+        if (variant == 2) check(self == nullptr, "the handler removed the timeline");
+        else
+        {
+            check(r.edited == 0, "a clip that is gone is not reported as edited");
+            check(r.tl->track(0).clips.size() == 1u && r.tl->track(0).clips[0].start == 15.0f && r.tl->track(0).clips[0].fadeIn == 0.0f, "the clip that slid into its place was not given a fade");
+        }
+    }
+}
+
 } // namespace
 
 // A scenario name on the command line runs only that one.
@@ -572,6 +796,8 @@ int main(int argc, char** argv)
     RUN(testSnapIgnoresNaN);
     RUN(testSplitAndRemoveArguments);
     RUN(testKeyframeLabelEdit);
+    RUN(testFadeLinesAndHandles);
+    RUN(testFadeHostile);
     shutdown();
     if (failures()) printf("%d checks failed\n", failures());
     else

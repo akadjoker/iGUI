@@ -443,7 +443,8 @@ void Timeline::clipRemoved(int track, int clip)
     // (A grab holds no index it uses again: the application keeps getting its moves and release.)
     const bool onClip = dragMode_ == DragMode::MoveClip || dragMode_ == DragMode::ResizeClipL ||
                         dragMode_ == DragMode::ResizeClipR || dragMode_ == DragMode::StretchClipR ||
-                        dragMode_ == DragMode::MoveEnvelopeKey;
+                        dragMode_ == DragMode::MoveEnvelopeKey || dragMode_ == DragMode::MoveFadeIn ||
+                        dragMode_ == DragMode::MoveFadeOut;
     if (onClip && dragTrack_ == track)
     {
         if (dragIndex_ == clip)
@@ -492,6 +493,8 @@ bool Timeline::dragTargetExists() const
         case DragMode::ResizeClipR:
         case DragMode::StretchClipR:
         case DragMode::MoveEnvelopeKey:
+        case DragMode::MoveFadeIn:
+        case DragMode::MoveFadeOut:
         {
             if (dragTrack_ < 0 || dragTrack_ >= trackCount() || dragIndex_ < 0 ||
                     dragIndex_ >= static_cast<int>(tracks_[dragTrack_].clips.size()))
@@ -748,6 +751,34 @@ int Timeline::envelopeKeyAt(const TimelineClip& clip, float mx, float my, float 
         if (std::fabs(mx - kx) + std::fabs(my - ky) < 7.0f) return k;
     }
     return -1;
+}
+
+// A fade handle is never nearer to the edge of its bar than this many pixels: a fade of nothing
+// has its handle there, and the edge itself still trims.
+static constexpr float kFadeHandleInset = 9.0f;
+
+// The length of a fade as it is drawn and grabbed: a length that is not a number, or is negative,
+// is no fade, and an enormous one is as long as a time of the timeline can be.
+static float fadeLength(float fade)
+{
+    return Math::sane(fade, 0.0f, 0.0f, kTimelineMaxTime);
+}
+
+float Timeline::fadeHandleX(const TimelineClip& clip, bool out) const
+{
+    const float x0 = timeToX(clip.start), x1 = timeToX(clip.end);
+    if (out) return x1 - fmaxf(x1 - timeToX(clip.end - fadeLength(clip.fadeOut)), kFadeHandleInset);
+    return x0 + fmaxf(timeToX(clip.start + fadeLength(clip.fadeIn)) - x0, kFadeHandleInset);
+}
+
+int Timeline::fadeHandleAt(const TimelineClip& clip, float mx, float my, float clipY) const
+{
+    if (!(fabsf(my - (clipY + 5.0f)) <= 7.0f)) return 0;
+    const float dIn = fabsf(mx - fadeHandleX(clip, false));
+    const float dOut = fabsf(mx - fadeHandleX(clip, true));
+    // (a clip whose times are not numbers has no handle to grab: every comparison with NaN is false)
+    if (!(dIn <= 7.0f) && !(dOut <= 7.0f)) return 0;
+    return dIn <= dOut ? 1 : 2;
 }
 
 float Timeline::snapLimit() const
@@ -1033,6 +1064,22 @@ void Timeline::onMousePress(MouseEvent& e)
             // one. The first and last points sit on the edges of the bar, where a drag would resize
             // it: a point is grabbed there too when the pointer is on it.
             TimelineClip& clip = trk.clips[ci];
+            // The handle of a fade, on the top edge of the bar: a drag changes the fade.
+            if (clip.editableFades)
+            {
+                const int handle = fadeHandleAt(clip, e.x, e.y, cy);
+                if (handle != 0)
+                {
+                    dragMode_ = handle == 1 ? DragMode::MoveFadeIn : DragMode::MoveFadeOut;
+                    dragTrack_ = ti;
+                    dragIndex_ = ci;
+                    dragStartX_ = e.x;
+                    dragOrigFade_ = handle == 1 ? clip.fadeIn : clip.fadeOut;
+                    dragMoved_ = false;
+                    e.consumed = true;
+                    return;
+                }
+            }
             if (clip.editableEnvelope)
             {
                 const bool inside = e.x > cx0 + 6 && e.x < cx1 - 6;
@@ -1231,7 +1278,8 @@ void Timeline::onMouseRelease(MouseEvent& e)
     const bool edited =
             dragMoved_ && dragTrack_ >= 0 && dragIndex_ >= 0 &&
             (dragMode_ == DragMode::MoveClip || dragMode_ == DragMode::ResizeClipL ||
-                    dragMode_ == DragMode::ResizeClipR || dragMode_ == DragMode::StretchClipR);
+                    dragMode_ == DragMode::ResizeClipR || dragMode_ == DragMode::StretchClipR ||
+                    dragMode_ == DragMode::MoveFadeIn || dragMode_ == DragMode::MoveFadeOut);
     const int editedTrack = dragTrack_;
     const int editedClip = dragIndex_;
     const bool keyDragged = dragMode_ == DragMode::MoveKey && dragTrack_ >= 0 &&
@@ -1475,6 +1523,25 @@ void Timeline::onMouseMove(MouseEvent& e)
             onClipChanged.emit(dragTrack_, dragIndex_);
             markDirty();
             e.consumed = true;
+            break;
+        }
+        case DragMode::MoveFadeIn:
+        case DragMode::MoveFadeOut:
+        {
+            auto& clip = tracks_[dragTrack_].clips[dragIndex_];
+            const bool out = dragMode_ == DragMode::MoveFadeOut;
+            // The handle follows the pointer by how far it has moved since it was grabbed: the
+            // fade in gets longer to the right, the fade out to the left.
+            // (fmaxf and fminf drop a NaN: a clip or a fade that is not a number asks for 0)
+            const float moved = xToTime(e.x) - xToTime(dragStartX_);
+            const float fade = fmaxf(0.0f,
+                    fminf(clip.end - clip.start, dragOrigFade_ + (out ? -moved : moved)));
+            (out ? clip.fadeOut : clip.fadeIn) = fade; // the application may change it back
+            dragMoved_ = true;
+            markDirty();
+            e.consumed = true;
+            // (last: a handler may take the clip away or the timeline out of the tree)
+            onFadeChanged.emit(dragTrack_, dragIndex_, out, fade);
             break;
         }
         case DragMode::MoveEnvelopeKey:
@@ -2006,6 +2073,68 @@ void Timeline::paintTracks(PaintContext& ctx, const Rect& b)
                     const float h = std::min(1.0f, std::sqrt(peak)) * (clipH * 0.5f - 1.0f);
                     ctx.fillRect(x, mid - h, 2.0f, std::max(1.0f, h * 2.0f));
                 }
+            }
+
+            // The fades: the line the loudness follows over them (equal power, like the mixer's),
+            // the bar above the line darkened, and a handle at the top end of each when they can
+            // be dragged.
+            const float fadeIn = fadeLength(clip.fadeIn), fadeOut = fadeLength(clip.fadeOut);
+            if (fadeIn > 0.0f || fadeOut > 0.0f || clip.editableFades)
+            {
+                const float left = fmaxf(cx0, b.x + kHeaderW);
+                const float right = fminf(cx1, b.x + b.w);
+                const float top = clipY + 2.0f, bottom = clipY + clipH - 2.0f;
+                for (int side = 0; side < 2; ++side)
+                {
+                    const float length = side ? fadeOut : fadeIn;
+                    if (!(length > 0.0f)) continue;
+                    const float fx0 = side ? tm.x(clip.end - length) : cx0;
+                    const float fx1 = side ? cx1 : tm.x(clip.start + length);
+                    const float from = fmaxf(left, fx0), to = fminf(right, fx1);
+                    if (!(fx1 > fx0) || !(to > from)) continue;
+                    // a point every two pixels and one at the end: never more turns than the pixels there are
+                    const int turns = stepLimit(from, to + 2.0f, 2.0f, pixelCap(to - from));
+                    float px = 0, py = 0, x = from;
+                    for (int turn = 0; turn < turns && x <= to + 2.0f; ++turn, x += 2.0f)
+                    {
+                        const float xs = fminf(x, to);
+                        const float u = (xs - fx0) / (fx1 - fx0);
+                        const float g = sinf(1.5707963f * (side ? 1.0f - u : u));
+                        const float y = bottom - g * (bottom - top);
+                        if (turn > 0)
+                        {
+                            const float above = fminf(py, y) - (clipY + 1.0f);
+                            if (above > 0.0f)
+                            {
+                                ctx.fill.SetColor(0, 0, 0, 70);
+                                ctx.fillRect(px, clipY + 1.0f, xs - px, above);
+                            }
+                            const float dx = xs - px, dy = y - py;
+                            const float len = sqrtf(dx * dx + dy * dy);
+                            if (len > 0.1f)
+                            {
+                                const float nx = -dy / len * 0.8f, ny = dx / len * 0.8f;
+                                ctx.fill.SetColor(120, 225, 255, 240);
+                                ctx.fillTriangle(
+                                        px + nx, py + ny, px - nx, py - ny, xs - nx, y - ny);
+                                ctx.fillTriangle(
+                                        px + nx, py + ny, xs - nx, y - ny, xs + nx, y + ny);
+                            }
+                        }
+                        px = xs;
+                        py = y;
+                    }
+                }
+                if (clip.editableFades)
+                    for (int side = 0; side < 2; ++side)
+                    {
+                        const float hx = fadeHandleX(clip, side != 0);
+                        if (!(hx >= left && hx <= right)) continue;
+                        ctx.fill.SetColor(255, 255, 255, 255);
+                        ctx.fillRect(hx - 4.0f, top - 1.0f, 8.0f, 8.0f);
+                        ctx.fill.SetColor(70, 190, 235, 255);
+                        ctx.fillRect(hx - 3.0f, top, 6.0f, 6.0f);
+                    }
             }
 
             // Envelope: the curve of the clip (volume), over the media's time
