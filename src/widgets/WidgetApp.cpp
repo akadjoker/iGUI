@@ -937,6 +937,13 @@ void WidgetApp::dispatchKeyEvent(const ig::retained::IO::KeyEvent& ke)
     // A key that made a widget go away was handled, consumed or not.
     const uint32_t deletionsBefore = deletions_;
     if (s_.focused_) bubbleKey(we, ke.down ? &Widget::onKeyPress : &Widget::onKeyRelease);
+    if (ke.down && ke.key == ig::retained::Key::Escape && !we.consumed && s_.popup_ && !ke.shift && !ke.ctrl &&
+        !ke.alt && deletions_ == deletionsBefore)
+    {
+        closePopup();
+        we.consumed = true;
+        return;
+    }
     if (ke.down && !we.consumed && deletions_ == deletionsBefore) unhandledKey.emit(we);
 }
 
