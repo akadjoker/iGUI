@@ -276,6 +276,18 @@ struct EditorColors
     Color nodeBodySelected = Color(50, 55, 65, 240);
     Color nodeEdge = Color(60, 62, 70, 255);        // the frame of a node that is not selected
     Color nodePinLabel = Color(190, 192, 200, 220);
+    // StateMachineEditor
+    Color smNode = Color(48, 51, 58, 235);          // a state box
+    Color smNodeEdge = Color(30, 32, 36, 255);
+    Color smNodeSelected = Color(26, 28, 33, 235);
+    Color smAccent = Color(86, 156, 224, 255);      // the frame of a selected state, the highlight of a selected arrow
+    Color smPlaying = Color(235, 190, 70, 255);     // the frame of the state that plays
+    Color smStart = Color(120, 205, 140, 255);      // the frame of Start
+    Color smEnd = Color(230, 100, 100, 255);        // the frame of End
+    Color smLine = Color(224, 224, 228, 255);       // an arrow and the text of a state
+    Color smAuto = Color(119, 206, 87, 255);        // the head of an arrow that advances by itself
+    Color smIcon = Color(224, 224, 224, 255);       // the head of an arrow, the play and edit marks
+    Color smIconEdge = Color(65, 64, 66, 255);
     // AssetBrowser
     Color assetBg = Color(22, 24, 28, 255);
     Color assetBar = Color(30, 33, 38, 255);
@@ -332,6 +344,17 @@ struct EditorColors
         c.nodeBodySelected = Color(232, 240, 252, 240);
         c.nodeEdge = Color(186, 186, 194, 255);
         c.nodePinLabel = Color(60, 60, 66, 230);
+        c.smNode = Color(236, 238, 244, 240);
+        c.smNodeEdge = Color(176, 178, 188, 255);
+        c.smNodeSelected = Color(222, 230, 244, 240);
+        c.smAccent = Color(0, 120, 215, 255);
+        c.smPlaying = Color(214, 150, 20, 255);
+        c.smStart = Color(40, 160, 80, 255);
+        c.smEnd = Color(210, 60, 60, 255);
+        c.smLine = Color(60, 62, 70, 255);
+        c.smAuto = Color(60, 170, 50, 255);
+        c.smIcon = Color(90, 92, 100, 255);
+        c.smIconEdge = Color(40, 40, 46, 255);
         c.assetBg = Color(250, 250, 252, 255);
         c.assetBar = Color(238, 238, 242, 255);
         c.assetLine = Color(210, 210, 216, 255);

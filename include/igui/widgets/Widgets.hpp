@@ -23,6 +23,7 @@
 #include "ScrollWidgets.hpp"
 #include "SideTabBar.hpp"
 #include "SpinSlider.hpp"
+#include "StateMachineEditor.hpp"
 #include "TextInputWidgets.hpp"
 #include "ThumbnailGrid.hpp"
 #include "Timeline.hpp"

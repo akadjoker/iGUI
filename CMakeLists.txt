@@ -273,6 +273,7 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         src/widgets/ScrollWidgets.cpp
         src/widgets/SideTabBar.cpp
         src/widgets/SpinSlider.cpp
+        src/widgets/StateMachineEditor.cpp
         src/widgets/SymbolOutline.cpp
         src/widgets/TextClip.cpp
         src/widgets/TextInputWidgets.cpp
