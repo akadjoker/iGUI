@@ -330,6 +330,18 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         endif()
         add_test(NAME igui_code_outline COMMAND igui_code_outline_tests)
 
+        # The retained CodeEditor's hover documentation: the pointer resting on a
+        # word, with a real font, through the frame loop of the zen adapter.
+        add_executable(igui_code_hover_tests tests/test_code_hover.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_code_hover_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_code_hover_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_code_hover_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_code_hover_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_code_hover_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_code_hover COMMAND igui_code_hover_tests)
+
         # The retained Chart: pie, donut and bars, their legend, labels and
         # hit testing, driven through WidgetApp.
         add_executable(igui_chart_tests tests/test_chart.cpp)

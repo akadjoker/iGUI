@@ -1796,6 +1796,8 @@ void CodeEditor::paint(PaintContext& ctx)
     ctx.font.scale = fontScale_;
     if (sigVisible_) paintSignature(ctx, abs);
     if (completionVisible_) paintCompletion(ctx, abs);
+    updateHover();
+    if (hoverVisible_) paintHover(ctx, abs);
     ctx.font.scale = 1.0f;
     if (bar_ != Bar::None) paintBar(ctx, abs);
     if (overrideFont_) ctx.popFont();
@@ -2224,6 +2226,7 @@ void CodeEditor::onMousePress(MouseEvent& e)
 {
     WidgetApp::DeletionHold hold; // (see WidgetApp::DeletionHold)
     if (!isEnabledInTree()) return;
+    dismissHover();
     if (completionVisible_)
     {
         if (completionRect_.contains(e.x, e.y) && completionRowHeight_ > 0.0f)
@@ -2443,6 +2446,13 @@ void CodeEditor::onMouseMove(MouseEvent& e)
         return;
     }
     TextEdit::onMouseMove(e);
+    trackHover(e);
+}
+
+void CodeEditor::onMouseLeave()
+{
+    dismissHover();
+    TextEdit::onMouseLeave();
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -3374,6 +3384,7 @@ bool CodeEditor::acceptCompletion()
 void CodeEditor::onTextInput(KeyEvent& e)
 {
     WidgetApp::DeletionHold hold;
+    dismissHover();
     if (bar_ != Bar::None && !e.ctrl && !e.alt)
     {
         barInput(e.text);
@@ -3395,6 +3406,7 @@ void CodeEditor::onKeyPress(KeyEvent& e)
 {
     WidgetApp::DeletionHold hold;
     namespace Key = ig::retained::Key;
+    dismissHover();
     if (bar_ != Bar::None && barKey(e)) return;
     if (e.key == Key::Escape && sigVisible_ && !completionVisible_ && extraCursors_.empty())
     {

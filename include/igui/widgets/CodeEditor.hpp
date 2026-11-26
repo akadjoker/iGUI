@@ -416,6 +416,35 @@ public:
     int signatureParameter() const { return sigParam_; }
     void dismissSignature();
 
+    // ── Hover documentation ───────────────────────────────────────────────
+    //
+    //  The pointer resting on a word for a moment asks the host's provider
+    //  what the word is; an answer opens a box under the word with a title
+    //  (a signature) and the documentation, wrapped. It closes when the
+    //  pointer goes to another word or leaves, on a key, a click, a scroll,
+    //  or while the completion popup or a bar is open. A button held down
+    //  asks nothing.
+
+    struct HoverContext
+    {
+        String receiver; // the dotted name before a ".": "self.node"; empty for a bare word
+        String word;
+        int line = 0;
+        int wordStart = 0; // columns, as TextPos counts them
+        int wordEnd = 0;
+    };
+    using HoverProvider = ct::Function<bool(const HoverContext&, String& title, String& doc)>;
+    void setHoverProvider(HoverProvider provider);
+    /// @brief Seconds the pointer rests on a word before the provider is asked (0.5 by default).
+    void setHoverDelay(float seconds) { hoverDelay_ = seconds < 0.0f ? 0.0f : seconds; }
+    float hoverDelay() const { return hoverDelay_; }
+    bool hoverVisible() const { return hoverVisible_; }
+    const String& hoverTitle() const { return hoverTitle_; }
+    const String& hoverDoc() const { return hoverDoc_; }
+    /// @brief Ask the provider for the word at (line, col) now and show the box, as if the pointer had rested there. False when it knows nothing of it.
+    bool showHoverAt(int line, int col);
+    void dismissHover();
+
     // ── Inline bars: find, replace, go to line, go to symbol ──────────────
     //
     //  One bar at a time, at the top right of the editor, with a field the
@@ -594,6 +623,7 @@ public:
     void onMousePress(MouseEvent& e) override;
     void onMouseRelease(MouseEvent& e) override;
     void onMouseMove(MouseEvent& e) override;
+    void onMouseLeave() override;
     /// The clipboard's way of changing the text (TextClip.hpp): a cut, a paste or a Delete from the menu is one step of undo.
     void clipReplaceSelection(const String& text) override;
 
@@ -746,6 +776,22 @@ private:
         String detail;
     };
     void paintList(PaintContext& ctx, const Rect& abs, const ct::Vector<ListRow>& rows, int selected, int first, float x, float y, Rect& outRect, float& outRowHeight);
+    // ── Hover documentation ──────────────────────────────────────────────
+    HoverProvider hoverProvider_;
+    float hoverDelay_ = 0.5f;
+    bool hoverPending_ = false;  // the pointer is on a word the provider has not been asked about yet
+    bool hoverVisible_ = false;
+    HoverContext hoverContext_;
+    double hoverSince_ = 0.0;
+    float hoverMouseX_ = 0.0f;   // widget-local, where the pointer rested
+    float hoverScrollX_ = 0.0f;
+    float hoverScrollY_ = 0.0f;
+    String hoverTitle_;
+    String hoverDoc_;
+    bool hoverContextAt(int line, int col, HoverContext& out) const;
+    void trackHover(MouseEvent& e);
+    void updateHover();
+    void paintHover(PaintContext& ctx, const Rect& abs);
     // ── Occurrences, jumps ───────────────────────────────────────────────
     bool highlightOccurrences_ = true;
     int indentUnit_ = 4;

@@ -436,6 +436,9 @@ public:
 protected:
     static const String emptyLine_;
 
+    /// @brief The position nearest a point in widget coordinates: past a line's end, its end.
+    TextPos hitTestMouse(float localX, float localY) const;
+
     ct::Vector<String> lines_;
     String rowScratch_; // paint's text of the row being drawn, tabs expanded, kept between frames
     mutable String rangeScratch_[2]; // and of the parts of it (the selection, the colour spans, the cursor)
@@ -562,7 +565,6 @@ private:
     float colToX(PaintContext& ctx, int line, int col) const;
     int xToCol(PaintContext& ctx, int line, float x) const;
     TextPos hitTest(PaintContext& ctx, float localX, float localY) const;
-    TextPos hitTestMouse(float localX, float localY) const;
     void rebuildWrap(PaintContext& ctx);
     bool wrapNeedsRebuild(const PaintContext& ctx, float textW) const;
 

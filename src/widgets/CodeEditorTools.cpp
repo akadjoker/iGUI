@@ -1021,6 +1021,223 @@ void CodeEditor::paintSignature(PaintContext& ctx, const Rect& abs)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  Hover documentation
+// ═════════════════════════════════════════════════════════════════════════════
+
+void CodeEditor::setHoverProvider(HoverProvider provider)
+{
+    hoverProvider_ = static_cast<HoverProvider&&>(provider);
+    dismissHover();
+}
+
+void CodeEditor::dismissHover()
+{
+    const bool wasVisible = hoverVisible_;
+    hoverPending_ = false;
+    hoverVisible_ = false;
+    hoverTitle_.clear();
+    hoverDoc_.clear();
+    if (wasVisible) markDirty();
+}
+
+// The word at (line, col): its dotted receiver, and its columns.
+bool CodeEditor::hoverContextAt(int line, int col, HoverContext& out) const
+{
+    if (line < 0 || line >= lineCount() || col < 0) return false;
+    const String& text = lineAt(line);
+    const size_t at = utf8ByteOffset(text, col);
+    if (at >= text.size() || !isWord(text[at])) return false;
+    size_t start = at, end = at;
+    while (start > 0 && isWord(text[start - 1])) --start;
+    while (end < text.size() && isWord(text[end])) ++end;
+    if (text[start] >= '0' && text[start] <= '9') return false;
+    out.line = line;
+    out.word = text.substr(start, end - start);
+    int cols = 0;
+    for (size_t i = 0; i < start; ++i)
+        if ((static_cast<unsigned char>(text[i]) & 0xC0) != 0x80) ++cols;
+    out.wordStart = cols;
+    out.wordEnd = cols + static_cast<int>(end - start);
+    out.receiver.clear();
+    if (start > 0 && text[start - 1] == '.')
+    {
+        size_t r = start - 1;
+        while (r > 0 && (isWord(text[r - 1]) || text[r - 1] == '.')) --r;
+        out.receiver = text.substr(r, start - 1 - r);
+        if (out.receiver.empty()) return false;
+    }
+    return true;
+}
+
+void CodeEditor::trackHover(MouseEvent& e)
+{
+    if (!hoverProvider_) return;
+    if (!isEnabledInTree() || completionVisible_ || bar_ != Bar::None || minimapDrag_ || dragging_ || wordWrap_)
+    {
+        dismissHover();
+        return;
+    }
+    if (e.localX < gutterW_ || e.localX > rect_.w - minimapEffectiveWidth() - barW_)
+    {
+        dismissHover();
+        return;
+    }
+    const TextPos at = hitTestMouse(e.localX, e.localY);
+    HoverContext ctx;
+    bool over = hoverContextAt(at.line, at.col, ctx);
+    if (!over && at.col > 0) over = hoverContextAt(at.line, at.col - 1, ctx);
+    if (over)
+    {
+        // On the word itself, not in the blank past the end of the line.
+        const float x = e.localX - gutterW_ - Theme::instance().textEditPadding + scrollX_;
+        over = x >= colToPixelX(ctx.line, ctx.wordStart) && x <= colToPixelX(ctx.line, ctx.wordEnd);
+    }
+    if (!over)
+    {
+        dismissHover();
+        return;
+    }
+    if ((hoverVisible_ || hoverPending_) && hoverContext_.line == ctx.line && hoverContext_.wordStart == ctx.wordStart) return;
+    dismissHover();
+    hoverContext_ = ctx;
+    hoverPending_ = true;
+    hoverSince_ = WidgetApp::instance().clockSeconds();
+    markDirty();
+}
+
+void CodeEditor::updateHover()
+{
+    if (!hoverProvider_) return;
+    if (hoverVisible_)
+    {
+        if (scrollX_ != hoverScrollX_ || scrollY_ != hoverScrollY_ || completionVisible_ || bar_ != Bar::None) dismissHover();
+        return;
+    }
+    if (!hoverPending_) return;
+    if (completionVisible_ || bar_ != Bar::None)
+    {
+        hoverPending_ = false;
+        return;
+    }
+    WidgetApp& app = WidgetApp::instance();
+    const double due = hoverSince_ + static_cast<double>(hoverDelay_);
+    if (app.clockSeconds() < due)
+    {
+        app.requestFrameIn(static_cast<float>(due - app.clockSeconds()) + 0.001f);
+        return;
+    }
+    hoverPending_ = false;
+    String title, doc;
+    if (hoverContext_.line < lineCount() && hoverProvider_(hoverContext_, title, doc) && !(title.empty() && doc.empty()))
+    {
+        hoverTitle_ = title;
+        hoverDoc_ = doc;
+        hoverVisible_ = true;
+        hoverScrollX_ = scrollX_;
+        hoverScrollY_ = scrollY_;
+        markDirty();
+    }
+}
+
+bool CodeEditor::showHoverAt(int line, int col)
+{
+    dismissHover();
+    HoverContext ctx;
+    String title, doc;
+    if (!hoverProvider_ || !hoverContextAt(line, col, ctx) || !hoverProvider_(ctx, title, doc) || (title.empty() && doc.empty())) return false;
+    hoverContext_ = ctx;
+    hoverTitle_ = title;
+    hoverDoc_ = doc;
+    hoverVisible_ = true;
+    hoverScrollX_ = scrollX_;
+    hoverScrollY_ = scrollY_;
+    markDirty();
+    return true;
+}
+
+namespace
+{
+
+// Greedy word wrap of each '\n'-separated paragraph to `width` pixels.
+void wrapRows(PaintContext& ctx, const String& text, float width, ct::Vector<String>& rows)
+{
+    size_t from = 0;
+    while (from <= text.size())
+    {
+        size_t to = text.find('\n', from);
+        if (to == String::npos) to = text.size();
+        const String paragraph = text.substr(from, to - from);
+        String row;
+        size_t pos = 0;
+        while (pos < paragraph.size())
+        {
+            while (pos < paragraph.size() && paragraph[pos] == ' ') ++pos;
+            size_t end = pos;
+            while (end < paragraph.size() && paragraph[end] != ' ') ++end;
+            if (end == pos) break;
+            const String word = paragraph.substr(pos, end - pos);
+            const String joined = row.empty() ? word : row + " " + word;
+            if (!row.empty() && ctx.font.GetTextWidth(joined.c_str()) > width)
+            {
+                rows.push_back(row);
+                row = word;
+            }
+            else
+                row = joined;
+            pos = end;
+        }
+        rows.push_back(row);
+        from = to + 1;
+    }
+    while (!rows.empty() && rows[rows.size() - 1].empty()) rows.pop_back();
+}
+
+} // namespace
+
+void CodeEditor::paintHover(PaintContext& ctx, const Rect& abs)
+{
+    const float lh = lineHeight();
+    if (lh <= 0.0f || hoverContext_.line < 0 || hoverContext_.line >= lineCount()) return;
+    const Theme& t = Theme::instance();
+    const float maxWidth = fmaxf(160.0f, fminf(abs.w - 16.0f, 480.0f * fontScale_));
+    ct::Vector<String> rows;
+    wrapRows(ctx, hoverDoc_, maxWidth - 16.0f, rows);
+    float textWidth = ctx.font.GetTextWidth(hoverTitle_.c_str());
+    for (size_t i = 0; i < rows.size(); ++i) textWidth = fmaxf(textWidth, ctx.font.GetTextWidth(rows[i].c_str()));
+    const float width = fminf(maxWidth, textWidth + 16.0f);
+    const bool hasTitle = !hoverTitle_.empty();
+    const float count = static_cast<float>(rows.size()) + (hasTitle ? 1.0f : 0.0f);
+    const float gap = hasTitle && !rows.empty() ? 3.0f : 0.0f;
+    const float height = count * lh + gap + 8.0f;
+    const float lineY = abs.y + t.textEditPadding + logicalToVisualRow(hoverContext_.line) * lh - scrollY_;
+    float x = abs.x + gutterW_ + t.textEditPadding + colToPixelX(hoverContext_.line, hoverContext_.wordStart) - scrollX_ - 6.0f;
+    x = fmaxf(abs.x, fminf(x, abs.x + abs.w - width));
+    float y = lineY + lh + 2.0f;
+    if (y + height > abs.y + abs.h) y = lineY - height - 2.0f;
+    if (y < abs.y) y = abs.y;
+
+    ctx.pushClip(abs);
+    ctx.fill.SetColor(t.menuBg);
+    ctx.fill.RoundedRectangle(x, y, width, height, 4, 6, true);
+    ctx.line.SetColor(t.borderColor);
+    ctx.line.RoundedRectangle(x, y, width, height, 4, 6, false);
+    float textY = y + 4.0f + (lh - ctx.font.GetFontSize()) * 0.5f + ctx.font.GetAscender(); // (the baseline)
+    if (hasTitle)
+    {
+        ctx.font.SetColor(t.textColor);
+        ctx.font.Print(hoverTitle_.c_str(), x + 8.0f, textY);
+        textY += lh + gap;
+    }
+    ctx.font.SetColor(t.textDisabled);
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        ctx.font.Print(rows[i].c_str(), x + 8.0f, textY);
+        textY += lh;
+    }
+    ctx.popClip();
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Formatting
 // ═════════════════════════════════════════════════════════════════════════════
 

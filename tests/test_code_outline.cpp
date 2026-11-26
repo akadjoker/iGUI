@@ -90,6 +90,12 @@ struct Bench
             frame();
         }
     }
+    void rest(float x, float y, int frames)
+    {
+        io.mouseX = x;
+        io.mouseY = y;
+        for (int i = 0; i < frames; ++i) frame();
+    }
     void click(float x, float y)
     {
         io.mouseX = x;
@@ -218,6 +224,50 @@ void testProviderCompletion()
     check(!b.editor->completionVisible(), "nothing from the host and no built-ins: no popup");
 }
 
+void testHover()
+{
+    Bench b;
+    b.editor->setText(kScript);
+    b.frame();
+    b.frame();
+    int asked = 0;
+    CodeEditor::HoverContext last;
+    b.editor->setHoverProvider([&](const CodeEditor::HoverContext& ctx, String& title, String& doc) {
+        ++asked;
+        last = ctx;
+        if (ctx.word == "on_digit")
+        {
+            title = "on_digit(self, sender)";
+            doc = "A digit key was pressed. The sender is the button that was pressed and it carries the digit as its text.";
+            return true;
+        }
+        if (ctx.word == "text" && ctx.receiver == "self.display")
+        {
+            title = "Edit.text";
+            return true;
+        }
+        return false;
+    });
+    check(b.editor->showHoverAt(5, 8) && b.editor->hoverVisible() && b.editor->hoverTitle() == "on_digit(self, sender)", "showHoverAt asks for the word at the position and opens the box");
+    check(last.word == "on_digit" && last.receiver.empty() && last.wordStart == 8 && last.wordEnd == 16, "with the word, its columns and no receiver");
+    b.frame();
+    check(b.editor->hoverVisible(), "the box stays through a frame");
+    b.editor->dismissHover();
+    check(!b.editor->hoverVisible(), "dismissHover closes it");
+    check(!b.editor->showHoverAt(0, 1) && !b.editor->hoverVisible(), "a word the provider does not know opens nothing");
+    check(!b.editor->showHoverAt(5, 3), "a blank opens nothing");
+    check(b.editor->showHoverAt(3, 22) && last.word == "text" && last.receiver == "self.display", "a word after a dot carries the dotted name before it");
+
+    b.editor->dismissHover();
+    b.app.setFocused(b.editor);
+    b.editor->showHoverAt(5, 8);
+    b.key(Key::Left);
+    check(!b.editor->hoverVisible(), "a key closes it");
+    b.editor->showHoverAt(5, 8);
+    b.editor->setHoverProvider(CodeEditor::HoverProvider());
+    check(!b.editor->hoverVisible() && !b.editor->showHoverAt(5, 8), "without a provider there is none");
+}
+
 void testOutline()
 {
     Bench b;
@@ -317,6 +367,7 @@ int main()
     testRevealScrollsOncePainted();
     testBuiltinCompletion();
     testProviderCompletion();
+    testHover();
     testOutline();
     testConsoleClick();
     testEditorDeletedFirst();
