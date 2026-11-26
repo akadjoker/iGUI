@@ -682,7 +682,10 @@ bool App::renderGl(Window *w)
 
     bool unchanged = false;
     uint64_t sig = 0;
-    if (skipUnchangedGl_ && !shotPath && !systemLoop_ && !(capture_ && w == main_))
+    // A screenshot run (ZEN_SCREENSHOT; also the hidden window of a driven run) draws only the frame it saves: every other frame may
+    // be skipped like any frame, and a skipped frame still counts towards the frame number that is saved.
+    const bool shotDue = shotPath && w == main_ && shotFrameCounter() + 1 == shotFrameWanted();
+    if (skipUnchangedGl_ && !shotDue && !systemLoop_ && !(capture_ && w == main_))
     {
         // A texture that GlRaster did not make has no version: the frame is drawn, its pixels can change unseen.
         bool unversioned = false;
@@ -708,6 +711,8 @@ bool App::renderGl(Window *w)
         // Same picture as the one on the screen: no draw, no swap (the caller sees false). The after-render callback runs all
         // the same; a readWindowPixels in it redraws first, the back buffer holds nothing.
         ++glSkipped_;
+        if (shotPath && w == main_)
+            ++shotFrameCounter();
         if (w == main_)
         {
             mainSkipped_ = true;
