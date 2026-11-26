@@ -9,7 +9,18 @@ Branch `proposal/gl-skip-unchanged` (not merged). Commits:
 
 zenWebView draws with OpenGL by default. On a machine without a GPU (Xvfb, Mesa llvmpipe) an idle page redrew the whole window 60 times a second. The software path already skipped rasterising an unchanged frame.
 
-## Numbers (Xvfb :99, Mesa llvmpipe, 2026-11-26)
+## Numbers on a real machine (X11 :1, Intel Arc (Meteor Lake) iGPU, Mesa, 2026-11-26)
+
+Same zenWebView source built twice, against this branch with `skipUnchangedGl` true and false; CPU time of the process in a window.
+
+| Case | Skip off | Skip on, byte-at-a-time signature (be8133d) | Skip on, 32-byte-step signature (this branch) |
+|---|---|---|---|
+| frozen github.com page, 20 s | 5.6 to 6.0 s | 10.4 to 10.7 s (twice the CPU) | 5.6 to 5.9 s |
+| idle page with a requestAnimationFrame loop, 10 s | 0.52 s | 0.48 s | not re-measured |
+
+On a GPU, drawing an unchanged frame is cheap: the skip saves little CPU there, and the byte-at-a-time FNV over every vertex of a large page cost more than the draw. The signature now hashes 32 bytes a step in four 64-bit lanes (`FrameSignature.hpp`, shared with SoftRaster). The large gain is on machines without a GPU (below).
+
+## Numbers without a GPU (Xvfb :99, Mesa llvmpipe, 2026-11-26)
 
 | Case | Before | After |
 |---|---|---|
@@ -30,4 +41,4 @@ zenWebView built against this branch (`-DZWV_IGUI_DIR=` the branch), OpenGL, on 
 ## Limits
 
 - An application that draws into a texture it made through `App` without calling `updateTexture` must call `invalidateGl()` (or set `skipUnchangedGl = false`), otherwise its picture can be stale.
-- The signature hashes every vertex of every frame, the same cost SoftRaster already pays; on a large page that is a few ms per frame.
+- The signature still reads every vertex of every frame (now 32 bytes a step). A dirty flag from the retained tree would avoid even that; not done.

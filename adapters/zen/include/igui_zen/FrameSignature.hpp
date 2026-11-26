@@ -3,6 +3,7 @@
 #include <igui/widgets/Retained.hpp>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 namespace ig
 {
@@ -19,11 +20,33 @@ template <class VersionFn>
 inline uint64_t frameSignature(const ig::retained::DrawData& data, int width, int height, int samples,
         uint32_t background, VersionFn&& textureVersion)
 {
+    // Called on every frame over every vertex: 32 bytes a step in four independent 64-bit lanes (a byte at a time cost more than
+    // drawing the frame on a GPU: a large page doubled the CPU time of the window), the lanes folded into h after each block.
     uint64_t h = 1469598103934665603ull;
     auto mix = [&h](const void* p, size_t n)
     {
         const unsigned char* b = static_cast<const unsigned char*>(p);
-        for (size_t i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
+        const uint64_t k = 0x9E3779B97F4A7C15ull;
+        uint64_t a0 = h, a1 = h ^ k, a2 = h + k, a3 = ~h;
+        size_t i = 0;
+        for (; i + 32 <= n; i += 32)
+        {
+            uint64_t w[4];
+            memcpy(w, b + i, 32);
+            a0 = (a0 ^ w[0]) * k;
+            a1 = (a1 ^ w[1]) * k;
+            a2 = (a2 ^ w[2]) * k;
+            a3 = (a3 ^ w[3]) * k;
+        }
+        h = ((a0 ^ (a1 >> 31)) * k) ^ ((a2 ^ (a3 >> 29)) * 0xC2B2AE3D27D4EB4Full) ^ (n * k);
+        for (; i + 8 <= n; i += 8)
+        {
+            uint64_t w;
+            memcpy(&w, b + i, 8);
+            h = (h ^ w) * k;
+            h ^= h >> 32;
+        }
+        for (; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
     };
     const int header[4] = { width, height, samples, static_cast<int>(background) };
     mix(header, sizeof header);
