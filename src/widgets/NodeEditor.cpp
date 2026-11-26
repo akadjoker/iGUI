@@ -144,6 +144,63 @@ void NodeEditor::fitView()
     markDirty();
 }
 
+void NodeEditor::selectNode(int nodeId)
+{
+    for (auto& n: nodes_) n.selected = false;
+    if (nodeId >= 0 && nodeId < static_cast<int>(nodes_.size())) nodes_[nodeId].selected = true;
+    markDirty();
+}
+
+void NodeEditor::clearSelection()
+{
+    selectNode(-1);
+}
+
+int NodeEditor::selectedNode() const
+{
+    for (size_t i = 0; i < nodes_.size(); ++i)
+        if (nodes_[i].selected) return static_cast<int>(i);
+    return -1;
+}
+
+void NodeEditor::fitAll()
+{
+    fitPending_ = true;
+    markDirty();
+}
+
+void NodeEditor::startFit()
+{
+    const Rect b = absoluteRect();
+    float zoom = 1.0f;
+    float cx = 0.0f;
+    float cy = 0.0f;
+    if (!nodes_.empty())
+    {
+        float minX = nodes_[0].x, maxX = nodes_[0].x + nodes_[0].w;
+        float minY = nodes_[0].y, maxY = nodes_[0].y + nodeHeight(nodes_[0]);
+        for (const auto& n: nodes_)
+        {
+            minX = std::min(minX, n.x);
+            maxX = std::max(maxX, n.x + n.w);
+            minY = std::min(minY, n.y);
+            maxY = std::max(maxY, n.y + nodeHeight(n));
+        }
+        cx = (minX + maxX) * 0.5f;
+        cy = (minY + maxY) * 0.5f;
+        const float w = (maxX - minX) + 80.0f;
+        const float h = (maxY - minY) + 80.0f;
+        zoom = std::min(1.0f, std::min(b.w / w, b.h / h));
+    }
+    zoom_ = std::clamp(zoom, 0.2f, 4.0f);
+    panX_ = cx - b.w * 0.5f / zoom_;
+    panY_ = cy - b.h * 0.5f / zoom_;
+    fitPending_ = false;
+    autoFit_ = true;
+    fitW_ = b.w;
+    fitH_ = b.h;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Coordinate transforms
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,7 +235,12 @@ float NodeEditor::nodeHeight(const Node& n) const
         else
             ++outputs;
     }
-    return kNodeHeaderH + std::max(inputs, outputs) * kPinH + 8;
+    return pinsTop(n) + std::max(inputs, outputs) * kPinH + 8;
+}
+
+float NodeEditor::pinsTop(const Node& n) const
+{
+    return kNodeHeaderH + (n.detail.empty() ? 0.0f : kPinH);
 }
 
 void NodeEditor::getPinPos(int nodeId, int pinIdx, float& px, float& py) const
@@ -193,12 +255,12 @@ void NodeEditor::getPinPos(int nodeId, int pinIdx, float& px, float& py) const
     if (pin.dir == PinDir::Input)
     {
         px = gx(n.x);
-        py = gy(n.y + kNodeHeaderH + idx * kPinH + kPinH * 0.5f);
+        py = gy(n.y + pinsTop(n) + idx * kPinH + kPinH * 0.5f);
     }
     else
     {
         px = gx(n.x + n.w);
-        py = gy(n.y + kNodeHeaderH + idx * kPinH + kPinH * 0.5f);
+        py = gy(n.y + pinsTop(n) + idx * kPinH + kPinH * 0.5f);
     }
 }
 
@@ -273,6 +335,7 @@ void NodeEditor::onMousePress(MouseEvent& e)
     // ── Middle button → pan ──────────────────────────────────────────────
     if (e.button == 2)
     {
+        autoFit_ = false;
         dragMode_ = DragMode::Pan;
         dragStartX_ = e.x;
         dragStartY_ = e.y;
@@ -285,6 +348,7 @@ void NodeEditor::onMousePress(MouseEvent& e)
     // ── Right button → delete nearest link ───────────────────────────────
     if (e.button == 1)
     {
+        e.consumed = true;
         float bestD2 = 12.0f * 12.0f;
         int del = -1;
         for (int li = 0; li < static_cast<int>(links_.size()); ++li)
@@ -310,8 +374,26 @@ void NodeEditor::onMousePress(MouseEvent& e)
                 }
             }
         }
+        if (editRequests_)
+        {
+            if (del >= 0)
+            {
+                const Link link = links_[del];
+                onLinkRemoveRequested.emit(link.srcNode, link.srcPin, link.dstNode, link.dstPin);
+                return;
+            }
+            const auto hit = hitTest(e.x, e.y);
+            if (hit.node >= 0)
+            {
+                selectNode(hit.node);
+                onNodeSelected.emit(hit.node);
+                onNodeContextRequested.emit(hit.node, e.x, e.y);
+                return;
+            }
+            onContextRequested.emit(e.x, e.y, sx(e.x), sy(e.y));
+            return;
+        }
         if (del >= 0) removeLink(del);
-        e.consumed = true;
         return;
     }
 
@@ -334,13 +416,20 @@ void NodeEditor::onMousePress(MouseEvent& e)
                 {
                     int sn = links_[li].srcNode;
                     int sp = links_[li].srcPin;
-                    removeLink(li);
+                    const Link link = links_[li];
                     dragMode_ = DragMode::ConnectPin;
                     connSrcNode_ = sn;
                     connSrcPin_ = sp;
                     connEndX_ = e.x;
                     connEndY_ = e.y;
                     e.consumed = true;
+                    if (editRequests_)
+                    {
+                        onLinkRemoveRequested.emit(link.srcNode, link.srcPin, link.dstNode,
+                                link.dstPin);
+                        return;
+                    }
+                    removeLink(li);
                     return;
                 }
             }
@@ -367,41 +456,73 @@ void NodeEditor::onMousePress(MouseEvent& e)
         dragStartY_ = e.y;
         nodeStartX_ = nodes_[hit.node].x;
         nodeStartY_ = nodes_[hit.node].y;
+        dragMoved_ = false;
         e.consumed = true;
-        onNodeSelected.emit(hit.node); // (last: a handler may take the editor out of the tree, see WidgetApp::hasGone)
+        if (e.clickCount >= 2) onNodeActivated.emit(hit.node);
+        else
+            onNodeSelected.emit(hit.node); // (last: a handler may take the editor out of the tree,
+                                           // see WidgetApp::hasGone)
         return;
     }
 
     // Background → deselect + pan
     for (auto& n: nodes_) n.selected = false;
+    autoFit_ = false;
     dragMode_ = DragMode::Pan;
     dragStartX_ = e.x;
     dragStartY_ = e.y;
     panStartX_ = panX_;
     panStartY_ = panY_;
     e.consumed = true;
+    onNothingSelected.emit();
 }
 
 void NodeEditor::onMouseRelease(MouseEvent& e)
 {
-    if (dragMode_ == DragMode::ConnectPin)
-    {
-        auto hit = hitTest(e.x, e.y);
-        if (hit.pin >= 0 && hit.node != connSrcNode_)
-        {
-            auto& srcP = nodes_[connSrcNode_].pins[connSrcPin_];
-            if (srcP.dir == PinDir::Output) addLink(connSrcNode_, connSrcPin_, hit.node, hit.pin);
-            else
-                addLink(hit.node, hit.pin, connSrcNode_, connSrcPin_);
-        }
-    }
-
+    const DragMode mode = dragMode_;
+    const int movedNode = dragNode_;
+    const int srcNode = connSrcNode_;
+    const int srcPin = connSrcPin_;
+    const bool moved = dragMoved_;
     dragMode_ = DragMode::None;
     dragNode_ = -1;
     connSrcNode_ = -1;
     connSrcPin_ = -1;
+    dragMoved_ = false;
     markDirty();
     e.consumed = true;
+
+    if (mode == DragMode::ConnectPin && srcNode >= 0 && srcNode < static_cast<int>(nodes_.size()) &&
+            srcPin >= 0 && srcPin < static_cast<int>(nodes_[srcNode].pins.size()))
+    {
+        auto hit = hitTest(e.x, e.y);
+        if (hit.pin >= 0 && hit.node != srcNode)
+        {
+            auto& srcP = nodes_[srcNode].pins[srcPin];
+            int outNode = srcNode, outPin = srcPin, inNode = hit.node, inPin = hit.pin;
+            if (srcP.dir != PinDir::Output)
+            {
+                outNode = hit.node;
+                outPin = hit.pin;
+                inNode = srcNode;
+                inPin = srcPin;
+            }
+            if (editRequests_)
+            {
+                if (nodes_[outNode].pins[outPin].dir == PinDir::Output &&
+                        nodes_[inNode].pins[inPin].dir == PinDir::Input)
+                    onLinkRequested.emit(outNode, outPin, inNode, inPin);
+            }
+            else
+                addLink(outNode, outPin, inNode, inPin);
+        }
+        else if (editRequests_ && hit.node < 0)
+            onLinkDropped.emit(srcNode, srcPin, e.x, e.y, sx(e.x), sy(e.y));
+        return;
+    }
+    if (mode == DragMode::MoveNode && moved && movedNode >= 0 &&
+            movedNode < static_cast<int>(nodes_.size()))
+        onNodeMoved.emit(movedNode, nodes_[movedNode].x, nodes_[movedNode].y);
 }
 
 void NodeEditor::onMouseMove(MouseEvent& e)
@@ -428,6 +549,7 @@ void NodeEditor::onMouseMove(MouseEvent& e)
         }
         nodes_[dragNode_].x = nx;
         nodes_[dragNode_].y = ny;
+        if (nx != nodeStartX_ || ny != nodeStartY_) dragMoved_ = true;
         markDirty();
         e.consumed = true;
     }
@@ -442,6 +564,7 @@ void NodeEditor::onMouseMove(MouseEvent& e)
 
 void NodeEditor::onMouseScroll(MouseEvent& e)
 {
+    autoFit_ = false;
     float oldZoom = zoom_;
     float factor = (e.scrollY > 0) ? 1.1f : 0.9f;
     zoom_ = std::clamp(zoom_ * factor, 0.2f, 4.0f);
@@ -457,6 +580,14 @@ void NodeEditor::onMouseScroll(MouseEvent& e)
     e.consumed = true;
 }
 
+void NodeEditor::onKeyPress(KeyEvent& e)
+{
+    if (!editRequests_ || e.key != Key::Delete) return;
+    const int selected = selectedNode();
+    e.consumed = true;
+    if (selected >= 0) onNodeDeleteRequested.emit(selected);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Painting — main entry
 // ─────────────────────────────────────────────────────────────────────────────
@@ -465,6 +596,8 @@ void NodeEditor::paint(PaintContext& ctx)
 {
     if (!visible_) return;
     Rect b = absoluteRect();
+    if (b.w > 8.0f && b.h > 8.0f && (fitPending_ || (autoFit_ && (b.w != fitW_ || b.h != fitH_))))
+        startFit();
 
     ctx.pushClip(b);
 
@@ -621,6 +754,15 @@ void NodeEditor::paintNodes(PaintContext& ctx)
         ctx.fillRect(nx, ny + nhz - 1, nw, 1);
         ctx.fillRect(nx, ny, 1, nhz);
         ctx.fillRect(nx + nw - 1, ny, 1, nhz);
+
+        // ── Detail line under the header ─────────────────────────────────
+        if (!n.detail.empty())
+        {
+            ctx.font.SetColor(ec.nodePinLabel);
+            const float textH = ctx.font.GetFontSize();
+            const float lineY = ny + hdrH + (kPinH * zoom_ - textH) * 0.5f + asc;
+            ctx.font.Print(n.detail.c_str(), nx + 8 * zoom_, lineY);
+        }
 
         // ── Pins ─────────────────────────────────────────────────────────
         for (int pi = 0; pi < static_cast<int>(n.pins.size()); ++pi)

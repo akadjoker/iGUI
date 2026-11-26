@@ -61,6 +61,7 @@ struct Node
     float w = 140, h = 0; // width fixed, height computed
     ct::Vector<Pin> pins;
     Color headerColor = Color(70, 90, 130, 255);
+    String detail;
     bool selected = false;
     bool collapsed = false;
 };
@@ -119,6 +120,30 @@ public:
         return static_cast<int>(links_.size());
     }
 
+    /// @brief Edits become requests: a link made or taken off, a node taken away, a menu asked for
+    /// and a link
+    ///        let go over empty space are signals (below) and the editor changes nothing itself, so
+    ///        that an application that owns the graph edits it and gives the editor the graph
+    ///        again.
+    void setEditRequests(bool on)
+    {
+        editRequests_ = on;
+        acceptsFocus_ = on;
+    }
+    bool editRequests() const
+    {
+        return editRequests_;
+    }
+    /// @brief Select one node (and no other); no signal.
+    void selectNode(int nodeId);
+    void clearSelection();
+    /// @brief The selected node, -1 when there is none.
+    int selectedNode() const;
+    /// @brief Show every node: at the next paint, and again when the editor changes size until it
+    /// is panned
+    ///        or zoomed by hand.
+    void fitAll();
+
     /// @brief Set the snap-to-grid spacing.
     void setGridSnap(float s)
     {
@@ -155,6 +180,26 @@ public:
     Signal<int, int> onLinkCreated;
     /// @brief Emitted when a link is removed.
     Signal<int> onLinkRemoved;
+    /// @brief Emitted when the background is pressed with nothing selected afterwards.
+    Signal<> onNothingSelected;
+    /// @brief Emitted when a dragged node is let go, with its position.
+    Signal<int, float, float> onNodeMoved;
+    /// @brief Emitted by a double click on a node.
+    Signal<int> onNodeActivated;
+    /// @brief Edit requests (setEditRequests): Delete on the selected node.
+    Signal<int> onNodeDeleteRequested;
+    /// @brief Edit requests: an output pin dropped on an input pin (source node, pin, destination
+    /// node, pin).
+    Signal<int, int, int, int> onLinkRequested;
+    /// @brief Edit requests: a link taken off (source node and pin, destination node and pin).
+    Signal<int, int, int, int> onLinkRemoveRequested;
+    /// @brief Edit requests: a link let go over empty space (node, pin, screen x and y, graph x and
+    /// y).
+    Signal<int, int, float, float, float, float> onLinkDropped;
+    /// @brief Edit requests: right click on the background (screen x and y, graph x and y).
+    Signal<float, float, float, float> onContextRequested;
+    /// @brief Edit requests: right click on a node (node, screen x and y).
+    Signal<int, float, float> onNodeContextRequested;
 
     // ── Overrides ────────────────────────────────────────────────────────
     void paint(PaintContext& ctx) override;
@@ -162,6 +207,7 @@ public:
     void onMouseRelease(MouseEvent& e) override;
     void onMouseMove(MouseEvent& e) override;
     void onMouseScroll(MouseEvent& e) override;
+    void onKeyPress(KeyEvent& e) override;
 
 private:
     ct::Vector<Node> nodes_;
@@ -172,6 +218,10 @@ private:
     float panX_ = 0, panY_ = 0;
     float zoom_ = 1.0f;
     float gridSnap_ = 16.0f;
+    bool editRequests_ = false;
+    bool fitPending_ = false;
+    bool autoFit_ = false;
+    float fitW_ = 0, fitH_ = 0;
 
     // Interaction state
     enum class DragMode
@@ -185,6 +235,7 @@ private:
     float dragStartX_ = 0, dragStartY_ = 0;
     float panStartX_ = 0, panStartY_ = 0;
     int dragNode_ = -1;
+    bool dragMoved_ = false;
     float nodeStartX_ = 0, nodeStartY_ = 0;
     int connSrcNode_ = -1, connSrcPin_ = -1;
     float connEndX_ = 0, connEndY_ = 0;
@@ -201,6 +252,8 @@ private:
     float sy(float y) const;
 
     float nodeHeight(const Node& n) const;
+    float pinsTop(const Node& n) const;
+    void startFit();
     void getPinPos(int nodeId, int pinIdx, float& px, float& py) const;
     Color pinColor(PinType t) const;
 
