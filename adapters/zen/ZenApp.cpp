@@ -1,5 +1,6 @@
 #include <cmath>
 #include <igui_zen/ZenApp.hpp>
+#include <igui_zen/FrameSignature.hpp>
 #include <stdlib.h>
 
 #include <platform.h>
@@ -230,6 +231,7 @@ bool App::create(const Config &config)
     current_ = main_;
 
     showStats_ = config.showStats;
+    skipUnchangedGl_ = config.skipUnchangedGl;
     raster_.setSamples(config.samples);
 #if defined(__EMSCRIPTEN__) || defined(__ANDROID__)
     systemLoop_ = true;
@@ -434,7 +436,10 @@ bool App::pump(bool skipBlocked)
             continue;
         window_begin_frame(w->platform);
         frameWindow(w, false);
-        window_swap(w->platform);
+        if (!useGl_ || w->glDrawn)
+            window_swap(w->platform);
+        if (w == main_)
+            mainSkipped_ = useGl_ && !w->glDrawn;
     }
     for (size_t i = windows_.size(); i-- > 1;)
     {
@@ -474,6 +479,13 @@ void App::feedInput(PlatformWindow *pw)
     while (poll_event(pw, &e))
     {
         if (eventHook_) eventHook_(e);
+        // The platform has no expose event; what can leave the window's pixels lost or stale is the events that change its size,
+        // scale, visibility or surface: those force a redraw.
+        if (e.type == EVENT_WINDOW_RESIZE || e.type == EVENT_WINDOW_FB_RESIZE || e.type == EVENT_WINDOW_SCALE_CHANGED ||
+                e.type == EVENT_WINDOW_MINIMIZE || e.type == EVENT_WINDOW_MAXIMIZE || e.type == EVENT_WINDOW_RESTORE ||
+                e.type == EVENT_WINDOW_FOCUS || e.type == EVENT_WINDOW_MOVE || e.type == EVENT_WINDOW_SURFACE_LOST ||
+                e.type == EVENT_WINDOW_SURFACE_READY)
+            if (Window *x = windowOf(pw)) x->glValid = false;
         if (e.type == EVENT_MOUSE_WHEEL)
         {
             io.mouseWheelX += e.data.wheel.x;
@@ -603,7 +615,7 @@ void App::frameWindow(Window *w, bool driven)
         mouse_set_cursor(pw, cursorShape(io.wantedCursor));
 
     if (useGl_)
-        renderGl(w);
+        w->glDrawn = renderGl(w);
     else
         framePixels();
     (void)driven;
@@ -637,18 +649,75 @@ void App::updateStats()
 static int& shotFrameCounter();
 static int shotFrameWanted();
 
-void App::renderGl(Window *w)
+App::Window *App::windowOf(const PlatformWindow *pw)
+{
+    for (Window *x : windows_)
+        if (x->platform == pw) return x;
+    return nullptr;
+}
+
+void App::invalidateGl()
+{
+    for (Window *x : windows_) x->glValid = false;
+}
+
+// Clears and draws the window's draw data; the context is current.
+void App::drawGl(Window *w, int width, int height)
+{
+    gl_.render(*rt::GetDrawData(), width, height, w->background);
+}
+
+bool App::renderGl(Window *w)
 {
     int width = 0, height = 0;
     window_get_framebuffer_size(w->platform, &width, &height);
     if (width <= 0 || height <= 0)
-        return;
+        return false;
     // One context, the main window's, draws into every window.
     if (w == main_)
         window_make_current(w->platform);
     else
         window_make_current_on(w->platform, main_->platform);
-    gl_.render(*rt::GetDrawData(), width, height, w->background);
+    static const char *shotPath = getenv("ZEN_SCREENSHOT");
+
+    bool unchanged = false;
+    uint64_t sig = 0;
+    if (skipUnchangedGl_ && !shotPath && !systemLoop_ && !(capture_ && w == main_))
+    {
+        // A texture that GlRaster did not make has no version: the frame is drawn, its pixels can change unseen.
+        bool unversioned = false;
+        const GlRaster &gl = gl_;
+        sig = frameSignature(*rt::GetDrawData(), width, height, 0, w->background,
+                [&unversioned, &gl](rt::TextureHandle t)
+                {
+                    uint32_t v = 0;
+                    if (!gl.textureVersion(t, v)) unversioned = true;
+                    return v;
+                });
+        unchanged = !unversioned && w->glValid && w->glSignature == sig && w->glWidth == width && w->glHeight == height;
+        w->glSignature = sig;
+        w->glWidth = width;
+        w->glHeight = height;
+        w->glValid = !unversioned;
+    }
+    else
+        w->glValid = false;
+
+    if (unchanged)
+    {
+        // Same picture as the one on the screen: no draw, no swap (the caller sees false). The after-render callback runs all
+        // the same; a readWindowPixels in it redraws first, the back buffer holds nothing.
+        ++glSkipped_;
+        if (w == main_)
+        {
+            mainSkipped_ = true;
+            if (afterRenderCallback_) afterRenderCallback_();
+        }
+        return false;
+    }
+    ++glDrawn_;
+    if (w == main_) mainSkipped_ = false;
+    drawGl(w, width, height);
     if (capture_ && w == main_)
     {
         ct::Vector<uint32_t> pixels;
@@ -658,7 +727,6 @@ void App::renderGl(Window *w)
         capture_ = nullptr;
         fn(pixels.data(), width, height);
     }
-    static const char *shotPath = getenv("ZEN_SCREENSHOT");
     if (shotPath && w == main_)
     {
         // Only the frame that is saved is read back (a run to measure memory waits on a far frame and must not pay a
@@ -675,6 +743,7 @@ void App::renderGl(Window *w)
     }
     if (w == main_ && afterRenderCallback_) afterRenderCallback_();
     // No window_swap here: the caller presents (pump, or app_run after the frame callback).
+    return true;
 }
 
 bool App::readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height)
@@ -693,6 +762,22 @@ bool App::readWindowPixels(ct::Vector<uint32_t>& out, int& width, int& height)
             memcpy(out.data() + static_cast<size_t>(y) * width,
                     pixels_ + static_cast<size_t>(y) * pixelsStride_,
                     static_cast<size_t>(width) * sizeof(uint32_t));
+        return true;
+    }
+    if (mainSkipped_ && !gl_.offscreen())
+    {
+        // The last frame was not drawn: the window's back buffer is whatever the swap before left (undefined), the picture is in
+        // the front buffer. Reading the front buffer is not portable (EGL, Wayland), so the draw data of the main window, which
+        // is still the last it had, is drawn again and read; the redraw is not swapped and does not touch the signature, so the
+        // next frame is skipped as before. An offscreen target keeps its picture, it is read as it is.
+        Window *back = current_;
+        makeCurrent(main_);
+        window_make_current(main_->platform);
+        drawGl(main_, width, height);
+        out.resize(static_cast<size_t>(width) * height);
+        gl_.readPixels(out.data(), width, height);
+        mainSkipped_ = false;
+        makeCurrent(back);
         return true;
     }
     out.resize(static_cast<size_t>(width) * height);

@@ -689,6 +689,14 @@ if((IGUI_BUILD_ZEN_ADAPTER OR IGUI_BUILD_ZEN_DEMO) AND TARGET igui_widgets)
         igui_add_window_test(igui_zen_screenshot_gl igui_zen_screenshot_gl_tests)
     endif()
 
+    if(IGUI_BUILD_TESTS)
+        # The OpenGL path skips (neither draws nor swaps) a frame whose draw data did not change: counters, in-place texture
+        # updates, readWindowPixels, resize, a second window, the switch. Needs an X server with OpenGL; 77 (skipped) without.
+        add_executable(igui_zen_gl_skip_tests tests/test_zen_gl_skip.cpp)
+        target_link_libraries(igui_zen_gl_skip_tests PRIVATE igui_zen)
+        igui_add_window_test(igui_zen_gl_skip igui_zen_gl_skip_tests)
+    endif()
+
     # Mouse and keyboard through the adapter, with real events made by the XTEST extension of an X server
     # (Linux): clicks, drags, typing, auto-repeat, the wheel; the delays and what is lost are printed.
     if(IGUI_BUILD_TESTS AND UNIX AND NOT APPLE)

@@ -72,6 +72,13 @@ public:
         // The default font's page of glyphs at the exact size asked for (1024x1024 RGBA, 4 MB of RAM and as much texture). false: the
         // default font is drawn at its baked size only; for a host that draws its text with faces of its own (zenhtml's HtmlView).
         bool defaultDynamicPage = true;
+        // OpenGL only: a frame whose draw data is the same as the last one drawn in that window (same signature, FrameSignature.hpp,
+        // same framebuffer size, nothing asked to be read) is neither drawn nor swapped, as SoftRaster does not rasterise it. The
+        // frame callback and the after-render callback still run every frame. false: every frame is drawn and swapped. An
+        // application that draws into a GL texture of its own that it shows by handle (a texture it made without createTexture,
+        // which the version cannot see) is never skipped while that texture is on screen; one that changes a texture it made
+        // through App without updateTexture, or the window's pixels in any other way, calls invalidateGl().
+        bool skipUnchangedGl = true;
     };
 
     class Window;
@@ -104,6 +111,18 @@ public:
     // Calls fn once with the main window's next rendered frame (0xAARRGGBB
     // pixels, top row first), for screenshots and tests. OpenGL only.
     void requestCapture(ct::Function<void(const uint32_t *pixels, int width, int height)> fn);
+
+    // OpenGL frames drawn and skipped (unchanged) since create(), over every window.
+    uint64_t glFramesDrawn() const
+    {
+        return glDrawn_;
+    }
+    uint64_t glFramesSkipped() const
+    {
+        return glSkipped_;
+    }
+    // The next frame of every window is drawn, whatever its draw data says.
+    void invalidateGl();
 
     ig::retained::WidgetApp& widgets()
     {
@@ -185,6 +204,13 @@ public:
         bool modal = false;
         bool closing = false;
         uint32_t background = 0;
+        // OpenGL: the signature of the last frame drawn into this window, valid while glValid; whether the frame just made was
+        // drawn (and so is to be swapped).
+        uint64_t glSignature = 0;
+        int glWidth = 0;
+        int glHeight = 0;
+        bool glValid = false;
+        bool glDrawn = true;
         float scale = 1.0f;   // UI zoom: widgets think the window is this many times smaller
         void *user = nullptr; // for the application
         // The state while this window is not the current one.
@@ -196,7 +222,9 @@ public:
 private:
     static void frameThunk(PlatformWindow *w, void *user);
     void frameWindow(Window *w, bool driven);
-    void renderGl(Window *w);
+    bool renderGl(Window *w); // true: drawn (and to be swapped); false: skipped as unchanged
+    void drawGl(Window *w, int width, int height);
+    Window *windowOf(const PlatformWindow *pw);
     void framePixels();
     void destroyWindow(Window *w);
     bool blockedByModal(const Window *w) const;
@@ -218,6 +246,10 @@ private:
     SoftRaster raster_;
     GlRaster gl_;
     bool useGl_ = false;
+    bool skipUnchangedGl_ = true;
+    uint64_t glDrawn_ = 0;
+    uint64_t glSkipped_ = 0;
+    bool mainSkipped_ = false; // the main window's last frame was skipped: its back buffer holds nothing to read
     bool showStats_ = true;
     bool systemLoop_ = false; // app_run owns the loop (web, Android)
     double statsTime_ = 0.0;

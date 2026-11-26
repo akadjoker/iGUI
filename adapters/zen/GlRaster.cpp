@@ -237,6 +237,7 @@ ig::retained::TextureHandle GlRaster::createTexture(int width, int height,
     Size size;
     size.width = width;
     size.height = height;
+    size.version = ++nextVersion_;
     sizes_[handle.value] = size;
     return handle;
 }
@@ -264,6 +265,15 @@ bool GlRaster::updateTexture(ig::retained::TextureHandle handle, const unsigned 
         size->width = width;
         size->height = height;
     }
+    size->version = ++nextVersion_;
+    return true;
+}
+
+bool GlRaster::textureVersion(ig::retained::TextureHandle handle, uint32_t& version) const
+{
+    const Size* size = handle ? sizes_.find(handle.value) : nullptr;
+    if (!size) return false;
+    version = size->version;
     return true;
 }
 

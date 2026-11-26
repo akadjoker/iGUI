@@ -1,4 +1,5 @@
 #include <igui_zen/SoftRaster.hpp>
+#include <igui_zen/FrameSignature.hpp>
 
 #include <math.h>
 #include <string.h>
@@ -317,39 +318,9 @@ void SoftRaster::drawTriangle(const Vertex& va, const Vertex& vb, const Vertex& 
 uint64_t SoftRaster::signature(const ig::retained::DrawData& data, int width, int height,
         uint32_t background) const
 {
-    uint64_t h = 1469598103934665603ull;
-    auto mix = [&h](const void* p, size_t n)
-    {
-        const unsigned char* b = static_cast<const unsigned char*>(p);
-        for (size_t i = 0; i < n; ++i) h = (h ^ b[i]) * 1099511628211ull;
-    };
-    const int header[4] = { width, height, samples_, static_cast<int>(background) };
-    mix(header, sizeof header);
-    mix(&data.displayWidth, sizeof data.displayWidth);
-    mix(&data.displayHeight, sizeof data.displayHeight);
-    for (const ig::retained::DrawPass& pass: data.passes)
-    {
-        if (!pass.list) continue;
-        mix(&pass.camera, sizeof pass.camera);
-        const auto& v = pass.list->vertices();
-        const auto& ix = pass.list->indices();
-        mix(v.data(), v.size() * sizeof v[0]);
-        mix(ix.data(), ix.size() * sizeof ix[0]);
-        for (const ig::retained::DrawCmd& cmd: pass.list->commands())
-        {
-            mix(&cmd.texture.value, sizeof cmd.texture.value);
-            if (cmd.texture)
-                mix(&reinterpret_cast<const Texture*>(cmd.texture.value)->version,
-                        sizeof(uint32_t));
-            mix(&cmd.clip, sizeof cmd.clip);
-            mix(&cmd.roundClipCount, sizeof cmd.roundClipCount);
-            for (int i = 0; i < cmd.roundClipCount && i < ig::retained::DrawCmd::MaxRoundClips; ++i)
-                mix(&cmd.roundClips[i], sizeof cmd.roundClips[i]);
-            mix(&cmd.indexOffset, sizeof cmd.indexOffset);
-            mix(&cmd.indexCount, sizeof cmd.indexCount);
-        }
-    }
-    return h;
+    return frameSignature(data, width, height, samples_, background,
+            [](ig::retained::TextureHandle t)
+            { return reinterpret_cast<const Texture*>(t.value)->version; });
 }
 
 bool SoftRaster::render(ig::retained::DrawData& data, uint32_t* dst, int width, int height,

@@ -33,6 +33,16 @@ public:
     bool updateTexture(ig::retained::TextureHandle texture, const unsigned char* rgba, int width,
             int height);
 
+    // The version of a texture made or updated through this object: a number that no other upload (of any texture) has had,
+    // so it changes whenever the pixels in the handle may have. false: the handle is not one of this object's (a GL texture the
+    // application made itself), whose pixels can change without it knowing.
+    bool textureVersion(ig::retained::TextureHandle texture, uint32_t& version) const;
+    // true while render() draws into an offscreen target (setOffscreen), which keeps its picture between frames.
+    bool offscreen() const
+    {
+        return offscreen_;
+    }
+
     // Clears the framebuffer to background (0xAARRGGBB) and draws every pass.
     void render(ig::retained::DrawData& data, int width, int height, uint32_t background);
 
@@ -73,7 +83,9 @@ private:
     {
         int width = 0;
         int height = 0;
+        uint32_t version = 0;
     };
+    uint32_t nextVersion_ = 0;
 
     bool offscreen_ = false;
     int wantSamples_ = 0;
