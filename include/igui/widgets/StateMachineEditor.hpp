@@ -218,7 +218,6 @@ private:
         int index = -1;
         float x0 = 0, y0 = 0, x1 = 0, y1 = 0;
         float width = 0;
-        float sideX = 0, sideY = 0;
         bool hidden = false;
     };
 
@@ -295,7 +294,7 @@ private:
     void paintTransition(PaintContext& ctx, float x0, float y0, float x1, float y1,
             const StateMachineTransition* t, bool enabled, bool selected, bool travel,
             float fadeRatio, bool autoAdvance, float opacity, bool endpointHovered,
-            bool endpointHoveredStart, float sideX = 0.0f, float sideY = 0.0f);
+            bool endpointHoveredStart);
     void paintIcon(PaintContext& ctx, float x0, float y0, float x1, float y1, TransitionSwitch mode,
             bool autoAdvance, float opacity, bool enabled);
     void paintProgress(PaintContext& ctx, int state, float ratio);

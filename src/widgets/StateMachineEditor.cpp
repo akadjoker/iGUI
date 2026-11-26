@@ -1063,8 +1063,6 @@ void StateMachineEditor::layoutLines()
             normalize(nx, ny);
             const float ox = -ny * kBidiOffset * z;
             const float oy = nx * kBidiOffset * z;
-            l.sideX = ox;
-            l.sideY = oy;
             l.x0 += ox;
             l.y0 += oy;
             l.x1 += ox;
@@ -1142,8 +1140,7 @@ void StateMachineEditor::paintIcon(PaintContext& ctx, float x0, float y0, float 
 
 void StateMachineEditor::paintTransition(PaintContext& ctx, float x0, float y0, float x1, float y1,
         const StateMachineTransition* t, bool enabled, bool selected, bool travel, float fadeRatio,
-        bool autoAdvance, float opacity, bool endpointHovered, bool endpointHoveredStart,
-        float sideX, float sideY)
+        bool autoAdvance, float opacity, bool endpointHovered, bool endpointHoveredStart)
 {
     const EditorColors& ec = Theme::instance().editor;
     const float z = zoom_;
@@ -1206,45 +1203,6 @@ void StateMachineEditor::paintTransition(PaintContext& ctx, float x0, float y0, 
 
     TransitionSwitch mode = t ? t->mode : TransitionSwitch::Immediate;
     paintIcon(ctx, x0, y0, x1, y1, mode, autoAdvance, opacity, enabled);
-
-    if (t && !t->condition.empty())
-    {
-        const float px = std::max(6.0f, Theme::instance().fontSize * z * 0.85f);
-        ctx.font.SetFontSize(px);
-        const float th = ctx.font.GetFontSize();
-        const float tw = ctx.font.GetTextWidth(t->condition.c_str());
-        float dx = x1 - x0;
-        float dy = y1 - y0;
-        normalize(dx, dy);
-        float nx = dy;
-        float ny = -dx;
-        if (sideX != 0.0f || sideY != 0.0f)
-        {
-            if (nx * sideX + ny * sideY < 0.0f)
-            {
-                nx = -nx;
-                ny = -ny;
-            }
-        }
-        else if (ny > 0.0f || (ny == 0.0f && nx < 0.0f))
-        {
-            nx = -nx;
-            ny = -ny;
-        }
-        const float reach = kIconSize * z * 0.5f + 3.0f * z +
-                            0.5f * (std::fabs(nx) * (tw + 8.0f) + std::fabs(ny) * (th + 4.0f));
-        const float cx = (x0 + x1) * 0.5f + nx * reach;
-        const float cy = (y0 + y1) * 0.5f + ny * reach;
-        const float bw = tw + 8.0f;
-        const float bh = th + 4.0f;
-        const Color back = scaled(t->conditionOn ? ec.smAuto : ec.smNodeSelected, 0.9f * opacity);
-        ctx.fill.SetColor(back);
-        ctx.fillRoundedRect(cx - bw * 0.5f, cy - bh * 0.5f, bw, bh, 3.0f * z);
-        ctx.font.SetColor(scaled(t->conditionOn ? ec.smIconEdge : ec.smLine,
-                opacity * (enabled ? 1.0f : 0.5f)));
-        ctx.font.Print(t->condition.c_str(), cx - tw * 0.5f,
-                cy - th * 0.5f + ctx.font.GetAscender());
-    }
 }
 
 void StateMachineEditor::paintFrame(PaintContext& ctx, int index, float opacity)
@@ -1494,8 +1452,7 @@ void StateMachineEditor::paint(PaintContext& ctx)
 
         const bool hovered = hoverTransition_ == l.index;
         paintTransition(ctx, l.x0, l.y0, l.x1, l.y1, &t, !t.disabled, selectedT == l.index, travel,
-                fade, t.autoAdvance || t.conditionOn, opacity, hovered, hoverTransitionStart_,
-                l.sideX, l.sideY);
+                fade, t.autoAdvance || t.conditionOn, opacity, hovered, hoverTransitionStart_);
     }
 
     const float px = std::max(6.0f, Theme::instance().fontSize * zoom_);
