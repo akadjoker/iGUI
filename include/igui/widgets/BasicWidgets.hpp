@@ -70,6 +70,48 @@ private:
 };
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  LinkLabel — text that opens an address: link colour, underline under the pointer, hand cursor,
+//  keyboard focus, Enter or Space activate. Activating emits linkClicked(url) and calls the
+//  application's WidgetApp::openUrl hook when there is one (iGUI opens nothing itself).
+// ═════════════════════════════════════════════════════════════════════════════
+
+class LinkLabel : public Widget
+{
+public:
+    IG_WIDGET_CLASS(LinkLabel, Widget);
+
+    explicit LinkLabel(const String& text = "", const String& url = "");
+
+    void setText(const String& t);
+    const String& text() const
+    {
+        return text_;
+    }
+    void setUrl(const String& u)
+    {
+        url_ = u;
+    }
+    const String& url() const
+    {
+        return url_;
+    }
+
+    /// @brief Same as a click: emits linkClicked and calls the openUrl hook.
+    void activate();
+
+    Signal<const String&> linkClicked;
+
+    Vec2f sizeHint() const override;
+    void paint(PaintContext& ctx) override;
+    void onKeyPress(KeyEvent& e) override;
+
+private:
+    String text_;
+    String url_;
+    mutable HintMemo hint_;
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Spacer — invisible widget that takes up space in layouts
 // ═════════════════════════════════════════════════════════════════════════════
 

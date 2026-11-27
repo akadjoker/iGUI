@@ -177,6 +177,8 @@ struct AppColors
     Color richBold = Color(255, 255, 255, 255);
     Color richItalic = Color(200, 200, 205, 255);
     Color richLink = Color(100, 170, 230, 255);
+    Color link = Color(100, 170, 230, 255);            // a LinkLabel
+    Color linkHover = Color(150, 200, 250, 255);      // a LinkLabel under the pointer or with the focus
     Color gridCellDim = Color(170, 170, 175, 255);     // the cells after the first of an unselected TreeGrid row
     Color progressText = Color(220, 220, 220, 255);    // the text a ProgressBar shows (when it was not given a colour)
     Color dateHeader = Color(140, 140, 160, 255);      // the day names of a DatePicker
@@ -200,6 +202,8 @@ struct AppColors
         c.richBold = Color(0, 0, 0, 255);
         c.richItalic = Color(60, 60, 66, 255);
         c.richLink = Color(0, 90, 190, 255);
+        c.link = Color(0, 90, 190, 255);
+        c.linkHover = Color(0, 60, 150, 255);
         c.gridCellDim = Color(90, 90, 96, 255);
         c.progressText = Color(30, 30, 30, 255);
         c.dateHeader = Color(90, 90, 110, 255);

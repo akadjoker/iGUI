@@ -375,6 +375,21 @@ public:
         s_.overlay_ = std::move(cb);
     }
 
+    /// @brief The application's way of opening an address (a LinkLabel calls it when one is activated). iGUI
+    ///        opens nothing itself: with no hook set, nothing happens beyond the widget's own signal.
+    void setOpenUrl(ct::Function<void(const String&)> fn)
+    {
+        openUrl_ = std::move(fn);
+    }
+    bool hasOpenUrl() const
+    {
+        return static_cast<bool>(openUrl_);
+    }
+    void openUrl(const String& url)
+    {
+        if (openUrl_) openUrl_(url);
+    }
+
     // ── Drag & Drop state (read by widgets/app during frame) ──────────────
     /// @brief Check if a widget drag is in progress.
     bool isDragging() const
@@ -954,6 +969,7 @@ private:
     uint32_t elapsedMs_ = 0;
     bool debugLayout_ = false;
     int debugLayoutKey_ = 0;
+    ct::Function<void(const String&)> openUrl_;
     bool ioKeyCtrl_ = false;
     bool ioKeyShift_ = false;
     bool ioKeyAlt_ = false;

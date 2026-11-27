@@ -188,6 +188,90 @@ void Line::paint(PaintContext& ctx)
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+//  LinkLabel
+// ═════════════════════════════════════════════════════════════════════════════
+
+LinkLabel::LinkLabel(const String& text, const String& url)
+        : text_(text)
+        , url_(url)
+{
+    acceptsFocus_ = true;
+    cursor_ = CursorType::Hand;
+    clicked.connect([this] { activate(); });
+}
+
+void LinkLabel::setText(const String& t)
+{
+    if (text_ == t) return;
+    text_ = t;
+    markDirty();
+    invalidateLayoutIfHintChanged(hint_);
+}
+
+void LinkLabel::activate()
+{
+    if (!isEnabledInTree()) return;
+    const String url = url_;
+    const uint32_t deletions = WidgetApp::instance().deletions();
+    linkClicked.emit(url);
+    if (WidgetApp::instance().deletions() != deletions) return;
+    WidgetApp::instance().openUrl(url);
+}
+
+Widget::Vec2f LinkLabel::sizeHint() const
+{
+    const auto& t = Theme::instance();
+    const float w = hintedTextWidth(text_, overrideFont_, text_.size() * t.fontSize * 0.6f);
+    return hint_.note(Vec2f{ w + t.padding * 2, t.fontSize + t.padding * 2 });
+}
+
+void LinkLabel::onKeyPress(KeyEvent& e)
+{
+    const bool accept = e.key == Key::Return || e.key == Key::KPEnter || e.key == Key::Space;
+    if (accept && !e.shift && !e.ctrl && !e.alt)
+    {
+        e.consumed = true;
+        activate();
+        return;
+    }
+    Widget::onKeyPress(e);
+}
+
+void LinkLabel::paint(PaintContext& ctx)
+{
+    if (!visible_) return;
+
+    Rect abs = absoluteRect();
+    if (ctx.isClipped(abs)) return;
+
+    const auto& t = Theme::instance();
+    const bool lit = hovered_ || focused_;
+    const Color& c = isEnabledInTree() ? (lit ? t.app.linkHover : t.app.link) : t.textDisabled;
+
+    if (overrideFont_) ctx.pushFont(overrideFont_);
+    ctx.font.SetFontSize(t.fontSize);
+    ctx.font.SetColor(c);
+    ctx.font.SetBatch(&ctx.text);
+
+    const float textW = ctx.font.GetTextWidth(text_.c_str());
+    const float tx = abs.x + t.padding;
+    const float asc = ctx.font.GetAscender();
+    const float ty = abs.y + (abs.h + asc) * 0.5f;
+
+    Rect textRect = { tx, ty - asc, textW, asc };
+    if (!ctx.isClipped(textRect)) ctx.printWithin(abs, text_, tx, textW, ty, asc);
+    if (overrideFont_) ctx.popFont();
+
+    if (lit && isEnabledInTree())
+    {
+        const float right = std::min(tx + textW, abs.x + abs.w);
+        ctx.line.SetColor(c.r, c.g, c.b, c.a);
+        ctx.line.Line2D(tx, ty + 2, right, ty + 2);
+    }
+    Widget::paint(ctx);
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 //  Button
 // ═════════════════════════════════════════════════════════════════════════════
 
