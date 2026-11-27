@@ -330,6 +330,17 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         endif()
         add_test(NAME igui_code_outline COMMAND igui_code_outline_tests)
 
+        # The NodeEditor in edit request mode: links between different pin types, and the
+        # signals for a link dropped on a pin, a link taken off and Delete on a node.
+        add_executable(igui_node_editor_requests_tests tests/test_node_editor_requests.cpp)
+        target_compile_features(igui_node_editor_requests_tests PRIVATE cxx_std_17)
+        target_link_libraries(igui_node_editor_requests_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_node_editor_requests_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_node_editor_requests_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_node_editor_requests COMMAND igui_node_editor_requests_tests)
+
         # The retained CodeEditor's hover documentation: the pointer resting on a
         # word, with a real font, through the frame loop of the zen adapter.
         add_executable(igui_code_hover_tests tests/test_code_hover.cpp adapters/zen/SoftRaster.cpp)

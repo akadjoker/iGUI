@@ -112,9 +112,10 @@ bool NodeEditor::canLink(int srcNode, int srcPin, int dstNode, int dstPin) const
     if (dstPin < 0 || dstPin >= static_cast<int>(dn.pins.size())) return false;
     if (sn.pins[srcPin].dir != PinDir::Output) return false;
     if (dn.pins[dstPin].dir != PinDir::Input) return false;
-    // Type compatibility: Any matches anything, otherwise must match
+    // Type compatibility: Any matches anything, otherwise must match; with edit requests the
+    // application decides (it may convert between types)
     auto st = sn.pins[srcPin].type, dt = dn.pins[dstPin].type;
-    if (st != PinType::Any && dt != PinType::Any && st != dt) return false;
+    if (!editRequests_ && st != PinType::Any && dt != PinType::Any && st != dt) return false;
     // No duplicate link on same input pin
     for (const auto& l: links_)
         if (l.dstNode == dstNode && l.dstPin == dstPin) return false;
