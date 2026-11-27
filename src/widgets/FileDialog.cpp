@@ -3,6 +3,7 @@
 #include "BuImage.hpp"
 #include "DialogWidgets.hpp"
 #include "LayoutWidgets.hpp"
+#include "ScrollWidgets.hpp"
 #include "TextInputWidgets.hpp"
 #include "WidgetApp.hpp"
 
@@ -499,8 +500,10 @@ void FileDialog::buildUI()
     bodyLayout_->setStretch(1);
     bodyLayout_->setSpacing(4);
 
-    sidebarLayout_ = bodyLayout_->createChild<BoxLayout>(LayoutDir::Vertical);
-    sidebarLayout_->setSize(120, 0);
+    sidebarScroll_ = bodyLayout_->createChild<ScrollView>();
+    sidebarScroll_->setSize(120, 0);
+    sidebarScroll_->setHorizontalScroll(false);
+    sidebarLayout_ = sidebarScroll_->setContent<BoxLayout>(LayoutDir::Vertical);
     sidebarLayout_->setSpacing(2);
     sidebarLayout_->setPadding(2);
     buildSidebar();
@@ -651,9 +654,9 @@ void FileDialog::paint(PaintContext& ctx)
     paintFileArea(ctx, area);
 
     // Sidebar separator
-    if (sidebarLayout_)
+    if (sidebarScroll_)
     {
-        Rect sr = sidebarLayout_->absoluteRect();
+        Rect sr = sidebarScroll_->absoluteRect();
         ctx.line.SetColor(Theme::instance().file.divider);
         ctx.drawLine(sr.x + sr.w, sr.y, sr.x + sr.w, sr.y + sr.h);
     }
