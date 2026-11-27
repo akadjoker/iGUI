@@ -166,6 +166,12 @@ int NodeEditor::selectedNode() const
 
 void NodeEditor::fitAll()
 {
+    fitAll(0.0f);
+}
+
+void NodeEditor::fitAll(float minZoom)
+{
+    fitMinZoom_ = minZoom;
     fitPending_ = true;
     markDirty();
 }
@@ -193,9 +199,17 @@ void NodeEditor::startFit()
         const float h = (maxY - minY) + 80.0f;
         zoom = std::min(1.0f, std::min(b.w / w, b.h / h));
     }
+    const bool cropped = fitMinZoom_ > zoom && !nodes_.empty();
+    if (cropped) zoom = fitMinZoom_;
     zoom_ = std::clamp(zoom, 0.2f, 4.0f);
     panX_ = cx - b.w * 0.5f / zoom_;
     panY_ = cy - b.h * 0.5f / zoom_;
+    if (cropped)
+    {
+        float maxX = nodes_[0].x + nodes_[0].w;
+        for (const auto& n: nodes_) maxX = std::max(maxX, n.x + n.w);
+        panX_ = maxX + 20.0f - b.w / zoom_;
+    }
     fitPending_ = false;
     autoFit_ = true;
     fitW_ = b.w;

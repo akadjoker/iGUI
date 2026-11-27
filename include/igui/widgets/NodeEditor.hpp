@@ -143,6 +143,9 @@ public:
     /// is panned
     ///        or zoomed by hand.
     void fitAll();
+    /// @brief Like fitAll, but the zoom does not go below @p minZoom: when the nodes do not fit at
+    ///        that zoom the right end of the graph is shown, centred vertically.
+    void fitAll(float minZoom);
 
     /// @brief Set the snap-to-grid spacing.
     void setGridSnap(float s)
@@ -220,6 +223,7 @@ private:
     float gridSnap_ = 16.0f;
     bool editRequests_ = false;
     bool fitPending_ = false;
+    float fitMinZoom_ = 0.0f;
     bool autoFit_ = false;
     float fitW_ = 0, fitH_ = 0;
 

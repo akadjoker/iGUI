@@ -137,6 +137,20 @@ void testDeleteRequest()
     check(b.editor->nodeCount() == 2, "the node is still there");
 }
 
+void testFitKeepsMinZoom()
+{
+    Bench b;
+    const int far = b.editor->addNode("Far", 3000.0f, 40.0f);
+    (void) far;
+    b.editor->fitAll(0.8f);
+    b.frame();
+    check(b.editor->zoom() > 0.79f && b.editor->zoom() < 0.81f, "the zoom stops at the minimum");
+    check(b.editor->panX() + 700.0f / b.editor->zoom() > 3140.0f, "the right end is in view");
+    b.editor->fitAll();
+    b.frame();
+    check(b.editor->zoom() < 0.5f, "without a minimum everything is shown");
+}
+
 } // namespace
 
 int main()
@@ -144,6 +158,7 @@ int main()
     testTypesAreTheApplications();
     testLinkRequest();
     testDeleteRequest();
+    testFitKeepsMinZoom();
     if (gFailures == 0) printf("node editor requests: ok\n");
     return gFailures == 0 ? 0 : 1;
 }
