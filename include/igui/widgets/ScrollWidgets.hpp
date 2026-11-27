@@ -149,6 +149,8 @@ public:
         return w;
     }
 
+    /// @brief Off: the content is laid out at the width of the view and never scrolls sideways.
+    void setHorizontalScroll(bool on);
     /// @brief Set the horizontal scroll offset.
     void setScrollX(float v);
     /// @brief Set the vertical scroll offset.
@@ -183,6 +185,7 @@ private:
     float scrollY_ = 0.0f;
     float contentW_ = 0.0f;
     float contentH_ = 0.0f;
+    bool horizontal_ = true;
     float barRoom_ = ScrollBar::kBarThickness + 2.0f; // the room a bar takes (its thickness and the gap), the theme's at the last layout
 
     static constexpr float kBarGap = 2.0f;

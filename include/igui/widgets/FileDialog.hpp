@@ -10,6 +10,7 @@ namespace ig
 namespace retained
 {
 class BoxLayout;
+class ScrollView;
 class Label;
 class TextInput;
 class Button;
@@ -246,6 +247,7 @@ private:
     BoxLayout* toolBar_ = nullptr;
     BoxLayout* breadcrumbBar_ = nullptr;
     BoxLayout* bodyLayout_ = nullptr;
+    ScrollView* sidebarScroll_ = nullptr;
     BoxLayout* sidebarLayout_ = nullptr;
     BoxLayout* fileListLayout_ = nullptr;
     Widget* previewPanel_ = nullptr;

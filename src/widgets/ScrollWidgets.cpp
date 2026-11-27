@@ -178,6 +178,14 @@ ScrollView::ScrollView()
     hbar_->scrolled.connect([this](float v) { setScrollX(v); });
 }
 
+void ScrollView::setHorizontalScroll(bool on)
+{
+    if (horizontal_ == on) return;
+    horizontal_ = on;
+    if (!on) scrollX_ = 0.0f;
+    markDirty();
+}
+
 void ScrollView::setScrollX(float v)
 {
     scrollX_ = v;
@@ -245,7 +253,7 @@ void ScrollView::layout()
 
     // Read the content's resulting size hint
     auto sh = contentWidget_->sizeHint();
-    contentW_ = std::max(sh.x, rect_.w);
+    contentW_ = horizontal_ ? std::max(sh.x, rect_.w) : rect_.w;
     contentH_ = sh.y;
 
     updateBars();
