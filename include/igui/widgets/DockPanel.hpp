@@ -99,8 +99,22 @@ public:
     void splitOff(const String& tabName, DockSide side, float ratio = 0.5f);
     /// @brief Close and remove a panel by name.
     void closePanel(const String& name);
-    /// @brief Bring a panel to front in its tab group.
+    /// @brief Bring a panel to front in its tab group. A hidden panel comes back first, into the
+    ///        first leaf.
     void showPanel(const String& name);
+    /// @brief Take a panel out of the arrangement without deleting its content: the widget stays
+    ///        alive and hidden, and showPanel() or restoreLayout() puts it back.
+    void hidePanel(const String& name);
+    /// @brief True when the panel was taken out by hidePanel() (or by a close with closeHides).
+    bool isPanelHidden(const String& name) const;
+    /// @brief True when the panel is in the arrangement (not hidden, not closed).
+    bool hasPanel(const String& name) const;
+    /// @brief With true the close cross of a tab hides the panel (hidePanel) instead of deleting
+    ///        it; panelClosed is emitted either way. Default false.
+    void setCloseHides(bool on)
+    {
+        closeHides_ = on;
+    }
     /// @brief Move a panel tab into the same leaf as another named panel.
     void moveTabToLeaf(const String& sourceName, const String& targetName);
 
@@ -192,6 +206,8 @@ public:
 
 private:
     DockNode* root_ = nullptr;
+    ct::Vector<DockNode::Tab> hidden_;
+    bool closeHides_ = false;
     float tabBarH_ = 26.0f;
     float handleW_ = 5.0f;
     String settingsKey_;           // name the layout is remembered under ("" = never)

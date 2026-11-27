@@ -655,6 +655,45 @@ static void test_closing_a_dock_panel_deletes_its_content_once()
     assert(strstr(dock.saveLayout().c_str(), "Inspector") == nullptr);
 }
 
+// hidePanel() takes a panel out of the arrangement but keeps its widget alive; showPanel() and
+// restoreLayout() bring it back.
+static void test_hiding_a_dock_panel_keeps_its_content()
+{
+    ig::retained::DockPanel dock;
+    dock.setRect({ 0.0f, 0.0f, 600.0f, 400.0f });
+    auto* inspector = new ig::retained::Panel();
+    auto* console = new ig::retained::Panel();
+    dock.addPanel("Inspector", inspector);
+    dock.addPanel("Console", console);
+    dock.splitOff("Console", ig::retained::DockSide::Bottom, 0.3f);
+    dock.layout();
+    const ig::retained::String arranged = dock.saveLayout();
+
+    assert(dock.hasPanel("Console"));
+    dock.hidePanel("Console");
+    dock.layout();
+    assert(!dock.hasPanel("Console"));
+    assert(dock.isPanelHidden("Console"));
+    assert(!console->isVisible());
+    assert(strstr(dock.saveLayout().c_str(), "Console") == nullptr);
+
+    dock.hidePanel("Console");
+    dock.hidePanel("Never added");
+    assert(dock.isPanelHidden("Console"));
+
+    dock.showPanel("Console");
+    dock.layout();
+    assert(dock.hasPanel("Console"));
+    assert(!dock.isPanelHidden("Console"));
+    assert(console->isVisible());
+
+    dock.hidePanel("Console");
+    assert(dock.restoreLayout(arranged));
+    assert(dock.hasPanel("Console"));
+    assert(!dock.isPanelHidden("Console"));
+    assert(dock.saveLayout() == arranged);
+}
+
 // A dialog that closes itself already removed the float, and the application's
 // own result handler removes it again: the second call must not queue the same
 // pointer, or the deferred delete frees it twice.
@@ -7310,6 +7349,7 @@ int main()
     test_dock_tab_shown_from_code_gets_a_size();
     test_odd_window_titles_do_not_abort_the_state_file();
     test_closing_a_dock_panel_deletes_its_content_once();
+    test_hiding_a_dock_panel_keeps_its_content();
     test_removing_a_float_twice_is_harmless();
     test_a_column_added_after_rows_has_cells();
     test_removing_a_line_can_be_undone();

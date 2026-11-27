@@ -159,6 +159,11 @@ void DockPanel::closePanel(const String& nameRef)
     DockNode* leaf = root_->findTab(name, &tabIdx);
     if (!leaf || tabIdx < 0) return;
 
+    if (closeHides_)
+    {
+        hidePanel(name);
+        return;
+    }
     Widget* w = leaf->tabs[tabIdx].content;
     leaf->tabs.erase(leaf->tabs.begin() + tabIdx);
     if (leaf->currentTab >= (int) leaf->tabs.size()) leaf->currentTab = (int) leaf->tabs.size() - 1;
@@ -197,9 +202,55 @@ void DockPanel::moveTabToLeaf(const String& sourceName, const String& targetName
     markDirty();
 }
 
+void DockPanel::hidePanel(const String& nameRef)
+{
+    const String name = nameRef;
+    ensureRoot();
+    int tabIdx = -1;
+    DockNode* leaf = root_->findTab(name, &tabIdx);
+    if (!leaf || tabIdx < 0) return;
+
+    DockNode::Tab tab = leaf->tabs[tabIdx];
+    leaf->tabs.erase(leaf->tabs.begin() + tabIdx);
+    if (leaf->currentTab >= (int) leaf->tabs.size()) leaf->currentTab = (int) leaf->tabs.size() - 1;
+    for (auto& t: leaf->tabs) t.content->setVisible(false);
+    if (leaf->currentTab >= 0 && !leaf->tabs.empty())
+        leaf->tabs[leaf->currentTab].content->setVisible(true);
+    tab.content->setVisible(false);
+    hidden_.push_back(tab);
+
+    pruneNode(root_);
+    markDirty();
+    WidgetApp::instance().requestLayout();
+    panelClosed.emit(name);
+}
+
+bool DockPanel::isPanelHidden(const String& name) const
+{
+    for (const auto& t: hidden_)
+        if (t.name == name) return true;
+    return false;
+}
+
+bool DockPanel::hasPanel(const String& name) const
+{
+    return root_ && const_cast<DockNode*>(root_)->findTab(name) != nullptr;
+}
+
 void DockPanel::showPanel(const String& name)
 {
     ensureRoot();
+    for (int i = 0; i < (int) hidden_.size(); ++i)
+    {
+        if (hidden_[i].name != name) continue;
+        DockNode* first = root_;
+        while (first->isSplit) first = first->first;
+        DockNode::Tab tab = hidden_[i];
+        hidden_.erase(hidden_.begin() + i);
+        tab.content->setVisible(false);
+        first->tabs.push_back(tab);
+        break;
+    }
     int idx = -1;
     DockNode* leaf = root_->findTab(name, &idx);
     if (!leaf || idx < 0) return;
@@ -393,6 +444,7 @@ bool DockPanel::restoreLayout(const String& text)
     ensureRoot();
     ct::Vector<DockNode::Tab> pool;
     collectTabs(root_, pool);
+    for (const auto& t: hidden_) pool.push_back(t);
 
     LayoutParser parser(text.c_str(), pool);
     DockNode* tree = parser.parse();
@@ -401,6 +453,7 @@ bool DockPanel::restoreLayout(const String& text)
         freeNode(tree);
         return false;
     }
+    hidden_.clear();
 
     // panels the text did not name keep a place in the first leaf
     DockNode* leaf = firstLeaf(tree);
