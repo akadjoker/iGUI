@@ -253,6 +253,44 @@ float NodeEditor::nodeHeight(const Node& n) const
     return pinsTop(n) + std::max(inputs, outputs) * kPinH + 8;
 }
 
+float NodeEditor::requiredWidth(PaintContext& ctx, const Node& n) const
+{
+    constexpr float kTextMargin = 8.0f;
+    constexpr float kPinInset = kPinRadius + 4.0f;
+    constexpr float kLabelGap = 14.0f;
+    float w = std::max(n.minW, ctx.font.GetTextWidth(n.title.c_str()) + 2.0f * kTextMargin + 8.0f);
+    if (!n.detail.empty())
+        w = std::max(w, ctx.font.GetTextWidth(n.detail.c_str()) + 2.0f * kTextMargin);
+    ct::Vector<float> in, out;
+    for (const auto& p: n.pins)
+        (p.dir == PinDir::Input ? in : out).push_back(ctx.font.GetTextWidth(p.name.c_str()));
+    const size_t rows = std::max(in.size(), out.size());
+    for (size_t i = 0; i < rows; ++i)
+    {
+        const float a = i < in.size() ? in[i] : 0.0f;
+        const float b = i < out.size() ? out[i] : 0.0f;
+        const float gap = (a > 0.0f && b > 0.0f) ? kLabelGap : 0.0f;
+        w = std::max(w, a + b + gap + 2.0f * kPinInset);
+    }
+    return std::ceil(w);
+}
+
+bool NodeEditor::updateNodeWidths(PaintContext& ctx)
+{
+    setupFont(ctx, Color(230, 232, 240, 255));
+    bool changed = false;
+    for (auto& n: nodes_)
+    {
+        const float w = requiredWidth(ctx, n);
+        if (w != n.w)
+        {
+            n.w = w;
+            changed = true;
+        }
+    }
+    return changed;
+}
+
 float NodeEditor::pinsTop(const Node& n) const
 {
     return kNodeHeaderH + (n.detail.empty() ? 0.0f : kPinH);
@@ -611,6 +649,7 @@ void NodeEditor::paint(PaintContext& ctx)
 {
     if (!visible_) return;
     Rect b = absoluteRect();
+    if (updateNodeWidths(ctx) && autoFit_) fitPending_ = true;
     if (b.w > 8.0f && b.h > 8.0f && (fitPending_ || (autoFit_ && (b.w != fitW_ || b.h != fitH_))))
         startFit();
 
@@ -674,45 +713,47 @@ void NodeEditor::paintGrid(PaintContext& ctx, const Rect& b)
 //  Links — cubic Bezier rendered as triangle strips for line thickness
 // ─────────────────────────────────────────────────────────────────────────────
 
+void ig::retained::buildLinkCurve(float x0, float y0, float x1, float y1, float zoom,
+        ct::Vector<Vec2>& out)
+{
+    out.clear();
+    const float dist = std::max(30.0f * zoom, std::fabs(x1 - x0) * 0.5f);
+    const float cx0 = x0 + dist;
+    const float cx1 = x1 - dist;
+    const float reach = dist + std::fabs(x1 - x0 - 2.0f * dist) + dist;
+    const float hull = reach + std::fabs(y1 - y0);
+    const int segs = std::clamp(static_cast<int>(std::ceil(hull / 5.0f)), 8, 160);
+    out.push_back(Vec2{ x0, y0 });
+    for (int i = 1; i < segs; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(segs);
+        const float it = 1.0f - t;
+        const float a = it * it * it;
+        const float b = 3.0f * it * it * t;
+        const float c = 3.0f * it * t * t;
+        const float d = t * t * t;
+        out.push_back(Vec2{ a * x0 + b * cx0 + c * cx1 + d * x1, (a + b) * y0 + (c + d) * y1 });
+    }
+    out.push_back(Vec2{ x1, y1 });
+}
+
+float ig::retained::linkThickness(float zoom)
+{
+    return std::clamp(2.2f * zoom, 1.5f, 5.0f);
+}
+
 void NodeEditor::paintLinks(PaintContext& ctx)
 {
-    constexpr int kSegs = 24;
-    constexpr float kThick = 2.0f;
-
+    ct::Vector<Vec2> points;
     for (const auto& link: links_)
     {
         float x0, y0, x1, y1;
         getPinPos(link.srcNode, link.srcPin, x0, y0);
         getPinPos(link.dstNode, link.dstPin, x1, y1);
-
-        Color col = pinColor(nodes_[link.srcNode].pins[link.srcPin].type);
-        ctx.fill.SetColor(col.r, col.g, col.b, 200);
-
-        float dist = std::max(30.0f, std::fabs(x1 - x0) * 0.5f);
-        float cx0 = x0 + dist, cy0 = y0;
-        float cx1 = x1 - dist, cy1 = y1;
-
-        float prevX = x0, prevY = y0;
-        for (int i = 1; i <= kSegs; ++i)
-        {
-            float t = float(i) / kSegs, it = 1.0f - t;
-            float bx = it * it * it * x0 + 3 * it * it * t * cx0 + 3 * it * t * t * cx1 +
-                       t * t * t * x1;
-            float by = it * it * it * y0 + 3 * it * it * t * cy0 + 3 * it * t * t * cy1 +
-                       t * t * t * y1;
-
-            float dx = bx - prevX, dy = by - prevY;
-            float len = std::sqrt(dx * dx + dy * dy);
-            if (len > 0.5f)
-            {
-                float nx = -dy / len * kThick * 0.5f;
-                float ny = dx / len * kThick * 0.5f;
-                ctx.fillTriangle(prevX + nx, prevY + ny, prevX - nx, prevY - ny, bx - nx, by - ny);
-                ctx.fillTriangle(prevX + nx, prevY + ny, bx - nx, by - ny, bx + nx, by + ny);
-            }
-            prevX = bx;
-            prevY = by;
-        }
+        const Color col = pinColor(nodes_[link.srcNode].pins[link.srcPin].type);
+        ctx.line.SetColor(col.r, col.g, col.b, 220);
+        buildLinkCurve(x0, y0, x1, y1, zoom_, points);
+        ctx.drawPolyline(points, linkThickness(zoom_));
     }
 }
 
@@ -722,7 +763,9 @@ void NodeEditor::paintLinks(PaintContext& ctx)
 
 void NodeEditor::paintNodes(PaintContext& ctx)
 {
-    const float asc = setupFont(ctx, Color(230, 232, 240, 255));
+    setupFont(ctx, Color(230, 232, 240, 255));
+    ctx.font.scale = zoom_;
+    const float asc = ctx.font.GetAscender();
 
     for (int ni = 0; ni < static_cast<int>(nodes_.size()); ++ni)
     {
@@ -808,6 +851,7 @@ void NodeEditor::paintNodes(PaintContext& ctx)
             }
         }
     }
+    ctx.font.scale = 1.0f;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -820,37 +864,12 @@ void NodeEditor::paintDragLink(PaintContext& ctx)
 
     float x0, y0;
     getPinPos(connSrcNode_, connSrcPin_, x0, y0);
-    float x1 = connEndX_, y1 = connEndY_;
-
-    Color col = pinColor(nodes_[connSrcNode_].pins[connSrcPin_].type);
-    ctx.fill.SetColor(col.r, col.g, col.b, 180);
-
-    float dist = std::max(30.0f, std::fabs(x1 - x0) * 0.5f);
-    bool isOutput = (nodes_[connSrcNode_].pins[connSrcPin_].dir == PinDir::Output);
-    float cx0 = isOutput ? x0 + dist : x0 - dist;
-    float cx1 = isOutput ? x1 - dist : x1 + dist;
-
-    constexpr int kSegs = 20;
-    constexpr float kThick = 1.5f;
-
-    float prevX = x0, prevY = y0;
-    for (int i = 1; i <= kSegs; ++i)
-    {
-        float t = float(i) / kSegs, it = 1.0f - t;
-        float bx =
-                it * it * it * x0 + 3 * it * it * t * cx0 + 3 * it * t * t * cx1 + t * t * t * x1;
-        float by = it * it * it * y0 + 3 * it * it * t * y0 + 3 * it * t * t * y1 + t * t * t * y1;
-
-        float dx = bx - prevX, dy = by - prevY;
-        float len = std::sqrt(dx * dx + dy * dy);
-        if (len > 0.5f)
-        {
-            float nx = -dy / len * kThick * 0.5f;
-            float ny = dx / len * kThick * 0.5f;
-            ctx.fillTriangle(prevX + nx, prevY + ny, prevX - nx, prevY - ny, bx - nx, by - ny);
-            ctx.fillTriangle(prevX + nx, prevY + ny, bx - nx, by - ny, bx + nx, by + ny);
-        }
-        prevX = bx;
-        prevY = by;
-    }
+    const Color col = pinColor(nodes_[connSrcNode_].pins[connSrcPin_].type);
+    ctx.line.SetColor(col.r, col.g, col.b, 180);
+    const bool isOutput = (nodes_[connSrcNode_].pins[connSrcPin_].dir == PinDir::Output);
+    ct::Vector<Vec2> points;
+    if (isOutput) buildLinkCurve(x0, y0, connEndX_, connEndY_, zoom_, points);
+    else
+        buildLinkCurve(connEndX_, connEndY_, x0, y0, zoom_, points);
+    ctx.drawPolyline(points, linkThickness(zoom_));
 }

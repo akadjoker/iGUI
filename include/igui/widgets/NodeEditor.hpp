@@ -58,7 +58,8 @@ struct Node
 {
     String title;
     float x = 0, y = 0;   // position in graph space
-    float w = 140, h = 0; // width fixed, height computed
+    float w = 140, h = 0; // width computed from the texts, never below minW; height computed
+    float minW = 140;
     ct::Vector<Pin> pins;
     Color headerColor = Color(70, 90, 130, 255);
     String detail;
@@ -71,6 +72,14 @@ struct Link
     int srcNode = -1, srcPin = -1;
     int dstNode = -1, dstPin = -1;
 };
+
+/// @brief The cubic Bezier a link follows between two pins, in screen space, as a polyline.
+/// Starts exactly at (x0, y0) and ends exactly at (x1, y1) with a horizontal tangent at both;
+/// the number of points follows the length on screen and the reach of the handles follows @p zoom.
+void buildLinkCurve(float x0, float y0, float x1, float y1, float zoom, ct::Vector<Vec2>& out);
+
+/// @brief Thickness in pixels of a link at @p zoom: scaled with the zoom, never below 1.5.
+float linkThickness(float zoom);
 
 class NodeEditor : public Widget
 {
@@ -256,6 +265,8 @@ private:
     float sy(float y) const;
 
     float nodeHeight(const Node& n) const;
+    float requiredWidth(PaintContext& ctx, const Node& n) const;
+    bool updateNodeWidths(PaintContext& ctx);
     float pinsTop(const Node& n) const;
     void startFit();
     void getPinPos(int nodeId, int pinIdx, float& px, float& py) const;

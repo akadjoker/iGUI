@@ -353,6 +353,18 @@ if(IGUI_BUILD_RETAINED AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb/s
         endif()
         add_test(NAME igui_code_hover COMMAND igui_code_hover_tests)
 
+        # The NodeEditor sizes nodes from their texts and draws links as smooth bands that
+        # start and end on the pins.
+        add_executable(igui_node_editor_layout_tests tests/test_node_editor_layout.cpp adapters/zen/SoftRaster.cpp)
+        target_compile_features(igui_node_editor_layout_tests PRIVATE cxx_std_17)
+        target_include_directories(igui_node_editor_layout_tests PRIVATE adapters/zen/include)
+        target_link_libraries(igui_node_editor_layout_tests PRIVATE igui_widgets)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(igui_node_editor_layout_tests PRIVATE -fsanitize=address)
+            target_link_options(igui_node_editor_layout_tests PRIVATE -fsanitize=address)
+        endif()
+        add_test(NAME igui_node_editor_layout COMMAND igui_node_editor_layout_tests)
+
         # The retained Chart: pie, donut and bars, their legend, labels and
         # hit testing, driven through WidgetApp.
         add_executable(igui_chart_tests tests/test_chart.cpp)
