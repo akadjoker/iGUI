@@ -55,6 +55,30 @@ int sdlKey(int key)
             return rt::Key::End;
         case KEY_KP_ENTER:
             return rt::Key::KPEnter;
+        case KEY_KP_0:
+            return rt::Key::KP0;
+        case KEY_KP_1:
+            return rt::Key::KP1;
+        case KEY_KP_2:
+            return rt::Key::KP2;
+        case KEY_KP_3:
+            return rt::Key::KP3;
+        case KEY_KP_4:
+            return rt::Key::KP4;
+        case KEY_KP_5:
+            return rt::Key::KP5;
+        case KEY_KP_6:
+            return rt::Key::KP6;
+        case KEY_KP_7:
+            return rt::Key::KP7;
+        case KEY_KP_8:
+            return rt::Key::KP8;
+        case KEY_KP_9:
+            return rt::Key::KP9;
+        case KEY_KP_DECIMAL:
+            return rt::Key::KPPeriod;
+        case KEY_KP_SUBTRACT:
+            return rt::Key::KPMinus;
         default:
             return 0;
     }
