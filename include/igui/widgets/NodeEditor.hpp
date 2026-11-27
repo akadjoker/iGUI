@@ -63,6 +63,10 @@ struct Node
     ct::Vector<Pin> pins;
     Color headerColor = Color(70, 90, 130, 255);
     String detail;
+    String error;
+    TextureHandle image;
+    Rect imageUv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
+    float imageW = 0, imageH = 0;
     bool selected = false;
     bool collapsed = false;
 };
@@ -113,6 +117,17 @@ public:
 
     /// @brief Set a node's header color.
     void setNodeHeader(int nodeId, const Color& c);
+
+    /// @brief Mark a node as failed: red header and border, @p message in red under the node.
+    ///        An empty message clears the mark.
+    void setNodeError(int nodeId, const String& message);
+    /// @brief Clear the error mark of every node.
+    void clearNodeErrors();
+    /// @brief Show an image inside the node body, under the pins, @p width x @p height in graph
+    /// units
+    ///        (scaled with the zoom); the node grows to hold it. A texture with value 0 removes it.
+    void setNodeImage(int nodeId, TextureHandle texture, float width, float height,
+            Rect uv = Rect(0.0f, 0.0f, 1.0f, 1.0f));
 
     /// @brief Add a typed pin to a node.
     int addPin(int nodeId, const String& name, PinDir dir, PinType type);
@@ -268,6 +283,7 @@ private:
     float requiredWidth(PaintContext& ctx, const Node& n) const;
     bool updateNodeWidths(PaintContext& ctx);
     float pinsTop(const Node& n) const;
+    float imageTop(const Node& n) const;
     void startFit();
     void getPinPos(int nodeId, int pinIdx, float& px, float& py) const;
     Color pinColor(PinType t) const;

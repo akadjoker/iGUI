@@ -73,6 +73,31 @@ void NodeEditor::setNodeHeader(int nodeId, const Color& c)
     markDirty();
 }
 
+void NodeEditor::setNodeError(int nodeId, const String& message)
+{
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
+    nodes_[nodeId].error = message;
+    markDirty();
+}
+
+void NodeEditor::clearNodeErrors()
+{
+    for (auto& n: nodes_) n.error = String();
+    markDirty();
+}
+
+void NodeEditor::setNodeImage(int nodeId, TextureHandle texture, float width, float height, Rect uv)
+{
+    if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return;
+    auto& n = nodes_[nodeId];
+    n.image = texture;
+    n.imageUv = uv;
+    n.imageW = texture.value != 0 ? width : 0.0f;
+    n.imageH = texture.value != 0 ? height : 0.0f;
+    n.h = nodeHeight(n);
+    markDirty();
+}
+
 int NodeEditor::addPin(int nodeId, const String& name, PinDir dir, PinType type)
 {
     if (nodeId < 0 || nodeId >= static_cast<int>(nodes_.size())) return -1;
@@ -250,7 +275,21 @@ float NodeEditor::nodeHeight(const Node& n) const
         else
             ++outputs;
     }
-    return pinsTop(n) + std::max(inputs, outputs) * kPinH + 8;
+    const float rows = pinsTop(n) + std::max(inputs, outputs) * kPinH;
+    if (n.image.value != 0) return rows + 4.0f + n.imageH + 8.0f;
+    return rows + 8.0f;
+}
+
+float NodeEditor::imageTop(const Node& n) const
+{
+    int inputs = 0, outputs = 0;
+    for (const auto& p: n.pins)
+    {
+        if (p.dir == PinDir::Input) ++inputs;
+        else
+            ++outputs;
+    }
+    return pinsTop(n) + std::max(inputs, outputs) * kPinH + 4.0f;
 }
 
 float NodeEditor::requiredWidth(PaintContext& ctx, const Node& n) const
@@ -272,6 +311,7 @@ float NodeEditor::requiredWidth(PaintContext& ctx, const Node& n) const
         const float gap = (a > 0.0f && b > 0.0f) ? kLabelGap : 0.0f;
         w = std::max(w, a + b + gap + 2.0f * kPinInset);
     }
+    if (n.image.value != 0) w = std::max(w, n.imageW + 2.0f * kTextMargin);
     return std::ceil(w);
 }
 
@@ -788,6 +828,7 @@ void NodeEditor::paintNodes(PaintContext& ctx)
 
         // ── Header ───────────────────────────────────────────────────────
         Color hdr = n.headerColor;
+        if (!n.error.empty()) hdr = Color(170, 40, 40, 255);
         if (n.selected)
         {
             hdr.r = static_cast<uint8_t>(std::min(255, hdr.r + 30));
@@ -806,12 +847,42 @@ void NodeEditor::paintNodes(PaintContext& ctx)
         }
 
         // ── Border ───────────────────────────────────────────────────────
+        const bool failed = !n.error.empty();
         Color border = n.selected ? Color(255, 200, 60, 255) : ec.nodeEdge;
+        if (failed) border = Color(235, 60, 60, 255);
+        const float edge = failed ? 2.0f : 1.0f;
         ctx.fill.SetColor(border.r, border.g, border.b, border.a);
-        ctx.fillRect(nx, ny, nw, 1);
-        ctx.fillRect(nx, ny + nhz - 1, nw, 1);
-        ctx.fillRect(nx, ny, 1, nhz);
-        ctx.fillRect(nx + nw - 1, ny, 1, nhz);
+        ctx.fillRect(nx, ny, nw, edge);
+        ctx.fillRect(nx, ny + nhz - edge, nw, edge);
+        ctx.fillRect(nx, ny, edge, nhz);
+        ctx.fillRect(nx + nw - edge, ny, edge, nhz);
+
+        // ── Image under the pins ─────────────────────────────────────────
+        if (n.image.value != 0)
+        {
+            const float iw = n.imageW * zoom_, ih = n.imageH * zoom_;
+            const float ix = nx + (nw - iw) * 0.5f;
+            const float iy = ny + imageTop(n) * zoom_;
+            ctx.drawImage(n.image, Rect(ix, iy, iw, ih), n.imageUv);
+            ctx.fill.SetColor(0, 0, 0, 120);
+            ctx.fillRect(ix, iy, iw, 1);
+            ctx.fillRect(ix, iy + ih - 1, iw, 1);
+            ctx.fillRect(ix, iy, 1, ih);
+            ctx.fillRect(ix + iw - 1, iy, 1, ih);
+        }
+
+        // ── Error message under the node ─────────────────────────────────
+        if (failed)
+        {
+            const float textH = ctx.font.GetFontSize();
+            const float tw = ctx.font.GetTextWidth(n.error.c_str());
+            const float pad = 4.0f * zoom_;
+            const float by = ny + nhz + 3.0f * zoom_;
+            ctx.fill.SetColor(60, 14, 14, 230);
+            ctx.fillRect(nx, by, tw + 2.0f * pad, textH + 2.0f * pad);
+            ctx.font.SetColor(Color(255, 130, 130, 255));
+            ctx.font.Print(n.error.c_str(), nx + pad, by + pad + asc);
+        }
 
         // ── Detail line under the header ─────────────────────────────────
         if (!n.detail.empty())

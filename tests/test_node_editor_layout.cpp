@@ -109,12 +109,55 @@ void testCurve()
     check(linkThickness(100.0f) <= 5.0f, "thickness is capped");
 }
 
+void testImageAndError()
+{
+    printf("a node holds an image under its pins and can be marked as failed\n");
+    Harness h(900.0f, 500.0f);
+    check(h.ok(), "the font atlas builds");
+    NodeEditor* editor = h.root()->createChild<NodeEditor>();
+    editor->setRect({ 0.0f, 0.0f, 800.0f, 400.0f });
+
+    const int a = editor->addNode("A", 10.0f, 10.0f);
+    editor->addPin(a, "In", PinDir::Input, PinType::Float);
+    editor->addPin(a, "Out", PinDir::Output, PinType::Float);
+    h.relayout();
+    h.frames(2);
+    const float plainHeight = editor->node(a).h;
+    const float plainWidth = editor->node(a).w;
+
+    editor->setNodeImage(a, handle(7), 180.0f, 96.0f);
+    h.frames(2);
+    check(editor->node(a).h >= plainHeight + 96.0f, "the node grows by the image height");
+    check(editor->node(a).w >= 180.0f + 16.0f, "the node is wide enough for the image");
+    check(editor->node(a).w > plainWidth, "a narrow node widens for the image");
+    check(editor->node(a).image.value == 7, "the texture is kept");
+
+    editor->setNodeImage(a, handle(0), 96.0f, 96.0f);
+    h.frames(2);
+    check(editor->node(a).h == plainHeight, "removing the image gives the height back");
+
+    check(editor->node(a).error.empty(), "no error at first");
+    editor->setNodeError(a, "undeclared identifier");
+    editor->setNodeImage(a, handle(7), 96.0f, 96.0f);
+    h.frames(2);
+    check(editor->node(a).error == String("undeclared identifier"), "the message is kept");
+    editor->setNodeError(a, String());
+    check(editor->node(a).error.empty(), "an empty message clears the error");
+    editor->setNodeError(a, "again");
+    editor->clearNodeErrors();
+    check(editor->node(a).error.empty(), "clearNodeErrors clears every node");
+    editor->setNodeError(99, "x");
+    editor->setNodeImage(-1, handle(1), 1.0f, 1.0f);
+    h.frames(1);
+}
+
 } // namespace
 
 int main()
 {
     testNodeWidth();
     testCurve();
+    testImageAndError();
     shutdown();
     if (failures()) printf("%d failure(s)\n", failures());
     else
