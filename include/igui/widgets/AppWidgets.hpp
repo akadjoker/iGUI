@@ -498,6 +498,17 @@ public:
         return tex_;
     }
 
+    /// @brief Show the texture upside down (for render targets whose first row is the bottom one).
+    void setFlipY(bool flip)
+    {
+        flipY_ = flip;
+    }
+    /// @brief Whether the texture is shown upside down.
+    bool flipY() const
+    {
+        return flipY_;
+    }
+
     /// @brief Set orbit speed (degrees per pixel).
     void setOrbitSpeed(float s)
     {
@@ -547,6 +558,7 @@ public:
 private:
     ig::retained::TextureHandle tex_ = {};
     int texW_ = 0, texH_ = 0;
+    bool flipY_ = false;
 
     float orbitSpeed_ = 0.3f;
     float panSpeed_ = 1.0f;

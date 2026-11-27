@@ -1566,7 +1566,8 @@ void Viewport3D::paint(PaintContext& ctx)
     if (tex_)
     {
         // Draw the FBO texture filling the widget area
-        ctx.drawImage(tex_, abs);
+        const Rect uv = flipY_ ? Rect(0.0f, 1.0f, 1.0f, -1.0f) : Rect(0.0f, 0.0f, 1.0f, 1.0f);
+        ctx.drawImage(tex_, abs, uv);
     }
     else
     {
