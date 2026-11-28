@@ -207,6 +207,7 @@ void ToolBar::setItemEnabled(int id, bool enabled)
 {
     if (auto* it = findItem(id))
     {
+        if (it->enabled == enabled) return;
         it->enabled = enabled;
         markDirty();
     }
@@ -221,6 +222,7 @@ void ToolBar::setItemChecked(int id, bool checked)
 {
     if (auto* it = findItem(id))
     {
+        if (it->checked == checked) return;
         it->checked = checked;
         markDirty();
     }
@@ -254,6 +256,7 @@ void ToolBar::setItemIcon(int id, IconId icon)
 {
     if (auto* it = findItem(id))
     {
+        if (it->iconId == icon && it->iconIndex == -1) return;
         it->iconId = icon;
         it->iconIndex = -1;
         markDirty();
